@@ -160,6 +160,55 @@ impl From<ProviderFactSourceKind> for ProviderDecisionFactSource {
     }
 }
 
+/// Provenance vocabulary for provider explanations.
+#[non_exhaustive]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderDecisionProvenance {
+    /// Exact parser or AST evidence.
+    ExactAst,
+    /// Parser evidence after syntactic desugaring.
+    DesugaredAst,
+    /// Semantic analyzer evidence.
+    SemanticAnalyzer,
+    /// Framework-generated evidence.
+    FrameworkSynthesis,
+    /// Import/export inference evidence.
+    ImportExportInference,
+    /// Pragma inference evidence.
+    PragmaInference,
+    /// Name heuristic evidence.
+    NameHeuristic,
+    /// Search fallback evidence.
+    SearchFallback,
+    /// Dynamic-boundary evidence.
+    DynamicBoundary,
+    /// Literal `require` plus literal import evidence.
+    LiteralRequireImport,
+    /// Provenance is not known to this schema version.
+    #[default]
+    Unknown,
+}
+
+impl From<Provenance> for ProviderDecisionProvenance {
+    fn from(provenance: Provenance) -> Self {
+        match provenance {
+            Provenance::ExactAst => Self::ExactAst,
+            Provenance::DesugaredAst => Self::DesugaredAst,
+            Provenance::SemanticAnalyzer => Self::SemanticAnalyzer,
+            Provenance::FrameworkSynthesis => Self::FrameworkSynthesis,
+            Provenance::ImportExportInference => Self::ImportExportInference,
+            Provenance::PragmaInference => Self::PragmaInference,
+            Provenance::NameHeuristic => Self::NameHeuristic,
+            Provenance::SearchFallback => Self::SearchFallback,
+            Provenance::DynamicBoundary => Self::DynamicBoundary,
+            Provenance::LiteralRequireImport => Self::LiteralRequireImport,
+        }
+    }
+}
+
 /// Confidence vocabulary for provider explanations.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -231,10 +280,54 @@ pub enum ProviderDecisionFallback {
     ShadowReceiptOnly,
 }
 
+/// Machine-readable blocker reason for provider explanations.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderDecisionBlockerReason {
+    /// Dynamic `require` or equivalent dynamic module lookup blocks certainty.
+    DynamicRequire,
+    /// String `eval` blocks static certainty.
+    EvalString,
+    /// Symbolic reference blocks static certainty.
+    SymbolicRef,
+    /// `AUTOLOAD` blocks static certainty.
+    Autoload,
+    /// Generated member requires generated-fact handling.
+    GeneratedMember,
+    /// Fact exists but is stale.
+    StaleFact,
+    /// Fact exists but has low confidence.
+    LowConfidence,
+    /// Candidate set is ambiguous.
+    AmbiguousCandidate,
+    /// Import/export visibility makes the edit or answer unsafe.
+    ImportExportVisibility,
+    /// Typeglob aliasing makes the edit or answer unsafe.
+    TypeglobAlias,
+    /// Source range is missing.
+    MissingSourceRange,
+    /// Declaration-including request needs a stricter proof path.
+    DeclarationIncludingRequest,
+    /// No usable fact exists.
+    MissingFact,
+    /// Provider surface is unsupported for this request.
+    Unsupported,
+    /// Edit-producing provider refused an unsafe action.
+    UnsafeEdit,
+    /// Dynamic boundary is known but not classified more narrowly yet.
+    DynamicBoundary,
+    /// Blocker is not known to this schema version.
+    Unknown,
+}
+
 /// Serializable explanation for one provider decision.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProviderDecisionExplanation {
+    /// Normalized provider decision schema version.
+    #[serde(default = "provider_decision_schema_version")]
+    pub schema_version: u32,
     /// Provider surface that made the decision.
     pub provider: ProviderDecisionProvider,
     /// Live, fallback, blocked, or shadowed outcome.
@@ -243,14 +336,29 @@ pub struct ProviderDecisionExplanation {
     pub reason: ProviderDecisionReason,
     /// Coarse fact source used for the decision.
     pub fact_source: ProviderDecisionFactSource,
+    /// Provenance for the underlying fact, when known.
+    #[serde(default)]
+    pub provenance: ProviderDecisionProvenance,
     /// Confidence in the fact or fallback.
     pub confidence: ProviderDecisionConfidence,
     /// Freshness of the fact relative to the request.
     pub freshness: ProviderDecisionFreshness,
+    /// Whether the provider decision is backed by source-addressable facts.
+    #[serde(default)]
+    pub source_backed: bool,
     /// Whether the decision crossed a dynamic Perl boundary.
     pub dynamic_boundary: bool,
     /// Fallback or refusal path.
     pub fallback: ProviderDecisionFallback,
+    /// Normalized fallback-state alias for clients that consume trust receipts.
+    #[serde(default = "default_provider_decision_fallback")]
+    pub fallback_state: ProviderDecisionFallback,
+    /// Optional machine-readable blocker reason.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blocker_reason: Option<ProviderDecisionBlockerReason>,
+    /// Optional short user-facing explanation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_message: Option<String>,
     /// Optional receipt identifier for bug reports and support triage.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub receipt_id: Option<String>,
@@ -276,15 +384,24 @@ impl ProviderDecisionExplanation {
         dynamic_boundary: bool,
         fallback: ProviderDecisionFallback,
     ) -> Self {
+        let source_backed = fact_source.is_source_backed() && !dynamic_boundary;
+        let blocker_reason = blocker_reason_for(decision, reason, dynamic_boundary, fallback);
+        let user_message = blocker_reason.map(blocker_message).map(str::to_string);
         Self {
+            schema_version: provider_decision_schema_version(),
             provider,
             decision,
             reason,
             fact_source,
+            provenance: ProviderDecisionProvenance::Unknown,
             confidence,
             freshness,
+            source_backed,
             dynamic_boundary,
             fallback,
+            fallback_state: fallback,
+            blocker_reason,
+            user_message,
             receipt_id: None,
             scenario: None,
             request_receipt: None,
@@ -308,6 +425,13 @@ impl ProviderDecisionExplanation {
             trace_is_dynamic_boundary(trace),
             fallback,
         )
+        .with_provenance(trace.provenance.into())
+    }
+
+    /// Attach provenance for the underlying fact.
+    pub fn with_provenance(mut self, provenance: ProviderDecisionProvenance) -> Self {
+        self.provenance = provenance;
+        self
     }
 
     /// Attach a stable receipt identifier.
@@ -336,6 +460,7 @@ impl ProviderDecisionExplanation {
     pub fn is_safe_to_act(&self) -> bool {
         self.decision == ProviderDecisionOutcome::Acted
             && self.fact_source.is_source_backed()
+            && self.source_backed
             && self.confidence == ProviderDecisionConfidence::High
             && self.freshness == ProviderDecisionFreshness::Fresh
             && !self.dynamic_boundary
@@ -352,9 +477,120 @@ impl ProviderDecisionExplanation {
     }
 }
 
+fn provider_decision_schema_version() -> u32 {
+    1
+}
+
+fn default_provider_decision_fallback() -> ProviderDecisionFallback {
+    ProviderDecisionFallback::None
+}
+
 fn trace_is_dynamic_boundary(trace: &ProviderFactTrace) -> bool {
     trace.source == ProviderFactSourceKind::DynamicBoundary
         || trace.provenance == Provenance::DynamicBoundary
+}
+
+fn blocker_reason_for(
+    decision: ProviderDecisionOutcome,
+    reason: ProviderDecisionReason,
+    dynamic_boundary: bool,
+    fallback: ProviderDecisionFallback,
+) -> Option<ProviderDecisionBlockerReason> {
+    if dynamic_boundary || reason == ProviderDecisionReason::DynamicBoundary {
+        return Some(ProviderDecisionBlockerReason::DynamicBoundary);
+    }
+
+    match reason {
+        ProviderDecisionReason::AmbiguousLowConfidenceCandidates => {
+            Some(ProviderDecisionBlockerReason::AmbiguousCandidate)
+        }
+        ProviderDecisionReason::StaleFact => Some(ProviderDecisionBlockerReason::StaleFact),
+        ProviderDecisionReason::LowConfidenceFact => {
+            Some(ProviderDecisionBlockerReason::LowConfidence)
+        }
+        ProviderDecisionReason::GeneratedNoSource => {
+            Some(ProviderDecisionBlockerReason::GeneratedMember)
+        }
+        ProviderDecisionReason::Unsupported => Some(ProviderDecisionBlockerReason::Unsupported),
+        ProviderDecisionReason::MissingFact => Some(ProviderDecisionBlockerReason::MissingFact),
+        ProviderDecisionReason::UnsafeEditBlocked => Some(ProviderDecisionBlockerReason::UnsafeEdit),
+        ProviderDecisionReason::DynamicBoundary => {
+            Some(ProviderDecisionBlockerReason::DynamicBoundary)
+        }
+        ProviderDecisionReason::Unknown => Some(ProviderDecisionBlockerReason::Unknown),
+        ProviderDecisionReason::SourceBackedHighConfidence
+        | ProviderDecisionReason::ShadowOnly
+        | ProviderDecisionReason::FallbackPolicy => {
+            if decision == ProviderDecisionOutcome::Blocked
+                || matches!(
+                    fallback,
+                    ProviderDecisionFallback::NoEdit
+                        | ProviderDecisionFallback::RequireConfirmation
+                        | ProviderDecisionFallback::RefreshWorkspaceFacts
+                )
+            {
+                Some(ProviderDecisionBlockerReason::UnsafeEdit)
+            } else {
+                None
+            }
+        }
+    }
+}
+
+fn blocker_message(reason: ProviderDecisionBlockerReason) -> &'static str {
+    match reason {
+        ProviderDecisionBlockerReason::DynamicRequire => {
+            "Provider decision blocked by dynamic require."
+        }
+        ProviderDecisionBlockerReason::EvalString => {
+            "Provider decision blocked by string eval."
+        }
+        ProviderDecisionBlockerReason::SymbolicRef => {
+            "Provider decision blocked by symbolic reference."
+        }
+        ProviderDecisionBlockerReason::Autoload => {
+            "Provider decision blocked by AUTOLOAD."
+        }
+        ProviderDecisionBlockerReason::GeneratedMember => {
+            "Provider decision blocked by generated member without live-safe proof."
+        }
+        ProviderDecisionBlockerReason::StaleFact => {
+            "Provider decision blocked by stale compiler fact."
+        }
+        ProviderDecisionBlockerReason::LowConfidence => {
+            "Provider decision blocked by low-confidence fact."
+        }
+        ProviderDecisionBlockerReason::AmbiguousCandidate => {
+            "Provider decision blocked by ambiguous candidates."
+        }
+        ProviderDecisionBlockerReason::ImportExportVisibility => {
+            "Provider decision blocked by import/export visibility."
+        }
+        ProviderDecisionBlockerReason::TypeglobAlias => {
+            "Provider decision blocked by typeglob alias."
+        }
+        ProviderDecisionBlockerReason::MissingSourceRange => {
+            "Provider decision blocked because no source range is available."
+        }
+        ProviderDecisionBlockerReason::DeclarationIncludingRequest => {
+            "Provider decision blocked by declaration-including request boundary."
+        }
+        ProviderDecisionBlockerReason::MissingFact => {
+            "Provider decision fell back because no usable fact exists."
+        }
+        ProviderDecisionBlockerReason::Unsupported => {
+            "Provider decision fell back because this surface is unsupported for the request."
+        }
+        ProviderDecisionBlockerReason::UnsafeEdit => {
+            "Provider decision blocked an edit because the proof is not live-safe."
+        }
+        ProviderDecisionBlockerReason::DynamicBoundary => {
+            "Provider decision blocked by a dynamic Perl boundary."
+        }
+        ProviderDecisionBlockerReason::Unknown => {
+            "Provider decision fell back for an unknown schema reason."
+        }
+    }
 }
 
 #[cfg(test)]
@@ -405,6 +641,7 @@ mod tests {
             value.get("provider").and_then(serde_json::Value::as_str),
             Some("goto_definition")
         );
+        assert_eq!(value.get("schema_version").and_then(serde_json::Value::as_u64), Some(1));
         assert_eq!(value.get("decision").and_then(serde_json::Value::as_str), Some("fallback"));
         assert_eq!(
             value.get("reason").and_then(serde_json::Value::as_str),
@@ -414,11 +651,28 @@ mod tests {
             value.get("fact_source").and_then(serde_json::Value::as_str),
             Some("compiler_fact")
         );
+        assert_eq!(
+            value.get("provenance").and_then(serde_json::Value::as_str),
+            Some("unknown")
+        );
         assert_eq!(value.get("confidence").and_then(serde_json::Value::as_str), Some("low"));
         assert_eq!(value.get("freshness").and_then(serde_json::Value::as_str), Some("fresh"));
+        assert_eq!(value.get("source_backed").and_then(serde_json::Value::as_bool), Some(true));
         assert_eq!(
             value.get("fallback").and_then(serde_json::Value::as_str),
             Some("legacy_provider")
+        );
+        assert_eq!(
+            value.get("fallback_state").and_then(serde_json::Value::as_str),
+            Some("legacy_provider")
+        );
+        assert_eq!(
+            value.get("blocker_reason").and_then(serde_json::Value::as_str),
+            Some("ambiguous_candidate")
+        );
+        assert_eq!(
+            value.get("user_message").and_then(serde_json::Value::as_str),
+            Some("Provider decision blocked by ambiguous candidates.")
         );
         assert_eq!(
             value.get("receipt_id").and_then(serde_json::Value::as_str),
@@ -470,6 +724,30 @@ mod tests {
     }
 
     #[test]
+    fn provider_decision_deserializes_legacy_payload_with_defaults() -> TestResult {
+        let legacy_payload = serde_json::json!({
+            "provider": "goto_definition",
+            "decision": "acted",
+            "reason": "source_backed_high_confidence",
+            "fact_source": "compiler_fact",
+            "confidence": "high",
+            "freshness": "fresh",
+            "dynamic_boundary": false,
+            "fallback": "none"
+        });
+
+        let decision: ProviderDecisionExplanation = serde_json::from_value(legacy_payload)?;
+
+        assert_eq!(decision.schema_version, 1);
+        assert_eq!(decision.provenance, ProviderDecisionProvenance::Unknown);
+        assert!(!decision.source_backed);
+        assert_eq!(decision.fallback_state, ProviderDecisionFallback::None);
+        assert!(decision.blocker_reason.is_none());
+        assert!(decision.user_message.is_none());
+        Ok(())
+    }
+
+    #[test]
     fn provider_decision_from_dynamic_trace_blocks_user_edit() {
         let trace = provider_trace(
             ProviderSurface::SafeDelete,
@@ -488,6 +766,13 @@ mod tests {
 
         assert_eq!(decision.provider, ProviderDecisionProvider::SafeDelete);
         assert!(decision.dynamic_boundary);
+        assert_eq!(decision.provenance, ProviderDecisionProvenance::DynamicBoundary);
+        assert!(!decision.source_backed);
+        assert_eq!(decision.fallback_state, ProviderDecisionFallback::NoEdit);
+        assert_eq!(
+            decision.blocker_reason,
+            Some(ProviderDecisionBlockerReason::DynamicBoundary)
+        );
         assert!(decision.blocks_user_edit());
         assert!(!decision.is_safe_to_act());
     }

@@ -261,15 +261,23 @@ fn test_execute_command_explain_provider_decision() -> Result<(), Box<dyn std::e
     let result = response.result.ok_or("No result in explain-provider-decision response")?;
 
     assert_eq!(result.get("provider").and_then(|value| value.as_str()), Some("goto_definition"));
+    assert_eq!(result.get("schema_version").and_then(|value| value.as_u64()), Some(1));
     assert_eq!(result.get("decision").and_then(|value| value.as_str()), Some("acted"));
     assert_eq!(
         result.get("reason").and_then(|value| value.as_str()),
         Some("source_backed_high_confidence")
     );
     assert_eq!(result.get("fact_source").and_then(|value| value.as_str()), Some("compiler_fact"));
+    assert_eq!(result.get("provenance").and_then(|value| value.as_str()), Some("unknown"));
     assert_eq!(result.get("confidence").and_then(|value| value.as_str()), Some("high"));
     assert_eq!(result.get("freshness").and_then(|value| value.as_str()), Some("fresh"));
+    assert_eq!(result.get("source_backed").and_then(|value| value.as_bool()), Some(true));
     assert_eq!(result.get("fallback").and_then(|value| value.as_str()), Some("none"));
+    assert_eq!(
+        result.get("fallback_state").and_then(|value| value.as_str()),
+        Some("none")
+    );
+    assert!(result.get("blocker_reason").is_none());
     assert_eq!(
         result.get("receipt_id").and_then(|value| value.as_str()),
         Some("semantic-shadow-compare")

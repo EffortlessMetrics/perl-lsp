@@ -16,6 +16,28 @@ adapter for migration, comparison, or custom policy stacks that are not native
 yet. You do not need to install `perlcritic` for the default native critic
 workflow.
 
+### Provider Decision Explanation Payload
+
+`perl.explainProviderDecision` returns a conservative, normalized schema for
+trust explanations. Existing fields such as `provider`, `decision`, `reason`,
+`fact_source`, `confidence`, `freshness`, `fallback`, `dynamic_boundary`,
+`receipt_id`, `scenario`, and `request_receipt` remain available. The normalized
+v1 envelope also includes:
+
+- `schema_version` - currently `1`
+- `provenance` - exact syntax, import/export inference, framework synthesis,
+  dynamic boundary, fallback, or `unknown`
+- `source_backed` - whether the decision is backed by source-addressable facts
+- `fallback_state` - normalized alias for the fallback/refusal path
+- `blocker_reason` - machine-readable blocker when a fallback or edit refusal
+  has a known safety reason
+- `user_message` - short user-facing explanation for known blockers
+
+The command is an explanation surface, not an authorization surface. A
+source-backed explanation does not by itself promote provider behavior; live
+cutovers still require the provider-specific receipts tracked in the status
+dashboard.
+
 ## Configuration Problems and Solutions
 
 ### Problem: Selecting the Critic Engine

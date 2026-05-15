@@ -199,12 +199,24 @@ fn test_explain_provider_decision_attaches_provider_receipt()
     )?;
 
     assert_eq!(result.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(result.get("schema_version").and_then(Value::as_u64), Some(1));
     assert_eq!(result.get("decision").and_then(Value::as_str), Some("blocked"));
     assert_eq!(result.get("reason").and_then(Value::as_str), Some("unsafe_edit_blocked"));
     assert_eq!(result.get("fact_source").and_then(Value::as_str), Some("compiler_fact"));
+    assert_eq!(result.get("provenance").and_then(Value::as_str), Some("unknown"));
     assert_eq!(result.get("confidence").and_then(Value::as_str), Some("high"));
     assert_eq!(result.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(result.get("source_backed").and_then(Value::as_bool), Some(true));
     assert_eq!(result.get("fallback").and_then(Value::as_str), Some("no_edit"));
+    assert_eq!(result.get("fallback_state").and_then(Value::as_str), Some("no_edit"));
+    assert_eq!(
+        result.get("blocker_reason").and_then(Value::as_str),
+        Some("unsafe_edit")
+    );
+    assert_eq!(
+        result.get("user_message").and_then(Value::as_str),
+        Some("Provider decision blocked an edit because the proof is not live-safe.")
+    );
     assert_eq!(result.get("receipt_id").and_then(Value::as_str), Some("semantic-shadow-compare"));
     assert_eq!(result.get("scenario").and_then(Value::as_str), Some("mojolicious-safe-delete"));
     assert_eq!(result.get("dynamic_boundary").and_then(Value::as_bool), Some(false));
@@ -295,7 +307,10 @@ fn test_explain_provider_decision_defaults_to_live_provider_receipt()
     assert_eq!(result.get("fact_source").and_then(Value::as_str), Some("compiler_fact"));
     assert_eq!(result.get("confidence").and_then(Value::as_str), Some("high"));
     assert_eq!(result.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(result.get("source_backed").and_then(Value::as_bool), Some(true));
     assert_eq!(result.get("fallback").and_then(Value::as_str), Some("none"));
+    assert_eq!(result.get("fallback_state").and_then(Value::as_str), Some("none"));
+    assert!(result.get("blocker_reason").is_none());
     assert_eq!(
         result.get("receipt_id").and_then(Value::as_str),
         Some("docs/project/status/provider_cutover.md#navigation-live-quality-dashboard")
