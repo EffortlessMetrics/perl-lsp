@@ -365,8 +365,8 @@ AST boundary receipts:
 
 Next parser runtime work should start only from current failing evidence: a
 fresh Linux receipt or a focused source-backed fixture that fails against the
-current parser. Otherwise the deferred Linux corpus refresh owns bucket-count
-movement.
+current parser. Otherwise successor issue #8863, the deferred Linux corpus
+refresh, owns bucket-count movement.
 
 Production delta
 
@@ -402,12 +402,12 @@ status, revert behavior first and leave fixture evidence for follow-up.
 
 ## Work item: linux-corpus-refresh
 
-Status: deferred on Windows; successor Linux corpus refresh
+Status: deferred on Windows; successor issue #8863, Linux corpus refresh
 Linked proposal: [PLSP-PROP-0001](../../docs/proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
 Linked spec: [PLSP-SPEC-0004](../../docs/specs/PLSP-SPEC-0004-corpus-receipt-freshness.md)
 Linked ADR: [PLSP-ADR-0001](../../docs/adr/PLSP-ADR-0001-generated-status-is-control-plane.md)
-Blocks: none for this closeout; successor Linux corpus refresh owns future
-bucket-count claims
+Blocks: none for this closeout; successor issue #8863 owns future bucket-count
+claims
 Blocked by: Linux system-Perl roots unavailable on this Windows host
 
 Goal
@@ -433,9 +433,9 @@ Deferral note
 
 The current Windows worktree does not have the Linux system roots named by the
 stale receipt (`/usr/share/perl`, `/usr/lib/x86_64-linux-gnu/perl`, and
-`/usr/share/perl5`). The refresh is deferred to a dedicated Linux corpus
-refresh lane and must run on a Linux host before any parser bucket-count
-movement is claimed.
+`/usr/share/perl5`). The refresh is deferred to successor issue #8863, the
+dedicated Linux corpus refresh lane, and must run on a Linux host before any
+parser bucket-count movement is claimed.
 
 Proof commands
 
@@ -632,8 +632,8 @@ Completion audit
   the raw `unclosed_paren_identifier` bucket; fixture-only work remains active
   and must not claim bucket-count movement.
 - Linux corpus refresh: deferred on this Windows host because the Linux
-  system-Perl roots are unavailable; a dedicated Linux corpus refresh lane owns
-  the fresh receipt.
+  system-Perl roots are unavailable; successor issue #8863 owns the fresh
+  receipt.
 - Provider confidence: `provider_confidence_matrix.md` maps provider source,
   confidence, freshness, fallback, runtime comparison, real-workspace links,
   live state, and next proof.

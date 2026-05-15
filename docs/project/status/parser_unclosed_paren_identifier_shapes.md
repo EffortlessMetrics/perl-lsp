@@ -213,9 +213,9 @@ Valid starting evidence:
 - a focused, source-backed fixture reproduces a boundary failure against the
   current parser.
 
-Otherwise, the next bucket-count action is a dedicated Linux corpus refresh.
-Fixture-only PRs should continue only when a new real-Perl source shape is not
-covered by the existing groups above.
+Otherwise, the next bucket-count action is successor issue #8863, the dedicated
+Linux corpus refresh. Fixture-only PRs should continue only when a new real-Perl
+source shape is not covered by the existing groups above.
 
 Recent closeouts:
 
