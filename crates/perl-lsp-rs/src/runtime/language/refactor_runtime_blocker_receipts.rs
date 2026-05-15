@@ -525,27 +525,35 @@ fn rename_fallback_noise_json(
     compiler_plan_edit_count: Option<usize>,
     blockers: Option<&[PlanBlocker]>,
 ) -> Value {
-    let (Some(compiler_plan_edit_count), Some(blockers)) = (compiler_plan_edit_count, blockers)
-    else {
-        return Value::Null;
+    let (compiler_available, blocker_reasons, blocker_messages, compiler_requires_confirmation) =
+        match blockers {
+            Some(blockers) => {
+                let blocker_reasons = blockers
+                    .iter()
+                    .map(|blocker| format!("{:?}", blocker.reason))
+                    .collect::<Vec<_>>();
+                let blocker_messages =
+                    blockers.iter().map(|blocker| blocker.description.clone()).collect::<Vec<_>>();
+                (true, blocker_reasons, blocker_messages, Some(!blockers.is_empty()))
+            }
+            None => (false, Vec::new(), Vec::new(), None),
+        };
+    let fallback_state = if let Some(blockers) = blockers {
+        if !blockers.is_empty() {
+            "compiler_blocked"
+        } else if compiler_plan_edit_count == Some(0) {
+            "compiler_empty"
+        } else {
+            "compiler_allowed"
+        }
+    } else {
+        "compiler_missing"
     };
-    let blocker_reasons =
-        blockers.iter().map(|blocker| format!("{:?}", blocker.reason)).collect::<Vec<_>>();
-    let blocker_messages =
-        blockers.iter().map(|blocker| blocker.description.clone()).collect::<Vec<_>>();
     let live_provider_state = rename_live_provider_state(
         live_provider_result,
         live_provider_error,
         live_provider_edit_count,
     );
-
-    let fallback_state = if !blockers.is_empty() {
-        "compiler_blocked"
-    } else if compiler_plan_edit_count == 0 {
-        "compiler_empty"
-    } else {
-        "compiler_allowed"
-    };
 
     json!({
         "provider": "rename",
@@ -554,10 +562,11 @@ fn rename_fallback_noise_json(
         "live_provider_state": live_provider_state,
         "live_provider_error": live_provider_error,
         "live_provider_edit_count": live_provider_edit_count,
+        "compiler_available": compiler_available,
         "compiler_plan_edit_count": compiler_plan_edit_count,
         "compiler_blocker_reasons": blocker_reasons,
         "compiler_blocker_messages": blocker_messages,
-        "compiler_requires_confirmation": !blockers.is_empty(),
+        "compiler_requires_confirmation": compiler_requires_confirmation,
         "fallback_state": fallback_state,
         "claim_boundary": "package/compiler-backed rename stays receipt-only until fallback/noise proof justifies cutover"
     })
