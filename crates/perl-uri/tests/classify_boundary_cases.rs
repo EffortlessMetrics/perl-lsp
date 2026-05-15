@@ -150,6 +150,23 @@ fn uri_extension_for_path_ending_in_slash() {
     assert_eq!(uri_extension("file:///path/"), None);
 }
 
+#[test]
+fn uri_extension_dotfile_with_extension_returns_trailing_segment() {
+    // Dotfile detection only skips the leading-dot-only case (`.bashrc`).
+    // Dotfiles with a later dot follow the same last-dot rule as other paths.
+    assert_eq!(uri_extension(".bashrc.bak"), Some("bak"));
+    assert_eq!(uri_extension(".config.json"), Some("json"));
+    assert_eq!(uri_extension("file:///home/user/.gitignore.bak"), Some("bak"));
+    assert_eq!(uri_extension(r"C:\Users\dev\.bashrc.bak"), Some("bak"));
+}
+
+#[test]
+fn uri_extension_returns_none_for_parent_dir_reference() {
+    // `..` has a dot, but the trailing extension segment is empty.
+    assert_eq!(uri_extension(".."), None);
+    assert_eq!(uri_extension("file:///path/.."), None);
+}
+
 // ---------------------------------------------------------------------------
 // uri_key: non-Windows path unchanged, drive letter normalization
 // ---------------------------------------------------------------------------
