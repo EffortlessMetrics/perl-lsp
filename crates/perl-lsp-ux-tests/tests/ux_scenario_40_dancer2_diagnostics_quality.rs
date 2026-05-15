@@ -1,0 +1,535 @@
+//! Scenario 40 - Dancer2 diagnostics quality receipt.
+//!
+//! This receipt exercises diagnostics over the committed Dancer2 skeleton
+//! workspace and records a second real-project false-positive / false-negative
+//! boundary without changing provider behavior.
+//!
+//! Receipt signals:
+//! - diagnostic notification and payload shape for selected real-workspace files
+//! - no false PL701 for Dancer2 modules present in the fixture workspace
+//! - conservative handling for dynamic typeglob DSL/plugin export boundaries
+//! - true-missing-module PL701 behavior from injected probe files
+//! - mixed project-shaped files keep present modules clean while reporting a
+//!   genuinely missing module
+
+use anyhow::{Context, Result};
+use perl_lsp_ux_tests::{
+    LspEvent, ScenarioConfig, UxCiTier, UxComponent, UxHarness, UxScenarioSkip, run_ux_scenario,
+};
+use serde::Serialize;
+use serde_json::Value;
+use std::collections::BTreeSet;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+const SCENARIO_FILE: &str = "ux_scenario_40_dancer2_diagnostics_quality.rs";
+const MISSING_MODULE_PROBE_PATH: &str = "lib/Dancer2/DiagnosticsProbe.pm";
+const MIXED_MODULE_PROBE_PATH: &str = "lib/Dancer2/DiagnosticsMixedProbe.pm";
+const MISSING_MODULE_PROBE_SOURCE: &str = r#"package Dancer2::DiagnosticsProbe;
+use strict;
+use warnings;
+use Dancer2;
+use Definitely::Missing::ForDancer2Receipt;
+
+sub diagnostic_probe { return 1 }
+
+1;
+"#;
+const MIXED_MODULE_PROBE_SOURCE: &str = r#"package Dancer2::DiagnosticsMixedProbe;
+use strict;
+use warnings;
+use Dancer2::Core::App;
+use Dancer2::Core::DSL;
+use Definitely::Missing::MixedDancer2Receipt;
+
+sub mixed_diagnostic_probe {
+  return (Dancer2::Core::App->new(name => 'receipt', runner => undef), Dancer2::Core::DSL->new(app => undef));
+}
+
+1;
+"#;
+
+#[derive(Debug)]
+struct FixtureFile {
+    relative_path: String,
+    content: String,
+}
+
+#[derive(Debug)]
+struct DiagnosticProbe {
+    name: &'static str,
+    category: &'static str,
+    file: &'static str,
+    absent_pl701_modules: &'static [&'static str],
+    required_codes: &'static [&'static str],
+    required_message_substrings: &'static [&'static str],
+    forbidden_message_substrings: &'static [&'static str],
+}
+
+#[derive(Debug, Serialize)]
+struct DiagnosticProbeReport {
+    name: &'static str,
+    category: &'static str,
+    file: &'static str,
+    diagnostic_count: usize,
+    notification_count: usize,
+    invalid_shape_count: usize,
+    pl701_count: usize,
+    false_positive_pl701_modules: Vec<String>,
+    required_code_hits: Vec<String>,
+    missing_required_codes: Vec<String>,
+    required_message_hits: Vec<String>,
+    missing_required_message_substrings: Vec<String>,
+    forbidden_message_hits: Vec<String>,
+    dynamic_boundary_label_hits: Vec<String>,
+    message_excerpts: Vec<String>,
+    fallback_or_empty: bool,
+}
+
+fn binary_available() -> bool {
+    perl_lsp_ux_tests::resolve_binary().is_ok()
+}
+
+fn missing_binary_skip() -> UxScenarioSkip {
+    UxScenarioSkip::infra("PERL_LSP_BIN not set and target/debug/perl-lsp not found")
+}
+
+fn workspace_root() -> Result<PathBuf> {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .map(Path::to_path_buf)
+        .context("CARGO_MANIFEST_DIR must be nested under the workspace root")
+}
+
+fn dancer2_fixture_root() -> Result<PathBuf> {
+    Ok(workspace_root()?.join("test_corpus").join("real_projects").join("dancer2_skeleton"))
+}
+
+fn is_perl_source(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| matches!(extension, "pm" | "pl" | "t"))
+}
+
+fn collect_perl_files(root: &Path, dir: &Path, files: &mut Vec<FixtureFile>) -> Result<()> {
+    for entry in fs::read_dir(dir).with_context(|| format!("reading {}", dir.display()))? {
+        let entry = entry.with_context(|| format!("reading an entry under {}", dir.display()))?;
+        let path = entry.path();
+        if path.is_dir() {
+            collect_perl_files(root, &path, files)?;
+        } else if is_perl_source(&path) {
+            let relative_path = path
+                .strip_prefix(root)
+                .with_context(|| format!("stripping fixture root from {}", path.display()))?
+                .to_string_lossy()
+                .replace('\\', "/");
+            let content =
+                fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+            files.push(FixtureFile { relative_path, content });
+        }
+    }
+    Ok(())
+}
+
+fn load_dancer2_fixture_files() -> Result<Vec<FixtureFile>> {
+    let root = dancer2_fixture_root()?;
+    let mut files = Vec::new();
+    collect_perl_files(&root, &root, &mut files)?;
+    files.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
+    Ok(files)
+}
+
+fn create_dancer2_harness(files: &[FixtureFile]) -> Result<UxHarness> {
+    let mut config = ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
+        .env("PERL_LSP_WORKSPACE", "1")
+        .with_file(MISSING_MODULE_PROBE_PATH, MISSING_MODULE_PROBE_SOURCE)
+        .with_file(MIXED_MODULE_PROBE_PATH, MIXED_MODULE_PROBE_SOURCE);
+
+    for file in files {
+        config = config.with_file(&file.relative_path, &file.content);
+    }
+
+    UxHarness::new(config)
+}
+
+fn open_all_fixture_files(harness: &UxHarness, files: &[FixtureFile]) -> Result<()> {
+    for file in files {
+        harness.open_file(&file.relative_path, &file.content)?;
+    }
+    harness.open_file(MISSING_MODULE_PROBE_PATH, MISSING_MODULE_PROBE_SOURCE)?;
+    harness.open_file(MIXED_MODULE_PROBE_PATH, MIXED_MODULE_PROBE_SOURCE)?;
+    Ok(())
+}
+
+fn diagnostic_probes() -> Vec<DiagnosticProbe> {
+    vec![
+        DiagnosticProbe {
+            name: "workspace_present_dancer2_imports",
+            category: "workspace_module_resolution_no_false_pl701",
+            file: "lib/Dancer2.pm",
+            absent_pl701_modules: &[
+                "Dancer2::Core::App",
+                "Dancer2::Core::DSL",
+                "Dancer2::Core::Runner",
+            ],
+            required_codes: &[],
+            required_message_substrings: &[],
+            forbidden_message_substrings: &[],
+        },
+        DiagnosticProbe {
+            name: "dynamic_dsl_export_boundary",
+            category: "dynamic_boundary_conservative",
+            file: "lib/Dancer2.pm",
+            absent_pl701_modules: &[],
+            required_codes: &[],
+            required_message_substrings: &[],
+            forbidden_message_substrings: &["${caller}::${name}"],
+        },
+        DiagnosticProbe {
+            name: "dynamic_plugin_export_boundary",
+            category: "dynamic_boundary_conservative",
+            file: "lib/Dancer2/Plugin.pm",
+            absent_pl701_modules: &[],
+            required_codes: &[],
+            required_message_substrings: &[],
+            forbidden_message_substrings: &["${plugin_class}::${kw}", "${caller}::register"],
+        },
+        DiagnosticProbe {
+            name: "missing_module_probe",
+            category: "missing_module_true_unknown",
+            file: MISSING_MODULE_PROBE_PATH,
+            absent_pl701_modules: &[],
+            required_codes: &["PL701"],
+            required_message_substrings: &["Definitely::Missing::ForDancer2Receipt"],
+            forbidden_message_substrings: &[],
+        },
+        DiagnosticProbe {
+            name: "mixed_present_and_missing_modules",
+            category: "mixed_false_positive_false_negative_boundary",
+            file: MIXED_MODULE_PROBE_PATH,
+            absent_pl701_modules: &["Dancer2::Core::App", "Dancer2::Core::DSL"],
+            required_codes: &["PL701"],
+            required_message_substrings: &["Definitely::Missing::MixedDancer2Receipt"],
+            forbidden_message_substrings: &[],
+        },
+    ]
+}
+
+fn diagnostic_code(diagnostic: &Value) -> Option<String> {
+    diagnostic.get("code").and_then(|code| {
+        code.as_str().map(str::to_string).or_else(|| code.as_u64().map(|n| n.to_string()))
+    })
+}
+
+fn diagnostic_message(diagnostic: &Value) -> &str {
+    diagnostic.get("message").and_then(Value::as_str).unwrap_or_default()
+}
+
+fn has_diagnostic_code(diagnostic: &Value, code: &str) -> bool {
+    diagnostic_code(diagnostic).is_some_and(|actual| actual == code)
+}
+
+fn is_valid_position(position: &Value) -> bool {
+    position.get("line").and_then(Value::as_u64).is_some()
+        && position.get("character").and_then(Value::as_u64).is_some()
+}
+
+fn is_valid_diagnostic_shape(diagnostic: &Value) -> bool {
+    let Some(range) = diagnostic.get("range") else {
+        return false;
+    };
+    let has_range = range.get("start").is_some_and(is_valid_position)
+        && range.get("end").is_some_and(is_valid_position);
+    let has_message = diagnostic.get("message").and_then(Value::as_str).is_some();
+    let severity_ok = diagnostic
+        .get("severity")
+        .is_none_or(|severity| severity.as_u64().is_some_and(|n| (1..=4).contains(&n)));
+    has_range && has_message && severity_ok
+}
+
+fn message_excerpt(message: &str) -> String {
+    const MAX_CHARS: usize = 180;
+    let mut excerpt = message.chars().take(MAX_CHARS).collect::<String>();
+    if message.chars().count() > MAX_CHARS {
+        excerpt.push_str("...");
+    }
+    excerpt
+}
+
+fn uri_matches_relative_path(uri: &str, relative_path: &str) -> bool {
+    let normalized_uri = uri.replace('\\', "/");
+    let normalized_path = relative_path.replace('\\', "/");
+    normalized_uri.ends_with(&normalized_path)
+}
+
+fn diagnostic_notification_count(harness: &UxHarness, relative_path: &str) -> usize {
+    harness
+        .peek_notifications()
+        .iter()
+        .filter(|event| {
+            matches!(
+                event,
+                LspEvent::Diagnostics { uri, .. } if uri_matches_relative_path(uri, relative_path)
+            )
+        })
+        .count()
+}
+
+fn matching_pl701_modules(diagnostics: &[Value], modules: &[&str]) -> Vec<String> {
+    modules
+        .iter()
+        .copied()
+        .filter(|module| {
+            diagnostics.iter().any(|diagnostic| {
+                has_diagnostic_code(diagnostic, "PL701")
+                    && diagnostic_message(diagnostic).contains(module)
+            })
+        })
+        .map(str::to_string)
+        .collect()
+}
+
+fn required_code_hits(diagnostics: &[Value], codes: &[&str]) -> Vec<String> {
+    codes
+        .iter()
+        .copied()
+        .filter(|code| diagnostics.iter().any(|diagnostic| has_diagnostic_code(diagnostic, code)))
+        .map(str::to_string)
+        .collect()
+}
+
+fn missing_required_codes(diagnostics: &[Value], codes: &[&str]) -> Vec<String> {
+    codes
+        .iter()
+        .copied()
+        .filter(|code| !diagnostics.iter().any(|diagnostic| has_diagnostic_code(diagnostic, code)))
+        .map(str::to_string)
+        .collect()
+}
+
+fn required_message_hits(diagnostics: &[Value], substrings: &[&str]) -> Vec<String> {
+    substrings
+        .iter()
+        .copied()
+        .filter(|needle| {
+            diagnostics.iter().any(|diagnostic| diagnostic_message(diagnostic).contains(needle))
+        })
+        .map(str::to_string)
+        .collect()
+}
+
+fn missing_required_message_substrings(diagnostics: &[Value], substrings: &[&str]) -> Vec<String> {
+    substrings
+        .iter()
+        .copied()
+        .filter(|needle| {
+            !diagnostics.iter().any(|diagnostic| diagnostic_message(diagnostic).contains(needle))
+        })
+        .map(str::to_string)
+        .collect()
+}
+
+fn forbidden_message_hits(diagnostics: &[Value], substrings: &[&str]) -> Vec<String> {
+    substrings
+        .iter()
+        .copied()
+        .filter(|needle| {
+            diagnostics.iter().any(|diagnostic| diagnostic_message(diagnostic).contains(needle))
+        })
+        .map(str::to_string)
+        .collect()
+}
+
+fn dynamic_boundary_label_hits(diagnostics: &[Value]) -> Vec<String> {
+    ["dynamic", "boundary", "fallback", "low confidence", "unknown"]
+        .iter()
+        .copied()
+        .filter(|needle| {
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic_message(diagnostic).to_ascii_lowercase().contains(needle)
+            })
+        })
+        .map(str::to_string)
+        .collect()
+}
+
+fn run_probe(harness: &UxHarness, probe: &DiagnosticProbe) -> DiagnosticProbeReport {
+    let diagnostics = harness.wait_for_latest_diagnostics(probe.file, Duration::from_secs(6));
+    let notification_count = diagnostic_notification_count(harness, probe.file);
+    let invalid_shape_count =
+        diagnostics.iter().filter(|diagnostic| !is_valid_diagnostic_shape(diagnostic)).count();
+    let pl701_count =
+        diagnostics.iter().filter(|diagnostic| has_diagnostic_code(diagnostic, "PL701")).count();
+    let false_positive_pl701_modules =
+        matching_pl701_modules(&diagnostics, probe.absent_pl701_modules);
+    let required_hits = required_code_hits(&diagnostics, probe.required_codes);
+    let missing_codes = missing_required_codes(&diagnostics, probe.required_codes);
+    let message_hits = required_message_hits(&diagnostics, probe.required_message_substrings);
+    let missing_messages =
+        missing_required_message_substrings(&diagnostics, probe.required_message_substrings);
+    let forbidden_hits = forbidden_message_hits(&diagnostics, probe.forbidden_message_substrings);
+    let dynamic_hits = dynamic_boundary_label_hits(&diagnostics);
+    let message_excerpts = diagnostics
+        .iter()
+        .filter_map(|diagnostic| diagnostic.get("message").and_then(Value::as_str))
+        .map(message_excerpt)
+        .collect::<Vec<_>>();
+
+    DiagnosticProbeReport {
+        name: probe.name,
+        category: probe.category,
+        file: probe.file,
+        diagnostic_count: diagnostics.len(),
+        notification_count,
+        invalid_shape_count,
+        pl701_count,
+        false_positive_pl701_modules,
+        required_code_hits: required_hits,
+        missing_required_codes: missing_codes,
+        required_message_hits: message_hits,
+        missing_required_message_substrings: missing_messages,
+        forbidden_message_hits: forbidden_hits,
+        dynamic_boundary_label_hits: dynamic_hits,
+        message_excerpts,
+        fallback_or_empty: diagnostics.is_empty(),
+    }
+}
+
+#[test]
+fn scenario_40_dancer2_diagnostics_quality_receipt() {
+    run_ux_scenario(
+        "dancer2_diagnostics_quality",
+        SCENARIO_FILE,
+        "scenario_40_dancer2_diagnostics_quality_receipt",
+        UxCiTier::Pr,
+        Some(UxComponent::Diagnostics),
+        |recorder| {
+            if !binary_available() {
+                return Err(missing_binary_skip().into());
+            }
+
+            let fixture_files = load_dancer2_fixture_files()?;
+            recorder
+                .check("dancer2 fixture has committed Perl files", !fixture_files.is_empty())?;
+
+            let harness = create_dancer2_harness(&fixture_files)?;
+            open_all_fixture_files(&harness, &fixture_files)?;
+            std::thread::sleep(Duration::from_millis(800));
+
+            let probes = diagnostic_probes();
+            let mut reports = Vec::new();
+
+            for probe in &probes {
+                recorder.mark_request_start(probe.name);
+                let report = run_probe(&harness, probe);
+                if report.notification_count > 0 {
+                    recorder.mark_first_useful_result(probe.name);
+                }
+                eprintln!(
+                    "diagnostic_probe={} category={} diagnostics={} pl701={} false_pl701={:?} missing_codes={:?}",
+                    report.name,
+                    report.category,
+                    report.diagnostic_count,
+                    report.pl701_count,
+                    report.false_positive_pl701_modules,
+                    report.missing_required_codes
+                );
+                reports.push(report);
+            }
+
+            let categories = reports.iter().map(|report| report.category).collect::<BTreeSet<_>>();
+            let invalid_shape_total: usize =
+                reports.iter().map(|report| report.invalid_shape_count).sum();
+            let notification_total: usize =
+                reports.iter().map(|report| report.notification_count).sum();
+            let false_positive_pl701_total: usize =
+                reports.iter().map(|report| report.false_positive_pl701_modules.len()).sum();
+            let missing_required_code_total: usize =
+                reports.iter().map(|report| report.missing_required_codes.len()).sum();
+            let missing_required_message_total: usize =
+                reports.iter().map(|report| report.missing_required_message_substrings.len()).sum();
+            let forbidden_message_total: usize =
+                reports.iter().map(|report| report.forbidden_message_hits.len()).sum();
+            let fallback_or_empty_count =
+                reports.iter().filter(|report| report.fallback_or_empty).count();
+            let missing_module_pl701_count = reports
+                .iter()
+                .find(|report| report.name == "missing_module_probe")
+                .map(|report| report.required_code_hits.len())
+                .unwrap_or_default();
+            let mixed_probe_pl701_count = reports
+                .iter()
+                .find(|report| report.name == "mixed_present_and_missing_modules")
+                .map(|report| report.required_code_hits.len())
+                .unwrap_or_default();
+
+            let receipt = serde_json::json!({
+                "schema_version": 1,
+                "project": "dancer2",
+                "surface": "diagnostics",
+                "claim_boundary": "second-project diagnostics quality receipt only; no provider behavior changed or promoted",
+                "fixture_file_count": fixture_files.len(),
+                "injected_probe_file_count": 2,
+                "probe_count": reports.len(),
+                "notification_total": notification_total,
+                "invalid_shape_total": invalid_shape_total,
+                "false_positive_pl701_total": false_positive_pl701_total,
+                "missing_required_code_total": missing_required_code_total,
+                "missing_required_message_total": missing_required_message_total,
+                "forbidden_message_total": forbidden_message_total,
+                "fallback_or_empty_count": fallback_or_empty_count,
+                "missing_module_pl701_count": missing_module_pl701_count,
+                "mixed_probe_pl701_count": mixed_probe_pl701_count,
+                "reports": reports,
+            });
+            eprintln!(
+                "dancer2_diagnostics_quality_receipt={}",
+                serde_json::to_string_pretty(&receipt)?
+            );
+
+            recorder
+                .check("all diagnostics probes produced reports", reports.len() == probes.len())?;
+            recorder.check(
+                "diagnostics probes covered all intended receipt categories",
+                categories
+                    == BTreeSet::from([
+                        "dynamic_boundary_conservative",
+                        "missing_module_true_unknown",
+                        "mixed_false_positive_false_negative_boundary",
+                        "workspace_module_resolution_no_false_pl701",
+                    ]),
+            )?;
+            recorder.check(
+                "diagnostic notifications arrived for selected probes",
+                notification_total >= probes.len(),
+            )?;
+            recorder
+                .check("all diagnostics used valid LSP payload shape", invalid_shape_total == 0)?;
+            recorder.check(
+                "workspace-present Dancer2 imports did not emit PL701",
+                false_positive_pl701_total == 0,
+            )?;
+            recorder.check(
+                "dynamic Dancer2 typeglob exports stayed conservative",
+                forbidden_message_total == 0,
+            )?;
+            recorder.check(
+                "missing-module probe emitted PL701",
+                missing_module_pl701_count > 0 && missing_required_code_total == 0,
+            )?;
+            recorder.check(
+                "diagnostic PL701 messages identify the required missing modules",
+                missing_required_message_total == 0,
+            )?;
+            recorder.check(
+                "mixed present/missing module probe emitted only the missing-module PL701 boundary",
+                mixed_probe_pl701_count > 0 && false_positive_pl701_total == 0,
+            )?;
+
+            harness.assert_no_crash();
+            Ok(())
+        },
+    );
+}
