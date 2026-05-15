@@ -150,17 +150,17 @@ impl SubprocessRuntime for TrackingRuntime {
 }
 
 #[test]
-#[allow(clippy::expect_used)]
-fn format_file_storm_does_not_retain_subprocess_outputs_or_temp_state() {
-    let temp = tempfile::tempdir().expect("create tempdir");
+fn format_file_storm_does_not_retain_subprocess_outputs_or_temp_state()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
     let runtime = Arc::new(TrackingRuntime::new());
     let formatter = PerlTidyFormatter::new(PerlTidyConfig::default(), runtime.clone());
     let mut expected_files = Vec::new();
 
     for i in 0..64 {
         let path = temp.path().join(format!("storm_{i}.pl"));
-        std::fs::write(&path, format!("print {i};\n")).expect("write temp Perl file");
-        formatter.format_file(&path).expect("format temp Perl file");
+        std::fs::write(&path, format!("print {i};\n"))?;
+        formatter.format_file(&path).map_err(std::io::Error::other)?;
         expected_files.push(path);
     }
 
@@ -171,10 +171,11 @@ fn format_file_storm_does_not_retain_subprocess_outputs_or_temp_state() {
     assert_eq!(formatter.cache_len(), 0, "format_file must not populate memoized format cache");
 
     let mut remaining_files: Vec<_> = std::fs::read_dir(temp.path())
-        .expect("read tempdir")
-        .map(|entry| entry.expect("read entry").path())
-        .collect();
+        ?
+        .map(|entry| entry.map(|entry| entry.path()))
+        .collect::<Result<Vec<_>, _>>()?;
     remaining_files.sort();
     expected_files.sort();
     assert_eq!(remaining_files, expected_files, "formatter wrapper should not create temp files");
+    Ok(())
 }
