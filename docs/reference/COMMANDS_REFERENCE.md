@@ -538,7 +538,7 @@ cargo test -p perl-lsp-rs --test lsp_behavioral_tests -- test_execute_command_de
 - ✅ `perl.runTestSub` - Execute specific test subroutine with isolation
 - ✅ `perl.debugTests` - Debug test execution with breakpoint support
 - ✅ `perl.runCritic` - Native critic analysis with explicit Perl::Critic compatibility
-- ✅ `perl.explainProviderDecision` - Return a structured provider decision explanation. The v1 command is conservative: it attaches current provider-matrix receipt anchors for known surfaces, preserves caller-provided receipt/scenario IDs, accepts an optional object-valued `request_receipt` for request-local bug reports, can replay persisted provider-local request receipts for covered refactor proof surfaces, and returns a low-confidence `missing_fact` / `no_result` fallback for unknown surfaces.
+- ✅ `perl.explainProviderDecision` - Return a structured provider decision explanation. The v1 command is conservative: it attaches current provider-matrix receipt anchors for known surfaces, preserves caller-provided receipt/scenario IDs, accepts an optional object-valued `request_receipt` for request-local bug reports, can replay persisted provider-local request receipts for covered live rename and refactor proof surfaces, and returns a low-confidence `missing_fact` / `no_result` fallback for unknown surfaces.
 
 ### Advanced Code Actions Testing (*Diataxis: How-to Guide* - Code action workflows)
 

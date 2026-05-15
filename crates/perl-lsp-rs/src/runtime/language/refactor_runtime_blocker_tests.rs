@@ -1197,6 +1197,57 @@ fn refactor_runtime_blocker_ux_explain_provider_decision_replays_persisted_safe_
 }
 
 #[test]
+fn refactor_runtime_blocker_ux_explain_provider_decision_replays_live_rename_trace()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let uri = "file:///workspace/lib/RenameTrace.pm";
+    let source = r#"package RenameTrace;
+use strict;
+use warnings;
+
+sub run {
+    my $value = 1;
+    return $value;
+}
+
+1;
+"#;
+    open_document(&server, uri, source)?;
+    let (line, character) = position_of(source, "$value =")?;
+    let rename_result = server
+        .handle_rename_workspace(Some(json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character},
+            "newName": "renamed_value"
+        })))?
+        .ok_or("missing live rename response")?;
+    let edit_count = rename_result
+        .get("changes")
+        .and_then(|changes| changes.get(uri))
+        .and_then(Value::as_array)
+        .map(Vec::len)
+        .ok_or("missing live rename edits")?;
+    assert!(edit_count > 0, "live rename must produce the baseline lexical edits");
+
+    let explanation = explain_provider_decision(&server, "rename")?;
+    let request_receipt =
+        explanation.get("request_receipt").ok_or("missing persisted rename request_receipt")?;
+    assert_eq!(request_receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("textDocument/rename")
+    );
+    assert_eq!(request_receipt.get("reason").and_then(Value::as_str), Some("same_file_semantic"));
+    assert_eq!(request_receipt.get("symbol").and_then(Value::as_str), Some("$value"));
+    assert_eq!(
+        request_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
+        u64::try_from(edit_count).ok()
+    );
+
+    Ok(())
+}
+
+#[test]
 fn refactor_runtime_blocker_ux_safe_delete_receipt_records_live_blocker_ux_and_rollback()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();

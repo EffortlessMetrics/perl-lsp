@@ -80,11 +80,11 @@ framework facts, PIR, formatter, critic, release, and security work.
 
 Provider decision explanations are already partial-live through
 `perl.explainProviderDecision`; callers can attach a request-local
-`request_receipt` object for bug reports, and covered refactor runtime receipt
-surfaces now persist provider-local traces that the command can replay when the
-caller does not provide a receipt. The next explanation step is wiring the same
-trace model into ordinary live completion, navigation, diagnostic, rename, and
-safe-delete requests.
+`request_receipt` object for bug reports, existing live rename paths now record
+provider-local traces, and covered refactor runtime receipt surfaces persist
+provider-local traces that the command can replay when the caller does not
+provide a receipt. The next explanation step is wiring the same trace model into
+ordinary live completion, navigation, diagnostic, and safe-delete requests.
 
 Parser raw-bucket work, Linux corpus refresh, security alert classification,
 Rust 1.95 rollout, native formatter, native critic, PIR, and determinism remain
