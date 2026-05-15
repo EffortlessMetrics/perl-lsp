@@ -62,7 +62,9 @@ sub caller {
 1;
 "#;
 
+const DANCER2_APP_URI: &str = "file:///workspace/lib/Dancer2/Core/App.pm";
 const DANCER2_DSL_URI: &str = "file:///workspace/lib/Dancer2/Core/DSL.pm";
+const DANCER2_PLUGIN_URI: &str = "file:///workspace/lib/Dancer2/Plugin.pm";
 const REAL_BASELINE_UTIL_URI: &str = "file:///workspace/lib/RealBaseline/Util.pm";
 
 fn create_server() -> LspServer {
@@ -642,6 +644,130 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_dancer2_stale_symbol_f
             "compiler_plan_safe=false",
             "blocker_reasons=StaleFact",
             "stale_fact=true",
+            "requires_confirmation=true",
+            "no live refactor behavior change",
+        ],
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_dancer2_generated_member()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_dancer2_workspace(&server)?;
+    let app = files.get("lib/Dancer2/Core/App.pm").ok_or("missing Dancer2 Core App fixture")?;
+
+    let (location_line, location_character) = position_of(app, "location    =>")?;
+    let location_params = json!({
+        "textDocument": {"uri": DANCER2_APP_URI},
+        "position": {"line": location_line, "character": location_character}
+    });
+    let location_receipt = server
+        .test_safe_delete_runtime_blocker_ux_receipt(Some(location_params))?
+        .ok_or("missing Dancer2 generated-member safe-delete receipt")?;
+    let location_compiler = compiler_receipt(&location_receipt)?;
+
+    assert_eq!(location_receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(location_receipt.get("symbol").and_then(Value::as_str), Some("location"));
+    assert_eq!(
+        location_receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(location_receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
+    assert!(trace_count(location_compiler)? > 0, "location receipt must carry fact-source traces");
+    assert_note_contains(
+        location_compiler,
+        &[
+            "safe-delete runtime blocker UX",
+            "compiler_plan_safe=false",
+            "blocker_count=1",
+            "blocker_reasons=GeneratedMember",
+            "requires_confirmation=true",
+            "no live refactor behavior change",
+        ],
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_dancer2_dynamic_typeglob_request_shape()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_dancer2_workspace(&server)?;
+    let plugin = files.get("lib/Dancer2/Plugin.pm").ok_or("missing Dancer2 Plugin fixture")?;
+
+    let (keyword_line, keyword_character) = position_of(plugin, "plugin_keywords")?;
+    let keyword_params = json!({
+        "textDocument": {"uri": DANCER2_PLUGIN_URI},
+        "position": {"line": keyword_line, "character": keyword_character},
+        "compilerPlanFixture": "dynamic_boundary"
+    });
+    let keyword_receipt = server
+        .test_safe_delete_runtime_blocker_ux_receipt(Some(keyword_params))?
+        .ok_or("missing Dancer2 dynamic typeglob safe-delete receipt")?;
+    let keyword_compiler = compiler_receipt(&keyword_receipt)?;
+
+    assert_eq!(keyword_receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(keyword_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        keyword_receipt.get("compiler_plan_fixture").and_then(Value::as_str),
+        Some("dynamic_boundary")
+    );
+    assert_eq!(keyword_receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
+    assert_trace_contains(keyword_compiler, "DynamicBoundary", "High", "Fresh")?;
+    assert!(trace_count(keyword_compiler)? > 0, "plugin_keywords receipt must carry traces");
+    assert_note_contains(
+        keyword_compiler,
+        &[
+            "safe-delete runtime blocker UX",
+            "compiler_plan_fixture=dynamic_boundary",
+            "compiler_plan_safe=false",
+            "blocker_reasons=DynamicBoundary",
+            "requires_confirmation=true",
+            "no live refactor behavior change",
+        ],
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_dancer2_low_confidence_request_shape()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_dancer2_workspace(&server)?;
+    let dsl = files.get("lib/Dancer2/Core/DSL.pm").ok_or("missing Dancer2 Core DSL fixture")?;
+
+    let (compile_line, compile_character) = position_of(dsl, "_compile {")?;
+    let compile_params = json!({
+        "textDocument": {"uri": DANCER2_DSL_URI},
+        "position": {"line": compile_line, "character": compile_character},
+        "compilerPlanFixture": "low_confidence"
+    });
+    let compile_receipt = server
+        .test_safe_delete_runtime_blocker_ux_receipt(Some(compile_params))?
+        .ok_or("missing Dancer2 low-confidence safe-delete receipt")?;
+    let compile_compiler = compiler_receipt(&compile_receipt)?;
+
+    assert_eq!(compile_receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        compile_receipt.get("compiler_plan_fixture").and_then(Value::as_str),
+        Some("low_confidence")
+    );
+    assert_eq!(compile_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert_eq!(compile_receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
+    assert_trace_contains(compile_compiler, "SemanticFact", "Low", "Fresh")?;
+    assert_note_contains(
+        compile_compiler,
+        &[
+            "safe-delete runtime blocker UX",
+            "compiler_plan_fixture=low_confidence",
+            "compiler_plan_safe=false",
+            "blocker_reasons=AmbiguousReference",
+            "low_confidence=true",
             "requires_confirmation=true",
             "no live refactor behavior change",
         ],

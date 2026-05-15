@@ -356,6 +356,11 @@ fn fixture_blocker(fixture: &str) -> Option<PlanBlocker> {
             None,
             "stale compiler fact must be refreshed before editing".to_string(),
         )),
+        "dynamic_boundary" => Some(PlanBlocker::new(
+            PlanBlockerReason::DynamicBoundary,
+            None,
+            "dynamic boundary requires confirmation before editing".to_string(),
+        )),
         _ => None,
     }
 }
