@@ -49,7 +49,7 @@ blocker when relevant.
 
 | Surface | Current state | Real-workspace receipt state | Fallback / blocker coverage | Next proof |
 | --- | --- | --- | --- | --- |
-| Completion | `partial live / shadowed` | Mojolicious visible-symbol ranking receipt covers candidate counts, top-N churn, useful/noisy additions, generated labels, and dynamic/fallback labels for scenario 28 | Legacy fallback; generated and dynamic-boundary candidates remain shadowed or blocked | Additional project-shape completion quality receipts before broader generated, dynamic, method, or workspace-wide completion cutover |
+| Completion | `partial live / shadowed` | Mojolicious visible-symbol ranking receipt covers candidate counts, top-N churn, useful/noisy additions, generated labels, and dynamic/fallback labels for scenario 28 | Legacy fallback; generated and dynamic-boundary candidates remain shadowed or blocked; ordinary completion requests persist provider-local decision traces for explain-provider-decision | Additional project-shape completion quality receipts before broader generated, dynamic, method, or workspace-wide completion cutover |
 | Hover | `partial live / provenance-backed` | Mojolicious scenario 29 records exact, imported, generated/framework, dynamic-shaped, module-resolution, and fallback/missing-fact hover surfaces | Legacy fallback; imported, generated, dynamic-boundary, and fallback paths are labeled in receipts | Additional project-shape hover quality receipts before broader generated/dynamic expansion |
 | Goto definition | `partial live exact/imported` | Mojolicious scenario 30 records module-resolution, exact-local, imported-symbol, and dynamic-boundary-shaped definition probes | Legacy fallback for generated/no-source, dynamic, stale, low-confidence, and ambiguous candidates | Additional generated/dynamic project-shape receipts with no false-exact source-location claims |
 | References | `partial live exact/imported` | Mojolicious scenario 30 records exact-local, imported-symbol, and declaration-including boundary reference probes | Legacy fallback for generated/no-source, declaration-including, coderef, typeglob, dynamic, stale, low-confidence, and ambiguous cases | Precision/recall receipts for generated, coderef, typeglob, dynamic, and broader declaration-including cases |
@@ -74,17 +74,20 @@ rename or live symbol-level safe-delete cutover.
 This dashboard keeps the next provider lane separate from parser capability,
 framework facts, PIR, formatter, critic, release, and security work.
 
-1. `feat(provider): extend persisted decision traces to live provider requests`
-2. `test(rename): add real-workspace package/compiler-backed pilot receipt`
-3. `feat(safe-delete): prove scoped live symbol-delete UX`
+1. `feat(navigation): persist provider decision traces`
+2. `feat(diagnostics): persist diagnostic trust decisions`
+3. `feat(safe-delete): persist blocker decision traces`
+4. `test(rename): add real-workspace package/compiler-backed pilot receipt`
+5. `feat(safe-delete): prove scoped live symbol-delete UX`
 
 Provider decision explanations are already partial-live through
 `perl.explainProviderDecision`; callers can attach a request-local
 `request_receipt` object for bug reports, existing live rename paths now record
 provider-local traces, and covered refactor runtime receipt surfaces persist
 provider-local traces that the command can replay when the caller does not
-provide a receipt. The next explanation step is wiring the same trace model into
-ordinary live completion, navigation, diagnostic, and safe-delete requests.
+provide a receipt. Ordinary live completion requests now persist the same trace
+model. The next explanation step is wiring provider-local traces into ordinary
+navigation, diagnostic, and safe-delete requests.
 
 Safe-delete support tiers have been reviewed after the allowed-symbol proof:
 the row remains `shadowed`, and the next proof is scoped live symbol-delete UX

@@ -33,6 +33,26 @@ use super::super::LspServer;
 static SNIPPET_PLACEHOLDER_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static SNIPPET_SIMPLE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 
+#[derive(Debug)]
+struct CompletionDecisionSummary {
+    compiler_fact_items: usize,
+    generated_items: usize,
+    dynamic_boundary_items: usize,
+    fallback_items: usize,
+    sample_labels: Vec<String>,
+}
+
+#[derive(Debug)]
+struct CompletionDecisionContext<'a> {
+    uri: &'a str,
+    line: u32,
+    character: u32,
+    ast_available: bool,
+    workspace_index_state: &'static str,
+    workspace_index_reason: Option<&'static str>,
+    is_incomplete: bool,
+}
+
 fn get_snippet_placeholder_regex() -> Option<&'static Regex> {
     SNIPPET_PLACEHOLDER_RE.get_or_init(|| Regex::new(r"\$\{(\d+):([^}]+)\}")).as_ref().ok()
 }
@@ -59,6 +79,144 @@ fn commit_chars_for_kind(kind: CompletionItemKind) -> Option<&'static [&'static 
 }
 
 impl LspServer {
+    fn record_completion_provider_decision_trace(
+        &self,
+        context: &CompletionDecisionContext<'_>,
+        completions: &[crate::completion::CompletionItem],
+    ) {
+        let summary = Self::completion_decision_summary(completions);
+        let item_count = completions.len();
+        let fact_source = if summary.compiler_fact_items > 0 {
+            "compiler_fact"
+        } else if context.ast_available {
+            "parser_syntax"
+        } else {
+            "fallback"
+        };
+        let fallback_state = if item_count == 0 {
+            "no_result"
+        } else if context.ast_available {
+            "none"
+        } else {
+            "legacy_provider"
+        };
+        let reason = if item_count == 0 {
+            "missing_fact"
+        } else if summary.dynamic_boundary_items > 0 {
+            "dynamic_boundary"
+        } else if summary.generated_items > 0 {
+            "generated_no_source"
+        } else if summary.compiler_fact_items > 0 {
+            "source_backed_high_confidence"
+        } else {
+            "fallback_policy"
+        };
+
+        self.record_provider_decision_trace(
+            "completion",
+            &json!({
+                "provider": "completion",
+                "provider_action": "textDocument/completion",
+                "decision": if item_count > 0 { "acted" } else { "fallback" },
+                "reason": reason,
+                "uri": context.uri,
+                "line": context.line,
+                "character": context.character,
+                "item_count": item_count,
+                "is_incomplete": context.is_incomplete,
+                "ast_available": context.ast_available,
+                "fact_source": fact_source,
+                "confidence": if item_count > 0 { "high" } else { "low" },
+                "freshness": "fresh",
+                "fallback_state": fallback_state,
+                "workspace_index_state": context.workspace_index_state,
+                "workspace_index_reason": context.workspace_index_reason,
+                "compiler_fact_item_count": summary.compiler_fact_items,
+                "generated_item_count": summary.generated_items,
+                "dynamic_boundary_item_count": summary.dynamic_boundary_items,
+                "fallback_candidate_count": summary.fallback_items,
+                "sample_labels": summary.sample_labels,
+                "claim_boundary": "records existing completion response only; no new completion candidates or ranking changes"
+            }),
+        );
+    }
+
+    #[cfg(feature = "workspace")]
+    fn completion_workspace_index_state(
+        workspace_mode: &IndexAccessMode<'_>,
+    ) -> (&'static str, Option<&'static str>) {
+        match workspace_mode {
+            IndexAccessMode::Full(_) => ("full", None),
+            IndexAccessMode::Partial(reason) => ("partial", Some(*reason)),
+            IndexAccessMode::None => ("none", None),
+        }
+    }
+
+    #[cfg(not(feature = "workspace"))]
+    fn completion_workspace_index_state(
+        workspace_mode: &IndexAccessMode,
+    ) -> (&'static str, Option<&'static str>) {
+        match workspace_mode {
+            IndexAccessMode::Partial(reason) => ("partial", Some(*reason)),
+            IndexAccessMode::None => ("none", None),
+        }
+    }
+
+    fn completion_decision_summary(
+        completions: &[crate::completion::CompletionItem],
+    ) -> CompletionDecisionSummary {
+        let sample_labels =
+            completions.iter().take(5).map(|completion| completion.label.clone()).collect();
+        let mut compiler_fact_items = 0;
+        let mut generated_items = 0;
+        let mut dynamic_boundary_items = 0;
+
+        for completion in completions {
+            let detail = completion.detail.as_deref().unwrap_or("");
+            let documentation = completion.documentation.as_deref().unwrap_or("");
+            let mut is_compiler_fact = detail.contains("compiler fact")
+                || documentation.contains("Compiler visible-symbol");
+            let is_generated = detail.contains("generated")
+                || documentation.contains("generated")
+                || detail.contains("framework")
+                || documentation.contains("Framework");
+            let is_dynamic = detail.contains("dynamic")
+                || documentation.contains("dynamic")
+                || detail.contains("Dynamic")
+                || documentation.contains("Dynamic");
+
+            if matches!(
+                completion.kind,
+                CompletionItemKind::Variable
+                    | CompletionItemKind::Function
+                    | CompletionItemKind::Module
+                    | CompletionItemKind::Constant
+                    | CompletionItemKind::Property
+            ) && detail.contains("high confidence")
+            {
+                is_compiler_fact = true;
+            }
+
+            if is_compiler_fact {
+                compiler_fact_items += 1;
+            }
+            if is_generated {
+                generated_items += 1;
+            }
+            if is_dynamic {
+                dynamic_boundary_items += 1;
+            }
+        }
+
+        CompletionDecisionSummary {
+            compiler_fact_items,
+            generated_items,
+            dynamic_boundary_items,
+            fallback_items: completions.len().saturating_sub(compiler_fact_items),
+            sample_labels,
+        }
+    }
+
     fn module_completion_roots_for_doc(
         &self,
         uri: &str,
@@ -480,6 +638,7 @@ impl LspServer {
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 let offset = self.pos16_to_offset(doc, line, character);
+                let ast_available = doc.ast.is_some();
 
                 // Get completions, with fallback for missing AST
                 #[cfg_attr(not(feature = "workspace"), allow(unused_mut))]
@@ -572,6 +731,21 @@ impl LspServer {
                 // Apply cap before converting to JSON
                 let is_incomplete = completions.len() > cap;
                 completions.truncate(cap);
+                let (workspace_index_state, workspace_index_reason) =
+                    Self::completion_workspace_index_state(&workspace_mode);
+                let completion_decision_context = CompletionDecisionContext {
+                    uri,
+                    line,
+                    character,
+                    ast_available,
+                    workspace_index_state,
+                    workspace_index_reason,
+                    is_incomplete,
+                };
+                self.record_completion_provider_decision_trace(
+                    &completion_decision_context,
+                    &completions,
+                );
 
                 // Snapshot capability flags once before the loop to avoid
                 // acquiring client_capabilities lock per completion item
@@ -743,6 +917,7 @@ impl LspServer {
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 let offset = self.pos16_to_offset(doc, line, character);
+                let ast_available = doc.ast.is_some();
 
                 // Create optimized cancellation callback with reduced frequency
                 // Performance optimization: reduced overhead from 16.66% to <10%
@@ -819,6 +994,22 @@ impl LspServer {
                     offset,
                     &workspace_mode,
                     completion_cap(),
+                );
+
+                let (workspace_index_state, workspace_index_reason) =
+                    Self::completion_workspace_index_state(&workspace_mode);
+                let completion_decision_context = CompletionDecisionContext {
+                    uri,
+                    line,
+                    character,
+                    ast_available,
+                    workspace_index_state,
+                    workspace_index_reason,
+                    is_incomplete: false,
+                };
+                self.record_completion_provider_decision_trace(
+                    &completion_decision_context,
+                    &completions,
                 );
 
                 // Convert to JSON format with highly optimized cancellation checks
@@ -1256,6 +1447,135 @@ impl LspServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn explain_provider_decision(
+        server: &LspServer,
+        provider: &str,
+    ) -> Result<Value, Box<dyn std::error::Error>> {
+        let response = server
+            .handle_execute_command(Some(json!({
+                "command": "perl.explainProviderDecision",
+                "arguments": [{
+                    "provider": provider
+                }]
+            })))?
+            .ok_or("missing explain-provider-decision response")?;
+        Ok(response)
+    }
+
+    #[test]
+    fn completion_provider_decision_replays_live_completion_trace()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::default();
+        let uri = "file:///workspace/completion_trace.pl";
+        let text = "my $count = 0;\nmy $counter = $co\n";
+
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": text
+            }
+        })))?;
+
+        let response = server
+            .handle_completion_cancellable(
+                Some(json!({
+                    "textDocument": { "uri": uri, "version": 1 },
+                    "position": { "line": 1, "character": 17 }
+                })),
+                Some(&json!("completion-provider-decision")),
+            )?
+            .ok_or("expected completion response")?;
+        let items =
+            response.get("items").and_then(Value::as_array).ok_or("expected completion items")?;
+        assert!(
+            items.iter().any(|item| item.get("label").and_then(Value::as_str) == Some("$count")),
+            "expected lexical completion to include $count, got: {items:?}"
+        );
+
+        let explanation = explain_provider_decision(&server, "completion")?;
+        let receipt = explanation
+            .get("request_receipt")
+            .and_then(Value::as_object)
+            .ok_or("missing persisted completion request receipt")?;
+        let sample_labels = receipt
+            .get("sample_labels")
+            .and_then(Value::as_array)
+            .ok_or("missing completion sample labels")?;
+
+        assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("completion"));
+        assert_eq!(
+            receipt.get("provider_action").and_then(Value::as_str),
+            Some("textDocument/completion")
+        );
+        assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("acted"));
+        assert_eq!(receipt.get("uri").and_then(Value::as_str), Some(uri));
+        assert_eq!(receipt.get("line").and_then(Value::as_u64), Some(1));
+        assert_eq!(receipt.get("character").and_then(Value::as_u64), Some(17));
+        assert_eq!(receipt.get("freshness").and_then(Value::as_str), Some("fresh"));
+        assert_eq!(
+            receipt.get("claim_boundary").and_then(Value::as_str),
+            Some(
+                "records existing completion response only; no new completion candidates or ranking changes"
+            )
+        );
+        assert!(
+            receipt.get("item_count").and_then(Value::as_u64).is_some_and(|count| count > 0),
+            "completion receipt should record item count: {receipt:?}"
+        );
+        assert!(
+            sample_labels.iter().filter_map(Value::as_str).any(|label| label == "$count"),
+            "completion receipt should include sample labels from the response: {sample_labels:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn completion_provider_decision_records_regular_completion_trace()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::default();
+        let uri = "file:///workspace/completion_regular_trace.pl";
+        let text = "my $ready = 1;\n$re\n";
+
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": text
+            }
+        })))?;
+
+        let response = server
+            .handle_completion(Some(json!({
+                "textDocument": { "uri": uri, "version": 1 },
+                "position": { "line": 1, "character": 3 }
+            })))?
+            .ok_or("expected completion response")?;
+        let items =
+            response.get("items").and_then(Value::as_array).ok_or("expected completion items")?;
+        assert!(
+            items.iter().any(|item| item.get("label").and_then(Value::as_str) == Some("$ready")),
+            "expected regular completion to include $ready, got: {items:?}"
+        );
+
+        let explanation = explain_provider_decision(&server, "completion")?;
+        let receipt = explanation
+            .get("request_receipt")
+            .and_then(Value::as_object)
+            .ok_or("missing persisted completion request receipt")?;
+
+        assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("completion"));
+        assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("acted"));
+        assert_eq!(
+            receipt.get("provider_action").and_then(Value::as_str),
+            Some("textDocument/completion")
+        );
+        assert_eq!(receipt.get("is_incomplete").and_then(Value::as_bool), Some(false));
+        Ok(())
+    }
 
     #[test]
     fn test_module_completion_roots_includes_use_lib_paths()
