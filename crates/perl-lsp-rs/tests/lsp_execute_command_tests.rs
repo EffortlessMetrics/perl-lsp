@@ -250,6 +250,11 @@ fn test_execute_command_explain_provider_decision() -> Result<(), Box<dyn std::e
                     "fact_source": "compiler_fact",
                     "confidence": "high",
                     "freshness": "fresh"
+                },
+                "request_position": {
+                    "uri_scheme": "file",
+                    "line": 7,
+                    "character": 2
                 }
             }]
         })),
@@ -292,6 +297,33 @@ fn test_execute_command_explain_provider_decision() -> Result<(), Box<dyn std::e
         Some("compiler_fact")
     );
     assert_eq!(result.get("dynamic_boundary").and_then(|value| value.as_bool()), Some(false));
+    let copyable_payload = result
+        .get("copyable_payload")
+        .and_then(|value| value.as_object())
+        .ok_or("missing copyable_payload")?;
+    assert_eq!(
+        copyable_payload.get("schema_version").and_then(|value| value.as_str()),
+        Some("provider_decision_bug_report.v1")
+    );
+    assert_eq!(
+        copyable_payload.get("perl_lsp_version").and_then(|value| value.as_str()),
+        Some(env!("CARGO_PKG_VERSION"))
+    );
+    assert_eq!(
+        copyable_payload.get("provider").and_then(|value| value.as_str()),
+        Some("goto_definition")
+    );
+    assert_eq!(
+        copyable_payload.get("support_tier_link").and_then(|value| value.as_str()),
+        Some("docs/project/status/SUPPORT_TIERS.md#claim-rows")
+    );
+    let copyable_position = copyable_payload
+        .get("request_position")
+        .and_then(|value| value.as_object())
+        .ok_or("missing copyable request_position")?;
+    assert_eq!(copyable_position.get("uri_scheme").and_then(|value| value.as_str()), Some("file"));
+    assert_eq!(copyable_position.get("line").and_then(|value| value.as_u64()), Some(7));
+    assert_eq!(copyable_position.get("character").and_then(|value| value.as_u64()), Some(2));
 
     Ok(())
 }

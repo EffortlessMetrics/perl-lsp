@@ -2003,7 +2003,7 @@ The Perl LSP server has achieved **100% user-visible coverage (53/53)** and **10
 | `perl.runTestSub` | ✅ Complete | Native | <2s | Subroutine isolation |
 | `perl.debugTests` | ✅ Complete | Native | <1s | Debug adapter preparation |
 | `perl.runCritic` | ✅ Complete | Native + compatibility | <2s | Native critic with explicit Perl::Critic compatibility |
-| `perl.explainProviderDecision` | ✅ Conservative v1 | Native | <50ms | Structured confidence/freshness explanation plus user-readable `user_message`; covered live rename and refactor proof surfaces can replay persisted provider-local request receipts; unknown provider means low-confidence fallback |
+| `perl.explainProviderDecision` | ✅ Conservative v1 | Native | <50ms | Structured confidence/freshness explanation plus user-readable `user_message` and local `copyable_payload`; covered live rename and refactor proof surfaces can replay persisted provider-local request receipts; unknown provider means low-confidence fallback |
 | `perl.previewSafeDelete` | ✅ Conservative v1 | Native | <50ms | Scoped safe-delete symbol preview with user-readable blocker/allow explanation and no live symbol deletion edits |
 
 ### Code Action Categories (*Diataxis: Reference* - Refactoring capabilities)

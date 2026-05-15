@@ -15,6 +15,9 @@ use perl_semantic_facts::{
 /// Current additive provider-decision explanation schema version.
 pub const PROVIDER_DECISION_SCHEMA_VERSION: &str = "provider_decision.v1";
 
+/// Copyable provider-decision bug-report payload schema version.
+pub const PROVIDER_DECISION_COPYABLE_PAYLOAD_VERSION: &str = "provider_decision_bug_report.v1";
+
 /// Editor surface that made or considered a provider decision.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -234,6 +237,103 @@ pub enum ProviderDecisionFallback {
     ShadowReceiptOnly,
 }
 
+/// Request position summary safe to include in copyable bug reports.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProviderDecisionRequestPosition {
+    /// URI scheme only, not the full workspace path.
+    #[serde(default)]
+    pub uri_scheme: Option<String>,
+    /// Zero-based request line when the caller can provide it.
+    #[serde(default)]
+    pub line: Option<u32>,
+    /// Zero-based request character when the caller can provide it.
+    #[serde(default)]
+    pub character: Option<u32>,
+}
+
+impl ProviderDecisionRequestPosition {
+    /// Construct a request position summary.
+    pub fn new(uri_scheme: Option<String>, line: Option<u32>, character: Option<u32>) -> Self {
+        Self { uri_scheme, line, character }
+    }
+}
+
+/// Copyable provider-decision payload for local bug reports.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProviderDecisionCopyablePayload {
+    /// Additive payload schema version.
+    pub schema_version: String,
+    /// `perl-lsp` package version that produced the payload.
+    pub perl_lsp_version: String,
+    /// Workspace root class, such as `none`, `single_root`, or `multi_root`.
+    pub workspace_root_class: String,
+    /// Redacted workspace root identity. Raw paths are intentionally omitted.
+    pub workspace_root_hash: Option<String>,
+    /// Request position summary when available.
+    pub request_position: Option<ProviderDecisionRequestPosition>,
+    /// Provider surface that made the decision.
+    pub provider: ProviderDecisionProvider,
+    /// Live, fallback, blocked, or shadowed outcome.
+    pub decision: ProviderDecisionOutcome,
+    /// Machine-readable reason for the decision.
+    pub reason: ProviderDecisionReason,
+    /// Coarse fact source used for the decision.
+    pub fact_source: ProviderDecisionFactSource,
+    /// Confidence in the fact or fallback.
+    pub confidence: ProviderDecisionConfidence,
+    /// Freshness of the fact relative to the request.
+    pub freshness: ProviderDecisionFreshness,
+    /// Fallback or refusal path.
+    pub fallback: ProviderDecisionFallback,
+    /// Whether the decision crossed a dynamic Perl boundary.
+    pub dynamic_boundary: bool,
+    /// Optional receipt identifier for support triage.
+    pub receipt_id: Option<String>,
+    /// Optional real-workspace or UX scenario identifier.
+    pub scenario: Option<String>,
+    /// Support-tier claim map link for this provider family.
+    pub support_tier_link: String,
+    /// Human-readable explanation paired with the structured payload.
+    pub user_message: Option<String>,
+    /// Optional normalized provider-local receipt supplied by the caller or runtime.
+    pub request_receipt: Option<Value>,
+}
+
+impl ProviderDecisionCopyablePayload {
+    /// Construct a copyable bug-report payload from a provider explanation.
+    pub fn from_explanation(
+        explanation: &ProviderDecisionExplanation,
+        perl_lsp_version: impl Into<String>,
+        workspace_root_class: impl Into<String>,
+        workspace_root_hash: Option<String>,
+        request_position: Option<ProviderDecisionRequestPosition>,
+        support_tier_link: impl Into<String>,
+    ) -> Self {
+        Self {
+            schema_version: PROVIDER_DECISION_COPYABLE_PAYLOAD_VERSION.to_string(),
+            perl_lsp_version: perl_lsp_version.into(),
+            workspace_root_class: workspace_root_class.into(),
+            workspace_root_hash,
+            request_position,
+            provider: explanation.provider,
+            decision: explanation.decision,
+            reason: explanation.reason,
+            fact_source: explanation.fact_source,
+            confidence: explanation.confidence,
+            freshness: explanation.freshness,
+            fallback: explanation.fallback,
+            dynamic_boundary: explanation.dynamic_boundary,
+            receipt_id: explanation.receipt_id.clone(),
+            scenario: explanation.scenario.clone(),
+            support_tier_link: support_tier_link.into(),
+            user_message: explanation.user_message.clone(),
+            request_receipt: explanation.request_receipt.clone(),
+        }
+    }
+}
+
 /// Serializable explanation for one provider decision.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -270,6 +370,9 @@ pub struct ProviderDecisionExplanation {
     /// channels, and copyable bug reports.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_message: Option<String>,
+    /// Optional local bug-report payload that users can copy explicitly.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub copyable_payload: Option<ProviderDecisionCopyablePayload>,
 }
 
 impl ProviderDecisionExplanation {
@@ -300,6 +403,7 @@ impl ProviderDecisionExplanation {
             scenario: None,
             request_receipt: None,
             user_message: None,
+            copyable_payload: None,
         }
     }
 
@@ -343,6 +447,12 @@ impl ProviderDecisionExplanation {
     /// Attach a human-readable explanation.
     pub fn with_user_message(mut self, message: impl Into<String>) -> Self {
         self.user_message = Some(message.into());
+        self
+    }
+
+    /// Attach a local copyable bug-report payload.
+    pub fn with_copyable_payload(mut self, payload: ProviderDecisionCopyablePayload) -> Self {
+        self.copyable_payload = Some(payload);
         self
     }
 
@@ -899,5 +1009,92 @@ mod tests {
         assert!(message.contains("Fallback: legacy provider."), "{message}");
         assert!(message.contains("Receipt: docs/project/status"), "{message}");
         assert!(message.contains("Scenario: dynamic-boundary-navigation."), "{message}");
+    }
+
+    #[test]
+    fn provider_decision_copyable_payload_includes_bug_report_fields() -> TestResult {
+        let explanation = ProviderDecisionExplanation::new(
+            ProviderDecisionProvider::SafeDelete,
+            ProviderDecisionOutcome::Blocked,
+            ProviderDecisionReason::UnsafeEditBlocked,
+            ProviderDecisionFactSource::CompilerFact,
+            ProviderDecisionConfidence::High,
+            ProviderDecisionFreshness::Fresh,
+            false,
+            ProviderDecisionFallback::NoEdit,
+        )
+        .with_receipt_id("safe-delete-runtime")
+        .with_scenario("realbaseline-safe-delete")
+        .with_request_receipt(serde_json::json!({
+            "provider": "safe_delete",
+            "decision": "blocked",
+            "reason": "references_exist",
+            "fallback_state": "compiler_blocked"
+        }))
+        .with_user_message("Safe delete blocked.\nFallback: no edit.");
+        let payload = ProviderDecisionCopyablePayload::from_explanation(
+            &explanation,
+            "0.14.0",
+            "single_root",
+            Some("workspace-root-hash".to_string()),
+            Some(ProviderDecisionRequestPosition::new(Some("file".to_string()), Some(12), Some(4))),
+            "docs/project/status/SUPPORT_TIERS.md#claim-rows",
+        );
+        let explanation = explanation.with_copyable_payload(payload);
+
+        let value = serde_json::to_value(&explanation)?;
+        let payload = value
+            .get("copyable_payload")
+            .and_then(serde_json::Value::as_object)
+            .ok_or("missing copyable_payload")?;
+        let request_position = payload
+            .get("request_position")
+            .and_then(serde_json::Value::as_object)
+            .ok_or("missing request_position")?;
+        let request_receipt = payload
+            .get("request_receipt")
+            .and_then(serde_json::Value::as_object)
+            .ok_or("missing request_receipt")?;
+
+        assert_eq!(
+            payload.get("schema_version").and_then(serde_json::Value::as_str),
+            Some(PROVIDER_DECISION_COPYABLE_PAYLOAD_VERSION)
+        );
+        assert_eq!(
+            payload.get("perl_lsp_version").and_then(serde_json::Value::as_str),
+            Some("0.14.0")
+        );
+        assert_eq!(
+            payload.get("workspace_root_class").and_then(serde_json::Value::as_str),
+            Some("single_root")
+        );
+        assert_eq!(
+            payload.get("workspace_root_hash").and_then(serde_json::Value::as_str),
+            Some("workspace-root-hash")
+        );
+        assert_eq!(
+            request_position.get("uri_scheme").and_then(serde_json::Value::as_str),
+            Some("file")
+        );
+        assert_eq!(request_position.get("line").and_then(serde_json::Value::as_u64), Some(12));
+        assert_eq!(request_position.get("character").and_then(serde_json::Value::as_u64), Some(4));
+        assert_eq!(
+            payload.get("provider").and_then(serde_json::Value::as_str),
+            Some("safe_delete")
+        );
+        assert_eq!(payload.get("decision").and_then(serde_json::Value::as_str), Some("blocked"));
+        assert_eq!(
+            payload.get("support_tier_link").and_then(serde_json::Value::as_str),
+            Some("docs/project/status/SUPPORT_TIERS.md#claim-rows")
+        );
+        assert_eq!(
+            payload.get("user_message").and_then(serde_json::Value::as_str),
+            Some("Safe delete blocked.\nFallback: no edit.")
+        );
+        assert_eq!(
+            request_receipt.get("fallback").and_then(serde_json::Value::as_str),
+            Some("no_edit")
+        );
+        Ok(())
     }
 }

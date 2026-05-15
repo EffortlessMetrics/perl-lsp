@@ -74,8 +74,9 @@ rename or live symbol-level safe-delete cutover.
 This dashboard keeps the next provider lane separate from parser capability,
 framework facts, PIR, formatter, critic, release, and security work.
 
-1. `test(rename): add real-workspace package/compiler-backed pilot receipt`
-2. `feat(workspace-symbols): enable high-confidence compiler symbols`
+1. `feat(vscode): expose provider explanation commands`
+2. `test(rename): add real-workspace package/compiler-backed pilot receipt`
+3. `feat(workspace-symbols): enable high-confidence compiler symbols`
 
 Provider decision explanations are already partial-live through
 `perl.explainProviderDecision`; callers can attach a request-local
@@ -94,7 +95,10 @@ claim-boundary fields. Provider explanations and attached request receipts now
 carry the additive `provider_decision.v1` schema version plus normalized
 fallback, source-backed, and dynamic-boundary fields while preserving
 provider-specific receipt fields. `perl.explainProviderDecision` also includes a
-formatted `user_message` for command-palette/output-channel use.
+formatted `user_message` for command-palette/output-channel use and a local
+`copyable_payload` with `perl-lsp` version, redacted workspace-root class/hash,
+request position when supplied, support-tier link, and normalized receipt
+context for bug reports.
 `perl.previewSafeDelete` now exposes scoped safe-delete blocked/allowed previews
 as user-readable no-edit UX.
 
