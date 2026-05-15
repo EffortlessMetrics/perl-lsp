@@ -135,6 +135,77 @@ enum Commands {
         check: bool,
     },
 
+    /// Produce diff-scoped RIPR PR evidence artifacts.
+    RiprPr {
+        /// Root passed to RIPR. Defaults to the repository root.
+        #[arg(long, default_value = ".")]
+        root: String,
+        /// Base revision for the PR diff.
+        #[arg(long, default_value = "origin/master")]
+        base: String,
+        /// Head revision for the PR diff.
+        #[arg(long, default_value = "HEAD")]
+        head: String,
+        /// Validate existing target/ripr/pr artifacts instead of regenerating.
+        #[arg(long)]
+        check: bool,
+    },
+
+    /// Produce diff-scoped RIPR review guidance artifacts without posting comments.
+    RiprReviewComments {
+        /// Root passed to RIPR. Defaults to the repository root.
+        #[arg(long, default_value = ".")]
+        root: String,
+        /// Base revision for the PR diff.
+        #[arg(long, default_value = "origin/master")]
+        base: String,
+        /// Head revision for the PR diff.
+        #[arg(long, default_value = "HEAD")]
+        head: String,
+        /// Bound RIPR review guidance generation; timeout writes an advisory error artifact.
+        #[arg(long)]
+        timeout_seconds: Option<u64>,
+        /// Validate existing target/ripr/review artifacts instead of regenerating.
+        #[arg(long)]
+        check: bool,
+    },
+
+    /// Generate the stable PR evidence summary from machine-readable artifacts.
+    RiprPrSummary {
+        /// Validate the generated summary instead of rewriting it.
+        #[arg(long)]
+        check: bool,
+    },
+
+    /// Render non-blocking GitHub warning annotations from comments[] guidance only.
+    RiprAnnotations {
+        /// Review guidance JSON path.
+        #[arg(long, default_value = "target/ripr/review/comments.json")]
+        comments: String,
+        /// Output path for rendered annotation commands.
+        #[arg(long, default_value = "target/ripr/review/annotations.txt")]
+        out: String,
+        /// Validate existing annotation output instead of regenerating.
+        #[arg(long)]
+        check: bool,
+    },
+
+    /// Emit mutation-routing evidence from PR evidence and labels.
+    ImpactedEvidence {
+        /// PR evidence JSON input.
+        #[arg(long, default_value = "target/ripr/pr/repo-exposure.json")]
+        pr_evidence: String,
+        /// Repeatable PR label input.
+        #[arg(long = "label")]
+        labels: Vec<String>,
+        /// Comma, semicolon, or newline separated PR labels.
+        #[arg(long)]
+        labels_csv: Option<String>,
+        /// Validate existing impacted evidence instead of regenerating.
+        #[arg(long)]
+        check: bool,
+    },
+
     /// Run benchmarks
     Bench {
         /// Run specific benchmark
@@ -2426,6 +2497,19 @@ fn main() -> Result<()> {
             test::run(release, suite, features, verbose, coverage)
         }
         Commands::Badges { check } => badges::run(check),
+        Commands::RiprPr { root, base, head, check } => {
+            ripr_evidence::ripr_pr(&root, &base, &head, check)
+        }
+        Commands::RiprReviewComments { root, base, head, timeout_seconds, check } => {
+            ripr_evidence::ripr_review_comments(&root, &base, &head, timeout_seconds, check)
+        }
+        Commands::RiprPrSummary { check } => ripr_evidence::ripr_pr_summary(check),
+        Commands::RiprAnnotations { comments, out, check } => {
+            ripr_evidence::ripr_annotations(&comments, &out, check)
+        }
+        Commands::ImpactedEvidence { pr_evidence, labels, labels_csv, check } => {
+            ripr_evidence::impacted_evidence(&pr_evidence, &labels, labels_csv.as_deref(), check)
+        }
         Commands::Bench { name, save, output } => bench::run(name, save, output),
         Commands::BenchRun { output, quick, category } => {
             benchmarks::run_benchmarks(output, quick, category)

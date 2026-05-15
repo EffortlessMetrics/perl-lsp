@@ -60,9 +60,16 @@ Do **not** translate these into `killed` / `survived`. They mean something diffe
 
 ## Behavior
 
-- `continue-on-error: true` — does **not** block merges.
-- Uploads `target/ripr/ripr.json` and `target/ripr/ripr.sarif`.
-- Posts a per-PR step summary via `scripts/ci/ripr_summary.py`.
+- `continue-on-error: true` - does **not** block merges.
+- Produces diff-scoped PR evidence under `target/ripr/pr/`.
+- Produces review guidance under `target/ripr/review/`.
+- In CI, review guidance has an explicit timeout and falls back to an
+  advisory `error` artifact instead of blocking the workflow.
+- Emits non-blocking warning annotations from `comments[]` only.
+- Produces mutation-routing evidence under
+  `target/xtask/impacted-evidence/`.
+- Uploads the `ripr-pr-evidence` artifact.
+- Appends `target/ripr/pr/summary.md` to the GitHub step summary.
 
 ---
 
@@ -102,7 +109,7 @@ ripr is **never** used as proof; it is used as a **prompt**.
 
 ## Toolchain
 
-`rust-toolchain.toml` pins `1.95.0`. The workflow installs `ripr` `0.4.0` as
+`rust-toolchain.toml` pins `1.95.0`. The workflow installs `ripr` `0.5.0` as
 the current advisory version for this lane.
 
 ---
@@ -110,11 +117,16 @@ the current advisory version for this lane.
 ## Running locally
 
 ```bash
-cargo install ripr --version 0.4.0 --locked
+cargo install ripr --version 0.5.0 --locked
 ripr doctor
-ripr check --base origin/master
-ripr check --base origin/master --json > target/ripr/ripr.json
-python3 scripts/ci/ripr_summary.py \
-    --report target/ripr/ripr.json \
-    --summary /dev/stdout
+cargo xtask ripr-pr --base origin/master --head HEAD
+cargo xtask ripr-review-comments --base origin/master --head HEAD
+cargo xtask impacted-evidence
+cargo xtask ripr-pr-summary
+cargo xtask ripr-annotations
+cargo xtask ripr-pr --base origin/master --head HEAD --check
+cargo xtask ripr-review-comments --base origin/master --head HEAD --check
+cargo xtask impacted-evidence --check
+cargo xtask ripr-pr-summary --check
+cargo xtask ripr-annotations --check
 ```

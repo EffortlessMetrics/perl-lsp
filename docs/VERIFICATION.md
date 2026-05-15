@@ -40,8 +40,41 @@ Committed endpoint files live under `badges/`. Detailed reports stay under `targ
 
 ## Pull Request Evidence
 
-Pull requests run advisory `ripr` evidence, impacted evidence, fast gates, docs-sync, publish preflight, example smoke checks, and targeted mutation when routing rules require it.
+Pull requests run advisory `ripr` evidence, impacted evidence, fast gates,
+docs-sync, publish preflight, example smoke checks, and targeted mutation when
+routing rules require it.
 
-`ripr` may suggest focused tests or route targeted mutation. It does not edit code, generate tests, run mutation, or make merge decisions by default.
+The portable `ripr` surface is:
+
+```bash
+cargo xtask ripr-pr
+cargo xtask ripr-pr --check
+cargo xtask ripr-review-comments
+cargo xtask ripr-review-comments --check
+cargo xtask impacted-evidence
+cargo xtask impacted-evidence --check
+cargo xtask ripr-pr-summary
+cargo xtask ripr-annotations
+```
+
+These commands write:
+
+```text
+target/ripr/pr/repo-exposure.json
+target/ripr/pr/repo-exposure.md
+target/ripr/pr/summary.md
+target/ripr/review/comments.json
+target/ripr/review/comments.md
+target/ripr/review/annotations.txt
+target/xtask/impacted-evidence/latest.json
+target/xtask/impacted-evidence/latest.md
+```
+
+`ripr` may suggest focused tests or route targeted mutation. It does not edit
+code, generate tests, run mutation, or make merge decisions by default.
+
+Line-placeable review guidance is emitted as non-blocking warning annotations
+from `comments[]` only. Summary-only findings stay in summaries and artifacts;
+inline PR comments are disabled by default.
 
 Pull request artifacts and summaries are diff-scoped. They must not be reused as repo-scope README badges.
