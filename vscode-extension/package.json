@@ -774,6 +774,24 @@
         "icon": "$(gear)"
       },
       {
+        "command": "perl-lsp.explainProviderDecision",
+        "title": "Explain Provider Decision",
+        "category": "Perl LSP",
+        "icon": "$(debug)"
+      },
+      {
+        "command": "perl-lsp.previewSafeDelete",
+        "title": "Preview Safe Delete",
+        "category": "Perl LSP",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "perl-lsp.copyProviderDecisionReceipt",
+        "title": "Copy Provider Decision Receipt",
+        "category": "Perl LSP",
+        "icon": "$(copy)"
+      },
+      {
         "command": "perl-lsp.reportIssue",
         "title": "Report Issue",
         "category": "Perl",
@@ -873,6 +891,18 @@
         },
         {
           "command": "perl-lsp.openConfigurationGuide"
+        },
+        {
+          "command": "perl-lsp.explainProviderDecision",
+          "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.previewSafeDelete",
+          "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.copyProviderDecisionReceipt",
+          "when": "editorLangId == perl"
         },
         {
           "command": "perl-lsp.reportIssue"

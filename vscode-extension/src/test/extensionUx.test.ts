@@ -18,6 +18,9 @@ jest.mock('vscode-languageclient/node', () => ({
   },
 }));
 import {
+  copyProviderDecisionReceiptCommand,
+  explainProviderDecisionCommand,
+  previewSafeDeleteCommand,
   validateIncludePaths,
   runPerlCriticOnActiveFile,
   setPerlCriticSeverity,
@@ -44,6 +47,7 @@ function makeContext(version = '0.12.3'): any {
 describe('extension UX warnings', () => {
   afterEach(() => {
     jest.clearAllMocks();
+    (vscode.window as any).activeTextEditor = undefined;
     (vscode.workspace as any).workspaceFolders = undefined;
     (vscode.extensions as any).all = [];
     (vscode.workspace.getConfiguration as jest.Mock).mockImplementation(
@@ -497,5 +501,116 @@ describe('extension UX warnings', () => {
       })
     );
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith('PerlCritic severity set to 4.');
+  });
+
+  test('explains a provider decision through the LSP execute command', async () => {
+    const sendRequest = jest.fn(async () => ({
+      provider: 'goto_definition',
+      decision: 'fallback',
+      user_message: 'Goto definition used fallback.',
+    }));
+    (vscode.window as any).activeTextEditor = {
+      document: {
+        languageId: 'perl',
+        uri: vscode.Uri.file('/workspace/lib/Foo.pm'),
+      },
+      selection: {
+        active: { line: 12, character: 4 },
+      },
+    };
+
+    await explainProviderDecisionCommand({ sendRequest } as any, 'goto_definition');
+
+    expect(sendRequest).toHaveBeenCalledWith(
+      'workspace/executeCommand',
+      {
+        command: 'perl.explainProviderDecision',
+        arguments: [
+          {
+            provider: 'goto_definition',
+            request_position: {
+              uri_scheme: 'file',
+              line: 12,
+              character: 4,
+            },
+          },
+        ],
+      }
+    );
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      'Goto definition used fallback.',
+      'Show Output'
+    );
+  });
+
+  test('previews safe-delete through the no-edit LSP command', async () => {
+    const sendRequest = jest.fn(async () => ({
+      provider: 'safe_delete',
+      decision: 'blocked',
+      user_message: 'Safe delete refused. No edits were applied.',
+    }));
+    (vscode.window as any).activeTextEditor = {
+      document: {
+        languageId: 'perl',
+        uri: vscode.Uri.file('/workspace/lib/Foo.pm'),
+      },
+      selection: {
+        active: { line: 8, character: 2 },
+      },
+    };
+
+    await previewSafeDeleteCommand({ sendRequest } as any);
+
+    expect(sendRequest).toHaveBeenCalledWith(
+      'workspace/executeCommand',
+      {
+        command: 'perl.previewSafeDelete',
+        arguments: [
+          {
+            textDocument: { uri: 'file:///workspace/lib/Foo.pm' },
+            position: { line: 8, character: 2 },
+          },
+        ],
+      }
+    );
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+      'Safe delete refused. No edits were applied.',
+      'Show Output'
+    );
+  });
+
+  test('copies the provider decision bug-report payload', async () => {
+    const sendRequest = jest.fn(async () => ({
+      provider: 'safe_delete',
+      decision: 'blocked',
+      copyable_payload: {
+        schema_version: 'provider_decision_bug_report.v1',
+        provider: 'safe_delete',
+        decision: 'blocked',
+      },
+    }));
+
+    await copyProviderDecisionReceiptCommand({ sendRequest } as any, 'safe_delete');
+
+    expect(sendRequest).toHaveBeenCalledWith(
+      'workspace/executeCommand',
+      expect.objectContaining({
+        command: 'perl.explainProviderDecision',
+        arguments: [
+          expect.objectContaining({
+            provider: 'safe_delete',
+          }),
+        ],
+      })
+    );
+    const clipboardText = (vscode.env.clipboard.writeText as jest.Mock).mock.calls[0][0] as string;
+    expect(JSON.parse(clipboardText)).toEqual({
+      schema_version: 'provider_decision_bug_report.v1',
+      provider: 'safe_delete',
+      decision: 'blocked',
+    });
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      'Provider decision receipt copied.'
+    );
   });
 });

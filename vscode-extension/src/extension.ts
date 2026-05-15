@@ -308,6 +308,194 @@ export async function setPerlCriticSeverity(
     vscode.window.showInformationMessage(`PerlCritic severity set to ${severity}.`);
 }
 
+type LspExecuteCommandClient = {
+    sendRequest<T>(method: string, params: unknown): Promise<T>;
+};
+
+type ProviderDecisionQuickPickItem = vscode.QuickPickItem & {
+    provider: string;
+};
+
+const PROVIDER_DECISION_OPTIONS: ProviderDecisionQuickPickItem[] = [
+    { label: 'Completion', provider: 'completion' },
+    { label: 'Goto definition', provider: 'goto_definition' },
+    { label: 'References', provider: 'references' },
+    { label: 'Hover', provider: 'hover' },
+    { label: 'Diagnostics', provider: 'diagnostics' },
+    { label: 'Rename', provider: 'rename' },
+    { label: 'Safe delete', provider: 'safe_delete' },
+    { label: 'Workspace symbols', provider: 'workspace_symbols' },
+    { label: 'Document symbols', provider: 'document_symbols' },
+    { label: 'Semantic tokens', provider: 'semantic_tokens' },
+    { label: 'Module resolution', provider: 'module_resolution' },
+    { label: 'DAP module paths', provider: 'dap_module_paths' },
+    { label: 'Perl subprocess', provider: 'perl_subprocess' },
+];
+
+function activeRequestPosition(): Record<string, unknown> | undefined {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+        return undefined;
+    }
+
+    return {
+        uri_scheme: editor.document.uri.toString().split(':', 1)[0] || 'file',
+        line: editor.selection.active.line,
+        character: editor.selection.active.character,
+    };
+}
+
+function providerDecisionArgument(provider: string): Record<string, unknown> {
+    const argument: Record<string, unknown> = { provider };
+    const requestPosition = activeRequestPosition();
+    if (requestPosition) {
+        argument.request_position = requestPosition;
+    }
+    return argument;
+}
+
+function activeSafeDeletePreviewArgument(): Record<string, unknown> | undefined {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.languageId !== 'perl') {
+        return undefined;
+    }
+
+    return {
+        textDocument: { uri: editor.document.uri.toString() },
+        position: {
+            line: editor.selection.active.line,
+            character: editor.selection.active.character,
+        },
+    };
+}
+
+function trustOutputChannel(): vscode.OutputChannel {
+    return outputChannel ?? vscode.window.createOutputChannel('Perl LSP Trust');
+}
+
+function asObject(value: unknown): Record<string, unknown> | undefined {
+    return value && typeof value === 'object' && !Array.isArray(value)
+        ? value as Record<string, unknown>
+        : undefined;
+}
+
+function stringField(value: Record<string, unknown> | undefined, field: string): string | undefined {
+    const fieldValue = value?.[field];
+    return typeof fieldValue === 'string' ? fieldValue : undefined;
+}
+
+function providerDecisionJson(value: unknown): string {
+    return JSON.stringify(value, null, 2);
+}
+
+async function executeLspCommand(
+    activeClient: LspExecuteCommandClient | undefined,
+    command: string,
+    argument: Record<string, unknown>
+): Promise<unknown | undefined> {
+    if (!activeClient) {
+        vscode.window.showWarningMessage(serverNotRunningMessage());
+        return undefined;
+    }
+
+    try {
+        return await activeClient.sendRequest('workspace/executeCommand', {
+            command,
+            arguments: [argument],
+        });
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(`Perl LSP command failed: ${message}`);
+        return undefined;
+    }
+}
+
+async function chooseProvider(providerOverride?: string): Promise<string | undefined> {
+    if (providerOverride) {
+        return providerOverride;
+    }
+
+    const selection = await vscode.window.showQuickPick(PROVIDER_DECISION_OPTIONS, {
+        placeHolder: 'Choose a provider decision to explain',
+    });
+    return selection?.provider;
+}
+
+async function showProviderDecisionResult(title: string, result: unknown): Promise<void> {
+    const resultObject = asObject(result);
+    const message = stringField(resultObject, 'user_message') ?? `${title} completed.`;
+    const channel = trustOutputChannel();
+    channel.appendLine('');
+    channel.appendLine(`[${title}]`);
+    channel.appendLine(providerDecisionJson(result));
+
+    const action = stringField(resultObject, 'decision') === 'blocked'
+        ? await vscode.window.showWarningMessage(message, 'Show Output')
+        : await vscode.window.showInformationMessage(message, 'Show Output');
+
+    if (action === 'Show Output') {
+        channel.show();
+    }
+}
+
+export async function explainProviderDecisionCommand(
+    activeClient: LspExecuteCommandClient | undefined = client,
+    providerOverride?: string
+): Promise<void> {
+    const provider = await chooseProvider(providerOverride);
+    if (!provider) {
+        return;
+    }
+
+    const result = await executeLspCommand(
+        activeClient,
+        'perl.explainProviderDecision',
+        providerDecisionArgument(provider)
+    );
+    if (result !== undefined) {
+        await showProviderDecisionResult('Provider decision explanation', result);
+    }
+}
+
+export async function previewSafeDeleteCommand(
+    activeClient: LspExecuteCommandClient | undefined = client
+): Promise<void> {
+    const argument = activeSafeDeletePreviewArgument();
+    if (!argument) {
+        vscode.window.showErrorMessage('Preview Safe Delete requires an active Perl file.');
+        return;
+    }
+
+    const result = await executeLspCommand(activeClient, 'perl.previewSafeDelete', argument);
+    if (result !== undefined) {
+        await showProviderDecisionResult('Safe-delete preview', result);
+    }
+}
+
+export async function copyProviderDecisionReceiptCommand(
+    activeClient: LspExecuteCommandClient | undefined = client,
+    providerOverride?: string
+): Promise<void> {
+    const provider = await chooseProvider(providerOverride);
+    if (!provider) {
+        return;
+    }
+
+    const result = await executeLspCommand(
+        activeClient,
+        'perl.explainProviderDecision',
+        providerDecisionArgument(provider)
+    );
+    const resultObject = asObject(result);
+    if (!resultObject) {
+        return;
+    }
+
+    const payload = resultObject.copyable_payload ?? resultObject;
+    await vscode.env.clipboard.writeText(providerDecisionJson(payload));
+    vscode.window.showInformationMessage('Provider decision receipt copied.');
+}
+
 export async function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Perl Language Server');
     const mcpDisposable = registerMcpSupport(outputChannel);
@@ -602,6 +790,27 @@ export async function activate(context: vscode.ExtensionContext) {
     const showParserAstCommand = vscode.commands.registerCommand('perl-lsp.showParserAst', async () => {
         await showParserAst();
     });
+
+    const explainProviderDecisionCommandDisposable = vscode.commands.registerCommand(
+        'perl-lsp.explainProviderDecision',
+        async (provider?: unknown) => {
+            await explainProviderDecisionCommand(client, typeof provider === 'string' ? provider : undefined);
+        }
+    );
+
+    const previewSafeDeleteCommandDisposable = vscode.commands.registerCommand(
+        'perl-lsp.previewSafeDelete',
+        async () => {
+            await previewSafeDeleteCommand(client);
+        }
+    );
+
+    const copyProviderDecisionReceiptCommandDisposable = vscode.commands.registerCommand(
+        'perl-lsp.copyProviderDecisionReceipt',
+        async (provider?: unknown) => {
+            await copyProviderDecisionReceiptCommand(client, typeof provider === 'string' ? provider : undefined);
+        }
+    );
 
     const whatsNewManager = new WhatsNewManager(context, outputChannel);
     const showWhatsNewCommand = vscode.commands.registerCommand('perl-lsp.showWhatsNew', async () => {
@@ -908,6 +1117,9 @@ export async function activate(context: vscode.ExtensionContext) {
         showIncPathsCommand,
         openModuleCommand,
         showParserAstCommand,
+        explainProviderDecisionCommandDisposable,
+        previewSafeDeleteCommandDisposable,
+        copyProviderDecisionReceiptCommandDisposable,
         showVersionCommand,
         statusMenuCommand,
         reinstallCommand,
