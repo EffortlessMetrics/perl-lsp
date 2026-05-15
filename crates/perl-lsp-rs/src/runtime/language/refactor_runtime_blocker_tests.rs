@@ -258,6 +258,27 @@ fn assert_json_array_contains(
     Ok(())
 }
 
+fn explain_provider_decision_with_request_receipt(
+    server: &LspServer,
+    provider: &str,
+    receipt_id: &str,
+    scenario: &str,
+    request_receipt: Value,
+) -> Result<Value, Box<dyn std::error::Error>> {
+    let response = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.explainProviderDecision",
+            "arguments": [{
+                "provider": provider,
+                "receipt_id": receipt_id,
+                "scenario": scenario,
+                "request_receipt": request_receipt
+            }]
+        })))?
+        .ok_or("missing explain-provider-decision response")?;
+    Ok(response)
+}
+
 #[test]
 fn refactor_runtime_blocker_ux_rename_receipt_blocks_low_confidence_fixture()
 -> Result<(), Box<dyn std::error::Error>> {
@@ -529,6 +550,67 @@ fn refactor_runtime_blocker_ux_rename_receipt_records_package_fallback_noise()
             "no live refactor behavior change",
         ],
     )?;
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_rename_request_receipt_preserves_package_fallback_noise()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_semantic_real_workspace(&server)?;
+    let util = files.get("lib/RealBaseline/Util.pm").ok_or("missing RealBaseline Util fixture")?;
+
+    let (helper_line, helper_character) = position_of(util, "helper {")?;
+    let helper_params = json!({
+        "textDocument": {"uri": REAL_BASELINE_UTIL_URI},
+        "position": {"line": helper_line, "character": helper_character},
+        "newName": "renamed_helper"
+    });
+    let receipt = server
+        .test_rename_runtime_blocker_ux_receipt(Some(helper_params))?
+        .ok_or("missing real-workspace rename fallback/noise receipt")?;
+    let fallback_noise = receipt.get("fallback_noise").ok_or("missing fallback_noise")?.clone();
+
+    let explanation = explain_provider_decision_with_request_receipt(
+        &server,
+        "rename",
+        "realbaseline-rename-fallback-noise",
+        "helper-to-renamed_helper",
+        fallback_noise,
+    )?;
+
+    assert_eq!(explanation.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(explanation.get("decision").and_then(Value::as_str), Some("fallback"));
+    assert_eq!(
+        explanation.get("receipt_id").and_then(Value::as_str),
+        Some("realbaseline-rename-fallback-noise")
+    );
+    assert_eq!(
+        explanation.get("scenario").and_then(Value::as_str),
+        Some("helper-to-renamed_helper")
+    );
+    let request_receipt = explanation
+        .get("request_receipt")
+        .and_then(Value::as_object)
+        .ok_or("missing request-local rename receipt")?;
+    assert_eq!(request_receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        request_receipt.get("fallback_state").and_then(Value::as_str),
+        Some("compiler_empty")
+    );
+    assert_eq!(request_receipt.get("compiler_plan_edit_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(
+        request_receipt.get("compiler_requires_confirmation").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(request_receipt.get("live_provider_state").and_then(Value::as_str), Some("error"));
+    assert!(
+        request_receipt.get("live_provider_error").and_then(Value::as_str).is_some_and(|message| {
+            message.contains("ambiguous symbol identity") && message.contains("helper")
+        }),
+        "request-local receipt must preserve live fallback/noise reason: {request_receipt:?}"
+    );
 
     Ok(())
 }
