@@ -172,12 +172,14 @@ Linux raw-bucket movement proof.
 ## AST Boundary Receipts
 
 `crates/perl-parser-core/tests/list_operator_boundary_receipts.rs` now asserts
-AST ownership for three representative list-operator shapes:
+AST ownership for four representative list-operator shapes:
 
 - DBI map/grep/keys: the outer `map` owns the `grep` source, and the nested
   `grep` owns the `keys` source.
 - ExtUtils attrs map/sort/keys: the outer `join` owns the `map` result, the
   `map` owns the `sort` source, and `sort` owns the `keys` source.
+- Capture::Tiny map/qw list declaration: the list declaration owns the `map`
+  initializer, and the `map` owns its block body plus the `qw` source list.
 - Unicode::Collate map/split: the outer `join` owns the `map` result, and the
   `map` owns the `split` source.
 
