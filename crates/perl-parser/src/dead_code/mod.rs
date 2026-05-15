@@ -266,7 +266,7 @@ fn is_keyword_boundary(ch: Option<char>) -> bool {
 /// Returns `true` if `condition` is a trivially-false constant expression.
 ///
 /// Matches: `0`, `""`, `''`, `undef`, `(0)`, `( 0 )` — the standard Perl idioms
-/// used to write permanently-dead `if`/`while`/`for` blocks.
+/// used to write permanently-dead `if`/`while` blocks.
 fn is_always_false(condition: &str) -> bool {
     let c = condition.trim();
     matches!(c, "0" | "\"\"" | "''" | "undef")
@@ -321,7 +321,7 @@ fn detect_dead_branches(file_path: &Path, text: &str, out: &mut Vec<DeadCode>) {
         // Determine if this line opens a dead branch.
         // We look for: KEYWORD WHITESPACE? ( CONDITION ) WHITESPACE? {
         let dead_reason_and_keyword: Option<(String, &str)> = 'detect: {
-            for kw in &["if", "while", "elsif", "unless", "until", "for", "foreach"] {
+            for kw in &["if", "while", "elsif", "unless", "until"] {
                 let rest = match trimmed.strip_prefix(kw) {
                     Some(r)
                         if r.is_empty()
@@ -357,7 +357,7 @@ fn detect_dead_branches(file_path: &Path, text: &str, out: &mut Vec<DeadCode>) {
                         None
                     }
                 } else {
-                    // if/while/for/foreach: body is dead when condition is always-false
+                    // if/while/elsif: body is dead when condition is always-false
                     if is_always_false(inner) {
                         Some(format!(
                             "`{kw}` condition `{inner}` is always false — block is never executed"

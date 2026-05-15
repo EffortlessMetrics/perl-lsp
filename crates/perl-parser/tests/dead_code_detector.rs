@@ -106,3 +106,90 @@ fn unconditional_return_still_flags_following_statement() -> TestResult {
     );
     Ok(())
 }
+
+#[test]
+fn for_loop_with_zero_is_not_dead_branch() -> TestResult {
+    // `for (0) {}` iterates once with $_ = 0 — NOT dead code.
+    // List iterators are not boolean conditions.
+    let index = WorkspaceIndex::new();
+    index_file_str(
+        &index,
+        "file:///script.pl",
+        "for (0) {\n    say 'runs once';\n}\n",
+    )?;
+
+    let detector = DeadCodeDetector::new(index);
+    let dead = detector.analyze_file(&PathBuf::from("/script.pl"))?;
+
+    assert!(
+        !dead
+            .iter()
+            .any(|d| d.code_type == DeadCodeType::DeadBranch),
+        "for (0) should not be flagged as a dead branch — it iterates once over the list (0)"
+    );
+    Ok(())
+}
+
+#[test]
+fn foreach_loop_with_zero_is_not_dead_branch() -> TestResult {
+    // `foreach (0) {}` iterates once with $_ = 0 — NOT dead code.
+    let index = WorkspaceIndex::new();
+    index_file_str(
+        &index,
+        "file:///script.pl",
+        "foreach (0) {\n    say 'runs once';\n}\n",
+    )?;
+
+    let detector = DeadCodeDetector::new(index);
+    let dead = detector.analyze_file(&PathBuf::from("/script.pl"))?;
+
+    assert!(
+        !dead
+            .iter()
+            .any(|d| d.code_type == DeadCodeType::DeadBranch),
+        "foreach (0) should not be flagged as a dead branch — it iterates once over the list (0)"
+    );
+    Ok(())
+}
+
+#[test]
+fn if_zero_is_still_a_dead_branch() -> TestResult {
+    // Regression guard: `if (0) {}` IS dead — boolean false, body never executes.
+    let index = WorkspaceIndex::new();
+    index_file_str(
+        &index,
+        "file:///script.pl",
+        "if (0) {\n    say 'dead';\n}\n",
+    )?;
+
+    let detector = DeadCodeDetector::new(index);
+    let dead = detector.analyze_file(&PathBuf::from("/script.pl"))?;
+
+    assert!(
+        dead.iter()
+            .any(|d| d.code_type == DeadCodeType::DeadBranch),
+        "if (0) should still be flagged as a dead branch"
+    );
+    Ok(())
+}
+
+#[test]
+fn while_zero_is_still_a_dead_branch() -> TestResult {
+    // Regression guard: `while (0) {}` IS dead — boolean false, body never executes.
+    let index = WorkspaceIndex::new();
+    index_file_str(
+        &index,
+        "file:///script.pl",
+        "while (0) {\n    say 'dead';\n}\n",
+    )?;
+
+    let detector = DeadCodeDetector::new(index);
+    let dead = detector.analyze_file(&PathBuf::from("/script.pl"))?;
+
+    assert!(
+        dead.iter()
+            .any(|d| d.code_type == DeadCodeType::DeadBranch),
+        "while (0) should still be flagged as a dead branch"
+    );
+    Ok(())
+}
