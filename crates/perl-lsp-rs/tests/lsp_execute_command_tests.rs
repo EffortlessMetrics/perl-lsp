@@ -242,7 +242,14 @@ fn test_execute_command_explain_provider_decision() -> Result<(), Box<dyn std::e
             "arguments": [{
                 "provider": "goto_definition",
                 "receipt_id": "semantic-shadow-compare",
-                "scenario": "mojolicious-navigation"
+                "scenario": "mojolicious-navigation",
+                "request_receipt": {
+                    "provider": "goto_definition",
+                    "decision": "acted",
+                    "fact_source": "compiler_fact",
+                    "confidence": "high",
+                    "freshness": "fresh"
+                }
             }]
         })),
         id: Some(json!(2)),
@@ -270,6 +277,18 @@ fn test_execute_command_explain_provider_decision() -> Result<(), Box<dyn std::e
     assert_eq!(
         result.get("scenario").and_then(|value| value.as_str()),
         Some("mojolicious-navigation")
+    );
+    let request_receipt = result
+        .get("request_receipt")
+        .and_then(|value| value.as_object())
+        .ok_or("missing request_receipt")?;
+    assert_eq!(
+        request_receipt.get("provider").and_then(|value| value.as_str()),
+        Some("goto_definition")
+    );
+    assert_eq!(
+        request_receipt.get("fact_source").and_then(|value| value.as_str()),
+        Some("compiler_fact")
     );
     assert_eq!(result.get("dynamic_boundary").and_then(|value| value.as_bool()), Some(false));
 

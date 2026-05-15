@@ -5,6 +5,7 @@
 //! or blocked an unsafe edit. It does not change live provider behavior.
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use perl_semantic_facts::{
     Confidence, Provenance, ProviderFactFreshness, ProviderFactSourceKind, ProviderFactTrace,
@@ -256,6 +257,9 @@ pub struct ProviderDecisionExplanation {
     /// Optional real-workspace or UX scenario identifier.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scenario: Option<String>,
+    /// Optional request-local provider receipt supplied by the caller.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_receipt: Option<Value>,
 }
 
 impl ProviderDecisionExplanation {
@@ -283,6 +287,7 @@ impl ProviderDecisionExplanation {
             fallback,
             receipt_id: None,
             scenario: None,
+            request_receipt: None,
         }
     }
 
@@ -314,6 +319,12 @@ impl ProviderDecisionExplanation {
     /// Attach a real-workspace or UX scenario identifier.
     pub fn with_scenario(mut self, scenario: impl Into<String>) -> Self {
         self.scenario = Some(scenario.into());
+        self
+    }
+
+    /// Attach a request-local provider receipt.
+    pub fn with_request_receipt(mut self, receipt: Value) -> Self {
+        self.request_receipt = Some(receipt);
         self
     }
 
@@ -417,7 +428,44 @@ mod tests {
             value.get("scenario").and_then(serde_json::Value::as_str),
             Some("mojolicious-navigation")
         );
+        assert!(value.get("request_receipt").is_none());
         assert_eq!(value.get("dynamic_boundary").and_then(serde_json::Value::as_bool), Some(false));
+        Ok(())
+    }
+
+    #[test]
+    fn provider_decision_attaches_request_local_receipt() -> TestResult {
+        let decision = ProviderDecisionExplanation::new(
+            ProviderDecisionProvider::Rename,
+            ProviderDecisionOutcome::Fallback,
+            ProviderDecisionReason::FallbackPolicy,
+            ProviderDecisionFactSource::Fallback,
+            ProviderDecisionConfidence::Low,
+            ProviderDecisionFreshness::NotApplicable,
+            false,
+            ProviderDecisionFallback::LegacyProvider,
+        )
+        .with_request_receipt(serde_json::json!({
+            "provider": "rename",
+            "decision": "fallback",
+            "reason": "ambiguous_symbol_identity",
+            "fallback_state": "compiler_empty"
+        }));
+
+        let value = serde_json::to_value(&decision)?;
+        let request_receipt = value
+            .get("request_receipt")
+            .and_then(serde_json::Value::as_object)
+            .ok_or("missing request_receipt object")?;
+
+        assert_eq!(
+            request_receipt.get("provider").and_then(serde_json::Value::as_str),
+            Some("rename")
+        );
+        assert_eq!(
+            request_receipt.get("fallback_state").and_then(serde_json::Value::as_str),
+            Some("compiler_empty")
+        );
         Ok(())
     }
 

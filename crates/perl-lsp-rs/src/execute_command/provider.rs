@@ -89,6 +89,8 @@ struct ExplainProviderDecisionRequest {
     receipt_id: Option<String>,
     #[serde(default)]
     scenario: Option<String>,
+    #[serde(default)]
+    request_receipt: Option<Value>,
 }
 
 impl Default for ExecuteCommandProvider {
@@ -216,6 +218,15 @@ impl ExecuteCommandProvider {
         }
         if let Some(scenario) = request.scenario {
             explanation = explanation.with_scenario(scenario);
+        }
+        if let Some(request_receipt) = request.request_receipt {
+            if !request_receipt.is_object() {
+                return Err(
+                    "Invalid explain-provider-decision argument: request_receipt must be an object"
+                        .to_string(),
+                );
+            }
+            explanation = explanation.with_request_receipt(request_receipt);
         }
 
         serde_json::to_value(explanation)
