@@ -65,6 +65,7 @@ sub caller {
 const DANCER2_DSL_URI: &str = "file:///workspace/lib/Dancer2/Core/DSL.pm";
 const DANCER2_APP_URI: &str = "file:///workspace/lib/Dancer2/Core/App.pm";
 const DANCER2_PLUGIN_URI: &str = "file:///workspace/lib/Dancer2/Plugin.pm";
+const REAL_BASELINE_BASE_URI: &str = "file:///workspace/lib/RealBaseline/Base.pm";
 const REAL_BASELINE_UTIL_URI: &str = "file:///workspace/lib/RealBaseline/Util.pm";
 const REAL_BASELINE_APP_URI: &str = "file:///workspace/lib/RealBaseline/App.pm";
 
@@ -1042,6 +1043,75 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_real_workspace_importe
             "no live refactor behavior change",
         ],
     )?;
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_receipt_records_allowed_symbol_cutover_proof()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_semantic_real_workspace(&server)?;
+    let base = files.get("lib/RealBaseline/Base.pm").ok_or("missing RealBaseline Base fixture")?;
+
+    let (reset_line, reset_character) = position_of(base, "reset {")?;
+    let reset_params = json!({
+        "textDocument": {"uri": REAL_BASELINE_BASE_URI},
+        "position": {"line": reset_line, "character": reset_character}
+    });
+    let receipt = server
+        .test_safe_delete_runtime_blocker_ux_receipt(Some(reset_params))?
+        .ok_or("missing real-workspace safe-delete allowed-symbol receipt")?;
+    let compiler = compiler_receipt(&receipt)?;
+
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(receipt.get("symbol").and_then(Value::as_str), Some("reset"));
+    assert_eq!(receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert_eq!(compiler.get("query").and_then(Value::as_str), Some("safe_delete_plan"));
+    assert_trace_contains(compiler, "SemanticFact", "High", "Fresh")?;
+    assert_note_contains(
+        compiler,
+        &[
+            "safe-delete cutover receipt",
+            "compiler_plan_safe=true",
+            "blocker_count=0",
+            "blocker_reasons=none",
+            "fallback_state=allowed",
+            "blocker_ux=none",
+            "requires_confirmation=false",
+            "no live refactor behavior change",
+        ],
+    )?;
+
+    let live_blocker_ux = receipt.get("live_blocker_ux").ok_or("missing live_blocker_ux")?;
+    assert_eq!(live_blocker_ux.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(live_blocker_ux.get("decision").and_then(Value::as_str), Some("allowed"));
+    assert_eq!(live_blocker_ux.get("fallback").and_then(Value::as_str), Some("none"));
+    assert_eq!(live_blocker_ux.get("requires_confirmation").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        live_blocker_ux.get("blocker_reasons").and_then(Value::as_array).map(Vec::len),
+        Some(0)
+    );
+    assert_eq!(
+        live_blocker_ux.get("blocker_messages").and_then(Value::as_array).map(Vec::len),
+        Some(0)
+    );
+
+    let rollback_receipt = receipt.get("rollback_receipt").ok_or("missing rollback_receipt")?;
+    assert_eq!(rollback_receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(rollback_receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(rollback_receipt.get("rollback_required").and_then(Value::as_bool), Some(false));
+    assert_eq!(rollback_receipt.get("rollback_safe").and_then(Value::as_bool), Some(true));
+    assert_eq!(rollback_receipt.get("blocked_before_edit").and_then(Value::as_bool), Some(false));
+    assert!(
+        rollback_receipt
+            .get("reason")
+            .and_then(Value::as_str)
+            .is_some_and(|reason| reason.contains("plan allowed")
+                && reason.contains("no live symbol-level delete")),
+        "rollback receipt should explain the allowed no-live-edit path: {rollback_receipt}"
+    );
 
     Ok(())
 }
