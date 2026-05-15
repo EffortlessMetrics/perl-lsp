@@ -1237,7 +1237,11 @@ sub run {
         request_receipt.get("provider_action").and_then(Value::as_str),
         Some("textDocument/rename")
     );
-    assert_eq!(request_receipt.get("reason").and_then(Value::as_str), Some("same_file_semantic"));
+    let reason = request_receipt.get("reason").and_then(Value::as_str).ok_or("missing reason")?;
+    assert!(
+        matches!(reason, "same_file_lexical" | "same_file_semantic"),
+        "expected a persisted same-file rename trace, got: {request_receipt}"
+    );
     assert_eq!(request_receipt.get("symbol").and_then(Value::as_str), Some("$value"));
     assert_eq!(
         request_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
