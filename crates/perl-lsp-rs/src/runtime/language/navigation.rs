@@ -52,13 +52,22 @@ static GOTO_LABEL_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::n
 #[cfg(feature = "workspace")]
 static LABEL_DECLARATION_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 
-#[cfg(any(test, feature = "expose_lsp_test_api"))]
 fn lsp_location_count(value: Option<&Value>) -> usize {
     match value {
         Some(Value::Array(items)) => items.len(),
         Some(Value::Object(obj)) if obj.contains_key("uri") || obj.contains_key("targetUri") => 1,
         _ => 0,
     }
+}
+
+#[derive(Debug)]
+struct NavigationDecisionTraceContext {
+    provider: &'static str,
+    provider_action: &'static str,
+    uri: String,
+    line: u32,
+    character: u32,
+    include_declaration: Option<bool>,
 }
 
 #[cfg(feature = "workspace")]
@@ -892,6 +901,67 @@ fn cursor_in_regex_capture(regex: &regex::Regex, text: &str, cursor: usize, grou
 }
 
 impl LspServer {
+    fn navigation_decision_trace_context(
+        params: Option<&Value>,
+        provider: &'static str,
+        provider_action: &'static str,
+        include_declaration: Option<bool>,
+    ) -> Result<Option<NavigationDecisionTraceContext>, JsonRpcError> {
+        let Some(params) = params else {
+            return Ok(None);
+        };
+        let uri = req_uri(params)?.to_string();
+        let (line, character) = req_position(params)?;
+        Ok(Some(NavigationDecisionTraceContext {
+            provider,
+            provider_action,
+            uri,
+            line,
+            character,
+            include_declaration,
+        }))
+    }
+
+    fn record_navigation_provider_decision_trace(
+        &self,
+        context: Option<&NavigationDecisionTraceContext>,
+        result: Option<&Value>,
+    ) {
+        let Some(context) = context else {
+            return;
+        };
+        let result_count = lsp_location_count(result);
+        let (decision, reason, fallback_state) = if result_count == 0 {
+            ("fallback", "no_result", "no_result")
+        } else {
+            ("acted", "live_provider_result", "live_provider")
+        };
+
+        self.record_provider_decision_trace(
+            context.provider,
+            &json!({
+                "provider": context.provider,
+                "provider_action": context.provider_action,
+                "decision": decision,
+                "reason": reason,
+                "uri": context.uri,
+                "line": context.line,
+                "character": context.character,
+                "include_declaration": context.include_declaration,
+                "result_count": result_count,
+                "fact_source": "navigation_provider",
+                "confidence": "low",
+                "freshness": "fresh",
+                "source_backed": false,
+                "source_backed_state": "not_proven_by_provider_trace",
+                "fallback_state": fallback_state,
+                "dynamic_boundary": false,
+                "trace_only_no_live_behavior_change": true,
+                "claim_boundary": "records existing navigation response only; no broader live navigation cutover"
+            }),
+        );
+    }
+
     /// Handle textDocument/declaration request
     pub(crate) fn handle_declaration(
         &self,
@@ -1025,6 +1095,21 @@ impl LspServer {
 
     /// Handle textDocument/definition request
     pub(crate) fn handle_definition(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        let trace_context = Self::navigation_decision_trace_context(
+            params.as_ref(),
+            "goto_definition",
+            "textDocument/definition",
+            None,
+        )?;
+        let result = self.handle_definition_inner(params)?;
+        self.record_navigation_provider_decision_trace(trace_context.as_ref(), result.as_ref());
+        Ok(result)
+    }
+
+    fn handle_definition_inner(
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {

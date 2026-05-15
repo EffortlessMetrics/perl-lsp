@@ -27,13 +27,20 @@ use crate::runtime::routing::{IndexAccessMode, route_index_access};
 
 static QUALIFIED_NAME_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 
-#[cfg(any(test, feature = "expose_lsp_test_api"))]
 fn lsp_location_count(value: Option<&Value>) -> usize {
     match value {
         Some(Value::Array(items)) => items.len(),
         Some(Value::Object(obj)) if obj.contains_key("uri") || obj.contains_key("targetUri") => 1,
         _ => 0,
     }
+}
+
+#[derive(Debug)]
+struct ReferencesDecisionTraceContext {
+    uri: String,
+    line: u32,
+    character: u32,
+    include_declaration: bool,
 }
 
 fn get_qualified_name_regex() -> Option<&'static regex::Regex> {
@@ -44,6 +51,62 @@ fn get_qualified_name_regex() -> Option<&'static regex::Regex> {
 }
 
 impl LspServer {
+    fn references_decision_trace_context(
+        params: Option<&Value>,
+    ) -> Result<Option<ReferencesDecisionTraceContext>, JsonRpcError> {
+        let Some(params) = params else {
+            return Ok(None);
+        };
+        let uri = req_uri(params)?.to_string();
+        let (line, character) = req_position(params)?;
+        let include_declaration = if let Some(context) = params.get("context") {
+            context["includeDeclaration"].as_bool().unwrap_or(true)
+        } else {
+            true
+        };
+        Ok(Some(ReferencesDecisionTraceContext { uri, line, character, include_declaration }))
+    }
+
+    fn record_references_provider_decision_trace(
+        &self,
+        context: Option<&ReferencesDecisionTraceContext>,
+        result: Option<&Value>,
+    ) {
+        let Some(context) = context else {
+            return;
+        };
+        let result_count = lsp_location_count(result);
+        let (decision, reason, fallback_state) = if result_count == 0 {
+            ("fallback", "no_result", "no_result")
+        } else {
+            ("acted", "live_provider_result", "live_provider")
+        };
+
+        self.record_provider_decision_trace(
+            "references",
+            &json!({
+                "provider": "references",
+                "provider_action": "textDocument/references",
+                "decision": decision,
+                "reason": reason,
+                "uri": context.uri,
+                "line": context.line,
+                "character": context.character,
+                "include_declaration": context.include_declaration,
+                "result_count": result_count,
+                "fact_source": "navigation_provider",
+                "confidence": "low",
+                "freshness": "fresh",
+                "source_backed": false,
+                "source_backed_state": "not_proven_by_provider_trace",
+                "fallback_state": fallback_state,
+                "dynamic_boundary": false,
+                "trace_only_no_live_behavior_change": true,
+                "claim_boundary": "records existing references response only; no broader live references cutover"
+            }),
+        );
+    }
+
     /// Handle textDocument/references request with lifecycle-aware dispatch
     ///
     /// Uses `IndexCoordinator` for state-aware behavior:
@@ -52,6 +115,16 @@ impl LspServer {
     ///
     /// Includes deadline enforcement to prevent blocking on large workspaces.
     pub(crate) fn handle_references(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        let trace_context = Self::references_decision_trace_context(params.as_ref())?;
+        let result = self.handle_references_inner(params)?;
+        self.record_references_provider_decision_trace(trace_context.as_ref(), result.as_ref());
+        Ok(result)
+    }
+
+    fn handle_references_inner(
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
