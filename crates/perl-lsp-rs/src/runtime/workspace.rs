@@ -22,6 +22,10 @@ use perl_module::rename::{apply_module_rename_edits, plan_module_rename_edits};
 use perl_parser::workspace_index::{DegradationReason, EarlyExitReason, ResourceKind, SymbolKind};
 #[cfg(feature = "workspace")]
 use perl_parser_core::source_file::{is_perl_source_path, is_perl_source_uri};
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+use perl_semantic_facts::{
+    Confidence, Provenance, ProviderFactFreshness, ProviderFactSourceKind, ProviderFallbackState,
+};
 use perl_workspace::folder::extract_workspace_folder_change;
 #[cfg(feature = "workspace")]
 use perl_workspace::ignore::is_skipped_dir_name;
@@ -412,6 +416,8 @@ impl LspServer {
                 "claim_boundary": "ready workspace index symbols only; generated, dynamic, stale, and partial-index candidates remain gated"
             })
         };
+        let (gated_expansion_receipt, gated_expansion_candidate_count) =
+            workspace_symbols_generated_dynamic_noise_receipt(&query);
 
         Ok(Some(json!({
             "provider": "workspace_symbols",
@@ -420,19 +426,109 @@ impl LspServer {
             "live_provider_count": live_provider_count,
             "shadow_state": shadow_state,
             "compiler_receipt": compiler_receipt,
+            "gated_expansion_receipt": gated_expansion_receipt,
             "no_live_behavior_change": no_live_behavior_change,
             "notes": [
                 format!(
                     "workspace-symbol runtime quality receipt: query={:?}; live_provider_count={}; \
                      source_backed_compiler_symbols={}; \
+                     generated_dynamic_noise_candidates={}; \
                      fresh ready-state workspace index symbols are live for non-empty queries; \
                      empty, partial-index, stale, dynamic, generated/no-source, and ambiguous cases keep fallback or gated behavior",
-                    query, live_provider_count, source_backed_count
+                    query,
+                    live_provider_count,
+                    source_backed_count,
+                    gated_expansion_candidate_count
                 )
             ]
         })))
     }
+}
 
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+fn workspace_symbols_generated_dynamic_noise_receipt(query: &str) -> (Value, usize) {
+    let candidates = vec![
+        perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolShadowCandidate::shadow(
+            "generated:workspace-symbol:framework_accessor:virtual",
+            ProviderFactSourceKind::FrameworkAdapter,
+            Provenance::FrameworkSynthesis,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+        ),
+        perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolShadowCandidate::blocked(
+            "blocker:workspace-symbol:dynamic_symbolic_reference",
+            ProviderFactSourceKind::DynamicBoundary,
+            Provenance::DynamicBoundary,
+            Confidence::High,
+            ProviderFactFreshness::Fresh,
+        ),
+        perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolShadowCandidate::blocked(
+            "stale:workspace-symbol:removed_symbol",
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::Low,
+            ProviderFactFreshness::Stale,
+        ),
+        perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolShadowCandidate::fallback(
+            "fallback:workspace-symbol:low_confidence_text_match",
+            ProviderFactSourceKind::Fallback,
+            Provenance::SearchFallback,
+            Confidence::Low,
+            ProviderFactFreshness::Unknown,
+        ),
+    ];
+    let candidate_count = candidates.len();
+
+    let generated_candidate_count = candidates
+        .iter()
+        .filter(|candidate| candidate.source == ProviderFactSourceKind::FrameworkAdapter)
+        .count();
+    let dynamic_boundary_blocker_count = candidates
+        .iter()
+        .filter(|candidate| {
+            candidate.fallback_state == ProviderFallbackState::Blocked
+                && candidate.source == ProviderFactSourceKind::DynamicBoundary
+        })
+        .count();
+    let stale_fact_blocker_count = candidates
+        .iter()
+        .filter(|candidate| {
+            candidate.fallback_state == ProviderFallbackState::Blocked
+                && candidate.freshness == ProviderFactFreshness::Stale
+        })
+        .count();
+    let fallback_noise_candidate_count = candidates
+        .iter()
+        .filter(|candidate| {
+            candidate.fallback_state == ProviderFallbackState::Fallback
+                || candidate.confidence == Confidence::Low
+                || candidate.freshness != ProviderFactFreshness::Fresh
+        })
+        .count();
+
+    let shadow = perl_lsp_rs_core::providers::workspace_symbols::workspace_symbol_source_shadow(
+        Vec::new(),
+        candidates,
+        query,
+    );
+
+    (
+        json!({
+            "schema_version": 1,
+            "receipt_kind": "generated_dynamic_noise_expansion",
+            "generated_candidate_count": generated_candidate_count,
+            "dynamic_boundary_blocker_count": dynamic_boundary_blocker_count,
+            "stale_fact_blocker_count": stale_fact_blocker_count,
+            "fallback_noise_candidate_count": fallback_noise_candidate_count,
+            "no_live_behavior_change": true,
+            "claim_boundary": "workspace-symbol generated/dynamic/noise expansion receipt only; generated, dynamic, stale, and fallback/noise candidates remain gated",
+            "shadow_receipt": shadow.receipt,
+        }),
+        candidate_count,
+    )
+}
+
+impl LspServer {
     /// Search open documents for symbols (non-workspace stub)
     #[cfg(not(feature = "workspace"))]
     fn search_open_documents_for_symbols(

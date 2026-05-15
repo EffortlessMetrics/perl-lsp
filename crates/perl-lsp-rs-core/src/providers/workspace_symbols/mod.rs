@@ -126,6 +126,80 @@ pub struct WorkspaceSymbolShadowCandidate {
     pub model_version: Option<u32>,
 }
 
+impl WorkspaceSymbolShadowCandidate {
+    /// Build a shadow-only workspace-symbol candidate.
+    ///
+    /// Use this for generated or otherwise unpromoted candidates that must be
+    /// measured without becoming live workspace-symbol answers.
+    #[must_use]
+    pub fn shadow(
+        identity: impl Into<String>,
+        source: ProviderFactSourceKind,
+        provenance: Provenance,
+        confidence: Confidence,
+        freshness: ProviderFactFreshness,
+    ) -> Self {
+        Self {
+            identity: identity.into(),
+            source,
+            provenance,
+            confidence,
+            freshness,
+            fallback_state: ProviderFallbackState::Shadow,
+            source_hash: None,
+            anchor_id: None,
+            model_version: None,
+        }
+    }
+
+    /// Build a blocked workspace-symbol candidate.
+    ///
+    /// Use this for stale, dynamic, generated/no-source, or otherwise unsafe
+    /// facts that must not authorize live workspace-symbol expansion.
+    #[must_use]
+    pub fn blocked(
+        identity: impl Into<String>,
+        source: ProviderFactSourceKind,
+        provenance: Provenance,
+        confidence: Confidence,
+        freshness: ProviderFactFreshness,
+    ) -> Self {
+        Self {
+            identity: identity.into(),
+            source,
+            provenance,
+            confidence,
+            freshness,
+            fallback_state: ProviderFallbackState::Blocked,
+            source_hash: None,
+            anchor_id: None,
+            model_version: None,
+        }
+    }
+
+    /// Build a fallback/noise candidate that remains outside live promotion.
+    #[must_use]
+    pub fn fallback(
+        identity: impl Into<String>,
+        source: ProviderFactSourceKind,
+        provenance: Provenance,
+        confidence: Confidence,
+        freshness: ProviderFactFreshness,
+    ) -> Self {
+        Self {
+            identity: identity.into(),
+            source,
+            provenance,
+            confidence,
+            freshness,
+            fallback_state: ProviderFallbackState::Fallback,
+            source_hash: None,
+            anchor_id: None,
+            model_version: None,
+        }
+    }
+}
+
 /// Workspace-symbol shadow proof result.
 ///
 /// Callers should keep returning the legacy workspace-symbol result while this
