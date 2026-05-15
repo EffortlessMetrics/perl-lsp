@@ -63,6 +63,7 @@ use crate::call_hierarchy_provider::CallHierarchyProvider;
 use crate::cancellation::{GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken};
 // Wave G3 (#4535): perl-lsp-feature-governance absorbed into perl-lsp-rs-core::governance
 use perl_lsp_rs_core::governance::FeatureProfile;
+use perl_lsp_rs_core::providers::{ProviderDecisionExplanation, ProviderDecisionProvider};
 
 // Import LSP providers from features (these moved from perl-parser to perl-lsp)
 use crate::features::{
@@ -179,6 +180,9 @@ pub struct LspServer {
     client_supports_pull_diags: Arc<AtomicBool>,
     /// Workspace configuration for module resolution
     workspace_config: Arc<Mutex<WorkspaceConfig>>,
+    /// Last provider decision explanation captured for each provider surface.
+    provider_decision_traces:
+        Arc<Mutex<HashMap<ProviderDecisionProvider, ProviderDecisionExplanation>>>,
     /// Atomic counter for generating unique request IDs
     next_request_id: Arc<AtomicI64>,
     /// Pending workspace/configuration reverse requests keyed by request ID.
@@ -395,6 +399,18 @@ impl LspServer {
     /// Active feature profile for this server instance.
     pub(crate) const fn feature_profile(&self) -> FeatureProfile {
         self.feature_profile
+    }
+
+    /// Record a provider decision explanation for later user inspection.
+    pub(crate) fn record_provider_decision_trace(&self, explanation: ProviderDecisionExplanation) {
+        self.provider_decision_traces.lock().insert(explanation.provider, explanation);
+    }
+
+    /// Snapshot the latest provider decision explanations for transient handlers.
+    pub(crate) fn provider_decision_traces_snapshot(
+        &self,
+    ) -> HashMap<ProviderDecisionProvider, ProviderDecisionExplanation> {
+        self.provider_decision_traces.lock().clone()
     }
 
     /// Get the registered AI inline-completion backend, if any.

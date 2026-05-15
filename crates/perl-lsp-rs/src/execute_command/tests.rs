@@ -4,7 +4,13 @@ use super::get_supported_commands;
 use super::provider::{ExecuteCommandProvider, TestRunner, select_test_runner};
 use super::test_support::mock_status;
 use perl_lsp_rs_core::config::WorkspaceConfig;
+use perl_lsp_rs_core::providers::{
+    ProviderDecisionConfidence, ProviderDecisionExplanation, ProviderDecisionFactSource,
+    ProviderDecisionFallback, ProviderDecisionFreshness, ProviderDecisionOutcome,
+    ProviderDecisionProvider, ProviderDecisionReason,
+};
 use serde_json::{Value, json};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use tempfile::tempdir;
@@ -250,6 +256,55 @@ fn test_explain_provider_decision_attaches_request_local_receipt()
         request_receipt.get("fallback_state").and_then(Value::as_str),
         Some("compiler_empty")
     );
+    Ok(())
+}
+
+#[test]
+fn test_explain_provider_decision_defaults_to_persisted_provider_trace()
+-> Result<(), Box<dyn std::error::Error>> {
+    let persisted = ProviderDecisionExplanation::new(
+        ProviderDecisionProvider::Rename,
+        ProviderDecisionOutcome::Fallback,
+        ProviderDecisionReason::FallbackPolicy,
+        ProviderDecisionFactSource::Fallback,
+        ProviderDecisionConfidence::Low,
+        ProviderDecisionFreshness::NotApplicable,
+        false,
+        ProviderDecisionFallback::LegacyProvider,
+    )
+    .with_receipt_id("runtime-request")
+    .with_scenario("helper-to-renamed_helper")
+    .with_request_receipt(json!({
+        "provider": "rename",
+        "symbol": "helper",
+        "fallback_state": "compiler_empty",
+        "live_provider_state": "error"
+    }));
+    let mut traces = HashMap::new();
+    traces.insert(ProviderDecisionProvider::Rename, persisted);
+    let provider = ExecuteCommandProvider::new().with_provider_decision_traces(traces);
+
+    let result = provider
+        .execute_command("perl.explainProviderDecision", vec![json!({ "provider": "rename" })])?;
+
+    assert_eq!(result.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(result.get("decision").and_then(Value::as_str), Some("fallback"));
+    assert_eq!(result.get("fact_source").and_then(Value::as_str), Some("fallback"));
+    assert_eq!(result.get("confidence").and_then(Value::as_str), Some("low"));
+    assert_eq!(result.get("freshness").and_then(Value::as_str), Some("not_applicable"));
+    assert_eq!(result.get("fallback").and_then(Value::as_str), Some("legacy_provider"));
+    assert_eq!(result.get("receipt_id").and_then(Value::as_str), Some("runtime-request"));
+    assert_eq!(result.get("scenario").and_then(Value::as_str), Some("helper-to-renamed_helper"));
+    let request_receipt = result
+        .get("request_receipt")
+        .and_then(Value::as_object)
+        .ok_or("missing persisted request_receipt")?;
+    assert_eq!(request_receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        request_receipt.get("fallback_state").and_then(Value::as_str),
+        Some("compiler_empty")
+    );
+    assert_eq!(request_receipt.get("live_provider_state").and_then(Value::as_str), Some("error"));
     Ok(())
 }
 

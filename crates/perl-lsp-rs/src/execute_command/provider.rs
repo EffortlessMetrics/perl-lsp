@@ -12,6 +12,7 @@ use perl_lsp_rs_core::providers::{
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::borrow::Cow;
+use std::collections::HashMap;
 #[cfg(windows)]
 use std::ffi::OsString;
 #[cfg(windows)]
@@ -73,6 +74,7 @@ pub(crate) fn normalize_path_for_external_command(path: &Path) -> PathBuf {
 pub struct ExecuteCommandProvider {
     workspace_roots: Vec<PathBuf>,
     workspace_config: Option<WorkspaceConfig>,
+    provider_decision_traces: HashMap<ProviderDecisionProvider, ProviderDecisionExplanation>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -136,12 +138,16 @@ impl ExecuteCommandProvider {
 impl ExecuteCommandProvider {
     /// Create a new execute command provider.
     pub fn new() -> Self {
-        Self { workspace_roots: Vec::new(), workspace_config: None }
+        Self {
+            workspace_roots: Vec::new(),
+            workspace_config: None,
+            provider_decision_traces: HashMap::new(),
+        }
     }
 
     /// Create a provider with workspace root enforcement.
     pub fn with_workspace_roots(workspace_roots: Vec<PathBuf>) -> Self {
-        Self { workspace_roots, workspace_config: None }
+        Self { workspace_roots, workspace_config: None, provider_decision_traces: HashMap::new() }
     }
 
     /// Attach a workspace configuration to enable PerlOracleEnv isolation for
@@ -152,6 +158,15 @@ impl ExecuteCommandProvider {
     /// deny-all-ambient env policy.
     pub fn with_workspace_config(mut self, config: WorkspaceConfig) -> Self {
         self.workspace_config = Some(config);
+        self
+    }
+
+    /// Attach provider-local decision traces captured earlier in the same LSP session.
+    pub(crate) fn with_provider_decision_traces(
+        mut self,
+        traces: HashMap<ProviderDecisionProvider, ProviderDecisionExplanation>,
+    ) -> Self {
+        self.provider_decision_traces = traces;
         self
     }
 
@@ -211,7 +226,11 @@ impl ExecuteCommandProvider {
         let request: ExplainProviderDecisionRequest = serde_json::from_value(request_value.clone())
             .map_err(|error| format!("Invalid explain-provider-decision argument: {error}"))?;
 
-        let mut explanation = default_provider_decision_explanation(request.provider);
+        let mut explanation = self
+            .provider_decision_traces
+            .get(&request.provider)
+            .cloned()
+            .unwrap_or_else(|| default_provider_decision_explanation(request.provider));
 
         if let Some(receipt_id) = request.receipt_id {
             explanation = explanation.with_receipt_id(receipt_id);

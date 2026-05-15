@@ -280,6 +280,21 @@ fn explain_provider_decision_with_request_receipt(
     Ok(response)
 }
 
+fn explain_provider_decision(
+    server: &LspServer,
+    provider: &str,
+) -> Result<Value, Box<dyn std::error::Error>> {
+    let response = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.explainProviderDecision",
+            "arguments": [{
+                "provider": provider
+            }]
+        })))?
+        .ok_or("missing explain-provider-decision response")?;
+    Ok(response)
+}
+
 #[test]
 fn refactor_runtime_blocker_ux_rename_receipt_blocks_low_confidence_fixture()
 -> Result<(), Box<dyn std::error::Error>> {
@@ -573,6 +588,26 @@ fn refactor_runtime_blocker_ux_rename_request_receipt_preserves_package_fallback
         .ok_or("missing real-workspace rename fallback/noise receipt")?;
     let fallback_noise = receipt.get("fallback_noise").ok_or("missing fallback_noise")?.clone();
 
+    let persisted = explain_provider_decision(&server, "rename")?;
+    assert_eq!(persisted.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(persisted.get("decision").and_then(Value::as_str), Some("fallback"));
+    assert_eq!(
+        persisted.get("receipt_id").and_then(Value::as_str),
+        Some("runtime-rename-fallback-noise")
+    );
+    let persisted_request_receipt = persisted
+        .get("request_receipt")
+        .and_then(Value::as_object)
+        .ok_or("missing persisted provider-local rename receipt")?;
+    assert_eq!(
+        persisted_request_receipt.get("fallback_state").and_then(Value::as_str),
+        Some("compiler_empty")
+    );
+    assert_eq!(
+        persisted_request_receipt.get("live_provider_state").and_then(Value::as_str),
+        Some("error")
+    );
+
     let explanation = explain_provider_decision_with_request_receipt(
         &server,
         "rename",
@@ -611,6 +646,26 @@ fn refactor_runtime_blocker_ux_rename_request_receipt_preserves_package_fallback
             message.contains("ambiguous symbol identity") && message.contains("helper")
         }),
         "request-local receipt must preserve live fallback/noise reason: {request_receipt:?}"
+    );
+
+    let replayed = explain_provider_decision(&server, "rename")?;
+    assert_eq!(replayed.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(replayed.get("decision").and_then(Value::as_str), Some("fallback"));
+    assert_eq!(
+        replayed.get("receipt_id").and_then(Value::as_str),
+        Some("realbaseline-rename-fallback-noise")
+    );
+    let replayed_request_receipt = replayed
+        .get("request_receipt")
+        .and_then(Value::as_object)
+        .ok_or("missing persisted request-local rename receipt")?;
+    assert_eq!(
+        replayed_request_receipt.get("fallback_state").and_then(Value::as_str),
+        Some("compiler_empty")
+    );
+    assert_eq!(
+        replayed_request_receipt.get("live_provider_state").and_then(Value::as_str),
+        Some("error")
     );
 
     Ok(())
@@ -1153,6 +1208,24 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_records_live_blocker_ux_and_r
             .is_some_and(|reason| reason.contains("blocker") && reason.contains("no live edits")),
         "rollback receipt should explain the no-edit blocked path: {rollback_receipt}"
     );
+
+    let explanation = explain_provider_decision(&server, "safe_delete")?;
+    assert_eq!(explanation.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(explanation.get("decision").and_then(Value::as_str), Some("blocked"));
+    assert_eq!(
+        explanation.get("receipt_id").and_then(Value::as_str),
+        Some("runtime-safe-delete-live-blocker-ux")
+    );
+    let request_receipt = explanation
+        .get("request_receipt")
+        .and_then(Value::as_object)
+        .ok_or("missing persisted safe-delete blocker receipt")?;
+    assert_eq!(request_receipt.get("decision").and_then(Value::as_str), Some("blocked"));
+    assert_json_array_contains(
+        &Value::Object(request_receipt.clone()),
+        "blocker_reasons",
+        "ImportedSymbol",
+    )?;
 
     assert_eq!(receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
     Ok(())

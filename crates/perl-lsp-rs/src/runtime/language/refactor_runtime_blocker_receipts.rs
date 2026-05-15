@@ -2,6 +2,12 @@
 
 use super::super::*;
 use crate::protocol::{req_position, req_uri};
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+use perl_lsp_rs_core::providers::{
+    ProviderDecisionConfidence, ProviderDecisionExplanation, ProviderDecisionFactSource,
+    ProviderDecisionFallback, ProviderDecisionFreshness, ProviderDecisionOutcome,
+    ProviderDecisionProvider, ProviderDecisionReason,
+};
 
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
@@ -153,6 +159,19 @@ impl LspServer {
                     },
                 );
 
+            let fallback_noise = rename_fallback_noise_json(
+                &symbol,
+                new_name,
+                live_provider_result.as_ref(),
+                live_provider_error.as_deref(),
+                live_provider_edit_count,
+                compiler_plan_edit_count,
+                compiler_blockers.as_deref(),
+            );
+            self.record_provider_decision_trace(rename_runtime_provider_decision(
+                fallback_noise.clone(),
+            ));
+
             Ok(Some(json!({
                 "provider": "rename",
                 "symbol": symbol,
@@ -161,15 +180,7 @@ impl LspServer {
                 "live_provider_error": live_provider_error,
                 "live_provider_edit_count": live_provider_edit_count,
                 "compiler_receipt": compiler_receipt,
-                "fallback_noise": rename_fallback_noise_json(
-                    &symbol,
-                    new_name,
-                    live_provider_result.as_ref(),
-                    live_provider_error.as_deref(),
-                    live_provider_edit_count,
-                    compiler_plan_edit_count,
-                    compiler_blockers.as_deref()
-                ),
+                "fallback_noise": fallback_noise,
                 "no_live_behavior_change": true
             })))
         }
@@ -276,15 +287,18 @@ impl LspServer {
             let (compiler_receipt, compiler_blockers) = compiler_receipt_parts
                 .map_or((None, None), |(receipt, blockers)| (Some(receipt), Some(blockers)));
 
+            let live_blocker_ux = safe_delete_live_blocker_ux_json(compiler_blockers.as_deref());
+            self.record_provider_decision_trace(safe_delete_runtime_provider_decision(
+                live_blocker_ux.clone(),
+            ));
+
             Ok(Some(json!({
                 "provider": "safe_delete",
                 "symbol": symbol,
                 "live_provider_result": live_provider_result,
                 "live_provider_edit_count": live_provider_edit_count,
                 "compiler_receipt": compiler_receipt,
-                "live_blocker_ux": safe_delete_live_blocker_ux_json(
-                    compiler_blockers.as_deref()
-                ),
+                "live_blocker_ux": live_blocker_ux,
                 "rollback_receipt": safe_delete_rollback_receipt_json(
                     live_provider_edit_count,
                     compiler_blockers.as_deref()
@@ -573,6 +587,23 @@ fn rename_fallback_noise_json(
 }
 
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn rename_runtime_provider_decision(fallback_noise: Value) -> ProviderDecisionExplanation {
+    ProviderDecisionExplanation::new(
+        ProviderDecisionProvider::Rename,
+        ProviderDecisionOutcome::Fallback,
+        ProviderDecisionReason::FallbackPolicy,
+        ProviderDecisionFactSource::Fallback,
+        ProviderDecisionConfidence::Low,
+        ProviderDecisionFreshness::NotApplicable,
+        false,
+        ProviderDecisionFallback::LegacyProvider,
+    )
+    .with_receipt_id("runtime-rename-fallback-noise")
+    .with_scenario("provider-local-rename-trace")
+    .with_request_receipt(fallback_noise)
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 fn rename_live_provider_state(
     live_provider_result: Option<&Value>,
     live_provider_error: Option<&str>,
@@ -608,6 +639,38 @@ fn safe_delete_live_blocker_ux_json(blockers: Option<&[PlanBlocker]>) -> Value {
         "blocker_reasons": blocker_reasons,
         "blocker_messages": blocker_messages
     })
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn safe_delete_runtime_provider_decision(live_blocker_ux: Value) -> ProviderDecisionExplanation {
+    let blocked = live_blocker_ux.get("decision").and_then(Value::as_str) == Some("blocked");
+    let (decision, reason, fallback) = if blocked {
+        (
+            ProviderDecisionOutcome::Blocked,
+            ProviderDecisionReason::UnsafeEditBlocked,
+            ProviderDecisionFallback::NoEdit,
+        )
+    } else {
+        (
+            ProviderDecisionOutcome::Fallback,
+            ProviderDecisionReason::FallbackPolicy,
+            ProviderDecisionFallback::NoEdit,
+        )
+    };
+
+    ProviderDecisionExplanation::new(
+        ProviderDecisionProvider::SafeDelete,
+        decision,
+        reason,
+        ProviderDecisionFactSource::CompilerFact,
+        ProviderDecisionConfidence::High,
+        ProviderDecisionFreshness::Fresh,
+        false,
+        fallback,
+    )
+    .with_receipt_id("runtime-safe-delete-live-blocker-ux")
+    .with_scenario("provider-local-safe-delete-trace")
+    .with_request_receipt(live_blocker_ux)
 }
 
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]

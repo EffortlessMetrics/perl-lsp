@@ -886,7 +886,8 @@ impl LspServer {
             }
 
             let provider = ExecuteCommandProvider::with_workspace_roots(workspace_roots)
-                .with_workspace_config(self.workspace_config.lock().clone());
+                .with_workspace_config(self.workspace_config.lock().clone())
+                .with_provider_decision_traces(self.provider_decision_traces_snapshot());
 
             match command {
                 // Keep existing test commands for backward compatibility
@@ -924,7 +925,17 @@ impl LspServer {
                 | "perl.debugTests"
                 | "perl.explainProviderDecision" => {
                     match provider.execute_command(command, arguments) {
-                        Ok(result) => return Ok(Some(result)),
+                        Ok(result) => {
+                            if command == "perl.explainProviderDecision"
+                                && let Ok(explanation) =
+                                    serde_json::from_value::<
+                                        perl_lsp_rs_core::providers::ProviderDecisionExplanation,
+                                    >(result.clone())
+                            {
+                                self.record_provider_decision_trace(explanation);
+                            }
+                            return Ok(Some(result));
+                        }
                         Err(e) => {
                             // Return proper JSON-RPC error according to LSP 3.17 specification
                             let error_code = if e.contains("Missing") || e.contains("argument") {
