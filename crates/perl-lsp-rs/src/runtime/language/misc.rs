@@ -1063,6 +1063,13 @@ impl LspServer {
                         .ok_or_else(|| invalid_params("Missing subtest name argument"))?;
                     return self.run_subtest(subtest_name);
                 }
+                "perl.previewSafeDelete" => {
+                    let request = arguments
+                        .first()
+                        .cloned()
+                        .ok_or_else(|| invalid_params("Missing safe-delete preview argument"))?;
+                    return self.safe_delete_symbol_preview(Some(request));
+                }
                 "perl.debugTest" => {
                     let test_id = arguments
                         .first()

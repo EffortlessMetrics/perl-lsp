@@ -226,6 +226,7 @@ fn test_execute_command_capabilities() -> Result<(), Box<dyn std::error::Error>>
     assert!(command_strs.contains(&"perl.runTestSub"));
     assert!(command_strs.contains(&"perl.runCritic"));
     assert!(command_strs.contains(&"perl.explainProviderDecision"));
+    assert!(command_strs.contains(&"perl.previewSafeDelete"));
 
     Ok(())
 }

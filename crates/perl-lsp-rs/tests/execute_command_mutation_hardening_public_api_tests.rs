@@ -720,7 +720,7 @@ fn test_supported_commands_structure() -> TestResult {
 
     // MUTATION KILLER: Verify not empty/default list
     assert!(!commands.is_empty(), "Supported commands should not be empty");
-    assert_eq!(commands.len(), 11, "Should have exactly 11 supported commands");
+    assert_eq!(commands.len(), 13, "Should have exactly 13 supported commands");
 
     // Verify specific commands are present
     let expected_commands = vec![
@@ -735,6 +735,8 @@ fn test_supported_commands_structure() -> TestResult {
         "perl.debugTest",
         "perl.goToTest",
         "perl.goToImplementation",
+        "perl.explainProviderDecision",
+        "perl.previewSafeDelete",
     ];
 
     for expected in &expected_commands {

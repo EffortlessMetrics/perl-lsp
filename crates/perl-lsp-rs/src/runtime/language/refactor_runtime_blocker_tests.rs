@@ -271,9 +271,12 @@ fn assert_safe_delete_decision_trace(
 ) -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(receipt.get("schema_version").and_then(Value::as_str), Some("provider_decision.v1"));
     assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
-    assert_eq!(
-        receipt.get("provider_action").and_then(Value::as_str),
-        Some("safeDelete/runtimeBlockerUxReceipt")
+    let provider_action =
+        receipt.get("provider_action").and_then(Value::as_str).ok_or("missing provider_action")?;
+    assert!(
+        provider_action == "safeDelete/runtimeBlockerUxReceipt"
+            || provider_action == "perl.previewSafeDelete",
+        "unexpected safe-delete provider_action: {provider_action}"
     );
     assert_eq!(receipt.get("decision").and_then(Value::as_str), Some(decision));
     assert_eq!(receipt.get("reason").and_then(Value::as_str), Some(reason));
@@ -288,11 +291,14 @@ fn assert_safe_delete_decision_trace(
         receipt.get("source_backed_state").and_then(Value::as_str),
         Some("not_proven_by_safe_delete_trace")
     );
-    assert_eq!(
-        receipt.get("claim_boundary").and_then(Value::as_str),
-        Some(
-            "records safe-delete blocker proof only; no live symbol-level delete behavior changes"
-        )
+    let claim_boundary =
+        receipt.get("claim_boundary").and_then(Value::as_str).ok_or("missing claim_boundary")?;
+    assert!(
+        claim_boundary
+            == "records safe-delete blocker proof only; no live symbol-level delete behavior changes"
+            || claim_boundary
+                == "scoped safe-delete UX preview only; no live symbol-level delete edits are applied",
+        "unexpected safe-delete claim boundary: {claim_boundary}"
     );
     Ok(())
 }
@@ -1403,5 +1409,101 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_records_live_blocker_ux_and_r
     );
 
     assert_eq!(receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_preview_command_returns_scoped_no_edit_ux()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_semantic_real_workspace(&server)?;
+    let util = files.get("lib/RealBaseline/Util.pm").ok_or("missing RealBaseline Util fixture")?;
+    let base = files.get("lib/RealBaseline/Base.pm").ok_or("missing RealBaseline Base fixture")?;
+
+    let (helper_line, helper_character) = position_of(util, "helper {")?;
+    let blocked_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.previewSafeDelete",
+            "arguments": [{
+                "textDocument": {"uri": REAL_BASELINE_UTIL_URI},
+                "position": {"line": helper_line, "character": helper_character}
+            }]
+        })))?
+        .ok_or("missing safe-delete preview blocker result")?;
+    assert_eq!(blocked_result.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        blocked_result.get("provider_action").and_then(Value::as_str),
+        Some("perl.previewSafeDelete")
+    );
+    assert_eq!(blocked_result.get("decision").and_then(Value::as_str), Some("blocked"));
+    assert_eq!(blocked_result.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        blocked_result.get("live_symbol_delete_enabled").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        blocked_result
+            .pointer("/workspace_edit/changes")
+            .and_then(Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0)
+    );
+    let blocked_message = blocked_result
+        .get("user_message")
+        .and_then(Value::as_str)
+        .ok_or("missing safe-delete blocker user_message")?;
+    assert!(
+        blocked_message.contains("Safe delete refused")
+            && blocked_message.contains("helper")
+            && blocked_message.contains("No edits were applied"),
+        "blocked preview message should explain the refusal without edits: {blocked_message}"
+    );
+    assert_safe_delete_decision_trace(&blocked_result, "blocked", "references_exist", "no_edit")?;
+    assert_eq!(
+        blocked_result.get("claim_boundary").and_then(Value::as_str),
+        Some("scoped safe-delete UX preview only; no live symbol-level delete edits are applied")
+    );
+
+    let blocked_explanation = explain_provider_decision(&server, "safe_delete")?;
+    let blocked_request_receipt = request_receipt(&blocked_explanation)?;
+    assert_eq!(
+        blocked_request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.previewSafeDelete")
+    );
+    assert_eq!(
+        blocked_request_receipt.get("user_message").and_then(Value::as_str),
+        Some(blocked_message)
+    );
+
+    let (reset_line, reset_character) = position_of(base, "reset {")?;
+    let allowed_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.previewSafeDelete",
+            "arguments": [{
+                "textDocument": {"uri": REAL_BASELINE_BASE_URI},
+                "position": {"line": reset_line, "character": reset_character}
+            }]
+        })))?
+        .ok_or("missing safe-delete preview allowed result")?;
+    assert_eq!(allowed_result.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        allowed_result.get("provider_action").and_then(Value::as_str),
+        Some("perl.previewSafeDelete")
+    );
+    assert_eq!(allowed_result.get("decision").and_then(Value::as_str), Some("allowed"));
+    assert_eq!(allowed_result.get("fallback_state").and_then(Value::as_str), Some("none"));
+    assert_eq!(allowed_result.get("edits_applied").and_then(Value::as_bool), Some(false));
+    let allowed_message = allowed_result
+        .get("user_message")
+        .and_then(Value::as_str)
+        .ok_or("missing safe-delete allowed user_message")?;
+    assert!(
+        allowed_message.contains("Safe delete preview")
+            && allowed_message.contains("reset")
+            && allowed_message.contains("no symbol deletion was applied"),
+        "allowed preview message should describe the no-edit preview path: {allowed_message}"
+    );
+    assert_safe_delete_decision_trace(&allowed_result, "allowed", "compiler_allowed", "none")?;
+
     Ok(())
 }

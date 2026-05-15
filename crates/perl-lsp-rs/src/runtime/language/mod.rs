@@ -38,7 +38,6 @@ mod virtual_content;
 mod navigation_runtime_quality_tests;
 #[cfg(test)]
 mod provider_decision_live_trace_tests;
-#[cfg(any(test, feature = "expose_lsp_test_api"))]
 mod refactor_runtime_blocker_receipts;
 #[cfg(test)]
 mod refactor_runtime_blocker_tests;
