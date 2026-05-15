@@ -38,6 +38,7 @@ references finds its uses
 diagnostics trusts it
 rename / safe-delete know whether it is safe
 symbols and tokens expose project shape without noise
+explain-provider-decision exposes the receipt boundary
 ```
 
 The loop is only trusted where each answer can identify its fact source,
@@ -64,8 +65,8 @@ blocker when relevant.
 This dashboard keeps the next provider lane separate from parser capability,
 framework facts, PIR, formatter, critic, release, and security work.
 
-1. `feat(provider): attach live provider receipts to explain-provider-decision`
-2. `docs(status): refresh support tiers after provider proof changes`
+1. `test(diagnostics): add broader false-positive / false-negative project-shape receipt`
+2. `test(workspace-symbols): add second-project noise receipt`
 
 Parser raw-bucket work, Linux corpus refresh, security alert classification,
 Rust 1.95 rollout, native formatter, native critic, PIR, and determinism remain

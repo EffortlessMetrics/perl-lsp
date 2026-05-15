@@ -209,16 +209,7 @@ impl ExecuteCommandProvider {
         let request: ExplainProviderDecisionRequest = serde_json::from_value(request_value.clone())
             .map_err(|error| format!("Invalid explain-provider-decision argument: {error}"))?;
 
-        let mut explanation = ProviderDecisionExplanation::new(
-            request.provider,
-            ProviderDecisionOutcome::Fallback,
-            ProviderDecisionReason::MissingFact,
-            ProviderDecisionFactSource::Unknown,
-            ProviderDecisionConfidence::Low,
-            ProviderDecisionFreshness::Unknown,
-            false,
-            ProviderDecisionFallback::NoResult,
-        );
+        let mut explanation = default_provider_decision_explanation(request.provider);
 
         if let Some(receipt_id) = request.receipt_id {
             explanation = explanation.with_receipt_id(receipt_id);
@@ -1010,6 +1001,206 @@ impl ExecuteCommandProvider {
             .map(|output| output.status.success())
             .unwrap_or(false)
     }
+}
+
+fn default_provider_decision_explanation(
+    provider: ProviderDecisionProvider,
+) -> ProviderDecisionExplanation {
+    let (
+        decision,
+        reason,
+        fact_source,
+        confidence,
+        freshness,
+        dynamic_boundary,
+        fallback,
+        receipt_id,
+        scenario,
+    ) = match provider {
+        ProviderDecisionProvider::Completion => (
+            ProviderDecisionOutcome::Fallback,
+            ProviderDecisionReason::FallbackPolicy,
+            ProviderDecisionFactSource::CompilerFact,
+            ProviderDecisionConfidence::High,
+            ProviderDecisionFreshness::Fresh,
+            false,
+            ProviderDecisionFallback::LegacyProvider,
+            Some("docs/project/status/provider_confidence_matrix.md#completion"),
+            Some("ux_scenario_28_mojolicious_completion_ranking"),
+        ),
+        ProviderDecisionProvider::GotoDefinition => (
+            ProviderDecisionOutcome::Acted,
+            ProviderDecisionReason::SourceBackedHighConfidence,
+            ProviderDecisionFactSource::CompilerFact,
+            ProviderDecisionConfidence::High,
+            ProviderDecisionFreshness::Fresh,
+            false,
+            ProviderDecisionFallback::None,
+            Some("docs/project/status/provider_cutover.md#navigation-live-quality-dashboard"),
+            Some("ux_scenario_30_mojolicious_navigation_quality"),
+        ),
+        ProviderDecisionProvider::References => (
+            ProviderDecisionOutcome::Acted,
+            ProviderDecisionReason::SourceBackedHighConfidence,
+            ProviderDecisionFactSource::CompilerFact,
+            ProviderDecisionConfidence::High,
+            ProviderDecisionFreshness::Fresh,
+            false,
+            ProviderDecisionFallback::None,
+            Some("docs/project/status/provider_cutover.md#navigation-live-quality-dashboard"),
+            Some("ux_scenario_30_mojolicious_navigation_quality"),
+        ),
+        ProviderDecisionProvider::Hover => (
+            ProviderDecisionOutcome::Fallback,
+            ProviderDecisionReason::FallbackPolicy,
+            ProviderDecisionFactSource::CompilerFact,
+            ProviderDecisionConfidence::High,
+            ProviderDecisionFreshness::Fresh,
+            false,
+            ProviderDecisionFallback::LegacyProvider,
+            Some("docs/project/status/provider_confidence_matrix.md#hover"),
+            Some("ux_scenario_29_mojolicious_hover_provenance"),
+        ),
+        ProviderDecisionProvider::Diagnostics => (
+            ProviderDecisionOutcome::Fallback,
+            ProviderDecisionReason::FallbackPolicy,
+            ProviderDecisionFactSource::CompilerFact,
+            ProviderDecisionConfidence::High,
+            ProviderDecisionFreshness::Fresh,
+            false,
+            ProviderDecisionFallback::LegacyProvider,
+            Some("docs/project/status/provider_confidence_matrix.md#diagnostics"),
+            Some("ux_scenario_31_mojolicious_diagnostics_quality"),
+        ),
+        ProviderDecisionProvider::Rename => (
+            ProviderDecisionOutcome::Fallback,
+            ProviderDecisionReason::FallbackPolicy,
+            ProviderDecisionFactSource::ParserSyntax,
+            ProviderDecisionConfidence::High,
+            ProviderDecisionFreshness::Fresh,
+            false,
+            ProviderDecisionFallback::LegacyProvider,
+            Some("docs/project/status/provider_confidence_matrix.md#rename"),
+            Some("ux_scenario_35_mojolicious_rename_unsafe_edit"),
+        ),
+        ProviderDecisionProvider::SafeDelete => (
+            ProviderDecisionOutcome::Blocked,
+            ProviderDecisionReason::UnsafeEditBlocked,
+            ProviderDecisionFactSource::CompilerFact,
+            ProviderDecisionConfidence::High,
+            ProviderDecisionFreshness::Fresh,
+            false,
+            ProviderDecisionFallback::NoEdit,
+            Some("docs/project/status/provider_confidence_matrix.md#safe-delete"),
+            Some("realbaseline-safe-delete-imported-symbol"),
+        ),
+        ProviderDecisionProvider::WorkspaceSymbols => (
+            ProviderDecisionOutcome::Shadowed,
+            ProviderDecisionReason::ShadowOnly,
+            ProviderDecisionFactSource::CompilerFact,
+            ProviderDecisionConfidence::High,
+            ProviderDecisionFreshness::Fresh,
+            false,
+            ProviderDecisionFallback::ShadowReceiptOnly,
+            Some("docs/project/status/provider_confidence_matrix.md#workspace-symbols"),
+            Some("ux_scenario_33_mojolicious_workspace_symbol_noise"),
+        ),
+        ProviderDecisionProvider::DocumentSymbols => (
+            ProviderDecisionOutcome::Acted,
+            ProviderDecisionReason::SourceBackedHighConfidence,
+            ProviderDecisionFactSource::ParserSyntax,
+            ProviderDecisionConfidence::High,
+            ProviderDecisionFreshness::Fresh,
+            false,
+            ProviderDecisionFallback::None,
+            Some("docs/project/status/provider_confidence_matrix.md#document-symbols"),
+            Some("ux_scenario_32_mojolicious_document_symbols_quality"),
+        ),
+        ProviderDecisionProvider::SemanticTokens => (
+            ProviderDecisionOutcome::Shadowed,
+            ProviderDecisionReason::ShadowOnly,
+            ProviderDecisionFactSource::SemanticFact,
+            ProviderDecisionConfidence::High,
+            ProviderDecisionFreshness::Fresh,
+            false,
+            ProviderDecisionFallback::ShadowReceiptOnly,
+            Some("docs/project/status/provider_confidence_matrix.md#semantic-tokens"),
+            Some("ux_scenario_34_mojolicious_semantic_tokens_quality"),
+        ),
+        ProviderDecisionProvider::ModuleResolution => (
+            ProviderDecisionOutcome::Acted,
+            ProviderDecisionReason::SourceBackedHighConfidence,
+            ProviderDecisionFactSource::SemanticFact,
+            ProviderDecisionConfidence::High,
+            ProviderDecisionFreshness::Fresh,
+            false,
+            ProviderDecisionFallback::None,
+            Some("docs/project/status/module_resolution.md"),
+            Some("ux_scenario_14_inc_conformance"),
+        ),
+        ProviderDecisionProvider::DapModulePaths => (
+            ProviderDecisionOutcome::Acted,
+            ProviderDecisionReason::SourceBackedHighConfidence,
+            ProviderDecisionFactSource::SemanticFact,
+            ProviderDecisionConfidence::High,
+            ProviderDecisionFreshness::Fresh,
+            false,
+            ProviderDecisionFallback::None,
+            Some("docs/development/PERL_ORACLE_RAIL.md"),
+            Some("dap-module-resolution-smoke"),
+        ),
+        ProviderDecisionProvider::PerlSubprocess => (
+            ProviderDecisionOutcome::Acted,
+            ProviderDecisionReason::SourceBackedHighConfidence,
+            ProviderDecisionFactSource::LegacyWorkspace,
+            ProviderDecisionConfidence::High,
+            ProviderDecisionFreshness::Fresh,
+            false,
+            ProviderDecisionFallback::None,
+            Some("docs/architecture/perl-subprocess-seams.md"),
+            Some("perl-oracle-env"),
+        ),
+        ProviderDecisionProvider::Unknown => (
+            ProviderDecisionOutcome::Fallback,
+            ProviderDecisionReason::MissingFact,
+            ProviderDecisionFactSource::Unknown,
+            ProviderDecisionConfidence::Low,
+            ProviderDecisionFreshness::Unknown,
+            false,
+            ProviderDecisionFallback::NoResult,
+            None,
+            None,
+        ),
+        _ => (
+            ProviderDecisionOutcome::Fallback,
+            ProviderDecisionReason::Unknown,
+            ProviderDecisionFactSource::Unknown,
+            ProviderDecisionConfidence::Low,
+            ProviderDecisionFreshness::Unknown,
+            false,
+            ProviderDecisionFallback::NoResult,
+            None,
+            None,
+        ),
+    };
+
+    let mut explanation = ProviderDecisionExplanation::new(
+        provider,
+        decision,
+        reason,
+        fact_source,
+        confidence,
+        freshness,
+        dynamic_boundary,
+        fallback,
+    );
+    if let Some(receipt_id) = receipt_id {
+        explanation = explanation.with_receipt_id(receipt_id);
+    }
+    if let Some(scenario) = scenario {
+        explanation = explanation.with_scenario(scenario);
+    }
+    explanation
 }
 
 pub(crate) fn select_test_runner(
