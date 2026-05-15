@@ -338,7 +338,7 @@ fn generate_operator_precedence_test_cases() -> Vec<PropertyTestCase> {
         ("$a + $b * $c", "Multiplication before addition"),
         ("($a + $b) * $c", "Parentheses override precedence"),
         ("$a ** $b ** $c", "Right-associative exponentiation"),
-        ("$a / $b * $c", "Left-associative multiplication/division"),
+        ("$a / $b * $c", "Left-associative division/multiplication"),
         ("$a % $b + $c", "Modulo before addition"),
         ("-$a ** $b", "Unary minus and exponentiation"),
         ("++$a * $b", "Pre-increment and multiplication"),
