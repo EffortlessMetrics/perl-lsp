@@ -69,7 +69,8 @@
       "perl.debugTest",
       "perl.goToTest",
       "perl.goToImplementation",
-      "perl.explainProviderDecision"
+      "perl.explainProviderDecision",
+      "perl.previewSafeDelete"
     ]
   },
   "experimental": {

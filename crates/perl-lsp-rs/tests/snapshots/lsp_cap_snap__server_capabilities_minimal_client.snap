@@ -63,6 +63,7 @@ executeCommandProvider:
     - perl.goToTest
     - perl.goToImplementation
     - perl.explainProviderDecision
+    - perl.previewSafeDelete
 experimental:
   perlInlineCompletionStream: true
 foldingRangeProvider: true

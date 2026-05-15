@@ -183,6 +183,10 @@ fn test_supported_commands_includes_go_to_test() {
         commands.contains(&"perl.explainProviderDecision".to_string()),
         "perl.explainProviderDecision should be in supported commands list"
     );
+    assert!(
+        commands.contains(&"perl.previewSafeDelete".to_string()),
+        "perl.previewSafeDelete should be in supported commands list"
+    );
 }
 
 #[test]

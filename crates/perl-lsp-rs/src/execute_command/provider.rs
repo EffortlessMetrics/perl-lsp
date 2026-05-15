@@ -199,6 +199,10 @@ impl ExecuteCommandProvider {
                 let file_path = self.resolve_path_from_args(&arguments)?;
                 Ok(self.go_to_implementation(&file_path))
             }
+            "perl.previewSafeDelete" => {
+                Err("perl.previewSafeDelete requires the live LSP runtime workspace index"
+                    .to_string())
+            }
             "perl.explainProviderDecision" => self.explain_provider_decision(&arguments),
             _ => Err(format!("Unknown command: {}", command)),
         }
@@ -1251,6 +1255,7 @@ pub fn get_supported_commands() -> Vec<String> {
         "perl.goToTest".to_string(),
         "perl.goToImplementation".to_string(),
         "perl.explainProviderDecision".to_string(),
+        "perl.previewSafeDelete".to_string(),
     ]
 }
 

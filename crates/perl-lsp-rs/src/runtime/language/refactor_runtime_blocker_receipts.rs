@@ -1,4 +1,4 @@
-//! Test-only runtime receipts for refactor blocker UX.
+//! Runtime receipts and no-edit previews for refactor blocker UX.
 
 use super::super::*;
 use crate::protocol::{req_position, req_uri};
@@ -6,18 +6,35 @@ use perl_lsp_rs_core::providers::normalize_provider_decision_receipt;
 
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
+#[cfg(all(
+    feature = "workspace",
+    not(target_arch = "wasm32"),
+    any(test, feature = "expose_lsp_test_api")
+))]
+use perl_lsp_rs_core::providers::navigation::rename_shadow::{RenameCutoverResult, rename_cutover};
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
-use perl_lsp_rs_core::providers::navigation::{
-    rename_shadow::{RenameCutoverResult, rename_cutover},
-    safe_delete_shadow::{SafeDeleteCutoverResult, safe_delete_cutover},
+use perl_lsp_rs_core::providers::navigation::safe_delete_shadow::{
+    SafeDeleteCutoverResult, safe_delete_cutover,
 };
-#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+#[cfg(all(
+    feature = "workspace",
+    not(target_arch = "wasm32"),
+    any(test, feature = "expose_lsp_test_api")
+))]
 use perl_semantic_facts::{
-    DefinitionCandidate, EntityFact, EntityId, FileId, OccurrenceFact, PlanBlocker,
-    PlanBlockerReason, RenamePlan, SafeDeletePlan, ScopeId, VisibleSymbol,
+    DefinitionCandidate, EntityFact, EntityId, FileId, OccurrenceFact, RenamePlan, SafeDeletePlan,
+    ScopeId, VisibleSymbol,
 };
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
-use perl_workspace::semantic::queries::{DynamicCallableEvidence, QueryContext, SemanticQueries};
+use perl_semantic_facts::{PlanBlocker, PlanBlockerReason};
+#[cfg(all(
+    feature = "workspace",
+    not(target_arch = "wasm32"),
+    any(test, feature = "expose_lsp_test_api")
+))]
+use perl_workspace::semantic::queries::DynamicCallableEvidence;
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+use perl_workspace::semantic::queries::{QueryContext, SemanticQueries};
 
 impl LspServer {
     /// Test-only receipt for rename blocker UX proof.
@@ -25,6 +42,7 @@ impl LspServer {
     /// Calls the live rename handler and compares the result with the
     /// compiler-fact rename plan from the same runtime workspace index. This is
     /// receipt-only and does not cut live rename over to compiler facts.
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
     pub(crate) fn rename_runtime_blocker_ux_receipt(
         &self,
         params: Option<Value>,
@@ -178,7 +196,7 @@ impl LspServer {
         }
     }
 
-    /// Test-only receipt for safe-delete blocker UX proof.
+    /// Receipt for safe-delete blocker UX proof.
     ///
     /// There is no live symbol-level safe-delete request yet, so this records
     /// the compiler-fact safe-delete plan from the runtime workspace index and
@@ -265,6 +283,7 @@ impl LspServer {
                 }));
             };
 
+            #[cfg(any(test, feature = "expose_lsp_test_api"))]
             if let Some(fixture) = params.get("compilerPlanFixture").and_then(Value::as_str) {
                 let (compiler_receipt, compiler_blockers) =
                     safe_delete_fixture_receipt(fixture, &symbol, live_provider_edit_count)
@@ -355,6 +374,37 @@ impl LspServer {
         }
     }
 
+    /// Live safe-delete UX preview for editor commands.
+    ///
+    /// This exposes the blocker/allowed explanation to users, but deliberately
+    /// returns an empty edit and does not perform symbol-level deletion.
+    pub(crate) fn safe_delete_symbol_preview(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        let Some(mut receipt) = self.safe_delete_runtime_blocker_ux_receipt(params)? else {
+            return Ok(None);
+        };
+        let user_message = safe_delete_symbol_preview_message(&receipt);
+
+        if let Some(object) = receipt.as_object_mut() {
+            object.insert("provider_action".to_string(), json!("perl.previewSafeDelete"));
+            object.insert("ux_surface".to_string(), json!("scoped_live_symbol_delete_preview"));
+            object.insert("edits_applied".to_string(), json!(false));
+            object.insert("live_symbol_delete_enabled".to_string(), json!(false));
+            object.insert("workspace_edit".to_string(), json!({"changes": {}}));
+            object.insert("user_message".to_string(), json!(user_message));
+            object.insert(
+                "claim_boundary".to_string(),
+                json!(
+                    "scoped safe-delete UX preview only; no live symbol-level delete edits are applied"
+                ),
+            );
+        }
+
+        self.record_safe_delete_decision_receipt(receipt)
+    }
+
     fn record_safe_delete_decision_receipt(
         &self,
         receipt: Value,
@@ -382,7 +432,11 @@ impl LspServer {
     }
 }
 
-#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+#[cfg(all(
+    feature = "workspace",
+    not(target_arch = "wasm32"),
+    any(test, feature = "expose_lsp_test_api")
+))]
 fn rename_fixture_receipt(
     fixture: &str,
     symbol: &str,
@@ -416,7 +470,11 @@ fn rename_fixture_receipt(
     Some(receipt)
 }
 
-#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+#[cfg(all(
+    feature = "workspace",
+    not(target_arch = "wasm32"),
+    any(test, feature = "expose_lsp_test_api")
+))]
 fn safe_delete_fixture_receipt(
     fixture: &str,
     symbol: &str,
@@ -454,7 +512,11 @@ fn safe_delete_fixture_receipt(
     Some((receipt, blockers))
 }
 
-#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+#[cfg(all(
+    feature = "workspace",
+    not(target_arch = "wasm32"),
+    any(test, feature = "expose_lsp_test_api")
+))]
 fn fixture_blocker(fixture: &str) -> Option<PlanBlocker> {
     match fixture {
         "low_confidence" => Some(PlanBlocker::new(
@@ -481,13 +543,21 @@ fn fixture_blocker(fixture: &str) -> Option<PlanBlocker> {
     }
 }
 
-#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+#[cfg(all(
+    feature = "workspace",
+    not(target_arch = "wasm32"),
+    any(test, feature = "expose_lsp_test_api")
+))]
 struct RefactorFixtureQueries {
     rename_plan: RenamePlan,
     safe_delete_plan: Option<SafeDeletePlan>,
 }
 
-#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+#[cfg(all(
+    feature = "workspace",
+    not(target_arch = "wasm32"),
+    any(test, feature = "expose_lsp_test_api")
+))]
 impl SemanticQueries for RefactorFixtureQueries {
     fn symbol_at(
         &self,
@@ -684,7 +754,11 @@ fn enrich_safe_delete_decision_trace(
     );
 }
 
-#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+#[cfg(all(
+    feature = "workspace",
+    not(target_arch = "wasm32"),
+    any(test, feature = "expose_lsp_test_api")
+))]
 fn rename_fallback_noise_json(
     symbol: &str,
     new_name: &str,
@@ -741,7 +815,11 @@ fn rename_fallback_noise_json(
     })
 }
 
-#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+#[cfg(all(
+    feature = "workspace",
+    not(target_arch = "wasm32"),
+    any(test, feature = "expose_lsp_test_api")
+))]
 fn rename_live_provider_state(
     live_provider_result: Option<&Value>,
     live_provider_error: Option<&str>,
@@ -801,6 +879,38 @@ fn safe_delete_rollback_receipt_json(
             "safe-delete plan allowed; no live symbol-level delete was executed"
         }
     })
+}
+
+fn safe_delete_symbol_preview_message(receipt: &Value) -> String {
+    let symbol = receipt.get("symbol").and_then(Value::as_str).unwrap_or("symbol");
+    match receipt.get("decision").and_then(Value::as_str) {
+        Some("allowed") => format!(
+            "Safe delete preview: `{symbol}` has no semantic blockers, but no symbol deletion was applied."
+        ),
+        Some("blocked") => {
+            let blocker = receipt
+                .pointer("/live_blocker_ux/blocker_messages/0")
+                .and_then(Value::as_str)
+                .or_else(|| receipt.get("reason").and_then(Value::as_str))
+                .unwrap_or("the available facts cannot safely authorize deletion");
+            format!("Safe delete refused for `{symbol}`: {blocker}. No edits were applied.")
+        }
+        Some("fallback") => {
+            let reason = receipt
+                .get("reason")
+                .and_then(Value::as_str)
+                .unwrap_or("safe-delete proof is unavailable");
+            format!(
+                "Safe delete preview unavailable for `{symbol}`: {reason}. No edits were applied."
+            )
+        }
+        Some(other) => {
+            format!("Safe delete preview returned `{other}` for `{symbol}`. No edits were applied.")
+        }
+        None => {
+            format!("Safe delete preview could not classify `{symbol}`. No edits were applied.")
+        }
+    }
 }
 
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]

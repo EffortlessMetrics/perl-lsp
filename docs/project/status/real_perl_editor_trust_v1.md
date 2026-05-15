@@ -58,7 +58,7 @@ blocker when relevant.
 | Workspace symbols | `shadowed` | Shadow compare records quality candidates; Mojolicious scenario 33 records live-provider query latency, useful/noisy hits, generated candidate gating, dynamic-boundary-shaped names, and edit freshness; Dancer2 scenario 39 adds second-project workspace-symbol noise, generated/dynamic candidate boundary, and edit-freshness proof | Existing workspace index remains live; stale/dynamic/generated compiler candidates stay gated | Live high-confidence compiler-symbol cutover proof after explicit rank/cutover receipts |
 | Semantic tokens | `shadowed` | Mojolicious scenario 34 records live token counts, LSP 5-tuple/span validity, source-backed token hits, dynamic-boundary string non-promotion, and edit freshness; Dancer2 scenario 38 adds second-project package, DSL, app, typeglob-boundary, and edit-freshness token proof | Existing parser/token provider remains live; stale/dynamic compiler classifications stay shadowed | Narrow compiler-backed token classes before live cutover |
 | Rename | `partial live lexical / boundary-shadowed compiler facts` | Mojolicious scenario 35 records exact local lexical edits, generated-accessor no-edit boundary, dynamic typeglob-string no-edit boundary, and open-document freshness; Dancer2 scenario 37 adds a second real-workspace unsafe-edit receipt covering exact lexical edits, generated `has` accessor no-edit behavior, dynamic typeglob no-edit behavior, and freshness; #8915 proves a narrow same-file scoped lexical live slice; `lsp_rename_tests::test_workspace_rename_workspace_edit_rolls_back_cleanly` proves scoped qualified multi-file WorkspaceEdits can be inverted exactly; the RealBaseline `helper -> renamed_helper` runtime receipt records live-provider ambiguity and `compiler_empty` fallback/noise without promotion, and the request-local explain-provider-decision receipt preserves that fallback/noise object for bug-report context; the imported `alias -> renamed_alias` call receipt records live-provider edit noise and `compiler_missing` fallback/noise without promotion; the core package/compiler-backed pilot proof classifies source-backed definition/reference plans but remains receipt-only | Same-file scoped live rename requires exactly one source-backed `my` or `state` declaration edit; stale, low-confidence, generated, dynamic, package-wide, empty fallback, missing compiler proof, and broader compiler-backed facts cannot authorize edits | Real-workspace package/compiler-backed pilot receipt plus support review before broader rename migration |
-| Safe delete | `boundary-shadowed` | Mojolicious scenario 36 records file-delete warning UX for a dependent module delete; Dancer2 runtime receipts record symbol-level `_compile`, `routes`, and `plugin_keywords` request shapes where stale, generated, dynamic-boundary, and low-confidence fixtures block deletion with zero live edits; CPAN-style RealBaseline runtime receipts record `RealBaseline::Util::helper` blocked by fresh compiler facts because it is imported by another file and `RealBaseline::Base::reset` allowed by fresh high-confidence semantic facts, with explicit no-live-edit rollback state for both paths; covered safe-delete receipt paths persist trace-only provider decisions that `perl.explainProviderDecision` can replay | Stale, low-confidence, generated, imported/exported, and dynamic facts cannot authorize symbol deletion; allowed semantic proof still does not enable live symbol deletion; safe-delete decision traces are explanation receipts, not edit authorization | Scoped live symbol-delete UX proof before any promotion |
+| Safe delete | `boundary-shadowed` | Mojolicious scenario 36 records file-delete warning UX for a dependent module delete; Dancer2 runtime receipts record symbol-level `_compile`, `routes`, and `plugin_keywords` request shapes where stale, generated, dynamic-boundary, and low-confidence fixtures block deletion with zero live edits; CPAN-style RealBaseline runtime receipts record `RealBaseline::Util::helper` blocked by fresh compiler facts because it is imported by another file and `RealBaseline::Base::reset` allowed by fresh high-confidence semantic facts, with explicit no-live-edit rollback state for both paths; covered safe-delete receipt paths persist trace-only provider decisions that `perl.explainProviderDecision` can replay; `perl.previewSafeDelete` exposes blocked/allowed scoped no-edit UX for those paths | Stale, low-confidence, generated, imported/exported, and dynamic facts cannot authorize symbol deletion; allowed semantic proof still does not enable live symbol deletion; safe-delete decision traces and previews are explanations, not edit authorization | Actual symbol-delete edit cutover proof with rollback before promotion |
 
 ## Refactor Support Review
 
@@ -74,9 +74,8 @@ rename or live symbol-level safe-delete cutover.
 This dashboard keeps the next provider lane separate from parser capability,
 framework facts, PIR, formatter, critic, release, and security work.
 
-1. `feat(safe-delete): prove scoped live symbol-delete UX`
-2. `test(rename): add real-workspace package/compiler-backed pilot receipt`
-3. `feat(workspace-symbols): enable high-confidence compiler symbols`
+1. `test(rename): add real-workspace package/compiler-backed pilot receipt`
+2. `feat(workspace-symbols): enable high-confidence compiler symbols`
 
 Provider decision explanations are already partial-live through
 `perl.explainProviderDecision`; callers can attach a request-local
@@ -94,12 +93,12 @@ decisions with fact source, confidence, freshness, fallback, blocker, and
 claim-boundary fields. Provider explanations and attached request receipts now
 carry the additive `provider_decision.v1` schema version plus normalized
 fallback, source-backed, and dynamic-boundary fields while preserving
-provider-specific receipt fields. The next explanation step is scoped live
-symbol-delete UX proof.
+provider-specific receipt fields. `perl.previewSafeDelete` now exposes scoped
+safe-delete blocked/allowed previews as user-readable no-edit UX.
 
-Safe-delete support tiers have been reviewed after the allowed-symbol proof:
-the row remains `shadowed`, and the next proof is scoped live symbol-delete UX
-without broad live symbol deletion.
+Safe-delete support tiers have been reviewed after the scoped preview proof:
+the row remains `shadowed`, and the next proof is actual symbol-delete edit
+cutover proof with rollback before promotion.
 
 Parser raw-bucket work, Linux corpus refresh, security alert classification,
 Rust 1.95 rollout, native formatter, native critic, PIR, and determinism remain
