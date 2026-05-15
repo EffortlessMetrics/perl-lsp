@@ -97,6 +97,36 @@ pub struct SemanticTokenShadowCandidate {
     pub model_version: Option<u32>,
 }
 
+impl SemanticTokenShadowCandidate {
+    /// Build a source-backed shadow-only semantic-token candidate.
+    ///
+    /// Use this for staged compiler-backed token-class receipts where the
+    /// candidate must remain outside live token behavior until cutover proof
+    /// promotes it.
+    #[must_use]
+    pub fn source_backed_shadow(
+        identity: impl Into<String>,
+        source: ProviderFactSourceKind,
+        provenance: Provenance,
+        confidence: Confidence,
+        freshness: ProviderFactFreshness,
+        source_span: SemanticTokenShadowSpan,
+    ) -> Self {
+        Self {
+            identity: identity.into(),
+            source,
+            provenance,
+            confidence,
+            freshness,
+            source_span: Some(source_span),
+            fallback_state: ProviderFallbackState::Shadow,
+            source_hash: None,
+            anchor_id: None,
+            model_version: None,
+        }
+    }
+}
+
 /// Semantic-token shadow proof result.
 #[derive(Debug, Clone)]
 #[non_exhaustive]
