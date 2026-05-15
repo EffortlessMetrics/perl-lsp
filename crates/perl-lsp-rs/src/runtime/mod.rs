@@ -211,6 +211,11 @@ pub struct LspServer {
     /// invalidation when source text changes — no TTL needed.
     pub(crate) semantic_analyzer_cache:
         Arc<Mutex<HashMap<(String, u64), Arc<crate::semantic::SemanticAnalyzer>>>>,
+    /// Last provider-local decision receipt by provider name.
+    ///
+    /// `perl.explainProviderDecision` can attach these transient per-server
+    /// receipts when the caller does not provide a request-local receipt.
+    pub(crate) provider_decision_traces: Arc<Mutex<HashMap<String, Value>>>,
     /// Short-TTL cache for module prefix directory scans (issue #8514).
     ///
     /// Typing a multi-segment `use` prefix (e.g. `use Mojo::Cont|`) triggers a

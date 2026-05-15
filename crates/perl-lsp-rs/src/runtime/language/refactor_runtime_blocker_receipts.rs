@@ -153,7 +153,7 @@ impl LspServer {
                     },
                 );
 
-            Ok(Some(json!({
+            let receipt = json!({
                 "provider": "rename",
                 "symbol": symbol,
                 "new_name": new_name,
@@ -171,7 +171,9 @@ impl LspServer {
                     compiler_blockers.as_deref()
                 ),
                 "no_live_behavior_change": true
-            })))
+            });
+            self.record_provider_decision_trace("rename", &receipt);
+            Ok(Some(receipt))
         }
     }
 
@@ -276,7 +278,7 @@ impl LspServer {
             let (compiler_receipt, compiler_blockers) = compiler_receipt_parts
                 .map_or((None, None), |(receipt, blockers)| (Some(receipt), Some(blockers)));
 
-            Ok(Some(json!({
+            let receipt = json!({
                 "provider": "safe_delete",
                 "symbol": symbol,
                 "live_provider_result": live_provider_result,
@@ -290,7 +292,9 @@ impl LspServer {
                     compiler_blockers.as_deref()
                 ),
                 "no_live_behavior_change": true
-            })))
+            });
+            self.record_provider_decision_trace("safe_delete", &receipt);
+            Ok(Some(receipt))
         }
     }
 

@@ -51,6 +51,32 @@ fn get_inline_value_regex() -> Option<&'static regex::Regex> {
 }
 
 impl LspServer {
+    pub(crate) fn record_provider_decision_trace(&self, provider: &str, receipt: &Value) {
+        if receipt.is_object() {
+            self.provider_decision_traces.lock().insert(provider.to_string(), receipt.clone());
+        }
+    }
+
+    fn provider_decision_trace(&self, provider: &str) -> Option<Value> {
+        self.provider_decision_traces.lock().get(provider).cloned()
+    }
+
+    fn attach_provider_decision_trace(&self, arguments: &mut [Value]) {
+        let Some(request) = arguments.first_mut().and_then(Value::as_object_mut) else {
+            return;
+        };
+        if request.contains_key("request_receipt") {
+            return;
+        }
+        let Some(provider) = request.get("provider").and_then(Value::as_str).map(str::to_string)
+        else {
+            return;
+        };
+        if let Some(trace) = self.provider_decision_trace(&provider) {
+            request.insert("request_receipt".to_string(), trace);
+        }
+    }
+
     /// Handle textDocument/inlayHint request
     pub(crate) fn handle_inlay_hints(
         &self,
@@ -858,7 +884,10 @@ impl LspServer {
                 });
             }
 
-            let arguments = params["arguments"].as_array().cloned().unwrap_or_default();
+            let mut arguments = params["arguments"].as_array().cloned().unwrap_or_default();
+            if command == "perl.explainProviderDecision" {
+                self.attach_provider_decision_trace(&mut arguments);
+            }
 
             tracing::debug!(command, "Executing command");
 
