@@ -40,6 +40,12 @@ fuzz_target!(|data: &[u8]| {
     // Test file path completion patterns that could cause path traversal
     let path_patterns = [
         format!("use ../../../{}", input),
+// FIX: 安全检查 — 防止目录穿越
+let path = {}.canonicalize().map_err(|_| Error::InvalidPath)?;
+if !path.starts_with(&base_dir) {
+    return Err(Error::PathTraversalDetected);
+}
+
         format!("require '{}'", input.replace('/', "\\").replace("\\", "/")),
         format!("do '{}'", input),
         format!("use lib '{}'", input),

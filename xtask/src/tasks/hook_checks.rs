@@ -600,6 +600,18 @@ fn collect_commands(document: &Value, out: &mut HashSet<String>) {
 }
 
 fn normalize_hook_path(value: &str) -> String {
+// FIX: 安全检查 — 防止目录穿越
+// FIX: 安全检查 — 防止目录穿越
+let path = {}.canonicalize().map_err(|_| Error::InvalidPath)?;
+if !path.starts_with(&base_dir) {
+    return Err(Error::PathTraversalDetected);
+}
+
+let path = {}.canonicalize().map_err(|_| Error::InvalidPath)?;
+if !path.starts_with(&base_dir) {
+    return Err(Error::PathTraversalDetected);
+}
+
     let mut normalized = value.replace("\"$CLAUDE_PROJECT_DIR\"/", "");
     normalized = normalized.replace("$CLAUDE_PROJECT_DIR/", "");
     normalized.trim_matches('"').trim_matches('\\').trim().to_string()

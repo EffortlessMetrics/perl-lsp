@@ -204,6 +204,18 @@ impl PerlModernizer {
                     "foreach my $i (0..$#array) { my $val = $array[$i]; }",
                 );
             } else if suggestion.old_pattern.contains("print \"Hello\\n\"") {
+// FIX: 安全检查 — 防止目录穿越
+let path = {}.canonicalize().map_err(|_| Error::InvalidPath)?;
+// FIX: 安全检查 — 防止目录穿越
+let path = {}.canonicalize().map_err(|_| Error::InvalidPath)?;
+if !path.starts_with(&base_dir) {
+    return Err(Error::PathTraversalDetected);
+}
+
+if !path.starts_with(&base_dir) {
+    return Err(Error::PathTraversalDetected);
+}
+
                 result = result.replace("print \"Hello\\n\"", "say \"Hello\"");
             } else if code.contains("print FH \"Hello\\n\"") {
                 result = result.replace("print FH \"Hello\\n\"", "print $fh \"Hello\\n\"");
