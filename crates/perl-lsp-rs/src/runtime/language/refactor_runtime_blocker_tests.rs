@@ -244,6 +244,19 @@ fn assert_note_contains(
     Ok(())
 }
 
+fn assert_json_array_contains(
+    value: &Value,
+    field: &str,
+    expected: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let values = value.get(field).and_then(Value::as_array).ok_or("missing array field")?;
+    assert!(
+        values.iter().filter_map(Value::as_str).any(|actual| actual.contains(expected)),
+        "expected `{field}` to contain `{expected}`: {values:?}"
+    );
+    Ok(())
+}
+
 #[test]
 fn refactor_runtime_blocker_ux_rename_receipt_blocks_low_confidence_fixture()
 -> Result<(), Box<dyn std::error::Error>> {
@@ -809,5 +822,47 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_real_workspace_importe
         ],
     )?;
 
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_receipt_records_live_blocker_ux_and_rollback()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_semantic_real_workspace(&server)?;
+    let util = files.get("lib/RealBaseline/Util.pm").ok_or("missing RealBaseline Util fixture")?;
+
+    let (helper_line, helper_character) = position_of(util, "helper {")?;
+    let helper_params = json!({
+        "textDocument": {"uri": REAL_BASELINE_UTIL_URI},
+        "position": {"line": helper_line, "character": helper_character}
+    });
+    let receipt = server
+        .test_safe_delete_runtime_blocker_ux_receipt(Some(helper_params))?
+        .ok_or("missing real-workspace safe-delete live blocker UX receipt")?;
+
+    let live_blocker_ux = receipt.get("live_blocker_ux").ok_or("missing live_blocker_ux")?;
+    assert_eq!(live_blocker_ux.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(live_blocker_ux.get("decision").and_then(Value::as_str), Some("blocked"));
+    assert_eq!(live_blocker_ux.get("fallback").and_then(Value::as_str), Some("no_edit"));
+    assert_eq!(live_blocker_ux.get("requires_confirmation").and_then(Value::as_bool), Some(true));
+    assert_json_array_contains(live_blocker_ux, "blocker_reasons", "ImportedSymbol")?;
+    assert_json_array_contains(live_blocker_ux, "blocker_messages", "imported by another file")?;
+
+    let rollback_receipt = receipt.get("rollback_receipt").ok_or("missing rollback_receipt")?;
+    assert_eq!(rollback_receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(rollback_receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(rollback_receipt.get("rollback_required").and_then(Value::as_bool), Some(false));
+    assert_eq!(rollback_receipt.get("rollback_safe").and_then(Value::as_bool), Some(true));
+    assert_eq!(rollback_receipt.get("blocked_before_edit").and_then(Value::as_bool), Some(true));
+    assert!(
+        rollback_receipt
+            .get("reason")
+            .and_then(Value::as_str)
+            .is_some_and(|reason| reason.contains("blocker") && reason.contains("no live edits")),
+        "rollback receipt should explain the no-edit blocked path: {rollback_receipt}"
+    );
+
+    assert_eq!(receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
     Ok(())
 }

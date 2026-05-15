@@ -209,7 +209,7 @@ impl LspServer {
                 })));
             }
 
-            let compiler_receipt = match route_index_access(self.coordinator()) {
+            let compiler_receipt_parts = match route_index_access(self.coordinator()) {
                 IndexAccessMode::Full(coordinator) => {
                     let index = coordinator.index();
                     index
@@ -236,12 +236,14 @@ impl LspServer {
                                 runtime_blocker_descriptions(&blockers),
                                 !blockers.is_empty()
                             ));
-                            Some(receipt)
+                            Some((receipt, blockers))
                         })
                         .flatten()
                 }
                 IndexAccessMode::Partial(_) | IndexAccessMode::None => None,
             };
+            let (compiler_receipt, compiler_blockers) = compiler_receipt_parts
+                .map_or((None, None), |(receipt, blockers)| (Some(receipt), Some(blockers)));
 
             Ok(Some(json!({
                 "provider": "safe_delete",
@@ -249,6 +251,13 @@ impl LspServer {
                 "live_provider_result": live_provider_result,
                 "live_provider_edit_count": live_provider_edit_count,
                 "compiler_receipt": compiler_receipt,
+                "live_blocker_ux": safe_delete_live_blocker_ux_json(
+                    compiler_blockers.as_deref()
+                ),
+                "rollback_receipt": safe_delete_rollback_receipt_json(
+                    live_provider_edit_count,
+                    compiler_blockers.as_deref()
+                ),
                 "no_live_behavior_change": true
             })))
         }
@@ -473,6 +482,50 @@ fn lsp_workspace_edit_count(value: Option<&Value>) -> usize {
         value.get("documentChanges").and_then(Value::as_array).map(std::vec::Vec::len).unwrap_or(0);
 
     changes_count + document_changes_count
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn safe_delete_live_blocker_ux_json(blockers: Option<&[PlanBlocker]>) -> Value {
+    let Some(blockers) = blockers else {
+        return Value::Null;
+    };
+    let blocker_reasons =
+        blockers.iter().map(|blocker| format!("{:?}", blocker.reason)).collect::<Vec<_>>();
+    let blocker_messages =
+        blockers.iter().map(|blocker| blocker.description.clone()).collect::<Vec<_>>();
+
+    json!({
+        "provider": "safe_delete",
+        "decision": if blockers.is_empty() { "allowed" } else { "blocked" },
+        "fallback": if blockers.is_empty() { "none" } else { "no_edit" },
+        "requires_confirmation": !blockers.is_empty(),
+        "blocker_reasons": blocker_reasons,
+        "blocker_messages": blocker_messages
+    })
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn safe_delete_rollback_receipt_json(
+    live_provider_edit_count: usize,
+    blockers: Option<&[PlanBlocker]>,
+) -> Value {
+    let Some(blockers) = blockers else {
+        return Value::Null;
+    };
+    let blocked = !blockers.is_empty();
+
+    json!({
+        "provider": "safe_delete",
+        "live_provider_edit_count": live_provider_edit_count,
+        "rollback_required": live_provider_edit_count > 0,
+        "rollback_safe": live_provider_edit_count == 0,
+        "blocked_before_edit": blocked,
+        "reason": if blocked {
+            "safe-delete blocker emitted no live edits; rollback is not required"
+        } else {
+            "safe-delete plan allowed; no live symbol-level delete was executed"
+        }
+    })
 }
 
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
