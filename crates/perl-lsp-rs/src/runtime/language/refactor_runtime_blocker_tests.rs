@@ -556,6 +556,12 @@ fn refactor_runtime_blocker_ux_rename_receipt_records_package_fallback_noise()
     assert_eq!(receipt.get("symbol").and_then(Value::as_str), Some("helper"));
     assert_eq!(receipt.get("new_name").and_then(Value::as_str), Some("renamed_helper"));
     assert_eq!(receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    let package_pilot = receipt.get("package_pilot").ok_or("missing package_pilot")?;
+    assert_eq!(package_pilot.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(package_pilot.get("eligible").and_then(Value::as_bool), Some(false));
+    assert_eq!(package_pilot.get("reason").and_then(Value::as_str), Some("empty_plan"));
+    assert_eq!(package_pilot.get("edit_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(package_pilot.get("no_live_rename_cutover").and_then(Value::as_bool), Some(true));
     assert_eq!(fallback_noise.get("provider").and_then(Value::as_str), Some("rename"));
     assert_eq!(fallback_noise.get("symbol").and_then(Value::as_str), Some("helper"));
     assert_eq!(fallback_noise.get("new_name").and_then(Value::as_str), Some("renamed_helper"));
@@ -606,6 +612,66 @@ fn refactor_runtime_blocker_ux_rename_receipt_records_package_fallback_noise()
             "rename runtime blocker UX",
             "compiler_plan_edits=",
             "blocker_count=0",
+            "requires_confirmation=false",
+            "no live refactor behavior change",
+        ],
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_rename_receipt_records_real_workspace_package_pilot_boundary()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_semantic_real_workspace(&server)?;
+    let base = files.get("lib/RealBaseline/Base.pm").ok_or("missing RealBaseline Base fixture")?;
+
+    let (shared_line, shared_character) = position_of(base, "shared {")?;
+    let shared_params = json!({
+        "textDocument": {"uri": REAL_BASELINE_BASE_URI},
+        "position": {"line": shared_line, "character": shared_character},
+        "newName": "renamed_shared"
+    });
+    let receipt = server
+        .test_rename_runtime_blocker_ux_receipt(Some(shared_params))?
+        .ok_or("missing real-workspace package pilot rename receipt")?;
+    let compiler = compiler_receipt(&receipt)?;
+    let package_pilot = receipt.get("package_pilot").ok_or("missing package_pilot")?;
+    let fallback_noise = receipt.get("fallback_noise").ok_or("missing fallback_noise")?;
+
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(receipt.get("symbol").and_then(Value::as_str), Some("shared"));
+    assert_eq!(receipt.get("new_name").and_then(Value::as_str), Some("renamed_shared"));
+    assert_eq!(receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert_eq!(package_pilot.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        package_pilot.get("eligible").and_then(Value::as_bool),
+        Some(false),
+        "unexpected package pilot classification: {package_pilot}"
+    );
+    assert_eq!(package_pilot.get("reason").and_then(Value::as_str), Some("empty_plan"));
+    assert_eq!(package_pilot.get("edit_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(package_pilot.get("blocker_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(package_pilot.get("no_live_rename_cutover").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        fallback_noise.get("fallback_state").and_then(Value::as_str),
+        Some("compiler_empty")
+    );
+    assert_eq!(
+        fallback_noise.get("compiler_requires_confirmation").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_trace_contains(compiler, "Fallback", "Low", "NotApplicable")?;
+    assert_note_contains(
+        compiler,
+        &[
+            "rename package pilot proof",
+            "eligible=false",
+            "reason=empty_plan",
+            "claim_boundary=receipt-only package/compiler-backed pilot",
+            "no_live_rename_cutover=true",
+            "rename runtime blocker UX",
             "requires_confirmation=false",
             "no live refactor behavior change",
         ],

@@ -11,7 +11,9 @@ use crate::runtime::routing::{IndexAccessMode, route_index_access};
     not(target_arch = "wasm32"),
     any(test, feature = "expose_lsp_test_api")
 ))]
-use perl_lsp_rs_core::providers::navigation::rename_shadow::{RenameCutoverResult, rename_cutover};
+use perl_lsp_rs_core::providers::navigation::rename_shadow::{
+    RenameCutoverResult, RenamePackagePilotResult, rename_cutover, rename_package_pilot_proof,
+};
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 use perl_lsp_rs_core::providers::navigation::safe_delete_shadow::{
     SafeDeleteCutoverResult, safe_delete_cutover,
@@ -137,18 +139,22 @@ impl LspServer {
                                 byte_offset,
                                 &symbol,
                             )?;
-                            let outcome = rename_cutover(
+                            let outcome = rename_package_pilot_proof(
                                 live_provider_edit_count > 0,
                                 &queries,
                                 entity_id,
                                 new_name,
                             );
                             let (compiler_plan_edit_count, blockers) = match &outcome.result {
-                                RenameCutoverResult::Allowed { edits } => (edits.len(), Vec::new()),
-                                RenameCutoverResult::Blocked { blockers, edits } => {
-                                    (edits.len(), blockers.clone())
+                                RenamePackagePilotResult::Eligible { edits } => {
+                                    (edits.len(), Vec::new())
                                 }
+                                RenamePackagePilotResult::Ineligible {
+                                    edits, blockers, ..
+                                } => (edits.len(), blockers.clone()),
+                                _ => (0, Vec::new()),
                             };
+                            let package_pilot = rename_package_pilot_json(&outcome.result);
                             let mut receipt = outcome.receipt;
                             receipt.notes.push(format!(
                                 "rename runtime blocker UX: live_provider_edits={}; compiler_plan_edits={compiler_plan_edit_count}; blocker_count={}; blocker_reasons={}; blocker_ux={}; requires_confirmation={}; no live refactor behavior change",
@@ -158,17 +164,17 @@ impl LspServer {
                                 runtime_blocker_descriptions(&blockers),
                                 !blockers.is_empty()
                             ));
-                            Some((receipt, compiler_plan_edit_count, blockers))
+                            Some((receipt, compiler_plan_edit_count, blockers, package_pilot))
                         })
                         .flatten()
                 }
                 IndexAccessMode::Partial(_) | IndexAccessMode::None => None,
             };
-            let (compiler_receipt, compiler_plan_edit_count, compiler_blockers) =
+            let (compiler_receipt, compiler_plan_edit_count, compiler_blockers, package_pilot) =
                 compiler_receipt_parts.map_or(
-                    (None, None, None),
-                    |(receipt, edit_count, blockers)| {
-                        (Some(receipt), Some(edit_count), Some(blockers))
+                    (None, None, None, Value::Null),
+                    |(receipt, edit_count, blockers, package_pilot)| {
+                        (Some(receipt), Some(edit_count), Some(blockers), package_pilot)
                     },
                 );
 
@@ -180,6 +186,7 @@ impl LspServer {
                 "live_provider_error": live_provider_error,
                 "live_provider_edit_count": live_provider_edit_count,
                 "compiler_receipt": compiler_receipt,
+                "package_pilot": package_pilot,
                 "fallback_noise": rename_fallback_noise_json(
                     &symbol,
                     new_name,
@@ -752,6 +759,76 @@ fn enrich_safe_delete_decision_trace(
             "records safe-delete blocker proof only; no live symbol-level delete behavior changes"
         ),
     );
+}
+
+#[cfg(all(
+    feature = "workspace",
+    not(target_arch = "wasm32"),
+    any(test, feature = "expose_lsp_test_api")
+))]
+fn rename_package_pilot_json(result: &RenamePackagePilotResult) -> Value {
+    match result {
+        RenamePackagePilotResult::Eligible { edits } => json!({
+            "provider": "rename",
+            "eligible": true,
+            "reason": "none",
+            "edit_count": edits.len(),
+            "blocker_count": 0,
+            "edit_categories": edits
+                .iter()
+                .map(|edit| format!("{:?}", edit.category))
+                .collect::<Vec<_>>(),
+            "blocker_reasons": [],
+            "claim_boundary": "receipt-only package/compiler-backed pilot; no live package rename cutover",
+            "no_live_rename_cutover": true
+        }),
+        RenamePackagePilotResult::Ineligible { reason, edits, blockers } => json!({
+            "provider": "rename",
+            "eligible": false,
+            "reason": rename_package_pilot_ineligible_reason(*reason),
+            "edit_count": edits.len(),
+            "blocker_count": blockers.len(),
+            "edit_categories": edits
+                .iter()
+                .map(|edit| format!("{:?}", edit.category))
+                .collect::<Vec<_>>(),
+            "blocker_reasons": blockers
+                .iter()
+                .map(|blocker| format!("{:?}", blocker.reason))
+                .collect::<Vec<_>>(),
+            "claim_boundary": "receipt-only package/compiler-backed pilot; no live package rename cutover",
+            "no_live_rename_cutover": true
+        }),
+        _ => json!({
+            "provider": "rename",
+            "eligible": false,
+            "reason": "unknown",
+            "edit_count": 0,
+            "blocker_count": 0,
+            "edit_categories": [],
+            "blocker_reasons": [],
+            "claim_boundary": "receipt-only package/compiler-backed pilot; no live package rename cutover",
+            "no_live_rename_cutover": true
+        }),
+    }
+}
+
+#[cfg(all(
+    feature = "workspace",
+    not(target_arch = "wasm32"),
+    any(test, feature = "expose_lsp_test_api")
+))]
+fn rename_package_pilot_ineligible_reason(
+    reason: perl_lsp_rs_core::providers::navigation::rename_shadow::RenamePackagePilotIneligibleReason,
+) -> &'static str {
+    use perl_lsp_rs_core::providers::navigation::rename_shadow::RenamePackagePilotIneligibleReason;
+
+    match reason {
+        RenamePackagePilotIneligibleReason::EmptyPlan => "empty_plan",
+        RenamePackagePilotIneligibleReason::Blocked => "blocked",
+        RenamePackagePilotIneligibleReason::UnsupportedEditCategory => "unsupported_edit_category",
+        _ => "unknown",
+    }
 }
 
 #[cfg(all(
