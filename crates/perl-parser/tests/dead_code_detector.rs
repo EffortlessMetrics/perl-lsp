@@ -151,3 +151,66 @@ fn if_zero_condition_still_flagged_as_dead_branch() -> TestResult {
     );
     Ok(())
 }
+
+#[test]
+fn while_zero_condition_still_flagged_as_dead_branch() -> TestResult {
+    let index = WorkspaceIndex::new();
+    index_file_str(&index, "file:///script.pl", "while (0) {\n    say 'never runs';\n}\n")?;
+
+    let detector = DeadCodeDetector::new(index);
+    let dead = detector.analyze_file(&PathBuf::from("/script.pl"))?;
+
+    assert!(
+        dead.iter().any(|d| d.code_type == DeadCodeType::DeadBranch),
+        "while (0) body is never executed — should be flagged as a dead branch"
+    );
+    Ok(())
+}
+
+// The following tests cover values that are always false in boolean context
+// but valid list elements that execute a `for` loop body once.
+
+#[test]
+fn for_loop_with_empty_string_is_not_dead_branch() -> TestResult {
+    let index = WorkspaceIndex::new();
+    index_file_str(&index, "file:///script.pl", "for (\"\") {\n    say 'runs once';\n}\n")?;
+
+    let detector = DeadCodeDetector::new(index);
+    let dead = detector.analyze_file(&PathBuf::from("/script.pl"))?;
+
+    assert!(
+        !dead.iter().any(|d| d.code_type == DeadCodeType::DeadBranch),
+        "for (\"\") iterates once with $_ = '' — it is not dead code"
+    );
+    Ok(())
+}
+
+#[test]
+fn for_loop_with_single_quoted_empty_string_is_not_dead_branch() -> TestResult {
+    let index = WorkspaceIndex::new();
+    index_file_str(&index, "file:///script.pl", "for ('') {\n    say 'runs once';\n}\n")?;
+
+    let detector = DeadCodeDetector::new(index);
+    let dead = detector.analyze_file(&PathBuf::from("/script.pl"))?;
+
+    assert!(
+        !dead.iter().any(|d| d.code_type == DeadCodeType::DeadBranch),
+        "for ('') iterates once with $_ = '' — it is not dead code"
+    );
+    Ok(())
+}
+
+#[test]
+fn for_loop_with_undef_is_not_dead_branch() -> TestResult {
+    let index = WorkspaceIndex::new();
+    index_file_str(&index, "file:///script.pl", "for (undef) {\n    say 'runs once';\n}\n")?;
+
+    let detector = DeadCodeDetector::new(index);
+    let dead = detector.analyze_file(&PathBuf::from("/script.pl"))?;
+
+    assert!(
+        !dead.iter().any(|d| d.code_type == DeadCodeType::DeadBranch),
+        "for (undef) iterates once with $_ = undef — it is not dead code"
+    );
+    Ok(())
+}
