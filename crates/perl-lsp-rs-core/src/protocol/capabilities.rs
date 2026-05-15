@@ -102,6 +102,7 @@ pub fn get_supported_commands() -> Vec<String> {
         "perl.goToImplementation".to_string(),
         "perl.explainProviderDecision".to_string(),
         "perl.previewSafeDelete".to_string(),
+        "perl.previewPackageRename".to_string(),
     ]
 }
 
@@ -231,6 +232,16 @@ mod tests {
         assert!(
             cmds.iter().any(|c| c == "perl.previewSafeDelete"),
             "perl.previewSafeDelete must be in get_supported_commands"
+        );
+    }
+
+    /// Verify that `perl.previewPackageRename` is included in the supported commands list.
+    #[test]
+    fn preview_package_rename_command_id_is_registered() {
+        let cmds = get_supported_commands();
+        assert!(
+            cmds.iter().any(|c| c == "perl.previewPackageRename"),
+            "perl.previewPackageRename must be in get_supported_commands"
         );
     }
 

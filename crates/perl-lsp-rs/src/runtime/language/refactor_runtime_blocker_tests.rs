@@ -681,6 +681,85 @@ fn refactor_runtime_blocker_ux_rename_receipt_records_real_workspace_package_pil
 }
 
 #[test]
+fn refactor_runtime_blocker_ux_package_rename_preview_command_returns_scoped_no_edit_ux()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_semantic_real_workspace(&server)?;
+    let base = files.get("lib/RealBaseline/Base.pm").ok_or("missing RealBaseline Base fixture")?;
+
+    let (shared_line, shared_character) = position_of(base, "shared {")?;
+    let preview_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.previewPackageRename",
+            "arguments": [{
+                "textDocument": {"uri": REAL_BASELINE_BASE_URI},
+                "position": {"line": shared_line, "character": shared_character},
+                "newName": "renamed_shared"
+            }]
+        })))?
+        .ok_or("missing package rename preview result")?;
+
+    assert_eq!(preview_result.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        preview_result.get("provider_action").and_then(Value::as_str),
+        Some("perl.previewPackageRename")
+    );
+    assert_eq!(preview_result.get("decision").and_then(Value::as_str), Some("fallback"));
+    assert_eq!(preview_result.get("reason").and_then(Value::as_str), Some("empty_compiler_plan"));
+    assert_eq!(
+        preview_result.get("fallback_state").and_then(Value::as_str),
+        Some("compiler_empty")
+    );
+    assert_eq!(preview_result.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        preview_result.get("live_package_rename_enabled").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        preview_result
+            .pointer("/workspace_edit/changes")
+            .and_then(Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0)
+    );
+    assert!(
+        preview_result.get("planned_workspace_edit").is_some(),
+        "package rename preview should return the planned live-provider edit shape: {preview_result}"
+    );
+    let package_pilot = preview_result.get("package_pilot").ok_or("missing package_pilot")?;
+    assert_eq!(package_pilot.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(package_pilot.get("eligible").and_then(Value::as_bool), Some(false));
+    assert_eq!(package_pilot.get("reason").and_then(Value::as_str), Some("empty_plan"));
+    assert_eq!(package_pilot.get("no_live_rename_cutover").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        preview_result.get("claim_boundary").and_then(Value::as_str),
+        Some("scoped package rename preview only; no package rename edits are applied")
+    );
+
+    let preview_message = preview_result
+        .get("user_message")
+        .and_then(Value::as_str)
+        .ok_or("missing package rename preview user_message")?;
+    assert!(
+        preview_message.contains("Package rename preview refused")
+            && preview_message.contains("shared")
+            && preview_message.contains("renamed_shared")
+            && preview_message.contains("No edits were applied"),
+        "package rename preview message should explain the no-edit refusal: {preview_message}"
+    );
+
+    let explanation = explain_provider_decision(&server, "rename")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.previewPackageRename")
+    );
+    assert_eq!(request_receipt.get("user_message").and_then(Value::as_str), Some(preview_message));
+
+    Ok(())
+}
+
+#[test]
 fn refactor_runtime_blocker_ux_rename_request_receipt_preserves_package_fallback_noise()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();
