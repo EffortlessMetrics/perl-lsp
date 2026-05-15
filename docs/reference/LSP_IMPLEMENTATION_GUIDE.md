@@ -1686,6 +1686,7 @@ pub static SUPPORTED_COMMANDS: &[&str] = &[
     "perl.runTestSub",         // Execute specific test subroutine
     "perl.debugTests",         // Debug test execution
     "perl.runCritic",          // ⭐ NEW: Native critic analysis
+    "perl.explainProviderDecision", // Structured provider trust explanation
 ];
 ```
 
@@ -2001,6 +2002,7 @@ The Perl LSP server has achieved **100% user-visible coverage (53/53)** and **10
 | `perl.runTestSub` | ✅ Complete | Native | <2s | Subroutine isolation |
 | `perl.debugTests` | ✅ Complete | Native | <1s | Debug adapter preparation |
 | `perl.runCritic` | ✅ Complete | Native + compatibility | <2s | Native critic with explicit Perl::Critic compatibility |
+| `perl.explainProviderDecision` | ✅ Conservative v1 | Native | <50ms | Structured confidence/freshness explanation; no receipt means low-confidence fallback |
 
 ### Code Action Categories (*Diataxis: Reference* - Refactoring capabilities)
 | Category | Operations | Status | Performance | Cross-file Support |

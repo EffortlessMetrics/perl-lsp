@@ -192,7 +192,10 @@ pub fn scope_issues_to_diagnostics_with_semantics<Q: SemanticQueries>(
                 continue;
             }
 
-            if has_proven_compiler_visible_symbol(semantic_queries, file_id, byte_offset, symbol) {
+            let visible_trust =
+                visible_symbol_diagnostic_trust(semantic_queries, file_id, byte_offset, symbol);
+
+            if visible_trust == VisibleSymbolDiagnosticTrust::Proven {
                 tracing::debug!(
                     bareword = %issue.variable_name,
                     "suppressed UnquotedBareword diagnostic: compiler fact proves imported/generated symbol"
@@ -233,7 +236,19 @@ pub fn scope_issues_to_diagnostics_with_semantics<Q: SemanticQueries>(
             IssueKind::CaptureVarWithoutRegexMatch => DiagnosticCode::CaptureVarWithoutRegexMatch,
         };
 
-        let related_info = build_scope_related_info(&issue);
+        let mut related_info = build_scope_related_info(&issue);
+        if issue.kind == IssueKind::UnquotedBareword {
+            add_visible_symbol_trust_boundary_related_info(
+                &issue,
+                &mut related_info,
+                visible_symbol_diagnostic_trust(
+                    semantic_queries,
+                    file_id,
+                    issue.range.0 as u32,
+                    issue.variable_name.as_str(),
+                ),
+            );
+        }
         let suggestion = build_scope_suggestion(&issue);
 
         diagnostics.push(Diagnostic {
@@ -254,23 +269,51 @@ pub fn scope_issues_to_diagnostics_with_semantics<Q: SemanticQueries>(
     diagnostics
 }
 
-fn has_proven_compiler_visible_symbol<Q: SemanticQueries>(
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum VisibleSymbolDiagnosticTrust {
+    NoEvidence,
+    Proven,
+    LowConfidence,
+    DynamicBoundary,
+    Ambiguous,
+}
+
+fn visible_symbol_diagnostic_trust<Q: SemanticQueries>(
     semantic_queries: &Q,
     file_id: FileId,
     byte_offset: u32,
     symbol: &str,
-) -> bool {
+) -> VisibleSymbolDiagnosticTrust {
     let visible = semantic_queries.visible_symbols_at(file_id, byte_offset, None);
-    let mut matching = visible.iter().filter(|candidate| candidate.name == symbol);
-    let Some(candidate) = matching.next() else {
-        return false;
-    };
+    classify_visible_symbol_diagnostic_trust(&visible, symbol)
+}
 
-    if matching.next().is_some() {
-        return false;
+fn classify_visible_symbol_diagnostic_trust(
+    visible: &[VisibleSymbol],
+    symbol: &str,
+) -> VisibleSymbolDiagnosticTrust {
+    let matching: Vec<_> = visible.iter().filter(|candidate| candidate.name == symbol).collect();
+    if matching.is_empty() {
+        return VisibleSymbolDiagnosticTrust::NoEvidence;
     }
 
-    is_proven_compiler_visible_symbol(candidate)
+    if matching.iter().any(|candidate| candidate.source == VisibleSymbolSource::DynamicUnknown) {
+        return VisibleSymbolDiagnosticTrust::DynamicBoundary;
+    }
+
+    if matching.iter().any(|candidate| candidate.confidence == Confidence::Low) {
+        return VisibleSymbolDiagnosticTrust::LowConfidence;
+    }
+
+    if matching.len() > 1 {
+        return VisibleSymbolDiagnosticTrust::Ambiguous;
+    }
+
+    if is_proven_compiler_visible_symbol(matching[0]) {
+        return VisibleSymbolDiagnosticTrust::Proven;
+    }
+
+    VisibleSymbolDiagnosticTrust::NoEvidence
 }
 
 fn is_proven_compiler_visible_symbol(candidate: &VisibleSymbol) -> bool {
@@ -281,6 +324,27 @@ fn is_proven_compiler_visible_symbol(candidate: &VisibleSymbol) -> bool {
             | VisibleSymbolSource::ExportTag
             | VisibleSymbolSource::Generated
     ) && candidate.confidence == Confidence::High
+}
+
+fn add_visible_symbol_trust_boundary_related_info(
+    issue: &ScopeIssue,
+    related_info: &mut Vec<RelatedInformation>,
+    trust: VisibleSymbolDiagnosticTrust,
+) {
+    let message = match trust {
+        VisibleSymbolDiagnosticTrust::NoEvidence | VisibleSymbolDiagnosticTrust::Proven => return,
+        VisibleSymbolDiagnosticTrust::LowConfidence => {
+            "Trust boundary: only low-confidence symbol evidence exists, so perl-lsp keeps this diagnostic instead of suppressing it."
+        }
+        VisibleSymbolDiagnosticTrust::DynamicBoundary => {
+            "Trust boundary: dynamic Perl evidence exists for this name, so perl-lsp does not treat it as an exact static fact."
+        }
+        VisibleSymbolDiagnosticTrust::Ambiguous => {
+            "Trust boundary: multiple possible symbol facts matched, so perl-lsp keeps this diagnostic instead of guessing."
+        }
+    };
+
+    related_info.push(RelatedInformation { location: issue.range, message: message.to_string() });
 }
 
 /// Build related information for a scope issue (extracted for reuse).
@@ -774,6 +838,10 @@ mod tests {
         }
     }
 
+    fn has_related_info_containing(diagnostic: &Diagnostic, needle: &str) -> bool {
+        diagnostic.related_information.iter().any(|info| info.message.contains(needle))
+    }
+
     // ── Tests ──
 
     #[test]
@@ -1043,6 +1111,10 @@ mod tests {
             1,
             "low-confidence import/export fact should not silently suppress diagnostics"
         );
+        assert!(
+            has_related_info_containing(&diagnostics[0], "low-confidence symbol evidence"),
+            "low-confidence diagnostic should carry an explicit trust-boundary label: {diagnostics:?}"
+        );
         Ok(())
     }
 
@@ -1072,6 +1144,10 @@ mod tests {
             1,
             "dynamic-boundary candidate should block imported/generated fact suppression"
         );
+        assert!(
+            has_related_info_containing(&diagnostics[0], "dynamic Perl evidence"),
+            "dynamic-boundary diagnostic should carry an explicit trust-boundary label: {diagnostics:?}"
+        );
         Ok(())
     }
 
@@ -1100,6 +1176,10 @@ mod tests {
             diagnostics.len(),
             1,
             "ambiguous imported/generated visibility should not silently suppress diagnostics"
+        );
+        assert!(
+            has_related_info_containing(&diagnostics[0], "multiple possible symbol facts"),
+            "ambiguous diagnostic should carry an explicit trust-boundary label: {diagnostics:?}"
         );
         Ok(())
     }
