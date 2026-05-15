@@ -186,7 +186,7 @@ fn test_supported_commands_includes_go_to_test() {
 }
 
 #[test]
-fn test_explain_provider_decision_returns_honest_no_receipt_fallback()
+fn test_explain_provider_decision_attaches_provider_receipt()
 -> Result<(), Box<dyn std::error::Error>> {
     let provider = ExecuteCommandProvider::new();
     let result = provider.execute_command(
@@ -199,15 +199,42 @@ fn test_explain_provider_decision_returns_honest_no_receipt_fallback()
     )?;
 
     assert_eq!(result.get("provider").and_then(Value::as_str), Some("safe_delete"));
-    assert_eq!(result.get("decision").and_then(Value::as_str), Some("fallback"));
-    assert_eq!(result.get("reason").and_then(Value::as_str), Some("missing_fact"));
-    assert_eq!(result.get("fact_source").and_then(Value::as_str), Some("unknown"));
-    assert_eq!(result.get("confidence").and_then(Value::as_str), Some("low"));
-    assert_eq!(result.get("freshness").and_then(Value::as_str), Some("unknown"));
-    assert_eq!(result.get("fallback").and_then(Value::as_str), Some("no_result"));
+    assert_eq!(result.get("decision").and_then(Value::as_str), Some("blocked"));
+    assert_eq!(result.get("reason").and_then(Value::as_str), Some("unsafe_edit_blocked"));
+    assert_eq!(result.get("fact_source").and_then(Value::as_str), Some("compiler_fact"));
+    assert_eq!(result.get("confidence").and_then(Value::as_str), Some("high"));
+    assert_eq!(result.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(result.get("fallback").and_then(Value::as_str), Some("no_edit"));
     assert_eq!(result.get("receipt_id").and_then(Value::as_str), Some("semantic-shadow-compare"));
     assert_eq!(result.get("scenario").and_then(Value::as_str), Some("mojolicious-safe-delete"));
     assert_eq!(result.get("dynamic_boundary").and_then(Value::as_bool), Some(false));
+    Ok(())
+}
+
+#[test]
+fn test_explain_provider_decision_defaults_to_live_provider_receipt()
+-> Result<(), Box<dyn std::error::Error>> {
+    let provider = ExecuteCommandProvider::new();
+    let result = provider.execute_command(
+        "perl.explainProviderDecision",
+        vec![json!({ "provider": "goto_definition" })],
+    )?;
+
+    assert_eq!(result.get("provider").and_then(Value::as_str), Some("goto_definition"));
+    assert_eq!(result.get("decision").and_then(Value::as_str), Some("acted"));
+    assert_eq!(result.get("reason").and_then(Value::as_str), Some("source_backed_high_confidence"));
+    assert_eq!(result.get("fact_source").and_then(Value::as_str), Some("compiler_fact"));
+    assert_eq!(result.get("confidence").and_then(Value::as_str), Some("high"));
+    assert_eq!(result.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(result.get("fallback").and_then(Value::as_str), Some("none"));
+    assert_eq!(
+        result.get("receipt_id").and_then(Value::as_str),
+        Some("docs/project/status/provider_cutover.md#navigation-live-quality-dashboard")
+    );
+    assert_eq!(
+        result.get("scenario").and_then(Value::as_str),
+        Some("ux_scenario_30_mojolicious_navigation_quality")
+    );
     Ok(())
 }
 
