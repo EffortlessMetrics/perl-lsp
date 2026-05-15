@@ -198,7 +198,12 @@ fn test_explain_provider_decision_attaches_provider_receipt()
         vec![json!({
             "provider": "safe_delete",
             "receipt_id": "semantic-shadow-compare",
-            "scenario": "mojolicious-safe-delete"
+            "scenario": "mojolicious-safe-delete",
+            "request_position": {
+                "uri_scheme": "file",
+                "line": 3,
+                "character": 11
+            }
         })],
     )?;
 
@@ -218,6 +223,33 @@ fn test_explain_provider_decision_attaches_provider_receipt()
     assert!(user_message.contains("Safe delete blocked."), "{user_message}");
     assert!(user_message.contains("Fact source: compiler facts."), "{user_message}");
     assert!(user_message.contains("Fallback: no edit."), "{user_message}");
+    let copyable_payload = result
+        .get("copyable_payload")
+        .and_then(Value::as_object)
+        .ok_or("missing copyable_payload")?;
+    assert_eq!(
+        copyable_payload.get("schema_version").and_then(Value::as_str),
+        Some("provider_decision_bug_report.v1")
+    );
+    assert_eq!(
+        copyable_payload.get("perl_lsp_version").and_then(Value::as_str),
+        Some(env!("CARGO_PKG_VERSION"))
+    );
+    assert_eq!(copyable_payload.get("workspace_root_class").and_then(Value::as_str), Some("none"));
+    assert!(copyable_payload.get("workspace_root_hash").is_some());
+    assert_eq!(copyable_payload.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(copyable_payload.get("decision").and_then(Value::as_str), Some("blocked"));
+    assert_eq!(
+        copyable_payload.get("support_tier_link").and_then(Value::as_str),
+        Some("docs/project/status/SUPPORT_TIERS.md#claim-rows")
+    );
+    let request_position = copyable_payload
+        .get("request_position")
+        .and_then(Value::as_object)
+        .ok_or("missing copyable request_position")?;
+    assert_eq!(request_position.get("uri_scheme").and_then(Value::as_str), Some("file"));
+    assert_eq!(request_position.get("line").and_then(Value::as_u64), Some(3));
+    assert_eq!(request_position.get("character").and_then(Value::as_u64), Some(11));
     Ok(())
 }
 
@@ -271,6 +303,49 @@ fn test_explain_provider_decision_attaches_request_local_receipt()
         result.get("user_message").and_then(Value::as_str).ok_or("missing user_message")?;
     assert!(user_message.contains("Rename used fallback."), "{user_message}");
     assert!(user_message.contains("Fallback: legacy provider."), "{user_message}");
+    let copyable_payload = result
+        .get("copyable_payload")
+        .and_then(Value::as_object)
+        .ok_or("missing copyable_payload")?;
+    let copyable_request_receipt = copyable_payload
+        .get("request_receipt")
+        .and_then(Value::as_object)
+        .ok_or("missing copyable request_receipt")?;
+    assert_eq!(
+        copyable_request_receipt.get("reason").and_then(Value::as_str),
+        Some("ambiguous_symbol_identity")
+    );
+    Ok(())
+}
+
+#[test]
+fn test_explain_provider_decision_redacts_workspace_root_in_copyable_payload()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = tempdir()?;
+    let root_string = temp_dir.path().to_string_lossy().to_string();
+    let provider =
+        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+    let result = provider.execute_command(
+        "perl.explainProviderDecision",
+        vec![json!({
+            "provider": "completion"
+        })],
+    )?;
+    let payload = result
+        .get("copyable_payload")
+        .and_then(Value::as_object)
+        .ok_or("missing copyable_payload")?;
+    let root_hash = payload
+        .get("workspace_root_hash")
+        .and_then(Value::as_str)
+        .ok_or("missing workspace_root_hash")?;
+
+    assert_eq!(payload.get("workspace_root_class").and_then(Value::as_str), Some("single_root"));
+    assert!(!root_hash.is_empty(), "workspace root hash should be present");
+    assert!(
+        !serde_json::to_string(payload)?.contains(&root_string),
+        "copyable payload must not expose raw workspace root paths"
+    );
     Ok(())
 }
 

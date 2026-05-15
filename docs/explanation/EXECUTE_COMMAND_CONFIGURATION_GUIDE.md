@@ -7,6 +7,9 @@
 `workspace/executeCommand` exposes server-side commands such as `perl.runTests`,
 `perl.runFile`, `perl.runTestSub`, `perl.debugTests`, `perl.runCritic`, and
 `perl.explainProviderDecision`.
+`perl.explainProviderDecision` returns structured trust fields, a readable
+`user_message`, and a local `copyable_payload` that users can paste into bug
+reports without sending telemetry.
 `perl.runCritic` now uses the native critic path by default. The native path
 shares perl-lsp parser, semantic, diagnostic, suppression, severity, code-action,
 and receipt surfaces with normal editor diagnostics.

@@ -5,9 +5,10 @@ use crate::perl_critic::{BuiltInAnalyzer, CriticAnalyzer, CriticConfig};
 use perl_lsp_rs_core::config::PerlOracleEnv;
 use perl_lsp_rs_core::config::WorkspaceConfig;
 use perl_lsp_rs_core::providers::{
-    ProviderDecisionConfidence, ProviderDecisionExplanation, ProviderDecisionFactSource,
-    ProviderDecisionFallback, ProviderDecisionFreshness, ProviderDecisionOutcome,
-    ProviderDecisionProvider, ProviderDecisionReason, format_provider_decision_explanation,
+    ProviderDecisionConfidence, ProviderDecisionCopyablePayload, ProviderDecisionExplanation,
+    ProviderDecisionFactSource, ProviderDecisionFallback, ProviderDecisionFreshness,
+    ProviderDecisionOutcome, ProviderDecisionProvider, ProviderDecisionReason,
+    ProviderDecisionRequestPosition, format_provider_decision_explanation,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -91,6 +92,8 @@ struct ExplainProviderDecisionRequest {
     scenario: Option<String>,
     #[serde(default)]
     request_receipt: Option<Value>,
+    #[serde(default)]
+    request_position: Option<ProviderDecisionRequestPosition>,
 }
 
 impl Default for ExecuteCommandProvider {
@@ -233,8 +236,18 @@ impl ExecuteCommandProvider {
             explanation = explanation.with_request_receipt(request_receipt);
         }
 
+        let request_position = request.request_position;
         let user_message = format_provider_decision_explanation(&explanation);
         explanation = explanation.with_user_message(user_message);
+        let copyable_payload = ProviderDecisionCopyablePayload::from_explanation(
+            &explanation,
+            env!("CARGO_PKG_VERSION"),
+            workspace_root_class(&self.workspace_roots),
+            workspace_root_hash(&self.workspace_roots),
+            request_position,
+            provider_support_tier_link(explanation.provider),
+        );
+        explanation = explanation.with_copyable_payload(copyable_payload);
 
         serde_json::to_value(explanation)
             .map_err(|error| format!("Failed to serialize provider decision explanation: {error}"))
@@ -1219,6 +1232,31 @@ fn default_provider_decision_explanation(
         explanation = explanation.with_scenario(scenario);
     }
     explanation
+}
+
+fn workspace_root_class(workspace_roots: &[PathBuf]) -> &'static str {
+    match workspace_roots.len() {
+        0 => "none",
+        1 => "single_root",
+        _ => "multi_root",
+    }
+}
+
+fn workspace_root_hash(workspace_roots: &[PathBuf]) -> Option<String> {
+    if workspace_roots.is_empty() {
+        return None;
+    }
+
+    let mut roots = workspace_roots
+        .iter()
+        .map(|root| root.to_string_lossy().replace('\\', "/"))
+        .collect::<Vec<_>>();
+    roots.sort();
+    Some(format!("{:x}", md5::compute(roots.join("\n"))))
+}
+
+fn provider_support_tier_link(_provider: ProviderDecisionProvider) -> &'static str {
+    "docs/project/status/SUPPORT_TIERS.md#claim-rows"
 }
 
 pub(crate) fn select_test_runner(
