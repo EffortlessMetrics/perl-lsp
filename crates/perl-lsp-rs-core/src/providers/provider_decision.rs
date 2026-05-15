@@ -5,12 +5,15 @@
 //! or blocked an unsafe edit. It does not change live provider behavior.
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 use perl_semantic_facts::{
     Confidence, Provenance, ProviderFactFreshness, ProviderFactSourceKind, ProviderFactTrace,
     ProviderSurface,
 };
+
+/// Current additive provider-decision explanation schema version.
+pub const PROVIDER_DECISION_SCHEMA_VERSION: &str = "provider_decision.v1";
 
 /// Editor surface that made or considered a provider decision.
 #[non_exhaustive]
@@ -235,6 +238,9 @@ pub enum ProviderDecisionFallback {
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProviderDecisionExplanation {
+    /// Additive schema version for command consumers and bug-report payloads.
+    #[serde(default = "provider_decision_schema_version")]
+    pub schema_version: String,
     /// Provider surface that made the decision.
     pub provider: ProviderDecisionProvider,
     /// Live, fallback, blocked, or shadowed outcome.
@@ -277,6 +283,7 @@ impl ProviderDecisionExplanation {
         fallback: ProviderDecisionFallback,
     ) -> Self {
         Self {
+            schema_version: provider_decision_schema_version(),
             provider,
             decision,
             reason,
@@ -324,7 +331,7 @@ impl ProviderDecisionExplanation {
 
     /// Attach a request-local provider receipt.
     pub fn with_request_receipt(mut self, receipt: Value) -> Self {
-        self.request_receipt = Some(receipt);
+        self.request_receipt = Some(normalize_provider_decision_receipt(receipt));
         self
     }
 
@@ -349,6 +356,88 @@ impl ProviderDecisionExplanation {
                 self.fallback,
                 ProviderDecisionFallback::NoEdit | ProviderDecisionFallback::RequireConfirmation
             )
+    }
+}
+
+fn provider_decision_schema_version() -> String {
+    PROVIDER_DECISION_SCHEMA_VERSION.to_string()
+}
+
+/// Normalize provider-local request receipts into the shared explanation schema.
+///
+/// This preserves provider-specific fields while adding stable shared keys that
+/// consumers can use without knowing each provider's receipt dialect.
+pub fn normalize_provider_decision_receipt(mut receipt: Value) -> Value {
+    let Some(object) = receipt.as_object_mut() else {
+        return receipt;
+    };
+
+    normalize_provider_decision_receipt_object(object);
+    receipt
+}
+
+fn normalize_provider_decision_receipt_object(object: &mut Map<String, Value>) {
+    insert_string_if_missing(object, "schema_version", PROVIDER_DECISION_SCHEMA_VERSION);
+    insert_string_if_missing(object, "decision", "fallback");
+    insert_string_if_missing(object, "reason", "unknown");
+    insert_string_if_missing(object, "fact_source", "provider_runtime");
+    insert_string_if_missing(object, "confidence", "low");
+    insert_string_if_missing(object, "freshness", "unknown");
+
+    if !object.contains_key("fallback") {
+        let fallback = object
+            .get("fallback_state")
+            .and_then(Value::as_str)
+            .map(normalize_fallback_state)
+            .unwrap_or_else(|| fallback_for_decision(string_field(object, "decision")));
+        object.insert("fallback".to_string(), Value::String(fallback.to_string()));
+    }
+
+    if !object.contains_key("source_backed") {
+        let source_backed =
+            string_field(object, "fact_source").is_some_and(provider_fact_source_is_source_backed);
+        object.insert("source_backed".to_string(), Value::Bool(source_backed));
+    }
+
+    if !object.contains_key("dynamic_boundary") {
+        let dynamic_boundary = string_field(object, "fact_source") == Some("dynamic_boundary")
+            || string_field(object, "reason") == Some("dynamic_boundary");
+        object.insert("dynamic_boundary".to_string(), Value::Bool(dynamic_boundary));
+    }
+}
+
+fn insert_string_if_missing(object: &mut Map<String, Value>, key: &str, value: &str) {
+    if !object.contains_key(key) {
+        object.insert(key.to_string(), Value::String(value.to_string()));
+    }
+}
+
+fn string_field<'a>(object: &'a Map<String, Value>, key: &str) -> Option<&'a str> {
+    object.get(key).and_then(Value::as_str)
+}
+
+fn provider_fact_source_is_source_backed(source: &str) -> bool {
+    matches!(source, "parser_syntax" | "legacy_workspace" | "semantic_fact" | "compiler_fact")
+}
+
+fn fallback_for_decision(decision: Option<&str>) -> &'static str {
+    match decision {
+        Some("acted") => "none",
+        Some("blocked") => "no_edit",
+        Some("shadowed") => "shadow_receipt_only",
+        _ => "no_result",
+    }
+}
+
+fn normalize_fallback_state(fallback_state: &str) -> &'static str {
+    match fallback_state {
+        "none" | "compiler_allowed" | "live_provider" => "none",
+        "legacy_provider" => "legacy_provider",
+        "no_edit" | "compiler_blocked" => "no_edit",
+        "require_confirmation" => "require_confirmation",
+        "refresh_workspace_facts" => "refresh_workspace_facts",
+        "shadow_receipt_only" | "shadow_only" => "shadow_receipt_only",
+        _ => "no_result",
     }
 }
 
@@ -401,6 +490,10 @@ mod tests {
 
         let value = serde_json::to_value(&decision)?;
 
+        assert_eq!(
+            value.get("schema_version").and_then(serde_json::Value::as_str),
+            Some(PROVIDER_DECISION_SCHEMA_VERSION)
+        );
         assert_eq!(
             value.get("provider").and_then(serde_json::Value::as_str),
             Some("goto_definition")
@@ -459,12 +552,61 @@ mod tests {
             .ok_or("missing request_receipt object")?;
 
         assert_eq!(
+            request_receipt.get("schema_version").and_then(serde_json::Value::as_str),
+            Some(PROVIDER_DECISION_SCHEMA_VERSION)
+        );
+        assert_eq!(
             request_receipt.get("provider").and_then(serde_json::Value::as_str),
             Some("rename")
         );
         assert_eq!(
+            request_receipt.get("fallback").and_then(serde_json::Value::as_str),
+            Some("no_result")
+        );
+        assert_eq!(
             request_receipt.get("fallback_state").and_then(serde_json::Value::as_str),
             Some("compiler_empty")
+        );
+        assert_eq!(
+            request_receipt.get("fact_source").and_then(serde_json::Value::as_str),
+            Some("provider_runtime")
+        );
+        assert_eq!(
+            request_receipt.get("source_backed").and_then(serde_json::Value::as_bool),
+            Some(false)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn provider_decision_normalizes_request_receipt_without_overwriting_fields() -> TestResult {
+        let receipt = normalize_provider_decision_receipt(serde_json::json!({
+            "provider": "safe_delete",
+            "decision": "blocked",
+            "reason": "stale_fact",
+            "fallback_state": "refresh_workspace_facts",
+            "fact_source": "compiler_fact",
+            "confidence": "low",
+            "freshness": "stale",
+            "custom_provider_field": "kept"
+        }));
+
+        assert_eq!(
+            receipt.get("schema_version").and_then(serde_json::Value::as_str),
+            Some(PROVIDER_DECISION_SCHEMA_VERSION)
+        );
+        assert_eq!(
+            receipt.get("fallback").and_then(serde_json::Value::as_str),
+            Some("refresh_workspace_facts")
+        );
+        assert_eq!(receipt.get("source_backed").and_then(serde_json::Value::as_bool), Some(true));
+        assert_eq!(
+            receipt.get("dynamic_boundary").and_then(serde_json::Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            receipt.get("custom_provider_field").and_then(serde_json::Value::as_str),
+            Some("kept")
         );
         Ok(())
     }

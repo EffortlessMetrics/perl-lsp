@@ -198,6 +198,7 @@ fn test_explain_provider_decision_attaches_provider_receipt()
         })],
     )?;
 
+    assert_eq!(result.get("schema_version").and_then(Value::as_str), Some("provider_decision.v1"));
     assert_eq!(result.get("provider").and_then(Value::as_str), Some("safe_delete"));
     assert_eq!(result.get("decision").and_then(Value::as_str), Some("blocked"));
     assert_eq!(result.get("reason").and_then(Value::as_str), Some("unsafe_edit_blocked"));
@@ -230,6 +231,7 @@ fn test_explain_provider_decision_attaches_request_local_receipt()
         })],
     )?;
 
+    assert_eq!(result.get("schema_version").and_then(Value::as_str), Some("provider_decision.v1"));
     let request_receipt = result
         .get("request_receipt")
         .and_then(Value::as_object)
@@ -243,6 +245,10 @@ fn test_explain_provider_decision_attaches_request_local_receipt()
         Some("realbaseline-rename-fallback-noise")
     );
     assert_eq!(
+        request_receipt.get("schema_version").and_then(Value::as_str),
+        Some("provider_decision.v1")
+    );
+    assert_eq!(
         request_receipt.get("reason").and_then(Value::as_str),
         Some("ambiguous_symbol_identity")
     );
@@ -250,6 +256,8 @@ fn test_explain_provider_decision_attaches_request_local_receipt()
         request_receipt.get("fallback_state").and_then(Value::as_str),
         Some("compiler_empty")
     );
+    assert_eq!(request_receipt.get("fallback").and_then(Value::as_str), Some("no_result"));
+    assert_eq!(request_receipt.get("source_backed").and_then(Value::as_bool), Some(false));
     Ok(())
 }
 
@@ -289,6 +297,7 @@ fn test_explain_provider_decision_defaults_to_live_provider_receipt()
         vec![json!({ "provider": "goto_definition" })],
     )?;
 
+    assert_eq!(result.get("schema_version").and_then(Value::as_str), Some("provider_decision.v1"));
     assert_eq!(result.get("provider").and_then(Value::as_str), Some("goto_definition"));
     assert_eq!(result.get("decision").and_then(Value::as_str), Some("acted"));
     assert_eq!(result.get("reason").and_then(Value::as_str), Some("source_backed_high_confidence"));

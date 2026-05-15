@@ -2,6 +2,7 @@
 
 use super::super::*;
 use crate::protocol::{req_position, req_uri};
+use perl_lsp_rs_core::providers::normalize_provider_decision_receipt;
 
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
@@ -358,6 +359,7 @@ impl LspServer {
         &self,
         receipt: Value,
     ) -> Result<Option<Value>, JsonRpcError> {
+        let receipt = normalize_provider_decision_receipt(receipt);
         self.record_provider_decision_trace("safe_delete", &receipt);
         Ok(Some(receipt))
     }

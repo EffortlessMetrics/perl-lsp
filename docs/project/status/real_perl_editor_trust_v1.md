@@ -74,10 +74,9 @@ rename or live symbol-level safe-delete cutover.
 This dashboard keeps the next provider lane separate from parser capability,
 framework facts, PIR, formatter, critic, release, and security work.
 
-1. `feat(provider): normalize provider decision explanation schema`
-2. `feat(safe-delete): prove scoped live symbol-delete UX`
-3. `test(rename): add real-workspace package/compiler-backed pilot receipt`
-4. `feat(workspace-symbols): enable high-confidence compiler symbols`
+1. `feat(safe-delete): prove scoped live symbol-delete UX`
+2. `test(rename): add real-workspace package/compiler-backed pilot receipt`
+3. `feat(workspace-symbols): enable high-confidence compiler symbols`
 
 Provider decision explanations are already partial-live through
 `perl.explainProviderDecision`; callers can attach a request-local
@@ -92,8 +91,11 @@ surface-specific compiler proof, and dispatcher traces deliberately do not
 overwrite completion's richer provider-local receipt. Safe-delete runtime
 blocker receipt paths now persist trace-only allowed, blocked, and fallback
 decisions with fact source, confidence, freshness, fallback, blocker, and
-claim-boundary fields. The next explanation step is normalizing the shared
-schema before scoped live symbol-delete UX proof.
+claim-boundary fields. Provider explanations and attached request receipts now
+carry the additive `provider_decision.v1` schema version plus normalized
+fallback, source-backed, and dynamic-boundary fields while preserving
+provider-specific receipt fields. The next explanation step is scoped live
+symbol-delete UX proof.
 
 Safe-delete support tiers have been reviewed after the allowed-symbol proof:
 the row remains `shadowed`, and the next proof is scoped live symbol-delete UX

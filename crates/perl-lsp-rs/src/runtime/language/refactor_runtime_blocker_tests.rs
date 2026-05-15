@@ -269,6 +269,7 @@ fn assert_safe_delete_decision_trace(
     reason: &str,
     fallback_state: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(receipt.get("schema_version").and_then(Value::as_str), Some("provider_decision.v1"));
     assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
     assert_eq!(
         receipt.get("provider_action").and_then(Value::as_str),

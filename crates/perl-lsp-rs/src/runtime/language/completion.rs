@@ -1505,6 +1505,10 @@ mod tests {
             .and_then(Value::as_array)
             .ok_or("missing completion sample labels")?;
 
+        assert_eq!(
+            receipt.get("schema_version").and_then(Value::as_str),
+            Some("provider_decision.v1")
+        );
         assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("completion"));
         assert_eq!(
             receipt.get("provider_action").and_then(Value::as_str),
@@ -1515,6 +1519,7 @@ mod tests {
         assert_eq!(receipt.get("line").and_then(Value::as_u64), Some(1));
         assert_eq!(receipt.get("character").and_then(Value::as_u64), Some(17));
         assert_eq!(receipt.get("freshness").and_then(Value::as_str), Some("fresh"));
+        assert_eq!(receipt.get("fallback").and_then(Value::as_str), Some("none"));
         assert_eq!(
             receipt.get("claim_boundary").and_then(Value::as_str),
             Some(
@@ -1567,6 +1572,10 @@ mod tests {
             .and_then(Value::as_object)
             .ok_or("missing persisted completion request receipt")?;
 
+        assert_eq!(
+            receipt.get("schema_version").and_then(Value::as_str),
+            Some("provider_decision.v1")
+        );
         assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("completion"));
         assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("acted"));
         assert_eq!(

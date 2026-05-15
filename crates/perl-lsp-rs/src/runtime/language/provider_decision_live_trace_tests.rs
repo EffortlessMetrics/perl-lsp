@@ -117,11 +117,13 @@ fn request_receipt<'a>(
 }
 
 fn assert_live_trace(receipt: &Value, provider: &str, action: &str) {
+    assert_eq!(receipt.get("schema_version").and_then(Value::as_str), Some("provider_decision.v1"));
     assert_eq!(receipt.get("provider").and_then(Value::as_str), Some(provider));
     assert_eq!(receipt.get("provider_action").and_then(Value::as_str), Some(action));
     assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("provider_runtime"));
     assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("low"));
     assert_eq!(receipt.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert!(receipt.get("fallback").and_then(Value::as_str).is_some());
     assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(false));
     assert_eq!(
         receipt.get("source_backed_state").and_then(Value::as_str),
