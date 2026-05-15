@@ -222,6 +222,21 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_execute_command_allows_preview_safe_delete() {
+        let method = "workspace/executeCommand";
+        let params = serde_json::json!({
+            "command": "perl.previewSafeDelete",
+            "arguments": [{
+                "textDocument": {"uri": "file:///workspace/lib/My.pm"},
+                "position": {"line": 0, "character": 0}
+            }]
+        });
+
+        let result = validate_lsp_request(method, &params);
+        assert!(result.is_ok());
+    }
+
+    #[test]
     fn test_validate_execute_command_blocked() {
         let method = "workspace/executeCommand";
         let params = serde_json::json!({
