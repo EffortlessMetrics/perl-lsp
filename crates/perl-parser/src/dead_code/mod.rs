@@ -321,7 +321,7 @@ fn detect_dead_branches(file_path: &Path, text: &str, out: &mut Vec<DeadCode>) {
         // Determine if this line opens a dead branch.
         // We look for: KEYWORD WHITESPACE? ( CONDITION ) WHITESPACE? {
         let dead_reason_and_keyword: Option<(String, &str)> = 'detect: {
-            for kw in &["if", "while", "elsif", "unless", "until", "for", "foreach"] {
+            for kw in &["if", "while", "elsif", "unless", "until"] {
                 let rest = match trimmed.strip_prefix(kw) {
                     Some(r)
                         if r.is_empty()
