@@ -34,7 +34,6 @@ fn live_provider_trace_key(method: &str) -> Option<&'static str> {
         "textDocument/hover" => Some("hover"),
         "textDocument/diagnostic" | "workspace/diagnostic" => Some("diagnostics"),
         "textDocument/documentSymbol" => Some("document_symbols"),
-        "workspace/symbol" => Some("workspace_symbols"),
         "textDocument/semanticTokens/full" | "textDocument/semanticTokens/range" => {
             Some("semantic_tokens")
         }

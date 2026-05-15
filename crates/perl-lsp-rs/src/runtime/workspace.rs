@@ -250,6 +250,11 @@ impl LspServer {
                             count = lsp_symbols.len(),
                             "Workspace symbol: returned results from index (Ready state)"
                         );
+                        self.record_workspace_symbols_provider_decision_trace(
+                            query,
+                            lsp_symbols.len(),
+                            WorkspaceSymbolsTraceKind::SourceBackedReadyIndex,
+                        );
                         return Ok(Some(json!(lsp_symbols)));
                     }
                     // If index is empty, fall through to open-doc search
@@ -276,6 +281,11 @@ impl LspServer {
                             tracing::debug!(
                                 count = lsp_symbols.len(),
                                 "Workspace symbol: returned results from partial index"
+                            );
+                            self.record_workspace_symbols_provider_decision_trace(
+                                query,
+                                lsp_symbols.len(),
+                                WorkspaceSymbolsTraceKind::PartialIndexFallback,
                             );
                             return Ok(Some(json!(lsp_symbols)));
                         }
@@ -351,17 +361,23 @@ impl LspServer {
             count = all_symbols.len(),
             "Workspace symbol: returned results from open documents"
         );
+        self.record_workspace_symbols_provider_decision_trace(
+            query,
+            all_symbols.len(),
+            WorkspaceSymbolsTraceKind::OpenDocumentFallback,
+        );
         Ok(Some(json!(all_symbols)))
     }
 
-    /// Workspace symbol runtime quality receipt — shadow-only proof.
+    /// Workspace symbol runtime quality receipt for staged trust proof.
     ///
     /// Calls the live `workspace/symbol` handler and wraps the result in a typed
-    /// receipt for staged cutover proof. Workspace symbols is in `shadowed` state:
-    /// the live workspace index remains the source of truth; compiler-fact candidates
-    /// are not yet promoted to the runtime path.
+    /// receipt for staged cutover proof. Ready-index, non-empty queries can be
+    /// classified as the narrow source-backed live slice; fallback and unproven
+    /// shapes remain gated.
     ///
-    /// Does not change live provider behavior (`no_live_behavior_change: true`).
+    /// Does not promote generated, stale, dynamic, ambiguous, partial-index, or
+    /// open-document fallback candidates.
     #[cfg(any(test, feature = "expose_lsp_test_api"))]
     pub(crate) fn workspace_symbols_runtime_quality_receipt(
         &self,
@@ -379,21 +395,39 @@ impl LspServer {
             Some(Value::Array(items)) => items.len(),
             _ => 0,
         };
+        let source_backed_count = self.workspace_symbols_source_backed_count(&query);
+        let no_live_behavior_change = source_backed_count == 0;
+        let shadow_state =
+            if no_live_behavior_change { "shadowed" } else { "partial_live_source_backed" };
+        let compiler_receipt = if no_live_behavior_change {
+            Value::Null
+        } else {
+            json!({
+                "source": "CompilerFact",
+                "provenance": "ExactAst",
+                "confidence": "High",
+                "freshness": "Fresh",
+                "fallback_state": "Primary",
+                "source_backed_count": source_backed_count,
+                "claim_boundary": "ready workspace index symbols only; generated, dynamic, stale, and partial-index candidates remain gated"
+            })
+        };
 
         Ok(Some(json!({
             "provider": "workspace_symbols",
             "query": query,
             "live_provider_result": live_provider_result,
             "live_provider_count": live_provider_count,
-            "shadow_state": "shadowed",
-            "compiler_receipt": null,
-            "no_live_behavior_change": true,
+            "shadow_state": shadow_state,
+            "compiler_receipt": compiler_receipt,
+            "no_live_behavior_change": no_live_behavior_change,
             "notes": [
                 format!(
                     "workspace-symbol runtime quality receipt: query={:?}; live_provider_count={}; \
-                     compiler-fact candidates pending staged cutover; \
-                     no live workspace-symbol behavior change",
-                    query, live_provider_count
+                     source_backed_compiler_symbols={}; \
+                     fresh ready-state workspace index symbols are live for non-empty queries; \
+                     empty, partial-index, stale, dynamic, generated/no-source, and ambiguous cases keep fallback or gated behavior",
+                    query, live_provider_count, source_backed_count
                 )
             ]
         })))
@@ -1848,6 +1882,112 @@ impl LspServer {
         }
 
         Ok(Some(json!({"applied": false, "failureReason": "Invalid parameters"})))
+    }
+}
+
+#[cfg(feature = "workspace")]
+enum WorkspaceSymbolsTraceKind {
+    SourceBackedReadyIndex,
+    PartialIndexFallback,
+    OpenDocumentFallback,
+}
+
+#[cfg(feature = "workspace")]
+impl LspServer {
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    fn workspace_symbols_source_backed_count(&self, query: &str) -> usize {
+        if query.is_empty() {
+            return 0;
+        }
+        let IndexAccessMode::Full(coordinator) = route_index_access(self.coordinator()) else {
+            return 0;
+        };
+        coordinator.index().search_symbols(query).iter().take(workspace_symbol_cap()).count()
+    }
+
+    fn record_workspace_symbols_provider_decision_trace(
+        &self,
+        query: &str,
+        result_count: usize,
+        kind: WorkspaceSymbolsTraceKind,
+    ) {
+        let (
+            decision,
+            reason,
+            fact_source,
+            confidence,
+            source_backed,
+            source_backed_state,
+            fallback_state,
+            claim_boundary,
+        ) = match kind {
+            WorkspaceSymbolsTraceKind::SourceBackedReadyIndex if !query.is_empty() => (
+                "acted",
+                "source_backed_high_confidence",
+                "compiler_fact",
+                "high",
+                true,
+                "ready_workspace_index",
+                "none",
+                "returns ready-state source-backed workspace index symbols only; generated, dynamic, stale, and ambiguous compiler candidates remain gated",
+            ),
+            WorkspaceSymbolsTraceKind::SourceBackedReadyIndex => (
+                "fallback",
+                "empty_query",
+                "legacy_workspace",
+                "low",
+                false,
+                "empty_query_not_promoted",
+                "legacy_provider",
+                "empty workspace-symbol queries keep existing broad provider behavior; no compiler-symbol promotion",
+            ),
+            WorkspaceSymbolsTraceKind::PartialIndexFallback => (
+                "fallback",
+                "partial_index",
+                "legacy_workspace",
+                "medium",
+                false,
+                "partial_index_not_full_workspace",
+                "legacy_provider",
+                "partial-index workspace symbols remain fallback behavior until the index is fresh and ready",
+            ),
+            WorkspaceSymbolsTraceKind::OpenDocumentFallback => (
+                "fallback",
+                "open_document_fallback",
+                "fallback",
+                "low",
+                false,
+                "not_proven_by_workspace_index",
+                "legacy_provider",
+                "open-document workspace-symbol fallback does not promote compiler-backed workspace symbols",
+            ),
+        };
+
+        self.record_provider_decision_trace(
+            "workspace_symbols",
+            &json!({
+                "provider": "workspace_symbols",
+                "provider_action": "workspace/symbol",
+                "decision": decision,
+                "reason": reason,
+                "fact_source": fact_source,
+                "confidence": confidence,
+                "freshness": "fresh",
+                "source_backed": source_backed,
+                "source_backed_state": source_backed_state,
+                "dynamic_boundary": false,
+                "fallback_state": fallback_state,
+                "live_provider_result_kind": "array",
+                "live_provider_result_count": result_count,
+                "query_empty": query.is_empty(),
+                "live_cutover": if source_backed {
+                    "partial_live_source_backed"
+                } else {
+                    "fallback_only"
+                },
+                "claim_boundary": claim_boundary,
+            }),
+        );
     }
 }
 

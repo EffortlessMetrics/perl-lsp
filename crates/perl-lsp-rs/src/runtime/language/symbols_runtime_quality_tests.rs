@@ -284,7 +284,7 @@ fn workspace_symbols_runtime_quality_receipt_has_correct_provider_field()
 }
 
 #[test]
-fn workspace_symbols_runtime_quality_receipt_reports_no_live_behavior_change()
+fn workspace_symbols_runtime_quality_receipt_reports_source_backed_live_slice()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();
     open_symbol_workspace(&server)?;
@@ -296,8 +296,8 @@ fn workspace_symbols_runtime_quality_receipt_reports_no_live_behavior_change()
 
     assert_eq!(
         receipt.get("no_live_behavior_change").and_then(Value::as_bool),
-        Some(true),
-        "receipt must confirm no live behavior change"
+        Some(false),
+        "ready non-empty workspace index results are the partial-live source-backed slice"
     );
     Ok(())
 }
@@ -330,6 +330,39 @@ fn workspace_symbols_runtime_quality_receipt_count_matches_live_result()
 }
 
 #[test]
+fn workspace_symbols_runtime_quality_receipt_records_source_backed_compiler_slice()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    open_symbol_workspace(&server)?;
+    let params = json!({"query": "greet"});
+
+    let receipt = server
+        .test_workspace_symbols_runtime_quality_receipt(Some(params))?
+        .ok_or("missing workspace symbols receipt")?;
+
+    let compiler_receipt = receipt.get("compiler_receipt").ok_or("missing compiler_receipt")?;
+    assert_eq!(compiler_receipt.get("source").and_then(Value::as_str), Some("CompilerFact"));
+    assert_eq!(compiler_receipt.get("provenance").and_then(Value::as_str), Some("ExactAst"));
+    assert_eq!(compiler_receipt.get("confidence").and_then(Value::as_str), Some("High"));
+    assert_eq!(compiler_receipt.get("freshness").and_then(Value::as_str), Some("Fresh"));
+    let source_backed_count = compiler_receipt
+        .get("source_backed_count")
+        .and_then(Value::as_u64)
+        .ok_or("missing source_backed_count")?;
+    assert!(
+        source_backed_count > 0,
+        "ready workspace index query must expose source-backed compiler symbols"
+    );
+    assert_eq!(
+        compiler_receipt.get("claim_boundary").and_then(Value::as_str),
+        Some(
+            "ready workspace index symbols only; generated, dynamic, stale, and partial-index candidates remain gated"
+        )
+    );
+    Ok(())
+}
+
+#[test]
 fn workspace_symbols_runtime_quality_receipt_echoes_query_field()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();
@@ -349,11 +382,11 @@ fn workspace_symbols_runtime_quality_receipt_echoes_query_field()
 }
 
 #[test]
-fn workspace_symbols_runtime_quality_receipt_shadow_state_is_shadowed()
+fn workspace_symbols_runtime_quality_receipt_shadow_state_is_partial_live_source_backed()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();
     open_symbol_workspace(&server)?;
-    let params = json!({"query": ""});
+    let params = json!({"query": "greet"});
 
     let receipt = server
         .test_workspace_symbols_runtime_quality_receipt(Some(params))?
@@ -361,8 +394,8 @@ fn workspace_symbols_runtime_quality_receipt_shadow_state_is_shadowed()
 
     assert_eq!(
         receipt.get("shadow_state").and_then(Value::as_str),
-        Some("shadowed"),
-        "workspace symbols must report shadowed state (not yet partial live)"
+        Some("partial_live_source_backed"),
+        "workspace symbols must report the ready source-backed partial-live state"
     );
     Ok(())
 }
@@ -385,8 +418,8 @@ fn workspace_symbols_runtime_quality_receipt_notes_record_quality_proof()
         "notes must identify this as a workspace-symbol runtime quality receipt: {notes:?}"
     );
     assert!(
-        notes.iter().any(|note| note.contains("no live workspace-symbol behavior change")),
-        "notes must confirm no live behavior change: {notes:?}"
+        notes.iter().any(|note| note.contains("source_backed_compiler_symbols=")),
+        "notes must record source-backed compiler symbol count: {notes:?}"
     );
     Ok(())
 }
