@@ -1008,6 +1008,34 @@
       ]
     },
     {
+      "id": "dancer2_diagnostics_quality",
+      "scenario_file": "ux_scenario_40_dancer2_diagnostics_quality.rs",
+      "subsystem_owner": "diagnostics",
+      "ci_tier": "pr",
+      "component": "diagnostics",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "open the Dancer2 real-workspace fixture and record second-project diagnostics false-positive and false-negative boundaries",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
+      ],
+      "expected_outcomes": [
+        "workspace-present Dancer2 modules do not emit PL701",
+        "mixed present/missing import probes report only the missing module",
+        "dynamic typeglob export boundaries stay conservative without provider behavior promotion"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "incremental_text_sync_recovery",
       "scenario_file": "ux_scenario_19_incremental_text_sync.rs",
       "subsystem_owner": "text_sync",
