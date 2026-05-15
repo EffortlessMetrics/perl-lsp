@@ -63,6 +63,8 @@ sub caller {
 "#;
 
 const DANCER2_DSL_URI: &str = "file:///workspace/lib/Dancer2/Core/DSL.pm";
+const DANCER2_APP_URI: &str = "file:///workspace/lib/Dancer2/Core/App.pm";
+const DANCER2_PLUGIN_URI: &str = "file:///workspace/lib/Dancer2/Plugin.pm";
 const REAL_BASELINE_UTIL_URI: &str = "file:///workspace/lib/RealBaseline/Util.pm";
 
 fn create_server() -> LspServer {
@@ -642,6 +644,126 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_dancer2_stale_symbol_f
             "compiler_plan_safe=false",
             "blocker_reasons=StaleFact",
             "stale_fact=true",
+            "requires_confirmation=true",
+            "no live refactor behavior change",
+        ],
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_dancer2_generated_dynamic_low_confidence()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_dancer2_workspace(&server)?;
+    let app = files.get("lib/Dancer2/Core/App.pm").ok_or("missing Dancer2 Core App fixture")?;
+    let dsl = files.get("lib/Dancer2/Core/DSL.pm").ok_or("missing Dancer2 Core DSL fixture")?;
+    let plugin = files.get("lib/Dancer2/Plugin.pm").ok_or("missing Dancer2 Plugin fixture")?;
+
+    let (routes_line, routes_character) = position_of(app, "routes      =>")?;
+    let generated_params = json!({
+        "textDocument": {"uri": DANCER2_APP_URI},
+        "position": {"line": routes_line, "character": routes_character},
+        "compilerPlanFixture": "generated_member"
+    });
+    let generated_receipt = server
+        .test_safe_delete_runtime_blocker_ux_receipt(Some(generated_params))?
+        .ok_or("missing Dancer2 generated safe-delete receipt")?;
+    let generated_compiler = compiler_receipt(&generated_receipt)?;
+
+    assert_eq!(generated_receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        generated_receipt.get("compiler_plan_fixture").and_then(Value::as_str),
+        Some("generated_member")
+    );
+    assert_eq!(generated_receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(
+        generated_receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(generated_receipt.get("symbol").and_then(Value::as_str), Some("routes"));
+    assert_trace_contains(generated_compiler, "FrameworkAdapter", "High", "Fresh")?;
+    assert_note_contains(
+        generated_compiler,
+        &[
+            "safe-delete runtime blocker UX",
+            "compiler_plan_fixture=generated_member",
+            "compiler_plan_safe=false",
+            "blocker_reasons=GeneratedMember",
+            "generated_member=true",
+            "requires_confirmation=true",
+            "no live refactor behavior change",
+        ],
+    )?;
+
+    let (plugin_keywords_line, plugin_keywords_character) = position_of(plugin, "plugin_keywords")?;
+    let dynamic_params = json!({
+        "textDocument": {"uri": DANCER2_PLUGIN_URI},
+        "position": {"line": plugin_keywords_line, "character": plugin_keywords_character},
+        "compilerPlanFixture": "dynamic_boundary"
+    });
+    let dynamic_receipt = server
+        .test_safe_delete_runtime_blocker_ux_receipt(Some(dynamic_params))?
+        .ok_or("missing Dancer2 dynamic-boundary safe-delete receipt")?;
+    let dynamic_compiler = compiler_receipt(&dynamic_receipt)?;
+
+    assert_eq!(dynamic_receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        dynamic_receipt.get("compiler_plan_fixture").and_then(Value::as_str),
+        Some("dynamic_boundary")
+    );
+    assert_eq!(dynamic_receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(dynamic_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert_eq!(dynamic_receipt.get("symbol").and_then(Value::as_str), Some("plugin_keywords"));
+    assert_trace_contains(dynamic_compiler, "DynamicBoundary", "High", "Fresh")?;
+    assert_note_contains(
+        dynamic_compiler,
+        &[
+            "safe-delete runtime blocker UX",
+            "compiler_plan_fixture=dynamic_boundary",
+            "compiler_plan_safe=false",
+            "blocker_reasons=DynamicBoundary",
+            "dynamic_boundary=true",
+            "requires_confirmation=true",
+            "no live refactor behavior change",
+        ],
+    )?;
+
+    let (compile_line, compile_character) = position_of(dsl, "_compile {")?;
+    let low_confidence_params = json!({
+        "textDocument": {"uri": DANCER2_DSL_URI},
+        "position": {"line": compile_line, "character": compile_character},
+        "compilerPlanFixture": "low_confidence"
+    });
+    let low_confidence_receipt = server
+        .test_safe_delete_runtime_blocker_ux_receipt(Some(low_confidence_params))?
+        .ok_or("missing Dancer2 low-confidence safe-delete receipt")?;
+    let low_confidence_compiler = compiler_receipt(&low_confidence_receipt)?;
+
+    assert_eq!(low_confidence_receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        low_confidence_receipt.get("compiler_plan_fixture").and_then(Value::as_str),
+        Some("low_confidence")
+    );
+    assert_eq!(
+        low_confidence_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        low_confidence_receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(low_confidence_receipt.get("symbol").and_then(Value::as_str), Some("_compile"));
+    assert_trace_contains(low_confidence_compiler, "SemanticFact", "Low", "Fresh")?;
+    assert_note_contains(
+        low_confidence_compiler,
+        &[
+            "safe-delete runtime blocker UX",
+            "compiler_plan_fixture=low_confidence",
+            "compiler_plan_safe=false",
+            "blocker_reasons=AmbiguousReference",
+            "low_confidence=true",
             "requires_confirmation=true",
             "no live refactor behavior change",
         ],

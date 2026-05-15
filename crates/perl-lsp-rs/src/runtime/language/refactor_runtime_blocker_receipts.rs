@@ -356,6 +356,16 @@ fn fixture_blocker(fixture: &str) -> Option<PlanBlocker> {
             None,
             "stale compiler fact must be refreshed before editing".to_string(),
         )),
+        "generated_member" => Some(PlanBlocker::new(
+            PlanBlockerReason::GeneratedMember,
+            None,
+            "generated member has no source-backed deletion target".to_string(),
+        )),
+        "dynamic_boundary" => Some(PlanBlocker::new(
+            PlanBlockerReason::DynamicBoundary,
+            None,
+            "dynamic Perl boundary prevents static deletion certainty".to_string(),
+        )),
         _ => None,
     }
 }
