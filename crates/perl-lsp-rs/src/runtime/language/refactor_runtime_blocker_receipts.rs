@@ -11,8 +11,10 @@ use crate::runtime::routing::{IndexAccessMode, route_index_access};
     not(target_arch = "wasm32"),
     any(test, feature = "expose_lsp_test_api")
 ))]
+use perl_lsp_rs_core::providers::navigation::rename_shadow::{RenameCutoverResult, rename_cutover};
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 use perl_lsp_rs_core::providers::navigation::rename_shadow::{
-    RenameCutoverResult, RenamePackagePilotResult, rename_cutover, rename_package_pilot_proof,
+    RenamePackagePilotResult, rename_package_pilot_proof,
 };
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 use perl_lsp_rs_core::providers::navigation::safe_delete_shadow::{
@@ -44,7 +46,6 @@ impl LspServer {
     /// Calls the live rename handler and compares the result with the
     /// compiler-fact rename plan from the same runtime workspace index. This is
     /// receipt-only and does not cut live rename over to compiler facts.
-    #[cfg(any(test, feature = "expose_lsp_test_api"))]
     pub(crate) fn rename_runtime_blocker_ux_receipt(
         &self,
         params: Option<Value>,
@@ -114,18 +115,25 @@ impl LspServer {
                 })));
             };
 
-            if let Some(fixture) = params.get("compilerPlanFixture").and_then(Value::as_str) {
-                let compiler_receipt =
-                    rename_fixture_receipt(fixture, &symbol, new_name, live_provider_edit_count);
-                return Ok(Some(json!({
-                    "provider": "rename",
-                    "symbol": symbol,
-                    "compiler_plan_fixture": fixture,
-                    "live_provider_result": live_provider_result,
-                    "live_provider_edit_count": live_provider_edit_count,
-                    "compiler_receipt": compiler_receipt,
-                    "no_live_behavior_change": true
-                })));
+            #[cfg(any(test, feature = "expose_lsp_test_api"))]
+            {
+                if let Some(fixture) = params.get("compilerPlanFixture").and_then(Value::as_str) {
+                    let compiler_receipt = rename_fixture_receipt(
+                        fixture,
+                        &symbol,
+                        new_name,
+                        live_provider_edit_count,
+                    );
+                    return Ok(Some(json!({
+                        "provider": "rename",
+                        "symbol": symbol,
+                        "compiler_plan_fixture": fixture,
+                        "live_provider_result": live_provider_result,
+                        "live_provider_edit_count": live_provider_edit_count,
+                        "compiler_receipt": compiler_receipt,
+                        "no_live_behavior_change": true
+                    })));
+                }
             }
 
             let compiler_receipt_parts = match route_index_access(self.coordinator()) {
@@ -201,6 +209,42 @@ impl LspServer {
             self.record_provider_decision_trace("rename", &receipt);
             Ok(Some(receipt))
         }
+    }
+
+    /// Live package-rename UX preview for editor commands.
+    ///
+    /// This exposes the package/compiler-backed rename pilot classification and
+    /// planned edit shape to users, but deliberately returns an empty edit and
+    /// does not apply or authorize package rename edits.
+    pub(crate) fn package_rename_preview(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        let Some(mut receipt) = self.rename_runtime_blocker_ux_receipt(params)? else {
+            return Ok(None);
+        };
+        let planned_workspace_edit =
+            receipt.get("live_provider_result").cloned().unwrap_or_else(|| json!({"changes": {}}));
+        let user_message = package_rename_preview_message(&receipt);
+
+        if let Some(object) = receipt.as_object_mut() {
+            object.insert("provider_action".to_string(), json!("perl.previewPackageRename"));
+            object.insert("ux_surface".to_string(), json!("scoped_package_rename_preview"));
+            object.insert("edits_applied".to_string(), json!(false));
+            object.insert("live_package_rename_enabled".to_string(), json!(false));
+            object.insert("planned_workspace_edit".to_string(), planned_workspace_edit);
+            object.insert("workspace_edit".to_string(), json!({"changes": {}}));
+            object.insert("user_message".to_string(), json!(user_message));
+            object.insert(
+                "claim_boundary".to_string(),
+                json!("scoped package rename preview only; no package rename edits are applied"),
+            );
+            enrich_package_rename_preview_decision_trace(object);
+        }
+
+        let receipt = normalize_provider_decision_receipt(receipt);
+        self.record_provider_decision_trace("rename", &receipt);
+        Ok(Some(receipt))
     }
 
     /// Receipt for safe-delete blocker UX proof.
@@ -761,11 +805,7 @@ fn enrich_safe_delete_decision_trace(
     );
 }
 
-#[cfg(all(
-    feature = "workspace",
-    not(target_arch = "wasm32"),
-    any(test, feature = "expose_lsp_test_api")
-))]
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 fn rename_package_pilot_json(result: &RenamePackagePilotResult) -> Value {
     match result {
         RenamePackagePilotResult::Eligible { edits } => json!({
@@ -813,11 +853,7 @@ fn rename_package_pilot_json(result: &RenamePackagePilotResult) -> Value {
     }
 }
 
-#[cfg(all(
-    feature = "workspace",
-    not(target_arch = "wasm32"),
-    any(test, feature = "expose_lsp_test_api")
-))]
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 fn rename_package_pilot_ineligible_reason(
     reason: perl_lsp_rs_core::providers::navigation::rename_shadow::RenamePackagePilotIneligibleReason,
 ) -> &'static str {
@@ -831,11 +867,7 @@ fn rename_package_pilot_ineligible_reason(
     }
 }
 
-#[cfg(all(
-    feature = "workspace",
-    not(target_arch = "wasm32"),
-    any(test, feature = "expose_lsp_test_api")
-))]
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 fn rename_fallback_noise_json(
     symbol: &str,
     new_name: &str,
@@ -892,11 +924,7 @@ fn rename_fallback_noise_json(
     })
 }
 
-#[cfg(all(
-    feature = "workspace",
-    not(target_arch = "wasm32"),
-    any(test, feature = "expose_lsp_test_api")
-))]
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 fn rename_live_provider_state(
     live_provider_result: Option<&Value>,
     live_provider_error: Option<&str>,
@@ -911,6 +939,140 @@ fn rename_live_provider_state(
         Some(_) if live_provider_edit_count > 0 => "edits",
         Some(_) => "empty_edit",
         None => "missing",
+    }
+}
+
+fn enrich_package_rename_preview_decision_trace(object: &mut serde_json::Map<String, Value>) {
+    let package_pilot = object.get("package_pilot").and_then(Value::as_object);
+    let fallback_noise = object.get("fallback_noise").and_then(Value::as_object);
+
+    let blocker_reasons = package_pilot
+        .and_then(|pilot| pilot.get("blocker_reasons"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let blocker_count = package_pilot
+        .and_then(|pilot| pilot.get("blocker_count"))
+        .and_then(Value::as_u64)
+        .unwrap_or_else(|| u64::try_from(blocker_reasons.len()).unwrap_or(u64::MAX));
+    let eligible = package_pilot.and_then(|pilot| pilot.get("eligible")).and_then(Value::as_bool);
+    let pilot_reason = package_pilot.and_then(|pilot| pilot.get("reason")).and_then(Value::as_str);
+    let fallback_state = fallback_noise
+        .and_then(|noise| noise.get("fallback_state"))
+        .and_then(Value::as_str)
+        .unwrap_or("compiler_missing");
+
+    let first_blocker = blocker_reasons.iter().filter_map(Value::as_str).next().unwrap_or_default();
+    let (decision, reason, fact_source, confidence, freshness, fallback_state) =
+        match (eligible, pilot_reason, blocker_count, first_blocker, fallback_state) {
+            (Some(true), _, _, _, _) => {
+                ("allowed", "compiler_preview_allowed", "compiler_fact", "high", "fresh", "none")
+            }
+            (_, _, count, "DynamicBoundary", _) if count > 0 => {
+                ("blocked", "dynamic_boundary", "dynamic_boundary", "high", "fresh", "no_edit")
+            }
+            (_, _, count, "GeneratedMember", _) if count > 0 => {
+                ("blocked", "generated_no_source", "framework_adapter", "high", "fresh", "no_edit")
+            }
+            (_, _, count, "StaleFact", _) if count > 0 => (
+                "blocked",
+                "stale_fact",
+                "compiler_fact",
+                "low",
+                "stale",
+                "refresh_workspace_facts",
+            ),
+            (_, _, count, "AmbiguousReference", _) if count > 0 => (
+                "blocked",
+                "ambiguous_low_confidence_candidates",
+                "semantic_fact",
+                "low",
+                "fresh",
+                "require_confirmation",
+            ),
+            (_, _, count, "CrossModuleExport" | "ImportedSymbol" | "ExportedSymbol", _)
+                if count > 0 =>
+            {
+                ("blocked", "import_export_visibility", "compiler_fact", "high", "fresh", "no_edit")
+            }
+            (_, _, count, _, _) if count > 0 => {
+                ("blocked", "compiler_blocked", "compiler_fact", "low", "fresh", "no_edit")
+            }
+            (_, Some("empty_plan"), _, _, _) => (
+                "fallback",
+                "empty_compiler_plan",
+                "fallback",
+                "low",
+                "not_applicable",
+                "compiler_empty",
+            ),
+            (_, _, _, _, "compiler_missing") => (
+                "fallback",
+                "compiler_missing",
+                "provider_runtime",
+                "low",
+                "unknown",
+                "compiler_missing",
+            ),
+            _ => (
+                "fallback",
+                "preview_not_authorized",
+                "provider_runtime",
+                "low",
+                "unknown",
+                "no_result",
+            ),
+        };
+
+    object.insert("decision".to_string(), json!(decision));
+    object.insert("reason".to_string(), json!(reason));
+    object.insert("fact_source".to_string(), json!(fact_source));
+    object.insert("confidence".to_string(), json!(confidence));
+    object.insert("freshness".to_string(), json!(freshness));
+    object.insert("source_backed".to_string(), json!(false));
+    object.insert(
+        "source_backed_state".to_string(),
+        json!("not_authorized_by_package_rename_preview"),
+    );
+    object.insert("dynamic_boundary".to_string(), json!(reason == "dynamic_boundary"));
+    object.insert("fallback_state".to_string(), json!(fallback_state));
+    object.insert("blocker_count".to_string(), json!(blocker_count));
+    object.insert("blocker_reasons".to_string(), Value::Array(blocker_reasons));
+    object.insert("trace_only_no_live_behavior_change".to_string(), json!(true));
+}
+
+fn package_rename_preview_message(receipt: &Value) -> String {
+    let symbol = receipt.get("symbol").and_then(Value::as_str).unwrap_or("symbol");
+    let new_name = receipt.get("new_name").and_then(Value::as_str).unwrap_or("new name");
+    let package_pilot = receipt.get("package_pilot");
+
+    match package_pilot.and_then(|pilot| pilot.get("eligible")).and_then(Value::as_bool) {
+        Some(true) => format!(
+            "Package rename preview: `{symbol}` can be planned as `{new_name}`, but no package rename edits were applied."
+        ),
+        Some(false) => {
+            let reason = package_pilot
+                .and_then(|pilot| pilot.get("reason"))
+                .and_then(Value::as_str)
+                .unwrap_or("not eligible");
+            let blocker = receipt
+                .pointer("/fallback_noise/compiler_blocker_messages/0")
+                .and_then(Value::as_str)
+                .unwrap_or(reason);
+            format!(
+                "Package rename preview refused for `{symbol}` -> `{new_name}`: {blocker}. No edits were applied."
+            )
+        }
+        None => {
+            let reason = receipt
+                .pointer("/fallback_noise/fallback_state")
+                .and_then(Value::as_str)
+                .or_else(|| receipt.get("reason").and_then(Value::as_str))
+                .unwrap_or("compiler proof is unavailable");
+            format!(
+                "Package rename preview unavailable for `{symbol}` -> `{new_name}`: {reason}. No edits were applied."
+            )
+        }
     }
 }
 
