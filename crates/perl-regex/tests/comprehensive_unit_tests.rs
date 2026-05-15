@@ -3,7 +3,8 @@
 //! Covers: RegexError, RegexValidator (validate, detects_code_execution,
 //! detect_nested_quantifiers), Default impl, and edge cases.
 
-use perl_regex::{RegexError, RegexValidator, validator::RegexFinding};
+use perl_regex::validator::RegexValidationConfig;
+use perl_regex::{RegexAnalyzer, RegexError, RegexValidator, validator::RegexFinding};
 
 fn require_error(
     result: Result<(), RegexError>,
@@ -955,5 +956,205 @@ fn validate_accepts_substitution_style_patterns() -> Result<(), Box<dyn std::err
     v.validate(r"(?:/\.)+", 0)?;
     // Pattern with character class in non-capturing group
     v.validate(r"(?:[a-z]\d)+", 0)?;
+    Ok(())
+}
+
+// ── RegexValidationConfig ──────────────────────────────────────────────
+
+#[test]
+fn config_default_values_match_documented_limits() -> Result<(), Box<dyn std::error::Error>> {
+    let cfg = RegexValidationConfig::default();
+    assert_eq!(cfg.max_nesting, 10);
+    assert_eq!(cfg.max_unicode_properties, 50);
+    assert_eq!(cfg.max_branch_reset_branches, 50);
+    Ok(())
+}
+
+#[test]
+fn config_clone_and_eq() -> Result<(), Box<dyn std::error::Error>> {
+    let cfg = RegexValidationConfig {
+        max_nesting: 3,
+        max_unicode_properties: 7,
+        max_branch_reset_branches: 11,
+    };
+    let cloned = cfg.clone();
+    assert_eq!(cfg, cloned);
+    Ok(())
+}
+
+#[test]
+fn config_inequality_when_any_field_differs() -> Result<(), Box<dyn std::error::Error>> {
+    let base = RegexValidationConfig::default();
+    let bumped_nesting =
+        RegexValidationConfig { max_nesting: base.max_nesting + 1, ..base.clone() };
+    let bumped_unicode = RegexValidationConfig {
+        max_unicode_properties: base.max_unicode_properties + 1,
+        ..base.clone()
+    };
+    let bumped_branches = RegexValidationConfig {
+        max_branch_reset_branches: base.max_branch_reset_branches + 1,
+        ..base.clone()
+    };
+    assert_ne!(base, bumped_nesting);
+    assert_ne!(base, bumped_unicode);
+    assert_ne!(base, bumped_branches);
+    Ok(())
+}
+
+#[test]
+fn config_debug_format_includes_field_names() -> Result<(), Box<dyn std::error::Error>> {
+    let cfg = RegexValidationConfig::default();
+    let dbg = format!("{cfg:?}");
+    assert!(dbg.contains("max_nesting"));
+    assert!(dbg.contains("max_unicode_properties"));
+    assert!(dbg.contains("max_branch_reset_branches"));
+    Ok(())
+}
+
+// ── RegexValidator::config() accessor ──────────────────────────────────
+
+#[test]
+fn validator_config_returns_default_after_new() -> Result<(), Box<dyn std::error::Error>> {
+    let v = RegexValidator::new();
+    assert_eq!(*v.config(), RegexValidationConfig::default());
+    Ok(())
+}
+
+#[test]
+fn validator_config_returns_supplied_config_after_with_config()
+-> Result<(), Box<dyn std::error::Error>> {
+    let supplied = RegexValidationConfig {
+        max_nesting: 4,
+        max_unicode_properties: 5,
+        max_branch_reset_branches: 6,
+    };
+    let v = RegexValidator::with_config(supplied.clone());
+    assert_eq!(*v.config(), supplied);
+    Ok(())
+}
+
+#[test]
+fn validator_config_returns_borrow_not_owned() -> Result<(), Box<dyn std::error::Error>> {
+    // Compile-time check: config() returns &RegexValidationConfig, so this binds
+    // to a borrow tied to `v`'s lifetime — a behavioural sanity check.
+    let v = RegexValidator::new();
+    let cfg_ref: &RegexValidationConfig = v.config();
+    assert_eq!(cfg_ref.max_nesting, 10);
+    Ok(())
+}
+
+// ── hover_text_for_regex: each documented modifier ─────────────────────
+
+#[test]
+fn hover_text_modifier_a_describes_ascii_safe() -> Result<(), Box<dyn std::error::Error>> {
+    let text = RegexAnalyzer::hover_text_for_regex("x", "a");
+    assert!(text.contains("ASCII"));
+    Ok(())
+}
+
+#[test]
+fn hover_text_modifier_d_describes_native_platform() -> Result<(), Box<dyn std::error::Error>> {
+    let text = RegexAnalyzer::hover_text_for_regex("x", "d");
+    assert!(text.contains("native platform"));
+    Ok(())
+}
+
+#[test]
+fn hover_text_modifier_l_describes_locale() -> Result<(), Box<dyn std::error::Error>> {
+    let text = RegexAnalyzer::hover_text_for_regex("x", "l");
+    assert!(text.contains("locale"));
+    Ok(())
+}
+
+#[test]
+fn hover_text_modifier_u_describes_unicode() -> Result<(), Box<dyn std::error::Error>> {
+    let text = RegexAnalyzer::hover_text_for_regex("x", "u");
+    assert!(text.contains("Unicode"));
+    Ok(())
+}
+
+#[test]
+fn hover_text_modifier_n_describes_non_capturing_default() -> Result<(), Box<dyn std::error::Error>>
+{
+    let text = RegexAnalyzer::hover_text_for_regex("x", "n");
+    assert!(text.contains("non-capturing"));
+    Ok(())
+}
+
+#[test]
+fn hover_text_modifier_p_describes_preserve_match() -> Result<(), Box<dyn std::error::Error>> {
+    let text = RegexAnalyzer::hover_text_for_regex("x", "p");
+    assert!(text.contains("preserve"));
+    Ok(())
+}
+
+#[test]
+fn hover_text_modifier_r_describes_non_destructive() -> Result<(), Box<dyn std::error::Error>> {
+    let text = RegexAnalyzer::hover_text_for_regex("x", "r");
+    assert!(text.contains("non-destructive"));
+    Ok(())
+}
+
+#[test]
+fn hover_text_modifier_c_describes_keep_position() -> Result<(), Box<dyn std::error::Error>> {
+    let text = RegexAnalyzer::hover_text_for_regex("x", "c");
+    assert!(text.contains("current match position"));
+    Ok(())
+}
+
+#[test]
+fn hover_text_modifier_o_describes_compile_once() -> Result<(), Box<dyn std::error::Error>> {
+    let text = RegexAnalyzer::hover_text_for_regex("x", "o");
+    assert!(text.contains("compile pattern only once"));
+    Ok(())
+}
+
+#[test]
+fn hover_text_modifier_e_describes_eval_replacement() -> Result<(), Box<dyn std::error::Error>> {
+    let text = RegexAnalyzer::hover_text_for_regex("x", "e");
+    assert!(text.contains("evaluate replacement"));
+    Ok(())
+}
+
+// ── hover_text_for_regex: duplicate / unknown modifier handling ────────
+
+#[test]
+fn hover_text_deduplicates_repeated_modifier_chars() -> Result<(), Box<dyn std::error::Error>> {
+    let text = RegexAnalyzer::hover_text_for_regex("x", "iii");
+    // "case-insensitive" is the description for 'i' — it should appear exactly once.
+    let occurrences = text.matches("case-insensitive").count();
+    assert_eq!(occurrences, 1, "duplicate 'i' modifiers should yield one description line");
+    Ok(())
+}
+
+#[test]
+fn hover_text_unknown_modifier_emits_unknown_line() -> Result<(), Box<dyn std::error::Error>> {
+    let text = RegexAnalyzer::hover_text_for_regex("x", "z");
+    // Existing tests only check the absence of "Modifiers:" header. The "Unknown
+    // modifiers:" suffix line itself was never asserted — pin it here.
+    assert!(text.contains("Unknown modifiers: `z`"), "got: {text}");
+    Ok(())
+}
+
+#[test]
+fn hover_text_unknown_modifier_deduplicates_unknown_chars() -> Result<(), Box<dyn std::error::Error>>
+{
+    let text = RegexAnalyzer::hover_text_for_regex("x", "zzz");
+    // The dedup loop runs before classifying as unknown, so repeated unknowns
+    // collapse to a single 'z'.
+    assert!(text.contains("Unknown modifiers: `z`"), "got: {text}");
+    assert!(!text.contains("Unknown modifiers: `zzz`"), "should not list 'zzz': {text}");
+    Ok(())
+}
+
+#[test]
+fn hover_text_mixed_known_and_unknown_modifiers() -> Result<(), Box<dyn std::error::Error>> {
+    let text = RegexAnalyzer::hover_text_for_regex("x", "iz");
+    // Known modifier description present
+    assert!(text.contains("case-insensitive"));
+    // Header line for known modifier section
+    assert!(text.contains("Modifiers:"));
+    // Unknown line present for the 'z'
+    assert!(text.contains("Unknown modifiers: `z`"));
     Ok(())
 }
