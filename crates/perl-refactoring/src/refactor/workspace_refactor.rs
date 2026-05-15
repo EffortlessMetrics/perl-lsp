@@ -50,6 +50,8 @@
 //! let optimized = refactor.optimize_imports()?;
 //! ```
 
+mod rename;
+
 use crate::import_optimizer::ImportOptimizer;
 use crate::refactor::refactor_plan::{
     RefactorConfidence, RefactorOperationKind, RefactorPlan, RefactorSafety, RefactorStats,
@@ -243,134 +245,23 @@ impl WorkspaceRefactor {
         _file_path: &Path,
         _position: (usize, usize),
     ) -> Result<RefactorResult, RefactorError> {
-        // Validate input parameters
-        if old_name.is_empty() {
-            return Err(RefactorError::InvalidInput("Symbol name cannot be empty".to_string()));
-        }
-        if new_name.is_empty() {
-            return Err(RefactorError::InvalidInput("New name cannot be empty".to_string()));
-        }
-        if old_name == new_name {
-            return Err(RefactorError::InvalidInput("Old and new names are identical".to_string()));
-        }
+        rename::validate_inputs(old_name, new_name)?;
 
-        // Infer symbol kind and bare name
-        let (sigil, bare) = normalize_var(old_name);
-        let kind = if sigil.is_some() { SymKind::Var } else { SymKind::Sub };
-
-        // For now assume package 'main'
-        let key = SymbolKey {
-            pkg: Arc::from("main".to_string()),
-            name: Arc::from(bare.to_string()),
-            sigil,
-            kind,
-        };
-
-        let mut edits: BTreeMap<PathBuf, Vec<TextEdit>> = BTreeMap::new();
-
-        // Find all references
-        let mut locations = self._index.find_refs(&key);
-
-        // Always try to include the definition explicitly
-        let def_loc = self._index.find_def(&key);
-        if let Some(def) = def_loc {
-            if !locations.iter().any(|loc| loc.uri == def.uri && loc.range == def.range) {
-                locations.push(def);
-            }
-        }
-
+        let target = rename::build_target(old_name);
         let store = self._index.document_store();
 
+        let mut locations = rename::collect_indexed_locations(&self._index, &target);
         if locations.is_empty() {
-            // Fallback naive search with performance optimizations
-            let _old_name_bytes = old_name.as_bytes();
-
-            for doc in store.all_documents() {
-                // Pre-check if the document even contains the target string to avoid unnecessary work
-                if !doc.text.contains(old_name) {
-                    continue;
-                }
-
-                let idx = doc.line_index.clone();
-                let mut pos = 0;
-                let _text_bytes = doc.text.as_bytes();
-
-                // Use faster byte-based searching with matches iterator
-                while let Some(found) = doc.text[pos..].find(old_name) {
-                    let start = pos + found;
-                    let end = start + old_name.len();
-
-                    // Early bounds checking to avoid invalid positions
-                    if start >= doc.text.len() || end > doc.text.len() {
-                        break;
-                    }
-
-                    let (start_line, start_col) = idx.offset_to_position(start);
-                    let (end_line, end_col) = idx.offset_to_position(end);
-                    let start_byte = idx.position_to_offset(start_line, start_col).unwrap_or(0);
-                    let end_byte = idx.position_to_offset(end_line, end_col).unwrap_or(0);
-                    locations.push(crate::workspace_index::Location {
-                        uri: doc.uri.clone(),
-                        range: crate::position::Range {
-                            start: crate::position::Position {
-                                byte: start_byte,
-                                line: start_line,
-                                column: start_col,
-                            },
-                            end: crate::position::Position {
-                                byte: end_byte,
-                                line: end_line,
-                                column: end_col,
-                            },
-                        },
-                    });
-                    pos = end;
-
-                    // Limit the number of matches to prevent runaway performance issues
-                    if locations.len() >= 1000 {
-                        break;
-                    }
-                }
-
-                // If we've found matches in this document and it's getting large, we can break early
-                // This is a heuristic to balance completeness with performance
-                if locations.len() >= 500 {
-                    break;
-                }
-            }
+            locations = rename::fallback_text_search(store, old_name);
         }
 
-        for loc in locations {
-            let path = uri_to_fs_path(&loc.uri).ok_or_else(|| {
-                RefactorError::UriConversion(format!("Failed to convert URI to path: {}", loc.uri))
-            })?;
-            if let Some(doc) = store.get(&loc.uri) {
-                let start_off =
-                    doc.line_index.position_to_offset(loc.range.start.line, loc.range.start.column);
-                let end_off =
-                    doc.line_index.position_to_offset(loc.range.end.line, loc.range.end.column);
-                if let (Some(start_off), Some(end_off)) = (start_off, end_off) {
-                    let replacement = match kind {
-                        SymKind::Var => {
-                            let sig = sigil.unwrap_or('$');
-                            format!("{}{}", sig, new_name.trim_start_matches(['$', '@', '%']))
-                        }
-                        _ => new_name.to_string(),
-                    };
-                    edits.entry(path).or_default().push(TextEdit {
-                        start: start_off,
-                        end: end_off,
-                        new_text: replacement,
-                    });
-                }
-            }
-        }
+        let file_edits = rename::build_file_edits(store, locations, &target, new_name)?;
 
-        let file_edits: Vec<FileEdit> =
-            edits.into_iter().map(|(file_path, edits)| FileEdit { file_path, edits }).collect();
-
-        let description = format!("Rename '{}' to '{}'", old_name, new_name);
-        Ok(RefactorResult { file_edits, description, warnings: vec![] })
+        Ok(RefactorResult {
+            file_edits,
+            description: format!("Rename '{}' to '{}'", old_name, new_name),
+            warnings: vec![],
+        })
     }
 
     /// Extract selected code into a new module
