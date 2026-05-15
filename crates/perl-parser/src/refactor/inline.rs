@@ -161,8 +161,8 @@ pub fn analyze_sub_for_inlining(
 
 /// Text-based Perl subroutine inliner.
 ///
-/// Create one instance per source file and call [`inline_call`] (or its
-/// variants) to produce the inlined expression text.
+/// Create one instance per source file and call [`SubInliner::inline_call`]
+/// (or its variants) to produce the inlined expression text.
 pub struct SubInliner {
     source: String,
 }
@@ -184,7 +184,7 @@ impl SubInliner {
         Ok(inlined)
     }
 
-    /// Like [`inline_call`] but also returns any warnings (e.g. side effects).
+    /// Like [`Self::inline_call`] but also returns any warnings (e.g. side effects).
     pub fn inline_call_with_warnings(
         &self,
         sub_name: &str,
@@ -193,7 +193,7 @@ impl SubInliner {
         self.inline_call_inner(sub_name, call_expr, &[])
     }
 
-    /// Like [`inline_call`] but accepts a list of variable names that already
+    /// Like [`Self::inline_call`] but accepts a list of variable names that already
     /// exist in the outer scope, so collisions can be detected and renamed.
     pub fn inline_call_with_outer_vars(
         &self,
