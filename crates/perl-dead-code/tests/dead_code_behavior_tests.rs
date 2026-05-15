@@ -27,6 +27,32 @@ fn detect_for_path(
     detector.analyze_file(Path::new(path))
 }
 
+fn assert_no_dead_branch(source_name: &str, source: &str) -> Result<(), String> {
+    let uri = format!("file:///{source_name}");
+    let path = format!("/{source_name}");
+    let detector = detector_with_single_file(&uri, source)?;
+    let dead_code = detect_for_path(&detector, &path)?;
+
+    assert!(
+        dead_code.iter().all(|item| item.code_type != DeadCodeType::DeadBranch),
+        "{source_name} must not produce a dead branch; got {dead_code:?}"
+    );
+    Ok(())
+}
+
+fn assert_has_dead_branch(source_name: &str, source: &str) -> Result<(), String> {
+    let uri = format!("file:///{source_name}");
+    let path = format!("/{source_name}");
+    let detector = detector_with_single_file(&uri, source)?;
+    let dead_code = detect_for_path(&detector, &path)?;
+
+    assert!(
+        dead_code.iter().any(|item| item.code_type == DeadCodeType::DeadBranch),
+        "{source_name} must produce a dead branch; got {dead_code:?}"
+    );
+    Ok(())
+}
+
 #[test]
 fn scenario_unreachable_statement_after_return_is_reported() -> Result<(), String> {
     // Given a subroutine with a statement after an unconditional return
@@ -105,6 +131,59 @@ fn scenario_nested_parenthesized_false_condition_is_detected() -> Result<(), Str
             && item.reason.contains("always false")
             && item.start_line == 1
     }));
+    Ok(())
+}
+
+#[test]
+fn scenario_for_falsey_list_elements_are_not_dead_branches() -> Result<(), String> {
+    // Given for/foreach loops over falsey values in list context
+    let cases = [
+        ("scenario_for_zero.pl", "for (0) {\n    print 'runs once';\n}\n"),
+        ("scenario_foreach_zero.pl", "foreach (0) {\n    print 'runs once';\n}\n"),
+        ("scenario_for_empty_double_string.pl", "for (\"\") {\n    print 'runs once';\n}\n"),
+        ("scenario_for_empty_single_string.pl", "for ('') {\n    print 'runs once';\n}\n"),
+        ("scenario_for_undef.pl", "for (undef) {\n    print 'runs once';\n}\n"),
+    ];
+
+    // Then none are reported as dead branches
+    for (source_name, source) in cases {
+        assert_no_dead_branch(source_name, source)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn scenario_mixed_file_for_zero_and_if_zero_only_if_is_dead() -> Result<(), String> {
+    // Given a file with a list iterator and a boolean false branch
+    let detector = detector_with_single_file(
+        "file:///scenario_mixed.pl",
+        "for (0) {\n    print 'runs';\n}\nif (0) {\n    print 'dead';\n}\n",
+    )?;
+
+    // When dead-code analysis runs on that file
+    let dead_code = detect_for_path(&detector, "/scenario_mixed.pl")?;
+
+    // Then only the if(0) block is reported as dead
+    let dead_branches: Vec<_> =
+        dead_code.iter().filter(|item| item.code_type == DeadCodeType::DeadBranch).collect();
+    assert_eq!(dead_branches.len(), 1, "exactly one dead branch expected; got {dead_branches:?}");
+    assert_eq!(dead_branches[0].start_line, 4);
+    Ok(())
+}
+
+#[test]
+fn scenario_boolean_context_branches_remain_dead_after_for_fix() -> Result<(), String> {
+    // Given boolean-context branches that should still be classified as dead
+    let cases = [
+        ("scenario_while_zero.pl", "while (0) {\n    print 'dead';\n}\n"),
+        ("scenario_if_zero.pl", "if (0) {\n    print 'dead';\n}\n"),
+        ("scenario_unless_one.pl", "unless (1) {\n    print 'dead';\n}\n"),
+    ];
+
+    // Then the existing boolean dead-branch detection still fires
+    for (source_name, source) in cases {
+        assert_has_dead_branch(source_name, source)?;
+    }
     Ok(())
 }
 

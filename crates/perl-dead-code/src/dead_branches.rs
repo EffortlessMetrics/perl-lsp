@@ -10,7 +10,9 @@ pub(crate) fn detect_dead_branches(file_path: &Path, text: &str, out: &mut Vec<D
         let trimmed = lines[i].trim();
 
         let dead_reason_and_keyword: Option<(String, &str)> = 'detect: {
-            for kw in &["if", "while", "elsif", "unless", "until", "for", "foreach"] {
+            // `for` and `foreach` are list iterators. Falsy list elements such as
+            // `0`, `""`, `''`, and `undef` still execute the loop body once.
+            for kw in &["if", "while", "elsif", "unless", "until"] {
                 let rest = match trimmed.strip_prefix(kw) {
                     Some(r)
                         if r.is_empty()
