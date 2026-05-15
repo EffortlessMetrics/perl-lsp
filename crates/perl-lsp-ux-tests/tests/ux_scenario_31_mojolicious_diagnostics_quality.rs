@@ -9,6 +9,8 @@
 //! - no false PL701 for Mojolicious modules present in the fixture workspace
 //! - conservative handling for a dynamic typeglob route-method registration
 //! - true-missing-module PL701 behavior from an injected probe file
+//! - mixed project-shaped files keep present modules clean while reporting a
+//!   genuinely missing module
 
 use anyhow::{Context, Result};
 use perl_lsp_ux_tests::{
@@ -23,11 +25,24 @@ use std::time::Duration;
 
 const SCENARIO_FILE: &str = "ux_scenario_31_mojolicious_diagnostics_quality.rs";
 const MISSING_MODULE_PROBE_PATH: &str = "lib/Mojolicious/DiagnosticsProbe.pm";
+const MIXED_MODULE_PROBE_PATH: &str = "lib/Mojolicious/DiagnosticsMixedProbe.pm";
 const MISSING_MODULE_PROBE_SOURCE: &str = r#"package Mojolicious::DiagnosticsProbe;
 use Mojo::Base -base, -signatures;
 use Definitely::Missing::ForMojoliciousReceipt;
 
 sub diagnostic_probe { return 1 }
+
+1;
+"#;
+const MIXED_MODULE_PROBE_SOURCE: &str = r#"package Mojolicious::DiagnosticsMixedProbe;
+use Mojo::Base -base, -signatures;
+use Mojolicious::Routes;
+use Mojolicious::Types;
+use Definitely::Missing::MixedMojoliciousReceipt;
+
+sub mixed_diagnostic_probe {
+  return (Mojolicious::Routes->new, Mojolicious::Types->new);
+}
 
 1;
 "#;
@@ -45,6 +60,7 @@ struct DiagnosticProbe {
     file: &'static str,
     absent_pl701_modules: &'static [&'static str],
     required_codes: &'static [&'static str],
+    required_message_substrings: &'static [&'static str],
     forbidden_message_substrings: &'static [&'static str],
 }
 
@@ -60,6 +76,8 @@ struct DiagnosticProbeReport {
     false_positive_pl701_modules: Vec<String>,
     required_code_hits: Vec<String>,
     missing_required_codes: Vec<String>,
+    required_message_hits: Vec<String>,
+    missing_required_message_substrings: Vec<String>,
     forbidden_message_hits: Vec<String>,
     dynamic_boundary_label_hits: Vec<String>,
     message_excerpts: Vec<String>,
@@ -123,7 +141,8 @@ fn load_mojolicious_fixture_files() -> Result<Vec<FixtureFile>> {
 fn create_mojolicious_harness(files: &[FixtureFile]) -> Result<UxHarness> {
     let mut config = ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
         .env("PERL_LSP_WORKSPACE", "1")
-        .with_file(MISSING_MODULE_PROBE_PATH, MISSING_MODULE_PROBE_SOURCE);
+        .with_file(MISSING_MODULE_PROBE_PATH, MISSING_MODULE_PROBE_SOURCE)
+        .with_file(MIXED_MODULE_PROBE_PATH, MIXED_MODULE_PROBE_SOURCE);
 
     for file in files {
         config = config.with_file(&file.relative_path, &file.content);
@@ -137,6 +156,7 @@ fn open_all_fixture_files(harness: &UxHarness, files: &[FixtureFile]) -> Result<
         harness.open_file(&file.relative_path, &file.content)?;
     }
     harness.open_file(MISSING_MODULE_PROBE_PATH, MISSING_MODULE_PROBE_SOURCE)?;
+    harness.open_file(MIXED_MODULE_PROBE_PATH, MIXED_MODULE_PROBE_SOURCE)?;
     Ok(())
 }
 
@@ -159,6 +179,7 @@ fn diagnostic_probes() -> Vec<DiagnosticProbe> {
                 "Mojolicious::Types",
             ],
             required_codes: &[],
+            required_message_substrings: &[],
             forbidden_message_substrings: &[],
         },
         DiagnosticProbe {
@@ -167,6 +188,7 @@ fn diagnostic_probes() -> Vec<DiagnosticProbe> {
             file: "lib/Mojolicious/Routes.pm",
             absent_pl701_modules: &[],
             required_codes: &[],
+            required_message_substrings: &[],
             forbidden_message_substrings: &["Mojolicious::Routes::Route::$name"],
         },
         DiagnosticProbe {
@@ -175,6 +197,16 @@ fn diagnostic_probes() -> Vec<DiagnosticProbe> {
             file: MISSING_MODULE_PROBE_PATH,
             absent_pl701_modules: &[],
             required_codes: &["PL701"],
+            required_message_substrings: &["Definitely::Missing::ForMojoliciousReceipt"],
+            forbidden_message_substrings: &[],
+        },
+        DiagnosticProbe {
+            name: "mixed_present_and_missing_modules",
+            category: "mixed_false_positive_false_negative_boundary",
+            file: MIXED_MODULE_PROBE_PATH,
+            absent_pl701_modules: &["Mojo::Base", "Mojolicious::Routes", "Mojolicious::Types"],
+            required_codes: &["PL701"],
+            required_message_substrings: &["Definitely::Missing::MixedMojoliciousReceipt"],
             forbidden_message_substrings: &[],
         },
     ]
@@ -272,6 +304,28 @@ fn missing_required_codes(diagnostics: &[Value], codes: &[&str]) -> Vec<String> 
         .collect()
 }
 
+fn required_message_hits(diagnostics: &[Value], substrings: &[&str]) -> Vec<String> {
+    substrings
+        .iter()
+        .copied()
+        .filter(|needle| {
+            diagnostics.iter().any(|diagnostic| diagnostic_message(diagnostic).contains(needle))
+        })
+        .map(str::to_string)
+        .collect()
+}
+
+fn missing_required_message_substrings(diagnostics: &[Value], substrings: &[&str]) -> Vec<String> {
+    substrings
+        .iter()
+        .copied()
+        .filter(|needle| {
+            !diagnostics.iter().any(|diagnostic| diagnostic_message(diagnostic).contains(needle))
+        })
+        .map(str::to_string)
+        .collect()
+}
+
 fn forbidden_message_hits(diagnostics: &[Value], substrings: &[&str]) -> Vec<String> {
     substrings
         .iter()
@@ -307,6 +361,9 @@ fn run_probe(harness: &UxHarness, probe: &DiagnosticProbe) -> DiagnosticProbeRep
         matching_pl701_modules(&diagnostics, probe.absent_pl701_modules);
     let required_hits = required_code_hits(&diagnostics, probe.required_codes);
     let missing_codes = missing_required_codes(&diagnostics, probe.required_codes);
+    let message_hits = required_message_hits(&diagnostics, probe.required_message_substrings);
+    let missing_messages =
+        missing_required_message_substrings(&diagnostics, probe.required_message_substrings);
     let forbidden_hits = forbidden_message_hits(&diagnostics, probe.forbidden_message_substrings);
     let dynamic_hits = dynamic_boundary_label_hits(&diagnostics);
     let message_excerpts = diagnostics
@@ -326,6 +383,8 @@ fn run_probe(harness: &UxHarness, probe: &DiagnosticProbe) -> DiagnosticProbeRep
         false_positive_pl701_modules,
         required_code_hits: required_hits,
         missing_required_codes: missing_codes,
+        required_message_hits: message_hits,
+        missing_required_message_substrings: missing_messages,
         forbidden_message_hits: forbidden_hits,
         dynamic_boundary_label_hits: dynamic_hits,
         message_excerpts,
@@ -384,6 +443,8 @@ fn scenario_31_mojolicious_diagnostics_quality_receipt() {
                 reports.iter().map(|report| report.false_positive_pl701_modules.len()).sum();
             let missing_required_code_total: usize =
                 reports.iter().map(|report| report.missing_required_codes.len()).sum();
+            let missing_required_message_total: usize =
+                reports.iter().map(|report| report.missing_required_message_substrings.len()).sum();
             let forbidden_message_total: usize =
                 reports.iter().map(|report| report.forbidden_message_hits.len()).sum();
             let fallback_or_empty_count =
@@ -393,6 +454,11 @@ fn scenario_31_mojolicious_diagnostics_quality_receipt() {
                 .find(|report| report.name == "missing_module_probe")
                 .map(|report| report.required_code_hits.len())
                 .unwrap_or_default();
+            let mixed_probe_pl701_count = reports
+                .iter()
+                .find(|report| report.name == "mixed_present_and_missing_modules")
+                .map(|report| report.required_code_hits.len())
+                .unwrap_or_default();
 
             let receipt = serde_json::json!({
                 "schema_version": 1,
@@ -400,15 +466,17 @@ fn scenario_31_mojolicious_diagnostics_quality_receipt() {
                 "surface": "diagnostics",
                 "claim_boundary": "real-workspace diagnostics quality receipt only; no provider behavior changed or promoted",
                 "fixture_file_count": fixture_files.len(),
-                "injected_probe_file_count": 1,
+                "injected_probe_file_count": 2,
                 "probe_count": reports.len(),
                 "notification_total": notification_total,
                 "invalid_shape_total": invalid_shape_total,
                 "false_positive_pl701_total": false_positive_pl701_total,
                 "missing_required_code_total": missing_required_code_total,
+                "missing_required_message_total": missing_required_message_total,
                 "forbidden_message_total": forbidden_message_total,
                 "fallback_or_empty_count": fallback_or_empty_count,
                 "missing_module_pl701_count": missing_module_pl701_count,
+                "mixed_probe_pl701_count": mixed_probe_pl701_count,
                 "reports": reports,
             });
             eprintln!(
@@ -424,6 +492,7 @@ fn scenario_31_mojolicious_diagnostics_quality_receipt() {
                     == BTreeSet::from([
                         "dynamic_boundary_conservative",
                         "missing_module_true_unknown",
+                        "mixed_false_positive_false_negative_boundary",
                         "workspace_module_resolution_no_false_pl701",
                     ]),
             )?;
@@ -444,6 +513,14 @@ fn scenario_31_mojolicious_diagnostics_quality_receipt() {
             recorder.check(
                 "missing-module probe emitted PL701",
                 missing_module_pl701_count > 0 && missing_required_code_total == 0,
+            )?;
+            recorder.check(
+                "diagnostic PL701 messages identify the required missing modules",
+                missing_required_message_total == 0,
+            )?;
+            recorder.check(
+                "mixed present/missing module probe emitted only the missing-module PL701 boundary",
+                mixed_probe_pl701_count > 0 && false_positive_pl701_total == 0,
             )?;
 
             harness.assert_no_crash();
