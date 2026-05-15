@@ -65,8 +65,13 @@ blocker when relevant.
 This dashboard keeps the next provider lane separate from parser capability,
 framework facts, PIR, formatter, critic, release, and security work.
 
-1. `docs(status): review refactor support tiers before any symbol-level safe-delete cutover`
-2. `feat(provider): add provider decision explanation model`
+1. `test(safe-delete): add explicit live blocker UX and rollback receipt`
+2. `test(rename): add package/compiler-backed fallback/noise receipt`
+3. `feat(provider): attach request-local provider decision receipts`
+
+Provider decision explanations are already partial-live through
+`perl.explainProviderDecision`; the next explanation step is request-local
+receipt attachment, not re-adding the model.
 
 Parser raw-bucket work, Linux corpus refresh, security alert classification,
 Rust 1.95 rollout, native formatter, native critic, PIR, and determinism remain
