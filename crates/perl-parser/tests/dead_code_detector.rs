@@ -106,3 +106,48 @@ fn unconditional_return_still_flags_following_statement() -> TestResult {
     );
     Ok(())
 }
+
+#[test]
+fn for_loop_with_constant_list_is_not_dead_branch() -> TestResult {
+    let index = WorkspaceIndex::new();
+    index_file_str(&index, "file:///script.pl", "for (0) {\n    say 'runs once';\n}\n")?;
+
+    let detector = DeadCodeDetector::new(index);
+    let dead = detector.analyze_file(&PathBuf::from("/script.pl"))?;
+
+    assert!(
+        !dead.iter().any(|d| d.code_type == DeadCodeType::DeadBranch),
+        "for (0) iterates once with $_ = 0 — it is not dead code"
+    );
+    Ok(())
+}
+
+#[test]
+fn foreach_loop_with_constant_list_is_not_dead_branch() -> TestResult {
+    let index = WorkspaceIndex::new();
+    index_file_str(&index, "file:///script.pl", "foreach (0) {\n    say 'runs once';\n}\n")?;
+
+    let detector = DeadCodeDetector::new(index);
+    let dead = detector.analyze_file(&PathBuf::from("/script.pl"))?;
+
+    assert!(
+        !dead.iter().any(|d| d.code_type == DeadCodeType::DeadBranch),
+        "foreach (0) iterates once with $_ = 0 — it is not dead code"
+    );
+    Ok(())
+}
+
+#[test]
+fn if_zero_condition_still_flagged_as_dead_branch() -> TestResult {
+    let index = WorkspaceIndex::new();
+    index_file_str(&index, "file:///script.pl", "if (0) {\n    say 'never runs';\n}\n")?;
+
+    let detector = DeadCodeDetector::new(index);
+    let dead = detector.analyze_file(&PathBuf::from("/script.pl"))?;
+
+    assert!(
+        dead.iter().any(|d| d.code_type == DeadCodeType::DeadBranch),
+        "if (0) body is never executed — should be flagged as a dead branch"
+    );
+    Ok(())
+}
