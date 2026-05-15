@@ -354,6 +354,43 @@ describe('perl-lsp.createDebugConfig command', () => {
 });
 
 // ---------------------------------------------------------------------------
+// trust explanation commands
+// ---------------------------------------------------------------------------
+describe('perl-lsp trust explanation commands', () => {
+  let pkg: any;
+  let commandIds: string[];
+  let paletteEntries: any[];
+
+  beforeAll(() => {
+    pkg = readPackageJson();
+    commandIds = pkg.contributes.commands.map((c: any) => c.command);
+    paletteEntries = pkg.contributes.menus.commandPalette;
+  });
+
+  test.each([
+    ['perl-lsp.explainProviderDecision', 'Explain Provider Decision'],
+    ['perl-lsp.previewSafeDelete', 'Preview Safe Delete'],
+    ['perl-lsp.copyProviderDecisionReceipt', 'Copy Provider Decision Receipt'],
+  ])('%s is declared as a Perl LSP command', (id, title) => {
+    const cmd = pkg.contributes.commands.find((c: any) => c.command === id);
+    expect(commandIds).toContain(id);
+    expect(cmd).toBeDefined();
+    expect(cmd.title).toBe(title);
+    expect(cmd.category).toBe('Perl LSP');
+  });
+
+  test.each([
+    'perl-lsp.explainProviderDecision',
+    'perl-lsp.previewSafeDelete',
+    'perl-lsp.copyProviderDecisionReceipt',
+  ])('%s is available from the Perl command palette', (id) => {
+    const entry = paletteEntries.find((e: any) => e.command === id);
+    expect(entry).toBeDefined();
+    expect(entry.when).toContain('editorLangId == perl');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // No duplicate activation events
 // ---------------------------------------------------------------------------
 describe('package.json activationEvents', () => {
