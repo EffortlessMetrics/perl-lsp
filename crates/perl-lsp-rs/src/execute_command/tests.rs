@@ -212,6 +212,75 @@ fn test_explain_provider_decision_attaches_provider_receipt()
 }
 
 #[test]
+fn test_explain_provider_decision_attaches_request_local_receipt()
+-> Result<(), Box<dyn std::error::Error>> {
+    let provider = ExecuteCommandProvider::new();
+    let result = provider.execute_command(
+        "perl.explainProviderDecision",
+        vec![json!({
+            "provider": "rename",
+            "receipt_id": "runtime-request",
+            "scenario": "realbaseline-rename-fallback-noise",
+            "request_receipt": {
+                "provider": "rename",
+                "decision": "fallback",
+                "reason": "ambiguous_symbol_identity",
+                "fallback_state": "compiler_empty"
+            }
+        })],
+    )?;
+
+    let request_receipt = result
+        .get("request_receipt")
+        .and_then(Value::as_object)
+        .ok_or("missing request_receipt object")?;
+
+    assert_eq!(result.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(result.get("decision").and_then(Value::as_str), Some("fallback"));
+    assert_eq!(result.get("receipt_id").and_then(Value::as_str), Some("runtime-request"));
+    assert_eq!(
+        result.get("scenario").and_then(Value::as_str),
+        Some("realbaseline-rename-fallback-noise")
+    );
+    assert_eq!(
+        request_receipt.get("reason").and_then(Value::as_str),
+        Some("ambiguous_symbol_identity")
+    );
+    assert_eq!(
+        request_receipt.get("fallback_state").and_then(Value::as_str),
+        Some("compiler_empty")
+    );
+    Ok(())
+}
+
+#[test]
+fn test_explain_provider_decision_rejects_non_object_request_receipt()
+-> Result<(), Box<dyn std::error::Error>> {
+    let provider = ExecuteCommandProvider::new();
+    let result = provider.execute_command(
+        "perl.explainProviderDecision",
+        vec![json!({
+            "provider": "rename",
+            "request_receipt": "runtime-request"
+        })],
+    );
+
+    let error = match result {
+        Ok(value) => {
+            return Err(
+                format!("non-object request_receipt should reject the request: {value}").into()
+            );
+        }
+        Err(error) => error,
+    };
+    assert!(
+        error.contains("request_receipt must be an object"),
+        "error should identify invalid request_receipt payload, got: {error}"
+    );
+    Ok(())
+}
+
+#[test]
 fn test_explain_provider_decision_defaults_to_live_provider_receipt()
 -> Result<(), Box<dyn std::error::Error>> {
     let provider = ExecuteCommandProvider::new();

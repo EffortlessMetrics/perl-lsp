@@ -74,13 +74,14 @@ rename or live symbol-level safe-delete cutover.
 This dashboard keeps the next provider lane separate from parser capability,
 framework facts, PIR, formatter, critic, release, and security work.
 
-1. `feat(provider): attach request-local provider decision receipts`
-2. `test(rename): add additional request-local package/compiler-backed fallback/noise receipts`
-3. `test(safe-delete): add scoped allowed-symbol cutover proof`
+1. `test(rename): add additional request-local package/compiler-backed fallback/noise receipts`
+2. `test(safe-delete): add scoped allowed-symbol cutover proof`
+3. `feat(provider): persist provider-local decision traces`
 
 Provider decision explanations are already partial-live through
-`perl.explainProviderDecision`; the next explanation step is request-local
-receipt attachment, not re-adding the model.
+`perl.explainProviderDecision`; callers can now attach a request-local
+`request_receipt` object for bug reports. The next explanation step is
+provider-owned persistence of the last specific editor-action receipt.
 
 Parser raw-bucket work, Linux corpus refresh, security alert classification,
 Rust 1.95 rollout, native formatter, native critic, PIR, and determinism remain
