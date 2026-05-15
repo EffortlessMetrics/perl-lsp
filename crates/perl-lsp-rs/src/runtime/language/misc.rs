@@ -13,6 +13,7 @@
 use super::super::*;
 use crate::protocol::{invalid_params, req_position, req_uri};
 use crate::state::{code_lens_cap, code_lens_resolve_deadline, inlay_hints_cap};
+use perl_lsp_rs_core::providers::normalize_provider_decision_receipt;
 use perl_parser_core::source_file::is_perl_source_uri;
 use std::sync::OnceLock;
 use std::time::Instant;
@@ -136,7 +137,9 @@ fn get_inline_value_regex() -> Option<&'static regex::Regex> {
 impl LspServer {
     pub(crate) fn record_provider_decision_trace(&self, provider: &str, receipt: &Value) {
         if receipt.is_object() {
-            self.provider_decision_traces.lock().insert(provider.to_string(), receipt.clone());
+            self.provider_decision_traces
+                .lock()
+                .insert(provider.to_string(), normalize_provider_decision_receipt(receipt.clone()));
         }
     }
 
