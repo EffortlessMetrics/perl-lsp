@@ -10,7 +10,7 @@
 //!   - Token count in the receipt matches the actual live provider count.
 //!   - `no_live_behavior_change` is always `true`.
 //!   - `shadow_state` is "shadowed".
-//!   - `compiler_receipt` is `null` (no compiler-fact cutover yet).
+//!   - `compiler_receipt` records source-backed compiler token classes as shadow-only proof.
 //!   - `notes` carry a human-readable proof trail.
 
 use crate::runtime::LspServer;
@@ -139,7 +139,7 @@ fn semantic_tokens_runtime_quality_receipt_shadow_state_is_shadowed() {
 }
 
 #[test]
-fn semantic_tokens_runtime_quality_receipt_compiler_receipt_is_null() {
+fn semantic_tokens_runtime_quality_receipt_records_compiler_backed_token_class() {
     let server = create_server();
     open_document(&server, DOC_URI, PERL_MODULE);
 
@@ -148,9 +148,63 @@ fn semantic_tokens_runtime_quality_receipt_compiler_receipt_is_null() {
             "textDocument": {"uri": DOC_URI}
         })))));
 
+    let compiler_receipt = must_some(receipt.get("compiler_receipt").and_then(Value::as_object));
+
+    assert_eq!(
+        compiler_receipt.get("token_class").and_then(Value::as_str),
+        Some("subroutine_declaration"),
+        "compiler receipt must identify the narrow token class under proof"
+    );
+    assert_eq!(
+        compiler_receipt.get("source").and_then(Value::as_str),
+        Some("CompilerFact"),
+        "compiler receipt must record the source as CompilerFact"
+    );
+    assert_eq!(
+        compiler_receipt.get("provenance").and_then(Value::as_str),
+        Some("SemanticAnalyzer"),
+        "compiler receipt must record semantic-analyzer provenance"
+    );
+    assert_eq!(
+        compiler_receipt.get("fallback_state").and_then(Value::as_str),
+        Some("Shadow"),
+        "compiler-backed token classes must remain shadow-only"
+    );
+    assert_eq!(
+        compiler_receipt.get("source_backed_span_count").and_then(Value::as_u64),
+        Some(1),
+        "compiler receipt must prove one source-backed LSP token span"
+    );
+    assert_eq!(
+        compiler_receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(true),
+        "compiler receipt must not broaden live semantic-token behavior"
+    );
+
+    let shadow_receipt =
+        must_some(compiler_receipt.get("shadow_receipt").and_then(Value::as_object));
+    assert_eq!(
+        shadow_receipt.get("query").and_then(Value::as_str),
+        Some("semantic_tokens"),
+        "compiler receipt must embed the semantic-token shadow receipt"
+    );
+    assert_eq!(
+        shadow_receipt.get("verdict").and_then(Value::as_str),
+        Some("improved"),
+        "compiler-backed token-class proof should improve the shadow-only candidate set"
+    );
+
+    let traces = must_some(shadow_receipt.get("fact_source_traces").and_then(Value::as_array));
+    let trace = must_some(traces.first());
+    assert_eq!(trace.get("source").and_then(Value::as_str), Some("CompilerFact"));
+    assert_eq!(trace.get("freshness").and_then(Value::as_str), Some("Fresh"));
+    assert_eq!(trace.get("confidence").and_then(Value::as_str), Some("Medium"));
+    assert_eq!(trace.get("fallback_state").and_then(Value::as_str), Some("Shadow"));
+
+    let claim_boundary = must_some(compiler_receipt.get("claim_boundary").and_then(Value::as_str));
     assert!(
-        receipt.get("compiler_receipt").map(Value::is_null).unwrap_or(false),
-        "compiler_receipt must be null — compiler-fact candidates are not yet wired"
+        claim_boundary.contains("parser/HIR semantic tokens remain live"),
+        "compiler receipt must preserve the live-provider claim boundary; got: {claim_boundary}"
     );
 }
 
@@ -222,6 +276,10 @@ fn semantic_tokens_runtime_quality_receipt_notes_record_quality_proof() {
         "notes must confirm no live behavior change; got: {notes}"
     );
     assert!(notes.contains("token_count="), "notes must include token_count metric; got: {notes}");
+    assert!(
+        notes.contains("compiler_backed_token_classes=1"),
+        "notes must record the compiler-backed token class count; got: {notes}"
+    );
 }
 
 // ---------------------------------------------------------------------------
