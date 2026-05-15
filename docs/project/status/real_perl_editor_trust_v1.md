@@ -53,7 +53,7 @@ blocker when relevant.
 | Hover | `partial live / provenance-backed` | Mojolicious scenario 29 records exact, imported, generated/framework, dynamic-shaped, module-resolution, and fallback/missing-fact hover surfaces | Legacy fallback; imported, generated, dynamic-boundary, and fallback paths are labeled in receipts | Additional project-shape hover quality receipts before broader generated/dynamic expansion |
 | Goto definition | `partial live exact/imported` | Mojolicious scenario 30 records module-resolution, exact-local, imported-symbol, and dynamic-boundary-shaped definition probes | Legacy fallback for generated/no-source, dynamic, stale, low-confidence, and ambiguous candidates; ordinary goto-definition requests persist provider-local decision traces for explain-provider-decision | Additional generated/dynamic project-shape receipts with no false-exact source-location claims |
 | References | `partial live exact/imported` | Mojolicious scenario 30 records exact-local, imported-symbol, and declaration-including boundary reference probes | Legacy fallback for generated/no-source, declaration-including, coderef, typeglob, dynamic, stale, low-confidence, and ambiguous cases; ordinary references requests persist provider-local decision traces for explain-provider-decision | Precision/recall receipts for generated, coderef, typeglob, dynamic, and broader declaration-including cases |
-| Diagnostics | `partial live` | Mojolicious baseline explicitly defers broad diagnostic correctness; scenario 31 covers workspace-present imports, a mixed present/missing import boundary, dynamic route-method conservatism, and true missing-module PL701; Dancer2 scenario 40 adds second-project workspace-present import, mixed present/missing import, typeglob-boundary, and true missing-module PL701 proof while scope diagnostics label low-confidence, ambiguous, and dynamic-boundary-shaped visible-symbol evidence when conservative PL109 diagnostics remain | Conservative diagnostics remain when semantic evidence is absent, ambiguous, stale, or dynamic; weak evidence is labeled instead of silently suppressing true unknowns | Generated/dynamic diagnostic-label receipts plus broader project-shape false-positive/false-negative proof before wider diagnostic correctness claims |
+| Diagnostics | `partial live` | Mojolicious baseline explicitly defers broad diagnostic correctness; scenario 31 covers workspace-present imports, a mixed present/missing import boundary, dynamic route-method conservatism, and true missing-module PL701; Dancer2 scenario 40 adds second-project workspace-present import, mixed present/missing import, typeglob-boundary, and true missing-module PL701 proof while scope diagnostics label low-confidence, ambiguous, and dynamic-boundary-shaped visible-symbol evidence when conservative PL109 diagnostics remain | Conservative diagnostics remain when semantic evidence is absent, ambiguous, stale, or dynamic; weak evidence is labeled instead of silently suppressing true unknowns; ordinary pull diagnostic requests persist provider-local decision traces for explain-provider-decision | Generated/dynamic diagnostic-label receipts plus broader project-shape false-positive/false-negative proof before wider diagnostic correctness claims |
 | Document symbols | `partial live source-backed` | Runtime quality receipts record source-backed parser-syntax symbol counts and fact traces; Mojolicious scenario 32 records source-backed explicit symbols, generated `has` candidate counts, dynamic-boundary-shaped names, and edit freshness | Astless, stale, dynamic, virtual generated/no-source, low-confidence, and ambiguous candidates keep fallback/gated behavior | Generated-label proof and additional project-shape document-symbol receipts before generated, dynamic, or broader symbol cutover |
 | Workspace symbols | `shadowed` | Shadow compare records quality candidates; Mojolicious scenario 33 records live-provider query latency, useful/noisy hits, generated candidate gating, dynamic-boundary-shaped names, and edit freshness; Dancer2 scenario 39 adds second-project workspace-symbol noise, generated/dynamic candidate boundary, and edit-freshness proof | Existing workspace index remains live; stale/dynamic/generated compiler candidates stay gated | Live high-confidence compiler-symbol cutover proof after explicit rank/cutover receipts |
 | Semantic tokens | `shadowed` | Mojolicious scenario 34 records live token counts, LSP 5-tuple/span validity, source-backed token hits, dynamic-boundary string non-promotion, and edit freshness; Dancer2 scenario 38 adds second-project package, DSL, app, typeglob-boundary, and edit-freshness token proof | Existing parser/token provider remains live; stale/dynamic compiler classifications stay shadowed | Narrow compiler-backed token classes before live cutover |
@@ -74,21 +74,20 @@ rename or live symbol-level safe-delete cutover.
 This dashboard keeps the next provider lane separate from parser capability,
 framework facts, PIR, formatter, critic, release, and security work.
 
-1. `feat(diagnostics): persist diagnostic trust decisions`
-2. `feat(safe-delete): persist blocker decision traces`
-3. `test(rename): add real-workspace package/compiler-backed pilot receipt`
-4. `feat(safe-delete): prove scoped live symbol-delete UX`
+1. `feat(safe-delete): persist blocker decision traces`
+2. `test(rename): add real-workspace package/compiler-backed pilot receipt`
+3. `feat(safe-delete): prove scoped live symbol-delete UX`
 
 Provider decision explanations are already partial-live through
 `perl.explainProviderDecision`; callers can attach a request-local
 `request_receipt` object for bug reports, existing live rename paths now record
 provider-local traces, and covered refactor runtime receipt surfaces persist
 provider-local traces that the command can replay when the caller does not
-provide a receipt. Ordinary live completion, goto-definition, and references
-requests now persist the same trace model; navigation request traces are
-trace-only, low-confidence receipts and do not broaden compiler-fact cutover
-claims. The next explanation step is wiring provider-local traces into ordinary
-diagnostic and safe-delete requests.
+provide a receipt. Ordinary live completion, goto-definition, references, and
+pull diagnostic requests now persist the same trace model; navigation and
+diagnostic request traces are trace-only receipts and do not broaden
+compiler-fact cutover claims. The next explanation step is wiring
+provider-local traces into ordinary safe-delete requests.
 
 Safe-delete support tiers have been reviewed after the allowed-symbol proof:
 the row remains `shadowed`, and the next proof is scoped live symbol-delete UX

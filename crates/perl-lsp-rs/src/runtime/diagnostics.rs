@@ -392,6 +392,74 @@ impl Default for PullDiagnosticsOrchestrator {
 }
 
 impl LspServer {
+    fn record_diagnostics_provider_decision_trace(
+        &self,
+        provider_action: &'static str,
+        uri: &str,
+        version: Option<i32>,
+        report: &Value,
+    ) {
+        let kind = report.get("kind").and_then(Value::as_str).unwrap_or("unknown");
+        let empty_items = Vec::new();
+        let items = report.get("items").and_then(Value::as_array).unwrap_or(&empty_items);
+        let item_count = items.len();
+        let diagnostic_codes: Vec<String> = items
+            .iter()
+            .filter_map(|item| {
+                let code = item.get("code")?;
+                if let Some(code) = code.as_str() {
+                    Some(code.to_string())
+                } else {
+                    code.as_i64().map(|code| code.to_string())
+                }
+            })
+            .take(8)
+            .collect();
+        let has_dynamic_boundary = items
+            .iter()
+            .filter_map(|item| item.get("message").and_then(Value::as_str))
+            .any(|message| {
+                let message = message.to_ascii_lowercase();
+                message.contains("dynamic boundary")
+                    || message.contains("low-confidence")
+                    || message.contains("low confidence")
+                    || message.contains("stale fact")
+            });
+        let reason = if kind == "unchanged" {
+            "freshness_unchanged"
+        } else if has_dynamic_boundary {
+            "dynamic_boundary"
+        } else if item_count == 0 {
+            "no_diagnostics"
+        } else {
+            "diagnostics_emitted"
+        };
+        let freshness = if kind == "unchanged" { "unchanged" } else { "fresh" };
+        let confidence = if has_dynamic_boundary { "medium" } else { "high" };
+
+        self.record_provider_decision_trace(
+            "diagnostics",
+            &json!({
+                "provider": "diagnostics",
+                "provider_action": provider_action,
+                "decision": "acted",
+                "reason": reason,
+                "uri": uri,
+                "version": version,
+                "report_kind": kind,
+                "item_count": item_count,
+                "diagnostic_codes": diagnostic_codes,
+                "fact_source": "diagnostics_provider",
+                "confidence": confidence,
+                "freshness": freshness,
+                "fallback_state": "none",
+                "dynamic_boundary": has_dynamic_boundary,
+                "trace_only_no_live_behavior_change": true,
+                "claim_boundary": "records existing diagnostic response only; no diagnostic behavior or suppression changes"
+            }),
+        );
+    }
+
     /// Convert internal diagnostic tags to LSP tag values
     ///
     /// Maps internal `DiagnosticTag` variants to their LSP numeric equivalents:
@@ -820,10 +888,17 @@ impl LspServer {
             let uri: Uri = match uri_str.parse() {
                 Ok(u) => u,
                 Err(_) => {
-                    return Ok(Some(json!({
+                    let report = json!({
                         "kind": "full",
                         "items": []
-                    })));
+                    });
+                    self.record_diagnostics_provider_decision_trace(
+                        "textDocument/diagnostic",
+                        uri_str,
+                        None,
+                        &report,
+                    );
+                    return Ok(Some(report));
                 }
             };
 
@@ -857,13 +932,28 @@ impl LspServer {
                 );
 
                 // Convert report to JSON
-                return Ok(Some(self.document_report_to_json(
-                    &report,
-                    &doc,
+                let json_report =
+                    self.document_report_to_json(&report, &doc, uri_str, &perlcritic_diags);
+                self.record_diagnostics_provider_decision_trace(
+                    "textDocument/diagnostic",
                     uri_str,
-                    &perlcritic_diags,
-                )));
+                    Some(doc.version),
+                    &json_report,
+                );
+                return Ok(Some(json_report));
             }
+
+            let report = json!({
+                "kind": "full",
+                "items": []
+            });
+            self.record_diagnostics_provider_decision_trace(
+                "textDocument/diagnostic",
+                uri_str,
+                None,
+                &report,
+            );
+            return Ok(Some(report));
         }
 
         // Return empty diagnostics if document not found
@@ -1810,6 +1900,87 @@ mod tests {
         let server =
             LspServer::with_io(Box::new(std::io::Cursor::new(Vec::<u8>::new())), Box::new(writer));
         (server, buf)
+    }
+
+    fn explain_provider_decision(
+        server: &LspServer,
+        provider: &str,
+    ) -> Result<Value, Box<dyn std::error::Error>> {
+        let response = server
+            .handle_execute_command(Some(json!({
+                "command": "perl.explainProviderDecision",
+                "arguments": [{
+                    "provider": provider
+                }]
+            })))?
+            .ok_or("missing explain-provider-decision response")?;
+        Ok(response)
+    }
+
+    #[test]
+    fn diagnostics_provider_decision_replays_live_pull_trace()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::default();
+        let uri = "file:///workspace/diagnostics_trace.pl";
+        let text = "print 'hello';\n";
+
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 7,
+                "text": text
+            }
+        })))?;
+
+        let response = server
+            .handle_document_diagnostic(Some(json!({
+                "textDocument": { "uri": uri }
+            })))?
+            .ok_or("expected diagnostic response")?;
+        let items =
+            response.get("items").and_then(Value::as_array).ok_or("expected diagnostic items")?;
+        assert!(
+            items.iter().any(|item| item.get("code").and_then(Value::as_str) == Some("PL100")),
+            "expected missing-strict diagnostic to produce PL100, got: {items:?}"
+        );
+
+        let explanation = explain_provider_decision(&server, "diagnostics")?;
+        let receipt = explanation
+            .get("request_receipt")
+            .and_then(Value::as_object)
+            .ok_or("missing persisted diagnostics request receipt")?;
+        let diagnostic_codes = receipt
+            .get("diagnostic_codes")
+            .and_then(Value::as_array)
+            .ok_or("missing diagnostic_codes")?;
+
+        assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("diagnostics"));
+        assert_eq!(
+            receipt.get("provider_action").and_then(Value::as_str),
+            Some("textDocument/diagnostic")
+        );
+        assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("acted"));
+        assert_eq!(receipt.get("reason").and_then(Value::as_str), Some("diagnostics_emitted"));
+        assert_eq!(receipt.get("uri").and_then(Value::as_str), Some(uri));
+        assert_eq!(receipt.get("version").and_then(Value::as_i64), Some(7));
+        assert_eq!(receipt.get("freshness").and_then(Value::as_str), Some("fresh"));
+        assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("high"));
+        assert_eq!(
+            receipt.get("item_count").and_then(Value::as_u64),
+            Some(u64::try_from(items.len())?)
+        );
+        assert!(
+            diagnostic_codes.iter().any(|code| code.as_str() == Some("PL100")),
+            "expected receipt to include PL100, got: {diagnostic_codes:?}"
+        );
+        assert_eq!(
+            receipt.get("claim_boundary").and_then(Value::as_str),
+            Some(
+                "records existing diagnostic response only; no diagnostic behavior or suppression changes"
+            )
+        );
+        Ok(())
     }
 
     /// Positive case: when no concurrent change arrives during diagnostic computation,
