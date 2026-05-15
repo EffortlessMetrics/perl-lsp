@@ -266,6 +266,10 @@ pub struct ProviderDecisionExplanation {
     /// Optional request-local provider receipt supplied by the caller.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub request_receipt: Option<Value>,
+    /// Optional human-readable explanation for command palettes, output
+    /// channels, and copyable bug reports.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_message: Option<String>,
 }
 
 impl ProviderDecisionExplanation {
@@ -295,6 +299,7 @@ impl ProviderDecisionExplanation {
             receipt_id: None,
             scenario: None,
             request_receipt: None,
+            user_message: None,
         }
     }
 
@@ -335,6 +340,12 @@ impl ProviderDecisionExplanation {
         self
     }
 
+    /// Attach a human-readable explanation.
+    pub fn with_user_message(mut self, message: impl Into<String>) -> Self {
+        self.user_message = Some(message.into());
+        self
+    }
+
     /// Whether this decision may safely drive a live provider action.
     ///
     /// Edit-producing providers still need their own narrower safety checks. This
@@ -356,6 +367,163 @@ impl ProviderDecisionExplanation {
                 self.fallback,
                 ProviderDecisionFallback::NoEdit | ProviderDecisionFallback::RequireConfirmation
             )
+    }
+}
+
+/// Format a provider decision explanation as a compact user-facing message.
+///
+/// The structured fields remain the source of truth. This formatter gives
+/// command-palette and output-channel consumers a readable summary without
+/// requiring every client to understand the provider receipt schema.
+pub fn format_provider_decision_explanation(explanation: &ProviderDecisionExplanation) -> String {
+    let mut lines = Vec::new();
+    lines.push(format!(
+        "{} {}.",
+        provider_label(explanation.provider),
+        decision_label(explanation.decision)
+    ));
+    lines.push(reason_sentence(explanation.reason).to_string());
+    lines.push(format!("Fact source: {}.", fact_source_label(explanation.fact_source)));
+    lines.push(format!(
+        "Confidence: {}. Freshness: {}.",
+        confidence_label(explanation.confidence),
+        freshness_label(explanation.freshness)
+    ));
+    lines.push(dynamic_boundary_sentence(explanation.dynamic_boundary).to_string());
+
+    if explanation.fallback != ProviderDecisionFallback::None {
+        lines.push(format!("Fallback: {}.", fallback_label(explanation.fallback)));
+    }
+
+    if let Some(request_message) = explanation
+        .request_receipt
+        .as_ref()
+        .and_then(|receipt| receipt.get("user_message"))
+        .and_then(Value::as_str)
+    {
+        lines.push(format!("Request detail: {request_message}"));
+    }
+
+    if let Some(receipt_id) = &explanation.receipt_id {
+        lines.push(format!("Receipt: {receipt_id}."));
+    }
+    if let Some(scenario) = &explanation.scenario {
+        lines.push(format!("Scenario: {scenario}."));
+    }
+
+    lines.join("\n")
+}
+
+fn provider_label(provider: ProviderDecisionProvider) -> &'static str {
+    match provider {
+        ProviderDecisionProvider::Completion => "Completion",
+        ProviderDecisionProvider::GotoDefinition => "Goto definition",
+        ProviderDecisionProvider::References => "References",
+        ProviderDecisionProvider::Hover => "Hover",
+        ProviderDecisionProvider::Diagnostics => "Diagnostics",
+        ProviderDecisionProvider::Rename => "Rename",
+        ProviderDecisionProvider::SafeDelete => "Safe delete",
+        ProviderDecisionProvider::WorkspaceSymbols => "Workspace symbols",
+        ProviderDecisionProvider::DocumentSymbols => "Document symbols",
+        ProviderDecisionProvider::SemanticTokens => "Semantic tokens",
+        ProviderDecisionProvider::ModuleResolution => "Module resolution",
+        ProviderDecisionProvider::DapModulePaths => "DAP module paths",
+        ProviderDecisionProvider::PerlSubprocess => "Perl subprocess",
+        ProviderDecisionProvider::Unknown => "Provider",
+    }
+}
+
+fn decision_label(decision: ProviderDecisionOutcome) -> &'static str {
+    match decision {
+        ProviderDecisionOutcome::Acted => "answered",
+        ProviderDecisionOutcome::Fallback => "used fallback",
+        ProviderDecisionOutcome::Blocked => "blocked",
+        ProviderDecisionOutcome::Shadowed => "stayed shadow-only",
+    }
+}
+
+fn reason_sentence(reason: ProviderDecisionReason) -> &'static str {
+    match reason {
+        ProviderDecisionReason::SourceBackedHighConfidence => {
+            "perl-lsp had a fresh, source-backed, high-confidence fact."
+        }
+        ProviderDecisionReason::AmbiguousLowConfidenceCandidates => {
+            "The available candidates were ambiguous or low confidence."
+        }
+        ProviderDecisionReason::StaleFact => {
+            "The available fact was stale and could not authorize this request."
+        }
+        ProviderDecisionReason::LowConfidenceFact => {
+            "The available fact did not meet the confidence threshold."
+        }
+        ProviderDecisionReason::GeneratedNoSource => {
+            "The candidate came from generated or no-source information."
+        }
+        ProviderDecisionReason::DynamicBoundary => {
+            "Dynamic Perl behavior prevents static certainty for this request."
+        }
+        ProviderDecisionReason::Unsupported => "This provider surface is unsupported here.",
+        ProviderDecisionReason::MissingFact => "No usable fact was available for this request.",
+        ProviderDecisionReason::ShadowOnly => {
+            "This path is recorded as proof but is not live behavior."
+        }
+        ProviderDecisionReason::UnsafeEditBlocked => {
+            "The edit was refused because the available proof is not safe enough."
+        }
+        ProviderDecisionReason::FallbackPolicy => {
+            "Provider policy selected a conservative fallback path."
+        }
+        ProviderDecisionReason::Unknown => "The provider did not report a more specific reason.",
+    }
+}
+
+fn fact_source_label(source: ProviderDecisionFactSource) -> &'static str {
+    match source {
+        ProviderDecisionFactSource::ParserSyntax => "parser syntax",
+        ProviderDecisionFactSource::LegacyWorkspace => "legacy workspace index",
+        ProviderDecisionFactSource::SemanticFact => "semantic facts",
+        ProviderDecisionFactSource::CompilerFact => "compiler facts",
+        ProviderDecisionFactSource::FrameworkAdapter => "framework adapter",
+        ProviderDecisionFactSource::DynamicBoundary => "dynamic boundary",
+        ProviderDecisionFactSource::Fallback => "fallback",
+        ProviderDecisionFactSource::Unknown => "unknown",
+    }
+}
+
+fn confidence_label(confidence: ProviderDecisionConfidence) -> &'static str {
+    match confidence {
+        ProviderDecisionConfidence::High => "high",
+        ProviderDecisionConfidence::Medium => "medium",
+        ProviderDecisionConfidence::Low => "low",
+    }
+}
+
+fn freshness_label(freshness: ProviderDecisionFreshness) -> &'static str {
+    match freshness {
+        ProviderDecisionFreshness::Fresh => "fresh",
+        ProviderDecisionFreshness::Stale => "stale",
+        ProviderDecisionFreshness::Unknown => "unknown",
+        ProviderDecisionFreshness::NotApplicable => "not applicable",
+    }
+}
+
+fn dynamic_boundary_sentence(dynamic_boundary: bool) -> &'static str {
+    if dynamic_boundary {
+        "Dynamic boundary: yes; static certainty is limited here."
+    } else {
+        "Dynamic boundary: no."
+    }
+}
+
+fn fallback_label(fallback: ProviderDecisionFallback) -> &'static str {
+    match fallback {
+        ProviderDecisionFallback::None => "none",
+        ProviderDecisionFallback::LegacyProvider => "legacy provider",
+        ProviderDecisionFallback::NoResult => "no result",
+        ProviderDecisionFallback::NoEdit => "no edit",
+        ProviderDecisionFallback::RequireConfirmation => "requires confirmation",
+        ProviderDecisionFallback::RefreshWorkspaceFacts => "refresh workspace facts",
+        ProviderDecisionFallback::ShadowReceiptOnly => "shadow receipt only",
     }
 }
 
@@ -670,5 +838,66 @@ mod tests {
             ..safe
         };
         assert!(!generated.is_safe_to_act());
+    }
+
+    #[test]
+    fn provider_decision_format_explains_blocked_safe_delete() {
+        let decision = ProviderDecisionExplanation::new(
+            ProviderDecisionProvider::SafeDelete,
+            ProviderDecisionOutcome::Blocked,
+            ProviderDecisionReason::UnsafeEditBlocked,
+            ProviderDecisionFactSource::CompilerFact,
+            ProviderDecisionConfidence::High,
+            ProviderDecisionFreshness::Fresh,
+            false,
+            ProviderDecisionFallback::NoEdit,
+        )
+        .with_request_receipt(serde_json::json!({
+            "provider": "safe_delete",
+            "decision": "blocked",
+            "reason": "references_exist",
+            "user_message": "Safe delete refused for `helper`: imported by another file. No edits were applied."
+        }));
+
+        let message = format_provider_decision_explanation(&decision);
+
+        assert!(message.contains("Safe delete blocked."), "{message}");
+        assert!(
+            message
+                .contains("The edit was refused because the available proof is not safe enough."),
+            "{message}"
+        );
+        assert!(message.contains("Fact source: compiler facts."), "{message}");
+        assert!(message.contains("Confidence: high. Freshness: fresh."), "{message}");
+        assert!(message.contains("Fallback: no edit."), "{message}");
+        assert!(message.contains("Request detail: Safe delete refused for `helper`"), "{message}");
+    }
+
+    #[test]
+    fn provider_decision_format_explains_dynamic_fallback() {
+        let decision = ProviderDecisionExplanation::new(
+            ProviderDecisionProvider::GotoDefinition,
+            ProviderDecisionOutcome::Fallback,
+            ProviderDecisionReason::DynamicBoundary,
+            ProviderDecisionFactSource::DynamicBoundary,
+            ProviderDecisionConfidence::Low,
+            ProviderDecisionFreshness::Fresh,
+            true,
+            ProviderDecisionFallback::LegacyProvider,
+        )
+        .with_receipt_id("docs/project/status/provider_confidence_matrix.md#goto-definition")
+        .with_scenario("dynamic-boundary-navigation");
+
+        let message = format_provider_decision_explanation(&decision);
+
+        assert!(message.contains("Goto definition used fallback."), "{message}");
+        assert!(message.contains("Dynamic Perl behavior prevents static certainty"), "{message}");
+        assert!(
+            message.contains("Dynamic boundary: yes; static certainty is limited here."),
+            "{message}"
+        );
+        assert!(message.contains("Fallback: legacy provider."), "{message}");
+        assert!(message.contains("Receipt: docs/project/status"), "{message}");
+        assert!(message.contains("Scenario: dynamic-boundary-navigation."), "{message}");
     }
 }

@@ -213,6 +213,11 @@ fn test_explain_provider_decision_attaches_provider_receipt()
     assert_eq!(result.get("receipt_id").and_then(Value::as_str), Some("semantic-shadow-compare"));
     assert_eq!(result.get("scenario").and_then(Value::as_str), Some("mojolicious-safe-delete"));
     assert_eq!(result.get("dynamic_boundary").and_then(Value::as_bool), Some(false));
+    let user_message =
+        result.get("user_message").and_then(Value::as_str).ok_or("missing user_message")?;
+    assert!(user_message.contains("Safe delete blocked."), "{user_message}");
+    assert!(user_message.contains("Fact source: compiler facts."), "{user_message}");
+    assert!(user_message.contains("Fallback: no edit."), "{user_message}");
     Ok(())
 }
 
@@ -262,6 +267,10 @@ fn test_explain_provider_decision_attaches_request_local_receipt()
     );
     assert_eq!(request_receipt.get("fallback").and_then(Value::as_str), Some("no_result"));
     assert_eq!(request_receipt.get("source_backed").and_then(Value::as_bool), Some(false));
+    let user_message =
+        result.get("user_message").and_then(Value::as_str).ok_or("missing user_message")?;
+    assert!(user_message.contains("Rename used fallback."), "{user_message}");
+    assert!(user_message.contains("Fallback: legacy provider."), "{user_message}");
     Ok(())
 }
 

@@ -7,7 +7,7 @@ use perl_lsp_rs_core::config::WorkspaceConfig;
 use perl_lsp_rs_core::providers::{
     ProviderDecisionConfidence, ProviderDecisionExplanation, ProviderDecisionFactSource,
     ProviderDecisionFallback, ProviderDecisionFreshness, ProviderDecisionOutcome,
-    ProviderDecisionProvider, ProviderDecisionReason,
+    ProviderDecisionProvider, ProviderDecisionReason, format_provider_decision_explanation,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -232,6 +232,9 @@ impl ExecuteCommandProvider {
             }
             explanation = explanation.with_request_receipt(request_receipt);
         }
+
+        let user_message = format_provider_decision_explanation(&explanation);
+        explanation = explanation.with_user_message(user_message);
 
         serde_json::to_value(explanation)
             .map_err(|error| format!("Failed to serialize provider decision explanation: {error}"))
