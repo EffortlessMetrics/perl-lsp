@@ -29,6 +29,7 @@ pub(crate) const ALLOWED_COMMANDS: &[&str] = &[
     "perl.extractVariable",
     "perl.extractSubroutine",
     "perl.optimizeImports",
+    "perl.previewSafeDelete",
 ];
 
 /// Suspicious patterns rejected in generic payloads.
