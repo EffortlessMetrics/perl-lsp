@@ -284,17 +284,41 @@ fn live_symbol_requests_persist_provider_traces() -> Result<(), Box<dyn std::err
     assert_eq!(receipt.get("schema_version").and_then(Value::as_str), Some("provider_decision.v1"));
     assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("workspace_symbols"));
     assert_eq!(receipt.get("provider_action").and_then(Value::as_str), Some("workspace/symbol"));
-    assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("fallback"));
-    assert_eq!(receipt.get("reason").and_then(Value::as_str), Some("partial_index"));
-    assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("legacy_workspace"));
-    assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("medium"));
     assert_eq!(receipt.get("freshness").and_then(Value::as_str), Some("fresh"));
-    assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(false));
-    assert_eq!(
-        receipt.get("source_backed_state").and_then(Value::as_str),
-        Some("partial_index_not_full_workspace")
-    );
-    assert_eq!(receipt.get("live_cutover").and_then(Value::as_str), Some("fallback_only"));
+    match receipt.get("decision").and_then(Value::as_str) {
+        Some("acted") => {
+            assert_eq!(
+                receipt.get("reason").and_then(Value::as_str),
+                Some("source_backed_high_confidence")
+            );
+            assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("compiler_fact"));
+            assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("high"));
+            assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(true));
+            assert_eq!(
+                receipt.get("source_backed_state").and_then(Value::as_str),
+                Some("ready_workspace_index")
+            );
+            assert_eq!(
+                receipt.get("live_cutover").and_then(Value::as_str),
+                Some("partial_live_source_backed")
+            );
+        }
+        Some("fallback") => {
+            assert_eq!(receipt.get("reason").and_then(Value::as_str), Some("partial_index"));
+            assert_eq!(
+                receipt.get("fact_source").and_then(Value::as_str),
+                Some("legacy_workspace")
+            );
+            assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("medium"));
+            assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(false));
+            assert_eq!(
+                receipt.get("source_backed_state").and_then(Value::as_str),
+                Some("partial_index_not_full_workspace")
+            );
+            assert_eq!(receipt.get("live_cutover").and_then(Value::as_str), Some("fallback_only"));
+        }
+        other => return Err(format!("unexpected workspace-symbol decision: {other:?}").into()),
+    }
     assert!(
         receipt.get("live_provider_result_count").and_then(Value::as_u64).is_some(),
         "workspace symbol trace must include a result count: {receipt}"
