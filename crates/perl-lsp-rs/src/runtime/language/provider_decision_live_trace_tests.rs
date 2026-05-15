@@ -20,6 +20,18 @@ my $call = target();
 my $prefix = $re;
 "#;
 
+const WORKSPACE_SYMBOL_URI: &str = "file:///workspace/lib/Trace/Symbols.pm";
+const WORKSPACE_SYMBOL_DOC: &str = r#"package Trace::Symbols;
+use strict;
+use warnings;
+
+sub greet {
+    return "hello";
+}
+
+1;
+"#;
+
 fn create_server() -> LspServer {
     let output =
         Arc::new(Mutex::new(Box::new(Cursor::new(Vec::new())) as Box<dyn std::io::Write + Send>));
@@ -62,6 +74,18 @@ fn open_trace_document(server: &LspServer) -> Result<(), Box<dyn std::error::Err
         "textDocument": {
             "uri": TRACE_URI,
             "text": TRACE_DOC,
+            "languageId": "perl",
+            "version": 1
+        }
+    })))?;
+    Ok(())
+}
+
+fn open_workspace_symbol_document(server: &LspServer) -> Result<(), Box<dyn std::error::Error>> {
+    server.test_handle_did_open(Some(json!({
+        "textDocument": {
+            "uri": WORKSPACE_SYMBOL_URI,
+            "text": WORKSPACE_SYMBOL_DOC,
             "languageId": "perl",
             "version": 1
         }
@@ -250,13 +274,31 @@ fn live_symbol_requests_persist_provider_traces() -> Result<(), Box<dyn std::err
     let receipt = request_receipt(&explanation, "document_symbols")?;
     assert_live_trace(receipt, "document_symbols", "textDocument/documentSymbol");
 
+    open_workspace_symbol_document(&server)?;
     response_result(
-        server.handle_request(request(6, "workspace/symbol", Some(json!({"query": "target"})))),
+        server.handle_request(request(6, "workspace/symbol", Some(json!({"query": "greet"})))),
         "workspace symbols",
     )?;
     let explanation = explain_provider_decision(&server, "workspace_symbols")?;
     let receipt = request_receipt(&explanation, "workspace_symbols")?;
-    assert_live_trace(receipt, "workspace_symbols", "workspace/symbol");
+    assert_eq!(receipt.get("schema_version").and_then(Value::as_str), Some("provider_decision.v1"));
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("workspace_symbols"));
+    assert_eq!(receipt.get("provider_action").and_then(Value::as_str), Some("workspace/symbol"));
+    assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("fallback"));
+    assert_eq!(receipt.get("reason").and_then(Value::as_str), Some("partial_index"));
+    assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("legacy_workspace"));
+    assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("medium"));
+    assert_eq!(receipt.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        receipt.get("source_backed_state").and_then(Value::as_str),
+        Some("partial_index_not_full_workspace")
+    );
+    assert_eq!(receipt.get("live_cutover").and_then(Value::as_str), Some("fallback_only"));
+    assert!(
+        receipt.get("live_provider_result_count").and_then(Value::as_u64).is_some(),
+        "workspace symbol trace must include a result count: {receipt}"
+    );
     Ok(())
 }
 
