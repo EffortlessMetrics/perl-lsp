@@ -731,10 +731,11 @@ level = "warn"
 activate_when_msrv = "1.94"
 reason = "Prefer the standard integer log helper."
 
-[[planned]]
+[[lint]]
 name = "clippy::decimal_bitwise_operands"
 level = "warn"
-activate_when_msrv = "1.94"
+status = "active"
+class = "numeric"
 reason = "Make bit masks visually inspectable."
 
 [[planned]]
