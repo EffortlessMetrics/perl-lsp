@@ -327,11 +327,13 @@ base_lem = 4
 owner = "testing"
 intent = "Find static oracle-gap evidence for changed Rust behavior."
 failure_mode = "Changed behavior is reachable but tests do not appear to discriminate it."
-proof_obligation = "Run static RIPR exposure analysis on production Rust diffs."
+proof_obligation = "Run static RIPR exposure analysis and advisory PR evidence routing on production Rust diffs."
 evidence = [
-  "target/ripr/ripr.json",
-  "target/ripr/ripr.sarif",
-  "GitHub annotations",
+  "target/ripr/pr/repo-exposure.json",
+  "target/ripr/pr/summary.md",
+  "target/ripr/review/comments.json",
+  "target/ripr/review/annotations.txt",
+  "target/xtask/impacted-evidence/latest.json",
 ]
 allowed_triggers = ["pull_request", "workflow_dispatch"]
 labels = ["ripr", "full-ci"]

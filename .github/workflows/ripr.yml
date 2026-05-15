@@ -1,11 +1,7 @@
-# ripr — static RIPR exposure analysis (advisory)
+# ripr - portable PR evidence and review guidance (advisory)
 #
-# Adds mutation-testing-lite oracle-gap detection at static-analysis prices.
-# Advisory in this rollout PR (PR 06). PR 18 introduces narrow soft-gating
-# for high-confidence new oracle gaps with `ripr` / `ripr-waive` / `full-ci`
-# / `ci-budget-ack` labels.
-#
-# See docs/ci/ripr.md.
+# Badges are repo-scoped public state. This workflow produces diff-scoped PR
+# evidence under target/ripr/ and mutation-routing receipts under target/xtask/.
 
 name: ripr
 
@@ -28,18 +24,17 @@ concurrency:
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   ripr:
     name: ripr static exposure
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
-    # Advisory only in this PR. Failures do not block.
+    timeout-minutes: 20
     continue-on-error: true
     if: github.event.pull_request.draft != true
     env:
-      RIPR_VERSION: "0.4.0"
+      RIPR_VERSION: "0.5.0"
+      PR_LABELS: ${{ github.event_name == 'pull_request' && join(github.event.pull_request.labels.*.name, ',') || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -60,39 +55,58 @@ jobs:
       - name: Install ripr
         run: cargo install ripr --version "$RIPR_VERSION" --locked
 
-      - name: Run ripr (doctor)
+      - name: Run ripr doctor
         run: ripr doctor
 
-      - name: Run ripr (JSON report)
-        run: |
-          mkdir -p target/ripr
-          ripr check --base "origin/${{ github.base_ref || 'master' }}" --json \
-            > target/ripr/ripr.json || true
+      - name: Generate PR evidence
+        run: cargo xtask ripr-pr --base "origin/${{ github.base_ref || 'master' }}" --head HEAD
 
-      - name: Run ripr (GitHub annotations)
-        run: |
-          ripr check --base "origin/${{ github.base_ref || 'master' }}" \
-            --format github || true
+      - name: Generate review guidance
+        if: always()
+        run: cargo xtask ripr-review-comments --base "origin/${{ github.base_ref || 'master' }}" --head HEAD --timeout-seconds 210
 
-      - name: Run ripr (SARIF)
-        run: |
-          ripr check --base "origin/${{ github.base_ref || 'master' }}" \
-            --format sarif > target/ripr/ripr.sarif || true
+      - name: Generate impacted evidence
+        if: always()
+        run: cargo xtask impacted-evidence --labels-csv "$PR_LABELS"
 
-      - name: Summarize ripr findings
+      - name: Generate PR evidence summary
+        if: always()
+        run: cargo xtask ripr-pr-summary
+
+      - name: Generate warning annotations
+        if: always()
+        run: cargo xtask ripr-annotations
+
+      - name: Validate PR evidence contracts
         if: always()
         run: |
-          if [ -f target/ripr/ripr.json ]; then
-            python3 scripts/ci/ripr_summary.py \
-              --report target/ripr/ripr.json \
-              --summary "$GITHUB_STEP_SUMMARY" || true
+          cargo xtask ripr-pr --base "origin/${{ github.base_ref || 'master' }}" --head HEAD --check
+          cargo xtask ripr-review-comments --base "origin/${{ github.base_ref || 'master' }}" --head HEAD --check
+          cargo xtask impacted-evidence --labels-csv "$PR_LABELS" --check
+          cargo xtask ripr-pr-summary --check
+          cargo xtask ripr-annotations --check
+
+      - name: Append PR evidence summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f target/ripr/pr/summary.md ]; then
+            cat target/ripr/pr/summary.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No RIPR PR evidence summary was produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f target/ripr/review/annotations.txt ]; then
+            cat target/ripr/review/annotations.txt
           fi
 
-      - name: Upload ripr report
+      - name: Upload ripr PR evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ripr-report
-          path: target/ripr/
+          name: ripr-pr-evidence
+          path: |
+            target/ripr/pr/**
+            target/ripr/review/**
+            target/xtask/impacted-evidence/**
           retention-days: 14
           if-no-files-found: warn

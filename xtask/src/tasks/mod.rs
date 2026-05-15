@@ -96,6 +96,7 @@ pub mod release_evidence;
 pub mod release_notes;
 pub mod release_turnkey;
 pub mod review_receipts;
+pub mod ripr_evidence;
 pub mod semantic_scorecard;
 pub mod semantic_shadow_compare;
 pub mod srp_microcrates;
