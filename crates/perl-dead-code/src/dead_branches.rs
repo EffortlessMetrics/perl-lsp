@@ -80,7 +80,9 @@ pub(crate) fn detect_dead_branches(file_path: &Path, text: &str, out: &mut Vec<D
 
 fn is_always_false(condition: &str) -> bool {
     let c = condition.trim();
-    matches!(c, "0" | "\"\"" | "''" | "undef")
+    // Perl considers a value false when it stringifies to "" or "0", so both
+    // the bare number 0 and the quoted strings "0" / '0' are always false.
+    matches!(c, "0" | "\"\"" | "''" | "\"0\"" | "'0'" | "undef")
         || (c.starts_with('(') && c.ends_with(')') && is_always_false(&c[1..c.len() - 1]))
 }
 

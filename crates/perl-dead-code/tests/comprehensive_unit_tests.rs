@@ -792,6 +792,54 @@ fn dead_branch_if_empty_string_emits_dead_branch() -> Result<(), String> {
 }
 
 #[test]
+fn dead_branch_if_double_quoted_zero_emits_dead_branch() -> Result<(), String> {
+    // In Perl, the string "0" is one of the two strings considered false
+    // (the other being ""). `if ("0") { ... }` is a dead branch.
+    let code = "if (\"0\") {\n    print \"never\";\n}\n";
+    let index = index_with_file("file:///test_dead_if_dq_zero.pl", code)?;
+    let detector = DeadCodeDetector::new(index);
+
+    let results = detector.analyze_file(&PathBuf::from("/test_dead_if_dq_zero.pl"))?;
+    let dead_branches: Vec<_> =
+        results.iter().filter(|d| d.code_type == DeadCodeType::DeadBranch).collect();
+    assert!(!dead_branches.is_empty(), "if (\"0\") should produce a DeadBranch entry");
+    Ok(())
+}
+
+#[test]
+fn dead_branch_if_single_quoted_zero_emits_dead_branch() -> Result<(), String> {
+    // The single-quoted string '0' is also Perl-false.
+    let code = "if ('0') {\n    print \"never\";\n}\n";
+    let index = index_with_file("file:///test_dead_if_sq_zero.pl", code)?;
+    let detector = DeadCodeDetector::new(index);
+
+    let results = detector.analyze_file(&PathBuf::from("/test_dead_if_sq_zero.pl"))?;
+    let dead_branches: Vec<_> =
+        results.iter().filter(|d| d.code_type == DeadCodeType::DeadBranch).collect();
+    assert!(!dead_branches.is_empty(), "if ('0') should produce a DeadBranch entry");
+    Ok(())
+}
+
+#[test]
+fn dead_branch_unless_double_quoted_zero_is_always_true() -> Result<(), String> {
+    // `unless ("0") { ... }` runs unconditionally — `unless` triggers only on an
+    // always-true condition, and "0" is always FALSE. Guards against an overzealous
+    // fix that would mistakenly classify "0" as always true.
+    let code = "unless (\"0\") {\n    print \"always\";\n}\n";
+    let index = index_with_file("file:///test_unless_dq_zero.pl", code)?;
+    let detector = DeadCodeDetector::new(index);
+
+    let results = detector.analyze_file(&PathBuf::from("/test_unless_dq_zero.pl"))?;
+    let dead_branches: Vec<_> =
+        results.iter().filter(|d| d.code_type == DeadCodeType::DeadBranch).collect();
+    assert!(
+        dead_branches.is_empty(),
+        "unless (\"0\") block runs unconditionally; should not be marked dead"
+    );
+    Ok(())
+}
+
+#[test]
 fn dead_branch_normal_if_does_not_emit() -> Result<(), String> {
     let code = "if ($x > 0) {\n    print \"yes\";\n}\n";
     let index = index_with_file("file:///test_normal_if.pl", code)?;
