@@ -18,7 +18,8 @@ cargo xtask queue project-labels \
 
 cargo xtask queue project-labels \
   --state target/receipts/queue-state.json \
-  --apply
+  --apply \
+  --receipt target/receipts/label-projection.json
 ```
 
 ## Input state shape
@@ -38,7 +39,7 @@ The projector does **not** infer canonical state from labels when a state receip
 
 ## Receipt fields
 
-Dry-run receipts include per-PR entries with:
+Receipts (written in both dry-run and `--apply` modes when `--receipt` is supplied) include per-PR entries with:
 
 - `current_labels`
 - `projected_apply`
