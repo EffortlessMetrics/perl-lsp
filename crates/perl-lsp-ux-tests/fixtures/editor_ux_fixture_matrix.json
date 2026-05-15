@@ -980,6 +980,34 @@
       ]
     },
     {
+      "id": "dancer2_workspace_symbol_noise",
+      "scenario_file": "ux_scenario_39_dancer2_workspace_symbol_noise.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "component": "workspace_symbols",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "request workspace symbols over the Dancer2 real-workspace fixture and record second-project noise and freshness boundaries",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
+      ],
+      "expected_outcomes": [
+        "workspace-symbol requests return valid LSP shapes without JSON-RPC errors",
+        "receipt records useful project hits, noisy hit counts, generated/dynamic candidate boundaries, and edit freshness",
+        "compiler-backed workspace-symbol candidates remain shadowed without provider behavior promotion"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "incremental_text_sync_recovery",
       "scenario_file": "ux_scenario_19_incremental_text_sync.rs",
       "subsystem_owner": "text_sync",
