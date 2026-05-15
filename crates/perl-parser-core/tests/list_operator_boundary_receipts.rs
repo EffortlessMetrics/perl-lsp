@@ -21,6 +21,19 @@ fn declaration_initializer<'a>(statement: &'a Node, context: &str) -> Result<&'a
     initializer.as_deref().ok_or_else(|| format!("expected initializer for {context}"))
 }
 
+fn list_declaration_initializer<'a>(
+    statement: &'a Node,
+    context: &str,
+) -> Result<&'a Node, String> {
+    let NodeKind::VariableListDeclaration { initializer, .. } = &statement.kind else {
+        return Err(format!(
+            "expected VariableListDeclaration for {context}, got {:?}",
+            statement.kind
+        ));
+    };
+    initializer.as_deref().ok_or_else(|| format!("expected initializer for {context}"))
+}
+
 fn function_call<'a>(
     node: &'a Node,
     expected_name: &str,
@@ -105,6 +118,23 @@ fn map_sort_source_stops_before_ternary_colon() -> Result<(), String> {
     let sort_args = function_call(arg(map_args, 1, "map source")?, "sort", "sort source boundary")?;
     assert_eq!(sort_args.len(), 1, "sort should contain keys source before ternary colon");
     function_call(arg(sort_args, 0, "sort source")?, "keys", "keys source boundary")?;
+
+    Ok(())
+}
+
+#[test]
+fn map_block_source_stays_inside_list_declaration_initializer() -> Result<(), String> {
+    let source = r#"my ($fh, $pos) = map { $stash->{$_}{$name} } qw/capture pos/;"#;
+    assert_clean_parse(source);
+
+    let statement = program_statement(source, "Capture::Tiny map list declaration boundary")?;
+    let initializer =
+        list_declaration_initializer(&statement, "Capture::Tiny map list declaration boundary")?;
+
+    let map_args = function_call(initializer, "map", "Capture::Tiny map boundary")?;
+    assert_eq!(map_args.len(), 2, "map should contain block and qw source");
+    assert!(matches!(arg(map_args, 0, "map block")?.kind, NodeKind::Block { .. }));
+    assert!(matches!(arg(map_args, 1, "map source")?.kind, NodeKind::ArrayLiteral { .. }));
 
     Ok(())
 }
