@@ -191,55 +191,107 @@ impl LspServer {
 
         #[cfg(not(all(feature = "workspace", not(target_arch = "wasm32"))))]
         {
-            Ok(Some(json!({
+            self.record_safe_delete_decision_receipt(json!({
                 "provider": "safe_delete",
+                "provider_action": "safeDelete/runtimeBlockerUxReceipt",
+                "decision": "fallback",
+                "reason": "workspace_semantic_queries_unavailable",
+                "fact_source": "provider_runtime",
+                "confidence": "low",
+                "freshness": "unknown",
+                "source_backed": false,
+                "source_backed_state": "not_proven_by_safe_delete_trace",
+                "dynamic_boundary": false,
+                "fallback_state": "compiler_missing",
                 "live_provider_result": live_provider_result,
                 "live_provider_edit_count": live_provider_edit_count,
                 "compiler_receipt": null,
+                "trace_only_no_live_behavior_change": true,
                 "no_live_behavior_change": true,
+                "claim_boundary": "records safe-delete blocker proof only; no live symbol-level delete behavior changes",
                 "note": "safe-delete blocker UX proof unavailable without workspace semantic queries"
-            })))
+            }))
         }
 
         #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
         {
             let Some(params) = params else {
-                return Ok(Some(json!({
+                return self.record_safe_delete_decision_receipt(json!({
                     "provider": "safe_delete",
+                    "provider_action": "safeDelete/runtimeBlockerUxReceipt",
+                    "decision": "fallback",
+                    "reason": "missing_request_params",
+                    "fact_source": "provider_runtime",
+                    "confidence": "low",
+                    "freshness": "unknown",
+                    "source_backed": false,
+                    "source_backed_state": "not_proven_by_safe_delete_trace",
+                    "dynamic_boundary": false,
+                    "fallback_state": "compiler_missing",
                     "live_provider_result": live_provider_result,
                     "live_provider_edit_count": live_provider_edit_count,
                     "compiler_receipt": null,
+                    "trace_only_no_live_behavior_change": true,
                     "no_live_behavior_change": true,
+                    "claim_boundary": "records safe-delete blocker proof only; no live symbol-level delete behavior changes",
                     "note": "safe-delete blocker UX proof missing request params"
-                })));
+                }));
             };
 
             let uri = req_uri(&params)?;
             let (line, character) = req_position(&params)?;
             let Some((symbol, byte_offset)) = self.refactor_runtime_symbol(uri, line, character)
             else {
-                return Ok(Some(json!({
+                return self.record_safe_delete_decision_receipt(json!({
                     "provider": "safe_delete",
+                    "provider_action": "safeDelete/runtimeBlockerUxReceipt",
+                    "decision": "fallback",
+                    "reason": "no_symbol_at_request_position",
+                    "fact_source": "provider_runtime",
+                    "confidence": "low",
+                    "freshness": "unknown",
+                    "source_backed": false,
+                    "source_backed_state": "not_proven_by_safe_delete_trace",
+                    "dynamic_boundary": false,
+                    "fallback_state": "compiler_missing",
                     "live_provider_result": live_provider_result,
                     "live_provider_edit_count": live_provider_edit_count,
                     "compiler_receipt": null,
+                    "trace_only_no_live_behavior_change": true,
                     "no_live_behavior_change": true,
+                    "claim_boundary": "records safe-delete blocker proof only; no live symbol-level delete behavior changes",
                     "note": "safe-delete blocker UX proof found no symbol at request position"
-                })));
+                }));
             };
 
             if let Some(fixture) = params.get("compilerPlanFixture").and_then(Value::as_str) {
-                let compiler_receipt =
-                    safe_delete_fixture_receipt(fixture, &symbol, live_provider_edit_count);
-                return Ok(Some(json!({
+                let (compiler_receipt, compiler_blockers) =
+                    safe_delete_fixture_receipt(fixture, &symbol, live_provider_edit_count)
+                        .map_or((None, None), |(receipt, blockers)| {
+                            (Some(receipt), Some(blockers))
+                        });
+                let mut receipt = json!({
                     "provider": "safe_delete",
                     "symbol": symbol,
                     "compiler_plan_fixture": fixture,
                     "live_provider_result": live_provider_result,
                     "live_provider_edit_count": live_provider_edit_count,
                     "compiler_receipt": compiler_receipt,
+                    "live_blocker_ux": safe_delete_live_blocker_ux_json(
+                        compiler_blockers.as_deref()
+                    ),
+                    "rollback_receipt": safe_delete_rollback_receipt_json(
+                        live_provider_edit_count,
+                        compiler_blockers.as_deref()
+                    ),
                     "no_live_behavior_change": true
-                })));
+                });
+                enrich_safe_delete_decision_trace(
+                    &mut receipt,
+                    compiler_blockers.as_deref(),
+                    "compiler_fixture_missing",
+                );
+                return self.record_safe_delete_decision_receipt(receipt);
             }
 
             let compiler_receipt_parts = match route_index_access(self.coordinator()) {
@@ -278,7 +330,7 @@ impl LspServer {
             let (compiler_receipt, compiler_blockers) = compiler_receipt_parts
                 .map_or((None, None), |(receipt, blockers)| (Some(receipt), Some(blockers)));
 
-            let receipt = json!({
+            let mut receipt = json!({
                 "provider": "safe_delete",
                 "symbol": symbol,
                 "live_provider_result": live_provider_result,
@@ -293,9 +345,21 @@ impl LspServer {
                 ),
                 "no_live_behavior_change": true
             });
-            self.record_provider_decision_trace("safe_delete", &receipt);
-            Ok(Some(receipt))
+            enrich_safe_delete_decision_trace(
+                &mut receipt,
+                compiler_blockers.as_deref(),
+                "compiler_receipt_missing",
+            );
+            self.record_safe_delete_decision_receipt(receipt)
         }
+    }
+
+    fn record_safe_delete_decision_receipt(
+        &self,
+        receipt: Value,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.record_provider_decision_trace("safe_delete", &receipt);
+        Ok(Some(receipt))
     }
 
     #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
@@ -355,7 +419,8 @@ fn safe_delete_fixture_receipt(
     fixture: &str,
     symbol: &str,
     live_provider_edit_count: usize,
-) -> Option<perl_workspace::semantic_shadow_compare::SemanticShadowCompareReceipt> {
+) -> Option<(perl_workspace::semantic_shadow_compare::SemanticShadowCompareReceipt, Vec<PlanBlocker>)>
+{
     let blocker = fixture_blocker(fixture)?;
     let plan = SafeDeletePlan::new(EntityId(1), symbol.to_string(), vec![blocker], Vec::new());
     let queries = RefactorFixtureQueries {
@@ -384,7 +449,7 @@ fn safe_delete_fixture_receipt(
         runtime_blocker_descriptions(&blockers),
         !blockers.is_empty()
     ));
-    Some(receipt)
+    Some((receipt, blockers))
 }
 
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
@@ -517,6 +582,104 @@ fn lsp_workspace_edit_count(value: Option<&Value>) -> usize {
         value.get("documentChanges").and_then(Value::as_array).map(std::vec::Vec::len).unwrap_or(0);
 
     changes_count + document_changes_count
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn enrich_safe_delete_decision_trace(
+    receipt: &mut Value,
+    blockers: Option<&[PlanBlocker]>,
+    missing_reason: &'static str,
+) {
+    let Some(object) = receipt.as_object_mut() else {
+        return;
+    };
+
+    let blocker_reasons = blockers
+        .unwrap_or(&[])
+        .iter()
+        .map(|blocker| format!("{:?}", blocker.reason))
+        .collect::<Vec<_>>();
+    let dynamic_boundary = blockers
+        .unwrap_or(&[])
+        .iter()
+        .any(|blocker| matches!(blocker.reason, PlanBlockerReason::DynamicBoundary));
+    let (decision, reason, fact_source, confidence, freshness, fallback_state) = match blockers {
+        Some([]) => ("allowed", "compiler_allowed", "compiler_fact", "high", "fresh", "none"),
+        Some(blockers)
+            if blockers
+                .iter()
+                .any(|blocker| matches!(blocker.reason, PlanBlockerReason::StaleFact)) =>
+        {
+            ("blocked", "stale_fact", "compiler_fact", "low", "stale", "refresh_workspace_facts")
+        }
+        Some(blockers)
+            if blockers
+                .iter()
+                .any(|blocker| matches!(blocker.reason, PlanBlockerReason::DynamicBoundary)) =>
+        {
+            ("blocked", "dynamic_boundary", "dynamic_boundary", "high", "fresh", "no_edit")
+        }
+        Some(blockers)
+            if blockers
+                .iter()
+                .any(|blocker| matches!(blocker.reason, PlanBlockerReason::GeneratedMember)) =>
+        {
+            ("blocked", "generated_no_source", "framework_adapter", "high", "fresh", "no_edit")
+        }
+        Some(blockers)
+            if blockers
+                .iter()
+                .any(|blocker| matches!(blocker.reason, PlanBlockerReason::AmbiguousReference)) =>
+        {
+            (
+                "blocked",
+                "ambiguous_low_confidence_candidates",
+                "semantic_fact",
+                "low",
+                "fresh",
+                "require_confirmation",
+            )
+        }
+        Some(blockers)
+            if blockers.iter().any(|blocker| {
+                matches!(
+                    blocker.reason,
+                    PlanBlockerReason::CrossModuleExport
+                        | PlanBlockerReason::ImportedSymbol
+                        | PlanBlockerReason::ExportedSymbol
+                        | PlanBlockerReason::ReferencesExist
+                )
+            }) =>
+        {
+            ("blocked", "references_exist", "compiler_fact", "high", "fresh", "no_edit")
+        }
+        Some(_) => {
+            ("blocked", "unclassified_occurrence", "semantic_fact", "low", "fresh", "no_edit")
+        }
+        None => {
+            ("fallback", missing_reason, "provider_runtime", "low", "unknown", "compiler_missing")
+        }
+    };
+
+    object.insert("provider_action".to_string(), json!("safeDelete/runtimeBlockerUxReceipt"));
+    object.insert("decision".to_string(), json!(decision));
+    object.insert("reason".to_string(), json!(reason));
+    object.insert("fact_source".to_string(), json!(fact_source));
+    object.insert("confidence".to_string(), json!(confidence));
+    object.insert("freshness".to_string(), json!(freshness));
+    object.insert("source_backed".to_string(), json!(false));
+    object.insert("source_backed_state".to_string(), json!("not_proven_by_safe_delete_trace"));
+    object.insert("dynamic_boundary".to_string(), json!(dynamic_boundary));
+    object.insert("fallback_state".to_string(), json!(fallback_state));
+    object.insert("blocker_count".to_string(), json!(blocker_reasons.len()));
+    object.insert("blocker_reasons".to_string(), json!(blocker_reasons));
+    object.insert("trace_only_no_live_behavior_change".to_string(), json!(true));
+    object.insert(
+        "claim_boundary".to_string(),
+        json!(
+            "records safe-delete blocker proof only; no live symbol-level delete behavior changes"
+        ),
+    );
 }
 
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
