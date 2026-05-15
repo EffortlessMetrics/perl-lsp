@@ -10,7 +10,11 @@ pub(crate) fn detect_dead_branches(file_path: &Path, text: &str, out: &mut Vec<D
         let trimmed = lines[i].trim();
 
         let dead_reason_and_keyword: Option<(String, &str)> = 'detect: {
-            for kw in &["if", "while", "elsif", "unless", "until", "for", "foreach"] {
+            // NOTE: `for` and `foreach` are list iterators, not boolean condition checkers.
+            // `for (0)` iterates once with $_ = 0 — it is NOT dead code even though 0 is
+            // always-false in a boolean context.  Only if/while/elsif/unless/until use the
+            // condition as a boolean gate where is_always_false / is_always_true applies.
+            for kw in &["if", "while", "elsif", "unless", "until"] {
                 let rest = match trimmed.strip_prefix(kw) {
                     Some(r)
                         if r.is_empty()

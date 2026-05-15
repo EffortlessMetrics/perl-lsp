@@ -128,3 +128,192 @@ fn scenario_workspace_analysis_aggregates_unreachable_and_dead_branch() -> Resul
     assert!(analysis.dead_code.iter().any(|item| item.code_type == DeadCodeType::DeadBranch));
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// for / foreach — list iterator false-positive regression suite (#9009)
+//
+// `for` and `foreach` are list iterators, not boolean condition checkers.
+// `for (0)` runs the body once with $_ = 0.  It is NEVER dead code, even
+// though `0` is falsy in boolean context.  The dead-branch detector must
+// not conflate list-iterator semantics with boolean condition semantics.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn scenario_for_loop_with_constant_zero_is_not_dead_branch() -> Result<(), String> {
+    // Given: `for (0)` iterates once with $_ = 0 — this is live code
+    let detector = detector_with_single_file(
+        "file:///for_zero.pl",
+        "for (0) {\n    say 'runs once, $_ is 0';\n}\n",
+    )?;
+
+    // When dead-code analysis runs
+    let dead = detect_for_path(&detector, "/for_zero.pl")?;
+
+    // Then no dead-branch diagnostic is emitted
+    assert!(
+        !dead.iter().any(|item| item.code_type == DeadCodeType::DeadBranch),
+        "for (0) iterates once — must not be reported as a dead branch"
+    );
+    Ok(())
+}
+
+#[test]
+fn scenario_foreach_loop_with_constant_zero_is_not_dead_branch() -> Result<(), String> {
+    // Given: `foreach (0)` iterates once with $_ = 0 — this is live code
+    let detector = detector_with_single_file(
+        "file:///foreach_zero.pl",
+        "foreach (0) {\n    say 'runs once, $_ is 0';\n}\n",
+    )?;
+
+    // When dead-code analysis runs
+    let dead = detect_for_path(&detector, "/foreach_zero.pl")?;
+
+    // Then no dead-branch diagnostic is emitted
+    assert!(
+        !dead.iter().any(|item| item.code_type == DeadCodeType::DeadBranch),
+        "foreach (0) iterates once — must not be reported as a dead branch"
+    );
+    Ok(())
+}
+
+#[test]
+fn scenario_for_loop_with_empty_string_is_not_dead_branch() -> Result<(), String> {
+    // Given: `for ("")` iterates once with $_ = "" — still live code
+    let detector = detector_with_single_file(
+        "file:///for_empty_str.pl",
+        "for (\"\") {\n    say \"runs once, \\$_ is empty string\";\n}\n",
+    )?;
+
+    // When dead-code analysis runs
+    let dead = detect_for_path(&detector, "/for_empty_str.pl")?;
+
+    // Then no dead-branch diagnostic is emitted
+    assert!(
+        !dead.iter().any(|item| item.code_type == DeadCodeType::DeadBranch),
+        "for (\"\") iterates once — must not be reported as a dead branch"
+    );
+    Ok(())
+}
+
+#[test]
+fn scenario_for_loop_with_undef_is_not_dead_branch() -> Result<(), String> {
+    // Given: `for (undef)` iterates once with $_ = undef — still live code
+    let detector = detector_with_single_file(
+        "file:///for_undef.pl",
+        "for (undef) {\n    say 'runs once, $_ is undef';\n}\n",
+    )?;
+
+    // When dead-code analysis runs
+    let dead = detect_for_path(&detector, "/for_undef.pl")?;
+
+    // Then no dead-branch diagnostic is emitted
+    assert!(
+        !dead.iter().any(|item| item.code_type == DeadCodeType::DeadBranch),
+        "for (undef) iterates once with $_ = undef — must not be a dead branch"
+    );
+    Ok(())
+}
+
+#[test]
+fn scenario_for_loop_with_multi_element_list_is_not_dead_branch() -> Result<(), String> {
+    // Given: `for (1, 2, 3)` iterates three times — definitely live
+    let detector =
+        detector_with_single_file("file:///for_list.pl", "for (1, 2, 3) {\n    say $_ ;\n}\n")?;
+
+    // When dead-code analysis runs
+    let dead = detect_for_path(&detector, "/for_list.pl")?;
+
+    // Then no dead-branch diagnostic is emitted
+    assert!(
+        !dead.iter().any(|item| item.code_type == DeadCodeType::DeadBranch),
+        "for (1, 2, 3) iterates — must not be a dead branch"
+    );
+    Ok(())
+}
+
+#[test]
+fn scenario_for_loop_mixed_with_dead_if_in_same_file() -> Result<(), String> {
+    // Given: a file with a live `for (0)` loop AND a genuinely dead `if (0)` branch
+    let detector = detector_with_single_file(
+        "file:///mixed.pl",
+        "for (0) {\n    say 'live';\n}\nif (0) {\n    say 'dead';\n}\n",
+    )?;
+
+    // When dead-code analysis runs
+    let dead = detect_for_path(&detector, "/mixed.pl")?;
+
+    // Then exactly one dead-branch is reported (the `if (0)`, not the `for (0)`)
+    let dead_branches: Vec<_> =
+        dead.iter().filter(|item| item.code_type == DeadCodeType::DeadBranch).collect();
+    assert_eq!(
+        dead_branches.len(),
+        1,
+        "only the `if (0)` block should be flagged; got {dead_branches:?}"
+    );
+    assert!(
+        dead_branches[0].reason.contains("if"),
+        "the dead branch should be the `if` block, not the `for` loop"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Regression guards — existing detections must still fire after the fix
+// ---------------------------------------------------------------------------
+
+#[test]
+fn regression_while_zero_loop_is_still_dead() -> Result<(), String> {
+    // Given: `while (0)` — loop body is never executed (0 is always false)
+    let detector =
+        detector_with_single_file("file:///while_zero.pl", "while (0) {\n    say 'never';\n}\n")?;
+
+    // When dead-code analysis runs
+    let dead = detect_for_path(&detector, "/while_zero.pl")?;
+
+    // Then the loop is flagged as a dead branch
+    assert!(
+        dead.iter().any(|item| item.code_type == DeadCodeType::DeadBranch
+            && item.reason.contains("always false")),
+        "while (0) must still be flagged as a dead branch"
+    );
+    Ok(())
+}
+
+#[test]
+fn regression_if_zero_branch_is_still_dead() -> Result<(), String> {
+    // Given: `if (0)` — body never executes
+    let detector = detector_with_single_file(
+        "file:///if_zero_regression.pl",
+        "if (0) {\n    say 'never';\n}\n",
+    )?;
+
+    // When dead-code analysis runs
+    let dead = detect_for_path(&detector, "/if_zero_regression.pl")?;
+
+    // Then the if-block is flagged
+    assert!(
+        dead.iter().any(|item| item.code_type == DeadCodeType::DeadBranch),
+        "if (0) must still be flagged as a dead branch"
+    );
+    Ok(())
+}
+
+#[test]
+fn regression_unless_one_branch_is_still_dead() -> Result<(), String> {
+    // Given: `unless (1)` — body never executes
+    let detector = detector_with_single_file(
+        "file:///unless_one_regression.pl",
+        "unless (1) {\n    say 'never';\n}\n",
+    )?;
+
+    // When dead-code analysis runs
+    let dead = detect_for_path(&detector, "/unless_one_regression.pl")?;
+
+    // Then the block is flagged as dead
+    assert!(
+        dead.iter().any(|item| item.code_type == DeadCodeType::DeadBranch
+            && item.reason.contains("always true")),
+        "unless (1) must still be flagged as a dead branch"
+    );
+    Ok(())
+}
