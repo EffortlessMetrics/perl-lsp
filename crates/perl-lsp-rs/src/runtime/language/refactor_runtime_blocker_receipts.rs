@@ -198,12 +198,16 @@ impl LspServer {
             if let Some(fixture) = params.get("compilerPlanFixture").and_then(Value::as_str) {
                 let compiler_receipt =
                     safe_delete_fixture_receipt(fixture, &symbol, live_provider_edit_count);
+                let live_blocker_ux =
+                    safe_delete_live_blocker_ux_receipt(compiler_receipt.as_ref());
                 return Ok(Some(json!({
                     "provider": "safe_delete",
                     "symbol": symbol,
                     "compiler_plan_fixture": fixture,
                     "live_provider_result": live_provider_result,
                     "live_provider_edit_count": live_provider_edit_count,
+                    "live_blocker_ux": live_blocker_ux,
+                    "rollback_receipt": safe_delete_noop_rollback_receipt(live_provider_edit_count),
                     "compiler_receipt": compiler_receipt,
                     "no_live_behavior_change": true
                 })));
@@ -242,12 +246,16 @@ impl LspServer {
                 }
                 IndexAccessMode::Partial(_) | IndexAccessMode::None => None,
             };
+            let live_blocker_ux =
+                safe_delete_live_blocker_ux_receipt(compiler_receipt.as_ref());
 
             Ok(Some(json!({
                 "provider": "safe_delete",
                 "symbol": symbol,
                 "live_provider_result": live_provider_result,
                 "live_provider_edit_count": live_provider_edit_count,
+                "live_blocker_ux": live_blocker_ux,
+                "rollback_receipt": safe_delete_noop_rollback_receipt(live_provider_edit_count),
                 "compiler_receipt": compiler_receipt,
                 "no_live_behavior_change": true
             })))
@@ -368,6 +376,74 @@ fn fixture_blocker(fixture: &str) -> Option<PlanBlocker> {
         )),
         _ => None,
     }
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn safe_delete_live_blocker_ux_receipt(
+    compiler_receipt: Option<&perl_workspace::semantic_shadow_compare::SemanticShadowCompareReceipt>,
+) -> Value {
+    let blocker_reasons = compiler_receipt
+        .map(|receipt| safe_delete_blocker_reasons(receipt))
+        .unwrap_or_default();
+    let blocked = !blocker_reasons.is_empty();
+    let decision = if blocked { "blocked" } else { "shadow_only_no_live_edit" };
+    let message = if blocked {
+        "Safe delete is blocked by compiler facts; no live symbol-level edit was returned."
+    } else {
+        "Safe delete remains shadow-only; no live symbol-level edit was returned."
+    };
+
+    json!({
+        "decision": decision,
+        "blocker_count": blocker_reasons.len(),
+        "blocker_reasons": blocker_reasons,
+        "requires_confirmation": blocked,
+        "message": message,
+        "claim_boundary": "test-only receipt; no live symbol-level safe-delete provider cutover"
+    })
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn safe_delete_blocker_reasons(
+    receipt: &perl_workspace::semantic_shadow_compare::SemanticShadowCompareReceipt,
+) -> Vec<String> {
+    let mut reasons = receipt
+        .new_result
+        .identities
+        .iter()
+        .filter_map(|identity| identity.strip_prefix("blocker:"))
+        .map(safe_delete_blocker_reason_label)
+        .collect::<Vec<_>>();
+    reasons.sort();
+    reasons.dedup();
+    reasons
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn safe_delete_blocker_reason_label(reason: &str) -> String {
+    match reason {
+        "AmbiguousReference" => "ambiguous_reference",
+        "CrossModuleExport" => "cross_module_export",
+        "DynamicBoundary" => "dynamic_boundary",
+        "ExportedSymbol" => "exported_symbol",
+        "GeneratedMember" => "generated_member",
+        "ImportedSymbol" => "imported_symbol",
+        "ReferencesExist" => "references_exist",
+        "StaleFact" => "stale_fact",
+        "UnclassifiedOccurrence" => "unclassified_occurrence",
+        _ => "unknown",
+    }
+    .to_string()
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn safe_delete_noop_rollback_receipt(live_provider_edit_count: usize) -> Value {
+    json!({
+        "live_provider_edit_count": live_provider_edit_count,
+        "inverse_edit_count": 0,
+        "restored_original": live_provider_edit_count == 0,
+        "claim_boundary": "empty live WorkspaceEdit is a no-op rollback receipt; symbol-level safe-delete remains blocked/shadowed"
+    })
 }
 
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]

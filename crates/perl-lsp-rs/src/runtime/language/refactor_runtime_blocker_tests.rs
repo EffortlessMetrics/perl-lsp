@@ -244,6 +244,64 @@ fn assert_note_contains(
     Ok(())
 }
 
+fn assert_safe_delete_no_live_edit(receipt: &Value) -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
+    let changes = receipt
+        .get("live_provider_result")
+        .and_then(|value| value.get("changes"))
+        .and_then(Value::as_object)
+        .ok_or("safe-delete receipt must expose live provider changes")?;
+    assert!(changes.is_empty(), "safe-delete live provider must return no symbol edits");
+
+    let rollback = receipt.get("rollback_receipt").ok_or("missing rollback_receipt")?;
+    assert_eq!(rollback.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(rollback.get("inverse_edit_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(rollback.get("restored_original").and_then(Value::as_bool), Some(true));
+    let claim_boundary = rollback
+        .get("claim_boundary")
+        .and_then(Value::as_str)
+        .ok_or("missing rollback claim_boundary")?;
+    assert!(
+        claim_boundary.contains("symbol-level safe-delete remains blocked"),
+        "rollback claim boundary must preserve safe-delete cutover boundary: {claim_boundary}"
+    );
+    Ok(())
+}
+
+fn assert_safe_delete_live_blocker_ux(
+    receipt: &Value,
+    expected_reason: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    assert_safe_delete_no_live_edit(receipt)?;
+
+    let live_blocker = receipt.get("live_blocker_ux").ok_or("missing live_blocker_ux")?;
+    assert_eq!(live_blocker.get("decision").and_then(Value::as_str), Some("blocked"));
+    assert_eq!(live_blocker.get("requires_confirmation").and_then(Value::as_bool), Some(true));
+    let blocker_reasons = live_blocker
+        .get("blocker_reasons")
+        .and_then(Value::as_array)
+        .ok_or("missing blocker_reasons")?;
+    assert!(
+        blocker_reasons.iter().any(|reason| reason.as_str() == Some(expected_reason)),
+        "expected live blocker reason `{expected_reason}`, got {blocker_reasons:?}"
+    );
+    let message = live_blocker.get("message").and_then(Value::as_str).ok_or("missing message")?;
+    assert!(
+        message.contains("Safe delete is blocked") && message.contains("no live symbol-level edit"),
+        "live blocker message must explain the no-edit blocker boundary: {message}"
+    );
+    let claim_boundary = live_blocker
+        .get("claim_boundary")
+        .and_then(Value::as_str)
+        .ok_or("missing live blocker claim_boundary")?;
+    assert!(
+        claim_boundary.contains("test-only receipt")
+            && claim_boundary.contains("no live symbol-level safe-delete provider cutover"),
+        "live blocker claim boundary must keep safe-delete shadowed: {claim_boundary}"
+    );
+    Ok(())
+}
+
 #[test]
 fn refactor_runtime_blocker_ux_rename_receipt_blocks_low_confidence_fixture()
 -> Result<(), Box<dyn std::error::Error>> {
@@ -347,6 +405,7 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_low_confidence_fixture
         Some("low_confidence")
     );
     assert_eq!(runtime_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert_safe_delete_live_blocker_ux(&runtime_receipt, "ambiguous_reference")?;
     assert_trace_contains(compiler, "SemanticFact", "Low", "Fresh")?;
     assert_note_contains(
         compiler,
@@ -387,6 +446,7 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_stale_fact_fixture()
         Some("stale_fact")
     );
     assert_eq!(runtime_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert_safe_delete_live_blocker_ux(&runtime_receipt, "stale_fact")?;
     assert_trace_contains(compiler, "CompilerFact", "Low", "Stale")?;
     assert_note_contains(
         compiler,
@@ -457,6 +517,14 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_records_exact_static_plan()
 
     assert_eq!(runtime_receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
     assert_eq!(runtime_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert_safe_delete_no_live_edit(&runtime_receipt)?;
+    let live_blocker =
+        runtime_receipt.get("live_blocker_ux").ok_or("missing live_blocker_ux")?;
+    assert_eq!(
+        live_blocker.get("decision").and_then(Value::as_str),
+        Some("shadow_only_no_live_edit")
+    );
+    assert_eq!(live_blocker.get("requires_confirmation").and_then(Value::as_bool), Some(false));
     assert_eq!(compiler.get("query").and_then(Value::as_str), Some("safe_delete_plan"));
     assert!(trace_count(compiler)? > 0, "safe-delete receipt must carry fact-source traces");
     assert!(
@@ -525,6 +593,7 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_dynamic_boundary()
 
     assert_eq!(runtime_receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
     assert_eq!(runtime_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert_safe_delete_live_blocker_ux(&runtime_receipt, "dynamic_boundary")?;
     assert!(trace_count(compiler)? > 0, "safe-delete receipt must carry fact-source traces");
     assert_note_contains(
         compiler,
@@ -593,6 +662,7 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_generated_member()
 
     assert_eq!(runtime_receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
     assert_eq!(runtime_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert_safe_delete_live_blocker_ux(&runtime_receipt, "generated_member")?;
     assert!(trace_count(compiler)? > 0, "safe-delete receipt must carry fact-source traces");
     assert_note_contains(
         compiler,
@@ -633,7 +703,7 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_dancer2_stale_symbol_f
         Some("stale_fact")
     );
     assert_eq!(compile_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
-    assert_eq!(compile_receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
+    assert_safe_delete_live_blocker_ux(&compile_receipt, "stale_fact")?;
     assert_trace_contains(compile_compiler, "CompilerFact", "Low", "Stale")?;
     assert!(trace_count(compile_compiler)? > 0, "_compile receipt must carry fact-source traces");
     assert_note_contains(
@@ -677,12 +747,12 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_dancer2_generated_dyna
         generated_receipt.get("compiler_plan_fixture").and_then(Value::as_str),
         Some("generated_member")
     );
-    assert_eq!(generated_receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
     assert_eq!(
         generated_receipt.get("no_live_behavior_change").and_then(Value::as_bool),
         Some(true)
     );
     assert_eq!(generated_receipt.get("symbol").and_then(Value::as_str), Some("routes"));
+    assert_safe_delete_live_blocker_ux(&generated_receipt, "generated_member")?;
     assert_trace_contains(generated_compiler, "FrameworkAdapter", "High", "Fresh")?;
     assert_note_contains(
         generated_compiler,
@@ -713,9 +783,9 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_dancer2_generated_dyna
         dynamic_receipt.get("compiler_plan_fixture").and_then(Value::as_str),
         Some("dynamic_boundary")
     );
-    assert_eq!(dynamic_receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
     assert_eq!(dynamic_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
     assert_eq!(dynamic_receipt.get("symbol").and_then(Value::as_str), Some("plugin_keywords"));
+    assert_safe_delete_live_blocker_ux(&dynamic_receipt, "dynamic_boundary")?;
     assert_trace_contains(dynamic_compiler, "DynamicBoundary", "High", "Fresh")?;
     assert_note_contains(
         dynamic_compiler,
@@ -747,14 +817,11 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_dancer2_generated_dyna
         Some("low_confidence")
     );
     assert_eq!(
-        low_confidence_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
-        Some(0)
-    );
-    assert_eq!(
         low_confidence_receipt.get("no_live_behavior_change").and_then(Value::as_bool),
         Some(true)
     );
     assert_eq!(low_confidence_receipt.get("symbol").and_then(Value::as_str), Some("_compile"));
+    assert_safe_delete_live_blocker_ux(&low_confidence_receipt, "ambiguous_reference")?;
     assert_trace_contains(low_confidence_compiler, "SemanticFact", "Low", "Fresh")?;
     assert_note_contains(
         low_confidence_compiler,
@@ -791,8 +858,8 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_real_workspace_importe
 
     assert_eq!(helper_receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
     assert_eq!(helper_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
-    assert_eq!(helper_receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
     assert_eq!(helper_receipt.get("symbol").and_then(Value::as_str), Some("helper"));
+    assert_safe_delete_live_blocker_ux(&helper_receipt, "imported_symbol")?;
     assert_eq!(helper_compiler.get("query").and_then(Value::as_str), Some("safe_delete_plan"));
     assert_trace_contains(helper_compiler, "CompilerFact", "High", "Fresh")?;
     assert!(trace_count(helper_compiler)? > 0, "helper receipt must carry fact-source traces");
