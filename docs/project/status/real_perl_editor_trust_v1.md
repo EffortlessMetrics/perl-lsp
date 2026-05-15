@@ -93,8 +93,10 @@ decisions with fact source, confidence, freshness, fallback, blocker, and
 claim-boundary fields. Provider explanations and attached request receipts now
 carry the additive `provider_decision.v1` schema version plus normalized
 fallback, source-backed, and dynamic-boundary fields while preserving
-provider-specific receipt fields. `perl.previewSafeDelete` now exposes scoped
-safe-delete blocked/allowed previews as user-readable no-edit UX.
+provider-specific receipt fields. `perl.explainProviderDecision` also includes a
+formatted `user_message` for command-palette/output-channel use.
+`perl.previewSafeDelete` now exposes scoped safe-delete blocked/allowed previews
+as user-readable no-edit UX.
 
 Safe-delete support tiers have been reviewed after the scoped preview proof:
 the row remains `shadowed`, and the next proof is actual symbol-delete edit
