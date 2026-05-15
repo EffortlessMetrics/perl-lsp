@@ -37,6 +37,30 @@ fn lexical_declaration_keyword_before(source: &str, symbol_start: usize) -> bool
 }
 
 impl LspServer {
+    fn record_rename_provider_decision_trace(
+        &self,
+        uri: Option<&str>,
+        symbol: Option<&str>,
+        reason: &'static str,
+        edit_count: usize,
+        fallback_state: &'static str,
+    ) {
+        self.record_provider_decision_trace(
+            "rename",
+            &json!({
+                "provider": "rename",
+                "provider_action": "textDocument/rename",
+                "decision": if edit_count > 0 { "acted" } else { "fallback" },
+                "reason": reason,
+                "uri": uri,
+                "symbol": symbol,
+                "live_provider_edit_count": edit_count,
+                "fallback_state": fallback_state,
+                "claim_boundary": "records existing live rename behavior only; compiler-backed refactor facts remain gated by receipt proof"
+            }),
+        );
+    }
+
     fn token_byte_span_in_line(line: &str, offset: usize) -> Option<(usize, usize)> {
         let is_ident_char = |ch: char| ch.is_alphanumeric() || ch == '_';
         let clamped_offset = offset.min(line.len());
@@ -518,6 +542,13 @@ impl LspServer {
                         .unwrap_or(false)
                 };
                 if rename_starts_in_blocked_context {
+                    self.record_rename_provider_decision_trace(
+                        Some(uri),
+                        None,
+                        "blocked_context",
+                        0,
+                        "no_edit",
+                    );
                     return Ok(Some(json!({"changes": {}})));
                 }
 
@@ -567,10 +598,18 @@ impl LspServer {
                                     normalized_bare,
                                 ) {
                                     Ok(edits) if !edits.is_empty() => {
+                                        let edit_count = edits.len();
                                         tracing::debug!(
-                                            count = edits.len(),
+                                            count = edit_count,
                                             reason,
                                             "Rename: served partial-index workspace edits"
+                                        );
+                                        self.record_rename_provider_decision_trace(
+                                            Some(uri),
+                                            current_symbol.as_deref(),
+                                            "partial_index_workspace_edit",
+                                            edit_count,
+                                            "workspace_index",
                                         );
                                         return Ok(Some(
                                             crate::workspace_rename::to_workspace_edit(edits),
@@ -622,7 +661,15 @@ impl LspServer {
                                 if edits.is_empty() {
                                     // Fall through to same-file rename
                                 } else {
+                                    let edit_count = edits.len();
                                     let ws_edit = crate::workspace_rename::to_workspace_edit(edits);
+                                    self.record_rename_provider_decision_trace(
+                                        Some(uri),
+                                        current_symbol.as_deref(),
+                                        "full_index_workspace_edit",
+                                        edit_count,
+                                        "workspace_index",
+                                    );
                                     return Ok(Some(ws_edit));
                                 }
                             }
@@ -642,6 +689,14 @@ impl LspServer {
                         if let Some(edits) =
                             self.scoped_lexical_rename_edits(doc, ast, offset, &normalized_name)
                         {
+                            let edit_count = edits.len();
+                            self.record_rename_provider_decision_trace(
+                                Some(uri),
+                                Some(current_symbol.as_str()),
+                                "same_file_lexical",
+                                edit_count,
+                                "none",
+                            );
                             return Ok(Some(json!({
                                 "changes": {
                                     uri: edits
@@ -656,6 +711,7 @@ impl LspServer {
                         let references = analyzer.find_all_references(offset, true);
 
                         if !references.is_empty() {
+                            let edit_count = references.len();
                             // Create text edits for all references
                             let mut edits = Vec::new();
                             for location in references {
@@ -673,6 +729,13 @@ impl LspServer {
                             }
 
                             // Return WorkspaceEdit with same-file changes only
+                            self.record_rename_provider_decision_trace(
+                                Some(uri),
+                                Some(current_symbol.as_str()),
+                                "same_file_semantic",
+                                edit_count,
+                                "none",
+                            );
                             return Ok(Some(json!({
                                 "changes": {
                                     uri: edits

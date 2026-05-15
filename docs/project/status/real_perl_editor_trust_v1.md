@@ -74,14 +74,17 @@ rename or live symbol-level safe-delete cutover.
 This dashboard keeps the next provider lane separate from parser capability,
 framework facts, PIR, formatter, critic, release, and security work.
 
-1. `feat(provider): persist provider-local decision traces`
-2. `feat(rename): design scoped package/compiler-backed pilot proof`
-3. `docs(status): review safe-delete support after allowed-symbol proof`
+1. `feat(rename): design scoped package/compiler-backed pilot proof`
+2. `docs(status): review safe-delete support after allowed-symbol proof`
+3. `feat(provider): extend persisted decision traces to live provider requests`
 
 Provider decision explanations are already partial-live through
-`perl.explainProviderDecision`; callers can now attach a request-local
-`request_receipt` object for bug reports. The next explanation step is
-provider-owned persistence of the last specific editor-action receipt.
+`perl.explainProviderDecision`; callers can attach a request-local
+`request_receipt` object for bug reports, existing live rename paths now record
+provider-local traces, and covered refactor runtime receipt surfaces persist
+provider-local traces that the command can replay when the caller does not
+provide a receipt. The next explanation step is wiring the same trace model into
+ordinary live completion, navigation, diagnostic, and safe-delete requests.
 
 Parser raw-bucket work, Linux corpus refresh, security alert classification,
 Rust 1.95 rollout, native formatter, native critic, PIR, and determinism remain

@@ -280,6 +280,21 @@ fn explain_provider_decision_with_request_receipt(
     Ok(response)
 }
 
+fn explain_provider_decision(
+    server: &LspServer,
+    provider: &str,
+) -> Result<Value, Box<dyn std::error::Error>> {
+    let response = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.explainProviderDecision",
+            "arguments": [{
+                "provider": provider
+            }]
+        })))?
+        .ok_or("missing explain-provider-decision response")?;
+    Ok(response)
+}
+
 #[test]
 fn refactor_runtime_blocker_ux_rename_receipt_blocks_low_confidence_fixture()
 -> Result<(), Box<dyn std::error::Error>> {
@@ -1111,6 +1126,126 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_records_allowed_symbol_cutove
             .is_some_and(|reason| reason.contains("plan allowed")
                 && reason.contains("no live symbol-level delete")),
         "rollback receipt should explain the allowed no-live-edit path: {rollback_receipt}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_explain_provider_decision_replays_persisted_safe_delete_receipt()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_semantic_real_workspace(&server)?;
+    let base = files.get("lib/RealBaseline/Base.pm").ok_or("missing RealBaseline Base fixture")?;
+
+    let (reset_line, reset_character) = position_of(base, "reset {")?;
+    let reset_params = json!({
+        "textDocument": {"uri": REAL_BASELINE_BASE_URI},
+        "position": {"line": reset_line, "character": reset_character}
+    });
+    let receipt = server
+        .test_safe_delete_runtime_blocker_ux_receipt(Some(reset_params))?
+        .ok_or("missing real-workspace safe-delete allowed-symbol receipt")?;
+    assert_eq!(receipt.get("symbol").and_then(Value::as_str), Some("reset"));
+
+    let explanation = explain_provider_decision(&server, "safe_delete")?;
+    assert_eq!(explanation.get("provider").and_then(Value::as_str), Some("safe_delete"));
+
+    let request_receipt =
+        explanation.get("request_receipt").ok_or("missing persisted request_receipt")?;
+    assert_eq!(request_receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(request_receipt.get("symbol").and_then(Value::as_str), Some("reset"));
+    assert_eq!(request_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        request_receipt
+            .get("compiler_receipt")
+            .and_then(|value| value.get("query"))
+            .and_then(Value::as_str),
+        Some("safe_delete_plan")
+    );
+    assert_eq!(
+        request_receipt
+            .get("live_blocker_ux")
+            .and_then(|value| value.get("decision"))
+            .and_then(Value::as_str),
+        Some("allowed")
+    );
+
+    let caller_receipt = json!({
+        "provider": "safe_delete",
+        "reason": "caller_supplied_receipt"
+    });
+    let caller_explanation = explain_provider_decision_with_request_receipt(
+        &server,
+        "safe_delete",
+        "docs/project/status/provider_confidence_matrix.md#safe-delete",
+        "caller-overrides-persisted-receipt",
+        caller_receipt,
+    )?;
+    let caller_request_receipt =
+        caller_explanation.get("request_receipt").ok_or("missing caller request_receipt")?;
+    assert_eq!(
+        caller_request_receipt.get("reason").and_then(Value::as_str),
+        Some("caller_supplied_receipt")
+    );
+    assert!(
+        caller_request_receipt.get("symbol").is_none(),
+        "caller-provided request_receipt must take precedence over persisted trace"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_explain_provider_decision_replays_live_rename_trace()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let uri = "file:///workspace/lib/RenameTrace.pm";
+    let source = r#"package RenameTrace;
+use strict;
+use warnings;
+
+sub run {
+    my $value = 1;
+    return $value;
+}
+
+1;
+"#;
+    open_document(&server, uri, source)?;
+    let (line, character) = position_of(source, "$value =")?;
+    let rename_result = server
+        .handle_rename_workspace(Some(json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character},
+            "newName": "renamed_value"
+        })))?
+        .ok_or("missing live rename response")?;
+    let edit_count = rename_result
+        .get("changes")
+        .and_then(|changes| changes.get(uri))
+        .and_then(Value::as_array)
+        .map(Vec::len)
+        .ok_or("missing live rename edits")?;
+    assert!(edit_count > 0, "live rename must produce the baseline lexical edits");
+
+    let explanation = explain_provider_decision(&server, "rename")?;
+    let request_receipt =
+        explanation.get("request_receipt").ok_or("missing persisted rename request_receipt")?;
+    assert_eq!(request_receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("textDocument/rename")
+    );
+    let reason = request_receipt.get("reason").and_then(Value::as_str).ok_or("missing reason")?;
+    assert!(
+        matches!(reason, "same_file_lexical" | "same_file_semantic"),
+        "expected a persisted same-file rename trace, got: {request_receipt}"
+    );
+    assert_eq!(request_receipt.get("symbol").and_then(Value::as_str), Some("$value"));
+    assert_eq!(
+        request_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
+        u64::try_from(edit_count).ok()
     );
 
     Ok(())
