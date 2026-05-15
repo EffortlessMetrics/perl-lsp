@@ -170,8 +170,7 @@ fn format_file_storm_does_not_retain_subprocess_outputs_or_temp_state()
     assert_eq!(runtime.emitted_stdout_bytes(), 64 * 16 * 1024);
     assert_eq!(formatter.cache_len(), 0, "format_file must not populate memoized format cache");
 
-    let mut remaining_files: Vec<_> = std::fs::read_dir(temp.path())
-        ?
+    let mut remaining_files: Vec<_> = std::fs::read_dir(temp.path())?
         .map(|entry| entry.map(|entry| entry.path()))
         .collect::<Result<Vec<_>, _>>()?;
     remaining_files.sort();
