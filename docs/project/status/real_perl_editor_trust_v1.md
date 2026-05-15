@@ -74,21 +74,24 @@ rename or live symbol-level safe-delete cutover.
 This dashboard keeps the next provider lane separate from parser capability,
 framework facts, PIR, formatter, critic, release, and security work.
 
-1. `feat(diagnostics): persist diagnostic trust decisions`
-2. `feat(safe-delete): persist blocker decision traces`
-3. `test(rename): add real-workspace package/compiler-backed pilot receipt`
-4. `feat(safe-delete): prove scoped live symbol-delete UX`
+1. `feat(safe-delete): persist blocker decision traces`
+2. `test(rename): add real-workspace package/compiler-backed pilot receipt`
+3. `feat(safe-delete): prove scoped live symbol-delete UX`
+4. `feat(provider): normalize provider decision explanation schema`
 
 Provider decision explanations are already partial-live through
 `perl.explainProviderDecision`; callers can attach a request-local
 `request_receipt` object for bug reports, existing live rename paths now record
 provider-local traces, and covered refactor runtime receipt surfaces persist
 provider-local traces that the command can replay when the caller does not
-provide a receipt. Ordinary live completion, goto-definition, and references
-requests now persist the same trace model; navigation request traces are
-trace-only, low-confidence receipts and do not broaden compiler-fact cutover
-claims. The next explanation step is wiring provider-local traces into ordinary
-diagnostic and safe-delete requests.
+provide a receipt. Ordinary live completion, goto-definition, references,
+hover, diagnostic, document-symbol, workspace-symbol, and semantic-token
+requests now persist the same trace model. Navigation and dispatcher traces are
+trace-only, low-confidence request-shape receipts; they do not replace
+surface-specific compiler proof, and dispatcher traces deliberately do not
+overwrite completion's richer provider-local receipt. The next explanation step
+is wiring provider-local traces into scoped safe-delete UX, then normalizing the
+shared schema.
 
 Safe-delete support tiers have been reviewed after the allowed-symbol proof:
 the row remains `shadowed`, and the next proof is scoped live symbol-delete UX

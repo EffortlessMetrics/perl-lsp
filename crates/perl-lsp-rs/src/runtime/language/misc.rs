@@ -19,6 +19,89 @@ use std::time::Instant;
 
 static INLINE_VALUE_REGEX: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 
+struct LiveProviderResultShape {
+    decision: &'static str,
+    reason: &'static str,
+    fallback_state: &'static str,
+    result_kind: &'static str,
+    result_count: usize,
+    error: Option<Value>,
+}
+
+fn live_provider_trace_key(method: &str) -> Option<&'static str> {
+    match method {
+        "textDocument/hover" => Some("hover"),
+        "textDocument/diagnostic" | "workspace/diagnostic" => Some("diagnostics"),
+        "textDocument/documentSymbol" => Some("document_symbols"),
+        "workspace/symbol" => Some("workspace_symbols"),
+        "textDocument/semanticTokens/full" | "textDocument/semanticTokens/range" => {
+            Some("semantic_tokens")
+        }
+        _ => None,
+    }
+}
+
+fn live_provider_result_shape(
+    result: &Result<Option<Value>, JsonRpcError>,
+) -> LiveProviderResultShape {
+    match result {
+        Ok(Some(value)) => {
+            let (result_kind, result_count) = live_provider_value_shape(value);
+            let has_result = result_count > 0;
+            LiveProviderResultShape {
+                decision: if has_result { "acted" } else { "fallback" },
+                reason: if has_result { "live_provider_result" } else { "no_result" },
+                fallback_state: if has_result { "live_provider" } else { "no_result" },
+                result_kind,
+                result_count,
+                error: None,
+            }
+        }
+        Ok(None) => LiveProviderResultShape {
+            decision: "fallback",
+            reason: "no_result",
+            fallback_state: "no_result",
+            result_kind: "none",
+            result_count: 0,
+            error: None,
+        },
+        Err(error) => LiveProviderResultShape {
+            decision: "fallback",
+            reason: "provider_error",
+            fallback_state: "provider_error",
+            result_kind: "error",
+            result_count: 0,
+            error: Some(json!({
+                "code": error.code,
+                "message": error.message,
+            })),
+        },
+    }
+}
+
+fn live_provider_value_shape(value: &Value) -> (&'static str, usize) {
+    if value.is_null() {
+        return ("null", 0);
+    }
+    if let Some(items) = value.get("items").and_then(Value::as_array) {
+        return ("items", items.len());
+    }
+    if let Some(data) = value.get("data").and_then(Value::as_array) {
+        return ("semantic_token_data", data.len() / 5);
+    }
+    if let Some(changes) = value.get("changes").and_then(Value::as_object) {
+        let edit_count = changes.values().filter_map(Value::as_array).map(Vec::len).sum();
+        return ("workspace_edit_changes", edit_count);
+    }
+    if let Some(array) = value.as_array() {
+        return ("array", array.len());
+    }
+    if value.is_object() {
+        return ("object", 1);
+    }
+    ("scalar", 1)
+}
+
 fn unresolved_debug_perl_error(resolved: &std::path::Path) -> JsonRpcError {
     JsonRpcError {
         code: -32603,
@@ -55,6 +138,47 @@ impl LspServer {
         if receipt.is_object() {
             self.provider_decision_traces.lock().insert(provider.to_string(), receipt.clone());
         }
+    }
+
+    pub(crate) fn record_live_provider_decision_trace(
+        &self,
+        method: &str,
+        result: &Result<Option<Value>, JsonRpcError>,
+    ) {
+        let Some(provider) = live_provider_trace_key(method) else {
+            return;
+        };
+
+        let shape = live_provider_result_shape(result);
+        let mut receipt = serde_json::Map::new();
+        receipt.insert("provider".to_string(), json!(provider));
+        receipt.insert("provider_action".to_string(), json!(method));
+        receipt.insert("decision".to_string(), json!(shape.decision));
+        receipt.insert("reason".to_string(), json!(shape.reason));
+        receipt.insert("fact_source".to_string(), json!("provider_runtime"));
+        receipt.insert("confidence".to_string(), json!("low"));
+        receipt.insert("freshness".to_string(), json!("fresh"));
+        receipt.insert("source_backed".to_string(), json!(false));
+        receipt.insert("source_backed_state".to_string(), json!("not_proven_by_dispatch_trace"));
+        receipt.insert("dynamic_boundary".to_string(), json!(false));
+        receipt.insert("fallback_state".to_string(), json!(shape.fallback_state));
+        receipt.insert("live_provider_result_kind".to_string(), json!(shape.result_kind));
+        receipt.insert(
+            "live_provider_result_count".to_string(),
+            json!(u64::try_from(shape.result_count).unwrap_or(u64::MAX)),
+        );
+        receipt.insert("trace_only_no_live_behavior_change".to_string(), json!(true));
+        receipt.insert(
+            "claim_boundary".to_string(),
+            json!(
+                "records live provider request shape only; compiler-fact trust remains gated by surface receipts"
+            ),
+        );
+        if let Some(error) = shape.error {
+            receipt.insert("provider_error".to_string(), error);
+        }
+
+        self.record_provider_decision_trace(provider, &Value::Object(receipt));
     }
 
     fn provider_decision_trace(&self, provider: &str) -> Option<Value> {

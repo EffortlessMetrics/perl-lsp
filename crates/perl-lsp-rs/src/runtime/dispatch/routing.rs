@@ -204,6 +204,7 @@ impl LspServer {
             }
         };
 
+        self.record_live_provider_decision_trace(&method, &result);
         RoutedResponse::Handler { id, method, should_respond, result }
     }
 
@@ -225,6 +226,7 @@ impl LspServer {
         }
 
         let result = handler(id.as_ref());
+        self.record_live_provider_decision_trace(&method, &result);
         RoutedResponse::Handler { id, method, should_respond, result }
     }
 }
