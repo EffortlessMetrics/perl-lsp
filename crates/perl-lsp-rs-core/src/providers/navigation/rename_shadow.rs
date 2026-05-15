@@ -22,9 +22,9 @@
 //!   Dynamic/Unavailable → block.
 
 use perl_semantic_facts::{
-    Confidence, EntityId, PlanBlocker, PlanBlockerReason, PlannedEdit, Provenance,
-    ProviderFactFreshness, ProviderFactSourceKind, ProviderFactTrace, ProviderFallbackState,
-    ProviderSurface, RenamePlan,
+    Confidence, EntityId, PlanBlocker, PlanBlockerReason, PlannedEdit, PlannedEditCategory,
+    Provenance, ProviderFactFreshness, ProviderFactSourceKind, ProviderFactTrace,
+    ProviderFallbackState, ProviderSurface, RenamePlan,
 };
 use perl_workspace::semantic::queries::SemanticQueries;
 use perl_workspace::semantic_shadow_compare::{
@@ -132,6 +132,53 @@ pub struct RenameCutoverOutcome {
     pub receipt: SemanticShadowCompareReceipt,
 }
 
+/// Classification for a package/compiler-backed rename pilot proof.
+///
+/// This is intentionally narrower than [`RenameCutoverResult`]. It records
+/// whether a semantic rename plan is eligible for a future scoped pilot, but it
+/// does not broaden live rename behavior.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum RenamePackagePilotResult {
+    /// The plan is eligible for the scoped pilot proof.
+    Eligible {
+        /// The source-backed definition/reference edits covered by the proof.
+        edits: Vec<PlannedEdit>,
+    },
+    /// The plan is not eligible for the scoped pilot proof.
+    Ineligible {
+        /// Why the plan is outside the pilot envelope.
+        reason: RenamePackagePilotIneligibleReason,
+        /// Any planned edits found in the semantic plan.
+        edits: Vec<PlannedEdit>,
+        /// Any blockers found in the semantic plan.
+        blockers: Vec<PlanBlocker>,
+    },
+}
+
+/// Why a package/compiler-backed rename plan is outside the pilot proof.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum RenamePackagePilotIneligibleReason {
+    /// No edits were produced, so there is no source-backed action to prove.
+    EmptyPlan,
+    /// One or more blockers prevent authorizing the edit.
+    Blocked,
+    /// The plan contains edit categories outside source-backed definition and
+    /// reference replacement.
+    UnsupportedEditCategory,
+}
+
+/// Outcome of a package/compiler-backed rename pilot proof request.
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct RenamePackagePilotOutcome {
+    /// The pilot-specific classification.
+    pub result: RenamePackagePilotResult,
+    /// Shadow-compare receipt for scorecard aggregation.
+    pub receipt: SemanticShadowCompareReceipt,
+}
+
 // ── Cutover entry point ──
 
 /// Run rename with the semantic path as primary.
@@ -194,12 +241,86 @@ pub fn rename_cutover<Q: SemanticQueries>(
     RenameCutoverOutcome { result, receipt }
 }
 
+/// Classify a semantic rename plan for a future package/compiler-backed pilot.
+///
+/// This reuses the cutover receipt path but applies a narrower policy envelope:
+/// source-backed definition/reference edits only, no blockers, and at least one
+/// edit. The returned proof is receipt-only; callers must not treat it as live
+/// package/compiler-backed rename authorization.
+pub fn rename_package_pilot_proof<Q: SemanticQueries>(
+    legacy_allowed: bool,
+    semantic_queries: &Q,
+    entity_id: EntityId,
+    new_name: &str,
+) -> RenamePackagePilotOutcome {
+    let cutover = rename_cutover(legacy_allowed, semantic_queries, entity_id, new_name);
+    let result = classify_package_pilot_result(cutover.result);
+    let mut receipt = cutover.receipt;
+    receipt.notes.push(package_pilot_receipt_note(&result));
+
+    RenamePackagePilotOutcome { result, receipt }
+}
+
 /// Classify a rename plan into the cutover result category.
 fn classify_rename_result(plan: RenamePlan) -> RenameCutoverResult {
     if plan.blockers.is_empty() {
         RenameCutoverResult::Allowed { edits: plan.edits }
     } else {
         RenameCutoverResult::Blocked { blockers: plan.blockers, edits: plan.edits }
+    }
+}
+
+fn classify_package_pilot_result(result: RenameCutoverResult) -> RenamePackagePilotResult {
+    match result {
+        RenameCutoverResult::Blocked { blockers, edits } => RenamePackagePilotResult::Ineligible {
+            reason: RenamePackagePilotIneligibleReason::Blocked,
+            edits,
+            blockers,
+        },
+        RenameCutoverResult::Allowed { edits } if edits.is_empty() => {
+            RenamePackagePilotResult::Ineligible {
+                reason: RenamePackagePilotIneligibleReason::EmptyPlan,
+                edits,
+                blockers: Vec::new(),
+            }
+        }
+        RenameCutoverResult::Allowed { edits }
+            if edits.iter().all(is_package_pilot_edit_category) =>
+        {
+            RenamePackagePilotResult::Eligible { edits }
+        }
+        RenameCutoverResult::Allowed { edits } => RenamePackagePilotResult::Ineligible {
+            reason: RenamePackagePilotIneligibleReason::UnsupportedEditCategory,
+            edits,
+            blockers: Vec::new(),
+        },
+    }
+}
+
+fn is_package_pilot_edit_category(edit: &PlannedEdit) -> bool {
+    matches!(edit.category, PlannedEditCategory::Definition | PlannedEditCategory::Reference)
+}
+
+fn package_pilot_receipt_note(result: &RenamePackagePilotResult) -> String {
+    let (eligible, reason, edit_count, blocker_count) = match result {
+        RenamePackagePilotResult::Eligible { edits } => ("true", "none", edits.len(), 0),
+        RenamePackagePilotResult::Ineligible { reason, edits, blockers } => {
+            ("false", reason.label(), edits.len(), blockers.len())
+        }
+    };
+
+    format!(
+        "rename package pilot proof: eligible={eligible}; reason={reason}; edit_count={edit_count}; blocker_count={blocker_count}; claim_boundary=receipt-only package/compiler-backed pilot; no_live_rename_cutover=true"
+    )
+}
+
+impl RenamePackagePilotIneligibleReason {
+    fn label(self) -> &'static str {
+        match self {
+            Self::EmptyPlan => "empty_plan",
+            Self::Blocked => "blocked",
+            Self::UnsupportedEditCategory => "unsupported_edit_category",
+        }
     }
 }
 
@@ -929,6 +1050,154 @@ mod tests {
             }
             other => return Err(format!("expected Allowed, got {:?}", other).into()),
         }
+        Ok(())
+    }
+
+    #[test]
+    fn rename_package_pilot_allows_source_backed_definition_and_reference()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let edits = vec![
+            make_edit(10, PlannedEditCategory::Definition),
+            make_edit(20, PlannedEditCategory::Reference),
+        ];
+        let plan = RenamePlan::new(
+            EntityId(1),
+            "Old::Name".to_string(),
+            "New::Name".to_string(),
+            edits.clone(),
+            vec![],
+            vec![],
+        );
+        let queries = StubSemanticQueries { rename_plan_result: plan };
+
+        let outcome = rename_package_pilot_proof(true, &queries, EntityId(1), "New::Name");
+
+        match &outcome.result {
+            RenamePackagePilotResult::Eligible { edits: result_edits } => {
+                assert_eq!(*result_edits, edits);
+            }
+            other => return Err(format!("expected Eligible, got {:?}", other).into()),
+        }
+        let notes = outcome.receipt.notes.join(" ");
+        assert!(notes.contains("eligible=true"), "missing eligible note in {}", notes);
+        assert!(
+            notes.contains("claim_boundary=receipt-only package/compiler-backed pilot"),
+            "missing claim boundary in {}",
+            notes
+        );
+        assert!(
+            notes.contains("no_live_rename_cutover=true"),
+            "missing no-live boundary in {}",
+            notes
+        );
+        for trace in &outcome.receipt.fact_source_traces {
+            assert_eq!(trace.surface, ProviderSurface::Rename);
+            assert_eq!(trace.source, ProviderFactSourceKind::SemanticFact);
+            assert_eq!(trace.provenance, Provenance::ExactAst);
+            assert_eq!(trace.confidence, Confidence::High);
+            assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
+            assert_eq!(trace.fallback_state, ProviderFallbackState::Primary);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn rename_package_pilot_rejects_empty_plan() -> Result<(), Box<dyn std::error::Error>> {
+        let plan = RenamePlan::new(
+            EntityId(1),
+            "Old::Name".to_string(),
+            "New::Name".to_string(),
+            vec![],
+            vec![],
+            vec![],
+        );
+        let queries = StubSemanticQueries { rename_plan_result: plan };
+
+        let outcome = rename_package_pilot_proof(true, &queries, EntityId(1), "New::Name");
+
+        match &outcome.result {
+            RenamePackagePilotResult::Ineligible { reason, edits, blockers } => {
+                assert_eq!(*reason, RenamePackagePilotIneligibleReason::EmptyPlan);
+                assert!(edits.is_empty());
+                assert!(blockers.is_empty());
+            }
+            other => return Err(format!("expected Ineligible, got {:?}", other).into()),
+        }
+        let notes = outcome.receipt.notes.join(" ");
+        assert!(notes.contains("eligible=false"), "missing ineligible note in {}", notes);
+        assert!(notes.contains("reason=empty_plan"), "missing reason in {}", notes);
+        Ok(())
+    }
+
+    #[test]
+    fn rename_package_pilot_rejects_import_and_export_edits()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let edits = vec![
+            make_edit(30, PlannedEditCategory::ImportList),
+            make_edit(40, PlannedEditCategory::ExportList),
+        ];
+        let plan = RenamePlan::new(
+            EntityId(1),
+            "Old::Name".to_string(),
+            "New::Name".to_string(),
+            edits,
+            vec![],
+            vec![],
+        );
+        let queries = StubSemanticQueries { rename_plan_result: plan };
+
+        let outcome = rename_package_pilot_proof(true, &queries, EntityId(1), "New::Name");
+
+        match &outcome.result {
+            RenamePackagePilotResult::Ineligible { reason, blockers, .. } => {
+                assert_eq!(*reason, RenamePackagePilotIneligibleReason::UnsupportedEditCategory);
+                assert!(blockers.is_empty());
+            }
+            other => return Err(format!("expected Ineligible, got {:?}", other).into()),
+        }
+        let notes = outcome.receipt.notes.join(" ");
+        assert!(
+            notes.contains("reason=unsupported_edit_category"),
+            "missing unsupported category reason in {}",
+            notes
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn rename_package_pilot_rejects_dynamic_generated_stale_and_low_confidence_blockers()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let blockers = vec![
+            make_blocker(PlanBlockerReason::DynamicBoundary),
+            make_blocker(PlanBlockerReason::GeneratedMember),
+            make_blocker(PlanBlockerReason::StaleFact),
+            make_blocker(PlanBlockerReason::AmbiguousReference),
+        ];
+        let plan = RenamePlan::new(
+            EntityId(1),
+            "Old::Name".to_string(),
+            "New::Name".to_string(),
+            vec![make_edit(10, PlannedEditCategory::Definition)],
+            blockers,
+            vec![],
+        );
+        let queries = StubSemanticQueries { rename_plan_result: plan };
+
+        let outcome = rename_package_pilot_proof(true, &queries, EntityId(1), "New::Name");
+
+        match &outcome.result {
+            RenamePackagePilotResult::Ineligible { reason, blockers, .. } => {
+                assert_eq!(*reason, RenamePackagePilotIneligibleReason::Blocked);
+                assert_eq!(blockers.len(), 4);
+            }
+            other => return Err(format!("expected Ineligible, got {:?}", other).into()),
+        }
+        let notes = outcome.receipt.notes.join(" ");
+        assert!(notes.contains("reason=blocked"), "missing blocked reason in {}", notes);
+        assert!(notes.contains("dynamic_boundary=true"), "missing dynamic note in {}", notes);
+        assert!(notes.contains("generated_member=true"), "missing generated note in {}", notes);
+        assert!(notes.contains("stale_fact=true"), "missing stale note in {}", notes);
+        assert!(notes.contains("low_confidence=true"), "missing low-confidence note in {}", notes);
         Ok(())
     }
 
