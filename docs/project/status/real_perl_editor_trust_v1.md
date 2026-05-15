@@ -57,7 +57,7 @@ blocker when relevant.
 | Document symbols | `partial live source-backed` | Runtime quality receipts record source-backed parser-syntax symbol counts and fact traces; Mojolicious scenario 32 records source-backed explicit symbols, generated `has` candidate counts, dynamic-boundary-shaped names, and edit freshness | Astless, stale, dynamic, virtual generated/no-source, low-confidence, and ambiguous candidates keep fallback/gated behavior | Generated-label proof and additional project-shape document-symbol receipts before generated, dynamic, or broader symbol cutover |
 | Workspace symbols | `shadowed` | Shadow compare records quality candidates; Mojolicious scenario 33 records live-provider query latency, useful/noisy hits, generated candidate gating, dynamic-boundary-shaped names, and edit freshness; Dancer2 scenario 39 adds second-project workspace-symbol noise, generated/dynamic candidate boundary, and edit-freshness proof | Existing workspace index remains live; stale/dynamic/generated compiler candidates stay gated | Live high-confidence compiler-symbol cutover proof after explicit rank/cutover receipts |
 | Semantic tokens | `shadowed` | Mojolicious scenario 34 records live token counts, LSP 5-tuple/span validity, source-backed token hits, dynamic-boundary string non-promotion, and edit freshness; Dancer2 scenario 38 adds second-project package, DSL, app, typeglob-boundary, and edit-freshness token proof | Existing parser/token provider remains live; stale/dynamic compiler classifications stay shadowed | Narrow compiler-backed token classes before live cutover |
-| Rename | `partial live lexical / boundary-shadowed compiler facts` | Mojolicious scenario 35 records exact local lexical edits, generated-accessor no-edit boundary, dynamic typeglob-string no-edit boundary, and open-document freshness; Dancer2 scenario 37 adds a second real-workspace unsafe-edit receipt covering exact lexical edits, generated `has` accessor no-edit behavior, dynamic typeglob no-edit behavior, and freshness; #8915 proves a narrow same-file scoped lexical live slice; `lsp_rename_tests::test_workspace_rename_workspace_edit_rolls_back_cleanly` proves scoped qualified multi-file WorkspaceEdits can be inverted exactly; the RealBaseline `helper -> renamed_helper` runtime receipt records live-provider ambiguity and `compiler_empty` fallback/noise without promotion, and the request-local explain-provider-decision receipt preserves that fallback/noise object for bug-report context; the imported `alias -> renamed_alias` call receipt records live-provider edit noise and `compiler_missing` fallback/noise without promotion; the core package/compiler-backed pilot proof classifies source-backed definition/reference plans, and the runtime package-pilot receipt covers the real-workspace empty-plan boundary, but package/compiler-backed rename remains receipt-only | Same-file scoped live rename requires exactly one source-backed `my` or `state` declaration edit; stale, low-confidence, generated, dynamic, package-wide, empty fallback, missing compiler proof, and broader compiler-backed facts cannot authorize edits | Package rename preview UX plus rollback, fallback, and noise receipts before broader rename migration |
+| Rename | `partial live lexical / boundary-shadowed compiler facts` | Mojolicious scenario 35 records exact local lexical edits, generated-accessor no-edit boundary, dynamic typeglob-string no-edit boundary, and open-document freshness; Dancer2 scenario 37 adds a second real-workspace unsafe-edit receipt covering exact lexical edits, generated `has` accessor no-edit behavior, dynamic typeglob no-edit behavior, and freshness; #8915 proves a narrow same-file scoped lexical live slice; `lsp_rename_tests::test_workspace_rename_workspace_edit_rolls_back_cleanly` proves scoped qualified multi-file WorkspaceEdits can be inverted exactly; the RealBaseline `helper -> renamed_helper` runtime receipt records live-provider ambiguity and `compiler_empty` fallback/noise without promotion, and the request-local explain-provider-decision receipt preserves that fallback/noise object for bug-report context; the imported `alias -> renamed_alias` call receipt records live-provider edit noise and `compiler_missing` fallback/noise without promotion; the core package/compiler-backed pilot proof classifies source-backed definition/reference plans, the runtime package-pilot receipt covers the real-workspace empty-plan boundary, and `perl.previewPackageRename` exposes scoped no-edit planned-edit/blocker/fallback UX, but package/compiler-backed rename remains receipt-only | Same-file scoped live rename requires exactly one source-backed `my` or `state` declaration edit; stale, low-confidence, generated, dynamic, package-wide, empty fallback, missing compiler proof, and broader compiler-backed facts cannot authorize edits | Package rename rollback and additional fallback/noise receipts before broader rename migration |
 | Safe delete | `boundary-shadowed` | Mojolicious scenario 36 records file-delete warning UX for a dependent module delete; Dancer2 runtime receipts record symbol-level `_compile`, `routes`, and `plugin_keywords` request shapes where stale, generated, dynamic-boundary, and low-confidence fixtures block deletion with zero live edits; CPAN-style RealBaseline runtime receipts record `RealBaseline::Util::helper` blocked by fresh compiler facts because it is imported by another file and `RealBaseline::Base::reset` allowed by fresh high-confidence semantic facts, with explicit no-live-edit rollback state for both paths; covered safe-delete receipt paths persist trace-only provider decisions that `perl.explainProviderDecision` can replay; `perl.previewSafeDelete` exposes blocked/allowed scoped no-edit UX for those paths | Stale, low-confidence, generated, imported/exported, and dynamic facts cannot authorize symbol deletion; allowed semantic proof still does not enable live symbol deletion; safe-delete decision traces and previews are explanations, not edit authorization | Actual symbol-delete edit cutover proof with rollback before promotion |
 
 ## Refactor Support Review
@@ -74,9 +74,9 @@ rename or live symbol-level safe-delete cutover.
 This dashboard keeps the next provider lane separate from parser capability,
 framework facts, PIR, formatter, critic, release, and security work.
 
-1. `feat(rename): add package rename preview command`
-2. `feat(workspace-symbols): enable high-confidence compiler symbols`
-3. `test(workspace-symbols): verify live compiler-symbol slice`
+1. `feat(workspace-symbols): enable high-confidence compiler symbols`
+2. `test(workspace-symbols): verify live compiler-symbol slice`
+3. `test(rename): add package rename rollback and fallback/noise preview receipts`
 
 Provider decision explanations are already partial-live through
 `perl.explainProviderDecision`; callers can attach a request-local
@@ -101,6 +101,9 @@ request position when supplied, support-tier link, and normalized receipt
 context for bug reports.
 `perl.previewSafeDelete` now exposes scoped safe-delete blocked/allowed previews
 as user-readable no-edit UX.
+`perl.previewPackageRename` now exposes scoped package/compiler-backed rename
+previews as user-readable no-edit UX with planned edit evidence plus fallback
+or blocker state.
 VS Code command palette wiring now exposes provider explanation, safe-delete
 preview, and copyable receipt commands without changing provider behavior or
 safe-delete edit authorization.
@@ -108,8 +111,8 @@ safe-delete edit authorization.
 Package/compiler-backed rename support has been reviewed after the runtime
 package-pilot receipt: same-file lexical rename remains the only live rename
 claim, and package/compiler-backed rename remains preview/receipt-only until a
-dedicated no-edit preview surface proves planned edits, blockers, rollback, and
-fallback/noise behavior.
+dedicated rollback and fallback/noise proof shows the preview path is stable
+enough for a later gated cutover decision.
 
 Safe-delete support tiers have been reviewed after the scoped preview proof:
 the row remains `shadowed`, and the next proof is actual symbol-delete edit

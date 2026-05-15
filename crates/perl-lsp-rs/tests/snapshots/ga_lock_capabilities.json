@@ -70,7 +70,8 @@
       "perl.goToTest",
       "perl.goToImplementation",
       "perl.explainProviderDecision",
-      "perl.previewSafeDelete"
+      "perl.previewSafeDelete",
+      "perl.previewPackageRename"
     ]
   },
   "experimental": {
