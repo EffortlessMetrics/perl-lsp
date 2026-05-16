@@ -15,7 +15,7 @@ use crate::protocol::{req_position, req_uri};
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
 #[cfg(feature = "workspace")]
 use perl_lsp_rs_core::providers::navigation::rename_shadow::{
-    RenamePackagePilotResult, rename_package_pilot_proof,
+    RenamePackagePilotIneligibleReason, RenamePackagePilotResult, rename_package_pilot_proof,
 };
 use perl_lsp_rs_core::providers::rename::{RenameOptions, RenameProvider, TextEdit as RenameEdit};
 #[cfg(feature = "workspace")]
@@ -119,7 +119,7 @@ impl LspServer {
         byte_offset: usize,
         symbol: &str,
         new_name_bare: &str,
-    ) -> Option<(Value, usize)> {
+    ) -> Option<Result<(Value, usize), ()>> {
         let byte_offset = u32::try_from(byte_offset).ok()?;
         workspace_index
             .with_semantic_queries_for_uri(uri, |file_id, queries| {
@@ -127,10 +127,15 @@ impl LspServer {
                     Self::package_rename_pilot_entity_id(&queries, file_id, byte_offset, symbol)?;
                 let outcome = rename_package_pilot_proof(true, &queries, entity_id, new_name_bare);
                 match outcome.result {
-                    RenamePackagePilotResult::Eligible { edits } => {
+                    RenamePackagePilotResult::Eligible { edits } => Some(
                         Self::package_rename_pilot_edits_to_workspace_edit(workspace_index, edits)
-                    }
-                    RenamePackagePilotResult::Ineligible { .. } => None,
+                            .ok_or(()),
+                    ),
+                    RenamePackagePilotResult::Ineligible {
+                        reason: RenamePackagePilotIneligibleReason::EmptyPlan,
+                        ..
+                    } => None,
+                    RenamePackagePilotResult::Ineligible { .. } => Some(Err(())),
                     _ => None,
                 }
             })
@@ -716,69 +721,71 @@ impl LspServer {
                                 && rename_is_package_scoped
                             {
                                 let idx = coordinator.index();
-                                if let Some((ws_edit, edit_count)) = self
-                                    .package_rename_live_pilot_workspace_edit(
-                                        idx.as_ref(),
-                                        uri,
-                                        offset,
-                                        symbol,
-                                        normalized_bare,
-                                    )
-                                {
-                                    if let Some(key) = workspace_symbol_key.as_ref() {
-                                        match crate::features::workspace_rename::build_rename_edit(
-                                            idx.as_ref(),
-                                            key,
-                                            normalized_bare,
-                                        ) {
-                                            Ok(edits) if !edits.is_empty() => {
-                                                let edit_count = edits
-                                                    .iter()
-                                                    .map(|rename_edit| rename_edit.edits.len())
-                                                    .sum::<usize>();
-                                                let ws_edit =
-                                                    crate::features::workspace_rename::to_workspace_edit(edits);
-                                                self.record_rename_provider_decision_trace(
-                                                    Some(uri),
-                                                    Some(symbol),
-                                                    "package_local_live_pilot",
-                                                    edit_count,
-                                                    "none",
-                                                );
-                                                return Ok(Some(ws_edit));
-                                            }
-                                            Ok(_) => {}
-                                            Err(_) => {
-                                                self.record_rename_provider_decision_trace(
-                                                    Some(uri),
-                                                    Some(symbol),
-                                                    "package_local_live_pilot_blocked",
-                                                    0,
-                                                    "no_edit",
-                                                );
-                                                return Ok(Some(json!({"changes": {}})));
+                                match self.package_rename_live_pilot_workspace_edit(
+                                    idx.as_ref(),
+                                    uri,
+                                    offset,
+                                    symbol,
+                                    normalized_bare,
+                                ) {
+                                    Some(Ok((ws_edit, edit_count))) => {
+                                        if let Some(key) = workspace_symbol_key.as_ref() {
+                                            match crate::features::workspace_rename::build_rename_edit(
+                                                idx.as_ref(),
+                                                key,
+                                                normalized_bare,
+                                            ) {
+                                                Ok(edits) if !edits.is_empty() => {
+                                                    let edit_count = edits
+                                                        .iter()
+                                                        .map(|rename_edit| rename_edit.edits.len())
+                                                        .sum::<usize>();
+                                                    let ws_edit =
+                                                        crate::features::workspace_rename::to_workspace_edit(edits);
+                                                    self.record_rename_provider_decision_trace(
+                                                        Some(uri),
+                                                        Some(symbol),
+                                                        "package_local_live_pilot",
+                                                        edit_count,
+                                                        "none",
+                                                    );
+                                                    return Ok(Some(ws_edit));
+                                                }
+                                                Ok(_) => {}
+                                                Err(_) => {
+                                                    self.record_rename_provider_decision_trace(
+                                                        Some(uri),
+                                                        Some(symbol),
+                                                        "package_local_live_pilot_blocked",
+                                                        0,
+                                                        "no_edit",
+                                                    );
+                                                    return Ok(Some(json!({"changes": {}})));
+                                                }
                                             }
                                         }
+
+                                        self.record_rename_provider_decision_trace(
+                                            Some(uri),
+                                            Some(symbol),
+                                            "package_local_live_pilot",
+                                            edit_count,
+                                            "none",
+                                        );
+                                        return Ok(Some(ws_edit));
                                     }
-
-                                    self.record_rename_provider_decision_trace(
-                                        Some(uri),
-                                        Some(symbol),
-                                        "package_local_live_pilot",
-                                        edit_count,
-                                        "none",
-                                    );
-                                    return Ok(Some(ws_edit));
+                                    Some(Err(())) => {
+                                        self.record_rename_provider_decision_trace(
+                                            Some(uri),
+                                            Some(symbol),
+                                            "package_local_live_pilot_blocked",
+                                            0,
+                                            "no_edit",
+                                        );
+                                        return Ok(Some(json!({"changes": {}})));
+                                    }
+                                    None => {}
                                 }
-
-                                self.record_rename_provider_decision_trace(
-                                    Some(uri),
-                                    Some(symbol),
-                                    "package_local_live_pilot_blocked",
-                                    0,
-                                    "no_edit",
-                                );
-                                return Ok(Some(json!({"changes": {}})));
                             }
                         }
                     }
