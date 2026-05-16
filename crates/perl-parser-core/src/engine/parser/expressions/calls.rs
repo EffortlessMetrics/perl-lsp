@@ -91,7 +91,13 @@ impl<'a> Parser<'a> {
                 | TokenKind::RightBrace
                 | TokenKind::RightParen
                 | TokenKind::Comma
-                | TokenKind::Eof => return false,
+                | TokenKind::Eof
+                // Word operators terminate a zero-arg list; they never begin an indirect object.
+                // e.g. `print or die "msg"` → `(print) or (die "msg")`
+                | TokenKind::WordOr
+                | TokenKind::WordAnd
+                | TokenKind::WordXor
+                | TokenKind::WordNot => return false,
                 _ => {}
             }
 

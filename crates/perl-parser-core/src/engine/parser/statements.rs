@@ -847,7 +847,14 @@ impl<'a> Parser<'a> {
                         | Some(TokenKind::Foreach)
                         | Some(TokenKind::RightBrace)
                         | Some(TokenKind::Eof)
-                        | None => {
+                        | None
+                        // Word operators bind less tightly than any list operator, so they
+                        // terminate a zero-argument builtin call rather than starting its args.
+                        // e.g. `print or die "msg"` → `(print) or (die "msg")`
+                        | Some(TokenKind::WordOr)
+                        | Some(TokenKind::WordAnd)
+                        | Some(TokenKind::WordXor)
+                        | Some(TokenKind::WordNot) => {
                             // No arguments - return as function call with empty args
                             let end = self.previous_position();
                             Ok(Node::new(
