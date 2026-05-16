@@ -332,3 +332,517 @@ pub fn req_range(params: &Value) -> Result<((u32, u32), (u32, u32)), JsonRpcErro
         .map_err(|_| invalid_params("range.end.character exceeds u32::MAX"))?;
     Ok(((start_line, start_char), (end_line, end_char)))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::error::Error;
+
+    // =========================================================================
+    // ErrorCode enum — verify repr values match constants
+    // =========================================================================
+
+    #[test]
+    fn error_code_parse_error_matches_constant() -> Result<(), Box<dyn Error>> {
+        assert_eq!(ErrorCode::ParseError as i32, PARSE_ERROR);
+        assert_eq!(PARSE_ERROR, -32700);
+        Ok(())
+    }
+
+    #[test]
+    fn error_code_invalid_request_matches_constant() -> Result<(), Box<dyn Error>> {
+        assert_eq!(ErrorCode::InvalidRequest as i32, INVALID_REQUEST);
+        assert_eq!(INVALID_REQUEST, -32600);
+        Ok(())
+    }
+
+    #[test]
+    fn error_code_method_not_found_matches_constant() -> Result<(), Box<dyn Error>> {
+        assert_eq!(ErrorCode::MethodNotFound as i32, METHOD_NOT_FOUND);
+        assert_eq!(METHOD_NOT_FOUND, -32601);
+        Ok(())
+    }
+
+    #[test]
+    fn error_code_invalid_params_matches_constant() -> Result<(), Box<dyn Error>> {
+        assert_eq!(ErrorCode::InvalidParams as i32, INVALID_PARAMS);
+        assert_eq!(INVALID_PARAMS, -32602);
+        Ok(())
+    }
+
+    #[test]
+    fn error_code_internal_error_matches_constant() -> Result<(), Box<dyn Error>> {
+        assert_eq!(ErrorCode::InternalError as i32, INTERNAL_ERROR);
+        assert_eq!(INTERNAL_ERROR, -32603);
+        Ok(())
+    }
+
+    #[test]
+    fn error_code_server_error_start_matches_constant() -> Result<(), Box<dyn Error>> {
+        assert_eq!(ErrorCode::ServerErrorStart as i32, SERVER_ERROR_START);
+        assert_eq!(SERVER_ERROR_START, -32099);
+        Ok(())
+    }
+
+    #[test]
+    fn error_code_server_error_end_matches_constant() -> Result<(), Box<dyn Error>> {
+        assert_eq!(ErrorCode::ServerErrorEnd as i32, SERVER_ERROR_END);
+        assert_eq!(SERVER_ERROR_END, -32000);
+        Ok(())
+    }
+
+    #[test]
+    fn error_code_request_cancelled_matches_constant() -> Result<(), Box<dyn Error>> {
+        assert_eq!(ErrorCode::RequestCancelled as i32, REQUEST_CANCELLED);
+        assert_eq!(REQUEST_CANCELLED, -32800);
+        Ok(())
+    }
+
+    #[test]
+    fn error_code_server_cancelled_matches_constant() -> Result<(), Box<dyn Error>> {
+        assert_eq!(ErrorCode::ServerCancelled as i32, SERVER_CANCELLED);
+        assert_eq!(SERVER_CANCELLED, -32802);
+        Ok(())
+    }
+
+    #[test]
+    fn error_code_content_modified_matches_constant() -> Result<(), Box<dyn Error>> {
+        assert_eq!(ErrorCode::ContentModified as i32, CONTENT_MODIFIED);
+        assert_eq!(CONTENT_MODIFIED, -32801);
+        Ok(())
+    }
+
+    #[test]
+    fn error_code_request_failed_matches_constant() -> Result<(), Box<dyn Error>> {
+        assert_eq!(ErrorCode::RequestFailed as i32, REQUEST_FAILED);
+        assert_eq!(REQUEST_FAILED, -32803);
+        Ok(())
+    }
+
+    #[test]
+    fn error_code_server_not_initialized_matches_constant() -> Result<(), Box<dyn Error>> {
+        assert_eq!(ErrorCode::ServerNotInitialized as i32, SERVER_NOT_INITIALIZED);
+        assert_eq!(SERVER_NOT_INITIALIZED, -32002);
+        Ok(())
+    }
+
+    // =========================================================================
+    // Error builders — code, message, data shape
+    // =========================================================================
+
+    #[test]
+    fn request_cancelled_error_has_correct_code_and_message() -> Result<(), Box<dyn Error>> {
+        let e = request_cancelled_error();
+        assert_eq!(e.code, REQUEST_CANCELLED);
+        assert_eq!(e.message, "Request cancelled");
+        assert!(e.data.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn server_cancelled_error_has_correct_code_and_message_starts_with()
+    -> Result<(), Box<dyn Error>> {
+        let e = server_cancelled_error();
+        assert_eq!(e.code, SERVER_CANCELLED);
+        assert!(e.message.starts_with("Server cancelled"), "message was: {}", e.message);
+        assert!(e.data.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn method_not_found_contains_method_name() -> Result<(), Box<dyn Error>> {
+        let e = method_not_found("foo/bar");
+        assert_eq!(e.code, METHOD_NOT_FOUND);
+        assert!(e.message.contains("foo/bar"), "message was: {}", e.message);
+        assert!(e.data.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn method_not_advertised_has_correct_code_and_specific_message() -> Result<(), Box<dyn Error>> {
+        let e = method_not_advertised();
+        assert_eq!(e.code, METHOD_NOT_FOUND);
+        assert_eq!(e.message, "Method not advertised in server capabilities");
+        assert!(e.data.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_params_sets_code_and_message() -> Result<(), Box<dyn Error>> {
+        let e = invalid_params("bad x");
+        assert_eq!(e.code, INVALID_PARAMS);
+        assert_eq!(e.message, "bad x");
+        assert!(e.data.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn server_not_initialized_has_correct_code_and_message() -> Result<(), Box<dyn Error>> {
+        let e = server_not_initialized();
+        assert_eq!(e.code, SERVER_NOT_INITIALIZED);
+        assert_eq!(e.message, "Server not initialized");
+        assert!(e.data.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn internal_error_sets_code_and_message() -> Result<(), Box<dyn Error>> {
+        let e = internal_error("oops");
+        assert_eq!(e.code, INTERNAL_ERROR);
+        assert_eq!(e.message, "oops");
+        assert!(e.data.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn connection_closed_error_has_correct_code_and_message() -> Result<(), Box<dyn Error>> {
+        let e = connection_closed_error();
+        assert_eq!(e.code, CONNECTION_CLOSED);
+        assert_eq!(e.message, "Connection closed");
+        assert!(e.data.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn transport_error_sets_code_and_message() -> Result<(), Box<dyn Error>> {
+        let e = transport_error("io");
+        assert_eq!(e.code, TRANSPORT_ERROR);
+        assert_eq!(e.message, "io");
+        assert!(e.data.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn document_not_found_error_returns_value_with_status_and_message() -> Result<(), Box<dyn Error>>
+    {
+        let v = document_not_found_error();
+        assert_eq!(v["status"], json!("error"));
+        assert_eq!(v["message"], json!("Document not found"));
+        Ok(())
+    }
+
+    // =========================================================================
+    // Response builders
+    // =========================================================================
+
+    #[test]
+    fn cancelled_response_has_correct_id_and_error_code() -> Result<(), Box<dyn Error>> {
+        let resp = cancelled_response(&json!(7));
+        assert_eq!(resp.jsonrpc, "2.0");
+        assert_eq!(resp.id, Some(json!(7)));
+        assert!(resp.result.is_none());
+        let error = resp.error.ok_or("expected error field")?;
+        assert_eq!(error.code, REQUEST_CANCELLED);
+        assert!(error.data.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn cancelled_response_with_method_namespaced_sets_id_code_and_data()
+    -> Result<(), Box<dyn Error>> {
+        let resp = cancelled_response_with_method(&json!(42), "textDocument/hover");
+        assert_eq!(resp.jsonrpc, "2.0");
+        assert_eq!(resp.id, Some(json!(42)));
+        assert!(resp.result.is_none());
+        let error = resp.error.ok_or("expected error field")?;
+        assert_eq!(error.code, REQUEST_CANCELLED);
+        assert!(
+            error.message.contains("hover"),
+            "expected 'hover' in message, got: {}",
+            error.message
+        );
+        let data = error.data.ok_or("expected data field")?;
+        assert_eq!(data["provider"], json!("textDocument/hover"));
+        assert_eq!(data["request_id"], json!(42));
+        Ok(())
+    }
+
+    #[test]
+    fn cancelled_response_with_method_no_slash_uses_method_as_provider()
+    -> Result<(), Box<dyn Error>> {
+        // Covers the `unwrap_or(method)` branch when there is no '/' in the method name.
+        let resp = cancelled_response_with_method(&json!(1), "plain");
+        let error = resp.error.ok_or("expected error field")?;
+        assert_eq!(error.code, REQUEST_CANCELLED);
+        // provider_name falls back to the full method name "plain"
+        assert!(
+            error.message.contains("plain"),
+            "expected 'plain' in message, got: {}",
+            error.message
+        );
+        let data = error.data.ok_or("expected data field")?;
+        assert_eq!(data["provider"], json!("plain"));
+        Ok(())
+    }
+
+    // =========================================================================
+    // enhanced_error — data payload shape
+    // =========================================================================
+
+    #[test]
+    fn enhanced_error_with_method_has_all_fields() -> Result<(), Box<dyn Error>> {
+        let e = enhanced_error(-100, "msg", "etype", Some("textDocument/hover"));
+        assert_eq!(e.code, -100);
+        assert_eq!(e.message, "msg");
+        let data = e.data.ok_or("expected data")?;
+        assert_eq!(data["error_type"], json!("etype"));
+        assert_eq!(data["server_info"]["name"], json!("perl-lsp"));
+        assert_eq!(data["method"], json!("textDocument/hover"));
+        Ok(())
+    }
+
+    #[test]
+    fn enhanced_error_without_method_omits_method_field() -> Result<(), Box<dyn Error>> {
+        let e = enhanced_error(-100, "msg", "etype", None);
+        assert_eq!(e.code, -100);
+        let data = e.data.ok_or("expected data")?;
+        assert_eq!(data["error_type"], json!("etype"));
+        // The `if let Some` branch is not taken — method key must be absent.
+        assert!(data.get("method").is_none(), "method should not be present");
+        Ok(())
+    }
+
+    // =========================================================================
+    // req_uri — happy path and error cases
+    // =========================================================================
+
+    #[test]
+    fn req_uri_happy_path() -> Result<(), Box<dyn Error>> {
+        let params = json!({"textDocument": {"uri": "file:///a"}});
+        let uri = req_uri(&params)?;
+        assert_eq!(uri, "file:///a");
+        Ok(())
+    }
+
+    #[test]
+    fn req_uri_missing_text_document_returns_invalid_params() -> Result<(), Box<dyn Error>> {
+        let Err(e) = req_uri(&json!({})) else {
+            return Err("expected Err".into());
+        };
+        assert_eq!(e.code, INVALID_PARAMS);
+        assert!(e.message.contains("textDocument.uri"), "message was: {}", e.message);
+        Ok(())
+    }
+
+    #[test]
+    fn req_uri_non_string_uri_returns_invalid_params() -> Result<(), Box<dyn Error>> {
+        let params = json!({"textDocument": {"uri": 42}});
+        let Err(e) = req_uri(&params) else {
+            return Err("expected Err".into());
+        };
+        assert_eq!(e.code, INVALID_PARAMS);
+        Ok(())
+    }
+
+    // =========================================================================
+    // req_position — happy path, missing fields, u32 overflow
+    // =========================================================================
+
+    #[test]
+    fn req_position_happy_path() -> Result<(), Box<dyn Error>> {
+        let params = json!({"position": {"line": 1, "character": 2}});
+        let (line, ch) = req_position(&params)?;
+        assert_eq!(line, 1);
+        assert_eq!(ch, 2);
+        Ok(())
+    }
+
+    #[test]
+    fn req_position_missing_position_returns_err_with_line_msg() -> Result<(), Box<dyn Error>> {
+        let Err(e) = req_position(&json!({})) else {
+            return Err("expected Err".into());
+        };
+        assert_eq!(e.code, INVALID_PARAMS);
+        assert!(e.message.contains("position.line"), "message was: {}", e.message);
+        Ok(())
+    }
+
+    #[test]
+    fn req_position_missing_character_returns_err_with_character_msg() -> Result<(), Box<dyn Error>>
+    {
+        let params = json!({"position": {"line": 1}});
+        let Err(e) = req_position(&params) else {
+            return Err("expected Err".into());
+        };
+        assert_eq!(e.code, INVALID_PARAMS);
+        assert!(e.message.contains("position.character"), "message was: {}", e.message);
+        Ok(())
+    }
+
+    #[test]
+    fn req_position_line_overflow_u32_returns_err() -> Result<(), Box<dyn Error>> {
+        let big: u64 = u64::from(u32::MAX) + 1;
+        let params = json!({"position": {"line": big, "character": 2}});
+        let Err(e) = req_position(&params) else {
+            return Err("expected Err".into());
+        };
+        assert_eq!(e.code, INVALID_PARAMS);
+        assert!(e.message.contains("exceeds u32::MAX"), "message was: {}", e.message);
+        Ok(())
+    }
+
+    #[test]
+    fn req_position_character_overflow_u32_returns_err() -> Result<(), Box<dyn Error>> {
+        let big: u64 = u64::from(u32::MAX) + 1;
+        let params = json!({"position": {"line": 1, "character": big}});
+        let Err(e) = req_position(&params) else {
+            return Err("expected Err".into());
+        };
+        assert_eq!(e.code, INVALID_PARAMS);
+        assert!(e.message.contains("exceeds u32::MAX"), "message was: {}", e.message);
+        Ok(())
+    }
+
+    // =========================================================================
+    // req_range — happy path, missing leaves, u32 overflow on all four leaves
+    // =========================================================================
+
+    #[test]
+    fn req_range_happy_path() -> Result<(), Box<dyn Error>> {
+        let params = json!({
+            "range": {
+                "start": {"line": 0, "character": 1},
+                "end":   {"line": 2, "character": 3}
+            }
+        });
+        let ((sl, sc), (el, ec)) = req_range(&params)?;
+        assert_eq!(sl, 0);
+        assert_eq!(sc, 1);
+        assert_eq!(el, 2);
+        assert_eq!(ec, 3);
+        Ok(())
+    }
+
+    #[test]
+    fn req_range_missing_start_line_returns_err() -> Result<(), Box<dyn Error>> {
+        let params = json!({
+            "range": {
+                "start": {"character": 1},
+                "end":   {"line": 2, "character": 3}
+            }
+        });
+        let Err(e) = req_range(&params) else {
+            return Err("expected Err".into());
+        };
+        assert_eq!(e.code, INVALID_PARAMS);
+        assert!(e.message.contains("range.start.line"), "message was: {}", e.message);
+        Ok(())
+    }
+
+    #[test]
+    fn req_range_missing_start_character_returns_err() -> Result<(), Box<dyn Error>> {
+        let params = json!({
+            "range": {
+                "start": {"line": 0},
+                "end":   {"line": 2, "character": 3}
+            }
+        });
+        let Err(e) = req_range(&params) else {
+            return Err("expected Err".into());
+        };
+        assert_eq!(e.code, INVALID_PARAMS);
+        assert!(e.message.contains("range.start.character"), "message was: {}", e.message);
+        Ok(())
+    }
+
+    #[test]
+    fn req_range_missing_end_line_returns_err() -> Result<(), Box<dyn Error>> {
+        let params = json!({
+            "range": {
+                "start": {"line": 0, "character": 1},
+                "end":   {"character": 3}
+            }
+        });
+        let Err(e) = req_range(&params) else {
+            return Err("expected Err".into());
+        };
+        assert_eq!(e.code, INVALID_PARAMS);
+        assert!(e.message.contains("range.end.line"), "message was: {}", e.message);
+        Ok(())
+    }
+
+    #[test]
+    fn req_range_missing_end_character_returns_err() -> Result<(), Box<dyn Error>> {
+        let params = json!({
+            "range": {
+                "start": {"line": 0, "character": 1},
+                "end":   {"line": 2}
+            }
+        });
+        let Err(e) = req_range(&params) else {
+            return Err("expected Err".into());
+        };
+        assert_eq!(e.code, INVALID_PARAMS);
+        assert!(e.message.contains("range.end.character"), "message was: {}", e.message);
+        Ok(())
+    }
+
+    #[test]
+    fn req_range_start_line_overflow_u32_returns_err() -> Result<(), Box<dyn Error>> {
+        let big: u64 = u64::from(u32::MAX) + 1;
+        let params = json!({
+            "range": {
+                "start": {"line": big, "character": 1},
+                "end":   {"line": 2, "character": 3}
+            }
+        });
+        let Err(e) = req_range(&params) else {
+            return Err("expected Err".into());
+        };
+        assert_eq!(e.code, INVALID_PARAMS);
+        assert!(e.message.contains("exceeds u32::MAX"), "message was: {}", e.message);
+        Ok(())
+    }
+
+    #[test]
+    fn req_range_start_character_overflow_u32_returns_err() -> Result<(), Box<dyn Error>> {
+        let big: u64 = u64::from(u32::MAX) + 1;
+        let params = json!({
+            "range": {
+                "start": {"line": 0, "character": big},
+                "end":   {"line": 2, "character": 3}
+            }
+        });
+        let Err(e) = req_range(&params) else {
+            return Err("expected Err".into());
+        };
+        assert_eq!(e.code, INVALID_PARAMS);
+        assert!(e.message.contains("exceeds u32::MAX"), "message was: {}", e.message);
+        Ok(())
+    }
+
+    #[test]
+    fn req_range_end_line_overflow_u32_returns_err() -> Result<(), Box<dyn Error>> {
+        let big: u64 = u64::from(u32::MAX) + 1;
+        let params = json!({
+            "range": {
+                "start": {"line": 0, "character": 1},
+                "end":   {"line": big, "character": 3}
+            }
+        });
+        let Err(e) = req_range(&params) else {
+            return Err("expected Err".into());
+        };
+        assert_eq!(e.code, INVALID_PARAMS);
+        assert!(e.message.contains("exceeds u32::MAX"), "message was: {}", e.message);
+        Ok(())
+    }
+
+    #[test]
+    fn req_range_end_character_overflow_u32_returns_err() -> Result<(), Box<dyn Error>> {
+        let big: u64 = u64::from(u32::MAX) + 1;
+        let params = json!({
+            "range": {
+                "start": {"line": 0, "character": 1},
+                "end":   {"line": 2, "character": big}
+            }
+        });
+        let Err(e) = req_range(&params) else {
+            return Err("expected Err".into());
+        };
+        assert_eq!(e.code, INVALID_PARAMS);
+        assert!(e.message.contains("exceeds u32::MAX"), "message was: {}", e.message);
+        Ok(())
+    }
+}
