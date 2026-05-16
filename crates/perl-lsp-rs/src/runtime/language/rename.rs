@@ -860,8 +860,10 @@ impl LspServer {
                 }
             }
         }
-        // Return empty edit if we can't resolve
-        Ok(Some(json!({"changes": {}})))
+        // Explicit blocker paths return empty edits above. If no safe edit path
+        // resolved, return null so clients can treat this as unavailable rather
+        // than as an empty successful refactor.
+        Ok(None)
     }
 
     /// Validate if a string is a valid Perl identifier
