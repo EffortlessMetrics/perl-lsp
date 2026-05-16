@@ -2441,3 +2441,100 @@ fn refactor_runtime_blocker_ux_safe_delete_live_pilot_returns_source_backed_edit
 
     Ok(())
 }
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_live_pilot_returns_dancer2_source_backed_edit()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_dancer2_workspace(&server)?;
+    let plugin = files.get("lib/Dancer2/Plugin.pm").ok_or("missing Dancer2 Plugin fixture")?;
+
+    let (hook_line, hook_character) = position_of(plugin, "execute_plugin_hook {")?;
+    let live_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.safeDeleteSymbol",
+            "arguments": [{
+                "textDocument": {"uri": DANCER2_PLUGIN_URI},
+                "position": {"line": hook_line, "character": hook_character}
+            }]
+        })))?
+        .ok_or("missing Dancer2 safe-delete live pilot result")?;
+
+    assert_eq!(live_result.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        live_result.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(live_result.get("symbol").and_then(Value::as_str), Some("execute_plugin_hook"));
+    assert_eq!(live_result.get("decision").and_then(Value::as_str), Some("allowed"));
+    assert_eq!(live_result.get("reason").and_then(Value::as_str), Some("compiler_allowed"));
+    assert_eq!(live_result.get("fallback_state").and_then(Value::as_str), Some("none"));
+    assert_eq!(live_result.get("source_backed").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        live_result.get("source_backed_state").and_then(Value::as_str),
+        Some("source_backed_subroutine_range")
+    );
+    assert_eq!(
+        live_result.get("live_pilot_source_guard").and_then(Value::as_str),
+        Some("source_backed_exact_subroutine_definition")
+    );
+    assert_eq!(live_result.get("live_symbol_delete_enabled").and_then(Value::as_bool), Some(true));
+    assert_eq!(live_result.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(live_result.get("returned_workspace_edit_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(live_result.get("no_live_behavior_change").and_then(Value::as_bool), Some(false));
+
+    let workspace_edit =
+        live_result.get("workspace_edit").ok_or("missing Dancer2 live workspace_edit")?;
+    let live_texts = workspace_edit_texts_for_uri(workspace_edit, DANCER2_PLUGIN_URI)?;
+    assert_eq!(live_texts, vec![""], "Dancer2 live pilot must return one delete edit");
+
+    let rollback_proof =
+        live_result.get("symbol_delete_edit_rollback").ok_or("missing Dancer2 rollback proof")?;
+    assert_eq!(
+        rollback_proof.get("rollback_verification").and_then(Value::as_str),
+        Some("restores_original")
+    );
+    assert_eq!(rollback_proof.get("rollback_safe").and_then(Value::as_bool), Some(true));
+
+    let rollback_edit = rollback_proof
+        .get("rollback_workspace_edit")
+        .ok_or("missing Dancer2 rollback workspace edit")?;
+    let rollback_texts = workspace_edit_texts_for_uri(rollback_edit, DANCER2_PLUGIN_URI)?;
+    let rollback_text = rollback_texts.first().ok_or("missing Dancer2 rollback insertion")?;
+    assert!(
+        rollback_text.contains("sub execute_plugin_hook") && rollback_text.contains("execute_hook"),
+        "Dancer2 rollback proof must restore the deleted source text: {rollback_text}"
+    );
+
+    let message = live_result
+        .get("user_message")
+        .and_then(Value::as_str)
+        .ok_or("missing Dancer2 live pilot user_message")?;
+    assert!(
+        message.contains("Safe delete can remove")
+            && message.contains("execute_plugin_hook")
+            && message.contains("WorkspaceEdit")
+            && message.contains("no edit was applied by the server"),
+        "Dancer2 live pilot message should explain the returned edit without server-side application: {message}"
+    );
+
+    let explanation = explain_provider_decision(&server, "safe_delete")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(request_receipt.get("symbol").and_then(Value::as_str), Some("execute_plugin_hook"));
+    assert_eq!(
+        request_receipt.get("live_symbol_delete_enabled").and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        request_receipt
+            .pointer("/symbol_delete_edit_rollback/rollback_verification")
+            .and_then(Value::as_str),
+        Some("restores_original")
+    );
+
+    Ok(())
+}
