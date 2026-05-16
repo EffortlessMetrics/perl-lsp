@@ -81,7 +81,7 @@ fn test_basic_double_quoted_heredoc() {
     assert_eq!(segment_text(src, content, 1), b"line two");
 }
 
-/// Backtick heredoc (`<<\`EOF\``) — QuoteKind stored, content collected normally.
+/// Backtick heredoc (``<<`EOF```) — QuoteKind stored, content collected normally.
 #[test]
 fn test_basic_backtick_heredoc() {
     let src = b"ls -la\nEOF\n";
@@ -270,8 +270,8 @@ fn test_multiple_heredocs_collected_in_order() {
     assert_eq!(result.next_offset, src.len());
 }
 
-/// Three heredocs — first terminates, second is missing its terminator, third
-/// never runs (offset passed by the unterminated one stops at EOF).
+/// Two heredocs — first terminates, second is missing its terminator (its
+/// collector reaches EOF without finding "SECOND").
 #[test]
 fn test_multiple_heredocs_first_terminated_second_not() {
     let src = b"body one\nFIRST\nbody two\n";
