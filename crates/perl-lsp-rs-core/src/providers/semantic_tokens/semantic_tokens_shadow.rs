@@ -471,6 +471,47 @@ mod tests {
     }
 
     #[test]
+    fn semantic_token_span_invariant_report_excludes_blocked_candidates_from_span_failures()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let report = semantic_token_span_invariant_report(&[
+            shadow_candidate(
+                "dynamic:semantic-token:$Package::{name}",
+                ProviderFactSourceKind::DynamicBoundary,
+                Provenance::DynamicBoundary,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                None,
+                ProviderFallbackState::Blocked,
+            ),
+            shadow_candidate(
+                "token:function:Foo::stale",
+                ProviderFactSourceKind::CompilerFact,
+                Provenance::SemanticAnalyzer,
+                Confidence::Low,
+                ProviderFactFreshness::Stale,
+                None,
+                ProviderFallbackState::Blocked,
+            ),
+            shadow_candidate(
+                "token:function:Foo::fresh",
+                ProviderFactSourceKind::CompilerFact,
+                Provenance::SemanticAnalyzer,
+                Confidence::Medium,
+                ProviderFactFreshness::Fresh,
+                Some(valid_span(0, 4, 5)),
+                ProviderFallbackState::Shadow,
+            ),
+        ]);
+
+        assert_eq!(report.candidate_count, 3);
+        assert_eq!(report.blocked_candidate_count, 2);
+        assert_eq!(report.source_backed_span_count, 1);
+        assert_eq!(report.missing_source_span_count, 0);
+        assert_eq!(report.invalid_source_span_count, 0);
+        Ok(())
+    }
+
+    #[test]
     fn semantic_token_source_span_rejects_zero_length_or_out_of_bounds_ranges() {
         let source = "package Foo;\n";
         assert!(SemanticTokenShadowSpan::from_byte_offsets(source, 0, 0).is_none());
