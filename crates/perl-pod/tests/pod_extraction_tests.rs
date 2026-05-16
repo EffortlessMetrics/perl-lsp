@@ -570,3 +570,24 @@ sub run { }
     assert_eq!(doc.name.as_deref(), Some("Multi - Multiple POD blocks"));
     assert!(doc.methods.contains_key("run"));
 }
+
+#[test]
+fn e_format_code_decodes_numeric_entities() -> Result<(), Box<dyn std::error::Error>> {
+    let doc = extract_pod("=head1 NAME\n\nE<65>E<0x42>E<0X43> E<9786>\n\n=cut\n");
+    assert_eq!(doc.name.as_deref(), Some("ABC ☺"));
+    Ok(())
+}
+
+#[test]
+fn e_format_code_decodes_sol_and_verbar_entities() -> Result<(), Box<dyn std::error::Error>> {
+    let doc = extract_pod("=head1 NAME\n\npathE<sol>to E<verbar> fallback\n\n=cut\n");
+    assert_eq!(doc.name.as_deref(), Some("path/to | fallback"));
+    Ok(())
+}
+
+#[test]
+fn invalid_numeric_entities_remain_visible() -> Result<(), Box<dyn std::error::Error>> {
+    let doc = extract_pod("=head1 NAME\n\nE<0xZZ> E<1114112>\n\n=cut\n");
+    assert_eq!(doc.name.as_deref(), Some("0xZZ 1114112"));
+    Ok(())
+}

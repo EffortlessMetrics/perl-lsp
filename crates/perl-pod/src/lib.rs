@@ -361,8 +361,11 @@ fn extract_link_display(link: &str) -> String {
 /// - `E<amp>` → `&`
 /// - `E<quot>` → `"`
 /// - `E<apos>` → `'`
+/// - `E<sol>` → `/`
+/// - `E<verbar>` → `|`
+/// - `E<123>` / `E<0x7B>` → the corresponding Unicode scalar value
 ///
-/// Unknown entities are returned as-is.
+/// Unknown or invalid entities are returned as-is.
 fn decode_pod_entity(entity: &str) -> String {
     match entity {
         "lt" => "<".to_string(),
@@ -370,8 +373,22 @@ fn decode_pod_entity(entity: &str) -> String {
         "amp" => "&".to_string(),
         "quot" => "\"".to_string(),
         "apos" => "'".to_string(),
-        _ => entity.to_string(),
+        "sol" => "/".to_string(),
+        "verbar" => "|".to_string(),
+        _ => decode_numeric_pod_entity(entity).unwrap_or_else(|| entity.to_string()),
     }
+}
+
+/// Decode a numeric POD entity as either decimal or `0x`-prefixed hexadecimal.
+fn decode_numeric_pod_entity(entity: &str) -> Option<String> {
+    let codepoint =
+        if let Some(hex) = entity.strip_prefix("0x").or_else(|| entity.strip_prefix("0X")) {
+            u32::from_str_radix(hex, 16).ok()?
+        } else {
+            entity.parse::<u32>().ok()?
+        };
+
+    char::from_u32(codepoint).map(|ch| ch.to_string())
 }
 
 fn is_pod_format_code(c: char) -> bool {
@@ -398,12 +415,18 @@ mod tests {
     }
 
     #[test]
-    fn decode_entity_numeric_looking_returns_unchanged() {
-        // Numeric-looking names like "32" or "0x20" are not handled as HTML numeric refs;
-        // they fall through to the unknown branch and are returned as-is.
-        // TODO: POD spec §8 supports E<number> (Unicode code point) — currently unimplemented.
-        assert_eq!(decode_pod_entity("32"), "32");
-        assert_eq!(decode_pod_entity("0x20"), "0x20");
+    fn decode_entity_numeric_values() {
+        assert_eq!(decode_pod_entity("32"), " ");
+        assert_eq!(decode_pod_entity("0x20"), " ");
+        assert_eq!(decode_pod_entity("0X7C"), "|");
+        assert_eq!(decode_pod_entity("9786"), "☺");
+    }
+
+    #[test]
+    fn decode_entity_invalid_numeric_values_return_unchanged() {
+        assert_eq!(decode_pod_entity("0x"), "0x");
+        assert_eq!(decode_pod_entity("0xZZ"), "0xZZ");
+        assert_eq!(decode_pod_entity("1114112"), "1114112");
     }
 
     #[test]
@@ -413,6 +436,8 @@ mod tests {
         assert_eq!(decode_pod_entity("amp"), "&");
         assert_eq!(decode_pod_entity("quot"), "\"");
         assert_eq!(decode_pod_entity("apos"), "'");
+        assert_eq!(decode_pod_entity("sol"), "/");
+        assert_eq!(decode_pod_entity("verbar"), "|");
     }
 
     // ── encode_pod_link_target ───────────────────────────────────────────────
