@@ -512,6 +512,67 @@ mod tests {
     }
 
     #[test]
+    fn semantic_token_shadow_traces_generated_no_source_and_fallback_boundaries()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source_backed_identity = "token:function:Foo::source_backed";
+        let candidates = vec![
+            shadow_candidate(
+                source_backed_identity,
+                ProviderFactSourceKind::CompilerFact,
+                Provenance::SemanticAnalyzer,
+                Confidence::Medium,
+                ProviderFactFreshness::Fresh,
+                Some(valid_span(0, 4, 13)),
+                ProviderFallbackState::Shadow,
+            ),
+            shadow_candidate(
+                "token:method:Foo::generated_accessor:no_source",
+                ProviderFactSourceKind::FrameworkAdapter,
+                Provenance::FrameworkSynthesis,
+                Confidence::Medium,
+                ProviderFactFreshness::Fresh,
+                None,
+                ProviderFallbackState::Blocked,
+            ),
+            shadow_candidate(
+                "token:method:Foo::fallback_candidate",
+                ProviderFactSourceKind::Fallback,
+                Provenance::SearchFallback,
+                Confidence::Low,
+                ProviderFactFreshness::Unknown,
+                None,
+                ProviderFallbackState::Fallback,
+            ),
+        ];
+
+        let report = semantic_token_span_invariant_report(&candidates);
+        let result = semantic_token_source_shadow(Vec::new(), candidates, "Foo::accessor");
+
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Improved);
+        assert_eq!(result.receipt.new_result.match_count, 1);
+        assert_eq!(result.receipt.new_result.identities, vec![source_backed_identity.to_string()]);
+        assert_eq!(result.receipt.fact_source_traces.len(), 3);
+
+        assert_eq!(report.candidate_count, 3);
+        assert_eq!(report.blocked_candidate_count, 1);
+        assert_eq!(report.source_backed_span_count, 1);
+        assert_eq!(report.missing_source_span_count, 1);
+        assert_eq!(report.invalid_source_span_count, 0);
+
+        let generated_trace = trace_at(&result, 1)?;
+        assert_eq!(generated_trace.source, ProviderFactSourceKind::FrameworkAdapter);
+        assert_eq!(generated_trace.provenance, Provenance::FrameworkSynthesis);
+        assert_eq!(generated_trace.fallback_state, ProviderFallbackState::Blocked);
+
+        let fallback_trace = trace_at(&result, 2)?;
+        assert_eq!(fallback_trace.source, ProviderFactSourceKind::Fallback);
+        assert_eq!(fallback_trace.provenance, Provenance::SearchFallback);
+        assert_eq!(fallback_trace.freshness, ProviderFactFreshness::Unknown);
+        assert_eq!(fallback_trace.fallback_state, ProviderFallbackState::Fallback);
+        Ok(())
+    }
+
+    #[test]
     fn semantic_token_source_span_rejects_zero_length_or_out_of_bounds_ranges() {
         let source = "package Foo;\n";
         assert!(SemanticTokenShadowSpan::from_byte_offsets(source, 0, 0).is_none());
@@ -572,10 +633,17 @@ mod tests {
     fn first_trace(
         result: &SemanticTokenShadowResult,
     ) -> Result<&ProviderFactTrace, Box<dyn std::error::Error>> {
+        trace_at(result, 0)
+    }
+
+    fn trace_at(
+        result: &SemanticTokenShadowResult,
+        index: usize,
+    ) -> Result<&ProviderFactTrace, Box<dyn std::error::Error>> {
         result
             .receipt
             .fact_source_traces
-            .first()
+            .get(index)
             .ok_or_else(|| "expected semantic-token fact-source trace".into())
     }
 }
