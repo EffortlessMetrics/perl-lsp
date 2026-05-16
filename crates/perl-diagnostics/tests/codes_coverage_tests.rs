@@ -662,6 +662,32 @@ fn context_hint_version_incompat_feature_is_some() -> Result<(), Box<dyn std::er
 }
 
 #[test]
+fn context_hint_phase_scoped_strict_pragma_is_some() -> Result<(), Box<dyn std::error::Error>> {
+    // Lines 614-617 in codes/mod.rs
+    let hint = DiagnosticCode::PhaseScopedStrictPragma.context_hint();
+    assert!(hint.is_some(), "PhaseScopedStrictPragma should have a context hint");
+    let hint = hint.ok_or("missing hint")?;
+    assert!(
+        hint.contains("strict") || hint.contains("phase"),
+        "hint should describe strict-pragma phase scoping"
+    );
+    Ok(())
+}
+
+#[test]
+fn context_hint_phase_scoped_warnings_pragma_is_some() -> Result<(), Box<dyn std::error::Error>> {
+    // Lines 618-622 in codes/mod.rs
+    let hint = DiagnosticCode::PhaseScopedWarningsPragma.context_hint();
+    assert!(hint.is_some(), "PhaseScopedWarningsPragma should have a context hint");
+    let hint = hint.ok_or("missing hint")?;
+    assert!(
+        hint.contains("warnings") || hint.contains("phase"),
+        "hint should describe warnings-pragma phase scoping"
+    );
+    Ok(())
+}
+
+#[test]
 fn context_hint_critic_codes_return_none() -> Result<(), Box<dyn std::error::Error>> {
     // Lines 691-695 in codes/mod.rs — already covered by other tests but verify all 5
     assert_eq!(DiagnosticCode::CriticSeverity1.context_hint(), None);
@@ -947,6 +973,12 @@ fn severity_missing_pod_coverage_is_hint() -> Result<(), Box<dyn std::error::Err
 #[test]
 fn severity_unreachable_code_is_hint() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(DiagnosticCode::UnreachableCode.severity(), DiagnosticSeverity::Hint);
+    Ok(())
+}
+
+#[test]
+fn severity_unused_import_is_hint() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(DiagnosticCode::UnusedImport.severity(), DiagnosticSeverity::Hint);
     Ok(())
 }
 
