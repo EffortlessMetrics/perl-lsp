@@ -218,7 +218,7 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
-    // ── helpers ──────────────────────────────────────────────────────────────
+    // ── helpers ──────────────────────────────────────────────────────────────────────
 
     fn minimal_sidecar_toml(id: &str, mode: &str) -> String {
         format!(
@@ -235,13 +235,13 @@ mode = "{mode}"
         )
     }
 
-    fn write_temp_file(dir: &std::path::Path, name: &str, contents: &str) -> PathBuf {
+    fn write_temp_file(dir: &std::path::Path, name: &str, contents: &str) -> Result<PathBuf> {
         let path = dir.join(name);
-        fs::write(&path, contents).expect("write_temp_file: fs::write failed");
-        path
+        fs::write(&path, contents)?;
+        Ok(path)
     }
 
-    // ── ExpectationMode deserialization ──────────────────────────────────────
+    // ── ExpectationMode deserialization ──────────────────────────────────────────
 
     #[test]
     fn expectation_mode_rejects_unknown_value() {
@@ -300,7 +300,7 @@ mode = "mystery"
         Ok(())
     }
 
-    // ── SidecarValidation::is_ok ─────────────────────────────────────────────
+    // ── SidecarValidation::is_ok ───────────────────────────────────────────────────
 
     #[test]
     fn sidecar_validation_is_ok_when_no_errors() {
@@ -322,7 +322,7 @@ mode = "mystery"
         assert!(v.is_ok(), "warnings alone do not make validation fail");
     }
 
-    // ── expected_fixture_path ────────────────────────────────────────────────
+    // ── expected_fixture_path ───────────────────────────────────────────────────────
 
     #[test]
     fn expected_fixture_path_rejects_empty_fixture_stem() {
@@ -362,7 +362,7 @@ mode = "mystery"
         Ok(())
     }
 
-    // ── parse_sidecar ────────────────────────────────────────────────────────
+    // ── parse_sidecar ────────────────────────────────────────────────────────────────────────
 
     #[test]
     fn parse_sidecar_reads_valid_file() -> Result<()> {
@@ -371,7 +371,7 @@ mode = "mystery"
             dir.path(),
             "foo.meta.toml",
             &minimal_sidecar_toml("my.concept", "parse_clean"),
-        );
+        )?;
         let sidecar = parse_sidecar(&sidecar_path)?;
         assert_eq!(sidecar.concept.id, "my.concept");
         assert_eq!(sidecar.concept.tier, "pr");
@@ -392,7 +392,7 @@ mode = "mystery"
     #[test]
     fn parse_sidecar_fails_on_invalid_toml() -> Result<()> {
         let dir = tempfile::tempdir()?;
-        let path = write_temp_file(dir.path(), "bad.meta.toml", "not valid toml }{{{");
+        let path = write_temp_file(dir.path(), "bad.meta.toml", "not valid toml }{{{")? ;
         let result = parse_sidecar(&path);
         assert!(result.is_err());
         Ok(())
@@ -402,7 +402,7 @@ mode = "mystery"
     fn parse_sidecar_fails_on_wrong_schema() -> Result<()> {
         let dir = tempfile::tempdir()?;
         // Valid TOML but missing required fields
-        let path = write_temp_file(dir.path(), "schema.meta.toml", "[concept]\nid = \"x\"\n");
+        let path = write_temp_file(dir.path(), "schema.meta.toml", "[concept]\nid = \"x\"\n")?;
         let result = parse_sidecar(&path);
         assert!(result.is_err());
         Ok(())
@@ -430,7 +430,7 @@ tokens = true
 ast = false
 spans = true
 "#;
-        let path = write_temp_file(dir.path(), "full.meta.toml", full_toml);
+        let path = write_temp_file(dir.path(), "full.meta.toml", full_toml)?;
         let sidecar = parse_sidecar(&path)?;
         assert!(sidecar.expect.timeout);
         let metrics = sidecar.metrics.as_ref().ok_or_else(|| anyhow::anyhow!("missing metrics"))?;
@@ -448,7 +448,7 @@ spans = true
         Ok(())
     }
 
-    // ── validate_sidecar ─────────────────────────────────────────────────────
+    // ── validate_sidecar ──────────────────────────────────────────────────────────────────
 
     fn make_sidecar(id: &str) -> FixtureExpectationSidecar {
         FixtureExpectationSidecar {
@@ -467,7 +467,7 @@ spans = true
     fn validate_sidecar_empty_concept_id_produces_error() -> Result<()> {
         let dir = tempfile::tempdir()?;
         // create the .pl fixture so the path check passes
-        write_temp_file(dir.path(), "empty.pl", "# perl");
+        write_temp_file(dir.path(), "empty.pl", "# perl")?;
         let sidecar_path = dir.path().join("empty.meta.toml");
         let sidecar = make_sidecar("   "); // whitespace-only id
         let v = validate_sidecar(&sidecar_path, &sidecar, None);
@@ -491,7 +491,7 @@ spans = true
     #[test]
     fn validate_sidecar_no_registry_emits_warning() -> Result<()> {
         let dir = tempfile::tempdir()?;
-        write_temp_file(dir.path(), "warn.pl", "# perl");
+        write_temp_file(dir.path(), "warn.pl", "# perl")?;
         let sidecar_path = dir.path().join("warn.meta.toml");
         let sidecar = make_sidecar("concept.pending");
         let v = validate_sidecar(&sidecar_path, &sidecar, None);
@@ -504,7 +504,7 @@ spans = true
     #[test]
     fn validate_sidecar_known_concept_is_clean() -> Result<()> {
         let dir = tempfile::tempdir()?;
-        write_temp_file(dir.path(), "ok.pl", "# perl");
+        write_temp_file(dir.path(), "ok.pl", "# perl")?;
         let sidecar_path = dir.path().join("ok.meta.toml");
         let sidecar = make_sidecar("known.concept");
 
@@ -513,7 +513,7 @@ spans = true
 [[concepts]]
 id = "known.concept"
 "#;
-        let reg_path = write_temp_file(dir.path(), "concepts.toml", registry_toml);
+        let reg_path = write_temp_file(dir.path(), "concepts.toml", registry_toml)?;
         let registry = ConceptRegistry::load(&reg_path)?;
 
         let v = validate_sidecar(&sidecar_path, &sidecar, Some(&registry));
@@ -525,7 +525,7 @@ id = "known.concept"
     #[test]
     fn validate_sidecar_unknown_concept_in_registry_produces_error() -> Result<()> {
         let dir = tempfile::tempdir()?;
-        write_temp_file(dir.path(), "unknown.pl", "# perl");
+        write_temp_file(dir.path(), "unknown.pl", "# perl")?;
         let sidecar_path = dir.path().join("unknown.meta.toml");
         let sidecar = make_sidecar("not.in.registry");
 
@@ -533,7 +533,7 @@ id = "known.concept"
 [[concepts]]
 id = "known.concept"
 "#;
-        let reg_path = write_temp_file(dir.path(), "concepts.toml", registry_toml);
+        let reg_path = write_temp_file(dir.path(), "concepts.toml", registry_toml)?;
         let registry = ConceptRegistry::load(&reg_path)?;
 
         let v = validate_sidecar(&sidecar_path, &sidecar, Some(&registry));
@@ -555,17 +555,17 @@ id = "known.concept"
         Ok(())
     }
 
-    // ── load_and_validate_sidecar ────────────────────────────────────────────
+    // ── load_and_validate_sidecar ────────────────────────────────────────────────────────
 
     #[test]
     fn load_and_validate_sidecar_succeeds_for_valid_file() -> Result<()> {
         let dir = tempfile::tempdir()?;
-        write_temp_file(dir.path(), "good.pl", "# perl");
+        write_temp_file(dir.path(), "good.pl", "# perl")?;
         let sidecar_path = write_temp_file(
             dir.path(),
             "good.meta.toml",
             &minimal_sidecar_toml("good.concept", "parse_clean"),
-        );
+        )?;
         let v = load_and_validate_sidecar(&sidecar_path, None)?;
         // fixture exists, concept id not empty, no registry → warning
         assert!(v.is_ok());
@@ -578,7 +578,7 @@ id = "known.concept"
         assert!(result.is_err());
     }
 
-    // ── discover_sidecars ────────────────────────────────────────────────────
+    // ── discover_sidecars ──────────────────────────────────────────────────────────────────
 
     #[test]
     fn discover_sidecars_returns_empty_for_nonexistent_root() -> Result<()> {
@@ -590,10 +590,10 @@ id = "known.concept"
     #[test]
     fn discover_sidecars_finds_meta_toml_files() -> Result<()> {
         let dir = tempfile::tempdir()?;
-        write_temp_file(dir.path(), "a.meta.toml", "# meta");
-        write_temp_file(dir.path(), "b.meta.toml", "# meta");
-        write_temp_file(dir.path(), "not_a_sidecar.txt", "ignored");
-        write_temp_file(dir.path(), "also_ignored.toml", "ignored");
+        write_temp_file(dir.path(), "a.meta.toml", "# meta")?;
+        write_temp_file(dir.path(), "b.meta.toml", "# meta")?;
+        write_temp_file(dir.path(), "not_a_sidecar.txt", "ignored")?;
+        write_temp_file(dir.path(), "also_ignored.toml", "ignored")?;
 
         let sidecars = discover_sidecars(dir.path())?;
         assert_eq!(sidecars.len(), 2);
@@ -607,8 +607,8 @@ id = "known.concept"
         let dir = tempfile::tempdir()?;
         let subdir = dir.path().join("sub");
         fs::create_dir(&subdir)?;
-        write_temp_file(dir.path(), "root.meta.toml", "# meta");
-        write_temp_file(&subdir, "nested.meta.toml", "# meta");
+        write_temp_file(dir.path(), "root.meta.toml", "# meta")?;
+        write_temp_file(&subdir, "nested.meta.toml", "# meta")?;
 
         let sidecars = discover_sidecars(dir.path())?;
         assert_eq!(sidecars.len(), 2);
@@ -618,9 +618,9 @@ id = "known.concept"
     #[test]
     fn discover_sidecars_returns_sorted_paths() -> Result<()> {
         let dir = tempfile::tempdir()?;
-        write_temp_file(dir.path(), "zzz.meta.toml", "# meta");
-        write_temp_file(dir.path(), "aaa.meta.toml", "# meta");
-        write_temp_file(dir.path(), "mmm.meta.toml", "# meta");
+        write_temp_file(dir.path(), "zzz.meta.toml", "# meta")?;
+        write_temp_file(dir.path(), "aaa.meta.toml", "# meta")?;
+        write_temp_file(dir.path(), "mmm.meta.toml", "# meta")?;
 
         let sidecars = discover_sidecars(dir.path())?;
         assert_eq!(sidecars.len(), 3);
@@ -636,17 +636,17 @@ id = "known.concept"
     #[test]
     fn discover_sidecars_ignores_non_meta_toml_files() -> Result<()> {
         let dir = tempfile::tempdir()?;
-        write_temp_file(dir.path(), "only_a.meta.toml", "# meta");
-        write_temp_file(dir.path(), "ignore.json", "{}");
-        write_temp_file(dir.path(), "ignore.toml", "[t]");
-        write_temp_file(dir.path(), "ignore.pl", "1;");
+        write_temp_file(dir.path(), "only_a.meta.toml", "# meta")?;
+        write_temp_file(dir.path(), "ignore.json", "{}")?;
+        write_temp_file(dir.path(), "ignore.toml", "[t]")?;
+        write_temp_file(dir.path(), "ignore.pl", "1;")?;
 
         let sidecars = discover_sidecars(dir.path())?;
         assert_eq!(sidecars.len(), 1);
         Ok(())
     }
 
-    // ── ConceptRegistry ──────────────────────────────────────────────────────
+    // ── ConceptRegistry ──────────────────────────────────────────────────────────────────
 
     #[test]
     fn concept_registry_load_fails_on_missing_file() {
@@ -659,7 +659,7 @@ id = "known.concept"
     #[test]
     fn concept_registry_load_fails_on_invalid_toml() -> Result<()> {
         let dir = tempfile::tempdir()?;
-        let path = write_temp_file(dir.path(), "bad.toml", "{{not valid");
+        let path = write_temp_file(dir.path(), "bad.toml", "{{not valid")?;
         let result = ConceptRegistry::load(&path);
         assert!(result.is_err());
         Ok(())
@@ -675,7 +675,7 @@ id = "parser.basic"
 [[concepts]]
 id = "regex.quantifier"
 "#;
-        let path = write_temp_file(dir.path(), "concepts.toml", toml);
+        let path = write_temp_file(dir.path(), "concepts.toml", toml)?;
         let registry = ConceptRegistry::load(&path)?;
         assert!(registry.contains("parser.basic"));
         assert!(registry.contains("regex.quantifier"));
@@ -689,7 +689,7 @@ id = "regex.quantifier"
 [[concepts]]
 id = "parser.basic"
 "#;
-        let path = write_temp_file(dir.path(), "concepts.toml", toml);
+        let path = write_temp_file(dir.path(), "concepts.toml", toml)?;
         let registry = ConceptRegistry::load(&path)?;
         assert!(!registry.contains("not.there"));
         Ok(())
@@ -708,7 +708,7 @@ id = "   "
 [[concepts]]
 id = "real.concept"
 "#;
-        let path = write_temp_file(dir.path(), "concepts.toml", toml);
+        let path = write_temp_file(dir.path(), "concepts.toml", toml)?;
         let registry = ConceptRegistry::load(&path)?;
         assert!(!registry.contains(""));
         assert!(!registry.contains("   "));
@@ -727,7 +727,7 @@ id = "outer.concept"
 [outer.inner]
 id = "inner.concept"
 "#;
-        let path = write_temp_file(dir.path(), "nested.toml", toml);
+        let path = write_temp_file(dir.path(), "nested.toml", toml)?;
         let registry = ConceptRegistry::load(&path)?;
         assert!(registry.contains("outer.concept"));
         assert!(registry.contains("inner.concept"));
@@ -743,14 +743,14 @@ concepts = [
     { id = "array.two" },
 ]
 "#;
-        let path = write_temp_file(dir.path(), "array.toml", toml);
+        let path = write_temp_file(dir.path(), "array.toml", toml)?;
         let registry = ConceptRegistry::load(&path)?;
         assert!(registry.contains("array.one"));
         assert!(registry.contains("array.two"));
         Ok(())
     }
 
-    // ── SidecarExpect/SidecarConcept equality ────────────────────────────────
+    // ── SidecarExpect/SidecarConcept equality ────────────────────────────────────────────
 
     #[test]
     fn sidecar_types_support_equality() {
