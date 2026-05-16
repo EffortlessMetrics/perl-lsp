@@ -320,7 +320,7 @@ pub struct RequireImportEntry {
 /// # Recognised patterns
 ///
 /// - `require Module::Path;` followed (anywhere later) by
-///   `Module::Path->import(qw(a b c));`
+///   `Module::Path->import(qw(a b c));` or another Perl `qw` delimiter
 /// - `require Module::Path;` followed by
 ///   `Module::Path->import('a', 'b');`
 /// - `require Module::Path;` followed by
@@ -447,6 +447,31 @@ fn parse_literal_import_call(line: &str, expected_module: &str) -> Option<Vec<St
     Some(symbols)
 }
 
+fn parse_qw_arg_list(trimmed: &str) -> Option<Vec<String>> {
+    let after_operator = trimmed.strip_prefix("qw")?;
+    let delimiter = after_operator.chars().next()?;
+    if delimiter.is_ascii_alphanumeric() || delimiter == '_' || delimiter.is_whitespace() {
+        return None;
+    }
+
+    let closing = match delimiter {
+        '(' => ')',
+        '[' => ']',
+        '{' => '}',
+        '<' => '>',
+        other => other,
+    };
+
+    let inner_start = "qw".len() + delimiter.len_utf8();
+    let inner_end = trimmed.len().checked_sub(closing.len_utf8())?;
+    if inner_start > inner_end || !trimmed.ends_with(closing) {
+        return None;
+    }
+
+    let inner = &trimmed[inner_start..inner_end];
+    Some(inner.split_whitespace().filter(|word| !word.is_empty()).map(str::to_string).collect())
+}
+
 /// Parse the interior of an `import(...)` argument list that contains only
 /// literal strings and/or a `qw(...)` list.
 ///
@@ -458,10 +483,7 @@ fn parse_literal_arg_list(args: &str) -> Option<Vec<String>> {
         return Some(Vec::new());
     }
 
-    // qw(...) form.
-    if let Some(inner) = trimmed.strip_prefix("qw(").and_then(|s| s.strip_suffix(')')) {
-        let words: Vec<String> =
-            inner.split_whitespace().filter(|w| !w.is_empty()).map(|w| w.to_string()).collect();
+    if let Some(words) = parse_qw_arg_list(trimmed) {
         return Some(words);
     }
 

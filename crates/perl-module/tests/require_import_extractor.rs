@@ -29,6 +29,28 @@ fn qw_list_produces_entries() -> Result<(), String> {
 }
 
 #[test]
+fn qw_list_with_non_paren_delimiter_produces_entries() -> Result<(), String> {
+    let cases = [
+        ("Foo->import(qw[alpha beta]);", ["alpha", "beta"]),
+        ("Foo->import(qw{gamma delta});", ["gamma", "delta"]),
+        ("Foo->import(qw<epsilon zeta>);", ["epsilon", "zeta"]),
+        ("Foo->import(qw!eta theta!);", ["eta", "theta"]),
+    ];
+
+    for (import_line, expected_names) in cases {
+        let source = format!("require Foo;\n{import_line}\n");
+        let entries = extract_require_import_symbols(&source);
+        let names: Vec<&str> = entries.iter().map(|entry| entry.symbol.as_str()).collect();
+
+        if names != expected_names {
+            return Err(format!("expected {expected_names:?} for {import_line:?}, got {names:?}"));
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
 fn single_quoted_args_produce_entries() -> Result<(), String> {
     let source = "require Foo;\nFoo->import('foo', 'bar');\n";
     let entries = extract_require_import_symbols(source);
@@ -83,6 +105,16 @@ fn nested_module_name_is_preserved() -> Result<(), String> {
 }
 
 // ── Non-goals: must not produce entries ─────────────────────────────────────
+
+#[test]
+fn malformed_qw_list_is_rejected() -> Result<(), String> {
+    let source = "require Foo;\nFoo->import(qw[alpha beta));\n";
+    let entries = extract_require_import_symbols(source);
+    if !entries.is_empty() {
+        return Err(format!("expected no entries for malformed qw list, got {entries:?}"));
+    }
+    Ok(())
+}
 
 #[test]
 fn dynamic_module_name_is_rejected() -> Result<(), String> {
