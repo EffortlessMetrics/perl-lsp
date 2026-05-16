@@ -77,8 +77,7 @@ fn must_returns_custom_struct() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-#[allow(clippy::unwrap_used)]
-fn must_panics_on_err_with_type_name_in_message() {
+fn must_panics_on_err_with_type_name_in_message() -> Result<(), Box<dyn std::error::Error>> {
     // Use a named unit struct so the type name appears in the panic message.
     // The struct name acts as both type-name evidence and debug representation.
     #[derive(Debug)]
@@ -86,25 +85,26 @@ fn must_panics_on_err_with_type_name_in_message() {
 
     let r: Result<i32, MyDistinctError> = Err(MyDistinctError);
     let result = std::panic::catch_unwind(|| must(r));
-    let msg = panic_msg(result.unwrap_err());
+    let msg = panic_msg(result.err().ok_or("expected panic")?);
     // Panic format: "unexpected Err<{type_name}>: {e:?}"
     assert!(msg.contains("MyDistinctError"), "panic message should contain type name, got: {msg}");
     assert!(
         msg.contains("unexpected Err"),
         "panic message should start with 'unexpected Err', got: {msg}"
     );
+    Ok(())
 }
 
 #[test]
-#[allow(clippy::unwrap_used)]
-fn must_panics_on_err_str() {
+fn must_panics_on_err_str() -> Result<(), Box<dyn std::error::Error>> {
     let r: Result<i32, &str> = Err("something went wrong");
     let result = std::panic::catch_unwind(|| must(r));
-    let msg = panic_msg(result.unwrap_err());
+    let msg = panic_msg(result.err().ok_or("expected panic")?);
     assert!(
         msg.contains("something went wrong"),
         "panic message should contain Debug of the &str error, got: {msg}"
     );
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -143,10 +143,9 @@ fn must_some_returns_custom_struct() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-#[allow(clippy::unwrap_used)]
-fn must_some_panics_on_none_with_type_name() {
+fn must_some_panics_on_none_with_type_name() -> Result<(), Box<dyn std::error::Error>> {
     let result = std::panic::catch_unwind(|| must_some(Option::<String>::None));
-    let msg = panic_msg(result.unwrap_err());
+    let msg = panic_msg(result.err().ok_or("expected panic")?);
     // Panic format: "unexpected None<{type_name}>"
     assert!(
         msg.contains("unexpected None"),
@@ -156,14 +155,15 @@ fn must_some_panics_on_none_with_type_name() {
         msg.contains("String") || msg.contains("alloc::string::String"),
         "panic message should contain the type name, got: {msg}"
     );
+    Ok(())
 }
 
 #[test]
-#[allow(clippy::unwrap_used)]
-fn must_some_panics_on_none_u32() {
+fn must_some_panics_on_none_u32() -> Result<(), Box<dyn std::error::Error>> {
     let result = std::panic::catch_unwind(|| must_some(Option::<u32>::None));
-    let msg = panic_msg(result.unwrap_err());
+    let msg = panic_msg(result.err().ok_or("expected panic")?);
     assert!(msg.contains("u32"), "panic message should contain 'u32', got: {msg}");
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -208,24 +208,24 @@ fn must_err_returns_custom_error_struct() -> Result<(), Box<dyn std::error::Erro
 // ---------------------------------------------------------------------------
 
 #[test]
-#[allow(clippy::unwrap_used)]
-fn must_err_panics_on_ok_with_type_names() {
+fn must_err_panics_on_ok_with_type_names() -> Result<(), Box<dyn std::error::Error>> {
     let r: Result<i32, &str> = Ok(99);
     let result = std::panic::catch_unwind(|| must_err(r));
-    let msg = panic_msg(result.unwrap_err());
+    let msg = panic_msg(result.err().ok_or("expected panic")?);
     // Panic format: "expected Err<{E}>, got Ok<{T}>({v:?})"
     assert!(msg.contains("expected Err"), "panic message should say 'expected Err', got: {msg}");
     assert!(msg.contains("i32"), "panic message should contain Ok type name 'i32', got: {msg}");
     assert!(msg.contains("99"), "panic message should contain the Ok value '99', got: {msg}");
+    Ok(())
 }
 
 #[test]
-#[allow(clippy::unwrap_used)]
-fn must_err_panics_on_ok_string_value() {
+fn must_err_panics_on_ok_string_value() -> Result<(), Box<dyn std::error::Error>> {
     let r: Result<String, i32> = Ok(String::from("oops"));
     let result = std::panic::catch_unwind(|| must_err(r));
-    let msg = panic_msg(result.unwrap_err());
+    let msg = panic_msg(result.err().ok_or("expected panic")?);
     assert!(msg.contains("oops"), "panic message should contain the Ok value, got: {msg}");
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
