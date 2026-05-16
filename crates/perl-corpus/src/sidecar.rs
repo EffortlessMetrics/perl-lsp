@@ -237,7 +237,7 @@ mode = "{mode}"
 
     fn write_temp_file(dir: &std::path::Path, name: &str, contents: &str) -> PathBuf {
         let path = dir.join(name);
-        fs::write(&path, contents).ok();
+        fs::write(&path, contents).expect("write_temp_file: fs::write failed");
         path
     }
 
@@ -611,7 +611,6 @@ id = "known.concept"
         write_temp_file(&subdir, "nested.meta.toml", "# meta");
 
         let sidecars = discover_sidecars(dir.path())?;
-        sidecars.len();
         assert_eq!(sidecars.len(), 2);
         Ok(())
     }
