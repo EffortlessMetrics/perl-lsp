@@ -125,6 +125,7 @@ mod non_windows_stub {
 mod mojibake_branches {
     use perl_uri::uri_to_fs_path;
 
+    #[cfg(unix)]
     #[test]
     fn non_utf8_path_bytes_pass_through_unchanged() -> Result<(), String> {
         // `%FF` decodes to a single 0xFF byte which is invalid UTF-8 in
@@ -204,11 +205,6 @@ mod mojibake_branches {
     fn path_bytes(path: &std::path::Path) -> Vec<u8> {
         use std::os::unix::ffi::OsStrExt;
         path.as_os_str().as_bytes().to_vec()
-    }
-
-    #[cfg(not(unix))]
-    fn path_bytes(path: &std::path::Path) -> Vec<u8> {
-        path.to_string_lossy().as_bytes().to_vec()
     }
 }
 
