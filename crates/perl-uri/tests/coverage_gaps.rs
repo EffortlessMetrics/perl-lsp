@@ -113,12 +113,14 @@ mod mojibake_repair_branches {
     /// returns false and `repair_mojibake_text` returns `text.to_string()` early.
     /// This covers the `if !looks_like_mojibake(text)` True branch on line 215.
     #[test]
-    fn clean_ascii_path_not_repaired() {
-        let path = uri_to_fs_path("file:///tmp/clean_ascii.pl");
-        assert!(path.is_some(), "should resolve clean ASCII URI");
-        let p = path.unwrap();
-        let s = p.to_string_lossy();
-        assert!(s.contains("clean_ascii.pl"), "filename should be unchanged: {s}");
+    fn clean_ascii_path_not_repaired() -> Result<(), String> {
+        let path =
+            uri_to_fs_path("file:///tmp/clean_ascii.pl").ok_or("should resolve clean ASCII URI")?;
+        let s = path.to_string_lossy();
+        if !s.contains("clean_ascii.pl") {
+            return Err(format!("filename should be unchanged: {s}"));
+        }
+        Ok(())
     }
 
     /// A double-encoded UTF-8 café path goes through the mojibake repair path.
@@ -129,14 +131,16 @@ mod mojibake_repair_branches {
     /// Covers: the repair loop, `u8::try_from` success, `String::from_utf8`
     /// success, and `mojibake_marker_count(candidate) < mojibake_marker_count(text)` True.
     #[test]
-    fn double_encoded_utf8_accent_is_repaired() {
+    fn double_encoded_utf8_accent_is_repaired() -> Result<(), String> {
         // %C3%83%C2%A9 = double-encoded "é" (0xC3 0xA9 → UTF-8 for é,
         // themselves encoded in Latin-1 as two bytes → decoded as ÃÂ©)
-        let path = uri_to_fs_path("file:///tmp/caf%C3%83%C2%A9.pl");
-        assert!(path.is_some(), "should resolve mojibake URI");
-        let p = path.unwrap();
-        let s = p.to_string_lossy();
-        assert!(s.contains("café"), "expected repaired café, got: {s}");
+        let path = uri_to_fs_path("file:///tmp/caf%C3%83%C2%A9.pl")
+            .ok_or("should resolve mojibake URI")?;
+        let s = path.to_string_lossy();
+        if !s.contains("café") {
+            return Err(format!("expected repaired café, got: {s}"));
+        }
+        Ok(())
     }
 
     /// A path with a high-plane Unicode character whose code point > 255 causes
