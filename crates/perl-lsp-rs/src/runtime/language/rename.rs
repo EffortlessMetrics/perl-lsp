@@ -656,7 +656,7 @@ impl LspServer {
                 #[cfg(feature = "workspace")]
                 {
                     let access_mode = route_index_access(self.coordinator());
-                    let (symbol_key, rename_byte_offset) = {
+                    let (symbol_key, rename_byte_offset, rename_is_package_scoped) = {
                         let documents = self.documents_guard();
                         self.get_document(&documents, uri).and_then(|doc| {
                             doc.ast.as_ref().and_then(|ast| {
@@ -669,11 +669,13 @@ impl LspServer {
                                     current_pkg,
                                     &doc.text,
                                 )
-                                .map(|key| (key, offset))
+                                .map(|key| (key, offset, !current_pkg.is_empty()))
                             })
                         })
                     }
-                    .map_or((None, None), |(key, offset)| (Some(key), Some(offset)));
+                    .map_or((None, None, false), |(key, offset, package_scoped)| {
+                        (Some(key), Some(offset), package_scoped)
+                    });
                     let current_symbol = {
                         let documents = self.documents_guard();
                         self.get_document(&documents, uri).map(|doc| {
@@ -711,6 +713,7 @@ impl LspServer {
                                 (rename_byte_offset, current_symbol.as_deref())
                                 && !symbol.is_empty()
                                 && symbol.chars().next().is_some_and(|c| !is_perl_sigil(c))
+                                && rename_is_package_scoped
                             {
                                 let idx = coordinator.index();
                                 if let Some((ws_edit, edit_count)) = self
