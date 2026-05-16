@@ -248,7 +248,9 @@ fn disable_warnings_categories(args: &[String], state: &mut PragmaState) {
     }
 
     for arg in args {
-        add_disabled_warning_category(state, normalized_pragma_token(arg));
+        for category in pragma_arg_items(arg) {
+            add_disabled_warning_category(state, &category);
+        }
     }
 }
 
