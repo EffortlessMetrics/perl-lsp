@@ -1913,8 +1913,11 @@ mod tests {
 
         // remaining types at zero
         assert_eq!(OccurrenceId(0), OccurrenceId(0));
+        assert_ne!(OccurrenceId(0), OccurrenceId(1));
         assert_eq!(EdgeId(0), EdgeId(0));
+        assert_ne!(EdgeId(0), EdgeId(1));
         assert_eq!(DiagnosticId(0), DiagnosticId(0));
+        assert_ne!(DiagnosticId(0), DiagnosticId(1));
     }
 
     /// All seven ID newtypes support total ordering consistent with their inner u64.
@@ -2081,8 +2084,7 @@ mod tests {
         // Serde roundtrip.
         let serialized = serde_json::to_string(&node)?;
         let decoded: PackageNode = serde_json::from_str(&serialized)?;
-        assert_eq!(decoded.entity_id, node.entity_id);
-        assert_eq!(decoded.name, node.name);
+        assert_eq!(decoded, node);
         Ok(())
     }
 
@@ -2118,9 +2120,7 @@ mod tests {
         // Serde roundtrip.
         let serialized = serde_json::to_string(&edge)?;
         let decoded: PackageEdge = serde_json::from_str(&serialized)?;
-        assert_eq!(decoded.from_package, edge.from_package);
-        assert_eq!(decoded.to_package, edge.to_package);
-        assert_eq!(decoded.kind, edge.kind);
+        assert_eq!(decoded, edge);
         Ok(())
     }
 }
