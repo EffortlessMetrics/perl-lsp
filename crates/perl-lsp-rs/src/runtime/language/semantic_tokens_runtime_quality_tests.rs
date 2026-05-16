@@ -12,6 +12,7 @@
 //!   - `shadow_state` is "shadowed" for broad compiler-token cutover.
 //!   - `compiler_receipt` records a source-backed compiler token class that matches
 //!     the existing live parser/HIR token output.
+//!   - Live token output remains monotonic, non-overlapping, and in-range.
 //!   - `notes` carry a human-readable proof trail.
 
 use crate::runtime::LspServer;
@@ -82,6 +83,66 @@ fn token_count(value: Option<&Value>) -> usize {
         .and_then(|d| d.as_array())
         .map(|arr| arr.len() / 5)
         .unwrap_or(0)
+}
+
+#[derive(Debug, Clone, Copy)]
+struct DecodedSemanticToken {
+    line: u32,
+    start: u32,
+    length: u32,
+    end: u32,
+}
+
+fn decode_semantic_tokens(
+    value: &Value,
+) -> Result<Vec<DecodedSemanticToken>, Box<dyn std::error::Error>> {
+    let data =
+        value.get("data").and_then(Value::as_array).ok_or("expected semantic token data array")?;
+    if data.len() % 5 != 0 {
+        return Err(
+            format!("semantic token data length must be divisible by 5: {}", data.len()).into()
+        );
+    }
+
+    let mut decoded = Vec::with_capacity(data.len() / 5);
+    let mut current_line = 0_u32;
+    let mut current_start = 0_u32;
+
+    for token in data.chunks_exact(5) {
+        let delta_line = semantic_token_u32(&token[0])?;
+        let delta_start = semantic_token_u32(&token[1])?;
+        let length = semantic_token_u32(&token[2])?;
+
+        if delta_line == 0 {
+            current_start = current_start
+                .checked_add(delta_start)
+                .ok_or("semantic token start offset overflow")?;
+        } else {
+            current_line = current_line
+                .checked_add(delta_line)
+                .ok_or("semantic token line offset overflow")?;
+            current_start = delta_start;
+        }
+
+        let end = current_start.checked_add(length).ok_or("semantic token end offset overflow")?;
+        decoded.push(DecodedSemanticToken {
+            line: current_line,
+            start: current_start,
+            length,
+            end,
+        });
+    }
+
+    Ok(decoded)
+}
+
+fn semantic_token_u32(value: &Value) -> Result<u32, Box<dyn std::error::Error>> {
+    let raw = value.as_u64().ok_or("expected semantic token integer")?;
+    Ok(u32::try_from(raw)?)
+}
+
+fn source_line_lsp_lengths(source: &str) -> Result<Vec<u32>, Box<dyn std::error::Error>> {
+    source.lines().map(|line| Ok(u32::try_from(line.encode_utf16().count())?)).collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -192,9 +253,24 @@ fn semantic_tokens_runtime_quality_receipt_records_compiler_backed_token_class()
         "compiler receipt must prove one matching live token span"
     );
     assert_eq!(
+        compiler_receipt.get("candidate_count").and_then(Value::as_u64),
+        Some(1),
+        "compiler receipt must record exactly one compiler-fact token candidate"
+    );
+    assert_eq!(
         compiler_receipt.get("source_backed_span_count").and_then(Value::as_u64),
         Some(1),
         "compiler receipt must prove one source-backed LSP token span"
+    );
+    assert_eq!(
+        compiler_receipt.get("missing_source_span_count").and_then(Value::as_u64),
+        Some(0),
+        "compiler receipt must fail closed instead of live-piloting missing spans"
+    );
+    assert_eq!(
+        compiler_receipt.get("invalid_source_span_count").and_then(Value::as_u64),
+        Some(0),
+        "compiler receipt must fail closed instead of live-piloting invalid spans"
     );
     assert_eq!(
         compiler_receipt.get("no_live_behavior_change").and_then(Value::as_bool),
@@ -275,6 +351,57 @@ fn semantic_tokens_runtime_quality_receipt_live_result_matches_handler() {
         live_result.as_ref(),
         "live_provider_result in receipt must exactly match the live handler output"
     );
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_proves_live_span_invariants()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    open_document(&server, DOC_URI, PERL_MODULE);
+
+    let params = json!({ "textDocument": {"uri": DOC_URI} });
+
+    let live_result =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+
+    let decoded = decode_semantic_tokens(&live_result)?;
+    let receipt_count =
+        must_some(receipt.get("live_provider_count").and_then(Value::as_u64).map(|n| n as usize));
+
+    assert_eq!(
+        decoded.len(),
+        receipt_count,
+        "decoded live semantic-token count must match the runtime receipt"
+    );
+    assert!(!decoded.is_empty(), "fixture must produce semantic tokens for span proof");
+
+    let line_lengths = source_line_lsp_lengths(PERL_MODULE)?;
+    let mut previous: Option<DecodedSemanticToken> = None;
+    for token in decoded {
+        assert!(
+            token.length > 0,
+            "semantic tokens must have a positive single-line LSP length: {token:?}"
+        );
+        let line_index = usize::try_from(token.line)?;
+        let line_length =
+            line_lengths.get(line_index).ok_or("semantic token line must exist in source")?;
+        assert!(
+            token.end <= *line_length,
+            "semantic token span must stay within its source line; line_length={line_length}, token={token:?}"
+        );
+
+        if let Some(prev) = previous {
+            assert!(
+                token.line > prev.line || (token.line == prev.line && token.start >= prev.end),
+                "semantic tokens must be monotonic and non-overlapping; previous={prev:?}, current={token:?}"
+            );
+        }
+        previous = Some(token);
+    }
+
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
