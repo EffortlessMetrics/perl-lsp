@@ -146,9 +146,10 @@ fn extract_named_captures_unclosed_angle_bracket_name() -> Result<(), Box<dyn st
 fn validate_returns_error_for_code_execution_pattern() -> Result<(), Box<dyn std::error::Error>> {
     // covers: validator/mod.rs line 41 — find_code_execution returns Some
     let v = RegexValidator::new();
-    let result = v.validate("(?{ system('ls') })", 0);
-    assert!(result.is_err(), "code-execution pattern must fail validation");
-    let msg = result.unwrap_err().to_string();
+    let Err(err) = v.validate("(?{ system('ls') })", 0) else {
+        return Err("code-execution pattern must fail validation".into());
+    };
+    let msg = err.to_string();
     assert!(
         msg.contains("code execution") || msg.contains("Embedded code"),
         "error should mention code execution: {msg}"
@@ -161,9 +162,10 @@ fn validate_returns_error_for_deferred_code_execution_pattern()
 -> Result<(), Box<dyn std::error::Error>> {
     // covers: validator/mod.rs line 41 — find_code_execution returns Some (deferred kind)
     let v = RegexValidator::new();
-    let result = v.validate("(??{ $code })", 0);
-    assert!(result.is_err(), "deferred code-execution pattern must fail validation");
-    let msg = result.unwrap_err().to_string();
+    let Err(err) = v.validate("(??{ $code })", 0) else {
+        return Err("deferred code-execution pattern must fail validation".into());
+    };
+    let msg = err.to_string();
     assert!(
         msg.contains("code execution") || msg.contains("Deferred"),
         "error should mention deferred code execution: {msg}"
@@ -176,9 +178,10 @@ fn validate_returns_error_for_nested_quantifier_pattern() -> Result<(), Box<dyn 
 {
     // covers: validator/mod.rs line 44 — find_nested_quantifier returns Some
     let v = RegexValidator::new();
-    let result = v.validate("(a+)+", 0);
-    assert!(result.is_err(), "nested-quantifier pattern must fail validation");
-    let msg = result.unwrap_err().to_string();
+    let Err(err) = v.validate("(a+)+", 0) else {
+        return Err("nested-quantifier pattern must fail validation".into());
+    };
+    let msg = err.to_string();
     assert!(
         msg.contains("quantifier") || msg.contains("backtracking"),
         "error should mention quantifiers: {msg}"
