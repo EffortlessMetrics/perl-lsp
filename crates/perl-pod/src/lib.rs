@@ -358,20 +358,52 @@ fn extract_link_display(link: &str) -> String {
 /// Handles standard POD escape sequences:
 /// - `E<lt>` → `<`
 /// - `E<gt>` → `>`
+/// - `E<sol>` → `/`
+/// - `E<verbar>` → `|`
 /// - `E<amp>` → `&`
 /// - `E<quot>` → `"`
 /// - `E<apos>` → `'`
+/// - `E<181>` → `µ`
+/// - `E<0x201E>` → `„`
+/// - `E<075>` → `=`
 ///
-/// Unknown entities are returned as-is.
+/// Unknown or invalid entities are returned as-is.
 fn decode_pod_entity(entity: &str) -> String {
     match entity {
         "lt" => "<".to_string(),
         "gt" => ">".to_string(),
+        "sol" => "/".to_string(),
+        "verbar" => "|".to_string(),
         "amp" => "&".to_string(),
         "quot" => "\"".to_string(),
         "apos" => "'".to_string(),
-        _ => entity.to_string(),
+        _ => decode_numeric_pod_entity(entity).unwrap_or_else(|| entity.to_string()),
     }
+}
+
+fn decode_numeric_pod_entity(entity: &str) -> Option<String> {
+    if entity.is_empty() {
+        return None;
+    }
+
+    let (digits, radix) =
+        if let Some(hex) = entity.strip_prefix("0x").or_else(|| entity.strip_prefix("0X")) {
+            (hex, 16)
+        } else if entity.len() > 1 {
+            match entity.strip_prefix('0') {
+                Some(octal) => (octal, 8),
+                None => (entity, 10),
+            }
+        } else {
+            (entity, 10)
+        };
+
+    if digits.is_empty() {
+        return None;
+    }
+
+    let codepoint = u32::from_str_radix(digits, radix).ok()?;
+    char::from_u32(codepoint).map(|ch| ch.to_string())
 }
 
 fn is_pod_format_code(c: char) -> bool {
@@ -398,18 +430,26 @@ mod tests {
     }
 
     #[test]
-    fn decode_entity_numeric_looking_returns_unchanged() {
-        // Numeric-looking names like "32" or "0x20" are not handled as HTML numeric refs;
-        // they fall through to the unknown branch and are returned as-is.
-        // TODO: POD spec §8 supports E<number> (Unicode code point) — currently unimplemented.
-        assert_eq!(decode_pod_entity("32"), "32");
-        assert_eq!(decode_pod_entity("0x20"), "0x20");
+    fn decode_entity_numeric_decimal_hex_and_octal() {
+        assert_eq!(decode_pod_entity("32"), " ");
+        assert_eq!(decode_pod_entity("181"), "µ");
+        assert_eq!(decode_pod_entity("0x201E"), "„");
+        assert_eq!(decode_pod_entity("075"), "=");
+    }
+
+    #[test]
+    fn decode_entity_invalid_numeric_returns_name_unchanged() {
+        assert_eq!(decode_pod_entity("0x"), "0x");
+        assert_eq!(decode_pod_entity("0x110000"), "0x110000");
+        assert_eq!(decode_pod_entity("09"), "09");
     }
 
     #[test]
     fn decode_entity_known_entities() {
         assert_eq!(decode_pod_entity("lt"), "<");
         assert_eq!(decode_pod_entity("gt"), ">");
+        assert_eq!(decode_pod_entity("sol"), "/");
+        assert_eq!(decode_pod_entity("verbar"), "|");
         assert_eq!(decode_pod_entity("amp"), "&");
         assert_eq!(decode_pod_entity("quot"), "\"");
         assert_eq!(decode_pod_entity("apos"), "'");

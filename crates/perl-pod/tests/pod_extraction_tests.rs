@@ -156,6 +156,14 @@ fn mixed_formatting() {
 }
 
 #[test]
+fn decodes_pod_numeric_and_core_named_entities() {
+    let doc = extract_pod(
+        "=head1 NAME\n\nUse E<181>, E<0x201E>, E<075>, E<sol>, and E<verbar>.\n\n=cut\n",
+    );
+    assert_eq!(doc.name.as_deref(), Some("Use µ, „, =, /, and |."));
+}
+
+#[test]
 fn handles_cut_properly() {
     let source = r#"
 =head1 NAME
