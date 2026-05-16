@@ -39,6 +39,7 @@ toml = "1.1.2"
 [dev-dependencies]
 proptest.workspace = true
 perl-tdd-support = { workspace = true }
+tempfile.workspace = true
 
 [features]
 default = []
