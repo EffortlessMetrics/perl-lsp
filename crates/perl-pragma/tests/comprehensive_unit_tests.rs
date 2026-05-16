@@ -231,6 +231,29 @@ fn use_strict_mixed_grouped_and_plain_args() -> Result<(), Box<dyn std::error::E
     Ok(())
 }
 
+#[test]
+fn use_strict_slash_qw_args_enable_requested_categories() -> Result<(), Box<dyn std::error::Error>>
+{
+    let ast = program(vec![use_node("strict", &["qw/vars refs/"], 0, 28)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+    assert!(state.strict_vars);
+    assert!(!state.strict_subs);
+    assert!(state.strict_refs);
+    Ok(())
+}
+
+#[test]
+fn use_feature_brace_qw_args_enable_requested_features() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("feature", &["qw{say unicode_strings}"], 0, 36)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+    assert!(state.has_feature("say"));
+    assert!(state.has_feature("unicode_strings"));
+    assert!(state.unicode_strings);
+    Ok(())
+}
+
 /// `use strict qw()` — empty qw list should be a no-op, not enable-all.
 /// The empty qw expands to zero items, so no categories are toggled.
 #[test]
@@ -1735,6 +1758,21 @@ fn no_builtin_removes_selected_lexical_imports() -> Result<(), Box<dyn std::erro
     let ast = program(vec![
         use_node("builtin", &["qw(true floor ceil)"], 0, 30),
         no_node("builtin", &["qw(floor)"], 31, 50),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+    assert!(state.has_builtin_import("true"));
+    assert!(!state.has_builtin_import("floor"));
+    assert!(state.has_builtin_import("ceil"));
+    Ok(())
+}
+
+#[test]
+fn builtin_qw_alternate_delimiters_track_and_remove_imports()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("builtin", &["qw<true floor ceil>"], 0, 30),
+        no_node("builtin", &["qw[floor]"], 31, 50),
     ]);
     let map = PragmaTracker::build(&ast);
     let state = &map[1].1;
