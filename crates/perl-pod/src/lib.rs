@@ -377,3 +377,88 @@ fn decode_pod_entity(entity: &str) -> String {
 fn is_pod_format_code(c: char) -> bool {
     matches!(c, 'B' | 'I' | 'C' | 'L' | 'F' | 'S' | 'E' | 'X' | 'Z')
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── decode_pod_entity ────────────────────────────────────────────────────
+
+    #[test]
+    fn decode_entity_unknown_returns_name_unchanged() {
+        // Unknown entity names fall through to the `_` branch and are returned as-is.
+        assert_eq!(decode_pod_entity("nbsp"), "nbsp");
+        assert_eq!(decode_pod_entity("unknown"), "unknown");
+    }
+
+    #[test]
+    fn decode_entity_empty_returns_empty() {
+        // Empty entity name is unknown → returned unchanged (empty string).
+        assert_eq!(decode_pod_entity(""), "");
+    }
+
+    #[test]
+    fn decode_entity_numeric_looking_returns_unchanged() {
+        // Numeric-looking names like "32" or "0x20" are not handled as HTML numeric refs;
+        // they fall through to the unknown branch and are returned as-is.
+        // TODO: POD spec §8 supports E<number> (Unicode code point) — currently unimplemented.
+        assert_eq!(decode_pod_entity("32"), "32");
+        assert_eq!(decode_pod_entity("0x20"), "0x20");
+    }
+
+    #[test]
+    fn decode_entity_known_entities() {
+        assert_eq!(decode_pod_entity("lt"), "<");
+        assert_eq!(decode_pod_entity("gt"), ">");
+        assert_eq!(decode_pod_entity("amp"), "&");
+        assert_eq!(decode_pod_entity("quot"), "\"");
+        assert_eq!(decode_pod_entity("apos"), "'");
+    }
+
+    // ── encode_pod_link_target ───────────────────────────────────────────────
+
+    #[test]
+    fn encode_link_empty_string() {
+        assert_eq!(encode_pod_link_target(""), "");
+    }
+
+    #[test]
+    fn encode_link_pure_ascii_safe_chars_pass_through() {
+        // The safe set includes alphanumerics and: - . _ ~ : /
+        assert_eq!(encode_pod_link_target("-._~"), "-._~");
+        assert_eq!(
+            encode_pod_link_target("A::Module/section-name_v1.0~"),
+            "A::Module/section-name_v1.0~"
+        );
+    }
+
+    #[test]
+    fn encode_link_multibyte_utf8_cafe() {
+        // "café" — 'é' is U+00E9, encoded in UTF-8 as 0xC3 0xA9.
+        let result = encode_pod_link_target("café");
+        assert_eq!(result, "caf%C3%A9");
+    }
+
+    #[test]
+    fn encode_link_multibyte_utf8_japanese() {
+        // "日本語" — each kanji is three UTF-8 bytes.
+        let result = encode_pod_link_target("日本語");
+        // 日 = E6 97 A5, 本 = E6 9C AC, 語 = E8 AA 9E
+        assert_eq!(result, "%E6%97%A5%E6%9C%AC%E8%AA%9E");
+    }
+
+    #[test]
+    fn encode_link_consecutive_special_chars() {
+        // Multiple consecutive non-safe characters are each percent-encoded.
+        assert_eq!(encode_pod_link_target("a  b"), "a%20%20b");
+        assert_eq!(encode_pod_link_target("((()))"), "%28%28%28%29%29%29");
+    }
+
+    #[test]
+    fn encode_link_control_chars_tab_and_newline() {
+        // Tab (0x09) and newline (0x0A) are not in the safe set → percent-encoded.
+        assert_eq!(encode_pod_link_target("\t"), "%09");
+        assert_eq!(encode_pod_link_target("\n"), "%0A");
+        assert_eq!(encode_pod_link_target("a\tb"), "a%09b");
+    }
+}
