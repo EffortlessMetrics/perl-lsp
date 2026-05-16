@@ -127,10 +127,10 @@ impl LspServer {
                     Self::package_rename_pilot_entity_id(&queries, file_id, byte_offset, symbol)?;
                 let outcome = rename_package_pilot_proof(true, &queries, entity_id, new_name_bare);
                 match outcome.result {
-                    RenamePackagePilotResult::Eligible { edits } => Some(
+                    RenamePackagePilotResult::Eligible { edits } => {
                         Self::package_rename_pilot_edits_to_workspace_edit(workspace_index, edits)
-                            .ok_or(()),
-                    ),
+                            .map(Ok)
+                    }
                     RenamePackagePilotResult::Ineligible {
                         reason: RenamePackagePilotIneligibleReason::EmptyPlan,
                         ..
