@@ -1871,4 +1871,134 @@ mod tests {
         assert_eq!(m.category, TokenCategory::Keyword);
         assert_eq!(m.display_name, "'sub'");
     }
+
+    // --- TokenKind role predicates ---
+
+    #[test]
+    fn is_assignment_operator_returns_true_for_assign_variants() {
+        assert!(TokenKind::Assign.is_assignment_operator());
+        assert!(TokenKind::PlusAssign.is_assignment_operator());
+        assert!(TokenKind::MinusAssign.is_assignment_operator());
+        assert!(TokenKind::StarAssign.is_assignment_operator());
+        assert!(TokenKind::SlashAssign.is_assignment_operator());
+        assert!(TokenKind::PercentAssign.is_assignment_operator());
+        assert!(TokenKind::DotAssign.is_assignment_operator());
+        assert!(TokenKind::AndAssign.is_assignment_operator());
+        assert!(TokenKind::OrAssign.is_assignment_operator());
+        assert!(TokenKind::XorAssign.is_assignment_operator());
+        assert!(TokenKind::PowerAssign.is_assignment_operator());
+        assert!(TokenKind::LeftShiftAssign.is_assignment_operator());
+        assert!(TokenKind::RightShiftAssign.is_assignment_operator());
+        assert!(TokenKind::LogicalAndAssign.is_assignment_operator());
+        assert!(TokenKind::LogicalOrAssign.is_assignment_operator());
+        assert!(TokenKind::DefinedOrAssign.is_assignment_operator());
+    }
+
+    #[test]
+    fn is_assignment_operator_returns_false_for_non_assign() {
+        assert!(!TokenKind::Plus.is_assignment_operator());
+        assert!(!TokenKind::Equal.is_assignment_operator());
+        assert!(!TokenKind::Identifier.is_assignment_operator());
+    }
+
+    #[test]
+    fn is_logical_operator_returns_true_for_logical_variants() {
+        assert!(TokenKind::And.is_logical_operator());
+        assert!(TokenKind::Or.is_logical_operator());
+        assert!(TokenKind::Not.is_logical_operator());
+        assert!(TokenKind::DefinedOr.is_logical_operator());
+        assert!(TokenKind::WordAnd.is_logical_operator());
+        assert!(TokenKind::WordOr.is_logical_operator());
+        assert!(TokenKind::WordNot.is_logical_operator());
+        assert!(TokenKind::WordXor.is_logical_operator());
+    }
+
+    #[test]
+    fn is_logical_operator_returns_false_for_non_logical() {
+        assert!(!TokenKind::Plus.is_logical_operator());
+        assert!(!TokenKind::Assign.is_logical_operator());
+        assert!(!TokenKind::Identifier.is_logical_operator());
+    }
+
+    #[test]
+    fn is_open_delimiter_returns_true_for_open_delimiters() {
+        assert!(TokenKind::LeftParen.is_open_delimiter());
+        assert!(TokenKind::LeftBrace.is_open_delimiter());
+        assert!(TokenKind::LeftBracket.is_open_delimiter());
+    }
+
+    #[test]
+    fn is_open_delimiter_returns_false_for_non_open() {
+        assert!(!TokenKind::RightParen.is_open_delimiter());
+        assert!(!TokenKind::Semicolon.is_open_delimiter());
+        assert!(!TokenKind::Plus.is_open_delimiter());
+    }
+
+    #[test]
+    fn is_quote_like_returns_true_for_quote_variants() {
+        assert!(TokenKind::Regex.is_quote_like());
+        assert!(TokenKind::Substitution.is_quote_like());
+        assert!(TokenKind::Transliteration.is_quote_like());
+        assert!(TokenKind::QuoteSingle.is_quote_like());
+        assert!(TokenKind::QuoteDouble.is_quote_like());
+        assert!(TokenKind::QuoteWords.is_quote_like());
+        assert!(TokenKind::QuoteCommand.is_quote_like());
+        assert!(TokenKind::HeredocStart.is_quote_like());
+    }
+
+    #[test]
+    fn is_quote_like_returns_false_for_non_quote() {
+        assert!(!TokenKind::String.is_quote_like());
+        assert!(!TokenKind::Identifier.is_quote_like());
+        assert!(!TokenKind::LeftParen.is_quote_like());
+    }
+
+    #[test]
+    fn is_recovery_boundary_returns_true_for_boundaries() {
+        assert!(TokenKind::Semicolon.is_recovery_boundary());
+        assert!(TokenKind::RightParen.is_recovery_boundary());
+        assert!(TokenKind::RightBrace.is_recovery_boundary());
+        assert!(TokenKind::RightBracket.is_recovery_boundary());
+        assert!(TokenKind::Eof.is_recovery_boundary());
+    }
+
+    #[test]
+    fn is_recovery_boundary_returns_false_for_non_boundary() {
+        assert!(!TokenKind::Plus.is_recovery_boundary());
+        assert!(!TokenKind::Identifier.is_recovery_boundary());
+        assert!(!TokenKind::LeftParen.is_recovery_boundary());
+    }
+
+    // --- TokenRef::new_checked branches ---
+
+    #[test]
+    fn token_ref_new_checked_rejects_end_before_start() {
+        let err = TokenRef::new_checked(TokenKind::Identifier, "x", 10, 3).unwrap_err();
+        assert_eq!(err, TokenSpanError::EndBeforeStart { start: 10, end: 3 });
+    }
+
+    #[test]
+    fn token_ref_new_checked_allows_empty_eof() {
+        let tok = TokenRef::new_checked(TokenKind::Eof, "", 7, 7).unwrap();
+        assert_eq!(tok.kind, TokenKind::Eof);
+        assert_eq!(tok.start, 7);
+        assert!(tok.is_empty());
+    }
+
+    #[test]
+    fn token_ref_new_checked_allows_empty_unknown() {
+        let tok = TokenRef::new_checked(TokenKind::Unknown, "", 3, 3).unwrap();
+        assert_eq!(tok.kind, TokenKind::Unknown);
+        assert_eq!(tok.start, 3);
+        assert!(tok.is_empty());
+    }
+
+    #[test]
+    fn token_ref_new_checked_rejects_empty_non_eof() {
+        let err = TokenRef::new_checked(TokenKind::Identifier, "", 5, 5).unwrap_err();
+        assert!(matches!(
+            err,
+            TokenSpanError::EmptySpanNotAllowed { kind: TokenKind::Identifier, at: 5 }
+        ));
+    }
 }
