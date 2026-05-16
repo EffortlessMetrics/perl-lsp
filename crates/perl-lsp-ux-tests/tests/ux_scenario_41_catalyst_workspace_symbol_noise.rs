@@ -7,7 +7,7 @@
 //! Receipt signals:
 //! - query latency and repeated-request candidate-count delta
 //! - useful hits versus unrelated/noisy hits for representative queries
-//! - generated/framework candidate names while source-backed generated labels stay bounded
+//! - generated/framework candidate names plus at least one explicitly labeled generated pilot symbol
 //! - dynamic-boundary-shaped names observed separately from exact symbols
 //! - stale/fresh query behavior after editing an open document
 
@@ -631,8 +631,8 @@ fn scenario_41_catalyst_workspace_symbol_noise_receipt() {
                 generated_candidate_total > 0 && generated_live_symbol_total == 0,
             )?;
             recorder.check(
-                "generated-label pilot symbols stayed explicitly labeled",
-                generated_label_names_are_labeled,
+                "generated-label pilot surfaced at least one explicitly labeled real-project symbol",
+                generated_label_total > 0 && generated_label_names_are_labeled,
             )?;
             recorder.check(
                 "configured generated candidates are backed by Catalyst fixture source",
