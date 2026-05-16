@@ -399,6 +399,8 @@ impl LspServer {
 
             let uri = req_uri(&params)?;
             let (line, character) = req_position(&params)?;
+            let include_edit_rollback_proof =
+                params.get("includeEditRollbackProof").and_then(Value::as_bool).unwrap_or(false);
             let Some((symbol, byte_offset)) = self.refactor_runtime_symbol(uri, line, character)
             else {
                 return self.record_safe_delete_decision_receipt(json!({
@@ -489,6 +491,16 @@ impl LspServer {
             };
             let (compiler_receipt, compiler_blockers) = compiler_receipt_parts
                 .map_or((None, None), |(receipt, blockers)| (Some(receipt), Some(blockers)));
+            let symbol_delete_edit_rollback = if include_edit_rollback_proof {
+                self.safe_delete_symbol_edit_rollback_proof_json(
+                    uri,
+                    usize::try_from(byte_offset).ok(),
+                    &symbol,
+                    compiler_blockers.as_deref(),
+                )
+            } else {
+                Value::Null
+            };
 
             let mut receipt = json!({
                 "provider": "safe_delete",
@@ -503,6 +515,7 @@ impl LspServer {
                     live_provider_edit_count,
                     compiler_blockers.as_deref()
                 ),
+                "symbol_delete_edit_rollback": symbol_delete_edit_rollback,
                 "no_live_behavior_change": true
             });
             enrich_safe_delete_decision_trace(
@@ -512,6 +525,119 @@ impl LspServer {
             );
             self.record_safe_delete_decision_receipt(receipt)
         }
+    }
+
+    #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+    fn safe_delete_symbol_edit_rollback_proof_json(
+        &self,
+        uri: &str,
+        byte_offset: Option<usize>,
+        symbol: &str,
+        blockers: Option<&[PlanBlocker]>,
+    ) -> Value {
+        let Some(blockers) = blockers else {
+            return safe_delete_symbol_delete_unavailable_json("compiler_receipt_missing");
+        };
+
+        if !blockers.is_empty() {
+            return json!({
+                "provider": "safe_delete",
+                "provider_action": "safeDelete/symbolDeleteEditRollbackProof",
+                "edit_plan_state": "blocked",
+                "planned_delete_edit_count": 0,
+                "rollback_edit_count": 0,
+                "rollback_required": false,
+                "rollback_safe": true,
+                "blocked_before_edit": true,
+                "edits_applied": false,
+                "live_symbol_delete_enabled": false,
+                "source_backed": false,
+                "source_backed_state": "blocked_before_source_edit",
+                "planned_delete_workspace_edit": json!({"changes": {}}),
+                "rollback_workspace_edit": json!({"changes": {}}),
+                "reason": "safe-delete blockers prevent edit planning; rollback is not required",
+                "claim_boundary": "safe-delete edit rollback proof only; no live symbol-level delete edits are applied"
+            });
+        }
+
+        let Some(byte_offset) = byte_offset else {
+            return safe_delete_symbol_delete_unavailable_json("request_offset_unavailable");
+        };
+
+        let documents = self.documents_guard();
+        let Some(doc) = self.get_document(&documents, uri) else {
+            return safe_delete_symbol_delete_unavailable_json("document_unavailable");
+        };
+        let Some((delete_start, delete_end)) =
+            safe_delete_subroutine_delete_range(&doc.text, byte_offset, symbol)
+        else {
+            return safe_delete_symbol_delete_unavailable_json("source_backed_range_unavailable");
+        };
+        let Some(deleted_text) = doc.text.get(delete_start..delete_end) else {
+            return safe_delete_symbol_delete_unavailable_json("source_range_not_utf8_boundary");
+        };
+        let Some(prefix) = doc.text.get(..delete_start) else {
+            return safe_delete_symbol_delete_unavailable_json("source_prefix_unavailable");
+        };
+        let Some(suffix) = doc.text.get(delete_end..) else {
+            return safe_delete_symbol_delete_unavailable_json("source_suffix_unavailable");
+        };
+
+        let after_delete = format!("{prefix}{suffix}");
+        let Some(rollback_prefix) = after_delete.get(..delete_start) else {
+            return safe_delete_symbol_delete_unavailable_json("rollback_prefix_unavailable");
+        };
+        let Some(rollback_suffix) = after_delete.get(delete_start..) else {
+            return safe_delete_symbol_delete_unavailable_json("rollback_suffix_unavailable");
+        };
+        let restored = format!("{rollback_prefix}{deleted_text}{rollback_suffix}");
+        let rollback_restores_original = restored == doc.text;
+
+        let (start_line, start_character) = self.offset_to_pos16(doc, delete_start);
+        let (end_line, end_character) = self.offset_to_pos16(doc, delete_end);
+
+        let delete_edit = json!({
+            "range": {
+                "start": { "line": start_line, "character": start_character },
+                "end": { "line": end_line, "character": end_character }
+            },
+            "newText": ""
+        });
+        let rollback_edit = json!({
+            "range": {
+                "start": { "line": start_line, "character": start_character },
+                "end": { "line": start_line, "character": start_character }
+            },
+            "newText": deleted_text
+        });
+
+        json!({
+            "provider": "safe_delete",
+            "provider_action": "safeDelete/symbolDeleteEditRollbackProof",
+            "edit_plan_state": if rollback_restores_original { "planned" } else { "verification_failed" },
+            "planned_delete_edit_count": 1,
+            "rollback_edit_count": 1,
+            "rollback_required": true,
+            "rollback_safe": rollback_restores_original,
+            "blocked_before_edit": false,
+            "edits_applied": false,
+            "live_symbol_delete_enabled": false,
+            "source_backed": true,
+            "source_backed_state": "source_backed_subroutine_range",
+            "rollback_verification": if rollback_restores_original { "restores_original" } else { "failed" },
+            "planned_delete_workspace_edit": {
+                "changes": {
+                    uri: [delete_edit]
+                }
+            },
+            "rollback_workspace_edit": {
+                "changes": {
+                    uri: [rollback_edit]
+                }
+            },
+            "reason": "source-backed symbol-delete edit can be inverted exactly; no live symbol-level delete was executed",
+            "claim_boundary": "safe-delete edit rollback proof only; no live symbol-level delete edits are applied"
+        })
     }
 
     /// Live safe-delete UX preview for editor commands.
@@ -1361,6 +1487,108 @@ fn safe_delete_rollback_receipt_json(
             "safe-delete plan allowed; no live symbol-level delete was executed"
         }
     })
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn safe_delete_symbol_delete_unavailable_json(reason: &'static str) -> Value {
+    json!({
+        "provider": "safe_delete",
+        "provider_action": "safeDelete/symbolDeleteEditRollbackProof",
+        "edit_plan_state": "unavailable",
+        "planned_delete_edit_count": 0,
+        "rollback_edit_count": 0,
+        "rollback_required": false,
+        "rollback_safe": false,
+        "blocked_before_edit": false,
+        "edits_applied": false,
+        "live_symbol_delete_enabled": false,
+        "source_backed": false,
+        "source_backed_state": "source_backed_range_unavailable",
+        "planned_delete_workspace_edit": json!({"changes": {}}),
+        "rollback_workspace_edit": json!({"changes": {}}),
+        "reason": reason,
+        "claim_boundary": "safe-delete edit rollback proof only; no live symbol-level delete edits are applied"
+    })
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn safe_delete_subroutine_delete_range(
+    text: &str,
+    byte_offset: usize,
+    symbol: &str,
+) -> Option<(usize, usize)> {
+    let line_starts = text_line_starts(text);
+    let line_index = line_index_for_offset(&line_starts, byte_offset)?;
+    let declaration_line = text_line(text, &line_starts, line_index)?;
+    let expected_declaration = format!("sub {symbol}");
+    if !declaration_line.trim_start().starts_with(&expected_declaration) {
+        return None;
+    }
+
+    let mut depth = 0i32;
+    let mut saw_open = false;
+    let mut end_line_exclusive = None;
+    for index in line_index..line_starts.len() {
+        let line = text_line(text, &line_starts, index)?;
+        for ch in line.chars() {
+            match ch {
+                '{' => {
+                    saw_open = true;
+                    depth += 1;
+                }
+                '}' if saw_open => {
+                    depth -= 1;
+                    if depth <= 0 {
+                        end_line_exclusive = Some(index + 1);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if end_line_exclusive.is_some() {
+            break;
+        }
+    }
+
+    let mut end_line_exclusive = end_line_exclusive?;
+    if let Some(next_line) = text_line(text, &line_starts, end_line_exclusive)
+        && next_line.trim().is_empty()
+    {
+        end_line_exclusive += 1;
+    }
+
+    let start = *line_starts.get(line_index)?;
+    let end = line_starts.get(end_line_exclusive).copied().unwrap_or(text.len());
+    (start < end).then_some((start, end))
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn text_line_starts(text: &str) -> Vec<usize> {
+    let mut starts = vec![0];
+    for (index, ch) in text.char_indices() {
+        if ch == '\n' {
+            starts.push(index + ch.len_utf8());
+        }
+    }
+    starts
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn line_index_for_offset(line_starts: &[usize], byte_offset: usize) -> Option<usize> {
+    line_starts
+        .iter()
+        .enumerate()
+        .take_while(|(_, start)| **start <= byte_offset)
+        .map(|(index, _)| index)
+        .last()
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn text_line<'a>(text: &'a str, line_starts: &[usize], line_index: usize) -> Option<&'a str> {
+    let start = *line_starts.get(line_index)?;
+    let end = line_starts.get(line_index + 1).copied().unwrap_or(text.len());
+    text.get(start..end)
 }
 
 fn safe_delete_symbol_preview_message(receipt: &Value) -> String {
