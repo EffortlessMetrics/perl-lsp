@@ -820,8 +820,8 @@ fn refactor_runtime_blocker_ux_package_rename_preview_records_imported_call_nois
     );
     assert_eq!(
         preview_result.get("planned_live_provider_edit_count").and_then(Value::as_u64),
-        Some(0),
-        "preview must preserve the live-provider no-edit count: {preview_result}"
+        Some(1),
+        "preview should record the legacy same-file fallback edit count without returning edits: {preview_result}"
     );
     assert_eq!(
         preview_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
@@ -845,17 +845,14 @@ fn refactor_runtime_blocker_ux_package_rename_preview_records_imported_call_nois
         Some("compiler_missing")
     );
     assert_eq!(fallback_noise.get("compiler_available").and_then(Value::as_bool), Some(false));
-    assert_eq!(
-        fallback_noise.get("live_provider_state").and_then(Value::as_str),
-        Some("empty_edit")
-    );
-    assert_eq!(fallback_noise.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(fallback_noise.get("live_provider_state").and_then(Value::as_str), Some("edits"));
+    assert_eq!(fallback_noise.get("live_provider_edit_count").and_then(Value::as_u64), Some(1));
 
     let rollback_receipt =
         preview_result.get("rollback_receipt").ok_or("missing rollback_receipt")?;
     assert_eq!(
         rollback_receipt.get("planned_live_provider_edit_count").and_then(Value::as_u64),
-        Some(0)
+        Some(1)
     );
     assert_eq!(
         rollback_receipt.get("returned_workspace_edit_count").and_then(Value::as_u64),
@@ -1372,17 +1369,17 @@ fn refactor_runtime_blocker_ux_rename_receipt_records_imported_call_fallback_noi
     );
     assert_eq!(
         fallback_noise.get("live_provider_edit_count").and_then(Value::as_u64),
-        Some(0),
-        "imported-call live provider must stay no-edit without compiler proof: {fallback_noise}"
+        Some(1),
+        "imported-call receipt should preserve the legacy same-file fallback edit count as noise: {fallback_noise}"
     );
     assert_eq!(
         fallback_noise.get("live_provider_state").and_then(Value::as_str),
-        Some("empty_edit"),
+        Some("edits"),
         "unexpected imported-call live provider state: {fallback_noise}"
     );
     assert!(
         fallback_noise.get("live_provider_error").is_some_and(Value::is_null),
-        "empty-edit state should not fabricate a provider error: {fallback_noise}"
+        "fallback-noise state should not fabricate a provider error: {fallback_noise}"
     );
 
     Ok(())
