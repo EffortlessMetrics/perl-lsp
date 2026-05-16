@@ -126,3 +126,137 @@ fn contains_word(haystack: &str, needle: &str) -> bool {
 fn is_word_char(ch: Option<char>) -> bool {
     ch.is_some_and(|c| c.is_ascii_alphanumeric() || c == '_')
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_entry(module: &str, symbols: &[&str], line: usize) -> ImportEntry {
+        ImportEntry {
+            module: module.to_string(),
+            symbols: symbols.iter().map(|s| s.to_string()).collect(),
+            line,
+        }
+    }
+
+    // --- find_unused_imports tests ---
+
+    #[test]
+    fn test_find_unused_imports_empty_imports_returns_empty() -> Result<(), String> {
+        let result = find_unused_imports(&[], "some code here")?;
+        assert!(result.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_find_unused_imports_bare_pragma_not_reported_unused() -> Result<(), String> {
+        // Pragma modules (strict, warnings) are never unused
+        let imports = vec![make_entry("strict", &[], 1), make_entry("warnings", &[], 2)];
+        let result = find_unused_imports(&imports, "my $x = 1;")?;
+        assert!(result.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_find_unused_imports_used_symbol_not_reported() -> Result<(), String> {
+        // "first" is used in the non-use content
+        let imports = vec![make_entry("List::Util", &["first", "max"], 1)];
+        let content = "my $f = first { $_ > 0 } @items;\nmy $m = max(@nums);\n";
+        let result = find_unused_imports(&imports, content)?;
+        assert!(result.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_find_unused_imports_unused_symbol_reported() -> Result<(), String> {
+        // "min" is imported but never appears in the content
+        let imports = vec![make_entry("List::Util", &["max", "min"], 1)];
+        let content = "my $m = max(1, 2);";
+        let result = find_unused_imports(&imports, content)?;
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].module, "List::Util");
+        assert_eq!(result[0].symbols, vec!["min"]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_find_unused_imports_all_symbols_used_no_report() -> Result<(), String> {
+        let imports = vec![make_entry("Scalar::Util", &["blessed", "reftype"], 1)];
+        let content = "my $b = blessed($obj);\nmy $r = reftype($ref);\n";
+        let result = find_unused_imports(&imports, content)?;
+        assert!(result.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_find_unused_imports_word_boundary_prevents_false_positive() -> Result<(), String> {
+        // "max" appears as part of "maximum" — must not count as used
+        let imports = vec![make_entry("List::Util", &["max"], 1)];
+        let content = "my $x = maximum_value();";
+        let result = find_unused_imports(&imports, content)?;
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].symbols, vec!["max"]);
+        Ok(())
+    }
+
+    // --- find_missing_imports tests ---
+
+    #[test]
+    fn test_find_missing_imports_no_qualified_usage_returns_empty() -> Result<(), String> {
+        let content = "use strict;\nmy $x = 1;\n";
+        let imports = vec![make_entry("strict", &[], 1)];
+        let result = find_missing_imports(content, &imports)?;
+        assert!(result.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_find_missing_imports_already_imported_module_not_reported() -> Result<(), String> {
+        let content = "use JSON;\nmy $j = JSON::encode_json({});\n";
+        let imports = vec![make_entry("JSON", &[], 1)];
+        let result = find_missing_imports(content, &imports)?;
+        assert!(result.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_find_missing_imports_unimported_module_detected() -> Result<(), String> {
+        let content = "use strict;\nmy $r = HTTP::Tiny::new();\n";
+        let imports = vec![make_entry("strict", &[], 1)];
+        let result = find_missing_imports(content, &imports)?;
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].module, "HTTP::Tiny");
+        Ok(())
+    }
+
+    #[test]
+    fn test_find_missing_imports_suggested_location_after_last_import() -> Result<(), String> {
+        let content = "use strict;\nuse warnings;\nmy $r = HTTP::Tiny::new();\n";
+        let imports = vec![make_entry("strict", &[], 1), make_entry("warnings", &[], 2)];
+        let result = find_missing_imports(content, &imports)?;
+        assert_eq!(result.len(), 1);
+        // suggested_location = last import line + 1 = 2 + 1 = 3
+        assert_eq!(result[0].suggested_location, 3);
+        Ok(())
+    }
+
+    #[test]
+    fn test_find_missing_imports_qualified_usage_in_string_not_reported() -> Result<(), String> {
+        // Module usage inside a string literal should not trigger a missing import
+        let content = "use strict;\nmy $s = \"JSON::encode_json is a function\";\n";
+        let imports = vec![make_entry("strict", &[], 1)];
+        let result = find_missing_imports(content, &imports)?;
+        assert!(result.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_find_missing_imports_confidence_is_positive() -> Result<(), String> {
+        let content = "use strict;\nmy $r = HTTP::Tiny::new();\n";
+        let imports = vec![make_entry("strict", &[], 1)];
+        let result = find_missing_imports(content, &imports)?;
+        assert_eq!(result.len(), 1);
+        assert!(result[0].confidence > 0.0);
+        Ok(())
+    }
+}
