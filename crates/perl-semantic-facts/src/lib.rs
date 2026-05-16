@@ -1973,8 +1973,23 @@ mod tests {
     }
 
     /// All seven ID newtypes round-trip through JSON at boundary values (0, 1, mid, MAX).
+    ///
+    /// The `id_newtype!` macro produces `pub struct $name(pub u64)`.  serde's
+    /// default representation for a newtype struct over a u64 is a bare JSON
+    /// number — **not** a JSON object.  The shape assertion below pins this
+    /// contract so that adding `#[serde(rename_all = ...)]` or similar
+    /// attributes would surface as a test failure.
     #[test]
     fn id_newtype_json_roundtrip_boundary_values() -> Result<(), serde_json::Error> {
+        // Shape contract: bare JSON number, not an object or array.
+        assert_eq!(serde_json::to_string(&FileId(42))?, "42");
+        assert_eq!(serde_json::to_string(&ScopeId(42))?, "42");
+        assert_eq!(serde_json::to_string(&EntityId(42))?, "42");
+        assert_eq!(serde_json::to_string(&AnchorId(42))?, "42");
+        assert_eq!(serde_json::to_string(&OccurrenceId(42))?, "42");
+        assert_eq!(serde_json::to_string(&EdgeId(42))?, "42");
+        assert_eq!(serde_json::to_string(&DiagnosticId(42))?, "42");
+
         for v in [0u64, 1, 500, u64::MAX] {
             let s = serde_json::to_string(&FileId(v))?;
             assert_eq!(serde_json::from_str::<FileId>(&s)?, FileId(v));
