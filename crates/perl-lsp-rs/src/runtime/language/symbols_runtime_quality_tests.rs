@@ -50,6 +50,16 @@ my $obj = Symbols::Quality->new(name => 'World');
 print $obj->greet(), "\n";
 "#;
 
+const GENERATED_MODULE_URI: &str = "file:///workspace/lib/Symbols/GeneratedPilot.pm";
+
+const GENERATED_MODULE: &str = r#"package Symbols::GeneratedPilot;
+use Moo;
+
+has display_name => (is => 'rw');
+
+1;
+"#;
+
 fn create_server() -> LspServer {
     let output =
         Arc::new(Mutex::new(Box::new(Cursor::new(Vec::new())) as Box<dyn std::io::Write + Send>));
@@ -75,6 +85,11 @@ fn open_document(
 fn open_symbol_workspace(server: &LspServer) -> Result<(), Box<dyn std::error::Error>> {
     open_document(server, MODULE_URI, MODULE)?;
     open_document(server, SCRIPT_URI, SCRIPT)?;
+    Ok(())
+}
+
+fn open_generated_symbol_workspace(server: &LspServer) -> Result<(), Box<dyn std::error::Error>> {
+    open_document(server, GENERATED_MODULE_URI, GENERATED_MODULE)?;
     Ok(())
 }
 
@@ -369,8 +384,85 @@ fn workspace_symbols_runtime_quality_receipt_records_source_backed_compiler_slic
     assert_eq!(
         compiler_receipt.get("claim_boundary").and_then(Value::as_str),
         Some(
-            "ready workspace index symbols only; generated, dynamic, stale, and partial-index candidates remain gated"
+            "ready workspace index source-backed symbols plus labeled source-backed generated/framework pilot symbols only; dynamic, stale, ambiguous, fallback/noise, and partial-index candidates remain gated"
         )
+    );
+    Ok(())
+}
+
+#[test]
+fn workspace_symbols_runtime_quality_receipt_records_labeled_generated_pilot()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    open_generated_symbol_workspace(&server)?;
+    let params = json!({"query": "display_name"});
+
+    let receipt = server
+        .test_workspace_symbols_runtime_quality_receipt(Some(params))?
+        .ok_or("missing workspace symbols receipt")?;
+
+    assert_eq!(
+        receipt.get("shadow_state").and_then(Value::as_str),
+        Some("partial_live_generated_labeled_pilot"),
+        "generated-only query must report the labeled generated pilot state"
+    );
+    assert_eq!(
+        receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(false),
+        "source-backed generated pilot changes live workspace-symbol output"
+    );
+
+    let live_symbols = receipt
+        .get("live_provider_result")
+        .and_then(Value::as_array)
+        .ok_or("missing live provider result")?;
+    assert!(
+        live_symbols.iter().any(|symbol| {
+            symbol.get("name").and_then(Value::as_str) == Some("display_name [generated/framework]")
+                && symbol.get("containerName").and_then(Value::as_str)
+                    == Some("Symbols::GeneratedPilot [generated/framework]")
+        }),
+        "live workspace-symbol output must include the explicit generated/framework label: {live_symbols:?}"
+    );
+
+    let compiler_receipt = receipt.get("compiler_receipt").ok_or("missing compiler receipt")?;
+    assert_eq!(
+        compiler_receipt.get("source").and_then(Value::as_str),
+        Some("FrameworkAdapter"),
+        "generated-only pilot receipts must not report exact compiler facts"
+    );
+    assert_eq!(
+        compiler_receipt.get("provenance").and_then(Value::as_str),
+        Some("FrameworkAnchor"),
+        "generated-only pilot receipts must report source-anchor semantics"
+    );
+    assert_eq!(
+        compiler_receipt.get("confidence").and_then(Value::as_str),
+        Some("Medium"),
+        "generated-only pilot receipts must not overclaim high confidence"
+    );
+    assert_eq!(
+        compiler_receipt.get("source_backed_count").and_then(Value::as_u64),
+        Some(0),
+        "generated pilot must not inflate exact source-backed syntax count"
+    );
+    assert_eq!(
+        compiler_receipt.get("generated_pilot_count").and_then(Value::as_u64),
+        Some(1),
+        "generated pilot count must record the source-backed framework member"
+    );
+    assert_eq!(
+        compiler_receipt.get("generated_pilot_location_semantics").and_then(Value::as_str),
+        Some("source_anchor_not_exact_generated_body"),
+        "generated pilot must not imply exact generated method bodies"
+    );
+    let boundary = compiler_receipt
+        .get("claim_boundary")
+        .and_then(Value::as_str)
+        .ok_or("missing claim boundary")?;
+    assert!(
+        boundary.contains("labeled source-backed generated/framework pilot symbols only"),
+        "claim boundary must describe the narrow generated pilot: {boundary}"
     );
     Ok(())
 }
