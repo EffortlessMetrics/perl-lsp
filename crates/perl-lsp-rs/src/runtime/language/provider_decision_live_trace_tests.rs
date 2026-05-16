@@ -32,6 +32,15 @@ sub greet {
 1;
 "#;
 
+const GENERATED_WORKSPACE_SYMBOL_URI: &str = "file:///workspace/lib/Trace/GeneratedSymbols.pm";
+const GENERATED_WORKSPACE_SYMBOL_DOC: &str = r#"package Trace::GeneratedSymbols;
+use Moo;
+
+has display_name => (is => 'rw');
+
+1;
+"#;
+
 fn create_server() -> LspServer {
     let output =
         Arc::new(Mutex::new(Box::new(Cursor::new(Vec::new())) as Box<dyn std::io::Write + Send>));
@@ -86,6 +95,20 @@ fn open_workspace_symbol_document(server: &LspServer) -> Result<(), Box<dyn std:
         "textDocument": {
             "uri": WORKSPACE_SYMBOL_URI,
             "text": WORKSPACE_SYMBOL_DOC,
+            "languageId": "perl",
+            "version": 1
+        }
+    })))?;
+    Ok(())
+}
+
+fn open_generated_workspace_symbol_document(
+    server: &LspServer,
+) -> Result<(), Box<dyn std::error::Error>> {
+    server.test_handle_did_open(Some(json!({
+        "textDocument": {
+            "uri": GENERATED_WORKSPACE_SYMBOL_URI,
+            "text": GENERATED_WORKSPACE_SYMBOL_DOC,
             "languageId": "perl",
             "version": 1
         }
@@ -322,6 +345,50 @@ fn live_symbol_requests_persist_provider_traces() -> Result<(), Box<dyn std::err
     assert!(
         receipt.get("live_provider_result_count").and_then(Value::as_u64).is_some(),
         "workspace symbol trace must include a result count: {receipt}"
+    );
+    Ok(())
+}
+
+#[test]
+fn live_workspace_symbol_generated_pilot_persists_labeled_provider_trace()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    initialize(&server)?;
+    open_generated_workspace_symbol_document(&server)?;
+
+    response_result(
+        server.handle_request(request(
+            6,
+            "workspace/symbol",
+            Some(json!({"query": "display_name"})),
+        )),
+        "workspace generated symbols",
+    )?;
+
+    let explanation = explain_provider_decision(&server, "workspace_symbols")?;
+    let receipt = request_receipt(&explanation, "workspace_symbols")?;
+    assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("acted"));
+    assert_eq!(
+        receipt.get("reason").and_then(Value::as_str),
+        Some("source_backed_generated_label_pilot")
+    );
+    assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("framework_adapter"));
+    assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("medium"));
+    assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        receipt.get("source_backed_state").and_then(Value::as_str),
+        Some("ready_workspace_index_generated_label_pilot")
+    );
+    assert_eq!(
+        receipt.get("live_cutover").and_then(Value::as_str),
+        Some("partial_live_source_backed_generated_pilot")
+    );
+    assert_eq!(receipt.get("generated_pilot_count").and_then(Value::as_u64), Some(1));
+    let boundary =
+        receipt.get("claim_boundary").and_then(Value::as_str).ok_or("missing boundary")?;
+    assert!(
+        boundary.contains("not exact generated method bodies"),
+        "generated pilot trace must avoid exact-location overclaim: {boundary}"
     );
     Ok(())
 }

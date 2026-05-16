@@ -2,12 +2,12 @@
 //!
 //! This receipt exercises `workspace/symbol` over the committed Catalyst
 //! skeleton workspace and records a third real-project quality signal for the
-//! workspace-symbol provider without changing provider behavior.
+//! workspace-symbol provider while bounding the generated-label pilot.
 //!
 //! Receipt signals:
 //! - query latency and repeated-request candidate-count delta
 //! - useful hits versus unrelated/noisy hits for representative queries
-//! - generated/framework candidate names while compiler-generated labels remain gated
+//! - generated/framework candidate names while source-backed generated labels stay bounded
 //! - dynamic-boundary-shaped names observed separately from exact symbols
 //! - stale/fresh query behavior after editing an open document
 
@@ -221,12 +221,17 @@ fn symbol_name_sample(symbols: &[Value]) -> Vec<String> {
     symbols.iter().take(TOP_N).filter_map(workspace_symbol_name).collect()
 }
 
-fn exact_symbol_name_hits(symbols: &[Value], candidates: &[&str]) -> Vec<String> {
+fn exact_unproven_generated_name_hits(
+    symbols: &[Value],
+    candidates: &[&str],
+    useful_substrings: &[&str],
+) -> Vec<String> {
     let candidate_names = candidates.iter().copied().collect::<BTreeSet<_>>();
     let mut names = symbols
         .iter()
         .filter_map(workspace_symbol_name)
         .filter(|name| candidate_names.contains(name.as_str()))
+        .filter(|name| !useful_substrings.iter().any(|useful| name.eq_ignore_ascii_case(useful)))
         .collect::<Vec<_>>();
     names.sort();
     names.dedup();
@@ -314,8 +319,11 @@ fn run_probe(
         first.symbols.iter().filter(|symbol| is_valid_workspace_symbol_shape(symbol)).count();
     let invalid_shape_count = first.symbols.len().saturating_sub(valid_shape_count);
     let useful_hits = matching_symbol_names(&first.symbols, probe.useful_substrings);
-    let generated_candidate_live_hits =
-        exact_symbol_name_hits(&first.symbols, probe.generated_candidate_names);
+    let generated_candidate_live_hits = exact_unproven_generated_name_hits(
+        &first.symbols,
+        probe.generated_candidate_names,
+        probe.useful_substrings,
+    );
     let generated_label_hits = matching_symbol_names(
         &first.symbols,
         &["generated", "framework", "virtual", "FrameworkAdapter"],
@@ -523,6 +531,12 @@ fn scenario_41_catalyst_workspace_symbol_noise_receipt() {
                 reports.iter().map(|report| report.generated_candidate_count).sum();
             let generated_label_total: usize =
                 reports.iter().map(|report| report.generated_label_hits.len()).sum();
+            let generated_label_names_are_labeled = reports.iter().all(|report| {
+                report
+                    .generated_label_hits
+                    .iter()
+                    .all(|name| name.contains("[generated/framework]"))
+            });
             let generated_live_symbol_total: usize =
                 reports.iter().map(|report| report.generated_candidate_live_hits.len()).sum();
             let dynamic_boundary_candidate_total: usize =
@@ -558,7 +572,7 @@ fn scenario_41_catalyst_workspace_symbol_noise_receipt() {
                 "schema_version": 1,
                 "project": "catalyst",
                 "surface": "workspace_symbols",
-                "claim_boundary": "third-project workspace-symbol noise receipt only; no provider behavior changed or promoted",
+                "claim_boundary": "third-project workspace-symbol noise receipt only; generated labels may appear only for source-backed pilot symbols and do not promote broad generated/dynamic behavior",
                 "fixture_file_count": fixture_files.len(),
                 "probe_count": reports.len(),
                 "live_symbol_total": live_symbol_total,
@@ -613,10 +627,12 @@ fn scenario_41_catalyst_workspace_symbol_noise_receipt() {
                 candidate_count_delta_total == 0,
             )?;
             recorder.check(
-                "receipt recorded generated candidates as still gated from live names and labels",
-                generated_candidate_total > 0
-                    && generated_live_symbol_total == 0
-                    && generated_label_total == 0,
+                "receipt recorded generated candidates without exact generated-name promotion",
+                generated_candidate_total > 0 && generated_live_symbol_total == 0,
+            )?;
+            recorder.check(
+                "generated-label pilot symbols stayed explicitly labeled",
+                generated_label_names_are_labeled,
             )?;
             recorder.check(
                 "configured generated candidates are backed by Catalyst fixture source",

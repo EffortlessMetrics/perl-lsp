@@ -92,9 +92,11 @@ support claims, real-workspace receipts, and next PRs, see
   proof for fresh compiler facts, framework-generated candidates,
   dynamic-boundary blockers, stale compiler facts, and candidate/noise deltas.
   Non-empty queries against the ready workspace index now persist and report a
-  narrow source-backed/high-confidence live trace. Empty-query, partial-index,
-  open-document fallback, generated/no-source, stale, dynamic, and ambiguous
-  compiler candidates remain fallback or gated.
+  narrow source-backed/high-confidence live trace. Source-backed generated
+  framework members may appear only as explicitly labeled virtual symbols
+  anchored to framework declarations, not exact generated method bodies.
+  Empty-query, partial-index, open-document fallback, generated/no-source,
+  stale, dynamic, and ambiguous compiler candidates remain fallback or gated.
 - Document symbols now have a narrow live source-backed parser-syntax slice for
   fresh, high-confidence `ExactAst` symbols. Framework-generated/no-source,
   dynamic-boundary, stale, low-confidence, and ambiguous candidates remain
@@ -103,13 +105,16 @@ support claims, real-workspace receipts, and next PRs, see
   call the live `textDocument/documentSymbol` and `workspace/symbol` handlers
   and capture live provider counts and results. Document-symbol receipts now
   include source-backed compiler symbol counts and fact-source traces; workspace
-  symbols remain no-live-behavior-change receipts.
+  symbol receipts now separate exact source-backed counts from labeled
+  source-backed generated/framework pilot counts and gated generated/no-source,
+  dynamic, stale, and fallback/noise candidates.
   Seven BDD receipt tests cover document symbols (provider field,
   source-backed live cutover, count integrity, symbol presence, shadow state,
-  notes proof, unknown-URI graceful handling) and eight tests cover workspace
-  symbols (provider field, no-live-behavior-change, count integrity, query echo,
-  shadow state, notes proof, empty-query, no-match query). These receipts
-  complete the runtime integration proof step for both surfaces.
+  notes proof, unknown-URI graceful handling), and workspace-symbol receipt
+  tests cover provider field, source-backed live state, labeled generated-pilot
+  state, count integrity, query echo, shadow state, notes proof, empty-query,
+  no-match query, and generated/dynamic/noise gating. These receipts complete
+  the runtime integration proof step for both surfaces.
 - The Mojolicious scenario 32 document-symbol receipt records live
   source-backed package/sub symbols, generated `has` candidate counts,
   dynamic-boundary-shaped names, LSP shape validity, missing-symbol counts, and
@@ -193,7 +198,7 @@ the relevant receipt command.
 | References | `partial live / ranked-shadowed` | Fresh, high-confidence, source-backed `ExactAst`, `ImportExportInference`, or `LiteralRequireImport` occurrence references can drive live `textDocument/references` when `includeDeclaration=false`; generated/no-source, dynamic-boundary, low-confidence, ambiguous, stale, and declaration-including requests remain traced as fallback/shadow proof. Mojolicious scenario 30 records exact-local, imported-symbol, and declaration-including boundary reference probes without behavior changes. | Broader references migration requires precision/recall receipts for generated, coderef, typeglob, and declaration-including cases |
 | Rename | `partial live lexical + package-local pilot / boundary-shadowed broader compiler facts` | Same-file sigiled lexical rename can use current-document scoped AST proof only when exactly one `my` or `state` declaration edit is proven; package-local compiler-backed rename can now return live edits only when the materialized semantic source-backed edit set exactly matches the workspace source/ambiguity guard; rename plan receipts still trace exact static edits, dynamic-boundary blockers, stale compiler facts, low-confidence ambiguity, runtime blocker UX notes, live-vs-compiler exact-static receipt data, Mojolicious scenario 35 and Dancer2 scenario 37 real-workspace unsafe-edit proof, the scoped lexical cutover in [#8915](https://github.com/EffortlessMetrics/perl-lsp/pull/8915), `lsp_rename_tests::test_workspace_rename_workspace_edit_rolls_back_cleanly` rollback proof, the package/compiler-backed pilot classifier plus real-workspace source-backed definition edit proof, `perl.previewPackageRename` no-edit preview UX with rollback/no-edit receipts for imported-symbol blockers, imported-call edit-noise, and compiler-allowed source-backed definition/reference pilot previews, and package-local live-pilot receipts for exact compiler-backed edits plus partial-plan fallback, generated, dynamic, stale, low-confidence, and ambiguous guardrails before any broad compiler-backed refactor behavior | Post-cutover package-local proof review before broader package/compiler-backed rename promotion |
 | Safe delete | `partial live source-backed pilot / boundary-shadowed broader facts` | `perl.safeDeleteSymbol` can return a source-backed symbol-delete WorkspaceEdit only when the compiler safe-delete plan is allowed, the live source guard resolves an exact high-confidence subroutine definition, and rollback proof restores the original text. Safe-delete receipts still trace dynamic-boundary blockers, framework-generated blockers, stale compiler facts, runtime blocker UX notes, Mojolicious scenario 36 file-delete warning UX, Dancer2 and RealBaseline symbol-level blocker/allowed request shapes, requested RealBaseline `reset` and Dancer2 `to_psgi` delete edits plus inverse rollback proof, and `perl.previewSafeDelete` scoped no-edit UX | Additional project-shaped false-allow and blocker receipts before broader symbol-delete migration |
-| Workspace symbols | `partial live source-backed` | Existing workspace index remains the live provider source; non-empty ready-index results can answer live with source-backed/high-confidence traces; semantic-shadow fixtures still trace fresh compiler, generated, dynamic-boundary, stale fact, and real-workspace quality candidates; runtime quality receipts capture source-backed ready-index counts/results; Mojolicious scenario 33 records live-provider noise, generated candidate gating, dynamic-boundary-shaped names, and edit freshness; Dancer2 scenario 39 and Catalyst scenario 41 add second- and third-project generated/dynamic/noise receipts | Narrow generated-symbol pilot proof before broader workspace-symbol expansion |
+| Workspace symbols | `partial live source-backed + generated-label pilot` | Existing workspace index remains the live provider source; non-empty ready-index results can answer live with source-backed/high-confidence traces; source-backed generated/framework members may answer live only as explicitly labeled virtual symbols anchored to framework declarations, not exact generated method bodies; semantic-shadow fixtures still trace fresh compiler, generated, dynamic-boundary, stale fact, and real-workspace quality candidates; runtime quality receipts capture source-backed ready-index counts/results, labeled generated-pilot counts, and generated/no-source/dynamic/stale/fallback-noise gating; Mojolicious scenario 33 records live-provider noise, generated candidate gating, dynamic-boundary-shaped names, and edit freshness; Dancer2 scenario 39 and Catalyst scenario 41 add second- and third-project generated/dynamic/noise receipts | Project-shaped generated-label receipt before broader workspace-symbol expansion |
 | Document symbols | `partial live source-backed` | Fresh, high-confidence, source-backed parser-syntax `ExactAst` symbols can drive live `textDocument/documentSymbol` results with fallback retained for astless documents and gated generated/no-source, dynamic-boundary, stale, low-confidence, and ambiguous candidates. Semantic-shadow fixtures still trace explicit syntax, generated, dynamic-boundary, and stale fact candidates; runtime quality receipts capture live provider counts/results plus source-backed compiler traces; Mojolicious scenario 32 records real-workspace symbol quality, generated candidate counts, and edit freshness. | Generated-label proof plus additional real-workspace document-symbol receipts before generated, dynamic, or broader symbol cutover |
 | Semantic tokens | `partial live token-class pilot` | Existing parser/token provider remains the broad live source; semantic-shadow fixtures trace parser/HIR, compiler-backed, generated/no-source, dynamic-boundary, stale, and fallback candidates; runtime quality receipts capture live token count, shadow state, no-token-output-change proof, and one source-backed compiler-fact subroutine-declaration class matched to existing live `function` token output; Mojolicious scenario 34 and Dancer2 scenario 38 record project-shaped token/span validity and edit freshness | Additional project-shaped compiler-backed token-class receipts and live-output parity proof before broader cutover |
 
