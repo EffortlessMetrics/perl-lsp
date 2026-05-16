@@ -11,7 +11,7 @@ use pest::{
 use pest_derive::Parser;
 use regex::Regex;
 use stacker;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, LazyLock};
 
 #[derive(Parser)]
 #[grammar = "grammar.pest"]
@@ -316,6 +316,10 @@ pub enum AstNode {
     },
 }
 
+fn compile_normalization_regex(pattern: &str) -> Option<Regex> {
+    Regex::new(pattern).ok()
+}
+
 /// Pure Rust Perl parser implementation
 pub struct PureRustPerlParser {
     _pratt_parser: PrattParser,
@@ -340,32 +344,19 @@ impl PureRustPerlParser {
     }
 
     fn normalize_source(source: &str) -> String {
-        static LOOP_DECL_RE: OnceLock<Option<Regex>> = OnceLock::new();
-        static SIMPLE_SCALAR_DEREF_RE: OnceLock<Option<Regex>> = OnceLock::new();
-        static ASSIGN_BITNOT_RE: OnceLock<Option<Regex>> = OnceLock::new();
+        static LOOP_DECL_RE: LazyLock<Option<Regex>> = LazyLock::new(|| {
+            compile_normalization_regex(
+                r"\b(?P<kw>for(?:each)?)\s+(?:my|our|local|state)\s+(?P<var>\$[A-Za-z_][A-Za-z0-9_:]*)\s*(?P<paren>\()",
+            )
+        });
+        static SIMPLE_SCALAR_DEREF_RE: LazyLock<Option<Regex>> =
+            LazyLock::new(|| compile_normalization_regex(r"\$\$(?P<name>[A-Za-z_][A-Za-z0-9_:]*)"));
+        static ASSIGN_BITNOT_RE: LazyLock<Option<Regex>> = LazyLock::new(|| {
+            compile_normalization_regex(r"=\s+~\s*(?P<expr>\$[A-Za-z_][A-Za-z0-9_:]*)")
+        });
 
-        // These are fixed patterns; if one ever fails to compile, skip normalization
-        // rather than panicking inside production parser code.
-        let Some(loop_decl_re) = LOOP_DECL_RE
-            .get_or_init(|| {
-                Regex::new(
-                    r"\b(?P<kw>for(?:each)?)\s+(?:my|our|local|state)\s+(?P<var>\$[A-Za-z_][A-Za-z0-9_:]*)\s*(?P<paren>\()",
-                )
-                .ok()
-            })
-            .as_ref()
-        else {
-            return source.to_string();
-        };
-        let Some(scalar_deref_re) = SIMPLE_SCALAR_DEREF_RE
-            .get_or_init(|| Regex::new(r"\$\$(?P<name>[A-Za-z_][A-Za-z0-9_:]*)").ok())
-            .as_ref()
-        else {
-            return source.to_string();
-        };
-        let Some(assign_bitnot_re) = ASSIGN_BITNOT_RE
-            .get_or_init(|| Regex::new(r"=\s+~\s*(?P<expr>\$[A-Za-z_][A-Za-z0-9_:]*)").ok())
-            .as_ref()
+        let (Some(loop_decl_re), Some(scalar_deref_re), Some(assign_bitnot_re)) =
+            (LOOP_DECL_RE.as_ref(), SIMPLE_SCALAR_DEREF_RE.as_ref(), ASSIGN_BITNOT_RE.as_ref())
         else {
             return source.to_string();
         };
@@ -2809,8 +2800,7 @@ mod tests {
         assert!(result.is_ok());
         let ast = must(result);
         let sexp = parser.to_sexp(&ast);
-        println!("AST: {:?}", ast);
-        println!("S-expression: {}", sexp);
+        assert!(sexp.contains("(scalar_variable $var)"), "unexpected S-expression: {sexp}");
     }
 
     #[test]
@@ -2822,7 +2812,9 @@ mod tests {
         assert!(result.is_ok());
         let ast = must(result);
         let sexp = parser.to_sexp(&ast);
-        println!("S-expression: {}", sexp);
+        assert!(sexp.contains("$scalar"), "unexpected S-expression: {sexp}");
+        assert!(sexp.contains("@array"), "unexpected S-expression: {sexp}");
+        assert!(sexp.contains("hash"), "unexpected S-expression: {sexp}");
     }
 
     #[test]
@@ -2832,8 +2824,8 @@ mod tests {
         let result = parser.parse(source);
         let ast = must(result);
         let sexp = parser.to_sexp(&ast);
-        println!("Success! AST: {:?}", ast);
-        println!("S-expression: {}", sexp);
+        assert!(sexp.contains("(variable_declaration"), "unexpected S-expression: {sexp}");
+        assert!(sexp.contains("$var"), "unexpected S-expression: {sexp}");
     }
 
     #[test]
@@ -2843,7 +2835,8 @@ mod tests {
         let result = parser.parse(source);
         let ast = must(result);
         let sexp = parser.to_sexp(&ast);
-        println!("S-expression: {}", sexp);
+        assert!(sexp.contains("(subroutine"), "unexpected S-expression: {sexp}");
+        assert!(sexp.contains("hello"), "unexpected S-expression: {sexp}");
     }
 
     #[test]
@@ -2853,7 +2846,7 @@ mod tests {
         let result = parser.parse(source);
         let ast = must(result);
         let sexp = parser.to_sexp(&ast);
-        println!("S-expression: {}", sexp);
+        assert!(sexp.contains("(if_statement"), "unexpected S-expression: {sexp}");
     }
 
     #[test]
@@ -2871,8 +2864,8 @@ mod tests {
         let result = parser.parse(source);
         let ast = must(result);
         let sexp = parser.to_sexp(&ast);
-        println!("Array assignment AST: {:?}", ast);
-        println!("S-expression: {}", sexp);
+        assert!(sexp.contains("(assignment"), "unexpected S-expression: {sexp}");
+        assert!(sexp.contains("@array"), "unexpected S-expression: {sexp}");
     }
 
     #[test]
@@ -2882,7 +2875,7 @@ mod tests {
         let result = parser.parse(source);
         let ast = must(result);
         let sexp = parser.to_sexp(&ast);
-        println!("Hash assignment AST: {:?}", ast);
-        println!("S-expression: {}", sexp);
+        assert!(sexp.contains("(assignment"), "unexpected S-expression: {sexp}");
+        assert!(sexp.contains("%hash"), "unexpected S-expression: {sexp}");
     }
 }
