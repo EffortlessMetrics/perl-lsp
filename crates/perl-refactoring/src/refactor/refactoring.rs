@@ -1971,207 +1971,274 @@ struct ExtractionAnalysis {
 }
 
 fn analyze_extraction(ast: &Node, start: usize, end: usize) -> ExtractionAnalysis {
-    let mut inputs = HashSet::new();
-    let mut outputs = HashSet::new();
-    let mut declared_in_scope = HashSet::new();
-    let mut declared_in_range = HashSet::new();
-
-    visit_node(
-        ast,
-        start,
-        end,
-        &mut inputs,
-        &mut outputs,
-        &mut declared_in_scope,
-        &mut declared_in_range,
-    );
-
-    let mut inputs_vec: Vec<_> = inputs.into_iter().collect();
-    inputs_vec.sort();
-    let mut outputs_vec: Vec<_> = outputs.into_iter().collect();
-    outputs_vec.sort();
-
-    ExtractionAnalysis { inputs: inputs_vec, outputs: outputs_vec }
+    let mut state = ExtractionWalk::new(start, end);
+    state.visit(ast);
+    state.finish()
 }
 
-fn visit_node(
-    node: &Node,
+/// Mutable walk state for [`analyze_extraction`].
+///
+/// Bundles the four name sets and the extraction range so the
+/// per-`NodeKind` helpers can share a single receiver instead of
+/// threading seven parameters through every recursive call.
+struct ExtractionWalk {
     start: usize,
     end: usize,
-    inputs: &mut HashSet<String>,
-    outputs: &mut HashSet<String>,
-    declared_in_scope: &mut HashSet<String>,
-    declared_in_range: &mut HashSet<String>,
-) {
-    let in_range = node.location.start >= start && node.location.end <= end;
+    inputs: HashSet<String>,
+    outputs: HashSet<String>,
+    declared_in_scope: HashSet<String>,
+    declared_in_range: HashSet<String>,
+}
 
-    match &node.kind {
-        NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
-            if declarator == "my" || declarator == "state" {
-                let name = extract_var_name(variable);
-                if in_range {
-                    declared_in_range.insert(name);
-                } else {
-                    declared_in_scope.insert(name);
-                }
-            }
-            if let Some(init) = initializer {
-                visit_node(init, start, end, inputs, outputs, declared_in_scope, declared_in_range);
-            }
+impl ExtractionWalk {
+    fn new(start: usize, end: usize) -> Self {
+        Self {
+            start,
+            end,
+            inputs: HashSet::new(),
+            outputs: HashSet::new(),
+            declared_in_scope: HashSet::new(),
+            declared_in_range: HashSet::new(),
         }
-        NodeKind::VariableListDeclaration { declarator, variables, initializer, .. } => {
-            if declarator == "my" || declarator == "state" {
-                for var in variables {
-                    let name = extract_var_name(var);
-                    if in_range {
-                        declared_in_range.insert(name);
-                    } else {
-                        declared_in_scope.insert(name);
-                    }
-                }
-            }
-            if let Some(init) = initializer {
-                visit_node(init, start, end, inputs, outputs, declared_in_scope, declared_in_range);
-            }
+    }
+
+    fn finish(self) -> ExtractionAnalysis {
+        let mut inputs_vec: Vec<_> = self.inputs.into_iter().collect();
+        inputs_vec.sort();
+        let mut outputs_vec: Vec<_> = self.outputs.into_iter().collect();
+        outputs_vec.sort();
+        ExtractionAnalysis { inputs: inputs_vec, outputs: outputs_vec }
+    }
+
+    fn node_in_range(&self, node: &Node) -> bool {
+        node.location.start >= self.start && node.location.end <= self.end
+    }
+
+    /// Record a freshly-declared name in either the in-range or outer-scope set.
+    fn record_declaration(&mut self, name: String, in_range: bool) {
+        if in_range {
+            self.declared_in_range.insert(name);
+        } else {
+            self.declared_in_scope.insert(name);
         }
-        NodeKind::MandatoryParameter { variable }
-        | NodeKind::SlurpyParameter { variable }
-        | NodeKind::NamedParameter { variable } => {
+    }
+
+    fn visit(&mut self, node: &Node) {
+        match &node.kind {
+            NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
+                self.visit_variable_declaration(node, declarator, variable, initializer.as_deref());
+            }
+            NodeKind::VariableListDeclaration { declarator, variables, initializer, .. } => {
+                self.visit_variable_list_declaration(
+                    node,
+                    declarator,
+                    variables,
+                    initializer.as_deref(),
+                );
+            }
+            NodeKind::MandatoryParameter { variable }
+            | NodeKind::SlurpyParameter { variable }
+            | NodeKind::NamedParameter { variable } => {
+                self.visit_parameter(node, variable);
+            }
+            NodeKind::OptionalParameter { variable, default_value } => {
+                self.visit_optional_parameter(node, variable, default_value);
+            }
+            NodeKind::Variable { sigil, name } => {
+                self.visit_variable_reference(node, sigil, name);
+            }
+            NodeKind::Block { statements } => {
+                self.visit_block(statements);
+            }
+            NodeKind::Subroutine { signature, body, .. } => {
+                self.visit_subroutine(signature.as_deref(), body);
+            }
+            NodeKind::Try { body, catch_blocks, finally_block } => {
+                self.visit_try(node, body, catch_blocks, finally_block.as_deref());
+            }
+            NodeKind::Foreach { variable, list, body, continue_block } => {
+                self.visit_foreach(variable, list, body, continue_block.as_deref());
+            }
+            NodeKind::For { init, condition, update, body, continue_block } => {
+                self.visit_for(
+                    init.as_deref(),
+                    condition.as_deref(),
+                    update.as_deref(),
+                    body,
+                    continue_block.as_deref(),
+                );
+            }
+            _ => self.visit_children(node),
+        }
+    }
+
+    fn visit_variable_declaration(
+        &mut self,
+        node: &Node,
+        declarator: &str,
+        variable: &Node,
+        initializer: Option<&Node>,
+    ) {
+        if declarator == "my" || declarator == "state" {
             let name = extract_var_name(variable);
-            if in_range {
-                declared_in_range.insert(name);
-            } else {
-                declared_in_scope.insert(name);
+            self.record_declaration(name, self.node_in_range(node));
+        }
+        if let Some(init) = initializer {
+            self.visit(init);
+        }
+    }
+
+    fn visit_variable_list_declaration(
+        &mut self,
+        node: &Node,
+        declarator: &str,
+        variables: &[Node],
+        initializer: Option<&Node>,
+    ) {
+        if declarator == "my" || declarator == "state" {
+            let in_range = self.node_in_range(node);
+            for var in variables {
+                let name = extract_var_name(var);
+                self.record_declaration(name, in_range);
             }
         }
-        NodeKind::OptionalParameter { variable, default_value } => {
-            let name = extract_var_name(variable);
-            if in_range {
-                declared_in_range.insert(name);
-            } else {
-                declared_in_scope.insert(name);
-            }
-            visit_node(
-                default_value,
-                start,
-                end,
-                inputs,
-                outputs,
-                declared_in_scope,
-                declared_in_range,
-            );
+        if let Some(init) = initializer {
+            self.visit(init);
         }
-        NodeKind::Variable { sigil, name } => {
-            let full_name = format!("{}{}", sigil, name);
-            if in_range {
-                // If not declared in range, check if declared in outer scope.
-                if !declared_in_range.contains(&full_name) && declared_in_scope.contains(&full_name)
-                {
-                    inputs.insert(full_name.clone());
-                }
-            } else if node.location.start >= end {
-                // Usage after range
-                // If declared in range OR used in range (input), it might have changed and is used after.
-                if declared_in_range.contains(&full_name) || inputs.contains(&full_name) {
-                    outputs.insert(full_name);
-                }
+    }
+
+    fn visit_parameter(&mut self, node: &Node, variable: &Node) {
+        let name = extract_var_name(variable);
+        self.record_declaration(name, self.node_in_range(node));
+    }
+
+    fn visit_optional_parameter(&mut self, node: &Node, variable: &Node, default_value: &Node) {
+        let name = extract_var_name(variable);
+        self.record_declaration(name, self.node_in_range(node));
+        self.visit(default_value);
+    }
+
+    /// Classify a variable usage as an input (declared outside, used inside)
+    /// or an output (defined inside, used after).
+    fn visit_variable_reference(&mut self, node: &Node, sigil: &str, name: &str) {
+        let full_name = format!("{}{}", sigil, name);
+        if self.node_in_range(node) {
+            if !self.declared_in_range.contains(&full_name)
+                && self.declared_in_scope.contains(&full_name)
+            {
+                self.inputs.insert(full_name);
             }
+        } else if node.location.start >= self.end
+            && (self.declared_in_range.contains(&full_name) || self.inputs.contains(&full_name))
+        {
+            // Usage strictly after the range: a value defined or modified inside
+            // the range and still read afterwards must be returned as output.
+            self.outputs.insert(full_name);
         }
-        NodeKind::Block { statements } => {
-            let mut inner_scope = declared_in_scope.clone();
+    }
+
+    fn visit_block(&mut self, statements: &[Node]) {
+        self.with_inner_scope(|inner| {
             for stmt in statements {
-                visit_node(stmt, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
+                inner.visit(stmt);
             }
-        }
-        NodeKind::Subroutine { signature, body, .. } => {
-            let mut inner_scope = declared_in_scope.clone();
+        });
+    }
+
+    fn visit_subroutine(&mut self, signature: Option<&Node>, body: &Node) {
+        self.with_inner_scope(|inner| {
             if let Some(sig) = signature {
-                visit_node(sig, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
+                inner.visit(sig);
             }
-            visit_node(body, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
-        }
-        NodeKind::Try { body, catch_blocks, finally_block } => {
-            visit_node(body, start, end, inputs, outputs, declared_in_scope, declared_in_range);
-            for (var, catch_body) in catch_blocks {
-                let mut inner_scope = declared_in_scope.clone();
+            inner.visit(body);
+        });
+    }
+
+    fn visit_try(
+        &mut self,
+        try_node: &Node,
+        body: &Node,
+        catch_blocks: &[(Option<String>, Box<Node>)],
+        finally: Option<&Node>,
+    ) {
+        // Match the original: the catch-binding's range classification is
+        // taken from the enclosing Try node, not from the catch body itself.
+        let try_in_range = self.node_in_range(try_node);
+        self.visit(body);
+        for (var, catch_body) in catch_blocks {
+            self.with_inner_scope(|inner| {
                 if let Some(v_name) = var {
-                    // Check if v_name has sigil, if not assume $
                     let full_name = if v_name.starts_with(['$', '@', '%']) {
                         v_name.clone()
                     } else {
                         format!("${}", v_name)
                     };
-                    if in_range {
-                        declared_in_range.insert(full_name);
-                    } else {
-                        declared_in_scope.insert(full_name);
-                    }
+                    inner.record_declaration(full_name, try_in_range);
                 }
-                visit_node(
-                    catch_body,
-                    start,
-                    end,
-                    inputs,
-                    outputs,
-                    &mut inner_scope,
-                    declared_in_range,
-                );
-            }
-            if let Some(finally) = finally_block {
-                visit_node(
-                    finally,
-                    start,
-                    end,
-                    inputs,
-                    outputs,
-                    declared_in_scope,
-                    declared_in_range,
-                );
-            }
+                inner.visit(catch_body);
+            });
         }
-        NodeKind::Foreach { variable, list, body, continue_block } => {
-            // Visit list with outer scope
-            visit_node(list, start, end, inputs, outputs, declared_in_scope, declared_in_range);
-
-            // Visit continue block if present
-            if let Some(cb) = continue_block {
-                visit_node(cb, start, end, inputs, outputs, declared_in_scope, declared_in_range);
-            }
-
-            // Create inner scope for variable and body
-            let mut inner_scope = declared_in_scope.clone();
-            visit_node(variable, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
-            visit_node(body, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
+        if let Some(f) = finally {
+            self.visit(f);
         }
-        NodeKind::For { init, condition, update, body, continue_block } => {
-            let mut inner_scope = declared_in_scope.clone();
+    }
+
+    fn visit_foreach(
+        &mut self,
+        variable: &Node,
+        list: &Node,
+        body: &Node,
+        continue_block: Option<&Node>,
+    ) {
+        // The list expression and continue block execute in the outer scope;
+        // the loop variable and body run in an inner scope.
+        self.visit(list);
+        if let Some(cb) = continue_block {
+            self.visit(cb);
+        }
+        self.with_inner_scope(|inner| {
+            inner.visit(variable);
+            inner.visit(body);
+        });
+    }
+
+    fn visit_for(
+        &mut self,
+        init: Option<&Node>,
+        condition: Option<&Node>,
+        update: Option<&Node>,
+        body: &Node,
+        continue_block: Option<&Node>,
+    ) {
+        self.with_inner_scope(|inner| {
             if let Some(n) = init {
-                visit_node(n, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
+                inner.visit(n);
             }
             if let Some(n) = condition {
-                visit_node(n, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
+                inner.visit(n);
             }
             if let Some(n) = update {
-                visit_node(n, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
+                inner.visit(n);
             }
-            visit_node(body, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
+            inner.visit(body);
             if let Some(n) = continue_block {
-                visit_node(n, start, end, inputs, outputs, &mut inner_scope, declared_in_range);
+                inner.visit(n);
             }
+        });
+    }
+
+    fn visit_children(&mut self, node: &Node) {
+        for child in node.children() {
+            self.visit(child);
         }
-        _ => {
-            for child in node.children() {
-                visit_node(
-                    child,
-                    start,
-                    end,
-                    inputs,
-                    outputs,
-                    declared_in_scope,
-                    declared_in_range,
-                );
-            }
-        }
+    }
+
+    /// Run a body with a snapshot-restored `declared_in_scope`, so
+    /// declarations made inside `f` don't leak back out to siblings.
+    fn with_inner_scope<F: FnOnce(&mut Self)>(&mut self, f: F) {
+        let saved = self.declared_in_scope.clone();
+        f(self);
+        self.declared_in_scope = saved;
     }
 }
 
