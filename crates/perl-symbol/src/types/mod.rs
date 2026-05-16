@@ -314,4 +314,122 @@ mod tests {
         assert!(SymbolKind::Role.is_namespace());
         assert!(!SymbolKind::Subroutine.is_namespace());
     }
+
+    #[test]
+    fn test_category_predicates_exhaustive() {
+        // is_variable: all three VarKind variants
+        assert!(SymbolKind::Variable(VarKind::Array).is_variable());
+        assert!(SymbolKind::Variable(VarKind::Hash).is_variable());
+        // non-variable kinds including Import/Export/Label/Format
+        assert!(!SymbolKind::Import.is_variable());
+        assert!(!SymbolKind::Export.is_variable());
+        assert!(!SymbolKind::Label.is_variable());
+        assert!(!SymbolKind::Format.is_variable());
+        assert!(!SymbolKind::Constant.is_variable());
+
+        // is_callable: non-callable kinds
+        assert!(!SymbolKind::Package.is_callable());
+        assert!(!SymbolKind::Import.is_callable());
+        assert!(!SymbolKind::Label.is_callable());
+        assert!(!SymbolKind::Constant.is_callable());
+
+        // is_namespace: non-namespace kinds
+        assert!(!SymbolKind::Subroutine.is_namespace());
+        assert!(!SymbolKind::Import.is_namespace());
+        assert!(!SymbolKind::Label.is_namespace());
+        assert!(!SymbolKind::Format.is_namespace());
+    }
+
+    #[test]
+    fn test_non_variable_sigil_is_none() {
+        // sigil() returns None for every non-Variable variant
+        for kind in [
+            SymbolKind::Package,
+            SymbolKind::Import,
+            SymbolKind::Export,
+            SymbolKind::Label,
+            SymbolKind::Format,
+            SymbolKind::Constant,
+        ] {
+            assert_eq!(kind.sigil(), None, "{kind:?} should have sigil None");
+        }
+    }
+
+    // ── VarKind: Copy / Hash / Eq semantics ───────────────────────────────────
+
+    #[test]
+    fn var_kind_is_copy() {
+        let a = VarKind::Scalar;
+        let b = a; // copy — not move
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn var_kind_hash_and_eq_consistency() {
+        use std::collections::HashSet;
+        let mut set = HashSet::new();
+        set.insert(VarKind::Scalar);
+        set.insert(VarKind::Array);
+        set.insert(VarKind::Hash);
+        // Inserting again must not grow the set
+        set.insert(VarKind::Scalar);
+        assert_eq!(set.len(), 3);
+        assert!(set.contains(&VarKind::Scalar));
+        assert!(set.contains(&VarKind::Array));
+        assert!(set.contains(&VarKind::Hash));
+    }
+
+    #[test]
+    fn symbol_kind_hash_and_eq_consistency() {
+        use std::collections::HashSet;
+        let mut set = HashSet::new();
+        set.insert(SymbolKind::Package);
+        set.insert(SymbolKind::Variable(VarKind::Scalar));
+        set.insert(SymbolKind::Variable(VarKind::Array));
+        set.insert(SymbolKind::Package); // duplicate
+        assert_eq!(set.len(), 3);
+        assert!(set.contains(&SymbolKind::Variable(VarKind::Scalar)));
+        // Variable(Scalar) != Variable(Array)
+        assert_ne!(SymbolKind::Variable(VarKind::Scalar), SymbolKind::Variable(VarKind::Array));
+    }
+
+    // ── Serde roundtrips ──────────────────────────────────────────────────────
+
+    #[test]
+    fn var_kind_serde_roundtrip() {
+        let serialized = serde_json::to_string(&VarKind::Scalar).expect("serialization failed");
+        let deserialized: VarKind =
+            serde_json::from_str(&serialized).expect("deserialization failed");
+        assert_eq!(deserialized, VarKind::Scalar);
+
+        let serialized = serde_json::to_string(&VarKind::Hash).expect("serialization failed");
+        let deserialized: VarKind =
+            serde_json::from_str(&serialized).expect("deserialization failed");
+        assert_eq!(deserialized, VarKind::Hash);
+    }
+
+    #[test]
+    fn symbol_kind_serde_roundtrip_all_variants() {
+        let variants = [
+            SymbolKind::Package,
+            SymbolKind::Class,
+            SymbolKind::Role,
+            SymbolKind::Subroutine,
+            SymbolKind::Method,
+            SymbolKind::Variable(VarKind::Scalar),
+            SymbolKind::Variable(VarKind::Array),
+            SymbolKind::Variable(VarKind::Hash),
+            SymbolKind::Constant,
+            SymbolKind::Import,
+            SymbolKind::Export,
+            SymbolKind::Label,
+            SymbolKind::Format,
+        ];
+        for kind in variants {
+            let serialized = serde_json::to_string(&kind).expect("serialization must succeed");
+            let deserialized: SymbolKind =
+                serde_json::from_str(&serialized).expect("deserialization must succeed");
+            assert_eq!(deserialized, kind, "roundtrip failed for {kind:?}");
+        }
+    }
 }
