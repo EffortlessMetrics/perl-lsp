@@ -23,6 +23,20 @@ pub(super) const DIAGNOSTIC_EXPLANATION_SCHEMA_VERSION: &str = "diagnostic_expla
 const MAX_DIAGNOSTIC_EXPLANATIONS: usize = 8;
 const MAX_REPORTED_INC_PATHS: usize = 8;
 
+fn truncate_inlay_hint_label(hint: &mut Value, max_chars: usize) {
+    let Some(label) = hint.get_mut("label") else {
+        return;
+    };
+    let Some(text) = label.as_str() else {
+        return;
+    };
+    if text.chars().count() <= max_chars {
+        return;
+    }
+
+    *label = Value::String(text.chars().take(max_chars).collect());
+}
+
 struct LiveProviderResultShape {
     decision: &'static str,
     reason: &'static str,
@@ -494,6 +508,21 @@ impl LspServer {
             return Ok(Some(json!([])));
         }
 
+        // Snapshot config once to avoid holding the lock across the hint generation.
+        let (hints_enabled, param_hints, type_hints, max_label_length) = {
+            let cfg = self.config.lock();
+            (
+                cfg.inlay_hints_enabled,
+                cfg.inlay_hints_parameter_hints,
+                cfg.inlay_hints_type_hints,
+                cfg.inlay_hints_max_length,
+            )
+        };
+
+        if !hints_enabled {
+            return Ok(Some(json!([])));
+        }
+
         let cap = inlay_hints_cap();
 
         if let Some(p) = params {
@@ -518,16 +547,20 @@ impl LspServer {
             })?;
             if let Some(ref ast) = doc.ast {
                 let mut hints = Vec::new();
-                hints.extend(crate::inlay_hints::parameter_hints(
-                    ast,
-                    &|off| self.offset_to_pos16(doc, off),
-                    range,
-                ));
-                hints.extend(crate::inlay_hints::trivial_type_hints(
-                    ast,
-                    &|off| self.offset_to_pos16(doc, off),
-                    range,
-                ));
+                if param_hints {
+                    hints.extend(crate::inlay_hints::parameter_hints(
+                        ast,
+                        &|off| self.offset_to_pos16(doc, off),
+                        range,
+                    ));
+                }
+                if type_hints {
+                    hints.extend(crate::inlay_hints::trivial_type_hints(
+                        ast,
+                        &|off| self.offset_to_pos16(doc, off),
+                        range,
+                    ));
+                }
 
                 // Add URI to hint data for later resolution.
                 // Merge with any existing data (e.g. functionName/paramIndex from
@@ -546,8 +579,12 @@ impl LspServer {
                     })
                     .collect();
 
-                // Apply cap to inlay hints
                 let mut result = enriched_hints;
+                for hint in &mut result {
+                    truncate_inlay_hint_label(hint, max_label_length);
+                }
+
+                // Apply cap to inlay hints.
                 if result.len() > cap {
                     tracing::debug!(from = result.len(), to = cap, "InlayHints: capping");
                     result.truncate(cap);
