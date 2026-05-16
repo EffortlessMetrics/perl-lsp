@@ -368,6 +368,27 @@ fn e_format_code_decodes_common_entities() {
     assert_eq!(doc.name.as_deref(), Some("< > & \" '"));
 }
 
+#[test]
+fn e_format_code_decodes_numeric_entities() -> Result<(), Box<dyn std::error::Error>> {
+    let doc = extract_pod("=head1 NAME\n\nE<65>E<0x20>E<0x1F980>\n\n=cut\n");
+    assert_eq!(doc.name.as_deref(), Some("A 🦀"));
+    Ok(())
+}
+
+#[test]
+fn e_format_code_decodes_pod_named_separators() -> Result<(), Box<dyn std::error::Error>> {
+    let doc = extract_pod("=head1 NAME\n\npathE<sol>to E<verbar> pipe\n\n=cut\n");
+    assert_eq!(doc.name.as_deref(), Some("path/to | pipe"));
+    Ok(())
+}
+
+#[test]
+fn invalid_numeric_entities_are_preserved() -> Result<(), Box<dyn std::error::Error>> {
+    let doc = extract_pod("=head1 NAME\n\nE<0x110000> E<0xZZ>\n\n=cut\n");
+    assert_eq!(doc.name.as_deref(), Some("0x110000 0xZZ"));
+    Ok(())
+}
+
 // ── POD L<> link → markdown link tests (Option B) ───────────────────────
 
 /// `L<Module::Name>` should produce a markdown link with target `perl-module://Module::Name`.
