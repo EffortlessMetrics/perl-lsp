@@ -31,7 +31,9 @@
 
 #[cfg(not(target_arch = "wasm32"))]
 mod os_default {
-    use perl_subprocess_runtime::{OsSubprocessRuntime, SubprocessRuntime};
+    use perl_subprocess_runtime::OsSubprocessRuntime;
+    #[cfg(not(windows))]
+    use perl_subprocess_runtime::SubprocessRuntime;
 
     /// `OsSubprocessRuntime` implements `Default` by delegating to `new()`.
     /// This test exercises the `Default` impl (lines 43-46 of os_runtime.rs),
@@ -60,7 +62,22 @@ mod os_default {
 /// `run_command` interface so that both branches of each condition are hit.
 #[cfg(not(target_arch = "wasm32"))]
 mod input_validation {
-    use perl_subprocess_runtime::{OsSubprocessRuntime, SubprocessRuntime};
+    use perl_subprocess_runtime::{OsSubprocessRuntime, SubprocessError, SubprocessRuntime};
+
+    fn run_command_error(
+        program: &str,
+        args: &[&str],
+    ) -> Result<SubprocessError, Box<dyn std::error::Error>> {
+        let runtime = OsSubprocessRuntime::new();
+        match runtime.run_command(program, args, None) {
+            Ok(output) => Err(format!(
+                "command must fail validation before spawning; got status {}",
+                output.status_code
+            )
+            .into()),
+            Err(err) => Ok(err),
+        }
+    }
 
     // ── empty / whitespace-only program names ────────────────────────────────
 
@@ -68,10 +85,7 @@ mod input_validation {
     /// `"".trim().is_empty()` is `true`, so this must be rejected.
     #[test]
     fn rejects_empty_string_program_name() -> Result<(), Box<dyn std::error::Error>> {
-        let runtime = OsSubprocessRuntime::new();
-        let result = runtime.run_command("", &[], None);
-        assert!(result.is_err(), "empty string must be rejected");
-        let err = result.unwrap_err();
+        let err = run_command_error("", &[])?;
         assert!(
             err.message.contains("must not be empty"),
             "unexpected error message: {}",
@@ -83,10 +97,7 @@ mod input_validation {
     /// Single space — `" ".trim().is_empty()` is `true`.
     #[test]
     fn rejects_single_space_program_name() -> Result<(), Box<dyn std::error::Error>> {
-        let runtime = OsSubprocessRuntime::new();
-        let result = runtime.run_command(" ", &[], None);
-        assert!(result.is_err(), "space-only program name must be rejected");
-        let err = result.unwrap_err();
+        let err = run_command_error(" ", &[])?;
         assert!(err.message.contains("must not be empty"), "unexpected: {}", err.message);
         Ok(())
     }
@@ -94,10 +105,7 @@ mod input_validation {
     /// Tab character — `"\t".trim().is_empty()` is `true`.
     #[test]
     fn rejects_tab_only_program_name() -> Result<(), Box<dyn std::error::Error>> {
-        let runtime = OsSubprocessRuntime::new();
-        let result = runtime.run_command("\t", &[], None);
-        assert!(result.is_err(), "tab-only program name must be rejected");
-        let err = result.unwrap_err();
+        let err = run_command_error("\t", &[])?;
         assert!(err.message.contains("must not be empty"), "unexpected: {}", err.message);
         Ok(())
     }
@@ -105,10 +113,7 @@ mod input_validation {
     /// Newline character — `"\n".trim().is_empty()` is `true`.
     #[test]
     fn rejects_newline_only_program_name() -> Result<(), Box<dyn std::error::Error>> {
-        let runtime = OsSubprocessRuntime::new();
-        let result = runtime.run_command("\n", &[], None);
-        assert!(result.is_err(), "newline-only program name must be rejected");
-        let err = result.unwrap_err();
+        let err = run_command_error("\n", &[])?;
         assert!(err.message.contains("must not be empty"), "unexpected: {}", err.message);
         Ok(())
     }
@@ -116,10 +121,7 @@ mod input_validation {
     /// Mixed whitespace — spaces, tabs, and carriage returns.
     #[test]
     fn rejects_mixed_whitespace_program_name() -> Result<(), Box<dyn std::error::Error>> {
-        let runtime = OsSubprocessRuntime::new();
-        let result = runtime.run_command("  \t \r\n  ", &[], None);
-        assert!(result.is_err(), "mixed whitespace program name must be rejected");
-        let err = result.unwrap_err();
+        let err = run_command_error("  \t \r\n  ", &[])?;
         assert!(err.message.contains("must not be empty"), "unexpected: {}", err.message);
         Ok(())
     }
@@ -129,10 +131,7 @@ mod input_validation {
     /// NUL byte at the start of the program name.
     #[test]
     fn rejects_nul_at_start_of_program_name() -> Result<(), Box<dyn std::error::Error>> {
-        let runtime = OsSubprocessRuntime::new();
-        let result = runtime.run_command("\0perl", &[], None);
-        assert!(result.is_err());
-        let err = result.unwrap_err();
+        let err = run_command_error("\0perl", &[])?;
         assert!(err.message.contains("NUL"), "unexpected: {}", err.message);
         Ok(())
     }
@@ -140,10 +139,7 @@ mod input_validation {
     /// NUL byte at the end of the program name.
     #[test]
     fn rejects_nul_at_end_of_program_name() -> Result<(), Box<dyn std::error::Error>> {
-        let runtime = OsSubprocessRuntime::new();
-        let result = runtime.run_command("perl\0", &[], None);
-        assert!(result.is_err());
-        let err = result.unwrap_err();
+        let err = run_command_error("perl\0", &[])?;
         assert!(err.message.contains("NUL"), "unexpected: {}", err.message);
         Ok(())
     }
@@ -151,10 +147,7 @@ mod input_validation {
     /// NUL byte in the middle of the program name.
     #[test]
     fn rejects_nul_in_middle_of_program_name() -> Result<(), Box<dyn std::error::Error>> {
-        let runtime = OsSubprocessRuntime::new();
-        let result = runtime.run_command("per\0l", &[], None);
-        assert!(result.is_err());
-        let err = result.unwrap_err();
+        let err = run_command_error("per\0l", &[])?;
         assert!(err.message.contains("NUL"), "unexpected: {}", err.message);
         Ok(())
     }
@@ -164,10 +157,7 @@ mod input_validation {
     /// NUL byte in the only argument.
     #[test]
     fn rejects_nul_in_single_arg() -> Result<(), Box<dyn std::error::Error>> {
-        let runtime = OsSubprocessRuntime::new();
-        let result = runtime.run_command("perl", &["-e\0"], None);
-        assert!(result.is_err());
-        let err = result.unwrap_err();
+        let err = run_command_error("perl", &["-e\0"])?;
         assert!(err.message.contains("NUL"), "unexpected: {}", err.message);
         Ok(())
     }
@@ -175,10 +165,7 @@ mod input_validation {
     /// NUL byte in the second of two arguments (checks that `any()` scans all).
     #[test]
     fn rejects_nul_in_second_arg() -> Result<(), Box<dyn std::error::Error>> {
-        let runtime = OsSubprocessRuntime::new();
-        let result = runtime.run_command("perl", &["-e", "print\0"], None);
-        assert!(result.is_err());
-        let err = result.unwrap_err();
+        let err = run_command_error("perl", &["-e", "print\0"])?;
         assert!(err.message.contains("NUL"), "unexpected: {}", err.message);
         Ok(())
     }
@@ -186,10 +173,7 @@ mod input_validation {
     /// NUL byte in the third of three arguments.
     #[test]
     fn rejects_nul_in_third_arg() -> Result<(), Box<dyn std::error::Error>> {
-        let runtime = OsSubprocessRuntime::new();
-        let result = runtime.run_command("perl", &["-I", "lib", "scri\0pt.pl"], None);
-        assert!(result.is_err());
-        let err = result.unwrap_err();
+        let err = run_command_error("perl", &["-I", "lib", "scri\0pt.pl"])?;
         assert!(err.message.contains("NUL"), "unexpected: {}", err.message);
         Ok(())
     }
@@ -198,10 +182,7 @@ mod input_validation {
     /// validates that the program check fires first.
     #[test]
     fn whitespace_program_checked_before_nul_in_arg() -> Result<(), Box<dyn std::error::Error>> {
-        let runtime = OsSubprocessRuntime::new();
-        let result = runtime.run_command("  ", &["arg\0"], None);
-        assert!(result.is_err());
-        let err = result.unwrap_err();
+        let err = run_command_error("  ", &["arg\0"])?;
         // The "empty" check must fire before the NUL-in-args check.
         assert!(
             err.message.contains("must not be empty"),
@@ -214,10 +195,7 @@ mod input_validation {
     /// NUL in program fires before NUL in args.
     #[test]
     fn nul_in_program_checked_before_nul_in_arg() -> Result<(), Box<dyn std::error::Error>> {
-        let runtime = OsSubprocessRuntime::new();
-        let result = runtime.run_command("per\0l", &["arg\0"], None);
-        assert!(result.is_err());
-        let err = result.unwrap_err();
+        let err = run_command_error("per\0l", &["arg\0"])?;
         // The NUL-in-program check must fire before the NUL-in-args check.
         assert!(
             err.message.contains("program name must not contain NUL"),
