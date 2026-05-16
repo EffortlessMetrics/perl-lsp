@@ -1095,6 +1095,29 @@ impl TokenKind {
         self == TokenKind::Semicolon || self.is_close_delimiter() || self == TokenKind::Eof
     }
 
+    /// Return the canonical source spelling for fixed-spelling token kinds.
+    ///
+    /// This returns `None` for value-carrying tokens (such as identifiers,
+    /// numbers, strings, regexes, heredocs, and recovery sentinels) because
+    /// those spellings come from the original source text rather than a stable
+    /// token-kind table.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_token::TokenKind;
+    ///
+    /// assert_eq!(TokenKind::Sub.canonical_spelling(), Some("sub"));
+    /// assert_eq!(TokenKind::LeftBrace.canonical_spelling(), Some("{"));
+    /// assert_eq!(TokenKind::Identifier.canonical_spelling(), None);
+    /// ```
+    pub fn canonical_spelling(self) -> Option<&'static str> {
+        spelling_for_kind(self, KEYWORD_SPELLINGS)
+            .or_else(|| spelling_for_kind(self, OPERATOR_SPELLINGS))
+            .or_else(|| spelling_for_kind(self, DELIMITER_SPELLINGS))
+            .or_else(|| spelling_for_kind(self, SIGIL_SPELLINGS))
+    }
+
     /// Map a canonical keyword spelling to its [`TokenKind`].
     ///
     /// This mapping is case-sensitive and only recognizes canonical Perl
@@ -1403,6 +1426,13 @@ impl TokenKind {
             TokenKind::Unknown => "unknown token",
         }
     }
+}
+
+fn spelling_for_kind(
+    kind: TokenKind,
+    spellings: &'static [(&'static str, TokenKind)],
+) -> Option<&'static str> {
+    spellings.iter().find_map(|&(spelling, candidate)| (candidate == kind).then_some(spelling))
 }
 
 const TOKEN_KIND_ALL: [TokenKind; 132] = [
