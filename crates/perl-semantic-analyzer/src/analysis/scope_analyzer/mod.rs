@@ -491,7 +491,11 @@ impl ScopeAnalyzer {
         Self
     }
 
-    pub(super) fn package_variable_name(&self, name: &str, context: &AnalysisContext<'_>) -> Option<String> {
+    pub(super) fn package_variable_name(
+        &self,
+        name: &str,
+        context: &AnalysisContext<'_>,
+    ) -> Option<String> {
         if name.is_empty() || name.contains("::") {
             return None;
         }
@@ -627,7 +631,7 @@ impl ScopeAnalyzer {
         let strict_subs_mode = pragma_state.strict_subs || pragma_state.signatures_strict;
         match &node.kind {
             NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
-                if declarations::handle_variable_declaration(
+                let _ = declarations::handle_variable_declaration(
                     self,
                     node,
                     declarator,
@@ -637,9 +641,7 @@ impl ScopeAnalyzer {
                     ancestors,
                     issues,
                     context,
-                ) {
-                    return;
-                }
+                );
             }
 
             NodeKind::VariableListDeclaration { declarator, variables, initializer, .. } => {
@@ -659,7 +661,7 @@ impl ScopeAnalyzer {
                 declarations::handle_use(self, node, module, args, scope, context);
             }
             NodeKind::Variable { sigil, name } => {
-                if uses::handle_variable(
+                let _ = uses::handle_variable(
                     self,
                     node,
                     sigil,
@@ -669,9 +671,7 @@ impl ScopeAnalyzer {
                     issues,
                     context,
                     strict_vars_mode,
-                ) {
-                    return;
-                }
+                );
             }
             NodeKind::Typeglob { name } => {
                 uses::handle_typeglob(self, node, name, scope, issues, context, strict_vars_mode);
@@ -715,7 +715,9 @@ impl ScopeAnalyzer {
                 );
             }
             NodeKind::Unary { op: _, operand } => {
-                calls_and_exprs::handle_unary(self, node, operand, scope, ancestors, issues, context);
+                calls_and_exprs::handle_unary(
+                    self, node, operand, scope, ancestors, issues, context,
+                );
             }
             NodeKind::String { value, interpolated } => {
                 interpolation::handle_string(self, value, *interpolated, scope, context);
@@ -724,13 +726,15 @@ impl ScopeAnalyzer {
                 interpolation::handle_heredoc(self, content, *interpolated, scope, context);
             }
             NodeKind::Assignment { lhs, rhs, op: _ } => {
-                if uses::handle_assignment(self, node, lhs, rhs, scope, ancestors, issues, context) {
-                    return;
-                }
+                let _ = uses::handle_assignment(
+                    self, node, lhs, rhs, scope, ancestors, issues, context,
+                );
             }
 
             NodeKind::Tie { variable, package, args } => {
-                uses::handle_tie(self, node, variable, package, args, scope, ancestors, issues, context);
+                uses::handle_tie(
+                    self, node, variable, package, args, scope, ancestors, issues, context,
+                );
             }
 
             NodeKind::Untie { variable } => {
@@ -754,11 +758,15 @@ impl ScopeAnalyzer {
                 // All binary operations (including {} and [])
                 // We don't need special handling for {} and [] here because NodeKind::Variable
                 // will handle the context-sensitive lookup (checking ancestors).
-                calls_and_exprs::handle_binary(self, node, left, right, scope, ancestors, issues, context);
+                calls_and_exprs::handle_binary(
+                    self, node, left, right, scope, ancestors, issues, context,
+                );
             }
 
             NodeKind::ArrayLiteral { elements } => {
-                calls_and_exprs::handle_array_literal(self, node, elements, scope, ancestors, issues, context);
+                calls_and_exprs::handle_array_literal(
+                    self, node, elements, scope, ancestors, issues, context,
+                );
             }
 
             NodeKind::Block { statements } => {
@@ -958,7 +966,10 @@ impl ScopeAnalyzer {
         Some((sigil, name))
     }
 
-    pub(super) fn extract_name_like_variable<'a>(&self, name: &'a str) -> Option<(&'a str, &'a str)> {
+    pub(super) fn extract_name_like_variable<'a>(
+        &self,
+        name: &'a str,
+    ) -> Option<(&'a str, &'a str)> {
         let (sigil, var_name) = split_variable_name(name);
         if sigil.is_empty()
             || var_name.is_empty()
@@ -970,7 +981,10 @@ impl ScopeAnalyzer {
         Some((sigil, var_name))
     }
 
-    pub(super) fn extract_method_name_variable<'a>(&self, method: &'a str) -> Option<(&'a str, &'a str)> {
+    pub(super) fn extract_method_name_variable<'a>(
+        &self,
+        method: &'a str,
+    ) -> Option<(&'a str, &'a str)> {
         self.extract_name_like_variable(method).or_else(|| {
             let inner = method.strip_prefix("${")?.strip_suffix('}')?;
             if inner.contains("::") || !self.looks_like_variable_name(inner) {
@@ -999,7 +1013,11 @@ impl ScopeAnalyzer {
         )
     }
 
-    pub(super) fn is_dynamic_method_deref_context<'a>(&self, node: &'a Node, ancestors: &[&'a Node]) -> bool {
+    pub(super) fn is_dynamic_method_deref_context<'a>(
+        &self,
+        node: &'a Node,
+        ancestors: &[&'a Node],
+    ) -> bool {
         let Some(grandparent) = ancestors.iter().rev().nth(1).copied() else {
             return false;
         };
@@ -1013,7 +1031,11 @@ impl ScopeAnalyzer {
         }
     }
 
-    pub(super) fn is_braced_dynamic_method_call(&self, node: &Node, context: &AnalysisContext<'_>) -> bool {
+    pub(super) fn is_braced_dynamic_method_call(
+        &self,
+        node: &Node,
+        context: &AnalysisContext<'_>,
+    ) -> bool {
         let Some(selector_text) = context.code.get(node.location.start..node.location.end) else {
             return false;
         };
@@ -1086,7 +1108,12 @@ impl ScopeAnalyzer {
 
     /// Marks variables as initialized when they appear on the left-hand side of an assignment.
     /// Handles scalar variables, list assignments like `($x, $y) = ...`, and nested structures.
-    pub(super) fn mark_initialized(&self, node: &Node, scope: &Rc<Scope>, context: &AnalysisContext<'_>) {
+    pub(super) fn mark_initialized(
+        &self,
+        node: &Node,
+        scope: &Rc<Scope>,
+        context: &AnalysisContext<'_>,
+    ) {
         match &node.kind {
             NodeKind::Variable { sigil, name } => {
                 if !name.contains("::") {
@@ -1283,7 +1310,12 @@ impl ScopeAnalyzer {
     /// my @vals = @hash{key1, key2};          # key1, key2 are in hash key context
     /// print INVALID_BAREWORD;                # NOT in hash key context - should warn
     /// ```
-    pub(super) fn is_in_hash_key_context(&self, node: &Node, ancestors: &[&Node], max_depth: usize) -> bool {
+    pub(super) fn is_in_hash_key_context(
+        &self,
+        node: &Node,
+        ancestors: &[&Node],
+        max_depth: usize,
+    ) -> bool {
         let mut current = node;
 
         // Traverse up the AST to find hash key contexts

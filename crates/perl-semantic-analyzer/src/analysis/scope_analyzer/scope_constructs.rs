@@ -1,8 +1,8 @@
 //! Handlers for nodes that open new scopes or have structural recursion semantics.
 
 use super::{
-    sigil_to_index, split_variable_name, AnalysisContext, IssueKind, Scope, ScopeAnalyzer,
-    ScopeIssue,
+    AnalysisContext, IssueKind, Scope, ScopeAnalyzer, ScopeIssue, sigil_to_index,
+    split_variable_name,
 };
 use crate::ast::{Node, NodeKind};
 use std::collections::HashSet;
@@ -45,6 +45,7 @@ pub(super) fn handle_phase_block<'a>(
 }
 
 /// Handle `NodeKind::For`.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn handle_for<'a>(
     analyzer: &ScopeAnalyzer,
     node: &'a Node,
@@ -78,6 +79,7 @@ pub(super) fn handle_for<'a>(
 }
 
 /// Handle `NodeKind::Foreach`.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn handle_foreach<'a>(
     analyzer: &ScopeAnalyzer,
     node: &'a Node,
@@ -180,7 +182,7 @@ pub(super) fn handle_subroutine<'a>(
                 true,
                 context,
             ); // Parameters are initialized
-               // Don't mark parameters as automatically used yet - track their actual usage
+            // Don't mark parameters as automatically used yet - track their actual usage
         }
     }
 
@@ -232,6 +234,7 @@ pub(super) fn handle_subroutine<'a>(
 }
 
 /// Handle `NodeKind::Try`.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn handle_try<'a>(
     analyzer: &ScopeAnalyzer,
     node: &'a Node,

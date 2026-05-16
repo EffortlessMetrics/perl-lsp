@@ -1,13 +1,14 @@
 //! Handlers for call-shaped and structural recursion node kinds in scope analysis.
 
 use super::{
-    builtin_declaration_arg_positions, is_topic_defaulting_builtin, is_topic_modifying_builtin,
-    AnalysisContext, Scope, ScopeAnalyzer, ScopeIssue,
+    AnalysisContext, Scope, ScopeAnalyzer, ScopeIssue, builtin_declaration_arg_positions,
+    is_topic_defaulting_builtin, is_topic_modifying_builtin,
 };
 use crate::ast::Node;
 use std::rc::Rc;
 
 /// Handle `NodeKind::FunctionCall`.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn handle_function_call<'a>(
     analyzer: &ScopeAnalyzer,
     node: &'a Node,
@@ -20,7 +21,15 @@ pub(super) fn handle_function_call<'a>(
     strict_vars_mode: bool,
 ) {
     if let Some((sigil, var_name)) = analyzer.extract_name_like_variable(name) {
-        analyzer.record_variable_use(scope, strict_vars_mode, context, issues, node, sigil, var_name);
+        analyzer.record_variable_use(
+            scope,
+            strict_vars_mode,
+            context,
+            issues,
+            node,
+            sigil,
+            var_name,
+        );
     }
 
     // Builtins that default to $_ when called with zero arguments implicitly
@@ -45,6 +54,7 @@ pub(super) fn handle_function_call<'a>(
 }
 
 /// Handle `NodeKind::MethodCall`.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn handle_method_call<'a>(
     analyzer: &ScopeAnalyzer,
     node: &'a Node,
@@ -60,7 +70,15 @@ pub(super) fn handle_method_call<'a>(
     ancestors.push(node);
     analyzer.analyze_node(object, scope, ancestors, issues, context);
     if let Some((sigil, var_name)) = analyzer.extract_method_name_variable(method) {
-        analyzer.record_variable_use(scope, strict_vars_mode, context, issues, node, sigil, var_name);
+        analyzer.record_variable_use(
+            scope,
+            strict_vars_mode,
+            context,
+            issues,
+            node,
+            sigil,
+            var_name,
+        );
     }
     for arg in args {
         analyzer.analyze_node(arg, scope, ancestors, issues, context);

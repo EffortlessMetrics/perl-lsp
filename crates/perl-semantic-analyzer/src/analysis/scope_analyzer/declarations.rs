@@ -1,8 +1,8 @@
 //! Handlers for declaration node kinds in scope analysis.
 
 use super::{
-    is_builtin_global, split_variable_name, AnalysisContext, IssueKind, Scope, ScopeAnalyzer,
-    ScopeIssue,
+    AnalysisContext, IssueKind, Scope, ScopeAnalyzer, ScopeIssue, is_builtin_global,
+    split_variable_name,
 };
 use crate::ast::{Node, NodeKind};
 use std::rc::Rc;
@@ -10,9 +10,10 @@ use std::rc::Rc;
 /// Handle `NodeKind::VariableDeclaration`.
 ///
 /// Returns `true` if the caller should return early (builtin-global local skipped).
+#[allow(clippy::too_many_arguments)]
 pub(super) fn handle_variable_declaration<'a>(
     analyzer: &ScopeAnalyzer,
-    node: &'a Node,
+    _node: &'a Node,
     declarator: &str,
     variable: &'a Node,
     initializer: Option<&'a Node>,

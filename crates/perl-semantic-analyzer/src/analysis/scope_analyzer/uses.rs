@@ -1,8 +1,8 @@
 //! Handlers for variable read/use and assignment tracking node kinds in scope analysis.
 
 use super::{
-    is_builtin_global, is_capture_variable, is_known_function, split_variable_name, AnalysisContext,
-    Scope, ScopeAnalyzer, ScopeIssue,
+    AnalysisContext, Scope, ScopeAnalyzer, ScopeIssue, is_builtin_global, is_capture_variable,
+    is_known_function, split_variable_name,
 };
 use crate::ast::{Node, NodeKind};
 use crate::pragma_tracker::PragmaState;
@@ -11,6 +11,7 @@ use std::rc::Rc;
 /// Handle `NodeKind::Variable`.
 ///
 /// Returns `true` if the caller should return early (capture variable already handled).
+#[allow(clippy::too_many_arguments)]
 pub(super) fn handle_variable<'a>(
     analyzer: &ScopeAnalyzer,
     node: &'a Node,
@@ -56,9 +57,8 @@ pub(super) fn handle_variable<'a>(
     // Normalize explicit dereference/container syntax before lookup so that
     // `@$ref` resolves to `$ref`, while direct subscripting keeps using the
     // container sigil that the syntax implies.
-    let (lookup_sigil, lookup_name) = analyzer
-        .resolve_variable_use_target(node, ancestors, context)
-        .unwrap_or((sigil, name));
+    let (lookup_sigil, lookup_name) =
+        analyzer.resolve_variable_use_target(node, ancestors, context).unwrap_or((sigil, name));
     let (variable_used, is_initialized) =
         analyzer.use_variable_parts_in_context(scope, lookup_sigil, lookup_name, context);
 
@@ -85,7 +85,15 @@ pub(super) fn handle_typeglob(
 ) {
     let (sigil, var_name) = split_variable_name(name);
     if !sigil.is_empty() && !var_name.is_empty() && !var_name.contains("::") {
-        analyzer.record_variable_use(scope, strict_vars_mode, context, issues, node, sigil, var_name);
+        analyzer.record_variable_use(
+            scope,
+            strict_vars_mode,
+            context,
+            issues,
+            node,
+            sigil,
+            var_name,
+        );
     }
 }
 
@@ -101,7 +109,15 @@ pub(super) fn handle_readline(
 ) {
     let (sigil, var_name) = split_variable_name(filehandle);
     if !sigil.is_empty() && !var_name.is_empty() && !var_name.contains("::") {
-        analyzer.record_variable_use(scope, strict_vars_mode, context, issues, node, sigil, var_name);
+        analyzer.record_variable_use(
+            scope,
+            strict_vars_mode,
+            context,
+            issues,
+            node,
+            sigil,
+            var_name,
+        );
     }
 }
 
@@ -110,7 +126,7 @@ pub(super) fn handle_readline(
 /// Returns `true` if the caller should return early (fast-path scalar assignment handled).
 pub(super) fn handle_assignment<'a>(
     analyzer: &ScopeAnalyzer,
-    node: &'a Node,
+    _node: &'a Node,
     lhs: &'a Node,
     rhs: &'a Node,
     scope: &Rc<Scope>,
@@ -144,6 +160,7 @@ pub(super) fn handle_assignment<'a>(
 }
 
 /// Handle `NodeKind::Tie`.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn handle_tie<'a>(
     analyzer: &ScopeAnalyzer,
     node: &'a Node,
@@ -191,6 +208,7 @@ pub(super) fn handle_untie<'a>(
 }
 
 /// Handle `NodeKind::Identifier`.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn handle_identifier(
     analyzer: &ScopeAnalyzer,
     node: &Node,
