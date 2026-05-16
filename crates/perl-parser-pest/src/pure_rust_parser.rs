@@ -11,7 +11,10 @@ use pest::{
 use pest_derive::Parser;
 use regex::Regex;
 use stacker;
-use std::sync::{Arc, OnceLock};
+use std::{
+    collections::VecDeque,
+    sync::{Arc, LazyLock},
+};
 
 #[derive(Parser)]
 #[grammar = "grammar.pest"]
@@ -319,16 +322,17 @@ pub enum AstNode {
 /// Pure Rust Perl parser implementation
 pub struct PureRustPerlParser {
     _pratt_parser: PrattParser,
+    loop_decl_scopes: VecDeque<(Arc<str>, Arc<str>)>,
 }
 
 impl PureRustPerlParser {
     pub fn new() -> Self {
-        Self { _pratt_parser: PrattParser::new() }
+        Self { _pratt_parser: PrattParser::new(), loop_decl_scopes: VecDeque::new() }
     }
 
     #[inline(always)]
     pub fn parse(&mut self, source: &str) -> Result<AstNode, Box<dyn std::error::Error>> {
-        let normalized = Self::normalize_source(source);
+        let normalized = self.normalize_source(source);
 
         match <PerlParser as Parser<Rule>>::parse(Rule::program, &normalized) {
             Ok(pairs) => self.build_ast(pairs),
@@ -339,38 +343,38 @@ impl PureRustPerlParser {
         }
     }
 
-    fn normalize_source(source: &str) -> String {
-        static LOOP_DECL_RE: OnceLock<Option<Regex>> = OnceLock::new();
-        static SIMPLE_SCALAR_DEREF_RE: OnceLock<Option<Regex>> = OnceLock::new();
-        static ASSIGN_BITNOT_RE: OnceLock<Option<Regex>> = OnceLock::new();
+    fn normalize_source(&mut self, source: &str) -> String {
+        static LOOP_DECL_RE: LazyLock<Option<Regex>> = LazyLock::new(|| {
+            Regex::new(
+                r"\b(?P<kw>for(?:each)?)\s+(?P<decl>my|our|local|state)\s+(?P<var>\$[A-Za-z_][A-Za-z0-9_:]*)\s*(?P<paren>\()",
+            )
+            .ok()
+        });
+        static SIMPLE_SCALAR_DEREF_RE: LazyLock<Option<Regex>> =
+            LazyLock::new(|| Regex::new(r"\$\$(?P<name>[A-Za-z_][A-Za-z0-9_:]*)").ok());
+        static ASSIGN_BITNOT_RE: LazyLock<Option<Regex>> =
+            LazyLock::new(|| Regex::new(r"=\s+~\s*(?P<expr>\$[A-Za-z_][A-Za-z0-9_:]*)").ok());
 
         // These are fixed patterns; if one ever fails to compile, skip normalization
         // rather than panicking inside production parser code.
-        let Some(loop_decl_re) = LOOP_DECL_RE
-            .get_or_init(|| {
-                Regex::new(
-                    r"\b(?P<kw>for(?:each)?)\s+(?:my|our|local|state)\s+(?P<var>\$[A-Za-z_][A-Za-z0-9_:]*)\s*(?P<paren>\()",
-                )
-                .ok()
-            })
-            .as_ref()
-        else {
+        let Some(loop_decl_re) = LOOP_DECL_RE.as_ref() else {
             return source.to_string();
         };
-        let Some(scalar_deref_re) = SIMPLE_SCALAR_DEREF_RE
-            .get_or_init(|| Regex::new(r"\$\$(?P<name>[A-Za-z_][A-Za-z0-9_:]*)").ok())
-            .as_ref()
-        else {
+        let Some(scalar_deref_re) = SIMPLE_SCALAR_DEREF_RE.as_ref() else {
             return source.to_string();
         };
-        let Some(assign_bitnot_re) = ASSIGN_BITNOT_RE
-            .get_or_init(|| Regex::new(r"=\s+~\s*(?P<expr>\$[A-Za-z_][A-Za-z0-9_:]*)").ok())
-            .as_ref()
-        else {
+        let Some(assign_bitnot_re) = ASSIGN_BITNOT_RE.as_ref() else {
             return source.to_string();
         };
 
-        let normalized_loops = loop_decl_re.replace_all(source, "$kw $var $paren").into_owned();
+        self.loop_decl_scopes.clear();
+        let normalized_loops = loop_decl_re
+            .replace_all(source, |caps: &regex::Captures<'_>| {
+                self.loop_decl_scopes
+                    .push_back((Arc::from(&caps["var"]), Arc::from(&caps["decl"])));
+                format!("{} {} {}", &caps["kw"], &caps["var"], &caps["paren"])
+            })
+            .into_owned();
         let normalized_derefs = scalar_deref_re
             .replace_all(&normalized_loops, |caps: &regex::Captures<'_>| {
                 let variable = format!("${}", &caps["name"]);
@@ -383,6 +387,16 @@ impl PureRustPerlParser {
                 format!("= bitnot({})", &caps["expr"])
             })
             .into_owned()
+    }
+
+    fn take_normalized_loop_declarator(&mut self, variable: &AstNode) -> Option<Arc<str>> {
+        let name = match variable {
+            AstNode::ScalarVariable(name) => name,
+            _ => return None,
+        };
+
+        let position = self.loop_decl_scopes.iter().position(|(var, _)| var == name)?;
+        self.loop_decl_scopes.remove(position).map(|(_, scope)| scope)
     }
 
     fn parse_with_recovery(
@@ -1897,16 +1911,20 @@ impl PureRustPerlParser {
                     }
                 }
 
-                let final_variable = if let Some(decl) = declarator {
-                    variable.map(|var| {
-                        Box::new(AstNode::VariableDeclaration {
+                let final_variable = if let Some(var) = variable {
+                    if let Some(decl) =
+                        declarator.or_else(|| self.take_normalized_loop_declarator(&var))
+                    {
+                        Some(Box::new(AstNode::VariableDeclaration {
                             scope: decl,
                             variables: vec![*var],
                             initializer: None,
-                        })
-                    })
+                        }))
+                    } else {
+                        Some(var)
+                    }
                 } else {
-                    variable
+                    None
                 };
 
                 Ok(Some(AstNode::ForeachStatement {
@@ -1987,16 +2005,20 @@ impl PureRustPerlParser {
                 } else {
                     // foreach-style for loop - use ForeachStatement AST node
                     // If there's a declarator, wrap the variable in a declaration
-                    let final_variable = if let Some(decl) = declarator {
-                        variable.map(|var| {
-                            Box::new(AstNode::VariableDeclaration {
+                    let final_variable = if let Some(var) = variable {
+                        if let Some(decl) =
+                            declarator.or_else(|| self.take_normalized_loop_declarator(&var))
+                        {
+                            Some(Box::new(AstNode::VariableDeclaration {
                                 scope: decl,
                                 variables: vec![*var],
                                 initializer: None,
-                            })
-                        })
+                            }))
+                        } else {
+                            Some(var)
+                        }
                     } else {
-                        variable
+                        None
                     };
 
                     Ok(Some(AstNode::ForeachStatement {

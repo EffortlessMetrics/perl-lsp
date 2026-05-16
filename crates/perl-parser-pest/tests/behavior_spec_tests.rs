@@ -38,12 +38,14 @@ fn when_given_if_statement_then_parser_emits_if_statement_shape() {
 }
 
 #[test]
-fn when_foreach_uses_my_declaration_then_normalization_keeps_parse_successful() {
+fn when_foreach_uses_my_declaration_then_parser_preserves_loop_declaration() {
     let sexp = parse_to_sexp("foreach my $item (@items) { print $item; }");
 
     assert!(
-        sexp.contains("(foreach_statement") || sexp.contains("(for_statement"),
-        "expected loop node in output; got: {sexp}"
+        sexp.contains("(foreach_statement")
+            && sexp.contains("(variable_declaration my (scalar_variable $item)")
+            && sexp.contains("(array_variable @items)"),
+        "expected foreach loop to preserve my-declared iterator and list; got: {sexp}"
     );
 }
 
