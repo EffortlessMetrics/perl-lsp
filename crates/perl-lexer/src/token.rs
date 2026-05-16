@@ -181,76 +181,89 @@ mod tests {
     use std::sync::Arc;
 
     #[test]
-    fn token_type_trivia_classifier_matches_expected_variants() {
+    fn token_type_trivia_classifier_matches_expected_variants()
+    -> Result<(), Box<dyn std::error::Error>> {
         assert!(TokenType::Whitespace.is_trivia());
         assert!(TokenType::Newline.is_trivia());
         assert!(TokenType::Comment(Arc::from("# note")).is_trivia());
         assert!(!TokenType::Identifier(Arc::from("foo")).is_trivia());
+        Ok(())
     }
 
     #[test]
-    fn token_type_recovery_classifier_matches_expected_variants() {
+    fn token_type_recovery_classifier_matches_expected_variants()
+    -> Result<(), Box<dyn std::error::Error>> {
         assert!(TokenType::UnknownRest.is_recovery_token());
         assert!(TokenType::Error(Arc::from("oops")).is_recovery_token());
         assert!(!TokenType::EOF.is_recovery_token());
+        Ok(())
     }
 
     // --- Token::new ---
 
     #[test]
-    fn token_new_stores_type_text_and_span() {
+    fn token_new_stores_type_text_and_span() -> Result<(), Box<dyn std::error::Error>> {
         let tok = Token::new(TokenType::Semicolon, ";", 3, 4);
         assert_eq!(tok.token_type, TokenType::Semicolon);
         assert_eq!(tok.text.as_ref(), ";");
         assert_eq!(tok.start, 3);
         assert_eq!(tok.end, 4);
+        Ok(())
     }
 
     #[test]
-    fn token_new_accepts_arc_str_directly() {
+    fn token_new_accepts_arc_str_directly() -> Result<(), Box<dyn std::error::Error>> {
         let text: Arc<str> = Arc::from("hello");
         let tok = Token::new(TokenType::Identifier(Arc::from("hello")), text, 0, 5);
         assert_eq!(tok.start, 0);
         assert_eq!(tok.end, 5);
+        Ok(())
     }
 
     // --- Token::len ---
 
     #[test]
-    fn token_len_returns_end_minus_start() {
+    fn token_len_returns_end_minus_start() -> Result<(), Box<dyn std::error::Error>> {
         let tok = Token::new(TokenType::Semicolon, ";", 10, 17);
         assert_eq!(tok.len(), 7);
+        Ok(())
     }
 
     #[test]
-    fn token_len_zero_when_span_is_empty() {
+    fn token_len_zero_when_span_is_empty() -> Result<(), Box<dyn std::error::Error>> {
         let tok = Token::new(TokenType::EOF, "", 5, 5);
         assert_eq!(tok.len(), 0);
+        Ok(())
     }
 
     #[test]
-    fn token_len_single_byte_span() {
+    fn token_len_single_byte_span() -> Result<(), Box<dyn std::error::Error>> {
         let tok = Token::new(TokenType::Comma, ",", 0, 1);
         assert_eq!(tok.len(), 1);
+        Ok(())
     }
 
     // --- Token::is_empty ---
 
     #[test]
-    fn token_is_empty_true_for_zero_length_span() {
+    fn token_is_empty_true_for_zero_length_span() -> Result<(), Box<dyn std::error::Error>> {
         let tok = Token::new(TokenType::EOF, "", 0, 0);
         assert!(tok.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn token_is_empty_true_for_non_zero_start_matching_end() {
+    fn token_is_empty_true_for_non_zero_start_matching_end()
+    -> Result<(), Box<dyn std::error::Error>> {
         let tok = Token::new(TokenType::EOF, "", 42, 42);
         assert!(tok.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn token_is_empty_false_for_non_zero_length_span() {
+    fn token_is_empty_false_for_non_zero_length_span() -> Result<(), Box<dyn std::error::Error>> {
         let tok = Token::new(TokenType::Semicolon, ";", 0, 1);
         assert!(!tok.is_empty());
+        Ok(())
     }
 }
