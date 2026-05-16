@@ -90,6 +90,19 @@ fn receipt_notes(receipt: &Value) -> Result<Vec<&str>, Box<dyn std::error::Error
     Ok(notes.iter().filter_map(Value::as_str).collect())
 }
 
+fn trace_with_fields(
+    traces: &[Value],
+    source: &str,
+    provenance: &str,
+    fallback_state: &str,
+) -> bool {
+    traces.iter().any(|trace| {
+        trace.get("source").and_then(Value::as_str) == Some(source)
+            && trace.get("provenance").and_then(Value::as_str) == Some(provenance)
+            && trace.get("fallback_state").and_then(Value::as_str) == Some(fallback_state)
+    })
+}
+
 // --- document symbol runtime quality receipt tests ---
 
 #[test]
@@ -358,6 +371,110 @@ fn workspace_symbols_runtime_quality_receipt_records_source_backed_compiler_slic
         Some(
             "ready workspace index symbols only; generated, dynamic, stale, and partial-index candidates remain gated"
         )
+    );
+    Ok(())
+}
+
+#[test]
+fn workspace_symbols_runtime_quality_receipt_records_generated_dynamic_noise_expansion()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    open_symbol_workspace(&server)?;
+    let params = json!({"query": "greet"});
+
+    let receipt = server
+        .test_workspace_symbols_runtime_quality_receipt(Some(params))?
+        .ok_or("missing workspace symbols receipt")?;
+
+    let expansion_receipt =
+        receipt.get("gated_expansion_receipt").ok_or("missing gated expansion receipt")?;
+    assert_eq!(
+        expansion_receipt.get("receipt_kind").and_then(Value::as_str),
+        Some("generated_dynamic_noise_expansion"),
+        "workspace-symbol receipt must identify the generated/dynamic/noise expansion proof"
+    );
+    assert_eq!(
+        expansion_receipt.get("generated_candidate_count").and_then(Value::as_u64),
+        Some(1),
+        "generated candidates must be counted separately from live source-backed symbols"
+    );
+    assert_eq!(
+        expansion_receipt.get("dynamic_boundary_blocker_count").and_then(Value::as_u64),
+        Some(1),
+        "dynamic-boundary candidates must stay blocked"
+    );
+    assert_eq!(
+        expansion_receipt.get("stale_fact_blocker_count").and_then(Value::as_u64),
+        Some(1),
+        "stale compiler facts must stay blocked"
+    );
+    assert_eq!(
+        expansion_receipt.get("fallback_noise_candidate_count").and_then(Value::as_u64),
+        Some(2),
+        "fallback/noise candidates must be measured without promotion"
+    );
+    assert_eq!(
+        expansion_receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(true),
+        "generated/dynamic/noise expansion proof must not broaden live workspace-symbol behavior"
+    );
+
+    let claim_boundary = expansion_receipt
+        .get("claim_boundary")
+        .and_then(Value::as_str)
+        .ok_or("missing boundary")?;
+    assert!(
+        claim_boundary.contains("remain gated"),
+        "claim boundary must keep generated/dynamic/noise candidates gated; got: {claim_boundary}"
+    );
+
+    let shadow_receipt = expansion_receipt
+        .get("shadow_receipt")
+        .and_then(Value::as_object)
+        .ok_or("missing shadow receipt")?;
+    assert_eq!(
+        shadow_receipt.get("query").and_then(Value::as_str),
+        Some("workspace_symbols"),
+        "expansion proof must embed a workspace-symbol shadow receipt"
+    );
+    assert_eq!(
+        shadow_receipt.get("verdict").and_then(Value::as_str),
+        Some("improved"),
+        "shadow expansion should improve the measured candidate set without live promotion"
+    );
+
+    let notes = shadow_receipt.get("notes").and_then(Value::as_array).ok_or("missing notes")?;
+    let note_text = notes.iter().filter_map(Value::as_str).collect::<Vec<_>>().join("\n");
+    assert!(note_text.contains("generated_labels=1"), "note missing generated count: {note_text}");
+    assert!(
+        note_text.contains("dynamic_boundary_blockers=1"),
+        "note missing dynamic blocker count: {note_text}"
+    );
+    assert!(
+        note_text.contains("stale_fact_blockers=1"),
+        "note missing stale blocker count: {note_text}"
+    );
+    assert!(note_text.contains("noise_delta=1"), "note missing noise delta: {note_text}");
+
+    let traces = shadow_receipt
+        .get("fact_source_traces")
+        .and_then(Value::as_array)
+        .ok_or("missing fact-source traces")?;
+    assert!(
+        trace_with_fields(traces, "FrameworkAdapter", "FrameworkSynthesis", "Shadow"),
+        "generated framework candidate trace must stay shadowed: {traces:?}"
+    );
+    assert!(
+        trace_with_fields(traces, "DynamicBoundary", "DynamicBoundary", "Blocked"),
+        "dynamic-boundary candidate trace must stay blocked: {traces:?}"
+    );
+    assert!(
+        trace_with_fields(traces, "CompilerFact", "SemanticAnalyzer", "Blocked"),
+        "stale compiler candidate trace must stay blocked: {traces:?}"
+    );
+    assert!(
+        trace_with_fields(traces, "Fallback", "SearchFallback", "Fallback"),
+        "low-confidence fallback/noise trace must stay fallback-only: {traces:?}"
     );
     Ok(())
 }
