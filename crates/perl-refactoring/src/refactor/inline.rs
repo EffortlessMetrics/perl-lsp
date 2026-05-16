@@ -353,30 +353,78 @@ fn is_sub_opening_delimiter(after_name: &str) -> bool {
 /// Extract the text between a matching pair of braces starting at `open_pos`
 /// (the position AFTER the opening `{`).
 fn extract_balanced_braces(source: &str, open_pos: usize) -> Option<String> {
-    let mut depth = 1usize;
-    let chars: Vec<char> = source[open_pos..].chars().collect();
-    let mut end = 0;
-    let mut found = false;
-    let mut i = 0;
-    while i < chars.len() {
-        match chars[i] {
-            '{' => depth += 1,
-            '}' => {
-                depth -= 1;
+    let close_pos = find_matching_delimiter(source, open_pos.saturating_sub(1), '{', '}')?;
+    source.get(open_pos..close_pos).map(ToString::to_string)
+}
+
+/// Find the matching closing delimiter for the opening delimiter at byte
+/// position `open`, ignoring delimiters that appear inside Perl string
+/// literals or line comments.
+fn find_matching_delimiter(s: &str, open: usize, opening: char, closing: char) -> Option<usize> {
+    if !s.get(open..)?.starts_with(opening) {
+        return None;
+    }
+
+    let mut depth = 0usize;
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    let mut in_line_comment = false;
+    let mut escaped = false;
+    let mut previous = None;
+
+    for (offset, c) in s.get(open..)?.char_indices() {
+        let pos = open + offset;
+
+        if in_line_comment {
+            if c == '\n' {
+                in_line_comment = false;
+            }
+            previous = Some(c);
+            continue;
+        }
+
+        if escaped {
+            escaped = false;
+            previous = Some(c);
+            continue;
+        }
+
+        match c {
+            '\\' if in_single_quote || in_double_quote => {
+                escaped = true;
+            }
+            '#' if !in_single_quote && !in_double_quote && is_line_comment_start(previous) => {
+                in_line_comment = true;
+            }
+            '\'' if !in_double_quote => {
+                in_single_quote = !in_single_quote;
+            }
+            '"' if !in_single_quote => {
+                in_double_quote = !in_double_quote;
+            }
+            _ if in_single_quote || in_double_quote => {}
+            c if c == opening => {
+                depth += 1;
+            }
+            c if c == closing => {
+                depth = depth.checked_sub(1)?;
                 if depth == 0 {
-                    end = i;
-                    found = true;
-                    break;
+                    return Some(pos);
                 }
             }
             _ => {}
         }
-        i += 1;
+        previous = Some(c);
     }
-    if !found {
-        return None;
+
+    None
+}
+
+fn is_line_comment_start(previous: Option<char>) -> bool {
+    match previous {
+        None => true,
+        Some(c) => c.is_whitespace() || matches!(c, ';' | '{' | '(' | '[' | ',' | ')' | ']' | '}'),
     }
-    Some(chars[..end].iter().collect())
 }
 
 /// Parse out the Perl parameter-extraction line `my ($a, $b) = @_;` from the
@@ -578,24 +626,7 @@ fn extract_call_args(call_expr: &str, sub_name: &str) -> Result<Vec<String>, Inl
 
 /// Find the matching `)` for the `(` at byte position `open` in `s`.
 fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
-    let bytes = s.as_bytes();
-    if bytes.get(open) != Some(&b'(') {
-        return None;
-    }
-    let mut depth = 0usize;
-    for (i, &b) in bytes.iter().enumerate().skip(open) {
-        match b {
-            b'(' => depth += 1,
-            b')' => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some(i);
-                }
-            }
-            _ => {}
-        }
-    }
-    None
+    find_matching_delimiter(s, open, '(', ')')
 }
 
 /// Split a comma-separated argument string, respecting nested parens and quotes.
