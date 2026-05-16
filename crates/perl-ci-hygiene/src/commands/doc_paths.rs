@@ -97,3 +97,220 @@ pub(crate) fn has_machine_specific_users_path(line: &str, users_name_path: &Rege
         })
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        check_doc_paths, has_machine_specific_home_path, has_machine_specific_users_path,
+        resolve_docs_path,
+    };
+    use regex::Regex;
+    use std::error::Error;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    type TestResult<T = ()> = Result<T, Box<dyn Error>>;
+
+    fn unique_temp_dir(label: &str) -> TestResult<PathBuf> {
+        let nanos = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+        let dir = std::env::temp_dir()
+            .join(format!("perl-ci-hygiene-doc-paths-{label}-{}-{nanos}", std::process::id()));
+        fs::create_dir_all(&dir)?;
+        Ok(dir)
+    }
+
+    // ── resolve_docs_path ──────────────────────────────────────────────────
+
+    #[test]
+    fn resolve_docs_path_relative_joins_repo_root() {
+        let root = Path::new("/repo/root");
+        let result = resolve_docs_path(root, "docs");
+        assert_eq!(result, PathBuf::from("/repo/root/docs"));
+    }
+
+    #[test]
+    fn resolve_docs_path_absolute_ignores_repo_root() {
+        let root = Path::new("/repo/root");
+        let result = resolve_docs_path(root, "/absolute/docs");
+        assert_eq!(result, PathBuf::from("/absolute/docs"));
+    }
+
+    #[test]
+    fn resolve_docs_path_nested_relative_joins_correctly() {
+        let root = Path::new("/workspace");
+        let result = resolve_docs_path(root, "docs/reference");
+        assert_eq!(result, PathBuf::from("/workspace/docs/reference"));
+    }
+
+    // ── has_machine_specific_home_path ─────────────────────────────────────
+
+    #[test]
+    fn home_path_generic_user_is_not_machine_specific() -> TestResult {
+        let re = Regex::new(r"/home/([A-Za-z0-9._-]+)")?;
+        assert!(!has_machine_specific_home_path("See /home/user/project for an example.", &re,));
+        Ok(())
+    }
+
+    #[test]
+    fn home_path_generic_user_case_insensitive() -> TestResult {
+        let re = Regex::new(r"/home/([A-Za-z0-9._-]+)")?;
+        // "USER" and "User" must also be treated as generic
+        assert!(!has_machine_specific_home_path("path: /home/USER/project", &re));
+        assert!(!has_machine_specific_home_path("path: /home/User/project", &re));
+        Ok(())
+    }
+
+    #[test]
+    fn home_path_real_username_is_machine_specific() -> TestResult {
+        let re = Regex::new(r"/home/([A-Za-z0-9._-]+)")?;
+        assert!(has_machine_specific_home_path("/home/alice/dev/perl-lsp", &re));
+        assert!(has_machine_specific_home_path("Built at /home/ubuntu/workspace", &re));
+        Ok(())
+    }
+
+    #[test]
+    fn home_path_single_char_username_is_machine_specific() -> TestResult {
+        let re = Regex::new(r"/home/([A-Za-z0-9._-]+)")?;
+        assert!(has_machine_specific_home_path("/home/u/project", &re));
+        Ok(())
+    }
+
+    #[test]
+    fn home_path_multiple_matches_any_real_triggers_detection() -> TestResult {
+        let re = Regex::new(r"/home/([A-Za-z0-9._-]+)")?;
+        // Line has both a generic and a machine-specific path — must return true
+        let line = "cp /home/user/template /home/alice/dest";
+        assert!(has_machine_specific_home_path(line, &re));
+        Ok(())
+    }
+
+    #[test]
+    fn home_path_no_matches_returns_false() -> TestResult {
+        let re = Regex::new(r"/home/([A-Za-z0-9._-]+)")?;
+        assert!(!has_machine_specific_home_path("No paths here at all.", &re));
+        assert!(!has_machine_specific_home_path("", &re));
+        Ok(())
+    }
+
+    // ── has_machine_specific_users_path ────────────────────────────────────
+
+    #[test]
+    fn users_path_generic_name_placeholder_is_not_machine_specific() -> TestResult {
+        let re = Regex::new(r"/Users/([A-Za-z0-9._-]+)")?;
+        assert!(!has_machine_specific_users_path("path: /Users/Name/project", &re));
+        Ok(())
+    }
+
+    #[test]
+    fn users_path_generic_user_placeholder_is_not_machine_specific() -> TestResult {
+        let re = Regex::new(r"/Users/([A-Za-z0-9._-]+)")?;
+        assert!(!has_machine_specific_users_path("path: /Users/user/project", &re));
+        Ok(())
+    }
+
+    #[test]
+    fn users_path_generic_placeholders_case_insensitive() -> TestResult {
+        let re = Regex::new(r"/Users/([A-Za-z0-9._-]+)")?;
+        assert!(!has_machine_specific_users_path("path: /Users/NAME/project", &re));
+        assert!(!has_machine_specific_users_path("path: /Users/USER/project", &re));
+        Ok(())
+    }
+
+    #[test]
+    fn users_path_real_username_is_machine_specific() -> TestResult {
+        let re = Regex::new(r"/Users/([A-Za-z0-9._-]+)")?;
+        assert!(has_machine_specific_users_path("Personal: /Users/alice/dev/perl-lsp", &re,));
+        assert!(has_machine_specific_users_path("/Users/bob/workspace", &re));
+        Ok(())
+    }
+
+    #[test]
+    fn users_path_multiple_matches_any_real_triggers_detection() -> TestResult {
+        let re = Regex::new(r"/Users/([A-Za-z0-9._-]+)")?;
+        let line = "from /Users/Name/src to /Users/alice/dest";
+        assert!(has_machine_specific_users_path(line, &re));
+        Ok(())
+    }
+
+    #[test]
+    fn users_path_no_matches_returns_false() -> TestResult {
+        let re = Regex::new(r"/Users/([A-Za-z0-9._-]+)")?;
+        assert!(!has_machine_specific_users_path("No paths here.", &re));
+        assert!(!has_machine_specific_users_path("", &re));
+        Ok(())
+    }
+
+    // ── check_doc_paths (end-to-end via public API) ────────────────────────
+
+    #[test]
+    fn check_doc_paths_errors_when_docs_dir_missing() -> TestResult {
+        let root = unique_temp_dir("missing-docs")?;
+        // No "docs" directory created — must return Err
+        let result = check_doc_paths(&root, None);
+        assert!(result.is_err());
+        let _ = fs::remove_dir_all(&root);
+        Ok(())
+    }
+
+    #[test]
+    fn check_doc_paths_returns_zero_for_clean_docs() -> TestResult {
+        let root = unique_temp_dir("clean-docs")?;
+        let docs = root.join("docs");
+        fs::create_dir_all(&docs)?;
+        fs::write(docs.join("guide.md"), "Use /home/user/project as the example.\n")?;
+        let exit_code = check_doc_paths(&root, None)?;
+        assert_eq!(exit_code, 0);
+        let _ = fs::remove_dir_all(&root);
+        Ok(())
+    }
+
+    #[test]
+    fn check_doc_paths_returns_one_for_machine_specific_home_path() -> TestResult {
+        let root = unique_temp_dir("home-violation")?;
+        let docs = root.join("docs");
+        fs::create_dir_all(&docs)?;
+        fs::write(docs.join("setup.md"), "Run: /home/alice/dev/perl-lsp/target\n")?;
+        let exit_code = check_doc_paths(&root, None)?;
+        assert_eq!(exit_code, 1);
+        let _ = fs::remove_dir_all(&root);
+        Ok(())
+    }
+
+    #[test]
+    fn check_doc_paths_warns_but_returns_zero_for_users_path_only() -> TestResult {
+        let root = unique_temp_dir("users-warning")?;
+        let docs = root.join("docs");
+        fs::create_dir_all(&docs)?;
+        fs::write(docs.join("notes.md"), "See /Users/alice/project for context.\n")?;
+        let exit_code = check_doc_paths(&root, None)?;
+        // macOS /Users/ paths are warnings only, not hard failures
+        assert_eq!(exit_code, 0);
+        let _ = fs::remove_dir_all(&root);
+        Ok(())
+    }
+
+    #[test]
+    fn check_doc_paths_custom_docs_dir() -> TestResult {
+        let root = unique_temp_dir("custom-docs")?;
+        let custom = root.join("documentation");
+        fs::create_dir_all(&custom)?;
+        fs::write(custom.join("readme.md"), "Generic docs content.\n")?;
+        let exit_code = check_doc_paths(&root, Some("documentation"))?;
+        assert_eq!(exit_code, 0);
+        let _ = fs::remove_dir_all(&root);
+        Ok(())
+    }
+
+    #[test]
+    fn check_doc_paths_empty_docs_dir_returns_zero() -> TestResult {
+        let root = unique_temp_dir("empty-docs")?;
+        let docs = root.join("docs");
+        fs::create_dir_all(&docs)?;
+        // No files in docs directory
+        let exit_code = check_doc_paths(&root, None)?;
+        assert_eq!(exit_code, 0);
+        let _ = fs::remove_dir_all(&root);
+        Ok(())
+    }
+}
