@@ -641,7 +641,7 @@ mod tests {
     // ---------------------------------------------------------------------------
 
     #[test]
-    fn test_regression_at_baseline_is_not_regression() {
+    fn test_regression_at_baseline_is_not_regression() -> Result<(), Box<dyn std::error::Error>> {
         let gov = minimal_governance(10, 2, 20.0, false, false, false, false);
         let guardian = IgnoredTestGuardian::new(gov);
         let result = guardian.check_baseline_regression(10);
@@ -649,20 +649,23 @@ mod tests {
         assert_eq!(result.absolute_increase, 0);
         assert_eq!(result.baseline_count, 10);
         assert!(result.threshold_exceeded.is_none());
+        Ok(())
     }
 
     #[test]
-    fn test_regression_below_baseline_is_not_regression() {
+    fn test_regression_below_baseline_is_not_regression() -> Result<(), Box<dyn std::error::Error>>
+    {
         let gov = minimal_governance(10, 2, 20.0, false, false, false, false);
         let guardian = IgnoredTestGuardian::new(gov);
         let result = guardian.check_baseline_regression(5);
         assert!(!result.is_regression);
         assert_eq!(result.absolute_increase, 0); // saturating_sub
         assert!(result.threshold_exceeded.is_none());
+        Ok(())
     }
 
     #[test]
-    fn test_regression_absolute_threshold_exceeded() {
+    fn test_regression_absolute_threshold_exceeded() -> Result<(), Box<dyn std::error::Error>> {
         // baseline=10, max_deviation=2 — adding 3 triggers absolute regression
         let gov = minimal_governance(10, 2, 50.0, false, false, false, false);
         let guardian = IgnoredTestGuardian::new(gov);
@@ -671,10 +674,11 @@ mod tests {
         assert_eq!(result.absolute_increase, 3);
         let msg = result.threshold_exceeded.as_deref().unwrap_or("");
         assert!(msg.contains("Absolute increase"), "expected absolute message, got: {msg}");
+        Ok(())
     }
 
     #[test]
-    fn test_regression_percentage_threshold_exceeded() {
+    fn test_regression_percentage_threshold_exceeded() -> Result<(), Box<dyn std::error::Error>> {
         // baseline=100, max_deviation=50 (won't trip), deviation_threshold=10%
         // adding 15 → 15 % > 10 %
         let gov = minimal_governance(100, 50, 10.0, false, false, false, false);
@@ -683,10 +687,12 @@ mod tests {
         assert!(result.is_regression);
         let msg = result.threshold_exceeded.as_deref().unwrap_or("");
         assert!(msg.contains("Percentage increase"), "expected percentage message, got: {msg}");
+        Ok(())
     }
 
     #[test]
-    fn test_regression_zero_baseline_no_percentage_increase() {
+    fn test_regression_zero_baseline_no_percentage_increase()
+    -> Result<(), Box<dyn std::error::Error>> {
         // baseline=0 → percentage_increase stays 0.0 even when count grows
         let gov = minimal_governance(0, 0, 5.0, false, false, false, false);
         let guardian = IgnoredTestGuardian::new(gov);
@@ -694,6 +700,7 @@ mod tests {
         // but percentage_increase must be 0.0 (not NaN / Inf)
         let result = guardian.check_baseline_regression(5);
         assert_eq!(result.percentage_increase, 0.0);
+        Ok(())
     }
 
     // ---------------------------------------------------------------------------
@@ -701,7 +708,7 @@ mod tests {
     // ---------------------------------------------------------------------------
 
     #[test]
-    fn test_validate_issue_reference_required_missing() {
+    fn test_validate_issue_reference_required_missing() -> Result<(), Box<dyn std::error::Error>> {
         let gov = minimal_governance(0, 5, 20.0, true, false, false, false);
         let guardian = IgnoredTestGuardian::new(gov);
         let meta = minimal_metadata(
@@ -714,10 +721,11 @@ mod tests {
         let result = guardian.validate_new_ignored_test(&meta);
         assert!(!result.is_valid);
         assert!(result.errors.iter().any(|e| e.contains("issue")));
+        Ok(())
     }
 
     #[test]
-    fn test_validate_issue_reference_satisfied_by_hash() {
+    fn test_validate_issue_reference_satisfied_by_hash() -> Result<(), Box<dyn std::error::Error>> {
         let gov = minimal_governance(0, 5, 20.0, true, false, false, false);
         let guardian = IgnoredTestGuardian::new(gov);
         let meta = minimal_metadata(
@@ -730,10 +738,12 @@ mod tests {
         let result = guardian.validate_new_ignored_test(&meta);
         // no issue-reference error expected
         assert!(!result.errors.iter().any(|e| e.contains("issue")));
+        Ok(())
     }
 
     #[test]
-    fn test_validate_issue_reference_satisfied_by_word_issue() {
+    fn test_validate_issue_reference_satisfied_by_word_issue()
+    -> Result<(), Box<dyn std::error::Error>> {
         let gov = minimal_governance(0, 5, 20.0, true, false, false, false);
         let guardian = IgnoredTestGuardian::new(gov);
         let meta = minimal_metadata(
@@ -745,6 +755,7 @@ mod tests {
         );
         let result = guardian.validate_new_ignored_test(&meta);
         assert!(!result.errors.iter().any(|e| e.contains("issue")));
+        Ok(())
     }
 
     // ---------------------------------------------------------------------------
@@ -752,7 +763,7 @@ mod tests {
     // ---------------------------------------------------------------------------
 
     #[test]
-    fn test_validate_timeline_required_zero_secs_fails() {
+    fn test_validate_timeline_required_zero_secs_fails() -> Result<(), Box<dyn std::error::Error>> {
         let gov = minimal_governance(0, 5, 20.0, false, true, false, false);
         let guardian = IgnoredTestGuardian::new(gov);
         let meta = minimal_metadata(
@@ -765,10 +776,11 @@ mod tests {
         let result = guardian.validate_new_ignored_test(&meta);
         assert!(!result.is_valid);
         assert!(result.errors.iter().any(|e| e.contains("timeline")));
+        Ok(())
     }
 
     #[test]
-    fn test_validate_timeline_required_nonzero_passes() {
+    fn test_validate_timeline_required_nonzero_passes() -> Result<(), Box<dyn std::error::Error>> {
         let gov = minimal_governance(0, 5, 20.0, false, true, false, false);
         let guardian = IgnoredTestGuardian::new(gov);
         let meta = minimal_metadata(
@@ -780,6 +792,7 @@ mod tests {
         );
         let result = guardian.validate_new_ignored_test(&meta);
         assert!(!result.errors.iter().any(|e| e.contains("timeline")));
+        Ok(())
     }
 
     // ---------------------------------------------------------------------------
@@ -787,7 +800,8 @@ mod tests {
     // ---------------------------------------------------------------------------
 
     #[test]
-    fn test_validate_success_criteria_required_empty_fails() {
+    fn test_validate_success_criteria_required_empty_fails()
+    -> Result<(), Box<dyn std::error::Error>> {
         let gov = minimal_governance(0, 5, 20.0, false, false, true, false);
         let guardian = IgnoredTestGuardian::new(gov);
         let meta = minimal_metadata(
@@ -800,10 +814,12 @@ mod tests {
         let result = guardian.validate_new_ignored_test(&meta);
         assert!(!result.is_valid);
         assert!(result.errors.iter().any(|e| e.contains("success criteria")));
+        Ok(())
     }
 
     #[test]
-    fn test_validate_success_criteria_required_provided_passes() {
+    fn test_validate_success_criteria_required_provided_passes()
+    -> Result<(), Box<dyn std::error::Error>> {
         let gov = minimal_governance(0, 5, 20.0, false, false, true, false);
         let guardian = IgnoredTestGuardian::new(gov);
         let meta = minimal_metadata(
@@ -815,6 +831,7 @@ mod tests {
         );
         let result = guardian.validate_new_ignored_test(&meta);
         assert!(!result.errors.iter().any(|e| e.contains("success criteria")));
+        Ok(())
     }
 
     // ---------------------------------------------------------------------------
@@ -822,7 +839,8 @@ mod tests {
     // ---------------------------------------------------------------------------
 
     #[test]
-    fn test_validate_complexity_low_long_timeline_warns() {
+    fn test_validate_complexity_low_long_timeline_warns() -> Result<(), Box<dyn std::error::Error>>
+    {
         let gov = minimal_governance(0, 5, 20.0, false, false, false, true);
         let guardian = IgnoredTestGuardian::new(gov);
         // 8 days > 7-day threshold for Low complexity
@@ -836,10 +854,12 @@ mod tests {
         );
         let result = guardian.validate_new_ignored_test(&meta);
         assert!(result.warnings.iter().any(|w| w.contains("shorter timeline")));
+        Ok(())
     }
 
     #[test]
-    fn test_validate_complexity_high_long_timeline_no_warning() {
+    fn test_validate_complexity_high_long_timeline_no_warning()
+    -> Result<(), Box<dyn std::error::Error>> {
         // High complexity: even a long timeline should NOT trigger the low-complexity warning
         let gov = minimal_governance(0, 5, 20.0, false, false, false, true);
         let guardian = IgnoredTestGuardian::new(gov);
@@ -853,6 +873,7 @@ mod tests {
         );
         let result = guardian.validate_new_ignored_test(&meta);
         assert!(!result.warnings.iter().any(|w| w.contains("shorter timeline")));
+        Ok(())
     }
 
     // ---------------------------------------------------------------------------
@@ -860,7 +881,7 @@ mod tests {
     // ---------------------------------------------------------------------------
 
     #[test]
-    fn test_quality_score_clamped_to_100() {
+    fn test_quality_score_clamped_to_100() -> Result<(), Box<dyn std::error::Error>> {
         // Perfect metadata: long reason, ≥3 success criteria, recent assessment
         let gov = minimal_governance(0, 5, 20.0, false, false, false, false);
         let guardian = IgnoredTestGuardian::new(gov);
@@ -874,10 +895,11 @@ mod tests {
         let result = guardian.validate_new_ignored_test(&meta);
         assert!(result.quality_score <= 100.0);
         assert!(result.quality_score >= 0.0);
+        Ok(())
     }
 
     #[test]
-    fn test_quality_score_reduced_for_short_reason() {
+    fn test_quality_score_reduced_for_short_reason() -> Result<(), Box<dyn std::error::Error>> {
         let gov = minimal_governance(0, 5, 20.0, false, false, false, false);
         let guardian = IgnoredTestGuardian::new(gov);
         // Short reason (<20 chars) and no success criteria → score deductions
@@ -885,6 +907,7 @@ mod tests {
         let result = guardian.validate_new_ignored_test(&meta);
         // 100 - 20 (short reason) - 30 (no success criteria) = 50
         assert!(result.quality_score < 70.0);
+        Ok(())
     }
 
     // ---------------------------------------------------------------------------
@@ -913,67 +936,75 @@ mod tests {
     }
 
     #[test]
-    fn test_trend_report_unknown_with_no_data() {
+    fn test_trend_report_unknown_with_no_data() -> Result<(), Box<dyn std::error::Error>> {
         let guardian = guardian_with_monthly(true);
         let report = guardian.generate_trend_report();
         assert_eq!(report.trend_direction, TrendDirection::Unknown);
         assert_eq!(report.average_count, 0.0);
         assert!(report.period_start.is_none());
         assert!(report.period_end.is_none());
+        Ok(())
     }
 
     #[test]
-    fn test_trend_report_unknown_with_one_data_point() {
+    fn test_trend_report_unknown_with_one_data_point() -> Result<(), Box<dyn std::error::Error>> {
         let mut guardian = guardian_with_monthly(true);
         guardian.set_historical_data(make_history(&[5]));
         let report = guardian.generate_trend_report();
         assert_eq!(report.trend_direction, TrendDirection::Unknown);
+        Ok(())
     }
 
     #[test]
-    fn test_trend_report_increasing_direction() {
+    fn test_trend_report_increasing_direction() -> Result<(), Box<dyn std::error::Error>> {
         let mut guardian = guardian_with_monthly(true);
         // last is > first * 1.1
         guardian.set_historical_data(make_history(&[10, 15, 20]));
         let report = guardian.generate_trend_report();
         assert_eq!(report.trend_direction, TrendDirection::Increasing);
         assert!(report.average_count > 0.0);
+        Ok(())
     }
 
     #[test]
-    fn test_trend_report_decreasing_direction() {
+    fn test_trend_report_decreasing_direction() -> Result<(), Box<dyn std::error::Error>> {
         let mut guardian = guardian_with_monthly(true);
         // last is < first * 0.9
         guardian.set_historical_data(make_history(&[20, 15, 10]));
         let report = guardian.generate_trend_report();
         assert_eq!(report.trend_direction, TrendDirection::Decreasing);
+        Ok(())
     }
 
     #[test]
-    fn test_trend_report_stable_direction() {
+    fn test_trend_report_stable_direction() -> Result<(), Box<dyn std::error::Error>> {
         let mut guardian = guardian_with_monthly(true);
         // last == first → within ±10 %
         guardian.set_historical_data(make_history(&[10, 10, 10]));
         let report = guardian.generate_trend_report();
         assert_eq!(report.trend_direction, TrendDirection::Stable);
+        Ok(())
     }
 
     #[test]
-    fn test_trend_report_recommendations_not_empty() {
+    fn test_trend_report_recommendations_not_empty() -> Result<(), Box<dyn std::error::Error>> {
         let mut guardian = guardian_with_monthly(true);
         guardian.set_historical_data(make_history(&[10, 20, 30]));
         let report = guardian.generate_trend_report();
         assert!(!report.recommendations.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn test_trend_report_window_excludes_old_data_when_monthly_disabled() {
+    fn test_trend_report_window_excludes_old_data_when_monthly_disabled()
+    -> Result<(), Box<dyn std::error::Error>> {
         // monthly_summaries=false → window = 0 seconds → all historical data is excluded
         let mut guardian = guardian_with_monthly(false);
         guardian.set_historical_data(make_history(&[10, 20]));
         let report = guardian.generate_trend_report();
         // All data is outside the 0-second window
         assert_eq!(report.trend_direction, TrendDirection::Unknown);
+        Ok(())
     }
 
     // ---------------------------------------------------------------------------
@@ -981,11 +1012,13 @@ mod tests {
     // ---------------------------------------------------------------------------
 
     #[test]
-    fn test_new_guardian_initialises_baseline_from_governance() {
+    fn test_new_guardian_initialises_baseline_from_governance()
+    -> Result<(), Box<dyn std::error::Error>> {
         let gov = minimal_governance(42, 5, 10.0, false, false, false, false);
         let guardian = IgnoredTestGuardian::new(gov);
         assert_eq!(guardian.baseline_tracker.current_baseline, 42);
         assert!(guardian.baseline_tracker.historical_data.is_empty());
+        Ok(())
     }
 
     // ---------------------------------------------------------------------------
@@ -993,12 +1026,13 @@ mod tests {
     // ---------------------------------------------------------------------------
 
     #[test]
-    fn test_set_historical_data_replaces_previous() {
+    fn test_set_historical_data_replaces_previous() -> Result<(), Box<dyn std::error::Error>> {
         let gov = minimal_governance(0, 5, 10.0, false, false, false, false);
         let mut guardian = IgnoredTestGuardian::new(gov);
         guardian.set_historical_data(vec![(SystemTime::now(), 1)]);
         assert_eq!(guardian.baseline_tracker.historical_data.len(), 1);
         guardian.set_historical_data(vec![]);
         assert!(guardian.baseline_tracker.historical_data.is_empty());
+        Ok(())
     }
 }
