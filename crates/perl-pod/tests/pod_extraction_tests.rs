@@ -699,13 +699,20 @@ fn unknown_e_entity_passes_through_as_text() {
     assert_eq!(name, "A nbsp B", "unknown E<> entity should pass through as text; got: {name}");
 }
 
-/// `first_paragraph` with a leading blank line before actual content.
-/// Exercises the `!result.is_empty()` False branch (line 229) — when we encounter
-/// a blank line but result is still empty, we must NOT break out of the loop.
+/// `extract_pod` with a DESCRIPTION section that has body content followed by a
+/// blank line — verifies that `first_paragraph` correctly truncates at the first
+/// blank line after actual content.
+///
+/// Note: the `!result.is_empty()` False branch inside `first_paragraph` (the
+/// "blank line before any content" path) is unreachable via `extract_pod` because
+/// `flush_section` calls `body.trim()` before passing the text to `first_paragraph`,
+/// which eliminates any leading blank lines.  That branch is implicitly dead code
+/// from the public API perspective.
 #[test]
-fn first_paragraph_skips_leading_blank_lines() {
-    // strip_pod_formatting is applied before first_paragraph, so feed the
-    // description via extract_pod with a blank line at the start of DESCRIPTION.
+fn first_paragraph_truncates_at_blank_line() {
+    // Two blank lines appear between the =head1 directive and the actual content.
+    // The body accumulation loop skips them (both body and line are empty), so
+    // first_paragraph receives "Actual first line.\nSecond line." after trim().
     let source = "=head1 DESCRIPTION\n\n\nActual first line.\nSecond line.\n\nNot in first paragraph.\n\n=cut\n";
     let doc = extract_pod(source);
     let desc = doc.description.as_deref().unwrap_or("");
