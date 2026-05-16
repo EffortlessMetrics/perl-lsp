@@ -225,6 +225,14 @@ impl LspServer {
         };
         let planned_workspace_edit =
             receipt.get("live_provider_result").cloned().unwrap_or_else(|| json!({"changes": {}}));
+        let planned_live_provider_edit_count =
+            lsp_workspace_edit_count(Some(&planned_workspace_edit));
+        let returned_workspace_edit_count = 0;
+        let rollback_receipt = package_rename_rollback_receipt_json(
+            planned_live_provider_edit_count,
+            returned_workspace_edit_count,
+            receipt.get("fallback_noise"),
+        );
         let user_message = package_rename_preview_message(&receipt);
 
         if let Some(object) = receipt.as_object_mut() {
@@ -232,6 +240,15 @@ impl LspServer {
             object.insert("ux_surface".to_string(), json!("scoped_package_rename_preview"));
             object.insert("edits_applied".to_string(), json!(false));
             object.insert("live_package_rename_enabled".to_string(), json!(false));
+            object.insert(
+                "planned_live_provider_edit_count".to_string(),
+                json!(planned_live_provider_edit_count),
+            );
+            object.insert(
+                "returned_workspace_edit_count".to_string(),
+                json!(returned_workspace_edit_count),
+            );
+            object.insert("rollback_receipt".to_string(), rollback_receipt);
             object.insert("planned_workspace_edit".to_string(), planned_workspace_edit);
             object.insert("workspace_edit".to_string(), json!({"changes": {}}));
             object.insert("user_message".to_string(), json!(user_message));
@@ -851,6 +868,34 @@ fn rename_package_pilot_json(result: &RenamePackagePilotResult) -> Value {
             "no_live_rename_cutover": true
         }),
     }
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn package_rename_rollback_receipt_json(
+    planned_live_provider_edit_count: usize,
+    returned_workspace_edit_count: usize,
+    fallback_noise: Option<&Value>,
+) -> Value {
+    json!({
+        "provider": "rename",
+        "provider_action": "perl.previewPackageRename",
+        "planned_live_provider_edit_count": planned_live_provider_edit_count,
+        "returned_workspace_edit_count": returned_workspace_edit_count,
+        "rollback_required": returned_workspace_edit_count > 0,
+        "rollback_safe": returned_workspace_edit_count == 0,
+        "edits_applied": false,
+        "live_package_rename_enabled": false,
+        "fallback_state": fallback_noise
+            .and_then(|noise| noise.get("fallback_state"))
+            .and_then(Value::as_str)
+            .unwrap_or("unknown"),
+        "reason": if returned_workspace_edit_count == 0 {
+            "package rename preview returned no live edits; rollback is not required"
+        } else {
+            "package rename preview returned edits; rollback would be required before promotion"
+        },
+        "claim_boundary": "package rename preview rollback proof only; no package rename edits are applied"
+    })
 }
 
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
