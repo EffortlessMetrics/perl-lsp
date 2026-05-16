@@ -127,11 +127,12 @@ support claims, real-workspace receipts, and next PRs, see
   workspace-symbol generated/dynamic/noise receipts with edit-freshness proof.
   They do not promote generated, dynamic, stale, partial-index, or
   open-document fallback workspace-symbol candidates.
-- Semantic tokens now have source/freshness shadow proof for explicit
-  parser/HIR classifications, compiler-backed classifications,
+- Semantic tokens now have source/freshness proof for explicit parser/HIR
+  classifications, a narrow source-backed compiler-token live slice,
   generated/no-source framework blockers, dynamic-boundary blockers, stale
-  compiler facts, and fallback candidates. These receipts do not broaden live
-  semantic-token behavior.
+  compiler facts, and fallback candidates. The live slice only records acted
+  provider-decision traces for compiler-backed subroutine-declaration spans
+  that already match the existing live `function` token output.
 - Semantic tokens now have runtime integration quality receipts
   (`semantic_tokens_runtime_quality_receipt`) that exercise the live
   `textDocument/semanticTokens/full` handler and capture token count, shadow
@@ -145,10 +146,10 @@ support claims, real-workspace receipts, and next PRs, see
 - The Mojolicious scenario 34 semantic-token receipt records live token counts,
   LSP 5-tuple/span validity, expected source-backed token hits,
   dynamic-boundary string non-promotion, and edit freshness without broadening
-  semantic-token provider behavior.
+  semantic-token output.
 - Dancer2 scenario 38 adds second-project semantic-token quality proof for
   package, DSL, app, typeglob-boundary, and edit-freshness token shapes without
-  broadening semantic-token provider behavior.
+  broadening semantic-token output.
 - Other provider surfaces remain trace/proof infrastructure only until their
   own cutover proof lands.
 
@@ -202,7 +203,7 @@ the relevant receipt command.
 | Safe delete | `partial live source-backed pilot / boundary-shadowed broader facts` | `perl.safeDeleteSymbol` can return a source-backed symbol-delete WorkspaceEdit only when the compiler safe-delete plan is allowed, the live source guard resolves an exact high-confidence subroutine definition, and rollback proof restores the original text. Safe-delete receipts still trace dynamic-boundary blockers, framework-generated blockers, stale compiler facts, runtime blocker UX notes, Mojolicious scenario 36 file-delete warning UX, Dancer2 and RealBaseline symbol-level blocker/allowed request shapes, requested RealBaseline `reset` and Dancer2 `to_psgi` delete edits plus inverse rollback proof, and `perl.previewSafeDelete` scoped no-edit UX | Additional project-shaped false-allow and blocker receipts before broader symbol-delete migration |
 | Workspace symbols | `partial live source-backed + generated-label pilot` | Existing workspace index remains the live provider source; non-empty ready-index results can answer live with source-backed/high-confidence traces; source-backed generated/framework members may answer live only as explicitly labeled virtual symbols anchored to framework declarations, not exact generated method bodies; semantic-shadow fixtures still trace fresh compiler, generated, dynamic-boundary, stale fact, and real-workspace quality candidates; runtime quality receipts capture source-backed ready-index counts/results, labeled generated-pilot counts, and generated/no-source/dynamic/stale/fallback-noise gating; Mojolicious scenario 33 records live-provider noise, generated candidate gating, dynamic-boundary-shaped names, and edit freshness; Dancer2 scenario 39 and Catalyst scenario 41 add second- and third-project generated/dynamic/noise receipts | Additional generated/dynamic false-exact, rank/noise, and edit-freshness receipts before broader generated-symbol expansion |
 | Document symbols | `partial live source-backed` | Fresh, high-confidence, source-backed parser-syntax `ExactAst` symbols can drive live `textDocument/documentSymbol` results with fallback retained for astless documents and gated generated/no-source, dynamic-boundary, stale, low-confidence, and ambiguous candidates. Semantic-shadow fixtures still trace explicit syntax, generated, dynamic-boundary, and stale fact candidates; runtime quality receipts capture live provider counts/results plus source-backed compiler traces; Mojolicious scenario 32 records real-workspace symbol quality, generated candidate counts, and edit freshness. | Generated-label proof plus additional real-workspace document-symbol receipts before generated, dynamic, or broader symbol cutover |
-| Semantic tokens | `partial live token-class pilot` | Existing parser/token provider remains the broad live source; semantic-shadow fixtures trace parser/HIR, compiler-backed, generated/no-source, dynamic-boundary, stale, and fallback candidates; runtime quality receipts capture live token count, shadow state, no-token-output-change proof, both synthetic source-backed and RealBaseline project-shaped source-backed compiler-fact subroutine-declaration classes matched to existing live `function` token output, and live-output parity across synthetic, Catalyst-shaped, and RealBaseline receipts; Mojolicious scenario 34 and Dancer2 scenario 38 record project-shaped token/span validity and edit freshness | First source-backed compiler-token live slice before broader cutover |
+| Semantic tokens | `partial live source-backed token slice` | Existing parser/token provider remains the broad live source; semantic-shadow fixtures trace parser/HIR, compiler-backed, generated/no-source, dynamic-boundary, stale, and fallback candidates; runtime quality receipts capture live token count, shadow state, no-token-output-change proof, synthetic, Catalyst-shaped, and RealBaseline source-backed compiler-fact subroutine-declaration classes matched to existing live `function` token output, live-output parity, and live-request provider-decision traces for the matched compiler-token slice; Mojolicious scenario 34 and Dancer2 scenario 38 record project-shaped token/span validity and edit freshness | Additional generated/no-source, dynamic-boundary, stale, fallback, and broader compiler-token class receipts before broader cutover |
 
 ## Cutover Rules
 

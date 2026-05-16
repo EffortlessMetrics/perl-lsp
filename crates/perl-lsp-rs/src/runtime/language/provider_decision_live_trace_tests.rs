@@ -40,6 +40,10 @@ has display_name => (is => 'rw');
 
 1;
 "#;
+const NO_SUB_SEMANTIC_TOKEN_URI: &str = "file:///workspace/lib/Trace/NoSub.pm";
+const NO_SUB_SEMANTIC_TOKEN_DOC: &str = r#"package Trace::NoSub;
+1;
+"#;
 
 fn create_server() -> LspServer {
     let output =
@@ -109,6 +113,20 @@ fn open_generated_workspace_symbol_document(
         "textDocument": {
             "uri": GENERATED_WORKSPACE_SYMBOL_URI,
             "text": GENERATED_WORKSPACE_SYMBOL_DOC,
+            "languageId": "perl",
+            "version": 1
+        }
+    })))?;
+    Ok(())
+}
+
+fn open_no_sub_semantic_token_document(
+    server: &LspServer,
+) -> Result<(), Box<dyn std::error::Error>> {
+    server.test_handle_did_open(Some(json!({
+        "textDocument": {
+            "uri": NO_SUB_SEMANTIC_TOKEN_URI,
+            "text": NO_SUB_SEMANTIC_TOKEN_DOC,
             "languageId": "perl",
             "version": 1
         }
@@ -394,8 +412,8 @@ fn live_workspace_symbol_generated_pilot_persists_labeled_provider_trace()
 }
 
 #[test]
-fn live_semantic_tokens_request_persists_provider_trace() -> Result<(), Box<dyn std::error::Error>>
-{
+fn live_semantic_tokens_request_persists_compiler_token_live_slice_trace()
+-> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();
     initialize(&server)?;
     open_trace_document(&server)?;
@@ -413,6 +431,96 @@ fn live_semantic_tokens_request_persists_provider_trace() -> Result<(), Box<dyn 
 
     let explanation = explain_provider_decision(&server, "semantic_tokens")?;
     let receipt = request_receipt(&explanation, "semantic_tokens")?;
-    assert_live_trace(receipt, "semantic_tokens", "textDocument/semanticTokens/full");
+    assert_eq!(receipt.get("schema_version").and_then(Value::as_str), Some("provider_decision.v1"));
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("semantic_tokens"));
+    assert_eq!(
+        receipt.get("provider_action").and_then(Value::as_str),
+        Some("textDocument/semanticTokens/full")
+    );
+    assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("acted"));
+    assert_eq!(
+        receipt.get("reason").and_then(Value::as_str),
+        Some("source_backed_compiler_token_live_slice")
+    );
+    assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("compiler_fact"));
+    assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("high"));
+    assert_eq!(receipt.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        receipt.get("source_backed_state").and_then(Value::as_str),
+        Some("source_backed_subroutine_declaration_live_token_match")
+    );
+    assert_eq!(receipt.get("fallback").and_then(Value::as_str), Some("none"));
+    assert_eq!(
+        receipt.get("live_cutover").and_then(Value::as_str),
+        Some("partial_live_source_backed_compiler_token")
+    );
+    assert_eq!(
+        receipt.get("compiler_token_class").and_then(Value::as_str),
+        Some("subroutine_declaration")
+    );
+    assert_eq!(receipt.get("live_token_type").and_then(Value::as_str), Some("function"));
+    assert_eq!(receipt.get("live_token_match_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(receipt.get("no_live_token_output_change").and_then(Value::as_bool), Some(true));
+    assert!(
+        receipt.get("live_provider_result_count").and_then(Value::as_u64).unwrap_or(0) > 0,
+        "semantic-token live slice must include a live token count: {receipt}"
+    );
+    let boundary =
+        receipt.get("claim_boundary").and_then(Value::as_str).ok_or("missing boundary")?;
+    assert!(
+        boundary.contains("generated/no-source")
+            && boundary.contains("dynamic-boundary")
+            && boundary.contains("low-confidence"),
+        "semantic-token live slice must preserve blocked boundaries: {boundary}"
+    );
+    assert!(
+        explanation
+            .get("user_message")
+            .and_then(Value::as_str)
+            .is_some_and(|message| message
+                .contains("source-backed compiler subroutine-declaration live slice")),
+        "explanation must surface the live-slice request detail: {explanation}"
+    );
+    Ok(())
+}
+
+#[test]
+fn live_semantic_tokens_request_falls_back_without_compiler_token_slice()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    initialize(&server)?;
+    open_no_sub_semantic_token_document(&server)?;
+
+    response_result(
+        server.handle_request(request(
+            5,
+            "textDocument/semanticTokens/full",
+            Some(json!({
+                "textDocument": {"uri": NO_SUB_SEMANTIC_TOKEN_URI, "version": 1}
+            })),
+        )),
+        "semantic tokens without compiler slice",
+    )?;
+
+    let explanation = explain_provider_decision(&server, "semantic_tokens")?;
+    let receipt = request_receipt(&explanation, "semantic_tokens")?;
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("semantic_tokens"));
+    assert_eq!(
+        receipt.get("provider_action").and_then(Value::as_str),
+        Some("textDocument/semanticTokens/full")
+    );
+    assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("fallback"));
+    assert_eq!(receipt.get("reason").and_then(Value::as_str), Some("no_compiler_token_class"));
+    assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("parser_syntax"));
+    assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("medium"));
+    assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        receipt.get("source_backed_state").and_then(Value::as_str),
+        Some("compiler_token_live_slice_not_proven")
+    );
+    assert_eq!(receipt.get("fallback").and_then(Value::as_str), Some("legacy_provider"));
+    assert_eq!(receipt.get("live_cutover").and_then(Value::as_str), Some("fallback_only"));
+    assert_eq!(receipt.get("no_live_token_output_change").and_then(Value::as_bool), Some(true));
     Ok(())
 }
