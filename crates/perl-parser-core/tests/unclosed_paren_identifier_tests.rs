@@ -722,6 +722,16 @@ fn extutils_mm_unix_hash_slice_map_lc_keys_assignment() {
 }
 
 #[test]
+fn extutils_mm_unix_perl_candidates_map_parenthesized_list() {
+    // From ExtUtils::MM_Unix: push may take a map BLOCK whose source list is
+    // a parenthesized literal list on the following line.
+    assert_clean_parse(
+        r#"push @perls, map { "$_$Config{exe_ext}" }
+                     ("perl$Config{version}", 'perl5', 'perl');"#,
+    );
+}
+
+#[test]
 fn extutils_mm_unix_map_over_grep_substitution() {
     // From ExtUtils::MM_Unix: a hash assignment may merge a map BLOCK whose
     // source list is a grep-like substitution expression over an array.
