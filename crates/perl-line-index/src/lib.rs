@@ -168,23 +168,26 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
-    fn checked_empty_string_origin_is_addressable() {
+    fn checked_empty_string_origin_is_addressable() -> Result<(), Box<dyn std::error::Error>> {
         let idx = LineIndex::new("");
         // (0, 0) is the only valid position in an empty document
         assert_eq!(idx.position_to_byte_checked(0, 0), Some(0));
+        Ok(())
     }
 
     #[test]
-    fn checked_empty_string_col_one_out_of_range() {
+    fn checked_empty_string_col_one_out_of_range() -> Result<(), Box<dyn std::error::Error>> {
         let idx = LineIndex::new("");
         // text_len = 0, max_column = 0, so col 1 is beyond range
         assert_eq!(idx.position_to_byte_checked(0, 1), None);
+        Ok(())
     }
 
     #[test]
-    fn checked_empty_string_line_one_out_of_range() {
+    fn checked_empty_string_line_one_out_of_range() -> Result<(), Box<dyn std::error::Error>> {
         let idx = LineIndex::new("");
         assert_eq!(idx.position_to_byte_checked(1, 0), None);
+        Ok(())
     }
 
     // -----------------------------------------------------------------------
@@ -192,19 +195,21 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
-    fn checked_single_line_all_columns_in_range() {
+    fn checked_single_line_all_columns_in_range() -> Result<(), Box<dyn std::error::Error>> {
         // "hello" = 5 bytes; text_len = 5; max_column on line 0 = 5 - 0 = 5
         let idx = LineIndex::new("hello");
         assert_eq!(idx.position_to_byte_checked(0, 0), Some(0));
         assert_eq!(idx.position_to_byte_checked(0, 4), Some(4)); // last char 'o'
         assert_eq!(idx.position_to_byte_checked(0, 5), Some(5)); // one past last char (end-of-file position)
+        Ok(())
     }
 
     #[test]
-    fn checked_single_line_col_beyond_text_len_is_none() {
+    fn checked_single_line_col_beyond_text_len_is_none() -> Result<(), Box<dyn std::error::Error>> {
         let idx = LineIndex::new("hello");
         // max_column = 5 (text_len - line_start = 5 - 0 = 5); col 6 is out of range
         assert_eq!(idx.position_to_byte_checked(0, 6), None);
+        Ok(())
     }
 
     // -----------------------------------------------------------------------
@@ -212,19 +217,23 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
-    fn checked_newline_byte_is_last_addressable_on_its_line() {
+    fn checked_newline_byte_is_last_addressable_on_its_line()
+    -> Result<(), Box<dyn std::error::Error>> {
         // "abc\ndef": line 0 bytes 0-3 ('\n' at 3), line 1 bytes 4-6
         let idx = LineIndex::new("abc\ndef");
         // column 3 = newline byte — the last addressable byte on line 0
         assert_eq!(idx.position_to_byte_checked(0, 3), Some(3));
+        Ok(())
     }
 
     #[test]
-    fn checked_next_line_start_is_not_addressable_on_current_line() {
+    fn checked_next_line_start_is_not_addressable_on_current_line()
+    -> Result<(), Box<dyn std::error::Error>> {
         let idx = LineIndex::new("abc\ndef");
         // column 4 would be 'd' (first byte of line 1) — out of range for line 0
         assert_eq!(idx.position_to_byte_checked(0, 4), None);
         assert_eq!(idx.position_to_byte_checked(0, 100), None);
+        Ok(())
     }
 
     // -----------------------------------------------------------------------
@@ -232,17 +241,21 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
-    fn checked_trailing_newline_empty_final_line_origin() {
+    fn checked_trailing_newline_empty_final_line_origin() -> Result<(), Box<dyn std::error::Error>>
+    {
         // "foo\n": line 0 = "foo\n" (0-3), line 1 starts at 4 (empty)
         let idx = LineIndex::new("foo\n");
         // line 1 is empty; text_len = 4, line_start = 4 → max_column = 0
         assert_eq!(idx.position_to_byte_checked(1, 0), Some(4));
+        Ok(())
     }
 
     #[test]
-    fn checked_trailing_newline_empty_final_line_col_one_is_none() {
+    fn checked_trailing_newline_empty_final_line_col_one_is_none()
+    -> Result<(), Box<dyn std::error::Error>> {
         let idx = LineIndex::new("foo\n");
         assert_eq!(idx.position_to_byte_checked(1, 1), None);
+        Ok(())
     }
 
     // -----------------------------------------------------------------------
@@ -250,7 +263,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
-    fn checked_crlf_cr_byte_addressable_on_its_line() {
+    fn checked_crlf_cr_byte_addressable_on_its_line() -> Result<(), Box<dyn std::error::Error>> {
         // "ab\r\ncd": '\r' at byte 2, '\n' at byte 3 → line 1 starts at 4
         // Line 0 ends at byte 3 (the '\n'); max_column = 3 - 0 = 3
         let idx = LineIndex::new("ab\r\ncd");
@@ -260,16 +273,18 @@ mod tests {
         assert_eq!(idx.position_to_byte_checked(0, 3), Some(3));
         // col 4 is the start of line 1 — out of range for line 0
         assert_eq!(idx.position_to_byte_checked(0, 4), None);
+        Ok(())
     }
 
     #[test]
-    fn checked_crlf_second_line() {
+    fn checked_crlf_second_line() -> Result<(), Box<dyn std::error::Error>> {
         // "ab\r\ncd": line 1 starts at byte 4; text_len = 6; max_column = 6 - 4 = 2
         let idx = LineIndex::new("ab\r\ncd");
         assert_eq!(idx.position_to_byte_checked(1, 0), Some(4)); // 'c'
         assert_eq!(idx.position_to_byte_checked(1, 1), Some(5)); // 'd'
         assert_eq!(idx.position_to_byte_checked(1, 2), Some(6)); // end-of-file position
         assert_eq!(idx.position_to_byte_checked(1, 3), None); // beyond text
+        Ok(())
     }
 
     // -----------------------------------------------------------------------
@@ -277,7 +292,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
-    fn checked_unicode_two_byte_char_boundary() {
+    fn checked_unicode_two_byte_char_boundary() -> Result<(), Box<dyn std::error::Error>> {
         // "caf\u{00e9}" = c(0) a(1) f(2) é(3,4) — 5 bytes total
         // Single line; text_len = 5; max_column = 5
         let idx = LineIndex::new("caf\u{00e9}");
@@ -285,10 +300,11 @@ mod tests {
         assert_eq!(idx.position_to_byte_checked(0, 4), Some(4)); // second byte of é
         assert_eq!(idx.position_to_byte_checked(0, 5), Some(5)); // end-of-file position
         assert_eq!(idx.position_to_byte_checked(0, 6), None); // beyond text
+        Ok(())
     }
 
     #[test]
-    fn checked_unicode_multiline_second_line_boundary() {
+    fn checked_unicode_multiline_second_line_boundary() -> Result<(), Box<dyn std::error::Error>> {
         // "a\u{00e9}\nb" — a(0) é(1,2) \n(3) b(4) = 5 bytes
         // Line 0: bytes 0-3 (max_column = (3+1-1) - 0 = 3)
         // Line 1: bytes 4-4 (max_column = 5 - 4 = 1)
@@ -298,6 +314,7 @@ mod tests {
         assert_eq!(idx.position_to_byte_checked(1, 0), Some(4)); // 'b'
         assert_eq!(idx.position_to_byte_checked(1, 1), Some(5)); // end-of-file position
         assert_eq!(idx.position_to_byte_checked(1, 2), None); // beyond text
+        Ok(())
     }
 
     // -----------------------------------------------------------------------
@@ -305,7 +322,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
-    fn checked_and_unchecked_agree_on_final_line() {
+    fn checked_and_unchecked_agree_on_final_line() -> Result<(), Box<dyn std::error::Error>> {
         // For the final line (no next-line-start constraint), both methods should
         // produce identical results for any column value.
         let idx = LineIndex::new("abc\nxyz");
@@ -316,6 +333,7 @@ mod tests {
                 "methods diverged at col {col} on final line"
             );
         }
+        Ok(())
     }
 
     // -----------------------------------------------------------------------
@@ -323,18 +341,20 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
-    fn byte_to_position_at_text_len_single_line() {
+    fn byte_to_position_at_text_len_single_line() -> Result<(), Box<dyn std::error::Error>> {
         // "hi" has text_len = 2; byte 2 is one past the end, still maps to line 0
         let idx = LineIndex::new("hi");
         assert_eq!(idx.byte_to_position(2), (0, 2));
+        Ok(())
     }
 
     #[test]
-    fn byte_to_position_at_text_len_multiline() {
+    fn byte_to_position_at_text_len_multiline() -> Result<(), Box<dyn std::error::Error>> {
         // "a\nb": line 1 starts at byte 2 ('b' at byte 2); text_len = 3
         // byte 3 is one past the end — still on line 1, column = 3 - 2 = 1
         let idx = LineIndex::new("a\nb");
         assert_eq!(idx.byte_to_position(3), (1, 1));
+        Ok(())
     }
 
     // -----------------------------------------------------------------------
@@ -342,19 +362,21 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
-    fn clone_preserves_index_state() {
+    fn clone_preserves_index_state() -> Result<(), Box<dyn std::error::Error>> {
         let idx = LineIndex::new("foo\nbar");
         let cloned = idx.clone();
         // Both originals and clones should produce the same result
         assert_eq!(idx.byte_to_position(4), cloned.byte_to_position(4));
         assert_eq!(idx.position_to_byte(1, 0), cloned.position_to_byte(1, 0));
+        Ok(())
     }
 
     #[test]
-    fn debug_format_is_non_empty() {
+    fn debug_format_is_non_empty() -> Result<(), Box<dyn std::error::Error>> {
         let idx = LineIndex::new("test\ndata");
         let debug_str = format!("{idx:?}");
         assert!(!debug_str.is_empty());
+        Ok(())
     }
 
     // -----------------------------------------------------------------------
@@ -362,7 +384,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
-    fn consecutive_newlines_produce_empty_lines() {
+    fn consecutive_newlines_produce_empty_lines() -> Result<(), Box<dyn std::error::Error>> {
         // "\n\n" → line 0 starts at 0, line 1 at 1, line 2 at 2
         let idx = LineIndex::new("\n\n");
         assert_eq!(idx.byte_to_position(0), (0, 0)); // first '\n'
@@ -374,5 +396,6 @@ mod tests {
         assert_eq!(idx.position_to_byte(2, 0), Some(2));
         // line 3 does not exist
         assert_eq!(idx.position_to_byte(3, 0), None);
+        Ok(())
     }
 }
