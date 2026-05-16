@@ -5,12 +5,13 @@
 //! result without changing any live behavior.
 //!
 //! These tests advance the cutover matrix state for semantic tokens from
-//! "shadowed" toward "runtime integration proof" by confirming that:
+//! "shadowed" toward a narrow live-pilot proof by confirming that:
 //!   - The live handler is called and its result is recorded in the receipt.
 //!   - Token count in the receipt matches the actual live provider count.
 //!   - `no_live_behavior_change` is always `true`.
-//!   - `shadow_state` is "shadowed".
-//!   - `compiler_receipt` records source-backed compiler token classes as shadow-only proof.
+//!   - `shadow_state` is "shadowed" for broad compiler-token cutover.
+//!   - `compiler_receipt` records a source-backed compiler token class that matches
+//!     the existing live parser/HIR token output.
 //!   - `notes` carry a human-readable proof trail.
 
 use crate::runtime::LspServer;
@@ -136,6 +137,11 @@ fn semantic_tokens_runtime_quality_receipt_shadow_state_is_shadowed() {
         Some("shadowed"),
         "shadow_state must be 'shadowed' — semantic tokens are not yet in partial-live cutover"
     );
+    assert_eq!(
+        receipt.get("live_pilot_state").and_then(Value::as_str),
+        Some("partial_live_source_backed"),
+        "live_pilot_state must record the narrow source-backed token-class pilot"
+    );
 }
 
 #[test]
@@ -167,8 +173,23 @@ fn semantic_tokens_runtime_quality_receipt_records_compiler_backed_token_class()
     );
     assert_eq!(
         compiler_receipt.get("fallback_state").and_then(Value::as_str),
-        Some("Shadow"),
-        "compiler-backed token classes must remain shadow-only"
+        Some("Primary"),
+        "source-backed compiler token class should be primary only after matching live token output"
+    );
+    assert_eq!(
+        compiler_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "compiler receipt must mark the narrow live pilot"
+    );
+    assert_eq!(
+        compiler_receipt.get("live_token_type").and_then(Value::as_str),
+        Some("function"),
+        "compiler receipt must identify the matched live token type"
+    );
+    assert_eq!(
+        compiler_receipt.get("live_token_match_count").and_then(Value::as_u64),
+        Some(1),
+        "compiler receipt must prove one matching live token span"
     );
     assert_eq!(
         compiler_receipt.get("source_backed_span_count").and_then(Value::as_u64),
@@ -179,6 +200,11 @@ fn semantic_tokens_runtime_quality_receipt_records_compiler_backed_token_class()
         compiler_receipt.get("no_live_behavior_change").and_then(Value::as_bool),
         Some(true),
         "compiler receipt must not broaden live semantic-token behavior"
+    );
+    assert_eq!(
+        compiler_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "compiler receipt must not emit new token output"
     );
 
     let shadow_receipt =
@@ -199,12 +225,12 @@ fn semantic_tokens_runtime_quality_receipt_records_compiler_backed_token_class()
     assert_eq!(trace.get("source").and_then(Value::as_str), Some("CompilerFact"));
     assert_eq!(trace.get("freshness").and_then(Value::as_str), Some("Fresh"));
     assert_eq!(trace.get("confidence").and_then(Value::as_str), Some("Medium"));
-    assert_eq!(trace.get("fallback_state").and_then(Value::as_str), Some("Shadow"));
+    assert_eq!(trace.get("fallback_state").and_then(Value::as_str), Some("Primary"));
 
     let claim_boundary = must_some(compiler_receipt.get("claim_boundary").and_then(Value::as_str));
     assert!(
-        claim_boundary.contains("parser/HIR semantic tokens remain live"),
-        "compiler receipt must preserve the live-provider claim boundary; got: {claim_boundary}"
+        claim_boundary.contains("matches existing parser/HIR live token output"),
+        "compiler receipt must preserve the live-pilot claim boundary; got: {claim_boundary}"
     );
 }
 
@@ -272,13 +298,17 @@ fn semantic_tokens_runtime_quality_receipt_notes_record_quality_proof() {
         "notes must contain 'semantic_tokens runtime proof'; got: {notes}"
     );
     assert!(
-        notes.contains("no live behavior change"),
-        "notes must confirm no live behavior change; got: {notes}"
+        notes.contains("no semantic-token output change"),
+        "notes must confirm no semantic-token output change; got: {notes}"
     );
     assert!(notes.contains("token_count="), "notes must include token_count metric; got: {notes}");
     assert!(
         notes.contains("compiler_backed_token_classes=1"),
         "notes must record the compiler-backed token class count; got: {notes}"
+    );
+    assert!(
+        notes.contains("compiler_live_pilot=1"),
+        "notes must record the narrow compiler-backed live pilot; got: {notes}"
     );
 }
 
@@ -319,6 +349,7 @@ fn semantic_tokens_runtime_quality_receipt_handles_minimal_document() {
         })))));
 
     assert_eq!(receipt.get("shadow_state").and_then(Value::as_str), Some("shadowed"),);
+    assert_eq!(receipt.get("live_pilot_state").and_then(Value::as_str), Some("shadowed"),);
     assert!(
         receipt.get("compiler_receipt").map(Value::is_null).unwrap_or(false),
         "compiler_receipt must remain null for minimal document"

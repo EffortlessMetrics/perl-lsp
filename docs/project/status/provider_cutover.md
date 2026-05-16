@@ -120,9 +120,11 @@ support claims, real-workspace receipts, and next PRs, see
 - Semantic tokens now have runtime integration quality receipts
   (`semantic_tokens_runtime_quality_receipt`) that exercise the live
   `textDocument/semanticTokens/full` handler and capture token count, shadow
-  state, and a quality-proof note. Nine BDD tests confirm receipt correctness,
-  no-live-behavior-change invariant, and token-count parity with the live
-  handler. Compiler-fact candidates remain pending staged cutover.
+  state, a narrow compiler-backed subroutine-declaration live-pilot span match,
+  and a quality-proof note. Eleven BDD tests confirm receipt correctness,
+  no-live-behavior-change invariant, no-token-output-change invariant, and
+  token-count parity with the live handler. Broader compiler-fact token
+  candidates remain pending staged cutover.
 - The Mojolicious scenario 34 semantic-token receipt records live token counts,
   LSP 5-tuple/span validity, expected source-backed token hits,
   dynamic-boundary string non-promotion, and edit freshness without broadening
@@ -183,7 +185,7 @@ the relevant receipt command.
 | Safe delete | `boundary-shadowed` | Safe-delete receipts trace exact static allow decisions, dynamic-boundary blockers, framework-generated blockers, stale compiler facts, runtime blocker UX notes, live-vs-compiler exact-static receipt data, Mojolicious scenario 36 file-delete warning UX, Dancer2 and RealBaseline symbol-level blocker/allowed request shapes, and `perl.previewSafeDelete` scoped no-edit UX before any live compiler-backed symbol delete edits | Actual symbol-delete edit cutover proof with rollback before any broader refactor migration |
 | Workspace symbols | `partial live source-backed` | Existing workspace index remains the live provider source; non-empty ready-index results can answer live with source-backed/high-confidence traces; semantic-shadow fixtures still trace fresh compiler, generated, dynamic-boundary, stale fact, and real-workspace quality candidates; runtime quality receipts capture source-backed ready-index counts/results; Mojolicious scenario 33 records live-provider noise, generated candidate gating, dynamic-boundary-shaped names, and edit freshness | Additional generated/dynamic/noise receipts before broader workspace-symbol expansion |
 | Document symbols | `partial live source-backed` | Fresh, high-confidence, source-backed parser-syntax `ExactAst` symbols can drive live `textDocument/documentSymbol` results with fallback retained for astless documents and gated generated/no-source, dynamic-boundary, stale, low-confidence, and ambiguous candidates. Semantic-shadow fixtures still trace explicit syntax, generated, dynamic-boundary, and stale fact candidates; runtime quality receipts capture live provider counts/results plus source-backed compiler traces; Mojolicious scenario 32 records real-workspace symbol quality, generated candidate counts, and edit freshness. | Generated-label proof plus additional real-workspace document-symbol receipts before generated, dynamic, or broader symbol cutover |
-| Semantic tokens | `shadowed` | Existing parser/token provider remains the live source; semantic-shadow fixtures trace parser/HIR, compiler-backed, dynamic-boundary, and stale fact candidates; runtime quality receipts capture live token count and shadow state without changing live behavior; Mojolicious scenario 34 and Dancer2 scenario 38 record project-shaped token/span validity and edit freshness | Narrow compiler-backed token-class proof before any live cutover |
+| Semantic tokens | `partial live token-class pilot` | Existing parser/token provider remains the broad live source; semantic-shadow fixtures trace parser/HIR, compiler-backed, dynamic-boundary, and stale fact candidates; runtime quality receipts capture live token count, shadow state, no-token-output-change proof, and one source-backed compiler-fact subroutine-declaration class matched to existing live `function` token output; Mojolicious scenario 34 and Dancer2 scenario 38 record project-shaped token/span validity and edit freshness | Additional compiler-backed token-class receipts for generated, dynamic, stale, and fallback boundaries before broader cutover |
 
 ## Cutover Rules
 

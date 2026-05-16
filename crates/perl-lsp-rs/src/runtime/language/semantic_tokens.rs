@@ -8,7 +8,9 @@ use super::super::*;
 use crate::protocol::req_uri;
 use crate::state::semantic_tokens_deadline;
 #[cfg(any(test, feature = "expose_lsp_test_api"))]
-use perl_semantic_facts::{Confidence, Provenance, ProviderFactFreshness, ProviderFactSourceKind};
+use perl_semantic_facts::{
+    Confidence, Provenance, ProviderFactFreshness, ProviderFactSourceKind, ProviderFallbackState,
+};
 use std::time::Instant;
 
 impl LspServer {
@@ -97,8 +99,17 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        let compiler_receipt = self.semantic_tokens_compiler_class_receipt(params.as_ref());
-        let live_provider_result = self.handle_semantic_tokens(params)?;
+        let live_provider_result = self.handle_semantic_tokens(params.clone())?;
+        let compiler_receipt = self
+            .semantic_tokens_compiler_class_receipt(params.as_ref(), live_provider_result.as_ref());
+        let live_pilot = compiler_receipt
+            .as_ref()
+            .and_then(|receipt| receipt.get("live_pilot"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let compiler_receipt_count = if compiler_receipt.is_some() { 1usize } else { 0usize };
+        let compiler_live_pilot_count = if live_pilot { 1usize } else { 0usize };
+        let live_pilot_state = if live_pilot { "partial_live_source_backed" } else { "shadowed" };
 
         // Each LSP semantic token encodes as 5 consecutive u32 values in the flat data array.
         let live_token_count = live_provider_result
@@ -113,25 +124,43 @@ impl LspServer {
             "live_provider_result": live_provider_result,
             "live_provider_count": live_token_count,
             "shadow_state": "shadowed",
+            "live_pilot_state": live_pilot_state,
             "compiler_receipt": compiler_receipt,
             "no_live_behavior_change": true,
+            "no_live_token_output_change": true,
             "notes": format!(
                 "semantic_tokens runtime proof: token_count={live_token_count}; \
                  parser/HIR classifications remain live provider; \
                  compiler_backed_token_classes={}; \
-                 compiler-fact candidates remain shadow-only; \
-                 no live behavior change",
-                usize::from(compiler_receipt.is_some())
+                 compiler_live_pilot={}; \
+                 compiler-fact candidates are live-pilot only when their source-backed span \
+                 already matches the live token stream; \
+                 no semantic-token output change",
+                compiler_receipt_count,
+                compiler_live_pilot_count
             )
         })))
     }
 
     #[cfg(any(test, feature = "expose_lsp_test_api"))]
-    fn semantic_tokens_compiler_class_receipt(&self, params: Option<&Value>) -> Option<Value> {
+    fn semantic_tokens_compiler_class_receipt(
+        &self,
+        params: Option<&Value>,
+        live_provider_result: Option<&Value>,
+    ) -> Option<Value> {
         let uri = req_uri(params?).ok()?;
         let documents = self.documents_guard();
         let doc = self.get_document(&documents, uri)?;
-        let candidate = semantic_token_subroutine_declaration_candidate(&doc.text)?;
+        let mut candidate = semantic_token_subroutine_declaration_candidate(&doc.text)?;
+        let live_pilot = semantic_tokens_live_contains_span(
+            live_provider_result,
+            candidate.source_span.as_ref(),
+            "function",
+        );
+        if live_pilot {
+            candidate.fallback_state = ProviderFallbackState::Primary;
+        }
+        let fallback_state = candidate.fallback_state;
         let candidates = vec![candidate];
         let span_report = crate::semantic_tokens::semantic_token_span_invariant_report(&candidates);
         let shadow = crate::semantic_tokens::semantic_token_source_shadow(
@@ -139,6 +168,12 @@ impl LspServer {
             candidates,
             "subroutine_declaration",
         );
+        let live_token_match_count = if live_pilot { 1usize } else { 0usize };
+        let claim_boundary = if live_pilot {
+            "narrow compiler-backed subroutine-declaration token class matches existing parser/HIR live token output; no new semantic-token output"
+        } else {
+            "compiler-backed token class receipt only; parser/HIR semantic tokens remain live"
+        };
 
         Some(json!({
             "token_class": "subroutine_declaration",
@@ -146,14 +181,18 @@ impl LspServer {
             "provenance": "SemanticAnalyzer",
             "confidence": "Medium",
             "freshness": "Fresh",
-            "fallback_state": "Shadow",
+            "fallback_state": provider_fallback_state_label(fallback_state),
             "shadow_state": "shadowed",
+            "live_pilot": live_pilot,
+            "live_token_type": "function",
+            "live_token_match_count": live_token_match_count,
             "candidate_count": span_report.candidate_count,
             "source_backed_span_count": span_report.source_backed_span_count,
             "missing_source_span_count": span_report.missing_source_span_count,
             "invalid_source_span_count": span_report.invalid_source_span_count,
             "no_live_behavior_change": true,
-            "claim_boundary": "compiler-backed token class receipt only; parser/HIR semantic tokens remain live",
+            "no_live_token_output_change": true,
+            "claim_boundary": claim_boundary,
             "shadow_receipt": shadow.receipt
         }))
     }
@@ -232,6 +271,85 @@ fn semantic_token_subroutine_declaration_candidate(
         ProviderFactFreshness::Fresh,
         span,
     ))
+}
+
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+fn semantic_tokens_live_contains_span(
+    live_provider_result: Option<&Value>,
+    source_span: Option<&crate::semantic_tokens::SemanticTokenShadowSpan>,
+    token_type: &str,
+) -> bool {
+    let Some(source_span) = source_span else {
+        return false;
+    };
+    let Some(expected_length) = source_span.single_line_lsp_length() else {
+        return false;
+    };
+    let Some(token_type_index) = semantic_token_type_index(token_type) else {
+        return false;
+    };
+    let Some(data) =
+        live_provider_result.and_then(|value| value.get("data")).and_then(Value::as_array)
+    else {
+        return false;
+    };
+
+    let mut current_line = 0_u32;
+    let mut current_start = 0_u32;
+    for token in data.chunks_exact(5) {
+        let Some(delta_line) = semantic_token_value_u32(&token[0]) else {
+            return false;
+        };
+        let Some(delta_start) = semantic_token_value_u32(&token[1]) else {
+            return false;
+        };
+        let Some(length) = semantic_token_value_u32(&token[2]) else {
+            return false;
+        };
+        let Some(actual_type_index) = semantic_token_value_u32(&token[3]) else {
+            return false;
+        };
+
+        if delta_line == 0 {
+            current_start = current_start.saturating_add(delta_start);
+        } else {
+            current_line = current_line.saturating_add(delta_line);
+            current_start = delta_start;
+        }
+
+        if current_line == source_span.range.start.line
+            && current_start == source_span.range.start.character
+            && actual_type_index == token_type_index
+            && length == expected_length
+        {
+            return true;
+        }
+    }
+
+    false
+}
+
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+fn semantic_token_type_index(token_type: &str) -> Option<u32> {
+    let legend = crate::semantic_tokens::legend();
+    legend.map.get(token_type).copied()
+}
+
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+fn semantic_token_value_u32(value: &Value) -> Option<u32> {
+    value.as_u64().and_then(|value| u32::try_from(value).ok())
+}
+
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+fn provider_fallback_state_label(state: ProviderFallbackState) -> &'static str {
+    match state {
+        ProviderFallbackState::Primary => "Primary",
+        ProviderFallbackState::Fallback => "Fallback",
+        ProviderFallbackState::Unavailable => "Unavailable",
+        ProviderFallbackState::Shadow => "Shadow",
+        ProviderFallbackState::Blocked => "Blocked",
+        _ => "Unknown",
+    }
 }
 
 #[cfg(any(test, feature = "expose_lsp_test_api"))]
