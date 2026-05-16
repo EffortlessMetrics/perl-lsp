@@ -49,6 +49,8 @@
 //! # }
 //! ```
 
+mod interpolation;
+
 use crate::ast::{Node, NodeKind};
 use crate::pragma_tracker::{PragmaQueryCursor, PragmaState};
 use perl_module::import::resolve_known_export_tag;
@@ -942,19 +944,10 @@ impl ScopeAnalyzer {
                 ancestors.pop();
             }
             NodeKind::String { value, interpolated } => {
-                if *interpolated
-                    || value.starts_with('"')
-                    || value.starts_with('`')
-                    || value.starts_with("qq")
-                    || value.starts_with("qx")
-                {
-                    self.mark_interpolated_variables_used(value, scope, context);
-                }
+                interpolation::handle_string(self, value, *interpolated, scope, context);
             }
             NodeKind::Heredoc { content, interpolated, .. } => {
-                if *interpolated {
-                    self.mark_interpolated_variables_used(content, scope, context);
-                }
+                interpolation::handle_heredoc(self, content, *interpolated, scope, context);
             }
             NodeKind::Assignment { lhs, rhs, op: _ } => {
                 // Handle assignment: LHS variable becomes initialized
@@ -1308,22 +1301,18 @@ impl ScopeAnalyzer {
 
             // Regex match operations set capture variables ($1, $2, ...) in the current scope.
             NodeKind::Match { expr, .. } => {
-                scope.has_regex_match.set(true);
-                ancestors.push(node);
-                self.analyze_node(expr, scope, ancestors, issues, context);
-                ancestors.pop();
+                interpolation::handle_match(self, node, expr, scope, ancestors, issues, context);
             }
 
             NodeKind::Substitution { expr, .. } => {
-                scope.has_regex_match.set(true);
-                ancestors.push(node);
-                self.analyze_node(expr, scope, ancestors, issues, context);
-                ancestors.pop();
+                interpolation::handle_substitution(
+                    self, node, expr, scope, ancestors, issues, context,
+                );
             }
 
             // Standalone regex (m// matching against $_) also sets capture variables.
             NodeKind::Regex { .. } => {
-                scope.has_regex_match.set(true);
+                interpolation::handle_regex(scope);
             }
 
             _ => {
