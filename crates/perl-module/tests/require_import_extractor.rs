@@ -213,3 +213,44 @@ fn require_without_import_produces_no_entries() -> Result<(), String> {
     }
     Ok(())
 }
+
+#[test]
+fn whitespace_around_import_method_call_is_tolerated() -> Result<(), String> {
+    let source = "require Foo::Bar;\nFoo::Bar  ->  import  ( 'alpha', \"beta\" );\n";
+    let entries = extract_require_import_symbols(source);
+
+    if entries.len() != 2 {
+        return Err(format!("expected 2 entries, got {}: {entries:?}", entries.len()));
+    }
+    let names: Vec<&str> = entries.iter().map(|e| e.symbol.as_str()).collect();
+    if !names.contains(&"alpha") || !names.contains(&"beta") {
+        return Err(format!("missing symbols in {names:?}"));
+    }
+    Ok(())
+}
+
+#[test]
+fn alternate_qw_delimiters_produce_entries() -> Result<(), String> {
+    let source =
+        "require Foo;\nFoo->import(qw/alpha beta/);\nrequire Bar;\nBar->import(qw[gamma delta]);\n";
+    let entries = extract_require_import_symbols(source);
+
+    let names: Vec<&str> = entries.iter().map(|e| e.symbol.as_str()).collect();
+    for expected in ["alpha", "beta", "gamma", "delta"] {
+        if !names.contains(&expected) {
+            return Err(format!("missing {expected:?} in {names:?}"));
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn malformed_module_separator_is_rejected() -> Result<(), String> {
+    let source = "require Foo::::Bar;\nFoo::::Bar->import('x');\n";
+    let entries = extract_require_import_symbols(source);
+
+    if !entries.is_empty() {
+        return Err(format!("expected malformed module name to be rejected, got {entries:?}"));
+    }
+    Ok(())
+}

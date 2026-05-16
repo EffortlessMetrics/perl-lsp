@@ -326,6 +326,10 @@ pub struct RequireImportEntry {
 /// - `require Module::Path;` followed by
 ///   `Module::Path->import("a", "b");`
 ///
+/// Whitespace around `->`, `import`, and the call parentheses is tolerated
+/// for literal receiver calls. Common `qw` delimiters (`()`, `[]`, `{}`, `<>`,
+/// and `/.../`) are recognised.
+///
 /// # Non-goals (not matched)
 ///
 /// - `require $var;` (dynamic module name — variable)
@@ -417,11 +421,19 @@ fn parse_literal_require_line(line: &str) -> Option<&str> {
     if !module.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_') {
         return None;
     }
-    // Must consist only of identifier chars and `::` separators.
-    if !module.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == ':') {
+    if !is_literal_module_name(module) {
         return None;
     }
     Some(module)
+}
+
+fn is_literal_module_name(module: &str) -> bool {
+    let mut segments = module.split("::");
+    segments.all(|segment| {
+        !segment.is_empty()
+            && segment.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+            && segment.chars().next().is_some_and(|ch| ch.is_ascii_alphabetic() || ch == '_')
+    })
 }
 
 /// Parse a line of the form `Module::Name->import(literal list);`.
@@ -430,9 +442,10 @@ fn parse_literal_require_line(line: &str) -> Option<&str> {
 /// expected module name with only literal arguments (`qw(...)`, `'x'`, `"x"`).
 /// Returns `None` when the line does not match or contains dynamic arguments.
 fn parse_literal_import_call(line: &str, expected_module: &str) -> Option<Vec<String>> {
-    // Line must start with `Module->import(` (possibly with whitespace).
-    let prefix = format!("{}->import(", expected_module);
-    let after_open = line.strip_prefix(prefix.as_str())?;
+    let after_module = line.strip_prefix(expected_module)?.trim_start();
+    let after_arrow = after_module.strip_prefix("->")?.trim_start();
+    let after_method = after_arrow.strip_prefix("import")?.trim_start();
+    let after_open = after_method.strip_prefix('(')?;
 
     // Find the matching close paren.
     let close_idx = after_open.rfind(')')?;
@@ -458,8 +471,7 @@ fn parse_literal_arg_list(args: &str) -> Option<Vec<String>> {
         return Some(Vec::new());
     }
 
-    // qw(...) form.
-    if let Some(inner) = trimmed.strip_prefix("qw(").and_then(|s| s.strip_suffix(')')) {
+    if let Some(inner) = parse_qw_literal(trimmed) {
         let words: Vec<String> =
             inner.split_whitespace().filter(|w| !w.is_empty()).map(|w| w.to_string()).collect();
         return Some(words);
@@ -493,6 +505,20 @@ fn parse_literal_arg_list(args: &str) -> Option<Vec<String>> {
     }
 
     Some(symbols)
+}
+
+fn parse_qw_literal(trimmed: &str) -> Option<&str> {
+    let after_qw = trimmed.strip_prefix("qw")?;
+    let delimiter = after_qw.chars().next()?;
+    let close = match delimiter {
+        '(' => ')',
+        '[' => ']',
+        '{' => '}',
+        '<' => '>',
+        '/' => '/',
+        _ => return None,
+    };
+    after_qw[delimiter.len_utf8()..].strip_suffix(close)
 }
 
 /// Return true when `line` indicates a new statement boundary that should stop
