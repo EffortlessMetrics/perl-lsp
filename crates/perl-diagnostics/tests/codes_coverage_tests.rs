@@ -952,6 +952,11 @@ fn parse_code_round_trip_all_variants_exhaustive() -> Result<(), Box<dyn std::er
         DiagnosticCode::CriticSeverity5,
     ];
 
+    assert_eq!(
+        all_variants.len(),
+        60,
+        "expected exhaustive DiagnosticCode variant list to cover 60 variants"
+    );
     for code in &all_variants {
         let s = code.as_str();
         let parsed = DiagnosticCode::parse_code(s);
@@ -1034,18 +1039,6 @@ fn severity_deprecated_codes_are_warning() -> Result<(), Box<dyn std::error::Err
     assert_eq!(DiagnosticCode::DeprecatedDefined.severity(), DiagnosticSeverity::Warning);
     assert_eq!(DiagnosticCode::DeprecatedArrayBase.severity(), DiagnosticSeverity::Warning);
     Ok(())
-}
-
-// ===========================================================================
-// Cross-cutting: all 60 variants covered by exhaustive arrays
-// ===========================================================================
-
-#[test]
-fn total_variant_count_is_60() {
-    // The exhaustive list in parse_code_round_trip_all_variants_exhaustive has 60 items.
-    // This test names them explicitly to verify the count hasn't drifted.
-    let count = 60_usize;
-    assert_eq!(count, 60, "expected 60 DiagnosticCode variants total");
 }
 
 #[test]
