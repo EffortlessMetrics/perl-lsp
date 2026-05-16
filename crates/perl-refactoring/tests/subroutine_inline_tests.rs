@@ -395,3 +395,342 @@ fn test_inline_call_with_paren_in_string_argument() {
         result
     );
 }
+
+// ---------------------------------------------------------------------------
+// InlineError Display formatting — covers all five variants
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_display_sub_not_found_includes_name() {
+    let err = InlineError::SubNotFound { name: "missing".to_string() };
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("missing") && msg.contains("not found"),
+        "SubNotFound Display should mention the name and 'not found'; got: {msg}"
+    );
+}
+
+#[test]
+fn test_display_recursive_includes_name() {
+    let err = InlineError::Recursive { name: "rec".to_string() };
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("rec") && msg.contains("recursive"),
+        "Recursive Display should mention the name and 'recursive'; got: {msg}"
+    );
+}
+
+#[test]
+fn test_display_too_large_includes_line_count() {
+    let err = InlineError::TooLarge { name: "big".to_string(), line_count: 123 };
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("big") && msg.contains("123"),
+        "TooLarge Display should include sub name and line count; got: {msg}"
+    );
+}
+
+#[test]
+fn test_display_multiple_returns_includes_count() {
+    let err = InlineError::MultipleReturns { name: "branch".to_string(), count: 3 };
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("branch") && msg.contains("3"),
+        "MultipleReturns Display should include sub name and count; got: {msg}"
+    );
+}
+
+#[test]
+fn test_display_call_site_parse_failed_includes_message() {
+    let err = InlineError::CallSiteParseFailed { message: "boom".to_string() };
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("boom") && msg.contains("call site"),
+        "CallSiteParseFailed Display should include the diagnostic; got: {msg}"
+    );
+}
+
+#[test]
+fn test_inline_error_is_std_error() {
+    // The std::error::Error impl is intentionally trait-only; this test confirms
+    // the bound holds so callers can use the error in `Box<dyn Error>` chains.
+    fn assert_error<E: std::error::Error>(_: &E) {}
+    let err = InlineError::SubNotFound { name: "x".to_string() };
+    assert_error(&err);
+}
+
+// ---------------------------------------------------------------------------
+// CallSiteParseFailed paths — both failure modes
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_call_expression_missing_sub_name_returns_parse_failed() {
+    // The call expression does not contain the sub name at all — extract_call_args
+    // must return CallSiteParseFailed rather than panicking or silently succeeding.
+    let source = r#"sub add {
+    my ($a, $b) = @_;
+    return $a + $b;
+}
+"#;
+    let inliner = SubInliner::new(source);
+    let result = inliner.inline_call("add", "wrong_name(1, 2)");
+    assert!(
+        matches!(result, Err(InlineError::CallSiteParseFailed { .. })),
+        "call expr missing sub name should return CallSiteParseFailed; got: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_call_expression_unmatched_paren_returns_parse_failed() {
+    // The call expression has '(' but no closing ')' — find_matching_paren returns
+    // None and extract_call_args surfaces CallSiteParseFailed.
+    let source = r#"sub add {
+    my ($a, $b) = @_;
+    return $a + $b;
+}
+"#;
+    let inliner = SubInliner::new(source);
+    let result = inliner.inline_call("add", "add(1, 2");
+    assert!(
+        matches!(result, Err(InlineError::CallSiteParseFailed { .. })),
+        "unmatched paren should return CallSiteParseFailed; got: {:?}",
+        result
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Call argument shapes — bare call, empty parens, nested parens, quoted commas
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_bare_call_without_parens_treated_as_no_args() {
+    // A bare call expression without parens (e.g. `now`) should be treated as
+    // a zero-argument call rather than a parse error.
+    let source = r#"sub now {
+    return time();
+}
+"#;
+    let inliner = SubInliner::new(source);
+    let result = inliner.inline_call("now", "now");
+    assert!(
+        result.is_ok(),
+        "bare call without parens should be treated as zero-arg call; got: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_empty_parens_call_treated_as_no_args() {
+    // `foo()` should produce no args without crashing or returning extra empty args.
+    let source = r#"sub greet {
+    return "hi";
+}
+"#;
+    let inliner = SubInliner::new(source);
+    let result = inliner.inline_call("greet", "greet()");
+    let inlined = must(result);
+    assert!(
+        inlined.contains("\"hi\""),
+        "empty-parens call should inline the return expression; got: {inlined}"
+    );
+}
+
+#[test]
+fn test_nested_paren_argument_is_kept_intact() {
+    // Argument contains nested parens — split_args must track paren depth so the
+    // single argument is not split at the inner comma.
+    let source = r#"sub passthrough {
+    my ($x) = @_;
+    return $x;
+}
+"#;
+    let inliner = SubInliner::new(source);
+    let result = inliner.inline_call("passthrough", "passthrough(foo(1, 2))");
+    let inlined = must(result);
+    assert!(
+        inlined.contains("foo(1, 2)"),
+        "nested-paren argument must be preserved as a single argument; got: {inlined}"
+    );
+}
+
+#[test]
+fn test_argument_with_comma_in_double_quoted_string() {
+    // Commas inside double-quoted strings must not split the argument list.
+    let source = r#"sub describe {
+    my ($a, $b) = @_;
+    return $a . $b;
+}
+"#;
+    let inliner = SubInliner::new(source);
+    let result = inliner.inline_call("describe", r#"describe("one, two", "three")"#);
+    let inlined = must(result);
+    assert!(
+        inlined.contains("\"one, two\""),
+        "comma inside double-quoted argument must not be treated as a separator; got: {inlined}"
+    );
+}
+
+#[test]
+fn test_argument_with_comma_in_single_quoted_string() {
+    // Same protection must apply for single-quoted strings.
+    let source = r#"sub describe {
+    my ($a, $b) = @_;
+    return $a . $b;
+}
+"#;
+    let inliner = SubInliner::new(source);
+    let result = inliner.inline_call("describe", "describe('one, two', 'three')");
+    let inlined = must(result);
+    assert!(
+        inlined.contains("'one, two'"),
+        "comma inside single-quoted argument must not be treated as a separator; got: {inlined}"
+    );
+}
+
+#[test]
+fn test_argument_with_escaped_quote_in_string() {
+    // A backslash-escaped quote inside an argument must not terminate the string,
+    // so split_args still sees the comma as inside the quoted region.
+    let source = r#"sub describe {
+    my ($a, $b) = @_;
+    return $a . $b;
+}
+"#;
+    let inliner = SubInliner::new(source);
+    let result =
+        inliner.inline_call("describe", r#"describe("with \" quote, still inside", "tail")"#);
+    let inlined = must(result);
+    assert!(
+        inlined.contains("\"with \\\" quote, still inside\""),
+        "escaped quote inside an argument must not end the string; got: {inlined}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Sub-body shapes — no param line, no return, side-effect keyword variants
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_sub_without_param_line_inlines_zero_args() {
+    // A sub with no `my (...) = @_;` line should still be inlineable when the
+    // call has no arguments — extract_params_line returns an empty Vec.
+    let source = r#"sub literal {
+    return 42;
+}
+"#;
+    let inliner = SubInliner::new(source);
+    let result = inliner.inline_call("literal", "literal()");
+    let inlined = must(result);
+    assert!(
+        inlined.contains("42"),
+        "param-less sub should inline its return expression; got: {inlined}"
+    );
+}
+
+#[test]
+fn test_sub_without_return_uses_trimmed_body_as_expression() {
+    // If the body has no `return` statement, extract_return_expr falls through to
+    // the trimmed body. The result should reflect the body's expression directly.
+    let source = r#"sub greet {
+    "static";
+}
+"#;
+    let inliner = SubInliner::new(source);
+    let result = inliner.inline_call("greet", "greet()");
+    let inlined = must(result);
+    assert!(
+        inlined.contains("\"static\""),
+        "body without an explicit `return` should still produce inlined text; got: {inlined}"
+    );
+}
+
+#[test]
+fn test_warn_keyword_triggers_side_effect_warning() {
+    let source = r#"sub log_msg {
+    my ($msg) = @_;
+    warn "[debug] $msg";
+    return 1;
+}
+"#;
+    let inliner = SubInliner::new(source);
+    let result = inliner.inline_call_with_warnings("log_msg", "log_msg(\"hi\")");
+    let (_, warnings) = must(result);
+    assert!(!warnings.is_empty(), "warn keyword should produce a side-effect warning");
+}
+
+#[test]
+fn test_die_keyword_triggers_side_effect_warning() {
+    let source = r#"sub assert_ok {
+    my ($cond) = @_;
+    die "fail" unless $cond;
+    return 1;
+}
+"#;
+    let inliner = SubInliner::new(source);
+    let result = inliner.inline_call_with_warnings("assert_ok", "assert_ok(1)");
+    let (_, warnings) = must(result);
+    assert!(!warnings.is_empty(), "die keyword should produce a side-effect warning");
+}
+
+#[test]
+fn test_open_keyword_triggers_side_effect_warning() {
+    let source = r#"sub read_file {
+    my ($path) = @_;
+    open my $fh, '<', $path;
+    return 1;
+}
+"#;
+    let inliner = SubInliner::new(source);
+    let result = inliner.inline_call_with_warnings("read_file", "read_file(\"/tmp/x\")");
+    let (_, warnings) = must(result);
+    assert!(!warnings.is_empty(), "open keyword should produce a side-effect warning");
+}
+
+#[test]
+fn test_pure_sub_produces_no_warnings() {
+    // A sub that performs no side-effect operations should yield zero warnings,
+    // exercising the !has_side_effects branch in inline_call_inner.
+    let source = r#"sub square {
+    my ($n) = @_;
+    return $n * $n;
+}
+"#;
+    let inliner = SubInliner::new(source);
+    let result = inliner.inline_call_with_warnings("square", "square(4)");
+    let (_, warnings) = must(result);
+    assert!(warnings.is_empty(), "pure sub should not produce warnings; got: {:?}", warnings);
+}
+
+// ---------------------------------------------------------------------------
+// analyze_sub_for_inlining — direct exposure of the analysis result shape
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_analyze_exposes_params_and_body() {
+    // analyze_sub_for_inlining should report the parameter list and a body that
+    // has the parameter line stripped.
+    let source = r#"sub multiply {
+    my ($x, $y) = @_;
+    return $x * $y;
+}
+"#;
+    let analysis = must(analyze_sub_for_inlining(source, "multiply"));
+    let InlineAbility::Ok { params, body, has_side_effects } = analysis;
+    assert_eq!(params, vec!["x".to_string(), "y".to_string()]);
+    assert!(!body.contains("= @_"), "param line should be stripped from body; got: {body}");
+    assert!(!has_side_effects, "pure multiply should not flag side effects");
+}
+
+#[test]
+fn test_analyze_flags_side_effects_for_print() {
+    let source = r#"sub trace {
+    my ($x) = @_;
+    print "trace: $x\n";
+    return $x;
+}
+"#;
+    let analysis = must(analyze_sub_for_inlining(source, "trace"));
+    let InlineAbility::Ok { has_side_effects, .. } = analysis;
+    assert!(has_side_effects, "analyze should flag print as a side effect");
+}
