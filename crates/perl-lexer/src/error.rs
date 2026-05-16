@@ -56,3 +56,74 @@ impl LexerError {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::LexerError;
+
+    // --- variants with positions ---
+
+    #[test]
+    fn lexer_error_unterminated_string_returns_position() {
+        let err = LexerError::UnterminatedString { position: 7 };
+        assert_eq!(err.position(), Some(7));
+    }
+
+    #[test]
+    fn lexer_error_unterminated_regex_returns_position() {
+        let err = LexerError::UnterminatedRegex { position: 42 };
+        assert_eq!(err.position(), Some(42));
+    }
+
+    #[test]
+    fn lexer_error_invalid_escape_returns_position() {
+        let err = LexerError::InvalidEscape { char: 'z', position: 15 };
+        assert_eq!(err.position(), Some(15));
+    }
+
+    #[test]
+    fn lexer_error_invalid_number_returns_position() {
+        let err = LexerError::InvalidNumber { position: 3, reason: "bad digit".into() };
+        assert_eq!(err.position(), Some(3));
+    }
+
+    #[test]
+    fn lexer_error_unexpected_char_returns_position() {
+        let err = LexerError::UnexpectedChar { char: '@', position: 99 };
+        assert_eq!(err.position(), Some(99));
+    }
+
+    #[test]
+    fn lexer_error_invalid_utf8_returns_position() {
+        let err = LexerError::InvalidUtf8 { position: 0 };
+        assert_eq!(err.position(), Some(0));
+    }
+
+    #[test]
+    fn lexer_error_heredoc_error_returns_position() {
+        let err = LexerError::HeredocError { position: 256, reason: "no terminator".into() };
+        assert_eq!(err.position(), Some(256));
+    }
+
+    // --- variant without a position ---
+
+    #[test]
+    fn lexer_error_other_returns_none() {
+        let err = LexerError::Other("something went wrong".into());
+        assert_eq!(err.position(), None);
+    }
+
+    // --- edge values ---
+
+    #[test]
+    fn lexer_error_position_zero_is_returned_correctly() {
+        let err = LexerError::UnterminatedString { position: 0 };
+        assert_eq!(err.position(), Some(0));
+    }
+
+    #[test]
+    fn lexer_error_position_usize_max_is_returned_correctly() {
+        let err = LexerError::UnterminatedString { position: usize::MAX };
+        assert_eq!(err.position(), Some(usize::MAX));
+    }
+}
