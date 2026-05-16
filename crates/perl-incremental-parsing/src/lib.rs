@@ -36,8 +36,9 @@ mod tests {
     // -------------------------------------------------------------------------
 
     #[test]
-    fn max_edit_size_is_64kb() {
+    fn max_edit_size_is_64kb() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(MAX_EDIT_SIZE, 64 * 1024);
+        Ok(())
     }
 
     // -------------------------------------------------------------------------
@@ -45,45 +46,51 @@ mod tests {
     // -------------------------------------------------------------------------
 
     #[test]
-    fn line_index_byte_zero_is_line_zero_col_zero() {
+    fn line_index_byte_zero_is_line_zero_col_zero() -> Result<(), Box<dyn std::error::Error>> {
         let li = LineIndex::new("hello");
         assert_eq!(li.byte_to_position(0), (0, 0));
+        Ok(())
     }
 
     #[test]
-    fn line_index_position_to_byte_last_column_on_last_line() {
+    fn line_index_position_to_byte_last_column_on_last_line()
+    -> Result<(), Box<dyn std::error::Error>> {
         // "ab" — last column is col 2 (one past 'b'), still within the single line
         let li = LineIndex::new("ab");
         assert_eq!(li.position_to_byte(0, 2), Some(2));
         // col 3 is beyond the text length → None
         assert_eq!(li.position_to_byte(0, 3), None);
+        Ok(())
     }
 
     #[test]
-    fn line_index_crlf_line_boundary() {
+    fn line_index_crlf_line_boundary() -> Result<(), Box<dyn std::error::Error>> {
         // "\r\n" counts as two bytes; only '\n' starts the new line.
         // "a\r\nb" — '\n' is at byte 2, so line 1 starts at byte 3.
         let li = LineIndex::new("a\r\nb");
         assert_eq!(li.byte_to_position(3), (1, 0));
         assert_eq!(li.position_to_byte(1, 0), Some(3));
+        Ok(())
     }
 
     #[test]
-    fn line_index_empty_string_position_to_byte() {
+    fn line_index_empty_string_position_to_byte() -> Result<(), Box<dyn std::error::Error>> {
         let li = LineIndex::new("");
         // Only line 0 exists with zero width; col 0 maps to byte 0.
         assert_eq!(li.position_to_byte(0, 0), Some(0));
         // No line 1.
         assert_eq!(li.position_to_byte(1, 0), None);
+        Ok(())
     }
 
     #[test]
-    fn line_index_trailing_newline_empty_final_line() {
+    fn line_index_trailing_newline_empty_final_line() -> Result<(), Box<dyn std::error::Error>> {
         // "x\n" — line 1 is empty; col 0 maps to byte 2 (end of string).
         let li = LineIndex::new("x\n");
         assert_eq!(li.position_to_byte(1, 0), Some(2));
         // col 1 is beyond the empty final line → None
         assert_eq!(li.position_to_byte(1, 1), None);
+        Ok(())
     }
 
     // -------------------------------------------------------------------------
@@ -91,7 +98,8 @@ mod tests {
     // -------------------------------------------------------------------------
 
     #[test]
-    fn edit_from_lsp_change_returns_none_for_out_of_range_line() {
+    fn edit_from_lsp_change_returns_none_for_out_of_range_line()
+    -> Result<(), Box<dyn std::error::Error>> {
         use lsp_types::{Range as LspRange, TextDocumentContentChangeEvent};
 
         let old = "hello";
@@ -106,6 +114,7 @@ mod tests {
         };
         let result = Edit::from_lsp_change(&change, &li, old);
         assert!(result.is_none());
+        Ok(())
     }
 
     // -------------------------------------------------------------------------
@@ -113,13 +122,14 @@ mod tests {
     // -------------------------------------------------------------------------
 
     #[test]
-    fn incremental_state_clone_equals_original() {
+    fn incremental_state_clone_equals_original() -> Result<(), Box<dyn std::error::Error>> {
         let src = "my $x = 1;";
         let state = IncrementalState::new(src.to_string());
         let cloned = state.clone();
         assert_eq!(cloned.source, state.source);
         assert_eq!(cloned.tokens.len(), state.tokens.len());
         assert_eq!(cloned.lex_checkpoints.len(), state.lex_checkpoints.len());
+        Ok(())
     }
 
     // -------------------------------------------------------------------------
