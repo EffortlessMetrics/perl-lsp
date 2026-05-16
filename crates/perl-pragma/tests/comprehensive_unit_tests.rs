@@ -716,10 +716,12 @@ fn feature_bundle_can_be_reenabled_after_no_feature_all() -> Result<(), Box<dyn 
 }
 
 #[test]
-fn no_feature_without_args_clears_bundle_features() -> Result<(), Box<dyn std::error::Error>> {
+fn no_feature_without_args_restores_default_features() -> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![use_node("v5.40", &[], 0, 12), no_node("feature", &[], 13, 23)]);
     let map = PragmaTracker::build(&ast);
     let state = &map[1].1;
+    assert!(state.has_feature("smartmatch"));
+    assert!(state.has_feature("indirect"));
     assert!(!state.has_feature("say"));
     assert!(!state.has_feature("switch"));
     assert!(!state.has_feature("builtin"));
@@ -1603,11 +1605,11 @@ fn v5_14_enables_unicode_strings() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn v5_26_enables_unicode_eval_and_postfix_deref() -> Result<(), Box<dyn std::error::Error>> {
+fn v5_26_enables_unicode_eval_and_postderef_qq() -> Result<(), Box<dyn std::error::Error>> {
     let features = features_enabled_by_version(PerlVersion::new(5, 26));
     assert!(features.contains(&"say"), "v5.26 should retain v5.10 features");
     assert!(features.contains(&"unicode_strings"), "v5.26 should retain v5.14 features");
-    assert!(features.contains(&"postfix_deref"), "v5.26 must enable 'postfix_deref'");
+    assert!(features.contains(&"postderef_qq"), "v5.26 must enable 'postderef_qq'");
     assert!(
         features.contains(&"unicode_eval"),
         "v5.26 must enable 'unicode_eval' (disables /xx is separate feature)"
@@ -1616,18 +1618,18 @@ fn v5_26_enables_unicode_eval_and_postfix_deref() -> Result<(), Box<dyn std::err
 }
 
 #[test]
-fn v5_36_enables_signatures_defer_isa() -> Result<(), Box<dyn std::error::Error>> {
+fn v5_36_enables_signatures_and_isa() -> Result<(), Box<dyn std::error::Error>> {
     let features = features_enabled_by_version(PerlVersion::new(5, 36));
     assert!(features.contains(&"signatures"), "v5.36 must enable 'signatures'");
-    assert!(features.contains(&"defer"), "v5.36 must enable 'defer'");
     assert!(features.contains(&"isa"), "v5.36 must enable 'isa'");
+    assert!(!features.contains(&"switch"), "v5.36 must omit removed 'switch'");
     Ok(())
 }
 
 #[test]
-fn v5_40_enables_builtin() -> Result<(), Box<dyn std::error::Error>> {
+fn v5_40_enables_module_true() -> Result<(), Box<dyn std::error::Error>> {
     let features = features_enabled_by_version(PerlVersion::new(5, 40));
-    assert!(features.contains(&"builtin"), "v5.40 must enable 'builtin'");
+    assert!(features.contains(&"module_true"), "v5.40 must enable 'module_true'");
     // Should also retain all v5.36 features
     assert!(features.contains(&"signatures"), "v5.40 should retain 'signatures'");
     assert!(features.contains(&"isa"), "v5.40 should retain 'isa'");
@@ -1636,20 +1638,20 @@ fn v5_40_enables_builtin() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn v5_12_retains_switch_from_v5_10() -> Result<(), Box<dyn std::error::Error>> {
-    // switch was inherited from v5.10 and not removed until v5.38
+    // switch was inherited from v5.10 and not removed until v5.36
     let features_v12 = features_enabled_by_version(PerlVersion::new(5, 12));
     assert!(
         features_v12.contains(&"switch"),
-        "v5.12 should include 'switch' (inherited from v5.10, removed at v5.38)"
+        "v5.12 should include 'switch' (inherited from v5.10, removed at v5.36)"
     );
     Ok(())
 }
 
 #[test]
-fn v5_38_removes_switch() -> Result<(), Box<dyn std::error::Error>> {
-    // switch (given/when) was removed from the bundle in v5.38
-    let features = features_enabled_by_version(PerlVersion::new(5, 38));
-    assert!(!features.contains(&"switch"), "v5.38 should not include 'switch' (removed)");
+fn v5_36_removes_switch() -> Result<(), Box<dyn std::error::Error>> {
+    // switch (given/when) is removed from bundles starting in v5.36.
+    let features = features_enabled_by_version(PerlVersion::new(5, 36));
+    assert!(!features.contains(&"switch"), "v5.36 should not include 'switch' (removed)");
     Ok(())
 }
 
@@ -1711,13 +1713,13 @@ fn use_v5_10_state_has_say_state_switch() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
-fn use_v5_36_state_has_signatures_defer_isa() -> Result<(), Box<dyn std::error::Error>> {
+fn use_v5_36_state_has_signatures_and_isa() -> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![use_node("v5.36", &[], 0, 12)]);
     let map = PragmaTracker::build(&ast);
     let state = &map[0].1;
     assert!(state.has_feature("signatures"), "v5.36 state must have 'signatures'");
-    assert!(state.has_feature("defer"), "v5.36 state must have 'defer'");
     assert!(state.has_feature("isa"), "v5.36 state must have 'isa'");
+    assert!(!state.has_feature("switch"), "v5.36 state must not have removed switch");
     // v5.36 also implies strict and warnings
     assert!(state.strict_vars, "v5.36 implies strict");
     assert!(state.warnings, "v5.36 implies warnings");
@@ -1725,11 +1727,16 @@ fn use_v5_36_state_has_signatures_defer_isa() -> Result<(), Box<dyn std::error::
 }
 
 #[test]
-fn use_v5_40_state_has_builtin() -> Result<(), Box<dyn std::error::Error>> {
+fn use_v5_40_state_has_module_true_alias_builtin() -> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![use_node("v5.40", &[], 0, 12)]);
     let map = PragmaTracker::build(&ast);
     let state = &map[0].1;
-    assert!(state.has_feature("builtin"), "v5.40 state must have 'builtin'");
+    assert!(state.has_feature("module_true"), "v5.40 state must have 'module_true'");
+    assert!(state.has_feature("builtin"), "legacy builtin query should alias module_true");
+    assert!(
+        state.has_feature("postfix_deref"),
+        "legacy postfix_deref query should alias postderef_qq"
+    );
     assert!(!state.has_builtin_import("floor"), "v5.40 should not imply lexical builtin imports");
     assert!(state.builtin_imports.is_empty(), "v5.40 should not populate lexical builtin imports");
     Ok(())
@@ -2049,5 +2056,64 @@ fn package_block_pragma_inside_is_visible_at_inner_offset() -> Result<(), Box<dy
 
     let inside = PragmaTracker::state_for_offset(&map, 30);
     assert!(inside.strict_vars, "strict_vars declared inside package block must be visible");
+    Ok(())
+}
+
+#[test]
+fn v5_42_removes_smartmatch_and_apostrophe_package_separator()
+-> Result<(), Box<dyn std::error::Error>> {
+    let features = features_enabled_by_version(PerlVersion::new(5, 42));
+    assert!(!features.contains(&"smartmatch"));
+    assert!(!features.contains(&"apostrophe_as_package_separator"));
+    assert!(features.contains(&"module_true"));
+    assert!(features.contains(&"try"));
+    Ok(())
+}
+
+#[test]
+fn no_feature_without_args_restores_default_feature_set_after_all()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast =
+        program(vec![use_node("feature", &["':all'"], 0, 20), no_node("feature", &[], 21, 32)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+    assert!(state.has_feature("smartmatch"));
+    assert!(state.has_feature("indirect"));
+    assert!(!state.has_feature("say"));
+    assert!(!state.has_feature("module_true"));
+    Ok(())
+}
+
+#[test]
+fn use_feature_default_enables_default_features() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("feature", &["':default'"], 0, 24)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+
+    assert!(state.has_feature("smartmatch"));
+    assert!(state.has_feature("indirect"));
+    assert!(state.has_feature("multidimensional"));
+    assert!(state.has_feature("bareword_filehandles"));
+    assert!(state.has_feature("apostrophe_as_package_separator"));
+    assert!(!state.has_feature("say"));
+    Ok(())
+}
+
+#[test]
+fn no_feature_default_disables_only_default_features() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("feature", &["':all'"], 0, 20),
+        no_node("feature", &["':default'"], 21, 42),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+
+    assert!(!state.has_feature("smartmatch"));
+    assert!(!state.has_feature("indirect"));
+    assert!(!state.has_feature("multidimensional"));
+    assert!(!state.has_feature("bareword_filehandles"));
+    assert!(!state.has_feature("apostrophe_as_package_separator"));
+    assert!(state.has_feature("say"));
+    assert!(state.has_feature("module_true"));
     Ok(())
 }

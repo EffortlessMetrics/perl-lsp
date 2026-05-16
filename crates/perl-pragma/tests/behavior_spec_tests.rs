@@ -205,15 +205,15 @@ fn given_use_feature_signatures_when_querying_state_then_effective_strict_modes_
 }
 
 #[test]
-fn given_use_v5_38_when_querying_state_then_switch_feature_is_not_available_but_modern_features_are()
- {
+fn given_use_v5_38_when_querying_state_then_removed_features_are_absent_but_modern_features_are() {
     let ast = program(vec![use_node("v5.38", &[], 0, 10)]);
     let map = PragmaTracker::build(&ast);
 
     let state = PragmaTracker::state_for_offset(&map, 5);
-    assert!(state.has_feature("class"));
-    assert!(state.has_feature("method"));
+    assert!(state.has_feature("module_true"));
+    assert!(state.has_feature("signatures"));
     assert!(!state.has_feature("switch"));
+    assert!(!state.has_feature("bareword_filehandles"));
 }
 
 #[test]
