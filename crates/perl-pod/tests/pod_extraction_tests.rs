@@ -609,7 +609,7 @@ fn for_directive_starts_pod_mode() {
 /// an extra newline when the body is still empty.
 #[test]
 fn item_as_first_line_in_section_no_leading_newline() {
-    let source = "=head2 options\n\n=over 4\n\n=item alpha\n\nFirst item.\n\n=back\n\n=cut\n";
+    let source = "=head2 options\n\n=item alpha\n\nFirst item.\n\n=cut\n";
     let doc = extract_pod(source);
     let method_doc = doc.methods.get("options").map(String::as_str).unwrap_or("");
     // The item should appear but must not start with a blank line
@@ -647,6 +647,10 @@ fn end_directive_inside_pod_is_skipped() {
     let doc = extract_pod(source);
     let name = doc.name.as_deref().unwrap_or("");
     assert!(name.contains("My::Module - real"), "name should be captured before =end; got: {name}");
+    assert!(
+        !name.contains("=end"),
+        "the =end directive line should not appear in name; got: {name}"
+    );
 }
 
 /// `=for` inside an active POD block hits the skip-directive branch (line 146).
