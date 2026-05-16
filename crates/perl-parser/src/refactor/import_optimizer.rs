@@ -247,6 +247,17 @@ fn get_known_module_exports(module: &str) -> Option<Vec<&'static str>> {
     }
 }
 
+fn strip_non_code_content(
+    content: &str,
+    string_literal_re: &Regex,
+    regex_literal_re: &Regex,
+    comment_re: &Regex,
+) -> String {
+    let stripped = string_literal_re.replace_all(content, " ").to_string();
+    let stripped = regex_literal_re.replace_all(&stripped, " ").to_string();
+    comment_re.replace_all(&stripped, " ").to_string()
+}
+
 impl ImportOptimizer {
     /// Create a new import optimizer for Analyze-stage refactorings.
     ///
@@ -345,19 +356,18 @@ impl ImportOptimizer {
             })
             .collect::<Vec<_>>();
 
-        // Build content without `use` lines for symbol usage detection
+        // Build stripped non-import content for symbol usage detection.
         let non_use_content = content
             .lines()
-            .filter(
-                |line| {
-                    !line.trim_start().starts_with("use ") && !line.trim_start().starts_with("#")
-                }, // Exclude comment lines
-            )
+            .filter(|line| !line.trim_start().starts_with("use "))
             .collect::<Vec<_>>()
-            .join(
-                "
-",
-            );
+            .join("\n");
+        let non_use_content = strip_non_code_content(
+            &non_use_content,
+            string_literal_re,
+            regex_literal_re,
+            comment_re,
+        );
 
         // Determine unused symbols for each import entry
         let mut unused_imports = Vec::new();
@@ -373,22 +383,7 @@ impl ImportOptimizer {
                     }
                 }
             } else {
-                // Skip pragma modules like strict, warnings, etc.
-                let is_pragma = matches!(
-                    imp.module.as_str(),
-                    "strict"
-                        | "warnings"
-                        | "utf8"
-                        | "bytes"
-                        | "integer"
-                        | "locale"
-                        | "overload"
-                        | "sigtrap"
-                        | "subs"
-                        | "vars"
-                );
-
-                if !is_pragma {
+                if !is_pragma_module(&imp.module) {
                     // For bare imports (without qw()), check if the module or any of its known exports are used
                     let (is_known_module, known_exports) =
                         match get_known_module_exports(&imp.module) {
@@ -444,10 +439,9 @@ impl ImportOptimizer {
         let imported_modules: BTreeSet<String> =
             imports.iter().map(|imp| imp.module.clone()).collect();
 
-        // Strip strings and comments before scanning for Module::symbol patterns
-        let stripped = string_literal_re.replace_all(content, " ").to_string();
-        let stripped = regex_literal_re.replace_all(&stripped, " ").to_string();
-        let stripped = comment_re.replace_all(&stripped, " ").to_string();
+        // Strip strings and comments before scanning for Module::symbol patterns.
+        let stripped =
+            strip_non_code_content(content, string_literal_re, regex_literal_re, comment_re);
         let mut usage_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
         for caps in module_usage_re.captures_iter(&stripped) {
             // Only process if both capture groups matched
