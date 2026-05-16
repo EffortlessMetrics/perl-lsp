@@ -920,3 +920,303 @@ impl fmt::Display for DiagnosticCategory {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    /// All defined codes in declaration order — used as the exhaustive variant list.
+    const ALL_CODES: &[DiagnosticCode] = &[
+        DiagnosticCode::ParseError,
+        DiagnosticCode::SyntaxError,
+        DiagnosticCode::UnexpectedEof,
+        DiagnosticCode::MissingStrict,
+        DiagnosticCode::MissingWarnings,
+        DiagnosticCode::UnusedVariable,
+        DiagnosticCode::UndefinedVariable,
+        DiagnosticCode::VariableShadowing,
+        DiagnosticCode::VariableRedeclaration,
+        DiagnosticCode::DuplicateParameter,
+        DiagnosticCode::ParameterShadowsGlobal,
+        DiagnosticCode::UnusedParameter,
+        DiagnosticCode::UnquotedBareword,
+        DiagnosticCode::UninitializedVariable,
+        DiagnosticCode::MisspelledPragma,
+        DiagnosticCode::CaptureVarWithoutRegexMatch,
+        DiagnosticCode::MissingPackageDeclaration,
+        DiagnosticCode::DuplicatePackage,
+        DiagnosticCode::DuplicateSubroutine,
+        DiagnosticCode::MissingReturn,
+        DiagnosticCode::InvalidPrototype,
+        DiagnosticCode::RoleConflict,
+        DiagnosticCode::MissingPodCoverage,
+        DiagnosticCode::BarewordFilehandle,
+        DiagnosticCode::TwoArgOpen,
+        DiagnosticCode::ImplicitReturn,
+        DiagnosticCode::AssignmentInCondition,
+        DiagnosticCode::NumericComparisonWithUndef,
+        DiagnosticCode::PrintfFormatMismatch,
+        DiagnosticCode::UnreachableCode,
+        DiagnosticCode::EvalErrorFlow,
+        DiagnosticCode::DuplicateHashKey,
+        DiagnosticCode::GotoUndefinedLabel,
+        DiagnosticCode::LoopControlUndefinedLabel,
+        DiagnosticCode::DeprecatedDefined,
+        DiagnosticCode::DeprecatedArrayBase,
+        DiagnosticCode::PhaseScopedStrictPragma,
+        DiagnosticCode::PhaseScopedWarningsPragma,
+        DiagnosticCode::SecurityStringEval,
+        DiagnosticCode::SecurityBacktickExec,
+        DiagnosticCode::SecuritySignalHandler,
+        DiagnosticCode::SecuritySystemCall,
+        DiagnosticCode::SecurityExecCall,
+        DiagnosticCode::SecurityPipeOpen,
+        DiagnosticCode::SecurityReadpipe,
+        DiagnosticCode::UnusedImport,
+        DiagnosticCode::ModuleNotFound,
+        DiagnosticCode::HeredocInFormat,
+        DiagnosticCode::HeredocInBegin,
+        DiagnosticCode::HeredocDynamicDelimiter,
+        DiagnosticCode::HeredocInSourceFilter,
+        DiagnosticCode::HeredocInRegexCode,
+        DiagnosticCode::HeredocInEval,
+        DiagnosticCode::HeredocTiedHandle,
+        DiagnosticCode::VersionIncompatFeature,
+        DiagnosticCode::CriticSeverity1,
+        DiagnosticCode::CriticSeverity2,
+        DiagnosticCode::CriticSeverity3,
+        DiagnosticCode::CriticSeverity4,
+        DiagnosticCode::CriticSeverity5,
+    ];
+
+    // -------------------------------------------------------------------------
+    // DiagnosticCode::parse_code — round-trip and error-path tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_parse_code_roundtrip_all_variants() {
+        for &code in ALL_CODES {
+            let s = code.as_str();
+            let parsed = DiagnosticCode::parse_code(s);
+            assert_eq!(parsed, Some(code), "parse_code({s:?}) should return Some({code:?})");
+        }
+    }
+
+    #[test]
+    fn test_parse_code_invalid_prefix_returns_none() {
+        assert_eq!(DiagnosticCode::parse_code("XX999"), None);
+    }
+
+    #[test]
+    fn test_parse_code_empty_string_returns_none() {
+        assert_eq!(DiagnosticCode::parse_code(""), None);
+    }
+
+    #[test]
+    fn test_parse_code_lowercase_is_case_sensitive_returns_none() {
+        // parse_code uses exact string matching — lowercase must return None.
+        assert_eq!(DiagnosticCode::parse_code("pl001"), None);
+    }
+
+    #[test]
+    fn test_parse_code_whitespace_prefix_returns_none() {
+        // Leading/trailing whitespace is not stripped — must return None.
+        assert_eq!(DiagnosticCode::parse_code(" PL001 "), None);
+    }
+
+    #[test]
+    fn test_parse_code_whitespace_only_returns_none() {
+        assert_eq!(DiagnosticCode::parse_code("   "), None);
+    }
+
+    // -------------------------------------------------------------------------
+    // DiagnosticCode::category — exhaustive category mapping
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_category_parser_codes() {
+        assert_eq!(DiagnosticCode::ParseError.category(), DiagnosticCategory::Parser);
+        assert_eq!(DiagnosticCode::SyntaxError.category(), DiagnosticCategory::Parser);
+        assert_eq!(DiagnosticCode::UnexpectedEof.category(), DiagnosticCategory::Parser);
+    }
+
+    #[test]
+    fn test_category_strict_warnings_codes() {
+        let expected = DiagnosticCategory::StrictWarnings;
+        assert_eq!(DiagnosticCode::MissingStrict.category(), expected);
+        assert_eq!(DiagnosticCode::MissingWarnings.category(), expected);
+        assert_eq!(DiagnosticCode::UnusedVariable.category(), expected);
+        assert_eq!(DiagnosticCode::UndefinedVariable.category(), expected);
+        assert_eq!(DiagnosticCode::VariableShadowing.category(), expected);
+        assert_eq!(DiagnosticCode::VariableRedeclaration.category(), expected);
+        assert_eq!(DiagnosticCode::DuplicateParameter.category(), expected);
+        assert_eq!(DiagnosticCode::ParameterShadowsGlobal.category(), expected);
+        assert_eq!(DiagnosticCode::UnusedParameter.category(), expected);
+        assert_eq!(DiagnosticCode::UnquotedBareword.category(), expected);
+        assert_eq!(DiagnosticCode::UninitializedVariable.category(), expected);
+        assert_eq!(DiagnosticCode::MisspelledPragma.category(), expected);
+        assert_eq!(DiagnosticCode::CaptureVarWithoutRegexMatch.category(), expected);
+        assert_eq!(DiagnosticCode::PhaseScopedStrictPragma.category(), expected);
+        assert_eq!(DiagnosticCode::PhaseScopedWarningsPragma.category(), expected);
+    }
+
+    #[test]
+    fn test_category_package_module_codes() {
+        let expected = DiagnosticCategory::PackageModule;
+        assert_eq!(DiagnosticCode::MissingPackageDeclaration.category(), expected);
+        assert_eq!(DiagnosticCode::DuplicatePackage.category(), expected);
+    }
+
+    #[test]
+    fn test_category_subroutine_codes() {
+        let expected = DiagnosticCategory::Subroutine;
+        assert_eq!(DiagnosticCode::DuplicateSubroutine.category(), expected);
+        assert_eq!(DiagnosticCode::MissingReturn.category(), expected);
+        assert_eq!(DiagnosticCode::InvalidPrototype.category(), expected);
+        assert_eq!(DiagnosticCode::RoleConflict.category(), expected);
+        assert_eq!(DiagnosticCode::MissingPodCoverage.category(), expected);
+    }
+
+    #[test]
+    fn test_category_best_practices_codes() {
+        let expected = DiagnosticCategory::BestPractices;
+        assert_eq!(DiagnosticCode::BarewordFilehandle.category(), expected);
+        assert_eq!(DiagnosticCode::TwoArgOpen.category(), expected);
+        assert_eq!(DiagnosticCode::ImplicitReturn.category(), expected);
+        assert_eq!(DiagnosticCode::AssignmentInCondition.category(), expected);
+        assert_eq!(DiagnosticCode::NumericComparisonWithUndef.category(), expected);
+        assert_eq!(DiagnosticCode::PrintfFormatMismatch.category(), expected);
+        assert_eq!(DiagnosticCode::UnreachableCode.category(), expected);
+        assert_eq!(DiagnosticCode::EvalErrorFlow.category(), expected);
+        assert_eq!(DiagnosticCode::DuplicateHashKey.category(), expected);
+        assert_eq!(DiagnosticCode::GotoUndefinedLabel.category(), expected);
+        assert_eq!(DiagnosticCode::LoopControlUndefinedLabel.category(), expected);
+        assert_eq!(DiagnosticCode::VersionIncompatFeature.category(), expected);
+    }
+
+    #[test]
+    fn test_category_deprecated_codes() {
+        let expected = DiagnosticCategory::Deprecated;
+        assert_eq!(DiagnosticCode::DeprecatedDefined.category(), expected);
+        assert_eq!(DiagnosticCode::DeprecatedArrayBase.category(), expected);
+    }
+
+    #[test]
+    fn test_category_security_codes() {
+        let expected = DiagnosticCategory::Security;
+        assert_eq!(DiagnosticCode::SecurityStringEval.category(), expected);
+        assert_eq!(DiagnosticCode::SecurityBacktickExec.category(), expected);
+        assert_eq!(DiagnosticCode::SecuritySignalHandler.category(), expected);
+        assert_eq!(DiagnosticCode::SecuritySystemCall.category(), expected);
+        assert_eq!(DiagnosticCode::SecurityExecCall.category(), expected);
+        assert_eq!(DiagnosticCode::SecurityPipeOpen.category(), expected);
+        assert_eq!(DiagnosticCode::SecurityReadpipe.category(), expected);
+    }
+
+    #[test]
+    fn test_category_import_codes() {
+        let expected = DiagnosticCategory::Import;
+        assert_eq!(DiagnosticCode::UnusedImport.category(), expected);
+        assert_eq!(DiagnosticCode::ModuleNotFound.category(), expected);
+    }
+
+    #[test]
+    fn test_category_heredoc_codes() {
+        let expected = DiagnosticCategory::Heredoc;
+        assert_eq!(DiagnosticCode::HeredocInFormat.category(), expected);
+        assert_eq!(DiagnosticCode::HeredocInBegin.category(), expected);
+        assert_eq!(DiagnosticCode::HeredocDynamicDelimiter.category(), expected);
+        assert_eq!(DiagnosticCode::HeredocInSourceFilter.category(), expected);
+        assert_eq!(DiagnosticCode::HeredocInRegexCode.category(), expected);
+        assert_eq!(DiagnosticCode::HeredocInEval.category(), expected);
+        assert_eq!(DiagnosticCode::HeredocTiedHandle.category(), expected);
+    }
+
+    #[test]
+    fn test_category_perl_critic_codes() {
+        let expected = DiagnosticCategory::PerlCritic;
+        assert_eq!(DiagnosticCode::CriticSeverity1.category(), expected);
+        assert_eq!(DiagnosticCode::CriticSeverity2.category(), expected);
+        assert_eq!(DiagnosticCode::CriticSeverity3.category(), expected);
+        assert_eq!(DiagnosticCode::CriticSeverity4.category(), expected);
+        assert_eq!(DiagnosticCode::CriticSeverity5.category(), expected);
+    }
+
+    // -------------------------------------------------------------------------
+    // DiagnosticSeverity::to_lsp_value — correctness and uniqueness
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_severity_to_lsp_value_correct_values() {
+        assert_eq!(DiagnosticSeverity::Error.to_lsp_value(), 1);
+        assert_eq!(DiagnosticSeverity::Warning.to_lsp_value(), 2);
+        assert_eq!(DiagnosticSeverity::Information.to_lsp_value(), 3);
+        assert_eq!(DiagnosticSeverity::Hint.to_lsp_value(), 4);
+    }
+
+    #[test]
+    fn test_severity_to_lsp_value_unique() {
+        let values: Vec<u8> = [
+            DiagnosticSeverity::Error,
+            DiagnosticSeverity::Warning,
+            DiagnosticSeverity::Information,
+            DiagnosticSeverity::Hint,
+        ]
+        .iter()
+        .map(|s| s.to_lsp_value())
+        .collect();
+
+        let unique: HashSet<u8> = values.iter().copied().collect();
+        assert_eq!(
+            values.len(),
+            unique.len(),
+            "all DiagnosticSeverity LSP values must be distinct"
+        );
+    }
+
+    #[test]
+    fn test_severity_to_lsp_value_in_lsp_range() {
+        for sev in [
+            DiagnosticSeverity::Error,
+            DiagnosticSeverity::Warning,
+            DiagnosticSeverity::Information,
+            DiagnosticSeverity::Hint,
+        ] {
+            let v = sev.to_lsp_value();
+            assert!(
+                (1..=4).contains(&v),
+                "DiagnosticSeverity::{sev:?} LSP value {v} is outside 1..=4"
+            );
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // DiagnosticTag::to_lsp_value — correctness and uniqueness
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_tag_to_lsp_value_correct_values() {
+        assert_eq!(DiagnosticTag::Unnecessary.to_lsp_value(), 1);
+        assert_eq!(DiagnosticTag::Deprecated.to_lsp_value(), 2);
+    }
+
+    #[test]
+    fn test_tag_to_lsp_value_unique() {
+        let values: Vec<u8> = [DiagnosticTag::Unnecessary, DiagnosticTag::Deprecated]
+            .iter()
+            .map(|t| t.to_lsp_value())
+            .collect();
+
+        let unique: HashSet<u8> = values.iter().copied().collect();
+        assert_eq!(values.len(), unique.len(), "all DiagnosticTag LSP values must be distinct");
+    }
+
+    #[test]
+    fn test_tag_to_lsp_value_in_lsp_range() {
+        for tag in [DiagnosticTag::Unnecessary, DiagnosticTag::Deprecated] {
+            let v = tag.to_lsp_value();
+            assert!((1..=2).contains(&v), "DiagnosticTag::{tag:?} LSP value {v} is outside 1..=2");
+        }
+    }
+}
