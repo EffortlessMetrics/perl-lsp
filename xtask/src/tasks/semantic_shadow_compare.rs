@@ -730,6 +730,21 @@ fn build_artifact() -> Artifact {
         ),
         receipt_from_identities(
             ShadowQueryName::SemanticTokens,
+            "semantic_token_generated_no_source",
+            Some(vec![]),
+            Some(vec![]),
+            "semantic-token shadow proof: generated framework candidates without source-backed spans are blocked before token promotion",
+            vec![trace(
+                ProviderSurface::SemanticTokens,
+                ProviderFactSourceKind::FrameworkAdapter,
+                Provenance::FrameworkSynthesis,
+                Confidence::Medium,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Blocked,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::SemanticTokens,
             "semantic_token_dynamic_boundary",
             Some(vec![]),
             Some(vec![]),
@@ -756,6 +771,21 @@ fn build_artifact() -> Artifact {
                 Confidence::Low,
                 ProviderFactFreshness::Stale,
                 ProviderFallbackState::Blocked,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::SemanticTokens,
+            "semantic_token_fallback_candidate",
+            Some(vec![]),
+            Some(vec![]),
+            "semantic-token shadow proof: fallback token candidates are traced but cannot become compiler-backed token identities",
+            vec![trace(
+                ProviderSurface::SemanticTokens,
+                ProviderFactSourceKind::Fallback,
+                Provenance::SearchFallback,
+                Confidence::Low,
+                ProviderFactFreshness::Unknown,
+                ProviderFallbackState::Fallback,
             )],
         ),
         receipt_from_identities(
@@ -1093,7 +1123,7 @@ mod tests {
     fn artifact_includes_required_verdict_rows() {
         let artifact = build_artifact();
         assert_eq!(artifact.schema_version, 3);
-        assert_eq!(artifact.verdict_counts.get("same"), Some(&32));
+        assert_eq!(artifact.verdict_counts.get("same"), Some(&34));
         assert_eq!(artifact.verdict_counts.get("improved"), Some(&13));
         assert_eq!(artifact.verdict_counts.get("regression"), Some(&1));
         assert_eq!(artifact.verdict_counts.get("ambiguous"), Some(&2));
@@ -1102,7 +1132,7 @@ mod tests {
         assert_eq!(artifact.release_readiness_verdict_counts.get("improved"), Some(&3));
         assert_eq!(artifact.release_readiness_verdict_counts.get("regression"), Some(&0));
         assert_eq!(artifact.release_readiness_verdict_counts.get("unavailable"), Some(&0));
-        assert_eq!(artifact.schema_fixture_verdict_counts.get("same"), Some(&23));
+        assert_eq!(artifact.schema_fixture_verdict_counts.get("same"), Some(&25));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("improved"), Some(&10));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("regression"), Some(&1));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("ambiguous"), Some(&2));
@@ -1184,15 +1214,23 @@ mod tests {
             "| schema-fixture | SemanticTokens | `semantic_token_compiler_classification` | improved | 0 | 1 |"
         ));
         assert!(markdown.contains(
+            "| schema-fixture | SemanticTokens | `semantic_token_generated_no_source` | same | 0 | 0 |"
+        ));
+        assert!(markdown.contains(
             "| schema-fixture | SemanticTokens | `semantic_token_dynamic_boundary` | same | 0 | 0 |"
         ));
         assert!(markdown.contains(
             "| schema-fixture | SemanticTokens | `semantic_token_stale_fact` | same | 0 | 0 |"
         ));
+        assert!(markdown.contains(
+            "| schema-fixture | SemanticTokens | `semantic_token_fallback_candidate` | same | 0 | 0 |"
+        ));
         assert!(markdown.contains("| schema-fixture | SemanticTokens | SemanticTokens | ParserSyntax | ExactAst | High | Fresh | Shadow |"));
         assert!(markdown.contains("| schema-fixture | SemanticTokens | SemanticTokens | CompilerFact | SemanticAnalyzer | Medium | Fresh | Shadow |"));
+        assert!(markdown.contains("| schema-fixture | SemanticTokens | SemanticTokens | FrameworkAdapter | FrameworkSynthesis | Medium | Fresh | Blocked |"));
         assert!(markdown.contains("| schema-fixture | SemanticTokens | SemanticTokens | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |"));
         assert!(markdown.contains("| schema-fixture | SemanticTokens | SemanticTokens | CompilerFact | SemanticAnalyzer | Low | Stale | Blocked |"));
+        assert!(markdown.contains("| schema-fixture | SemanticTokens | SemanticTokens | Fallback | SearchFallback | Low | Unknown | Fallback |"));
         assert!(markdown.contains("| schema-fixture | RenamePlan | Rename | SemanticFact | ExactAst | High | Fresh | Shadow |"));
         assert!(markdown.contains("| schema-fixture | RenamePlan | Rename | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |"));
         assert!(markdown.contains("| schema-fixture | RenamePlan | Rename | CompilerFact | SemanticAnalyzer | Low | Stale | Blocked |"));

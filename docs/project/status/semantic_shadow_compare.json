@@ -1542,6 +1542,40 @@
       "schema_version": 2,
       "query": "semantic_tokens",
       "input": {
+        "symbol": "semantic_token_generated_no_source"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "verdict": "same",
+      "notes": [
+        "semantic-token shadow proof: generated framework candidates without source-backed spans are blocked before token promotion"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "SemanticTokens",
+          "source": "FrameworkAdapter",
+          "provenance": "FrameworkSynthesis",
+          "confidence": "Medium",
+          "freshness": "Fresh",
+          "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "semantic_tokens",
+      "input": {
         "symbol": "semantic_token_dynamic_boundary"
       },
       "old_result": {
@@ -1600,6 +1634,40 @@
           "confidence": "Low",
           "freshness": "Stale",
           "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "semantic_tokens",
+      "input": {
+        "symbol": "semantic_token_fallback_candidate"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "verdict": "same",
+      "notes": [
+        "semantic-token shadow proof: fallback token candidates are traced but cannot become compiler-backed token identities"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "SemanticTokens",
+          "source": "Fallback",
+          "provenance": "SearchFallback",
+          "confidence": "Low",
+          "freshness": "Unknown",
+          "fallback_state": "Fallback",
           "source_hash": "deterministic-fixture",
           "anchor_id": 1,
           "model_version": 1
@@ -1915,7 +1983,7 @@
     "ambiguous": 2,
     "improved": 13,
     "regression": 1,
-    "same": 32,
+    "same": 34,
     "unavailable": 0
   },
   "release_readiness_verdict_counts": {
@@ -1929,7 +1997,7 @@
     "ambiguous": 2,
     "improved": 10,
     "regression": 1,
-    "same": 23,
+    "same": 25,
     "unavailable": 0
   },
   "notes": "0.13.2 semantic shadow proof: release-readiness counts include provider-gating receipts only; schema fixture receipts exercise non-gating verdict shapes."
