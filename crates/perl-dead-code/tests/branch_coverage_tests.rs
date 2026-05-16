@@ -480,13 +480,12 @@ fn core_exit_is_an_unconditional_terminator() -> Result<(), String> {
 }
 
 // ---------------------------------------------------------------------------
-// dead_branches.rs — elsif keyword dead branch: line-start detection only
+// dead_branches.rs — elsif keyword dead branch: line-start detection
 // (dead_branches.rs line 15: "elsif" in keyword list)
 //
 // The detector trims each line and checks if it starts with a keyword.
-// `} elsif (0) {` trims to `} elsif (0) {`, which starts with `}` — NOT `elsif`.
-// So `elsif` in the keyword list only fires when `elsif` is at the start of the
-// trimmed line (unusual formatting). We document this limitation explicitly.
+// These tests exercise the `elsif` keyword path without locking in behavior
+// for ordinary inline `} elsif (...) {` formatting.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -506,23 +505,9 @@ fn elsif_at_line_start_with_false_condition_emits_dead_branch() -> Result<(), St
     Ok(())
 }
 
-#[test]
-fn elsif_inline_after_closing_brace_is_not_detected() -> Result<(), String> {
-    // `} elsif (0) {` — the closing `}` prevents keyword detection at line start;
-    // this is a known limitation of the line-by-line scanner.
-    let source = "if ($x) {\n    print 'maybe';\n} elsif (0) {\n    print 'dead';\n}\n";
-    let branches = dead_branches_in("file:///bc_elsif_inline.pl", "/bc_elsif_inline.pl", source)?;
-    // The detector does NOT fire here because trimmed starts with `}`, not `elsif`.
-    assert!(
-        branches.is_empty(),
-        "inline `}} elsif (0) {{` is a known detection gap (starts with `}}`); got {branches:?}"
-    );
-    Ok(())
-}
-
 // ---------------------------------------------------------------------------
-// lib.rs — stats: UnusedConstant and UnusedPackage counters
-// (lib.rs lines 216-217: UnusedConstant and UnusedPackage arms in stats match)
+// lib.rs — stats: DeadBranch, UnusedConstant, and UnusedPackage counters
+// (lib.rs lines 216-219: stats match arms)
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -540,6 +525,35 @@ fn analyze_workspace_counts_dead_branch_stats() -> Result<(), String> {
         "should count two dead branches in stats; got {}",
         analysis.stats.dead_branches
     );
+    Ok(())
+}
+
+#[test]
+fn analyze_workspace_counts_unused_constant_and_package_stats() -> Result<(), String> {
+    let source = "package Dead::Pkg;\nuse constant DEAD_CONST => 1;\n1;\n";
+    let index = WorkspaceIndex::new();
+    let uri = perl_uri::fs_path_to_uri(PathBuf::from("/dead_pkg.pl")).map_err(|e| e.to_string())?;
+    index.index_file_str(&uri, source)?;
+    let detector = DeadCodeDetector::new(index);
+
+    let analysis = detector.analyze_workspace();
+    let unused_constant_count =
+        analysis.dead_code.iter().filter(|d| d.code_type == DeadCodeType::UnusedConstant).count();
+    let unused_package_count =
+        analysis.dead_code.iter().filter(|d| d.code_type == DeadCodeType::UnusedPackage).count();
+
+    assert!(
+        unused_constant_count > 0,
+        "workspace should report at least one unused constant; got {:?}",
+        analysis.dead_code
+    );
+    assert!(
+        unused_package_count > 0,
+        "workspace should report at least one unused package; got {:?}",
+        analysis.dead_code
+    );
+    assert_eq!(analysis.stats.unused_constants, unused_constant_count);
+    assert_eq!(analysis.stats.unused_packages, unused_package_count);
     Ok(())
 }
 
@@ -570,7 +584,7 @@ fn if_double_nested_paren_false_condition_emits_dead_branch() -> Result<(), Stri
 #[test]
 fn elsif_with_variable_condition_is_not_dead() -> Result<(), String> {
     // `elsif ($y > 0)` — not a constant; no dead branch
-    let source = "if ($x) {\n    print 'a';\n} elsif ($y > 0) {\n    print 'b';\n}\n";
+    let source = "if ($x) {\n    print 'a';\n}\nelsif ($y > 0) {\n    print 'b';\n}\n";
     let branches = dead_branches_in("file:///bc_elsif_var.pl", "/bc_elsif_var.pl", source)?;
     assert!(
         branches.is_empty(),
