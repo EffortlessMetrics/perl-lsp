@@ -19,7 +19,10 @@ use crate::runtime::LspServer;
 use parking_lot::Mutex;
 use perl_tdd_support::{must, must_some};
 use serde_json::{Value, json};
+use std::error::Error;
+use std::fs;
 use std::io::Cursor;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 const DOC_URI: &str = "file:///workspace/lib/Tokens.pm";
@@ -104,6 +107,24 @@ fn open_document(server: &LspServer, uri: &str, text: &str) {
             "version": 1
         }
     }))));
+}
+
+fn workspace_root() -> Result<PathBuf, Box<dyn Error>> {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .map(Path::to_path_buf)
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "CARGO_MANIFEST_DIR must be nested under the workspace root",
+            )
+            .into()
+        })
+}
+
+fn read_real_project_fixture(relative_path: &str) -> Result<String, Box<dyn Error>> {
+    Ok(fs::read_to_string(workspace_root()?.join(relative_path))?)
 }
 
 /// Count LSP semantic tokens from a `{ "data": [...] }` response.
@@ -339,6 +360,129 @@ fn semantic_tokens_runtime_quality_receipt_records_compiler_backed_token_class()
         claim_boundary.contains("matches existing parser/HIR live token output"),
         "compiler receipt must preserve the live-pilot claim boundary; got: {claim_boundary}"
     );
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_records_realbaseline_compiler_token_class()
+-> Result<(), Box<dyn Error>> {
+    const PROJECT_URI: &str = "file:///workspace/lib/RealBaseline/App.pm";
+    const PROJECT_FIXTURE: &str = "crates/perl-workspace/tests/fixtures/semantic_real_workspace/cpan_style/lib/RealBaseline/App.pm";
+
+    let server = create_server();
+    let source = read_real_project_fixture(PROJECT_FIXTURE)?;
+    assert!(
+        source.contains("sub new"),
+        "fixture must preserve the project-shaped subroutine under compiler token-class proof"
+    );
+    open_document(&server, PROJECT_URI, &source);
+
+    let receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(json!({
+            "textDocument": {"uri": PROJECT_URI}
+        })))));
+
+    assert_eq!(
+        receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(true),
+        "project-shaped receipt must not change live semantic-token behavior"
+    );
+    assert_eq!(
+        receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "project-shaped receipt must not change live semantic-token output"
+    );
+    assert!(
+        receipt.get("live_provider_count").and_then(Value::as_u64).unwrap_or(0) > 0,
+        "RealBaseline fixture must produce live semantic tokens for receipt proof"
+    );
+
+    let compiler_receipt = must_some(receipt.get("compiler_receipt").and_then(Value::as_object));
+    assert_eq!(
+        compiler_receipt.get("token_class").and_then(Value::as_str),
+        Some("subroutine_declaration"),
+        "project-shaped receipt must keep the narrow token class under proof"
+    );
+    assert_eq!(
+        compiler_receipt.get("source").and_then(Value::as_str),
+        Some("CompilerFact"),
+        "project-shaped receipt must identify compiler-fact source"
+    );
+    assert_eq!(
+        compiler_receipt.get("provenance").and_then(Value::as_str),
+        Some("SemanticAnalyzer"),
+        "project-shaped receipt must identify semantic-analyzer provenance"
+    );
+    assert_eq!(
+        compiler_receipt.get("freshness").and_then(Value::as_str),
+        Some("Fresh"),
+        "project-shaped receipt must prove fresh compiler facts"
+    );
+    assert_eq!(
+        compiler_receipt.get("fallback_state").and_then(Value::as_str),
+        Some("Primary"),
+        "project-shaped receipt may be primary only after matching live token output"
+    );
+    assert_eq!(
+        compiler_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "project-shaped compiler token class must match existing live token output"
+    );
+    assert_eq!(
+        compiler_receipt.get("live_token_type").and_then(Value::as_str),
+        Some("function"),
+        "project-shaped compiler token class must match the live parser/HIR function token"
+    );
+    assert_eq!(
+        compiler_receipt.get("live_token_match_count").and_then(Value::as_u64),
+        Some(1),
+        "project-shaped compiler token class must prove one matching live token span"
+    );
+    assert_eq!(
+        compiler_receipt.get("candidate_count").and_then(Value::as_u64),
+        Some(1),
+        "project-shaped receipt must keep one source-backed compiler candidate"
+    );
+    assert_eq!(
+        compiler_receipt.get("source_backed_span_count").and_then(Value::as_u64),
+        Some(1),
+        "project-shaped compiler token class must prove one source-backed span"
+    );
+    assert_eq!(
+        compiler_receipt.get("missing_source_span_count").and_then(Value::as_u64),
+        Some(0),
+        "project-shaped compiler token class must fail closed on missing spans"
+    );
+    assert_eq!(
+        compiler_receipt.get("invalid_source_span_count").and_then(Value::as_u64),
+        Some(0),
+        "project-shaped compiler token class must fail closed on invalid spans"
+    );
+    assert_eq!(
+        compiler_receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(true),
+        "compiler receipt must remain receipt-only for project-shaped code"
+    );
+    assert_eq!(
+        compiler_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "compiler receipt must remain receipt-only for project-shaped source"
+    );
+
+    let claim_boundary = must_some(compiler_receipt.get("claim_boundary").and_then(Value::as_str));
+    assert!(
+        claim_boundary.contains("no new semantic-token output"),
+        "project-shaped receipt must preserve the no-output-change boundary; got: {claim_boundary}"
+    );
+
+    let notes = must_some(receipt.get("notes").and_then(Value::as_str));
+    assert!(
+        notes.contains("compiler_backed_token_classes=1")
+            && notes.contains("compiler_live_pilot=1")
+            && notes.contains("no semantic-token output change"),
+        "project-shaped notes must record compiler receipt proof without output change; got: {notes}"
+    );
+
+    Ok(())
 }
 
 #[test]
