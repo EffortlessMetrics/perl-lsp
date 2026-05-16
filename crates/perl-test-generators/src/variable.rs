@@ -88,5 +88,89 @@ mod tests {
                 prop_assert!(!segment.is_empty(), "empty package segment in {pkg}");
             }
         }
+
+        #[test]
+        fn variable_is_ascii(v in variable()) {
+            prop_assert!(v.is_ascii(), "variable must be ASCII: {v}");
+        }
+
+        #[test]
+        fn variable_len_is_at_least_two(v in variable()) {
+            // sigil + at least one body character
+            prop_assert!(v.len() >= 2, "variable too short: {v}");
+        }
+
+        #[test]
+        fn identifier_starts_with_letter_or_underscore(id in identifier()) {
+            let first = id.chars().next();
+            match first {
+                Some(ch) => prop_assert!(
+                    ch.is_ascii_alphabetic() || ch == '_',
+                    "identifier must start with letter or '_': {id}"
+                ),
+                None => prop_assert!(false, "identifier must not be empty"),
+            }
+        }
+
+        #[test]
+        fn identifier_is_non_empty(id in identifier()) {
+            prop_assert!(!id.is_empty(), "identifier must be non-empty");
+        }
+
+        #[test]
+        fn identifier_body_chars_are_word_chars(id in identifier()) {
+            let mut chars = id.chars();
+            // Skip first character (allowed: alpha or underscore)
+            let _ = chars.next();
+            for ch in chars {
+                prop_assert!(
+                    ch.is_ascii_alphanumeric() || ch == '_',
+                    "invalid identifier body char '{ch}' in {id}"
+                );
+            }
+        }
+
+        #[test]
+        fn package_path_segment_count_bounded(pkg in package_path()) {
+            let count = pkg.split("::").count();
+            prop_assert!(count >= 1, "package path must have at least one segment: {pkg}");
+            prop_assert!(count <= 4, "package path must have at most 4 segments: {pkg}");
+        }
+
+        #[test]
+        fn package_qualified_variable_contains_double_colon(v in variable()) {
+            // Variables of the form $Foo::Bar::name contain "::" — when they do,
+            // the prefix before the last "::" is the package, which must be non-empty.
+            if let Some(last_sep) = v.rfind("::") {
+                let sigil_and_pkg = &v[..last_sep];
+                // sigil is at index 0, package part starts at index 1
+                let pkg = &sigil_and_pkg[1..];
+                prop_assert!(!pkg.is_empty(), "package prefix must be non-empty in {v}");
+            }
+        }
+
+        #[test]
+        fn numeric_special_variables_in_range(v in variable()) {
+            // $1–$9 are capture variables; all numeric special vars from the
+            // generator must be in the range 0–9.
+            if let Some(body) = v.strip_prefix('$') {
+                if let Ok(n) = body.parse::<u32>() {
+                    prop_assert!(n <= 9, "numeric capture variable out of range: {v}");
+                }
+            }
+        }
+
+        #[test]
+        fn special_at_underscore_sigil_is_at(v in variable()) {
+            // @_ is a known special variable produced by the generator
+            if v == "@_" {
+                prop_assert!(v.starts_with('@'));
+            }
+        }
+
+        #[test]
+        fn package_path_is_ascii(pkg in package_path()) {
+            prop_assert!(pkg.is_ascii(), "package path must be ASCII: {pkg}");
+        }
     }
 }
