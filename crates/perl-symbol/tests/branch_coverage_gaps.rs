@@ -469,22 +469,28 @@ fn variable_decl_with_non_variable_child_emits_no_decl() -> Result<()> {
 // ── is_constant_name_candidate: rejects args starting with `{`, `}` ─────────
 //
 // Lines 395-396 (starts_with('{') / starts_with('}') False branches) were
-// executed 0 times for the False path. These are exercised indirectly via
-// `extract_symbol_decls`, but we add an explicit inline unit test here to
-// drive those branches with extreme inputs.
+// executed 0 times for the False path. Exact `{` and `}` tokens are handled as
+// depth markers before candidate filtering, so this test also includes
+// malformed brace-prefixed arguments that must reach and fail the candidate
+// predicate.
 
 #[test]
-fn constant_names_rejects_brace_and_hash_sigil_prefixes() -> Result<()> {
+fn constant_names_rejects_brace_prefixed_args() -> Result<()> {
     // `use constant { FOO => 1, BAR => 2 };` where the brace tokens appear in `args`.
-    // The `{` and `}` entries must be tracked as depth markers, not treated as names.
+    // Exact braces are depth markers; malformed brace-prefixed entries must not
+    // become constant names.
     let use_node = Node::new(
         NodeKind::Use {
             module: "constant".to_string(),
             args: vec![
                 "{".to_string(),
+                "{BAD".to_string(),
+                ",".to_string(),
                 "FOO".to_string(),
                 "=>".to_string(),
                 "1".to_string(),
+                ",".to_string(),
+                "}BAD".to_string(),
                 ",".to_string(),
                 "BAR".to_string(),
                 "=>".to_string(),
@@ -600,50 +606,6 @@ fn token_under_cursor_cursor_on_space_not_adjacent_to_token_returns_none() {
     assert_eq!(result, None, "space at start of line must return None");
 }
 
-// ── token_under_cursor: end == start gives None ──────────────────────────────
-//
-// Line 161: `if end == start` True-branch was executed 0 times. This happens
-// when `cursor` lands on a pure sigil followed by non-modchar chars.
-
-#[test]
-fn token_under_cursor_sigil_only_with_no_following_name_returns_none() {
-    // "$;" — the `$` sigil is at position 0; after stepping end past '$', the
-    // next byte is ';' which is not a modchar. So end==1, start==0 (after
-    // stepping back over no modchars), end-start==1 actually. Let's use "$ "
-    // where after advancing past `$`, `end` finds a space.
-    // "$" followed by space: end stays at 1 after sigil-advance, bytes[1]=' '
-    // is not modchar, so end==1==start_after_sigil... actually start gets
-    // adjusted by the modchar-backtrack loop. Let us confirm the exact behaviour.
-    //
-    // cursor=0 (the '$'), end=0, then `matches!('$')` → end=1,
-    // then while bytes[1]=' ' is not modchar → end stays 1.
-    // start=0, while bytes[-1]... (start > 0 is false) → start=0.
-    // Also `matches!(bytes[start-1], ...)` is guarded by `start > 0`.
-    // end=1, start=0 → end != start → Some("$").
-    //
-    // We need a case where the sigil is both at start AND end.
-    // Actually the guard is `if end == start { return None }` after all loops.
-    // The only way end==start is if we never advance end past any modchar and
-    // never advance start back. With cursor directly on a sigil, end is
-    // stepped to cursor+1, so they can't be equal unless cursor was at a
-    // non-sigil non-modchar. Let us test a cursor right after an identifier
-    // but on a non-sigil non-modchar where snap-back succeeds but forward walk
-    // adds nothing new.
-    //
-    // Actually this branch fires when the snap produces a cursor pointing at a
-    // sigil that has no name after it. For example: text = "x$ y", cursor at 2
-    // (space). anchor = 1 ('$') via snap-back, then end advances past '$' to 2,
-    // but bytes[2]=' ' is not modchar → end=2=start → None.
-    let text = "x$ y";
-    // col 2 = space byte; anchor=2; bytes[2]=' ' not modchar/sigil;
-    // bytes[1]='$' is not a modchar — so the else-if also fails → return None.
-    // Actually '$' itself is not a modchar (alphanumeric/colon/underscore).
-    // So bytes[anchor-1]='$' is a sigil not a modchar → second branch also fails.
-    let result = token_under_cursor(text, 0, 2);
-    // space at col 2: neither modchar nor sigil, bytes[1]='$' not modchar → None.
-    assert_eq!(result, None, "space after sigil must return None");
-}
-
 // ── get_symbol_range_at_position: sigil with underscore name ─────────────────
 //
 // Line 80 branch (80:65) `chars[end] == '_'` True path was 0 times.
@@ -656,10 +618,7 @@ fn get_symbol_range_underscore_name_includes_underscores() -> Result<()> {
     // position 1 = 'm' (first char of name after '$')
     let (start, end) = get_symbol_range_at_position(1, source)
         .ok_or("get_symbol_range_at_position must return Some for a valid identifier")?;
-    // start should include the '$' sigil (position 0)
-    assert!(start <= 1, "start should be at or before the name");
-    // end should extend past the whole name including underscores
-    assert!(end >= 7, "end must include all of 'my_var'");
+    assert_eq!((start, end), (0, 7), "range must include '$my_var' exactly");
     Ok(())
 }
 
