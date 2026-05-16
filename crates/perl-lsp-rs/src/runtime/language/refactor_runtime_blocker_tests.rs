@@ -1972,6 +1972,89 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_records_allowed_symbol_cutove
 }
 
 #[test]
+fn refactor_runtime_blocker_ux_safe_delete_receipt_proves_symbol_delete_edit_rollback()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_semantic_real_workspace(&server)?;
+    let base = files.get("lib/RealBaseline/Base.pm").ok_or("missing RealBaseline Base fixture")?;
+
+    let (reset_line, reset_character) = position_of(base, "reset {")?;
+    let reset_params = json!({
+        "textDocument": {"uri": REAL_BASELINE_BASE_URI},
+        "position": {"line": reset_line, "character": reset_character},
+        "includeEditRollbackProof": true
+    });
+    let receipt = server
+        .test_safe_delete_runtime_blocker_ux_receipt(Some(reset_params))?
+        .ok_or("missing safe-delete edit rollback receipt")?;
+
+    assert_safe_delete_decision_trace(&receipt, "allowed", "compiler_allowed", "none")?;
+    assert_eq!(receipt.get("symbol").and_then(Value::as_str), Some("reset"));
+    assert_eq!(receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
+
+    let rollback_proof =
+        receipt.get("symbol_delete_edit_rollback").ok_or("missing symbol_delete_edit_rollback")?;
+    assert_eq!(rollback_proof.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        rollback_proof.get("provider_action").and_then(Value::as_str),
+        Some("safeDelete/symbolDeleteEditRollbackProof")
+    );
+    assert_eq!(rollback_proof.get("edit_plan_state").and_then(Value::as_str), Some("planned"));
+    assert_eq!(rollback_proof.get("planned_delete_edit_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(rollback_proof.get("rollback_edit_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(rollback_proof.get("rollback_required").and_then(Value::as_bool), Some(true));
+    assert_eq!(rollback_proof.get("rollback_safe").and_then(Value::as_bool), Some(true));
+    assert_eq!(rollback_proof.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        rollback_proof.get("live_symbol_delete_enabled").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(rollback_proof.get("source_backed").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        rollback_proof.get("source_backed_state").and_then(Value::as_str),
+        Some("source_backed_subroutine_range")
+    );
+    assert_eq!(
+        rollback_proof.get("rollback_verification").and_then(Value::as_str),
+        Some("restores_original")
+    );
+    assert_eq!(
+        rollback_proof.get("claim_boundary").and_then(Value::as_str),
+        Some("safe-delete edit rollback proof only; no live symbol-level delete edits are applied")
+    );
+
+    let planned_delete = rollback_proof
+        .get("planned_delete_workspace_edit")
+        .ok_or("missing planned_delete_workspace_edit")?;
+    let planned_texts = workspace_edit_texts_for_uri(planned_delete, REAL_BASELINE_BASE_URI)?;
+    assert_eq!(
+        planned_texts,
+        vec![""],
+        "delete proof must replace the symbol range with empty text"
+    );
+
+    let rollback_edit =
+        rollback_proof.get("rollback_workspace_edit").ok_or("missing rollback_workspace_edit")?;
+    let rollback_texts = workspace_edit_texts_for_uri(rollback_edit, REAL_BASELINE_BASE_URI)?;
+    let rollback_text = rollback_texts.first().ok_or("missing rollback insertion text")?;
+    assert!(
+        rollback_text.contains("sub reset") && rollback_text.contains("return 1;"),
+        "rollback proof must carry the source-backed symbol text: {rollback_text}"
+    );
+
+    let explanation = explain_provider_decision(&server, "safe_delete")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(
+        request_receipt
+            .pointer("/symbol_delete_edit_rollback/rollback_verification")
+            .and_then(Value::as_str),
+        Some("restores_original")
+    );
+
+    Ok(())
+}
+
+#[test]
 fn refactor_runtime_blocker_ux_explain_provider_decision_replays_persisted_safe_delete_receipt()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();
