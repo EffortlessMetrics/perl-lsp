@@ -247,4 +247,156 @@ mod tests {
         let result: Result<i32, ParseError> = Err(ParseError { line: 10 });
         assert_eq!(must_err(result), ParseError { line: 10 });
     }
+
+    // ── must — additional edge cases ──────────────────────────────────────────
+
+    /// `must` with `Ok(0)` — zero integer, boundary value.
+    #[test]
+    fn must_ok_zero_integer() {
+        let result: Result<i32, &str> = Ok(0);
+        assert_eq!(must(result), 0);
+    }
+
+    /// `must` with a negative integer — exercises non-positive values.
+    #[test]
+    fn must_ok_negative_integer() {
+        let result: Result<i32, &str> = Ok(-1);
+        assert_eq!(must(result), -1);
+    }
+
+    /// `must` with a tuple Ok value — ensures tuple destructuring works.
+    #[test]
+    fn must_ok_tuple() {
+        let result: Result<(i32, &str), &str> = Ok((3, "hello"));
+        assert_eq!(must(result), (3, "hello"));
+    }
+
+    /// `must` panic message includes the type name of the error type (via Debug).
+    #[test]
+    #[should_panic(expected = "unexpected Err<&str>")]
+    fn must_panic_message_contains_type_name() {
+        let result: Result<i32, &str> = Err("type check");
+        must(result);
+    }
+
+    /// `must` with an enum `Ok` variant — exercises algebraic type.
+    #[test]
+    fn must_ok_enum_value() {
+        #[derive(Debug, PartialEq)]
+        #[allow(dead_code)]
+        enum Color {
+            Red,
+            Green,
+            Blue,
+        }
+        let result: Result<Color, &str> = Ok(Color::Green);
+        assert_eq!(must(result), Color::Green);
+    }
+
+    /// `must` with a `Vec` Ok value — heap-allocated container.
+    #[test]
+    fn must_ok_vec() {
+        let result: Result<Vec<u32>, &str> = Ok(vec![10, 20, 30]);
+        assert_eq!(must(result), [10, 20, 30]);
+    }
+
+    /// `must` chained: unwrap outer then inner (nested Results are independent).
+    #[test]
+    fn must_chained_nested_results_err_inner() {
+        let inner: Result<i32, &str> = Err("inner fail");
+        let outer: Result<Result<i32, &str>, &str> = Ok(inner);
+        let extracted = must(outer);
+        // inner is still Err — must_err on it should work
+        assert_eq!(must_err(extracted), "inner fail");
+    }
+
+    // ── must_some — additional edge cases ────────────────────────────────────
+
+    /// `must_some` with a tuple — exercises composite type.
+    #[test]
+    fn must_some_tuple() {
+        let opt: Option<(u8, u8)> = Some((1, 2));
+        assert_eq!(must_some(opt), (1, 2));
+    }
+
+    /// `must_some` with `Some(0)` — zero boundary value.
+    #[test]
+    fn must_some_zero() {
+        assert_eq!(must_some(Some(0_i32)), 0);
+    }
+
+    /// `must_some` panic message includes the full type name for a Vec.
+    #[test]
+    #[should_panic(expected = "unexpected None")]
+    fn must_some_panic_message_for_vec_type() {
+        let _ = must_some(Option::<Vec<u32>>::None);
+    }
+
+    /// `must_some` with a nested Option — `Some(Some(v))` returns `Some(v)`.
+    #[test]
+    fn must_some_nested_option() {
+        let outer: Option<Option<i32>> = Some(Some(42));
+        let inner = must_some(outer);
+        assert_eq!(must_some(inner), 42);
+    }
+
+    /// `must_some` returns the original value unchanged (identity check).
+    #[test]
+    fn must_some_identity() {
+        let val = String::from("identity");
+        let opt = Some(val.clone());
+        assert_eq!(must_some(opt), val);
+    }
+
+    // ── must_err — additional edge cases ─────────────────────────────────────
+
+    /// `must_err` with an enum error variant.
+    #[test]
+    fn must_err_enum_error() {
+        #[derive(Debug, PartialEq)]
+        #[allow(dead_code)]
+        enum AppError {
+            NotFound,
+            Timeout,
+        }
+        let result: Result<i32, AppError> = Err(AppError::NotFound);
+        assert_eq!(must_err(result), AppError::NotFound);
+    }
+
+    /// `must_err` panic message includes both type names (Err<E>, Ok<T>).
+    #[test]
+    #[should_panic(expected = "expected Err")]
+    fn must_err_panic_message_contains_expected_err_prefix() {
+        let result: Result<u32, &str> = Ok(7);
+        let _ = must_err(result);
+    }
+
+    /// `must_err` with a Vec Ok value — ensures Debug of container appears in panic.
+    #[test]
+    #[should_panic(expected = "expected Err")]
+    fn must_err_panics_on_ok_vec() {
+        let result: Result<Vec<i32>, &str> = Ok(vec![1, 2, 3]);
+        let _ = must_err(result);
+    }
+
+    /// `must_err` with a bool error type — smallest non-unit scalar.
+    #[test]
+    fn must_err_bool_error() {
+        let result: Result<i32, bool> = Err(false);
+        assert!(!must_err(result));
+    }
+
+    /// `must_err` with a tuple error — exercises structured error types.
+    #[test]
+    fn must_err_tuple_error() {
+        let result: Result<i32, (u32, &str)> = Err((42, "oops"));
+        assert_eq!(must_err(result), (42, "oops"));
+    }
+
+    /// `must_err` zero-value numeric error.
+    #[test]
+    fn must_err_zero_error_code() {
+        let result: Result<&str, u32> = Err(0);
+        assert_eq!(must_err(result), 0);
+    }
 }
