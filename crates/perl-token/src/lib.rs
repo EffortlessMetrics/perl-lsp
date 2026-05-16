@@ -1973,32 +1973,35 @@ mod tests {
 
     #[test]
     fn token_ref_new_checked_rejects_end_before_start() {
-        let err = TokenRef::new_checked(TokenKind::Identifier, "x", 10, 3).unwrap_err();
-        assert_eq!(err, TokenSpanError::EndBeforeStart { start: 10, end: 3 });
+        assert_eq!(
+            TokenRef::new_checked(TokenKind::Identifier, "x", 10, 3),
+            Err(TokenSpanError::EndBeforeStart { start: 10, end: 3 })
+        );
     }
 
     #[test]
-    fn token_ref_new_checked_allows_empty_eof() {
-        let tok = TokenRef::new_checked(TokenKind::Eof, "", 7, 7).unwrap();
+    fn token_ref_new_checked_allows_empty_eof() -> Result<(), Box<dyn std::error::Error>> {
+        let tok = TokenRef::new_checked(TokenKind::Eof, "", 7, 7)?;
         assert_eq!(tok.kind, TokenKind::Eof);
         assert_eq!(tok.start, 7);
         assert!(tok.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn token_ref_new_checked_allows_empty_unknown() {
-        let tok = TokenRef::new_checked(TokenKind::Unknown, "", 3, 3).unwrap();
+    fn token_ref_new_checked_allows_empty_unknown() -> Result<(), Box<dyn std::error::Error>> {
+        let tok = TokenRef::new_checked(TokenKind::Unknown, "", 3, 3)?;
         assert_eq!(tok.kind, TokenKind::Unknown);
         assert_eq!(tok.start, 3);
         assert!(tok.is_empty());
+        Ok(())
     }
 
     #[test]
     fn token_ref_new_checked_rejects_empty_non_eof() {
-        let err = TokenRef::new_checked(TokenKind::Identifier, "", 5, 5).unwrap_err();
-        assert!(matches!(
-            err,
-            TokenSpanError::EmptySpanNotAllowed { kind: TokenKind::Identifier, at: 5 }
-        ));
+        assert_eq!(
+            TokenRef::new_checked(TokenKind::Identifier, "", 5, 5),
+            Err(TokenSpanError::EmptySpanNotAllowed { kind: TokenKind::Identifier, at: 5 })
+        );
     }
 }
