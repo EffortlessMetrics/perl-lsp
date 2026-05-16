@@ -108,9 +108,26 @@ mod tests {
     use std::error::Error;
     use std::fs;
     use std::path::{Path, PathBuf};
+    use std::sync::LazyLock;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     type TestResult<T = ()> = Result<T, Box<dyn Error>>;
+    static HOME_USER_PATH_RE: LazyLock<Result<Regex, regex::Error>> =
+        LazyLock::new(|| Regex::new(r"/home/([A-Za-z0-9._-]+)"));
+    static USERS_NAME_PATH_RE: LazyLock<Result<Regex, regex::Error>> =
+        LazyLock::new(|| Regex::new(r"/Users/([A-Za-z0-9._-]+)"));
+
+    fn home_user_path_re() -> TestResult<&'static Regex> {
+        HOME_USER_PATH_RE.as_ref().map_err(|err| {
+            std::io::Error::other(format!("failed to compile /home regex: {err}")).into()
+        })
+    }
+
+    fn users_name_path_re() -> TestResult<&'static Regex> {
+        USERS_NAME_PATH_RE.as_ref().map_err(|err| {
+            std::io::Error::other(format!("failed to compile /Users regex: {err}")).into()
+        })
+    }
 
     fn unique_temp_dir(label: &str) -> TestResult<PathBuf> {
         let nanos = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
@@ -131,9 +148,19 @@ mod tests {
 
     #[test]
     fn resolve_docs_path_absolute_ignores_repo_root() {
+        #[cfg(windows)]
+        let root = Path::new(r"C:\repo\root");
+        #[cfg(not(windows))]
         let root = Path::new("/repo/root");
-        let result = resolve_docs_path(root, "/absolute/docs");
-        assert_eq!(result, PathBuf::from("/absolute/docs"));
+
+        #[cfg(windows)]
+        let absolute = r"C:\absolute\docs";
+        #[cfg(not(windows))]
+        let absolute = "/absolute/docs";
+
+        assert!(Path::new(absolute).is_absolute());
+        let result = resolve_docs_path(root, absolute);
+        assert_eq!(result, PathBuf::from(absolute));
     }
 
     #[test]
@@ -147,49 +174,49 @@ mod tests {
 
     #[test]
     fn home_path_generic_user_is_not_machine_specific() -> TestResult {
-        let re = Regex::new(r"/home/([A-Za-z0-9._-]+)")?;
-        assert!(!has_machine_specific_home_path("See /home/user/project for an example.", &re,));
+        let re = home_user_path_re()?;
+        assert!(!has_machine_specific_home_path("See /home/user/project for an example.", re,));
         Ok(())
     }
 
     #[test]
     fn home_path_generic_user_case_insensitive() -> TestResult {
-        let re = Regex::new(r"/home/([A-Za-z0-9._-]+)")?;
+        let re = home_user_path_re()?;
         // "USER" and "User" must also be treated as generic
-        assert!(!has_machine_specific_home_path("path: /home/USER/project", &re));
-        assert!(!has_machine_specific_home_path("path: /home/User/project", &re));
+        assert!(!has_machine_specific_home_path("path: /home/USER/project", re));
+        assert!(!has_machine_specific_home_path("path: /home/User/project", re));
         Ok(())
     }
 
     #[test]
     fn home_path_real_username_is_machine_specific() -> TestResult {
-        let re = Regex::new(r"/home/([A-Za-z0-9._-]+)")?;
-        assert!(has_machine_specific_home_path("/home/alice/dev/perl-lsp", &re));
-        assert!(has_machine_specific_home_path("Built at /home/ubuntu/workspace", &re));
+        let re = home_user_path_re()?;
+        assert!(has_machine_specific_home_path("/home/alice/dev/perl-lsp", re));
+        assert!(has_machine_specific_home_path("Built at /home/ubuntu/workspace", re));
         Ok(())
     }
 
     #[test]
     fn home_path_single_char_username_is_machine_specific() -> TestResult {
-        let re = Regex::new(r"/home/([A-Za-z0-9._-]+)")?;
-        assert!(has_machine_specific_home_path("/home/u/project", &re));
+        let re = home_user_path_re()?;
+        assert!(has_machine_specific_home_path("/home/u/project", re));
         Ok(())
     }
 
     #[test]
     fn home_path_multiple_matches_any_real_triggers_detection() -> TestResult {
-        let re = Regex::new(r"/home/([A-Za-z0-9._-]+)")?;
+        let re = home_user_path_re()?;
         // Line has both a generic and a machine-specific path — must return true
         let line = "cp /home/user/template /home/alice/dest";
-        assert!(has_machine_specific_home_path(line, &re));
+        assert!(has_machine_specific_home_path(line, re));
         Ok(())
     }
 
     #[test]
     fn home_path_no_matches_returns_false() -> TestResult {
-        let re = Regex::new(r"/home/([A-Za-z0-9._-]+)")?;
-        assert!(!has_machine_specific_home_path("No paths here at all.", &re));
-        assert!(!has_machine_specific_home_path("", &re));
+        let re = home_user_path_re()?;
+        assert!(!has_machine_specific_home_path("No paths here at all.", re));
+        assert!(!has_machine_specific_home_path("", re));
         Ok(())
     }
 
@@ -197,47 +224,47 @@ mod tests {
 
     #[test]
     fn users_path_generic_name_placeholder_is_not_machine_specific() -> TestResult {
-        let re = Regex::new(r"/Users/([A-Za-z0-9._-]+)")?;
-        assert!(!has_machine_specific_users_path("path: /Users/Name/project", &re));
+        let re = users_name_path_re()?;
+        assert!(!has_machine_specific_users_path("path: /Users/Name/project", re));
         Ok(())
     }
 
     #[test]
     fn users_path_generic_user_placeholder_is_not_machine_specific() -> TestResult {
-        let re = Regex::new(r"/Users/([A-Za-z0-9._-]+)")?;
-        assert!(!has_machine_specific_users_path("path: /Users/user/project", &re));
+        let re = users_name_path_re()?;
+        assert!(!has_machine_specific_users_path("path: /Users/user/project", re));
         Ok(())
     }
 
     #[test]
     fn users_path_generic_placeholders_case_insensitive() -> TestResult {
-        let re = Regex::new(r"/Users/([A-Za-z0-9._-]+)")?;
-        assert!(!has_machine_specific_users_path("path: /Users/NAME/project", &re));
-        assert!(!has_machine_specific_users_path("path: /Users/USER/project", &re));
+        let re = users_name_path_re()?;
+        assert!(!has_machine_specific_users_path("path: /Users/NAME/project", re));
+        assert!(!has_machine_specific_users_path("path: /Users/USER/project", re));
         Ok(())
     }
 
     #[test]
     fn users_path_real_username_is_machine_specific() -> TestResult {
-        let re = Regex::new(r"/Users/([A-Za-z0-9._-]+)")?;
-        assert!(has_machine_specific_users_path("Personal: /Users/alice/dev/perl-lsp", &re,));
-        assert!(has_machine_specific_users_path("/Users/bob/workspace", &re));
+        let re = users_name_path_re()?;
+        assert!(has_machine_specific_users_path("Personal: /Users/alice/dev/perl-lsp", re,));
+        assert!(has_machine_specific_users_path("/Users/bob/workspace", re));
         Ok(())
     }
 
     #[test]
     fn users_path_multiple_matches_any_real_triggers_detection() -> TestResult {
-        let re = Regex::new(r"/Users/([A-Za-z0-9._-]+)")?;
+        let re = users_name_path_re()?;
         let line = "from /Users/Name/src to /Users/alice/dest";
-        assert!(has_machine_specific_users_path(line, &re));
+        assert!(has_machine_specific_users_path(line, re));
         Ok(())
     }
 
     #[test]
     fn users_path_no_matches_returns_false() -> TestResult {
-        let re = Regex::new(r"/Users/([A-Za-z0-9._-]+)")?;
-        assert!(!has_machine_specific_users_path("No paths here.", &re));
-        assert!(!has_machine_specific_users_path("", &re));
+        let re = users_name_path_re()?;
+        assert!(!has_machine_specific_users_path("No paths here.", re));
+        assert!(!has_machine_specific_users_path("", re));
         Ok(())
     }
 
@@ -278,7 +305,7 @@ mod tests {
     }
 
     #[test]
-    fn check_doc_paths_warns_but_returns_zero_for_users_path_only() -> TestResult {
+    fn check_doc_paths_returns_zero_for_users_path_only() -> TestResult {
         let root = unique_temp_dir("users-warning")?;
         let docs = root.join("docs");
         fs::create_dir_all(&docs)?;
