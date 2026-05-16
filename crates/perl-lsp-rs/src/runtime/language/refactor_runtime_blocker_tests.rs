@@ -598,14 +598,23 @@ fn refactor_runtime_blocker_ux_rename_receipt_records_package_fallback_noise()
     assert_eq!(compiler_edit_count, 1, "compiler plan should include the definition edit");
     let live_state =
         fallback_noise.get("live_provider_state").and_then(Value::as_str).ok_or("missing state")?;
-    assert_eq!(live_state, "empty_edit", "unexpected live provider state: {fallback_noise}");
+    assert_eq!(live_state, "error", "unexpected live provider state: {fallback_noise}");
+    assert!(
+        fallback_noise
+            .get("live_provider_error")
+            .and_then(Value::as_str)
+            .is_some_and(|message| !message.is_empty()),
+        "error state must include the live provider error: {fallback_noise}"
+    );
     assert_eq!(
         live_edit_count, 0,
         "live provider should not produce edits after refusal: {fallback_noise}"
     );
     assert!(
-        fallback_noise.get("live_provider_error").is_some_and(Value::is_null),
-        "empty-edit refusal should not fabricate a provider error: {fallback_noise}"
+        fallback_noise.get("live_provider_error").and_then(Value::as_str).is_some_and(|message| {
+            message.contains("ambiguous symbol identity") && message.contains("helper")
+        }),
+        "package/compiler-backed rename receipt should expose the live fallback/noise reason: {fallback_noise}"
     );
     assert_trace_contains(compiler, "CompilerFact", "High", "Fresh")?;
     assert_note_contains(
@@ -1051,7 +1060,73 @@ sub caller {
 }
 
 #[test]
-fn refactor_runtime_blocker_ux_package_local_live_pilot_applies_source_backed_plan()
+fn refactor_runtime_blocker_ux_package_local_live_pilot_applies_exact_source_backed_plan()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let uri = "file:///workspace/lib/Rename/Pilot.pm";
+    let source = r#"package Rename::Pilot;
+use strict;
+use warnings;
+
+sub pilot_target {
+    return 1;
+}
+
+sub caller {
+    return 1;
+}
+
+1;
+"#;
+    open_document(&server, uri, source)?;
+
+    let (target_line, target_character) = position_of(source, "pilot_target {")?;
+    let rename_result = server
+        .handle_rename_workspace(Some(json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": target_line, "character": target_character},
+            "newName": "renamed_pilot_target"
+        })))?
+        .ok_or("missing package-local live rename result")?;
+
+    let changes = rename_result
+        .get("changes")
+        .and_then(Value::as_object)
+        .ok_or("missing package-local live rename changes")?;
+    let edit_count = changes.values().filter_map(Value::as_array).map(Vec::len).sum::<usize>();
+    let explanation = explain_provider_decision(&server, "rename")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert!(
+        edit_count == 1,
+        "package-local live pilot should apply only the exact source-backed edit set: {rename_result}; receipt={request_receipt}"
+    );
+
+    let base_texts = workspace_edit_texts_for_uri(&rename_result, uri)?;
+    assert!(
+        base_texts.iter().filter(|text| **text == "renamed_pilot_target").count() == 1,
+        "package-local live pilot should rename only the source-backed definition when no references exist: {rename_result}"
+    );
+
+    assert_eq!(request_receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("textDocument/rename")
+    );
+    assert_eq!(
+        request_receipt.get("reason").and_then(Value::as_str),
+        Some("package_local_live_pilot")
+    );
+    assert_eq!(request_receipt.get("fallback_state").and_then(Value::as_str), Some("none"));
+    assert_eq!(
+        request_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
+        u64::try_from(edit_count).ok()
+    );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_package_local_live_pilot_falls_back_on_partial_source_backed_plan()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();
     let uri = "file:///workspace/lib/Rename/Pilot.pm";
@@ -1080,20 +1155,14 @@ sub caller {
         })))?
         .ok_or("missing package-local live rename result")?;
 
-    let changes = rename_result
+    let edit_count = rename_result
         .get("changes")
         .and_then(Value::as_object)
-        .ok_or("missing package-local live rename changes")?;
-    let edit_count = changes.values().filter_map(Value::as_array).map(Vec::len).sum::<usize>();
-    assert!(
-        edit_count >= 2,
-        "package-local live pilot should apply source-backed definition and reference edits"
-    );
-
-    let base_texts = workspace_edit_texts_for_uri(&rename_result, uri)?;
-    assert!(
-        base_texts.iter().filter(|text| **text == "renamed_pilot_target").count() >= 2,
-        "package-local live pilot should rename source-backed definition and reference: {rename_result}"
+        .map(|changes| changes.values().filter_map(Value::as_array).map(Vec::len).sum::<usize>())
+        .ok_or("missing fallback workspace edit changes")?;
+    assert_eq!(
+        edit_count, 2,
+        "partial semantic package-local pilot must fall back to the existing safe workspace-index edit set: {rename_result}"
     );
 
     let explanation = explain_provider_decision(&server, "rename")?;
@@ -1105,13 +1174,13 @@ sub caller {
     );
     assert_eq!(
         request_receipt.get("reason").and_then(Value::as_str),
-        Some("package_local_live_pilot")
+        Some("full_index_workspace_edit")
     );
-    assert_eq!(request_receipt.get("fallback_state").and_then(Value::as_str), Some("none"));
     assert_eq!(
-        request_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
-        u64::try_from(edit_count).ok()
+        request_receipt.get("fallback_state").and_then(Value::as_str),
+        Some("workspace_index")
     );
+    assert_eq!(request_receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(2));
 
     Ok(())
 }
@@ -1316,13 +1385,12 @@ fn refactor_runtime_blocker_ux_rename_request_receipt_preserves_package_fallback
         request_receipt.get("compiler_requires_confirmation").and_then(Value::as_bool),
         Some(true)
     );
-    assert_eq!(
-        request_receipt.get("live_provider_state").and_then(Value::as_str),
-        Some("empty_edit")
-    );
+    assert_eq!(request_receipt.get("live_provider_state").and_then(Value::as_str), Some("error"));
     assert!(
-        request_receipt.get("live_provider_error").is_some_and(Value::is_null),
-        "request-local receipt must preserve no-edit fallback state: {request_receipt:?}"
+        request_receipt.get("live_provider_error").and_then(Value::as_str).is_some_and(|message| {
+            message.contains("ambiguous symbol identity") && message.contains("helper")
+        }),
+        "request-local receipt must preserve live fallback/noise reason: {request_receipt:?}"
     );
 
     Ok(())

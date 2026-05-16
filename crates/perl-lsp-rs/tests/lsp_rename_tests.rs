@@ -733,7 +733,7 @@ fn test_rename_out_of_bounds() -> TestResult {
     Ok(())
 }
 
-/// Workspace rename of an unqualified cross-package call must return no edits
+/// Workspace rename of an unqualified cross-package call must hard-refuse
 /// rather than silently renaming the wrong symbol.
 #[test]
 fn test_workspace_rename_blocks_ambiguous_symbol_identity() -> TestResult {
@@ -747,19 +747,20 @@ fn test_workspace_rename_blocks_ambiguous_symbol_identity() -> TestResult {
     // Bar calls process_data without qualification — ambiguous cross-package reference.
     harness.open(bar_uri, "package Bar;\nsub run { return process_data(); }\n1;\n")?;
 
-    let response = harness.request(
-        "textDocument/rename",
-        json!({
-            "textDocument": { "uri": foo_uri },
-            "position": { "line": 1, "character": 5 },
-            "newName": "process_records"
-        }),
-    )?;
-
-    // The rename must refuse with no edits, not silently rename only the
-    // definition while skipping the ambiguous call site.
-    let changes = response["changes"].as_object().ok_or("rename should return changes map")?;
-    assert!(changes.is_empty(), "ambiguous workspace identity must produce no edits: {response}");
+    let error = harness
+        .request(
+            "textDocument/rename",
+            json!({
+                "textDocument": { "uri": foo_uri },
+                "position": { "line": 1, "character": 5 },
+                "newName": "process_records"
+            }),
+        )
+        .expect_err("ambiguous workspace identity must be refused");
+    assert!(
+        error.contains("ambiguous symbol identity"),
+        "ambiguous workspace identity error should explain the refusal: {error}"
+    );
 
     Ok(())
 }

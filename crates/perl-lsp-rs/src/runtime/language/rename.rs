@@ -161,7 +161,7 @@ impl LspServer {
                 "symbol": symbol,
                 "live_provider_edit_count": edit_count,
                 "fallback_state": fallback_state,
-                "claim_boundary": "records existing live rename behavior only; compiler-backed refactor facts remain gated by receipt proof"
+                "claim_boundary": "package-local compiler facts require exact live guardrails; broader compiler-backed refactor facts remain gated by receipt proof"
             }),
         );
     }
@@ -630,6 +630,38 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_rename_workspace_inner(params, true)
+    }
+
+    pub(crate) fn handle_rename_workspace_for_receipt_noise(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_rename_workspace_inner(params, false)
+    }
+
+    fn workspace_edit_change_count(workspace_edit: &Value) -> usize {
+        workspace_edit
+            .get("changes")
+            .and_then(Value::as_object)
+            .map(|changes| changes.values().filter_map(Value::as_array).map(Vec::len).sum())
+            .unwrap_or(0)
+    }
+
+    fn package_rename_guard_accepts_workspace_edit(
+        guard_workspace_edit: &Value,
+        semantic_workspace_edit: &Value,
+        semantic_edit_count: usize,
+    ) -> bool {
+        Self::workspace_edit_change_count(guard_workspace_edit) == semantic_edit_count
+            && guard_workspace_edit == semantic_workspace_edit
+    }
+
+    fn handle_rename_workspace_inner(
+        &self,
+        params: Option<Value>,
+        package_local_live_pilot_enabled: bool,
+    ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(p) = params {
             if let (Some(uri), Some(line), Some(ch), Some(new_name)) = (
                 p.get("textDocument").and_then(|t| t.get("uri")).and_then(|s| s.as_str()),
@@ -714,77 +746,137 @@ impl LspServer {
                             // Fall through to same-file rename
                         }
                         IndexAccessMode::Full(coordinator) => {
-                            if let (Some(offset), Some(symbol)) =
-                                (rename_byte_offset, current_symbol.as_deref())
-                                && !symbol.is_empty()
-                                && symbol.chars().next().is_some_and(|c| !is_perl_sigil(c))
-                                && rename_is_package_scoped
-                            {
-                                let idx = coordinator.index();
-                                match self.package_rename_live_pilot_workspace_edit(
-                                    idx.as_ref(),
-                                    uri,
-                                    offset,
-                                    symbol,
-                                    normalized_bare,
-                                ) {
-                                    Some(Ok((ws_edit, edit_count))) => {
-                                        if let Some(key) = workspace_symbol_key.as_ref() {
-                                            match crate::features::workspace_rename::build_rename_edit(
-                                                idx.as_ref(),
-                                                key,
-                                                normalized_bare,
-                                            ) {
-                                                Ok(edits) if !edits.is_empty() => {
-                                                    let edit_count = edits
-                                                        .iter()
-                                                        .map(|rename_edit| rename_edit.edits.len())
-                                                        .sum::<usize>();
-                                                    let ws_edit =
-                                                        crate::features::workspace_rename::to_workspace_edit(edits);
+                            let idx = coordinator.index();
+                            if package_local_live_pilot_enabled {
+                                if let (Some(offset), Some(symbol)) =
+                                    (rename_byte_offset, current_symbol.as_deref())
+                                    && !symbol.is_empty()
+                                    && symbol.chars().next().is_some_and(|c| !is_perl_sigil(c))
+                                    && rename_is_package_scoped
+                                {
+                                    match self.package_rename_live_pilot_workspace_edit(
+                                        idx.as_ref(),
+                                        uri,
+                                        offset,
+                                        symbol,
+                                        normalized_bare,
+                                    ) {
+                                        Some(Ok((semantic_ws_edit, semantic_edit_count))) => {
+                                            let Some(key) = workspace_symbol_key.as_ref() else {
+                                                self.record_rename_provider_decision_trace(
+                                                    Some(uri),
+                                                    Some(symbol),
+                                                    "package_local_live_pilot_blocked",
+                                                    0,
+                                                    "no_edit",
+                                                );
+                                                return Ok(Some(json!({"changes": {}})));
+                                            };
+
+                                            let guard_edits =
+                                                crate::features::workspace_rename::build_rename_edit(
+                                                    idx.as_ref(),
+                                                    key,
+                                                    normalized_bare,
+                                                )
+                                                .map_err(|refusal| {
+                                                    self.record_rename_provider_decision_trace(
+                                                        Some(uri),
+                                                        Some(symbol),
+                                                        "package_local_live_pilot_ambiguous",
+                                                        0,
+                                                        "ambiguous_identity",
+                                                    );
+                                                    JsonRpcError {
+                                                        code: -32602,
+                                                        message: refusal.to_string(),
+                                                        data: None,
+                                                    }
+                                                })?;
+
+                                            if !guard_edits.is_empty() {
+                                                let guard_ws_edit =
+                                                    crate::features::workspace_rename::to_workspace_edit(
+                                                        guard_edits,
+                                                    );
+                                                if Self::package_rename_guard_accepts_workspace_edit(
+                                                    &guard_ws_edit,
+                                                    &semantic_ws_edit,
+                                                    semantic_edit_count,
+                                                ) {
                                                     self.record_rename_provider_decision_trace(
                                                         Some(uri),
                                                         Some(symbol),
                                                         "package_local_live_pilot",
-                                                        edit_count,
+                                                        semantic_edit_count,
                                                         "none",
                                                     );
-                                                    return Ok(Some(ws_edit));
+                                                    return Ok(Some(semantic_ws_edit));
                                                 }
-                                                Ok(_) => {}
-                                                Err(_) => {
-                                                    self.record_rename_provider_decision_trace(
-                                                        Some(uri),
-                                                        Some(symbol),
-                                                        "package_local_live_pilot_blocked",
-                                                        0,
-                                                        "no_edit",
-                                                    );
-                                                    return Ok(Some(json!({"changes": {}})));
-                                                }
-                                            }
-                                        }
 
-                                        self.record_rename_provider_decision_trace(
-                                            Some(uri),
-                                            Some(symbol),
-                                            "package_local_live_pilot",
-                                            edit_count,
-                                            "none",
-                                        );
-                                        return Ok(Some(ws_edit));
+                                                let guard_edit_count =
+                                                    Self::workspace_edit_change_count(
+                                                        &guard_ws_edit,
+                                                    );
+                                                self.record_rename_provider_decision_trace(
+                                                    Some(uri),
+                                                    Some(symbol),
+                                                    "full_index_workspace_edit",
+                                                    guard_edit_count,
+                                                    "workspace_index",
+                                                );
+                                                return Ok(Some(guard_ws_edit));
+                                            }
+
+                                            self.record_rename_provider_decision_trace(
+                                                Some(uri),
+                                                Some(symbol),
+                                                "package_local_live_pilot_guard_mismatch",
+                                                0,
+                                                "no_edit",
+                                            );
+                                            return Ok(Some(json!({"changes": {}})));
+                                        }
+                                        Some(Err(())) => {
+                                            self.record_rename_provider_decision_trace(
+                                                Some(uri),
+                                                Some(symbol),
+                                                "package_local_live_pilot_blocked",
+                                                0,
+                                                "no_edit",
+                                            );
+                                            return Ok(Some(json!({"changes": {}})));
+                                        }
+                                        None => {}
                                     }
-                                    Some(Err(())) => {
-                                        self.record_rename_provider_decision_trace(
-                                            Some(uri),
-                                            Some(symbol),
-                                            "package_local_live_pilot_blocked",
-                                            0,
-                                            "no_edit",
-                                        );
-                                        return Ok(Some(json!({"changes": {}})));
+                                }
+                            } else if let Some(key) = workspace_symbol_key.as_ref() {
+                                let edits = crate::features::workspace_rename::build_rename_edit(
+                                    idx.as_ref(),
+                                    key,
+                                    normalized_bare,
+                                )
+                                .map_err(|refusal| {
+                                    JsonRpcError {
+                                        code: -32602,
+                                        message: refusal.to_string(),
+                                        data: None,
                                     }
-                                    None => {}
+                                })?;
+                                if edits.is_empty() {
+                                    // Fall through to same-file rename.
+                                } else {
+                                    let edit_count = edits.len();
+                                    let ws_edit =
+                                        crate::features::workspace_rename::to_workspace_edit(edits);
+                                    self.record_rename_provider_decision_trace(
+                                        Some(uri),
+                                        current_symbol.as_deref(),
+                                        "full_index_workspace_edit",
+                                        edit_count,
+                                        "workspace_index",
+                                    );
+                                    return Ok(Some(ws_edit));
                                 }
                             }
                         }

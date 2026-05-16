@@ -43,15 +43,16 @@ use perl_workspace::semantic::queries::{QueryContext, SemanticQueries};
 impl LspServer {
     /// Test-only receipt for rename blocker UX proof.
     ///
-    /// Calls the live rename handler and compares the result with the
+    /// Calls the compatibility rename path and compares the result with the
     /// compiler-fact rename plan from the same runtime workspace index. This is
-    /// receipt-only and does not cut live rename over to compiler facts.
+    /// receipt-only and preserves fallback/noise evidence even when newer live
+    /// guardrails block the edit-producing path.
     pub(crate) fn rename_runtime_blocker_ux_receipt(
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         let (live_provider_result, live_provider_error) =
-            match self.handle_rename_workspace(params.clone()) {
+            match self.handle_rename_workspace_for_receipt_noise(params.clone()) {
                 Ok(result) => (result, None),
                 Err(error) => (
                     Some(json!({
