@@ -52,6 +52,7 @@
 mod calls_and_exprs;
 mod declarations;
 mod interpolation;
+mod scope_constructs;
 mod uses;
 
 use crate::ast::{Node, NodeKind};
@@ -121,7 +122,7 @@ struct Variable {
 /// - `*` (glob): 4
 /// - Other: 5 (fallback)
 #[inline]
-fn sigil_to_index(sigil: &str) -> usize {
+pub(super) fn sigil_to_index(sigil: &str) -> usize {
     // Use first byte for fast comparison - sigils are always single ASCII chars
     match sigil.as_bytes().first() {
         Some(b'$') => 0,
@@ -761,261 +762,85 @@ impl ScopeAnalyzer {
             }
 
             NodeKind::Block { statements } => {
-                let block_scope = Rc::new(Scope::with_parent(scope.clone()));
-                ancestors.push(node);
-                for stmt in statements {
-                    self.analyze_node(stmt, &block_scope, ancestors, issues, context);
-                }
-                ancestors.pop();
-                self.collect_unused_variables(&block_scope, issues, context);
+                scope_constructs::handle_block(
+                    self, node, statements, scope, ancestors, issues, context,
+                );
             }
 
             NodeKind::PhaseBlock { block, .. } => {
-                let phase_scope = Rc::new(Scope::with_parent(scope.clone()));
-                ancestors.push(node);
-                self.analyze_node(block, &phase_scope, ancestors, issues, context);
-                ancestors.pop();
-                self.collect_unused_variables(&phase_scope, issues, context);
+                scope_constructs::handle_phase_block(
+                    self, node, block, scope, ancestors, issues, context,
+                );
             }
 
             NodeKind::For { init, condition, update, body, .. } => {
-                let loop_scope = Rc::new(Scope::with_parent(scope.clone()));
-
-                ancestors.push(node);
-
-                if let Some(init_node) = init {
-                    self.analyze_node(init_node, &loop_scope, ancestors, issues, context);
-                }
-                if let Some(cond) = condition {
-                    self.analyze_node(cond, &loop_scope, ancestors, issues, context);
-                }
-                if let Some(upd) = update {
-                    self.analyze_node(upd, &loop_scope, ancestors, issues, context);
-                }
-                self.analyze_node(body, &loop_scope, ancestors, issues, context);
-
-                ancestors.pop();
-
-                self.collect_unused_variables(&loop_scope, issues, context);
+                scope_constructs::handle_for(
+                    self,
+                    node,
+                    init.as_deref(),
+                    condition.as_deref(),
+                    update.as_deref(),
+                    body,
+                    scope,
+                    ancestors,
+                    issues,
+                    context,
+                );
             }
 
             NodeKind::Foreach { variable, list, body, continue_block } => {
-                let loop_scope = Rc::new(Scope::with_parent(scope.clone()));
-
-                ancestors.push(node);
-
-                // Declare the loop variable and immediately mark it initialized — the list
-                // provides its value at runtime so there is no uninitialized window.
-                self.analyze_node(variable, &loop_scope, ancestors, issues, context);
-                self.mark_initialized(variable, &loop_scope, context);
-                self.analyze_node(list, &loop_scope, ancestors, issues, context);
-                self.analyze_node(body, &loop_scope, ancestors, issues, context);
-                if let Some(cb) = continue_block {
-                    self.analyze_node(cb, &loop_scope, ancestors, issues, context);
-                }
-
-                ancestors.pop();
-
-                self.collect_unused_variables(&loop_scope, issues, context);
+                scope_constructs::handle_foreach(
+                    self,
+                    node,
+                    variable,
+                    list,
+                    body,
+                    continue_block.as_deref(),
+                    scope,
+                    ancestors,
+                    issues,
+                    context,
+                );
             }
 
             NodeKind::Subroutine { signature, body, .. } => {
-                let sub_scope = Rc::new(Scope::with_parent(scope.clone()));
-
-                // Check for duplicate parameters and shadowing
-                let mut param_names = HashSet::new();
-
-                // Extract parameters from signature if present
-                // Optimization: Use slice to avoid cloning the parameters vector (deep copy of AST nodes)
-                let params_to_check: &[Node] = if let Some(sig) = signature {
-                    match &sig.kind {
-                        NodeKind::Signature { parameters } => parameters.as_slice(),
-                        _ => &[],
-                    }
-                } else {
-                    &[]
-                };
-
-                for param in params_to_check {
-                    let extracted = self.extract_variable_name(param);
-                    if !extracted.is_empty() {
-                        let full_name = extracted.as_string();
-                        let (sigil, name) = extracted.parts();
-
-                        // Check for duplicate parameters
-                        if !param_names.insert(full_name.clone()) {
-                            issues.push(ScopeIssue {
-                                kind: IssueKind::DuplicateParameter,
-                                variable_name: full_name.clone(),
-                                line: context.get_line(param.location.start),
-                                range: (param.location.start, param.location.end),
-                                description: format!(
-                                    "Duplicate parameter '{}' in subroutine signature",
-                                    full_name
-                                ),
-                            });
-                        }
-
-                        // Check if parameter shadows a global or parent scope variable
-                        if self.has_variable_parts_in_context(scope, sigil, name, context) {
-                            issues.push(ScopeIssue {
-                                kind: IssueKind::ParameterShadowsGlobal,
-                                variable_name: full_name.clone(),
-                                line: context.get_line(param.location.start),
-                                range: (param.location.start, param.location.end),
-                                description: format!(
-                                    "Parameter '{}' shadows a variable from outer scope",
-                                    full_name
-                                ),
-                            });
-                        }
-
-                        // Declare the parameter in subroutine scope
-                        self.declare_variable_parts_in_context(
-                            &sub_scope,
-                            sigil,
-                            name,
-                            param.location.start,
-                            false,
-                            true,
-                            context,
-                        ); // Parameters are initialized
-                        // Don't mark parameters as automatically used yet - track their actual usage
-                    }
-                }
-
-                ancestors.push(node);
-                self.analyze_node(body, &sub_scope, ancestors, issues, context);
-                ancestors.pop();
-
-                // Check for unused parameters
-                if let Some(sig) = signature {
-                    if let NodeKind::Signature { parameters } = &sig.kind {
-                        for param in parameters {
-                            let extracted = self.extract_variable_name(param);
-                            if !extracted.is_empty() {
-                                let (sigil, name) = extracted.parts();
-                                let full_name = extracted.as_string();
-
-                                // Skip parameters starting with underscore (intentionally unused)
-                                if name.starts_with('_') {
-                                    continue;
-                                }
-
-                                // Optimization: Access variable directly from current scope to avoid Rc clone
-                                let idx = sigil_to_index(sigil);
-                                let vars = sub_scope.variables.borrow();
-                                if let Some(map) = vars[idx].as_ref() {
-                                    if let Some(var) = map.get(name) {
-                                        if !*var.is_used.borrow() {
-                                            issues.push(ScopeIssue {
-                                                kind: IssueKind::UnusedParameter,
-                                                variable_name: full_name.clone(),
-                                                line: context.get_line(param.location.start),
-                                                range: (param.location.start, param.location.end),
-                                                description: format!(
-                                                    "Parameter '{}' is declared but never used",
-                                                    full_name
-                                                ),
-                                            });
-                                            // Mark as used to prevent double reporting
-                                            *var.is_used.borrow_mut() = true;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                self.collect_unused_variables(&sub_scope, issues, context);
+                scope_constructs::handle_subroutine(
+                    self,
+                    node,
+                    signature.as_deref(),
+                    body,
+                    scope,
+                    ancestors,
+                    issues,
+                    context,
+                );
             }
 
             NodeKind::Try { body, catch_blocks, finally_block } => {
-                ancestors.push(node);
-                self.analyze_node(body, scope, ancestors, issues, context);
-
-                for (catch_var, catch_body) in catch_blocks {
-                    let catch_scope = Rc::new(Scope::with_parent(scope.clone()));
-
-                    if let Some(full_name) = catch_var.as_deref() {
-                        let catch_var_range = context
-                            .find_catch_variable_range(catch_body.location.start, full_name)
-                            .unwrap_or((catch_body.location.start, catch_body.location.start));
-                        let (sigil, name) = split_variable_name(full_name);
-                        if !sigil.is_empty() && !name.is_empty() && !name.contains("::") {
-                            if let Some(issue_kind) = catch_scope.declare_variable_parts(
-                                sigil,
-                                name,
-                                catch_var_range.0,
-                                false,
-                                true,
-                            ) {
-                                let description = match issue_kind {
-                                    IssueKind::VariableShadowing => {
-                                        format!(
-                                            "Variable '{}' shadows a variable in outer scope",
-                                            full_name
-                                        )
-                                    }
-                                    IssueKind::VariableRedeclaration => {
-                                        format!(
-                                            "Variable '{}' is already declared in this scope",
-                                            full_name
-                                        )
-                                    }
-                                    _ => String::new(),
-                                };
-                                issues.push(ScopeIssue {
-                                    kind: issue_kind,
-                                    variable_name: full_name.to_string(),
-                                    line: context.get_line(catch_var_range.0),
-                                    range: catch_var_range,
-                                    description,
-                                });
-                            }
-                        }
-                    }
-
-                    self.analyze_block_with_scope(
-                        catch_body,
-                        &catch_scope,
-                        ancestors,
-                        issues,
-                        context,
-                    );
-                    self.collect_unused_variables(&catch_scope, issues, context);
-                }
-
-                if let Some(finally) = finally_block {
-                    self.analyze_node(finally, scope, ancestors, issues, context);
-                }
-
-                ancestors.pop();
+                scope_constructs::handle_try(
+                    self,
+                    node,
+                    body,
+                    catch_blocks,
+                    finally_block.as_deref(),
+                    scope,
+                    ancestors,
+                    issues,
+                    context,
+                );
             }
+
             NodeKind::Package { name, block, .. } => {
-                // Track the active package so that `our` variable declarations can be
-                // correctly namespaced.  Two packages that each declare `our $VAR` are
-                // declaring *different* package-global variables (`Alpha::VAR` vs
-                // `Beta::VAR`) and must not be reported as redeclarations.
-                if let Some(block_node) = block {
-                    // Block form: `package Foo { ... }` — scope is limited to the block.
-                    // Save the previous package name and restore it after the block.
-                    let saved_package = context.current_package.borrow().clone();
-                    *context.current_package.borrow_mut() = name.clone();
-
-                    let pkg_scope = Rc::new(Scope::with_parent(scope.clone()));
-                    ancestors.push(node);
-                    self.analyze_node(block_node, &pkg_scope, ancestors, issues, context);
-                    ancestors.pop();
-                    self.collect_unused_variables(&pkg_scope, issues, context);
-
-                    *context.current_package.borrow_mut() = saved_package;
-                } else {
-                    // Statement form: `package Foo;` — affects the rest of the file.
-                    // No scope boundary is created; the current scope continues.
-                    *context.current_package.borrow_mut() = name.clone();
-                }
+                scope_constructs::handle_package(
+                    self,
+                    node,
+                    name,
+                    block.as_deref(),
+                    scope,
+                    ancestors,
+                    issues,
+                    context,
+                );
             }
 
             // Regex match operations set capture variables ($1, $2, ...) in the current scope.
