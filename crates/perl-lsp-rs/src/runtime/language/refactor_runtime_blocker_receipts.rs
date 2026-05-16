@@ -30,7 +30,7 @@ use perl_semantic_facts::{
     PlannedEditCategory, RenamePlan, SafeDeletePlan, ScopeId, VisibleSymbol,
 };
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
-use perl_semantic_facts::{PlanBlocker, PlanBlockerReason};
+use perl_semantic_facts::{Confidence, EntityKind, PlanBlocker, PlanBlockerReason, Provenance};
 #[cfg(all(
     feature = "workspace",
     not(target_arch = "wasm32"),
@@ -671,6 +671,110 @@ impl LspServer {
         self.record_safe_delete_decision_receipt(receipt)
     }
 
+    /// Narrow live safe-delete pilot for source-backed symbol deletion.
+    ///
+    /// The pilot only returns an edit when the compiler plan is allowed and the
+    /// source-backed delete edit has an exact rollback proof. All other paths
+    /// remain no-edit blocker/fallback responses.
+    pub(crate) fn safe_delete_symbol_live_pilot(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        let source_guard_request = params.clone();
+        let params = params.map(|mut value| {
+            if let Some(object) = value.as_object_mut() {
+                object.insert("includeEditRollbackProof".to_string(), json!(true));
+            }
+            value
+        });
+        let Some(mut receipt) = self.safe_delete_runtime_blocker_ux_receipt(params)? else {
+            return Ok(None);
+        };
+
+        let rollback_proof =
+            receipt.get("symbol_delete_edit_rollback").cloned().unwrap_or(Value::Null);
+        let rollback_is_safe = rollback_proof
+            .get("edit_plan_state")
+            .and_then(Value::as_str)
+            .is_some_and(|state| state == "planned")
+            && rollback_proof.get("rollback_safe").and_then(Value::as_bool).unwrap_or(false)
+            && rollback_proof.get("source_backed").and_then(Value::as_bool).unwrap_or(false);
+        let compiler_allowed = receipt
+            .get("decision")
+            .and_then(Value::as_str)
+            .is_some_and(|decision| decision == "allowed")
+            && receipt
+                .get("fallback_state")
+                .and_then(Value::as_str)
+                .is_some_and(|fallback| fallback == "none");
+        let source_guard_accepts = source_guard_request
+            .as_ref()
+            .and_then(|request| {
+                let uri = req_uri(request).ok()?;
+                let (line, character) = req_position(request).ok()?;
+                let (symbol, byte_offset) = self.refactor_runtime_symbol(uri, line, character)?;
+                self.safe_delete_symbol_live_source_guard(
+                    uri,
+                    usize::try_from(byte_offset).ok()?,
+                    &symbol,
+                )
+            })
+            .unwrap_or(false);
+        let can_return_edit = compiler_allowed && rollback_is_safe && source_guard_accepts;
+        let workspace_edit = if can_return_edit {
+            rollback_proof
+                .get("planned_delete_workspace_edit")
+                .cloned()
+                .unwrap_or_else(|| json!({"changes": {}}))
+        } else {
+            json!({"changes": {}})
+        };
+        let returned_workspace_edit_count = lsp_workspace_edit_count(Some(&workspace_edit));
+        let user_message = safe_delete_symbol_live_pilot_message(&receipt, can_return_edit);
+
+        if let Some(object) = receipt.as_object_mut() {
+            object.insert("provider_action".to_string(), json!("perl.safeDeleteSymbol"));
+            object.insert(
+                "ux_surface".to_string(),
+                json!("narrow_source_backed_symbol_delete_live_pilot"),
+            );
+            object.insert("edits_applied".to_string(), json!(false));
+            object.insert("live_symbol_delete_enabled".to_string(), json!(can_return_edit));
+            object.insert(
+                "live_pilot_source_guard".to_string(),
+                json!(if source_guard_accepts {
+                    "source_backed_exact_subroutine_definition"
+                } else {
+                    "not_source_backed_exact_subroutine_definition"
+                }),
+            );
+            object.insert(
+                "returned_workspace_edit_count".to_string(),
+                json!(returned_workspace_edit_count),
+            );
+            object.insert("workspace_edit".to_string(), workspace_edit);
+            object.insert("user_message".to_string(), json!(user_message));
+            object.insert(
+                "claim_boundary".to_string(),
+                json!(
+                    "narrow safe-delete live pilot only; returns a source-backed symbol-delete WorkspaceEdit when compiler proof and rollback proof both pass"
+                ),
+            );
+            object
+                .insert("trace_only_no_live_behavior_change".to_string(), json!(!can_return_edit));
+            object.insert("no_live_behavior_change".to_string(), json!(!can_return_edit));
+            if can_return_edit {
+                object.insert("source_backed".to_string(), json!(true));
+                object.insert(
+                    "source_backed_state".to_string(),
+                    json!("source_backed_subroutine_range"),
+                );
+            }
+        }
+
+        self.record_safe_delete_decision_receipt(receipt)
+    }
+
     fn record_safe_delete_decision_receipt(
         &self,
         receipt: Value,
@@ -695,6 +799,64 @@ impl LspServer {
             return None;
         }
         Some((symbol, u32::try_from(offset).ok()?))
+    }
+
+    #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+    fn safe_delete_symbol_live_source_guard(
+        &self,
+        uri: &str,
+        byte_offset: usize,
+        symbol: &str,
+    ) -> Option<bool> {
+        let byte_offset = u32::try_from(byte_offset).ok()?;
+        let coordinator = match route_index_access(self.coordinator()) {
+            IndexAccessMode::Full(coordinator) => coordinator,
+            IndexAccessMode::Partial(_) | IndexAccessMode::None => return Some(false),
+        };
+        let index = coordinator.index();
+
+        index
+            .with_semantic_queries_for_uri(uri, |file_id, queries| {
+                let context = QueryContext::new(file_id, None, Some(byte_offset));
+                let symbol_entity_id = queries
+                    .symbol_at(file_id, byte_offset)
+                    .and_then(|(_, occurrence)| occurrence.entity_id);
+                for candidate in queries.definitions(symbol, &context) {
+                    if symbol_entity_id.is_some_and(|entity_id| candidate.entity_id != entity_id) {
+                        continue;
+                    }
+                    if candidate.kind != EntityKind::Subroutine
+                        || candidate.provenance != Provenance::ExactAst
+                        || candidate.confidence != Confidence::High
+                    {
+                        continue;
+                    }
+
+                    let Some(location) =
+                        index.semantic_anchor_wire_location_for_file(file_id, candidate.anchor_id)
+                    else {
+                        continue;
+                    };
+                    if location.uri != uri {
+                        continue;
+                    }
+
+                    let Some(doc) = index.document_store().get(&location.uri) else {
+                        continue;
+                    };
+                    let start = location.range.start.to_byte_offset(&doc.text);
+                    let end = location.range.end.to_byte_offset(&doc.text);
+                    if doc.text.get(start..end).is_some_and(|anchor_text| {
+                        anchor_text == symbol
+                            || anchor_text.starts_with("sub ") && anchor_text.contains(symbol)
+                    }) {
+                        return Some(true);
+                    }
+                }
+
+                Some(false)
+            })
+            .flatten()
     }
 }
 
@@ -1619,6 +1781,48 @@ fn safe_delete_symbol_preview_message(receipt: &Value) -> String {
         }
         None => {
             format!("Safe delete preview could not classify `{symbol}`. No edits were applied.")
+        }
+    }
+}
+
+fn safe_delete_symbol_live_pilot_message(receipt: &Value, can_return_edit: bool) -> String {
+    let symbol = receipt.get("symbol").and_then(Value::as_str).unwrap_or("symbol");
+    if can_return_edit {
+        return format!(
+            "Safe delete can remove `{symbol}` with a source-backed edit. The returned WorkspaceEdit has rollback proof; no edit was applied by the server."
+        );
+    }
+
+    match receipt.get("decision").and_then(Value::as_str) {
+        Some("blocked") => {
+            let blocker = receipt
+                .pointer("/live_blocker_ux/blocker_messages/0")
+                .and_then(Value::as_str)
+                .or_else(|| receipt.get("reason").and_then(Value::as_str))
+                .unwrap_or("the available facts cannot safely authorize deletion");
+            format!("Safe delete refused for `{symbol}`: {blocker}. No edits were returned.")
+        }
+        Some("allowed") => {
+            let reason = receipt
+                .pointer("/symbol_delete_edit_rollback/reason")
+                .and_then(Value::as_str)
+                .unwrap_or("rollback proof is unavailable");
+            format!(
+                "Safe delete did not return edits for `{symbol}`: {reason}. The narrow live pilot requires source-backed rollback proof."
+            )
+        }
+        Some("fallback") => {
+            let reason = receipt
+                .get("reason")
+                .and_then(Value::as_str)
+                .unwrap_or("safe-delete proof is unavailable");
+            format!("Safe delete unavailable for `{symbol}`: {reason}. No edits were returned.")
+        }
+        Some(other) => {
+            format!("Safe delete returned `{other}` for `{symbol}`. No edits were returned.")
+        }
+        None => {
+            format!("Safe delete could not classify `{symbol}`. No edits were returned.")
         }
     }
 }

@@ -15,3 +15,5 @@ expression: "&commands"
 - perl.goToImplementation
 - perl.explainProviderDecision
 - perl.previewSafeDelete
+- perl.safeDeleteSymbol
+- perl.previewPackageRename

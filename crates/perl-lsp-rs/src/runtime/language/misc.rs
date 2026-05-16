@@ -1069,6 +1069,13 @@ impl LspServer {
                         .ok_or_else(|| invalid_params("Missing safe-delete preview argument"))?;
                     return self.safe_delete_symbol_preview(Some(request));
                 }
+                "perl.safeDeleteSymbol" => {
+                    let request = arguments
+                        .first()
+                        .cloned()
+                        .ok_or_else(|| invalid_params("Missing safe-delete symbol argument"))?;
+                    return self.safe_delete_symbol_live_pilot(Some(request));
+                }
                 "perl.previewPackageRename" => {
                     let request = arguments
                         .first()
