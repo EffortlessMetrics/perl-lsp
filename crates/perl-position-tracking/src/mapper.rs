@@ -558,4 +558,124 @@ mod tests {
         mapper.apply_edit(5, 16, " ");
         assert_eq!(mapper.text(), "hello Rust");
     }
+
+    // --- Additional targeted tests for lsp_pos_to_byte, lsp_pos_to_char,
+    //     char_to_lsp_pos with multi-byte UTF-8, CRLF, and out-of-bounds ---
+
+    /// Round-trip: byte → lsp_pos → byte for a string containing a 🦀 (crab emoji,
+    /// U+1F980, 4 bytes UTF-8, 2 UTF-16 code units) and accented é (U+00E9,
+    /// 2 bytes UTF-8, 1 UTF-16 code unit).
+    #[test]
+    fn test_multibyte_utf8_round_trip_byte_to_lsp_pos_to_byte() {
+        // Layout (bytes):  'a'=1, 'é'=2, '🦀'=4, 'b'=1  → total 8 bytes
+        // UTF-16 columns:   a=0,   é=1,   🦀=2..4, b=4, end=5
+        let text = "aé🦀b";
+        let mapper = PositionMapper::new(text);
+
+        // Verify byte → LSP pos for the start of each character
+        assert_eq!(mapper.byte_to_lsp_pos(0), Position { line: 0, character: 0 }); // 'a'
+        assert_eq!(mapper.byte_to_lsp_pos(1), Position { line: 0, character: 1 }); // 'é'
+        assert_eq!(mapper.byte_to_lsp_pos(3), Position { line: 0, character: 2 }); // '🦀'
+        assert_eq!(mapper.byte_to_lsp_pos(7), Position { line: 0, character: 4 }); // 'b'
+
+        // Round-trip: lsp_pos → byte → lsp_pos must be identity for
+        // positions at the start of each character.
+        for (byte_offset, col) in [(0u32, 0u32), (1, 1), (3, 2), (7, 4)] {
+            let pos = Position { line: 0, character: col };
+            let got_byte = mapper.lsp_pos_to_byte(pos).expect("valid position must return Some");
+            assert_eq!(
+                got_byte, byte_offset as usize,
+                "lsp_pos_to_byte for col {col} should be byte {byte_offset}"
+            );
+            // And back
+            assert_eq!(
+                mapper.byte_to_lsp_pos(got_byte),
+                pos,
+                "byte_to_lsp_pos should round-trip for col {col}"
+            );
+        }
+    }
+
+    /// lsp_pos_to_char and char_to_lsp_pos round-trip on a text containing é.
+    #[test]
+    fn test_lsp_pos_to_char_and_char_to_lsp_pos_round_trip() {
+        // 'é' is 2 UTF-8 bytes but 1 char index in the rope and 1 UTF-16 unit.
+        let text = "aéb";
+        let mapper = PositionMapper::new(text);
+
+        // lsp_pos_to_char: line 0, col 1 (UTF-16) → é starts at char index 1
+        let char_idx = mapper
+            .lsp_pos_to_char(Position { line: 0, character: 1 })
+            .expect("valid position must return Some");
+        assert_eq!(char_idx, 1, "char index of 'é' is 1");
+
+        // char_to_lsp_pos: char index 1 → line 0, col 1 (UTF-16)
+        let pos = mapper.char_to_lsp_pos(char_idx);
+        assert_eq!(pos, Position { line: 0, character: 1 });
+
+        // Another round: 'b' is char index 2
+        let char_b = mapper
+            .lsp_pos_to_char(Position { line: 0, character: 2 })
+            .expect("valid position must return Some");
+        assert_eq!(char_b, 2);
+        assert_eq!(mapper.char_to_lsp_pos(char_b), Position { line: 0, character: 2 });
+    }
+
+    /// CRLF multi-line text: verify lsp_pos_to_byte returns the correct byte offset
+    /// for positions on each line, including the byte that follows the \r\n pair.
+    #[test]
+    fn test_crlf_lsp_pos_to_byte_per_line() {
+        // "abc\r\ndef\r\nghi"
+        // bytes:  a=0,b=1,c=2,\r=3,\n=4,d=5,e=6,f=7,\r=8,\n=9,g=10,h=11,i=12
+        let text = "abc\r\ndef\r\nghi";
+        let mapper = PositionMapper::new(text);
+        assert_eq!(mapper.line_ending(), LineEnding::CrLf);
+
+        // Line 0 start
+        assert_eq!(mapper.lsp_pos_to_byte(Position { line: 0, character: 0 }), Some(0));
+        // Line 0 char 2 → byte 2 ('c')
+        assert_eq!(mapper.lsp_pos_to_byte(Position { line: 0, character: 2 }), Some(2));
+        // Line 1 start → byte 5 ('d')
+        assert_eq!(mapper.lsp_pos_to_byte(Position { line: 1, character: 0 }), Some(5));
+        // Line 1 char 2 → byte 7 ('f')
+        assert_eq!(mapper.lsp_pos_to_byte(Position { line: 1, character: 2 }), Some(7));
+        // Line 2 start → byte 10 ('g')
+        assert_eq!(mapper.lsp_pos_to_byte(Position { line: 2, character: 0 }), Some(10));
+    }
+
+    /// Out-of-bounds line → lsp_pos_to_byte and lsp_pos_to_char return None.
+    #[test]
+    fn test_out_of_bounds_line_returns_none() {
+        let text = "one\ntwo\n";
+        let mapper = PositionMapper::new(text);
+
+        // The rope sees "one\ntwo\n" as 3 lines (line 0, 1, and an empty line 2).
+        // Line 3 does not exist.
+        assert!(
+            mapper.lsp_pos_to_byte(Position { line: 3, character: 0 }).is_none(),
+            "line past end of document should return None"
+        );
+        assert!(
+            mapper.lsp_pos_to_char(Position { line: 3, character: 0 }).is_none(),
+            "line past end of document should return None for lsp_pos_to_char"
+        );
+    }
+
+    /// Out-of-bounds column on a line — the implementation clamps to the end of
+    /// the line rather than returning None.
+    #[test]
+    fn test_out_of_bounds_column_clamps_to_line_end() {
+        let text = "hello\nworld\n";
+        let mapper = PositionMapper::new(text);
+
+        // "hello\n" has 5 visible chars (cols 0..5) + newline.
+        // Asking for col 9999 should clamp to the newline / end of line content.
+        let clamped = mapper
+            .lsp_pos_to_byte(Position { line: 0, character: 9999 })
+            .expect("out-of-bounds column must return Some (clamped)");
+
+        // The byte returned must be within the span of line 0 (bytes 0..6 inclusive,
+        // where byte 5 is '\n').  We accept anything in [0, 6].
+        assert!(clamped <= 6, "clamped byte {clamped} should not exceed end of line 0 (byte 6)");
+    }
 }
