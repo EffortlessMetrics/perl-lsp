@@ -722,9 +722,27 @@ fn refactor_runtime_blocker_ux_package_rename_preview_command_returns_scoped_no_
             .map(serde_json::Map::len),
         Some(0)
     );
+    assert_eq!(
+        preview_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
     assert!(
         preview_result.get("planned_workspace_edit").is_some(),
         "package rename preview should return the planned live-provider edit shape: {preview_result}"
+    );
+    let rollback_receipt =
+        preview_result.get("rollback_receipt").ok_or("missing rollback_receipt")?;
+    assert_eq!(rollback_receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        rollback_receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.previewPackageRename")
+    );
+    assert_eq!(rollback_receipt.get("rollback_required").and_then(Value::as_bool), Some(false));
+    assert_eq!(rollback_receipt.get("rollback_safe").and_then(Value::as_bool), Some(true));
+    assert_eq!(rollback_receipt.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        rollback_receipt.get("fallback_state").and_then(Value::as_str),
+        Some("compiler_empty")
     );
     let package_pilot = preview_result.get("package_pilot").ok_or("missing package_pilot")?;
     assert_eq!(package_pilot.get("provider").and_then(Value::as_str), Some("rename"));
@@ -755,6 +773,115 @@ fn refactor_runtime_blocker_ux_package_rename_preview_command_returns_scoped_no_
         Some("perl.previewPackageRename")
     );
     assert_eq!(request_receipt.get("user_message").and_then(Value::as_str), Some(preview_message));
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_package_rename_preview_records_imported_call_noise_and_rollback()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_semantic_real_workspace(&server)?;
+    let app = files.get("lib/RealBaseline/App.pm").ok_or("missing RealBaseline App fixture")?;
+
+    let (alias_line, alias_character) = position_of(app, "alias($self->shared)")?;
+    let preview_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.previewPackageRename",
+            "arguments": [{
+                "textDocument": {"uri": REAL_BASELINE_APP_URI},
+                "position": {"line": alias_line, "character": alias_character},
+                "newName": "renamed_alias"
+            }]
+        })))?
+        .ok_or("missing imported-call package rename preview result")?;
+
+    assert_eq!(preview_result.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        preview_result.get("provider_action").and_then(Value::as_str),
+        Some("perl.previewPackageRename")
+    );
+    assert_eq!(preview_result.get("decision").and_then(Value::as_str), Some("fallback"));
+    assert_eq!(
+        preview_result.get("fallback_state").and_then(Value::as_str),
+        Some("compiler_missing")
+    );
+    assert_eq!(preview_result.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        preview_result.get("live_package_rename_enabled").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        preview_result.get("planned_live_provider_edit_count").and_then(Value::as_u64),
+        Some(1),
+        "preview must preserve the live-provider edit-noise count without applying it: {preview_result}"
+    );
+    assert_eq!(
+        preview_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0),
+        "package rename preview must return no live edits: {preview_result}"
+    );
+    assert_eq!(
+        preview_result
+            .pointer("/workspace_edit/changes")
+            .and_then(Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0),
+        "preview workspace edit must remain empty: {preview_result}"
+    );
+
+    let fallback_noise = preview_result.get("fallback_noise").ok_or("missing fallback_noise")?;
+    assert_eq!(fallback_noise.get("symbol").and_then(Value::as_str), Some("alias"));
+    assert_eq!(fallback_noise.get("new_name").and_then(Value::as_str), Some("renamed_alias"));
+    assert_eq!(
+        fallback_noise.get("fallback_state").and_then(Value::as_str),
+        Some("compiler_missing")
+    );
+    assert_eq!(fallback_noise.get("compiler_available").and_then(Value::as_bool), Some(false));
+    assert_eq!(fallback_noise.get("live_provider_state").and_then(Value::as_str), Some("edits"));
+    assert_eq!(fallback_noise.get("live_provider_edit_count").and_then(Value::as_u64), Some(1));
+
+    let rollback_receipt =
+        preview_result.get("rollback_receipt").ok_or("missing rollback_receipt")?;
+    assert_eq!(
+        rollback_receipt.get("planned_live_provider_edit_count").and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        rollback_receipt.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(rollback_receipt.get("rollback_required").and_then(Value::as_bool), Some(false));
+    assert_eq!(rollback_receipt.get("rollback_safe").and_then(Value::as_bool), Some(true));
+    assert_eq!(rollback_receipt.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        rollback_receipt.get("fallback_state").and_then(Value::as_str),
+        Some("compiler_missing")
+    );
+    assert!(
+        rollback_receipt
+            .get("claim_boundary")
+            .and_then(Value::as_str)
+            .is_some_and(|boundary| boundary.contains("no package rename edits")),
+        "rollback receipt must keep package rename preview no-edit: {rollback_receipt}"
+    );
+
+    let explanation = explain_provider_decision(&server, "rename")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.previewPackageRename")
+    );
+    assert_eq!(
+        request_receipt.pointer("/rollback_receipt/fallback_state").and_then(Value::as_str),
+        Some("compiler_missing")
+    );
+    assert_eq!(
+        request_receipt
+            .pointer("/rollback_receipt/returned_workspace_edit_count")
+            .and_then(Value::as_u64),
+        Some(0)
+    );
 
     Ok(())
 }
