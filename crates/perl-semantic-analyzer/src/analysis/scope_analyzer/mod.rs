@@ -51,6 +51,7 @@
 
 mod calls_and_exprs;
 mod interpolation;
+mod uses;
 
 use crate::ast::{Node, NodeKind};
 use crate::pragma_tracker::{PragmaQueryCursor, PragmaState};
@@ -337,7 +338,7 @@ impl Scope {
 }
 
 /// Helper to split a full variable name into sigil and name parts.
-fn split_variable_name(full_name: &str) -> (&str, &str) {
+pub(super) fn split_variable_name(full_name: &str) -> (&str, &str) {
     if !full_name.is_empty() {
         let c = full_name.as_bytes()[0];
         if c == b'$' || c == b'@' || c == b'%' || c == b'&' || c == b'*' {
@@ -805,82 +806,33 @@ impl ScopeAnalyzer {
                 }
             }
             NodeKind::Variable { sigil, name } => {
-                // Capture variables ($1, $2, ...) are built-in globals but require a preceding
-                // regex match in scope to be meaningful. Check before the general builtin skip.
-                if sigil == "$" && is_capture_variable(name) {
-                    if !scope.regex_match_in_scope() {
-                        let full_name = format!("{}{}", sigil, name);
-                        issues.push(ScopeIssue {
-                            kind: IssueKind::CaptureVarWithoutRegexMatch,
-                            variable_name: full_name.clone(),
-                            line: context.get_line(node.location.start),
-                            range: (node.location.start, node.location.end),
-                            description: format!(
-                                "Capture variable '{}' used without a preceding regex match in scope",
-                                full_name
-                            ),
-                        });
-                    }
+                if uses::handle_variable(
+                    self,
+                    node,
+                    sigil,
+                    name,
+                    scope,
+                    ancestors,
+                    issues,
+                    context,
+                    strict_vars_mode,
+                ) {
                     return;
-                }
-
-                // Skip built-in global variables — but only when no lexical declaration shadows
-                // them.  Variables like $a and $b are sort globals, but `my ($a, $b) = @_`
-                // creates a lexical shadow that must be tracked as used.
-                if is_builtin_global(sigil, name) && !scope.has_variable_parts(sigil, name) {
-                    return;
-                }
-
-                // Skip package-qualified variables
-                if name.contains("::") {
-                    return;
-                }
-
-                // Normalize explicit dereference/container syntax before lookup so that
-                // `@$ref` resolves to `$ref`, while direct subscripting keeps using the
-                // container sigil that the syntax implies.
-                let (lookup_sigil, lookup_name) = self
-                    .resolve_variable_use_target(node, ancestors, context)
-                    .unwrap_or((sigil, name));
-                let (variable_used, is_initialized) =
-                    self.use_variable_parts_in_context(scope, lookup_sigil, lookup_name, context);
-
-                // Variable not found - check if we should report it
-                if !variable_used {
-                    if strict_vars_mode {
-                        self.push_undeclared_variable_issue(issues, context, node, sigil, name);
-                    }
-                } else if !is_initialized {
-                    self.push_uninitialized_variable_issue(issues, context, node, sigil, name);
                 }
             }
             NodeKind::Typeglob { name } => {
-                let (sigil, var_name) = split_variable_name(name);
-                if !sigil.is_empty() && !var_name.is_empty() && !var_name.contains("::") {
-                    self.record_variable_use(
-                        scope,
-                        strict_vars_mode,
-                        context,
-                        issues,
-                        node,
-                        sigil,
-                        var_name,
-                    );
-                }
+                uses::handle_typeglob(self, node, name, scope, issues, context, strict_vars_mode);
             }
             NodeKind::Readline { filehandle: Some(filehandle) } => {
-                let (sigil, var_name) = split_variable_name(filehandle);
-                if !sigil.is_empty() && !var_name.is_empty() && !var_name.contains("::") {
-                    self.record_variable_use(
-                        scope,
-                        strict_vars_mode,
-                        context,
-                        issues,
-                        node,
-                        sigil,
-                        var_name,
-                    );
-                }
+                uses::handle_readline(
+                    self,
+                    node,
+                    filehandle,
+                    scope,
+                    issues,
+                    context,
+                    strict_vars_mode,
+                );
             }
             NodeKind::FunctionCall { name, args } => {
                 calls_and_exprs::handle_function_call(
@@ -919,77 +871,30 @@ impl ScopeAnalyzer {
                 interpolation::handle_heredoc(self, content, *interpolated, scope, context);
             }
             NodeKind::Assignment { lhs, rhs, op: _ } => {
-                // Handle assignment: LHS variable becomes initialized
-                // First analyze RHS (usages)
-                self.analyze_node(rhs, scope, ancestors, issues, context);
-
-                // Optimization: Handle simple scalar assignment directly to avoid double lookup
-                // (mark_initialized + analyze_node both perform lookups)
-                if let NodeKind::Variable { sigil, name } = &lhs.kind {
-                    if !name.contains("::") && !is_builtin_global(sigil, name) {
-                        if self.initialize_and_use_variable_parts_in_context(
-                            scope, sigil, name, context,
-                        ) {
-                            return;
-                        }
-                    }
+                if uses::handle_assignment(self, node, lhs, rhs, scope, ancestors, issues, context) {
+                    return;
                 }
-
-                // Then analyze LHS
-                // We need to recursively mark variables as initialized in the LHS structure
-                // This handles scalars ($x = 1) and lists (($x, $y) = (1, 2))
-                self.mark_initialized(lhs, scope, context);
-
-                // Recurse into LHS to trigger UndeclaredVariable checks
-                // Note: 'use_variable' marks as used, which is technically correct for assignment too (write usage)
-                self.analyze_node(lhs, scope, ancestors, issues, context);
             }
 
             NodeKind::Tie { variable, package, args } => {
-                ancestors.push(node);
-                // Analyze arguments first
-                self.analyze_node(package, scope, ancestors, issues, context);
-                for arg in args {
-                    self.analyze_node(arg, scope, ancestors, issues, context);
-                }
-
-                if let NodeKind::VariableDeclaration { .. } = variable.kind {
-                    // Must analyze declaration FIRST to declare it, then mark initialized
-                    self.analyze_node(variable, scope, ancestors, issues, context);
-                    self.mark_initialized(variable, scope, context);
-                } else {
-                    // For existing variables, mark initialized then analyze (usage)
-                    self.mark_initialized(variable, scope, context);
-                    self.analyze_node(variable, scope, ancestors, issues, context);
-                }
-
-                ancestors.pop();
+                uses::handle_tie(self, node, variable, package, args, scope, ancestors, issues, context);
             }
 
             NodeKind::Untie { variable } => {
-                ancestors.push(node);
-                self.analyze_node(variable, scope, ancestors, issues, context);
-                ancestors.pop();
+                uses::handle_untie(self, node, variable, scope, ancestors, issues, context);
             }
 
             NodeKind::Identifier { name } => {
-                // Check for barewords under strict mode, excluding hash keys
-                // Hybrid check: Fast path for immediate hash keys (depth 1), then known functions, then deep check
-                if strict_subs_mode
-                    && !self.is_in_hash_key_context(node, ancestors, 1)
-                    && !is_known_function(name)
-                    && !pragma_state.has_builtin_import(name)
-                    && !context.has_imported_bareword(name)
-                    && !self.is_in_hash_key_context(node, ancestors, 10)
-                {
-                    issues.push(ScopeIssue {
-                        kind: IssueKind::UnquotedBareword,
-                        variable_name: name.clone(),
-                        line: context.get_line(node.location.start),
-                        range: (node.location.start, node.location.end),
-                        description: format!("Bareword '{}' not allowed under 'use strict'", name),
-                    });
-                }
+                uses::handle_identifier(
+                    self,
+                    node,
+                    name,
+                    issues,
+                    context,
+                    ancestors,
+                    &pragma_state,
+                    strict_subs_mode,
+                );
             }
 
             NodeKind::Binary { op: _, left, right } => {
@@ -2040,13 +1945,13 @@ fn collect_imported_barewords(ast: &Node) -> HashSet<String> {
 /// Capture variables are `$1`, `$2`, ..., `$9`, `$10`, `$11`, etc.
 /// `$0` is the program name and is NOT a capture variable.
 #[inline]
-fn is_capture_variable(name: &str) -> bool {
+pub(super) fn is_capture_variable(name: &str) -> bool {
     // Must be non-empty, all digits, and not "0" (which is $0 = program name)
     !name.is_empty() && name != "0" && name.as_bytes().iter().all(|c| c.is_ascii_digit())
 }
 
 /// Check if a variable is a built-in Perl global variable
-fn is_builtin_global(sigil: &str, name: &str) -> bool {
+pub(super) fn is_builtin_global(sigil: &str, name: &str) -> bool {
     // Fast path: most user variables start with lowercase and are not built-ins
     // Exception: $a and $b are built-in sort variables
     if !name.is_empty() {
@@ -2134,7 +2039,7 @@ fn is_builtin_global(sigil: &str, name: &str) -> bool {
 }
 
 /// Check if an identifier is a known Perl built-in function
-fn is_known_function(name: &str) -> bool {
+pub(super) fn is_known_function(name: &str) -> bool {
     if name.is_empty() {
         return false;
     }
@@ -2191,7 +2096,7 @@ fn is_known_function(name: &str) -> bool {
 /// - Position 0: `open`, `opendir`, `sysopen`, `socket`, `accept`, `dbmopen`
 /// - Position 1: `read`, `sysread`, `recv`, `shmread`
 /// - Positions 0 and 1: `pipe`, `socketpair`
-fn builtin_declaration_arg_positions(name: &str) -> &'static [usize] {
+pub(super) fn builtin_declaration_arg_positions(name: &str) -> &'static [usize] {
     match name {
         // Position 0: the first argument is the new handle/socket
         "open" | "opendir" | "sysopen" | "socket" | "accept" | "dbmopen" => &[0],
@@ -2210,7 +2115,7 @@ fn builtin_declaration_arg_positions(name: &str) -> &'static [usize] {
 /// When any of these is invoked as a bare call (no args), Perl implicitly reads
 /// (and in some cases modifies) `$_`. Marking `$_` as used at call sites prevents
 /// false "unused" or "uninitialized" diagnostics for lexically-scoped `my $_`.
-fn is_topic_defaulting_builtin(name: &str) -> bool {
+pub(super) fn is_topic_defaulting_builtin(name: &str) -> bool {
     matches!(
         name,
         "chomp"
@@ -2237,7 +2142,7 @@ fn is_topic_defaulting_builtin(name: &str) -> bool {
 }
 
 /// Topic-defaulting builtins that also modify `$_` when called without args.
-fn is_topic_modifying_builtin(name: &str) -> bool {
+pub(super) fn is_topic_modifying_builtin(name: &str) -> bool {
     matches!(name, "chomp" | "chop")
 }
 
