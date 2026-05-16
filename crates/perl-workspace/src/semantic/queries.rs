@@ -648,6 +648,22 @@ impl<'a> SemanticQueries for WorkspaceSemanticQueries<'a> {
 
         // ── Collect definition occurrences ──
         let bare = bare_name(&old_name);
+        if let Some(info) = entity_info.as_ref()
+            && is_definition_kind(info.kind)
+            && let Some(anchor_id) = info.anchor_id
+            && let Some(shard) = self
+                .fact_shards
+                .values()
+                .find(|shard| shard.anchors.iter().any(|anchor| anchor.id == anchor_id))
+        {
+            edits.push(PlannedEdit::new(
+                anchor_id,
+                shard.file_id,
+                PlannedEditCategory::Definition,
+                bare.clone(),
+                new_name.to_string(),
+            ));
+        }
         for shard in self.fact_shards.values() {
             for occ in &shard.occurrences {
                 if occ.entity_id != Some(entity_id) {
@@ -731,21 +747,20 @@ impl<'a> SemanticQueries for WorkspaceSemanticQueries<'a> {
         // ── Cross-module export check (Req 16.3) ──
         // If the symbol is exported and referenced from other modules,
         // add a CrossModuleExport blocker.
+        let entity_file_id = entity_info.as_ref().and_then(|e| {
+            e.anchor_id.and_then(|aid| {
+                self.fact_shards
+                    .values()
+                    .find_map(|s| s.anchors.iter().find(|a| a.id == aid).map(|_| s.file_id))
+            })
+        });
+        let is_imported = entity_file_id
+            .map(|fid| self.import_export_index.is_imported_by_other_file(&bare, fid))
+            .unwrap_or(false);
+
         if let Some(exporting_module) = self.import_export_index.find_exporting_module(&bare) {
             // Check if any other file imports this symbol.
-            let entity_file_id = entity_info.as_ref().and_then(|e| {
-                e.anchor_id.and_then(|aid| {
-                    self.fact_shards
-                        .values()
-                        .find_map(|s| s.anchors.iter().find(|a| a.id == aid).map(|_| s.file_id))
-                })
-            });
-
-            let has_cross_module_refs = entity_file_id
-                .map(|fid| self.import_export_index.is_imported_by_other_file(&bare, fid))
-                .unwrap_or(false);
-
-            if has_cross_module_refs {
+            if is_imported {
                 blockers.push(PlanBlocker::new(
                     PlanBlockerReason::CrossModuleExport,
                     None,
@@ -764,6 +779,18 @@ impl<'a> SemanticQueries for WorkspaceSemanticQueries<'a> {
                     None,
                 ));
             }
+        }
+
+        if is_imported
+            && !blockers
+                .iter()
+                .any(|blocker| matches!(blocker.reason, PlanBlockerReason::CrossModuleExport))
+        {
+            blockers.push(PlanBlocker::new(
+                PlanBlockerReason::ImportedSymbol,
+                None,
+                format!("Symbol '{}' is imported by another file.", bare),
+            ));
         }
 
         // Deduplicate edits by anchor_id (an occurrence may appear in both
@@ -2500,6 +2527,58 @@ mod tests {
     }
 
     #[test]
+    fn rename_plan_uses_source_backed_entity_anchor_without_definition_occurrence()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let file_id = FileId(1);
+        let entity_id = EntityId(100);
+        let anchor_id = AnchorId(10);
+        let shard = make_shard(
+            "file:///lib/Foo.pm",
+            file_id,
+            vec![AnchorFact {
+                id: anchor_id,
+                file_id,
+                span_start_byte: 0,
+                span_end_byte: 15,
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            }],
+            vec![EntityFact {
+                id: entity_id,
+                kind: EntityKind::Subroutine,
+                canonical_name: "Foo::bar".to_string(),
+                anchor_id: Some(anchor_id),
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            }],
+            vec![],
+            vec![],
+        );
+        let mut shards = HashMap::new();
+        shards.insert(shard.source_uri.clone(), shard);
+
+        let ref_index = ReferenceIndex::new();
+        let ie_index = ImportExportIndex::new();
+        let queries = build_queries(&ref_index, &ie_index, &shards);
+
+        let plan = queries.rename_plan(entity_id, "baz");
+
+        assert_eq!(plan.entity_id, entity_id);
+        assert_eq!(plan.old_name, "Foo::bar");
+        assert!(plan.blockers.is_empty(), "source-backed definition should not block: {plan:?}");
+        assert_eq!(plan.edits.len(), 1, "definition anchor should produce one edit: {plan:?}");
+        let edit = plan.edits.first().ok_or("missing definition edit")?;
+        assert_eq!(edit.anchor_id, anchor_id);
+        assert_eq!(edit.file_id, file_id);
+        assert_eq!(edit.category, PlannedEditCategory::Definition);
+        assert_eq!(edit.old_text, "bar");
+        assert_eq!(edit.new_text, "baz");
+        Ok(())
+    }
+
+    #[test]
     fn rename_plan_unknown_entity_returns_empty_plan() -> Result<(), Box<dyn std::error::Error>> {
         let shards = HashMap::new();
         let ref_index = ReferenceIndex::new();
@@ -2735,6 +2814,77 @@ mod tests {
             .filter(|b| b.reason == PlanBlockerReason::CrossModuleExport)
             .collect();
         assert!(!export_blockers.is_empty(), "should have CrossModuleExport blocker");
+        Ok(())
+    }
+
+    #[test]
+    fn rename_plan_blocks_on_imported_symbol_without_export_set()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use perl_semantic_facts::{ImportKind, ImportSpec, ImportSymbols};
+
+        let file_def = FileId(1);
+        let file_importer = FileId(2);
+        let entity_id = EntityId(100);
+        let anchor_def = AnchorId(10);
+
+        let shard_def = make_shard(
+            "file:///lib/Provider.pm",
+            file_def,
+            vec![AnchorFact {
+                id: anchor_def,
+                file_id: file_def,
+                span_start_byte: 0,
+                span_end_byte: 10,
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            }],
+            vec![EntityFact {
+                id: entity_id,
+                kind: EntityKind::Subroutine,
+                canonical_name: "Provider::util".to_string(),
+                anchor_id: Some(anchor_def),
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            }],
+            vec![],
+            vec![],
+        );
+        let shard_importer =
+            make_shard("file:///lib/Consumer.pm", file_importer, vec![], vec![], vec![], vec![]);
+        let mut shards = HashMap::new();
+        shards.insert(shard_def.source_uri.clone(), shard_def);
+        shards.insert(shard_importer.source_uri.clone(), shard_importer);
+
+        let ref_index = ReferenceIndex::new();
+        let mut ie_index = ImportExportIndex::new();
+        ie_index.add_file_imports(
+            "file:///lib/Consumer.pm",
+            file_importer,
+            vec![ImportSpec {
+                module: "Provider".to_string(),
+                kind: ImportKind::UseExplicitList,
+                symbols: ImportSymbols::Explicit(vec!["util".to_string()]),
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+                file_id: Some(file_importer),
+                anchor_id: None,
+                scope_id: None,
+                span_start_byte: None,
+            }],
+        );
+
+        let queries = build_queries(&ref_index, &ie_index, &shards);
+        let plan = queries.rename_plan(entity_id, "new_util");
+
+        assert!(plan.edits.iter().any(|edit| edit.category == PlannedEditCategory::Definition));
+        let import_blockers: Vec<_> = plan
+            .blockers
+            .iter()
+            .filter(|blocker| blocker.reason == PlanBlockerReason::ImportedSymbol)
+            .collect();
+        assert!(!import_blockers.is_empty(), "should have ImportedSymbol blocker");
         Ok(())
     }
 

@@ -559,19 +559,21 @@ fn refactor_runtime_blocker_ux_rename_receipt_records_package_fallback_noise()
     let package_pilot = receipt.get("package_pilot").ok_or("missing package_pilot")?;
     assert_eq!(package_pilot.get("provider").and_then(Value::as_str), Some("rename"));
     assert_eq!(package_pilot.get("eligible").and_then(Value::as_bool), Some(false));
-    assert_eq!(package_pilot.get("reason").and_then(Value::as_str), Some("empty_plan"));
-    assert_eq!(package_pilot.get("edit_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(package_pilot.get("reason").and_then(Value::as_str), Some("blocked"));
+    assert_eq!(package_pilot.get("edit_count").and_then(Value::as_u64), Some(1));
+    assert_json_array_contains(package_pilot, "edit_categories", "Definition")?;
+    assert_json_array_contains(package_pilot, "blocker_reasons", "ImportedSymbol")?;
     assert_eq!(package_pilot.get("no_live_rename_cutover").and_then(Value::as_bool), Some(true));
     assert_eq!(fallback_noise.get("provider").and_then(Value::as_str), Some("rename"));
     assert_eq!(fallback_noise.get("symbol").and_then(Value::as_str), Some("helper"));
     assert_eq!(fallback_noise.get("new_name").and_then(Value::as_str), Some("renamed_helper"));
     assert_eq!(
         fallback_noise.get("compiler_requires_confirmation").and_then(Value::as_bool),
-        Some(false)
+        Some(true)
     );
     assert_eq!(
         fallback_noise.get("fallback_state").and_then(Value::as_str),
-        Some("compiler_empty")
+        Some("compiler_blocked")
     );
     let live_edit_count = fallback_noise
         .get("live_provider_edit_count")
@@ -581,10 +583,7 @@ fn refactor_runtime_blocker_ux_rename_receipt_records_package_fallback_noise()
         .get("compiler_plan_edit_count")
         .and_then(Value::as_u64)
         .ok_or("missing compiler_plan_edit_count")?;
-    assert_eq!(
-        compiler_edit_count, 0,
-        "package/compiler-backed rename receipt should not promote an empty compiler plan: {fallback_noise}"
-    );
+    assert_eq!(compiler_edit_count, 1, "compiler plan should include the definition edit");
     let live_state =
         fallback_noise.get("live_provider_state").and_then(Value::as_str).ok_or("missing state")?;
     assert_eq!(live_state, "error", "unexpected live provider state: {fallback_noise}");
@@ -605,14 +604,15 @@ fn refactor_runtime_blocker_ux_rename_receipt_records_package_fallback_noise()
         }),
         "package/compiler-backed rename receipt should expose the live fallback/noise reason: {fallback_noise}"
     );
-    assert_trace_contains(compiler, "Fallback", "Low", "NotApplicable")?;
+    assert_trace_contains(compiler, "CompilerFact", "High", "Fresh")?;
     assert_note_contains(
         compiler,
         &[
             "rename runtime blocker UX",
             "compiler_plan_edits=",
-            "blocker_count=0",
-            "requires_confirmation=false",
+            "blocker_count=1",
+            "ImportedSymbol",
+            "requires_confirmation=true",
             "no live refactor behavior change",
         ],
     )?;
@@ -647,28 +647,30 @@ fn refactor_runtime_blocker_ux_rename_receipt_records_real_workspace_package_pil
     assert_eq!(package_pilot.get("provider").and_then(Value::as_str), Some("rename"));
     assert_eq!(
         package_pilot.get("eligible").and_then(Value::as_bool),
-        Some(false),
+        Some(true),
         "unexpected package pilot classification: {package_pilot}"
     );
-    assert_eq!(package_pilot.get("reason").and_then(Value::as_str), Some("empty_plan"));
-    assert_eq!(package_pilot.get("edit_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(package_pilot.get("reason").and_then(Value::as_str), Some("none"));
+    assert_eq!(package_pilot.get("edit_count").and_then(Value::as_u64), Some(1));
     assert_eq!(package_pilot.get("blocker_count").and_then(Value::as_u64), Some(0));
+    assert_json_array_contains(package_pilot, "edit_categories", "Definition")?;
     assert_eq!(package_pilot.get("no_live_rename_cutover").and_then(Value::as_bool), Some(true));
     assert_eq!(
         fallback_noise.get("fallback_state").and_then(Value::as_str),
-        Some("compiler_empty")
+        Some("compiler_allowed")
     );
     assert_eq!(
         fallback_noise.get("compiler_requires_confirmation").and_then(Value::as_bool),
         Some(false)
     );
-    assert_trace_contains(compiler, "Fallback", "Low", "NotApplicable")?;
+    assert_trace_contains(compiler, "SemanticFact", "High", "Fresh")?;
     assert_note_contains(
         compiler,
         &[
             "rename package pilot proof",
-            "eligible=false",
-            "reason=empty_plan",
+            "eligible=true",
+            "reason=none",
+            "edit_count=1",
             "claim_boundary=receipt-only package/compiler-backed pilot",
             "no_live_rename_cutover=true",
             "rename runtime blocker UX",
@@ -704,12 +706,12 @@ fn refactor_runtime_blocker_ux_package_rename_preview_command_returns_scoped_no_
         preview_result.get("provider_action").and_then(Value::as_str),
         Some("perl.previewPackageRename")
     );
-    assert_eq!(preview_result.get("decision").and_then(Value::as_str), Some("fallback"));
-    assert_eq!(preview_result.get("reason").and_then(Value::as_str), Some("empty_compiler_plan"));
+    assert_eq!(preview_result.get("decision").and_then(Value::as_str), Some("allowed"));
     assert_eq!(
-        preview_result.get("fallback_state").and_then(Value::as_str),
-        Some("compiler_empty")
+        preview_result.get("reason").and_then(Value::as_str),
+        Some("compiler_preview_allowed")
     );
+    assert_eq!(preview_result.get("fallback_state").and_then(Value::as_str), Some("none"));
     assert_eq!(preview_result.get("edits_applied").and_then(Value::as_bool), Some(false));
     assert_eq!(
         preview_result.get("live_package_rename_enabled").and_then(Value::as_bool),
@@ -742,12 +744,14 @@ fn refactor_runtime_blocker_ux_package_rename_preview_command_returns_scoped_no_
     assert_eq!(rollback_receipt.get("edits_applied").and_then(Value::as_bool), Some(false));
     assert_eq!(
         rollback_receipt.get("fallback_state").and_then(Value::as_str),
-        Some("compiler_empty")
+        Some("compiler_allowed")
     );
     let package_pilot = preview_result.get("package_pilot").ok_or("missing package_pilot")?;
     assert_eq!(package_pilot.get("provider").and_then(Value::as_str), Some("rename"));
-    assert_eq!(package_pilot.get("eligible").and_then(Value::as_bool), Some(false));
-    assert_eq!(package_pilot.get("reason").and_then(Value::as_str), Some("empty_plan"));
+    assert_eq!(package_pilot.get("eligible").and_then(Value::as_bool), Some(true));
+    assert_eq!(package_pilot.get("reason").and_then(Value::as_str), Some("none"));
+    assert_eq!(package_pilot.get("edit_count").and_then(Value::as_u64), Some(1));
+    assert_json_array_contains(package_pilot, "edit_categories", "Definition")?;
     assert_eq!(package_pilot.get("no_live_rename_cutover").and_then(Value::as_bool), Some(true));
     assert_eq!(
         preview_result.get("claim_boundary").and_then(Value::as_str),
@@ -759,11 +763,11 @@ fn refactor_runtime_blocker_ux_package_rename_preview_command_returns_scoped_no_
         .and_then(Value::as_str)
         .ok_or("missing package rename preview user_message")?;
     assert!(
-        preview_message.contains("Package rename preview refused")
+        preview_message.contains("Package rename preview")
             && preview_message.contains("shared")
             && preview_message.contains("renamed_shared")
-            && preview_message.contains("No edits were applied"),
-        "package rename preview message should explain the no-edit refusal: {preview_message}"
+            && preview_message.contains("no package rename edits were applied"),
+        "package rename preview message should explain the no-edit allowed proof: {preview_message}"
     );
 
     let explanation = explain_provider_decision(&server, "rename")?;
@@ -1086,12 +1090,12 @@ fn refactor_runtime_blocker_ux_rename_request_receipt_preserves_package_fallback
     assert_eq!(request_receipt.get("provider").and_then(Value::as_str), Some("rename"));
     assert_eq!(
         request_receipt.get("fallback_state").and_then(Value::as_str),
-        Some("compiler_empty")
+        Some("compiler_blocked")
     );
-    assert_eq!(request_receipt.get("compiler_plan_edit_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(request_receipt.get("compiler_plan_edit_count").and_then(Value::as_u64), Some(1));
     assert_eq!(
         request_receipt.get("compiler_requires_confirmation").and_then(Value::as_bool),
-        Some(false)
+        Some(true)
     );
     assert_eq!(request_receipt.get("live_provider_state").and_then(Value::as_str), Some("error"));
     assert!(
