@@ -2659,6 +2659,39 @@ impl WorkspaceIndex {
         location
     }
 
+    /// Resolve a semantic anchor to a source-backed LSP-wire location in a
+    /// specific indexed file.
+    ///
+    /// This is the edit-safe variant of [`Self::semantic_anchor_wire_location`]:
+    /// callers that already have `(file_id, anchor_id)` from a semantic plan do
+    /// not need the global duplicate-anchor fail-closed behavior.
+    pub fn semantic_anchor_wire_location_for_file(
+        &self,
+        file_id: FileId,
+        anchor_id: AnchorId,
+    ) -> Option<WireLocation> {
+        let shards = self.fact_shards.read();
+        let shard = shards.values().find(|shard| shard.file_id == file_id)?;
+        let anchor = shard
+            .anchors
+            .iter()
+            .find(|anchor| anchor.id == anchor_id && anchor.file_id == file_id)?;
+
+        if anchor.span_end_byte <= anchor.span_start_byte {
+            return None;
+        }
+
+        let doc = self.document_store.get(&shard.source_uri)?;
+        let start = usize::try_from(anchor.span_start_byte).ok()?;
+        let end = usize::try_from(anchor.span_end_byte).ok()?;
+        doc.text.get(start..end)?;
+
+        Some(WireLocation::new(
+            shard.source_uri.clone(),
+            WireRange::from_byte_offsets(&doc.text, start, end),
+        ))
+    }
+
     /// Compute the [`FileId`] for a URI using the same hash used during indexing.
     ///
     /// Returns `None` if the URI has not been indexed (no fact shard is present).
@@ -6981,6 +7014,44 @@ MixedMod->import(qw(qw_one qw_two));
             None,
             "duplicate source-backed anchors must not resolve to an arbitrary file"
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_anchor_wire_location_for_file_resolves_duplicate_anchor_ids_by_file()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::semantic::queries::SemanticQueries;
+
+        let index = WorkspaceIndex::new();
+        let code = "package DuplicateAnchor;\nsub target { 1 }\n1;\n";
+        let uri_a = "file:///lib/DuplicateA.pm";
+        let uri_b = "file:///lib/DuplicateB.pm";
+
+        must(index.index_file(must(url::Url::parse(uri_a)), code.to_string()));
+        must(index.index_file(must(url::Url::parse(uri_b)), code.to_string()));
+
+        let (file_id_a, anchor_id) = index
+            .with_semantic_queries_for_uri(uri_a, |file_id, queries| {
+                let ctx = crate::semantic::queries::QueryContext::new(file_id, None, Some(0));
+                queries
+                    .definitions("DuplicateAnchor::target", &ctx)
+                    .first()
+                    .map(|candidate| (file_id, candidate.anchor_id))
+            })
+            .flatten()
+            .ok_or("missing duplicate definition candidate")?;
+
+        assert_eq!(
+            index.semantic_anchor_wire_location(anchor_id),
+            None,
+            "global anchor lookup must still fail closed for duplicate anchor IDs"
+        );
+
+        let location = index
+            .semantic_anchor_wire_location_for_file(file_id_a, anchor_id)
+            .ok_or("file-scoped anchor lookup should resolve duplicate anchor ID")?;
+        assert_eq!(location.uri, uri_a);
 
         Ok(())
     }
