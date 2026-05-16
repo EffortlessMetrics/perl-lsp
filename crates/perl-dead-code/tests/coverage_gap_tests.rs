@@ -235,15 +235,19 @@ mod always_true_edge_cases {
     use super::*;
 
     /// `if (0.0) {...}` — float parses successfully but equals 0.0.
-    /// `is_ok_and(|n| n != 0.0)` returns false (0.0 == 0.0), so line 94's branch fires.
+    /// `is_ok_and(|n| n != 0.0)` returns false (0.0 == 0.0), exercising that branch.
+    /// `is_always_false("0.0")` also returns false (not a recognized literal), so the
+    /// block is NOT detected as dead — the detector only matches "0", `""`, `''`, `undef`.
     #[test]
-    fn float_zero_not_always_true_so_if_runs() -> Result<(), String> {
+    fn float_zero_if_branch_is_not_detected_as_dead() -> Result<(), String> {
         let det = detector_with("/float_zero_if.pl", "if (0.0) {\n    print 'maybe';\n}\n")?;
         let results = analyze(&det, "/float_zero_if.pl")?;
-        // 0.0 is falsy — should be flagged as dead branch (is_always_false matches "0.0"? no)
-        // Actually: is_always_false only matches "0", "\"\"", "''" or "undef".
-        // "0.0" is not in that set, so it is NOT flagged. The point is line 94's branch.
-        let _ = results;
+        // is_always_false("0.0") is false — "0.0" is not a recognized always-false literal
+        // so the block is NOT flagged as a dead branch
+        assert!(
+            results.iter().all(|d| d.code_type != DeadCodeType::DeadBranch),
+            "if (0.0) should not be flagged as dead branch (0.0 not a recognized literal); got {results:?}"
+        );
         Ok(())
     }
 
