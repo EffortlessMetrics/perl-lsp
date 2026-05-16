@@ -5,24 +5,14 @@
 use super::super::*;
 use crate::cancellation::RequestCleanupGuard;
 use crate::protocol::{req_position, req_uri};
-use perl_lsp_rs_core::providers::navigation::hover_shadow::{
-    HoverCutoverOutcome, HoverCutoverResult, hover_cutover,
-};
-use perl_semantic_facts::ProviderFactSourceKind;
-
+mod hover_cards;
 mod hover_extracted;
 #[cfg(test)]
 mod hover_tests;
+mod live_compiler_hover;
 mod regex_hover;
 
 use hover_extracted::HoverExtracted;
-
-#[derive(Debug, Clone)]
-struct LiveHoverCompilerContext {
-    uri: String,
-    symbol: String,
-    byte_offset: u32,
-}
 
 impl LspServer {
     /// Handle textDocument/hover request for symbol information display
@@ -155,118 +145,6 @@ impl LspServer {
         Ok(Some(json!(null)))
     }
 
-    fn live_hover_compiler_context(
-        uri: &str,
-        text: &str,
-        offset: usize,
-    ) -> Option<LiveHoverCompilerContext> {
-        let symbol = Self::get_token_at_position_static(text, offset);
-        if symbol.is_empty() {
-            return None;
-        }
-
-        let byte_offset = u32::try_from(offset).ok()?;
-        Some(LiveHoverCompilerContext { uri: uri.to_string(), symbol, byte_offset })
-    }
-
-    fn try_live_compiler_hover(
-        &self,
-        legacy_value: Option<&Value>,
-        context: Option<&LiveHoverCompilerContext>,
-    ) -> Option<Value> {
-        let context = context?;
-        let legacy_text = legacy_value.and_then(Self::hover_value_markdown);
-
-        #[cfg(not(all(feature = "workspace", not(target_arch = "wasm32"))))]
-        {
-            let _ = (legacy_text, context);
-            None
-        }
-
-        #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
-        {
-            let workspace_index = self.workspace_index()?;
-            let outcome = workspace_index.with_semantic_queries_for_uri(
-                &context.uri,
-                |file_id, queries| {
-                    hover_cutover(
-                        legacy_text.clone(),
-                        &queries,
-                        &context.symbol,
-                        file_id,
-                        context.byte_offset,
-                        None,
-                    )
-                },
-            )?;
-
-            if !Self::hover_outcome_uses_live_compiler_facts(&outcome) {
-                return None;
-            }
-
-            match outcome.result {
-                HoverCutoverResult::Exact(explanation)
-                | HoverCutoverResult::Ambiguous(explanation)
-                | HoverCutoverResult::DynamicBoundary(explanation) => {
-                    Some(Self::hover_markdown_value(explanation.markdown))
-                }
-                HoverCutoverResult::LegacyFallback(_) => None,
-            }
-        }
-    }
-
-    fn hover_outcome_uses_live_compiler_facts(outcome: &HoverCutoverOutcome) -> bool {
-        outcome.receipt.fact_source_traces.iter().any(|trace| {
-            matches!(
-                trace.source,
-                ProviderFactSourceKind::CompilerFact
-                    | ProviderFactSourceKind::FrameworkAdapter
-                    | ProviderFactSourceKind::DynamicBoundary
-            )
-        })
-    }
-
-    fn hover_value_markdown(value: &Value) -> Option<String> {
-        let contents = value.get("contents")?;
-        if let Some(markdown) = contents.as_str() {
-            return Some(markdown.to_string());
-        }
-        contents.get("value").and_then(Value::as_str).map(str::to_string)
-    }
-
-    fn hover_markdown_value(markdown: String) -> Value {
-        json!({
-            "contents": {
-                "kind": "markdown",
-                "value": markdown,
-            },
-        })
-    }
-
-    fn method_modifier_description(modifier_kind: &str) -> &'static str {
-        match modifier_kind {
-            "before" => "runs **before** the method — use for preconditions and logging",
-            "after" => "runs **after** the method — use for postconditions and cleanup",
-            "around" => {
-                "wraps the method — receives `$orig` as first arg, must call `$orig->($self, @_)`"
-            }
-            "override" => "overrides the parent method — use to replace inherited behavior",
-            "augment" => "extends the parent method — call `inner()` to invoke the next layer",
-            _ => "modifies the method",
-        }
-    }
-
-    fn build_method_modifier_hover(modifier_kind: &str, method_name: &str, doc: &str) -> Value {
-        let kind_label = Self::method_modifier_description(modifier_kind);
-        json!({
-            "contents": {
-                "kind": "markdown",
-                "value": format!(
-                    "**Method Modifier (`{modifier_kind}`)**\n\n`{method_name}` — {kind_label}\n\n{doc}"
-                ),
-            },
-        })
-    }
     /// Extract hover information from semantic analysis (called under document lock).
     ///
     /// Uses `get_or_build_analyzer` so repeated hovers on the same document version
@@ -291,7 +169,7 @@ impl LspServer {
         {
             let method_name = &symbol_info.name;
             let doc = symbol_info.documentation.as_deref().unwrap_or("");
-            return HoverExtracted::Complete(Self::build_method_modifier_hover(
+            return HoverExtracted::Complete(hover_cards::method_modifier_hover(
                 modifier_kind,
                 method_name,
                 doc,
@@ -320,7 +198,7 @@ impl LspServer {
             {
                 let method_name = &symbol_info.name;
                 let doc = symbol_info.documentation.as_deref().unwrap_or("");
-                return HoverExtracted::Complete(Self::build_method_modifier_hover(
+                return HoverExtracted::Complete(hover_cards::method_modifier_hover(
                     modifier_kind,
                     method_name,
                     doc,
