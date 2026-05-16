@@ -40,6 +40,44 @@ impl TokenSpan {
     pub const fn range(self) -> Range<usize> {
         self.start..self.end
     }
+
+    /// Return whether `offset` is inside this half-open span.
+    ///
+    /// The start is inclusive and the end is exclusive, matching Rust
+    /// [`Range`] semantics. Empty spans contain no offsets.
+    pub const fn contains(self, offset: usize) -> bool {
+        self.start <= offset && offset < self.end
+    }
+
+    /// Return whether `offset` touches this span, including the end boundary.
+    ///
+    /// This is useful for cursor-oriented callers that need positions at token
+    /// boundaries to resolve to the adjacent token. Empty spans touch exactly
+    /// their single boundary offset.
+    pub const fn touches(self, offset: usize) -> bool {
+        self.start <= offset && offset <= self.end
+    }
+
+    /// Return whether this span overlaps `other`.
+    ///
+    /// Spans are treated as half-open byte ranges, so adjacent spans such as
+    /// `0..2` and `2..4` do not overlap. Empty spans never overlap.
+    pub const fn overlaps(self, other: Self) -> bool {
+        !self.is_empty() && !other.is_empty() && self.start < other.end && other.start < self.end
+    }
+
+    /// Return the smallest span covering both spans.
+    pub const fn cover(self, other: Self) -> Self {
+        Self { start: min_usize(self.start, other.start), end: max_usize(self.end, other.end) }
+    }
+}
+
+const fn min_usize(left: usize, right: usize) -> usize {
+    if left <= right { left } else { right }
+}
+
+const fn max_usize(left: usize, right: usize) -> usize {
+    if left >= right { left } else { right }
 }
 
 /// Error type for checked token/span constructors.
