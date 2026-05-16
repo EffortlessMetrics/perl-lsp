@@ -1048,6 +1048,156 @@ sub caller {
 }
 
 #[test]
+fn refactor_runtime_blocker_ux_package_local_live_pilot_receipt_preserves_cutover_guardrails()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    open_document(&server, REFACTOR_URI, REFACTOR_MODULE)?;
+    let (line, character) = position_of(REFACTOR_MODULE, "renamable")?;
+
+    for (fixture, expected_reason, expected_fallback, expected_fact_source) in [
+        ("generated_member", "generated_no_source", "no_edit", "framework_adapter"),
+        ("dynamic_boundary", "dynamic_boundary", "no_edit", "dynamic_boundary"),
+        ("stale_fact", "stale_fact", "refresh_workspace_facts", "compiler_fact"),
+        (
+            "low_confidence",
+            "ambiguous_low_confidence_candidates",
+            "require_confirmation",
+            "semantic_fact",
+        ),
+    ] {
+        let preview_result = server
+            .handle_execute_command(Some(json!({
+                "command": "perl.previewPackageRename",
+                "arguments": [{
+                    "textDocument": {"uri": REFACTOR_URI},
+                    "position": {"line": line, "character": character},
+                    "newName": "renamed_target",
+                    "compilerPlanFixture": fixture
+                }]
+            })))?
+            .ok_or("missing package rename blocker preview result")?;
+
+        assert_eq!(preview_result.get("provider").and_then(Value::as_str), Some("rename"));
+        assert_eq!(
+            preview_result.get("provider_action").and_then(Value::as_str),
+            Some("perl.previewPackageRename")
+        );
+        assert_eq!(
+            preview_result.get("decision").and_then(Value::as_str),
+            Some("blocked"),
+            "package-local live-pilot blocker receipt must block `{fixture}`: {preview_result}"
+        );
+        assert_eq!(
+            preview_result.get("reason").and_then(Value::as_str),
+            Some(expected_reason),
+            "package-local live-pilot blocker reason should identify `{fixture}`: {preview_result}"
+        );
+        assert_eq!(
+            preview_result.get("fact_source").and_then(Value::as_str),
+            Some(expected_fact_source)
+        );
+        assert_eq!(
+            preview_result.get("fallback_state").and_then(Value::as_str),
+            Some(expected_fallback)
+        );
+        assert_eq!(preview_result.get("edits_applied").and_then(Value::as_bool), Some(false));
+        assert_eq!(
+            preview_result.get("live_package_rename_enabled").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            preview_result.get("trace_only_no_live_behavior_change").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            preview_result
+                .pointer("/workspace_edit/changes")
+                .and_then(Value::as_object)
+                .map(serde_json::Map::len),
+            Some(0)
+        );
+        assert_eq!(
+            preview_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
+            Some(0)
+        );
+
+        let package_pilot = preview_result.get("package_pilot").ok_or("missing package_pilot")?;
+        assert_eq!(
+            package_pilot.get("eligible").and_then(Value::as_bool),
+            Some(false),
+            "blocked package-local live-pilot receipt must not be eligible: {package_pilot}"
+        );
+        assert_eq!(package_pilot.get("reason").and_then(Value::as_str), Some("blocked"));
+        assert_eq!(package_pilot.get("edit_count").and_then(Value::as_u64), Some(2));
+        assert_eq!(package_pilot.get("blocker_count").and_then(Value::as_u64), Some(1));
+        assert_json_array_contains(package_pilot, "edit_categories", "Definition")?;
+        assert_json_array_contains(package_pilot, "edit_categories", "Reference")?;
+        assert_eq!(
+            package_pilot.get("no_live_rename_cutover").and_then(Value::as_bool),
+            Some(true)
+        );
+
+        let fallback_noise =
+            preview_result.get("fallback_noise").ok_or("missing fallback_noise")?;
+        assert_eq!(
+            fallback_noise.get("fallback_state").and_then(Value::as_str),
+            Some("compiler_blocked")
+        );
+        assert_eq!(fallback_noise.get("compiler_plan_edit_count").and_then(Value::as_u64), Some(2));
+        assert_eq!(
+            fallback_noise.get("compiler_requires_confirmation").and_then(Value::as_bool),
+            Some(true)
+        );
+
+        let rollback_receipt =
+            preview_result.get("rollback_receipt").ok_or("missing rollback_receipt")?;
+        assert_eq!(
+            rollback_receipt.get("provider_action").and_then(Value::as_str),
+            Some("perl.previewPackageRename")
+        );
+        assert_eq!(rollback_receipt.get("rollback_required").and_then(Value::as_bool), Some(false));
+        assert_eq!(rollback_receipt.get("rollback_safe").and_then(Value::as_bool), Some(true));
+        assert_eq!(rollback_receipt.get("edits_applied").and_then(Value::as_bool), Some(false));
+        assert_eq!(
+            rollback_receipt.get("live_package_rename_enabled").and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let user_message = preview_result
+            .get("user_message")
+            .and_then(Value::as_str)
+            .ok_or("missing package rename blocker user_message")?;
+        assert!(
+            user_message.contains("Package rename preview refused")
+                && user_message.contains("renamable")
+                && user_message.contains("renamed_target")
+                && user_message.contains("No edits were applied"),
+            "blocked preview message should explain the no-edit guardrail: {user_message}"
+        );
+
+        let explanation = explain_provider_decision(&server, "rename")?;
+        let request_receipt = request_receipt(&explanation)?;
+        assert_eq!(
+            request_receipt.get("provider_action").and_then(Value::as_str),
+            Some("perl.previewPackageRename")
+        );
+        assert_eq!(request_receipt.get("reason").and_then(Value::as_str), Some(expected_reason));
+        assert_eq!(
+            request_receipt.pointer("/package_pilot/eligible").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            request_receipt
+                .pointer("/rollback_receipt/live_package_rename_enabled")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
 fn refactor_runtime_blocker_ux_rename_request_receipt_preserves_package_fallback_noise()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();
