@@ -153,6 +153,42 @@ impl LspServer {
                         self.record_provider_decision_trace("rename", &receipt);
                         return Ok(Some(receipt));
                     }
+                    if let Some(blocker) = fixture_blocker(fixture) {
+                        let (
+                            compiler_receipt,
+                            compiler_plan_edit_count,
+                            compiler_blockers,
+                            package_pilot,
+                        ) = rename_package_pilot_blocker_fixture_receipt(
+                            fixture,
+                            &symbol,
+                            new_name,
+                            live_provider_edit_count,
+                            blocker,
+                        );
+                        let receipt = json!({
+                            "provider": "rename",
+                            "symbol": symbol,
+                            "new_name": new_name,
+                            "compiler_plan_fixture": fixture,
+                            "live_provider_result": live_provider_result,
+                            "live_provider_edit_count": live_provider_edit_count,
+                            "compiler_receipt": compiler_receipt,
+                            "package_pilot": package_pilot,
+                            "fallback_noise": rename_fallback_noise_json(
+                                &symbol,
+                                new_name,
+                                live_provider_result.as_ref(),
+                                live_provider_error.as_deref(),
+                                live_provider_edit_count,
+                                Some(compiler_plan_edit_count),
+                                Some(&compiler_blockers),
+                            ),
+                            "no_live_behavior_change": true
+                        });
+                        self.record_provider_decision_trace("rename", &receipt);
+                        return Ok(Some(receipt));
+                    }
                     let compiler_receipt = rename_fixture_receipt(
                         fixture,
                         &symbol,
@@ -573,6 +609,70 @@ fn rename_package_pilot_allowed_fixture_receipt(
         new_name.to_string(),
         edits,
         Vec::new(),
+        Vec::new(),
+    );
+    let queries = RefactorFixtureQueries { rename_plan: plan, safe_delete_plan: None };
+    let outcome =
+        rename_package_pilot_proof(live_provider_edit_count > 0, &queries, EntityId(1), new_name);
+    let (compiler_plan_edit_count, blockers) = match &outcome.result {
+        RenamePackagePilotResult::Eligible { edits } => (edits.len(), Vec::new()),
+        RenamePackagePilotResult::Ineligible { edits, blockers, .. } => {
+            (edits.len(), blockers.clone())
+        }
+        _ => (0, Vec::new()),
+    };
+    let package_pilot = rename_package_pilot_json(&outcome.result);
+    let mut receipt = outcome.receipt;
+    receipt.notes.push(format!(
+        "rename runtime blocker UX: compiler_plan_fixture={fixture}; live_provider_edits={}; compiler_plan_edits={compiler_plan_edit_count}; blocker_count={}; blocker_reasons={}; blocker_ux={}; requires_confirmation={}; no live refactor behavior change",
+        live_provider_edit_count,
+        blockers.len(),
+        runtime_blocker_reasons(&blockers),
+        runtime_blocker_descriptions(&blockers),
+        !blockers.is_empty()
+    ));
+    (receipt, compiler_plan_edit_count, blockers, package_pilot)
+}
+
+#[cfg(all(
+    feature = "workspace",
+    not(target_arch = "wasm32"),
+    any(test, feature = "expose_lsp_test_api")
+))]
+fn rename_package_pilot_blocker_fixture_receipt(
+    fixture: &str,
+    symbol: &str,
+    new_name: &str,
+    live_provider_edit_count: usize,
+    blocker: PlanBlocker,
+) -> (
+    perl_workspace::semantic_shadow_compare::SemanticShadowCompareReceipt,
+    usize,
+    Vec<PlanBlocker>,
+    Value,
+) {
+    let edits = vec![
+        PlannedEdit::new(
+            AnchorId(1),
+            FileId(1),
+            PlannedEditCategory::Definition,
+            symbol.to_string(),
+            new_name.to_string(),
+        ),
+        PlannedEdit::new(
+            AnchorId(2),
+            FileId(1),
+            PlannedEditCategory::Reference,
+            symbol.to_string(),
+            new_name.to_string(),
+        ),
+    ];
+    let plan = RenamePlan::new(
+        EntityId(1),
+        symbol.to_string(),
+        new_name.to_string(),
+        edits,
+        vec![blocker],
         Vec::new(),
     );
     let queries = RefactorFixtureQueries { rename_plan: plan, safe_delete_plan: None };
