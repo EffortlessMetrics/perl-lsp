@@ -124,6 +124,13 @@ fn test_block_sexp() {
 }
 
 #[test]
+fn test_block_sexp_empty() {
+    let mut id_gen = NodeIdGenerator::new();
+    let node = make_node(&mut id_gen, NodeKind::Block { statements: vec![] });
+    assert_eq!(node.to_sexp(), "(block )");
+}
+
+#[test]
 fn test_binary_sexp() {
     let mut id_gen = NodeIdGenerator::new();
     let left = make_node(&mut id_gen, NodeKind::Number { value: "1".into() });
