@@ -206,6 +206,10 @@ impl ExecuteCommandProvider {
                 Err("perl.previewSafeDelete requires the live LSP runtime workspace index"
                     .to_string())
             }
+            "perl.safeDeleteSymbol" => {
+                Err("perl.safeDeleteSymbol requires the live LSP runtime workspace index"
+                    .to_string())
+            }
             "perl.previewPackageRename" => {
                 Err("perl.previewPackageRename requires the live LSP runtime workspace index"
                     .to_string())
@@ -1301,6 +1305,7 @@ pub fn get_supported_commands() -> Vec<String> {
         "perl.goToImplementation".to_string(),
         "perl.explainProviderDecision".to_string(),
         "perl.previewSafeDelete".to_string(),
+        "perl.safeDeleteSymbol".to_string(),
         "perl.previewPackageRename".to_string(),
     ]
 }

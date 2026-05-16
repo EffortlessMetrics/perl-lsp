@@ -64,6 +64,8 @@ executeCommandProvider:
     - perl.goToImplementation
     - perl.explainProviderDecision
     - perl.previewSafeDelete
+    - perl.safeDeleteSymbol
+    - perl.previewPackageRename
 experimental:
   perlInlineCompletionStream: true
 foldingRangeProvider: true
