@@ -48,6 +48,37 @@ sub describe {
 1;
 "#;
 
+/// Catalyst-style controller code with route attributes, multiple actions, and
+/// dynamic dispatch strings. This keeps the compiler-token receipt project-shaped
+/// without broadening semantic-token output.
+const CATALYST_CONTROLLER_MODULE: &str = r#"package MyApp::Controller::Root;
+use Moose;
+use namespace::autoclean;
+
+BEGIN { extends 'Catalyst::Controller' }
+
+__PACKAGE__->config(namespace => '');
+
+sub index :Path :Args(0) {
+    my ($self, $c) = @_;
+    $c->stash(template => 'index.tt');
+}
+
+sub item :Local Args(1) {
+    my ($self, $c, $id) = @_;
+    my $action = "show_${id}";
+    return $c->forward("${self}::${action}");
+}
+
+sub generated_dispatch :Private {
+    my ($self, $c, $controller, $action) = @_;
+    return $c->forward("${controller}::${action}");
+}
+
+__PACKAGE__->meta->make_immutable;
+1;
+"#;
+
 /// Empty Perl file — no declarations at all.
 const EMPTY_PERL: &str = r#"1;
 "#;
@@ -307,6 +338,114 @@ fn semantic_tokens_runtime_quality_receipt_records_compiler_backed_token_class()
     assert!(
         claim_boundary.contains("matches existing parser/HIR live token output"),
         "compiler receipt must preserve the live-pilot claim boundary; got: {claim_boundary}"
+    );
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_records_project_shaped_compiler_backed_token_class() {
+    let server = create_server();
+    let catalyst_uri = "file:///workspace/lib/MyApp/Controller/Root.pm";
+    open_document(&server, catalyst_uri, CATALYST_CONTROLLER_MODULE);
+
+    let receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(json!({
+            "textDocument": {"uri": catalyst_uri}
+        })))));
+
+    assert_eq!(
+        receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(true),
+        "project-shaped compiler receipt must not change live semantic-token behavior"
+    );
+    assert_eq!(
+        receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "project-shaped compiler receipt must not emit additional semantic tokens"
+    );
+    assert!(
+        receipt.get("live_provider_count").and_then(Value::as_u64).unwrap_or(0) > 0,
+        "Catalyst-shaped controller must produce live semantic tokens for receipt proof"
+    );
+
+    let compiler_receipt = must_some(receipt.get("compiler_receipt").and_then(Value::as_object));
+    assert_eq!(
+        compiler_receipt.get("token_class").and_then(Value::as_str),
+        Some("subroutine_declaration"),
+        "project-shaped receipt must keep the narrow token class under proof"
+    );
+    assert_eq!(
+        compiler_receipt.get("source").and_then(Value::as_str),
+        Some("CompilerFact"),
+        "project-shaped receipt must remain compiler-fact backed"
+    );
+    assert_eq!(
+        compiler_receipt.get("provenance").and_then(Value::as_str),
+        Some("SemanticAnalyzer"),
+        "project-shaped receipt must preserve semantic-analyzer provenance"
+    );
+    assert_eq!(
+        compiler_receipt.get("fallback_state").and_then(Value::as_str),
+        Some("Primary"),
+        "project-shaped source-backed token class should be primary only after matching live output"
+    );
+    assert_eq!(
+        compiler_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "project-shaped receipt must mark the narrow live pilot"
+    );
+    assert_eq!(
+        compiler_receipt.get("live_token_type").and_then(Value::as_str),
+        Some("function"),
+        "project-shaped receipt must match the existing live function token"
+    );
+    assert_eq!(
+        compiler_receipt.get("live_token_match_count").and_then(Value::as_u64),
+        Some(1),
+        "project-shaped receipt must prove one matching live token span"
+    );
+    assert_eq!(
+        compiler_receipt.get("candidate_count").and_then(Value::as_u64),
+        Some(1),
+        "project-shaped receipt must keep one source-backed compiler candidate"
+    );
+    assert_eq!(
+        compiler_receipt.get("source_backed_span_count").and_then(Value::as_u64),
+        Some(1),
+        "project-shaped receipt must prove one source-backed LSP span"
+    );
+    assert_eq!(
+        compiler_receipt.get("missing_source_span_count").and_then(Value::as_u64),
+        Some(0),
+        "project-shaped receipt must not pilot missing compiler spans"
+    );
+    assert_eq!(
+        compiler_receipt.get("invalid_source_span_count").and_then(Value::as_u64),
+        Some(0),
+        "project-shaped receipt must not pilot invalid compiler spans"
+    );
+    assert_eq!(
+        compiler_receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(true),
+        "compiler receipt must remain receipt-only for project-shaped code"
+    );
+    assert_eq!(
+        compiler_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "compiler receipt must not broaden project-shaped semantic-token output"
+    );
+
+    let claim_boundary = must_some(compiler_receipt.get("claim_boundary").and_then(Value::as_str));
+    assert!(
+        claim_boundary.contains("no new semantic-token output"),
+        "project-shaped receipt must keep the no-output-change claim boundary; got: {claim_boundary}"
+    );
+
+    let notes = must_some(receipt.get("notes").and_then(Value::as_str));
+    assert!(
+        notes.contains("compiler_backed_token_classes=1")
+            && notes.contains("compiler_live_pilot=1")
+            && notes.contains("no semantic-token output change"),
+        "project-shaped notes must record compiler receipt proof without output change; got: {notes}"
     );
 }
 
