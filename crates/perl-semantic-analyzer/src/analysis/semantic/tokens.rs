@@ -116,3 +116,113 @@ pub struct SemanticToken {
     /// Additional modifiers for enhanced highlighting
     pub modifiers: Vec<SemanticTokenModifier>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── SemanticTokenType ──────────────────────────────────────────────────────
+
+    #[test]
+    fn token_type_equality_same_variant() {
+        assert_eq!(SemanticTokenType::Variable, SemanticTokenType::Variable);
+        assert_eq!(SemanticTokenType::Function, SemanticTokenType::Function);
+        assert_eq!(SemanticTokenType::Comment, SemanticTokenType::Comment);
+    }
+
+    #[test]
+    fn token_type_inequality_different_variants() {
+        assert_ne!(SemanticTokenType::Variable, SemanticTokenType::Function);
+        assert_ne!(SemanticTokenType::String, SemanticTokenType::Number);
+        assert_ne!(SemanticTokenType::Keyword, SemanticTokenType::Operator);
+    }
+
+    #[test]
+    fn token_type_is_copy() {
+        let t = SemanticTokenType::Class;
+        let t2 = t; // Copy — no move
+        assert_eq!(t, t2);
+    }
+
+    #[test]
+    fn token_type_debug_contains_variant_name() {
+        let formatted = format!("{:?}", SemanticTokenType::FunctionDeclaration);
+        assert!(formatted.contains("FunctionDeclaration"), "got: {formatted}");
+
+        let formatted2 = format!("{:?}", SemanticTokenType::CommentDoc);
+        assert!(formatted2.contains("CommentDoc"), "got: {formatted2}");
+    }
+
+    // ── SemanticTokenModifier ─────────────────────────────────────────────────
+
+    #[test]
+    fn token_modifier_equality_same_variant() {
+        assert_eq!(SemanticTokenModifier::Declaration, SemanticTokenModifier::Declaration);
+        assert_eq!(SemanticTokenModifier::Readonly, SemanticTokenModifier::Readonly);
+        assert_eq!(SemanticTokenModifier::Deprecated, SemanticTokenModifier::Deprecated);
+    }
+
+    #[test]
+    fn token_modifier_inequality_different_variants() {
+        assert_ne!(SemanticTokenModifier::Declaration, SemanticTokenModifier::Definition);
+        assert_ne!(SemanticTokenModifier::Static, SemanticTokenModifier::Async);
+        assert_ne!(SemanticTokenModifier::Documentation, SemanticTokenModifier::DefaultLibrary);
+    }
+
+    #[test]
+    fn token_modifier_is_copy() {
+        let m = SemanticTokenModifier::Modification;
+        let m2 = m; // Copy — no move
+        assert_eq!(m, m2);
+    }
+
+    #[test]
+    fn token_modifier_debug_contains_variant_name() {
+        let formatted = format!("{:?}", SemanticTokenModifier::DefaultLibrary);
+        assert!(formatted.contains("DefaultLibrary"), "got: {formatted}");
+
+        let formatted2 = format!("{:?}", SemanticTokenModifier::Abstract);
+        assert!(formatted2.contains("Abstract"), "got: {formatted2}");
+    }
+
+    // ── SemanticToken ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn semantic_token_construction_round_trips_fields() {
+        let location = SourceLocation { start: 10, end: 20 };
+        let tok = SemanticToken {
+            location,
+            token_type: SemanticTokenType::Variable,
+            modifiers: vec![SemanticTokenModifier::Declaration],
+        };
+        assert_eq!(tok.location.start, 10);
+        assert_eq!(tok.location.end, 20);
+        assert_eq!(tok.token_type, SemanticTokenType::Variable);
+        assert_eq!(tok.modifiers.len(), 1);
+        assert_eq!(tok.modifiers[0], SemanticTokenModifier::Declaration);
+    }
+
+    #[test]
+    fn semantic_token_no_modifiers() {
+        let tok = SemanticToken {
+            location: SourceLocation { start: 0, end: 5 },
+            token_type: SemanticTokenType::Keyword,
+            modifiers: Vec::new(),
+        };
+        assert!(tok.modifiers.is_empty());
+    }
+
+    #[test]
+    fn semantic_token_clone_is_independent() {
+        let original = SemanticToken {
+            location: SourceLocation { start: 1, end: 3 },
+            token_type: SemanticTokenType::Number,
+            modifiers: vec![SemanticTokenModifier::Readonly],
+        };
+        let mut cloned = original.clone();
+        cloned.modifiers.push(SemanticTokenModifier::Static);
+        // Original must not be affected by mutation of the clone
+        assert_eq!(original.modifiers.len(), 1);
+        assert_eq!(cloned.modifiers.len(), 2);
+    }
+}

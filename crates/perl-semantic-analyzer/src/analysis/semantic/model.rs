@@ -164,3 +164,116 @@ impl SemanticModel {
         self.analyzer.resolve_parent_chain(receiver_class)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Parser;
+    use perl_tdd_support::must_some;
+
+    fn build_model(source: &str) -> Result<SemanticModel, Box<dyn std::error::Error>> {
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+        Ok(SemanticModel::build(&ast, source))
+    }
+
+    // ── tokens ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn tokens_empty_source_returns_empty_slice() -> Result<(), Box<dyn std::error::Error>> {
+        let model = build_model("")?;
+        assert!(model.tokens().is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn tokens_nonempty_for_variable_declaration() -> Result<(), Box<dyn std::error::Error>> {
+        let model = build_model("my $x = 42;")?;
+        assert!(!model.tokens().is_empty());
+        Ok(())
+    }
+
+    // ── symbol_table ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn symbol_table_contains_declared_subroutine() -> Result<(), Box<dyn std::error::Error>> {
+        let model = build_model("sub greet { return 1; }")?;
+        let table = model.symbol_table();
+        assert!(table.symbols.contains_key("greet"), "expected 'greet' in symbol table");
+        Ok(())
+    }
+
+    #[test]
+    fn symbol_table_contains_declared_variable() -> Result<(), Box<dyn std::error::Error>> {
+        let model = build_model("my $counter = 0;")?;
+        let table = model.symbol_table();
+        assert!(table.symbols.contains_key("counter"), "expected 'counter' in symbol table");
+        Ok(())
+    }
+
+    // ── definition_at ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn definition_at_returns_none_past_end_of_source() -> Result<(), Box<dyn std::error::Error>> {
+        let model = build_model("my $x = 1;")?;
+        // Position far beyond end of source — nothing to find
+        let result = model.definition_at(99_999);
+        assert!(result.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn definition_at_returns_symbol_at_declaration_site() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let source = "my $value = 1;";
+        let model = build_model(source)?;
+        // The variable declaration starts at position 3 (after "my ")
+        let sym = model.definition_at(3);
+        assert!(sym.is_some(), "expected a symbol at the declaration site");
+        let sym = must_some(sym);
+        assert_eq!(sym.name, "value");
+        Ok(())
+    }
+
+    // ── export_metadata / package_edges / generated_members ───────────────────
+
+    #[test]
+    fn export_metadata_empty_for_plain_script() -> Result<(), Box<dyn std::error::Error>> {
+        let model = build_model("my $x = 42;")?;
+        // No Exporter usage → no packages in metadata
+        assert!(model.export_metadata().packages.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn package_edges_empty_for_plain_script() -> Result<(), Box<dyn std::error::Error>> {
+        let model = build_model("my $x = 42;")?;
+        assert!(model.package_edges().is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn generated_members_empty_for_plain_script() -> Result<(), Box<dyn std::error::Error>> {
+        let model = build_model("my $x = 42;")?;
+        assert!(model.generated_members().is_empty());
+        Ok(())
+    }
+
+    // ── parent_chain / hover_info_at ──────────────────────────────────────────
+
+    #[test]
+    fn parent_chain_returns_none_for_unknown_class() -> Result<(), Box<dyn std::error::Error>> {
+        let model = build_model("my $x = 1;")?;
+        assert!(model.parent_chain("NoSuchClass").is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn hover_info_at_returns_none_for_out_of_range_location()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let model = build_model("my $x = 1;")?;
+        let far_location = SourceLocation { start: 99_999, end: 100_000 };
+        assert!(model.hover_info_at(far_location).is_none());
+        Ok(())
+    }
+}
