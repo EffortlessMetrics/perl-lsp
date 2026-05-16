@@ -870,7 +870,6 @@ fn rename_package_pilot_json(result: &RenamePackagePilotResult) -> Value {
     }
 }
 
-#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 fn package_rename_rollback_receipt_json(
     planned_live_provider_edit_count: usize,
     returned_workspace_edit_count: usize,
