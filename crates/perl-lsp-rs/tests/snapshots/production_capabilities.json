@@ -71,6 +71,7 @@
       "perl.goToImplementation",
       "perl.explainProviderDecision",
       "perl.previewSafeDelete",
+      "perl.safeDelete",
       "perl.previewPackageRename"
     ]
   },

@@ -671,6 +671,86 @@ impl LspServer {
         self.record_safe_delete_decision_receipt(receipt)
     }
 
+    /// Narrow live safe-delete pilot for source-backed symbols.
+    ///
+    /// The command returns a WorkspaceEdit only when the compiler plan is
+    /// allowed and the rollback proof has already proven an exact source-backed
+    /// delete range. The server still does not mutate open documents directly;
+    /// the edit is returned to the client for normal WorkspaceEdit application.
+    pub(crate) fn safe_delete_symbol_live_pilot(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        let params = params.map(|mut value| {
+            if let Some(object) = value.as_object_mut() {
+                object.insert("includeEditRollbackProof".to_string(), json!(true));
+            }
+            value
+        });
+        let Some(mut receipt) = self.safe_delete_runtime_blocker_ux_receipt(params)? else {
+            return Ok(None);
+        };
+
+        let live_allowed = safe_delete_live_pilot_allowed(&receipt);
+        let workspace_edit = if live_allowed {
+            receipt
+                .pointer("/symbol_delete_edit_rollback/planned_delete_workspace_edit")
+                .cloned()
+                .unwrap_or_else(safe_delete_empty_workspace_edit)
+        } else {
+            safe_delete_empty_workspace_edit()
+        };
+        let returned_workspace_edit_count = lsp_workspace_edit_count(Some(&workspace_edit));
+        let live_symbol_delete_enabled = live_allowed && returned_workspace_edit_count > 0;
+        let rollback_receipt = safe_delete_live_pilot_rollback_receipt_json(
+            returned_workspace_edit_count,
+            receipt.get("symbol_delete_edit_rollback"),
+        );
+        let user_message =
+            safe_delete_symbol_live_pilot_message(&receipt, returned_workspace_edit_count);
+
+        if let Some(object) = receipt.as_object_mut() {
+            object.insert("provider_action".to_string(), json!("perl.safeDelete"));
+            object.insert(
+                "ux_surface".to_string(),
+                json!("narrow_source_backed_symbol_delete_pilot"),
+            );
+            object.insert("edits_applied".to_string(), json!(false));
+            object.insert(
+                "live_symbol_delete_enabled".to_string(),
+                json!(live_symbol_delete_enabled),
+            );
+            object.insert(
+                "returned_workspace_edit_count".to_string(),
+                json!(returned_workspace_edit_count),
+            );
+            object.insert("rollback_receipt".to_string(), rollback_receipt);
+            object.insert("workspace_edit".to_string(), workspace_edit);
+            object.insert("user_message".to_string(), json!(user_message));
+            object.insert(
+                "trace_only_no_live_behavior_change".to_string(),
+                json!(!live_symbol_delete_enabled),
+            );
+            object
+                .insert("no_live_behavior_change".to_string(), json!(!live_symbol_delete_enabled));
+            object.insert(
+                "claim_boundary".to_string(),
+                json!(
+                    "narrow source-backed safe-delete pilot returns edits only for fresh high-confidence unreferenced symbols; broader safe-delete remains gated"
+                ),
+            );
+            if live_symbol_delete_enabled {
+                object.insert("source_backed".to_string(), json!(true));
+                object.insert(
+                    "source_backed_state".to_string(),
+                    json!("source_backed_live_symbol_delete_pilot"),
+                );
+            }
+        }
+
+        self.record_safe_delete_decision_receipt(receipt)
+    }
+
     fn record_safe_delete_decision_receipt(
         &self,
         receipt: Value,
@@ -696,6 +776,53 @@ impl LspServer {
         }
         Some((symbol, u32::try_from(offset).ok()?))
     }
+}
+
+fn safe_delete_empty_workspace_edit() -> Value {
+    json!({"changes": {}})
+}
+
+fn safe_delete_live_pilot_allowed(receipt: &Value) -> bool {
+    receipt.get("decision").and_then(Value::as_str) == Some("allowed")
+        && receipt.get("reason").and_then(Value::as_str) == Some("compiler_allowed")
+        && receipt.get("fallback_state").and_then(Value::as_str) == Some("none")
+        && receipt.pointer("/symbol_delete_edit_rollback/edit_plan_state").and_then(Value::as_str)
+            == Some("planned")
+        && receipt.pointer("/symbol_delete_edit_rollback/rollback_safe").and_then(Value::as_bool)
+            == Some(true)
+        && receipt.pointer("/symbol_delete_edit_rollback/source_backed").and_then(Value::as_bool)
+            == Some(true)
+}
+
+fn safe_delete_live_pilot_rollback_receipt_json(
+    returned_workspace_edit_count: usize,
+    rollback_proof: Option<&Value>,
+) -> Value {
+    let rollback_safe = rollback_proof
+        .and_then(|proof| proof.get("rollback_safe"))
+        .and_then(Value::as_bool)
+        .unwrap_or(returned_workspace_edit_count == 0);
+    let rollback_workspace_edit = rollback_proof
+        .and_then(|proof| proof.get("rollback_workspace_edit"))
+        .cloned()
+        .unwrap_or_else(safe_delete_empty_workspace_edit);
+
+    json!({
+        "provider": "safe_delete",
+        "provider_action": "perl.safeDelete",
+        "returned_workspace_edit_count": returned_workspace_edit_count,
+        "rollback_required": returned_workspace_edit_count > 0,
+        "rollback_safe": returned_workspace_edit_count == 0 || rollback_safe,
+        "edits_applied": false,
+        "live_symbol_delete_enabled": returned_workspace_edit_count > 0,
+        "rollback_workspace_edit": rollback_workspace_edit,
+        "reason": if returned_workspace_edit_count > 0 {
+            "safe-delete live pilot returned a rollback-backed WorkspaceEdit; client application remains outside the server"
+        } else {
+            "safe-delete live pilot returned no edits; rollback is not required"
+        },
+        "claim_boundary": "safe-delete live pilot rollback receipt only; broader symbol deletion remains gated"
+    })
 }
 
 #[cfg(all(
@@ -1443,6 +1570,32 @@ fn package_rename_preview_message(receipt: &Value) -> String {
             )
         }
     }
+}
+
+fn safe_delete_symbol_live_pilot_message(
+    receipt: &Value,
+    returned_workspace_edit_count: usize,
+) -> String {
+    let symbol = receipt.get("symbol").and_then(Value::as_str).unwrap_or("symbol");
+    if returned_workspace_edit_count > 0 {
+        return format!(
+            "Safe delete prepared for `{symbol}`: returning {returned_workspace_edit_count} source-backed edit. No edits were applied by the server."
+        );
+    }
+
+    let decision = receipt.get("decision").and_then(Value::as_str).unwrap_or("fallback");
+    if decision == "blocked" {
+        let blocker = receipt
+            .pointer("/live_blocker_ux/blocker_messages/0")
+            .and_then(Value::as_str)
+            .or_else(|| receipt.get("reason").and_then(Value::as_str))
+            .unwrap_or("compiler blocker");
+        return format!("Safe delete refused for `{symbol}`: {blocker}. No edits were returned.");
+    }
+
+    let reason =
+        receipt.get("reason").and_then(Value::as_str).unwrap_or("compiler proof is unavailable");
+    format!("Safe delete unavailable for `{symbol}`: {reason}. No edits were returned.")
 }
 
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]

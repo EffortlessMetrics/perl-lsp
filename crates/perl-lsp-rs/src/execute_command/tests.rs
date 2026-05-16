@@ -188,6 +188,10 @@ fn test_supported_commands_includes_go_to_test() {
         "perl.previewSafeDelete should be in supported commands list"
     );
     assert!(
+        commands.contains(&"perl.safeDelete".to_string()),
+        "perl.safeDelete should be in supported commands list"
+    );
+    assert!(
         commands.contains(&"perl.previewPackageRename".to_string()),
         "perl.previewPackageRename should be in supported commands list"
     );

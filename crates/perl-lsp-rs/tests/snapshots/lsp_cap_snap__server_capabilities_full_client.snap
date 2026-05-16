@@ -1,6 +1,5 @@
 ---
 source: crates/perl-lsp-rs/tests/lsp_cap_snap.rs
-assertion_line: 52
 expression: caps
 ---
 callHierarchyProvider: true
@@ -64,6 +63,8 @@ executeCommandProvider:
     - perl.goToImplementation
     - perl.explainProviderDecision
     - perl.previewSafeDelete
+    - perl.safeDelete
+    - perl.previewPackageRename
 experimental:
   perlInlineCompletionStream: true
 foldingRangeProvider: true

@@ -2311,3 +2311,177 @@ fn refactor_runtime_blocker_ux_safe_delete_preview_command_returns_scoped_no_edi
 
     Ok(())
 }
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_command_returns_narrow_source_backed_edit()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_semantic_real_workspace(&server)?;
+    let base = files.get("lib/RealBaseline/Base.pm").ok_or("missing RealBaseline Base fixture")?;
+
+    let (reset_line, reset_character) = position_of(base, "reset {")?;
+    let result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.safeDelete",
+            "arguments": [{
+                "textDocument": {"uri": REAL_BASELINE_BASE_URI},
+                "position": {"line": reset_line, "character": reset_character}
+            }]
+        })))?
+        .ok_or("missing safe-delete live pilot result")?;
+
+    assert_eq!(result.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(result.get("provider_action").and_then(Value::as_str), Some("perl.safeDelete"));
+    assert_eq!(result.get("symbol").and_then(Value::as_str), Some("reset"));
+    assert_eq!(result.get("decision").and_then(Value::as_str), Some("allowed"));
+    assert_eq!(result.get("reason").and_then(Value::as_str), Some("compiler_allowed"));
+    assert_eq!(result.get("fallback_state").and_then(Value::as_str), Some("none"));
+    assert_eq!(result.get("source_backed").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        result.get("source_backed_state").and_then(Value::as_str),
+        Some("source_backed_live_symbol_delete_pilot")
+    );
+    assert_eq!(result.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(result.get("live_symbol_delete_enabled").and_then(Value::as_bool), Some(true));
+    assert_eq!(result.get("returned_workspace_edit_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        result.get("trace_only_no_live_behavior_change").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(result.get("no_live_behavior_change").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        result.get("claim_boundary").and_then(Value::as_str),
+        Some(
+            "narrow source-backed safe-delete pilot returns edits only for fresh high-confidence unreferenced symbols; broader safe-delete remains gated"
+        )
+    );
+
+    let delete_texts = workspace_edit_texts_for_uri(
+        result.get("workspace_edit").ok_or("missing workspace_edit")?,
+        REAL_BASELINE_BASE_URI,
+    )?;
+    assert_eq!(delete_texts, vec![""], "live pilot must return a source-backed delete edit");
+
+    let rollback_receipt = result.get("rollback_receipt").ok_or("missing rollback_receipt")?;
+    assert_eq!(rollback_receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        rollback_receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDelete")
+    );
+    assert_eq!(
+        rollback_receipt.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(rollback_receipt.get("rollback_required").and_then(Value::as_bool), Some(true));
+    assert_eq!(rollback_receipt.get("rollback_safe").and_then(Value::as_bool), Some(true));
+    let rollback_texts = workspace_edit_texts_for_uri(
+        rollback_receipt.get("rollback_workspace_edit").ok_or("missing rollback_workspace_edit")?,
+        REAL_BASELINE_BASE_URI,
+    )?;
+    let rollback_text = rollback_texts.first().ok_or("missing rollback insertion text")?;
+    assert!(
+        rollback_text.contains("sub reset") && rollback_text.contains("return 1;"),
+        "live pilot rollback receipt must carry the deleted source text: {rollback_text}"
+    );
+
+    let message = result
+        .get("user_message")
+        .and_then(Value::as_str)
+        .ok_or("missing safe-delete live pilot user_message")?;
+    assert!(
+        message.contains("Safe delete prepared")
+            && message.contains("reset")
+            && message.contains("No edits were applied by the server"),
+        "live pilot message should explain returned edits without server mutation: {message}"
+    );
+
+    let explanation = explain_provider_decision(&server, "safe_delete")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDelete")
+    );
+    assert_eq!(
+        request_receipt.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        request_receipt
+            .pointer("/workspace_edit/changes")
+            .and_then(Value::as_object)
+            .map(serde_json::Map::len),
+        Some(1)
+    );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_command_blocks_imported_symbol_without_edits()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_semantic_real_workspace(&server)?;
+    let util = files.get("lib/RealBaseline/Util.pm").ok_or("missing RealBaseline Util fixture")?;
+
+    let (helper_line, helper_character) = position_of(util, "helper {")?;
+    let result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.safeDelete",
+            "arguments": [{
+                "textDocument": {"uri": REAL_BASELINE_UTIL_URI},
+                "position": {"line": helper_line, "character": helper_character}
+            }]
+        })))?
+        .ok_or("missing safe-delete live pilot blocker result")?;
+
+    assert_eq!(result.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(result.get("provider_action").and_then(Value::as_str), Some("perl.safeDelete"));
+    assert_eq!(result.get("symbol").and_then(Value::as_str), Some("helper"));
+    assert_eq!(result.get("decision").and_then(Value::as_str), Some("blocked"));
+    assert_eq!(result.get("reason").and_then(Value::as_str), Some("references_exist"));
+    assert_eq!(result.get("fallback_state").and_then(Value::as_str), Some("no_edit"));
+    assert_eq!(result.get("source_backed").and_then(Value::as_bool), Some(false));
+    assert_eq!(result.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(result.get("live_symbol_delete_enabled").and_then(Value::as_bool), Some(false));
+    assert_eq!(result.get("returned_workspace_edit_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(
+        result.get("trace_only_no_live_behavior_change").and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(result.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        result
+            .pointer("/workspace_edit/changes")
+            .and_then(Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0)
+    );
+    assert_eq!(
+        result.pointer("/symbol_delete_edit_rollback/edit_plan_state").and_then(Value::as_str),
+        Some("blocked")
+    );
+
+    let message = result
+        .get("user_message")
+        .and_then(Value::as_str)
+        .ok_or("missing safe-delete live pilot blocker user_message")?;
+    assert!(
+        message.contains("Safe delete refused")
+            && message.contains("helper")
+            && message.contains("No edits were returned"),
+        "blocked live pilot message should explain refusal without edits: {message}"
+    );
+
+    let explanation = explain_provider_decision(&server, "safe_delete")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDelete")
+    );
+    assert_eq!(
+        request_receipt.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+
+    Ok(())
+}
