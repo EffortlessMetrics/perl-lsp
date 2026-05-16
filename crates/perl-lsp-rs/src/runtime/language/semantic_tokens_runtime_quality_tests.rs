@@ -143,6 +143,7 @@ struct DecodedSemanticToken {
     start: u32,
     length: u32,
     end: u32,
+    token_type: u32,
 }
 
 fn decode_semantic_tokens(
@@ -164,6 +165,7 @@ fn decode_semantic_tokens(
         let delta_line = semantic_token_u32(&token[0])?;
         let delta_start = semantic_token_u32(&token[1])?;
         let length = semantic_token_u32(&token[2])?;
+        let token_type = semantic_token_u32(&token[3])?;
 
         if delta_line == 0 {
             current_start = current_start
@@ -182,6 +184,7 @@ fn decode_semantic_tokens(
             start: current_start,
             length,
             end,
+            token_type,
         });
     }
 
@@ -195,6 +198,134 @@ fn semantic_token_u32(value: &Value) -> Result<u32, Box<dyn std::error::Error>> 
 
 fn source_line_lsp_lengths(source: &str) -> Result<Vec<u32>, Box<dyn std::error::Error>> {
     source.lines().map(|line| Ok(u32::try_from(line.encode_utf16().count())?)).collect()
+}
+
+fn first_subroutine_name_lsp_span(source: &str) -> Result<(u32, u32, u32), Box<dyn Error>> {
+    let marker_start = source.find("sub ").ok_or("expected a subroutine declaration")?;
+    let name_start = marker_start + "sub ".len();
+    let mut name_end = name_start;
+
+    for (offset, ch) in source[name_start..].char_indices() {
+        if ch.is_ascii_alphanumeric() || ch == '_' || ch == ':' {
+            name_end = name_start + offset + ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    if name_end == name_start {
+        return Err("expected a subroutine name after sub keyword".into());
+    }
+
+    let prefix = &source[..name_start];
+    let line = u32::try_from(prefix.bytes().filter(|byte| *byte == b'\n').count())?;
+    let line_start = prefix.rfind('\n').map_or(0, |offset| offset + 1);
+    let start = u32::try_from(source[line_start..name_start].encode_utf16().count())?;
+    let length = u32::try_from(source[name_start..name_end].encode_utf16().count())?;
+
+    Ok((line, start, length))
+}
+
+fn assert_semantic_token_live_output_parity(uri: &str, source: &str) -> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    open_document(&server, uri, source);
+
+    let params = json!({ "textDocument": {"uri": uri} });
+    let live_result = must(server.test_handle_semantic_tokens(Some(params.clone())));
+    let receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+
+    let live_value = live_result.as_ref().ok_or("expected live semantic-token result")?;
+    assert_eq!(
+        receipt.get("live_provider_result"),
+        Some(live_value),
+        "runtime receipt must capture the exact live handler output for {uri}"
+    );
+    assert_eq!(
+        receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(true),
+        "runtime receipt must not change live semantic-token behavior for {uri}"
+    );
+    assert_eq!(
+        receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "runtime receipt must not change live semantic-token output for {uri}"
+    );
+
+    let receipt_count = must_some(receipt.get("live_provider_count").and_then(Value::as_u64));
+    assert_eq!(
+        usize::try_from(receipt_count)?,
+        token_count(Some(live_value)),
+        "runtime receipt token count must match live handler output for {uri}"
+    );
+    assert!(receipt_count > 0, "parity fixture must produce live semantic tokens for {uri}");
+
+    let (expected_line, expected_start, expected_length) = first_subroutine_name_lsp_span(source)?;
+    let function_token_type =
+        *crate::semantic_tokens::legend().map.get("function").ok_or("missing function token")?;
+    let live_match_count = decode_semantic_tokens(live_value)?
+        .iter()
+        .filter(|token| {
+            token.line == expected_line
+                && token.start == expected_start
+                && token.length == expected_length
+                && token.token_type == function_token_type
+        })
+        .count();
+
+    assert_eq!(
+        live_match_count, 1,
+        "expected exactly one live function token matching the compiler candidate span for {uri}"
+    );
+
+    let compiler_receipt = must_some(receipt.get("compiler_receipt").and_then(Value::as_object));
+    assert_eq!(
+        compiler_receipt.get("token_class").and_then(Value::as_str),
+        Some("subroutine_declaration"),
+        "parity proof must stay limited to the subroutine-declaration token class for {uri}"
+    );
+    assert_eq!(
+        compiler_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "compiler token-class pilot must be backed by the existing live token stream for {uri}"
+    );
+    assert_eq!(
+        compiler_receipt.get("live_token_type").and_then(Value::as_str),
+        Some("function"),
+        "compiler token-class pilot must match the existing live function token for {uri}"
+    );
+    assert_eq!(
+        compiler_receipt.get("live_token_match_count").and_then(Value::as_u64),
+        Some(u64::try_from(live_match_count)?),
+        "compiler receipt match count must equal the decoded live token match count for {uri}"
+    );
+    assert_eq!(
+        compiler_receipt.get("candidate_count").and_then(Value::as_u64),
+        Some(1),
+        "parity proof must keep exactly one compiler candidate for {uri}"
+    );
+    assert_eq!(
+        compiler_receipt.get("source_backed_span_count").and_then(Value::as_u64),
+        Some(1),
+        "parity proof must keep the compiler candidate source-backed for {uri}"
+    );
+    assert_eq!(
+        compiler_receipt.get("missing_source_span_count").and_then(Value::as_u64),
+        Some(0),
+        "parity proof must fail closed on missing compiler spans for {uri}"
+    );
+    assert_eq!(
+        compiler_receipt.get("invalid_source_span_count").and_then(Value::as_u64),
+        Some(0),
+        "parity proof must fail closed on invalid compiler spans for {uri}"
+    );
+    assert_eq!(
+        compiler_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "compiler receipt must remain output-neutral for {uri}"
+    );
+
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -634,6 +765,24 @@ fn semantic_tokens_runtime_quality_receipt_live_result_matches_handler() {
         live_result.as_ref(),
         "live_provider_result in receipt must exactly match the live handler output"
     );
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_proves_project_live_output_parity()
+-> Result<(), Box<dyn Error>> {
+    assert_semantic_token_live_output_parity(DOC_URI, PERL_MODULE)?;
+
+    assert_semantic_token_live_output_parity(
+        "file:///workspace/lib/MyApp/Controller/Root.pm",
+        CATALYST_CONTROLLER_MODULE,
+    )?;
+
+    const REALBASELINE_URI: &str = "file:///workspace/lib/RealBaseline/App.pm";
+    const REALBASELINE_FIXTURE: &str = "crates/perl-workspace/tests/fixtures/semantic_real_workspace/cpan_style/lib/RealBaseline/App.pm";
+    let realbaseline_source = read_real_project_fixture(REALBASELINE_FIXTURE)?;
+    assert_semantic_token_live_output_parity(REALBASELINE_URI, &realbaseline_source)?;
+
+    Ok(())
 }
 
 #[test]
