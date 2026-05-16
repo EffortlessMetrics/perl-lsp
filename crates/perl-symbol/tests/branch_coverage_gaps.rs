@@ -651,16 +651,16 @@ fn token_under_cursor_sigil_only_with_no_following_name_returns_none() {
 // non-underscore, but the `_ ==` True arm within the loop was not exercised.
 
 #[test]
-fn get_symbol_range_underscore_name_includes_underscores() {
+fn get_symbol_range_underscore_name_includes_underscores() -> Result<()> {
     let source = "$my_var = 1";
     // position 1 = 'm' (first char of name after '$')
-    let result = get_symbol_range_at_position(1, source);
-    assert!(result.is_some(), "must find a range");
-    let (start, end) = result.unwrap();
+    let (start, end) = get_symbol_range_at_position(1, source)
+        .ok_or("get_symbol_range_at_position must return Some for a valid identifier")?;
     // start should include the '$' sigil (position 0)
     assert!(start <= 1, "start should be at or before the name");
     // end should extend past the whole name including underscores
     assert!(end >= 7, "end must include all of 'my_var'");
+    Ok(())
 }
 
 // ── is_word_boundary: pos > 0 and preceding char is modchar → false ──────────
@@ -707,12 +707,14 @@ fn extract_symbol_at_position_zero_without_sigil() {
 // preceding position, in addition to the no-sigil predecessor case.
 
 #[test]
-fn extract_symbol_percent_sigil_before_position() {
+fn extract_symbol_percent_sigil_before_position() -> Result<()> {
     // cursor on the 'c' in %cfg — position 1, sigil '%' at 0
     let source = "%cfg";
-    let (name, kind) = extract_symbol_from_source(1, source).unwrap();
+    let (name, kind) = extract_symbol_from_source(1, source)
+        .ok_or("extract_symbol_from_source must return Some for %cfg at position 1")?;
     assert_eq!(name, "cfg");
     assert_eq!(kind, CursorSymbolKind::Hash);
+    Ok(())
 }
 
 // ── byte_offset_utf16: units > col_utf16 mid-surrogate path ─────────────────
