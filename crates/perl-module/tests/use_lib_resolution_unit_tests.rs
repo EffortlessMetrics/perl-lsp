@@ -507,15 +507,18 @@ fn escaped_backslash_at_end_of_path() {
 #[test]
 fn double_quoted_path_with_escaped_double_quote() {
     // Edge case: double-quoted string containing an escaped quote.
-    // The statement splitter must handle the escaped quote so it doesn't
-    // terminate the string prematurely.
-    let source = r#"use lib "path/to/lib"; use lib 'also';"#;
+    // The extractor must not terminate the string at the escaped delimiter.
+    let source = r#"use lib "path/with\"quote;lib"; use lib 'also';"#;
 
     let paths = extract_use_lib_paths(source);
 
-    assert_eq!(paths.len(), 2);
-    assert!(paths.iter().any(|p| p.path.contains("lib")));
-    assert!(paths.iter().any(|p| p.path.contains("also")));
+    assert_eq!(
+        paths,
+        vec![
+            UseLibPath { path: "path/with\"quote;lib".to_string(), from_findbin: false },
+            UseLibPath { path: "also".to_string(), from_findbin: false },
+        ]
+    );
 }
 
 #[test]
@@ -526,8 +529,13 @@ fn single_quoted_path_with_escaped_single_quote() {
 
     let paths = extract_use_lib_paths(source);
 
-    // Should extract both paths without being confused by the \' in the first path.
-    assert!(paths.len() >= 2, "Expected at least 2 paths, got {}", paths.len());
+    assert_eq!(
+        paths,
+        vec![
+            UseLibPath { path: "it's; a path".to_string(), from_findbin: false },
+            UseLibPath { path: "also".to_string(), from_findbin: false },
+        ]
+    );
 }
 
 #[test]

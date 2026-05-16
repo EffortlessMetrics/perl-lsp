@@ -403,12 +403,36 @@ fn extract_one_quoted(s: &str) -> Option<(String, bool, &str)> {
     };
 
     let inner = &s[1..];
-    let end = inner.find(quote)?;
-    let content = &inner[..end];
-    let rest = &inner[end + 1..];
+    let mut content = String::new();
+    let mut escaped = false;
 
-    let (path, from_findbin) = resolve_findbin_in_string(content);
-    Some((path, from_findbin, rest))
+    for (end, ch) in inner.char_indices() {
+        if escaped {
+            if ch == quote {
+                content.push(ch);
+            } else {
+                content.push('\\');
+                content.push(ch);
+            }
+            escaped = false;
+            continue;
+        }
+
+        if ch == '\\' {
+            escaped = true;
+            continue;
+        }
+
+        if ch == quote {
+            let rest = &inner[end + ch.len_utf8()..];
+            let (path, from_findbin) = resolve_findbin_in_string(&content);
+            return Some((path, from_findbin, rest));
+        }
+
+        content.push(ch);
+    }
+
+    None
 }
 
 fn resolve_findbin_in_string(s: &str) -> (String, bool) {
