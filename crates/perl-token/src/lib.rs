@@ -795,6 +795,29 @@ impl TokenKind {
         TokenKindMetadata { category: self.category(), display_name: self.display_name() }
     }
 
+    /// Return the canonical source spelling for token kinds that have one.
+    ///
+    /// This is intended for lexer/parser diagnostics and conformance tests that
+    /// need the exact spelling used in Perl source. Literal families, generic
+    /// identifiers, EOF, and recovery tokens do not have a single canonical
+    /// source spelling and therefore return `None`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_token::TokenKind;
+    ///
+    /// assert_eq!(TokenKind::Sub.canonical_spelling(), Some("sub"));
+    /// assert_eq!(TokenKind::LeftBrace.canonical_spelling(), Some("{"));
+    /// assert_eq!(TokenKind::Identifier.canonical_spelling(), None);
+    /// ```
+    pub fn canonical_spelling(self) -> Option<&'static str> {
+        canonical_spelling_in(KEYWORD_SPELLINGS, self)
+            .or_else(|| canonical_spelling_in(OPERATOR_SPELLINGS, self))
+            .or_else(|| canonical_spelling_in(DELIMITER_SPELLINGS, self))
+            .or_else(|| canonical_spelling_in(SIGIL_SPELLINGS, self))
+    }
+
     /// Return the high-level category for this token kind.
     pub const fn category(self) -> TokenCategory {
         match self {
@@ -1403,6 +1426,13 @@ impl TokenKind {
             TokenKind::Unknown => "unknown token",
         }
     }
+}
+
+fn canonical_spelling_in(
+    spellings: &'static [(&'static str, TokenKind)],
+    needle: TokenKind,
+) -> Option<&'static str> {
+    spellings.iter().find_map(|(spelling, kind)| (*kind == needle).then_some(*spelling))
 }
 
 const TOKEN_KIND_ALL: [TokenKind; 132] = [

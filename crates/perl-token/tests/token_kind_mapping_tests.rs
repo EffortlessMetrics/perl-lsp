@@ -52,3 +52,38 @@ fn category_helpers_align_with_category_method() {
         assert_eq!(kind.is_special(), kind.category() == perl_token::TokenCategory::Special);
     }
 }
+
+#[test]
+fn canonical_spelling_round_trips_parser_facing_tables() {
+    for &(spelling, kind) in KEYWORD_SPELLINGS {
+        assert_eq!(kind.canonical_spelling(), Some(spelling), "keyword: {spelling}");
+    }
+    for &(spelling, kind) in OPERATOR_SPELLINGS {
+        assert_eq!(kind.canonical_spelling(), Some(spelling), "operator: {spelling}");
+    }
+    for &(spelling, kind) in DELIMITER_SPELLINGS {
+        assert_eq!(kind.canonical_spelling(), Some(spelling), "delimiter: {spelling}");
+    }
+    for &(spelling, kind) in SIGIL_SPELLINGS {
+        assert_eq!(kind.canonical_spelling(), Some(spelling), "sigil: {spelling}");
+    }
+}
+
+#[test]
+fn canonical_spelling_is_absent_for_non_canonical_token_families() {
+    for kind in [
+        TokenKind::Identifier,
+        TokenKind::Number,
+        TokenKind::String,
+        TokenKind::Regex,
+        TokenKind::HeredocBody,
+        TokenKind::FormatBody,
+        TokenKind::DataBody,
+        TokenKind::UnknownRest,
+        TokenKind::HeredocDepthLimit,
+        TokenKind::Eof,
+        TokenKind::Unknown,
+    ] {
+        assert_eq!(kind.canonical_spelling(), None, "{kind:?} should not have canonical spelling");
+    }
+}
