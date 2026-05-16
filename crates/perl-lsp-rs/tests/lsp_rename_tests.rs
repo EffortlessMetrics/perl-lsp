@@ -733,10 +733,10 @@ fn test_rename_out_of_bounds() -> TestResult {
     Ok(())
 }
 
-/// Workspace rename of an unqualified cross-package call must return a JSON-RPC
-/// error (AmbiguousIdentity) rather than silently renaming the wrong symbol.
+/// Workspace rename of an unqualified cross-package call must return no edits
+/// rather than silently renaming the wrong symbol.
 #[test]
-fn test_workspace_rename_refuses_ambiguous_symbol_identity() -> TestResult {
+fn test_workspace_rename_blocks_ambiguous_symbol_identity() -> TestResult {
     let mut harness = LspHarness::new();
     let _init = harness.initialize(None)?;
 
@@ -747,21 +747,19 @@ fn test_workspace_rename_refuses_ambiguous_symbol_identity() -> TestResult {
     // Bar calls process_data without qualification — ambiguous cross-package reference.
     harness.open(bar_uri, "package Bar;\nsub run { return process_data(); }\n1;\n")?;
 
-    let result = harness.request(
+    let response = harness.request(
         "textDocument/rename",
         json!({
             "textDocument": { "uri": foo_uri },
             "position": { "line": 1, "character": 5 },
             "newName": "process_records"
         }),
-    );
+    )?;
 
-    // The rename must refuse with an error — NOT silently rename the wrong call site.
-    let error = result.expect_err("rename should refuse ambiguous workspace identity");
-    assert!(
-        error.contains("ambiguous symbol identity"),
-        "expected ambiguous-identity refusal, got: {error}"
-    );
+    // The rename must refuse with no edits, not silently rename only the
+    // definition while skipping the ambiguous call site.
+    let changes = response["changes"].as_object().ok_or("rename should return changes map")?;
+    assert!(changes.is_empty(), "ambiguous workspace identity must produce no edits: {response}");
 
     Ok(())
 }

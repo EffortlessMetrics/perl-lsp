@@ -263,6 +263,18 @@ fn request_receipt<'a>(explanation: &'a Value) -> Result<&'a Value, Box<dyn std:
     explanation.get("request_receipt").ok_or_else(|| "missing persisted request_receipt".into())
 }
 
+fn workspace_edit_texts_for_uri<'a>(
+    edit: &'a Value,
+    uri: &str,
+) -> Result<Vec<&'a str>, Box<dyn std::error::Error>> {
+    let edits = edit
+        .get("changes")
+        .and_then(|changes| changes.get(uri))
+        .and_then(Value::as_array)
+        .ok_or("missing workspace edit changes for URI")?;
+    Ok(edits.iter().filter_map(|edit| edit.get("newText").and_then(Value::as_str)).collect())
+}
+
 fn assert_safe_delete_decision_trace(
     receipt: &Value,
     decision: &str,
@@ -586,23 +598,14 @@ fn refactor_runtime_blocker_ux_rename_receipt_records_package_fallback_noise()
     assert_eq!(compiler_edit_count, 1, "compiler plan should include the definition edit");
     let live_state =
         fallback_noise.get("live_provider_state").and_then(Value::as_str).ok_or("missing state")?;
-    assert_eq!(live_state, "error", "unexpected live provider state: {fallback_noise}");
-    assert!(
-        fallback_noise
-            .get("live_provider_error")
-            .and_then(Value::as_str)
-            .is_some_and(|message| !message.is_empty()),
-        "error state must include the live provider error: {fallback_noise}"
-    );
+    assert_eq!(live_state, "empty_edit", "unexpected live provider state: {fallback_noise}");
     assert_eq!(
         live_edit_count, 0,
         "live provider should not produce edits after refusal: {fallback_noise}"
     );
     assert!(
-        fallback_noise.get("live_provider_error").and_then(Value::as_str).is_some_and(|message| {
-            message.contains("ambiguous symbol identity") && message.contains("helper")
-        }),
-        "package/compiler-backed rename receipt should expose the live fallback/noise reason: {fallback_noise}"
+        fallback_noise.get("live_provider_error").is_some_and(Value::is_null),
+        "empty-edit refusal should not fabricate a provider error: {fallback_noise}"
     );
     assert_trace_contains(compiler, "CompilerFact", "High", "Fresh")?;
     assert_note_contains(
@@ -817,8 +820,8 @@ fn refactor_runtime_blocker_ux_package_rename_preview_records_imported_call_nois
     );
     assert_eq!(
         preview_result.get("planned_live_provider_edit_count").and_then(Value::as_u64),
-        Some(1),
-        "preview must preserve the live-provider edit-noise count without applying it: {preview_result}"
+        Some(0),
+        "preview must preserve the live-provider no-edit count: {preview_result}"
     );
     assert_eq!(
         preview_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
@@ -842,14 +845,17 @@ fn refactor_runtime_blocker_ux_package_rename_preview_records_imported_call_nois
         Some("compiler_missing")
     );
     assert_eq!(fallback_noise.get("compiler_available").and_then(Value::as_bool), Some(false));
-    assert_eq!(fallback_noise.get("live_provider_state").and_then(Value::as_str), Some("edits"));
-    assert_eq!(fallback_noise.get("live_provider_edit_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        fallback_noise.get("live_provider_state").and_then(Value::as_str),
+        Some("empty_edit")
+    );
+    assert_eq!(fallback_noise.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
 
     let rollback_receipt =
         preview_result.get("rollback_receipt").ok_or("missing rollback_receipt")?;
     assert_eq!(
         rollback_receipt.get("planned_live_provider_edit_count").and_then(Value::as_u64),
-        Some(1)
+        Some(0)
     );
     assert_eq!(
         rollback_receipt.get("returned_workspace_edit_count").and_then(Value::as_u64),
@@ -1042,6 +1048,72 @@ sub caller {
     assert_eq!(
         request_receipt.pointer("/rollback_receipt/rollback_safe").and_then(Value::as_bool),
         Some(true)
+    );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_package_local_live_pilot_applies_source_backed_plan()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let uri = "file:///workspace/lib/Rename/Pilot.pm";
+    let source = r#"package Rename::Pilot;
+use strict;
+use warnings;
+
+sub pilot_target {
+    return 1;
+}
+
+sub caller {
+    return pilot_target();
+}
+
+1;
+"#;
+    open_document(&server, uri, source)?;
+
+    let (target_line, target_character) = position_of(source, "pilot_target {")?;
+    let rename_result = server
+        .handle_rename_workspace(Some(json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": target_line, "character": target_character},
+            "newName": "renamed_pilot_target"
+        })))?
+        .ok_or("missing package-local live rename result")?;
+
+    let changes = rename_result
+        .get("changes")
+        .and_then(Value::as_object)
+        .ok_or("missing package-local live rename changes")?;
+    let edit_count = changes.values().filter_map(Value::as_array).map(Vec::len).sum::<usize>();
+    assert!(
+        edit_count >= 2,
+        "package-local live pilot should apply source-backed definition and reference edits"
+    );
+
+    let base_texts = workspace_edit_texts_for_uri(&rename_result, uri)?;
+    assert!(
+        base_texts.iter().filter(|text| **text == "renamed_pilot_target").count() >= 2,
+        "package-local live pilot should rename source-backed definition and reference: {rename_result}"
+    );
+
+    let explanation = explain_provider_decision(&server, "rename")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(request_receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("textDocument/rename")
+    );
+    assert_eq!(
+        request_receipt.get("reason").and_then(Value::as_str),
+        Some("package_local_live_pilot")
+    );
+    assert_eq!(request_receipt.get("fallback_state").and_then(Value::as_str), Some("none"));
+    assert_eq!(
+        request_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
+        u64::try_from(edit_count).ok()
     );
 
     Ok(())
@@ -1247,12 +1319,13 @@ fn refactor_runtime_blocker_ux_rename_request_receipt_preserves_package_fallback
         request_receipt.get("compiler_requires_confirmation").and_then(Value::as_bool),
         Some(true)
     );
-    assert_eq!(request_receipt.get("live_provider_state").and_then(Value::as_str), Some("error"));
+    assert_eq!(
+        request_receipt.get("live_provider_state").and_then(Value::as_str),
+        Some("empty_edit")
+    );
     assert!(
-        request_receipt.get("live_provider_error").and_then(Value::as_str).is_some_and(|message| {
-            message.contains("ambiguous symbol identity") && message.contains("helper")
-        }),
-        "request-local receipt must preserve live fallback/noise reason: {request_receipt:?}"
+        request_receipt.get("live_provider_error").is_some_and(Value::is_null),
+        "request-local receipt must preserve no-edit fallback state: {request_receipt:?}"
     );
 
     Ok(())
@@ -1299,17 +1372,17 @@ fn refactor_runtime_blocker_ux_rename_receipt_records_imported_call_fallback_noi
     );
     assert_eq!(
         fallback_noise.get("live_provider_edit_count").and_then(Value::as_u64),
-        Some(1),
-        "imported-call live provider noise should stay visible before promotion: {fallback_noise}"
+        Some(0),
+        "imported-call live provider must stay no-edit without compiler proof: {fallback_noise}"
     );
     assert_eq!(
         fallback_noise.get("live_provider_state").and_then(Value::as_str),
-        Some("edits"),
+        Some("empty_edit"),
         "unexpected imported-call live provider state: {fallback_noise}"
     );
     assert!(
         fallback_noise.get("live_provider_error").is_some_and(Value::is_null),
-        "live edit-noise state should not fabricate a provider error: {fallback_noise}"
+        "empty-edit state should not fabricate a provider error: {fallback_noise}"
     );
 
     Ok(())

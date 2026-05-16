@@ -467,10 +467,6 @@ pub(crate) mod builtin_signatures {
     pub use perl_parser::builtin_signatures::*;
 }
 
-pub(crate) mod workspace_rename {
-    pub use crate::features::workspace_rename::*;
-}
-
 pub(crate) mod semantic_tokens {
     pub use crate::features::semantic_tokens::*;
 }
