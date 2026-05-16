@@ -1321,8 +1321,7 @@ mod tests {
 
     #[test]
     fn verdict_counts_total_saturates_at_max() -> Result<(), Box<dyn std::error::Error>> {
-        // Set each field to u64::MAX / 5 and verify total does not overflow.
-        // saturating_add ensures no panic.
+        // Make the mathematical total exceed u64::MAX and verify it saturates instead of wrapping.
         let mut counts = VerdictCounts {
             same: u64::MAX / 5,
             improved: u64::MAX / 5,
@@ -1330,15 +1329,22 @@ mod tests {
             ambiguous: u64::MAX / 5,
             unavailable: u64::MAX / 5,
         };
-        // Record one more in each field — should saturate, not overflow.
         counts.record(ShadowCompareVerdict::Same);
         counts.record(ShadowCompareVerdict::Improved);
         counts.record(ShadowCompareVerdict::Regression);
         counts.record(ShadowCompareVerdict::Ambiguous);
         counts.record(ShadowCompareVerdict::Unavailable);
-        // total() uses saturating_add throughout — must not panic.
-        let t = counts.total();
-        assert!(t > 0, "total must be positive after records");
+        assert_eq!(counts.total(), u64::MAX);
+        Ok(())
+    }
+
+    #[test]
+    fn verdict_counts_record_saturates_individual_field() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let mut counts = VerdictCounts { same: u64::MAX, ..VerdictCounts::default() };
+        counts.record(ShadowCompareVerdict::Same);
+        assert_eq!(counts.same, u64::MAX);
+        assert_eq!(counts.total(), u64::MAX);
         Ok(())
     }
 
