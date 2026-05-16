@@ -177,7 +177,7 @@ impl Token {
 
 #[cfg(test)]
 mod tests {
-    use super::TokenType;
+    use super::{Token, TokenType};
     use std::sync::Arc;
 
     #[test]
@@ -193,5 +193,64 @@ mod tests {
         assert!(TokenType::UnknownRest.is_recovery_token());
         assert!(TokenType::Error(Arc::from("oops")).is_recovery_token());
         assert!(!TokenType::EOF.is_recovery_token());
+    }
+
+    // --- Token::new ---
+
+    #[test]
+    fn token_new_stores_type_text_and_span() {
+        let tok = Token::new(TokenType::Semicolon, ";", 3, 4);
+        assert_eq!(tok.token_type, TokenType::Semicolon);
+        assert_eq!(tok.text.as_ref(), ";");
+        assert_eq!(tok.start, 3);
+        assert_eq!(tok.end, 4);
+    }
+
+    #[test]
+    fn token_new_accepts_arc_str_directly() {
+        let text: Arc<str> = Arc::from("hello");
+        let tok = Token::new(TokenType::Identifier(Arc::from("hello")), text, 0, 5);
+        assert_eq!(tok.start, 0);
+        assert_eq!(tok.end, 5);
+    }
+
+    // --- Token::len ---
+
+    #[test]
+    fn token_len_returns_end_minus_start() {
+        let tok = Token::new(TokenType::Semicolon, ";", 10, 17);
+        assert_eq!(tok.len(), 7);
+    }
+
+    #[test]
+    fn token_len_zero_when_span_is_empty() {
+        let tok = Token::new(TokenType::EOF, "", 5, 5);
+        assert_eq!(tok.len(), 0);
+    }
+
+    #[test]
+    fn token_len_single_byte_span() {
+        let tok = Token::new(TokenType::Comma, ",", 0, 1);
+        assert_eq!(tok.len(), 1);
+    }
+
+    // --- Token::is_empty ---
+
+    #[test]
+    fn token_is_empty_true_for_zero_length_span() {
+        let tok = Token::new(TokenType::EOF, "", 0, 0);
+        assert!(tok.is_empty());
+    }
+
+    #[test]
+    fn token_is_empty_true_for_non_zero_start_matching_end() {
+        let tok = Token::new(TokenType::EOF, "", 42, 42);
+        assert!(tok.is_empty());
+    }
+
+    #[test]
+    fn token_is_empty_false_for_non_zero_length_span() {
+        let tok = Token::new(TokenType::Semicolon, ";", 0, 1);
+        assert!(!tok.is_empty());
     }
 }

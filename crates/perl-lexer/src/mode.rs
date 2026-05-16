@@ -70,3 +70,89 @@ impl LexerMode {
         matches!(self, LexerMode::ExpectOperator)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::LexerMode;
+
+    // --- is_expect_term ---
+
+    #[test]
+    fn lexer_mode_expect_term_is_term() {
+        assert!(LexerMode::ExpectTerm.is_expect_term());
+    }
+
+    #[test]
+    fn lexer_mode_expect_operator_is_not_term() {
+        assert!(!LexerMode::ExpectOperator.is_expect_term());
+    }
+
+    #[test]
+    fn lexer_mode_expect_delimiter_is_not_term() {
+        assert!(!LexerMode::ExpectDelimiter.is_expect_term());
+    }
+
+    #[test]
+    fn lexer_mode_in_format_body_is_not_term() {
+        assert!(!LexerMode::InFormatBody.is_expect_term());
+    }
+
+    #[test]
+    fn lexer_mode_in_data_section_is_not_term() {
+        assert!(!LexerMode::InDataSection.is_expect_term());
+    }
+
+    // --- is_expect_operator ---
+
+    #[test]
+    fn lexer_mode_expect_operator_is_operator() {
+        assert!(LexerMode::ExpectOperator.is_expect_operator());
+    }
+
+    #[test]
+    fn lexer_mode_expect_term_is_not_operator() {
+        assert!(!LexerMode::ExpectTerm.is_expect_operator());
+    }
+
+    #[test]
+    fn lexer_mode_expect_delimiter_is_not_operator() {
+        assert!(!LexerMode::ExpectDelimiter.is_expect_operator());
+    }
+
+    #[test]
+    fn lexer_mode_in_format_body_is_not_operator() {
+        assert!(!LexerMode::InFormatBody.is_expect_operator());
+    }
+
+    #[test]
+    fn lexer_mode_in_data_section_is_not_operator() {
+        assert!(!LexerMode::InDataSection.is_expect_operator());
+    }
+
+    // --- mutual exclusion ---
+    // No mode is simultaneously term-expecting AND operator-expecting.
+
+    #[test]
+    fn lexer_mode_no_variant_is_both_term_and_operator() {
+        let modes = [
+            LexerMode::ExpectTerm,
+            LexerMode::ExpectOperator,
+            LexerMode::ExpectDelimiter,
+            LexerMode::InFormatBody,
+            LexerMode::InDataSection,
+        ];
+        for mode in modes {
+            assert!(
+                !(mode.is_expect_term() && mode.is_expect_operator()),
+                "{mode:?} should not be both term-expecting and operator-expecting",
+            );
+        }
+    }
+
+    // --- default ---
+
+    #[test]
+    fn lexer_mode_default_is_expect_term() {
+        assert_eq!(LexerMode::default(), LexerMode::ExpectTerm);
+    }
+}
