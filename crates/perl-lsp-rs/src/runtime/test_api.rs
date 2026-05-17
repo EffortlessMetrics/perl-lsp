@@ -33,6 +33,21 @@ impl LspServer {
         self.handle_did_open(params)
     }
 
+    /// Test-only entrypoint for LSP `textDocument/didChange`.
+    ///
+    /// This method exercises the real text-sync change handler without needing
+    /// an external transport. Use it in tests to prove provider receipts refresh
+    /// after document edits.
+    ///
+    /// # Parameters
+    /// - `params`: JSON-RPC params containing `textDocument` and `contentChanges`.
+    ///
+    /// # Errors
+    /// Returns [`JsonRpcError`] if params are invalid or the handler fails.
+    pub fn test_handle_did_change(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
+        self.handle_did_change(params)
+    }
+
     /// Test-only entrypoint for LSP `textDocument/definition`.
     ///
     /// Exercises go-to-definition functionality in tests. Returns the

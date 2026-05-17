@@ -1804,6 +1804,9 @@ dependencies = [
 [[package]]
 name = "perl-pod"
 version = "0.14.0"
+dependencies = [
+ "tempfile",
+]
 
 [[package]]
 name = "perl-position-tracking"

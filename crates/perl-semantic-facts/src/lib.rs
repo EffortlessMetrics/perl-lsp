@@ -1871,4 +1871,256 @@ mod tests {
         }
         Ok(())
     }
+
+    // ── ID newtype semantics ──────────────────────────────────────────────────
+    //
+    // The id_newtype! macro derives Debug, Clone, Copy, PartialEq, Eq, PartialOrd,
+    // Ord, Hash, Serialize, and Deserialize.  The existing `id_u64_max_roundtrips`
+    // test only exercises EntityId at u64::MAX.  The tests below cover boundary
+    // values (0, 1, mid-range), ordering comparisons, HashMap key identity, and
+    // Debug format for all seven ID types.
+
+    /// All seven ID newtypes produce the correct Debug representation.
+    #[test]
+    fn id_newtype_debug_format() {
+        assert_eq!(format!("{:?}", FileId(0)), "FileId(0)");
+        assert_eq!(format!("{:?}", ScopeId(1)), "ScopeId(1)");
+        assert_eq!(format!("{:?}", EntityId(42)), "EntityId(42)");
+        assert_eq!(format!("{:?}", AnchorId(999)), "AnchorId(999)");
+        assert_eq!(format!("{:?}", OccurrenceId(u64::MAX)), "OccurrenceId(18446744073709551615)");
+        assert_eq!(format!("{:?}", EdgeId(0)), "EdgeId(0)");
+        assert_eq!(format!("{:?}", DiagnosticId(1)), "DiagnosticId(1)");
+    }
+
+    /// All seven ID newtypes support equality and inequality at boundary values.
+    #[test]
+    fn id_newtype_equality_at_boundaries() {
+        // zero identity
+        assert_eq!(FileId(0), FileId(0));
+        assert_ne!(FileId(0), FileId(1));
+
+        // one identity
+        assert_eq!(ScopeId(1), ScopeId(1));
+        assert_ne!(ScopeId(1), ScopeId(2));
+
+        // mid-range identity
+        assert_eq!(EntityId(500), EntityId(500));
+        assert_ne!(EntityId(499), EntityId(500));
+
+        // u64::MAX identity
+        assert_eq!(AnchorId(u64::MAX), AnchorId(u64::MAX));
+        assert_ne!(AnchorId(u64::MAX - 1), AnchorId(u64::MAX));
+
+        // remaining types at zero
+        assert_eq!(OccurrenceId(0), OccurrenceId(0));
+        assert_ne!(OccurrenceId(0), OccurrenceId(1));
+        assert_eq!(EdgeId(0), EdgeId(0));
+        assert_ne!(EdgeId(0), EdgeId(1));
+        assert_eq!(DiagnosticId(0), DiagnosticId(0));
+        assert_ne!(DiagnosticId(0), DiagnosticId(1));
+    }
+
+    /// All seven ID newtypes support total ordering consistent with their inner u64.
+    #[test]
+    fn id_newtype_ordering() {
+        assert!(FileId(0) < FileId(1));
+        assert!(FileId(1) < FileId(u64::MAX));
+        assert!(ScopeId(10) > ScopeId(9));
+        assert!(EntityId(0) <= EntityId(0));
+        assert!(AnchorId(100) >= AnchorId(100));
+        assert!(OccurrenceId(1) < OccurrenceId(2));
+        assert!(EdgeId(u64::MAX - 1) < EdgeId(u64::MAX));
+        assert!(DiagnosticId(3) > DiagnosticId(2));
+    }
+
+    /// ID newtypes can be used as HashMap keys (exercises Hash + Eq).
+    #[test]
+    fn id_newtype_as_hashmap_key() {
+        use std::collections::HashMap;
+
+        let mut map: HashMap<FileId, &str> = HashMap::new();
+        map.insert(FileId(0), "zero");
+        map.insert(FileId(1), "one");
+        map.insert(FileId(u64::MAX), "max");
+
+        assert_eq!(map[&FileId(0)], "zero");
+        assert_eq!(map[&FileId(1)], "one");
+        assert_eq!(map[&FileId(u64::MAX)], "max");
+        assert!(!map.contains_key(&FileId(2)));
+
+        // Verify the same for ScopeId, EntityId, AnchorId, OccurrenceId, EdgeId, DiagnosticId.
+        let mut scope_map: HashMap<ScopeId, u32> = HashMap::new();
+        scope_map.insert(ScopeId(0), 0);
+        scope_map.insert(ScopeId(1), 1);
+        assert_eq!(scope_map[&ScopeId(0)], 0);
+
+        let mut entity_map: HashMap<EntityId, u32> = HashMap::new();
+        entity_map.insert(EntityId(42), 42);
+        assert_eq!(entity_map[&EntityId(42)], 42);
+
+        let mut anchor_map: HashMap<AnchorId, u32> = HashMap::new();
+        anchor_map.insert(AnchorId(99), 99);
+        assert_eq!(anchor_map[&AnchorId(99)], 99);
+
+        let mut occ_map: HashMap<OccurrenceId, u32> = HashMap::new();
+        occ_map.insert(OccurrenceId(7), 7);
+        assert_eq!(occ_map[&OccurrenceId(7)], 7);
+
+        let mut edge_map: HashMap<EdgeId, u32> = HashMap::new();
+        edge_map.insert(EdgeId(3), 3);
+        assert_eq!(edge_map[&EdgeId(3)], 3);
+
+        let mut diag_map: HashMap<DiagnosticId, u32> = HashMap::new();
+        diag_map.insert(DiagnosticId(5), 5);
+        assert_eq!(diag_map[&DiagnosticId(5)], 5);
+    }
+
+    /// All seven ID newtypes round-trip through JSON at boundary values (0, 1, mid, MAX).
+    ///
+    /// The `id_newtype!` macro produces `pub struct $name(pub u64)`.  serde's
+    /// default representation for a newtype struct over a u64 is a bare JSON
+    /// number — **not** a JSON object.  The shape assertion below pins this
+    /// contract so that adding `#[serde(rename_all = ...)]` or similar
+    /// attributes would surface as a test failure.
+    #[test]
+    fn id_newtype_json_roundtrip_boundary_values() -> Result<(), serde_json::Error> {
+        // Shape contract: bare JSON number, not an object or array.
+        assert_eq!(serde_json::to_string(&FileId(42))?, "42");
+        assert_eq!(serde_json::to_string(&ScopeId(42))?, "42");
+        assert_eq!(serde_json::to_string(&EntityId(42))?, "42");
+        assert_eq!(serde_json::to_string(&AnchorId(42))?, "42");
+        assert_eq!(serde_json::to_string(&OccurrenceId(42))?, "42");
+        assert_eq!(serde_json::to_string(&EdgeId(42))?, "42");
+        assert_eq!(serde_json::to_string(&DiagnosticId(42))?, "42");
+
+        for v in [0u64, 1, 500, u64::MAX] {
+            let s = serde_json::to_string(&FileId(v))?;
+            assert_eq!(serde_json::from_str::<FileId>(&s)?, FileId(v));
+
+            let s = serde_json::to_string(&ScopeId(v))?;
+            assert_eq!(serde_json::from_str::<ScopeId>(&s)?, ScopeId(v));
+
+            let s = serde_json::to_string(&EntityId(v))?;
+            assert_eq!(serde_json::from_str::<EntityId>(&s)?, EntityId(v));
+
+            let s = serde_json::to_string(&AnchorId(v))?;
+            assert_eq!(serde_json::from_str::<AnchorId>(&s)?, AnchorId(v));
+
+            let s = serde_json::to_string(&OccurrenceId(v))?;
+            assert_eq!(serde_json::from_str::<OccurrenceId>(&s)?, OccurrenceId(v));
+
+            let s = serde_json::to_string(&EdgeId(v))?;
+            assert_eq!(serde_json::from_str::<EdgeId>(&s)?, EdgeId(v));
+
+            let s = serde_json::to_string(&DiagnosticId(v))?;
+            assert_eq!(serde_json::from_str::<DiagnosticId>(&s)?, DiagnosticId(v));
+        }
+        Ok(())
+    }
+
+    // ── Constructor coverage ──────────────────────────────────────────────────
+
+    /// `VisibleSymbolContext::new()` produces a value equal to the struct literal.
+    ///
+    /// Required because `#[non_exhaustive]` prevents struct-literal construction
+    /// outside the crate — callers must use `new()`.
+    #[test]
+    fn visible_symbol_context_new_constructor() -> Result<(), serde_json::Error> {
+        let via_new = VisibleSymbolContext::new(
+            Some("Foo::Bar".to_string()),
+            Some(AnchorId(10)),
+            Some(AnchorId(20)),
+        );
+        assert_eq!(via_new.source_module.as_deref(), Some("Foo::Bar"));
+        assert_eq!(via_new.source_import_anchor_id, Some(AnchorId(10)));
+        assert_eq!(via_new.source_export_anchor_id, Some(AnchorId(20)));
+
+        // All-None variant.
+        let none_ctx = VisibleSymbolContext::new(None, None, None);
+        assert!(none_ctx.source_module.is_none());
+        assert!(none_ctx.source_import_anchor_id.is_none());
+        assert!(none_ctx.source_export_anchor_id.is_none());
+
+        // Serde roundtrip with populated fields.
+        let serialized = serde_json::to_string(&via_new)?;
+        let decoded: VisibleSymbolContext = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded.source_module, via_new.source_module);
+        assert_eq!(decoded.source_import_anchor_id, via_new.source_import_anchor_id);
+        assert_eq!(decoded.source_export_anchor_id, via_new.source_export_anchor_id);
+        Ok(())
+    }
+
+    /// `PackageNode::new()` produces the correct field values.
+    #[test]
+    fn package_node_new_constructor() -> Result<(), serde_json::Error> {
+        let node = PackageNode::new(
+            EntityId(10),
+            "My::Package".to_string(),
+            PackageKind::Class,
+            Some(AnchorId(5)),
+            Some(FileId(1)),
+        );
+        assert_eq!(node.entity_id, EntityId(10));
+        assert_eq!(node.name, "My::Package");
+        assert_eq!(node.kind, PackageKind::Class);
+        assert_eq!(node.anchor_id, Some(AnchorId(5)));
+        assert_eq!(node.file_id, Some(FileId(1)));
+
+        // None-anchor, None-file variant.
+        let bare = PackageNode::new(
+            EntityId(99),
+            "External::Pkg".to_string(),
+            PackageKind::External,
+            None,
+            None,
+        );
+        assert!(bare.anchor_id.is_none());
+        assert!(bare.file_id.is_none());
+        assert_eq!(
+            format!("{bare:?}"),
+            "PackageNode { entity_id: EntityId(99), name: \"External::Pkg\", kind: External, anchor_id: None, file_id: None }"
+        );
+
+        // Serde roundtrip.
+        let serialized = serde_json::to_string(&node)?;
+        let decoded: PackageNode = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, node);
+        Ok(())
+    }
+
+    /// `PackageEdge::new()` produces the correct field values.
+    #[test]
+    fn package_edge_new_constructor() -> Result<(), serde_json::Error> {
+        let edge = PackageEdge::new(
+            "Child::Class".to_string(),
+            "Parent::Class".to_string(),
+            PackageEdgeKind::Inherits,
+            Some(AnchorId(77)),
+            Provenance::ExactAst,
+            Confidence::High,
+        );
+        assert_eq!(edge.from_package, "Child::Class");
+        assert_eq!(edge.to_package, "Parent::Class");
+        assert_eq!(edge.kind, PackageEdgeKind::Inherits);
+        assert_eq!(edge.anchor_id, Some(AnchorId(77)));
+        assert_eq!(edge.provenance, Provenance::ExactAst);
+        assert_eq!(edge.confidence, Confidence::High);
+
+        // No-anchor variant.
+        let inferred = PackageEdge::new(
+            "App::Worker".to_string(),
+            "Moo".to_string(),
+            PackageEdgeKind::DependsOn,
+            None,
+            Provenance::NameHeuristic,
+            Confidence::Low,
+        );
+        assert!(inferred.anchor_id.is_none());
+
+        // Serde roundtrip.
+        let serialized = serde_json::to_string(&edge)?;
+        let decoded: PackageEdge = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, edge);
+        Ok(())
+    }
 }

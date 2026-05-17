@@ -33,6 +33,7 @@ mod semantic_tokens;
 mod streaming;
 mod symbols;
 mod virtual_content;
+mod workspace_trust_report;
 
 #[cfg(test)]
 mod navigation_runtime_quality_tests;
