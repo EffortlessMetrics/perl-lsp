@@ -440,7 +440,7 @@ doctor-env:
     @echo "=============================================="
     @echo "  perl-lsp developer environment doctor"
     @echo "=============================================="
-    @cargo xtask devex-doctor
+    @{{cargo_safe}} xtask devex-doctor
 
 # Short alias for the developer environment quick check
 devex: doctor-env
@@ -804,7 +804,7 @@ devex-targeted base='' mode='all':
         exit 1
     fi
     echo "Running targeted checks (base=$base, mode={{mode}})..."
-    cargo xtask targeted-checks --base "$base" --mode "{{mode}}"
+    {{cargo_safe}} xtask targeted-checks --base "$base" --mode "{{mode}}"
 
 # Show recent upstream commits using an auto-detected base ref.
 # Helpful in detached or minimal-clone environments where origin/master may not exist.
