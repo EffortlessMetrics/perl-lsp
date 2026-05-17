@@ -133,6 +133,10 @@ impl LspServer {
         let compiler_receipt_count = if compiler_receipt.is_some() { 1usize } else { 0usize };
         let compiler_live_pilot_count = if live_pilot { 1usize } else { 0usize };
         let class_specific_receipt_count = class_specific_expansion_receipts.len();
+        let class_specific_live_pilot_count = class_specific_expansion_receipts
+            .iter()
+            .filter(|receipt| receipt.get("live_pilot").and_then(Value::as_bool).unwrap_or(false))
+            .count();
         let live_pilot_state = if live_pilot { "partial_live_source_backed" } else { "shadowed" };
 
         // Each LSP semantic token encodes as 5 consecutive u32 values in the flat data array.
@@ -151,6 +155,7 @@ impl LspServer {
             "live_pilot_state": live_pilot_state,
             "compiler_receipt": compiler_receipt,
             "class_specific_expansion_receipts": class_specific_expansion_receipts,
+            "class_specific_live_pilot_count": class_specific_live_pilot_count,
             "no_live_behavior_change": true,
             "no_live_token_output_change": true,
             "notes": format!(
@@ -159,12 +164,14 @@ impl LspServer {
                  compiler_backed_token_classes={}; \
                  compiler_live_pilot={}; \
                  class_specific_compiler_token_classes={}; \
+                 class_specific_live_pilots={}; \
                  compiler-fact candidates are live-pilot only when their source-backed span \
                  already matches the live token stream; \
                  no semantic-token output change",
                 compiler_receipt_count,
                 compiler_live_pilot_count,
-                class_specific_receipt_count
+                class_specific_receipt_count,
+                class_specific_live_pilot_count
             )
         })))
     }
@@ -246,6 +253,7 @@ impl LspServer {
                 "namespace",
                 "matched_existing_live_namespace_token",
                 "unmatched_existing_live_namespace_token",
+                false,
                 "class-specific compiler package-declaration receipt only; token:function remains the only compiler-backed live slice, and package declarations stay shadowed until class-specific approval lands",
             ));
         }
@@ -257,7 +265,8 @@ impl LspServer {
                 "method",
                 "matched_existing_live_method_token",
                 "unmatched_existing_live_method_token",
-                "class-specific compiler method-declaration receipt only; token:function remains the only compiler-backed live slice, and method declarations stay shadowed until class-specific approval lands",
+                true,
+                "scoped compiler method-declaration class cutover proof only; method declarations may count as compiler-token identities only when their source-backed span already matches existing live parser/HIR method tokens, and no new token output is emitted",
             ));
         }
         if let Some(candidate) = semantic_token_class_field_declaration_candidate(&doc.text) {
@@ -268,6 +277,7 @@ impl LspServer {
                 "variable",
                 "matched_existing_live_variable_token",
                 "unmatched_existing_live_variable_token",
+                false,
                 "class-specific compiler field-declaration receipt only; token:function remains the only compiler-backed live slice, and field declarations stay shadowed until class-specific approval lands",
             ));
         }
@@ -278,11 +288,12 @@ impl LspServer {
     #[cfg(any(test, feature = "expose_lsp_test_api"))]
     fn semantic_tokens_class_specific_expansion_receipt(
         live_provider_result: Option<&Value>,
-        candidate: crate::semantic_tokens::SemanticTokenShadowCandidate,
+        mut candidate: crate::semantic_tokens::SemanticTokenShadowCandidate,
         token_class: &'static str,
         live_token_type: &'static str,
         matched_parity_state: &'static str,
         unmatched_parity_state: &'static str,
+        approved_for_live_cutover: bool,
         claim_boundary: &'static str,
     ) -> Value {
         let live_output_parity = semantic_tokens_live_contains_span(
@@ -290,6 +301,10 @@ impl LspServer {
             candidate.source_span.as_ref(),
             live_token_type,
         );
+        let live_pilot = approved_for_live_cutover && live_output_parity;
+        if live_pilot {
+            candidate.fallback_state = ProviderFallbackState::Primary;
+        }
         let fallback_state = candidate.fallback_state;
         let candidates = vec![candidate];
         let span_report = crate::semantic_tokens::semantic_token_span_invariant_report(&candidates);
@@ -310,8 +325,8 @@ impl LspServer {
             "freshness": "Fresh",
             "fallback_state": provider_fallback_state_label(fallback_state),
             "shadow_state": "shadowed",
-            "approved_for_live_cutover": false,
-            "live_pilot": false,
+            "approved_for_live_cutover": approved_for_live_cutover,
+            "live_pilot": live_pilot,
             "live_output_parity": live_output_parity,
             "parity_state": parity_state,
             "live_token_type": live_token_type,
@@ -471,7 +486,7 @@ fn semantic_token_method_declaration_candidate(
     )?;
 
     Some(crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
-        format!("token:method:{name}:compiler"),
+        format!("token:method_declaration:{name}:compiler"),
         ProviderFactSourceKind::CompilerFact,
         Provenance::SemanticAnalyzer,
         Confidence::Medium,
