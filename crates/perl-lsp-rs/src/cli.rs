@@ -108,7 +108,7 @@ fn invocation_name(args: &[std::ffi::OsString]) -> String {
 }
 
 fn render_help_text(command_name: &str) -> String {
-    help_text().replace("perl-lsp", command_name)
+    help_text().replace("perl-lsp", command_name).replace("perllsp", command_name)
 }
 
 fn render_shell_completion(script: &str, command_name: &str) -> String {
@@ -579,7 +579,8 @@ fn print_version(command_name: &str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        categorize_error, invocation_name, remediation_hint_for_category, render_shell_completion,
+        categorize_error, invocation_name, remediation_hint_for_category, render_help_text,
+        render_shell_completion,
     };
     use std::ffi::OsString;
 
@@ -593,6 +594,16 @@ mod tests {
     fn invocation_name_falls_back_when_first_arg_is_empty() {
         let args = vec![OsString::from("")];
         assert_eq!(invocation_name(&args), "perllsp");
+    }
+
+    #[test]
+    fn render_help_text_rewrites_usage_examples_for_invocation_name() {
+        let rendered = render_help_text("perl-lsp-rs");
+
+        assert!(rendered.contains("Usage: perl-lsp-rs [options]"));
+        assert!(rendered.contains("perl-lsp-rs --check lib/MyModule.pm"));
+        assert!(!rendered.contains("Usage: perllsp"));
+        assert!(!rendered.contains("perllsp --"));
     }
 
     #[test]
