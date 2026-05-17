@@ -511,4 +511,58 @@ include_paths = ["other_lib"]
         );
         Ok(())
     }
+
+    #[test]
+    fn did_change_configuration_accepts_unwrapped_perl_settings() {
+        // Sublime Text's LSP package sends settings without the outer "perl" wrapper:
+        //   {"settings": {"workspace": {"includePaths": [...], "useSystemInc": false}}}
+        // rather than the standard:
+        //   {"settings": {"perl": {"workspace": {"includePaths": [...], "useSystemInc": false}}}}
+        // Both forms must be accepted and applied.
+        let server = LspServer::new();
+
+        server.handle_did_change_configuration(Some(serde_json::json!({
+            "settings": {
+                "workspace": {
+                    "includePaths": ["vendor/lib"],
+                    "useSystemInc": false
+                }
+            }
+        })));
+
+        let workspace_config = server.workspace_config.lock();
+        assert!(
+            workspace_config.include_paths.contains(&"vendor/lib".to_string()),
+            "unwrapped Sublime-style settings must apply includePaths; got: {:?}",
+            workspace_config.include_paths
+        );
+        assert!(
+            !workspace_config.use_system_inc,
+            "unwrapped Sublime-style settings must apply useSystemInc=false"
+        );
+    }
+
+    #[test]
+    fn did_change_configuration_wrapped_form_still_works() {
+        // Ensure the standard wrapped form continues to work after the Sublime fix.
+        let server = LspServer::new();
+
+        server.handle_did_change_configuration(Some(serde_json::json!({
+            "settings": {
+                "perl": {
+                    "workspace": {
+                        "includePaths": ["lib/wrapped"],
+                        "useSystemInc": false
+                    }
+                }
+            }
+        })));
+
+        let workspace_config = server.workspace_config.lock();
+        assert!(
+            workspace_config.include_paths.contains(&"lib/wrapped".to_string()),
+            "standard wrapped settings must still apply includePaths; got: {:?}",
+            workspace_config.include_paths
+        );
+    }
 }
