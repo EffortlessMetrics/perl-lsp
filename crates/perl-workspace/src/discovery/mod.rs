@@ -232,8 +232,8 @@ fn log_discovery(result: &DiscoveryResult) {
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_git_ls_files_output, path_contains_skipped_component, should_skip_dir,
-        walk_discovery, DiscoveryMethod,
+        DiscoveryMethod, parse_git_ls_files_output, path_contains_skipped_component,
+        should_skip_dir, walk_discovery,
     };
     use std::fs;
     use std::path::Path;
