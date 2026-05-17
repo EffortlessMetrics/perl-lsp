@@ -664,6 +664,7 @@ impl TestResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::SourceLocation;
     use crate::parser::Parser;
     use std::sync::{LazyLock, Mutex};
 
@@ -768,6 +769,191 @@ done_testing();
 
         assert!(!runner.is_test_file("file:///lib/Module.pm"));
         assert!(!runner.is_test_file("file:///script.pl"));
+    }
+
+    #[test]
+    fn test_status_strings_cover_all_variants() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(TestStatus::Passed.as_str(), "passed");
+        assert_eq!(TestStatus::Failed.as_str(), "failed");
+        assert_eq!(TestStatus::Skipped.as_str(), "skipped");
+        assert_eq!(TestStatus::Errored.as_str(), "errored");
+        Ok(())
+    }
+
+    #[test]
+    fn test_item_json_includes_ranges_and_children() -> Result<(), Box<dyn std::error::Error>> {
+        let child = TestItem {
+            id: "file:///suite.t::child".to_string(),
+            label: "child".to_string(),
+            uri: "file:///suite.t".to_string(),
+            range: TestRange { start_line: 3, start_character: 4, end_line: 3, end_character: 16 },
+            kind: TestKind::Test,
+            children: vec![],
+        };
+        let item = TestItem {
+            id: "file:///suite.t".to_string(),
+            label: "suite.t".to_string(),
+            uri: "file:///suite.t".to_string(),
+            range: TestRange { start_line: 0, start_character: 0, end_line: 5, end_character: 1 },
+            kind: TestKind::File,
+            children: vec![child],
+        };
+
+        let json = item.to_json();
+
+        assert_eq!(json["id"], "file:///suite.t");
+        assert_eq!(json["label"], "suite.t");
+        assert_eq!(json["range"]["end"]["line"], 5);
+        assert_eq!(json["canResolveChildren"], true);
+        assert_eq!(json["children"][0]["id"], "file:///suite.t::child");
+        assert_eq!(json["children"][0]["range"]["start"]["character"], 4);
+        Ok(())
+    }
+
+    #[test]
+    fn test_result_json_covers_message_and_duration() -> Result<(), Box<dyn std::error::Error>> {
+        let result = TestResult {
+            test_id: "file:///suite.t::case".to_string(),
+            status: TestStatus::Errored,
+            message: Some("boom".to_string()),
+            duration: Some(42),
+        };
+
+        let json = result.to_json();
+
+        assert_eq!(json["testId"], "file:///suite.t::case");
+        assert_eq!(json["state"], "errored");
+        assert_eq!(json["message"]["message"], "boom");
+        assert_eq!(json["duration"], 42);
+        Ok(())
+    }
+
+    #[test]
+    fn tap_parser_reports_individual_passes_and_failures() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let runner = TestRunner::new(String::new(), String::new());
+
+        let results = runner.parse_tap_output(
+            "1..3
+ok 1 - loads
+not ok 2 - rejects invalid input
+ok 3
+",
+            "ignored when individual TAP records exist",
+            false,
+            99,
+            "t/sample.t",
+        );
+
+        assert_eq!(results.len(), 3);
+        assert_eq!(results[0].test_id, "t/sample.t::- loads");
+        assert_eq!(results[0].status, TestStatus::Passed);
+        assert_eq!(results[1].test_id, "t/sample.t::2 - rejects invalid input");
+        assert_eq!(results[1].status, TestStatus::Failed);
+        assert_eq!(results[1].message.as_deref(), Some("not ok 2 - rejects invalid input"));
+        assert_eq!(results[2].test_id, "t/sample.t::test");
+        assert_eq!(results[2].duration, None);
+        Ok(())
+    }
+
+    #[test]
+    fn tap_parser_falls_back_to_file_result_with_stderr() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let runner = TestRunner::new(String::new(), String::new());
+
+        let results = runner.parse_tap_output("", "syntax error", false, 17, "script.pl");
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].test_id, "script.pl");
+        assert_eq!(results[0].status, TestStatus::Failed);
+        assert_eq!(results[0].message.as_deref(), Some("syntax error"));
+        assert_eq!(results[0].duration, Some(17));
+        Ok(())
+    }
+
+    #[test]
+    fn discover_tests_nests_file_children_and_computes_ranges()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = "use Test::More;
+sub test_nested {
+    ok(1);
+}
+";
+        let body = node(NodeKind::Block { statements: vec![] }, 36, 46);
+        let subroutine = node(
+            NodeKind::Subroutine {
+                name: Some("test_nested".to_string()),
+                name_span: Some(SourceLocation { start: 20, end: 31 }),
+                prototype: None,
+                signature: None,
+                attributes: vec![],
+                body: Box::new(body),
+            },
+            16,
+            46,
+        );
+        let ast = node(NodeKind::Program { statements: vec![subroutine] }, 0, source.len());
+        let runner = TestRunner::new(source.to_string(), "file:///project/t/sample.t".to_string());
+
+        let tests = runner.discover_tests(&ast);
+
+        assert_eq!(tests.len(), 1);
+        assert_eq!(tests[0].kind, TestKind::File);
+        assert_eq!(tests[0].label, "sample.t");
+        assert_eq!(tests[0].range.end_line, 3);
+        assert_eq!(tests[0].range.end_character, 1);
+        assert_eq!(tests[0].children.len(), 1);
+        assert_eq!(tests[0].children[0].label, "test_nested");
+        assert_eq!(tests[0].children[0].range.start_line, 1);
+        assert_eq!(tests[0].children[0].range.start_character, 0);
+        assert_eq!(tests[0].children[0].range.end_line, 3);
+        assert_eq!(tests[0].children[0].range.end_character, 1);
+        Ok(())
+    }
+
+    #[test]
+    fn assertion_discovery_uses_string_description_or_call_name()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = "ok($value, 'truthy');
+pass();
+";
+        let described = node(
+            NodeKind::FunctionCall {
+                name: "ok".to_string(),
+                args: vec![
+                    node(
+                        NodeKind::Variable { sigil: "$".to_string(), name: "value".to_string() },
+                        3,
+                        9,
+                    ),
+                    node(
+                        NodeKind::String { value: "truthy".to_string(), interpolated: false },
+                        11,
+                        19,
+                    ),
+                ],
+            },
+            0,
+            20,
+        );
+        let unnamed =
+            node(NodeKind::FunctionCall { name: "pass".to_string(), args: vec![] }, 21, 27);
+        let ast = node(NodeKind::Program { statements: vec![described, unnamed] }, 0, source.len());
+        let runner =
+            TestRunner::new(source.to_string(), "file:///project/lib/Module.pm".to_string());
+
+        let tests = runner.find_test_functions(&ast);
+
+        assert_eq!(tests.len(), 2);
+        assert_eq!(tests[0].label, "truthy");
+        assert_eq!(tests[0].id, "file:///project/lib/Module.pm::ok::0");
+        assert_eq!(tests[1].label, "pass");
+        assert_eq!(tests[1].id, "file:///project/lib/Module.pm::pass::21");
+        Ok(())
+    }
+
+    fn node(kind: NodeKind, start: usize, end: usize) -> Node {
+        Node::new(kind, SourceLocation { start, end })
     }
 
     // ── Hermeticity tests for hermetic_perl_command (#8689) ──────────────────
