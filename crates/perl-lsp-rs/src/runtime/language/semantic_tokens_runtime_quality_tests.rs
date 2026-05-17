@@ -288,6 +288,24 @@ fn first_subroutine_name_lsp_span(source: &str) -> Result<(u32, u32, u32), Box<d
     Ok((line, start, length))
 }
 
+fn package_declaration_name_span(
+    source: &str,
+    package: &str,
+) -> Result<(usize, usize, u32, u32, u32), Box<dyn Error>> {
+    let marker = format!("package {package}");
+    let marker_start = source.find(&marker).ok_or("expected package declaration in fixture")?;
+    let name_start = marker_start + "package ".len();
+    let name_end = name_start + package.len();
+
+    let prefix = &source[..name_start];
+    let line = u32::try_from(prefix.bytes().filter(|byte| *byte == b'\n').count())?;
+    let line_start = prefix.rfind('\n').map_or(0, |offset| offset + 1);
+    let start = u32::try_from(source[line_start..name_start].encode_utf16().count())?;
+    let length = u32::try_from(source[name_start..name_end].encode_utf16().count())?;
+
+    Ok((name_start, name_end, line, start, length))
+}
+
 fn method_call_name_span(
     source: &str,
     method: &str,
@@ -439,6 +457,148 @@ fn assert_semantic_token_live_output_parity(uri: &str, source: &str) -> Result<(
         compiler_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
         Some(true),
         "compiler receipt must remain output-neutral for {uri}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_proves_source_backed_package_declaration_compiler_token_parity()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    let catalyst_uri = "file:///workspace/lib/MyApp/Controller/Root.pm";
+    open_document(&server, catalyst_uri, CATALYST_CONTROLLER_MODULE);
+
+    let params = json!({ "textDocument": {"uri": catalyst_uri} });
+    let live_result =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+
+    assert_eq!(
+        receipt.get("live_provider_result"),
+        Some(&live_result),
+        "runtime receipt must compare package declarations against the exact live token output"
+    );
+    assert_eq!(
+        receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "package-declaration receipt must not emit additional semantic tokens"
+    );
+
+    let expansion_receipts =
+        must_some(receipt.get("class_specific_expansion_receipts").and_then(Value::as_array));
+    let package_receipt = must_some(
+        expansion_receipts
+            .iter()
+            .find(|receipt| {
+                receipt.get("token_class").and_then(Value::as_str) == Some("package_declaration")
+            })
+            .and_then(Value::as_object),
+    );
+
+    assert_eq!(package_receipt.get("source").and_then(Value::as_str), Some("CompilerFact"));
+    assert_eq!(package_receipt.get("provenance").and_then(Value::as_str), Some("SemanticAnalyzer"));
+    assert_eq!(package_receipt.get("freshness").and_then(Value::as_str), Some("Fresh"));
+    assert_eq!(package_receipt.get("fallback_state").and_then(Value::as_str), Some("Shadow"));
+    assert_eq!(
+        package_receipt.get("approved_for_live_cutover").and_then(Value::as_bool),
+        Some(false),
+        "package declarations must remain shadowed until explicit class-specific approval lands"
+    );
+    assert_eq!(
+        package_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(false),
+        "package declarations must not join the live compiler-token slice from parity proof alone"
+    );
+    assert_eq!(
+        package_receipt.get("live_output_parity").and_then(Value::as_bool),
+        Some(true),
+        "source-backed package compiler span must match existing live namespace token output"
+    );
+    assert_eq!(
+        package_receipt.get("parity_state").and_then(Value::as_str),
+        Some("matched_existing_live_namespace_token")
+    );
+    assert_eq!(package_receipt.get("live_token_type").and_then(Value::as_str), Some("namespace"));
+    assert_eq!(package_receipt.get("live_token_match_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(package_receipt.get("candidate_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        package_receipt.get("source_backed_span_count").and_then(Value::as_u64),
+        Some(1),
+        "package candidate must be source-backed"
+    );
+    assert_eq!(package_receipt.get("missing_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(package_receipt.get("invalid_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(
+        package_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true)
+    );
+
+    let (package_start, package_end, expected_line, expected_start, expected_length) =
+        package_declaration_name_span(CATALYST_CONTROLLER_MODULE, "MyApp::Controller::Root")?;
+    let package_span = crate::semantic_tokens::SemanticTokenShadowSpan::from_byte_offsets(
+        CATALYST_CONTROLLER_MODULE,
+        package_start,
+        package_end,
+    )
+    .ok_or("expected source-backed package compiler span")?;
+    assert_eq!(package_span.range.start.line, expected_line);
+    assert_eq!(package_span.range.start.character, expected_start);
+    assert_eq!(package_span.single_line_lsp_length(), Some(expected_length));
+
+    let package_candidate =
+        crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
+            "token:namespace:MyApp::Controller::Root:compiler",
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+            package_span,
+        );
+    let span_report = crate::semantic_tokens::semantic_token_span_invariant_report(
+        std::slice::from_ref(&package_candidate),
+    );
+    assert_eq!(span_report.candidate_count, 1);
+    assert_eq!(span_report.source_backed_span_count, 1);
+    assert_eq!(span_report.missing_source_span_count, 0);
+    assert_eq!(span_report.invalid_source_span_count, 0);
+
+    let shadow = crate::semantic_tokens::semantic_token_source_shadow(
+        Vec::new(),
+        vec![package_candidate],
+        "package_declaration",
+    );
+    assert_eq!(
+        shadow.receipt.verdict,
+        ShadowCompareVerdict::Same,
+        "package compiler candidates remain receipt-only until class-specific cutover"
+    );
+    assert_eq!(
+        shadow.receipt.new_result.match_count, 0,
+        "package compiler candidates must not become semantic-token identities yet"
+    );
+
+    let namespace_token_type =
+        *crate::semantic_tokens::legend().map.get("namespace").ok_or("missing namespace token")?;
+    let live_match_count = decode_semantic_tokens(&live_result)?
+        .iter()
+        .filter(|token| {
+            token.line == expected_line
+                && token.start == expected_start
+                && token.length == expected_length
+                && token.token_type == namespace_token_type
+        })
+        .count();
+    assert_eq!(
+        live_match_count, 1,
+        "source-backed package compiler span must match exactly one existing live namespace token"
+    );
+
+    let claim_boundary = must_some(package_receipt.get("claim_boundary").and_then(Value::as_str));
+    assert!(
+        claim_boundary.contains("package declarations stay shadowed"),
+        "package receipt must preserve the no-cutover boundary; got: {claim_boundary}"
     );
 
     Ok(())

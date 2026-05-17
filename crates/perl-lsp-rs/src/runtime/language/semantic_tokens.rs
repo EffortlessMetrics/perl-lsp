@@ -238,6 +238,17 @@ impl LspServer {
             return Vec::new();
         };
         let mut receipts = Vec::new();
+        if let Some(candidate) = semantic_token_package_declaration_candidate(&doc.text) {
+            receipts.push(Self::semantic_tokens_class_specific_expansion_receipt(
+                live_provider_result,
+                candidate,
+                "package_declaration",
+                "namespace",
+                "matched_existing_live_namespace_token",
+                "unmatched_existing_live_namespace_token",
+                "class-specific compiler package-declaration receipt only; token:function remains the only compiler-backed live slice, and package declarations stay shadowed until class-specific approval lands",
+            ));
+        }
         if let Some(candidate) = semantic_token_method_declaration_candidate(&doc.text) {
             receipts.push(Self::semantic_tokens_class_specific_expansion_receipt(
                 live_provider_result,
@@ -383,6 +394,49 @@ fn semantic_token_subroutine_declaration_candidate(
 
     Some(crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
         format!("token:function:{name}:compiler"),
+        ProviderFactSourceKind::CompilerFact,
+        Provenance::SemanticAnalyzer,
+        Confidence::Medium,
+        ProviderFactFreshness::Fresh,
+        span,
+    ))
+}
+
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+fn semantic_token_package_declaration_candidate(
+    source: &str,
+) -> Option<crate::semantic_tokens::SemanticTokenShadowCandidate> {
+    let marker_start = source.find("package ")?;
+    let mut name_start = marker_start + "package ".len();
+
+    while let Some(ch) = source[name_start..].chars().next() {
+        if ch.is_whitespace() {
+            name_start += ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    let mut name_end = name_start;
+    for (offset, ch) in source[name_start..].char_indices() {
+        if is_subroutine_name_char(ch) {
+            name_end = name_start + offset + ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    if name_end == name_start {
+        return None;
+    }
+
+    let name = &source[name_start..name_end];
+    let span = crate::semantic_tokens::SemanticTokenShadowSpan::from_byte_offsets(
+        source, name_start, name_end,
+    )?;
+
+    Some(crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
+        format!("token:namespace:{name}:compiler"),
         ProviderFactSourceKind::CompilerFact,
         Provenance::SemanticAnalyzer,
         Confidence::Medium,
