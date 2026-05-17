@@ -231,3 +231,63 @@ fn when_requesting_last_child_on_program_then_last_statement_is_returned() {
 
     assert_eq!(child.map(|c| c.kind.kind_name()), Some("Identifier"));
 }
+
+#[test]
+fn when_finding_deepest_node_at_offset_then_most_specific_match_is_returned() {
+    let tree = Node::new(
+        NodeKind::Program {
+            statements: vec![Node::new(
+                NodeKind::ExpressionStatement {
+                    expression: Box::new(Node::new(
+                        NodeKind::Binary {
+                            op: "+".to_string(),
+                            left: Box::new(Node::new(
+                                NodeKind::Identifier { name: "left".to_string() },
+                                loc(0, 4),
+                            )),
+                            right: Box::new(Node::new(
+                                NodeKind::Number { value: "42".to_string() },
+                                loc(7, 9),
+                            )),
+                        },
+                        loc(0, 9),
+                    )),
+                },
+                loc(0, 10),
+            )],
+        },
+        loc(0, 10),
+    );
+
+    let node = tree.find_deepest_at_offset(8);
+
+    assert_eq!(node.map(|found| found.kind.kind_name()), Some("Number"));
+}
+
+#[test]
+fn when_finding_deepest_node_at_offset_on_gap_then_nearest_containing_ancestor_is_returned() {
+    let tree = Node::new(
+        NodeKind::Binary {
+            op: "+".to_string(),
+            left: Box::new(Node::new(NodeKind::Identifier { name: "a".to_string() }, loc(0, 1))),
+            right: Box::new(Node::new(NodeKind::Identifier { name: "b".to_string() }, loc(4, 5))),
+        },
+        loc(0, 5),
+    );
+
+    let node = tree.find_deepest_at_offset(2);
+
+    assert_eq!(node.map(|found| found.kind.kind_name()), Some("Binary"));
+}
+
+#[test]
+fn when_finding_deepest_node_at_exclusive_end_then_none_is_returned() {
+    let tree = Node::new(
+        NodeKind::Program {
+            statements: vec![Node::new(NodeKind::Number { value: "1".to_string() }, loc(0, 1))],
+        },
+        loc(0, 1),
+    );
+
+    assert!(tree.find_deepest_at_offset(1).is_none());
+}

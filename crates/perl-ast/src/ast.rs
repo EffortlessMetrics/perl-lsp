@@ -1413,6 +1413,54 @@ impl Node {
         self.location.end.saturating_sub(self.location.start)
     }
 
+    /// Find the deepest node whose source span contains `offset`.
+    ///
+    /// This is useful for editor features that need the most specific AST node
+    /// at a cursor byte offset without allocating a full traversal path. The
+    /// start position is inclusive and the end position is exclusive, matching
+    /// [`contains_offset`](Self::contains_offset).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use perl_ast::{Node, NodeKind, SourceLocation};
+    ///
+    /// let loc = SourceLocation { start: 0, end: 5 };
+    /// let expr = Node::new(
+    ///     NodeKind::Binary {
+    ///         op: "+".to_string(),
+    ///         left: Box::new(Node::new(
+    ///             NodeKind::Number { value: "1".to_string() },
+    ///             SourceLocation { start: 0, end: 1 },
+    ///         )),
+    ///         right: Box::new(Node::new(
+    ///             NodeKind::Number { value: "22".to_string() },
+    ///             SourceLocation { start: 3, end: 5 },
+    ///         )),
+    ///     },
+    ///     loc,
+    /// );
+    ///
+    /// assert_eq!(expr.find_deepest_at_offset(3).map(|n| n.span_len()), Some(2));
+    /// assert!(expr.find_deepest_at_offset(5).is_none());
+    /// ```
+    #[inline]
+    pub fn find_deepest_at_offset(&self, offset: usize) -> Option<&Node> {
+        if !self.contains_offset(offset) {
+            return None;
+        }
+
+        let mut result = self;
+        self.for_each_child(|child| {
+            if let Some(candidate) = child.find_deepest_at_offset(offset) {
+                if candidate.span_len() <= result.span_len() {
+                    result = candidate;
+                }
+            }
+        });
+        Some(result)
+    }
+
     /// Get the last direct child node, if any.
     ///
     /// Optimized to avoid allocating the children vector.
