@@ -104,7 +104,6 @@ impl CodeActionsProvider {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used)]
 mod tests {
     use super::*;
     use crate::providers::diagnostics::DiagnosticSeverity;
@@ -218,7 +217,7 @@ mod tests {
         let source = "sub f {\nreturn 1;\nmy $dead = 2;\n}\n";
         let mut parser = Parser::new(source);
         let ast = must(parser.parse());
-        let start = source.find("my $dead").expect("dead statement start");
+        let start = must_some(source.find("my $dead"));
         let end = start + "my $dead = 2;".len();
         let diagnostics = vec![make_diagnostic(
             start,
@@ -430,7 +429,7 @@ mod tests {
         let mut parser = Parser::new(source);
         let ast = must(parser.parse());
         let diagnostics = vec![];
-        let range_start = source.find("my $x").expect("line exists");
+        let range_start = must_some(source.find("my $x"));
 
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (range_start, source.len()), &diagnostics);
@@ -549,10 +548,8 @@ mod tests {
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
 
-        let fix = actions
-            .iter()
-            .find(|action| action.title.contains("bareword filehandle"))
-            .expect("native bareword filehandle diagnostic should produce a quick fix");
+        let fix =
+            must_some(actions.iter().find(|action| action.title.contains("bareword filehandle")));
         assert_eq!(fix.edit.changes[0].new_text, "my $fh_fh");
     }
 
@@ -574,10 +571,8 @@ mod tests {
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
 
-        let fix = actions
-            .iter()
-            .find(|action| action.title.contains("three-argument open()"))
-            .expect("native two-arg open diagnostic should produce a quick fix");
+        let fix =
+            must_some(actions.iter().find(|action| action.title.contains("three-argument open()")));
         assert_eq!(fix.edit.changes[0].new_text, "open(my $fh, '<', $path)");
     }
 
@@ -712,7 +707,7 @@ mod tests {
         let source = "use strict;\nuse warnings;\nmy $unused = 1;\n";
         let mut parser = Parser::new(source);
         let ast = must(parser.parse());
-        let start = source.find("$unused").unwrap();
+        let start = must_some(source.find("$unused"));
         let diagnostics = vec![Diagnostic {
             range: (start, start + "$unused".len()),
             severity: DiagnosticSeverity::Warning,
@@ -738,7 +733,7 @@ mod tests {
         let source = "use strict;\nuse warnings;\nsub helper($used, $unused) { return $used; }\n";
         let mut parser = Parser::new(source);
         let ast = must(parser.parse());
-        let start = source.find("$unused").unwrap();
+        let start = must_some(source.find("$unused"));
         let diagnostics = vec![Diagnostic {
             range: (start, start + "$unused".len()),
             severity: DiagnosticSeverity::Warning,
@@ -767,7 +762,7 @@ mod tests {
         let source = "use strict;\nuse warnings;\nsub helper($arg, $arg) { return $arg; }\n";
         let mut parser = Parser::new(source);
         let ast = must(parser.parse());
-        let start = source.find(", $arg").unwrap() + ", ".len();
+        let start = must_some(source.find(", $arg")) + ", ".len();
         let diagnostics = vec![Diagnostic {
             range: (start, start + "$arg".len()),
             severity: DiagnosticSeverity::Error,
@@ -800,7 +795,7 @@ mod tests {
         let source = "use strict;\nuse warnings;\nmy $name = 'outer';\nsub helper($name) { return $name; }\n";
         let mut parser = Parser::new(source);
         let ast = must(parser.parse());
-        let start = source.find("($name").unwrap() + 1;
+        let start = must_some(source.find("($name")) + 1;
         let diagnostics = vec![Diagnostic {
             range: (start, start + "$name".len()),
             severity: DiagnosticSeverity::Warning,
@@ -833,7 +828,7 @@ mod tests {
         let source = "use strict;\nuse warnings;\nmy $dup = 1;\nmy $dup = 2;\n";
         let mut parser = Parser::new(source);
         let ast = must(parser.parse());
-        let start = source.rfind("$dup").unwrap();
+        let start = must_some(source.rfind("$dup"));
         let diagnostics = vec![Diagnostic {
             range: (start, start + "$dup".len()),
             severity: DiagnosticSeverity::Error,
@@ -848,12 +843,11 @@ mod tests {
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
 
-        let action = actions
-            .iter()
-            .find(|action| action.title == "Remove duplicate 'my' declaration")
-            .expect("native duplicate lexical should reuse duplicate-my fix");
+        let action = must_some(
+            actions.iter().find(|action| action.title == "Remove duplicate 'my' declaration"),
+        );
         assert!(action.edit.changes.iter().any(|edit| {
-            edit.location.start == source.rfind("my $dup").unwrap()
+            edit.location.start == must_some(source.rfind("my $dup"))
                 && edit.location.end == start
                 && edit.new_text.is_empty()
         }));
@@ -864,7 +858,7 @@ mod tests {
         let source = "use strict;\nuse warnings;\nmy $value = 1;\n{ my $value = 2; }\n";
         let mut parser = Parser::new(source);
         let ast = must(parser.parse());
-        let start = source.rfind("$value").unwrap();
+        let start = must_some(source.rfind("$value"));
         let diagnostics = vec![Diagnostic {
             range: (start, start + "$value".len()),
             severity: DiagnosticSeverity::Warning,
@@ -893,7 +887,7 @@ mod tests {
         let source = "BEGIN { use strict; }\nmy $x = 1;\n";
         let mut parser = Parser::new(source);
         let ast = must(parser.parse());
-        let start = source.find("use strict;").unwrap();
+        let start = must_some(source.find("use strict;"));
         let end = start + "use strict;".len();
         let diagnostics = vec![make_diagnostic(
             start,
@@ -904,10 +898,9 @@ mod tests {
 
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
-        let action = actions
-            .iter()
-            .find(|action| action.title == "Move 'use strict' to file scope")
-            .expect("phase-scoped strict quick fix");
+        let action = must_some(
+            actions.iter().find(|action| action.title == "Move 'use strict' to file scope"),
+        );
 
         let rewritten = apply_action(source, action);
         assert!(rewritten.starts_with("use strict;\nBEGIN { "));
@@ -919,7 +912,7 @@ mod tests {
         let source = "#!/usr/bin/perl\nBEGIN { use warnings; }\nprint 1;\n";
         let mut parser = Parser::new(source);
         let ast = must(parser.parse());
-        let start = source.find("use warnings;").unwrap();
+        let start = must_some(source.find("use warnings;"));
         let end = start + "use warnings;".len();
         let diagnostics = vec![make_diagnostic(
             start,
@@ -930,10 +923,9 @@ mod tests {
 
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
-        let action = actions
-            .iter()
-            .find(|action| action.title == "Move 'use warnings' to file scope")
-            .expect("phase-scoped warnings quick fix");
+        let action = must_some(
+            actions.iter().find(|action| action.title == "Move 'use warnings' to file scope"),
+        );
 
         let rewritten = apply_action(source, action);
         assert!(rewritten.starts_with("#!/usr/bin/perl\nuse warnings;\n"));
