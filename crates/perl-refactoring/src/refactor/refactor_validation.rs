@@ -87,4 +87,60 @@ mod tests {
         assert_eq!(validate_plan(&plan).len(), 1);
         Ok(())
     }
+
+    #[test]
+    fn validate_plan_accepts_empty_edit_batches() -> Result<(), Box<dyn std::error::Error>> {
+        let plan = RefactorPlan {
+            operation: RefactorOperationKind::OptimizeImports,
+            edits: vec![FileEdit { file_path: PathBuf::from("empty.pm"), edits: vec![] }],
+            diagnostics: vec![],
+            confidence: RefactorConfidence::Exact,
+            safety: RefactorSafety::Safe,
+            stats: RefactorStats { files_changed: 0, edits_count: 0 },
+        };
+        assert!(validate_plan(&plan).is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn validate_plan_rejects_reversed_edit_ranges() -> Result<(), Box<dyn std::error::Error>> {
+        let plan = RefactorPlan {
+            operation: RefactorOperationKind::OptimizeImports,
+            edits: vec![FileEdit {
+                file_path: PathBuf::from("reversed.pm"),
+                edits: vec![TextEdit { start: 4, end: 2, new_text: "x".to_string() }],
+            }],
+            diagnostics: vec![],
+            confidence: RefactorConfidence::Exact,
+            safety: RefactorSafety::Safe,
+            stats: RefactorStats { files_changed: 1, edits_count: 1 },
+        };
+        let diagnostics = validate_plan(&plan);
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].code, "edit_overlap_or_order");
+        assert!(diagnostics[0].message.contains("reversed.pm"));
+        Ok(())
+    }
+
+    #[test]
+    fn validate_plan_accepts_adjacent_zero_length_edits() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let plan = RefactorPlan {
+            operation: RefactorOperationKind::OptimizeImports,
+            edits: vec![FileEdit {
+                file_path: PathBuf::from("zero-length.pm"),
+                edits: vec![
+                    TextEdit { start: 0, end: 0, new_text: "use strict;\n".to_string() },
+                    TextEdit { start: 0, end: 0, new_text: "use warnings;\n".to_string() },
+                    TextEdit { start: 3, end: 3, new_text: "# marker".to_string() },
+                ],
+            }],
+            diagnostics: vec![],
+            confidence: RefactorConfidence::Exact,
+            safety: RefactorSafety::Safe,
+            stats: RefactorStats { files_changed: 1, edits_count: 3 },
+        };
+        assert!(validate_plan(&plan).is_empty());
+        Ok(())
+    }
 }
