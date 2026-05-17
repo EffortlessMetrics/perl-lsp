@@ -1,3 +1,5 @@
+use crate::syntax::cursor::quoted_literal_end;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct GroupFrame {
     has_backtracking_quantifier: bool,
@@ -24,6 +26,11 @@ pub(crate) fn find_nested_quantifier(pattern: &str, start_pos: usize) -> Option<
     while i < bytes.len() {
         match bytes[i] {
             b'\\' => {
+                if let Some(end) = quoted_literal_end(bytes, i) {
+                    i = end;
+                    last_atom = LastAtom::None;
+                    continue;
+                }
                 i += 2;
                 last_atom = LastAtom::None;
                 continue;

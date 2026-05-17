@@ -7,7 +7,7 @@
 //! Receipt signals:
 //! - query latency and repeated-request candidate-count delta
 //! - useful hits versus unrelated/noisy hits for representative queries
-//! - generated/framework candidate names while source-backed generated labels stay bounded
+//! - generated/framework candidate names plus at least one explicitly labeled generated pilot symbol
 //! - dynamic-boundary-shaped names observed separately from exact symbols
 //! - stale/fresh query behavior after editing an open document
 
@@ -61,6 +61,10 @@ struct WorkspaceSymbolProbeReport {
     generated_candidate_count: usize,
     generated_candidate_live_hits: Vec<String>,
     generated_label_hits: Vec<String>,
+    first_useful_source_rank: Option<usize>,
+    first_generated_label_rank: Option<usize>,
+    generated_label_after_useful_source: bool,
+    generated_label_before_useful_source_count: usize,
     dynamic_boundary_candidate_count: usize,
     dynamic_boundary_live_hits: Vec<String>,
     stale_or_fallback_label_hits: Vec<String>,
@@ -184,6 +188,22 @@ fn workspace_symbol_text(symbol: &Value) -> String {
         }
     }
     parts.join("\n")
+}
+
+fn workspace_symbol_has_generated_label(symbol: &Value) -> bool {
+    workspace_symbol_text(symbol).contains("[generated/framework]")
+}
+
+fn workspace_symbol_matches_any(symbol: &Value, substrings: &[&str]) -> bool {
+    let haystack = workspace_symbol_text(symbol);
+    substrings.iter().any(|needle| haystack.contains(needle))
+}
+
+fn first_symbol_rank_matching<F>(symbols: &[Value], predicate: F) -> Option<usize>
+where
+    F: Fn(&Value) -> bool,
+{
+    symbols.iter().position(predicate)
 }
 
 fn is_valid_position(position: &Value) -> bool {
@@ -334,6 +354,25 @@ fn run_probe(
         &first.symbols,
         &["stale", "fallback", "low confidence", "dynamic boundary"],
     );
+    let first_useful_source_rank = first_symbol_rank_matching(&first.symbols, |symbol| {
+        !workspace_symbol_has_generated_label(symbol)
+            && workspace_symbol_matches_any(symbol, probe.useful_substrings)
+    });
+    let first_generated_label_rank =
+        first_symbol_rank_matching(&first.symbols, workspace_symbol_has_generated_label);
+    let generated_label_after_useful_source = matches!(
+        (first_useful_source_rank, first_generated_label_rank),
+        (Some(source_rank), Some(generated_rank)) if source_rank < generated_rank
+    );
+    let generated_label_before_useful_source_count = first
+        .symbols
+        .iter()
+        .enumerate()
+        .filter(|(rank, symbol)| {
+            workspace_symbol_has_generated_label(symbol)
+                && first_useful_source_rank.is_none_or(|source_rank| *rank < source_rank)
+        })
+        .count();
 
     Ok(WorkspaceSymbolProbeReport {
         name: probe.name,
@@ -357,6 +396,10 @@ fn run_probe(
         generated_candidate_count: probe.generated_candidate_names.len(),
         generated_candidate_live_hits,
         generated_label_hits,
+        first_useful_source_rank,
+        first_generated_label_rank,
+        generated_label_after_useful_source,
+        generated_label_before_useful_source_count,
         dynamic_boundary_candidate_count: probe.dynamic_boundary_names.len(),
         dynamic_boundary_live_hits,
         stale_or_fallback_label_hits,
@@ -537,6 +580,12 @@ fn scenario_41_catalyst_workspace_symbol_noise_receipt() {
                     .iter()
                     .all(|name| name.contains("[generated/framework]"))
             });
+            let generated_label_rank_proof_count =
+                reports.iter().filter(|report| report.generated_label_after_useful_source).count();
+            let generated_label_before_useful_source_total: usize = reports
+                .iter()
+                .map(|report| report.generated_label_before_useful_source_count)
+                .sum();
             let generated_live_symbol_total: usize =
                 reports.iter().map(|report| report.generated_candidate_live_hits.len()).sum();
             let dynamic_boundary_candidate_total: usize =
@@ -584,6 +633,8 @@ fn scenario_41_catalyst_workspace_symbol_noise_receipt() {
                 "generated_candidate_total": generated_candidate_total,
                 "generated_live_symbol_total": generated_live_symbol_total,
                 "generated_label_total": generated_label_total,
+                "generated_label_rank_proof_count": generated_label_rank_proof_count,
+                "generated_label_before_useful_source_total": generated_label_before_useful_source_total,
                 "generated_source_hits": generated_source_hits,
                 "generated_source_missing": generated_source_missing,
                 "dynamic_boundary_candidate_total": dynamic_boundary_candidate_total,
@@ -631,8 +682,13 @@ fn scenario_41_catalyst_workspace_symbol_noise_receipt() {
                 generated_candidate_total > 0 && generated_live_symbol_total == 0,
             )?;
             recorder.check(
-                "generated-label pilot symbols stayed explicitly labeled",
-                generated_label_names_are_labeled,
+                "generated-label pilot surfaced at least one explicitly labeled real-project symbol",
+                generated_label_total > 0 && generated_label_names_are_labeled,
+            )?;
+            recorder.check(
+                "generated-label pilot ranks after useful source-backed project symbols",
+                generated_label_rank_proof_count > 0
+                    && generated_label_before_useful_source_total == 0,
             )?;
             recorder.check(
                 "configured generated candidates are backed by Catalyst fixture source",
