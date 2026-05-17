@@ -1155,6 +1155,48 @@ pub fn non_rust_propose(root: &Path, config: ProposeConfig) -> Result<()> {
     Ok(())
 }
 
+fn automation_script_extension(ext: &str) -> bool {
+    matches!(
+        ext,
+        "sh" | "bash" | "zsh" | "fish" | "ps1" | "bat" | "cmd" | "py" | "rb" | "js" | "ts"
+    )
+}
+
+fn automation_path(path: &str) -> bool {
+    let first = path.split('/').next().unwrap_or(path);
+    matches!(first, "scripts" | "bin" | "tools" | "ci" | ".ci" | ".github")
+}
+
+fn extension_for_path(path: &str) -> &str {
+    let basename = path.rsplit('/').next().unwrap_or(path);
+    basename
+        .rsplit_once('.')
+        .filter(|(stem, ext)| !stem.is_empty() && !ext.is_empty())
+        .map(|(_, ext)| ext)
+        .unwrap_or("")
+}
+
+fn rust_migration_recommendation(path: &str) -> Option<&'static str> {
+    let ext = extension_for_path(path);
+    if automation_path(path) && automation_script_extension(ext) {
+        return Some("port repo automation into `cargo xtask` Rust tasks");
+    }
+
+    if path == "install.sh" || path == "install.ps1" {
+        return Some("move installer validation and shared logic into Rust install-surface checks");
+    }
+
+    if path.starts_with("tree-sitter-perl/") && automation_script_extension(ext) {
+        return Some("move tree-sitter maintenance automation into xtask native tooling");
+    }
+
+    None
+}
+
+fn group_migration_recommendation(files: &[String]) -> Option<&'static str> {
+    files.iter().find_map(|file| rust_migration_recommendation(file))
+}
+
 /// Group files by their top-level directory component.
 fn group_by_directory(files: &[String]) -> BTreeMap<String, Vec<String>> {
     let mut groups: BTreeMap<String, Vec<String>> = BTreeMap::new();
@@ -1302,6 +1344,29 @@ fn render_proposal_markdown(
     }
     out.push('\n');
 
+    let migration_candidates: Vec<(&String, &Vec<String>, &'static str)> = groups
+        .iter()
+        .filter_map(|(group_key, files)| {
+            group_migration_recommendation(files)
+                .map(|recommendation| (group_key, files, recommendation))
+        })
+        .collect();
+
+    out.push_str("## Rust migration candidates\n\n");
+    if migration_candidates.is_empty() {
+        out.push_str("No unclassified repo-automation scripts were detected in this proposal.\n\n");
+    } else {
+        out.push_str(
+            "These groups contain non-Rust automation that should be reviewed for conversion \
+             into the core Rust/xtask design before broad allowlist promotion.\n\n",
+        );
+        out.push_str("| Group | Files | Recommended destination |\n|---|---:|---|\n");
+        for (group_key, files, recommendation) in &migration_candidates {
+            out.push_str(&format!("| `{group_key}` | {} | {recommendation} |\n", files.len()));
+        }
+        out.push('\n');
+    }
+
     out.push_str(&format!("## Groups by {group_label}\n\n"));
     for (group_key, files) in groups {
         let entry_id = entries
@@ -1316,6 +1381,9 @@ fn render_proposal_markdown(
         out.push_str(&format!("- Proposed entry: `{entry_id}`\n"));
         out.push_str("- `owner`: TBD — must be set before promotion\n");
         out.push_str("- `surface`: unclassified — must be refined\n");
+        if let Some(recommendation) = group_migration_recommendation(files) {
+            out.push_str(&format!("- Rust migration review: {recommendation}\n"));
+        }
         // Show first 10 files as examples.
         if !files.is_empty() {
             out.push_str("- Sample files:\n");
