@@ -45,6 +45,12 @@ claim unless the live state and next-proof columns say so explicitly.
 
 ## Operating Rules
 
+- Rename note, 2026-05-17: `refactor_runtime_blocker_ux_package_local_live_pilot_blocks_real_workspace_imported_symbol_false_allow`
+  records the RealBaseline imported-symbol false-allow boundary for the
+  package-local live pilot. It proves the live path returns no edits and a
+  `package_local_live_pilot_blocked` trace for `helper`, preserving the rule
+  that imported/exported facts do not authorize package-local rename edits.
+
 - Use this matrix to choose the next provider receipt lane.
 - Update provider-specific proof before promoting a row.
 - Do not move a row to broader live behavior without fallback and rollback
