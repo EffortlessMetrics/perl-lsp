@@ -399,7 +399,7 @@ mod tests {
 
         assert!(actions.iter().any(|action| {
             action.title == "Remove unused variable '$unused'"
-                && action.edit.range == (source.find("my $unused").unwrap(), source.len())
+                && action.edit.range == (must_some(source.find("my $unused")), source.len())
         }));
         assert!(actions.iter().any(|action| {
             action.title == "Rename to '$_unused' (mark as intentionally unused)"
@@ -424,7 +424,7 @@ mod tests {
 
         assert_eq!(actions.len(), 1);
         assert_eq!(actions[0].title, "Remove redundant 'my'");
-        assert_eq!(actions[0].edit.range, (source.rfind("my $dup").unwrap(), start));
+        assert_eq!(actions[0].edit.range, (must_some(source.rfind("my $dup")), start));
         assert_eq!(actions[0].edit.new_text, "");
     }
 
