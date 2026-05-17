@@ -51,6 +51,28 @@ sub describe {
 1;
 "#;
 
+const UPDATED_PERL_MODULE: &str = r#"package Tokens::Example;
+use strict;
+use warnings;
+
+my $CONSTANT = 42;
+my @items    = (1, 2, 3);
+my %mapping  = (key => "value");
+
+sub process_updated {
+    my ($self, $input) = @_;
+    my $result = $input * $CONSTANT;
+    return $result;
+}
+
+sub describe {
+    my $self = shift;
+    return "Tokens::Example instance";
+}
+
+1;
+"#;
+
 /// Catalyst-style controller code with route attributes, multiple actions, and
 /// dynamic dispatch strings. This keeps the compiler-token receipt project-shaped
 /// without broadening semantic-token output.
@@ -106,6 +128,18 @@ fn open_document(server: &LspServer, uri: &str, text: &str) {
             "languageId": "perl",
             "version": 1
         }
+    }))));
+}
+
+fn change_document(server: &LspServer, uri: &str, version: i32, text: &str) {
+    must(server.test_handle_did_change(Some(json!({
+        "textDocument": {
+            "uri": uri,
+            "version": version
+        },
+        "contentChanges": [
+            { "text": text }
+        ]
     }))));
 }
 
@@ -194,6 +228,16 @@ fn decode_semantic_tokens(
 fn semantic_token_u32(value: &Value) -> Result<u32, Box<dyn std::error::Error>> {
     let raw = value.as_u64().ok_or("expected semantic token integer")?;
     Ok(u32::try_from(raw)?)
+}
+
+fn compiler_token_identity(receipt: &Value) -> Result<String, Box<dyn std::error::Error>> {
+    let compiler_receipt = must_some(receipt.get("compiler_receipt").and_then(Value::as_object));
+    let shadow_receipt =
+        must_some(compiler_receipt.get("shadow_receipt").and_then(Value::as_object));
+    let new_result = must_some(shadow_receipt.get("new_result").and_then(Value::as_object));
+    let identities = must_some(new_result.get("identities").and_then(Value::as_array));
+    let identity = must_some(identities.first().and_then(Value::as_str));
+    Ok(identity.to_string())
 }
 
 fn source_line_lsp_lengths(source: &str) -> Result<Vec<u32>, Box<dyn std::error::Error>> {
@@ -765,6 +809,70 @@ fn semantic_tokens_runtime_quality_receipt_live_result_matches_handler() {
         live_result.as_ref(),
         "live_provider_result in receipt must exactly match the live handler output"
     );
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_refreshes_after_document_edit()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    open_document(&server, DOC_URI, PERL_MODULE);
+
+    let params = json!({ "textDocument": {"uri": DOC_URI} });
+    let initial_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let initial_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params.clone()))));
+    let initial_identity = compiler_token_identity(&initial_receipt)?;
+    assert!(
+        initial_identity.contains("process"),
+        "initial compiler token identity should reflect the opened document: {initial_identity}"
+    );
+
+    change_document(&server, DOC_URI, 2, UPDATED_PERL_MODULE);
+
+    let updated_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let updated_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+    let updated_identity = compiler_token_identity(&updated_receipt)?;
+
+    assert_ne!(
+        updated_live, initial_live,
+        "semantic-token live output must refresh after a document edit"
+    );
+    assert_eq!(
+        updated_receipt.get("live_provider_result"),
+        Some(&updated_live),
+        "runtime receipt must capture the post-edit live token output"
+    );
+    assert_ne!(
+        updated_identity, initial_identity,
+        "compiler token identity must refresh after the document edit"
+    );
+    assert!(
+        updated_identity.contains("process_updated"),
+        "updated compiler token identity should use the edited subroutine name: {updated_identity}"
+    );
+
+    let compiler_receipt =
+        must_some(updated_receipt.get("compiler_receipt").and_then(Value::as_object));
+    assert_eq!(
+        compiler_receipt.get("freshness").and_then(Value::as_str),
+        Some("Fresh"),
+        "post-edit compiler receipt must remain fresh"
+    );
+    assert_eq!(
+        compiler_receipt.get("live_token_match_count").and_then(Value::as_u64),
+        Some(1),
+        "post-edit source-backed compiler span must still match the live token stream"
+    );
+    assert_eq!(
+        compiler_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "edit-freshness proof must not broaden live semantic-token output"
+    );
+
+    Ok(())
 }
 
 #[test]
