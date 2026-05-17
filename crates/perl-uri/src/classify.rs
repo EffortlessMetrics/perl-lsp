@@ -215,6 +215,12 @@ mod tests {
     }
 
     #[test]
+    fn trims_uri_keys_before_normalization() {
+        assert_eq!(uri_key("  file:///tmp/test.pl\n"), "file:///tmp/test.pl");
+        assert_eq!(uri_key("\tfile:///C:/Users/dev/test.pl  "), "file:///c:/Users/dev/test.pl");
+    }
+
+    #[test]
     fn normalizes_legacy_notepadpp_file_uri_two_slashes() {
         // Notepad++ LSP client emits `file://C:\...` (two slashes, backslashes).
         assert_eq!(uri_key(r"file://C:\Users\dev\example.pl"), "file:///c:/Users/dev/example.pl");
@@ -229,6 +235,12 @@ mod tests {
         // Some editors send a bare `C:\...` path with no scheme at all.
         assert_eq!(uri_key(r"C:\Users\dev\plain_path.pl"), "file:///c:/Users/dev/plain_path.pl");
         assert_eq!(uri_key(r"c:\users\dev\lowercase.pl"), "file:///c:/users/dev/lowercase.pl");
+    }
+
+    #[test]
+    fn normalizes_windows_drive_paths_without_directory_separator() {
+        assert_eq!(uri_key(r"C:relative\script.pl"), "file:///c:/relative/script.pl");
+        assert_eq!(uri_key("file://D:relative/script.pl"), "file:///d:/relative/script.pl");
     }
 
     #[test]
@@ -285,6 +297,12 @@ mod tests {
     }
 
     #[test]
+    fn normalizes_legacy_unc_share_roots() {
+        assert_eq!(uri_key(r"\\server\share"), "file://server/share");
+        assert_eq!(uri_key(r"file://\\server\share"), "file://server/share");
+    }
+
+    #[test]
     fn linux_paths_not_treated_as_windows() {
         // Linux absolute paths like `/home/user/file.pl` must not be misidentified
         // as Windows paths (index-1 byte is not `:`).
@@ -315,6 +333,12 @@ mod tests {
         assert!(is_special_scheme("UNTITLED:Untitled-1"));
         assert!(is_special_scheme("GIT:relative/path"));
         assert!(is_special_scheme("VSCODE-NOTEBOOK-CELL:bad uri"));
+    }
+
+    #[test]
+    fn detects_all_special_scheme_fallback_prefixes() {
+        assert!(is_special_scheme("VSCODE-NOTEBOOK:invalid notebook uri"));
+        assert!(is_special_scheme("VSCODE-VFS:invalid vfs uri"));
     }
 
     #[test]
