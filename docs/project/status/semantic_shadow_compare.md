@@ -2,7 +2,7 @@
 
 Measured: `deterministic-fixture-baseline`
 
-Receipts: `50`
+Receipts: `51`
 
 ## Verdict Counts
 
@@ -11,7 +11,7 @@ Receipts: `50`
 | ambiguous | 2 |
 | improved | 13 |
 | regression | 1 |
-| same | 34 |
+| same | 35 |
 | unavailable | 0 |
 
 ## Release-Readiness Verdict Counts
@@ -31,7 +31,7 @@ Receipts: `50`
 | ambiguous | 2 |
 | improved | 10 |
 | regression | 1 |
-| same | 25 |
+| same | 26 |
 | unavailable | 0 |
 
 ## Receipts
@@ -76,6 +76,7 @@ Receipts: `50`
 | schema-fixture | DocumentSymbols | `document_symbol_stale_fact` | same | 0 | 0 |
 | schema-fixture | SemanticTokens | `semantic_token_explicit` | same | 1 | 1 |
 | schema-fixture | SemanticTokens | `semantic_token_compiler_classification` | improved | 0 | 1 |
+| schema-fixture | SemanticTokens | `semantic_token_broader_compiler_class_false_exact` | same | 0 | 0 |
 | schema-fixture | SemanticTokens | `semantic_token_generated_no_source` | same | 0 | 0 |
 | schema-fixture | SemanticTokens | `semantic_token_dynamic_boundary` | same | 0 | 0 |
 | schema-fixture | SemanticTokens | `semantic_token_stale_fact` | same | 0 | 0 |
@@ -143,6 +144,7 @@ Receipts: `50`
 | schema-fixture | DocumentSymbols | DocumentSymbols | CompilerFact | SemanticAnalyzer | Low | Stale | Blocked |
 | schema-fixture | SemanticTokens | SemanticTokens | ParserSyntax | ExactAst | High | Fresh | Shadow |
 | schema-fixture | SemanticTokens | SemanticTokens | CompilerFact | SemanticAnalyzer | Medium | Fresh | Shadow |
+| schema-fixture | SemanticTokens | SemanticTokens | CompilerFact | SemanticAnalyzer | High | Fresh | Shadow |
 | schema-fixture | SemanticTokens | SemanticTokens | FrameworkAdapter | FrameworkSynthesis | Medium | Fresh | Blocked |
 | schema-fixture | SemanticTokens | SemanticTokens | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |
 | schema-fixture | SemanticTokens | SemanticTokens | CompilerFact | SemanticAnalyzer | Low | Stale | Blocked |

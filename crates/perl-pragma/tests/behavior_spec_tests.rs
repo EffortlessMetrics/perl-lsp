@@ -507,3 +507,47 @@ fn given_scoped_block_when_building_explicit_map_then_restore_point_is_zero_leng
     assert!(final_state.strict_subs);
     assert!(final_state.strict_refs);
 }
+
+/// Querying an empty `PragmaMap` via the explicit-map cursor API must return
+/// the default snapshot, matching `CompileTimePragmaEnvironment::snapshot_at`.
+/// This exercises the `entries.is_empty()` early-return branch in
+/// `PragmaQueryCursor::entry_for_offset` through the public `snapshot_at` /
+/// `state_at` methods (the existing empty-map test only covers the legacy
+/// tuple `state_for_offset` API).
+#[test]
+fn given_empty_explicit_pragma_map_when_using_cursor_then_default_snapshot_is_returned() {
+    let ast = program(vec![]);
+    let environment = CompileTimePragmaEnvironment::build(&ast);
+    let map = environment.map();
+    assert!(map.entries().is_empty(), "program without pragmas must produce empty map");
+
+    let mut cursor = map.cursor();
+    let snapshot = cursor.snapshot_at(map, 999);
+    let state = cursor.state_at(map, 999);
+
+    assert_eq!(snapshot, environment.snapshot_at(999));
+    assert_eq!(state, map.state_at(999));
+    assert_eq!(state, PragmaState::default());
+}
+
+/// Querying an offset that precedes the first pragma range via the explicit-map
+/// cursor API must return the default snapshot — same as the static
+/// `PragmaMap::snapshot_at`. This exercises the `entries[index].range.start >
+/// offset` branch in `entry_for_offset` where `partition_point` returns 0 and
+/// the index is not decremented (mirroring the legacy `state_for_offset`
+/// coverage for the same edge case).
+#[test]
+fn given_cursor_when_explicit_map_offset_is_before_first_pragma_then_default_snapshot_is_returned()
+{
+    let ast = program(vec![use_node("strict", &[], 10, 22)]);
+    let environment = CompileTimePragmaEnvironment::build(&ast);
+    let map = environment.map();
+
+    let mut cursor = map.cursor();
+    let snapshot = cursor.snapshot_at(map, 5);
+    let state = cursor.state_at(map, 5);
+
+    assert_eq!(snapshot, environment.snapshot_at(5));
+    assert_eq!(state, map.state_at(5));
+    assert!(!state.strict_vars, "no pragma has started at offset 5");
+}
