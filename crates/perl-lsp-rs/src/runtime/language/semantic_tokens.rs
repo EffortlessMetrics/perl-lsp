@@ -7,7 +7,6 @@
 use super::super::*;
 use crate::protocol::req_uri;
 use crate::state::semantic_tokens_deadline;
-#[cfg(any(test, feature = "expose_lsp_test_api"))]
 use perl_semantic_facts::{
     Confidence, Provenance, ProviderFactFreshness, ProviderFactSourceKind, ProviderFallbackState,
 };
@@ -25,21 +24,25 @@ impl LspServer {
         let start = Instant::now();
         let deadline = semantic_tokens_deadline();
 
-        if let Some(p) = params {
-            let uri = req_uri(&p)?;
-            let documents = self.documents_guard();
-            let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
-                code: INVALID_REQUEST,
-                message: format!("Document not open: {}", uri),
-                data: None,
-            })?;
-            if let Some(ref ast) = doc.ast {
-                let data =
-                    crate::semantic_tokens::collect_semantic_tokens(ast, &doc.text, &|off| {
-                        self.offset_to_pos16(doc, off)
-                    });
-                let flat_data: Vec<_> = data.into_iter().flatten().collect();
+        if let Some(ref p) = params {
+            let uri = req_uri(p)?;
+            let flat_data = {
+                let documents = self.documents_guard();
+                let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
+                    code: INVALID_REQUEST,
+                    message: format!("Document not open: {}", uri),
+                    data: None,
+                })?;
+                doc.ast.as_ref().map(|ast| {
+                    let data =
+                        crate::semantic_tokens::collect_semantic_tokens(ast, &doc.text, &|off| {
+                            self.offset_to_pos16(doc, off)
+                        });
+                    data.into_iter().flatten().collect::<Vec<_>>()
+                })
+            };
 
+            if let Some(flat_data) = flat_data {
                 if start.elapsed() >= deadline {
                     tracing::debug!(
                         elapsed = ?start.elapsed(),
@@ -48,10 +51,22 @@ impl LspServer {
                     );
                 }
 
-                return Ok(Some(json!({ "data": flat_data })));
+                let result = Some(json!({ "data": flat_data }));
+                self.record_semantic_tokens_provider_decision_trace(
+                    "textDocument/semanticTokens/full",
+                    params.as_ref(),
+                    result.as_ref(),
+                );
+                return Ok(result);
             }
         }
-        Ok(Some(json!({ "data": [] })))
+        let result = Some(json!({ "data": [] }));
+        self.record_semantic_tokens_provider_decision_trace(
+            "textDocument/semanticTokens/full",
+            params.as_ref(),
+            result.as_ref(),
+        );
+        Ok(result)
     }
 
     /// Handle semantic tokens full request (alternative method name)
@@ -142,7 +157,123 @@ impl LspServer {
         })))
     }
 
-    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    fn record_semantic_tokens_provider_decision_trace(
+        &self,
+        method: &str,
+        params: Option<&Value>,
+        live_provider_result: Option<&Value>,
+    ) {
+        let compiler_receipt =
+            self.semantic_tokens_compiler_class_receipt(params, live_provider_result);
+        let live_pilot = compiler_receipt
+            .as_ref()
+            .and_then(|receipt| receipt.get("live_pilot"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let live_provider_count = semantic_tokens_live_provider_count(live_provider_result);
+        let compiler_receipt_count = if compiler_receipt.is_some() { 1usize } else { 0usize };
+
+        let (decision, reason, fact_source, confidence, fallback_state, source_backed_state) =
+            if live_pilot {
+                (
+                    "acted",
+                    "source_backed_high_confidence",
+                    "compiler_fact",
+                    "high",
+                    "none",
+                    "live_output_matched_source_backed_compiler_span",
+                )
+            } else if compiler_receipt.is_some() {
+                (
+                    "shadowed",
+                    "shadow_only",
+                    "compiler_fact",
+                    "medium",
+                    "shadow_receipt_only",
+                    "source_backed_compiler_span_not_live",
+                )
+            } else if live_provider_count > 0 {
+                (
+                    "fallback",
+                    "fallback_policy",
+                    "provider_runtime",
+                    "low",
+                    "legacy_provider",
+                    "not_proven_by_compiler_token_trace",
+                )
+            } else {
+                (
+                    "fallback",
+                    "missing_fact",
+                    "provider_runtime",
+                    "low",
+                    "no_result",
+                    "not_proven_by_compiler_token_trace",
+                )
+            };
+
+        let live_cutover =
+            if live_pilot { "partial_live_source_backed" } else { "shadowed_or_fallback" };
+        let token_class = compiler_receipt
+            .as_ref()
+            .and_then(|receipt| receipt.get("token_class"))
+            .and_then(Value::as_str);
+        let live_token_type = compiler_receipt
+            .as_ref()
+            .and_then(|receipt| receipt.get("live_token_type"))
+            .and_then(Value::as_str);
+        let live_token_match_count = compiler_receipt
+            .as_ref()
+            .and_then(|receipt| receipt.get("live_token_match_count"))
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+
+        let mut receipt = serde_json::json!({
+            "provider": "semantic_tokens",
+            "provider_action": method,
+            "decision": decision,
+            "reason": reason,
+            "fact_source": fact_source,
+            "confidence": confidence,
+            "freshness": "fresh",
+            "source_backed": live_pilot,
+            "source_backed_state": source_backed_state,
+            "dynamic_boundary": false,
+            "fallback_state": fallback_state,
+            "live_cutover": live_cutover,
+            "live_provider_result_kind": "semantic_token_data",
+            "live_provider_result_count": live_provider_count,
+            "compiler_receipt_count": compiler_receipt_count,
+            "compiler_live_pilot_count": if live_pilot { 1usize } else { 0usize },
+            "live_token_match_count": live_token_match_count,
+            "no_live_behavior_change": true,
+            "no_live_token_output_change": true,
+            "claim_boundary": if live_pilot {
+                "first source-backed compiler-token live slice only; subroutine-declaration span must already match existing live function token output; no semantic-token output change"
+            } else {
+                "semantic-token request used existing parser/HIR output; no source-backed compiler-token live slice was proven"
+            }
+        });
+
+        if let Some(token_class) = token_class {
+            if let Some(object) = receipt.as_object_mut() {
+                object.insert("token_class".to_string(), json!(token_class));
+            }
+        }
+        if let Some(live_token_type) = live_token_type {
+            if let Some(object) = receipt.as_object_mut() {
+                object.insert("live_token_type".to_string(), json!(live_token_type));
+            }
+        }
+        if let Some(compiler_receipt) = compiler_receipt {
+            if let Some(object) = receipt.as_object_mut() {
+                object.insert("compiler_receipt".to_string(), compiler_receipt);
+            }
+        }
+
+        self.record_provider_decision_trace("semantic_tokens", &receipt);
+    }
+
     fn semantic_tokens_compiler_class_receipt(
         &self,
         params: Option<&Value>,
@@ -184,6 +315,7 @@ impl LspServer {
             "fallback_state": provider_fallback_state_label(fallback_state),
             "shadow_state": "shadowed",
             "live_pilot": live_pilot,
+            "live_cutover": if live_pilot { "partial_live_source_backed" } else { "shadowed" },
             "live_token_type": "function",
             "live_token_match_count": live_token_match_count,
             "candidate_count": span_report.candidate_count,
@@ -238,7 +370,6 @@ impl LspServer {
     }
 }
 
-#[cfg(any(test, feature = "expose_lsp_test_api"))]
 fn semantic_token_subroutine_declaration_candidate(
     source: &str,
 ) -> Option<crate::semantic_tokens::SemanticTokenShadowCandidate> {
@@ -273,7 +404,6 @@ fn semantic_token_subroutine_declaration_candidate(
     ))
 }
 
-#[cfg(any(test, feature = "expose_lsp_test_api"))]
 fn semantic_tokens_live_contains_span(
     live_provider_result: Option<&Value>,
     source_span: Option<&crate::semantic_tokens::SemanticTokenShadowSpan>,
@@ -329,18 +459,23 @@ fn semantic_tokens_live_contains_span(
     false
 }
 
-#[cfg(any(test, feature = "expose_lsp_test_api"))]
+fn semantic_tokens_live_provider_count(live_provider_result: Option<&Value>) -> usize {
+    live_provider_result
+        .and_then(|value| value.get("data"))
+        .and_then(Value::as_array)
+        .map(|data| data.len() / 5)
+        .unwrap_or(0)
+}
+
 fn semantic_token_type_index(token_type: &str) -> Option<u32> {
     let legend = crate::semantic_tokens::legend();
     legend.map.get(token_type).copied()
 }
 
-#[cfg(any(test, feature = "expose_lsp_test_api"))]
 fn semantic_token_value_u32(value: &Value) -> Option<u32> {
     value.as_u64().and_then(|value| u32::try_from(value).ok())
 }
 
-#[cfg(any(test, feature = "expose_lsp_test_api"))]
 fn provider_fallback_state_label(state: ProviderFallbackState) -> &'static str {
     match state {
         ProviderFallbackState::Primary => "Primary",
@@ -352,7 +487,6 @@ fn provider_fallback_state_label(state: ProviderFallbackState) -> &'static str {
     }
 }
 
-#[cfg(any(test, feature = "expose_lsp_test_api"))]
 fn is_subroutine_name_char(ch: char) -> bool {
     ch.is_ascii_alphanumeric() || ch == '_' || ch == ':'
 }

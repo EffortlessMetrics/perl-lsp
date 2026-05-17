@@ -150,6 +150,14 @@ impl LspServer {
         let Some(provider) = live_provider_trace_key(method) else {
             return;
         };
+        if provider == "semantic_tokens"
+            && result.is_ok()
+            && self.provider_decision_trace(provider).is_some_and(|trace| {
+                trace.get("provider_action").and_then(Value::as_str) == Some(method)
+            })
+        {
+            return;
+        }
 
         let shape = live_provider_result_shape(result);
         let mut receipt = serde_json::Map::new();

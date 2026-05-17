@@ -5,11 +5,12 @@
 //! result without changing any live behavior.
 //!
 //! These tests advance the cutover matrix state for semantic tokens from
-//! "shadowed" toward a narrow live-pilot proof by confirming that:
+//! "shadowed" toward a narrow source-backed live slice by confirming that:
 //!   - The live handler is called and its result is recorded in the receipt.
 //!   - Token count in the receipt matches the actual live provider count.
 //!   - `no_live_behavior_change` is always `true`.
 //!   - `shadow_state` is "shadowed" for broad compiler-token cutover.
+//!   - `live_pilot_state` records the partial-live source-backed token-class slice.
 //!   - `compiler_receipt` records a source-backed compiler token class that matches
 //!     the existing live parser/HIR token output.
 //!   - Live token output remains monotonic, non-overlapping, and in-range.
@@ -287,12 +288,17 @@ fn assert_semantic_token_live_output_parity(uri: &str, source: &str) -> Result<(
     assert_eq!(
         compiler_receipt.get("live_pilot").and_then(Value::as_bool),
         Some(true),
-        "compiler token-class pilot must be backed by the existing live token stream for {uri}"
+        "compiler token-class live slice must be backed by the existing live token stream for {uri}"
+    );
+    assert_eq!(
+        compiler_receipt.get("live_cutover").and_then(Value::as_str),
+        Some("partial_live_source_backed"),
+        "compiler token-class live slice must name the partial-live source-backed cutover for {uri}"
     );
     assert_eq!(
         compiler_receipt.get("live_token_type").and_then(Value::as_str),
         Some("function"),
-        "compiler token-class pilot must match the existing live function token for {uri}"
+        "compiler token-class live slice must match the existing live function token for {uri}"
     );
     assert_eq!(
         compiler_receipt.get("live_token_match_count").and_then(Value::as_u64),
@@ -379,12 +385,12 @@ fn semantic_tokens_runtime_quality_receipt_shadow_state_is_shadowed() {
     assert_eq!(
         receipt.get("shadow_state").and_then(Value::as_str),
         Some("shadowed"),
-        "shadow_state must be 'shadowed' — semantic tokens are not yet in partial-live cutover"
+        "shadow_state must be 'shadowed' — broad compiler-token cutover remains gated"
     );
     assert_eq!(
         receipt.get("live_pilot_state").and_then(Value::as_str),
         Some("partial_live_source_backed"),
-        "live_pilot_state must record the narrow source-backed token-class pilot"
+        "live_pilot_state must record the narrow source-backed token-class live slice"
     );
 }
 
@@ -423,7 +429,12 @@ fn semantic_tokens_runtime_quality_receipt_records_compiler_backed_token_class()
     assert_eq!(
         compiler_receipt.get("live_pilot").and_then(Value::as_bool),
         Some(true),
-        "compiler receipt must mark the narrow live pilot"
+        "compiler receipt must mark the narrow source-backed live slice"
+    );
+    assert_eq!(
+        compiler_receipt.get("live_cutover").and_then(Value::as_str),
+        Some("partial_live_source_backed"),
+        "compiler receipt must name the first source-backed token live slice"
     );
     assert_eq!(
         compiler_receipt.get("live_token_type").and_then(Value::as_str),
@@ -559,6 +570,11 @@ fn semantic_tokens_runtime_quality_receipt_records_realbaseline_compiler_token_c
         "project-shaped compiler token class must match existing live token output"
     );
     assert_eq!(
+        compiler_receipt.get("live_cutover").and_then(Value::as_str),
+        Some("partial_live_source_backed"),
+        "project-shaped compiler token class must record the source-backed live slice"
+    );
+    assert_eq!(
         compiler_receipt.get("live_token_type").and_then(Value::as_str),
         Some("function"),
         "project-shaped compiler token class must match the live parser/HIR function token"
@@ -666,7 +682,12 @@ fn semantic_tokens_runtime_quality_receipt_records_project_shaped_compiler_backe
     assert_eq!(
         compiler_receipt.get("live_pilot").and_then(Value::as_bool),
         Some(true),
-        "project-shaped receipt must mark the narrow live pilot"
+        "project-shaped receipt must mark the narrow source-backed live slice"
+    );
+    assert_eq!(
+        compiler_receipt.get("live_cutover").and_then(Value::as_str),
+        Some("partial_live_source_backed"),
+        "project-shaped receipt must name the source-backed live slice"
     );
     assert_eq!(
         compiler_receipt.get("live_token_type").and_then(Value::as_str),

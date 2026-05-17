@@ -32,6 +32,15 @@ sub greet {
 1;
 "#;
 
+const TRACE_NO_SUB_URI: &str = "file:///workspace/lib/Trace/NoSub.pm";
+const TRACE_NO_SUB_DOC: &str = r#"package Trace::NoSub;
+use strict;
+use warnings;
+
+my $value = 1;
+1;
+"#;
+
 const GENERATED_WORKSPACE_SYMBOL_URI: &str = "file:///workspace/lib/Trace/GeneratedSymbols.pm";
 const GENERATED_WORKSPACE_SYMBOL_DOC: &str = r#"package Trace::GeneratedSymbols;
 use Moo;
@@ -95,6 +104,18 @@ fn open_workspace_symbol_document(server: &LspServer) -> Result<(), Box<dyn std:
         "textDocument": {
             "uri": WORKSPACE_SYMBOL_URI,
             "text": WORKSPACE_SYMBOL_DOC,
+            "languageId": "perl",
+            "version": 1
+        }
+    })))?;
+    Ok(())
+}
+
+fn open_no_sub_document(server: &LspServer) -> Result<(), Box<dyn std::error::Error>> {
+    server.test_handle_did_open(Some(json!({
+        "textDocument": {
+            "uri": TRACE_NO_SUB_URI,
+            "text": TRACE_NO_SUB_DOC,
             "languageId": "perl",
             "version": 1
         }
@@ -394,25 +415,106 @@ fn live_workspace_symbol_generated_pilot_persists_labeled_provider_trace()
 }
 
 #[test]
-fn live_semantic_tokens_request_persists_provider_trace() -> Result<(), Box<dyn std::error::Error>>
-{
+fn live_semantic_tokens_request_persists_source_backed_token_class_trace()
+-> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();
     initialize(&server)?;
     open_trace_document(&server)?;
 
+    let params = json!({
+        "textDocument": {"uri": TRACE_URI, "version": 1}
+    });
+    let direct_result = server
+        .test_handle_semantic_tokens(Some(params.clone()))?
+        .ok_or("missing direct semantic-token result")?;
+    let routed_result = response_result(
+        server.handle_request(request(5, "textDocument/semanticTokens/full", Some(params))),
+        "semantic tokens",
+    )?;
+    assert_eq!(
+        routed_result, direct_result,
+        "source-backed token-class trace must not change semantic-token output"
+    );
+
+    let explanation = explain_provider_decision(&server, "semantic_tokens")?;
+    let receipt = request_receipt(&explanation, "semantic_tokens")?;
+    assert_eq!(receipt.get("schema_version").and_then(Value::as_str), Some("provider_decision.v1"));
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("semantic_tokens"));
+    assert_eq!(
+        receipt.get("provider_action").and_then(Value::as_str),
+        Some("textDocument/semanticTokens/full")
+    );
+    assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("acted"));
+    assert_eq!(
+        receipt.get("reason").and_then(Value::as_str),
+        Some("source_backed_high_confidence")
+    );
+    assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("compiler_fact"));
+    assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("high"));
+    assert_eq!(receipt.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(receipt.get("fallback").and_then(Value::as_str), Some("none"));
+    assert_eq!(receipt.get("fallback_state").and_then(Value::as_str), Some("none"));
+    assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        receipt.get("source_backed_state").and_then(Value::as_str),
+        Some("live_output_matched_source_backed_compiler_span")
+    );
+    assert_eq!(receipt.get("dynamic_boundary").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        receipt.get("live_cutover").and_then(Value::as_str),
+        Some("partial_live_source_backed")
+    );
+    assert_eq!(receipt.get("token_class").and_then(Value::as_str), Some("subroutine_declaration"));
+    assert_eq!(receipt.get("live_token_type").and_then(Value::as_str), Some("function"));
+    assert_eq!(receipt.get("live_token_match_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(receipt.get("compiler_receipt_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(receipt.get("compiler_live_pilot_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(receipt.get("no_live_token_output_change").and_then(Value::as_bool), Some(true));
+    let boundary =
+        receipt.get("claim_boundary").and_then(Value::as_str).ok_or("missing claim_boundary")?;
+    assert!(
+        boundary.contains("subroutine-declaration span must already match"),
+        "semantic-token live-slice trace must preserve the parity guard: {boundary}"
+    );
+    Ok(())
+}
+
+#[test]
+fn live_semantic_tokens_request_without_compiler_token_class_stays_fallback_trace()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    initialize(&server)?;
+    open_no_sub_document(&server)?;
+
     response_result(
         server.handle_request(request(
-            5,
+            6,
             "textDocument/semanticTokens/full",
             Some(json!({
-                "textDocument": {"uri": TRACE_URI, "version": 1}
+                "textDocument": {"uri": TRACE_NO_SUB_URI, "version": 1}
             })),
         )),
-        "semantic tokens",
+        "semantic tokens without compiler token class",
     )?;
 
     let explanation = explain_provider_decision(&server, "semantic_tokens")?;
     let receipt = request_receipt(&explanation, "semantic_tokens")?;
-    assert_live_trace(receipt, "semantic_tokens", "textDocument/semanticTokens/full");
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("semantic_tokens"));
+    assert_eq!(
+        receipt.get("provider_action").and_then(Value::as_str),
+        Some("textDocument/semanticTokens/full")
+    );
+    assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("fallback"));
+    assert_eq!(receipt.get("reason").and_then(Value::as_str), Some("fallback_policy"));
+    assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("provider_runtime"));
+    assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(false));
+    assert_eq!(receipt.get("live_cutover").and_then(Value::as_str), Some("shadowed_or_fallback"));
+    assert_eq!(receipt.get("compiler_receipt_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(receipt.get("compiler_live_pilot_count").and_then(Value::as_u64), Some(0));
+    assert!(
+        receipt.get("token_class").is_none(),
+        "fallback trace must not claim a compiler token class: {receipt}"
+    );
+    assert_eq!(receipt.get("no_live_token_output_change").and_then(Value::as_bool), Some(true));
     Ok(())
 }
