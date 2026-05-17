@@ -213,13 +213,20 @@ fn semantic_token_answer_identities(
 fn semantic_token_candidate_can_count(candidate: &SemanticTokenShadowCandidate) -> bool {
     matches!(
         candidate.fallback_state,
-        ProviderFallbackState::Primary
-            | ProviderFallbackState::Shadow
-            | ProviderFallbackState::Fallback
+        ProviderFallbackState::Primary | ProviderFallbackState::Shadow
     ) && candidate
         .source_span
         .as_ref()
         .is_some_and(SemanticTokenShadowSpan::is_valid_lsp_token_span)
+        && semantic_token_candidate_class_is_approved(candidate)
+}
+
+fn semantic_token_candidate_class_is_approved(candidate: &SemanticTokenShadowCandidate) -> bool {
+    match candidate.source {
+        ProviderFactSourceKind::ParserSyntax => true,
+        ProviderFactSourceKind::CompilerFact => candidate.identity.starts_with("token:function:"),
+        _ => false,
+    }
 }
 
 /// Summarize whether semantic-token candidates have source-backed LSP spans.
@@ -654,6 +661,44 @@ mod tests {
         assert_eq!(fallback_trace.confidence, Confidence::Low);
         assert_eq!(fallback_trace.freshness, ProviderFactFreshness::Unknown);
         assert_eq!(fallback_trace.fallback_state, ProviderFallbackState::Fallback);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_token_shadow_blocks_broader_compiler_token_class_false_exact()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let candidate = shadow_candidate(
+            "token:method:Foo::generated_method:compiler",
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::High,
+            ProviderFactFreshness::Fresh,
+            Some(valid_span(0, 4, 16)),
+            ProviderFallbackState::Shadow,
+        );
+        let report = semantic_token_span_invariant_report(std::slice::from_ref(&candidate));
+        let result = semantic_token_source_shadow(Vec::new(), vec![candidate], "generated_method");
+
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Same);
+        assert_eq!(result.receipt.old_result.match_count, 0);
+        assert_eq!(result.receipt.new_result.match_count, 0);
+        assert!(
+            result.receipt.new_result.identities.is_empty(),
+            "broader compiler token classes must not become exact token identities without class-specific proof"
+        );
+
+        assert_eq!(report.candidate_count, 1);
+        assert_eq!(report.blocked_candidate_count, 0);
+        assert_eq!(report.source_backed_span_count, 1);
+        assert_eq!(report.missing_source_span_count, 0);
+        assert_eq!(report.invalid_source_span_count, 0);
+
+        let trace = first_trace(&result)?;
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.provenance, Provenance::SemanticAnalyzer);
+        assert_eq!(trace.confidence, Confidence::High);
+        assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Shadow);
         Ok(())
     }
 
