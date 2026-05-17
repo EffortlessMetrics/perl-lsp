@@ -11,12 +11,9 @@
 //! - Server MUST NOT crash when it tries to run perlcritic and fails.
 //! - Server must remain responsive after the diagnostic pass.
 
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 use std::time::Duration;
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 fn config_without_perlcritic() -> ScenarioConfig {
     // Exclude only perlcritic from PATH, leaving perl and other tools available.

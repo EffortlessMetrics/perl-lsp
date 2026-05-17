@@ -6,6 +6,7 @@
 //! - Then diagnostics should recover and the server should keep serving requests.
 
 use anyhow::{Context, Result, ensure};
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{LspEvent, ScenarioConfig, UxHarness};
 use std::time::{Duration, Instant};
 
@@ -24,10 +25,6 @@ use warnings;\n\
 my $value = 42;\n\
 print $value;\n\
 ";
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 fn has_parse_like_diagnostic(diagnostics: &[serde_json::Value]) -> bool {
     diagnostics.iter().any(|diag| {

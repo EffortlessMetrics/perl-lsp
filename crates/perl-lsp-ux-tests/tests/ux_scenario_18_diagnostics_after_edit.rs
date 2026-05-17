@@ -6,12 +6,9 @@
 //! Verifies that the UX harness can drive a real edit cycle and observe
 //! follow-up `textDocument/publishDiagnostics` updates for the edited file.
 
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{LspEvent, ScenarioConfig, UxHarness};
 use std::time::{Duration, Instant};
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 // NOTE: BROKEN_SOURCE contains a genuine Perl syntax error — the incomplete
 // expression `(1 +` triggers a parse failure under `use strict`.  A missing

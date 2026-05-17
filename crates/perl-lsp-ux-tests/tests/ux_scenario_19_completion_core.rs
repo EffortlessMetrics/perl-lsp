@@ -10,6 +10,7 @@
 //! - No crash signatures after repeated completion requests.
 
 use anyhow::Result;
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 
 const COMPLETION_FIXTURE: &str = r#"use strict;
@@ -20,10 +21,6 @@ pri
 my $value = 42;
 my $display = $val
 "#;
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 fn create_harness() -> Result<UxHarness> {
     UxHarness::new(ScenarioConfig::default().with_file("completion.pl", COMPLETION_FIXTURE))

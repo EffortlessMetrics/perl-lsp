@@ -5,6 +5,7 @@
 //! Given/When/Then language and avoids duplicated harness boilerplate.
 
 use anyhow::Result;
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 use serde_json::Value;
 use std::time::Duration;
@@ -40,10 +41,6 @@ use Counter;
 my $value = Counter->increment(3);
 print "$value\n";
 "#;
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 struct DefinitionScenario {
     harness: UxHarness,

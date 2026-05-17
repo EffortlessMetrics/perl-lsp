@@ -47,6 +47,7 @@
 pub mod client;
 pub mod diagnostics;
 pub mod env;
+pub mod project_fixture;
 pub mod recorder;
 pub mod scorecard;
 pub mod taxonomy;
@@ -55,6 +56,11 @@ pub mod workspace;
 pub use client::{LspEvent, UxClient};
 pub use diagnostics::DiagnosticsTracker;
 pub use env::{PathGuard, RestrictedPath};
+pub use project_fixture::{
+    ProjectFixtureFile, create_fixture_harness, fixture_content, fixture_scenario_config,
+    load_catalyst_fixture_files, load_dancer2_fixture_files, load_mojolicious_fixture_files,
+    open_all_fixture_files, workspace_root,
+};
 pub use recorder::{
     AssertionBasis, AssertionCounts, OperationTiming, RunIdentity, UxCheckFailure, UxRunRecorder,
     UxScenarioRunReceipt, UxScenarioSkip, run_ux_scenario,
@@ -941,6 +947,19 @@ impl FormatResult {
 }
 
 // ─────────────────────────────── Binary Resolution ───────────────────────────
+
+/// Return whether the perl-lsp binary can be resolved for UX scenario tests.
+///
+/// This is a lightweight guard for integration tests that need to skip when the
+/// server binary has not been built in the current environment.
+pub fn binary_available() -> bool {
+    resolve_binary().is_ok()
+}
+
+/// Standard skip reason for scenarios that require a runnable perl-lsp binary.
+pub fn missing_binary_skip() -> UxScenarioSkip {
+    UxScenarioSkip::infra("PERL_LSP_BIN not set and target/debug/perl-lsp not found")
+}
 
 /// Resolve the path to the perl-lsp binary.
 ///
