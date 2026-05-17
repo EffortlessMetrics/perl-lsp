@@ -213,8 +213,9 @@ ready-index queries only. Generated/framework symbols are virtual, labeled, and
 anchored to framework declarations rather than exact generated method bodies.
 Empty-query, partial-index, open-document fallback, generated/no-source, stale,
 dynamic, ambiguous, and fallback/noise candidates remain fallback or gated.
-The next workspace-symbol proof is a scoped generated-symbol cutover receipt;
-another rank/noise receipt alone is no longer the promotion blocker.
+The scoped generated-symbol cutover receipt is now recorded; the next
+workspace-symbol proof is another generated-symbol class receipt before
+broader generated workspace-symbol expansion.
 
 ## Promotion Rules
 
