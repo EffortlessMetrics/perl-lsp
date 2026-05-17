@@ -4806,11 +4806,10 @@ my $var = 42;
         must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
 
         let symbols = index.file_symbols(uri);
-        let pkg_sym = symbols.iter().find(|s| s.name == "Foo" && s.kind == SymbolKind::Package);
-        assert!(pkg_sym.is_some(), "Package symbol not found");
+        let pkg_sym =
+            must_some(symbols.iter().find(|s| s.name == "Foo" && s.kind == SymbolKind::Package));
         assert_eq!(
-            pkg_sym.unwrap().container_name,
-            None,
+            pkg_sym.container_name, None,
             "Package symbol must not carry a container (was 'main')"
         );
     }
@@ -4827,13 +4826,8 @@ my $var = 42;
         must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
 
         let symbols = index.file_symbols(uri);
-        let var_sym = symbols.iter().find(|s| s.name == "$x" && s.kind.is_variable());
-        assert!(var_sym.is_some(), "$x variable not indexed");
-        assert_eq!(
-            var_sym.unwrap().qualified_name,
-            None,
-            "my variable must not have a qualified_name"
-        );
+        let var_sym = must_some(symbols.iter().find(|s| s.name == "$x" && s.kind.is_variable()));
+        assert_eq!(var_sym.qualified_name, None, "my variable must not have a qualified_name");
 
         // `find_definition("Foo::x")` must not accidentally resolve to a lexical variable.
         assert!(
