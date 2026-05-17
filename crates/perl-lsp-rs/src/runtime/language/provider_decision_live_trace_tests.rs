@@ -196,6 +196,40 @@ fn request_receipt<'a>(
         .ok_or_else(|| format!("missing {provider} request_receipt").into())
 }
 
+fn generated_workspace_symbol_pilot_receipt(
+    server: &LspServer,
+) -> Result<Value, Box<dyn std::error::Error>> {
+    let mut last_receipt = None;
+
+    for _ in 0..5 {
+        #[cfg(feature = "workspace")]
+        seed_ready_generated_workspace_symbol_index(server)?;
+
+        response_result(
+            server.handle_request(request(
+                6,
+                "workspace/symbol",
+                Some(json!({"query": "display_name"})),
+            )),
+            "workspace generated symbols",
+        )?;
+
+        let explanation = explain_provider_decision(server, "workspace_symbols")?;
+        let receipt = request_receipt(&explanation, "workspace_symbols")?.clone();
+        if receipt.get("decision").and_then(Value::as_str) == Some("acted") {
+            return Ok(receipt);
+        }
+        last_receipt = Some(receipt);
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+
+    Err(format!(
+        "generated workspace-symbol pilot did not reach ready-index trace; last receipt: {}",
+        last_receipt.unwrap_or(Value::Null)
+    )
+    .into())
+}
+
 fn assert_live_trace(receipt: &Value, provider: &str, action: &str) {
     assert_eq!(receipt.get("schema_version").and_then(Value::as_str), Some("provider_decision.v1"));
     assert_eq!(receipt.get("provider").and_then(Value::as_str), Some(provider));
@@ -388,20 +422,8 @@ fn live_workspace_symbol_generated_pilot_persists_labeled_provider_trace()
     let server = create_server();
     initialize(&server)?;
     open_generated_workspace_symbol_document(&server)?;
-    #[cfg(feature = "workspace")]
-    seed_ready_generated_workspace_symbol_index(&server)?;
 
-    response_result(
-        server.handle_request(request(
-            6,
-            "workspace/symbol",
-            Some(json!({"query": "display_name"})),
-        )),
-        "workspace generated symbols",
-    )?;
-
-    let explanation = explain_provider_decision(&server, "workspace_symbols")?;
-    let receipt = request_receipt(&explanation, "workspace_symbols")?;
+    let receipt = generated_workspace_symbol_pilot_receipt(&server)?;
     assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("acted"));
     assert_eq!(
         receipt.get("reason").and_then(Value::as_str),
