@@ -277,8 +277,8 @@ impl LspServer {
                 "variable",
                 "matched_existing_live_variable_token",
                 "unmatched_existing_live_variable_token",
-                false,
-                "class-specific compiler field-declaration receipt only; token:function remains the only compiler-backed live slice, and field declarations stay shadowed until class-specific approval lands",
+                true,
+                "scoped compiler field-declaration class cutover proof only; field declarations may count as compiler-token identities only when their source-backed span already matches existing live parser/HIR variable tokens, and no new token output is emitted",
             ));
         }
 
@@ -534,7 +534,7 @@ fn semantic_token_class_field_declaration_candidate(
     )?;
 
     Some(crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
-        format!("token:variable:{name}:compiler"),
+        format!("token:field_declaration:{name}:compiler"),
         ProviderFactSourceKind::CompilerFact,
         Provenance::SemanticAnalyzer,
         Confidence::Medium,
