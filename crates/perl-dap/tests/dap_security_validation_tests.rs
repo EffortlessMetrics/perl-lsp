@@ -10,7 +10,6 @@ use perl_dap::security::{
     DEFAULT_TIMEOUT_MS, SecurityError, validate_condition, validate_expression, validate_path,
     validate_timeout,
 };
-use perl_tdd_support::must;
 use std::path::PathBuf;
 use tempfile::TempDir;
 
@@ -44,8 +43,8 @@ fn test_path_validation_safe_relative_paths() -> TestResult {
 }
 
 #[test]
-fn test_path_validation_parent_traversal_attempts() {
-    let workspace = must(temp_workspace());
+fn test_path_validation_parent_traversal_attempts() -> TestResult {
+    let workspace = temp_workspace()?;
 
     // Malicious paths with parent directory references
     let malicious_paths =
@@ -55,15 +54,6 @@ fn test_path_validation_parent_traversal_attempts() {
         let path = PathBuf::from(path_str);
         let result = validate_path(&path, workspace.path());
 
-        if result.is_ok() {
-            eprintln!(
-                "DEBUG: Path '{}' was ALLOWED (workspace: {})",
-                path_str,
-                workspace.path().display()
-            );
-            eprintln!("DEBUG: Result: {:?}", result);
-        }
-
         assert!(
             result.is_err(),
             "Parent traversal path '{}' should be rejected (workspace: {}), result: {:?}",
@@ -72,25 +62,32 @@ fn test_path_validation_parent_traversal_attempts() {
             result
         );
 
-        if let Err(e) = result {
-            match e {
-                SecurityError::PathTraversalAttempt(_) | SecurityError::PathOutsideWorkspace(_) => {
-                }
-                _ => {
-                    must(Err::<(), _>(format!(
-                        "Expected PathTraversalAttempt or PathOutsideWorkspace error for '{}', got: {:?}",
-                        path_str, e
-                    )));
-                    unreachable!()
-                }
+        match result {
+            Err(
+                SecurityError::PathTraversalAttempt(_) | SecurityError::PathOutsideWorkspace(_),
+            ) => {}
+            Err(error) => {
+                return Err(format!(
+                    "Expected PathTraversalAttempt or PathOutsideWorkspace error for '{path_str}', got: {error:?}"
+                )
+                .into());
+            }
+            Ok(path) => {
+                return Err(format!(
+                    "Parent traversal path '{path_str}' unexpectedly resolved to {}",
+                    path.display()
+                )
+                .into());
             }
         }
     }
+
+    Ok(())
 }
 
 #[test]
-fn test_path_validation_absolute_paths() {
-    let workspace = must(temp_workspace());
+fn test_path_validation_absolute_paths() -> TestResult {
+    let workspace = temp_workspace()?;
 
     // Absolute paths outside workspace should be rejected
     let outside_paths = vec!["/etc/passwd", "/root/.ssh/id_rsa"];
@@ -104,10 +101,12 @@ fn test_path_validation_absolute_paths() {
             path_str
         );
     }
+
+    Ok(())
 }
 
 #[test]
-fn test_path_validation_null_byte_injection() {
+fn test_path_validation_null_byte_injection() -> TestResult {
     let workspace = PathBuf::from("/workspace");
 
     // Null byte injection attempts
@@ -117,10 +116,10 @@ fn test_path_validation_null_byte_injection() {
     assert!(result.is_err(), "Null byte injection should be rejected");
 
     match result {
-        Err(SecurityError::InvalidPathCharacters) => {}
-        _ => {
-            must(Err::<(), _>("Expected InvalidPathCharacters error"));
-            unreachable!()
+        Err(SecurityError::InvalidPathCharacters) => Ok(()),
+        Err(error) => Err(format!("Expected InvalidPathCharacters error, got: {error:?}").into()),
+        Ok(path) => {
+            Err(format!("Null byte injection unexpectedly resolved to {}", path.display()).into())
         }
     }
 }
@@ -139,7 +138,7 @@ fn test_expression_validation_valid_expressions() -> TestResult {
 }
 
 #[test]
-fn test_expression_validation_newline_injection() {
+fn test_expression_validation_newline_injection() -> TestResult {
     let malicious_exprs = vec!["1\nprint 'hacked'", "$x\nsystem('rm -rf /')", "valid\rmalicious"];
 
     for expr in malicious_exprs {
@@ -152,12 +151,20 @@ fn test_expression_validation_newline_injection() {
 
         match result {
             Err(SecurityError::InvalidExpression) => {}
-            _ => {
-                must(Err::<(), _>("Expected InvalidExpression error"));
-                unreachable!()
+            Err(error) => {
+                return Err(format!("Expected InvalidExpression error, got: {error:?}").into());
+            }
+            Ok(()) => {
+                return Err(format!(
+                    "Expression '{}' unexpectedly validated",
+                    expr.escape_default()
+                )
+                .into());
             }
         }
     }
+
+    Ok(())
 }
 
 // ===== Condition Validation Tests =====
@@ -174,7 +181,7 @@ fn test_condition_validation_safe_conditions() -> TestResult {
 }
 
 #[test]
-fn test_condition_validation_protocol_injection() {
+fn test_condition_validation_protocol_injection() -> TestResult {
     // Protocol injection attempts in breakpoint conditions
     let malicious_conditions = vec!["1; print \"PWNED\"\n", "$x > 10\nsystem('ls')"];
 
@@ -182,21 +189,27 @@ fn test_condition_validation_protocol_injection() {
         let result = validate_condition(cond);
         assert!(result.is_err(), "Malicious condition '{}' should be rejected", cond);
     }
+
+    Ok(())
 }
 
 // ===== Timeout Validation Tests =====
 
 #[test]
-fn test_timeout_validation_within_bounds() {
-    assert_eq!(validate_timeout(1000).unwrap(), 1000);
-    assert_eq!(validate_timeout(5000).unwrap(), 5000);
-    assert_eq!(validate_timeout(100_000).unwrap(), 100_000);
-    assert_eq!(validate_timeout(DEFAULT_TIMEOUT_MS).unwrap(), DEFAULT_TIMEOUT_MS);
+fn test_timeout_validation_within_bounds() -> TestResult {
+    assert_eq!(validate_timeout(1000)?, 1000);
+    assert_eq!(validate_timeout(5000)?, 5000);
+    assert_eq!(validate_timeout(100_000)?, 100_000);
+    assert_eq!(validate_timeout(DEFAULT_TIMEOUT_MS)?, DEFAULT_TIMEOUT_MS);
+
+    Ok(())
 }
 
 #[test]
-fn test_timeout_validation_zero_clamped() {
-    assert_eq!(validate_timeout(0).unwrap(), 1, "Zero timeout should be clamped to 1ms");
+fn test_timeout_validation_zero_clamped() -> TestResult {
+    assert_eq!(validate_timeout(0)?, 1, "Zero timeout should be clamped to 1ms");
+
+    Ok(())
 }
 
 #[test]
@@ -208,7 +221,7 @@ fn test_timeout_validation_excessive_returns_error() {
 // ===== Integration Tests =====
 
 #[test]
-fn test_security_comprehensive_path_traversal_matrix() {
+fn test_security_comprehensive_path_traversal_matrix() -> TestResult {
     // Test matrix from fixtures/security/path_traversal_attempts.json
     let test_cases = vec![
         ("../../../etc/passwd", true),
@@ -219,7 +232,7 @@ fn test_security_comprehensive_path_traversal_matrix() {
         ("test.pl", false),
     ];
 
-    let workspace = must(temp_workspace());
+    let workspace = temp_workspace()?;
 
     for (path_str, should_reject) in test_cases {
         let path = PathBuf::from(path_str);
@@ -237,6 +250,8 @@ fn test_security_comprehensive_path_traversal_matrix() {
             );
         }
     }
+
+    Ok(())
 }
 
 #[test]
