@@ -1,0 +1,33 @@
+---
+source: crates/perl-lsp-rs/tests/lsp_provider_decision_explanation_snap.rs
+expression: scrub_version(result)
+---
+confidence: low
+copyable_payload:
+  confidence: low
+  decision: fallback
+  dynamic_boundary: false
+  fact_source: unknown
+  fallback: no_result
+  freshness: unknown
+  perl_lsp_version: "<version>"
+  provider: unknown
+  reason: missing_fact
+  receipt_id: ~
+  request_position: ~
+  request_receipt: ~
+  scenario: ~
+  schema_version: provider_decision_bug_report.v1
+  support_tier_link: "docs/project/status/SUPPORT_TIERS.md#claim-rows"
+  user_message: "Provider used fallback.\nNo usable fact was available for this request.\nFact source: unknown.\nConfidence: low. Freshness: unknown.\nDynamic boundary: no.\nFallback: no result."
+  workspace_root_class: single_root
+  workspace_root_hash: "<workspace-root-hash>"
+decision: fallback
+dynamic_boundary: false
+fact_source: unknown
+fallback: no_result
+freshness: unknown
+provider: unknown
+reason: missing_fact
+schema_version: provider_decision.v1
+user_message: "Provider used fallback.\nNo usable fact was available for this request.\nFact source: unknown.\nConfidence: low. Freshness: unknown.\nDynamic boundary: no.\nFallback: no result."
