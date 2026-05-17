@@ -36,10 +36,9 @@
 //!
 //! Requires the `memory-profiling` feature.
 
-#![allow(clippy::panic, clippy::unwrap_used, clippy::expect_used)]
-
 use perl_workspace::workspace::memory::{MemorySnapshot, ScaleReport};
 use perl_workspace::workspace_index::WorkspaceIndex;
+use std::error::Error;
 use std::time::Instant;
 use url::Url;
 
@@ -47,9 +46,8 @@ use url::Url;
 ///
 /// Each module contains 5 public symbols:
 /// `new`, `method_a_N`, `method_b_N`, `method_c_N`, `_private_N`.
-fn generate_module(idx: usize) -> (Url, String) {
-    let uri = Url::parse(&format!("file:///lib/Gen/Module{}.pm", idx))
-        .expect("valid uri for synthetic module");
+fn generate_module(idx: usize) -> Result<(Url, String), Box<dyn Error>> {
+    let uri = Url::parse(&format!("file:///lib/Gen/Module{}.pm", idx))?;
     let src = format!(
         r#"package Gen::Module{idx};
 use strict;
@@ -84,28 +82,28 @@ sub _private_{idx} {{
 1;
 "#
     );
-    (uri, src)
+    Ok((uri, src))
 }
 
 /// Build a [`WorkspaceIndex`] containing `file_count` synthetic modules.
-fn build_index_at_scale(file_count: usize) -> WorkspaceIndex {
+fn build_index_at_scale(file_count: usize) -> Result<WorkspaceIndex, Box<dyn Error>> {
     let index = WorkspaceIndex::new();
     for i in 0..file_count {
-        let (uri, src) = generate_module(i);
-        index.index_file(uri, src).ok();
+        let (uri, src) = generate_module(i)?;
+        index.index_file(uri, src)?;
     }
-    index
+    Ok(index)
 }
 
 /// Run the profiling harness and return a populated [`ScaleReport`].
 ///
 /// `scales` is the list of file-count checkpoints to measure.
-fn run_profile(scales: &[usize]) -> ScaleReport {
+fn run_profile(scales: &[usize]) -> Result<ScaleReport, Box<dyn Error>> {
     let mut report = ScaleReport::new();
 
     for &scale in scales {
         let t0 = Instant::now();
-        let index = build_index_at_scale(scale);
+        let index = build_index_at_scale(scale)?;
         let build_ms = t0.elapsed().as_millis();
 
         let snap = MemorySnapshot::capture(&index);
@@ -122,7 +120,7 @@ fn run_profile(scales: &[usize]) -> ScaleReport {
         report.add_checkpoint(scale, snap);
     }
 
-    report
+    Ok(report)
 }
 
 /// Emit the report as newline-delimited JSON to stdout.
@@ -145,7 +143,7 @@ fn print_json(report: &ScaleReport) {
     }
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = std::env::args().collect();
 
     let mut emit_json = false;
@@ -171,11 +169,13 @@ fn main() {
         None => default_scales,
     };
 
-    let report = run_profile(&scales);
+    let report = run_profile(&scales)?;
 
     if emit_json {
         print_json(&report);
     } else {
         println!("{}", report);
     }
+
+    Ok(())
 }

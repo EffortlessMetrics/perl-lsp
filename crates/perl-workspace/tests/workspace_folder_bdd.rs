@@ -15,11 +15,13 @@ fn given_file_uri_when_resolving_then_path_is_returned() {
 }
 
 #[test]
-fn given_file_uri_with_unresolvable_path_when_resolving_then_scheme_is_stripped() {
+fn given_file_uri_with_remote_host_when_resolving_then_remote_host_is_not_pathified() {
     let parsed = workspace_folder_to_path("file://relative/example");
-    assert!(!parsed.to_string_lossy().contains("file://"));
-    // On Windows, file://host/path resolves as a UNC path \\host\path;
-    // on other platforms the fallback strips "file://" and returns "relative/example".
-    // Either way the path must contain "example".
-    assert!(parsed.to_string_lossy().contains("example"));
+    let path = parsed.to_string_lossy();
+
+    // Remote file URI hosts must not be stripped into a path component that a caller
+    // could accidentally open as a local/UNC path. Keeping the raw URI makes the
+    // unresolved authority explicit while preserving the original value for diagnostics.
+    assert!(path.contains("file://relative/example"));
+    assert!(!path.starts_with("relative"));
 }
