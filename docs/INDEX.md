@@ -109,6 +109,7 @@ Decision records, project status, and planning documents.
 - [Latency Caps SLO Spec](specs/LATENCY_CAPS_SLO_SPEC.md)
 - [Native Formatter and Critic Replacement Contract](specs/NATIVE_FORMATTER_CRITIC_REPLACEMENT.md)
 - [Release Candidate Baseline](specs/RELEASE_CANDIDATE_BASELINE.md)
+- [Receiver Facts Pipeline Specification](specs/RECEIVER_FACTS_PIPELINE.md)
 
 ### Historical Analyses
 Long-form historical writing plus the supporting research notes that fed it.
