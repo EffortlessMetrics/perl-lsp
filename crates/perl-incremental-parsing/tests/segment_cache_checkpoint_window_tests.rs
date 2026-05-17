@@ -20,6 +20,7 @@
 use perl_incremental_parsing::incremental::incremental_checkpoint::{
     CheckpointedIncrementalParser, SimpleEdit,
 };
+use perl_tdd_support::must_some;
 
 // =========================================================================
 // 1. Correctness Tests
@@ -397,8 +398,7 @@ fn test_find_after_exact_match() {
 
     // Find checkpoint at exact position
     let cp = cache.find_after(200);
-    assert!(cp.is_some(), "Expected checkpoint at position 200");
-    assert_eq!(cp.unwrap().position, 200);
+    assert_eq!(must_some(cp).position, 200);
 }
 
 /// Test find_after() between checkpoints.
@@ -413,8 +413,7 @@ fn test_find_after_between_checkpoints() {
 
     // Find checkpoint after position 150
     let cp = cache.find_after(150);
-    assert!(cp.is_some(), "Expected checkpoint after position 150");
-    assert_eq!(cp.unwrap().position, 200);
+    assert_eq!(must_some(cp).position, 200);
 }
 
 /// Test find_after() before first checkpoint.
@@ -429,8 +428,7 @@ fn test_find_after_before_first() {
 
     // Find checkpoint after position 50
     let cp = cache.find_after(50);
-    assert!(cp.is_some(), "Expected checkpoint after position 50");
-    assert_eq!(cp.unwrap().position, 100);
+    assert_eq!(must_some(cp).position, 100);
 }
 
 /// Test find_after() after last checkpoint.
@@ -470,13 +468,11 @@ fn test_find_after_single_checkpoint() {
 
     // Find checkpoint before position
     let cp = cache.find_after(50);
-    assert!(cp.is_some(), "Expected checkpoint after position 50");
-    assert_eq!(cp.unwrap().position, 100);
+    assert_eq!(must_some(cp).position, 100);
 
     // Find checkpoint at exact position
     let cp = cache.find_after(100);
-    assert!(cp.is_some(), "Expected checkpoint at position 100");
-    assert_eq!(cp.unwrap().position, 100);
+    assert_eq!(must_some(cp).position, 100);
 
     // Find checkpoint after position
     let cp = cache.find_after(150);
@@ -497,8 +493,7 @@ fn test_find_after_many_checkpoints() {
     for i in 0..99 {
         let pos = i * 10 + 5; // Between checkpoints
         let cp = cache.find_after(pos);
-        assert!(cp.is_some(), "Expected checkpoint after position {}", pos);
-        assert_eq!(cp.unwrap().position, (i + 1) * 10);
+        assert_eq!(must_some(cp).position, (i + 1) * 10);
     }
 }
 
@@ -516,11 +511,40 @@ fn test_find_after_and_before_together() {
     let before = cache.find_before(250);
     let after = cache.find_after(250);
 
-    assert!(before.is_some(), "Expected checkpoint before position 250");
-    assert_eq!(before.unwrap().position, 200);
+    assert_eq!(must_some(before).position, 200);
+    assert_eq!(must_some(after).position, 300);
+}
 
-    assert!(after.is_some(), "Expected checkpoint after position 250");
-    assert_eq!(after.unwrap().position, 300);
+/// Test adding checkpoints out of order preserves searchable order.
+#[test]
+fn test_find_after_with_unsorted_insertions_and_replacement() {
+    use perl_lexer::checkpoint::{CheckpointCache, LexerCheckpoint};
+
+    let mut cache = CheckpointCache::new(10);
+    cache.add(LexerCheckpoint::at_position(300));
+    cache.add(LexerCheckpoint::at_position(100));
+    cache.add(LexerCheckpoint::at_position(200));
+    cache.add(LexerCheckpoint::at_position(200));
+
+    assert_eq!(cache.len(), 3);
+    assert_eq!(must_some(cache.find_before(250)).position, 200);
+    assert_eq!(must_some(cache.find_after(150)).position, 200);
+}
+
+/// Test cache eviction keeps both boundary anchors searchable.
+#[test]
+fn test_find_after_eviction_preserves_boundaries() {
+    use perl_lexer::checkpoint::{CheckpointCache, LexerCheckpoint};
+
+    let mut cache = CheckpointCache::new(3);
+    for position in [0, 100, 200, 300, 400] {
+        cache.add(LexerCheckpoint::at_position(position));
+    }
+
+    assert_eq!(cache.len(), 3);
+    assert_eq!(must_some(cache.find_before(usize::MAX)).position, 400);
+    assert_eq!(must_some(cache.find_after(0)).position, 0);
+    assert!(cache.find_after(401).is_none(), "expected no checkpoint beyond final boundary");
 }
 
 /// Test find_after() after edit (checkpoint position adjustment).
@@ -538,8 +562,7 @@ fn test_find_after_after_edit() {
 
     // Find checkpoint after original position 200 (now at 210)
     let cp = cache.find_after(210);
-    assert!(cp.is_some(), "Expected checkpoint after position 210");
-    assert_eq!(cp.unwrap().position, 210);
+    assert_eq!(must_some(cp).position, 210);
 }
 
 // =========================================================================

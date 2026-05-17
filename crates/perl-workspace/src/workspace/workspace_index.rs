@@ -2909,6 +2909,7 @@ impl WorkspaceIndex {
     /// to preserve the historical source-backed live slice for trust receipts
     /// or fallback paths.
     pub fn search_source_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
+        let query = query.trim();
         let query_lower = query.to_lowercase();
         let files = self.files.read();
         let mut results = Vec::new();
@@ -2934,6 +2935,7 @@ impl WorkspaceIndex {
     /// labeled as generated/framework members and point at the source declaration
     /// that produced the member, not at an exact generated method body.
     pub fn search_generated_workspace_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
+        let query = query.trim();
         if query.is_empty() {
             return Vec::new();
         }
@@ -4630,9 +4632,19 @@ has display_name => (is => 'rw');
             source_symbols.is_empty(),
             "generated framework members must not enter the exact source-symbol slice"
         );
+        let trimmed_source_symbols = index.search_source_symbols("  display_name  ");
+        assert!(
+            trimmed_source_symbols.is_empty(),
+            "trimmed generated framework member queries must not enter the exact source-symbol slice"
+        );
 
         let generated_symbols = index.search_generated_workspace_symbols("display_name");
         assert_eq!(generated_symbols.len(), 1);
+        let trimmed_generated_symbols =
+            index.search_generated_workspace_symbols("  display_name  ");
+        assert_eq!(trimmed_generated_symbols.len(), 1);
+        assert_eq!(trimmed_generated_symbols[0].name, "display_name [generated/framework]");
+        assert!(index.search_generated_workspace_symbols("   ").is_empty());
         let symbol = &generated_symbols[0];
         assert_eq!(symbol.name, "display_name [generated/framework]");
         assert_eq!(symbol.kind, SymbolKind::Method);
@@ -4794,11 +4806,10 @@ my $var = 42;
         must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
 
         let symbols = index.file_symbols(uri);
-        let pkg_sym = symbols.iter().find(|s| s.name == "Foo" && s.kind == SymbolKind::Package);
-        assert!(pkg_sym.is_some(), "Package symbol not found");
+        let pkg_sym =
+            must_some(symbols.iter().find(|s| s.name == "Foo" && s.kind == SymbolKind::Package));
         assert_eq!(
-            pkg_sym.unwrap().container_name,
-            None,
+            pkg_sym.container_name, None,
             "Package symbol must not carry a container (was 'main')"
         );
     }
@@ -4815,13 +4826,8 @@ my $var = 42;
         must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
 
         let symbols = index.file_symbols(uri);
-        let var_sym = symbols.iter().find(|s| s.name == "$x" && s.kind.is_variable());
-        assert!(var_sym.is_some(), "$x variable not indexed");
-        assert_eq!(
-            var_sym.unwrap().qualified_name,
-            None,
-            "my variable must not have a qualified_name"
-        );
+        let var_sym = must_some(symbols.iter().find(|s| s.name == "$x" && s.kind.is_variable()));
+        assert_eq!(var_sym.qualified_name, None, "my variable must not have a qualified_name");
 
         // `find_definition("Foo::x")` must not accidentally resolve to a lexical variable.
         assert!(
