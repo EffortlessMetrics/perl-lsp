@@ -15,11 +15,11 @@ fn given_file_uri_when_resolving_then_path_is_returned() {
 }
 
 #[test]
-fn given_file_uri_with_unresolvable_path_when_resolving_then_scheme_is_stripped() {
+fn given_file_uri_with_remote_host_when_resolving_then_raw_uri_is_preserved() {
     let parsed = workspace_folder_to_path("file://relative/example");
-    assert!(!parsed.to_string_lossy().contains("file://"));
-    // On Windows, file://host/path resolves as a UNC path \\host\path;
-    // on other platforms the fallback strips "file://" and returns "relative/example".
-    // Either way the path must contain "example".
-    assert!(parsed.to_string_lossy().contains("example"));
+
+    // Remote file URI hosts are intentionally not converted into local path
+    // components: preserving the raw URI keeps the caller from opening a path
+    // that accidentally includes a remote hostname as a normal directory.
+    assert_eq!(parsed, PathBuf::from("file://relative/example"));
 }
