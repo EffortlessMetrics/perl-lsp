@@ -12,15 +12,14 @@
 //! - mixed project-shaped files keep present modules clean while reporting a
 //!   genuinely missing module
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use perl_lsp_ux_tests::{
-    LspEvent, ScenarioConfig, UxCiTier, UxComponent, UxHarness, UxScenarioSkip, run_ux_scenario,
+    FixtureFile, LspEvent, ScenarioConfig, UxCiTier, UxComponent, UxHarness, binary_available,
+    load_real_project_fixture_files, missing_binary_skip, run_ux_scenario,
 };
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeSet;
-use std::fs;
-use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 const SCENARIO_FILE: &str = "ux_scenario_40_dancer2_diagnostics_quality.rs";
@@ -51,12 +50,6 @@ sub mixed_diagnostic_probe {
 "#;
 
 #[derive(Debug)]
-struct FixtureFile {
-    relative_path: String,
-    content: String,
-}
-
-#[derive(Debug)]
 struct DiagnosticProbe {
     name: &'static str,
     category: &'static str,
@@ -85,60 +78,6 @@ struct DiagnosticProbeReport {
     dynamic_boundary_label_hits: Vec<String>,
     message_excerpts: Vec<String>,
     fallback_or_empty: bool,
-}
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
-
-fn missing_binary_skip() -> UxScenarioSkip {
-    UxScenarioSkip::infra("PERL_LSP_BIN not set and target/debug/perl-lsp not found")
-}
-
-fn workspace_root() -> Result<PathBuf> {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
-        .map(Path::to_path_buf)
-        .context("CARGO_MANIFEST_DIR must be nested under the workspace root")
-}
-
-fn dancer2_fixture_root() -> Result<PathBuf> {
-    Ok(workspace_root()?.join("test_corpus").join("real_projects").join("dancer2_skeleton"))
-}
-
-fn is_perl_source(path: &Path) -> bool {
-    path.extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| matches!(extension, "pm" | "pl" | "t"))
-}
-
-fn collect_perl_files(root: &Path, dir: &Path, files: &mut Vec<FixtureFile>) -> Result<()> {
-    for entry in fs::read_dir(dir).with_context(|| format!("reading {}", dir.display()))? {
-        let entry = entry.with_context(|| format!("reading an entry under {}", dir.display()))?;
-        let path = entry.path();
-        if path.is_dir() {
-            collect_perl_files(root, &path, files)?;
-        } else if is_perl_source(&path) {
-            let relative_path = path
-                .strip_prefix(root)
-                .with_context(|| format!("stripping fixture root from {}", path.display()))?
-                .to_string_lossy()
-                .replace('\\', "/");
-            let content =
-                fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
-            files.push(FixtureFile { relative_path, content });
-        }
-    }
-    Ok(())
-}
-
-fn load_dancer2_fixture_files() -> Result<Vec<FixtureFile>> {
-    let root = dancer2_fixture_root()?;
-    let mut files = Vec::new();
-    collect_perl_files(&root, &root, &mut files)?;
-    files.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
-    Ok(files)
 }
 
 fn create_dancer2_harness(files: &[FixtureFile]) -> Result<UxHarness> {
@@ -410,7 +349,7 @@ fn scenario_40_dancer2_diagnostics_quality_receipt() {
                 return Err(missing_binary_skip().into());
             }
 
-            let fixture_files = load_dancer2_fixture_files()?;
+            let fixture_files = load_real_project_fixture_files("dancer2_skeleton")?;
             recorder
                 .check("dancer2 fixture has committed Perl files", !fixture_files.is_empty())?;
 

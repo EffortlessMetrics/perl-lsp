@@ -12,24 +12,17 @@
 
 use anyhow::{Context, Result, anyhow};
 use perl_lsp_ux_tests::{
-    ScenarioConfig, UxCiTier, UxComponent, UxHarness, UxScenarioSkip, run_ux_scenario,
+    FixtureFile, ScenarioConfig, UxCiTier, UxComponent, UxHarness, binary_available,
+    fixture_content, load_real_project_fixture_files, missing_binary_skip, run_ux_scenario,
 };
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
-use std::fs;
-use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 const SCENARIO_FILE: &str = "ux_scenario_35_mojolicious_rename_unsafe_edit.rs";
 const STATIC_FILE: &str = "lib/Mojolicious/Static.pm";
 const ROUTES_FILE: &str = "lib/Mojolicious/Routes.pm";
-
-#[derive(Debug)]
-struct FixtureFile {
-    relative_path: String,
-    content: String,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -111,60 +104,6 @@ struct FreshnessReport {
     error_message: Option<String>,
 }
 
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
-
-fn missing_binary_skip() -> UxScenarioSkip {
-    UxScenarioSkip::infra("PERL_LSP_BIN not set and target/debug/perl-lsp not found")
-}
-
-fn workspace_root() -> Result<PathBuf> {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
-        .map(Path::to_path_buf)
-        .context("CARGO_MANIFEST_DIR must be nested under the workspace root")
-}
-
-fn mojolicious_fixture_root() -> Result<PathBuf> {
-    Ok(workspace_root()?.join("test_corpus").join("real_projects").join("mojolicious_skeleton"))
-}
-
-fn is_perl_source(path: &Path) -> bool {
-    path.extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| matches!(extension, "pm" | "pl" | "t"))
-}
-
-fn collect_perl_files(root: &Path, dir: &Path, files: &mut Vec<FixtureFile>) -> Result<()> {
-    for entry in fs::read_dir(dir).with_context(|| format!("reading {}", dir.display()))? {
-        let entry = entry.with_context(|| format!("reading an entry under {}", dir.display()))?;
-        let path = entry.path();
-        if path.is_dir() {
-            collect_perl_files(root, &path, files)?;
-        } else if is_perl_source(&path) {
-            let relative_path = path
-                .strip_prefix(root)
-                .with_context(|| format!("stripping fixture root from {}", path.display()))?
-                .to_string_lossy()
-                .replace('\\', "/");
-            let content =
-                fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
-            files.push(FixtureFile { relative_path, content });
-        }
-    }
-    Ok(())
-}
-
-fn load_mojolicious_fixture_files() -> Result<Vec<FixtureFile>> {
-    let root = mojolicious_fixture_root()?;
-    let mut files = Vec::new();
-    collect_perl_files(&root, &root, &mut files)?;
-    files.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
-    Ok(files)
-}
-
 fn create_mojolicious_harness(files: &[FixtureFile]) -> Result<UxHarness> {
     let mut config = ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
         .env("PERL_LSP_WORKSPACE", "1");
@@ -181,14 +120,6 @@ fn open_all_fixture_files(harness: &UxHarness, files: &[FixtureFile]) -> Result<
         harness.open_file(&file.relative_path, &file.content)?;
     }
     Ok(())
-}
-
-fn fixture_content<'a>(files: &'a [FixtureFile], relative_path: &str) -> Result<&'a str> {
-    files
-        .iter()
-        .find(|file| file.relative_path == relative_path)
-        .map(|file| file.content.as_str())
-        .with_context(|| format!("missing fixture file {relative_path}"))
 }
 
 fn resolve_probe_position(files: &[FixtureFile], probe: &RenameProbe) -> Result<ProbePosition> {
@@ -559,7 +490,7 @@ fn scenario_35_mojolicious_rename_unsafe_edit_receipt() {
                 return Err(missing_binary_skip().into());
             }
 
-            let fixture_files = load_mojolicious_fixture_files()?;
+            let fixture_files = load_real_project_fixture_files("mojolicious_skeleton")?;
             recorder
                 .check("mojolicious fixture has committed Perl files", !fixture_files.is_empty())?;
 

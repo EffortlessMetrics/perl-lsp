@@ -69,7 +69,8 @@ pub use workspace::FakeWorkspace;
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
 use std::collections::HashMap;
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
 use url::Url;
@@ -938,6 +939,86 @@ impl FormatResult {
     pub fn has_edits(&self) -> bool {
         matches!(self, Self::Edits(v) if !v.is_empty())
     }
+}
+
+// ───────────────────────────── Real-project fixture loading ─────────────────
+
+/// A Perl source file loaded from a committed real-project UX fixture.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct FixtureFile {
+    /// Slash-normalized path relative to the fixture project root.
+    pub relative_path: String,
+    /// Complete file contents.
+    pub content: String,
+}
+
+/// Return whether the UX harness can resolve a runnable perl-lsp binary.
+pub fn binary_available() -> bool {
+    resolve_binary().is_ok()
+}
+
+/// Standard skip reason for scenarios that require a runnable perl-lsp binary.
+pub fn missing_binary_skip() -> UxScenarioSkip {
+    UxScenarioSkip::infra("PERL_LSP_BIN not set and target/debug/perl-lsp not found")
+}
+
+/// Resolve the workspace root from this crate's manifest directory.
+pub fn workspace_root() -> Result<PathBuf> {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .map(Path::to_path_buf)
+        .context("CARGO_MANIFEST_DIR must be nested under the workspace root")
+}
+
+/// Resolve a committed real-project fixture root by directory name.
+pub fn real_project_fixture_root(project_dir: &str) -> Result<PathBuf> {
+    Ok(workspace_root()?.join("test_corpus").join("real_projects").join(project_dir))
+}
+
+/// Load all Perl source files from a committed real-project fixture.
+pub fn load_real_project_fixture_files(project_dir: &str) -> Result<Vec<FixtureFile>> {
+    let root = real_project_fixture_root(project_dir)?;
+    let mut files = Vec::new();
+    collect_perl_files(&root, &root, &mut files)?;
+    files.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
+    Ok(files)
+}
+
+/// Return one loaded fixture file's content by relative path.
+pub fn fixture_content<'a>(files: &'a [FixtureFile], relative_path: &str) -> Result<&'a str> {
+    files
+        .iter()
+        .find(|file| file.relative_path == relative_path)
+        .map(|file| file.content.as_str())
+        .with_context(|| format!("missing fixture file {relative_path}"))
+}
+
+fn is_perl_source(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| matches!(extension, "pm" | "pl" | "t"))
+}
+
+fn collect_perl_files(root: &Path, dir: &Path, files: &mut Vec<FixtureFile>) -> Result<()> {
+    for entry in fs::read_dir(dir).with_context(|| format!("reading {}", dir.display()))? {
+        let entry = entry.with_context(|| format!("reading an entry under {}", dir.display()))?;
+        let path = entry.path();
+        if path.is_dir() {
+            collect_perl_files(root, &path, files)?;
+        } else if is_perl_source(&path) {
+            let relative_path = path
+                .strip_prefix(root)
+                .with_context(|| format!("stripping fixture root from {}", path.display()))?
+                .to_string_lossy()
+                .replace('\\', "/");
+            let content =
+                fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+            files.push(FixtureFile { relative_path, content });
+        }
+    }
+    Ok(())
 }
 
 // ─────────────────────────────── Binary Resolution ───────────────────────────
