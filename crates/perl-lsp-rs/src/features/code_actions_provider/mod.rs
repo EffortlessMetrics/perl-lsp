@@ -51,6 +51,10 @@ impl CodeActionsProvider {
 
     /// Get code actions for a specific diagnostic
     fn get_actions_for_diagnostic(&self, diagnostic: &Diagnostic) -> Vec<CodeAction> {
+        if !source_utils::is_valid_source_range(self.source(), diagnostic.range) {
+            return Vec::new();
+        }
+
         match diagnostic.code.as_deref() {
             Some(c)
                 if c == DiagnosticCode::UndefinedVariable.as_str()
@@ -176,6 +180,48 @@ mod tests {
             tags: vec![],
             suggestion: None,
         }
+    }
+
+    fn provider_covering(range: (usize, usize)) -> CodeActionsProvider {
+        CodeActionsProvider::new(" ".repeat(range.1))
+    }
+
+    #[test]
+    fn test_invalid_diagnostic_ranges_do_not_panic() {
+        let source = "use strict;\nprint $x;".to_string();
+        let provider = CodeActionsProvider::new(source.clone());
+        let invalid_ranges =
+            [(source.len() + 1, source.len() + 3), (8, 3), (usize::MAX, usize::MAX)];
+
+        for range in invalid_ranges {
+            let diagnostic = make_diagnostic(
+                range,
+                DiagnosticSeverity::Error,
+                "undefined-variable",
+                "Variable '$x' is undefined",
+            );
+
+            let actions = provider.get_actions_for_diagnostic(&diagnostic);
+
+            assert!(actions.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_non_char_boundary_diagnostic_ranges_do_not_panic() {
+        let source = "use strict;\nprint \"\u{00e9}\";".to_string();
+        let accent_start = must_some(source.find('\u{00e9}'));
+        let provider = CodeActionsProvider::new(source);
+        let diagnostic = make_diagnostic(
+            (accent_start + 1, accent_start + '\u{00e9}'.len_utf8()),
+            DiagnosticSeverity::Error,
+            "undefined-variable",
+            "Variable '$x' is undefined",
+        );
+
+        let actions = provider.get_actions_for_diagnostic(&diagnostic);
+
+        assert!(actions.is_empty());
     }
 
     // ── Quick-fix: undefined / undeclared variable ──────────────────────
@@ -441,7 +487,7 @@ mod tests {
             "Variable '$foo' shadows outer variable",
         );
 
-        let provider = CodeActionsProvider::new(String::new());
+        let provider = provider_covering(diagnostic.range);
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
 
         assert_eq!(actions.len(), 3);
@@ -459,7 +505,7 @@ mod tests {
             "Lexical variable '$value' shadows an outer declaration",
         );
 
-        let provider = CodeActionsProvider::new(String::new());
+        let provider = provider_covering(diagnostic.range);
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
 
         assert_eq!(actions.len(), 3);
@@ -477,7 +523,7 @@ mod tests {
             "Variable '@items' shadows outer variable",
         );
 
-        let provider = CodeActionsProvider::new(String::new());
+        let provider = provider_covering(diagnostic.range);
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
 
         assert_eq!(actions[0].edit.new_text, "@inner_items");
@@ -494,7 +540,7 @@ mod tests {
             "Variable '%cfg' shadows outer variable",
         );
 
-        let provider = CodeActionsProvider::new(String::new());
+        let provider = provider_covering(diagnostic.range);
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
 
         assert_eq!(actions[0].edit.new_text, "%inner_cfg");
@@ -549,7 +595,7 @@ mod tests {
             "Parameter '$arg' is duplicated",
         );
 
-        let provider = CodeActionsProvider::new(String::new());
+        let provider = provider_covering(diagnostic.range);
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
 
         assert_eq!(actions.len(), 2);
@@ -566,7 +612,7 @@ mod tests {
             "Parameter '@vals' is duplicated",
         );
 
-        let provider = CodeActionsProvider::new(String::new());
+        let provider = provider_covering(diagnostic.range);
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
 
         assert_eq!(actions[1].edit.new_text, "@vals_2");
@@ -581,7 +627,7 @@ mod tests {
             "Parameter '$arg' appears more than once in this signature",
         );
 
-        let provider = CodeActionsProvider::new(String::new());
+        let provider = provider_covering(diagnostic.range);
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
 
         assert_eq!(actions.len(), 2);
@@ -603,7 +649,7 @@ mod tests {
             "Parameter '$name' shadows global variable",
         );
 
-        let provider = CodeActionsProvider::new(String::new());
+        let provider = provider_covering(diagnostic.range);
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
 
         assert_eq!(actions.len(), 3);
@@ -621,7 +667,7 @@ mod tests {
             "Parameter '%opts' shadows global variable",
         );
 
-        let provider = CodeActionsProvider::new(String::new());
+        let provider = provider_covering(diagnostic.range);
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
 
         assert_eq!(actions[0].edit.new_text, "%p_opts");
@@ -638,7 +684,7 @@ mod tests {
             "Parameter '$name' shadows an outer declaration",
         );
 
-        let provider = CodeActionsProvider::new(String::new());
+        let provider = provider_covering(diagnostic.range);
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
 
         assert_eq!(actions.len(), 3);
@@ -812,7 +858,7 @@ mod tests {
             "Parameter '$self' is unused",
         );
 
-        let provider = CodeActionsProvider::new(String::new());
+        let provider = provider_covering(diagnostic.range);
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
 
         assert_eq!(actions.len(), 1);
@@ -829,7 +875,7 @@ mod tests {
             "Parameter '$unused' is never used",
         );
 
-        let provider = CodeActionsProvider::new(String::new());
+        let provider = provider_covering(diagnostic.range);
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
 
         assert_eq!(actions.len(), 1);
@@ -847,7 +893,7 @@ mod tests {
             "Parameter '$ctx' is unused",
         );
 
-        let provider = CodeActionsProvider::new(String::new());
+        let provider = provider_covering(diagnostic.range);
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
 
         assert_eq!(actions.len(), 1);
