@@ -915,6 +915,14 @@ impl<'a> Parser<'a> {
         if name.contains("::") {
             return true;
         }
+
+        // Filter::Simple exports an uppercase FILTER block form:
+        // `FILTER { s/foo/bar/g; };`. Treat only that DSL keyword as a
+        // bare block call so ordinary uppercase constants remain expressions.
+        if name == "FILTER" {
+            return true;
+        }
+
         // Only lowercase/underscore-leading identifiers
         name.starts_with(|c: char| c.is_ascii_lowercase() || c == '_')
     }
