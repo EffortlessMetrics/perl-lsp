@@ -226,9 +226,73 @@ fn test_execute_command_capabilities() -> Result<(), Box<dyn std::error::Error>>
     assert!(command_strs.contains(&"perl.runTestSub"));
     assert!(command_strs.contains(&"perl.runCritic"));
     assert!(command_strs.contains(&"perl.explainProviderDecision"));
+    assert!(command_strs.contains(&"perl.workspaceTrustReport"));
     assert!(command_strs.contains(&"perl.previewSafeDelete"));
     assert!(command_strs.contains(&"perl.safeDeleteSymbol"));
     assert!(command_strs.contains(&"perl.previewPackageRename"));
+
+    Ok(())
+}
+
+#[test]
+fn test_execute_command_workspace_trust_report() -> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = TempDir::new()?;
+    let root_path = temp_dir.path().to_string_lossy().to_string();
+    let server = setup_server(Some(root_path));
+
+    let execute_request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "workspace/executeCommand".to_string(),
+        params: Some(json!({
+            "command": "perl.workspaceTrustReport",
+            "arguments": []
+        })),
+        id: Some(json!(2)),
+    };
+
+    let response = server
+        .handle_request(execute_request)
+        .ok_or("No response from workspace-trust-report command")?;
+    let result = response.result.ok_or("No result in workspace-trust-report response")?;
+
+    assert_eq!(
+        result.get("schema_version").and_then(|value| value.as_str()),
+        Some("workspace_trust_report.v1")
+    );
+    assert_eq!(
+        result.get("command").and_then(|value| value.as_str()),
+        Some("perl.workspaceTrustReport")
+    );
+    assert!(
+        result
+            .get("claim_boundary")
+            .and_then(|value| value.as_str())
+            .is_some_and(|claim| claim.contains("does not scan files")),
+        "report must state its no-scan claim boundary"
+    );
+    assert!(
+        result.get("workspace").and_then(|value| value.as_object()).is_some(),
+        "report should include workspace state"
+    );
+    assert!(
+        result
+            .get("module_resolution")
+            .and_then(|value| value.get("global_workspace_config"))
+            .is_some(),
+        "report should include module-resolution config state"
+    );
+    assert!(
+        result.get("index").and_then(|value| value.as_object()).is_some(),
+        "report should include index state"
+    );
+    assert_eq!(
+        result
+            .get("providers")
+            .and_then(|value| value.get("support_tiers"))
+            .and_then(|value| value.get("completion"))
+            .and_then(|value| value.as_str()),
+        Some("partial-live-with-fallback")
+    );
 
     Ok(())
 }

@@ -221,6 +221,32 @@ fn kind_idx(leg: &TokensLegend, k: &str) -> u32 {
     *leg.map.get(k).unwrap_or(&0)
 }
 
+fn method_declaration_name_offsets(
+    text: &str,
+    node_start: usize,
+    node_end: usize,
+    name: &str,
+) -> Option<(usize, usize)> {
+    let node_text = text.get(node_start..node_end)?;
+    let relative_start = if node_text.starts_with("method") {
+        let after_keyword = node_text.get("method".len()..)?;
+        let whitespace_len = after_keyword.len() - after_keyword.trim_start().len();
+        if whitespace_len == 0 {
+            return None;
+        }
+        "method".len() + whitespace_len
+    } else if node_text.starts_with(name) {
+        0
+    } else {
+        return None;
+    };
+    let relative_end = relative_start.checked_add(name.len())?;
+    if node_text.get(relative_start..relative_end)? != name {
+        return None;
+    }
+    Some((node_start + relative_start, node_start + relative_end))
+}
+
 // ---------------------------------------------------------------------------
 // Heredoc language injection helpers (Issue #2059)
 // ---------------------------------------------------------------------------
@@ -631,9 +657,16 @@ pub fn collect_semantic_tokens(
                 }
                 return true;
             }
-            NodeKind::Method { .. } => {
-                let (sl, sc) = to_pos16(node.location.start);
-                let (el, ec) = to_pos16(node.location.end);
+            NodeKind::Method { name, .. } => {
+                let (start, end) = method_declaration_name_offsets(
+                    text,
+                    node.location.start,
+                    node.location.end,
+                    name,
+                )
+                .unwrap_or((node.location.start, node.location.end));
+                let (sl, sc) = to_pos16(start);
+                let (el, ec) = to_pos16(end);
                 let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
                 if len > 0 {
                     ast_tokens.push((

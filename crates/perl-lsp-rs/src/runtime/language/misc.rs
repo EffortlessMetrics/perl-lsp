@@ -150,6 +150,13 @@ impl LspServer {
         let Some(provider) = live_provider_trace_key(method) else {
             return;
         };
+        if method == "textDocument/semanticTokens/full" && result.is_ok() {
+            // The semantic-token full handler records a provider-specific trace that
+            // distinguishes the source-backed compiler-token live slice from the
+            // parser/HIR fallback. Do not replace it with the generic dispatcher
+            // shape after the handler returns.
+            return;
+        }
 
         let shape = live_provider_result_shape(result);
         let mut receipt = serde_json::Map::new();
@@ -1061,6 +1068,9 @@ impl LspServer {
                         .and_then(|v| v.as_str())
                         .ok_or_else(|| invalid_params("Missing subtest name argument"))?;
                     return self.run_subtest(subtest_name);
+                }
+                "perl.workspaceTrustReport" => {
+                    return self.workspace_trust_report();
                 }
                 "perl.previewSafeDelete" => {
                     let request = arguments
