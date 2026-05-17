@@ -3,7 +3,20 @@
 //! This module centralizes URI helpers that are frequently reused by LSP-facing
 //! crates while keeping filesystem URI conversion concerns in `perl-uri`.
 
+use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use url::Url;
+
+const URI_PATH_KEY_ENCODE_SET: &AsciiSet = &CONTROLS
+    .add(b' ')
+    .add(b'"')
+    .add(b'#')
+    .add(b'%')
+    .add(b'<')
+    .add(b'>')
+    .add(b'?')
+    .add(b'`')
+    .add(b'{')
+    .add(b'}');
 
 /// Normalize a URI to a consistent key for lookups.
 ///
@@ -66,7 +79,7 @@ pub fn uri_key(uri: &str) -> String {
 /// - `C:\path\file.pl`        → `file:///c:/path/file.pl`  (bare path form)
 ///
 /// Returns `None` for any URI that is not one of these legacy forms.
-fn normalize_legacy_windows_uri(uri: &str) -> Option<String> {
+pub(crate) fn normalize_legacy_windows_uri(uri: &str) -> Option<String> {
     let trimmed = uri.trim();
     if trimmed.is_empty() {
         return None;
@@ -115,7 +128,8 @@ fn normalize_unc_path_to_key(path: &str) -> Option<String> {
 
     let server = parts.next()?;
     let share = parts.next()?;
-    let rest = parts.collect::<Vec<_>>().join("/");
+    let share = encode_uri_path_key_component(share);
+    let rest = parts.map(encode_uri_path_key_component).collect::<Vec<_>>().join("/");
 
     if rest.is_empty() {
         Some(format!("file://{server}/{share}"))
@@ -156,7 +170,18 @@ fn normalize_windows_path_to_key(path: &str) -> Option<String> {
 
     // Lowercase the drive letter.
     let drive = normalized[0..1].to_ascii_lowercase();
-    Some(format!("file:///{drive}{}", &normalized[1..]))
+    let path =
+        normalized[3..].split('/').map(encode_uri_path_key_component).collect::<Vec<_>>().join("/");
+
+    if path.is_empty() {
+        Some(format!("file:///{drive}:/"))
+    } else {
+        Some(format!("file:///{drive}:/{path}"))
+    }
+}
+
+fn encode_uri_path_key_component(component: &str) -> String {
+    utf8_percent_encode(component, URI_PATH_KEY_ENCODE_SET).to_string()
 }
 
 /// Check if a URI uses the `file://` scheme.
@@ -222,6 +247,15 @@ mod tests {
     #[test]
     fn preserves_invalid_uri_values() {
         assert_eq!(uri_key("not-a-uri"), "not-a-uri");
+    }
+
+    #[test]
+    fn normalizes_surrounding_whitespace_before_keying() {
+        assert_eq!(
+            uri_key(" \tfile:///C:/Users/dev/trimmed.pl\n"),
+            "file:///c:/Users/dev/trimmed.pl"
+        );
+        assert_eq!(uri_key("  not-a-uri  "), "not-a-uri");
     }
 
     #[test]
@@ -316,6 +350,31 @@ mod tests {
     }
 
     #[test]
+    fn percent_encodes_legacy_windows_drive_key_segments() {
+        assert_eq!(
+            uri_key(r"C:\Users\dev\path with spaces\name#frag?.pl"),
+            "file:///c:/Users/dev/path%20with%20spaces/name%23frag%3F.pl"
+        );
+        assert_eq!(
+            uri_key("file://D:/projects/ümlaut/module%.pm"),
+            "file:///d:/projects/%C3%BCmlaut/module%25.pm"
+        );
+    }
+
+    #[test]
+    fn percent_encodes_legacy_unc_key_segments() {
+        assert_eq!(
+            uri_key(r"\\server\shared docs\folder#1\file?.pl"),
+            "file://server/shared%20docs/folder%231/file%3F.pl"
+        );
+    }
+
+    #[test]
+    fn bare_incomplete_unc_paths_remain_unmodified() {
+        assert_eq!(uri_key(r"\\server"), r"\\server");
+    }
+
+    #[test]
     fn linux_paths_not_treated_as_windows() {
         // Linux absolute paths like `/home/user/file.pl` must not be misidentified
         // as Windows paths (index-1 byte is not `:`).
@@ -351,11 +410,15 @@ mod tests {
     #[test]
     fn extracts_extensions() {
         assert_eq!(uri_extension("file:///tmp/test.pl"), Some("pl"));
+        assert_eq!(uri_extension("file:///tmp/archive.tar.gz"), Some("gz"));
+        assert_eq!(uri_extension("file:///tmp.with.dots/test"), None);
         assert_eq!(uri_extension("file:///tmp/file.pl?query=1"), Some("pl"));
         assert_eq!(uri_extension("file:///tmp/file.pl#L10/permalink"), Some("pl"));
         assert_eq!(uri_extension(r"C:\tmp\file.pl"), Some("pl"));
         assert_eq!(uri_extension(r"C:\Users\.bashrc"), None);
         assert_eq!(uri_extension(r"C:\Users\.gitignore"), None);
+        assert_eq!(uri_extension("file:///tmp/trailing-dot."), None);
+        assert_eq!(uri_extension("file:///tmp/file.pm/"), None);
         assert_eq!(uri_extension("file:///tmp/no-extension"), None);
     }
 }
