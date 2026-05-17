@@ -100,6 +100,22 @@ fn symbol_count(value: Option<&Value>) -> usize {
     }
 }
 
+fn symbol_name(symbol: &Value) -> Option<&str> {
+    symbol.get("name").and_then(Value::as_str)
+}
+
+fn symbol_index_by_name(symbols: &[Value], name: &str) -> Option<usize> {
+    symbols.iter().position(|symbol| symbol_name(symbol) == Some(name))
+}
+
+fn symbol_has_generated_label(symbol: &Value) -> bool {
+    symbol_name(symbol).is_some_and(|name| name.contains("[generated/framework]"))
+        || symbol
+            .get("containerName")
+            .and_then(Value::as_str)
+            .is_some_and(|container| container.contains("[generated/framework]"))
+}
+
 fn receipt_notes(receipt: &Value) -> Result<Vec<&str>, Box<dyn std::error::Error>> {
     let notes = receipt.get("notes").and_then(Value::as_array).ok_or("missing notes")?;
     Ok(notes.iter().filter_map(Value::as_str).collect())
@@ -464,6 +480,114 @@ fn workspace_symbols_runtime_quality_receipt_records_labeled_generated_pilot()
         boundary.contains("labeled source-backed generated/framework pilot symbols only"),
         "claim boundary must describe the narrow generated pilot: {boundary}"
     );
+    Ok(())
+}
+
+#[test]
+fn workspace_symbols_runtime_quality_receipt_records_generated_expansion_rank_noise()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    open_symbol_workspace(&server)?;
+    open_generated_symbol_workspace(&server)?;
+    let params = json!({"query": "name"});
+
+    let receipt = server
+        .test_workspace_symbols_runtime_quality_receipt(Some(params))?
+        .ok_or("missing workspace symbols receipt")?;
+
+    assert_eq!(
+        receipt.get("shadow_state").and_then(Value::as_str),
+        Some("partial_live_source_backed_generated_pilot"),
+        "mixed query must record source-backed plus generated-pilot state"
+    );
+    assert_eq!(
+        receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(false),
+        "mixed source/generated pilot query is part of the narrow live slice"
+    );
+
+    let compiler_receipt = receipt.get("compiler_receipt").ok_or("missing compiler receipt")?;
+    assert_eq!(
+        compiler_receipt.get("source").and_then(Value::as_str),
+        Some("CompilerFact+FrameworkAdapter"),
+        "mixed receipt must identify exact compiler facts plus generated framework anchors"
+    );
+    assert_eq!(
+        compiler_receipt.get("provenance").and_then(Value::as_str),
+        Some("MixedExactAstFrameworkAnchor"),
+        "mixed receipt must keep generated/framework provenance distinct"
+    );
+    assert_eq!(
+        compiler_receipt.get("source_backed_count").and_then(Value::as_u64),
+        Some(1),
+        "query must include the exact source-backed Symbols::Quality::name symbol"
+    );
+    assert_eq!(
+        compiler_receipt.get("generated_pilot_count").and_then(Value::as_u64),
+        Some(1),
+        "query must include the labeled generated/framework display_name symbol"
+    );
+
+    let symbols = receipt
+        .get("live_provider_result")
+        .and_then(Value::as_array)
+        .ok_or("missing live provider result")?;
+    let source_index =
+        symbol_index_by_name(symbols, "name").ok_or("missing source-backed name symbol")?;
+    let generated_index = symbol_index_by_name(symbols, "display_name [generated/framework]")
+        .ok_or("missing labeled generated display_name symbol")?;
+
+    assert!(
+        source_index < generated_index,
+        "source-backed exact symbol must rank ahead of generated/framework noise: {symbols:?}"
+    );
+    assert!(
+        symbols.iter().any(symbol_has_generated_label),
+        "generated/framework pilot result must remain explicitly labeled: {symbols:?}"
+    );
+    assert!(
+        symbols.iter().all(|symbol| symbol_name(symbol) != Some("display_name")),
+        "generated/framework member must not appear as an unlabeled exact symbol: {symbols:?}"
+    );
+
+    let expansion_receipt =
+        receipt.get("gated_expansion_receipt").ok_or("missing gated expansion receipt")?;
+    assert_eq!(
+        expansion_receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(true),
+        "rank/noise receipt must keep broader generated/dynamic/noise expansion gated"
+    );
+    let boundary = expansion_receipt
+        .get("claim_boundary")
+        .and_then(Value::as_str)
+        .ok_or("missing boundary")?;
+    assert!(
+        boundary.contains("remain gated"),
+        "broader generated/dynamic/noise candidates must stay gated: {boundary}"
+    );
+
+    let shadow_receipt = expansion_receipt
+        .get("shadow_receipt")
+        .and_then(Value::as_object)
+        .ok_or("missing shadow receipt")?;
+    let notes = shadow_receipt.get("notes").and_then(Value::as_array).ok_or("missing notes")?;
+    let note_text = notes.iter().filter_map(Value::as_str).collect::<Vec<_>>().join("\n");
+    assert!(note_text.contains("rank_delta=+2"), "note missing rank delta: {note_text}");
+    assert!(note_text.contains("noise_delta=1"), "note missing noise delta: {note_text}");
+    assert!(note_text.contains("generated_labels=1"), "note missing generated count: {note_text}");
+    assert!(
+        note_text.contains("dynamic_boundary_blockers=1"),
+        "note missing dynamic blocker count: {note_text}"
+    );
+    assert!(
+        note_text.contains("stale_fact_blockers=1"),
+        "note missing stale blocker count: {note_text}"
+    );
+    assert!(
+        note_text.contains("no live workspace-symbol behavior change"),
+        "note must keep this receipt proof-only: {note_text}"
+    );
+
     Ok(())
 }
 
