@@ -137,6 +137,17 @@ fn token_count(value: Option<&Value>) -> usize {
         .unwrap_or(0)
 }
 
+fn decoded_token_type_count(
+    decoded: &[DecodedSemanticToken],
+    token_type: &str,
+) -> Result<usize, Box<dyn Error>> {
+    let token_type_index = *crate::semantic_tokens::legend()
+        .map
+        .get(token_type)
+        .ok_or_else(|| format!("semantic token legend must include {token_type}"))?;
+    Ok(decoded.iter().filter(|token| token.token_type == token_type_index).count())
+}
+
 #[derive(Debug, Clone, Copy)]
 struct DecodedSemanticToken {
     line: u32,
@@ -722,6 +733,103 @@ fn semantic_tokens_runtime_quality_receipt_records_project_shaped_compiler_backe
             && notes.contains("no semantic-token output change"),
         "project-shaped notes must record compiler receipt proof without output change; got: {notes}"
     );
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_keeps_broader_compiler_classes_false_exact()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    let catalyst_uri = "file:///workspace/lib/MyApp/Controller/Root.pm";
+    assert!(
+        CATALYST_CONTROLLER_MODULE.contains("${controller}::${action}"),
+        "fixture must keep a dynamic-looking dispatch string under the false-exact proof"
+    );
+    open_document(&server, catalyst_uri, CATALYST_CONTROLLER_MODULE);
+
+    let params = json!({ "textDocument": {"uri": catalyst_uri} });
+    let live_result =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+
+    assert_eq!(
+        receipt.get("live_provider_result"),
+        Some(&live_result),
+        "receipt must capture the exact live semantic-token output while proving false-exact boundaries"
+    );
+    assert_eq!(
+        receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "false-exact receipt must not emit or remove live semantic tokens"
+    );
+
+    let decoded = decode_semantic_tokens(&live_result)?;
+    for token_type in ["namespace", "variable", "function"] {
+        assert!(
+            decoded_token_type_count(&decoded, token_type)? > 0,
+            "fixture must expose live {token_type} tokens before proving broader compiler classes stay gated"
+        );
+    }
+
+    let compiler_receipt = must_some(receipt.get("compiler_receipt").and_then(Value::as_object));
+    assert_eq!(
+        compiler_receipt.get("token_class").and_then(Value::as_str),
+        Some("subroutine_declaration"),
+        "runtime receipt must not broaden compiler-backed token classes beyond the narrow live slice"
+    );
+    assert_eq!(
+        compiler_receipt.get("candidate_count").and_then(Value::as_u64),
+        Some(1),
+        "broader live token classes must not become extra compiler-fact candidates"
+    );
+    assert_eq!(
+        compiler_receipt.get("live_token_match_count").and_then(Value::as_u64),
+        Some(1),
+        "only the source-backed subroutine declaration should match the live token stream"
+    );
+    assert_eq!(
+        compiler_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "compiler receipt must remain output-neutral for broader token classes"
+    );
+
+    let shadow_receipt =
+        must_some(compiler_receipt.get("shadow_receipt").and_then(Value::as_object));
+    let new_result = must_some(shadow_receipt.get("new_result").and_then(Value::as_object));
+    let identities = must_some(new_result.get("identities").and_then(Value::as_array));
+    assert_eq!(
+        identities.len(),
+        1,
+        "shadow receipt must not add namespace, variable, generated, or dynamic compiler identities"
+    );
+    let identity = must_some(identities.first().and_then(Value::as_str));
+    assert!(
+        identity.starts_with("token:function:"),
+        "only the subroutine-declaration compiler identity should be counted; got: {identity}"
+    );
+
+    let traces = must_some(shadow_receipt.get("fact_source_traces").and_then(Value::as_array));
+    assert_eq!(
+        traces.len(),
+        1,
+        "broader class false-exact proof must keep exactly one compiler-fact trace"
+    );
+
+    let claim_boundary = must_some(compiler_receipt.get("claim_boundary").and_then(Value::as_str));
+    assert!(
+        claim_boundary.contains("subroutine-declaration")
+            && claim_boundary.contains("no new semantic-token output"),
+        "compiler receipt must state the narrow class and no-output-change boundary; got: {claim_boundary}"
+    );
+
+    let notes = must_some(receipt.get("notes").and_then(Value::as_str));
+    assert!(
+        notes.contains("compiler_backed_token_classes=1")
+            && notes.contains("no semantic-token output change"),
+        "runtime notes must keep broader compiler token classes out of the live claim; got: {notes}"
+    );
+
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
