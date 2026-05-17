@@ -120,6 +120,21 @@ fn open_generated_workspace_symbol_document(
     Ok(())
 }
 
+#[cfg(feature = "workspace")]
+fn seed_ready_generated_workspace_symbol_index(
+    server: &LspServer,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let coordinator = server.coordinator().ok_or("missing workspace index coordinator")?;
+    let url = url::Url::parse(GENERATED_WORKSPACE_SYMBOL_URI)?;
+    coordinator
+        .index()
+        .index_file(url, GENERATED_WORKSPACE_SYMBOL_DOC.to_string())
+        .map_err(|error| format!("failed to seed generated workspace symbol index: {error}"))?;
+    coordinator
+        .transition_to_ready(coordinator.index().file_count(), coordinator.index().symbol_count());
+    Ok(())
+}
+
 fn open_no_sub_semantic_token_document(
     server: &LspServer,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -373,6 +388,8 @@ fn live_workspace_symbol_generated_pilot_persists_labeled_provider_trace()
     let server = create_server();
     initialize(&server)?;
     open_generated_workspace_symbol_document(&server)?;
+    #[cfg(feature = "workspace")]
+    seed_ready_generated_workspace_symbol_index(&server)?;
 
     response_result(
         server.handle_request(request(
