@@ -237,14 +237,47 @@ impl LspServer {
         let Some(doc) = self.get_document(&documents, uri) else {
             return Vec::new();
         };
-        let Some(candidate) = semantic_token_method_declaration_candidate(&doc.text) else {
-            return Vec::new();
-        };
+        let mut receipts = Vec::new();
+        if let Some(candidate) = semantic_token_method_declaration_candidate(&doc.text) {
+            receipts.push(Self::semantic_tokens_class_specific_expansion_receipt(
+                live_provider_result,
+                candidate,
+                "method_declaration",
+                "method",
+                "matched_existing_live_method_token",
+                "unmatched_existing_live_method_token",
+                "class-specific compiler method-declaration receipt only; token:function remains the only compiler-backed live slice, and method declarations stay shadowed until class-specific approval lands",
+            ));
+        }
+        if let Some(candidate) = semantic_token_class_field_declaration_candidate(&doc.text) {
+            receipts.push(Self::semantic_tokens_class_specific_expansion_receipt(
+                live_provider_result,
+                candidate,
+                "field_declaration",
+                "variable",
+                "matched_existing_live_variable_token",
+                "unmatched_existing_live_variable_token",
+                "class-specific compiler field-declaration receipt only; token:function remains the only compiler-backed live slice, and field declarations stay shadowed until class-specific approval lands",
+            ));
+        }
 
+        receipts
+    }
+
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    fn semantic_tokens_class_specific_expansion_receipt(
+        live_provider_result: Option<&Value>,
+        candidate: crate::semantic_tokens::SemanticTokenShadowCandidate,
+        token_class: &'static str,
+        live_token_type: &'static str,
+        matched_parity_state: &'static str,
+        unmatched_parity_state: &'static str,
+        claim_boundary: &'static str,
+    ) -> Value {
         let live_output_parity = semantic_tokens_live_contains_span(
             live_provider_result,
             candidate.source_span.as_ref(),
-            "method",
+            live_token_type,
         );
         let fallback_state = candidate.fallback_state;
         let candidates = vec![candidate];
@@ -252,17 +285,14 @@ impl LspServer {
         let shadow = crate::semantic_tokens::semantic_token_source_shadow(
             Vec::new(),
             candidates,
-            "method_declaration",
+            token_class,
         );
         let live_token_match_count = if live_output_parity { 1usize } else { 0usize };
-        let parity_state = if live_output_parity {
-            "matched_existing_live_method_token"
-        } else {
-            "unmatched_existing_live_method_token"
-        };
+        let parity_state =
+            if live_output_parity { matched_parity_state } else { unmatched_parity_state };
 
-        vec![json!({
-            "token_class": "method_declaration",
+        json!({
+            "token_class": token_class,
             "source": "CompilerFact",
             "provenance": "SemanticAnalyzer",
             "confidence": "Medium",
@@ -273,7 +303,7 @@ impl LspServer {
             "live_pilot": false,
             "live_output_parity": live_output_parity,
             "parity_state": parity_state,
-            "live_token_type": "method",
+            "live_token_type": live_token_type,
             "live_token_match_count": live_token_match_count,
             "candidate_count": span_report.candidate_count,
             "source_backed_span_count": span_report.source_backed_span_count,
@@ -281,9 +311,9 @@ impl LspServer {
             "invalid_source_span_count": span_report.invalid_source_span_count,
             "no_live_behavior_change": true,
             "no_live_token_output_change": true,
-            "claim_boundary": "class-specific compiler method-declaration receipt only; token:function remains the only compiler-backed live slice, and method declarations stay shadowed until class-specific approval lands",
+            "claim_boundary": claim_boundary,
             "shadow_receipt": shadow.receipt
-        })]
+        })
     }
 
     /// Handle semantic tokens range request
@@ -388,6 +418,54 @@ fn semantic_token_method_declaration_candidate(
 
     Some(crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
         format!("token:method:{name}:compiler"),
+        ProviderFactSourceKind::CompilerFact,
+        Provenance::SemanticAnalyzer,
+        Confidence::Medium,
+        ProviderFactFreshness::Fresh,
+        span,
+    ))
+}
+
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+fn semantic_token_class_field_declaration_candidate(
+    source: &str,
+) -> Option<crate::semantic_tokens::SemanticTokenShadowCandidate> {
+    let marker_start = source.find("field ")?;
+    let mut name_start = marker_start + "field ".len();
+
+    while let Some(ch) = source[name_start..].chars().next() {
+        if ch.is_whitespace() {
+            name_start += ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    let sigil = source[name_start..].chars().next()?;
+    if !matches!(sigil, '$' | '@' | '%') {
+        return None;
+    }
+
+    let mut name_end = name_start + sigil.len_utf8();
+    for (offset, ch) in source[name_end..].char_indices() {
+        if is_subroutine_name_char(ch) {
+            name_end = name_start + sigil.len_utf8() + offset + ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    if name_end == name_start + sigil.len_utf8() {
+        return None;
+    }
+
+    let name = &source[name_start..name_end];
+    let span = crate::semantic_tokens::SemanticTokenShadowSpan::from_byte_offsets(
+        source, name_start, name_end,
+    )?;
+
+    Some(crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
+        format!("token:variable:{name}:compiler"),
         ProviderFactSourceKind::CompilerFact,
         Provenance::SemanticAnalyzer,
         Confidence::Medium,
