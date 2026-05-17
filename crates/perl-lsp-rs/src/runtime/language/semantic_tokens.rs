@@ -281,7 +281,7 @@ impl LspServer {
             "invalid_source_span_count": span_report.invalid_source_span_count,
             "no_live_behavior_change": true,
             "no_live_token_output_change": true,
-            "claim_boundary": "class-specific compiler method-declaration receipt only; token:function remains the only compiler-backed live slice, and method declarations stay shadowed until class-specific live-output parity and approval land",
+            "claim_boundary": "class-specific compiler method-declaration receipt only; token:function remains the only compiler-backed live slice, and method declarations stay shadowed until class-specific approval lands",
             "shadow_receipt": shadow.receipt
         })]
     }
