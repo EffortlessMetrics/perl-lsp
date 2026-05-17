@@ -183,13 +183,16 @@ support claims, real-workspace receipts, and next PRs, see
   refreshes after `didChange`, and emits no new semantic-token output. It does
   not approve broader `token:method:` candidates or other compiler-token
   classes.
-- The semantic-token support review keeps method-call and field-declaration
-  compiler-token receipts receipt-only or shadow-only. They prove span
-  alignment with existing live parser/HIR `method` and `variable` tokens, not a
-  broader compiler-backed semantic-token cutover. The method-declaration and
-  package-declaration scoped proofs close two class cutover steps while keeping
-  broader compiler-token promotion gated by no-token-output-change, false-exact,
-  fallback, and edit-freshness coverage.
+- The field-declaration scoped cutover proof proves a source-backed
+  `field $name` compiler span matches exactly one existing live `variable`
+  token, allows only the `token:field_declaration:` compiler identity class,
+  refreshes after `didChange`, and emits no new semantic-token output. It does
+  not approve broader `token:variable:` candidates or other compiler-token
+  classes. Method-call compiler-token receipts remain receipt-only. The
+  method-declaration, package-declaration, and field-declaration scoped proofs
+  close three class cutover steps while keeping broader compiler-token promotion
+  gated by no-token-output-change, false-exact, fallback, and edit-freshness
+  coverage.
 - The Mojolicious scenario 34 semantic-token receipt records live token counts,
   LSP 5-tuple/span validity, expected source-backed token hits,
   dynamic-boundary string non-promotion, and edit freshness without broadening
@@ -253,7 +256,7 @@ the relevant receipt command.
 | Safe delete | `partial live source-backed pilot / boundary-shadowed broader facts` | `perl.safeDeleteSymbol` can return a source-backed symbol-delete WorkspaceEdit only when the compiler safe-delete plan is allowed, the live source guard resolves an exact high-confidence subroutine definition, and rollback proof restores the original text. Safe-delete receipts still trace dynamic-boundary blockers, framework-generated blockers, stale compiler facts, runtime blocker UX notes, Mojolicious scenario 36 file-delete warning UX, Dancer2 and RealBaseline symbol-level blocker/allowed request shapes, requested RealBaseline `reset` and Dancer2 `to_psgi` delete edits plus inverse rollback proof, and `perl.previewSafeDelete` scoped no-edit UX | Additional project-shaped false-allow and blocker receipts before broader symbol-delete migration |
 | Workspace symbols | `partial live source-backed + generated-label pilot` | Existing workspace index remains the live provider source; non-empty ready-index results can answer live with source-backed/high-confidence traces; source-backed generated/framework members may answer live only as explicitly labeled virtual symbols anchored to framework declarations, not exact generated method bodies; semantic-shadow fixtures still trace fresh compiler, generated, dynamic-boundary, stale fact, and real-workspace quality candidates; runtime quality receipts capture source-backed ready-index counts/results, labeled generated-pilot counts, mixed source-backed/generated rank proof, generated/dynamic false-exact shadow proof plus generated-pilot edit-freshness proof, scoped generated-symbol cutover proof, and generated/no-source/dynamic/stale/fallback-noise gating; Mojolicious scenario 33 records live-provider noise, generated candidate gating, dynamic-boundary-shaped names, and edit freshness; Dancer2 scenario 39, Catalyst scenario 41, and Modern OO scenario 43 add project-shaped generated/dynamic/noise receipts; support review keeps generated-label behavior bounded to virtual source anchors | Additional scoped generated-symbol class proof before broader generated-symbol expansion |
 | Document symbols | `partial live source-backed` | Fresh, high-confidence, source-backed parser-syntax `ExactAst` symbols can drive live `textDocument/documentSymbol` results with fallback retained for astless documents and gated generated/no-source, dynamic-boundary, stale, low-confidence, and ambiguous candidates. Semantic-shadow fixtures still trace explicit syntax, generated, dynamic-boundary, and stale fact candidates; runtime quality receipts capture live provider counts/results plus source-backed compiler traces; Mojolicious scenario 32 records real-workspace symbol quality, generated candidate counts, and edit freshness. | Generated-label proof plus additional real-workspace document-symbol receipts before generated, dynamic, or broader symbol cutover |
-| Semantic tokens | `partial live source-backed token slice + scoped method/package-declaration proof` | Existing parser/token provider remains the broad live source; semantic-shadow fixtures trace parser/HIR, compiler-backed, generated/no-source, dynamic-boundary, stale, and fallback candidates, including a combined unsafe-boundary receipt that produces no semantic-token identities and a broader `token:method:` false-exact receipt; runtime quality receipts capture live token count, shadow state, no-token-output-change proof, synthetic, Catalyst-shaped, and RealBaseline source-backed compiler-fact subroutine-declaration classes matched to existing live `function` token output, live-output parity, edit freshness after `didChange`, the scoped method-declaration proof that allows only source-backed `token:method_declaration:` identities already matching existing live `method` tokens and refreshing after `didChange`, the scoped package-declaration proof that allows only source-backed `token:package_declaration:` identities already matching existing live `namespace` tokens and refreshing after `didChange`, the Catalyst method-call parity receipt that proves a source-backed `$c->stash` compiler span matches exactly one existing live `method` token while remaining receipt-only, the field-declaration parity receipt that proves a source-backed `field $name` compiler span matches exactly one existing live `variable` token while remaining shadow-only, and live-request provider-decision traces remain limited to the matched subroutine-declaration compiler-token slice; Mojolicious scenario 34 and Dancer2 scenario 38 record project-shaped token/span validity and edit freshness; Catalyst scenario 42 records project-shaped false-exact generated/dynamic-looking token boundaries and edit freshness | Additional scoped method-call or field-declaration cutover proof before broader compiler-token promotion |
+| Semantic tokens | `partial live source-backed token slice + scoped method/package/field-declaration proof` | Existing parser/token provider remains the broad live source; semantic-shadow fixtures trace parser/HIR, compiler-backed, generated/no-source, dynamic-boundary, stale, and fallback candidates, including a combined unsafe-boundary receipt that produces no semantic-token identities and a broader `token:method:` false-exact receipt; runtime quality receipts capture live token count, shadow state, no-token-output-change proof, synthetic, Catalyst-shaped, and RealBaseline source-backed compiler-fact subroutine-declaration classes matched to existing live `function` token output, live-output parity, edit freshness after `didChange`, the scoped method-declaration proof that allows only source-backed `token:method_declaration:` identities already matching existing live `method` tokens and refreshing after `didChange`, the scoped package-declaration proof that allows only source-backed `token:package_declaration:` identities already matching existing live `namespace` tokens and refreshing after `didChange`, the Catalyst method-call parity receipt that proves a source-backed `$c->stash` compiler span matches exactly one existing live `method` token while remaining receipt-only, the field-declaration cutover proof that allows only source-backed `token:field_declaration:` identities whose span matches exactly one existing live `variable` token and refreshes after `didChange`, and live-request provider-decision traces remain limited to the matched subroutine-declaration compiler-token slice; Mojolicious scenario 34 and Dancer2 scenario 38 record project-shaped token/span validity and edit freshness; Catalyst scenario 42 records project-shaped false-exact generated/dynamic-looking token boundaries and edit freshness | Additional scoped method-call cutover proof before broader compiler-token promotion |
 
 ## Cutover Rules
 
@@ -274,12 +277,12 @@ the relevant receipt command.
   authorize exact generated method-body locations or generated/no-source,
   dynamic, stale, fallback, partial-index, or ambiguous candidates.
 
-- Semantic-token note, 2026-05-17: method-declaration and package-declaration
-  parity have moved to scoped output-neutral `token:method_declaration:` and
-  `token:package_declaration:` proofs only. Method-call and field-declaration
-  parity receipts do not move class-specific compiler facts into live token
-  output. Broader compiler-backed semantic tokens still require class-specific
-  cutover proof.
+- Semantic-token note, 2026-05-17: method-declaration, package-declaration,
+  and field-declaration parity have moved to scoped output-neutral
+  `token:method_declaration:`, `token:package_declaration:`, and
+  `token:field_declaration:` proofs only. Method-call parity receipts do not
+  move class-specific compiler facts into live token output. Broader
+  compiler-backed semantic tokens still require class-specific cutover proof.
 
 - Do not cut a provider over just because a fact exists.
 - Every provider answer that uses compiler facts should be able to identify
