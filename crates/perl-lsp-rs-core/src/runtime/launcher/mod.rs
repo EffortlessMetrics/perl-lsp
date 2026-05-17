@@ -637,7 +637,9 @@ pub fn help_text() -> String {
     out.push_str("                       Report native formatter compatibility for .perltidyrc\n");
     out.push_str("  --perlcritic-compat-report <profile>\n");
     out.push_str("                       Report native critic compatibility for .perlcriticrc\n");
-    out.push_str("  --completion <shell> Generate shell completions (bash, zsh, fish)\n");
+    out.push_str(
+        "  --completion <shell> Generate shell completions (bash, zsh, fish, powershell)\n",
+    );
     out.push_str("  --help               Show this help message\n");
     out.push('\n');
     out.push_str("Examples:\n");
@@ -709,10 +711,10 @@ const BASH_COMPLETION: &str = r#"_perl_lsp() {
         return 0
     fi
 }
-complete -F _perl_lsp perl-lsp
+complete -F _perl_lsp perllsp perl-lsp
 "#;
 
-const ZSH_COMPLETION: &str = r#"#compdef perl-lsp
+const ZSH_COMPLETION: &str = r#"#compdef perllsp perl-lsp
 
 _perl-lsp() {
     _arguments \
@@ -738,25 +740,27 @@ _perl-lsp() {
 _perl-lsp "$@"
 "#;
 
-const FISH_COMPLETION: &str = r#"complete -c perl-lsp -l stdio -d 'Use stdio for communication (default)'
-complete -c perl-lsp -l mcp -d 'Alias for stdio mode (MCP clients)'
-complete -c perl-lsp -l socket -d 'Use TCP socket for communication'
-complete -c perl-lsp -l port -x -d 'Port to listen on'
-complete -c perl-lsp -l log -d 'Enable logging to stderr'
-complete -c perl-lsp -l health -d 'Quick health check'
-complete -c perl-lsp -l info -d 'Show server info'
-complete -c perl-lsp -l check -F -d 'Validate Perl files'
-complete -c perl-lsp -l check-project -d 'Scan project directory for parsability report'
-complete -c perl-lsp -l version -d 'Show version information'
-complete -c perl-lsp -l features-json -d 'Output features catalog as JSON'
-complete -c perl-lsp -l perltidy-compat-report -F -d 'Report native formatter compatibility for .perltidyrc'
-complete -c perl-lsp -l perlcritic-compat-report -F -d 'Report native critic compatibility for .perlcriticrc'
-complete -c perl-lsp -l feature-profile -x -a 'ga-lock ga prod production all auto' -d 'Set feature profile'
-complete -c perl-lsp -l completion -x -a 'bash zsh fish powershell' -d 'Generate shell completions'
-complete -c perl-lsp -l help -d 'Show help message'
+const FISH_COMPLETION: &str = r#"complete -c perllsp -w perl-lsp
+complete -c perl-lsp -w perllsp
+complete -c perllsp -l stdio -d 'Use stdio for communication (default)'
+complete -c perllsp -l mcp -d 'Alias for stdio mode (MCP clients)'
+complete -c perllsp -l socket -d 'Use TCP socket for communication'
+complete -c perllsp -l port -x -d 'Port to listen on'
+complete -c perllsp -l log -d 'Enable logging to stderr'
+complete -c perllsp -l health -d 'Quick health check'
+complete -c perllsp -l info -d 'Show server info'
+complete -c perllsp -l check -F -d 'Validate Perl files'
+complete -c perllsp -l check-project -d 'Scan project directory for parsability report'
+complete -c perllsp -l version -d 'Show version information'
+complete -c perllsp -l features-json -d 'Output features catalog as JSON'
+complete -c perllsp -l perltidy-compat-report -F -d 'Report native formatter compatibility for .perltidyrc'
+complete -c perllsp -l perlcritic-compat-report -F -d 'Report native critic compatibility for .perlcriticrc'
+complete -c perllsp -l feature-profile -x -a 'ga-lock ga prod production all auto' -d 'Set feature profile'
+complete -c perllsp -l completion -x -a 'bash zsh fish powershell' -d 'Generate shell completions'
+complete -c perllsp -l help -d 'Show help message'
 "#;
 
-const POWERSHELL_COMPLETION: &str = r#"Register-ArgumentCompleter -Native -CommandName perl-lsp -ScriptBlock {
+const POWERSHELL_COMPLETION: &str = r#"Register-ArgumentCompleter -Native -CommandName 'perllsp', 'perl-lsp' -ScriptBlock {
     param($wordToComplete, $commandAst, $cursorPosition)
 
     $options = @(
@@ -894,7 +898,7 @@ fn parse_feature_profile(raw_profile: &str) -> Result<FeatureProfile, LaunchPars
 #[cfg(test)]
 mod tests {
     use super::{DEFAULT_LSP_PORT, LaunchAction, TransportMode, parse_args};
-    use perl_tdd_support::must;
+    use perl_tdd_support::{must, must_some};
 
     #[test]
     fn init_logging_does_not_panic_without_log_file() {
@@ -967,14 +971,35 @@ mod tests {
         for (shell, needle) in
             [("bash", "--mcp"), ("zsh", "--mcp"), ("fish", "-l mcp"), ("powershell", "--mcp")]
         {
-            let script = super::shell_completion(shell)
-                .unwrap_or_else(|| panic!("missing completion for {shell}"));
+            let script = must_some(super::shell_completion(shell));
             assert!(script.contains(needle), "{shell} completion is missing {needle}: {script}");
         }
 
         // Parser side: --mcp must still resolve to stdio (alias semantics).
         let plan = must(parse_args(["perl-lsp", "--mcp"]));
         assert_eq!(plan.config.transport, TransportMode::Stdio);
+    }
+
+    #[test]
+    fn completions_target_public_perllsp_binary() {
+        let help = super::help_text();
+        assert!(
+            help.contains("bash, zsh, fish, powershell"),
+            "help_text must list every supported completion shell: {help}"
+        );
+
+        let bash = must_some(super::shell_completion("bash"));
+        assert!(bash.contains("complete -F _perl_lsp perllsp perl-lsp"));
+
+        let zsh = must_some(super::shell_completion("zsh"));
+        assert!(zsh.contains("#compdef perllsp perl-lsp"));
+
+        let fish = must_some(super::shell_completion("fish"));
+        assert!(fish.contains("complete -c perllsp -l stdio"));
+        assert!(fish.contains("complete -c perl-lsp -w perllsp"));
+
+        let powershell = must_some(super::shell_completion("powershell"));
+        assert!(powershell.contains("-CommandName 'perllsp', 'perl-lsp'"));
     }
 
     #[test]
