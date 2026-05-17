@@ -60,6 +60,14 @@ has display_name => (is => 'rw');
 1;
 "#;
 
+const UPDATED_GENERATED_MODULE: &str = r#"package Symbols::GeneratedPilot;
+use Moo;
+
+has display_alias => (is => 'rw');
+
+1;
+"#;
+
 fn create_server() -> LspServer {
     let output =
         Arc::new(Mutex::new(Box::new(Cursor::new(Vec::new())) as Box<dyn std::io::Write + Send>));
@@ -78,6 +86,24 @@ fn open_document(
             "languageId": "perl",
             "version": 1
         }
+    })))?;
+    Ok(())
+}
+
+fn change_document(
+    server: &LspServer,
+    uri: &str,
+    version: i32,
+    text: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    server.test_handle_did_change(Some(json!({
+        "textDocument": {
+            "uri": uri,
+            "version": version
+        },
+        "contentChanges": [
+            { "text": text }
+        ]
     })))?;
     Ok(())
 }
@@ -692,6 +718,163 @@ fn workspace_symbols_runtime_quality_receipt_records_generated_dynamic_noise_exp
         trace_with_fields(traces, "Fallback", "SearchFallback", "Fallback"),
         "low-confidence fallback/noise trace must stay fallback-only: {traces:?}"
     );
+    Ok(())
+}
+
+#[test]
+fn workspace_symbols_runtime_quality_receipt_blocks_generated_dynamic_false_exact_after_edit()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    open_symbol_workspace(&server)?;
+    open_generated_symbol_workspace(&server)?;
+
+    let initial_receipt = server
+        .test_workspace_symbols_runtime_quality_receipt(Some(json!({"query": "display_name"})))?
+        .ok_or("missing initial workspace symbols receipt")?;
+    let initial_symbols = initial_receipt
+        .get("live_provider_result")
+        .and_then(Value::as_array)
+        .ok_or("missing initial live provider result")?;
+    assert!(
+        initial_symbols
+            .iter()
+            .any(|symbol| { symbol_name(symbol) == Some("display_name [generated/framework]") }),
+        "generated pilot must expose a labeled framework symbol before edit: {initial_symbols:?}"
+    );
+    assert!(
+        initial_symbols.iter().all(|symbol| symbol_name(symbol) != Some("display_name")),
+        "generated pilot must not expose an unlabeled exact generated symbol before edit: {initial_symbols:?}"
+    );
+
+    let compiler_receipt =
+        initial_receipt.get("compiler_receipt").ok_or("missing compiler receipt")?;
+    assert_eq!(
+        compiler_receipt.get("generated_pilot_location_semantics").and_then(Value::as_str),
+        Some("source_anchor_not_exact_generated_body"),
+        "generated workspace symbols must remain source anchors, not exact generated bodies"
+    );
+
+    let expansion_receipt =
+        initial_receipt.get("gated_expansion_receipt").ok_or("missing expansion receipt")?;
+    assert_eq!(
+        expansion_receipt.get("generated_false_exact_candidate_count").and_then(Value::as_u64),
+        Some(1),
+        "generated false-exact candidates must be measured separately"
+    );
+    assert_eq!(
+        expansion_receipt.get("dynamic_false_exact_blocker_count").and_then(Value::as_u64),
+        Some(1),
+        "dynamic false-exact candidates must stay blocked"
+    );
+    assert_eq!(
+        expansion_receipt.get("stale_fact_blocker_count").and_then(Value::as_u64),
+        Some(1),
+        "stale compiler-fact shadow candidates must stay blocked"
+    );
+    assert_eq!(
+        expansion_receipt.get("generated_location_semantics").and_then(Value::as_str),
+        Some("source_anchor_not_exact_generated_body"),
+        "receipt must not imply exact generated method-body locations"
+    );
+    assert_eq!(
+        expansion_receipt.get("edit_freshness_policy").and_then(Value::as_str),
+        Some(
+            "labeled generated workspace-symbol queries must recompute from fresh document state after didChange; stale compiler-fact shadow candidates remain blocked by the gated-expansion receipt"
+        ),
+        "receipt must record the generated-pilot edit-freshness boundary"
+    );
+
+    let shadow_receipt = expansion_receipt
+        .get("shadow_receipt")
+        .and_then(Value::as_object)
+        .ok_or("missing shadow receipt")?;
+    let traces = shadow_receipt
+        .get("fact_source_traces")
+        .and_then(Value::as_array)
+        .ok_or("missing fact-source traces")?;
+    assert!(
+        trace_with_fields(traces, "FrameworkAdapter", "FrameworkSynthesis", "Shadow"),
+        "generated false-exact framework candidate must stay shadowed: {traces:?}"
+    );
+    assert!(
+        trace_with_fields(traces, "DynamicBoundary", "DynamicBoundary", "Blocked"),
+        "dynamic false-exact candidate must stay blocked: {traces:?}"
+    );
+    assert!(
+        trace_with_fields(traces, "CompilerFact", "SemanticAnalyzer", "Blocked"),
+        "stale compiler fact must stay blocked: {traces:?}"
+    );
+    assert!(
+        trace_with_fields(traces, "Fallback", "SearchFallback", "Fallback"),
+        "low-confidence fallback/noise candidate must stay fallback-only: {traces:?}"
+    );
+
+    change_document(&server, GENERATED_MODULE_URI, 2, UPDATED_GENERATED_MODULE)?;
+
+    let stale_receipt = server
+        .test_workspace_symbols_runtime_quality_receipt(Some(json!({"query": "display_name"})))?
+        .ok_or("missing stale-name workspace symbols receipt")?;
+    let stale_symbols = stale_receipt
+        .get("live_provider_result")
+        .and_then(Value::as_array)
+        .ok_or("missing stale-name live provider result")?;
+    assert!(
+        stale_symbols.iter().all(|symbol| {
+            symbol_name(symbol) != Some("display_name")
+                && symbol_name(symbol) != Some("display_name [generated/framework]")
+        }),
+        "post-edit workspace-symbol query must not return stale generated names: {stale_symbols:?}"
+    );
+
+    let updated_receipt = server
+        .test_workspace_symbols_runtime_quality_receipt(Some(json!({"query": "display_alias"})))?
+        .ok_or("missing updated workspace symbols receipt")?;
+    let updated_symbols = updated_receipt
+        .get("live_provider_result")
+        .and_then(Value::as_array)
+        .ok_or("missing updated live provider result")?;
+    assert!(
+        updated_symbols
+            .iter()
+            .any(|symbol| { symbol_name(symbol) == Some("display_alias [generated/framework]") }),
+        "post-edit workspace-symbol query must return the fresh generated pilot name: {updated_symbols:?}"
+    );
+    assert!(
+        updated_symbols.iter().all(|symbol| symbol_name(symbol) != Some("display_alias")),
+        "post-edit generated pilot must still avoid unlabeled exact generated symbols: {updated_symbols:?}"
+    );
+
+    let updated_compiler_receipt =
+        updated_receipt.get("compiler_receipt").ok_or("missing updated compiler receipt")?;
+    assert_eq!(
+        updated_compiler_receipt.get("freshness").and_then(Value::as_str),
+        Some("Fresh"),
+        "post-edit generated pilot receipt must stay fresh"
+    );
+    assert_eq!(
+        updated_compiler_receipt.get("generated_pilot_count").and_then(Value::as_u64),
+        Some(1),
+        "post-edit generated pilot count must reflect the fresh edited symbol"
+    );
+    assert_eq!(
+        updated_compiler_receipt.get("generated_pilot_location_semantics").and_then(Value::as_str),
+        Some("source_anchor_not_exact_generated_body"),
+        "post-edit generated symbol must remain a source-anchor location"
+    );
+
+    let updated_expansion_receipt =
+        updated_receipt.get("gated_expansion_receipt").ok_or("missing updated expansion")?;
+    assert_eq!(
+        updated_expansion_receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(true),
+        "edit-freshness receipt must not broaden generated/dynamic/noise workspace-symbol behavior"
+    );
+    assert_eq!(
+        updated_expansion_receipt.get("stale_fact_blocker_count").and_then(Value::as_u64),
+        Some(1),
+        "post-edit receipt must keep stale shadow facts blocked rather than authorizing stale symbols"
+    );
+
     Ok(())
 }
 
