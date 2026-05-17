@@ -108,7 +108,11 @@ fn invocation_name(args: &[std::ffi::OsString]) -> String {
 }
 
 fn render_help_text(command_name: &str) -> String {
-    help_text().replace("perl-lsp", command_name).replace("perllsp", command_name)
+    let placeholder = "__PERL_LSP_COMMAND_NAME__";
+    help_text()
+        .replace("perl-lsp", placeholder)
+        .replace("perllsp", placeholder)
+        .replace(placeholder, command_name)
 }
 
 fn render_shell_completion(script: &str, command_name: &str) -> String {
@@ -604,6 +608,14 @@ mod tests {
         assert!(rendered.contains("perl-lsp-rs --check lib/MyModule.pm"));
         assert!(!rendered.contains("Usage: perllsp"));
         assert!(!rendered.contains("perllsp --"));
+    }
+
+    #[test]
+    fn render_help_text_does_not_rewrite_inserted_command_name() {
+        let rendered = render_help_text("perllsp-dev");
+
+        assert!(rendered.contains("Usage: perllsp-dev [options]"));
+        assert!(!rendered.contains("perllsp-dev-dev"));
     }
 
     #[test]
