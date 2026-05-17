@@ -19,7 +19,7 @@ pub(crate) fn detects_code_execution(pattern: &str) -> bool {
 pub(crate) fn find_code_execution(pattern: &str, start_pos: usize) -> Option<EmbeddedCodeFinding> {
     let mut cursor = RegexCursor::new(pattern);
     while let Some(ch) = cursor.current() {
-        if cursor.skip_escape() || cursor.skip_char_class() {
+        if cursor.skip_quoted_literal() || cursor.skip_escape() || cursor.skip_char_class() {
             continue;
         }
         if ch == b'(' && cursor.peek(1) == Some(b'?') {
