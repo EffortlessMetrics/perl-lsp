@@ -1668,6 +1668,21 @@ enum NonRustCommand {
         #[arg(long, hide = true)]
         root: Option<PathBuf>,
     },
+
+    /// Find non-Rust repository automation that is plausible to migrate into Rust/xtask.
+    ///
+    /// Writes:
+    ///   - `<output-dir>/non-rust-migration-candidates.md` — human-readable report.
+    ///   - `<output-dir>/non-rust-migration-candidates.json` — machine-readable report.
+    MigrationCandidates {
+        /// Output directory (default: `target/policy`).
+        #[arg(long, default_value = "target/policy")]
+        output_dir: PathBuf,
+
+        /// Override the workspace root used for `git ls-files`. Test seam only.
+        #[arg(long, hide = true)]
+        root: Option<PathBuf>,
+    },
 }
 
 /// CLI-facing grouping argument (mirrors `file_policy::ProposeGroupBy`).
@@ -3241,6 +3256,14 @@ fn main() -> Result<()> {
                 tasks::file_policy::non_rust_propose(
                     &root,
                     ProposeConfig { output_dir, group_by, root_override },
+                )
+            }
+            NonRustCommand::MigrationCandidates { output_dir, root: root_override } => {
+                use tasks::file_policy::MigrationCandidatesConfig;
+                let root = root_override.unwrap_or(utils::project_root()?);
+                tasks::file_policy::non_rust_migration_candidates(
+                    &root,
+                    MigrationCandidatesConfig { output_dir },
                 )
             }
         },

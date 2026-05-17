@@ -16,6 +16,9 @@
 //!   `review_after`, duplicate ids, absolute/backslashed paths, broad globs without
 //!   `broad_glob_reason`).
 //!
+//! - `cargo xtask non-rust migration-candidates` — identify non-Rust automation
+//!   scripts that are plausible next migrations into Rust/xtask.
+//!
 //! The inventory is **read-only** — it never mutates the allowlist.
 //!
 //! Refs: #8174, #8566.
@@ -920,6 +923,238 @@ pub fn check_file_policy(root: &std::path::Path, config: CheckFilePolicyConfig) 
 }
 
 // ---------------------------------------------------------------------------
+// Migration candidate report — `cargo xtask non-rust migration-candidates`
+// ---------------------------------------------------------------------------
+
+/// Configuration for `cargo xtask non-rust migration-candidates`.
+pub struct MigrationCandidatesConfig {
+    /// Output directory (default: `target/policy`).
+    pub output_dir: std::path::PathBuf,
+}
+
+/// A non-Rust automation file that may be worth migrating into Rust/xtask.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MigrationCandidate {
+    /// Repo-relative path.
+    pub path: String,
+    /// Source language or file extension.
+    pub language: String,
+    /// Current policy surface, when allowlisted.
+    pub surface: String,
+    /// Priority bucket for review ordering.
+    pub priority: String,
+    /// Why this file is a Rust/xtask migration candidate.
+    pub reason: String,
+    /// Suggested Rust-home for the migration.
+    pub suggested_target: String,
+}
+
+/// Entry point for `cargo xtask non-rust migration-candidates`.
+pub fn non_rust_migration_candidates(
+    root: &std::path::Path,
+    config: MigrationCandidatesConfig,
+) -> Result<()> {
+    println!("Finding non-Rust automation migration candidates...");
+
+    let records = build_inventory(root)?;
+    let candidates = find_migration_candidates(&records);
+
+    fs::create_dir_all(&config.output_dir)
+        .with_context(|| format!("creating {}", config.output_dir.display()))?;
+
+    let md_path = config.output_dir.join("non-rust-migration-candidates.md");
+    let json_path = config.output_dir.join("non-rust-migration-candidates.json");
+
+    fs::write(&md_path, render_migration_candidates_markdown(&candidates))
+        .with_context(|| format!("writing {}", md_path.display()))?;
+    fs::write(
+        &json_path,
+        serde_json::to_string_pretty(&candidates)
+            .with_context(|| "serialising migration candidates to JSON")?,
+    )
+    .with_context(|| format!("writing {}", json_path.display()))?;
+
+    println!(
+        "Wrote {} candidates to {} and {}",
+        candidates.len(),
+        md_path.display(),
+        json_path.display()
+    );
+    Ok(())
+}
+
+fn find_migration_candidates(records: &[FileRecord]) -> Vec<MigrationCandidate> {
+    let mut candidates: Vec<MigrationCandidate> = records
+        .iter()
+        .filter(|record| record.category != "rust")
+        .filter_map(migration_candidate_for_record)
+        .collect();
+
+    candidates.sort_by(|a, b| {
+        priority_rank(&a.priority)
+            .cmp(&priority_rank(&b.priority))
+            .then_with(|| a.path.cmp(&b.path))
+    });
+    candidates
+}
+
+fn migration_candidate_for_record(record: &FileRecord) -> Option<MigrationCandidate> {
+    if is_low_signal_non_rust(record) {
+        return None;
+    }
+
+    let automation_surface = is_automation_surface(record);
+    let script_language = migration_language(record)?;
+
+    if !automation_surface && !is_repo_automation_path(&record.path) {
+        return None;
+    }
+
+    let priority = candidate_priority(record);
+    let suggested_target = suggested_migration_target(record);
+    let reason = candidate_reason(record, script_language);
+
+    Some(MigrationCandidate {
+        path: record.path.clone(),
+        language: script_language.to_string(),
+        surface: record
+            .entry
+            .as_ref()
+            .map(|entry| entry.surface.clone())
+            .unwrap_or_else(|| "unclassified".to_string()),
+        priority,
+        reason,
+        suggested_target,
+    })
+}
+
+fn migration_language(record: &FileRecord) -> Option<&'static str> {
+    match record.extension.as_str() {
+        "py" => Some("python"),
+        "sh" => Some("shell"),
+        "ps1" => Some("powershell"),
+        "rb" => Some("ruby"),
+        "js" => Some("javascript"),
+        _ => None,
+    }
+}
+
+fn is_low_signal_non_rust(record: &FileRecord) -> bool {
+    let path = record.path.as_str();
+    path.contains("/fixtures/")
+        || path.contains("/testdata/")
+        || path.contains("/tests/fixtures/")
+        || path.starts_with("test_corpus/")
+        || path.starts_with("docs/")
+        || path.starts_with("book/")
+        || path.starts_with("vscode-extension/")
+}
+
+fn is_repo_automation_path(path: &str) -> bool {
+    path.starts_with("scripts/")
+        || path.starts_with("ci/")
+        || path.starts_with("benchmarks/scripts/")
+        || path.starts_with(".ci/scripts/")
+}
+
+fn is_automation_surface(record: &FileRecord) -> bool {
+    record.entry.as_ref().is_some_and(|entry| {
+        entry.surface.contains("ci")
+            || entry.surface.contains("release")
+            || entry.surface.contains("tool")
+            || entry.surface.contains("automation")
+            || entry.classification == "tooling"
+            || entry.kind == "tooling"
+    })
+}
+
+fn candidate_priority(record: &FileRecord) -> String {
+    let path = record.path.as_str();
+    if path.starts_with("ci/") || path.starts_with(".ci/scripts/") {
+        "P0-ci-portability".to_string()
+    } else if path.starts_with("scripts/") {
+        "P1-xtask-core".to_string()
+    } else if path.starts_with("benchmarks/scripts/") {
+        "P2-benchmark-tooling".to_string()
+    } else {
+        "P3-review".to_string()
+    }
+}
+
+fn priority_rank(priority: &str) -> u8 {
+    match priority {
+        "P0-ci-portability" => 0,
+        "P1-xtask-core" => 1,
+        "P2-benchmark-tooling" => 2,
+        _ => 3,
+    }
+}
+
+fn suggested_migration_target(record: &FileRecord) -> String {
+    let path = record.path.as_str();
+    if path.starts_with("benchmarks/scripts/") {
+        "xtask/src/tasks/benchmarks.rs".to_string()
+    } else if path.starts_with("ci/") || path.starts_with(".ci/scripts/") {
+        "xtask/src/tasks/ci_hygiene.rs or a focused ci_* task".to_string()
+    } else if path.starts_with("scripts/gh/") {
+        "xtask/src/tasks/github.rs".to_string()
+    } else if path.starts_with("scripts/forensics/") {
+        "xtask/src/tasks/forensics.rs".to_string()
+    } else {
+        "xtask/src/tasks/<focused_task>.rs".to_string()
+    }
+}
+
+fn candidate_reason(record: &FileRecord, language: &str) -> String {
+    let surface = record
+        .entry
+        .as_ref()
+        .map(|entry| entry.surface.as_str())
+        .unwrap_or("unclassified automation");
+    format!(
+        "{language} automation on the `{surface}` surface; migrate to Rust for typed errors, cross-platform behavior, and reuse of workspace metadata"
+    )
+}
+
+fn render_migration_candidates_markdown(candidates: &[MigrationCandidate]) -> String {
+    let mut by_priority: BTreeMap<&str, usize> = BTreeMap::new();
+    for candidate in candidates {
+        *by_priority.entry(candidate.priority.as_str()).or_insert(0) += 1;
+    }
+
+    let mut out = String::new();
+    out.push_str("# Non-Rust Migration Candidates\n\n");
+    out.push_str(
+        "> Generated by `cargo xtask non-rust migration-candidates`. Do not edit by hand.\n\n",
+    );
+    out.push_str("This report highlights non-Rust repository automation that is plausible to move into the Rust `xtask` core design. It intentionally excludes fixtures, docs, and VS Code extension sources.\n\n");
+
+    out.push_str("## Summary\n\n");
+    out.push_str("| Priority | Candidates |\n|---|---:|\n");
+    for (priority, count) in by_priority {
+        out.push_str(&format!("| `{priority}` | {count} |\n"));
+    }
+    out.push('\n');
+
+    out.push_str("## Candidates\n\n");
+    out.push_str("| Priority | Path | Language | Surface | Suggested target | Reason |\n");
+    out.push_str("|---|---|---|---|---|---|\n");
+    for candidate in candidates {
+        out.push_str(&format!(
+            "| `{}` | `{}` | {} | `{}` | `{}` | {} |\n",
+            candidate.priority,
+            candidate.path,
+            candidate.language,
+            candidate.surface,
+            candidate.suggested_target,
+            candidate.reason
+        ));
+    }
+
+    out
+}
+
+// ---------------------------------------------------------------------------
 // Proposal generator — `cargo xtask non-rust propose`
 // ---------------------------------------------------------------------------
 
@@ -1523,5 +1758,80 @@ mod tests {
         assert!(md.contains("## Summary"), "missing Summary section");
         assert!(md.contains("## Unclassified files"), "missing Unclassified section");
         assert!(md.contains("## Allowlisted non-Rust files"), "missing Allowlisted section");
+    }
+
+    #[test]
+    fn migration_candidates_include_repo_automation() {
+        let mut entry = make_entry("scripts", Some("scripts/**"), None, "tooling");
+        entry.surface = "release/ci".to_string();
+        let records = vec![FileRecord {
+            path: "scripts/check-version-sync.sh".to_string(),
+            extension: "sh".to_string(),
+            category: "tooling".to_string(),
+            allowlisted: true,
+            entry: Some(entry),
+        }];
+
+        let candidates = find_migration_candidates(&records);
+
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].priority, "P1-xtask-core");
+        assert_eq!(candidates[0].suggested_target, "xtask/src/tasks/<focused_task>.rs");
+    }
+
+    #[test]
+    fn migration_candidates_exclude_fixtures_and_extension_sources() {
+        let records = vec![
+            FileRecord {
+                path: "crates/perl-parser/tests/fixtures/generate.py".to_string(),
+                extension: "py".to_string(),
+                category: "test".to_string(),
+                allowlisted: true,
+                entry: Some(make_entry("fixtures", Some("crates/**/fixtures/**"), None, "test")),
+            },
+            FileRecord {
+                path: "vscode-extension/src/downloader.ts".to_string(),
+                extension: "ts".to_string(),
+                category: "production".to_string(),
+                allowlisted: true,
+                entry: Some(make_entry("vscode", Some("vscode-extension/**"), None, "production")),
+            },
+        ];
+
+        let candidates = find_migration_candidates(&records);
+
+        assert!(candidates.is_empty());
+    }
+
+    #[test]
+    fn migration_candidates_sort_by_priority_then_path() {
+        let records = vec![
+            FileRecord {
+                path: "scripts/z.sh".to_string(),
+                extension: "sh".to_string(),
+                category: "unclassified".to_string(),
+                allowlisted: false,
+                entry: None,
+            },
+            FileRecord {
+                path: "ci/a.sh".to_string(),
+                extension: "sh".to_string(),
+                category: "unclassified".to_string(),
+                allowlisted: false,
+                entry: None,
+            },
+            FileRecord {
+                path: "scripts/a.py".to_string(),
+                extension: "py".to_string(),
+                category: "unclassified".to_string(),
+                allowlisted: false,
+                entry: None,
+            },
+        ];
+
+        let candidates = find_migration_candidates(&records);
+        let paths: Vec<&str> = candidates.iter().map(|candidate| candidate.path.as_str()).collect();
+
+        assert_eq!(paths, vec!["ci/a.sh", "scripts/a.py", "scripts/z.sh"]);
     }
 }

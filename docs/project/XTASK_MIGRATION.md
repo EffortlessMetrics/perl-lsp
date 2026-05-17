@@ -44,6 +44,7 @@ xtask subcommands (`cargo xtask <subcommand>`).
 | `parse-rust` | `parse_rust.rs` | 54 | Run pure Rust parser on a file |
 | `parser-matrix` | `parser_matrix.rs` | 338 | Generate `docs/reference/PARSER_FEATURE_MATRIX.md` from parser audit report |
 | `validate-workspace-exclusions` | `validate_workspace_exclusions.rs` | -- | Validate workspace exclusion strategy and dependency invariants |
+| `non-rust migration-candidates` | `file_policy.rs` | -- | Identify non-Rust automation scripts that are good Rust/xtask migration candidates |
 | `release` | `release.rs` | 223 | Prepare a release |
 | `security-hardening` | `hardening.rs` | -- | Production security hardening checks |
 | `release-turnkey` | `release_turnkey.rs` | -- | PR-driven release orchestration |
