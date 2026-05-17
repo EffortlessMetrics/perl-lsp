@@ -467,14 +467,31 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse an optional declaration initializer in argument context.
+    ///
+    /// Uses `parse_assignment()` for any present initializer so that commas are
+    /// treated as argument separators rather than being consumed by the
+    /// comma operator. Missing RHS operands are recovered as `MissingExpression`
+    /// placeholders instead of aborting the surrounding argument/block parse.
+    fn parse_optional_declaration_initializer(&mut self) -> ParseResult<Option<Box<Node>>> {
+        if self.peek_kind() != Some(TokenKind::Assign) {
+            return Ok(None);
+        }
+
+        let assign_token = self.tokens.next()?; // consume =
+        let rhs = if let Some(missing) = self.recover_missing_infix_rhs(assign_token.start) {
+            missing
+        } else {
+            self.parse_assignment()?
+        };
+
+        Ok(Some(Box::new(rhs)))
+    }
+
     /// Parse a variable declaration as a function argument.
     ///
     /// Handles `my $x`, `our @arr`, `local $var`, `state $count` inside
     /// parenthesized argument lists (e.g. `foo(my $x, $y)`).
-    ///
-    /// Uses `parse_assignment()` for any initializer so that commas are
-    /// treated as argument separators rather than being consumed by the
-    /// comma operator.
     fn parse_declaration_arg(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
         let declarator_token = self.consume_token()?;
@@ -496,12 +513,7 @@ impl<'a> Parser<'a> {
             let variable = self.parse_assignment()?;
             self.expect_closing_delimiter(TokenKind::RightParen)?;
 
-            let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
-                self.tokens.next()?; // consume =
-                Some(Box::new(self.parse_assignment()?))
-            } else {
-                None
-            };
+            let initializer = self.parse_optional_declaration_initializer()?;
 
             let end = self.previous_position();
             Ok(Node::new(
@@ -535,12 +547,7 @@ impl<'a> Parser<'a> {
 
             self.expect_closing_delimiter(TokenKind::RightParen)?; // consume )
 
-            let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
-                self.tokens.next()?; // consume =
-                Some(Box::new(self.parse_assignment()?))
-            } else {
-                None
-            };
+            let initializer = self.parse_optional_declaration_initializer()?;
 
             let end = self.previous_position();
             Ok(Node::new(
@@ -560,12 +567,7 @@ impl<'a> Parser<'a> {
                 self.parse_variable()?
             };
 
-            let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
-                self.tokens.next()?; // consume =
-                Some(Box::new(self.parse_assignment()?))
-            } else {
-                None
-            };
+            let initializer = self.parse_optional_declaration_initializer()?;
 
             let end = self.previous_position();
             Ok(Node::new(
