@@ -74,7 +74,7 @@ fn normalize_legacy_windows_uri(uri: &str) -> Option<String> {
 
     // Strip the optional `file://` prefix (two slashes — not three).
     // A three-slash `file:///` form is already canonical and must not match here.
-    let path = if let Some(rest) = trimmed.strip_prefix("file://") {
+    let path = if let Some(rest) = strip_ascii_prefix(trimmed, "file://") {
         // Make sure we are not accidentally handling `file:///...` (three slashes).
         // After stripping `file://`, a canonical URI starts with `/` followed by
         // another `/` (the empty authority makes a third slash), so we skip it.
@@ -87,11 +87,21 @@ fn normalize_legacy_windows_uri(uri: &str) -> Option<String> {
     };
 
     // Accept malformed localhost authorities commonly emitted by some clients,
-    // e.g. `file://localhost/C:\dir\file.pl` and `file://localhost/C:/dir/file.pl`.
-    let path =
-        path.strip_prefix("localhost/").or_else(|| path.strip_prefix("LOCALHOST/")).unwrap_or(path);
+    // e.g. `file://localhost/C:\dir\file.pl`, `FILE://LOCALHOST/C:/dir/file.pl`,
+    // and the backslash-delimited `file://localhost\C:\dir\file.pl` variant.
+    let path = strip_localhost_authority(path).unwrap_or(path);
 
     normalize_windows_path_to_key(path).or_else(|| normalize_unc_path_to_key(path))
+}
+
+fn strip_ascii_prefix<'a>(value: &'a str, prefix: &str) -> Option<&'a str> {
+    let candidate = value.get(..prefix.len())?;
+    if candidate.eq_ignore_ascii_case(prefix) { value.get(prefix.len()..) } else { None }
+}
+
+fn strip_localhost_authority(path: &str) -> Option<&str> {
+    let rest = strip_ascii_prefix(path, "localhost")?;
+    rest.strip_prefix('/').or_else(|| rest.strip_prefix('\\'))
 }
 
 /// Convert a UNC path into canonical `file://server/share/...` key.
@@ -264,6 +274,27 @@ mod tests {
         );
         assert_eq!(
             uri_key(r"file://LOCALHOST/D:\projects\myapp\script.pl"),
+            "file:///d:/projects/myapp/script.pl"
+        );
+    }
+
+    #[test]
+    fn normalizes_case_insensitive_legacy_file_scheme() {
+        assert_eq!(uri_key(r"FILE://C:\Users\dev\example.pl"), "file:///c:/Users/dev/example.pl");
+        assert_eq!(
+            uri_key("File://D:/projects/MyApp/script.pl"),
+            "file:///d:/projects/MyApp/script.pl"
+        );
+    }
+
+    #[test]
+    fn normalizes_backslash_delimited_localhost_authority() {
+        assert_eq!(
+            uri_key(r"file://localhost\C:\Users\dev\example.pl"),
+            "file:///c:/Users/dev/example.pl"
+        );
+        assert_eq!(
+            uri_key(r"FILE://LocalHost\D:\projects\myapp\script.pl"),
             "file:///d:/projects/myapp/script.pl"
         );
     }
