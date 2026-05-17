@@ -45,6 +45,12 @@ and [provider_cutover.md](provider_cutover.md).
   `package_local_live_pilot_blocked` trace; it does not promote broader
   package/compiler-backed rename support.
 
+- Rename note, 2026-05-17: `refactor_runtime_blocker_ux_package_rename_preview_records_dancer2_source_backed_pilot_without_cutover`
+  records a Dancer2 `to_psgi` package-rename preview receipt. It proves a
+  fresh high-confidence compiler-backed definition plan can be explained and
+  rolled back as no-edit preview evidence; it does not return package rename
+  edits or promote broader compiler-backed rename support.
+
 - Workspace-symbol note, 2026-05-17: the generated-label pilot remains bounded.
   Source-backed generated/framework members can appear only as labeled virtual
   entries anchored to framework declarations; this does not promote exact
