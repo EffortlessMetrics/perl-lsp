@@ -76,6 +76,38 @@ covered_by = [
 created = "2026-05-07"
 review_after = "2026-11-07"
 
+[[allow]]
+id = "non-rust-badge-endpoint-docs"
+glob = "badges/README.md"
+kind = "documentation"
+language = "markdown"
+surface = "docs"
+classification = "documentation"
+owner = "docs"
+reason = "Badge endpoint directory documentation explains generated public Shields JSON surfaces."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-13"
+review_after = "2026-08-13"
+
+[[allow]]
+id = "non-rust-generated-badge-endpoints"
+glob = "badges/*.json"
+kind = "generated_badge_endpoint"
+language = "json"
+surface = "docs"
+classification = "generated"
+owner = "release/ci"
+reason = "Generated Shields endpoint JSON for public README badges."
+generated_by = "cargo xtask badges"
+covered_by = [
+  "cargo xtask badges --check",
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-13"
+review_after = "2026-08-13"
+
 # =============================================================================
 # CI / GitHub Actions
 # =============================================================================

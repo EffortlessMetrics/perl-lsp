@@ -137,6 +137,13 @@ enum Commands {
         output: Option<PathBuf>,
     },
 
+    /// Generate public Shields badge endpoint JSON.
+    Badges {
+        /// Check committed endpoints for drift instead of updating badges/.
+        #[arg(long)]
+        check: bool,
+    },
+
     /// Run C vs Rust benchmark comparison
     Compare {
         /// Run only C implementation benchmarks
@@ -2418,6 +2425,7 @@ fn main() -> Result<()> {
         }
         Commands::BenchAlert { format, check } => benchmarks::alert_benchmarks(format, check),
         Commands::BenchAlertTest => benchmarks::test_alert_system(),
+        Commands::Badges { check } => badges::run(check),
         Commands::InjectShaAssets {
             version,
             owner,
