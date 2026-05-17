@@ -227,6 +227,7 @@ fn semantic_token_candidate_class_is_approved(candidate: &SemanticTokenShadowCan
         ProviderFactSourceKind::CompilerFact => {
             candidate.identity.starts_with("token:function:")
                 || candidate.identity.starts_with("token:method_declaration:")
+                || candidate.identity.starts_with("token:package_declaration:")
         }
         _ => false,
     }
@@ -727,6 +728,43 @@ mod tests {
         assert_eq!(
             result.receipt.new_result.identities,
             vec!["token:method_declaration:greet:compiler".to_string()]
+        );
+        assert_eq!(report.candidate_count, 1);
+        assert_eq!(report.source_backed_span_count, 1);
+        assert_eq!(report.missing_source_span_count, 0);
+        assert_eq!(report.invalid_source_span_count, 0);
+
+        let trace = first_trace(&result)?;
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.provenance, Provenance::SemanticAnalyzer);
+        assert_eq!(trace.confidence, Confidence::Medium);
+        assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Primary);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_token_shadow_allows_scoped_package_declaration_class()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let candidate = shadow_candidate(
+            "token:package_declaration:MyApp::Controller::Root:compiler",
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+            Some(valid_span(0, 8, 23)),
+            ProviderFallbackState::Primary,
+        );
+        let report = semantic_token_span_invariant_report(std::slice::from_ref(&candidate));
+        let result =
+            semantic_token_source_shadow(Vec::new(), vec![candidate], "package_declaration");
+
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Improved);
+        assert_eq!(result.receipt.old_result.match_count, 0);
+        assert_eq!(result.receipt.new_result.match_count, 1);
+        assert_eq!(
+            result.receipt.new_result.identities,
+            vec!["token:package_declaration:MyApp::Controller::Root:compiler".to_string()]
         );
         assert_eq!(report.candidate_count, 1);
         assert_eq!(report.source_backed_span_count, 1);
