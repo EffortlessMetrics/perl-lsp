@@ -3,7 +3,20 @@
 //! This module centralizes URI helpers that are frequently reused by LSP-facing
 //! crates while keeping filesystem URI conversion concerns in `perl-uri`.
 
+use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use url::Url;
+
+const URI_PATH_KEY_ENCODE_SET: &AsciiSet = &CONTROLS
+    .add(b' ')
+    .add(b'"')
+    .add(b'#')
+    .add(b'%')
+    .add(b'<')
+    .add(b'>')
+    .add(b'?')
+    .add(b'`')
+    .add(b'{')
+    .add(b'}');
 
 /// Normalize a URI to a consistent key for lookups.
 ///
@@ -105,7 +118,8 @@ fn normalize_unc_path_to_key(path: &str) -> Option<String> {
 
     let server = parts.next()?;
     let share = parts.next()?;
-    let rest = parts.collect::<Vec<_>>().join("/");
+    let share = encode_uri_path_key_component(share);
+    let rest = parts.map(encode_uri_path_key_component).collect::<Vec<_>>().join("/");
 
     if rest.is_empty() {
         Some(format!("file://{server}/{share}"))
@@ -146,7 +160,18 @@ fn normalize_windows_path_to_key(path: &str) -> Option<String> {
 
     // Lowercase the drive letter.
     let drive = normalized[0..1].to_ascii_lowercase();
-    Some(format!("file:///{drive}{}", &normalized[1..]))
+    let path =
+        normalized[3..].split('/').map(encode_uri_path_key_component).collect::<Vec<_>>().join("/");
+
+    if path.is_empty() {
+        Some(format!("file:///{drive}:/"))
+    } else {
+        Some(format!("file:///{drive}:/{path}"))
+    }
+}
+
+fn encode_uri_path_key_component(component: &str) -> String {
+    utf8_percent_encode(component, URI_PATH_KEY_ENCODE_SET).to_string()
 }
 
 /// Check if a URI uses the `file://` scheme.
@@ -281,6 +306,26 @@ mod tests {
         assert_eq!(
             uri_key(r"file://\\server\share\folder\file.pl"),
             "file://server/share/folder/file.pl"
+        );
+    }
+
+    #[test]
+    fn percent_encodes_legacy_windows_drive_key_segments() {
+        assert_eq!(
+            uri_key(r"C:\Users\dev\path with spaces\name#frag?.pl"),
+            "file:///c:/Users/dev/path%20with%20spaces/name%23frag%3F.pl"
+        );
+        assert_eq!(
+            uri_key("file://D:/projects/ümlaut/module%.pm"),
+            "file:///d:/projects/%C3%BCmlaut/module%25.pm"
+        );
+    }
+
+    #[test]
+    fn percent_encodes_legacy_unc_key_segments() {
+        assert_eq!(
+            uri_key(r"\\server\shared docs\folder#1\file?.pl"),
+            "file://server/shared%20docs/folder%231/file%3F.pl"
         );
     }
 
