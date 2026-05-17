@@ -5,39 +5,37 @@ This file is the short planning snapshot for sequencing work. Use
 plan and [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) for
 evidence-backed status and release facts.
 
-## DONE — v0.12.2 through v0.12.8 (consolidated and shipped)
+## DONE — v0.12.x through v0.13.x public-alpha foundation
 
-- Work consolidated and merged 2026-04-02 (~70 PRs): CI gates, error handling, test coverage, parser confidence, performance, distribution, AI inline completion, packaging, announcement polish
-- `v0.12.3` is the live GitHub/editor release line as of 2026-04-09 with binaries, SBOM, SHA256SUMS, VS Code Marketplace, and Open VSX published
-- crates.io intentionally remains on `v0.12.2` while the registry window is deferred
+- The 0.12.x line consolidated parser confidence, diagnostics, refactoring, distribution, AI inline completion, packaging, and announcement polish.
+- The 0.13.x line built public-alpha release-channel confidence and prepared the Rust 1.95 / v0.14.0 train.
+- Historical release receipts belong in [docs/project/status/release.md](docs/project/status/release.md) and [RELEASE_HISTORY.md](RELEASE_HISTORY.md), not this snapshot.
 
-## NOW — post-v0.12.3 / pre-announcement cleanup
+## NOW — v0.14.0 public-alpha patch prep
 
-- License badge fixed (canonical SPDX text in all 126 LICENSE files), GitHub now reports `Apache-2.0` instead of `NOASSERTION`
-- Docker arm64 timeout fix landed (Dockerfile MSRV pin + workflow timeout bump)
-- Dependency triage complete: 7 dependabot PRs merged including 3 majors (eslint v10, actions/cache v5, similar 3.0.0)
-- Keep public guidance explicit about the current channel split: GitHub Releases plus editor marketplaces are on `v0.12.3`; crates.io remains on `v0.12.2`
-- SRP microcrate extractions in flight (anti_pattern_detector, bench_parser) to free the dead `tree-sitter-perl-rs` harness for archival
-- Publishing the modern parsers as `tree-sitter-perl-c` (C tree-sitter FFI) and a new `tree-sitter-perl-rs` (Rust v3 facade with tree-sitter-compatible output)
-- Per-crate publish blockers cleared (perl-lsp-ai-provider unblocked, perl-heredoc-anti-patterns extraction in progress)
+- Treat `v0.14.0` as staged until the release-prep checks and channel receipts close.
+- Keep public install guidance explicit: this is public alpha, not stable/GA.
+- Close release proof across GitHub Releases, crates.io, VS Code Marketplace, Open VSX, Docker, and the owned `effortlessmetrics/tap/perllsp` Homebrew path.
+- Execute the next CI/control-plane wave as small lanes: status streaming, trigger lint, expected-skip/stale-check normalization, reconciler projection, disposition evidence, merge-train receipts, and tokmd advisory calibration.
+- Continue compiler-backed provider work through provenance/freshness receipts, shadow/live comparison, and explicit fallback behavior.
 
-## NEXT — v0.13.0 public alpha announcement
+## NEXT — post-v0.14.0 hardening
 
-- Re-trigger crates.io publish after the SRP extractions and harness archival land
-- Final smoke test across all distribution channels
-- Bump workspace to `0.13.0`
-- Announcement blog post / release notes
+- Resume parser and corpus ratchets from capability-gap packets, not duplicated metric tables.
+- Promote Real Perl Editor Trust v1 workflows when provider dashboards show repeatable user-visible confidence.
+- Harden DAP module-resolution and breakpoint UX while retaining the native+bridge preview stance.
+- Keep install-surface checks and release-history gates current as distribution channels move.
 
-## LATER — beyond v0.13.0
+## LATER — toward v1.0.0
 
-- Stability contract for APIs and advertised wire behavior
-- Performance hardening for larger workspaces
-- Security posture and documentation hardening
-- Path to `v1.0.0`
+- Stability contract for APIs and advertised wire behavior.
+- Performance hardening for larger workspaces.
+- Security posture and documentation hardening.
+- Graduation from public alpha only when channel reliability and editor-trust evidence support it.
 
 ## Working Rules
 
-- Last updated: `2026-04-09`
+- Last updated: `2026-05-16`.
 - Keep “current release line” separate from “next milestone”.
 - Put receipts and computed metrics in [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md), not here.
 - Put detailed milestone criteria in [docs/project/ROADMAP.md](docs/project/ROADMAP.md), not here.

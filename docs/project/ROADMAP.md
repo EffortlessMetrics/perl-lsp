@@ -97,6 +97,34 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - Public install language must say public alpha, not stable/GA
 - Follow-on quality cleanup resumes after the release-channel receipts are closed
 
+## Roadmap Build-Out
+
+The next planning horizon is deliberately split into receipt-backed lanes. Each
+lane below should ship as small PRs with one owner, one acceptance checklist, and
+one verification receipt; do not turn any lane into a broad architecture rewrite.
+
+| Horizon | Lane | Outcome | Acceptance evidence | Primary sources |
+| --- | --- | --- | --- | --- |
+| Release closeout | v0.14.0 channel proof | Public-alpha package, editor, Docker, and Homebrew surfaces are verified before dispatch | Release-prep checks, install receipts, and cross-channel ledger entries | [v0.14.0 notes](../releases/v0.14.0.md), [release status](status/release.md) |
+| Immediate hardening | CI/control-plane Wave 3 | Agents and reviewers can tell whether a PR is merge-ready without parsing raw logs | Streaming `update-status --write`, trigger lint, normalized skip/stale-check states, and reconciler projection receipts | [CI wave execution plan](CI_WAVE_EXECUTION_PLAN.md), [CI hardening status](status/ci_hardening.md) |
+| Provider trust | Compiler-backed provider cutover | Providers prefer compiler facts only where freshness/provenance is high and keep fallback behavior explicit | Shadow/live comparison receipts, provider fact-source traces, and dashboard promotions | [compiler-backed roadmap](COMPILER_BACKED_LSP_ROADMAP.md), [provider cutover status](status/provider_cutover.md) |
+| Editor quality | Real Perl Editor Trust v1 | Common real-project editing workflows become dashboarded, reproducible, and promotable | Per-provider trust-loop receipts plus user-visible before/after scenarios | [Editor Trust Wave](EDITOR_TRUST_WAVE.md), [Real Perl Editor Trust v1](status/real_perl_editor_trust_v1.md) |
+| Language breadth | Parser/corpus ratchet | Parser confidence grows through strict-clean manifests and capability-gap packets, not raw percentage chasing | Updated parser status, corpus manifests, and targeted failure-cluster PRs | [parser status](status/parser.md), [CPAN corpus strategy](CPAN_CORPUS_STRATEGY.md) |
+| Debugger confidence | DAP module and breakpoint UX | Native+bridge preview remains shippable while module path and breakpoint behavior are hardened | DAP smoke tests, launch/attach receipts, and status updates | [DAP status](status/dap.md), [release status](status/release.md) |
+| Post-release polish | Distribution, security, and docs | Public-alpha install guidance stays accurate as channels move, and release docs avoid stale duplicated metrics | Release-history checks, install-surface checks, and links to generated status files | [publishing roadmap](PUBLISHING_ROADMAP.md), [CURRENT_STATUS.md](CURRENT_STATUS.md) |
+
+### Sequencing Rules
+
+1. Finish v0.14.0 release proof before claiming any channel as complete.
+2. Land CI/control-plane slices before increasing automation authority; labels are
+   projected state, not the source of truth.
+3. Promote compiler-backed provider behavior only when shadow/live receipts show
+   high-confidence, fresh facts and an explicit fallback path.
+4. Treat real-project editor trust as the user-facing promotion gate: fixtures can
+   justify implementation, but dashboarded workflows justify release language.
+5. Keep generated metrics in status files and keep this roadmap focused on intent,
+   sequencing, and acceptance evidence.
+
 ## Now / Next / Later
 
 ### Now (v0.14.0 public-alpha patch prep)

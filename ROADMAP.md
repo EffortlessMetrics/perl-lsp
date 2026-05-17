@@ -11,30 +11,33 @@ project docs when you need exact release facts, receipts, or milestone detail.
 
 - Active milestone plan: [docs/project/ROADMAP.md](docs/project/ROADMAP.md)
 - Current truth and receipts: [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md)
+- Release readiness and channel proof: [docs/project/status/release.md](docs/project/status/release.md)
 - Compiler-backed LSP build-out: [docs/project/COMPILER_BACKED_LSP_ROADMAP.md](docs/project/COMPILER_BACKED_LSP_ROADMAP.md)
-- Published release tracking: [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases)
+- Provider cutover dashboard: [docs/project/status/provider_cutover.md](docs/project/status/provider_cutover.md)
+- Real Perl editor trust dashboard: [docs/project/status/real_perl_editor_trust_v1.md](docs/project/status/real_perl_editor_trust_v1.md)
+- Published release tracking: [RELEASE_HISTORY.md](RELEASE_HISTORY.md) and [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases)
 
-## Now (post-v0.12.3 ship / pre-announcement cleanup)
+## Now (v0.14.0 public-alpha patch prep)
 
-- `v0.12.3` shipped to GitHub Releases, VS Code Marketplace, and Open VSX on 2026-04-09
-- crates.io intentionally remains on `0.12.2` while the registry window is still deferred
-- Pre-announcement plumbing: license badge fix, Docker arm64 timeout fix, dependency triage, harness archival, SRP microcrate extractions
-- Distribution channel verification across GitHub Releases, VS Code Marketplace, Open VSX, Docker Hub, and the delayed crates.io line
-- See [docs/project/ROADMAP.md](docs/project/ROADMAP.md) "Now (post-v0.12.3 / pre-v0.13.0)" for the active item list
+- Workspace version line is `v0.14.0`; verify live channel state before claiming a release is published.
+- Release proof is the top lane: close the v0.14.0 prep checks, keep crates.io/editor/Docker/Homebrew receipts wired to the release runbook, and keep public language at public alpha.
+- CI/control-plane work is the next execution lane: streaming status output, CI trigger lint, normalized expected-skip/stale-check states, reconciler label projection, disposition evidence, merge-train receipts, and tokmd advisory calibration.
+- Compiler-backed LSP work continues through fact-source tracing, shadow/live comparison, provider cutover dashboards, and explicit fallback behavior.
+- Real-project editor trust is the user-facing promotion gate for provider changes; fixtures prove implementation, but dashboarded workflows justify release claims.
 
-## Next (v0.13.0 — public alpha announcement)
+## Next (post-v0.14.0)
 
-- 0.12.x line built confidence across parser, diagnostics, refactoring, distribution, AI inline completion
-- Quality cleanup PRs land, version bump to 0.13.0
-- Seamless install story verified across all distribution channels
-- Announcement blog post / release notes
+- Resume parser, corpus, semantic, DAP, and distribution hardening after release-channel receipts close.
+- Run the Editor Trust Wave as one lane with one canonical checklist and one verification receipt.
+- Keep install guidance verified across GitHub Releases, crates.io, VS Code Marketplace, Open VSX, Docker, and the owned Homebrew tap path.
+- Keep release notes concise, receipt-backed, and explicit about public-alpha status.
 
-## Beyond v0.13.0
+## Later (toward v1.0.0)
 
-- Stability contract for APIs and advertised wire behavior
-- Performance hardening for larger workspaces
-- Security posture and documentation hardening
-- Path to `v1.0.0`
+- Stability contract for public APIs and advertised wire behavior.
+- Performance hardening for larger workspaces.
+- Security posture and documentation hardening.
+- A measured path from public alpha to `v1.0.0` based on channel reliability and editor-trust evidence.
 
 ## Update Rules
 
