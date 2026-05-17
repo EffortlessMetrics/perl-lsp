@@ -704,6 +704,7 @@ jobs:
           lexer_tokenization,
           lsp_cancellation_registry,
           lsp_navigation,
+          module_surface,
           parser_integration,
           quote_operators,
           semantic_model,
