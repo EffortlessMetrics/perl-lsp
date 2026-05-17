@@ -177,6 +177,50 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[test]
+    fn earliest_timeout_reports_none_for_empty_pending_set() {
+        let pending = HashMap::new();
+
+        assert!(earliest_timeout(&pending).is_none());
+    }
+
+    #[test]
+    fn earliest_timeout_saturates_when_deadline_already_passed() {
+        let mut pending = HashMap::new();
+        pending.insert("file:///expired.pl".to_string(), Instant::now() - Duration::from_millis(5));
+
+        assert_eq!(earliest_timeout(&pending), Some(Duration::ZERO));
+    }
+
+    #[test]
+    fn fire_expired_batches_only_ready_uris_and_keeps_pending_count() {
+        let pending_count = AtomicUsize::new(0);
+        let batches = Mutex::new(Vec::<Vec<String>>::new());
+        let mut pending = HashMap::new();
+        pending.insert("file:///ready-a.pl".to_string(), Instant::now() - Duration::from_millis(2));
+        pending.insert("file:///ready-b.pl".to_string(), Instant::now() - Duration::from_millis(1));
+        pending.insert("file:///later.pl".to_string(), Instant::now() + Duration::from_secs(30));
+        pending_count.store(pending.len(), Ordering::SeqCst);
+
+        fire_expired(
+            &mut pending,
+            &|mut uris| {
+                uris.sort();
+                batches.lock().push(uris);
+            },
+            &pending_count,
+        );
+
+        assert_eq!(
+            batches.lock().as_slice(),
+            [vec!["file:///ready-a.pl".to_string(), "file:///ready-b.pl".to_string()]]
+        );
+        assert!(!pending.contains_key("file:///ready-a.pl"));
+        assert!(!pending.contains_key("file:///ready-b.pl"));
+        assert!(pending.contains_key("file:///later.pl"));
+        assert_eq!(pending_count.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
     fn file_watcher_debouncer_fires_after_interval() {
         let count = Arc::new(AtomicUsize::new(0));
         let received = Arc::new(Mutex::new(Vec::<String>::new()));
