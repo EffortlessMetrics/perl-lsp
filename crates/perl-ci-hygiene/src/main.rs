@@ -111,6 +111,7 @@ fn run() -> Result<i32> {
         CliCommand::CheckUnsafeProd => cmd_check_unsafe_prod(&repo_root)?,
         CliCommand::CheckUnwrapsModules => cmd_check_unwraps_modules(&repo_root)?,
         CliCommand::CheckUnwrapsProd => cmd_check_unwraps_prod(&repo_root)?,
+        CliCommand::CheckPrintInLib => cmd_check_print_in_lib(&repo_root)?,
         CliCommand::QuickCheck => cmd_quick_check(&repo_root)?,
         CliCommand::TestHeredocs => cmd_test_heredocs(&repo_root)?,
     };
@@ -2942,6 +2943,167 @@ fn cmd_check_unwraps_prod(repo_root: &Path) -> Result<i32> {
         );
         return Ok(1);
     }
+    Ok(0)
+}
+
+/// Returns `true` for paths that should be skipped by the print-in-lib check.
+///
+/// This is a superset of `is_excluded_test_path` with extra exclusions specific
+/// to the print-macro policy:
+///   - `build.rs` files: Cargo build scripts use `println!("cargo:...")` to communicate
+///     with Cargo itself.  This is the standard mechanism; it is not "library output".
+///   - Files whose name starts with `test_` (e.g. `test_parser.rs`): these are test
+///     driver / helper files that live alongside library source but are only invoked
+///     during test runs.
+///   - Test-support crates whose primary purpose is emitting diagnostic output during
+///     test execution (e.g. `perl-lsp-ux-tests`).
+fn is_excluded_for_print_check(path: &Path) -> bool {
+    let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+    // Build scripts may use println!("cargo:...") — standard Cargo convention.
+    if file_name == "build.rs" {
+        return true;
+    }
+
+    // Test-driver files next to src/ but not inside tests/ directory.
+    if file_name.starts_with("test_") && file_name.ends_with(".rs") {
+        return true;
+    }
+
+    // Test-support and UX-test crates use print output intentionally.
+    if path.components().any(|c| c.as_os_str() == OsStr::new("perl-lsp-ux-tests")) {
+        return true;
+    }
+
+    false
+}
+
+/// Returns `true` when a source file should be skipped wholesale by the print-macro check.
+///
+/// Files with a file-level `#![allow(clippy::print_stderr)]` or
+/// `#![allow(clippy::print_stdout)]` attribute have been explicitly opted out of the
+/// rule (e.g. `cli.rs` in the LSP binary crate).  The attribute must appear in the
+/// first 30 lines of the file (the module-doc / crate-doc block).
+fn file_has_print_allow(lines: &[String]) -> bool {
+    for line in lines.iter().take(30) {
+        if line.contains("#![allow(clippy::print_stderr)]")
+            || line.contains("#![allow(clippy::print_stdout)]")
+            || (line.contains("#![allow(") && line.contains("print_"))
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// Enforce that library source files do not contain raw `println!` / `eprintln!` /
+/// `print!` / `eprint!` calls.
+///
+/// Library code should use `tracing::{debug,info,warn,error}` for all diagnostic
+/// output.  Raw print macros:
+///   - Bypass the structured logging pipeline (no span context, no log level filtering).
+///   - Appear in release builds and pollute the LSP's stdout/stderr channels.
+///   - Make test output noisy when tests fail.
+///
+/// Allowed exceptions (enforced at the call site):
+///   - Files with a file-level `#![allow(clippy::print_stderr/stdout)]` attribute (e.g.
+///     `cli.rs` in the LSP binary crate — user-facing output is their product).
+///   - Lines inside `#[cfg(debug_assertions)]` blocks (debug-only guardrails).
+///   - The startup banner in `launcher/mod.rs` (function-level `#[allow]`).
+///   - Any future deliberate exception must add the clippy allow attribute with a
+///     comment explaining why.
+///
+/// This check mirrors the pattern of `cmd_check_unwraps_prod`.  The baseline is stored
+/// in `ci/print_in_lib_baseline.txt`; the check fails if the current count exceeds it.
+fn cmd_check_print_in_lib(repo_root: &Path) -> Result<i32> {
+    let print_re = Regex::new(r"(println!|eprintln!|print!\(|eprint!\()")?;
+    let comment_re = Regex::new(r"^\s*//")?;
+    let debug_attr_re = Regex::new(r"#\[cfg\(debug_assertions\)\]")?;
+    let fn_allow_re =
+        Regex::new(r"#\[allow\(clippy::print_stderr\)|#\[allow\(clippy::print_stdout\)")?;
+    let mut offenders = Vec::new();
+
+    for path in walk_rust_source_files_for_ci_checks(repo_root)? {
+        if is_excluded_for_print_check(&path) {
+            continue;
+        }
+        let rel = display_path(repo_root, &path);
+        let lines = read_lines(&path)?;
+
+        // Skip files that have a file-level opt-out attribute.
+        if file_has_print_allow(&lines) {
+            continue;
+        }
+
+        let test_start = first_cfg_test_line_number(&path).unwrap_or(usize::MAX);
+
+        // Sliding window of the last few non-blank lines seen, used for context checks.
+        // We use this to detect `#[cfg(debug_assertions)]` blocks and function-level
+        // `#[allow(clippy::print_*)]` attributes that precede the print macro.
+        let mut recent: std::collections::VecDeque<String> = std::collections::VecDeque::new();
+        const WINDOW: usize = 6;
+
+        for (index, line) in lines.iter().enumerate() {
+            let line_no = index + 1;
+            if line_no >= test_start {
+                break;
+            }
+            if comment_re.is_match(line) {
+                if !line.trim().is_empty() {
+                    recent.push_back(line.clone());
+                    if recent.len() > WINDOW {
+                        recent.pop_front();
+                    }
+                }
+                continue;
+            }
+
+            if print_re.is_match(line) {
+                // Allow if any line in the recent window is a debug_assertions cfg
+                // (debug-only guardrail blocks) or a function-level allow attribute.
+                let context_allows = recent
+                    .iter()
+                    .any(|ctx| debug_attr_re.is_match(ctx) || fn_allow_re.is_match(ctx));
+                if !context_allows {
+                    offenders.push(format!("{rel}:{line_no}:{}", line.trim()));
+                }
+            }
+
+            if !line.trim().is_empty() {
+                recent.push_back(line.clone());
+                if recent.len() > WINDOW {
+                    recent.pop_front();
+                }
+            }
+        }
+    }
+
+    let baseline = read_usize_file(&repo_root.join("ci/print_in_lib_baseline.txt"), 0)?;
+    println!("print macros in library source: {} (baseline: {})", offenders.len(), baseline);
+    if offenders.len() > baseline {
+        println!("FAIL: print macro count ({}) exceeds baseline ({})", offenders.len(), baseline);
+        println!();
+        println!("Offenders (use tracing::{{debug,info,warn,error}} instead):");
+        for line in offenders.iter().take(20) {
+            println!("  {line}");
+        }
+        println!();
+        println!("If the print macro is intentional, add #[allow(clippy::print_stderr)] or");
+        println!("#[allow(clippy::print_stdout)] with a comment explaining why.");
+        println!(
+            "If you removed print macros, update ci/print_in_lib_baseline.txt with the new lower count."
+        );
+        return Ok(1);
+    }
+
+    if offenders.len() < baseline {
+        println!(
+            "NOTE: count ({}) is below baseline ({}). Update ci/print_in_lib_baseline.txt to ratchet down.",
+            offenders.len(),
+            baseline
+        );
+    }
+
     Ok(0)
 }
 

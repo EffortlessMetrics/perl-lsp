@@ -961,6 +961,7 @@ ci-gate:
     just ci-clippy-gate && \
     just ci-unwrap-panic-ratchet && \
     just ci-unsafe-ratchet && \
+    just ci-print-in-lib-ratchet && \
     just ci-forbid-fatal && \
     just ci-test-lib && \
     just check-all-targets && \
@@ -1089,6 +1090,12 @@ ci-unsafe-ratchet:
     @echo "🛡️  Checking unsafe syntax ratchet..."
     @cargo xtask ci-hygiene check-unsafe-prod
     @echo "✅ Unsafe syntax ratchet passed"
+
+# Print-macro ratchet: no raw println!/eprintln! in library source (use tracing)
+ci-print-in-lib-ratchet:
+    @echo "🖨️  Checking print-macro ratchet (library source only)..."
+    @cargo xtask ci-hygiene check-print-in-lib
+    @echo "✅ Print-macro ratchet passed"
 
 # Forbid fatal constructs gate - catches abort/exit/panic that Clippy misses
 ci-forbid-fatal:
