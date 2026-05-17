@@ -5,39 +5,37 @@ This file is the short planning snapshot for sequencing work. Use
 plan and [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) for
 evidence-backed status and release facts.
 
-## DONE — v0.12.2 through v0.12.8 (consolidated and shipped)
+## DONE — public-alpha confidence line through v0.13.x
 
-- Work consolidated and merged 2026-04-02 (~70 PRs): CI gates, error handling, test coverage, parser confidence, performance, distribution, AI inline completion, packaging, announcement polish
-- `v0.12.3` is the live GitHub/editor release line as of 2026-04-09 with binaries, SBOM, SHA256SUMS, VS Code Marketplace, and Open VSX published
-- crates.io intentionally remains on `v0.12.2` while the registry window is deferred
+- The 0.12.x and 0.13.x lines built confidence across parser, diagnostics, refactoring, distribution, AI inline completion, and release automation.
+- Release history and channel receipts are tracked in [RELEASE_HISTORY.md](RELEASE_HISTORY.md); do not copy those tables here.
+- The current workspace version line has advanced to `v0.14.0` for the Rust 1.95 MSRV public-alpha patch train.
 
-## NOW — post-v0.12.3 / pre-announcement cleanup
+## NOW — v0.14.0 public-alpha patch prep
 
-- License badge fixed (canonical SPDX text in all 126 LICENSE files), GitHub now reports `Apache-2.0` instead of `NOASSERTION`
-- Docker arm64 timeout fix landed (Dockerfile MSRV pin + workflow timeout bump)
-- Dependency triage complete: 7 dependabot PRs merged including 3 majors (eslint v10, actions/cache v5, similar 3.0.0)
-- Keep public guidance explicit about the current channel split: GitHub Releases plus editor marketplaces are on `v0.12.3`; crates.io remains on `v0.12.2`
-- SRP microcrate extractions in flight (anti_pattern_detector, bench_parser) to free the dead `tree-sitter-perl-rs` harness for archival
-- Publishing the modern parsers as `tree-sitter-perl-c` (C tree-sitter FFI) and a new `tree-sitter-perl-rs` (Rust v3 facade with tree-sitter-compatible output)
-- Per-crate publish blockers cleared (perl-lsp-ai-provider unblocked, perl-heredoc-anti-patterns extraction in progress)
+- Complete release-prep verification before dispatching release orchestration.
+- Keep every install surface public-alpha framed: GitHub Release, crates.io, Docker, VS Code Marketplace, Open VSX, and `brew install effortlessmetrics/tap/perllsp`.
+- Treat CI/control-plane work as seven independent lanes: status streaming, trigger lint, check-state normalization, review-receipt label projection, disposition receipts, merge-train receipts, and tokmd advisory stabilization.
+- Preserve the editor-trust north star: no hangs, no confident lies, no silent regressions, edit-time recovery, and measurable improvements.
+- Continue compiler-backed LSP work through fact-source tracing, shadow/provenance receipts, live fallback, and narrow provider cutovers.
 
-## NEXT — v0.13.0 public alpha announcement
+## NEXT — after v0.14.0 channel receipts close
 
-- Re-trigger crates.io publish after the SRP extractions and harness archival land
-- Final smoke test across all distribution channels
-- Bump workspace to `0.13.0`
-- Announcement blog post / release notes
+- Resume parser, corpus, semantic, and DAP hardening without reopening already-landed release prep.
+- Run the editor-trust wave through one canonical harness, fixture schema, scorecard, dashboard, and ratchet path.
+- Unify module-resolution and `@INC` behavior across completion, definition, hover, diagnostics, and workspace symbols.
+- Promote stable scorecard floors gradually: nightly first, label-gated next, merge-blocking only after deterministic proof.
 
-## LATER — beyond v0.13.0
+## LATER — public-alpha maturity toward v1.0.0
 
-- Stability contract for APIs and advertised wire behavior
-- Performance hardening for larger workspaces
-- Security posture and documentation hardening
-- Path to `v1.0.0`
+- Define the stability contract for public APIs and advertised wire behavior.
+- Harden large-workspace performance and memory behavior.
+- Harden security posture, repository trust, and documentation.
+- Keep release and capability claims tied to receipts rather than aspirational wording.
 
 ## Working Rules
 
-- Last updated: `2026-04-09`
+- Last updated: `2026-05-16`.
 - Keep “current release line” separate from “next milestone”.
 - Put receipts and computed metrics in [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md), not here.
 - Put detailed milestone criteria in [docs/project/ROADMAP.md](docs/project/ROADMAP.md), not here.

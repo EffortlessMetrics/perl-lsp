@@ -12,29 +12,33 @@ project docs when you need exact release facts, receipts, or milestone detail.
 - Active milestone plan: [docs/project/ROADMAP.md](docs/project/ROADMAP.md)
 - Current truth and receipts: [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md)
 - Compiler-backed LSP build-out: [docs/project/COMPILER_BACKED_LSP_ROADMAP.md](docs/project/COMPILER_BACKED_LSP_ROADMAP.md)
-- Published release tracking: [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases)
+- Editor-trust wave: [docs/project/EDITOR_TRUST_WAVE.md](docs/project/EDITOR_TRUST_WAVE.md)
+- CI/control-plane wave: [docs/project/CI_WAVE_EXECUTION_PLAN.md](docs/project/CI_WAVE_EXECUTION_PLAN.md)
+- Published release tracking: [RELEASE_HISTORY.md](RELEASE_HISTORY.md)
 
-## Now (post-v0.12.3 ship / pre-announcement cleanup)
+## Now (v0.14.0 public-alpha patch prep)
 
-- `v0.12.3` shipped to GitHub Releases, VS Code Marketplace, and Open VSX on 2026-04-09
-- crates.io intentionally remains on `0.12.2` while the registry window is still deferred
-- Pre-announcement plumbing: license badge fix, Docker arm64 timeout fix, dependency triage, harness archival, SRP microcrate extractions
-- Distribution channel verification across GitHub Releases, VS Code Marketplace, Open VSX, Docker Hub, and the delayed crates.io line
-- See [docs/project/ROADMAP.md](docs/project/ROADMAP.md) "Now (post-v0.12.3 / pre-v0.13.0)" for the active item list
+- Workspace version line is `v0.14.0`; release dispatch remains intentionally pending until prep checks pass.
+- Keep install and release language explicit: public alpha, not stable/GA.
+- Finish release-channel proof for GitHub Release, crates.io, Docker, VS Code Marketplace, Open VSX, and the owned Homebrew tap path.
+- Keep release notes concise and tied to concrete channel receipts.
+- Run the CI/control-plane follow-up wave as independent, reviewable slices instead of a broad redesign.
+- Continue compiler-backed provider cutover only through measured, fact-source-traced proof lanes.
+- See [docs/project/ROADMAP.md](docs/project/ROADMAP.md) for exit criteria, sequencing, and guardrails.
 
-## Next (v0.13.0 — public alpha announcement)
+## Next (post-v0.14.0)
 
-- 0.12.x line built confidence across parser, diagnostics, refactoring, distribution, AI inline completion
-- Quality cleanup PRs land, version bump to 0.13.0
-- Seamless install story verified across all distribution channels
-- Announcement blog post / release notes
+- Resume parser, corpus, semantic, DAP, and editor-trust hardening after the release-channel receipts close.
+- Promote only proven scorecard floors from nightly or label-gated checks into merge-blocking checks.
+- Keep module-resolution and `@INC` behavior consistent across completion, definition, hover, diagnostics, and workspace symbols.
+- Continue compiler-backed LSP cutovers by provider, with live fallback and rollback receipts.
 
-## Beyond v0.13.0
+## Later
 
-- Stability contract for APIs and advertised wire behavior
-- Performance hardening for larger workspaces
-- Security posture and documentation hardening
-- Path to `v1.0.0`
+- Stability contract for APIs and advertised wire behavior.
+- Performance hardening for larger workspaces.
+- Security posture and documentation hardening.
+- Path to `v1.0.0`.
 
 ## Update Rules
 
