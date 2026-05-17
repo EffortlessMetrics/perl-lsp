@@ -13,8 +13,9 @@ use serde_json::{Value, json};
 static HEX_COLOR_RE: Lazy<Option<Regex>> =
     Lazy::new(|| Regex::new(r"#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})\b").ok());
 
-/// Regex for ANSI escape codes: \e[31m, \e[32m, etc.
-static ANSI_COLOR_RE: Lazy<Option<Regex>> = Lazy::new(|| Regex::new(r"\\e\[([0-9;]+)m").ok());
+/// Regex for Perl ANSI escape code literals: \e[31m, \033[31m, \x1b[31m, \x{1b}[31m.
+static ANSI_COLOR_RE: Lazy<Option<Regex>> =
+    Lazy::new(|| Regex::new(r"\\(?:e|033|x1[bB]|x\{1[bB]\})\[([0-9;]+)m").ok());
 
 /// Regex for named CSS colors inside quoted strings
 static NAMED_COLOR_RE: Lazy<Option<Regex>> = Lazy::new(|| {
@@ -139,21 +140,22 @@ fn detect_hex_colors(text: &str) -> Vec<ColorInformation> {
     };
     for (line_num, line) in text.lines().enumerate() {
         for cap in re.captures_iter(line) {
-            if let Some(mat) = cap.get(0) {
-                let hex = &cap[1];
-                if let Some(color) = parse_hex_color(hex) {
-                    // Convert byte offsets to UTF-16 positions (LSP requirement)
-                    let start_char = byte_to_utf16_col(line, mat.start());
-                    let end_char = byte_to_utf16_col(line, mat.end());
+            let (Some(mat), Some(hex_match)) = (cap.get(0), cap.get(1)) else {
+                continue;
+            };
+            let hex = hex_match.as_str();
+            if let Some(color) = parse_hex_color(hex) {
+                // Convert byte offsets to UTF-16 positions (LSP requirement)
+                let start_char = byte_to_utf16_col(line, mat.start());
+                let end_char = byte_to_utf16_col(line, mat.end());
 
-                    colors.push(ColorInformation {
-                        range: WireRange {
-                            start: WirePosition::new(line_num as u32, start_char),
-                            end: WirePosition::new(line_num as u32, end_char),
-                        },
-                        color,
-                    });
-                }
+                colors.push(ColorInformation {
+                    range: WireRange {
+                        start: WirePosition::new(line_num as u32, start_char),
+                        end: WirePosition::new(line_num as u32, end_char),
+                    },
+                    color,
+                });
             }
         }
     }
@@ -214,21 +216,22 @@ fn detect_ansi_colors(text: &str) -> Vec<ColorInformation> {
     };
     for (line_num, line) in text.lines().enumerate() {
         for cap in re.captures_iter(line) {
-            if let Some(mat) = cap.get(0) {
-                let code = &cap[1];
-                if let Some(color) = parse_ansi_color(code) {
-                    // Convert byte offsets to UTF-16 positions (LSP requirement)
-                    let start_char = byte_to_utf16_col(line, mat.start());
-                    let end_char = byte_to_utf16_col(line, mat.end());
+            let (Some(mat), Some(code_match)) = (cap.get(0), cap.get(1)) else {
+                continue;
+            };
+            let code = code_match.as_str();
+            if let Some(color) = parse_ansi_color(code) {
+                // Convert byte offsets to UTF-16 positions (LSP requirement)
+                let start_char = byte_to_utf16_col(line, mat.start());
+                let end_char = byte_to_utf16_col(line, mat.end());
 
-                    colors.push(ColorInformation {
-                        range: WireRange {
-                            start: WirePosition::new(line_num as u32, start_char),
-                            end: WirePosition::new(line_num as u32, end_char),
-                        },
-                        color,
-                    });
-                }
+                colors.push(ColorInformation {
+                    range: WireRange {
+                        start: WirePosition::new(line_num as u32, start_char),
+                        end: WirePosition::new(line_num as u32, end_char),
+                    },
+                    color,
+                });
             }
         }
     }
@@ -636,6 +639,19 @@ mod tests {
         // "世界 " = 3 UTF-16 units before the ANSI sequence.
         assert_eq!(colors[0].range.start.character, 3);
         assert_eq!(colors[0].range.end.character, 9);
+    }
+
+    #[test]
+    fn parser_detect_ansi_colors_from_common_perl_escape_literals() {
+        let text = r"\e[31m \033[32m \x1b[34m \x{1b}[35m";
+        let colors = detect_ansi_colors(text);
+        assert_eq!(colors.len(), 4);
+
+        assert!((colors[0].color.red - 0.8).abs() < 0.01);
+        assert!((colors[1].color.green - 0.8).abs() < 0.01);
+        assert!((colors[2].color.blue - 0.8).abs() < 0.01);
+        assert!((colors[3].color.red - 0.8).abs() < 0.01);
+        assert!((colors[3].color.blue - 0.8).abs() < 0.01);
     }
 
     #[test]
