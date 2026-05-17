@@ -120,6 +120,11 @@ impl LspServer {
         let live_provider_result = self.handle_semantic_tokens(params.clone())?;
         let compiler_receipt = self
             .semantic_tokens_compiler_class_receipt(params.as_ref(), live_provider_result.as_ref());
+        let class_specific_expansion_receipts = self
+            .semantic_tokens_class_specific_expansion_receipts(
+                params.as_ref(),
+                live_provider_result.as_ref(),
+            );
         let live_pilot = compiler_receipt
             .as_ref()
             .and_then(|receipt| receipt.get("live_pilot"))
@@ -127,6 +132,7 @@ impl LspServer {
             .unwrap_or(false);
         let compiler_receipt_count = if compiler_receipt.is_some() { 1usize } else { 0usize };
         let compiler_live_pilot_count = if live_pilot { 1usize } else { 0usize };
+        let class_specific_receipt_count = class_specific_expansion_receipts.len();
         let live_pilot_state = if live_pilot { "partial_live_source_backed" } else { "shadowed" };
 
         // Each LSP semantic token encodes as 5 consecutive u32 values in the flat data array.
@@ -144,6 +150,7 @@ impl LspServer {
             "shadow_state": "shadowed",
             "live_pilot_state": live_pilot_state,
             "compiler_receipt": compiler_receipt,
+            "class_specific_expansion_receipts": class_specific_expansion_receipts,
             "no_live_behavior_change": true,
             "no_live_token_output_change": true,
             "notes": format!(
@@ -151,11 +158,13 @@ impl LspServer {
                  parser/HIR classifications remain live provider; \
                  compiler_backed_token_classes={}; \
                  compiler_live_pilot={}; \
+                 class_specific_compiler_token_classes={}; \
                  compiler-fact candidates are live-pilot only when their source-backed span \
                  already matches the live token stream; \
                  no semantic-token output change",
                 compiler_receipt_count,
-                compiler_live_pilot_count
+                compiler_live_pilot_count,
+                class_specific_receipt_count
             )
         })))
     }
@@ -213,6 +222,68 @@ impl LspServer {
             "claim_boundary": claim_boundary,
             "shadow_receipt": shadow.receipt
         }))
+    }
+
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    fn semantic_tokens_class_specific_expansion_receipts(
+        &self,
+        params: Option<&Value>,
+        live_provider_result: Option<&Value>,
+    ) -> Vec<Value> {
+        let Some(uri) = params.and_then(|params| req_uri(params).ok()) else {
+            return Vec::new();
+        };
+        let documents = self.documents_guard();
+        let Some(doc) = self.get_document(&documents, uri) else {
+            return Vec::new();
+        };
+        let Some(candidate) = semantic_token_method_declaration_candidate(&doc.text) else {
+            return Vec::new();
+        };
+
+        let live_output_parity = semantic_tokens_live_contains_span(
+            live_provider_result,
+            candidate.source_span.as_ref(),
+            "method",
+        );
+        let fallback_state = candidate.fallback_state;
+        let candidates = vec![candidate];
+        let span_report = crate::semantic_tokens::semantic_token_span_invariant_report(&candidates);
+        let shadow = crate::semantic_tokens::semantic_token_source_shadow(
+            Vec::new(),
+            candidates,
+            "method_declaration",
+        );
+        let live_token_match_count = if live_output_parity { 1usize } else { 0usize };
+        let parity_state = if live_output_parity {
+            "matched_existing_live_method_token"
+        } else {
+            "unmatched_existing_live_method_token"
+        };
+
+        vec![json!({
+            "token_class": "method_declaration",
+            "source": "CompilerFact",
+            "provenance": "SemanticAnalyzer",
+            "confidence": "Medium",
+            "freshness": "Fresh",
+            "fallback_state": provider_fallback_state_label(fallback_state),
+            "shadow_state": "shadowed",
+            "approved_for_live_cutover": false,
+            "live_pilot": false,
+            "live_output_parity": live_output_parity,
+            "parity_state": parity_state,
+            "live_token_type": "method",
+            "live_token_match_count": live_token_match_count,
+            "candidate_count": span_report.candidate_count,
+            "source_backed_span_count": span_report.source_backed_span_count,
+            "missing_source_span_count": span_report.missing_source_span_count,
+            "invalid_source_span_count": span_report.invalid_source_span_count,
+            "no_live_behavior_change": true,
+            "no_live_token_output_change": true,
+            "claim_boundary": "class-specific compiler method-declaration receipt only; token:function remains the only compiler-backed live slice, and method declarations stay shadowed until class-specific approval lands",
+            "shadow_receipt": shadow.receipt
+        })]
     }
 
     /// Handle semantic tokens range request
@@ -282,6 +353,41 @@ fn semantic_token_subroutine_declaration_candidate(
 
     Some(crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
         format!("token:function:{name}:compiler"),
+        ProviderFactSourceKind::CompilerFact,
+        Provenance::SemanticAnalyzer,
+        Confidence::Medium,
+        ProviderFactFreshness::Fresh,
+        span,
+    ))
+}
+
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+fn semantic_token_method_declaration_candidate(
+    source: &str,
+) -> Option<crate::semantic_tokens::SemanticTokenShadowCandidate> {
+    let marker_start = source.find("method ")?;
+    let name_start = marker_start + "method ".len();
+    let mut name_end = name_start;
+
+    for (offset, ch) in source[name_start..].char_indices() {
+        if is_subroutine_name_char(ch) {
+            name_end = name_start + offset + ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    if name_end == name_start {
+        return None;
+    }
+
+    let name = &source[name_start..name_end];
+    let span = crate::semantic_tokens::SemanticTokenShadowSpan::from_byte_offsets(
+        source, name_start, name_end,
+    )?;
+
+    Some(crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
+        format!("token:method:{name}:compiler"),
         ProviderFactSourceKind::CompilerFact,
         Provenance::SemanticAnalyzer,
         Confidence::Medium,
