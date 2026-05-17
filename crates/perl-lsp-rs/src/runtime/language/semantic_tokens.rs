@@ -8,9 +8,8 @@ use super::super::*;
 use crate::protocol::req_uri;
 use crate::state::semantic_tokens_deadline;
 #[cfg(any(test, feature = "expose_lsp_test_api"))]
-use perl_semantic_facts::{
-    Confidence, Provenance, ProviderFactFreshness, ProviderFactSourceKind, ProviderFallbackState,
-};
+use perl_semantic_facts::ProviderFallbackState;
+use perl_semantic_facts::{Confidence, Provenance, ProviderFactFreshness, ProviderFactSourceKind};
 use std::time::Instant;
 
 impl LspServer {
@@ -39,18 +38,37 @@ impl LspServer {
                         self.offset_to_pos16(doc, off)
                     });
                 let flat_data: Vec<_> = data.into_iter().flatten().collect();
+                let live_token_count = flat_data.len() / 5;
+                let live_result = json!({ "data": flat_data });
+                let provider_trace = semantic_tokens_live_slice_provider_trace(
+                    &doc.text,
+                    &live_result,
+                    live_token_count,
+                    "textDocument/semanticTokens/full",
+                );
 
                 if start.elapsed() >= deadline {
                     tracing::debug!(
                         elapsed = ?start.elapsed(),
-                        tokens = flat_data.len() / 5, // Each token is 5 u32s
+                        tokens = live_token_count,
                         "SemanticTokens: deadline exceeded"
                     );
                 }
 
-                return Ok(Some(json!({ "data": flat_data })));
+                self.record_provider_decision_trace("semantic_tokens", &provider_trace);
+
+                return Ok(Some(live_result));
             }
         }
+        self.record_provider_decision_trace(
+            "semantic_tokens",
+            &semantic_tokens_fallback_provider_trace(
+                "textDocument/semanticTokens/full",
+                0,
+                "no_ast_available",
+                "no live AST was available; parser/HIR semantic-token provider returned no tokens",
+            ),
+        );
         Ok(Some(json!({ "data": [] })))
     }
 
@@ -238,7 +256,6 @@ impl LspServer {
     }
 }
 
-#[cfg(any(test, feature = "expose_lsp_test_api"))]
 fn semantic_token_subroutine_declaration_candidate(
     source: &str,
 ) -> Option<crate::semantic_tokens::SemanticTokenShadowCandidate> {
@@ -273,7 +290,87 @@ fn semantic_token_subroutine_declaration_candidate(
     ))
 }
 
-#[cfg(any(test, feature = "expose_lsp_test_api"))]
+fn semantic_tokens_live_slice_provider_trace(
+    source: &str,
+    live_provider_result: &Value,
+    live_token_count: usize,
+    provider_action: &'static str,
+) -> Value {
+    let Some(candidate) = semantic_token_subroutine_declaration_candidate(source) else {
+        return semantic_tokens_fallback_provider_trace(
+            provider_action,
+            live_token_count,
+            "no_compiler_token_class",
+            "semantic tokens used the existing parser/HIR provider; no source-backed compiler token class matched this request",
+        );
+    };
+    let live_pilot = semantic_tokens_live_contains_span(
+        Some(live_provider_result),
+        candidate.source_span.as_ref(),
+        "function",
+    );
+
+    if !live_pilot {
+        return semantic_tokens_fallback_provider_trace(
+            provider_action,
+            live_token_count,
+            "compiler_token_span_not_live",
+            "semantic tokens used the existing parser/HIR provider; the compiler token candidate did not match a live token span",
+        );
+    }
+
+    json!({
+        "provider": "semantic_tokens",
+        "provider_action": provider_action,
+        "decision": "acted",
+        "reason": "source_backed_compiler_token_live_slice",
+        "fact_source": "compiler_fact",
+        "confidence": "high",
+        "freshness": "fresh",
+        "source_backed": true,
+        "source_backed_state": "source_backed_subroutine_declaration_live_token_match",
+        "dynamic_boundary": false,
+        "fallback_state": "none",
+        "live_provider_result_kind": "semantic_token_data",
+        "live_provider_result_count": u64::try_from(live_token_count).unwrap_or(u64::MAX),
+        "live_cutover": "partial_live_source_backed_compiler_token",
+        "compiler_token_class": "subroutine_declaration",
+        "live_token_type": "function",
+        "live_token_match_count": 1,
+        "no_live_token_output_change": true,
+        "user_message": "Semantic tokens used the source-backed compiler subroutine-declaration live slice because it matched the existing parser/HIR function token. No new semantic tokens were emitted.",
+        "claim_boundary": "only source-backed compiler subroutine-declaration spans that exactly match existing live parser/HIR function tokens participate; generated/no-source, stale, dynamic-boundary, low-confidence, fallback, and unmatched compiler candidates remain blocked, fallback-only, or shadowed",
+    })
+}
+
+fn semantic_tokens_fallback_provider_trace(
+    provider_action: &'static str,
+    live_token_count: usize,
+    reason: &'static str,
+    user_message: &'static str,
+) -> Value {
+    json!({
+        "provider": "semantic_tokens",
+        "provider_action": provider_action,
+        "decision": "fallback",
+        "reason": reason,
+        "fact_source": "parser_syntax",
+        "confidence": "medium",
+        "freshness": "fresh",
+        "source_backed": false,
+        "source_backed_state": "compiler_token_live_slice_not_proven",
+        "dynamic_boundary": false,
+        "fallback_state": "legacy_provider",
+        "live_provider_result_kind": "semantic_token_data",
+        "live_provider_result_count": u64::try_from(live_token_count).unwrap_or(u64::MAX),
+        "live_cutover": "fallback_only",
+        "compiler_token_class": "subroutine_declaration",
+        "no_live_token_output_change": true,
+        "user_message": user_message,
+        "claim_boundary": "parser/HIR semantic tokens remain the fallback for requests without a source-backed compiler token span matching existing live output; no compiler-backed token expansion",
+    })
+}
+
 fn semantic_tokens_live_contains_span(
     live_provider_result: Option<&Value>,
     source_span: Option<&crate::semantic_tokens::SemanticTokenShadowSpan>,
@@ -329,13 +426,11 @@ fn semantic_tokens_live_contains_span(
     false
 }
 
-#[cfg(any(test, feature = "expose_lsp_test_api"))]
 fn semantic_token_type_index(token_type: &str) -> Option<u32> {
     let legend = crate::semantic_tokens::legend();
     legend.map.get(token_type).copied()
 }
 
-#[cfg(any(test, feature = "expose_lsp_test_api"))]
 fn semantic_token_value_u32(value: &Value) -> Option<u32> {
     value.as_u64().and_then(|value| u32::try_from(value).ok())
 }
@@ -352,7 +447,6 @@ fn provider_fallback_state_label(state: ProviderFallbackState) -> &'static str {
     }
 }
 
-#[cfg(any(test, feature = "expose_lsp_test_api"))]
 fn is_subroutine_name_char(ch: char) -> bool {
     ch.is_ascii_alphanumeric() || ch == '_' || ch == ':'
 }
