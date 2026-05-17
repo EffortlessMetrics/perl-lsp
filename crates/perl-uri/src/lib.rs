@@ -252,6 +252,7 @@ fn mojibake_marker_count(text: &str) -> usize {
 /// - Valid URIs are parsed and re-serialized
 /// - File paths are converted to `file://` URIs
 /// - Malformed `file://` URIs are reconstructed
+/// - Legacy Windows `file://C:\...` forms are canonicalized to `file:///c:/...`
 /// - Special URIs (e.g., `untitled:`) are preserved as-is
 ///
 /// # Examples
@@ -279,6 +280,10 @@ fn mojibake_marker_count(text: &str) -> usize {
 /// On `wasm32`, only URI parsing is performed without filesystem operations.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn normalize_uri(uri: &str) -> String {
+    if let Some(normalized) = classify::normalize_legacy_windows_uri(uri) {
+        return normalized;
+    }
+
     let path = std::path::Path::new(uri);
 
     // Raw absolute filesystem paths should normalize to file:// URIs before
@@ -328,6 +333,10 @@ pub fn normalize_uri(uri: &str) -> String {
 /// Normalize a URI to a consistent form (wasm32 version - no filesystem).
 #[cfg(target_arch = "wasm32")]
 pub fn normalize_uri(uri: &str) -> String {
+    if let Some(normalized) = classify::normalize_legacy_windows_uri(uri) {
+        return normalized;
+    }
+
     // On wasm32, just try to parse as URL or return as-is
     if let Ok(url) = Url::parse(uri) { url.to_string() } else { uri.to_string() }
 }

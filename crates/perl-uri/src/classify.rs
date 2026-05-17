@@ -66,7 +66,7 @@ pub fn uri_key(uri: &str) -> String {
 /// - `C:\path\file.pl`        → `file:///c:/path/file.pl`  (bare path form)
 ///
 /// Returns `None` for any URI that is not one of these legacy forms.
-fn normalize_legacy_windows_uri(uri: &str) -> Option<String> {
+pub(crate) fn normalize_legacy_windows_uri(uri: &str) -> Option<String> {
     let trimmed = uri.trim();
     if trimmed.is_empty() {
         return None;
