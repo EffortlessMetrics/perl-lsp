@@ -1294,6 +1294,139 @@ profile = "recommended"
     }
 
     #[test]
+    fn server_config_update_from_value_applies_lsp_settings() -> TestResult {
+        let mut config = ServerConfig::default();
+
+        config.update_from_value(&serde_json::json!({
+            "inlayHints": {
+                "enabled": false,
+                "parameterHints": false,
+                "typeHints": false,
+                "chainedHints": true,
+                "maxLength": 12
+            },
+            "testRunner": {
+                "enabled": false,
+                "command": "prove",
+                "args": ["-lv", 42, "t/unit.t"],
+                "timeout": 12_345
+            },
+            "telemetry": {
+                "enabled": true
+            },
+            "perlcritic": {
+                "enabled": false,
+                "severity": 99,
+                "profile": "  .perlcriticrc  ",
+                "theme": "  core && !pbp  "
+            }
+        }));
+
+        assert!(!config.inlay_hints_enabled);
+        assert!(!config.inlay_hints_parameter_hints);
+        assert!(!config.inlay_hints_type_hints);
+        assert!(config.inlay_hints_chained_hints);
+        assert_eq!(config.inlay_hints_max_length, 12);
+        assert!(!config.test_runner_enabled);
+        assert_eq!(config.test_runner_command, "prove");
+        assert_eq!(config.test_runner_args, vec!["-lv".to_string(), "t/unit.t".to_string()]);
+        assert_eq!(config.test_runner_timeout, 12_345);
+        assert!(config.telemetry_enabled);
+        assert!(!config.perlcritic_enabled);
+        assert_eq!(config.perlcritic_severity, 5);
+        assert_eq!(config.perlcritic_profile.as_deref(), Some(".perlcriticrc"));
+        assert_eq!(config.perlcritic_theme.as_deref(), Some("core && !pbp"));
+
+        config.update_from_value(&serde_json::json!({
+            "perlcritic": {
+                "severity": 0,
+                "profile": "   ",
+                "theme": ""
+            }
+        }));
+
+        assert_eq!(config.perlcritic_severity, 1);
+        assert!(config.perlcritic_profile.is_none());
+        assert!(config.perlcritic_theme.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn server_config_update_from_value_applies_formatting_and_ai_settings() -> TestResult {
+        let mut config = ServerConfig::default();
+
+        config.update_from_value(&serde_json::json!({
+            "formatting": {
+                "enabled": false,
+                "engine": "perltidy_compat",
+                "profile": "  .perltidyrc  ",
+                "maximumLineLength": 120,
+                "indentColumns": 2,
+                "tabs": true,
+                "openingBraceOnNewLine": true,
+                "cuddledElse": false,
+                "spaceAfterKeyword": false,
+                "addTrailingCommas": true,
+                "verticalAlignment": false,
+                "blockCommentIndentation": 1,
+                "extraArgs": ["-noll", false, "-bar"],
+                "timeoutSecs": 7
+            },
+            "aiCompletion": {
+                "enabled": true,
+                "provider": "local",
+                "endpoint": "http://127.0.0.1:11434/v1",
+                "model": "codellama",
+                "apiKeyEnv": "LOCAL_AI_KEY",
+                "timeoutMs": 2500,
+                "maxOutputTokens": 128,
+                "rateLimitRps": 2.5,
+                "maxInflight": 3,
+                "fallback": false,
+                "streaming": {
+                    "enabled": false,
+                    "updateDebounceMs": 125
+                }
+            }
+        }));
+
+        assert!(!config.perltidy_enabled);
+        assert_eq!(config.formatting_engine, FormatterMode::Compat);
+        assert_eq!(config.perltidy_profile.as_deref(), Some(".perltidyrc"));
+        assert_eq!(config.perltidy_maximum_line_length, Some(120));
+        assert_eq!(config.perltidy_indent_columns, Some(2));
+        assert_eq!(config.perltidy_tabs, Some(true));
+        assert_eq!(config.perltidy_opening_brace_on_new_line, Some(true));
+        assert_eq!(config.perltidy_cuddled_else, Some(false));
+        assert_eq!(config.perltidy_space_after_keyword, Some(false));
+        assert_eq!(config.perltidy_add_trailing_commas, Some(true));
+        assert_eq!(config.perltidy_vertical_alignment, Some(false));
+        assert_eq!(config.perltidy_block_comment_indentation, Some(1));
+        assert_eq!(config.perltidy_extra_args, vec!["-noll".to_string(), "-bar".to_string()]);
+        assert_eq!(config.perltidy_timeout_secs, 7);
+        assert!(config.ai_completion.enabled);
+        assert_eq!(config.ai_completion.provider, "local");
+        assert_eq!(config.ai_completion.endpoint, "http://127.0.0.1:11434/v1");
+        assert_eq!(config.ai_completion.model, "codellama");
+        assert_eq!(config.ai_completion.api_key_env, "LOCAL_AI_KEY");
+        assert_eq!(config.ai_completion.timeout_ms, 2500);
+        assert_eq!(config.ai_completion.max_output_tokens, 128);
+        assert_eq!(config.ai_completion.rate_limit_rps, 2.5);
+        assert_eq!(config.ai_completion.max_inflight, 3);
+        assert!(!config.ai_completion.fallback);
+        assert!(!config.ai_completion.streaming.enabled);
+        assert_eq!(config.ai_completion.streaming.update_debounce_ms, 125);
+
+        config.update_from_value(&serde_json::json!({
+            "formatting": {
+                "profile": ""
+            }
+        }));
+        assert!(config.perltidy_profile.is_none());
+        Ok(())
+    }
+
+    #[test]
     fn server_config_accepts_formatter_engine_aliases() {
         let mut config = ServerConfig::default();
 
