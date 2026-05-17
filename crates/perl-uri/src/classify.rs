@@ -215,6 +215,15 @@ mod tests {
     }
 
     #[test]
+    fn normalizes_surrounding_whitespace_before_keying() {
+        assert_eq!(
+            uri_key(" \tfile:///C:/Users/dev/trimmed.pl\n"),
+            "file:///c:/Users/dev/trimmed.pl"
+        );
+        assert_eq!(uri_key("  not-a-uri  "), "not-a-uri");
+    }
+
+    #[test]
     fn normalizes_legacy_notepadpp_file_uri_two_slashes() {
         // Notepad++ LSP client emits `file://C:\...` (two slashes, backslashes).
         assert_eq!(uri_key(r"file://C:\Users\dev\example.pl"), "file:///c:/Users/dev/example.pl");
@@ -285,6 +294,11 @@ mod tests {
     }
 
     #[test]
+    fn bare_incomplete_unc_paths_remain_unmodified() {
+        assert_eq!(uri_key(r"\\server"), r"\\server");
+    }
+
+    #[test]
     fn linux_paths_not_treated_as_windows() {
         // Linux absolute paths like `/home/user/file.pl` must not be misidentified
         // as Windows paths (index-1 byte is not `:`).
@@ -320,11 +334,15 @@ mod tests {
     #[test]
     fn extracts_extensions() {
         assert_eq!(uri_extension("file:///tmp/test.pl"), Some("pl"));
+        assert_eq!(uri_extension("file:///tmp/archive.tar.gz"), Some("gz"));
+        assert_eq!(uri_extension("file:///tmp.with.dots/test"), None);
         assert_eq!(uri_extension("file:///tmp/file.pl?query=1"), Some("pl"));
         assert_eq!(uri_extension("file:///tmp/file.pl#L10/permalink"), Some("pl"));
         assert_eq!(uri_extension(r"C:\tmp\file.pl"), Some("pl"));
         assert_eq!(uri_extension(r"C:\Users\.bashrc"), None);
         assert_eq!(uri_extension(r"C:\Users\.gitignore"), None);
+        assert_eq!(uri_extension("file:///tmp/trailing-dot."), None);
+        assert_eq!(uri_extension("file:///tmp/file.pm/"), None);
         assert_eq!(uri_extension("file:///tmp/no-extension"), None);
     }
 }
