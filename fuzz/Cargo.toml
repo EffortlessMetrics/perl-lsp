@@ -98,6 +98,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "structured_perl_programs"
+path = "fuzz_targets/structured_perl_programs.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "symbol_query_ranking"
 path = "fuzz_targets/symbol_query_ranking.rs"
 test = false

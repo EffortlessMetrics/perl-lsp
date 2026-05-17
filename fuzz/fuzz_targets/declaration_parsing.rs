@@ -10,11 +10,7 @@ fn bounded_utf8_lossy(data: &[u8]) -> std::borrow::Cow<'_, str> {
         return std::borrow::Cow::Borrowed("");
     }
 
-    let capped = if data.len() <= MAX_INPUT_BYTES {
-        data
-    } else {
-        &data[..MAX_INPUT_BYTES]
-    };
+    let capped = if data.len() <= MAX_INPUT_BYTES { data } else { &data[..MAX_INPUT_BYTES] };
 
     String::from_utf8_lossy(capped)
 }
@@ -37,8 +33,8 @@ fuzz_target!(|data: &[u8]| {
         format!("require {short};"),
         format!("use {short} qw({short});"),
         format!("no {short} qw({short});"),
-        format!("use {short} ({short}, \\\${short}, \%{short});"),
-        format!("no {short} ({short}, \\\@{short}, \&{short});"),
+        format!("use {short} ({short}, \\${short}, \\%{short});"),
+        format!("no {short} ({short}, \\@{short}, \\&{short});"),
         format!("use {short} '{{{short}}}', \"{escaped_double}\", '{escaped_single}';"),
         format!("use if {short}, {short}, qw({short});"),
         format!("use lib '{escaped_single}', \"{escaped_double}\";"),
