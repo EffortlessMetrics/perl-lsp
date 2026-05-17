@@ -573,6 +573,91 @@ mod tests {
     }
 
     #[test]
+    fn semantic_token_shadow_blocks_unsafe_generated_dynamic_stale_and_fallback_boundaries()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let candidates = vec![
+            shadow_candidate(
+                "token:method:Framework::generated_accessor:no_source",
+                ProviderFactSourceKind::FrameworkAdapter,
+                Provenance::FrameworkSynthesis,
+                Confidence::Medium,
+                ProviderFactFreshness::Fresh,
+                None,
+                ProviderFallbackState::Blocked,
+            ),
+            shadow_candidate(
+                "dynamic:semantic-token:$Package::{method}",
+                ProviderFactSourceKind::DynamicBoundary,
+                Provenance::DynamicBoundary,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                None,
+                ProviderFallbackState::Blocked,
+            ),
+            shadow_candidate(
+                "stale:semantic-token:old_method",
+                ProviderFactSourceKind::CompilerFact,
+                Provenance::SemanticAnalyzer,
+                Confidence::Low,
+                ProviderFactFreshness::Stale,
+                None,
+                ProviderFallbackState::Blocked,
+            ),
+            shadow_candidate(
+                "fallback:semantic-token:grep_guess",
+                ProviderFactSourceKind::Fallback,
+                Provenance::SearchFallback,
+                Confidence::Low,
+                ProviderFactFreshness::Unknown,
+                None,
+                ProviderFallbackState::Fallback,
+            ),
+        ];
+
+        let report = semantic_token_span_invariant_report(&candidates);
+        let result = semantic_token_source_shadow(Vec::new(), candidates, "unsafe-boundaries");
+
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Same);
+        assert_eq!(result.receipt.old_result.match_count, 0);
+        assert_eq!(result.receipt.new_result.match_count, 0);
+        assert!(
+            result.receipt.new_result.identities.is_empty(),
+            "unsafe semantic-token boundaries must not produce live token identities"
+        );
+        assert_eq!(result.receipt.fact_source_traces.len(), 4);
+
+        assert_eq!(report.candidate_count, 4);
+        assert_eq!(report.blocked_candidate_count, 3);
+        assert_eq!(report.source_backed_span_count, 0);
+        assert_eq!(report.missing_source_span_count, 1);
+        assert_eq!(report.invalid_source_span_count, 0);
+
+        let generated_trace = trace_at(&result, 0)?;
+        assert_eq!(generated_trace.source, ProviderFactSourceKind::FrameworkAdapter);
+        assert_eq!(generated_trace.provenance, Provenance::FrameworkSynthesis);
+        assert_eq!(generated_trace.fallback_state, ProviderFallbackState::Blocked);
+
+        let dynamic_trace = trace_at(&result, 1)?;
+        assert_eq!(dynamic_trace.source, ProviderFactSourceKind::DynamicBoundary);
+        assert_eq!(dynamic_trace.provenance, Provenance::DynamicBoundary);
+        assert_eq!(dynamic_trace.fallback_state, ProviderFallbackState::Blocked);
+
+        let stale_trace = trace_at(&result, 2)?;
+        assert_eq!(stale_trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(stale_trace.confidence, Confidence::Low);
+        assert_eq!(stale_trace.freshness, ProviderFactFreshness::Stale);
+        assert_eq!(stale_trace.fallback_state, ProviderFallbackState::Blocked);
+
+        let fallback_trace = trace_at(&result, 3)?;
+        assert_eq!(fallback_trace.source, ProviderFactSourceKind::Fallback);
+        assert_eq!(fallback_trace.provenance, Provenance::SearchFallback);
+        assert_eq!(fallback_trace.confidence, Confidence::Low);
+        assert_eq!(fallback_trace.freshness, ProviderFactFreshness::Unknown);
+        assert_eq!(fallback_trace.fallback_state, ProviderFallbackState::Fallback);
+        Ok(())
+    }
+
+    #[test]
     fn semantic_token_source_span_rejects_zero_length_or_out_of_bounds_ranges() {
         let source = "package Foo;\n";
         assert!(SemanticTokenShadowSpan::from_byte_offsets(source, 0, 0).is_none());
