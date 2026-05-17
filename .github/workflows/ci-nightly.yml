@@ -696,11 +696,22 @@ jobs:
       matrix:
         target: [
           builtin_functions,
+          dap_eval_validator,
+          dap_stack_parser,
+          declaration_parsing,
           heredoc_parsing,
+          incremental_edit_sequences,
+          lexer_tokenization,
           lsp_cancellation_registry,
           lsp_navigation,
+          parser_integration,
+          quote_operators,
+          semantic_model,
+          structured_perl_programs,
           substitution_parsing,
-          unicode_positions
+          symbol_query_ranking,
+          unicode_positions,
+          utf16_roundtrip
         ]
 
     steps:
@@ -725,7 +736,7 @@ jobs:
     - name: Run fuzzer
       run: |
         DURATION=${{ github.event.inputs.duration || '600' }}
-        cargo +nightly fuzz run ${{ matrix.target }} -- -max_total_time=$DURATION -max_len=1000 -timeout=25
+        ./scripts/fuzz-bounded --duration "$DURATION" -- ${{ matrix.target }}
 
     - name: Upload crash artifacts
       if: failure()
