@@ -113,9 +113,13 @@ broader symbol-level safe-delete cutover.
 This dashboard keeps the next provider lane separate from parser capability,
 framework facts, PIR, formatter, critic, release, and security work.
 
-1. `test(workspace-symbols): add another project-shaped generated-symbol rank/noise receipt before broader expansion`
-2. `test(semantic-tokens): add another class-specific compiler-token receipt before broader method-class cutover`
-3. `test(rename): add another project-shaped package/compiler-backed receipt before broader promotion`
+Recent workspace-symbol and semantic-token receipts have refreshed those
+surfaces without broadening live behavior. Route the next provider slice through
+rename before repeating another workspace-symbol or semantic-token receipt.
+
+1. `test(rename): add another project-shaped package/compiler-backed receipt before broader promotion`
+2. `test(workspace-symbols): add another project-shaped generated-symbol rank/noise receipt before broader generated-symbol expansion`
+3. `test(semantic-tokens): add another class-specific compiler-token receipt before broader promotion`
 
 Provider decision explanations are already partial-live through
 `perl.explainProviderDecision`; callers can attach a request-local
