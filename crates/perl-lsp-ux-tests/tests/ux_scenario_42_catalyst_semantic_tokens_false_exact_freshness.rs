@@ -51,7 +51,7 @@ const GENERATED_METHOD_CANDIDATES: [&str; 10] = [
     "is_debug", "is_info", "is_warn", "is_error", "is_fatal", "debug", "info", "warn", "error",
     "fatal",
 ];
-const DYNAMIC_BOUNDARY_TEXTS: [&str; 3] = ["is_$level", "*{$level}", "${\"is_$level\"}"];
+const DYNAMIC_BOUNDARY_TEXTS: [&str; 3] = ["is_$level", "*{$level}", "${\\\"is_$level\"}"];
 
 #[derive(Debug)]
 struct FixtureFile {
@@ -512,7 +512,7 @@ fn scenario_42_catalyst_semantic_tokens_false_exact_freshness_receipt() {
             )?;
             recorder.check(
                 "Catalyst dynamic boundary source shapes were present",
-                false_exact.dynamic_boundary_source_hit_count >= 2,
+                false_exact.dynamic_boundary_source_hit_count >= DYNAMIC_BOUNDARY_TEXTS.len(),
             )?;
             recorder.check(
                 "Catalyst dynamic boundary shapes are not exact symbol tokens",
