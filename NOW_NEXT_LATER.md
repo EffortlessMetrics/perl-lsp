@@ -5,39 +5,39 @@ This file is the short planning snapshot for sequencing work. Use
 plan and [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) for
 evidence-backed status and release facts.
 
-## DONE — v0.12.2 through v0.12.8 (consolidated and shipped)
+## DONE — public-alpha foundation through v0.13.x
 
-- Work consolidated and merged 2026-04-02 (~70 PRs): CI gates, error handling, test coverage, parser confidence, performance, distribution, AI inline completion, packaging, announcement polish
-- `v0.12.3` is the live GitHub/editor release line as of 2026-04-09 with binaries, SBOM, SHA256SUMS, VS Code Marketplace, and Open VSX published
-- crates.io intentionally remains on `v0.12.2` while the registry window is deferred
+- v0.12.x built confidence across parser corpus, diagnostics, refactoring, distribution, AI inline completion, packaging, and announcement polish
+- v0.13.x carried that public-alpha foundation forward into the current release-prep line
+- CI/control-plane Wave 2 substrate landed: gate timeout receipts, bounded build storage contracts, UX receipt upload path, PR-fast planner coverage, and tokmd advisory instrumentation
+- Compiler-backed LSP substrate now has fixture-backed semantic facts, fact-source traces, and live-with-fallback slices for narrow diagnostics, hover, definition, and references
 
-## NOW — post-v0.12.3 / pre-announcement cleanup
+## NOW — v0.14.0 public-alpha patch prep
 
-- License badge fixed (canonical SPDX text in all 126 LICENSE files), GitHub now reports `Apache-2.0` instead of `NOASSERTION`
-- Docker arm64 timeout fix landed (Dockerfile MSRV pin + workflow timeout bump)
-- Dependency triage complete: 7 dependabot PRs merged including 3 majors (eslint v10, actions/cache v5, similar 3.0.0)
-- Keep public guidance explicit about the current channel split: GitHub Releases plus editor marketplaces are on `v0.12.3`; crates.io remains on `v0.12.2`
-- SRP microcrate extractions in flight (anti_pattern_detector, bench_parser) to free the dead `tree-sitter-perl-rs` harness for archival
-- Publishing the modern parsers as `tree-sitter-perl-c` (C tree-sitter FFI) and a new `tree-sitter-perl-rs` (Rust v3 facade with tree-sitter-compatible output)
-- Per-crate publish blockers cleared (perl-lsp-ai-provider unblocked, perl-heredoc-anti-patterns extraction in progress)
+- Treat `v0.14.0` as the active public-alpha release train; do not describe it as stable/GA
+- Complete RP-2 dry-run publish readiness before tag, channel dispatch, or announcement operations
+- Keep install-channel receipts explicit for crates.io, GitHub Release assets, Docker, VS Code Marketplace, Open VSX, and Homebrew (`brew install effortlessmetrics/tap/perllsp`)
+- Run the next CI/control-plane slice first: `update-status --write` progress streaming and failure attribution
+- Keep compiler-backed provider work evidence-gated: live paths need provenance and fallback receipts; uncertain paths remain shadow-only
 
-## NEXT — v0.13.0 public alpha announcement
+## NEXT — after v0.14.0 receipts close
 
-- Re-trigger crates.io publish after the SRP extractions and harness archival land
-- Final smoke test across all distribution channels
-- Bump workspace to `0.13.0`
-- Announcement blog post / release notes
+- Resume parser, corpus, semantic, and DAP hardening in narrow reviewable slices
+- Promote compiler-backed completion, rename, safe-delete, workspace symbols, document symbols, and semantic tokens only after source/freshness receipts are strong enough
+- Execute the editor-trust wave with one canonical lane per UX area and deterministic real-project receipts before CI ratchets
+- Continue quality cleanup: production-code `unwrap()` / `expect()` audit, temporary allow burndown, dependency triage, and install-surface checks
 
-## LATER — beyond v0.13.0
+## LATER — v1.0 runway
 
-- Stability contract for APIs and advertised wire behavior
-- Performance hardening for larger workspaces
-- Security posture and documentation hardening
-- Path to `v1.0.0`
+- Define the stable Rust API surface and the internal crate boundary
+- Define advertised LSP/DAP wire-behavior compatibility and fallback semantics
+- Establish large-workspace performance and memory budgets that respect agent build-storage limits
+- Document subprocess, Perl environment, and extension-distribution security expectations
+- Pick a `v1.0.0` date only after those contracts have reviewable acceptance criteria
 
 ## Working Rules
 
-- Last updated: `2026-04-09`
+- Last updated: `2026-05-16`
 - Keep “current release line” separate from “next milestone”.
 - Put receipts and computed metrics in [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md), not here.
 - Put detailed milestone criteria in [docs/project/ROADMAP.md](docs/project/ROADMAP.md), not here.

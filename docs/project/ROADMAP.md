@@ -97,6 +97,126 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - Public install language must say public alpha, not stable/GA
 - Follow-on quality cleanup resumes after the release-channel receipts are closed
 
+## Roadmap Build-Out
+
+Use this section to route follow-up work after reading the generated status files.
+It is intentionally outcome-oriented: every lane names the source of truth, the
+next reviewable slice, and the stop condition that prevents roadmap work from
+becoming an unbounded rewrite.
+
+### Release Proof Lane — finish `v0.14.0` without changing the product posture
+
+**Goal:** close the public-alpha release proof for the Rust 1.95 line while
+keeping tag/publish/announcement operations separate from documentation changes.
+
+- Source of truth: [docs/releases/v0.14.0.md](../releases/v0.14.0.md),
+  [status/release.md](status/release.md), and
+  [RELEASE_HISTORY.md](../../RELEASE_HISTORY.md).
+- Next slices:
+  1. RP-2 dry-run publish readiness: verify the 31-crate allowlist, generated
+     package contents, and failure receipts before any tag or channel dispatch.
+  2. Install-channel receipt pass: record the exact verification commands for
+     crates.io, GitHub Release assets, Docker, VS Code Marketplace, Open VSX,
+     and Homebrew without claiming stable/GA readiness.
+  3. Release-note claim audit: keep the changelog tied to shipped receipts and
+     move deferred work to successor issues rather than expanding the train.
+- Stop condition: do not dispatch or announce while any release-channel receipt
+  is missing, stale, or only inferred from local state.
+
+### Compiler-Backed LSP Lane — move providers by evidence, not aspiration
+
+**Goal:** continue replacing heuristic provider behavior with compiler-backed
+facts only where the shadow receipts show equal-or-better behavior.
+
+- Source of truth: [COMPILER_BACKED_LSP_ROADMAP.md](COMPILER_BACKED_LSP_ROADMAP.md),
+  [COMPILER_CAPABILITY_STATUS.md](COMPILER_CAPABILITY_STATUS.md),
+  [status/compiler_facts.md](status/compiler_facts.md), and
+  [status/provider_cutover.md](status/provider_cutover.md).
+- Next slices:
+  1. Keep diagnostics, hover, definition, and references live-with-fallback
+     paths covered by provenance receipts before widening their surface area.
+  2. Promote completion, rename, safe-delete, workspace symbols, document
+     symbols, and semantic tokens only after shadow receipts demonstrate source
+     freshness and explainable fallback behavior.
+  3. Expand real-Perl conformance under the existing #8199 lane rather than
+     adding one-off fixtures that cannot become ratchets.
+- Stop condition: if a compiler-backed path cannot explain its fact source or
+  fallback decision, keep it shadow-only.
+
+### Editor Trust Lane — make real-project behavior boring
+
+**Goal:** prove editor behavior against real Perl workspaces without turning the
+UX effort into broad provider rewrites.
+
+- Source of truth: [EDITOR_TRUST_WAVE.md](EDITOR_TRUST_WAVE.md),
+  [status/real_perl_editor_trust_v1.md](status/real_perl_editor_trust_v1.md),
+  and [status/editor_ux.json](status/editor_ux.json).
+- Next slices:
+  1. Preserve one canonical lane per trust area: completions, diagnostics,
+     parser recovery, UX evidence, and `@INC` consistency.
+  2. Add receipts that describe what a user would see in the editor, not only
+     which internal helper returned a value.
+  3. Convert passing real-project scenarios into ratchets only after their
+     inputs and expected behavior are stable enough for CI.
+- Stop condition: do not promote exploratory real-project checks to required CI
+  until they are deterministic across Linux CI and local agent profiles.
+
+### CI / Control-Plane Lane — improve operator feedback in narrow steps
+
+**Goal:** keep the automation reliable for humans and agents without building a
+full merge bot or broad CI redesign.
+
+- Source of truth: [CI_WAVE_EXECUTION_PLAN.md](CI_WAVE_EXECUTION_PLAN.md),
+  [protocols/verification.md](protocols/verification.md), and the generated
+  status files under [status/](status/).
+- Next slices:
+  1. Land `update-status --write` progress streaming and failure attribution
+     before lower-urgency control-plane polish.
+  2. Add CI trigger regression linting for `pull_request:labeled|unlabeled` and
+     `cancel-in-progress` as an independent guardrail.
+  3. Normalize expected-skip/stale-check reporting so merge-ready automation
+     reports evidence state rather than guessing intent from labels.
+  4. Keep tokmd advisory until signal quality is proven; advisory output must
+     not become a surprise release blocker.
+- Stop condition: reject slices that require global pre-push hooks, bulk stale
+  closure, or a single PR that rewrites the workflow architecture.
+
+### Quality, Security, and Distribution Lane — keep alpha safe to install
+
+**Goal:** maintain install confidence while public-alpha semantics remain clear.
+
+- Source of truth: [CURRENT_STATUS.md](CURRENT_STATUS.md),
+  [status/quality.md](status/quality.md),
+  [docs/reference/COMMANDS_REFERENCE.md](../reference/COMMANDS_REFERENCE.md),
+  and channel receipts linked from [RELEASE_HISTORY.md](../../RELEASE_HISTORY.md).
+- Next slices:
+  1. Continue production-code `unwrap()` / `expect()` and temporary-allow
+     burndown in focused crate-sized PRs.
+  2. Keep dependency triage per release train, separating urgent security fixes
+     from opportunistic churn.
+  3. Verify Docker, Homebrew, editor marketplaces, and crates.io as install
+     surfaces with commands users can copy.
+- Stop condition: do not describe the project as stable/GA until the stability
+  contract is written, reviewed, and reflected across release surfaces.
+
+### v1.0 Runway — define the contract before declaring stability
+
+**Goal:** turn the public-alpha learning loop into a deliberate stability plan.
+
+- Source of truth: this roadmap plus future stability-contract documents linked
+  from [docs/project/](.).
+- Next slices:
+  1. Define which Rust crates expose stable public APIs and which remain
+     internal implementation crates.
+  2. Define advertised LSP/DAP behavior that must remain backward compatible,
+     including fallback semantics for compiler-backed providers.
+  3. Establish performance and memory budgets for large workspaces that can be
+     checked without unbounded build output in agent worktrees.
+  4. Document security expectations for subprocess execution, Perl environment
+     construction, and extension distribution.
+- Stop condition: do not set a `v1.0.0` target date until the API, wire-behavior,
+  performance, and security contracts have reviewable acceptance criteria.
+
 ## Now / Next / Later
 
 ### Now (v0.14.0 public-alpha patch prep)
@@ -219,4 +339,4 @@ For live capability posture, run `just status-check` or read [CURRENT_STATUS.md]
 | Evidence-backed metrics | [CURRENT_STATUS.md](CURRENT_STATUS.md) |
 | Top-level summary docs | [../../ROADMAP.md](../../ROADMAP.md), [../../NOW_NEXT_LATER.md](../../NOW_NEXT_LATER.md) |
 
-<!-- Last Updated: 2026-05-12 -->
+<!-- Last Updated: 2026-05-16 -->
