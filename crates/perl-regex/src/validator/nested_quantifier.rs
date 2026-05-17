@@ -1,3 +1,5 @@
+use crate::syntax::cursor::quoted_literal_end;
+
 pub(crate) fn detect_nested_quantifiers(pattern: &str) -> bool {
     find_nested_quantifier(pattern, 0).is_some()
 }
@@ -10,6 +12,11 @@ pub(crate) fn find_nested_quantifier(pattern: &str, start_pos: usize) -> Option<
     while i < bytes.len() {
         match bytes[i] {
             b'\\' => {
+                if let Some(end) = quoted_literal_end(bytes, i) {
+                    i = end;
+                    last_type = 0;
+                    continue;
+                }
                 i += 2;
                 last_type = 0;
                 continue;
