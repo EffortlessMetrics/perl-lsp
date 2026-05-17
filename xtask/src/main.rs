@@ -1668,6 +1668,9 @@ enum NonRustCommand {
         #[arg(long, hide = true)]
         root: Option<PathBuf>,
     },
+
+    /// Find non-Rust production/tooling files that are good Rust migration candidates.
+    Candidates,
 }
 
 /// CLI-facing grouping argument (mirrors `file_policy::ProposeGroupBy`).
@@ -3242,6 +3245,10 @@ fn main() -> Result<()> {
                     &root,
                     ProposeConfig { output_dir, group_by, root_override },
                 )
+            }
+            NonRustCommand::Candidates => {
+                let root = utils::project_root()?;
+                tasks::file_policy::non_rust_candidates(&root)
             }
         },
         Commands::CheckFilePolicy { mode, json, allowlist, root: root_override } => {
