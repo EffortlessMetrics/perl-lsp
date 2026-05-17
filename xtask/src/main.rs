@@ -1684,6 +1684,17 @@ enum NonRustCommand {
         #[arg(long, hide = true)]
         root: Option<PathBuf>,
     },
+
+    /// Validate the non-Rust allowlist/debt TOML schema without walking git.
+    ValidatePolicy {
+        /// Override the default allowlist path (`policy/non-rust-allowlist.toml`).
+        #[arg(long, default_value = "policy/non-rust-allowlist.toml")]
+        allowlist: PathBuf,
+
+        /// Override the default debt path (`policy/non-rust-debt.toml`).
+        #[arg(long, default_value = "policy/non-rust-debt.toml")]
+        debt: PathBuf,
+    },
 }
 
 /// CLI-facing grouping argument (mirrors `file_policy::ProposeGroupBy`).
@@ -3262,6 +3273,13 @@ fn main() -> Result<()> {
                     &root,
                     ProposeConfig { output_dir, group_by, root_override },
                 )
+            }
+            NonRustCommand::ValidatePolicy { allowlist, debt } => {
+                use tasks::file_policy::ValidateNonRustPolicyConfig;
+                tasks::file_policy::validate_non_rust_policy(ValidateNonRustPolicyConfig {
+                    allowlist_path: allowlist,
+                    debt_path: debt,
+                })
             }
         },
         Commands::CheckFilePolicy { mode, json, allowlist, root: root_override } => {
