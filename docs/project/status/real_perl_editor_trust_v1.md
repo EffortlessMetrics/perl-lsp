@@ -77,9 +77,9 @@ safe-delete cutover.
 This dashboard keeps the next provider lane separate from parser capability,
 framework facts, PIR, formatter, critic, release, and security work.
 
-1. `docs(status): review package-local rename support before broader promotion`
-2. `test(semantic-tokens): prove method-declaration compiler-token live-output parity before cutover`
-3. `test(workspace-symbols): add additional generated/dynamic false-exact and edit-freshness receipts`
+1. `test(semantic-tokens): prove method-declaration compiler-token live-output parity before cutover`
+2. `test(workspace-symbols): add additional generated/dynamic false-exact and edit-freshness receipts`
+3. `test(rename): add cross-project package-local false-allow and package-wide blocker receipts`
 
 Provider decision explanations are already partial-live through
 `perl.explainProviderDecision`; callers can attach a request-local
