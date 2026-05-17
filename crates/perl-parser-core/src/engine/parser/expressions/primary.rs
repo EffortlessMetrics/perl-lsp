@@ -264,7 +264,7 @@ impl<'a> Parser<'a> {
                     0
                 };
                 if op_len > 0 {
-                    let after_op = &text[op_len..];
+                    let after_op = text[op_len..].trim_start();
                     if let Some(open) = after_op.chars().next() {
                         let close = match open {
                             '(' => ')',
@@ -298,6 +298,7 @@ impl<'a> Parser<'a> {
 
                 // Parse qw(...) to extract words
                 if let Some(content) = text.strip_prefix("qw") {
+                    let content = content.trim_start();
                     // Find the delimiter and extract content.
                     // Track whether the closing delimiter was present so we can record an error
                     // when the qw() is unclosed (e.g. qw(one two three at EOF).
