@@ -39,6 +39,12 @@ and [provider_cutover.md](provider_cutover.md).
 
 ## Operating Rules
 
+- Rename note, 2026-05-17: `refactor_runtime_blocker_ux_package_local_live_pilot_blocks_real_workspace_imported_symbol_false_allow`
+  records the RealBaseline imported-symbol false-allow boundary for the
+  package-local live pilot. It proves `helper` returns no edits with a
+  `package_local_live_pilot_blocked` trace; it does not promote broader
+  package/compiler-backed rename support.
+
 - Promote a claim only when the row's proof command and status docs cover the
   claim being made.
 - Do not use a stale parser corpus receipt for bucket-count or support-tier

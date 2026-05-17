@@ -1190,6 +1190,57 @@ sub caller {
 }
 
 #[test]
+fn refactor_runtime_blocker_ux_package_local_live_pilot_blocks_real_workspace_imported_symbol_false_allow()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_semantic_real_workspace(&server)?;
+    let util = files.get("lib/RealBaseline/Util.pm").ok_or("missing RealBaseline Util fixture")?;
+
+    let (helper_line, helper_character) = position_of(util, "helper {")?;
+    let rename_result = server
+        .handle_rename_workspace(Some(json!({
+            "textDocument": {"uri": REAL_BASELINE_UTIL_URI},
+            "position": {"line": helper_line, "character": helper_character},
+            "newName": "renamed_helper"
+        })))?
+        .ok_or("missing package-local live rename blocker result")?;
+
+    let edit_count = rename_result
+        .get("changes")
+        .and_then(Value::as_object)
+        .map(|changes| changes.values().filter_map(Value::as_array).map(Vec::len).sum::<usize>())
+        .ok_or("missing package-local live rename blocker changes")?;
+    assert_eq!(
+        edit_count, 0,
+        "imported/exported real-workspace package symbol must not be falsely allowed as a package-local edit: {rename_result}"
+    );
+
+    let explanation = explain_provider_decision(&server, "rename")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(request_receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("textDocument/rename")
+    );
+    assert_eq!(
+        request_receipt.get("reason").and_then(Value::as_str),
+        Some("package_local_live_pilot_blocked")
+    );
+    assert_eq!(request_receipt.get("fallback_state").and_then(Value::as_str), Some("no_edit"));
+    assert_eq!(request_receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(request_receipt.get("symbol").and_then(Value::as_str), Some("helper"));
+    assert!(
+        request_receipt.get("claim_boundary").and_then(Value::as_str).is_some_and(|boundary| {
+            boundary.contains("package-local compiler facts")
+                && boundary.contains("broader compiler-backed refactor facts remain gated")
+        }),
+        "rename trace must preserve the package-local claim boundary: {request_receipt}"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn refactor_runtime_blocker_ux_package_local_live_pilot_receipt_preserves_cutover_guardrails()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();

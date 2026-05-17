@@ -234,6 +234,12 @@ the relevant receipt command.
 
 ## Cutover Rules
 
+- Rename note, 2026-05-17: `refactor_runtime_blocker_ux_package_local_live_pilot_blocks_real_workspace_imported_symbol_false_allow`
+  records the RealBaseline imported-symbol false-allow boundary for the
+  package-local live pilot. It proves `helper` returns no edits and records a
+  `package_local_live_pilot_blocked` trace rather than treating an
+  imported/exported fact as a package-local edit authorization.
+
 - Do not cut a provider over just because a fact exists.
 - Every provider answer that uses compiler facts should be able to identify
   source, provenance, confidence, and fallback state where relevant.
