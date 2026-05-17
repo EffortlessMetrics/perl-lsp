@@ -66,6 +66,7 @@ const DANCER2_DSL_URI: &str = "file:///workspace/lib/Dancer2/Core/DSL.pm";
 const DANCER2_APP_URI: &str = "file:///workspace/lib/Dancer2/Core/App.pm";
 const DANCER2_RESPONSE_URI: &str = "file:///workspace/lib/Dancer2/Core/Response.pm";
 const DANCER2_PLUGIN_URI: &str = "file:///workspace/lib/Dancer2/Plugin.pm";
+const CATALYST_DISPATCHER_URI: &str = "file:///workspace/lib/Catalyst/Dispatcher.pm";
 const REAL_BASELINE_BASE_URI: &str = "file:///workspace/lib/RealBaseline/Base.pm";
 const REAL_BASELINE_UTIL_URI: &str = "file:///workspace/lib/RealBaseline/Util.pm";
 const REAL_BASELINE_APP_URI: &str = "file:///workspace/lib/RealBaseline/App.pm";
@@ -174,6 +175,16 @@ fn open_dancer2_workspace(
     server: &LspServer,
 ) -> Result<BTreeMap<String, String>, Box<dyn std::error::Error>> {
     let files = load_dancer2_fixture_files()?;
+    for (relative_path, content) in &files {
+        open_document(server, &format!("file:///workspace/{relative_path}"), content)?;
+    }
+    Ok(files)
+}
+
+fn open_catalyst_workspace(
+    server: &LspServer,
+) -> Result<BTreeMap<String, String>, Box<dyn std::error::Error>> {
+    let files = load_real_project_fixture_files("catalyst_skeleton")?;
     for (relative_path, content) in &files {
         open_document(server, &format!("file:///workspace/{relative_path}"), content)?;
     }
@@ -1517,6 +1528,124 @@ fn refactor_runtime_blocker_ux_package_local_live_pilot_real_workspace_false_all
         fresh_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
         u64::try_from(fresh_edit_count).ok()
     );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_package_local_live_pilot_catalyst_false_allow_blocks()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_catalyst_workspace(&server)?;
+    let dispatcher =
+        files.get("lib/Catalyst/Dispatcher.pm").ok_or("missing Catalyst Dispatcher fixture")?;
+
+    let (get_action_line, get_action_character) = position_of(dispatcher, "get_action {")?;
+    let preview_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.previewPackageRename",
+            "arguments": [{
+                "textDocument": {"uri": CATALYST_DISPATCHER_URI},
+                "position": {"line": get_action_line, "character": get_action_character},
+                "newName": "renamed_get_action"
+            }]
+        })))?
+        .ok_or("missing Catalyst package rename preview result")?;
+
+    assert_eq!(preview_result.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        preview_result.get("provider_action").and_then(Value::as_str),
+        Some("perl.previewPackageRename")
+    );
+    assert_eq!(preview_result.get("decision").and_then(Value::as_str), Some("allowed"));
+    assert_eq!(
+        preview_result.get("reason").and_then(Value::as_str),
+        Some("compiler_preview_allowed")
+    );
+    assert_eq!(preview_result.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        preview_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+
+    let package_pilot = preview_result.get("package_pilot").ok_or("missing package_pilot")?;
+    assert_eq!(package_pilot.get("eligible").and_then(Value::as_bool), Some(true));
+    assert_eq!(package_pilot.get("reason").and_then(Value::as_str), Some("none"));
+    let compiler_edit_count = package_pilot
+        .get("edit_count")
+        .and_then(Value::as_u64)
+        .ok_or("missing package pilot edit count")?;
+    assert_eq!(
+        compiler_edit_count, 1,
+        "Catalyst package pilot should see only the source-backed definition edit: {package_pilot}"
+    );
+    assert_json_array_contains(package_pilot, "edit_categories", "Definition")?;
+    assert!(
+        preview_result
+            .get("claim_boundary")
+            .and_then(Value::as_str)
+            .is_some_and(|boundary| boundary.contains("no package rename edits are applied")),
+        "Catalyst package rename preview must remain no-edit: {preview_result}"
+    );
+
+    let rename_request = json!({
+        "textDocument": {"uri": CATALYST_DISPATCHER_URI},
+        "position": {"line": get_action_line, "character": get_action_character},
+        "newName": "renamed_get_action"
+    });
+    let live_result = match server.handle_rename_workspace(Some(rename_request)) {
+        Ok(Some(result)) => {
+            let edit_count = workspace_edit_change_count(&result)?;
+            assert_eq!(
+                edit_count, 0,
+                "Catalyst ambiguous package-local false allow must not return edits: {result}"
+            );
+            Some(result)
+        }
+        Ok(None) => return Err("missing Catalyst package-local live rename result".into()),
+        Err(error) => {
+            assert_eq!(error.code, -32602);
+            assert!(
+                error.message.contains("ambiguous symbol identity"),
+                "Catalyst false-allow refusal should explain ambiguous project-shaped identity: {error:?}"
+            );
+            None
+        }
+    };
+    let live_edit_count = live_result.as_ref().map_or(Ok(0), workspace_edit_change_count)?;
+
+    let explanation = explain_provider_decision(&server, "rename")?;
+    let live_receipt = request_receipt(&explanation)?;
+    assert_eq!(live_receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        live_receipt.get("provider_action").and_then(Value::as_str),
+        Some("textDocument/rename")
+    );
+    assert!(
+        live_receipt.get("claim_boundary").and_then(Value::as_str).is_some_and(|boundary| {
+            boundary.contains("package-local compiler facts")
+                && boundary.contains("broader compiler-backed refactor facts remain gated")
+        }),
+        "Catalyst rename trace must preserve the package-local claim boundary: {live_receipt}"
+    );
+
+    let reason = live_receipt
+        .get("reason")
+        .and_then(Value::as_str)
+        .ok_or("missing Catalyst live rename reason")?;
+    assert_eq!(
+        reason, "package_local_live_pilot_ambiguous",
+        "Catalyst package-local false allow must be refused as ambiguous identity: {live_receipt}"
+    );
+    assert_eq!(
+        live_edit_count, 0,
+        "ambiguous package-local pilot must not return edits: {live_result:?}"
+    );
+    assert_eq!(
+        live_receipt.get("fallback_state").and_then(Value::as_str),
+        Some("ambiguous_identity")
+    );
+    assert_eq!(live_receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
 
     Ok(())
 }
