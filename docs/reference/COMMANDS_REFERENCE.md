@@ -94,6 +94,7 @@ perl-dap --stdio  # Standard DAP transport
 | Release/version surfaces touched | `just version-check` then `just release-check` | Verifies version sync and the release-prep gate before tagging/publishing. |
 | Native tooling defaults touched | `cargo xtask native-tooling check-defaults` | Verifies native formatter and native critic default paths do not silently shell out. |
 | Native tooling cutover status touched | `cargo xtask native-tooling readiness --markdown docs/project/status/native_tooling_readiness.md` | Renders explicit native formatter/critic default-readiness criteria from existing receipts. |
+| Non-Rust migration planning | `cargo xtask non-rust migration-candidates --limit 20` | Finds script-style tooling that should move into Rust-owned crates or typed xtask tasks. |
 | User migration check | `perllsp --perltidy-compat-report .perltidyrc` / `perllsp --perlcritic-compat-report .perlcriticrc` | Classifies legacy profiles against native formatter and critic support without requiring external tools. |
 | Native critic touched | `cargo xtask native-critic check` | Runs native critic rules and emits check receipts for findings, suppressions, and fixability. |
 | DevEx docs touched | `cargo xtask check-devex-docs` | Verifies toolchain wording and documented command references stay current. |
