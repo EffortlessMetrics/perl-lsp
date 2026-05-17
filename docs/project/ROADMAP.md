@@ -134,6 +134,7 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - The 0.13.x line has built confidence across parser, diagnostics, refactoring, and distribution
 - Resume parser, corpus, semantic, and DAP hardening after the release-channel receipts close
 - Run the editor-trust wave through [EDITOR_TRUST_WAVE.md](EDITOR_TRUST_WAVE.md): one lane, one canonical PR, one acceptance checklist, one verification receipt
+- Receiver-expression completion hardening is specified in [RECEIVER_FACTS_PIPELINE.md](RECEIVER_FACTS_PIPELINE.md); implement it as semantic facts first, then completion handoff.
 - Keep the install story verified across all distribution channels
 - Keep public-alpha release notes concise and tied to concrete channel receipts
 
