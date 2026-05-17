@@ -1413,6 +1413,41 @@ impl Node {
         self.location.end.saturating_sub(self.location.start)
     }
 
+    /// Find the deepest descendant whose source span contains `offset`.
+    ///
+    /// Returns `None` when `offset` is outside this node's span. If multiple
+    /// nested nodes contain the offset, the most-specific descendant is returned;
+    /// otherwise this node is returned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use perl_ast::{Node, NodeKind, SourceLocation};
+    ///
+    /// let outer = SourceLocation { start: 0, end: 5 };
+    /// let inner = SourceLocation { start: 1, end: 4 };
+    /// let child = Node::new(NodeKind::Identifier { name: "foo".to_string() }, inner);
+    /// let node = Node::new(NodeKind::Block { statements: vec![child] }, outer);
+    ///
+    /// assert_eq!(node.deepest_node_at_offset(2).map(|n| n.kind.kind_name()), Some("Identifier"));
+    /// assert_eq!(node.deepest_node_at_offset(4).map(|n| n.kind.kind_name()), Some("Block"));
+    /// assert!(node.deepest_node_at_offset(5).is_none());
+    /// ```
+    #[inline]
+    pub fn deepest_node_at_offset(&self, offset: usize) -> Option<&Node> {
+        if !self.contains_offset(offset) {
+            return None;
+        }
+
+        let mut result = self;
+        self.for_each_child(|child| {
+            if let Some(found) = child.deepest_node_at_offset(offset) {
+                result = found;
+            }
+        });
+        Some(result)
+    }
+
     /// Get the last direct child node, if any.
     ///
     /// Optimized to avoid allocating the children vector.

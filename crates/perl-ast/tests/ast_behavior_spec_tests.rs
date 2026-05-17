@@ -231,3 +231,59 @@ fn when_requesting_last_child_on_program_then_last_statement_is_returned() {
 
     assert_eq!(child.map(|c| c.kind.kind_name()), Some("Identifier"));
 }
+
+#[test]
+fn when_finding_deepest_node_at_offset_then_most_specific_descendant_is_returned() {
+    let node = Node::new(
+        NodeKind::Program {
+            statements: vec![Node::new(
+                NodeKind::ExpressionStatement {
+                    expression: Box::new(Node::new(
+                        NodeKind::Binary {
+                            op: "+".to_string(),
+                            left: Box::new(Node::new(
+                                NodeKind::Identifier { name: "x".to_string() },
+                                loc(2, 3),
+                            )),
+                            right: Box::new(Node::new(
+                                NodeKind::Number { value: "42".to_string() },
+                                loc(6, 8),
+                            )),
+                        },
+                        loc(2, 8),
+                    )),
+                },
+                loc(2, 8),
+            )],
+        },
+        loc(0, 10),
+    );
+
+    let found = node.deepest_node_at_offset(6);
+
+    assert_eq!(found.map(|n| n.kind.kind_name()), Some("Number"));
+}
+
+#[test]
+fn when_finding_deepest_node_at_offset_in_operator_gap_then_containing_expression_is_returned() {
+    let node = Node::new(
+        NodeKind::Binary {
+            op: "+".to_string(),
+            left: Box::new(Node::new(NodeKind::Identifier { name: "x".to_string() }, loc(2, 3))),
+            right: Box::new(Node::new(NodeKind::Number { value: "42".to_string() }, loc(6, 8))),
+        },
+        loc(2, 8),
+    );
+
+    let found = node.deepest_node_at_offset(4);
+
+    assert_eq!(found.map(|n| n.kind.kind_name()), Some("Binary"));
+}
+
+#[test]
+fn when_finding_deepest_node_at_offset_outside_span_then_none_is_returned() {
+    let node = Node::new(NodeKind::Identifier { name: "foo".to_string() }, loc(3, 6));
+
+    assert!(node.deepest_node_at_offset(6).is_none());
+    assert!(node.deepest_node_at_offset(2).is_none());
+}
