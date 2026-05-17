@@ -1036,6 +1036,34 @@
       ]
     },
     {
+      "id": "modern_oo_workspace_symbol_noise",
+      "scenario_file": "ux_scenario_43_modern_oo_workspace_symbol_noise.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "component": "workspace_symbols",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "request workspace symbols over the Modern OO corpus fixture and record generated accessor, delegated-handle, role-composition, and method-modifier rank/noise boundaries",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
+      ],
+      "expected_outcomes": [
+        "workspace-symbol requests return valid LSP shapes without JSON-RPC errors",
+        "receipt records useful Modern OO hits, labeled generated symbols, generated exact-name gating, and edit freshness",
+        "broader generated/dynamic workspace-symbol candidates remain bounded without provider behavior promotion"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "catalyst_semantic_tokens_false_exact_freshness",
       "scenario_file": "ux_scenario_42_catalyst_semantic_tokens_false_exact_freshness.rs",
       "subsystem_owner": "editor_intelligence",
