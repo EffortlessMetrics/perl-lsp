@@ -39,6 +39,9 @@ enum Command {
     /// Build _index.json and _tags.json
     Index,
 
+    /// Add generated metadata to legacy section-based corpus files
+    AddMetadata,
+
     /// Print corpus statistics
     Stats {
         /// Show detailed statistics
@@ -147,6 +150,14 @@ fn main() -> Result<()> {
             println!("   - {}", args.corpus.join("_tags.json").display());
             println!("   - {}", args.corpus.join("COVERAGE_SUMMARY.md").display());
             println!("   Total sections: {}", sections.len());
+        }
+
+        Command::AddMetadata => {
+            let report = perl_corpus::metadata_backfill::backfill_dir(&args.corpus)?;
+            for path in &report.updated {
+                println!("✅ Updated {}", path.display());
+            }
+            println!("Scanned {} corpus files; updated {}", report.scanned, report.updated_count());
         }
 
         Command::Stats { detailed } => {
