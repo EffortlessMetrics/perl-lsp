@@ -62,7 +62,20 @@ impl DebugAdapter {
 
         let start_line = args.start_line.min(args.end_line);
         let end_line = args.end_line.max(args.start_line);
-        let content = match std::fs::read_to_string(&source_path) {
+        let validated_path = match self.validate_source_path(&source_path) {
+            Ok(path) => path,
+            Err(e) => {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "inlineValues".to_string(),
+                    body: None,
+                    message: Some(e),
+                };
+            }
+        };
+        let content = match std::fs::read_to_string(&validated_path) {
             Ok(content) => content,
             Err(e) => {
                 return DapMessage::Response {
