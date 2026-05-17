@@ -162,3 +162,40 @@ fn scenario_hover_text_deduplicates_repeated_known_modifier()
     );
     Ok(())
 }
+
+#[test]
+fn scenario_quoted_regex_literals_do_not_trigger_safety_findings()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Given: Perl \Q...\E quoted literals containing text that looks like regex syntax.
+    let validator = RegexValidator::new();
+    let pattern = r"\Q(?{ die 'literal' })(a+)+\p{L}(?<name>literal)\E";
+
+    // When: validating and running advisory scans.
+    let validation_result = validator.validate(pattern, 30);
+    let executes_code = validator.detects_code_execution(pattern);
+    let nested_quantifier = validator.detect_nested_quantifiers(pattern);
+    let captures = RegexAnalyzer::extract_named_captures(pattern);
+
+    // Then: quoted text is treated as literal text, not executable regex structure.
+    assert!(validation_result.is_ok());
+    assert!(!executes_code);
+    assert!(!nested_quantifier);
+    assert!(captures.is_empty());
+    Ok(())
+}
+
+#[test]
+fn scenario_named_capture_subpattern_preserves_quoted_literal_parentheses()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Given: a named capture whose body includes a quoted literal closing parenthesis.
+    let pattern = r"(?<literal>\Q)\E+)";
+
+    // When: extracting capture metadata for hover text and IDE consumers.
+    let captures = RegexAnalyzer::extract_named_captures(pattern);
+
+    // Then: the literal parenthesis does not terminate the capture body early.
+    assert_eq!(captures.len(), 1);
+    assert_eq!(captures[0].name, "literal");
+    assert_eq!(captures[0].pattern, r"\Q)\E+");
+    Ok(())
+}
