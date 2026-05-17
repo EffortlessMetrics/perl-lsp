@@ -1088,6 +1088,139 @@ sub caller {
 }
 
 #[test]
+fn refactor_runtime_blocker_ux_package_rename_preview_records_dancer2_source_backed_pilot_without_cutover()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_dancer2_workspace(&server)?;
+    let response =
+        files.get("lib/Dancer2/Core/Response.pm").ok_or("missing Dancer2 Core Response fixture")?;
+
+    let (to_psgi_line, to_psgi_character) = position_of(response, "to_psgi {")?;
+    let preview_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.previewPackageRename",
+            "arguments": [{
+                "textDocument": {"uri": DANCER2_RESPONSE_URI},
+                "position": {"line": to_psgi_line, "character": to_psgi_character},
+                "newName": "renamed_to_psgi"
+            }]
+        })))?
+        .ok_or("missing Dancer2 package rename live-pilot preview result")?;
+
+    assert_eq!(preview_result.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        preview_result.get("provider_action").and_then(Value::as_str),
+        Some("perl.previewPackageRename")
+    );
+    assert_eq!(preview_result.get("decision").and_then(Value::as_str), Some("allowed"));
+    assert_eq!(
+        preview_result.get("reason").and_then(Value::as_str),
+        Some("compiler_preview_allowed")
+    );
+    assert_eq!(preview_result.get("fact_source").and_then(Value::as_str), Some("compiler_fact"));
+    assert_eq!(preview_result.get("confidence").and_then(Value::as_str), Some("high"));
+    assert_eq!(preview_result.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(preview_result.get("fallback_state").and_then(Value::as_str), Some("none"));
+    assert_eq!(preview_result.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        preview_result.get("live_package_rename_enabled").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        preview_result.get("trace_only_no_live_behavior_change").and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        preview_result.get("source_backed_state").and_then(Value::as_str),
+        Some("not_authorized_by_package_rename_preview")
+    );
+    assert_eq!(
+        preview_result
+            .pointer("/workspace_edit/changes")
+            .and_then(Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0),
+        "Dancer2 package rename preview must not return live edits: {preview_result}"
+    );
+    assert_eq!(
+        preview_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+
+    let package_pilot = preview_result.get("package_pilot").ok_or("missing package_pilot")?;
+    assert_eq!(package_pilot.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        package_pilot.get("eligible").and_then(Value::as_bool),
+        Some(true),
+        "Dancer2 package/compiler-backed pilot should be eligible before live cutover: {package_pilot}"
+    );
+    assert_eq!(package_pilot.get("reason").and_then(Value::as_str), Some("none"));
+    assert_eq!(package_pilot.get("blocker_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(package_pilot.get("no_live_rename_cutover").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        package_pilot.get("edit_count").and_then(Value::as_u64),
+        Some(1),
+        "Dancer2 source-backed pilot should record the package-local definition edit only: {package_pilot}"
+    );
+    assert_json_array_contains(package_pilot, "edit_categories", "Definition")?;
+
+    let fallback_noise = preview_result.get("fallback_noise").ok_or("missing fallback_noise")?;
+    assert_eq!(
+        fallback_noise.get("fallback_state").and_then(Value::as_str),
+        Some("compiler_allowed")
+    );
+    assert_eq!(
+        fallback_noise.get("compiler_requires_confirmation").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(fallback_noise.get("compiler_plan_edit_count").and_then(Value::as_u64), Some(1));
+
+    let rollback_receipt =
+        preview_result.get("rollback_receipt").ok_or("missing rollback_receipt")?;
+    assert_eq!(
+        rollback_receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.previewPackageRename")
+    );
+    assert_eq!(rollback_receipt.get("rollback_required").and_then(Value::as_bool), Some(false));
+    assert_eq!(rollback_receipt.get("rollback_safe").and_then(Value::as_bool), Some(true));
+    assert_eq!(rollback_receipt.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        rollback_receipt.get("fallback_state").and_then(Value::as_str),
+        Some("compiler_allowed")
+    );
+
+    let user_message = preview_result
+        .get("user_message")
+        .and_then(Value::as_str)
+        .ok_or("missing Dancer2 package rename preview user_message")?;
+    assert!(
+        user_message.contains("Package rename preview")
+            && user_message.contains("to_psgi")
+            && user_message.contains("renamed_to_psgi")
+            && user_message.contains("no package rename edits were applied"),
+        "Dancer2 preview message should explain the no-edit live-pilot proof: {user_message}"
+    );
+
+    let explanation = explain_provider_decision(&server, "rename")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.previewPackageRename")
+    );
+    assert_eq!(request_receipt.get("decision").and_then(Value::as_str), Some("allowed"));
+    assert_eq!(
+        request_receipt.pointer("/package_pilot/eligible").and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        request_receipt.pointer("/rollback_receipt/rollback_safe").and_then(Value::as_bool),
+        Some(true)
+    );
+
+    Ok(())
+}
+
+#[test]
 fn refactor_runtime_blocker_ux_package_local_live_pilot_applies_exact_source_backed_plan()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();

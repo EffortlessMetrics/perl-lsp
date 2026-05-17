@@ -51,6 +51,12 @@ claim unless the live state and next-proof columns say so explicitly.
   `package_local_live_pilot_blocked` trace for `helper`, preserving the rule
   that imported/exported facts do not authorize package-local rename edits.
 
+- Rename note, 2026-05-17: `refactor_runtime_blocker_ux_package_rename_preview_records_dancer2_source_backed_pilot_without_cutover`
+  records a Dancer2 `to_psgi` package-rename preview receipt. It proves a
+  source-backed compiler plan can be surfaced as no-edit preview evidence with
+  high confidence, fresh facts, and rollback-safe no-op behavior while leaving
+  broader package/compiler-backed rename cutover gated.
+
 - Workspace-symbol note, 2026-05-17: generated-label support remains a bounded
   pilot. Source-backed generated/framework members can appear only as labeled
   virtual symbols anchored to framework declarations; generated/no-source,
