@@ -662,6 +662,7 @@ pub fn help_text() -> String {
     out.push_str("  PERL_LSP_LOG=1       Enable logging (alternative to --log)\n");
     out.push_str("  PERL_LSP_LOG_FILE=<path>\n");
     out.push_str("                       Also log to a daily-rotated file (max 5 files)\n");
+    out.push_str("  PERL_LSP_QUIET=1     Suppress the startup banner on stderr\n");
     out.push_str("  RUST_LOG=<filter>    Set tracing filter (e.g. perl_lsp=debug)\n");
     out.push_str("  NO_COLOR=1           Disable colored output\n");
     out
@@ -1201,6 +1202,13 @@ mod tests {
         assert!(text.contains("--completion"));
         assert!(text.contains("powershell"));
         assert!(text.contains("pwsh"));
+    }
+
+    #[test]
+    fn help_mentions_quiet_environment_flag() {
+        let text = super::help_text();
+        assert!(text.contains("PERL_LSP_QUIET=1"));
+        assert!(text.contains("startup banner"));
     }
 
     // -- --check-project flag -----------------------------------------
