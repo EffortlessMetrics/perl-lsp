@@ -1413,6 +1413,56 @@ impl Node {
         self.location.end.saturating_sub(self.location.start)
     }
 
+    /// Returns `true` when this node has no direct child nodes.
+    ///
+    /// Optimized to avoid allocating the children vector.
+    #[inline]
+    pub fn is_leaf(&self) -> bool {
+        self.first_child().is_none()
+    }
+
+    /// Find the deepest node whose source span contains `offset`.
+    ///
+    /// This is useful for cursor-oriented LSP features that need the most
+    /// specific AST node at a byte offset. The search honors
+    /// [`contains_offset`](Self::contains_offset): starts are inclusive, ends
+    /// are exclusive, and zero-length spans do not contain any offset.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use perl_ast::{Node, NodeKind, SourceLocation};
+    ///
+    /// let child = Node::new(
+    ///     NodeKind::Number { value: "42".to_string() },
+    ///     SourceLocation { start: 5, end: 7 },
+    /// );
+    /// let program = Node::new(
+    ///     NodeKind::Program { statements: vec![child] },
+    ///     SourceLocation { start: 0, end: 10 },
+    /// );
+    ///
+    /// assert_eq!(
+    ///     program.find_deepest_node_at_offset(5).map(|node| node.kind.kind_name()),
+    ///     Some("Number")
+    /// );
+    /// assert_eq!(program.find_deepest_node_at_offset(10), None);
+    /// ```
+    pub fn find_deepest_node_at_offset(&self, offset: usize) -> Option<&Node> {
+        if !self.contains_offset(offset) {
+            return None;
+        }
+
+        let mut deepest = None;
+        self.for_each_child(|child| {
+            if deepest.is_none() {
+                deepest = child.find_deepest_node_at_offset(offset);
+            }
+        });
+
+        deepest.or(Some(self))
+    }
+
     /// Get the last direct child node, if any.
     ///
     /// Optimized to avoid allocating the children vector.

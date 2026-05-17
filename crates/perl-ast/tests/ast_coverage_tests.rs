@@ -1879,3 +1879,51 @@ fn debug_nodekind_shows_variant_fields() -> Result<(), Box<dyn std::error::Error
     assert!(dbg.contains("arr"), "got: {dbg}");
     Ok(())
 }
+
+// 11. Cursor-oriented span lookup helpers
+
+#[test]
+fn is_leaf_distinguishes_nodes_with_children() -> Result<(), Box<dyn std::error::Error>> {
+    let leaf = num("1");
+    let branch = Node::new(NodeKind::Program { statements: vec![leaf.clone()] }, loc(0, 1));
+
+    assert!(leaf.is_leaf());
+    assert!(!branch.is_leaf());
+
+    Ok(())
+}
+
+#[test]
+fn find_deepest_node_at_offset_prefers_most_specific_child()
+-> Result<(), Box<dyn std::error::Error>> {
+    let target = Node::new(NodeKind::Number { value: "42".to_string() }, loc(8, 10));
+    let expression =
+        Node::new(NodeKind::ExpressionStatement { expression: Box::new(target) }, loc(5, 11));
+    let program = Node::new(NodeKind::Program { statements: vec![expression] }, loc(0, 20));
+
+    let found = program.find_deepest_node_at_offset(8);
+
+    assert_eq!(found.map(|node| node.kind.kind_name()), Some("Number"));
+    Ok(())
+}
+
+#[test]
+fn find_deepest_node_at_offset_falls_back_to_self_when_no_child_contains_offset()
+-> Result<(), Box<dyn std::error::Error>> {
+    let child = Node::new(NodeKind::Number { value: "1".to_string() }, loc(8, 9));
+    let program = Node::new(NodeKind::Program { statements: vec![child] }, loc(0, 20));
+
+    let found = program.find_deepest_node_at_offset(3);
+
+    assert_eq!(found.map(|node| node.kind.kind_name()), Some("Program"));
+    Ok(())
+}
+
+#[test]
+fn find_deepest_node_at_offset_respects_exclusive_end_bound()
+-> Result<(), Box<dyn std::error::Error>> {
+    let program = Node::new(NodeKind::Program { statements: vec![] }, loc(0, 20));
+
+    assert!(program.find_deepest_node_at_offset(20).is_none());
+    Ok(())
+}
