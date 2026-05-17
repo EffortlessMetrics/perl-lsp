@@ -142,8 +142,15 @@ proptest! {
         let result = discover_perl_files(root);
 
         for path in &result.files {
+            let relative_path = match path.strip_prefix(root) {
+                Ok(relative_path) => relative_path,
+                Err(_) => {
+                    prop_assert!(false, "discovered path was outside root: {:?}", path);
+                    return Ok(());
+                }
+            };
             for skipped_dir in skipped_dirs {
-                prop_assert!(!has_path_component(path, skipped_dir));
+                prop_assert!(!has_path_component(relative_path, skipped_dir));
             }
         }
 

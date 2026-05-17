@@ -6,15 +6,13 @@
 //! Requires the `memory-profiling` feature.
 
 #![cfg(feature = "memory-profiling")]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
 use perl_workspace::workspace::memory::{MemorySnapshot, ScaleReport};
 use perl_workspace::workspace_index::WorkspaceIndex;
 use url::Url;
 
 /// Generate a synthetic Perl module with a known number of symbols (5 per module).
-fn generate_module(idx: usize) -> (Url, String) {
-    let uri = Url::parse(&format!("file:///lib/Profile/Module{}.pm", idx)).expect("valid uri");
+fn generate_module(idx: usize) -> Result<(Url, String), Box<dyn std::error::Error>> {
+    let uri = Url::parse(&format!("file:///lib/Profile/Module{}.pm", idx))?;
     let src = format!(
         r#"package Profile::Module{idx};
 use strict;
@@ -49,7 +47,7 @@ sub _private_{idx} {{
 1;
 "#
     );
-    (uri, src)
+    Ok((uri, src))
 }
 
 #[test]
@@ -65,13 +63,13 @@ fn memory_snapshot_is_zero_for_empty_index() {
 }
 
 #[test]
-fn memory_snapshot_grows_with_files() {
+fn memory_snapshot_grows_with_files() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
 
     // Index 10 files
     for i in 0..10 {
-        let (uri, src) = generate_module(i);
-        index.index_file(uri, src).ok();
+        let (uri, src) = generate_module(i)?;
+        index.index_file(uri, src)?;
     }
 
     let snap = MemorySnapshot::capture(&index);
@@ -81,23 +79,24 @@ fn memory_snapshot_grows_with_files() {
     assert!(snap.files_bytes > 0, "files_bytes should be positive after indexing");
     assert!(snap.symbols_bytes > 0, "symbols_bytes should be positive after indexing");
     assert!(snap.total_estimated_bytes() > 0, "total should be positive after indexing");
+    Ok(())
 }
 
 #[test]
-fn memory_snapshot_scales_linearly_with_file_count() {
+fn memory_snapshot_scales_linearly_with_file_count() -> Result<(), Box<dyn std::error::Error>> {
     let index_small = WorkspaceIndex::new();
     let index_large = WorkspaceIndex::new();
 
     // Index 10 files in small
     for i in 0..10 {
-        let (uri, src) = generate_module(i);
-        index_small.index_file(uri, src).ok();
+        let (uri, src) = generate_module(i)?;
+        index_small.index_file(uri, src)?;
     }
 
     // Index 100 files in large
     for i in 0..100 {
-        let (uri, src) = generate_module(i);
-        index_large.index_file(uri, src).ok();
+        let (uri, src) = generate_module(i)?;
+        index_large.index_file(uri, src)?;
     }
 
     let snap_small = MemorySnapshot::capture(&index_small);
@@ -114,14 +113,15 @@ fn memory_snapshot_scales_linearly_with_file_count() {
 
     assert!(snap_large.file_count == 100, "large index should have 100 files");
     assert!(snap_small.file_count == 10, "small index should have 10 files");
+    Ok(())
 }
 
 #[test]
-fn memory_snapshot_display_is_human_readable() {
+fn memory_snapshot_display_is_human_readable() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     for i in 0..5 {
-        let (uri, src) = generate_module(i);
-        index.index_file(uri, src).ok();
+        let (uri, src) = generate_module(i)?;
+        index.index_file(uri, src)?;
     }
 
     let snap = MemorySnapshot::capture(&index);
@@ -131,17 +131,18 @@ fn memory_snapshot_display_is_human_readable() {
     assert!(display.contains("files"), "display should mention files component");
     assert!(display.contains("symbols"), "display should mention symbols component");
     assert!(display.contains("total"), "display should mention total");
+    Ok(())
 }
 
 #[test]
-fn scale_report_captures_multiple_checkpoints() {
+fn scale_report_captures_multiple_checkpoints() -> Result<(), Box<dyn std::error::Error>> {
     let mut report = ScaleReport::new();
 
     for scale in [10usize, 50, 100] {
         let index = WorkspaceIndex::new();
         for i in 0..scale {
-            let (uri, src) = generate_module(i);
-            index.index_file(uri, src).ok();
+            let (uri, src) = generate_module(i)?;
+            index.index_file(uri, src)?;
         }
         let snap = MemorySnapshot::capture(&index);
         report.add_checkpoint(scale, snap);
@@ -158,16 +159,17 @@ fn scale_report_captures_multiple_checkpoints() {
         "memory should increase monotonically: {:?}",
         mems
     );
+    Ok(())
 }
 
 #[test]
-fn memory_snapshot_bytes_per_symbol_is_reasonable() {
+fn memory_snapshot_bytes_per_symbol_is_reasonable() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
 
     // Index 100 files, each with ~5 symbols => ~500 symbols
     for i in 0..100 {
-        let (uri, src) = generate_module(i);
-        index.index_file(uri, src).ok();
+        let (uri, src) = generate_module(i)?;
+        index.index_file(uri, src)?;
     }
 
     let snap = MemorySnapshot::capture(&index);
@@ -186,4 +188,5 @@ fn memory_snapshot_bytes_per_symbol_is_reasonable() {
         "bytes per symbol should be at most 10,000: got {}",
         bytes_per_symbol
     );
+    Ok(())
 }

@@ -595,11 +595,12 @@ fn all_six_skipped_directories_are_excluded_from_walk() -> TestResult {
 
     // Verify none of the skipped dirs leaked through
     for path in &result.files {
-        let path_str = path.to_string_lossy();
+        let relative_path = path.strip_prefix(root)?;
         for dir in &skipped {
             assert!(
-                !path_str.contains(&format!("/{dir}/")),
-                "skipped dir {dir} leaked into results: {path_str}"
+                !relative_path.components().any(|component| component.as_os_str() == *dir),
+                "skipped dir {dir} leaked into results: {}",
+                relative_path.display()
             );
         }
     }

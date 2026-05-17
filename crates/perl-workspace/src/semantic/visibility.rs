@@ -1235,13 +1235,10 @@ mod tests {
 
                 // Every explicitly imported symbol must appear with ExplicitImport source.
                 for sym_name in &symbols {
-                    let found = visible.iter().find(|v| v.name == *sym_name);
-                    prop_assert!(
-                        found.is_some(),
-                        "explicit import '{}' should be visible",
-                        sym_name
-                    );
-                    let vs = found.expect("checked above");
+                    let Some(vs) = visible.iter().find(|v| v.name == *sym_name) else {
+                        prop_assert!(false, "explicit import '{}' should be visible", sym_name);
+                        continue;
+                    };
                     prop_assert_eq!(
                         &vs.source,
                         &VisibleSymbolSource::ExplicitImport,
@@ -1249,10 +1246,12 @@ mod tests {
                         sym_name
                     );
                     // Context should carry the source module.
-                    let ctx = vs.context.as_ref();
-                    prop_assert!(ctx.is_some(), "explicit import should have context");
+                    let Some(ctx) = vs.context.as_ref() else {
+                        prop_assert!(false, "explicit import should have context");
+                        continue;
+                    };
                     prop_assert_eq!(
-                        ctx.expect("checked above").source_module.as_deref(),
+                        ctx.source_module.as_deref(),
                         Some(module_name.as_str()),
                         "context source_module should match import module"
                     );
@@ -1312,23 +1311,22 @@ mod tests {
 
                 // Every default export must appear with DefaultExport source.
                 for sym_name in &default_exports {
-                    let found = visible.iter().find(|v| v.name == *sym_name);
-                    prop_assert!(
-                        found.is_some(),
-                        "default export '{}' should be visible",
-                        sym_name
-                    );
-                    let vs = found.expect("checked above");
+                    let Some(vs) = visible.iter().find(|v| v.name == *sym_name) else {
+                        prop_assert!(false, "default export '{}' should be visible", sym_name);
+                        continue;
+                    };
                     prop_assert_eq!(
                         &vs.source,
                         &VisibleSymbolSource::DefaultExport,
                         "default export '{}' should have DefaultExport source",
                         sym_name
                     );
-                    let ctx = vs.context.as_ref();
-                    prop_assert!(ctx.is_some(), "default export should have context");
+                    let Some(ctx) = vs.context.as_ref() else {
+                        prop_assert!(false, "default export should have context");
+                        continue;
+                    };
                     prop_assert_eq!(
-                        ctx.expect("checked above").source_module.as_deref(),
+                        ctx.source_module.as_deref(),
                         Some(module_name.as_str()),
                         "context source_module should match export module"
                     );
@@ -1404,24 +1402,27 @@ mod tests {
 
                 // Every tag member must appear with ExportTag source.
                 for sym_name in &tag_members {
-                    let found = visible.iter().find(|v| v.name == *sym_name);
-                    prop_assert!(
-                        found.is_some(),
-                        "tag member '{}' should be visible via :{} tag",
-                        sym_name,
-                        tag_name
-                    );
-                    let vs = found.expect("checked above");
+                    let Some(vs) = visible.iter().find(|v| v.name == *sym_name) else {
+                        prop_assert!(
+                            false,
+                            "tag member '{}' should be visible via :{} tag",
+                            sym_name,
+                            tag_name
+                        );
+                        continue;
+                    };
                     prop_assert_eq!(
                         &vs.source,
                         &VisibleSymbolSource::ExportTag,
                         "tag member '{}' should have ExportTag source",
                         sym_name
                     );
-                    let ctx = vs.context.as_ref();
-                    prop_assert!(ctx.is_some(), "tag export should have context");
+                    let Some(ctx) = vs.context.as_ref() else {
+                        prop_assert!(false, "tag export should have context");
+                        continue;
+                    };
                     prop_assert_eq!(
-                        ctx.expect("checked above").source_module.as_deref(),
+                        ctx.source_module.as_deref(),
                         Some(module_name.as_str()),
                         "context source_module should match export module"
                     );

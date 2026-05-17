@@ -4535,19 +4535,17 @@ mod tests {
                 // Every expected occurrence should appear in the plan edits
                 // with the correct category.
                 for (anchor_id, expected_cat) in &expected {
-                    let matching_edit = plan
-                        .edits
-                        .iter()
-                        .find(|e| e.anchor_id == *anchor_id);
-                    prop_assert!(
-                        matching_edit.is_some(),
-                        "expected an edit for anchor {:?} with category {:?}, \
-                         but no matching edit found in plan. edits: {:?}",
-                        anchor_id,
-                        expected_cat,
-                        plan.edits,
-                    );
-                    let edit = matching_edit.expect("checked above");
+                    let Some(edit) = plan.edits.iter().find(|e| e.anchor_id == *anchor_id) else {
+                        prop_assert!(
+                            false,
+                            "expected an edit for anchor {:?} with category {:?}, \
+                             but no matching edit found in plan. edits: {:?}",
+                            anchor_id,
+                            expected_cat,
+                            plan.edits,
+                        );
+                        continue;
+                    };
                     prop_assert_eq!(
                         edit.category,
                         *expected_cat,
