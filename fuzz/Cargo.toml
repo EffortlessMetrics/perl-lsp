@@ -105,6 +105,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "semantic_model"
+path = "fuzz_targets/semantic_model.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "incremental_edit_sequences"
 path = "fuzz_targets/incremental_edit_sequences.rs"
 test = false
