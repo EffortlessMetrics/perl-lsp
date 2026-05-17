@@ -380,3 +380,260 @@ pub fn create_attach_json_snippet() -> String {
         "{}".to_string()
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyhow::Result;
+    use serde_json::Value;
+    use std::fs;
+    use std::path::PathBuf;
+    use tempfile::{NamedTempFile, tempdir};
+
+    fn minimal_launch(program: PathBuf) -> LaunchConfiguration {
+        LaunchConfiguration {
+            program,
+            args: Vec::new(),
+            cwd: None,
+            env: HashMap::new(),
+            perl_path: None,
+            include_paths: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn resolve_paths_converts_relative_launch_paths() -> Result<()> {
+        let workspace = tempdir()?;
+        let mut config = LaunchConfiguration {
+            program: PathBuf::from("bin/app.pl"),
+            args: vec!["--flag".to_string()],
+            cwd: Some(PathBuf::from("work")),
+            env: HashMap::new(),
+            perl_path: None,
+            include_paths: vec![PathBuf::from("lib"), PathBuf::from("vendor/lib")],
+        };
+
+        config.resolve_paths(workspace.path())?;
+
+        assert_eq!(config.program, workspace.path().join("bin/app.pl"));
+        assert_eq!(config.cwd, Some(workspace.path().join("work")));
+        assert_eq!(
+            config.include_paths,
+            vec![workspace.path().join("lib"), workspace.path().join("vendor/lib")]
+        );
+        assert_eq!(config.args, vec!["--flag"]);
+        Ok(())
+    }
+
+    #[test]
+    fn resolve_paths_preserves_absolute_launch_paths() -> Result<()> {
+        let workspace = tempdir()?;
+        let absolute_program = workspace.path().join("script.pl");
+        let absolute_cwd = workspace.path().join("cwd");
+        let absolute_include = workspace.path().join("abs-lib");
+        let mut config = LaunchConfiguration {
+            program: absolute_program.clone(),
+            args: Vec::new(),
+            cwd: Some(absolute_cwd.clone()),
+            env: HashMap::new(),
+            perl_path: None,
+            include_paths: vec![absolute_include.clone()],
+        };
+
+        config.resolve_paths(workspace.path())?;
+
+        assert_eq!(config.program, absolute_program);
+        assert_eq!(config.cwd, Some(absolute_cwd));
+        assert_eq!(config.include_paths, vec![absolute_include]);
+        Ok(())
+    }
+
+    #[test]
+    fn launch_validate_accepts_existing_program_cwd_and_perl_binary() -> Result<()> {
+        let program = NamedTempFile::new()?;
+        let perl_binary = NamedTempFile::new()?;
+        let cwd = tempdir()?;
+        let config = LaunchConfiguration {
+            program: program.path().to_path_buf(),
+            args: Vec::new(),
+            cwd: Some(cwd.path().to_path_buf()),
+            env: HashMap::new(),
+            perl_path: Some(perl_binary.path().to_path_buf()),
+            include_paths: Vec::new(),
+        };
+
+        config.validate()?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn launch_validate_rejects_missing_program() -> Result<()> {
+        let missing_program = tempdir()?.path().join("missing.pl");
+        let config = minimal_launch(missing_program);
+
+        let error = config.validate().err();
+
+        assert!(error.is_some_and(|err| err.to_string().contains("Program file does not exist")));
+        Ok(())
+    }
+
+    #[test]
+    fn launch_validate_rejects_directory_program() -> Result<()> {
+        let dir = tempdir()?;
+        let config = minimal_launch(dir.path().to_path_buf());
+
+        let error = config.validate().err();
+
+        assert!(error.is_some_and(|err| err.to_string().contains("Program file is not a file")));
+        Ok(())
+    }
+
+    #[test]
+    fn launch_validate_rejects_invalid_cwd_and_perl_binary() -> Result<()> {
+        let program = NamedTempFile::new()?;
+        let file_as_cwd = NamedTempFile::new()?;
+        let config = LaunchConfiguration {
+            program: program.path().to_path_buf(),
+            args: Vec::new(),
+            cwd: Some(file_as_cwd.path().to_path_buf()),
+            env: HashMap::new(),
+            perl_path: None,
+            include_paths: Vec::new(),
+        };
+
+        let cwd_error = config.validate().err();
+
+        assert!(
+            cwd_error.is_some_and(|err| err
+                .to_string()
+                .contains("Working directory is not a directory"))
+        );
+
+        let missing_perl = tempdir()?.path().join("perl");
+        let config = LaunchConfiguration {
+            program: program.path().to_path_buf(),
+            args: Vec::new(),
+            cwd: None,
+            env: HashMap::new(),
+            perl_path: Some(missing_perl),
+            include_paths: Vec::new(),
+        };
+
+        let perl_error = config.validate().err();
+
+        assert!(
+            perl_error.is_some_and(|err| err.to_string().contains("Perl binary does not exist"))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn attach_default_matches_documented_endpoint() {
+        let config = AttachConfiguration::default();
+
+        assert_eq!(config.host, "localhost");
+        assert_eq!(config.port, 13603);
+        assert_eq!(config.timeout_ms, Some(5000));
+        assert_eq!(config.stop_on_entry, None);
+    }
+
+    #[test]
+    fn attach_validate_accepts_boundary_timeout_values() -> Result<()> {
+        for timeout_ms in [None, Some(1), Some(300_000)] {
+            let config = AttachConfiguration {
+                host: "127.0.0.1".to_string(),
+                port: 1,
+                timeout_ms,
+                stop_on_entry: Some(true),
+            };
+
+            config.validate()?;
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn attach_validate_rejects_blank_host_zero_port_and_bad_timeouts() {
+        let blank_host = AttachConfiguration {
+            host: " \t\n ".to_string(),
+            port: 13603,
+            timeout_ms: Some(5000),
+            stop_on_entry: None,
+        };
+        assert!(blank_host.validate().is_err_and(|err| err.to_string() == "Host cannot be empty"));
+
+        let zero_port = AttachConfiguration {
+            host: "localhost".to_string(),
+            port: 0,
+            timeout_ms: Some(5000),
+            stop_on_entry: None,
+        };
+        assert!(
+            zero_port
+                .validate()
+                .is_err_and(|err| err.to_string() == "Port must be in range 1-65535")
+        );
+
+        let zero_timeout = AttachConfiguration {
+            host: "localhost".to_string(),
+            port: 13603,
+            timeout_ms: Some(0),
+            stop_on_entry: None,
+        };
+        assert!(
+            zero_timeout
+                .validate()
+                .is_err_and(|err| err.to_string() == "Timeout must be greater than 0 milliseconds")
+        );
+
+        let excessive_timeout = AttachConfiguration {
+            host: "localhost".to_string(),
+            port: 13603,
+            timeout_ms: Some(300_001),
+            stop_on_entry: None,
+        };
+        assert!(excessive_timeout.validate().is_err_and(|err| {
+            err.to_string() == "Timeout cannot exceed 300000 milliseconds (5 minutes)"
+        }));
+    }
+
+    #[test]
+    fn launch_snippet_contains_deserializable_launch_defaults() -> Result<()> {
+        let value: Value = serde_json::from_str(&create_launch_json_snippet())?;
+
+        assert_eq!(value["type"], "perl");
+        assert_eq!(value["request"], "launch");
+        assert_eq!(value["program"], "${workspaceFolder}/script.pl");
+        assert_eq!(value["perlPath"], "perl");
+        assert_eq!(value["cwd"], "${workspaceFolder}");
+        assert_eq!(value["includePaths"][0], "${workspaceFolder}/lib");
+        Ok(())
+    }
+
+    #[test]
+    fn attach_snippet_contains_deserializable_attach_defaults() -> Result<()> {
+        let value: Value = serde_json::from_str(&create_attach_json_snippet())?;
+
+        assert_eq!(value["type"], "perl");
+        assert_eq!(value["request"], "attach");
+        assert_eq!(value["host"], "localhost");
+        assert_eq!(value["port"], 13603);
+        assert_eq!(value["timeout"], 5000);
+        assert_eq!(value["stopOnEntry"], false);
+        Ok(())
+    }
+
+    #[test]
+    fn launch_validate_accepts_program_created_with_fs_write() -> Result<()> {
+        let dir = tempdir()?;
+        let program = dir.path().join("script.pl");
+        fs::write(&program, "use strict;\n")?;
+        let config = minimal_launch(program);
+
+        config.validate()?;
+
+        Ok(())
+    }
+}
