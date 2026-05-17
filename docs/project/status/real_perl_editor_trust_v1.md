@@ -157,8 +157,9 @@ allow proof, source guard, and rollback proof all pass.
 previews as user-readable no-edit UX with planned edit evidence plus fallback
 or blocker state.
 VS Code command palette wiring now exposes provider explanation, safe-delete
-preview, and copyable receipt commands without changing provider behavior or
-safe-delete edit authorization.
+preview, copyable receipt, and workspace trust report commands without changing
+provider behavior, safe-delete edit authorization, scanning files, probing Perl,
+or promoting support tiers.
 
 Package-local rename live support has now moved from preview-only to a narrow
 pilot. The compiler-allowed preview receipt proves the eligible no-edit UX shape
