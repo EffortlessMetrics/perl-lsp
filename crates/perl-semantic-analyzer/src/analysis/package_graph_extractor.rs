@@ -46,16 +46,31 @@ struct ExtractorState {
 }
 
 impl ExtractorState {
+    /// Walk a statement list in source order using the current package context.
+    fn walk_statements(&mut self, statements: &[Node]) {
+        for stmt in statements {
+            self.walk(stmt);
+        }
+    }
+
     /// Recursive AST walker.
     fn walk(&mut self, node: &Node) {
         match &node.kind {
-            // For statement containers (Program, Block), walk statements in order
-            // so that `package Foo;` (semicolon form) updates the current package
-            // for subsequent sibling statements.
-            NodeKind::Program { statements } | NodeKind::Block { statements } => {
-                for stmt in statements {
-                    self.walk(stmt);
-                }
+            // For the top-level program, walk statements in order so that
+            // `package Foo;` (semicolon form) updates the current package for
+            // subsequent sibling statements through the end of the file.
+            NodeKind::Program { statements } => {
+                self.walk_statements(statements);
+                return;
+            }
+
+            // Bare blocks introduce a lexical package scope: `package Foo;` inside
+            // the block applies to later statements in that block, but the outer
+            // package resumes after the block.
+            NodeKind::Block { statements } => {
+                let prev_package = self.current_package.clone();
+                self.walk_statements(statements);
+                self.current_package = prev_package;
                 return;
             }
 
@@ -516,6 +531,27 @@ use parent 'Parent';
 
         assert_eq!(edge.from_package, "main");
         assert_eq!(edge.to_package, "Base");
+        Ok(())
+    }
+
+    #[test]
+    fn test_package_declaration_inside_block_restores_outer_package() -> Result<(), String> {
+        let code = r#"
+package Outer;
+{
+    package Inner;
+    use parent 'InnerBase';
+}
+use parent 'OuterBase';
+1;
+"#;
+        let edges = parse_and_extract(code);
+        assert_eq!(edges.len(), 2, "expected two inheritance edges, got {}", edges.len());
+
+        assert_eq!(edges[0].from_package, "Inner");
+        assert_eq!(edges[0].to_package, "InnerBase");
+        assert_eq!(edges[1].from_package, "Outer");
+        assert_eq!(edges[1].to_package, "OuterBase");
         Ok(())
     }
 
