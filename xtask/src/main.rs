@@ -2328,14 +2328,14 @@ enum DevexCommand {
     /// Plan the cheapest correct local proof commands for the current diff.
     Plan {
         /// Git base ref used for changed-file detection.
-        #[arg(long, default_value = "origin/master")]
+        #[arg(long, default_value = "auto")]
         base: String,
     },
 
     /// Emit a JSON receipt for the current local proof plan.
     Receipt {
         /// Git base ref used for changed-file detection.
-        #[arg(long, default_value = "origin/master")]
+        #[arg(long, default_value = "auto")]
         base: String,
 
         /// Output path for the JSON receipt.
@@ -2346,7 +2346,7 @@ enum DevexCommand {
     /// Show a local PR cockpit summary for the current diff.
     Cockpit {
         /// Git base ref used for changed-file detection.
-        #[arg(long, default_value = "origin/master")]
+        #[arg(long, default_value = "auto")]
         base: String,
 
         /// Output path for the JSON receipt refreshed by the cockpit.
@@ -2357,7 +2357,7 @@ enum DevexCommand {
     /// Print a paste-ready PR proof packet for the current diff.
     PrBody {
         /// Git base ref used for changed-file detection.
-        #[arg(long, default_value = "origin/master")]
+        #[arg(long, default_value = "auto")]
         base: String,
 
         /// Receipt path referenced by the generated PR body.
