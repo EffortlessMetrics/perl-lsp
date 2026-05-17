@@ -922,6 +922,39 @@ fn validate_rejects_word_class_quantifier_in_group() -> Result<(), Box<dyn std::
 }
 
 #[test]
+fn validate_accepts_atomic_group_with_inner_quantifier() -> Result<(), Box<dyn std::error::Error>> {
+    let v = RegexValidator::new();
+
+    v.validate(r"(?>\w+)+", 0)?;
+    assert!(!v.detect_nested_quantifiers(r"(?>\w+)+"));
+
+    Ok(())
+}
+
+#[test]
+fn validate_accepts_possessive_inner_quantifier() -> Result<(), Box<dyn std::error::Error>> {
+    let v = RegexValidator::new();
+
+    v.validate(r"(\w++)+", 0)?;
+    assert!(!v.detect_nested_quantifiers(r"(\w++)+"));
+
+    Ok(())
+}
+
+#[test]
+fn validate_accepts_possessive_outer_quantifier() -> Result<(), Box<dyn std::error::Error>> {
+    let v = RegexValidator::new();
+
+    v.validate(r"(\w+)++", 0)?;
+    assert!(!v.detect_nested_quantifiers(r"(\w+)++"));
+
+    v.validate(r"(\w+){2,5}+", 0)?;
+    assert!(!v.detect_nested_quantifiers(r"(\w+){2,5}+"));
+
+    Ok(())
+}
+
+#[test]
 fn validate_accepts_non_capturing_with_quantifier() -> Result<(), Box<dyn std::error::Error>> {
     let v = RegexValidator::new();
     // (?:pattern)+ is a perfectly normal Perl regex
