@@ -253,8 +253,8 @@ impl LspServer {
                 "namespace",
                 "matched_existing_live_namespace_token",
                 "unmatched_existing_live_namespace_token",
-                false,
-                "class-specific compiler package-declaration receipt only; token:function remains the only compiler-backed live slice, and package declarations stay shadowed until class-specific approval lands",
+                true,
+                "scoped compiler package-declaration class cutover proof only; package declarations may count as compiler-token identities only when their source-backed span already matches existing live parser/HIR namespace tokens, and no new token output is emitted",
             ));
         }
         if let Some(candidate) = semantic_token_method_declaration_candidate(&doc.text) {
@@ -451,7 +451,7 @@ fn semantic_token_package_declaration_candidate(
     )?;
 
     Some(crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
-        format!("token:namespace:{name}:compiler"),
+        format!("token:package_declaration:{name}:compiler"),
         ProviderFactSourceKind::CompilerFact,
         Provenance::SemanticAnalyzer,
         Confidence::Medium,

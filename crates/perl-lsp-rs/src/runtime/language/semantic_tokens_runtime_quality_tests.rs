@@ -106,6 +106,34 @@ __PACKAGE__->meta->make_immutable;
 1;
 "#;
 
+const UPDATED_CATALYST_CONTROLLER_MODULE: &str = r#"package MyApp::Controller::Renamed;
+use Moose;
+use namespace::autoclean;
+
+BEGIN { extends 'Catalyst::Controller' }
+
+__PACKAGE__->config(namespace => '');
+
+sub index :Path :Args(0) {
+    my ($self, $c) = @_;
+    $c->stash(template => 'index.tt');
+}
+
+sub item :Local Args(1) {
+    my ($self, $c, $id) = @_;
+    my $action = "show_${id}";
+    return $c->forward("${self}::${action}");
+}
+
+sub generated_dispatch :Private {
+    my ($self, $c, $controller, $action) = @_;
+    return $c->forward("${controller}::${action}");
+}
+
+__PACKAGE__->meta->make_immutable;
+1;
+"#;
+
 /// Class-syntax fixture used for the next compiler-token expansion receipt.
 /// The method name is source-backed by the compiler candidate, but the receipt
 /// must keep it shadowed until class-specific live-output parity is proven.
@@ -540,16 +568,16 @@ fn semantic_tokens_runtime_quality_receipt_proves_source_backed_package_declarat
     assert_eq!(package_receipt.get("source").and_then(Value::as_str), Some("CompilerFact"));
     assert_eq!(package_receipt.get("provenance").and_then(Value::as_str), Some("SemanticAnalyzer"));
     assert_eq!(package_receipt.get("freshness").and_then(Value::as_str), Some("Fresh"));
-    assert_eq!(package_receipt.get("fallback_state").and_then(Value::as_str), Some("Shadow"));
+    assert_eq!(package_receipt.get("fallback_state").and_then(Value::as_str), Some("Primary"));
     assert_eq!(
         package_receipt.get("approved_for_live_cutover").and_then(Value::as_bool),
-        Some(false),
-        "package declarations must remain shadowed until explicit class-specific approval lands"
+        Some(true),
+        "package declarations are the scoped class under cutover proof"
     );
     assert_eq!(
         package_receipt.get("live_pilot").and_then(Value::as_bool),
-        Some(false),
-        "package declarations must not join the live compiler-token slice from parity proof alone"
+        Some(true),
+        "package declarations may join the scoped compiler-token live pilot only with parity proof"
     );
     assert_eq!(
         package_receipt.get("live_output_parity").and_then(Value::as_bool),
@@ -589,7 +617,7 @@ fn semantic_tokens_runtime_quality_receipt_proves_source_backed_package_declarat
 
     let package_candidate =
         crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
-            "token:namespace:MyApp::Controller::Root:compiler",
+            "token:package_declaration:MyApp::Controller::Root:compiler",
             ProviderFactSourceKind::CompilerFact,
             Provenance::SemanticAnalyzer,
             Confidence::Medium,
@@ -611,12 +639,16 @@ fn semantic_tokens_runtime_quality_receipt_proves_source_backed_package_declarat
     );
     assert_eq!(
         shadow.receipt.verdict,
-        ShadowCompareVerdict::Same,
-        "package compiler candidates remain receipt-only until class-specific cutover"
+        ShadowCompareVerdict::Improved,
+        "package compiler candidates may count only through the scoped package-declaration identity"
     );
     assert_eq!(
-        shadow.receipt.new_result.match_count, 0,
-        "package compiler candidates must not become semantic-token identities yet"
+        shadow.receipt.new_result.match_count, 1,
+        "package compiler candidates may become identities only after class-specific cutover proof"
+    );
+    assert_eq!(
+        shadow.receipt.new_result.identities,
+        vec!["token:package_declaration:MyApp::Controller::Root:compiler".to_string()]
     );
 
     let namespace_token_type =
@@ -637,8 +669,8 @@ fn semantic_tokens_runtime_quality_receipt_proves_source_backed_package_declarat
 
     let claim_boundary = must_some(package_receipt.get("claim_boundary").and_then(Value::as_str));
     assert!(
-        claim_boundary.contains("package declarations stay shadowed"),
-        "package receipt must preserve the no-cutover boundary; got: {claim_boundary}"
+        claim_boundary.contains("no new token output is emitted"),
+        "package receipt must preserve the output-neutral cutover boundary; got: {claim_boundary}"
     );
 
     Ok(())
@@ -1717,6 +1749,70 @@ fn semantic_tokens_runtime_quality_receipt_refreshes_method_declaration_live_pil
     );
     assert_eq!(
         updated_method_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "edit-freshness proof must remain output-neutral"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_refreshes_package_declaration_live_pilot_after_edit()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    let catalyst_uri = "file:///workspace/lib/MyApp/Controller/Root.pm";
+    open_document(&server, catalyst_uri, CATALYST_CONTROLLER_MODULE);
+
+    let params = json!({ "textDocument": {"uri": catalyst_uri} });
+    let initial_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let initial_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params.clone()))));
+    let initial_package_receipt = class_specific_receipt(&initial_receipt, "package_declaration")?;
+    let initial_identity = first_shadow_identity(initial_package_receipt)?;
+    assert!(
+        initial_identity.contains("MyApp::Controller::Root"),
+        "initial package-declaration compiler identity should use the opened source: {initial_identity}"
+    );
+    assert_eq!(
+        initial_package_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "initial package declaration should be the scoped class live pilot"
+    );
+
+    change_document(&server, catalyst_uri, 2, UPDATED_CATALYST_CONTROLLER_MODULE);
+
+    let updated_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let updated_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+    let updated_package_receipt = class_specific_receipt(&updated_receipt, "package_declaration")?;
+    let updated_identity = first_shadow_identity(updated_package_receipt)?;
+
+    assert_ne!(
+        updated_live, initial_live,
+        "live semantic-token output must refresh after the package declaration edit"
+    );
+    assert_ne!(
+        updated_identity, initial_identity,
+        "package-declaration compiler identity must refresh after didChange"
+    );
+    assert!(
+        updated_identity.contains("MyApp::Controller::Renamed"),
+        "updated package-declaration compiler identity should use the edited source: {updated_identity}"
+    );
+    assert_eq!(
+        updated_package_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "post-edit package declaration should remain in the scoped class live pilot"
+    );
+    assert_eq!(
+        updated_package_receipt.get("live_token_match_count").and_then(Value::as_u64),
+        Some(1),
+        "post-edit source-backed package declaration must still match the live token stream"
+    );
+    assert_eq!(
+        updated_package_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
         Some(true),
         "edit-freshness proof must remain output-neutral"
     );
