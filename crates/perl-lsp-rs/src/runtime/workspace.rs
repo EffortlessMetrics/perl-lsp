@@ -219,12 +219,8 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        let query = params
-            .as_ref()
-            .and_then(|p| p.get("query"))
-            .and_then(|q| q.as_str())
-            .unwrap_or("")
-            .trim();
+        let query =
+            params.as_ref().and_then(|p| p.get("query")).and_then(|q| q.as_str()).unwrap_or("");
         let cap = workspace_symbol_cap();
 
         tracing::debug!(query, cap, "Workspace symbol search v2");
@@ -410,7 +406,6 @@ impl LspServer {
             .and_then(|p| p.get("query"))
             .and_then(Value::as_str)
             .unwrap_or("")
-            .trim()
             .to_string();
 
         let live_provider_result = self.handle_workspace_symbols_v2(params)?;
@@ -612,12 +607,8 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        let query = params
-            .as_ref()
-            .and_then(|p| p.get("query"))
-            .and_then(|q| q.as_str())
-            .unwrap_or("")
-            .trim();
+        let query =
+            params.as_ref().and_then(|p| p.get("query")).and_then(|q| q.as_str()).unwrap_or("");
 
         tracing::debug!(query, "Workspace symbol search");
 

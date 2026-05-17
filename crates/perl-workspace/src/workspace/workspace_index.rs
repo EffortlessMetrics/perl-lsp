@@ -2909,7 +2909,6 @@ impl WorkspaceIndex {
     /// to preserve the historical source-backed live slice for trust receipts
     /// or fallback paths.
     pub fn search_source_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
-        let query = query.trim();
         let query_lower = query.to_lowercase();
         let files = self.files.read();
         let mut results = Vec::new();
@@ -2935,7 +2934,6 @@ impl WorkspaceIndex {
     /// labeled as generated/framework members and point at the source declaration
     /// that produced the member, not at an exact generated method body.
     pub fn search_generated_workspace_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
-        let query = query.trim();
         if query.is_empty() {
             return Vec::new();
         }
@@ -4632,19 +4630,9 @@ has display_name => (is => 'rw');
             source_symbols.is_empty(),
             "generated framework members must not enter the exact source-symbol slice"
         );
-        let trimmed_source_symbols = index.search_source_symbols("  display_name  ");
-        assert!(
-            trimmed_source_symbols.is_empty(),
-            "trimmed generated framework member queries must not enter the exact source-symbol slice"
-        );
 
         let generated_symbols = index.search_generated_workspace_symbols("display_name");
         assert_eq!(generated_symbols.len(), 1);
-        let trimmed_generated_symbols =
-            index.search_generated_workspace_symbols("  display_name  ");
-        assert_eq!(trimmed_generated_symbols.len(), 1);
-        assert_eq!(trimmed_generated_symbols[0].name, "display_name [generated/framework]");
-        assert!(index.search_generated_workspace_symbols("   ").is_empty());
         let symbol = &generated_symbols[0];
         assert_eq!(symbol.name, "display_name [generated/framework]");
         assert_eq!(symbol.kind, SymbolKind::Method);
