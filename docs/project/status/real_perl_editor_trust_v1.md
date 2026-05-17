@@ -93,10 +93,11 @@ class-specific proof covers
 false-exact boundaries, generated/no-source candidates, dynamic and stale facts,
 edit freshness, and the intended user-visible output behavior.
 
-The next semantic-token step should be a support review or scoped class cutover
-plan with no-token-output-change and fallback evidence. This review does not
-promote package-declaration, method-call, method-declaration, or
-field-declaration compiler facts to live token output.
+With this support review recorded, the next semantic-token step is a scoped
+class cutover plan with no-token-output-change, false-exact, fallback, and
+edit-freshness evidence. This review does not promote package-declaration,
+method-call, method-declaration, or field-declaration compiler facts to live
+token output.
 
 ## Refactor Support Review
 
@@ -121,12 +122,12 @@ Recent workspace-symbol, semantic-token, and rename-preview receipts have
 refreshed those surfaces without broadening live behavior. The Modern OO
 workspace-symbol receipt plus generated-symbol support review closes the
 immediate workspace-symbol rank/noise and review routing item, and the
-package-declaration receipt closes the immediate semantic-token class-specific
-receipt request; route the next provider slice through support review before
-another rename receipt.
+semantic-token class receipt support review closes the immediate
+semantic-token review routing item; route the next provider slice through
+rename support review before another cutover receipt.
 
-1. `docs(status): review semantic-token class receipts before broader compiler-token promotion`
-2. `docs(status): review rename support after Dancer2 package-rename preview proof`
+1. `docs(status): review rename support after Dancer2 package-rename preview proof`
+2. `test(semantic-tokens): prove scoped class cutover before broader compiler-token promotion`
 3. `test(workspace-symbols): prove scoped generated-symbol cutover before broader generated-symbol expansion`
 
 Provider decision explanations are already partial-live through
