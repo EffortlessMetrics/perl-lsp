@@ -161,7 +161,7 @@ default_pr = true
 blocking = false
 paths = ["crates/**/src/**", "xtask/src/**"]
 labels = ["ripr", "full-ci"]
-outputs = ["target/ripr/ripr.json", "target/ripr/ripr.sarif", "step-summary"]
+outputs = ["target/ripr/pr/", "target/ripr/review/", "step-summary"]
 duplicate_of = ["nightly:mutation"]
 
 # -----------------------------------------------------------------------------

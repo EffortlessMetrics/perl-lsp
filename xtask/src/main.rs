@@ -68,6 +68,27 @@ enum Commands {
     /// Verify DevEx docs match the toolchain and command surface.
     CheckDevexDocs,
 
+    /// Regenerate or verify public Shields badge endpoints.
+    Badges {
+        /// Check committed endpoints for drift without updating badges/.
+        #[arg(long)]
+        check: bool,
+    },
+
+    /// Produce or verify PR-scoped RIPR repository exposure evidence.
+    RiprPr {
+        /// Verify the generated output contract without rerunning ripr.
+        #[arg(long)]
+        check: bool,
+    },
+
+    /// Produce or verify PR-scoped RIPR review guidance.
+    RiprReviewComments {
+        /// Verify the generated output contract without rerunning ripr.
+        #[arg(long)]
+        check: bool,
+    },
+
     /// Capture a GitHub PR queue snapshot for disconnected maintainership.
     Queue {
         #[command(subcommand)]
@@ -2381,6 +2402,9 @@ fn main() -> Result<()> {
         Commands::CheckLintPolicy => check_lint_policy::run(),
         Commands::CheckToolchain { doctor } => check_toolchain::run(doctor),
         Commands::CheckDevexDocs => devex_docs::run(),
+        Commands::Badges { check } => badges::run(check),
+        Commands::RiprPr { check } => ripr_evidence::run_pr(check),
+        Commands::RiprReviewComments { check } => ripr_evidence::run_review_comments(check),
         Commands::Queue { command } => match command {
             QueueCommand::Snapshot { out, fixture } => queue_snapshot::run_snapshot(out, fixture),
             QueueCommand::Health { receipt, fixture } => {

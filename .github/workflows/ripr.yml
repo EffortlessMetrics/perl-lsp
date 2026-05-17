@@ -39,7 +39,7 @@ jobs:
     continue-on-error: true
     if: github.event.pull_request.draft != true
     env:
-      RIPR_VERSION: "0.4.0"
+      RIPR_VERSION: "0.5.0"
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -63,36 +63,58 @@ jobs:
       - name: Run ripr (doctor)
         run: ripr doctor
 
-      - name: Run ripr (JSON report)
-        run: |
-          mkdir -p target/ripr
-          ripr check --base "origin/${{ github.base_ref || 'master' }}" --json \
-            > target/ripr/ripr.json || true
+      - name: Fetch base branch
+        if: github.base_ref != ''
+        run: git fetch origin ${{ github.base_ref }}
 
-      - name: Run ripr (GitHub annotations)
-        run: |
-          ripr check --base "origin/${{ github.base_ref || 'master' }}" \
-            --format github || true
+      - name: RIPR PR evidence
+        id: ripr_pr
+        run: cargo xtask ripr-pr
 
-      - name: Run ripr (SARIF)
-        run: |
-          ripr check --base "origin/${{ github.base_ref || 'master' }}" \
-            --format sarif > target/ripr/ripr.sarif || true
+      - name: RIPR review guidance
+        id: ripr_review
+        run: cargo xtask ripr-review-comments
 
-      - name: Summarize ripr findings
+      - name: RIPR PR contract
         if: always()
-        run: |
-          if [ -f target/ripr/ripr.json ]; then
-            python3 scripts/ci/ripr_summary.py \
-              --report target/ripr/ripr.json \
-              --summary "$GITHUB_STEP_SUMMARY" || true
-          fi
+        run: cargo xtask ripr-pr --check
 
-      - name: Upload ripr report
+      - name: RIPR review contract
+        if: always()
+        run: cargo xtask ripr-review-comments --check
+
+      - name: RIPR annotations
+        if: always()
+        run: python scripts/ripr-annotations.py
+
+      - name: RIPR review summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## RIPR Review Guidance"
+            echo
+            if [ -f target/ripr/review/comments.md ]; then
+              cat target/ripr/review/comments.md
+            else
+              echo "No RIPR review guidance was produced."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload RIPR PR evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ripr-report
-          path: target/ripr/
+          name: ripr-pr
+          path: target/ripr/pr
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Upload RIPR review guidance
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ripr-review
+          path: target/ripr/review
           retention-days: 14
           if-no-files-found: warn
