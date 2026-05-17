@@ -114,7 +114,7 @@ Run in order for a release. See [CONTRIBUTING.md](../CONTRIBUTING.md#release-wor
 | `control-plane-lock.sh` | Advisory single-writer lock for swarm operations |
 | `test-control-plane-lock.sh` | Test the lock implementation |
 | `swarm-summary.sh` | Summarize current swarm state |
-| `validate_swarm_agent_roster.py` | Validate agent roster completeness |
+| `cargo xtask validate-swarm-agent-roster` | Validate agent roster completeness |
 | `validate_swarm_findings.py` | Validate swarm-discovered findings |
 | `bulk-label-issues.sh` | Bulk-label GitHub issues by query |
 | `close-duplicate-prs.sh` | Close duplicate PRs by title |

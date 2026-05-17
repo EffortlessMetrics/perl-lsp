@@ -1468,6 +1468,13 @@ enum Commands {
     /// Remove stale `.claude/worktrees` entries and prune Git metadata.
     WorktreeCleanup,
 
+    /// Validate the committed Claude swarm agent roster contract.
+    ValidateSwarmAgentRoster {
+        /// Repository root containing `.claude/agents/agent-roster.json`.
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
+
     /// Show summary statistics from swarm-metrics.jsonl.
     SwarmSummary {
         /// Path to operations directory (defaults to `.ops-perl-lsp`).
@@ -3186,6 +3193,7 @@ fn main() -> Result<()> {
             Ok(())
         }
         Commands::WorktreeCleanup => worktrees::cleanup(),
+        Commands::ValidateSwarmAgentRoster { root } => swarm_agent_roster::run(root),
         Commands::SwarmSummary { ops_dir, since, limit, format } => {
             swarm_summary::run(swarm_summary::SwarmSummaryConfig { ops_dir, since, limit, format })
         }

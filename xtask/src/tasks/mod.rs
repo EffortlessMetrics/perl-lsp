@@ -101,6 +101,7 @@ pub mod ripr_evidence;
 pub mod semantic_scorecard;
 pub mod semantic_shadow_compare;
 pub mod srp_microcrates;
+pub mod swarm_agent_roster;
 pub mod swarm_summary;
 pub mod sync_release_docs;
 pub mod targeted_checks;
