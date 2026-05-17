@@ -465,6 +465,18 @@ mod normalize_uri_tests {
     }
 
     #[test]
+    fn legacy_windows_file_uri_encodes_key_segments() {
+        assert_eq!(
+            normalize_uri(r"file://C:\My Project\a#b?.pl"),
+            "file:///c:/My%20Project/a%23b%3F.pl"
+        );
+        assert_eq!(
+            normalize_uri(r"D:\projects\ümlaut\module%.pm"),
+            "file:///d:/projects/%C3%BCmlaut/module%25.pm"
+        );
+    }
+
+    #[test]
     fn bare_windows_path_becomes_canonical_file_uri() {
         assert_eq!(
             normalize_uri(r"C:\Users\dev\plain_path.pl"),

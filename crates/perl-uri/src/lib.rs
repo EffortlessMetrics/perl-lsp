@@ -277,7 +277,8 @@ fn mojibake_marker_count(text: &str) -> usize {
 /// # Platform Support
 ///
 /// The full implementation is only available on non-`wasm32` targets.
-/// On `wasm32`, only URI parsing is performed without filesystem operations.
+/// On `wasm32`, legacy Windows URI normalization and URI parsing are performed
+/// without filesystem operations.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn normalize_uri(uri: &str) -> String {
     if let Some(normalized) = classify::normalize_legacy_windows_uri(uri) {
@@ -457,7 +458,7 @@ mod tests {
         fn test_normalize_uri_absolute_path() {
             let path = std::env::temp_dir().join("normalize-uri-absolute.pl");
             let raw_path = path.to_string_lossy();
-            let expected = must(fs_path_to_uri(&path));
+            let expected = uri_key(&must(fs_path_to_uri(&path)));
 
             assert_eq!(normalize_uri(raw_path.as_ref()), expected);
         }
