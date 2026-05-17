@@ -1779,6 +1779,7 @@ dependencies = [
  "perl-tdd-support",
  "tree-sitter",
  "tree-sitter-perl-c",
+ "walkdir",
 ]
 
 [[package]]

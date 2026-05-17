@@ -45,8 +45,12 @@
 // Tests in this crate may use panic-based helpers (must/must_some).
 #![cfg_attr(test, allow(clippy::panic, clippy::unwrap_used, clippy::expect_used))]
 
+pub mod corpus_walker;
 pub mod harness;
 pub mod outcomes;
 
+pub use corpus_walker::{
+    AggregateStats, DisagreementKind, FileRecord, classify, format_report, walk_corpora,
+};
 pub use harness::{ParseResult, parse_v1, parse_v2, parse_v3};
 pub use outcomes::Verdict;
