@@ -107,10 +107,12 @@ fn normalize_unc_path_to_key(path: &str) -> Option<String> {
     let share = parts.next()?;
     let rest = parts.collect::<Vec<_>>().join("/");
 
+    let encoded_share = percent_encode_uri_path_component(share);
     if rest.is_empty() {
-        Some(format!("file://{server}/{share}"))
+        Some(format!("file://{server}/{encoded_share}"))
     } else {
-        Some(format!("file://{server}/{share}/{rest}"))
+        let encoded_rest = percent_encode_uri_path(&rest);
+        Some(format!("file://{server}/{encoded_share}/{encoded_rest}"))
     }
 }
 
@@ -144,9 +146,40 @@ fn normalize_windows_path_to_key(path: &str) -> Option<String> {
         normalized.insert(2, '/');
     }
 
-    // Lowercase the drive letter.
+    // Lowercase the drive letter and percent-encode characters that are not
+    // valid in URI paths (spaces, fragments, non-ASCII bytes, etc.).
     let drive = normalized[0..1].to_ascii_lowercase();
-    Some(format!("file:///{drive}{}", &normalized[1..]))
+    let path = format!("{drive}{}", &normalized[1..]);
+    Some(format!("file:///{}", percent_encode_uri_path(&path)))
+}
+
+fn percent_encode_uri_path(path: &str) -> String {
+    path.split('/').map(percent_encode_uri_path_component).collect::<Vec<_>>().join("/")
+}
+
+fn percent_encode_uri_path_component(component: &str) -> String {
+    let mut encoded = String::with_capacity(component.len());
+    for byte in component.as_bytes() {
+        match *byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' | b':' => {
+                encoded.push(char::from(*byte))
+            }
+            _ => {
+                encoded.push('%');
+                encoded.push(hex_digit(byte >> 4));
+                encoded.push(hex_digit(byte & 0x0f));
+            }
+        }
+    }
+    encoded
+}
+
+fn hex_digit(nibble: u8) -> char {
+    match nibble {
+        0..=9 => char::from(b'0' + nibble),
+        10..=15 => char::from(b'A' + (nibble - 10)),
+        _ => '0',
+    }
 }
 
 /// Check if a URI uses the `file://` scheme.
@@ -232,6 +265,15 @@ mod tests {
     }
 
     #[test]
+    fn percent_encodes_legacy_windows_path_keys() {
+        assert_eq!(
+            uri_key(r"C:\Users\dev\my script #1.pl"),
+            "file:///c:/Users/dev/my%20script%20%231.pl"
+        );
+        assert_eq!(uri_key(r"file://C:\Users\dev\café.pl"), "file:///c:/Users/dev/caf%C3%A9.pl");
+    }
+
+    #[test]
     fn normalizes_legacy_file_uri_two_slashes_forward_slash() {
         // Some clients emit `file://C:/...` (two slashes, forward slashes) instead of
         // the canonical three-slash form.  The pre-pass handles both backslash and
@@ -281,6 +323,14 @@ mod tests {
         assert_eq!(
             uri_key(r"file://\\server\share\folder\file.pl"),
             "file://server/share/folder/file.pl"
+        );
+    }
+
+    #[test]
+    fn percent_encodes_legacy_unc_path_keys() {
+        assert_eq!(
+            uri_key(r"\\server\shared docs\café scripts\hello world.pl"),
+            "file://server/shared%20docs/caf%C3%A9%20scripts/hello%20world.pl"
         );
     }
 
