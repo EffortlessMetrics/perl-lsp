@@ -427,6 +427,28 @@ fn nested_quantifiers_escaped_paren_not_group() -> Result<(), Box<dyn std::error
 }
 
 #[test]
+fn nested_quantifiers_reject_nested_group_wrappers() -> Result<(), Box<dyn std::error::Error>> {
+    let v = RegexValidator::new();
+    assert!(v.detect_nested_quantifiers("((a+))+"));
+    assert!(v.detect_nested_quantifiers("((?:a+))+"));
+    assert!(v.validate("((a+))+", 0).is_err());
+    Ok(())
+}
+
+#[test]
+fn nested_quantifiers_accept_atomic_and_possessive_backtracking_guards()
+-> Result<(), Box<dyn std::error::Error>> {
+    let v = RegexValidator::new();
+    assert!(!v.detect_nested_quantifiers("(?>a+)+"));
+    assert!(!v.detect_nested_quantifiers("(a++)+"));
+    assert!(!v.detect_nested_quantifiers("(a*+)+"));
+    assert!(!v.detect_nested_quantifiers("(a{1,3}+)+"));
+    v.validate("(?>a+)+", 0)?;
+    v.validate("(a++)+", 0)?;
+    Ok(())
+}
+
+#[test]
 fn nested_quantifiers_non_capturing_group() -> Result<(), Box<dyn std::error::Error>> {
     let v = RegexValidator::new();
     assert!(v.detect_nested_quantifiers("(?:a+)+"));
