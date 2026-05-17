@@ -730,6 +730,21 @@ fn build_artifact() -> Artifact {
         ),
         receipt_from_identities(
             ShadowQueryName::SemanticTokens,
+            "semantic_token_broader_compiler_class_false_exact",
+            Some(vec![]),
+            Some(vec![]),
+            "semantic-token shadow proof: broader compiler-backed token classes remain non-exact until class-specific source-backed proof lands",
+            vec![trace(
+                ProviderSurface::SemanticTokens,
+                ProviderFactSourceKind::CompilerFact,
+                Provenance::SemanticAnalyzer,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Shadow,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::SemanticTokens,
             "semantic_token_generated_no_source",
             Some(vec![]),
             Some(vec![]),
@@ -1123,7 +1138,7 @@ mod tests {
     fn artifact_includes_required_verdict_rows() {
         let artifact = build_artifact();
         assert_eq!(artifact.schema_version, 3);
-        assert_eq!(artifact.verdict_counts.get("same"), Some(&34));
+        assert_eq!(artifact.verdict_counts.get("same"), Some(&35));
         assert_eq!(artifact.verdict_counts.get("improved"), Some(&13));
         assert_eq!(artifact.verdict_counts.get("regression"), Some(&1));
         assert_eq!(artifact.verdict_counts.get("ambiguous"), Some(&2));
@@ -1132,7 +1147,7 @@ mod tests {
         assert_eq!(artifact.release_readiness_verdict_counts.get("improved"), Some(&3));
         assert_eq!(artifact.release_readiness_verdict_counts.get("regression"), Some(&0));
         assert_eq!(artifact.release_readiness_verdict_counts.get("unavailable"), Some(&0));
-        assert_eq!(artifact.schema_fixture_verdict_counts.get("same"), Some(&25));
+        assert_eq!(artifact.schema_fixture_verdict_counts.get("same"), Some(&26));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("improved"), Some(&10));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("regression"), Some(&1));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("ambiguous"), Some(&2));
@@ -1212,6 +1227,9 @@ mod tests {
         ));
         assert!(markdown.contains(
             "| schema-fixture | SemanticTokens | `semantic_token_compiler_classification` | improved | 0 | 1 |"
+        ));
+        assert!(markdown.contains(
+            "| schema-fixture | SemanticTokens | `semantic_token_broader_compiler_class_false_exact` | same | 0 | 0 |"
         ));
         assert!(markdown.contains(
             "| schema-fixture | SemanticTokens | `semantic_token_generated_no_source` | same | 0 | 0 |"
