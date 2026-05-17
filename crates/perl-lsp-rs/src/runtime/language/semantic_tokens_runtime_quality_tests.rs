@@ -108,7 +108,7 @@ __PACKAGE__->meta->make_immutable;
 
 /// Class-syntax fixture used for the next compiler-token expansion receipt.
 /// The method name is source-backed by the compiler candidate, but the receipt
-/// must keep it shadowed until class-specific live-output parity is proven.
+/// must keep it shadowed until explicit class-specific approval lands.
 const CLASS_METHOD_MODULE: &str = r#"use feature 'class';
 
 class TokenGreeter {
@@ -304,6 +304,24 @@ fn method_call_name_span(
     let length = u32::try_from(source[name_start..name_end].encode_utf16().count())?;
 
     Ok((name_start, name_end, line, start, length))
+}
+
+fn method_declaration_name_span(
+    source: &str,
+    method: &str,
+) -> Result<(u32, u32, u32), Box<dyn Error>> {
+    let marker = format!("method {method}");
+    let marker_start = source.find(&marker).ok_or("expected method declaration in fixture")?;
+    let name_start = marker_start + "method ".len();
+    let name_end = name_start + method.len();
+
+    let prefix = &source[..name_start];
+    let line = u32::try_from(prefix.bytes().filter(|byte| *byte == b'\n').count())?;
+    let line_start = prefix.rfind('\n').map_or(0, |offset| offset + 1);
+    let start = u32::try_from(source[line_start..name_start].encode_utf16().count())?;
+    let length = u32::try_from(source[name_start..name_end].encode_utf16().count())?;
+
+    Ok((line, start, length))
 }
 
 fn assert_semantic_token_live_output_parity(uri: &str, source: &str) -> Result<(), Box<dyn Error>> {
@@ -903,6 +921,19 @@ fn semantic_tokens_runtime_quality_receipt_records_project_shaped_compiler_backe
     );
 }
 
+fn class_specific_method_declaration_receipt(
+    receipt: &Value,
+) -> Result<&serde_json::Map<String, Value>, Box<dyn Error>> {
+    let expansion_receipts =
+        must_some(receipt.get("class_specific_expansion_receipts").and_then(Value::as_array));
+    assert_eq!(
+        expansion_receipts.len(),
+        1,
+        "class-method fixture should record one class-specific compiler-token receipt"
+    );
+    Ok(must_some(expansion_receipts.first().and_then(Value::as_object)))
+}
+
 #[test]
 fn semantic_tokens_runtime_quality_receipt_records_class_specific_method_expansion_receipt()
 -> Result<(), Box<dyn Error>> {
@@ -925,14 +956,7 @@ fn semantic_tokens_runtime_quality_receipt_records_class_specific_method_expansi
         "class-specific compiler-token receipt must not broaden live token output"
     );
 
-    let expansion_receipts =
-        must_some(receipt.get("class_specific_expansion_receipts").and_then(Value::as_array));
-    assert_eq!(
-        expansion_receipts.len(),
-        1,
-        "class-method fixture should record one class-specific compiler-token receipt"
-    );
-    let method_receipt = must_some(expansion_receipts.first().and_then(Value::as_object));
+    let method_receipt = class_specific_method_declaration_receipt(&receipt)?;
 
     assert_eq!(
         method_receipt.get("token_class").and_then(Value::as_str),
@@ -954,15 +978,15 @@ fn semantic_tokens_runtime_quality_receipt_records_class_specific_method_expansi
     );
     assert_eq!(
         method_receipt.get("live_output_parity").and_then(Value::as_bool),
-        Some(false),
-        "current parser/HIR method tokens must not be treated as exact compiler method-name parity"
+        Some(true),
+        "parser/HIR method declaration tokens must match the compiler method-name span before cutover"
     );
     assert_eq!(
         method_receipt.get("parity_state").and_then(Value::as_str),
-        Some("unmatched_existing_live_method_token")
+        Some("matched_existing_live_method_token")
     );
     assert_eq!(method_receipt.get("live_token_type").and_then(Value::as_str), Some("method"));
-    assert_eq!(method_receipt.get("live_token_match_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(method_receipt.get("live_token_match_count").and_then(Value::as_u64), Some(1));
     assert_eq!(method_receipt.get("candidate_count").and_then(Value::as_u64), Some(1));
     assert_eq!(
         method_receipt.get("source_backed_span_count").and_then(Value::as_u64),
@@ -999,6 +1023,106 @@ fn semantic_tokens_runtime_quality_receipt_records_class_specific_method_expansi
     assert!(
         notes.contains("class_specific_compiler_token_classes=1"),
         "runtime notes must count the class-specific expansion receipt; got: {notes}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_proves_source_backed_method_declaration_compiler_token_parity()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    let class_uri = "file:///workspace/lib/TokenGreeter.pm";
+    open_document(&server, class_uri, CLASS_METHOD_MODULE);
+
+    let params = json!({ "textDocument": {"uri": class_uri} });
+    let live_result =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+
+    assert_eq!(
+        receipt.get("live_provider_result"),
+        Some(&live_result),
+        "method-declaration parity must compare against the exact live token output"
+    );
+    assert_eq!(
+        receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(true),
+        "method-declaration parity receipt must not change live semantic-token behavior"
+    );
+    assert_eq!(
+        receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "method-declaration parity receipt must not emit extra compiler tokens"
+    );
+
+    let (expected_line, expected_start, expected_length) =
+        method_declaration_name_span(CLASS_METHOD_MODULE, "greet")?;
+    let method_token_type =
+        *crate::semantic_tokens::legend().map.get("method").ok_or("missing method token")?;
+    let live_match_count = decode_semantic_tokens(&live_result)?
+        .iter()
+        .filter(|token| {
+            token.line == expected_line
+                && token.start == expected_start
+                && token.length == expected_length
+                && token.token_type == method_token_type
+        })
+        .count();
+    assert_eq!(
+        live_match_count, 1,
+        "source-backed method-declaration compiler span must match exactly one live method token"
+    );
+
+    let method_receipt = class_specific_method_declaration_receipt(&receipt)?;
+    assert_eq!(
+        method_receipt.get("token_class").and_then(Value::as_str),
+        Some("method_declaration")
+    );
+    assert_eq!(method_receipt.get("source").and_then(Value::as_str), Some("CompilerFact"));
+    assert_eq!(method_receipt.get("provenance").and_then(Value::as_str), Some("SemanticAnalyzer"));
+    assert_eq!(method_receipt.get("fallback_state").and_then(Value::as_str), Some("Shadow"));
+    assert_eq!(
+        method_receipt.get("approved_for_live_cutover").and_then(Value::as_bool),
+        Some(false),
+        "parity proof must not approve method declarations for compiler-backed live cutover"
+    );
+    assert_eq!(
+        method_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(false),
+        "method declarations must remain outside the existing compiler-backed live slice"
+    );
+    assert_eq!(method_receipt.get("live_output_parity").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        method_receipt.get("parity_state").and_then(Value::as_str),
+        Some("matched_existing_live_method_token")
+    );
+    assert_eq!(method_receipt.get("live_token_type").and_then(Value::as_str), Some("method"));
+    assert_eq!(
+        method_receipt.get("live_token_match_count").and_then(Value::as_u64),
+        Some(u64::try_from(live_match_count)?)
+    );
+    assert_eq!(method_receipt.get("candidate_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(method_receipt.get("source_backed_span_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(method_receipt.get("missing_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(method_receipt.get("invalid_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(
+        method_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true)
+    );
+
+    let shadow_receipt = must_some(method_receipt.get("shadow_receipt").and_then(Value::as_object));
+    let new_result = must_some(shadow_receipt.get("new_result").and_then(Value::as_object));
+    assert_eq!(
+        new_result.get("match_count").and_then(Value::as_u64),
+        Some(0),
+        "method-declaration compiler candidates must not become semantic-token identities yet"
+    );
+    let identities = must_some(new_result.get("identities").and_then(Value::as_array));
+    assert!(
+        identities.is_empty(),
+        "method-declaration parity must remain receipt-only until support review"
     );
 
     Ok(())

@@ -631,9 +631,14 @@ pub fn collect_semantic_tokens(
                 }
                 return true;
             }
-            NodeKind::Method { .. } => {
-                let (sl, sc) = to_pos16(node.location.start);
-                let (el, ec) = to_pos16(node.location.end);
+            NodeKind::Method { name, .. } => {
+                let Some((name_start, name_end)) =
+                    method_declaration_name_span(text, node.location.start, name)
+                else {
+                    return true;
+                };
+                let (sl, sc) = to_pos16(name_start);
+                let (el, ec) = to_pos16(name_end);
                 let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
                 if len > 0 {
                     ast_tokens.push((
@@ -900,6 +905,35 @@ fn assignment_lhs_spans(ast: &Node) -> FxHashSet<(usize, usize)> {
     spans
 }
 
+fn method_declaration_name_span(
+    source: &str,
+    method_start: usize,
+    name: &str,
+) -> Option<(usize, usize)> {
+    if name.is_empty() {
+        return None;
+    }
+
+    let direct_end = method_start.checked_add(name.len())?;
+    if source.get(method_start..direct_end) == Some(name) {
+        return Some((method_start, direct_end));
+    }
+
+    let after_keyword = method_start.checked_add("method".len())?;
+    if source.get(method_start..after_keyword) != Some("method") {
+        return None;
+    }
+
+    let mut name_start = after_keyword;
+    let bytes = source.as_bytes();
+    while matches!(bytes.get(name_start), Some(b' ' | b'\t' | b'\r' | b'\n')) {
+        name_start = name_start.checked_add(1)?;
+    }
+
+    let name_end = name_start.checked_add(name.len())?;
+    if source.get(name_start..name_end) == Some(name) { Some((name_start, name_end)) } else { None }
+}
+
 fn ast_uses_const_fast(ast: &Node) -> bool {
     let mut enabled = false;
     walk_ast_full(ast, &mut |node| {
@@ -1147,6 +1181,61 @@ print "ok" foreach @ys;
         });
         assert!(completed);
         assert_eq!(visited, ast.count_nodes());
+        Ok(())
+    }
+
+    #[test]
+    fn method_declaration_semantic_token_uses_method_name_span()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = r#"use feature 'class';
+
+class TokenGreeter {
+    method greet {
+        return "hello";
+    }
+}
+"#;
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+        let to_pos16 = |offset: usize| {
+            let prefix = &source[..offset];
+            let line = prefix.bytes().filter(|byte| *byte == b'\n').count() as u32;
+            let line_start = prefix.rfind('\n').map_or(0, |pos| pos + 1);
+            let col = source[line_start..offset].encode_utf16().count() as u32;
+            (line, col)
+        };
+        let tokens = collect_semantic_tokens(&ast, source, &to_pos16);
+        let legend = legend();
+        let method_token_type = kind_idx(&legend, "method");
+        let method_name_start = source.find("greet").ok_or("expected method name")?;
+        let (expected_line, expected_start) = to_pos16(method_name_start);
+        let expected_length = "greet".len() as u32;
+
+        let mut current_line = 0_u32;
+        let mut current_start = 0_u32;
+        let mut matching_method_tokens = 0usize;
+        for [delta_line, delta_start, length, token_type, _mods] in tokens {
+            if delta_line == 0 {
+                current_start = current_start.saturating_add(delta_start);
+            } else {
+                current_line = current_line.saturating_add(delta_line);
+                current_start = delta_start;
+            }
+
+            if current_line == expected_line
+                && current_start == expected_start
+                && length == expected_length
+                && token_type == method_token_type
+            {
+                matching_method_tokens += 1;
+            }
+        }
+
+        assert_eq!(
+            matching_method_tokens, 1,
+            "method declaration should emit exactly one live method token on the method name"
+        );
+
         Ok(())
     }
 
