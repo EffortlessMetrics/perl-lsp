@@ -1069,6 +1069,9 @@ impl LspServer {
                         .ok_or_else(|| invalid_params("Missing subtest name argument"))?;
                     return self.run_subtest(subtest_name);
                 }
+                "perl.workspaceTrustReport" => {
+                    return self.workspace_trust_report();
+                }
                 "perl.previewSafeDelete" => {
                     let request = arguments
                         .first()
