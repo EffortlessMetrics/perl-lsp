@@ -397,16 +397,7 @@ impl DebugAdapter {
         let all_entries = if has_session { self.query_inc_entries() } else { Vec::new() };
 
         let total = all_entries.len() as i64;
-
-        // Convert Foo/Bar.pm keys to Foo::Bar module names.
-        let all_modules: Vec<Module> = all_entries
-            .into_iter()
-            .enumerate()
-            .map(|(idx, (key, path))| {
-                let name = module_path_to_name(&key);
-                Module { id: idx.to_string(), name, path: Some(path) }
-            })
-            .collect();
+        let all_modules = modules_from_inc_entries(all_entries);
 
         // Apply pagination.
         let paginated: Vec<Module> = if let Some(count) = module_count {
@@ -425,5 +416,48 @@ impl DebugAdapter {
             body: serde_json::to_value(&body).ok(),
             message: None,
         }
+    }
+}
+
+fn modules_from_inc_entries(entries: Vec<(String, String)>) -> Vec<Module> {
+    let mut modules: Vec<(String, String)> =
+        entries.into_iter().map(|(key, path)| (module_path_to_name(&key), path)).collect();
+
+    modules.sort_by(|(left_name, left_path), (right_name, right_path)| {
+        left_name.cmp(right_name).then_with(|| left_path.cmp(right_path))
+    });
+
+    modules
+        .into_iter()
+        .enumerate()
+        .map(|(idx, (name, path))| Module { id: idx.to_string(), name, path: Some(path) })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::modules_from_inc_entries;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    #[test]
+    fn modules_from_inc_entries_sorts_before_assigning_ids() -> TestResult {
+        let modules = modules_from_inc_entries(vec![
+            ("Zoo/Last.pm".to_string(), "/lib/Zoo/Last.pm".to_string()),
+            ("App/Core.pm".to_string(), "/lib/App/Core.pm".to_string()),
+            ("App/Core.pm".to_string(), "/vendor/App/Core.pm".to_string()),
+        ]);
+
+        let names: Vec<&str> = modules.iter().map(|module| module.name.as_str()).collect();
+        assert_eq!(names, vec!["App::Core", "App::Core", "Zoo::Last"]);
+        let first_path = modules
+            .first()
+            .and_then(|module| module.path.as_deref())
+            .ok_or("expected first module to preserve sorted path")?;
+        assert_eq!(first_path, "/lib/App/Core.pm");
+        let ids: Vec<&str> = modules.iter().map(|module| module.id.as_str()).collect();
+        assert_eq!(ids, vec!["0", "1", "2"]);
+
+        Ok(())
     }
 }
