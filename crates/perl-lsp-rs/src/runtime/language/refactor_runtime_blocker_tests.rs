@@ -92,6 +92,24 @@ fn open_document(
     Ok(())
 }
 
+fn change_document(
+    server: &LspServer,
+    uri: &str,
+    version: i32,
+    text: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    server.test_handle_did_change(Some(json!({
+        "textDocument": {
+            "uri": uri,
+            "version": version
+        },
+        "contentChanges": [
+            { "text": text }
+        ]
+    })))?;
+    Ok(())
+}
+
 fn workspace_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -274,6 +292,12 @@ fn workspace_edit_texts_for_uri<'a>(
         .and_then(Value::as_array)
         .ok_or("missing workspace edit changes for URI")?;
     Ok(edits.iter().filter_map(|edit| edit.get("newText").and_then(Value::as_str)).collect())
+}
+
+fn workspace_edit_change_count(edit: &Value) -> Result<usize, Box<dyn std::error::Error>> {
+    let changes =
+        edit.get("changes").and_then(Value::as_object).ok_or("missing workspace edit changes")?;
+    Ok(changes.values().filter_map(Value::as_array).map(Vec::len).sum())
 }
 
 fn assert_safe_delete_decision_trace(
@@ -1235,6 +1259,130 @@ fn refactor_runtime_blocker_ux_package_local_live_pilot_blocks_real_workspace_im
                 && boundary.contains("broader compiler-backed refactor facts remain gated")
         }),
         "rename trace must preserve the package-local claim boundary: {request_receipt}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_package_local_live_pilot_real_workspace_false_allow_falls_back_with_fresh_rollback_boundary()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_semantic_real_workspace(&server)?;
+    let app = files.get("lib/RealBaseline/App.pm").ok_or("missing RealBaseline App fixture")?;
+
+    let (name_line, name_character) = position_of(app, "name {")?;
+    let preview_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.previewPackageRename",
+            "arguments": [{
+                "textDocument": {"uri": REAL_BASELINE_APP_URI},
+                "position": {"line": name_line, "character": name_character},
+                "newName": "renamed_name"
+            }]
+        })))?
+        .ok_or("missing package rename false-allow preview result")?;
+
+    assert_eq!(preview_result.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        preview_result.get("provider_action").and_then(Value::as_str),
+        Some("perl.previewPackageRename")
+    );
+    assert_eq!(preview_result.get("decision").and_then(Value::as_str), Some("allowed"));
+    assert_eq!(
+        preview_result.get("reason").and_then(Value::as_str),
+        Some("compiler_preview_allowed")
+    );
+    assert_eq!(preview_result.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        preview_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+
+    let package_pilot = preview_result.get("package_pilot").ok_or("missing package_pilot")?;
+    assert_eq!(package_pilot.get("eligible").and_then(Value::as_bool), Some(true));
+    assert_eq!(package_pilot.get("reason").and_then(Value::as_str), Some("none"));
+    let compiler_edit_count = package_pilot
+        .get("edit_count")
+        .and_then(Value::as_u64)
+        .ok_or("missing package pilot edit count")?;
+    assert_eq!(
+        compiler_edit_count, 1,
+        "RealBaseline package pilot should see only the source-backed definition edit: {package_pilot}"
+    );
+    assert_json_array_contains(package_pilot, "edit_categories", "Definition")?;
+
+    let rollback_receipt =
+        preview_result.get("rollback_receipt").ok_or("missing rollback_receipt")?;
+    assert_eq!(rollback_receipt.get("rollback_required").and_then(Value::as_bool), Some(false));
+    assert_eq!(rollback_receipt.get("rollback_safe").and_then(Value::as_bool), Some(true));
+    assert_eq!(rollback_receipt.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        rollback_receipt.get("live_package_rename_enabled").and_then(Value::as_bool),
+        Some(false)
+    );
+
+    let rename_request = json!({
+        "textDocument": {"uri": REAL_BASELINE_APP_URI},
+        "position": {"line": name_line, "character": name_character},
+        "newName": "renamed_name"
+    });
+    let live_result = server
+        .handle_rename_workspace(Some(rename_request.clone()))?
+        .ok_or("missing package-local live rename fallback result")?;
+    let live_edit_count = workspace_edit_change_count(&live_result)?;
+    assert!(
+        live_edit_count > usize::try_from(compiler_edit_count)?,
+        "workspace guard must catch the package-pilot false allow and return broader current-source fallback edits: compiler={compiler_edit_count}, live={live_edit_count}, result={live_result}"
+    );
+    let live_app_texts = workspace_edit_texts_for_uri(&live_result, REAL_BASELINE_APP_URI)?;
+    assert!(
+        live_app_texts.iter().filter(|text| **text == "renamed_name").count() >= 2,
+        "workspace-index fallback must include RealBaseline::App::name references in App.pm: {live_result}"
+    );
+
+    let explanation = explain_provider_decision(&server, "rename")?;
+    let live_receipt = request_receipt(&explanation)?;
+    assert_eq!(live_receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        live_receipt.get("provider_action").and_then(Value::as_str),
+        Some("textDocument/rename")
+    );
+    assert_eq!(
+        live_receipt.get("reason").and_then(Value::as_str),
+        Some("full_index_workspace_edit")
+    );
+    assert_eq!(live_receipt.get("fallback_state").and_then(Value::as_str), Some("workspace_index"));
+    assert_eq!(
+        live_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
+        u64::try_from(live_edit_count).ok()
+    );
+
+    let updated_app = app.replace("helper($self->name);", "helper($self->name);\n    $self->name;");
+    change_document(&server, REAL_BASELINE_APP_URI, 2, &updated_app)?;
+
+    let fresh_live_result = server
+        .handle_rename_workspace(Some(rename_request))?
+        .ok_or("missing package-local fresh fallback result")?;
+    let fresh_edit_count = workspace_edit_change_count(&fresh_live_result)?;
+    assert!(
+        fresh_edit_count > live_edit_count,
+        "current-source fallback must use fresh didChange state instead of stale package-pilot evidence: before={live_edit_count}, after={fresh_edit_count}, result={fresh_live_result}"
+    );
+    let fresh_app_texts = workspace_edit_texts_for_uri(&fresh_live_result, REAL_BASELINE_APP_URI)?;
+    assert!(
+        fresh_app_texts.iter().filter(|text| **text == "renamed_name").count()
+            > live_app_texts.iter().filter(|text| **text == "renamed_name").count(),
+        "post-edit fallback should include the newly added App.pm name call: before={live_app_texts:?}, after={fresh_app_texts:?}"
+    );
+
+    let fresh_explanation = explain_provider_decision(&server, "rename")?;
+    let fresh_receipt = request_receipt(&fresh_explanation)?;
+    assert_eq!(fresh_receipt.get("reason").and_then(Value::as_str), Some("same_file_semantic"));
+    assert_eq!(fresh_receipt.get("fallback_state").and_then(Value::as_str), Some("none"));
+    assert_eq!(
+        fresh_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
+        u64::try_from(fresh_edit_count).ok()
     );
 
     Ok(())
