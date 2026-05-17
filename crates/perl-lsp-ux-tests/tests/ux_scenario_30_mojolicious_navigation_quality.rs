@@ -12,6 +12,7 @@
 //! - fallback/empty counts for uncertain dynamic or unsupported surfaces
 
 use anyhow::{Context, Result};
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{
     ScenarioConfig, UxCiTier, UxComponent, UxHarness, UxScenarioSkip, run_ux_scenario,
 };
@@ -73,10 +74,6 @@ struct NavigationProbeReport {
     expected_target_hits: Vec<String>,
     missing_expected_uri_suffixes: Vec<String>,
     fallback_or_empty: bool,
-}
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
 }
 
 fn missing_binary_skip() -> UxScenarioSkip {

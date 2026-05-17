@@ -942,6 +942,14 @@ impl FormatResult {
 
 // ─────────────────────────────── Binary Resolution ───────────────────────────
 
+/// Return whether the perl-lsp binary can be resolved for UX scenario tests.
+///
+/// This is a lightweight guard for integration tests that need to skip when the
+/// server binary has not been built in the current environment.
+pub fn binary_available() -> bool {
+    resolve_binary().is_ok()
+}
+
 /// Resolve the path to the perl-lsp binary.
 ///
 /// Resolution order:

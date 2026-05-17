@@ -11,6 +11,7 @@
 //! - dynamic/fallback label coverage when the provider exposes it
 
 use anyhow::{Context, Result};
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{
     ScenarioConfig, UxCiTier, UxComponent, UxHarness, UxScenarioSkip, run_ux_scenario,
 };
@@ -56,10 +57,6 @@ struct CompletionProbeReport {
     generated_candidate_hits: Vec<String>,
     generated_provenance_label_hits: Vec<String>,
     dynamic_or_fallback_label_hits: Vec<String>,
-}
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
 }
 
 fn missing_binary_skip() -> UxScenarioSkip {

@@ -13,6 +13,7 @@
 //! - freshness after editing a document so stale symbol names disappear
 
 use anyhow::{Context, Result};
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{
     ScenarioConfig, UxCiTier, UxComponent, UxHarness, UxScenarioSkip, run_ux_scenario,
 };
@@ -80,10 +81,6 @@ struct FreshnessReport {
     before_hits: Vec<String>,
     after_hits: Vec<String>,
     after_invalid_shape_count: usize,
-}
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
 }
 
 fn missing_binary_skip() -> UxScenarioSkip {

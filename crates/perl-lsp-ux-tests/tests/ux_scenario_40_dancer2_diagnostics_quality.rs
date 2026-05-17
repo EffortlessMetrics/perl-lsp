@@ -13,6 +13,7 @@
 //!   genuinely missing module
 
 use anyhow::{Context, Result};
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{
     LspEvent, ScenarioConfig, UxCiTier, UxComponent, UxHarness, UxScenarioSkip, run_ux_scenario,
 };
@@ -85,10 +86,6 @@ struct DiagnosticProbeReport {
     dynamic_boundary_label_hits: Vec<String>,
     message_excerpts: Vec<String>,
     fallback_or_empty: bool,
-}
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
 }
 
 fn missing_binary_skip() -> UxScenarioSkip {
