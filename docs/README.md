@@ -4,6 +4,37 @@ Use this directory as the short docs front door. It tells you where to go next
 without making you learn the workspace layout first. For the full Diataxis-style
 map of the docs tree, use [INDEX.md](INDEX.md).
 
+## Source-of-Truth Stack for Long-Lived Work
+
+For long-lived lanes, use the same source-of-truth stack that the Real Perl
+Editor Trust lane established:
+
+```text
+Roadmap → Proposal → Specs → ADRs → Plan → Active goal → PRs → Receipts
+```
+
+Each layer owns a different kind of truth so that product motivation, behavior
+contracts, architectural decisions, implementation sequencing, active agent
+state, and generated evidence do not drift into one another.
+
+| Layer | Owns | Canonical location |
+| --- | --- | --- |
+| Roadmap | Release direction and active milestone | [project/ROADMAP.md](project/ROADMAP.md) |
+| Proposal / PRD | Why the lane exists, user value, alternatives, claim boundary | [proposals/](proposals/) |
+| Spec | Behavior contract, acceptance, proof, claim limits | [specs/](specs/) |
+| ADR | Durable architecture or operating decision | [adr/](adr/) |
+| Implementation plan | PR-sized sequence, proof commands, rollback, handoff state | [../plans/](../plans/) |
+| Active goal manifest | Machine-readable current agent state | [../.perl-lsp/goals/](../.perl-lsp/goals/) |
+| Status / support tiers | Current truth and public claim proof | [project/status/](project/status/) |
+| Policy ledgers | CI, lint, file, package, and exception receipts | [../policy/](../policy/), [../.ci/](../.ci/) |
+| Closeout / handoff | What happened, what remains, proof | `plans/<lane>/closeout.md` or [forensics/](forensics/) |
+
+Start with [reference/SPEC_SYSTEM.md](reference/SPEC_SYSTEM.md) when creating or
+reviewing a lane. The lane-local example is
+[../plans/real-perl-editor-trust/](../plans/real-perl-editor-trust/), which
+links [PLSP-PROP-0001](proposals/PLSP-PROP-0001-real-perl-editor-trust.md), the
+PLSP specs, PLSP ADRs, its implementation plan, and the active goal manifest.
+
 ## Diataxis in This Repository
 
 When adding or moving docs, choose the content type first, then the file:
@@ -69,6 +100,7 @@ For complete workspace membership and canonical crate/version truth, use [`../Ca
 | tune performance or threading | [how-to/PERFORMANCE_TUNING.md](how-to/PERFORMANCE_TUNING.md), [how-to/THREADING_CONFIGURATION_GUIDE.md](how-to/THREADING_CONFIGURATION_GUIDE.md) |
 | work with DAP workflows | [tutorials/DAP_USER_GUIDE.md](tutorials/DAP_USER_GUIDE.md) |
 | understand project architecture | [reference/ARCHITECTURE_OVERVIEW.md](reference/ARCHITECTURE_OVERVIEW.md), [reference/CRATE_ARCHITECTURE_GUIDE.md](reference/CRATE_ARCHITECTURE_GUIDE.md) |
+| understand the proposal/spec/ADR/plan/goal source-of-truth stack | [reference/SPEC_SYSTEM.md](reference/SPEC_SYSTEM.md) |
 | understand measured editor trust and the long-term Rust Perl path | [explanation/MEASURED_PERL_EDITOR_TRUST.md](explanation/MEASURED_PERL_EDITOR_TRUST.md) |
 | check known limitations and parser support | [reference/KNOWN_LIMITATIONS.md](reference/KNOWN_LIMITATIONS.md), [reference/PARSER_FEATURE_MATRIX.md](reference/PARSER_FEATURE_MATRIX.md) |
 | see what is true now | [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md) |
