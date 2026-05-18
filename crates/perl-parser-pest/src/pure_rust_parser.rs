@@ -2788,55 +2788,59 @@ mod tests {
     fn test_basic_parsing() {
         let mut parser = PureRustPerlParser::new();
         let source = "$var";
-        let result = parser.parse(source);
-        assert!(result.is_ok());
-        let ast = must(result);
+        let ast = must(parser.parse(source));
         let sexp = parser.to_sexp(&ast);
-        println!("AST: {:?}", ast);
-        println!("S-expression: {}", sexp);
+
+        assert!(sexp.contains("(scalar_variable $var)"), "expected scalar variable; got: {sexp}");
     }
 
     #[test]
     fn test_variable_parsing() {
-        use perl_tdd_support::must;
         let mut parser = PureRustPerlParser::new();
         let source = "$scalar @array %hash";
-        let result = parser.parse(source);
-        assert!(result.is_ok());
-        let ast = must(result);
+        let ast = must(parser.parse(source));
         let sexp = parser.to_sexp(&ast);
-        println!("S-expression: {}", sexp);
+
+        assert!(sexp.contains("$scalar"), "expected scalar variable; got: {sexp}");
+        assert!(sexp.contains("@array"), "expected array variable; got: {sexp}");
+        assert!(
+            sexp.contains("(%)") && sexp.contains("(identifier hash)"),
+            "expected hash token shape; got: {sexp}"
+        );
     }
 
     #[test]
     fn test_assignment_parsing() {
         let mut parser = PureRustPerlParser::new();
         let source = "my $var = 42;";
-        let result = parser.parse(source);
-        let ast = must(result);
+        let ast = must(parser.parse(source));
         let sexp = parser.to_sexp(&ast);
-        println!("Success! AST: {:?}", ast);
-        println!("S-expression: {}", sexp);
+
+        assert!(sexp.contains("(variable_declaration"), "expected declaration; got: {sexp}");
+        assert!(sexp.contains("(number 42)"), "expected numeric initializer; got: {sexp}");
     }
 
     #[test]
     fn test_function_declaration() {
         let mut parser = PureRustPerlParser::new();
         let source = "sub hello { print 'Hello'; }";
-        let result = parser.parse(source);
-        let ast = must(result);
+        let ast = must(parser.parse(source));
         let sexp = parser.to_sexp(&ast);
-        println!("S-expression: {}", sexp);
+
+        assert!(
+            sexp.contains("(subroutine (identifier hello)"),
+            "expected subroutine declaration; got: {sexp}"
+        );
     }
 
     #[test]
     fn test_if_statement() {
         let mut parser = PureRustPerlParser::new();
         let source = "if ($x > 0) { print 'positive'; }";
-        let result = parser.parse(source);
-        let ast = must(result);
+        let ast = must(parser.parse(source));
         let sexp = parser.to_sexp(&ast);
-        println!("S-expression: {}", sexp);
+
+        assert!(sexp.contains("(if_statement"), "expected if statement; got: {sexp}");
     }
 
     #[test]
@@ -2851,21 +2855,25 @@ mod tests {
     fn test_array_assignment() {
         let mut parser = PureRustPerlParser::new();
         let source = "@array = (1, 2, 3);";
-        let result = parser.parse(source);
-        let ast = must(result);
+        let ast = must(parser.parse(source));
         let sexp = parser.to_sexp(&ast);
-        println!("Array assignment AST: {:?}", ast);
-        println!("S-expression: {}", sexp);
+
+        assert!(
+            sexp.contains("(assignment (array_variable @array)"),
+            "expected array assignment; got: {sexp}"
+        );
     }
 
     #[test]
     fn test_hash_assignment() {
         let mut parser = PureRustPerlParser::new();
         let source = "%hash = (a => 1, b => 2);";
-        let result = parser.parse(source);
-        let ast = must(result);
+        let ast = must(parser.parse(source));
         let sexp = parser.to_sexp(&ast);
-        println!("Hash assignment AST: {:?}", ast);
-        println!("S-expression: {}", sexp);
+
+        assert!(
+            sexp.contains("(assignment (hash_variable %hash)"),
+            "expected hash assignment; got: {sexp}"
+        );
     }
 }
