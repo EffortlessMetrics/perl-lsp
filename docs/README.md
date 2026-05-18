@@ -4,6 +4,40 @@ Use this directory as the short docs front door. It tells you where to go next
 without making you learn the workspace layout first. For the full Diataxis-style
 map of the docs tree, use [INDEX.md](INDEX.md).
 
+## Long-Lived Source-of-Truth Stack
+
+For long-lived work, use this path through the repository:
+
+```text
+Roadmap → Proposal → Specs → ADRs → Plan → Active goal → PRs → Receipts
+```
+
+This is the canonical source-of-truth system for `perl-lsp` lanes. It keeps
+product motivation, behavior contracts, architecture decisions, implementation
+sequencing, machine-readable agent state, and evidence-backed receipts in
+separate artifacts. The Real Perl Editor Trust lane is the current example of
+this pattern: its proposal, specs, ADRs, implementation plan, and active goal
+manifest are linked through the same chain future lanes should follow.
+
+| Layer | Owns | Storage |
+| --- | --- | --- |
+| Roadmap | Release direction and active milestone | [`project/ROADMAP.md`](project/ROADMAP.md) |
+| Proposal / PRD | Why the lane exists, user value, alternatives, and claim boundary | [`proposals/`](proposals/) |
+| Spec | Behavior contract, acceptance, proof, status interpretation, and claim limits | [`specs/`](specs/) |
+| ADR | Durable architecture or operating decision | [`adr/`](adr/) |
+| Implementation plan | PR-sized sequence, proof commands, rollback, and handoff state | [`../plans/`](../plans/) |
+| Active goal manifest | Machine-readable current agent state | [`../.perl-lsp/goals/`](../.perl-lsp/goals/) |
+| Status / support tiers | Current truth and claim proof | [`project/status/`](project/status/) |
+| Policy ledgers | CI, lint, file, package, and exception receipts | [`../policy/`](../policy/) and [`../.ci/`](../.ci/) |
+| Closeout / handoff | What happened, what remains, and proof | `../plans/<lane>/closeout.md` or [`forensics/`](forensics/) |
+
+Read [reference/SPEC_SYSTEM.md](reference/SPEC_SYSTEM.md) before creating a new
+proposal/spec/ADR/plan/goal lane. The artifact-specific entry points are
+[proposals/README.md](proposals/README.md), [specs/README.md](specs/README.md),
+[adr/README.md](adr/README.md), [../plans/README.md](../plans/README.md),
+[../plans/real-perl-editor-trust/README.md](../plans/real-perl-editor-trust/README.md),
+and [../.perl-lsp/goals/README.md](../.perl-lsp/goals/README.md).
+
 ## Diataxis in This Repository
 
 When adding or moving docs, choose the content type first, then the file:
@@ -47,6 +81,7 @@ Start here if you need to orient quickly before diving into a crate:
 | `crates/tree-sitter-perl-c/` | C tree-sitter grammar binding | Compatibility for tree-sitter consumers |
 | `crates/tree-sitter-perl-rs/` | Rust-native tree-sitter-style facade over v3 parser | Tree-sitter ergonomics on native parser stack |
 | `docs/project/` | Status, roadmap, process, governance docs | "What is true now?" and "what ships next?" |
+| `../plans/` | Lane implementation plans | PR sequence, proof commands, rollback, and handoff for long-lived work |
 | `docs/reference/` | Contract-style reference docs | Command/config/API behavior lookups |
 | `docs/how-to/`, `docs/tutorials/`, `docs/explanation/` | Task guides, walkthroughs, rationale | Learning and operational guidance |
 
@@ -65,6 +100,7 @@ For complete workspace membership and canonical crate/version truth, use [`../Ca
 | troubleshoot a broken setup | [how-to/TROUBLESHOOTING.md](how-to/TROUBLESHOOTING.md) |
 | enforce public API docs coverage in CI | [reference/MISSING_DOCUMENTATION_GUIDE.md](reference/MISSING_DOCUMENTATION_GUIDE.md) |
 | learn API docs writing standards | [reference/API_DOCUMENTATION_STANDARDS.md](reference/API_DOCUMENTATION_STANDARDS.md) |
+| author a long-lived proposal/spec/ADR/plan lane | [reference/SPEC_SYSTEM.md](reference/SPEC_SYSTEM.md), [proposals/README.md](proposals/README.md), [specs/README.md](specs/README.md), [adr/README.md](adr/README.md), [../plans/README.md](../plans/README.md) |
 | choose the right Diátaxis doc type before writing | [reference/DOCUMENTATION_GUIDE.md](reference/DOCUMENTATION_GUIDE.md) |
 | tune performance or threading | [how-to/PERFORMANCE_TUNING.md](how-to/PERFORMANCE_TUNING.md), [how-to/THREADING_CONFIGURATION_GUIDE.md](how-to/THREADING_CONFIGURATION_GUIDE.md) |
 | work with DAP workflows | [tutorials/DAP_USER_GUIDE.md](tutorials/DAP_USER_GUIDE.md) |
@@ -84,7 +120,7 @@ For complete workspace membership and canonical crate/version truth, use [`../Ca
 
 - Tutorials: [tutorials/GETTING_STARTED.md](tutorials/GETTING_STARTED.md), [tutorials/LSP_DEVELOPMENT_GUIDE.md](tutorials/LSP_DEVELOPMENT_GUIDE.md), [tutorials/DAP_USER_GUIDE.md](tutorials/DAP_USER_GUIDE.md), [tutorials/COMPREHENSIVE_TESTING_GUIDE.md](tutorials/COMPREHENSIVE_TESTING_GUIDE.md)
 - How-to: [how-to/INSTALLATION.md](how-to/INSTALLATION.md), [how-to/GITHUB_ACTIONS.md](how-to/GITHUB_ACTIONS.md), [how-to/EDITOR_SETUP.md](how-to/EDITOR_SETUP.md), [how-to/TROUBLESHOOTING.md](how-to/TROUBLESHOOTING.md), [how-to/CONTINUOUS_TESTING.md](how-to/CONTINUOUS_TESTING.md), [how-to/UPGRADING.md](how-to/UPGRADING.md), [how-to/PRE_COMMIT.md](how-to/PRE_COMMIT.md), [how-to/PERFORMANCE_TUNING.md](how-to/PERFORMANCE_TUNING.md), [how-to/THREADING_CONFIGURATION_GUIDE.md](how-to/THREADING_CONFIGURATION_GUIDE.md), [how-to/SECURITY_DEVELOPMENT_GUIDE.md](how-to/SECURITY_DEVELOPMENT_GUIDE.md)
-- Reference: [reference/COMMANDS_REFERENCE.md](reference/COMMANDS_REFERENCE.md), [reference/CONFIG.md](reference/CONFIG.md), [reference/LSP_FEATURES.md](reference/LSP_FEATURES.md), [reference/ARCHITECTURE_OVERVIEW.md](reference/ARCHITECTURE_OVERVIEW.md), [reference/CRATE_ARCHITECTURE_GUIDE.md](reference/CRATE_ARCHITECTURE_GUIDE.md), [reference/KNOWN_LIMITATIONS.md](reference/KNOWN_LIMITATIONS.md), [reference/PARSER_FEATURE_MATRIX.md](reference/PARSER_FEATURE_MATRIX.md), [reference/MISSING_DOCUMENTATION_GUIDE.md](reference/MISSING_DOCUMENTATION_GUIDE.md), [reference/API_DOCUMENTATION_STANDARDS.md](reference/API_DOCUMENTATION_STANDARDS.md), [reference/DIATAXIS_GUIDE.md](reference/DIATAXIS_GUIDE.md), [reference/DOCUMENTATION_GUIDE.md](reference/DOCUMENTATION_GUIDE.md), [reference/FAQ.md](reference/FAQ.md)
+- Reference: [reference/COMMANDS_REFERENCE.md](reference/COMMANDS_REFERENCE.md), [reference/CONFIG.md](reference/CONFIG.md), [reference/LSP_FEATURES.md](reference/LSP_FEATURES.md), [reference/ARCHITECTURE_OVERVIEW.md](reference/ARCHITECTURE_OVERVIEW.md), [reference/CRATE_ARCHITECTURE_GUIDE.md](reference/CRATE_ARCHITECTURE_GUIDE.md), [reference/SPEC_SYSTEM.md](reference/SPEC_SYSTEM.md), [reference/KNOWN_LIMITATIONS.md](reference/KNOWN_LIMITATIONS.md), [reference/PARSER_FEATURE_MATRIX.md](reference/PARSER_FEATURE_MATRIX.md), [reference/MISSING_DOCUMENTATION_GUIDE.md](reference/MISSING_DOCUMENTATION_GUIDE.md), [reference/API_DOCUMENTATION_STANDARDS.md](reference/API_DOCUMENTATION_STANDARDS.md), [reference/DIATAXIS_GUIDE.md](reference/DIATAXIS_GUIDE.md), [reference/DOCUMENTATION_GUIDE.md](reference/DOCUMENTATION_GUIDE.md), [reference/FAQ.md](reference/FAQ.md)
 - Project, specs, and explanations: [INDEX.md](INDEX.md), [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md), [project/ROADMAP.md](project/ROADMAP.md), [project/COMPILER_BACKED_LSP_ROADMAP.md](project/COMPILER_BACKED_LSP_ROADMAP.md), [project/CI.md](project/CI.md), [project/FEATURE_GOVERNANCE.md](project/FEATURE_GOVERNANCE.md), [explanation/MEASURED_PERL_EDITOR_TRUST.md](explanation/MEASURED_PERL_EDITOR_TRUST.md), [explanation/LSP_DOCUMENTATION.md](explanation/LSP_DOCUMENTATION.md)
 
 ## Maintenance
