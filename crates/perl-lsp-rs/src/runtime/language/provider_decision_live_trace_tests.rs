@@ -69,6 +69,17 @@ $c->stash;
 
 1;
 "#;
+const SELF_METHOD_CALL_SEMANTIC_TOKEN_URI: &str =
+    "file:///workspace/lib/Trace/SelfMethodCallTokens.pm";
+const SELF_METHOD_CALL_SEMANTIC_TOKEN_DOC: &str = r#"package Trace::SelfMethodCallTokens;
+use strict;
+use warnings;
+
+my $self = current_object();
+$self->status;
+
+1;
+"#;
 const FIELD_SEMANTIC_TOKEN_URI: &str = "file:///workspace/lib/Trace/FieldTokens.pm";
 const FIELD_SEMANTIC_TOKEN_DOC: &str = r#"use feature 'class';
 
@@ -218,6 +229,20 @@ fn open_method_call_semantic_token_document(
         "textDocument": {
             "uri": METHOD_CALL_SEMANTIC_TOKEN_URI,
             "text": METHOD_CALL_SEMANTIC_TOKEN_DOC,
+            "languageId": "perl",
+            "version": 1
+        }
+    })))?;
+    Ok(())
+}
+
+fn open_self_method_call_semantic_token_document(
+    server: &LspServer,
+) -> Result<(), Box<dyn std::error::Error>> {
+    server.test_handle_did_open(Some(json!({
+        "textDocument": {
+            "uri": SELF_METHOD_CALL_SEMANTIC_TOKEN_URI,
+            "text": SELF_METHOD_CALL_SEMANTIC_TOKEN_DOC,
             "languageId": "perl",
             "version": 1
         }
@@ -731,6 +756,69 @@ fn live_semantic_tokens_request_exposes_reviewed_method_call_trace()
             .and_then(Value::as_str)
             .is_some_and(|message| message.contains("compiler method-call live trace")),
         "explanation must surface the reviewed method-call trace: {explanation}"
+    );
+    Ok(())
+}
+
+#[test]
+fn live_semantic_tokens_request_exposes_reviewed_self_method_call_trace()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    initialize(&server)?;
+    open_self_method_call_semantic_token_document(&server)?;
+
+    response_result(
+        server.handle_request(request(
+            5,
+            "textDocument/semanticTokens/full",
+            Some(json!({
+                "textDocument": {"uri": SELF_METHOD_CALL_SEMANTIC_TOKEN_URI, "version": 1}
+            })),
+        )),
+        "semantic tokens self method call",
+    )?;
+
+    let explanation = explain_provider_decision(&server, "semantic_tokens")?;
+    let receipt = request_receipt(&explanation, "semantic_tokens")?;
+    assert_eq!(receipt.get("schema_version").and_then(Value::as_str), Some("provider_decision.v1"));
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("semantic_tokens"));
+    assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("acted"));
+    assert_eq!(
+        receipt.get("reason").and_then(Value::as_str),
+        Some("source_backed_compiler_token_live_slice")
+    );
+    assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("compiler_fact"));
+    assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("high"));
+    assert_eq!(receipt.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        receipt.get("source_backed_state").and_then(Value::as_str),
+        Some("source_backed_self_method_call_live_token_match")
+    );
+    assert_eq!(
+        receipt.get("compiler_token_class").and_then(Value::as_str),
+        Some("self_method_call")
+    );
+    assert_eq!(receipt.get("live_token_type").and_then(Value::as_str), Some("method"));
+    assert_eq!(receipt.get("live_token_match_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(receipt.get("fallback").and_then(Value::as_str), Some("none"));
+    assert_eq!(receipt.get("no_live_token_output_change").and_then(Value::as_bool), Some(true));
+
+    let boundary =
+        receipt.get("claim_boundary").and_then(Value::as_str).ok_or("missing boundary")?;
+    assert!(
+        boundary.contains("$self method-call spans")
+            && boundary.contains("broader receiver classes")
+            && boundary.contains("generated/no-source")
+            && boundary.contains("dynamic-boundary"),
+        "self method-call trace must preserve scoped blockers: {boundary}"
+    );
+    assert!(
+        explanation
+            .get("user_message")
+            .and_then(Value::as_str)
+            .is_some_and(|message| message.contains("compiler $self method-call live trace")),
+        "explanation must surface the reviewed self method-call trace: {explanation}"
     );
     Ok(())
 }
