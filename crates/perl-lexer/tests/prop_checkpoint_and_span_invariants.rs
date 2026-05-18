@@ -37,6 +37,39 @@ fn collect_signatures_until_eof(
     )))
 }
 
+fn assert_restored_checkpoint_replays_identical_suffix(
+    input: &str,
+    split_tokens: usize,
+) -> Result<(), TestCaseError> {
+    let mut lexer = PerlLexer::new(input);
+
+    for _ in 0..split_tokens {
+        let Some(token) = lexer.next_token() else {
+            return Ok(());
+        };
+
+        if matches!(token.token_type, TokenType::EOF) {
+            return Ok(());
+        }
+    }
+
+    let checkpoint = lexer.checkpoint();
+    let max_tokens = input.len().max(1) * 3 + 32;
+
+    let first_pass = collect_signatures_until_eof(&mut lexer, max_tokens)?;
+    lexer.restore(&checkpoint);
+    let replay = collect_signatures_until_eof(&mut lexer, max_tokens)?;
+
+    prop_assert_eq!(replay, first_pass);
+    Ok(())
+}
+
+#[test]
+fn restored_checkpoint_replays_identical_suffix_for_eof_regression() -> Result<(), TestCaseError> {
+    let input = "$\u{3347a}A%0a\u{7f}\u{00a1}\u{00a1}(0''\u{3347a}a";
+    assert_restored_checkpoint_replays_identical_suffix(input, 0)
+}
+
 proptest! {
     #![proptest_config(prop_support::persisted_config(REGRESS_DIR, 192))]
 
@@ -122,30 +155,12 @@ proptest! {
 
     #[test]
     fn restored_checkpoint_replays_identical_token_suffix(
-        input in ".{0,200}",
+        input in mixed_source(80),
         split_tokens in 0usize..40,
     ) {
-        let mut lexer = PerlLexer::new(&input);
-
-        for _ in 0..split_tokens {
-            let Some(token) = lexer.next_token() else {
-                return Ok(());
-            };
-
-            if matches!(token.token_type, TokenType::EOF) {
-                return Ok(());
-            }
-        }
-
-        let checkpoint = lexer.checkpoint();
-        let max_tokens = input.len().max(1) * 3 + 32;
-
-        let first_pass = collect_signatures_until_eof(&mut lexer, max_tokens)?;
-        lexer.restore(&checkpoint);
-        let replay = collect_signatures_until_eof(&mut lexer, max_tokens)?;
-
-        prop_assert_eq!(replay, first_pass);
+        assert_restored_checkpoint_replays_identical_suffix(&input, split_tokens)?;
     }
+
     #[test]
     fn collect_tokens_matches_manual_iteration(input in mixed_source(80)) {
         let mut manual_lexer = PerlLexer::new(&input);
