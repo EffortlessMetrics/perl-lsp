@@ -369,6 +369,33 @@ function activeSafeDeletePreviewArgument(): Record<string, unknown> | undefined 
     };
 }
 
+function isPerlModuleName(value: string): boolean {
+    return /^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$/.test(value);
+}
+
+function moduleNameAtCursor(editor: vscode.TextEditor): string | undefined {
+    const selectedText = editor.document.getText(editor.selection).trim();
+    if (isPerlModuleName(selectedText)) {
+        return selectedText;
+    }
+
+    const active = editor.selection.active;
+    const lineText = editor.document.lineAt(active.line).text;
+    const modulePattern = /[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)+/g;
+    for (const match of lineText.matchAll(modulePattern)) {
+        const start = match.index ?? 0;
+        const end = start + match[0].length;
+        if (active.character >= start && active.character <= end) {
+            return match[0];
+        }
+    }
+
+    const useStatement = lineText.match(
+        /\b(?:use|require)\s+([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)/
+    );
+    return useStatement?.[1];
+}
+
 function trustOutputChannel(): vscode.OutputChannel {
     return outputChannel ?? vscode.window.createOutputChannel('Perl LSP Trust');
 }
@@ -534,6 +561,62 @@ function formatWorkspaceTrustReport(result: unknown): string {
     return lines.join('\n');
 }
 
+function formatMissingModuleLookup(result: unknown): string {
+    const report = asObject(result);
+    const moduleResolution = asObject(report?.module_resolution);
+    const lookupResult = asObject(moduleResolution?.result);
+    const includePaths = arrayField(moduleResolution, 'effective_include_paths');
+
+    const lines = [
+        'Perl LSP Missing Module Lookup',
+        '',
+        `Module: ${stringField(report, 'requested_module') ?? '(unknown)'}`,
+        `Expected path: ${stringField(report, 'expected_relative_path') ?? '(unknown)'}`,
+        `Result: ${stringField(lookupResult, 'status') ?? 'unknown'}`,
+        `Why: ${stringField(lookupResult, 'why') ?? 'No lookup reason reported.'}`,
+        '',
+        'Module resolution / @INC',
+        `- PERL5LIB policy: ${stringField(moduleResolution, 'perl5lib_policy') ?? 'unknown'}`,
+        `- system @INC enabled: ${String(booleanField(moduleResolution, 'use_system_inc') ?? false)}`,
+        `- include roots: ${includePaths.length}`,
+    ];
+
+    for (const entry of includePaths.slice(0, 8)) {
+        const root = asObject(entry);
+        if (!root) {
+            continue;
+        }
+
+        const source = stringField(root, 'source') ?? 'unknown source';
+        const kind = stringField(root, 'kind') ?? 'unknown kind';
+        lines.push(`- ${stringField(root, 'path') ?? '(unknown path)'} (${source}, ${kind})`);
+
+        for (const candidate of arrayField(root, 'candidate_paths').slice(0, 2)) {
+            const candidateObject = asObject(candidate);
+            if (!candidateObject) {
+                continue;
+            }
+            const exists = booleanField(candidateObject, 'exists') === true ? 'exists' : 'missing';
+            lines.push(`  candidate: ${stringField(candidateObject, 'path') ?? '(unknown)'} [${exists}]`);
+        }
+    }
+
+    if (includePaths.length > 8) {
+        lines.push(`- ... and ${includePaths.length - 8} more include roots`);
+    }
+
+    lines.push(
+        '',
+        'Claim boundary',
+        stringField(report, 'claim_boundary') ?? 'This explanation is bounded to current runtime state.',
+        '',
+        'Raw lookup JSON',
+        providerDecisionJson(result),
+    );
+
+    return lines.join('\n');
+}
+
 export async function showWorkspaceTrustReportCommand(
     activeClient: LspExecuteCommandClient | undefined = client
 ): Promise<void> {
@@ -546,6 +629,60 @@ export async function showWorkspaceTrustReportCommand(
     channel.appendLine('');
     channel.appendLine(formatWorkspaceTrustReport(result));
     channel.show();
+}
+
+export async function explainMissingModuleLookupCommand(
+    activeClient: LspExecuteCommandClient | undefined = client,
+    moduleOverride?: string
+): Promise<unknown | undefined> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.languageId !== 'perl') {
+        vscode.window.showErrorMessage('Explain Missing Module Lookup requires an active Perl file.');
+        return undefined;
+    }
+
+    const moduleName = moduleOverride ?? moduleNameAtCursor(editor) ?? await vscode.window.showInputBox({
+        placeHolder: 'Missing::Module',
+        prompt: 'Module name to explain with perl-lsp @INC lookup state',
+        validateInput: value => {
+            if (!value.trim()) {
+                return 'Enter a Perl module name.';
+            }
+            return isPerlModuleName(value.trim()) ? undefined : 'Enter a valid Perl module name.';
+        },
+    });
+    if (!moduleName) {
+        return undefined;
+    }
+
+    const result = await executeLspCommand(activeClient, 'perl.explainMissingModuleLookup', {
+        module: moduleName.trim(),
+        textDocument: { uri: editor.document.uri.toString() },
+        position: {
+            line: editor.selection.active.line,
+            character: editor.selection.active.character,
+        },
+    });
+    if (result === undefined) {
+        return undefined;
+    }
+
+    const resultObject = asObject(result);
+    const message = stringField(resultObject, 'user_message') ?? 'Missing-module lookup explained.';
+    const status = stringField(asObject(asObject(resultObject?.module_resolution)?.result), 'status');
+    const channel = trustOutputChannel();
+    channel.appendLine('');
+    channel.appendLine(formatMissingModuleLookup(result));
+
+    const action = status === 'resolved'
+        ? await vscode.window.showInformationMessage(message, 'Show Output')
+        : await vscode.window.showWarningMessage(message, 'Show Output');
+
+    if (action === 'Show Output') {
+        channel.show();
+    }
+
+    return result;
 }
 
 export async function explainProviderDecisionCommand(
@@ -929,6 +1066,16 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     );
 
+    const explainMissingModuleLookupCommandDisposable = vscode.commands.registerCommand(
+        'perl-lsp.explainMissingModuleLookup',
+        async (moduleName?: unknown) => {
+            await explainMissingModuleLookupCommand(
+                client,
+                typeof moduleName === 'string' ? moduleName : undefined
+            );
+        }
+    );
+
     const whatsNewManager = new WhatsNewManager(context, outputChannel);
     const showWhatsNewCommand = vscode.commands.registerCommand('perl-lsp.showWhatsNew', async () => {
         await whatsNewManager.showWhatsNew();
@@ -1238,6 +1385,7 @@ export async function activate(context: vscode.ExtensionContext) {
         previewSafeDeleteCommandDisposable,
         copyProviderDecisionReceiptCommandDisposable,
         showWorkspaceTrustReportCommandDisposable,
+        explainMissingModuleLookupCommandDisposable,
         showVersionCommand,
         statusMenuCommand,
         reinstallCommand,

@@ -19,6 +19,7 @@ jest.mock('vscode-languageclient/node', () => ({
 }));
 import {
   copyProviderDecisionReceiptCommand,
+  explainMissingModuleLookupCommand,
   explainProviderDecisionCommand,
   previewSafeDeleteCommand,
   showWorkspaceTrustReportCommand,
@@ -674,5 +675,80 @@ describe('extension UX warnings', () => {
     expect(rendered).toContain('completion: partial-live-with-fallback');
     expect(rendered).toContain('Aggregates current runtime state only.');
     expect(outputChannel.show).toHaveBeenCalled();
+  });
+
+  test('explains a missing-module lookup through the LSP execute command', async () => {
+    const outputChannel = {
+      appendLine: jest.fn(),
+      show: jest.fn(),
+      dispose: jest.fn(),
+    };
+    (vscode.window.createOutputChannel as jest.Mock).mockReturnValueOnce(outputChannel);
+    const sendRequest = jest.fn(async () => ({
+      schema_version: 'missing_module_lookup_explanation.v1',
+      requested_module: 'Missing::Payload',
+      expected_relative_path: 'Missing/Payload.pm',
+      module_resolution: {
+        result: {
+          status: 'not_found',
+          why: 'No searched @INC candidate matched.',
+        },
+        effective_include_paths: [
+          {
+            path: 'lib',
+            source: 'workspace includePaths',
+            kind: 'workspace_relative',
+            candidate_paths: [
+              {
+                path: '/workspace/lib/Missing/Payload.pm',
+                exists: false,
+              },
+            ],
+          },
+        ],
+        perl5lib_policy: 'enabled_but_environment_empty',
+        use_system_inc: false,
+      },
+      user_message: 'Module Missing::Payload was not found in the current effective @INC state.',
+      claim_boundary: 'explains one missing-module lookup only',
+    }));
+    (vscode.window as any).activeTextEditor = {
+      document: {
+        languageId: 'perl',
+        uri: vscode.Uri.file('/workspace/script.pl'),
+        getText: jest.fn(() => ''),
+        lineAt: jest.fn(() => ({ text: 'use Missing::Payload;' })),
+      },
+      selection: {
+        active: { line: 0, character: 8 },
+      },
+    };
+
+    await explainMissingModuleLookupCommand({ sendRequest } as any);
+
+    expect(sendRequest).toHaveBeenCalledWith(
+      'workspace/executeCommand',
+      {
+        command: 'perl.explainMissingModuleLookup',
+        arguments: [
+          {
+            module: 'Missing::Payload',
+            textDocument: { uri: 'file:///workspace/script.pl' },
+            position: { line: 0, character: 8 },
+          },
+        ],
+      }
+    );
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+      'Module Missing::Payload was not found in the current effective @INC state.',
+      'Show Output'
+    );
+    const rendered = outputChannel.appendLine.mock.calls
+      .map((call: unknown[]) => String(call[0]))
+      .join('\n');
+    expect(rendered).toContain('Perl LSP Missing Module Lookup');
+    expect(rendered).toContain('Missing::Payload');
+    expect(rendered).toContain('workspace includePaths');
+    expect(rendered).toContain('Raw lookup JSON');
   });
 });
