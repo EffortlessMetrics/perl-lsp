@@ -171,8 +171,8 @@ context for bug reports.
 `perl.previewSafeDelete` now exposes scoped safe-delete blocked/allowed previews
 as user-readable no-edit UX. `perl.safeDeleteSymbol` now exposes a narrow
 source-backed live pilot that returns a delete WorkspaceEdit only when compiler
-allow proof, exact source guard, current-source reference guard, workspace
-identity guard, and rollback proof all pass.
+allow proof, exact source guard, current-source/workspace reference guards,
+workspace identity guard, and rollback proof all pass.
 `perl.previewPackageRename` now exposes scoped package/compiler-backed rename
 previews as user-readable no-edit UX with planned edit evidence plus fallback
 or blocker state.
