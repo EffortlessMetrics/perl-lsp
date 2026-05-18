@@ -142,3 +142,12 @@ fn test_arrow_hash_key_defer_condition() {
 fn test_hash_slice_keyword_keys() {
     assert_clean_parse(r#"my @vals = @h{defer, try, eval, tie, untie};"#);
 }
+
+#[test]
+fn test_arrow_hash_key_local_in_grep_block() {
+    assert_clean_parse(
+        r#"return grep {
+    $_->{defined} && $_->{dynamic} && !$_->{local}
+} values %{$self->{dynsyms}};"#,
+    );
+}
