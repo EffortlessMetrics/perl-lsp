@@ -263,6 +263,7 @@ perl-lsp-perltidy = { path = "crates/perl-lsp-perltidy", version = "0.14.0" }
 # (perl-lsp-formatting absorbed into perl-lsp-rs-core::providers::formatting — Wave G1b)
 perl-tdd-support = { path = "crates/perl-tdd-support", version = "0.14.0" }
 perl-test-must = { path = "crates/perl-test-must", version = "0.14.0" }
+perl-test-generators = { path = "crates/perl-test-generators", version = "0.14.0" }
 # (perl-lsp-diagnostics absorbed into perl-lsp-rs-core::providers::diagnostics — Wave G1b)
 # (perl-lsp-semantic-tokens absorbed into perl-lsp-rs-core::providers::semantic_tokens — Wave G1b)
 # (perl-lsp-inlay-hints absorbed into perl-lsp-rs-core::providers — Wave G1a)
