@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc a7051861535d39f603b79420e563340f3f9956bab3a9099f3f111cea8ad7f978 # shrinks to input = "$\u{3347a}A%0a\u{7f}¡¡(0''\u{3347a}a", split_tokens = 0
