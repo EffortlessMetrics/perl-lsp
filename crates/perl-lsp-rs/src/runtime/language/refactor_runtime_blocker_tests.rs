@@ -1232,6 +1232,90 @@ fn refactor_runtime_blocker_ux_package_rename_preview_records_dancer2_source_bac
 }
 
 #[test]
+fn refactor_runtime_blocker_ux_package_local_live_pilot_dancer2_edit_freshness_falls_back_to_current_source()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_dancer2_workspace(&server)?;
+    let response =
+        files.get("lib/Dancer2/Core/Response.pm").ok_or("missing Dancer2 Core Response fixture")?;
+
+    let (to_psgi_line, to_psgi_character) = position_of(response, "to_psgi {")?;
+    let preview_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.previewPackageRename",
+            "arguments": [{
+                "textDocument": {"uri": DANCER2_RESPONSE_URI},
+                "position": {"line": to_psgi_line, "character": to_psgi_character},
+                "newName": "renamed_to_psgi"
+            }]
+        })))?
+        .ok_or("missing Dancer2 package rename edit-freshness preview result")?;
+
+    let package_pilot = preview_result.get("package_pilot").ok_or("missing package_pilot")?;
+    assert_eq!(preview_result.get("decision").and_then(Value::as_str), Some("allowed"));
+    assert_eq!(package_pilot.get("eligible").and_then(Value::as_bool), Some(true));
+    let compiler_edit_count = package_pilot
+        .get("edit_count")
+        .and_then(Value::as_u64)
+        .ok_or("missing package pilot edit count")?;
+    assert_eq!(
+        compiler_edit_count, 1,
+        "Dancer2 compiler preview should start with only the source-backed definition edit: {package_pilot}"
+    );
+    let rollback_receipt =
+        preview_result.get("rollback_receipt").ok_or("missing rollback_receipt")?;
+    assert_eq!(rollback_receipt.get("rollback_required").and_then(Value::as_bool), Some(false));
+    assert_eq!(rollback_receipt.get("rollback_safe").and_then(Value::as_bool), Some(true));
+    assert_eq!(rollback_receipt.get("edits_applied").and_then(Value::as_bool), Some(false));
+
+    let updated_response = response.replace(
+        "sub is_forwarded",
+        "sub as_array {\n    my $self = shift;\n    return $self->to_psgi;\n}\n\nsub is_forwarded",
+    );
+    change_document(&server, DANCER2_RESPONSE_URI, 2, &updated_response)?;
+
+    let rename_result = server
+        .handle_rename_workspace(Some(json!({
+            "textDocument": {"uri": DANCER2_RESPONSE_URI},
+            "position": {"line": to_psgi_line, "character": to_psgi_character},
+            "newName": "renamed_to_psgi"
+        })))?
+        .ok_or("missing Dancer2 package-local fresh fallback result")?;
+    let edit_count = workspace_edit_change_count(&rename_result)?;
+    assert!(
+        edit_count > usize::try_from(compiler_edit_count)?,
+        "Dancer2 current-source fallback must not promote the stale one-edit compiler preview after didChange: compiler={compiler_edit_count}, live={edit_count}, result={rename_result}"
+    );
+    let response_texts = workspace_edit_texts_for_uri(&rename_result, DANCER2_RESPONSE_URI)?;
+    assert!(
+        response_texts.iter().filter(|text| **text == "renamed_to_psgi").count() >= 2,
+        "fresh fallback should include the Dancer2 definition and newly added call: {rename_result}"
+    );
+
+    let explanation = explain_provider_decision(&server, "rename")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(request_receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("textDocument/rename")
+    );
+    assert_eq!(
+        request_receipt.get("reason").and_then(Value::as_str),
+        Some("full_index_workspace_edit")
+    );
+    assert_eq!(
+        request_receipt.get("fallback_state").and_then(Value::as_str),
+        Some("workspace_index")
+    );
+    assert_eq!(
+        request_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
+        u64::try_from(edit_count).ok()
+    );
+
+    Ok(())
+}
+
+#[test]
 fn refactor_runtime_blocker_ux_package_local_live_pilot_applies_exact_source_backed_plan()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();
