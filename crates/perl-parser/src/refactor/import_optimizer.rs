@@ -680,12 +680,13 @@ impl ImportOptimizer {
         if line <= 1 {
             return 0;
         }
+
         let mut offset = 0;
-        for (idx, l) in content.lines().enumerate() {
+        for (idx, segment) in content.split_inclusive('\n').enumerate() {
             if idx + 1 >= line {
                 break;
             }
-            offset += l.len() + 1; // include newline
+            offset += segment.len();
         }
         offset
     }
@@ -1054,6 +1055,21 @@ my $result = JSON::encode_json({test => 1});
         // Should only detect the actual module usage, not the ones in strings/regex
         assert_eq!(analysis.missing_imports.len(), 1);
         assert_eq!(analysis.missing_imports[0].module, "JSON");
+        Ok(())
+    }
+
+    #[test]
+    fn test_generate_edits_preserves_crlf_import_block_range()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let optimizer = ImportOptimizer::new();
+        let content = concat!("use warnings;\r\n", "use strict;\r\n", "print qq(done);\r\n");
+        let expected_range_end = concat!("use warnings;\r\n", "use strict;\r\n").len();
+        let analysis = optimizer.analyze_content(content)?;
+
+        let edits = optimizer.generate_edits(content, &analysis);
+        assert_eq!(edits.len(), 1);
+        assert_eq!(edits[0].range, (0, expected_range_end));
+        assert_eq!(edits[0].new_text, "use strict;\nuse warnings;\n");
         Ok(())
     }
 
