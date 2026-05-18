@@ -370,6 +370,7 @@ describe('perl-lsp trust explanation commands', () => {
   test.each([
     ['perl-lsp.explainProviderDecision', 'Explain Provider Decision'],
     ['perl-lsp.previewSafeDelete', 'Preview Safe Delete'],
+    ['perl-lsp.previewPackageRename', 'Preview Package Rename'],
     ['perl-lsp.copyProviderDecisionReceipt', 'Copy Provider Decision Receipt'],
     ['perl-lsp.showWorkspaceTrustReport', 'Show Workspace Trust Report'],
     ['perl-lsp.explainMissingModuleLookup', 'Explain Missing Module Lookup'],
@@ -385,6 +386,7 @@ describe('perl-lsp trust explanation commands', () => {
   test.each([
     'perl-lsp.explainProviderDecision',
     'perl-lsp.previewSafeDelete',
+    'perl-lsp.previewPackageRename',
     'perl-lsp.copyProviderDecisionReceipt',
     'perl-lsp.explainMissingModuleLookup',
     'perl-lsp.explainDiagnostic',

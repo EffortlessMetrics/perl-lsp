@@ -548,6 +548,34 @@ fn test_call_expression_unmatched_paren_returns_parse_failed() {
 }
 
 // ---------------------------------------------------------------------------
+// Edge case: reference dereferences must not be corrupted
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_inlining_does_not_corrupt_scalar_deref() {
+    let source = r#"sub first_elem {
+    my ($ref) = @_;
+    return $$ref;
+}
+"#;
+    let inliner = SubInliner::new(source);
+    let result = inliner.inline_call("first_elem", "first_elem($value_ref)");
+    let inlined = must(result);
+    assert!(
+        inlined.contains("${$value_ref}"),
+        "dereference parameter should be braced during substitution; got: {inlined}"
+    );
+    assert!(
+        !inlined.contains("$$value_ref"),
+        "replacing $ref in $$ref must not produce unbraced $$value_ref; got: {inlined}"
+    );
+    assert!(
+        !inlined.contains("$$ref"),
+        "inlined output must not leave the original parameter reference behind; got: {inlined}"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Call argument shapes — bare call, empty parens, nested parens, quoted commas
 // ---------------------------------------------------------------------------
 

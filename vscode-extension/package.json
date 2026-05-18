@@ -786,6 +786,12 @@
         "icon": "$(shield)"
       },
       {
+        "command": "perl-lsp.previewPackageRename",
+        "title": "Preview Package Rename",
+        "category": "Perl LSP",
+        "icon": "$(symbol-method)"
+      },
+      {
         "command": "perl-lsp.copyProviderDecisionReceipt",
         "title": "Copy Provider Decision Receipt",
         "category": "Perl LSP",
@@ -916,6 +922,10 @@
         },
         {
           "command": "perl-lsp.previewSafeDelete",
+          "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.previewPackageRename",
           "when": "editorLangId == perl"
         },
         {

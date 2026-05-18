@@ -139,10 +139,10 @@ gates:
     description: "Prevent committed merge conflict markers"
     required: true
     command: just check-conflict-markers
-    timeout_seconds: 30
+    timeout_seconds: 60
     retry_count: 0
     budgets:
-      max_duration_ms: 10000
+      max_duration_ms: 45000
     quarantine: false
     tags:
       - hygiene

@@ -27,7 +27,7 @@ into an executable control plane for improving perl-lsp user trust.
 
 end_state = [
   "Parser measurement queue has no active packets or gaps.",
-  "Raw parser buckets route PR-sized parser capability lanes.",
+  "Raw parser buckets route PR-sized parser capability lanes only when generated parser status lists a nonzero raw bucket.",
   "Corpus receipt freshness rules are encoded.",
   "Provider confidence and freshness receipts exist before cutover.",
   "Real-workspace baseline proves editor behavior on at least one real project.",
@@ -54,16 +54,17 @@ status_docs = [
 
 [[work_item]]
 id = "raw-bucket-fixture-lane"
-status = "active"
+status = "deferred"
 spec = "docs/specs/PLSP-SPEC-0001-parser-compatibility-bucket-closeout.md"
 adr = "docs/adr/PLSP-ADR-0001-generated-status-is-control-plane.md"
 plan = "plans/real-perl-editor-trust/implementation-plan.md#work-item-raw-bucket-fixture-lane"
 current_pointer = "docs/project/status/parser_accuracy_next.md"
 current_status = "docs/project/status/parser.md#raw-failure-buckets"
-shape_analysis = "docs/project/status/parser_unclosed_paren_identifier_shapes.md"
+historical_shape_analysis = "docs/project/status/parser_unclosed_paren_identifier_shapes.md"
 boundary_receipt = "crates/perl-parser-core/tests/list_operator_boundary_receipts.rs"
 claim_boundary = "Fixture-only PRs lock source-backed shapes; bucket-count movement requires a refreshed corpus receipt."
-next_runtime_rule = "Start a parser runtime repair only from a fresh Linux receipt or a focused source-backed fixture that fails against the current parser."
+deferred_reason = "Generated parser status currently lists no nonzero raw bucket; do not start raw-bucket work from stale context."
+next_runtime_rule = "Resume parser runtime or fixture work only from a fresh Linux receipt, a generated nonzero raw bucket, or a focused source-backed fixture that fails against the current parser."
 commands = [
   "cargo test -p perl-parser-core --test <bucket-test> --profile agent --locked -- --nocapture",
   "cargo test -p perl-parser-core --test list_operator_boundary_receipts --profile agent --locked -- --nocapture",
