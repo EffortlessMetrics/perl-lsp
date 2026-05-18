@@ -448,14 +448,18 @@ impl ImportOptimizer {
         if line <= 1 {
             return 0;
         }
-        let mut offset = 0;
-        for (idx, l) in content.lines().enumerate() {
-            if idx + 1 >= line {
-                break;
+
+        let mut seen_newlines = 0;
+        for (idx, ch) in content.char_indices() {
+            if ch == '\n' {
+                seen_newlines += 1;
+                if seen_newlines == line - 1 {
+                    return idx + ch.len_utf8();
+                }
             }
-            offset += l.len() + 1; // include newline
         }
-        offset
+
+        content.len()
     }
 }
 

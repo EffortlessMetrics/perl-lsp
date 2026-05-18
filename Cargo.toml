@@ -11,6 +11,7 @@ members = [
     "crates/perl-parser-bench",
     "crates/perl-parser-core",
     "crates/perl-parser-pest",
+    "crates/perl-parser-comparison",
     "crates/perl-semantic-analyzer",
     "crates/perl-semantic-facts",
     "crates/perl-workspace",
@@ -171,6 +172,7 @@ allow = [
     # (perl-dead-code absorbed into perl-parser::dead_code — Wave 4-Completion)
     "perl-parser",
     # (perl-parser-bench is benchmark-only; publish = false)
+    # (perl-parser-comparison is test-only; publish = false)
     "perl-parser-pest",
     "perl-corpus",
 

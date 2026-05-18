@@ -1386,6 +1386,39 @@ mod tests {
     }
 
     #[test]
+    fn test_inline_values_rejects_traversal() -> Result<(), Box<dyn std::error::Error>> {
+        let mut adapter = DebugAdapter::new();
+        adapter.handle_request(1, "initialize", None);
+
+        let dir = tempfile::tempdir()?;
+        *lock_or_recover(&adapter.workspace_root, "test.workspace_root") =
+            Some(dir.path().to_path_buf());
+
+        let response = adapter.handle_request(
+            2,
+            "inlineValues",
+            Some(json!({
+                "source": {"path": "../../../etc/passwd"},
+                "startLine": 1,
+                "endLine": 1
+            })),
+        );
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success, "inlineValues with traversal path should fail");
+                assert_eq!(command, "inlineValues");
+                let msg = message.as_deref().unwrap_or("");
+                assert!(
+                    msg.contains("Path validation failed"),
+                    "should report path validation failure, got: {msg}"
+                );
+            }
+            _ => return Err("Expected response".into()),
+        }
+        Ok(())
+    }
+
+    #[test]
     fn test_source_rejects_traversal() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         adapter.handle_request(1, "initialize", None);

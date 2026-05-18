@@ -557,6 +557,32 @@ fn test_unknown_command_includes_case_only_suggestion() {
     }
 }
 
+#[test]
+fn test_unknown_command_includes_typo_suggestion() {
+    let mut adapter = DebugAdapter::new();
+
+    let response = adapter.handle_request(1, "setBreakpoint", None);
+
+    match response {
+        DapMessage::Response { success, message, .. } => {
+            assert!(!success, "Unexpected success for unknown command");
+            let msg = must_some(message);
+            assert!(
+                msg.contains("Unknown command: setBreakpoint"),
+                "Error should include unknown command: {msg}"
+            );
+            assert!(
+                msg.contains("Did you mean 'setBreakpoints'?"),
+                "Error should include typo suggestion: {msg}"
+            );
+        }
+        _ => {
+            must(Err::<(), _>("Expected Response for unknown command"));
+            unreachable!()
+        }
+    }
+}
+
 // AC9.4: Test that handlers are thread-safe (can be called multiple times)
 #[test]
 fn test_control_flow_handlers_thread_safe() {

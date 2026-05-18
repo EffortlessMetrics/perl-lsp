@@ -11,6 +11,28 @@ mod tests {
     use crate::parser::Parser;
     use perl_tdd_support::must;
 
+    #[test]
+    fn filter_simple_uppercase_block_call() {
+        let code = r#"FILTER {
+    s/BANG!/return "excited"/g;
+    s/MAGIC/42/g;
+};"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        assert!(
+            parser.errors().is_empty(),
+            "should not record parser errors: {:?}",
+            parser.errors()
+        );
+        let sexp = ast.to_sexp();
+        assert!(!sexp.contains("ERROR"), "should not contain ERROR: {}", sexp);
+        assert!(
+            sexp.contains("ambiguous_function_call_expression"),
+            "should parse FILTER as a block call: {}",
+            sexp
+        );
+    }
+
     // ---- grep ----
 
     #[test]
