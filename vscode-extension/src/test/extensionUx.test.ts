@@ -702,7 +702,7 @@ describe('extension UX warnings', () => {
           version_status: 'not_probed_by_report',
         },
         perldoc: {
-          status: 'oracle_contract_available_not_run',
+          status: 'oracle_contract_reported_not_run',
         },
         dap: {
           status: 'not_probed_by_lsp_workspace_report',
@@ -781,7 +781,7 @@ describe('extension UX warnings', () => {
     expect(rendered).toContain('Perl LSP Trust Report');
     expect(rendered).toContain('Setup hints');
     expect(rendered).toContain('Perl binary: configured_not_probed_by_report');
-    expect(rendered).toContain('perldoc: oracle_contract_available_not_run');
+    expect(rendered).toContain('perldoc: oracle_contract_reported_not_run');
     expect(rendered).toContain('DAP Perl: not_probed_by_lsp_workspace_report');
     expect(rendered).toContain('Client runtime state');
     expect(rendered).toContain('perldoc surface: client_surface_registered');

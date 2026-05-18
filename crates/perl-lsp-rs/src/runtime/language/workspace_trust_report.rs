@@ -5,8 +5,6 @@
 //! evidence.
 
 use super::super::*;
-#[cfg(not(target_arch = "wasm32"))]
-use perl_lsp_rs_core::config::PerlOracleEnv;
 use perl_lsp_rs_core::config::{Perl5LibPrecedence, WorkspaceConfig};
 use std::sync::atomic::Ordering;
 
@@ -125,39 +123,22 @@ fn setup_hints_summary(config: &WorkspaceConfig) -> Value {
     })
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-fn timeout_ms(timeout: std::time::Duration) -> u64 {
-    match u64::try_from(timeout.as_millis()) {
-        Ok(value) => value,
-        Err(_) => u64::MAX,
-    }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
 fn perldoc_runtime_state(config: &WorkspaceConfig) -> Value {
-    let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let oracle = PerlOracleEnv::for_perldoc(config, cwd);
-
     json!({
-        "status": "oracle_contract_available_not_run",
+        "status": "oracle_contract_reported_not_run",
         "run_status": "not_run_by_report",
-        "binary": oracle.perl_binary.display().to_string(),
-        "timeout_ms": timeout_ms(oracle.timeout),
-        "allow_perl5lib": oracle.allow_perl5lib,
-        "allow_perl5opt": oracle.allow_perl5opt,
-        "allow_local_lib": oracle.allow_local_lib,
-        "lc_all": oracle.extra_env.get("LC_ALL").map(String::as_str),
+        "binary_source": if configured_perl_path(config).is_some() {
+            "configured_perl_toolchain_or_perldoc_on_path_when_opened"
+        } else {
+            "perldoc_on_path_when_opened"
+        },
+        "timeout_ms": 10_000,
+        "allow_perl5lib": config.use_perl5lib,
+        "allow_perl5opt": false,
+        "allow_local_lib": false,
+        "lc_all": "C",
         "argv_policy": "perldoc -T -- <module>",
-        "policy": "perldoc:// requests use this Perl oracle environment when opened; this report constructs the contract but does not run perldoc.",
-    })
-}
-
-#[cfg(target_arch = "wasm32")]
-fn perldoc_runtime_state(_config: &WorkspaceConfig) -> Value {
-    json!({
-        "status": "unavailable_on_wasm",
-        "run_status": "not_run_by_report",
-        "policy": "perldoc:// subprocess lookups are unavailable in wasm builds.",
+        "policy": "perldoc:// requests use the Perl oracle environment when opened; this report exposes the contract from configuration but does not resolve or run perldoc.",
     })
 }
 

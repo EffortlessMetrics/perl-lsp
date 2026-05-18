@@ -314,7 +314,7 @@ fn test_execute_command_workspace_trust_report() -> Result<(), Box<dyn std::erro
     );
     assert_eq!(
         result.pointer("/setup_hints/perldoc/status").and_then(|value| value.as_str()),
-        Some("oracle_contract_available_not_run")
+        Some("oracle_contract_reported_not_run")
     );
     assert_eq!(
         result.pointer("/setup_hints/perldoc/run_status").and_then(|value| value.as_str()),

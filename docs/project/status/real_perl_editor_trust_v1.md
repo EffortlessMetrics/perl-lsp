@@ -164,10 +164,11 @@ hint routing item by reporting advisory Perl/PERL5LIB/perldoc/DAP boundaries
 from existing state only; it does not resolve Perl, run perldoc, inspect DAP
 sessions, or promote broader setup-health claims.
 The DAP/perldoc runtime-state pass closes the current trust-report runtime-state
-routing item by adding the perldoc oracle contract without running perldoc and
-by carrying sanitized VS Code client DAP/perldoc state into the report; it does
-not start DAP, run perldoc, probe Perl, inspect debug-session internals, scan
-workspace files, or promote broader setup-health claims.
+routing item by adding the perldoc oracle contract from configuration without
+resolving or running perldoc and by carrying sanitized VS Code client
+DAP/perldoc state into the report; it does not start DAP, run perldoc, probe
+Perl, inspect debug-session internals, scan workspace files, or promote broader
+setup-health claims.
 
 1. `test(workspace-symbols): add additional generated/no-source project variant only if broader generated-symbol expansion is being considered`
 2. `test(rename): keep package/compiler-backed fallback and edit-freshness receipts current before broader promotion`
