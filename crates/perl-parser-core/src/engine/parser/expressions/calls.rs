@@ -92,6 +92,9 @@ impl<'a> Parser<'a> {
                 | TokenKind::RightParen
                 | TokenKind::Comma
                 | TokenKind::Eof => return false,
+                // Word operators bind below list operators, so they terminate
+                // a zero-arg builtin call instead of starting an indirect object.
+                kind if kind.is_low_precedence_word_operator() => return false,
                 _ => {}
             }
 
