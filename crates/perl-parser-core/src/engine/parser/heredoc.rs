@@ -71,9 +71,15 @@ fn parse_heredoc_delimiter(s: &str) -> (String, bool, bool, bool) {
         return (String::new(), true, indented, false);
     }
 
-    // Check quoting to determine interpolation and command execution
+    // Check quoting to determine interpolation and command execution.
+    // `<<\EOF` is Perl's backslash-quoted heredoc form: the terminator is
+    // `EOF`, and the body is not interpolated. The lexer accepts this spelling
+    // and includes the leading backslash in token text, so normalize it here
+    // before the AST node and collector are populated.
     let (delimiter, interpolated, command) =
-        if rest.starts_with('"') && rest.ends_with('"') && rest.len() >= 2 {
+        if let Some(label) = rest.strip_prefix('\\') {
+            (label.to_string(), false, false)
+        } else if rest.starts_with('"') && rest.ends_with('"') && rest.len() >= 2 {
             // Double-quoted: interpolated, unescape label
             (unescape_label(&rest[1..rest.len() - 1]), true, false)
         } else if rest.starts_with('\'') && rest.ends_with('\'') && rest.len() >= 2 {
@@ -97,7 +103,7 @@ fn map_heredoc_quote_kind(text: &str, _interpolated: bool) -> heredoc_collector:
     // Skip << and optional ~
     let rest = text.trim_start_matches('<').trim_start_matches('~').trim();
 
-    if rest.starts_with('\'') && rest.ends_with('\'') {
+    if rest.starts_with('\\') || rest.starts_with('\'') && rest.ends_with('\'') {
         heredoc_collector::QuoteKind::Single
     } else if rest.starts_with('"') && rest.ends_with('"') {
         heredoc_collector::QuoteKind::Double

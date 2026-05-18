@@ -101,7 +101,9 @@ pub fn get_supported_commands() -> Vec<String> {
         "perl.goToTest".to_string(),
         "perl.goToImplementation".to_string(),
         "perl.explainProviderDecision".to_string(),
+        "perl.workspaceTrustReport".to_string(),
         "perl.previewSafeDelete".to_string(),
+        "perl.safeDeleteSymbol".to_string(),
         "perl.previewPackageRename".to_string(),
     ]
 }
@@ -225,6 +227,16 @@ mod tests {
         );
     }
 
+    /// Verify that `perl.workspaceTrustReport` is included in the supported commands list.
+    #[test]
+    fn workspace_trust_report_command_id_is_registered() {
+        let cmds = get_supported_commands();
+        assert!(
+            cmds.iter().any(|c| c == "perl.workspaceTrustReport"),
+            "perl.workspaceTrustReport must be in get_supported_commands"
+        );
+    }
+
     /// Verify that `perl.previewSafeDelete` is included in the supported commands list.
     #[test]
     fn preview_safe_delete_command_id_is_registered() {
@@ -232,6 +244,16 @@ mod tests {
         assert!(
             cmds.iter().any(|c| c == "perl.previewSafeDelete"),
             "perl.previewSafeDelete must be in get_supported_commands"
+        );
+    }
+
+    /// Verify that `perl.safeDeleteSymbol` is included in the supported commands list.
+    #[test]
+    fn safe_delete_symbol_command_id_is_registered() {
+        let cmds = get_supported_commands();
+        assert!(
+            cmds.iter().any(|c| c == "perl.safeDeleteSymbol"),
+            "perl.safeDeleteSymbol must be in get_supported_commands"
         );
     }
 

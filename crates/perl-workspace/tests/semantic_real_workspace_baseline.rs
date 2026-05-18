@@ -1,4 +1,5 @@
-use perl_semantic_facts::{OccurrenceKind, Provenance};
+use perl_semantic_facts::{OccurrenceKind, PlannedEditCategory, Provenance};
+use perl_workspace::semantic::queries::SemanticQueries;
 use perl_workspace::workspace::workspace_index::{FileFactShard, WorkspaceIndex};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -107,6 +108,36 @@ fn real_workspace_baseline_indexes_cpan_style_project() -> Result<()> {
     ] {
         assert!(names.contains(expected), "missing expected semantic entity {expected}");
     }
+
+    Ok(())
+}
+
+#[test]
+fn real_workspace_rename_plan_includes_source_backed_sub_definition_edit() -> Result<()> {
+    let root = fixture_root();
+    let (index, shards) = index_fixture_workspace(&root)?;
+    let entity_id = shards
+        .iter()
+        .flat_map(|shard| shard.entities.iter())
+        .find(|entity| entity.canonical_name == "RealBaseline::Base::shared")
+        .map(|entity| entity.id)
+        .ok_or("missing RealBaseline::Base::shared entity")?;
+    let base_uri = url::Url::from_file_path(root.join("lib").join("RealBaseline").join("Base.pm"))
+        .map_err(|()| "fixture path cannot become file URI")?;
+
+    let plan = index
+        .with_semantic_queries_for_uri(base_uri.as_str(), |_file_id, queries| {
+            queries.rename_plan(entity_id, "renamed_shared")
+        })
+        .ok_or("missing semantic queries for RealBaseline::Base")?;
+
+    assert_eq!(plan.old_name, "RealBaseline::Base::shared");
+    assert!(plan.blockers.is_empty(), "source-backed sub definition should not block: {plan:?}");
+    assert!(
+        plan.edits.iter().any(|edit| edit.category == PlannedEditCategory::Definition),
+        "rename plan should include a source-backed definition edit: {plan:?}"
+    );
+    assert!(!plan.edits.is_empty(), "source-backed declaration must not produce empty plan");
 
     Ok(())
 }

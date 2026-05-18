@@ -82,6 +82,16 @@ fn wait_for_diagnostics_matching(
     .into())
 }
 
+fn diagnostic_items(response: &Value) -> Result<&Vec<Value>, Box<dyn std::error::Error>> {
+    let result = response.get("result").ok_or("diagnostic response missing result")?;
+    let items = result.get("items").ok_or("diagnostic result missing items")?;
+    Ok(items.as_array().ok_or("diagnostic items should be an array")?)
+}
+
+fn diagnostic_messages(items: &[Value]) -> Vec<&str> {
+    items.iter().filter_map(|item| item.get("message").and_then(Value::as_str)).collect()
+}
+
 #[test]
 fn lsp_smoke_e2e_push_diagnostics_clear_after_fix() -> Result<(), Box<dyn std::error::Error>> {
     let server = common::start_lsp_server();
@@ -585,6 +595,146 @@ my $value = gre
 
         std::thread::sleep(Duration::from_millis(25));
     }
+
+    Ok(())
+}
+
+#[test]
+fn lsp_smoke_e2e_pull_diagnostics_refresh_after_change() -> Result<(), Box<dyn std::error::Error>> {
+    let server = common::start_lsp_server();
+    let timeout = Duration::from_secs(2);
+    let init_timeout = common::timeout_scaler::TimeoutProfile::Initialization.timeout();
+
+    let uri = "file:///tmp/lsp_smoke_e2e_diagnostics.pl";
+    let broken_fixture = "use strict;
+use warnings;
+
+my $value = ;
+";
+    let fixed_fixture = "use strict;
+use warnings;
+
+my $value = 42;
+";
+
+    let init_response = send_request_with_timeout(
+        &server,
+        101,
+        "initialize",
+        json!({
+            "processId": null,
+            "rootUri": null,
+            "capabilities": {
+                "textDocument": {
+                    "diagnostic": {
+                        "dynamicRegistration": false
+                    }
+                }
+            }
+        }),
+        init_timeout,
+    )?;
+    assert!(init_response.get("error").is_none(), "initialize returned error: {init_response:#}");
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "initialized",
+            "params": {}
+        }),
+    );
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": broken_fixture
+                }
+            }
+        }),
+    );
+
+    let broken_response = send_request_with_timeout(
+        &server,
+        102,
+        "textDocument/diagnostic",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+        timeout,
+    )?;
+    assert!(
+        broken_response.get("error").is_none(),
+        "textDocument/diagnostic returned error for broken document: {broken_response:#}"
+    );
+    let broken_items = diagnostic_items(&broken_response)?;
+    assert!(!broken_items.is_empty(), "broken document should report at least one pull diagnostic");
+    let broken_messages = diagnostic_messages(broken_items);
+    assert!(
+        broken_messages.iter().any(|message| {
+            let lower = message.to_ascii_lowercase();
+            lower.contains("expected") || lower.contains("recovered from missingoperand")
+        }),
+        "broken document diagnostics should mention an expected token or recovered missing operand: {broken_messages:?}"
+    );
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didChange",
+            "params": {
+                "textDocument": { "uri": uri, "version": 2 },
+                "contentChanges": [{ "text": fixed_fixture }]
+            }
+        }),
+    );
+    std::thread::sleep(Duration::from_millis(50));
+
+    let fixed_response = send_request_with_timeout(
+        &server,
+        103,
+        "textDocument/diagnostic",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+        timeout,
+    )?;
+    assert!(
+        fixed_response.get("error").is_none(),
+        "textDocument/diagnostic returned error after fixing document: {fixed_response:#}"
+    );
+    let fixed_items = diagnostic_items(&fixed_response)?;
+    let fixed_messages = diagnostic_messages(fixed_items);
+    assert!(
+        fixed_messages.iter().all(|message| {
+            let lower = message.to_ascii_lowercase();
+            !lower.contains("expected") && !lower.contains("recovered from missingoperand")
+        }),
+        "fixed document should clear parse-error diagnostics: {fixed_messages:?}"
+    );
+
+    let shutdown_response =
+        send_request_with_timeout(&server, 104, "shutdown", json!(null), timeout)?;
+    assert!(
+        shutdown_response.get("error").is_none(),
+        "shutdown returned error: {shutdown_response:#}"
+    );
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+            "params": null
+        }),
+    );
 
     Ok(())
 }
