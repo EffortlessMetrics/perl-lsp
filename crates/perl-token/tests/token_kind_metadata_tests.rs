@@ -65,6 +65,8 @@ fn canonical_spelling_tables_cover_parser_facing_categories() {
                 );
             }
             TokenCategory::Identifier | TokenCategory::Literal | TokenCategory::Special => {}
+            // #[non_exhaustive]: future categories are silently accepted here.
+            _ => {}
         }
     }
 }

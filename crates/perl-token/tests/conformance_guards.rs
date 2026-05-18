@@ -195,6 +195,8 @@ fn tokenkind_metadata_is_complete_and_in_sync() {
             | TokenCategory::Literal
             | TokenCategory::Identifier
             | TokenCategory::Special => {}
+            // #[non_exhaustive]: future categories are accepted without a test update.
+            _ => {}
         }
     }
 }

@@ -622,6 +622,12 @@ pub enum TokenKind {
 }
 
 /// Broad classification used for token metadata and conformance checks.
+///
+/// This enum is `#[non_exhaustive]` so that new categories can be added in
+/// future minor releases without breaking existing match arms in downstream
+/// crates.  Match arms must include a wildcard (`_ => { ... }`) to handle
+/// any category introduced after your dependency was compiled.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenCategory {
     /// Reserved words and language keywords.
@@ -639,6 +645,12 @@ pub enum TokenCategory {
 }
 
 /// Metadata associated with each [`TokenKind`] variant.
+///
+/// This struct is `#[non_exhaustive]` so that additional metadata fields can
+/// be added in future minor releases without requiring struct-literal updates
+/// in downstream crates.  Callers obtain values via [`TokenKind::metadata()`]
+/// rather than constructing them directly.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TokenKindMetadata {
     /// Stable category used in docs/tests/gates.
