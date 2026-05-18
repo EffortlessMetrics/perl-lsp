@@ -44,3 +44,26 @@ fn unclosed_quote_like_tokens_return_unclosed_error() -> TestResult {
 
     Ok(())
 }
+
+#[test]
+fn substitution_empty_quoted_replacement_closes_before_next_statement() -> TestResult {
+    let source = r#"if ($def =~ /=/) { $def =~ s/"/""/g; $def = qq["$def"]; }"#;
+    let mut lexer = PerlLexer::new(source);
+    let mut saw_substitution = false;
+
+    while let Some(token) = lexer.next_token() {
+        if matches!(token.token_type, TokenType::Error(_)) {
+            return Err(format!("unexpected lexer error token: {token:?}").into());
+        }
+        if matches!(token.token_type, TokenType::Substitution) {
+            assert_eq!(token.text.as_ref(), r#"s/"/""/g"#);
+            saw_substitution = true;
+        }
+        if matches!(token.token_type, TokenType::EOF) {
+            break;
+        }
+    }
+
+    assert!(saw_substitution, "expected substitution token in {source}");
+    Ok(())
+}

@@ -123,3 +123,8 @@ fn malformed_tie_missing_paren_emits_inserted_closer() {
         "Parser must return a Program node for tie with missing ')'"
     );
 }
+
+#[test]
+fn bucket_substitution_empty_quoted_replacement_before_next_statement_is_clean() {
+    assert_clean_parse(r#"if ($def =~ /=/) { $def =~ s/"/""/g; $def = qq["$def"]; }"#);
+}

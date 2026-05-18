@@ -3062,7 +3062,15 @@ impl<'a> PerlLexer<'a> {
         quote: char,
         delim: char,
     ) -> Option<(usize, bool)> {
+        // Adjacent quotes are literal replacement text (for example s/"/""/g),
+        // not a string literal to skip while hunting for the replacement delimiter.
+        if self.input.get(..start).and_then(|text| text.chars().next_back()) == Some(quote) {
+            return None;
+        }
         let mut pos = start.checked_add(quote.len_utf8())?;
+        if self.input.get(pos..).is_some_and(|text| text.starts_with(quote)) {
+            return None;
+        }
         let mut escaped = false;
         let mut contains_delim = false;
 

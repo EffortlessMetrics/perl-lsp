@@ -597,8 +597,16 @@ fn scan_inner_string(
     quote: char,
     delimiter: char,
 ) -> Option<(usize, bool)> {
+    // Adjacent quotes are literal replacement text (for example s/"/""/g),
+    // not a string literal to skip while hunting for the replacement delimiter.
+    if text.get(..pos).and_then(|prefix| prefix.chars().next_back()) == Some(quote) {
+        return None;
+    }
     let start = pos + quote.len_utf8();
     let rest = text.get(start..)?;
+    if rest.starts_with(quote) {
+        return None;
+    }
     let mut escaped = false;
     let mut contains_delim = false;
     let mut end_of_string = None;
