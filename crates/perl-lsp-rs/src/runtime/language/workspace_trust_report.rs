@@ -17,14 +17,117 @@ fn perl5lib_precedence_label(precedence: &Perl5LibPrecedence) -> &'static str {
     }
 }
 
-fn workspace_config_summary(config: &WorkspaceConfig) -> Value {
-    let perl5lib_paths = if config.use_perl5lib {
-        std::env::var("PERL5LIB")
-            .map(|value| WorkspaceConfig::parse_perl5lib(&value))
-            .unwrap_or_default()
+fn configured_perl_path(config: &WorkspaceConfig) -> Option<&str> {
+    match config.perl_path.as_deref().map(str::trim) {
+        Some(path) if !path.is_empty() => Some(path),
+        _ => None,
+    }
+}
+
+fn perl5lib_paths(config: &WorkspaceConfig) -> Vec<String> {
+    if !config.use_perl5lib {
+        return Vec::new();
+    }
+
+    std::env::var("PERL5LIB")
+        .map(|value| WorkspaceConfig::parse_perl5lib(&value))
+        .unwrap_or_default()
+}
+
+fn setup_hint(code: &str, severity: &str, message: &str, action: &str) -> Value {
+    json!({
+        "code": code,
+        "severity": severity,
+        "message": message,
+        "action": action,
+    })
+}
+
+fn setup_hints_summary(config: &WorkspaceConfig) -> Value {
+    let perl5lib_paths = perl5lib_paths(config);
+    let mut hints = Vec::new();
+
+    if configured_perl_path(config).is_none() {
+        hints.push(setup_hint(
+            "perl_path_uses_path",
+            "info",
+            "No explicit Perl binary is configured; perl-lsp will resolve `perl` from PATH when a subprocess needs it.",
+            "Set `perl.workspace.perlPath` when the editor should use a specific Perl.",
+        ));
+    }
+
+    if config.include_paths.is_empty() {
+        hints.push(setup_hint(
+            "include_paths_empty",
+            "warning",
+            "No workspace include paths are configured.",
+            "Configure `perl.workspace.includePaths` so module resolution can find project libraries.",
+        ));
+    } else if config.include_paths.iter().any(|path| path.trim().is_empty()) {
+        hints.push(setup_hint(
+            "include_path_empty_entry",
+            "warning",
+            "At least one configured include path is empty.",
+            "Remove empty entries from `perl.workspace.includePaths`.",
+        ));
+    }
+
+    if config.use_perl5lib {
+        if perl5lib_paths.is_empty() {
+            hints.push(setup_hint(
+                "perl5lib_enabled_empty",
+                "info",
+                "PERL5LIB participation is enabled, but the current environment has no PERL5LIB entries.",
+                "Configure `perl.workspace.includePaths` for project-specific libraries instead of relying on ambient shell state.",
+            ));
+        }
     } else {
-        Vec::new()
-    };
+        hints.push(setup_hint(
+            "perl5lib_disabled",
+            "info",
+            "PERL5LIB is not inherited by workspace module resolution.",
+            "Configure `perl.workspace.includePaths` for paths the editor should search.",
+        ));
+    }
+
+    if config.use_system_inc {
+        hints.push(setup_hint(
+            "system_inc_not_probed_by_report",
+            "info",
+            "Interpreter startup @INC is enabled, but the workspace trust report does not probe Perl.",
+            "Use provider receipts or module lookup explanations for request-local @INC evidence.",
+        ));
+    }
+
+    let hint_count = hints.len();
+    json!({
+        "status": "advisory",
+        "hint_count": hint_count,
+        "hints": hints,
+        "perl_binary": {
+            "configured_path": configured_perl_path(config),
+            "resolution_status": if configured_perl_path(config).is_some() {
+                "configured_not_probed_by_report"
+            } else {
+                "uses_path_when_needed_not_probed_by_report"
+            },
+            "version_status": "not_probed_by_report",
+            "args_count": config.perl_args.len(),
+        },
+        "perldoc": {
+            "status": "not_probed_by_report",
+            "policy": "perldoc:// requests use the Perl oracle environment when opened; this report does not run perldoc.",
+        },
+        "dap": {
+            "status": "not_probed_by_lsp_workspace_report",
+            "policy": "DAP Perl path and module paths are configured by debug launch state and are not probed by this read-only LSP trust report.",
+        },
+        "claim_boundary": "Setup hints are derived from current configuration and environment counts only. They do not resolve Perl, run perldoc, inspect DAP sessions, scan files, or change provider behavior.",
+    })
+}
+
+fn workspace_config_summary(config: &WorkspaceConfig) -> Value {
+    let perl5lib_paths = perl5lib_paths(config);
     json!({
         "include_paths": &config.include_paths,
         "effective_include_paths": config.effective_include_paths(&perl5lib_paths),
@@ -180,6 +283,7 @@ impl LspServer {
                 "global_workspace_config": workspace_config_summary(&global_config),
                 "policy": "Configured include paths and optional PERL5LIB participation are reported without probing interpreter startup @INC.",
             },
+            "setup_hints": setup_hints_summary(&global_config),
             "index": index_report(self),
             "providers": {
                 "support_tiers": support_tiers_summary(),

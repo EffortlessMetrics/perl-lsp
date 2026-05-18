@@ -283,6 +283,25 @@ fn test_execute_command_workspace_trust_report() -> Result<(), Box<dyn std::erro
             .is_some(),
         "report should include module-resolution config state"
     );
+    assert_eq!(
+        result.pointer("/setup_hints/perl_binary/version_status").and_then(|value| value.as_str()),
+        Some("not_probed_by_report")
+    );
+    assert!(
+        result
+            .pointer("/setup_hints/claim_boundary")
+            .and_then(|value| value.as_str())
+            .is_some_and(|claim| claim.contains("do not resolve Perl")),
+        "setup hints should preserve the no-probe boundary"
+    );
+    assert_eq!(
+        result.pointer("/setup_hints/perldoc/status").and_then(|value| value.as_str()),
+        Some("not_probed_by_report")
+    );
+    assert_eq!(
+        result.pointer("/setup_hints/dap/status").and_then(|value| value.as_str()),
+        Some("not_probed_by_lsp_workspace_report")
+    );
     assert!(
         result.get("index").and_then(|value| value.as_object()).is_some(),
         "report should include index state"

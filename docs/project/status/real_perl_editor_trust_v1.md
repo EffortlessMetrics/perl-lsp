@@ -159,10 +159,14 @@ explanation payload, explain-diagnostic code action, and missing-module lookup
 command close the current diagnostic explanation routing items without changing
 diagnostic suppression, severity, resolver behavior, workspace scanning, or
 support tiers.
+The workspace trust report setup-hint pass closes the current first-run setup
+hint routing item by reporting advisory Perl/PERL5LIB/perldoc/DAP boundaries
+from existing state only; it does not resolve Perl, run perldoc, inspect DAP
+sessions, or promote broader setup-health claims.
 
 1. `test(workspace-symbols): add additional generated/no-source project variant only if broader generated-symbol expansion is being considered`
 2. `test(rename): keep package/compiler-backed fallback and edit-freshness receipts current before broader promotion`
-3. `feat(ux): add first-run Perl setup hints and subprocess trust-report polish before broader reporting promotion`
+3. `feat(ux): integrate DAP/perldoc runtime state into the trust report before broader setup-health claims`
 
 Provider decision explanations are already partial-live through
 `perl.explainProviderDecision`; callers can attach a request-local
@@ -207,6 +211,10 @@ explain-diagnostic, missing-module lookup, safe-delete preview, copyable
 receipt, and workspace trust report commands without changing provider
 behavior, safe-delete edit authorization, scanning files, probing Perl, or
 promoting support tiers.
+`perl.workspaceTrustReport` now includes advisory setup hints and explicit
+Perl binary, perldoc, and DAP probe boundaries derived from current config and
+environment counts only; the VS Code output renders those hints without
+running probes or changing subprocess behavior.
 
 Package-local rename live support has now moved from preview-only to a narrow
 pilot. The compiler-allowed preview receipt proves the eligible no-edit UX shape

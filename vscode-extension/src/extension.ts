@@ -502,6 +502,11 @@ function formatWorkspaceTrustReport(result: unknown): string {
     const providers = asObject(report?.providers);
     const supportTiers = asObject(providers?.support_tiers);
     const dynamicBoundaries = asObject(report?.dynamic_boundaries);
+    const setupHints = asObject(report?.setup_hints);
+    const setupHintItems = arrayField(setupHints, 'hints');
+    const perlBinary = asObject(setupHints?.perl_binary);
+    const perldoc = asObject(setupHints?.perldoc);
+    const dap = asObject(setupHints?.dap);
 
     const rootPath = stringField(workspace, 'root_path') ?? '(none)';
     const folderCount = numberField(workspace, 'workspace_folder_count') ?? 0;
@@ -532,6 +537,36 @@ function formatWorkspaceTrustReport(result: unknown): string {
         `- PERL5LIB entries: ${perl5libCount}`,
         `- perl.path: ${stringField(globalConfig, 'perl_path') ?? '(unconfigured)'}`,
         '',
+        'Setup hints',
+        `- status: ${stringField(setupHints, 'status') ?? 'unknown'}`,
+        `- hint count: ${numberField(setupHints, 'hint_count') ?? setupHintItems.length}`,
+        `- Perl binary: ${stringField(perlBinary, 'resolution_status') ?? 'unknown'}`,
+        `- Perl version: ${stringField(perlBinary, 'version_status') ?? 'unknown'}`,
+        `- perldoc: ${stringField(perldoc, 'status') ?? 'unknown'}`,
+        `- DAP Perl: ${stringField(dap, 'status') ?? 'unknown'}`,
+    ];
+
+    for (const item of setupHintItems.slice(0, 5)) {
+        const hint = asObject(item);
+        if (!hint) {
+            continue;
+        }
+        const severity = stringField(hint, 'severity') ?? 'info';
+        const message = stringField(hint, 'message') ?? 'Setup hint did not include a message.';
+        lines.push(`- ${severity}: ${message}`);
+        const action = stringField(hint, 'action');
+        if (action) {
+            lines.push(`  action: ${action}`);
+        }
+    }
+
+    const setupBoundary = stringField(setupHints, 'claim_boundary');
+    if (setupBoundary) {
+        lines.push(`- boundary: ${setupBoundary}`);
+    }
+
+    lines.push(
+        '',
         'Index',
         `- state: ${indexState}`,
         `- availability: ${indexAvailability}`,
@@ -539,8 +574,7 @@ function formatWorkspaceTrustReport(result: unknown): string {
         `- indexed symbols: ${indexedSymbolCount}`,
         '',
         'Provider support tiers',
-    ];
-
+    );
     appendSupportTierLines(lines, supportTiers);
 
     lines.push(

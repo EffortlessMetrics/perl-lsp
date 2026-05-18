@@ -687,6 +687,28 @@ describe('extension UX warnings', () => {
           perl_path: '/usr/bin/perl',
         },
       },
+      setup_hints: {
+        status: 'advisory',
+        hint_count: 1,
+        hints: [
+          {
+            severity: 'info',
+            message: 'PERL5LIB is not inherited by workspace module resolution.',
+            action: 'Configure `perl.workspace.includePaths` for paths the editor should search.',
+          },
+        ],
+        perl_binary: {
+          resolution_status: 'configured_not_probed_by_report',
+          version_status: 'not_probed_by_report',
+        },
+        perldoc: {
+          status: 'not_probed_by_report',
+        },
+        dap: {
+          status: 'not_probed_by_lsp_workspace_report',
+        },
+        claim_boundary: 'Setup hints are derived from current configuration only.',
+      },
       index: {
         state: 'ready',
         availability: 'full',
@@ -719,6 +741,12 @@ describe('extension UX warnings', () => {
       .map((call: unknown[]) => call[0])
       .join('\n');
     expect(rendered).toContain('Perl LSP Trust Report');
+    expect(rendered).toContain('Setup hints');
+    expect(rendered).toContain('Perl binary: configured_not_probed_by_report');
+    expect(rendered).toContain('perldoc: not_probed_by_report');
+    expect(rendered).toContain('DAP Perl: not_probed_by_lsp_workspace_report');
+    expect(rendered).toContain('PERL5LIB is not inherited by workspace module resolution.');
+    expect(rendered).toContain('Setup hints are derived from current configuration only.');
     expect(rendered).toContain('completion: partial-live-with-fallback');
     expect(rendered).toContain('Aggregates current runtime state only.');
     expect(outputChannel.show).toHaveBeenCalled();
