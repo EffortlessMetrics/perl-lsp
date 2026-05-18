@@ -517,8 +517,9 @@ fn workspace_symbol_shadow_note(
     let generated_label_count = compiler_candidates
         .iter()
         .filter(|candidate| {
-            candidate.source == ProviderFactSourceKind::FrameworkAdapter
-                || candidate.identity.starts_with("generated:")
+            candidate.fallback_state != ProviderFallbackState::Blocked
+                && (candidate.source == ProviderFactSourceKind::FrameworkAdapter
+                    || candidate.identity.starts_with("generated:"))
         })
         .count();
     let dynamic_boundary_blockers = compiler_candidates
