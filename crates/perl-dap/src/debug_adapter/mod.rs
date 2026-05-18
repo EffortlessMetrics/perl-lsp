@@ -4,6 +4,7 @@
 //! to enable debugging support in VSCode and other DAP-compatible editors.
 
 mod breakpoints;
+mod data_breakpoints;
 mod evaluation;
 mod execution;
 mod frames;
@@ -16,8 +17,10 @@ mod dispatch;
 mod parsing;
 mod regexes;
 pub(crate) mod safe_eval;
+mod session;
 mod sync_utils;
 mod transport;
+mod variable_cache;
 
 use crate::breakpoint::{AstBreakpointValidator, BreakpointValidator};
 use crate::eval::SafeEvaluator;
@@ -59,6 +62,9 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::breakpoints::{BreakpointHitOutcome, BreakpointStore};
+use crate::debug_adapter::data_breakpoints::DataBreakpointRecord;
+use crate::debug_adapter::session::{DebugSession, DebugState, ResumeMode};
+use crate::debug_adapter::variable_cache::{VariableCache, VariableCacheKind, slice_variables};
 use crate::security;
 #[cfg(unix)]
 use nix::sys::signal::{self, Signal};
@@ -67,17 +73,6 @@ use nix::unistd::Pid;
 use patterns::*;
 use safe_eval::validate_safe_expression;
 use sync_utils::{emit_event_safe, lock_or_recover};
-
-/// Stored data breakpoint record for watchpoint management
-#[derive(Debug, Clone)]
-struct DataBreakpointRecord {
-    #[allow(dead_code)]
-    data_id: String,
-    #[allow(dead_code)]
-    access_type: Option<String>,
-    #[allow(dead_code)]
-    condition: Option<String>,
-}
 
 /// Check if the match is an escape sequence (preceded by backslash)
 fn is_escape_sequence(s: &str, match_start: usize) -> bool {
@@ -129,100 +124,6 @@ pub struct DebugAdapter {
     next_goto_target_id: Arc<Mutex<i64>>,
     /// Workspace root for path validation (set during launch)
     workspace_root: Arc<Mutex<Option<PathBuf>>>,
-}
-
-/// Active debug session
-struct DebugSession {
-    /// Perl debugger process
-    process: Child,
-    /// Current execution state
-    state: DebugState,
-    /// Stack frames
-    stack_frames: Vec<StackFrame>,
-    /// Variables in current scope, including root scopes and child expansions.
-    variable_cache: VariableCache,
-    /// Thread ID
-    thread_id: i32,
-    /// Last resume command issued while running.
-    last_resume_mode: ResumeMode,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum VariableCacheKind {
-    Root,
-    Child,
-}
-
-#[derive(Debug, Clone)]
-struct VariableCacheEntry {
-    kind: VariableCacheKind,
-    full: Vec<Variable>,
-    page_slices: HashMap<(usize, usize), Vec<Variable>>,
-}
-
-#[derive(Debug, Default)]
-struct VariableCache {
-    entries: HashMap<i32, VariableCacheEntry>,
-}
-
-impl VariableCache {
-    fn clear(&mut self) {
-        self.entries.clear();
-    }
-
-    fn upsert(&mut self, reference: i32, kind: VariableCacheKind, variables: Vec<Variable>) {
-        let _ = self.entries.insert(
-            reference,
-            VariableCacheEntry { kind, full: variables, page_slices: HashMap::new() },
-        );
-    }
-
-    fn get_page(&mut self, reference: i32, start: usize, count: usize) -> Option<Vec<Variable>> {
-        let entry = self.entries.get_mut(&reference)?;
-        let key = (start, count);
-        if let Some(cached) = entry.page_slices.get(&key) {
-            return Some(cached.clone());
-        }
-
-        let page = slice_variables(&entry.full, start, count);
-        let _ = entry.page_slices.insert(key, page.clone());
-        Some(page)
-    }
-
-    fn all_variables(&self) -> impl Iterator<Item = &Variable> {
-        self.entries
-            .values()
-            .filter(|entry| entry.kind == VariableCacheKind::Root)
-            .chain(self.entries.values().filter(|entry| entry.kind == VariableCacheKind::Child))
-            .flat_map(|entry| entry.full.iter())
-    }
-}
-
-fn slice_variables(variables: &[Variable], start: usize, count: usize) -> Vec<Variable> {
-    variables.iter().skip(start).take(count).cloned().collect()
-}
-
-#[derive(Debug, Clone, PartialEq)]
-#[allow(dead_code)]
-enum DebugState {
-    Running,
-    Stopped,
-    Terminated,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-enum ResumeMode {
-    Continue,
-    /// Like `Continue` but auto-continues past any non-breakpoint stop.
-    /// Used when `configurationDone` runs with `stopOnEntry: false` to
-    /// silently skip the debugger's implicit first-line stop and run to
-    /// the first user-set breakpoint.
-    RunToBreakpoint,
-    Goto,
-    Next,
-    StepIn,
-    StepOut,
-    Unknown,
 }
 
 /// Represents a DAP message, which can be a request, response, or event.
