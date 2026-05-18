@@ -134,6 +134,34 @@ __PACKAGE__->meta->make_immutable;
 1;
 "#;
 
+const UPDATED_CATALYST_METHOD_CALL_MODULE: &str = r#"package MyApp::Controller::Root;
+use Moose;
+use namespace::autoclean;
+
+BEGIN { extends 'Catalyst::Controller' }
+
+__PACKAGE__->config(namespace => '');
+
+sub index :Path :Args(0) {
+    my ($self, $c) = @_;
+    $c->stash_updated(template => 'index.tt');
+}
+
+sub item :Local Args(1) {
+    my ($self, $c, $id) = @_;
+    my $action = "show_${id}";
+    return $c->forward("${self}::${action}");
+}
+
+sub generated_dispatch :Private {
+    my ($self, $c, $controller, $action) = @_;
+    return $c->forward("${controller}::${action}");
+}
+
+__PACKAGE__->meta->make_immutable;
+1;
+"#;
+
 /// Class-syntax fixture used for scoped compiler-token expansion receipts.
 /// Class-specific compiler candidates must stay output-neutral until each
 /// source-backed span matches an existing live parser/HIR token class.
@@ -730,36 +758,43 @@ fn semantic_tokens_runtime_quality_receipt_proves_source_backed_method_call_comp
     assert_eq!(method_span.range.start.character, expected_start);
     assert_eq!(method_span.single_line_lsp_length(), Some(expected_length));
 
-    let method_candidate =
-        crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
-            "token:method:Catalyst::Context::stash:compiler",
-            ProviderFactSourceKind::CompilerFact,
-            Provenance::SemanticAnalyzer,
-            Confidence::Medium,
-            ProviderFactFreshness::Fresh,
-            method_span,
-        );
-    let span_report = crate::semantic_tokens::semantic_token_span_invariant_report(
-        std::slice::from_ref(&method_candidate),
-    );
-    assert_eq!(span_report.candidate_count, 1);
-    assert_eq!(span_report.source_backed_span_count, 1);
-    assert_eq!(span_report.missing_source_span_count, 0);
-    assert_eq!(span_report.invalid_source_span_count, 0);
-
-    let shadow = crate::semantic_tokens::semantic_token_source_shadow(
-        Vec::new(),
-        vec![method_candidate],
-        "method_call",
+    let method_receipt = class_specific_receipt(&receipt, "method_call")?;
+    assert_eq!(method_receipt.get("source").and_then(Value::as_str), Some("CompilerFact"));
+    assert_eq!(method_receipt.get("provenance").and_then(Value::as_str), Some("SemanticAnalyzer"));
+    assert_eq!(method_receipt.get("freshness").and_then(Value::as_str), Some("Fresh"));
+    assert_eq!(method_receipt.get("fallback_state").and_then(Value::as_str), Some("Primary"));
+    assert_eq!(
+        method_receipt.get("approved_for_live_cutover").and_then(Value::as_bool),
+        Some(true),
+        "method calls are the scoped class under cutover proof"
     );
     assert_eq!(
-        shadow.receipt.verdict,
-        ShadowCompareVerdict::Same,
-        "method-call compiler candidates remain receipt-only until class-specific cutover"
+        method_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "method-call receipt may join the scoped compiler-token live pilot only with parity proof"
     );
     assert_eq!(
-        shadow.receipt.new_result.match_count, 0,
-        "method-call compiler candidates must not become semantic-token identities yet"
+        method_receipt.get("live_output_parity").and_then(Value::as_bool),
+        Some(true),
+        "source-backed method-call compiler span must match existing live method token output"
+    );
+    assert_eq!(
+        method_receipt.get("parity_state").and_then(Value::as_str),
+        Some("matched_existing_live_method_token")
+    );
+    assert_eq!(method_receipt.get("live_token_type").and_then(Value::as_str), Some("method"));
+    assert_eq!(method_receipt.get("live_token_match_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(method_receipt.get("candidate_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        method_receipt.get("source_backed_span_count").and_then(Value::as_u64),
+        Some(1),
+        "method-call candidate must be source-backed"
+    );
+    assert_eq!(method_receipt.get("missing_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(method_receipt.get("invalid_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(
+        method_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true)
     );
 
     let method_token_type =
@@ -778,11 +813,26 @@ fn semantic_tokens_runtime_quality_receipt_proves_source_backed_method_call_comp
         "source-backed method-call compiler span must match exactly one existing live method token"
     );
 
-    let compiler_receipt = must_some(receipt.get("compiler_receipt").and_then(Value::as_object));
+    let claim_boundary = must_some(method_receipt.get("claim_boundary").and_then(Value::as_str));
+    assert!(
+        claim_boundary.contains("no new token output is emitted"),
+        "method-call receipt must preserve the output-neutral boundary; got: {claim_boundary}"
+    );
+
+    let shadow_receipt = must_some(method_receipt.get("shadow_receipt").and_then(Value::as_object));
+    let new_result = must_some(shadow_receipt.get("new_result").and_then(Value::as_object));
     assert_eq!(
-        compiler_receipt.get("token_class").and_then(Value::as_str),
-        Some("subroutine_declaration"),
-        "runtime receipt must not broaden the live compiler-token class while proving method parity"
+        new_result.get("match_count").and_then(Value::as_u64),
+        Some(1),
+        "source-backed method-call compiler candidates may count only through the scoped class identity"
+    );
+    let identities = must_some(new_result.get("identities").and_then(Value::as_array));
+    assert!(
+        identities
+            .iter()
+            .filter_map(Value::as_str)
+            .any(|identity| identity == "token:method_call:stash:compiler"),
+        "class-specific receipt must authorize only the method-call identity; got: {identities:?}"
     );
 
     Ok(())
@@ -1894,6 +1944,70 @@ fn semantic_tokens_runtime_quality_receipt_refreshes_package_declaration_live_pi
     );
     assert_eq!(
         updated_package_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "edit-freshness proof must remain output-neutral"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_refreshes_method_call_live_pilot_after_edit()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    let catalyst_uri = "file:///workspace/lib/MyApp/Controller/Root.pm";
+    open_document(&server, catalyst_uri, CATALYST_CONTROLLER_MODULE);
+
+    let params = json!({ "textDocument": {"uri": catalyst_uri} });
+    let initial_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let initial_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params.clone()))));
+    let initial_method_receipt = class_specific_receipt(&initial_receipt, "method_call")?;
+    let initial_identity = first_shadow_identity(initial_method_receipt)?;
+    assert!(
+        initial_identity.contains("stash"),
+        "initial method-call compiler identity should use the opened source: {initial_identity}"
+    );
+    assert_eq!(
+        initial_method_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "initial method call should be the scoped class live pilot"
+    );
+
+    change_document(&server, catalyst_uri, 2, UPDATED_CATALYST_METHOD_CALL_MODULE);
+
+    let updated_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let updated_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+    let updated_method_receipt = class_specific_receipt(&updated_receipt, "method_call")?;
+    let updated_identity = first_shadow_identity(updated_method_receipt)?;
+
+    assert_ne!(
+        updated_live, initial_live,
+        "live semantic-token output must refresh after the method-call edit"
+    );
+    assert_ne!(
+        updated_identity, initial_identity,
+        "method-call compiler identity must refresh after didChange"
+    );
+    assert!(
+        updated_identity.contains("stash_updated"),
+        "updated method-call compiler identity should use the edited source: {updated_identity}"
+    );
+    assert_eq!(
+        updated_method_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "post-edit method call should remain in the scoped class live pilot"
+    );
+    assert_eq!(
+        updated_method_receipt.get("live_token_match_count").and_then(Value::as_u64),
+        Some(1),
+        "post-edit source-backed method call must still match the live token stream"
+    );
+    assert_eq!(
+        updated_method_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
         Some(true),
         "edit-freshness proof must remain output-neutral"
     );

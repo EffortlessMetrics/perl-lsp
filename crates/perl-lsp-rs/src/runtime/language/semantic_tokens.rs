@@ -269,6 +269,18 @@ impl LspServer {
                 "scoped compiler method-declaration class cutover proof only; method declarations may count as compiler-token identities only when their source-backed span already matches existing live parser/HIR method tokens, and no new token output is emitted",
             ));
         }
+        if let Some(candidate) = semantic_token_method_call_candidate(&doc.text) {
+            receipts.push(Self::semantic_tokens_class_specific_expansion_receipt(
+                live_provider_result,
+                candidate,
+                "method_call",
+                "method",
+                "matched_existing_live_method_token",
+                "unmatched_existing_live_method_token",
+                true,
+                "scoped compiler method-call class cutover proof only; method calls may count as compiler-token identities only when their source-backed span already matches existing live parser/HIR method tokens, and no new token output is emitted",
+            ));
+        }
         if let Some(candidate) = semantic_token_class_field_declaration_candidate(&doc.text) {
             receipts.push(Self::semantic_tokens_class_specific_expansion_receipt(
                 live_provider_result,
@@ -487,6 +499,49 @@ fn semantic_token_method_declaration_candidate(
 
     Some(crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
         format!("token:method_declaration:{name}:compiler"),
+        ProviderFactSourceKind::CompilerFact,
+        Provenance::SemanticAnalyzer,
+        Confidence::Medium,
+        ProviderFactFreshness::Fresh,
+        span,
+    ))
+}
+
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+fn semantic_token_method_call_candidate(
+    source: &str,
+) -> Option<crate::semantic_tokens::SemanticTokenShadowCandidate> {
+    let receiver_start = source.find("$c->")?;
+    let mut name_start = receiver_start + "$c->".len();
+
+    while let Some(ch) = source[name_start..].chars().next() {
+        if ch.is_whitespace() {
+            name_start += ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    let mut name_end = name_start;
+    for (offset, ch) in source[name_start..].char_indices() {
+        if is_subroutine_name_char(ch) {
+            name_end = name_start + offset + ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    if name_end == name_start {
+        return None;
+    }
+
+    let name = &source[name_start..name_end];
+    let span = crate::semantic_tokens::SemanticTokenShadowSpan::from_byte_offsets(
+        source, name_start, name_end,
+    )?;
+
+    Some(crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
+        format!("token:method_call:{name}:compiler"),
         ProviderFactSourceKind::CompilerFact,
         Provenance::SemanticAnalyzer,
         Confidence::Medium,
