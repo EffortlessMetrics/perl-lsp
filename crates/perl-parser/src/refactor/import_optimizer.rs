@@ -52,9 +52,6 @@ static USE_STATEMENT_RE: LazyLock<Result<Regex, String>> = LazyLock::new(|| {
         .map_err(|err| err.to_string())
 });
 
-static DUMPER_SYMBOL_RE: LazyLock<Result<Regex, String>> =
-    LazyLock::new(|| Regex::new(r"\bDumper\b").map_err(|err| err.to_string()));
-
 static STRING_LITERAL_RE: LazyLock<Result<Regex, String>> =
     LazyLock::new(|| Regex::new("'[^']*'|\"[^\"]*\"").map_err(|err| err.to_string()));
 
@@ -199,6 +196,30 @@ fn is_pragma_module(module: &str) -> bool {
     )
 }
 
+fn is_perl_identifier_char(ch: char) -> bool {
+    ch == '_' || ch.is_ascii_alphanumeric()
+}
+
+fn has_identifier_boundary_before(content: &str, start: usize) -> bool {
+    start == 0 || content[..start].chars().next_back().is_none_or(|ch| !is_perl_identifier_char(ch))
+}
+
+fn has_identifier_boundary_after(content: &str, end: usize) -> bool {
+    end == content.len()
+        || content[end..].chars().next().is_none_or(|ch| !is_perl_identifier_char(ch))
+}
+
+fn contains_perl_identifier(content: &str, needle: &str) -> bool {
+    if needle.is_empty() {
+        return false;
+    }
+
+    content.match_indices(needle).any(|(start, matched)| {
+        has_identifier_boundary_before(content, start)
+            && has_identifier_boundary_after(content, start + matched.len())
+    })
+}
+
 /// Get known exports for popular Perl modules
 fn get_known_module_exports(module: &str) -> Option<Vec<&'static str>> {
     match module {
@@ -285,7 +306,6 @@ impl ImportOptimizer {
     /// ```
     pub fn analyze_content(&self, content: &str) -> Result<ImportAnalysis, String> {
         let use_statement_re = USE_STATEMENT_RE.as_ref().map_err(|err| err.clone())?;
-        let dumper_symbol_re = DUMPER_SYMBOL_RE.as_ref().map_err(|err| err.clone())?;
         let string_literal_re = STRING_LITERAL_RE.as_ref().map_err(|err| err.clone())?;
         let regex_literal_re = REGEX_LITERAL_RE.as_ref().map_err(|err| err.clone())?;
         let comment_re = COMMENT_RE.as_ref().map_err(|err| err.clone())?;
@@ -347,11 +367,8 @@ impl ImportOptimizer {
             // If there are explicit symbols (like qw()), check each one
             if !imp.symbols.is_empty() {
                 for sym in &imp.symbols {
-                    let re = Regex::new(&format!(r"\b{}\b", regex::escape(sym)))
-                        .map_err(|e| e.to_string())?;
-
                     // Check if symbol is used in non-use content
-                    if !re.is_match(&non_use_content) {
+                    if !contains_perl_identifier(&non_use_content, sym) {
                         unused_symbols.push(sym.clone());
                     }
                 }
@@ -381,36 +398,22 @@ impl ImportOptimizer {
                     let mut is_used = false;
 
                     // First check if the module is directly referenced (e.g., Module::function)
-                    let module_pattern = format!(r"\b{}\b", regex::escape(&imp.module));
-                    let module_re = Regex::new(&module_pattern).map_err(|e| e.to_string())?;
-                    if module_re.is_match(&non_use_content) {
+                    if contains_perl_identifier(&non_use_content, &imp.module) {
                         is_used = true;
                     }
 
-                    // Also check for qualified function calls like Module::function
-                    if !is_used {
-                        let qualified_pattern = format!(r"{}::", regex::escape(&imp.module));
-                        let qualified_re =
-                            Regex::new(&qualified_pattern).map_err(|e| e.to_string())?;
-                        if qualified_re.is_match(&non_use_content) {
-                            is_used = true;
-                        }
-                    }
-
                     // Special handling for Data::Dumper - check for Dumper function usage
-                    if !is_used && imp.module == "Data::Dumper" {
-                        if dumper_symbol_re.is_match(&non_use_content) {
-                            is_used = true;
-                        }
+                    if !is_used
+                        && imp.module == "Data::Dumper"
+                        && contains_perl_identifier(&non_use_content, "Dumper")
+                    {
+                        is_used = true;
                     }
 
                     // Then check if any known exports are used
                     if !is_used && !known_exports.is_empty() {
                         for export in &known_exports {
-                            let export_pattern = format!(r"\b{}\b", regex::escape(export));
-                            let export_re =
-                                Regex::new(&export_pattern).map_err(|e| e.to_string())?;
-                            if export_re.is_match(&non_use_content) {
+                            if contains_perl_identifier(&non_use_content, export) {
                                 is_used = true;
                                 break;
                             }
@@ -1004,6 +1007,29 @@ print Dumper(\@ARGV);
         // JSON and SomeUnknownModule are treated as having potential side effects,
         // so neither is flagged as unused.
         assert!(analysis.unused_imports.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_imported_symbol_usage_requires_identifier_boundaries()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let optimizer = ImportOptimizer::new();
+        let content = r#"use strict;
+use warnings;
+use List::Util qw(first max);
+
+my $first_name = 'Ada';
+my $maximum = 42;
+my $match = first { $_ > 10 } @values;
+print $first_name, $maximum, $match;
+"#;
+
+        let (_temp_dir, file_path) = create_test_file(content)?;
+        let analysis = optimizer.analyze_file(&file_path)?;
+
+        let unused = analysis.unused_imports.iter().find(|unused| unused.module == "List::Util");
+
+        assert!(unused.is_some_and(|unused| unused.symbols == ["max"]));
         Ok(())
     }
 
