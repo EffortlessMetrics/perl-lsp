@@ -261,7 +261,36 @@ fn test_execute_command_workspace_trust_report() -> Result<(), Box<dyn std::erro
                         "active_perl_debug_session": false,
                         "managed_adapter_exists": true,
                         "launch_json_workspace_count": 1,
-                        "workspace_folder_count": 1
+                        "workspace_folder_count": 1,
+                        "launch_configuration": {
+                            "status": "client_launch_config_reported",
+                            "configuration_count": 3,
+                            "perl_configuration_count": 2,
+                            "launch_request_count": 1,
+                            "attach_request_count": 1,
+                            "perl_path_configured_count": 1,
+                            "include_paths_configured_count": 2,
+                            "include_path_entry_count": 3,
+                            "non_string_include_path_count": 1,
+                            "program_configured_count": 1,
+                            "cwd_configured_count": 1,
+                            "include_path_kind_counts": {
+                                "workspace_variable": 1,
+                                "relative": 2,
+                                "raw_path_value": 99
+                            },
+                            "perl_path_kind_counts": {
+                                "absolute": 1
+                            },
+                            "program_path_kind_counts": {
+                                "workspace_variable": 1
+                            },
+                            "cwd_path_kind_counts": {
+                                "relative": 1
+                            },
+                            "raw_include_paths": ["secret/lib"],
+                            "claim_boundary": "Launch configuration state reports counts and path classes only."
+                        }
                     },
                     "ignored": "not copied"
                 }
@@ -337,6 +366,38 @@ fn test_execute_command_workspace_trust_report() -> Result<(), Box<dyn std::erro
             .pointer("/client_runtime_state/dap/managed_adapter_exists")
             .and_then(|value| value.as_bool()),
         Some(true)
+    );
+    assert_eq!(
+        result
+            .pointer("/client_runtime_state/dap/launch_configuration/status")
+            .and_then(|value| value.as_str()),
+        Some("client_launch_config_reported")
+    );
+    assert_eq!(
+        result
+            .pointer("/client_runtime_state/dap/launch_configuration/include_path_entry_count")
+            .and_then(|value| value.as_u64()),
+        Some(3)
+    );
+    assert_eq!(
+        result
+            .pointer(
+                "/client_runtime_state/dap/launch_configuration/include_path_kind_counts/workspace_variable",
+            )
+            .and_then(|value| value.as_u64()),
+        Some(1)
+    );
+    assert!(
+        result
+            .pointer("/client_runtime_state/dap/launch_configuration/include_path_kind_counts/raw_path_value")
+            .is_none(),
+        "launch path class counts should be sanitized to known classes"
+    );
+    assert!(
+        result
+            .pointer("/client_runtime_state/dap/launch_configuration/raw_include_paths")
+            .is_none(),
+        "raw launch include paths should not be copied into the report"
     );
     assert!(
         result.pointer("/client_runtime_state/ignored").is_none(),

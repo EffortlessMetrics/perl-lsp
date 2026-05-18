@@ -169,10 +169,15 @@ resolving or running perldoc and by carrying sanitized VS Code client
 DAP/perldoc state into the report; it does not start DAP, run perldoc, probe
 Perl, inspect debug-session internals, scan workspace files, or promote broader
 setup-health claims.
+The launch-configuration/module-path parsing pass closes the current
+setup-health parsing receipt by carrying sanitized VS Code launch configuration
+counts and path classes into the trust report. It does not copy raw launch
+paths, start DAP, resolve Perl, probe module paths, inspect debug-session
+internals, or promote broader setup-health claims.
 
 1. `test(workspace-symbols): add additional generated/no-source project variant only if broader generated-symbol expansion is being considered`
 2. `test(rename): keep package/compiler-backed fallback and edit-freshness receipts current before broader promotion`
-3. `feat(ux): add launch-configuration/module-path parsing receipts before broader setup-health claims`
+3. `test(dap): add explicit DAP module-path behavior receipts before broader setup-health claims`
 
 Provider decision explanations are already partial-live through
 `perl.explainProviderDecision`; callers can attach a request-local
@@ -218,10 +223,11 @@ receipt, and workspace trust report commands without changing provider
 behavior, safe-delete edit authorization, scanning files, probing Perl, or
 promoting support tiers.
 `perl.workspaceTrustReport` now includes advisory setup hints, explicit Perl
-binary/perldoc/DAP probe boundaries, the perldoc oracle contract, and sanitized
-VS Code client DAP/perldoc runtime state; the VS Code output renders those
-hints without running perldoc, starting DAP, probing Perl, scanning workspace
-files, or changing subprocess behavior.
+binary/perldoc/DAP probe boundaries, the perldoc oracle contract, sanitized
+VS Code client DAP/perldoc runtime state, and launch-configuration/module-path
+counts and path classes; the VS Code output renders those hints without copying
+raw launch paths, running perldoc, starting DAP, probing Perl, or changing
+subprocess behavior.
 
 Package-local rename live support has now moved from preview-only to a narrow
 pilot. The compiler-allowed preview receipt proves the eligible no-edit UX shape
