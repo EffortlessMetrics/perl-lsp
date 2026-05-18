@@ -375,6 +375,75 @@ impl<'a> Parser<'a> {
         matches!(kind, Some(TokenKind::And | TokenKind::Or | TokenKind::DefinedOr))
     }
 
+    fn assignment_operator_text(kind: TokenKind) -> Option<&'static str> {
+        match kind {
+            TokenKind::Assign => Some("="),
+            TokenKind::PlusAssign => Some("+="),
+            TokenKind::MinusAssign => Some("-="),
+            TokenKind::StarAssign => Some("*="),
+            TokenKind::SlashAssign => Some("/="),
+            TokenKind::PercentAssign => Some("%="),
+            TokenKind::DotAssign => Some(".="),
+            TokenKind::AndAssign => Some("&="),
+            TokenKind::OrAssign => Some("|="),
+            TokenKind::XorAssign => Some("^="),
+            TokenKind::PowerAssign => Some("**="),
+            TokenKind::LeftShiftAssign => Some("<<="),
+            TokenKind::RightShiftAssign => Some(">>="),
+            TokenKind::LogicalAndAssign => Some("&&="),
+            TokenKind::LogicalOrAssign => Some("||="),
+            TokenKind::DefinedOrAssign => Some("//="),
+            _ => None,
+        }
+    }
+
+    fn consume_bare_lvalue_assignment_separator(&mut self, func_name: &str) -> ParseResult<bool> {
+        if func_name != "substr" || self.peek_kind() != Some(TokenKind::Comma) {
+            return Ok(false);
+        }
+
+        if self
+            .tokens
+            .peek_second()
+            .ok()
+            .and_then(|token| Self::assignment_operator_text(token.kind))
+            .is_none()
+        {
+            return Ok(false);
+        }
+
+        self.consume_token()?;
+        Ok(true)
+    }
+
+    fn parse_lvalue_builtin_assignment_tail(
+        &mut self,
+        func_name: &str,
+        expr: Node,
+    ) -> ParseResult<Node> {
+        if func_name != "substr" {
+            return Ok(expr);
+        }
+
+        let Some(op) = self.peek_kind().and_then(Self::assignment_operator_text) else {
+            return Ok(expr);
+        };
+
+        let op_token = self.tokens.next()?;
+        let rhs = if let Some(missing) = self.recover_missing_infix_rhs(op_token.start) {
+            missing
+        } else {
+            self.parse_assignment()?
+        };
+        let start = expr.location.start;
+        let end = rhs.location.end;
+
+        Ok(Node::new(
+            NodeKind::Assignment { lhs: Box::new(expr), rhs: Box::new(rhs), op: op.to_string() },
+            SourceLocation { start, end },
+        ))
+    }
+
     fn is_explicit_sub_sigil_argument_start(&mut self) -> bool {
         matches!(self.peek_kind(), Some(TokenKind::SubSigil | TokenKind::BitwiseAnd))
             && self.tokens.peek_second().is_ok_and(|token| {
