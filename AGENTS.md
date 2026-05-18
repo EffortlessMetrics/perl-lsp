@@ -19,6 +19,27 @@ The orchestrator reads `CLAUDE.md`. This file is for you.
 | `docs/articles/CONTINUOUS_REVIEW_PATTERNS.md` | The orchestration pattern used here |
 | `docs/articles/ORCHESTRATION_COUNTERINTUITIONS.md` | Lessons where the obvious rule was wrong |
 
+## Repo source-of-truth stack
+
+This repo uses a linked source-of-truth stack:
+
+```text
+Roadmap → Proposal → Spec → ADR → Plan → Active goal → PR → Proof
+```
+
+Before changing files, read:
+
+1. `docs/reference/SPEC_SYSTEM.md`
+2. `.perl-lsp/goals/active.toml`
+3. The linked implementation plan
+4. The linked spec for the selected work item
+5. Linked ADRs
+
+Work on exactly one work item per PR. Do not create a new lane, broaden support
+claims, hand-edit generated status, or add policy exceptions unless the selected
+work item explicitly requires it. If the active goal or linked artifacts are
+missing, stop and report instead of guessing.
+
 **Before starting:** check the latest upstream commits so you do not re-implement
 already-merged work.
 

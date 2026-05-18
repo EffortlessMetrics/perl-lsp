@@ -10,17 +10,53 @@ like (#0000) or (#9999) will fail CI.
 ## Summary
 <!-- What changed and why. Link the issue: Fixes #NNN -->
 
-## Changes
-<!-- List changed files and what each change does -->
+## Source-of-truth links
 
-## Test
-<!-- What test was added? Does it fail before the fix and pass after? -->
+Proposal:
+Spec:
+ADR:
+Plan item:
+Active goal:
+
+## Scope
+
+- [ ] Proposal / why
+- [ ] Spec / behavior contract
+- [ ] ADR / durable decision
+- [ ] Plan / sequencing
+- [ ] Active goal / current execution state
+- [ ] Runtime / implementation
+- [ ] Policy ledger
+- [ ] Support-tier update
+- [ ] Generated status / receipt
+
+## Non-goals
+<!-- What this PR explicitly does not do. -->
+
+## Changes
+<!-- List changed files and what each change does. -->
+
+## Proof
+<!-- Commands run, results, unavailable proof, and substitute evidence. -->
+
+```bash
+# commands run
+```
+
+Results:
+
+## Claim boundary
+<!-- What may be claimed after this PR? What may not be claimed yet? -->
+
+## Rollback
+<!-- How to revert safely. -->
 
 ## Verification
 - [ ] `cargo xtask fmt` — clean
 - [ ] I used a narrow orthogonal pass first (freshness check, truth-check, or targeted repro) before the broader gate.
 - [ ] `cargo clippy -p <crate> --tests` — clean
 - [ ] `cargo test -p <crate>` — pass
+- [ ] `git diff --check` — clean
 - [ ] This PR introduces UX-visible changes. I have verified that error messages are actionable and the UX test harness still passes.
 
 ## Retained State
@@ -32,10 +68,10 @@ like (#0000) or (#9999) will fail CI.
 - [ ] A regression test, receipt, snapshot counter, or debug counter covers the state.
 
 ## What I considered but didn't do
-<!-- Alternative approaches, related issues found, scope decisions -->
+<!-- Alternative approaches, related issues found, scope decisions. -->
 
 ## What's next
-<!-- Follow-up work, edge cases to address, related issues to file -->
+<!-- Follow-up work, edge cases to address, related issues to file. -->
 
 ## CI cost / verification note
 <!-- See docs/ci/cost-and-verification-policy.md and docs/ci/lem-budgeting.md. -->
@@ -45,4 +81,4 @@ like (#0000) or (#9999) will fail CI.
 - [ ] New CI work states the failure mode it catches and its estimated LEM.
 
 ## Agent
-<!-- If created by swarm: agent type, issue number, model tier -->
+<!-- If created by swarm: agent type, issue number, model tier. -->
