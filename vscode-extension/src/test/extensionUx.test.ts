@@ -22,6 +22,7 @@ import {
   explainDiagnosticCommand,
   explainMissingModuleLookupCommand,
   explainProviderDecisionCommand,
+  previewPackageRenameCommand,
   previewSafeDeleteCommand,
   showWorkspaceTrustReportCommand,
   validateIncludePaths,
@@ -625,6 +626,53 @@ describe('extension UX warnings', () => {
     );
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
       'Safe delete refused. No edits were applied.',
+      'Show Output'
+    );
+  });
+
+  test('previews package rename through the no-edit LSP command', async () => {
+    const sendRequest = jest.fn(async () => ({
+      provider: 'rename',
+      decision: 'allowed',
+      user_message: 'Package rename preview is available. No edits were applied.',
+    }));
+    (vscode.window.showInputBox as jest.Mock).mockResolvedValue('renamed_shared');
+    (vscode.window as any).activeTextEditor = {
+      document: {
+        languageId: 'perl',
+        uri: vscode.Uri.file('/workspace/lib/Foo.pm'),
+        getText: jest.fn(() => 'shared'),
+        getWordRangeAtPosition: jest.fn(() => ({ start: { line: 12, character: 4 }, end: { line: 12, character: 10 } })),
+      },
+      selection: {
+        active: { line: 12, character: 4 },
+        isEmpty: true,
+      },
+    };
+
+    await previewPackageRenameCommand({ sendRequest } as any);
+
+    expect(vscode.window.showInputBox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        value: 'shared',
+        placeHolder: 'renamed_symbol',
+      })
+    );
+    expect(sendRequest).toHaveBeenCalledWith(
+      'workspace/executeCommand',
+      {
+        command: 'perl.previewPackageRename',
+        arguments: [
+          {
+            textDocument: { uri: 'file:///workspace/lib/Foo.pm' },
+            position: { line: 12, character: 4 },
+            newName: 'renamed_shared',
+          },
+        ],
+      }
+    );
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      'Package rename preview is available. No edits were applied.',
       'Show Output'
     );
   });

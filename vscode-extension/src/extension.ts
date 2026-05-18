@@ -374,6 +374,47 @@ function activeSafeDeletePreviewArgument(): Record<string, unknown> | undefined 
     };
 }
 
+async function activePackageRenamePreviewArgument(): Promise<Record<string, unknown> | undefined> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.languageId !== 'perl') {
+        return undefined;
+    }
+
+    const selectedText = editor.selection.isEmpty
+        ? ''
+        : editor.document.getText(editor.selection).trim();
+    const wordRange = editor.document.getWordRangeAtPosition(editor.selection.active);
+    const wordText = wordRange ? editor.document.getText(wordRange).trim() : '';
+    const defaultValue = selectedText || wordText;
+
+    const newName = await vscode.window.showInputBox({
+        value: defaultValue,
+        placeHolder: 'renamed_symbol',
+        prompt: 'New package or symbol name for the no-edit rename preview',
+        validateInput: value => {
+            const trimmed = value.trim();
+            if (!trimmed) {
+                return 'Enter a new Perl package or symbol name.';
+            }
+            return isPerlModuleName(trimmed)
+                ? undefined
+                : 'Use a single Perl package or symbol name.';
+        },
+    });
+    if (!newName) {
+        return undefined;
+    }
+
+    return {
+        textDocument: { uri: editor.document.uri.toString() },
+        position: {
+            line: editor.selection.active.line,
+            character: editor.selection.active.character,
+        },
+        newName: newName.trim(),
+    };
+}
+
 function isPerlModuleName(value: string): boolean {
     return /^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$/.test(value);
 }
@@ -956,6 +997,26 @@ export async function previewSafeDeleteCommand(
     }
 }
 
+export async function previewPackageRenameCommand(
+    activeClient: LspExecuteCommandClient | undefined = client
+): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.languageId !== 'perl') {
+        vscode.window.showErrorMessage('Preview Package Rename requires an active Perl file.');
+        return;
+    }
+
+    const argument = await activePackageRenamePreviewArgument();
+    if (!argument) {
+        return;
+    }
+
+    const result = await executeLspCommand(activeClient, 'perl.previewPackageRename', argument);
+    if (result !== undefined) {
+        await showProviderDecisionResult('Package rename preview', result);
+    }
+}
+
 export async function copyProviderDecisionReceiptCommand(
     activeClient: LspExecuteCommandClient | undefined = client,
     providerOverride?: string
@@ -1286,6 +1347,13 @@ export async function activate(context: vscode.ExtensionContext) {
         'perl-lsp.previewSafeDelete',
         async () => {
             await previewSafeDeleteCommand(client);
+        }
+    );
+
+    const previewPackageRenameCommandDisposable = vscode.commands.registerCommand(
+        'perl-lsp.previewPackageRename',
+        async () => {
+            await previewPackageRenameCommand(client);
         }
     );
 
@@ -1627,6 +1695,7 @@ export async function activate(context: vscode.ExtensionContext) {
         showParserAstCommand,
         explainProviderDecisionCommandDisposable,
         previewSafeDeleteCommandDisposable,
+        previewPackageRenameCommandDisposable,
         copyProviderDecisionReceiptCommandDisposable,
         showWorkspaceTrustReportCommandDisposable,
         explainMissingModuleLookupCommandDisposable,
