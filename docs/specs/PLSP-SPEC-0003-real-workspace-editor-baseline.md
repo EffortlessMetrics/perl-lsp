@@ -98,6 +98,12 @@ Targeted latency proof:
 cargo test -p perl-lsp-rs --test real_project_latency mojolicious -- --include-ignored --nocapture
 ```
 
+Resource inventory proof:
+
+```bash
+cargo test -p perl-lsp-rs --test real_project_latency test_real_project_resource_inventory_receipt --profile agent --locked -- --nocapture
+```
+
 Semantic/provider status proof:
 
 ```bash
