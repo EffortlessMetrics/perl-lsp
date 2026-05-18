@@ -1360,6 +1360,13 @@ impl LspServer {
                         .ok_or_else(|| invalid_params("Missing package rename preview argument"))?;
                     return self.package_rename_preview(Some(request));
                 }
+                "perl.explainMissingModuleLookup" => {
+                    let request = arguments
+                        .first()
+                        .cloned()
+                        .ok_or_else(|| invalid_params("Missing missing-module lookup argument"))?;
+                    return self.explain_missing_module_lookup(Some(request));
+                }
                 "perl.debugTest" => {
                     let test_id = arguments
                         .first()

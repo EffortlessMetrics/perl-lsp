@@ -67,6 +67,7 @@ executeCommandProvider:
     - perl.previewSafeDelete
     - perl.safeDeleteSymbol
     - perl.previewPackageRename
+    - perl.explainMissingModuleLookup
 experimental:
   perlInlineCompletionStream: true
 foldingRangeProvider: true
