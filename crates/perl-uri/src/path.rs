@@ -1,0 +1,260 @@
+//! Filesystem path conversion helpers for `file://` URIs.
+
+use std::path::{Path, PathBuf};
+
+use url::Url;
+
+use crate::mojibake::repair_path_mojibake;
+
+/// Convert a `file://` URI to a filesystem path.
+///
+/// Properly handles percent-encoding and works with spaces, Windows paths,
+/// and non-ASCII characters. Returns `None` if the URI is not a valid `file://` URI.
+///
+/// # Examples
+///
+/// ```
+/// # #[cfg(not(target_arch = "wasm32"))]
+/// # fn main() {
+/// use perl_uri::uri_to_fs_path;
+///
+/// // Basic file URI
+/// let path = uri_to_fs_path("file:///tmp/test.pl");
+/// assert!(path.is_some());
+///
+/// // URI with percent-encoded spaces
+/// let path = uri_to_fs_path("file:///tmp/path%20with%20spaces/test.pl");
+/// assert!(path.is_some());
+///
+/// // Non-file URIs return None
+/// let path = uri_to_fs_path("https://example.com");
+/// assert!(path.is_none());
+/// # }
+/// # #[cfg(target_arch = "wasm32")]
+/// # fn main() {}
+/// ```
+///
+/// # Platform Support
+///
+/// This function is not available on `wasm32` targets (no filesystem).
+pub fn uri_to_fs_path(uri: &str) -> Option<PathBuf> {
+    // Parse the URI
+    let url = Url::parse(uri).ok()?;
+
+    // Only handle file:// URIs
+    if url.scheme() != "file" {
+        return None;
+    }
+
+    // Convert to filesystem path using the url crate's built-in method.
+    // On Windows, accept rooted file URIs like file:///tmp/test.pl as \tmp\test.pl
+    // so cross-platform tests and internal helpers stay permissive.
+    let path = url.to_file_path().ok().or_else(|| windows_rooted_file_uri_to_path(&url))?;
+    Some(repair_path_mojibake(path))
+}
+
+/// Convert either a `file://` URI or absolute filesystem path to a source path.
+///
+/// This helper accepts:
+/// - absolute native paths (including Windows drive paths)
+/// - `file://` URIs that map to local filesystem paths
+///
+/// It returns `None` for non-file schemes, invalid inputs, and relative paths.
+pub fn source_path_from_uri_or_path(input: &str) -> Option<PathBuf> {
+    let path = Path::new(input);
+    if path.is_absolute() {
+        return Some(path.to_path_buf());
+    }
+
+    uri_to_fs_path(input)
+}
+
+/// Convert a filesystem path to a `file://` URI.
+///
+/// Properly handles percent-encoding and works with spaces, Windows paths,
+/// and non-ASCII characters.
+///
+/// # Examples
+///
+/// ```
+/// # #[cfg(not(target_arch = "wasm32"))]
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// use perl_uri::fs_path_to_uri;
+///
+/// // Absolute path
+/// let uri = fs_path_to_uri("/tmp/test.pl")?;
+/// assert!(uri.starts_with("file:///"));
+///
+/// // Path with spaces gets percent-encoded
+/// let uri = fs_path_to_uri("/tmp/path with spaces/test.pl")?;
+/// assert!(uri.contains("%20"));
+/// # Ok(())
+/// # }
+/// # #[cfg(target_arch = "wasm32")]
+/// # fn main() {}
+/// ```
+///
+/// # Errors
+///
+/// Returns an error if the path cannot be converted to an absolute path
+/// or if the conversion to a URI fails.
+///
+/// # Platform Support
+///
+/// This function is not available on `wasm32` targets (no filesystem).
+pub fn fs_path_to_uri<P: AsRef<Path>>(path: P) -> Result<String, String> {
+    let path = normalize_filesystem_path(path.as_ref());
+
+    // Convert to absolute path if relative
+    let abs_path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map_err(|e| format!("Failed to get current directory: {e}"))?
+            .join(path)
+    };
+
+    // Use the url crate's built-in method to create a proper file:// URI
+    Url::from_file_path(&abs_path)
+        .map(|url| url.to_string())
+        .map_err(|()| format!("Failed to convert path to URI: {}", abs_path.display()))
+}
+
+fn normalize_filesystem_path(path: &Path) -> PathBuf {
+    #[cfg(windows)]
+    {
+        if let Some(path_str) = path.to_str() {
+            if let Some(stripped) = path_str.strip_prefix(r"\\?\UNC\") {
+                return PathBuf::from(format!(r"\\{stripped}"));
+            }
+            if let Some(stripped) = path_str.strip_prefix(r"\\?\") {
+                return PathBuf::from(stripped);
+            }
+        }
+    }
+
+    path.to_path_buf()
+}
+
+#[cfg(windows)]
+fn windows_rooted_file_uri_to_path(url: &Url) -> Option<PathBuf> {
+    use percent_encoding::percent_decode_str;
+
+    match url.host_str() {
+        None | Some("localhost") => {}
+        Some(_) => return None,
+    }
+
+    let decoded = percent_decode_str(url.path()).decode_utf8().ok()?;
+    if decoded.is_empty() {
+        return None;
+    }
+
+    let native = if decoded.len() > 3
+        && decoded.starts_with('/')
+        && decoded.as_bytes()[2] == b':'
+        && decoded.as_bytes()[1].is_ascii_alphabetic()
+    {
+        decoded[1..].replace('/', "\\")
+    } else {
+        decoded.replace('/', "\\")
+    };
+
+    Some(PathBuf::from(native))
+}
+
+#[cfg(not(windows))]
+fn windows_rooted_file_uri_to_path(_url: &Url) -> Option<PathBuf> {
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_tdd_support::{must, must_some};
+
+    #[test]
+    fn test_uri_to_fs_path_basic() {
+        let path = uri_to_fs_path("file:///tmp/test.pl");
+        assert!(path.is_some());
+        let path = must_some(path);
+        assert!(path.ends_with("test.pl"));
+    }
+
+    #[test]
+    fn test_uri_to_fs_path_non_file() {
+        assert!(uri_to_fs_path("https://example.com").is_none());
+        assert!(uri_to_fs_path("untitled:Untitled-1").is_none());
+    }
+
+    #[test]
+    fn test_uri_to_fs_path_with_spaces() {
+        let path = uri_to_fs_path("file:///tmp/path%20with%20spaces/test.pl");
+        assert!(path.is_some());
+        let path = must_some(path);
+        let path_str = path.to_string_lossy();
+        assert!(path_str.contains("path with spaces"));
+    }
+
+    #[test]
+    fn test_uri_to_fs_path_repairs_common_mojibake() {
+        let path = must_some(uri_to_fs_path("file:///tmp/caf%C3%83%C2%A9.pl"));
+        let path_str = path.to_string_lossy();
+        assert!(path_str.contains("café.pl"), "expected repaired UTF-8 path, got {path_str}");
+    }
+
+    #[test]
+    fn test_fs_path_to_uri_basic() {
+        let uri = must(fs_path_to_uri("/tmp/test.pl"));
+        assert!(uri.starts_with("file:///"));
+        assert!(uri.contains("test.pl"));
+    }
+
+    #[test]
+    fn test_fs_path_to_uri_with_spaces() {
+        let uri = must(fs_path_to_uri("/tmp/path with spaces/test.pl"));
+        assert!(uri.contains("%20") || uri.contains("path with spaces"));
+    }
+
+    #[test]
+    fn test_roundtrip() {
+        let original = "/tmp/roundtrip-test.pl";
+        let uri = must(fs_path_to_uri(original));
+        let path = must_some(uri_to_fs_path(&uri));
+        assert!(path.ends_with("roundtrip-test.pl"));
+    }
+
+    #[test]
+    fn test_source_path_from_uri_or_path_rejects_non_file_scheme() {
+        assert!(source_path_from_uri_or_path("https://example.com/a.pl").is_none());
+    }
+
+    #[test]
+    fn test_source_path_from_uri_or_path_rejects_relative_path() {
+        assert!(source_path_from_uri_or_path("lib/Foo.pm").is_none());
+    }
+
+    #[test]
+    fn test_source_path_from_uri_or_path_accepts_file_uri_and_absolute_path() {
+        let from_uri = must_some(source_path_from_uri_or_path("file:///tmp/from-uri.pl"));
+        assert!(from_uri.ends_with("from-uri.pl"));
+
+        let absolute_path = std::env::temp_dir().join("from-path.pl");
+        let from_path =
+            must_some(source_path_from_uri_or_path(absolute_path.to_string_lossy().as_ref()));
+        assert!(from_path.ends_with("from-path.pl"));
+    }
+
+    #[test]
+    fn test_source_path_from_uri_or_path_localhost_file_uri() {
+        let path = must_some(source_path_from_uri_or_path("file://localhost/tmp/localhost.pl"));
+        assert!(path.ends_with("localhost.pl"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_source_path_from_uri_or_path_accepts_windows_drive_path() {
+        let path = must_some(source_path_from_uri_or_path("C:\\tmp\\drive-path.pl"));
+        assert!(path.ends_with("drive-path.pl"));
+    }
+}
