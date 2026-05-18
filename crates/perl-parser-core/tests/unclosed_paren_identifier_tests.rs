@@ -913,6 +913,13 @@ fn caller_one() {
 }
 
 #[test]
+fn caller_paren_list_assignment() {
+    // From Unicode::Normalize: caller(N) may appear on the RHS of a lexical
+    // list assignment in this bucket's source-backed corpus files.
+    assert_clean_parse(r#"my (undef, $file, $line) = caller(1);"#);
+}
+
+#[test]
 fn caller_with_parens() {
     // caller(0) — explicit parens, should still work
     assert_clean_parse(r#"my @c = caller(0);"#);
