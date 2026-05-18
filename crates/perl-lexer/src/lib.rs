@@ -3079,6 +3079,9 @@ impl<'a> PerlLexer<'a> {
             return None;
         }
         let mut pos = start.checked_add(quote.len_utf8())?;
+        if self.input.get(pos..).is_some_and(|text| text.starts_with(delim)) {
+            return None;
+        }
         if self.input.get(pos..).is_some_and(|text| text.starts_with(quote)) {
             return None;
         }
