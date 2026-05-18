@@ -108,7 +108,11 @@ fn invocation_name(args: &[std::ffi::OsString]) -> String {
 }
 
 fn render_help_text(command_name: &str) -> String {
-    help_text().replace("perl-lsp", command_name)
+    let placeholder = "__PERL_LSP_COMMAND_NAME__";
+    help_text()
+        .replace("perl-lsp", placeholder)
+        .replace("perllsp", placeholder)
+        .replace(placeholder, command_name)
 }
 
 fn render_shell_completion(script: &str, command_name: &str) -> String {
@@ -222,8 +226,25 @@ struct FileError {
 }
 
 fn run_check_project(dir: &str) -> i32 {
+    let root = Path::new(dir);
+    let metadata = match root.metadata() {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            eprintln!("{dir}: directory not found");
+            return 1;
+        }
+        Err(error) => {
+            eprintln!("{dir}: cannot access directory: {error}");
+            return 1;
+        }
+    };
+    if !metadata.is_dir() {
+        eprintln!("{dir}: not a directory");
+        return 1;
+    }
+
     let extensions: &[&str] = &["pm", "pl", "t"];
-    let walker = walkdir::WalkDir::new(dir).follow_links(true).into_iter();
+    let walker = walkdir::WalkDir::new(root).follow_links(true).into_iter();
 
     let mut total = 0usize;
     let mut clean = 0usize;
@@ -579,7 +600,8 @@ fn print_version(command_name: &str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        categorize_error, invocation_name, remediation_hint_for_category, render_shell_completion,
+        categorize_error, invocation_name, remediation_hint_for_category, render_help_text,
+        render_shell_completion,
     };
     use std::ffi::OsString;
 
@@ -593,6 +615,24 @@ mod tests {
     fn invocation_name_falls_back_when_first_arg_is_empty() {
         let args = vec![OsString::from("")];
         assert_eq!(invocation_name(&args), "perllsp");
+    }
+
+    #[test]
+    fn render_help_text_rewrites_usage_examples_for_invocation_name() {
+        let rendered = render_help_text("perl-lsp-rs");
+
+        assert!(rendered.contains("Usage: perl-lsp-rs [options]"));
+        assert!(rendered.contains("perl-lsp-rs --check lib/MyModule.pm"));
+        assert!(!rendered.contains("Usage: perllsp"));
+        assert!(!rendered.contains("perllsp --"));
+    }
+
+    #[test]
+    fn render_help_text_does_not_rewrite_inserted_command_name() {
+        let rendered = render_help_text("perllsp-dev");
+
+        assert!(rendered.contains("Usage: perllsp-dev [options]"));
+        assert!(!rendered.contains("perllsp-dev-dev"));
     }
 
     #[test]

@@ -79,7 +79,7 @@ use perl_workspace::semantic_shadow_compare::{
     SemanticShadowCompareReceipt, ShadowQueryInput, ShadowQueryName, summarize_identities,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// LSP WorkspaceSymbol representing a symbol found in the workspace.
 ///
@@ -340,7 +340,12 @@ impl WorkspaceSymbolsProvider {
         candidates: &[String],
     ) -> Vec<WorkspaceSymbol> {
         let mut results = Vec::new();
+        let mut seen_candidates = HashSet::new();
         for candidate in candidates {
+            if !seen_candidates.insert(candidate.as_str()) {
+                continue;
+            }
+
             if let Some(entries) = self.symbols_by_name.get(candidate) {
                 for (uri, symbol) in entries {
                     if matches_query(&symbol.name, query) {
@@ -512,8 +517,9 @@ fn workspace_symbol_shadow_note(
     let generated_label_count = compiler_candidates
         .iter()
         .filter(|candidate| {
-            candidate.source == ProviderFactSourceKind::FrameworkAdapter
-                || candidate.identity.starts_with("generated:")
+            candidate.fallback_state != ProviderFallbackState::Blocked
+                && (candidate.source == ProviderFactSourceKind::FrameworkAdapter
+                    || candidate.identity.starts_with("generated:"))
         })
         .count();
     let dynamic_boundary_blockers = compiler_candidates
@@ -1298,6 +1304,29 @@ sub get_log { 3 }
 
         assert!(names.contains(&"alpha"), "alpha is a candidate match");
         assert!(!names.contains(&"apex"), "apex is not in candidate set");
+    }
+
+    #[test]
+    fn search_with_candidates_deduplicates_candidate_names() {
+        let mut provider = WorkspaceSymbolsProvider::new();
+        let mut source_map = HashMap::new();
+
+        let source = "sub alpha { 1 }\nsub beta { 2 }\n";
+        source_map.insert("file:///dedupe.pl".to_string(), source.to_string());
+
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        provider.index_document("file:///dedupe.pl", &ast, source);
+
+        let candidates = vec!["alpha".to_string(), "alpha".to_string(), "beta".to_string()];
+        let results = provider.search_with_candidates("a", &source_map, &candidates);
+        let names: Vec<&str> = results.iter().map(|s| s.name.as_str()).collect();
+
+        assert_eq!(
+            names,
+            vec!["alpha", "beta"],
+            "duplicate candidate names should not duplicate workspace/symbol results"
+        );
     }
 
     #[test]

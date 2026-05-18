@@ -403,12 +403,34 @@ fn extract_one_quoted(s: &str) -> Option<(String, bool, &str)> {
     };
 
     let inner = &s[1..];
-    let end = inner.find(quote)?;
+    let end = find_unescaped_quote(inner, quote)?;
     let content = &inner[..end];
-    let rest = &inner[end + 1..];
+    let rest = &inner[end + quote.len_utf8()..];
 
     let (path, from_findbin) = resolve_findbin_in_string(content);
     Some((path, from_findbin, rest))
+}
+
+fn find_unescaped_quote(s: &str, quote: char) -> Option<usize> {
+    let mut escaped = false;
+
+    for (idx, ch) in s.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        if ch == '\\' {
+            escaped = true;
+            continue;
+        }
+
+        if ch == quote {
+            return Some(idx);
+        }
+    }
+
+    None
 }
 
 fn resolve_findbin_in_string(s: &str) -> (String, bool) {

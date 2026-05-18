@@ -1770,6 +1770,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-parser-comparison"
+version = "0.14.0"
+dependencies = [
+ "perl-ast",
+ "perl-parser-core",
+ "perl-parser-pest",
+ "perl-tdd-support",
+ "tree-sitter",
+ "tree-sitter-perl-c",
+]
+
+[[package]]
 name = "perl-parser-core"
 version = "0.14.0"
 dependencies = [

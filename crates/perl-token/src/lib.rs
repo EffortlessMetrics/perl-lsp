@@ -1095,6 +1095,29 @@ impl TokenKind {
         self == TokenKind::Semicolon || self.is_close_delimiter() || self == TokenKind::Eof
     }
 
+    /// Return the canonical source spelling for fixed-spelling token kinds.
+    ///
+    /// This returns `None` for value-carrying tokens (such as identifiers,
+    /// numbers, strings, regexes, heredocs, and recovery sentinels) because
+    /// those spellings come from the original source text rather than a stable
+    /// token-kind table.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_token::TokenKind;
+    ///
+    /// assert_eq!(TokenKind::Sub.canonical_spelling(), Some("sub"));
+    /// assert_eq!(TokenKind::LeftBrace.canonical_spelling(), Some("{"));
+    /// assert_eq!(TokenKind::Identifier.canonical_spelling(), None);
+    /// ```
+    pub fn canonical_spelling(self) -> Option<&'static str> {
+        spelling_for_kind(self, KEYWORD_SPELLINGS)
+            .or_else(|| spelling_for_kind(self, OPERATOR_SPELLINGS))
+            .or_else(|| spelling_for_kind(self, DELIMITER_SPELLINGS))
+            .or_else(|| spelling_for_kind(self, SIGIL_SPELLINGS))
+    }
+
     /// Map a canonical keyword spelling to its [`TokenKind`].
     ///
     /// This mapping is case-sensitive and only recognizes canonical Perl
@@ -1405,6 +1428,13 @@ impl TokenKind {
     }
 }
 
+fn spelling_for_kind(
+    kind: TokenKind,
+    spellings: &'static [(&'static str, TokenKind)],
+) -> Option<&'static str> {
+    spellings.iter().find_map(|&(spelling, candidate)| (candidate == kind).then_some(spelling))
+}
+
 const TOKEN_KIND_ALL: [TokenKind; 132] = [
     TokenKind::My,
     TokenKind::Our,
@@ -1564,16 +1594,19 @@ mod tests {
     }
 
     #[test]
-    fn token_span_try_new_ok() {
-        let span = TokenSpan::try_new(0, 5).unwrap();
+    fn token_span_try_new_ok() -> Result<(), TokenSpanError> {
+        let span = TokenSpan::try_new(0, 5)?;
         assert_eq!(span.start, 0);
         assert_eq!(span.end, 5);
+        Ok(())
     }
 
     #[test]
     fn token_span_try_new_end_before_start_errors() {
-        let err = TokenSpan::try_new(10, 5).unwrap_err();
-        assert_eq!(err, TokenSpanError::EndBeforeStart { start: 10, end: 5 });
+        assert_eq!(
+            TokenSpan::try_new(10, 5),
+            Err(TokenSpanError::EndBeforeStart { start: 10, end: 5 })
+        );
     }
 
     #[test]
@@ -1622,25 +1655,45 @@ mod tests {
     }
 
     #[test]
+    fn token_try_new_allows_ordered_spans() -> Result<(), TokenSpanError> {
+        let tok = Token::try_new(TokenKind::Identifier, "name", 4, 8)?;
+        assert_eq!(tok.kind, TokenKind::Identifier);
+        assert_eq!(&*tok.text, "name");
+        assert_eq!(tok.span(), TokenSpan::new(4, 8));
+        Ok(())
+    }
+
+    #[test]
     fn token_try_new_rejects_end_before_start() {
-        let err = Token::try_new(TokenKind::Identifier, "x", 10, 5).unwrap_err();
-        assert_eq!(err, TokenSpanError::EndBeforeStart { start: 10, end: 5 });
+        assert_eq!(
+            Token::try_new(TokenKind::Identifier, "x", 10, 5),
+            Err(TokenSpanError::EndBeforeStart { start: 10, end: 5 })
+        );
     }
 
     #[test]
     fn token_new_checked_rejects_empty_non_eof() {
-        let err = Token::new_checked(TokenKind::Identifier, "", 5, 5).unwrap_err();
-        assert!(matches!(
-            err,
-            TokenSpanError::EmptySpanNotAllowed { kind: TokenKind::Identifier, at: 5 }
-        ));
+        assert_eq!(
+            Token::new_checked(TokenKind::Identifier, "", 5, 5),
+            Err(TokenSpanError::EmptySpanNotAllowed { kind: TokenKind::Identifier, at: 5 })
+        );
     }
 
     #[test]
-    fn token_new_checked_allows_empty_eof() {
-        let tok = Token::new_checked(TokenKind::Eof, "", 5, 5).unwrap();
+    fn token_new_checked_allows_empty_eof() -> Result<(), TokenSpanError> {
+        let tok = Token::new_checked(TokenKind::Eof, "", 5, 5)?;
         assert_eq!(tok.kind, TokenKind::Eof);
         assert_eq!(tok.start, 5);
+        Ok(())
+    }
+
+    #[test]
+    fn token_new_checked_allows_empty_unknown() -> Result<(), TokenSpanError> {
+        let tok = Token::new_checked(TokenKind::Unknown, "", 6, 6)?;
+        assert_eq!(tok.kind, TokenKind::Unknown);
+        assert_eq!(tok.start, 6);
+        assert!(tok.is_empty());
+        Ok(())
     }
 
     #[test]
@@ -1671,11 +1724,21 @@ mod tests {
     }
 
     #[test]
-    fn token_with_span_ok() {
+    fn token_with_span_ok() -> Result<(), TokenSpanError> {
         let tok = Token::new(TokenKind::String, "hello", 0, 5);
-        let moved = tok.with_span(10, 15).unwrap();
+        let moved = tok.with_span(10, 15)?;
         assert_eq!(moved.start, 10);
         assert_eq!(moved.end, 15);
+        Ok(())
+    }
+
+    #[test]
+    fn token_with_span_rejects_empty_non_eof() {
+        let tok = Token::new(TokenKind::String, "hello", 0, 5);
+        assert_eq!(
+            tok.with_span(10, 10),
+            Err(TokenSpanError::EmptySpanNotAllowed { kind: TokenKind::String, at: 10 })
+        );
     }
 
     #[test]
@@ -1707,6 +1770,15 @@ mod tests {
         assert!(!r.is_empty());
         assert_eq!(r.span(), (4, 6));
         assert_eq!(r.display_name(), "number");
+    }
+
+    #[test]
+    fn token_ref_try_new_allows_ordered_spans() -> Result<(), TokenSpanError> {
+        let r = TokenRef::try_new(TokenKind::Number, "99", 4, 6)?;
+        assert_eq!(r.kind, TokenKind::Number);
+        assert_eq!(r.text, "99");
+        assert_eq!(r.span(), (4, 6));
+        Ok(())
     }
 
     #[test]

@@ -1,0 +1,27 @@
+[package]
+name = "perl-parser-comparison"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Differential test suite measuring v1/v2/v3 parser gaps on constructs that historically defeated tree-sitter"
+publish = false
+
+[dependencies]
+perl-ast = { workspace = true }
+perl-parser-core = { workspace = true }
+perl-parser-pest = { workspace = true }
+tree-sitter-perl-c = { workspace = true }
+tree-sitter = { workspace = true }
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
