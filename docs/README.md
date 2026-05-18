@@ -4,6 +4,39 @@ Use this directory as the short docs front door. It tells you where to go next
 without making you learn the workspace layout first. For the full Diataxis-style
 map of the docs tree, use [INDEX.md](INDEX.md).
 
+## Source-of-Truth Stack for Long-Lived Work
+
+For durable lanes, use the existing `perl-lsp` source-of-truth chain instead
+of burying decisions inside one implementation plan:
+
+```text
+Roadmap → Proposal → Specs → ADRs → Plan → Active goal → PRs → Receipts
+```
+
+| Layer | Owns | Storage |
+| --- | --- | --- |
+| Roadmap | release direction and active milestone | [project/ROADMAP.md](project/ROADMAP.md) |
+| Proposal / PRD | why the lane exists, user value, alternatives, claim boundary | [proposals/](proposals/) |
+| Spec | behavior contract, acceptance, proof, claim limits | [specs/](specs/) |
+| ADR | durable architecture or operating decision | [adr/](adr/) |
+| Implementation plan | PR-sized sequence, proof commands, rollback, handoff state | [../plans/](../plans/) |
+| Active goal manifest | machine-readable current agent state | [../.perl-lsp/goals/](../.perl-lsp/goals/) |
+| Status / support tiers | current truth and public claim proof | [project/status/](project/status/) |
+| Policy ledgers | CI, lint, file, and package exceptions or receipts | [`../policy/`](../policy/), [`../.ci/`](../.ci/) |
+| Closeout / handoff | what happened, what remains, and proof | [../plans/](../plans/) or [forensics/](forensics/) |
+
+Use [reference/SPEC_SYSTEM.md](reference/SPEC_SYSTEM.md) for artifact roles,
+ID naming, required headers, status-linking rules, active-goal expectations,
+and PR body guidance. The Real Perl Editor Trust lane is the current model for
+this stack: [proposals/README.md](proposals/README.md),
+[specs/README.md](specs/README.md), [adr/README.md](adr/README.md),
+[../plans/real-perl-editor-trust/README.md](../plans/real-perl-editor-trust/README.md),
+and [../.perl-lsp/goals/README.md](../.perl-lsp/goals/README.md).
+
+Do not copy generated status tables into proposals, specs, ADRs, plans, or goal
+manifests. Link to [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md),
+[project/status/](project/status/), and support-tier docs instead.
+
 ## Diataxis in This Repository
 
 When adding or moving docs, choose the content type first, then the file:
