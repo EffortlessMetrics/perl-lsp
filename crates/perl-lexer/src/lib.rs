@@ -135,7 +135,7 @@
     clippy::uninlined_format_args
 )]
 
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 pub mod api;
 pub mod builtins;
@@ -165,6 +165,10 @@ pub use token::{StringPart, Token, TokenType};
 use unicode::{is_perl_identifier_continue, is_perl_identifier_start};
 
 use crate::heredoc::HeredocSpec;
+use crate::lexer::helpers::{
+    empty_arc, is_builtin_function, is_compound_operator, is_keyword_fast, is_quote_op_word_prefix,
+    truncate_preview,
+};
 use crate::limits::{
     HEREDOC_TIMEOUT_MS, MAX_DELIM_NEST, MAX_HEREDOC_BYTES, MAX_HEREDOC_DEPTH, MAX_REGEX_BYTES,
 };
@@ -3370,110 +3374,6 @@ impl<'a> PerlLexer<'a> {
         // Unterminated regex - EOF reached before closing /
         // Parser will emit diagnostic for unterminated literal
         None
-    }
-}
-
-// Pre-allocated empty Arc to avoid repeated allocations
-static EMPTY_ARC: OnceLock<Arc<str>> = OnceLock::new();
-
-#[inline(always)]
-fn empty_arc() -> Arc<str> {
-    EMPTY_ARC.get_or_init(|| Arc::from("")).clone()
-}
-
-fn truncate_preview(text: &str, max_chars: usize) -> String {
-    match text.char_indices().nth(max_chars) {
-        Some((idx, _)) => format!("{}...", &text[..idx]),
-        None => text.to_string(),
-    }
-}
-
-#[inline(always)]
-fn is_keyword_fast(word: &str) -> bool {
-    // Fast length-based rejection for most cases.
-    // Lexer keywords are currently bounded to 1..=9 characters.
-    matches!(word.len(), 1..=9) && is_lexer_keyword(word)
-}
-
-#[inline]
-fn is_builtin_function(word: &str) -> bool {
-    BARE_TERM_BUILTINS.binary_search(&word).is_ok()
-}
-
-#[inline(always)]
-fn is_quote_op_word_prefix(word: &[u8]) -> bool {
-    matches!(word, b"m" | b"q" | b"qq" | b"qw" | b"qx" | b"qr")
-}
-
-const BARE_TERM_BUILTINS: &[&str] = &[
-    "abs", "chomp", "chop", "chr", "close", "defined", "delete", "each", "exists", "hex", "int",
-    "join", "keys", "lc", "lcfirst", "length", "oct", "open", "ord", "pack", "print", "push",
-    "read", "ref", "reverse", "rindex", "say", "scalar", "splice", "sprintf", "sqrt", "substr",
-    "tie", "uc", "ucfirst", "unpack", "unshift", "untie", "values", "write",
-];
-
-/// Fast lookup table for compound operator second characters
-const COMPOUND_SECOND_CHARS: &[u8] = b"=<>&|+->.~*:";
-
-#[inline]
-fn is_compound_operator(first: char, second: char) -> bool {
-    // Optimized compound operator lookup using perfect hashing for common cases
-    // Convert to bytes for faster comparison (most operators are ASCII)
-    if first.is_ascii() && second.is_ascii() {
-        let first_byte = first as u8;
-        let second_byte = second as u8;
-
-        if !COMPOUND_SECOND_CHARS.contains(&second_byte) {
-            return false;
-        }
-
-        // Use lookup table approach for maximum performance
-        match (first_byte, second_byte) {
-            // Assignment operators
-            (b'+' | b'-' | b'*' | b'/' | b'%' | b'&' | b'|' | b'^' | b'.', b'=') => true,
-
-            // Comparison operators
-            (b'<' | b'>' | b'=' | b'!', b'=') => true,
-
-            // Pattern operators
-            (b'=' | b'!', b'~') => true,
-
-            // Increment/decrement
-            (b'+', b'+') | (b'-', b'-') => true,
-
-            // Logical operators
-            (b'&', b'&') | (b'|', b'|') => true,
-
-            // Shift operators
-            (b'<', b'<') | (b'>', b'>') => true,
-
-            // Other compound operators
-            (b'*', b'*')
-            | (b'/', b'/')
-            | (b'-' | b'=', b'>')
-            | (b'.', b'.')
-            | (b'~', b'~')
-            | (b':', b':') => true,
-
-            _ => false,
-        }
-    } else {
-        // Fallback for non-ASCII (should be rare)
-        matches!(
-            (first, second),
-            ('+' | '-' | '*' | '/' | '%' | '&' | '|' | '^' | '.' | '<' | '>' | '=' | '!', '=')
-                | ('=' | '!' | '~', '~')
-                | ('+', '+')
-                | ('-', '-' | '>')
-                | ('&', '&')
-                | ('|', '|')
-                | ('<', '<')
-                | ('>' | '=', '>')
-                | ('*', '*')
-                | ('/', '/')
-                | ('.', '.')
-                | (':', ':')
-        )
     }
 }
 
