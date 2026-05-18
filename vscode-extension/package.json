@@ -1141,7 +1141,7 @@
     "@typescript-eslint/parser": "^8.58.0",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.9.1",
-    "eslint": "^10.3.0",
+    "eslint": "^10.4.0",
     "jest": "^30.4.2",
     "mocha": "^11.7.5",
     "ts-jest": "^29.4.9",
