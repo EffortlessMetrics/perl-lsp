@@ -1,4 +1,4 @@
-//! Corpus differential test — walks the project's real-world Perl corpora and
+//! Corpus differential test - walks the project's real-world Perl corpora and
 //! asserts that v3 does not regress below a recorded baseline.
 //!
 //! # What this tests
@@ -7,8 +7,8 @@
 //! runs all three parsers (v1/v2/v3) on every `.pl`, `.pm`, and `.t` file.  It
 //! records per-parser outcomes and asserts:
 //!
-//! 1. **No crashes** — no parser should panic on any corpus file.
-//! 2. **v3 clean rate does not regress** — v3 is the production parser; its
+//! 1. **No crashes** - no parser should panic on any corpus file.
+//! 2. **v3 clean rate does not regress** - v3 is the production parser; its
 //!    clean-parse count must meet or exceed the recorded baseline.
 //!
 //! # Baseline
@@ -34,7 +34,7 @@ use std::path::PathBuf;
 
 use perl_parser_comparison::{AggregateStats, DisagreementKind, Verdict, classify, walk_corpora};
 
-// ─── Baselines ────────────────────────────────────────────────────────────────
+// --- Baselines ----------------------------------------------------------------
 //
 // Baselines established from corpus run (2026-05-16) on 1268-file corpus:
 //   v3 clean: 1242, v3 errors: 26, crashes: 0
@@ -49,7 +49,7 @@ const BASELINE_V3_CLEAN_MIN: usize = 1179;
 /// Maximum allowed crashes across all parsers.
 const BASELINE_MAX_CRASHES: usize = 0;
 
-// ─── Corpus root helpers ──────────────────────────────────────────────────────
+// --- Corpus root helpers ------------------------------------------------------
 
 /// Locate the workspace root from CARGO_MANIFEST_DIR or current directory.
 fn workspace_root() -> PathBuf {
@@ -93,16 +93,16 @@ fn full_corpus_roots() -> Vec<PathBuf> {
         .collect()
 }
 
-// ─── Tests ────────────────────────────────────────────────────────────────────
+// --- Tests --------------------------------------------------------------------
 
-/// Full corpus differential run.  Marked `#[ignore]` — run with `-- --ignored`.
+/// Full corpus differential run.  Marked `#[ignore]` - run with `-- --ignored`.
 ///
 /// Produces a human-readable report on stdout when run with `--nocapture`.
 #[test]
 #[ignore]
 fn corpus_differential_full() {
     let roots = full_corpus_roots();
-    assert!(!roots.is_empty(), "No corpus roots found — is the workspace root reachable?");
+    assert!(!roots.is_empty(), "No corpus roots found - is the workspace root reachable?");
 
     println!("\n=== Corpus Differential: Full Run ===");
     for root in &roots {
@@ -116,7 +116,7 @@ fn corpus_differential_full() {
     let report = perl_parser_comparison::format_report(&records, &stats);
     println!("{report}");
 
-    // ─── Assertion 1: no crashes ──────────────────────────────────────────────
+    // --- Assertion 1: no crashes ----------------------------------------------
     let total_crashes = stats.v1_crashes + stats.v2_crashes + stats.v3_crashes;
     assert!(
         total_crashes == BASELINE_MAX_CRASHES,
@@ -139,7 +139,7 @@ fn corpus_differential_full() {
             .join("\n"),
     );
 
-    // ─── Assertion 2: v3 clean rate does not regress ──────────────────────────
+    // --- Assertion 2: v3 clean rate does not regress --------------------------
     assert!(
         stats.v3_clean >= BASELINE_V3_CLEAN_MIN,
         "v3 clean-parse count regressed: got {} but baseline requires >= {}\n\
@@ -163,13 +163,13 @@ fn corpus_differential_full() {
     println!("    each_disagrees:        {}", stats.each_disagrees);
 }
 
-/// Lightweight smoke test — only walks the top-level test_corpus directory.
+/// Lightweight smoke test - only walks the top-level test_corpus directory.
 /// Runs in the default `cargo test` invocation (no `--ignored` needed).
 ///
 /// Asserts:
 /// - At least 10 files were found (sanity check that corpus is reachable)
 /// - No parser crashes
-/// - Disagrement counts are tracked and printed
+/// - Disagreement counts are tracked and printed
 #[test]
 fn corpus_differential_smoke() {
     let root = workspace_root();
@@ -206,7 +206,7 @@ fn corpus_differential_smoke() {
         println!("    {:30} {}", kind, count);
     }
 
-    // No crashes allowed — a crash on corpus is always a parser bug
+    // No crashes allowed - a crash on corpus is always a parser bug
     let total_crashes = stats.v1_crashes + stats.v2_crashes + stats.v3_crashes;
     assert!(
         total_crashes == 0,
@@ -230,12 +230,12 @@ fn corpus_differential_smoke() {
 /// Unit test for the classify() function.
 #[test]
 fn classify_unit_tests() {
-    // All agree — clean
+    // All agree - clean
     assert_eq!(
         classify(&Verdict::Correct, &Verdict::Correct, &Verdict::Correct),
         DisagreementKind::AllAgree
     );
-    // All agree — same error kind
+    // All agree - same error kind
     assert_eq!(
         classify(&Verdict::Errors, &Verdict::Errors, &Verdict::Errors),
         DisagreementKind::AllAgree
@@ -263,6 +263,12 @@ fn classify_unit_tests() {
     assert_eq!(
         classify(&Verdict::Errors, &Verdict::WrongButPlausible, &Verdict::Errors),
         DisagreementKind::RecoveryDisagreement
+    );
+
+    // All three non-clean verdicts differ.
+    assert_eq!(
+        classify(&Verdict::Errors, &Verdict::WrongButPlausible, &Verdict::Crashes),
+        DisagreementKind::EachDisagrees
     );
 
     // Recovery disagreement: two clean, one not

@@ -26,6 +26,7 @@ const MAX_FILE_BYTES: u64 = 1_024 * 1_024;
 
 /// The outcome of running all three parsers on a single corpus file.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct FileRecord {
     /// Path to the source file.
     pub path: PathBuf,
@@ -41,6 +42,7 @@ pub struct FileRecord {
 
 /// Categories of parser disagreement for a single file.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum DisagreementKind {
     /// All three produced the same outcome category (boring).
     AllAgree,
@@ -82,10 +84,13 @@ pub fn classify(v1: &Verdict, v2: &Verdict, v3: &Verdict) -> DisagreementKind {
     let c3 = is_clean(v3);
 
     match (c1, c2, c3) {
-        // All clean — always all_agree
+        // All clean - always all_agree
         (true, true, true) => DisagreementKind::AllAgree,
-        // All non-clean — check if they're the same kind of failure
+        // All non-clean - check if they're the same kind of failure
         (false, false, false) if v1 == v2 && v2 == v3 => DisagreementKind::AllAgree,
+        (false, false, false) if v1 != v2 && v1 != v3 && v2 != v3 => {
+            DisagreementKind::EachDisagrees
+        }
         (false, false, false) => DisagreementKind::RecoveryDisagreement,
 
         // Only one parser is clean
@@ -93,7 +98,7 @@ pub fn classify(v1: &Verdict, v2: &Verdict, v3: &Verdict) -> DisagreementKind {
         (false, true, false) => DisagreementKind::V2OnlyClean,
         (true, false, false) => DisagreementKind::V1OnlyClean,
 
-        // Two parsers clean, one not — recovery disagreement
+        // Two parsers clean, one not - recovery disagreement
         (true, true, false) | (true, false, true) | (false, true, true) => {
             DisagreementKind::RecoveryDisagreement
         }
@@ -163,6 +168,7 @@ pub fn walk_corpora(corpus_roots: &[PathBuf]) -> Vec<FileRecord> {
 
 /// Aggregate statistics over a set of [`FileRecord`]s.
 #[derive(Debug, Default)]
+#[non_exhaustive]
 pub struct AggregateStats {
     /// Total files processed.
     pub total: usize,

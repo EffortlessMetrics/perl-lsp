@@ -1,4 +1,4 @@
-//! Corpus differential binary — walks the project's real-world Perl corpora and
+//! Corpus differential binary - walks the project's real-world Perl corpora and
 //! surfaces per-parser disagreements.
 //!
 //! # Usage
