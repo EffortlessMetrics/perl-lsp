@@ -154,6 +154,57 @@ fn number_field(value: Option<&Value>, field: &str) -> Option<u64> {
     value.and_then(|object| object.get(field)).and_then(Value::as_u64)
 }
 
+fn allowed_launch_path_class(key: &str) -> bool {
+    matches!(
+        key,
+        "absolute"
+            | "relative"
+            | "workspace_variable"
+            | "file_variable"
+            | "other_variable"
+            | "home_relative"
+            | "command"
+            | "empty"
+            | "unknown"
+    )
+}
+
+fn path_class_counts_field(value: Option<&Value>, field: &str) -> Value {
+    let mut counts = serde_json::Map::new();
+    if let Some(object) = value.and_then(|parent| parent.get(field)).and_then(Value::as_object) {
+        for (key, count) in object {
+            if allowed_launch_path_class(key) {
+                if let Some(count) = count.as_u64() {
+                    counts.insert(key.clone(), json!(count));
+                }
+            }
+        }
+    }
+    Value::Object(counts)
+}
+
+fn launch_configuration_summary(dap: Option<&Value>) -> Value {
+    let launch_config = dap.and_then(|value| value.get("launch_configuration"));
+    json!({
+        "status": string_field(launch_config, "status").unwrap_or_else(|| "not_supplied".to_string()),
+        "configuration_count": number_field(launch_config, "configuration_count"),
+        "perl_configuration_count": number_field(launch_config, "perl_configuration_count"),
+        "launch_request_count": number_field(launch_config, "launch_request_count"),
+        "attach_request_count": number_field(launch_config, "attach_request_count"),
+        "perl_path_configured_count": number_field(launch_config, "perl_path_configured_count"),
+        "include_paths_configured_count": number_field(launch_config, "include_paths_configured_count"),
+        "include_path_entry_count": number_field(launch_config, "include_path_entry_count"),
+        "non_string_include_path_count": number_field(launch_config, "non_string_include_path_count"),
+        "program_configured_count": number_field(launch_config, "program_configured_count"),
+        "cwd_configured_count": number_field(launch_config, "cwd_configured_count"),
+        "include_path_kind_counts": path_class_counts_field(launch_config, "include_path_kind_counts"),
+        "perl_path_kind_counts": path_class_counts_field(launch_config, "perl_path_kind_counts"),
+        "program_path_kind_counts": path_class_counts_field(launch_config, "program_path_kind_counts"),
+        "cwd_path_kind_counts": path_class_counts_field(launch_config, "cwd_path_kind_counts"),
+        "claim_boundary": string_field(launch_config, "claim_boundary").unwrap_or_else(|| "Launch configuration state was not supplied by the client.".to_string()),
+    })
+}
+
 fn client_runtime_state_summary(argument: Option<&Value>) -> Value {
     let client_state = argument.and_then(|value| value.get("client_runtime_state"));
     let perldoc = client_state.and_then(|value| value.get("perldoc"));
@@ -174,8 +225,9 @@ fn client_runtime_state_summary(argument: Option<&Value>) -> Value {
             "managed_adapter_exists": bool_field(dap, "managed_adapter_exists"),
             "launch_json_workspace_count": number_field(dap, "launch_json_workspace_count"),
             "workspace_folder_count": number_field(dap, "workspace_folder_count"),
+            "launch_configuration": launch_configuration_summary(dap),
         },
-        "claim_boundary": "Client runtime state is caller-supplied and sanitized to known fields. It does not start DAP, run perldoc, probe Perl, scan workspace files, or change provider behavior.",
+        "claim_boundary": "Client runtime state is caller-supplied and sanitized to known fields. It does not start DAP, run perldoc, probe Perl, scan workspace files beyond client-reported launch configuration state, or change provider behavior.",
     })
 }
 
