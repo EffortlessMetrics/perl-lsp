@@ -794,6 +794,7 @@ impl<'a> Parser<'a> {
                             // In expression context, stop at common delimiters to avoid
                             // consuming surrounding list/argument separators.
                             while !self.tokens.is_eof()
+                                && !Self::is_symbolic_short_circuit_operator(self.peek_kind())
                                 && !matches!(
                                     self.peek_kind(),
                                     Some(

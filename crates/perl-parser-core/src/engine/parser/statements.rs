@@ -460,9 +460,10 @@ impl<'a> Parser<'a> {
                     if self.is_indirect_call_pattern(&text) {
                         // Parse indirect call but DON'T return early - let it go through
                         // the same modifier/semicolon handling as other statements.
-                        // Word operators (or, and, xor) may follow: `print $fh "msg" or die`.
+                        // Short-circuit operators may follow: `print $fh "msg" or die`,
+                        // `close FH || croak`.
                         let call = self.parse_indirect_call()?;
-                        Ok(self.parse_word_or_expr(call)?)
+                        Ok(self.parse_named_unary_statement_tail(call)?)
                     } else {
                         self.parse_expression_statement()
                     }
@@ -623,8 +624,11 @@ impl<'a> Parser<'a> {
         func_name: &str,
         allow_no_args: bool,
     ) -> ParseResult<Node> {
+        let binary_operator_starts_missing_arg = self.peek_kind().is_some_and(Self::is_binary_operator)
+            && !(Self::is_optional_arg_builtin(func_name)
+                && self.is_explicit_sub_sigil_argument_start());
         let omit_optional_arg = allow_no_args
-            && (self.peek_kind().is_some_and(Self::is_binary_operator)
+            && (binary_operator_starts_missing_arg
                 || self.peek_kind() == Some(TokenKind::Slash)
                 // Nullary/named-unary builtins at statement start may be
                 // followed by a comma operator:

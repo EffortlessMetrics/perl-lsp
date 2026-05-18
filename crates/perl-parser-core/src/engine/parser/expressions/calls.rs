@@ -304,18 +304,21 @@ impl<'a> Parser<'a> {
                         if third.kind == TokenKind::Arrow {
                             return false;
                         }
-                        // Word operators after $var means regular call with low-precedence
-                        // operator: func @list or die, func $arg and next, etc.
+                        // Short-circuit operators after $var mean a regular call with
+                        // the operator outside the argument: func $arg || die,
+                        // func @list or die, func $arg and next, etc.
                         // These are NOT indirect method calls.
-                        if matches!(
-                            third.kind,
-                            TokenKind::WordOr
-                                | TokenKind::WordAnd
-                                | TokenKind::WordXor
-                                | TokenKind::WordNot
-                                | TokenKind::Question
-                                | TokenKind::Semicolon
-                        ) {
+                        if Self::is_symbolic_short_circuit_operator(Some(third.kind))
+                            || matches!(
+                                third.kind,
+                                TokenKind::WordOr
+                                    | TokenKind::WordAnd
+                                    | TokenKind::WordXor
+                                    | TokenKind::WordNot
+                                    | TokenKind::Question
+                                    | TokenKind::Semicolon
+                            )
+                        {
                             return false;
                         }
                         return true;
@@ -380,6 +383,7 @@ impl<'a> Parser<'a> {
         // so they terminate argument collection for indirect calls.
         while !Self::is_statement_terminator(self.peek_kind())
             && !self.is_statement_modifier_keyword()
+            && !Self::is_symbolic_short_circuit_operator(self.peek_kind())
             && !matches!(
                 self.peek_kind(),
                 Some(
