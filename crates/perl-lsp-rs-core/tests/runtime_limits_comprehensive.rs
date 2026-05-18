@@ -79,7 +79,7 @@ fn large_workspace_overrides() -> Result<(), Box<dyn std::error::Error>> {
     let lw = LspLimits::large_workspace();
     assert_eq!(lw.max_indexed_files, 50_000);
     assert_eq!(lw.max_total_symbols, 2_000_000);
-    assert_eq!(lw.workspace_scan_deadline, Duration::from_secs(120));
+    assert_eq!(lw.workspace_scan_deadline, Duration::from_mins(2));
     Ok(())
 }
 
@@ -216,7 +216,7 @@ fn update_workspace_scan_deadline_ms() -> Result<(), Box<dyn std::error::Error>>
     let mut limits = LspLimits::default();
     let settings = serde_json::json!({ "limits": { "workspaceScanDeadlineMs": 60000 } });
     limits.update_from_value(&settings);
-    assert_eq!(limits.workspace_scan_deadline, Duration::from_secs(60));
+    assert_eq!(limits.workspace_scan_deadline, Duration::from_mins(1));
     Ok(())
 }
 

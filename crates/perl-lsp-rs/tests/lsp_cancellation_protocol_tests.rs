@@ -285,8 +285,7 @@ fn test_multiple_provider_cancellation_with_context_ac1() -> Result<(), Box<dyn 
 
     // Validate all cancellations with enhanced error context
     for (id, method, _params, _provider_type) in &provider_scenarios {
-        let response =
-            read_response_matching_i64(&fixture.server, *id, Duration::from_secs(1));
+        let response = read_response_matching_i64(&fixture.server, *id, Duration::from_secs(1));
 
         if let Some(resp) = response {
             if let Some(error) = resp.get("error") {

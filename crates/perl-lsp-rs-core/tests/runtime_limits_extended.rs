@@ -241,7 +241,7 @@ fn large_workspace_overrides() -> Result<(), Box<dyn std::error::Error>> {
 
     assert_eq!(limits.max_indexed_files, 50_000);
     assert_eq!(limits.max_total_symbols, 2_000_000);
-    assert_eq!(limits.workspace_scan_deadline, Duration::from_secs(120));
+    assert_eq!(limits.workspace_scan_deadline, Duration::from_mins(2));
     Ok(())
 }
 

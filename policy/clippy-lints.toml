@@ -771,7 +771,7 @@ reason = "Use collection APIs that encode predicate-and-pop intent directly."
 [[lint]]
 name = "clippy::duration_suboptimal_units"
 level = "warn"
-status = "tracked"
+status = "active"
 class = "readability"
 reason = "Make durations legible without mental unit conversion."
 
