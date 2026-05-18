@@ -10,6 +10,37 @@ like (#0000) or (#9999) will fail CI.
 ## Summary
 <!-- What changed and why. Link the issue: Fixes #NNN -->
 
+## Source-of-truth links
+<!-- Use n/a when this PR is outside the source-of-truth stack. -->
+Proposal:
+Spec:
+ADR:
+Plan item:
+Active goal:
+
+## Scope
+- [ ] Proposal / why
+- [ ] Spec / behavior contract
+- [ ] ADR / durable decision
+- [ ] Plan / sequencing
+- [ ] Active goal / current execution state
+- [ ] Runtime / implementation
+- [ ] Policy ledger
+- [ ] Support-tier update
+- [ ] Generated status / receipt
+
+## Non-goals
+<!-- What this PR explicitly does not do. -->
+
+## Proof
+<!-- Commands run, results, unavailable proof, and substitute evidence. -->
+
+## Claim boundary
+<!-- What may be claimed after this PR? What may not be claimed yet? -->
+
+## Rollback
+<!-- How to revert safely. -->
+
 ## Changes
 <!-- List changed files and what each change does -->
 

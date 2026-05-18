@@ -18,6 +18,37 @@ The orchestrator reads `CLAUDE.md`. This file is for you.
 | `docs/project/FRICTION_LOG.md` | Platform quirks and known workarounds |
 | `docs/articles/CONTINUOUS_REVIEW_PATTERNS.md` | The orchestration pattern used here |
 | `docs/articles/ORCHESTRATION_COUNTERINTUITIONS.md` | Lessons where the obvious rule was wrong |
+| `docs/reference/SPEC_SYSTEM.md` | Source-of-truth stack: proposal/spec/ADR/plan/active-goal roles |
+| `.perl-lsp/goals/active.toml` | Machine-readable active lane and proof commands |
+
+## Repo source-of-truth stack
+
+This repo uses a linked source-of-truth stack:
+
+```text
+Roadmap → Proposal → Spec → ADR → Plan → Active goal → PR → Proof
+```
+
+Before changing files for lane work, read:
+
+1. `docs/reference/SPEC_SYSTEM.md`
+2. `.perl-lsp/goals/active.toml`
+3. the linked implementation plan
+4. the linked spec for the selected work item
+5. linked ADRs
+
+Work on exactly one work item per PR. Docs-only artifacts should stay separate:
+proposal PRs explain why, spec PRs define behavior, ADR PRs record durable
+decisions, plan PRs define sequencing, and active-goal PRs define current
+execution state. Runtime/code PRs should link to the spec and plan item they
+implement.
+
+Run the proof commands listed in the selected plan item. If a command cannot run,
+record the command, the reason it is unavailable, substitute evidence if any, and
+whether the missing proof blocks merge. Do not hand-edit generated status; run the
+generator or checker named in the plan. If you add a policy exception, update the
+relevant `policy/*.toml` ledger with owner, reason, coverage, creation date, and
+review date.
 
 **Before starting:** check the latest upstream commits so you do not re-implement
 already-merged work.
