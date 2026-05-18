@@ -570,3 +570,52 @@ sub run { }
     assert_eq!(doc.name.as_deref(), Some("Multi - Multiple POD blocks"));
     assert!(doc.methods.contains_key("run"));
 }
+
+#[test]
+fn formatted_head2_heading_uses_plain_method_key() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+=head2 C<new>
+
+Creates a new instance.
+
+=head2 B<parse> E<lt>inputE<gt>
+
+Parses input values.
+
+=cut
+"#;
+    let doc = extract_pod(source);
+
+    assert!(doc.methods.contains_key("new"), "formatted C<> heading should be normalized");
+    assert!(
+        doc.methods.contains_key("parse <input>"),
+        "formatted B<> and E<> heading should be normalized"
+    );
+    assert!(!doc.methods.contains_key("C<new>"));
+    Ok(())
+}
+
+#[test]
+fn nested_link_display_text_is_escaped() -> Result<(), Box<dyn std::error::Error>> {
+    let doc = extract_pod("=head1 NAME\n\nL<B<click [here]>|File::Path>\n\n=cut\n");
+    let name = doc.name.as_deref().ok_or("expected NAME section")?;
+
+    assert!(
+        name.contains("[click \\[here\\]](perl-module://File::Path)"),
+        "expected nested display formatting to be stripped before markdown escaping; got: {name}"
+    );
+    Ok(())
+}
+
+#[test]
+fn extract_pod_from_file_reads_pod_documentation() -> Result<(), Box<dyn std::error::Error>> {
+    let mut path = std::env::temp_dir();
+    path.push(format!("perl-pod-test-{}.pm", std::process::id()));
+    std::fs::write(&path, "=head1 NAME\n\nTemp::Module - Loaded from disk\n\n=cut\n")?;
+
+    let doc = extract_pod_from_file(&path)?;
+    std::fs::remove_file(&path)?;
+
+    assert_eq!(doc.name.as_deref(), Some("Temp::Module - Loaded from disk"));
+    Ok(())
+}

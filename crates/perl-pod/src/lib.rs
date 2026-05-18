@@ -133,7 +133,7 @@ pub fn extract_pod(source: &str) -> PodDoc {
         if let Some(heading) = line.strip_prefix("=head2") {
             flush_section(&mut doc, &current_section, &body, false);
             body.clear();
-            let heading = heading.trim().to_string();
+            let heading = strip_pod_formatting(heading.trim());
             current_section = Some(Section::Method(heading));
             continue;
         }
