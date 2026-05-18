@@ -27,6 +27,8 @@ pub mod scope_analyzer;
 pub mod semantic;
 /// Symbol extraction and symbol table construction.
 pub mod symbol;
+/// Rich expression facts layered on top of coarse Perl types.
+pub mod type_facts;
 /// Type inference engine for Perl variable analysis.
 pub mod type_inference;
 /// Lightweight value-shape inference from constructor calls, bless, and `$self`.
