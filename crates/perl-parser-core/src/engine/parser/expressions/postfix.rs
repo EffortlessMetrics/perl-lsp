@@ -860,9 +860,15 @@ impl<'a> Parser<'a> {
                             // Also applies to optional-arg builtins (defined, length, ord, etc.)
                             // that implicitly use $_ when no explicit argument is given, so that
                             // `defined && ...`, `length > 0`, `ord >= 32` parse correctly.
+                            let next_is_binary_operator =
+                                self.peek_kind().is_some_and(Self::is_binary_operator);
+                            let optional_arg_has_explicit_sub_arg =
+                                Self::is_optional_arg_builtin(bare_name)
+                                    && self.is_explicit_sub_sigil_argument_start();
                             let is_nullary_without_args = (Self::is_nullary_builtin(bare_name)
-                                || Self::is_optional_arg_builtin(bare_name))
-                                && self.peek_kind().is_some_and(Self::is_binary_operator);
+                                || (Self::is_optional_arg_builtin(bare_name)
+                                    && !optional_arg_has_explicit_sub_arg))
+                                && next_is_binary_operator;
 
                             // When a builtin is followed by a comma, it should be treated
                             // as having no arguments.  The comma belongs to an enclosing

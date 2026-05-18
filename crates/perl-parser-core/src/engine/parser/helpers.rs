@@ -371,6 +371,17 @@ impl<'a> Parser<'a> {
             )
     }
 
+    fn is_symbolic_short_circuit_operator(kind: Option<TokenKind>) -> bool {
+        matches!(kind, Some(TokenKind::And | TokenKind::Or | TokenKind::DefinedOr))
+    }
+
+    fn is_explicit_sub_sigil_argument_start(&mut self) -> bool {
+        matches!(self.peek_kind(), Some(TokenKind::SubSigil | TokenKind::BitwiseAnd))
+            && self.tokens.peek_second().is_ok_and(|token| {
+                token.kind == TokenKind::LeftBrace || Self::can_be_sub_name(token.kind)
+            })
+    }
+
     /// Peek at the next token's kind
     fn peek_kind(&mut self) -> Option<TokenKind> {
         self.tokens.peek().ok().map(|t| t.kind)
