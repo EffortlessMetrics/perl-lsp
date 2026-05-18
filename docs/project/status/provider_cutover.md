@@ -13,6 +13,8 @@ fallback, runtime comparison, live state, and next proof, see
 For the Real Perl Editor Trust v1 routing dashboard that ties provider state to
 support claims, real-workspace receipts, and next PRs, see
 [real_perl_editor_trust_v1.md](real_perl_editor_trust_v1.md).
+For class-level promote, fallback, block, and defer decisions, see
+[provider promotion ledger](provider_promotion_ledger.md).
 
 ## Recent Proof
 
