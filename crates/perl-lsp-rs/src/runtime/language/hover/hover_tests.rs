@@ -103,7 +103,7 @@ fn missing_module_hover_gives_actionable_next_steps() {
     let value = must_some(hover["contents"]["value"].as_str());
 
     assert!(
-        value.contains("Module not found in workspace or configured include paths"),
+        value.contains("Not found in workspace or configured include paths"),
         "missing module hover should explain the failure scope: {value}"
     );
     let test_lib_display = std::path::Path::new("t").join("lib").display().to_string();

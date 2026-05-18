@@ -1320,7 +1320,7 @@ impl LspServer {
                 "value": format!(
                     "**{module_name}**
 
-Module not found in workspace or configured include paths.
+Not found in workspace or configured include paths.
 
 **Searched paths**:
 {searched_paths}
