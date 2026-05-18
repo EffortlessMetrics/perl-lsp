@@ -720,7 +720,31 @@ impl LspServer {
                 )
             })
             .unwrap_or(false);
-        let can_return_edit = compiler_allowed && rollback_is_safe && source_guard_accepts;
+        let current_source_reference_count = source_guard_request
+            .as_ref()
+            .and_then(|request| {
+                let uri = req_uri(request).ok()?;
+                let (line, character) = req_position(request).ok()?;
+                let (symbol, byte_offset) = self.refactor_runtime_symbol(uri, line, character)?;
+                self.safe_delete_current_source_reference_count(
+                    uri,
+                    usize::try_from(byte_offset).ok()?,
+                    &symbol,
+                )
+            })
+            .unwrap_or(0);
+        let current_source_blocks = compiler_allowed
+            && rollback_is_safe
+            && source_guard_accepts
+            && current_source_reference_count > 0;
+        if current_source_blocks {
+            mark_safe_delete_current_source_reference_blocker(
+                &mut receipt,
+                current_source_reference_count,
+            );
+        }
+        let can_return_edit =
+            compiler_allowed && rollback_is_safe && source_guard_accepts && !current_source_blocks;
         let workspace_edit = if can_return_edit {
             rollback_proof
                 .get("planned_delete_workspace_edit")
@@ -751,6 +775,10 @@ impl LspServer {
             object.insert(
                 "returned_workspace_edit_count".to_string(),
                 json!(returned_workspace_edit_count),
+            );
+            object.insert(
+                "current_source_reference_count".to_string(),
+                json!(current_source_reference_count),
             );
             object.insert("workspace_edit".to_string(), workspace_edit);
             object.insert("user_message".to_string(), json!(user_message));
@@ -857,6 +885,20 @@ impl LspServer {
                 Some(false)
             })
             .flatten()
+    }
+
+    #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+    fn safe_delete_current_source_reference_count(
+        &self,
+        uri: &str,
+        byte_offset: usize,
+        symbol: &str,
+    ) -> Option<usize> {
+        let documents = self.documents_guard();
+        let doc = self.get_document(&documents, uri)?;
+        let (delete_start, delete_end) =
+            safe_delete_subroutine_delete_range(&doc.text, byte_offset, symbol)?;
+        Some(count_symbol_occurrences_outside_range(&doc.text, symbol, delete_start, delete_end))
     }
 }
 
@@ -1671,6 +1713,84 @@ fn safe_delete_symbol_delete_unavailable_json(reason: &'static str) -> Value {
         "reason": reason,
         "claim_boundary": "safe-delete edit rollback proof only; no live symbol-level delete edits are applied"
     })
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn mark_safe_delete_current_source_reference_blocker(receipt: &mut Value, reference_count: usize) {
+    let symbol = receipt.get("symbol").and_then(Value::as_str).unwrap_or("symbol");
+    let message = format!(
+        "Symbol '{symbol}' still has {reference_count} reference(s) in the current open document."
+    );
+
+    let Some(object) = receipt.as_object_mut() else {
+        return;
+    };
+    object.insert("decision".to_string(), json!("blocked"));
+    object.insert("reason".to_string(), json!("references_exist"));
+    object.insert("fact_source".to_string(), json!("current_source"));
+    object.insert("confidence".to_string(), json!("high"));
+    object.insert("freshness".to_string(), json!("fresh"));
+    object.insert("fallback_state".to_string(), json!("no_edit"));
+    object.insert("blocker_count".to_string(), json!(1));
+    object.insert("blocker_reasons".to_string(), json!(["ReferencesExist"]));
+    object.insert("dynamic_boundary".to_string(), json!(false));
+    object.insert(
+        "current_source_delete_guard".to_string(),
+        json!("blocked_by_current_source_reference"),
+    );
+    object.insert(
+        "live_blocker_ux".to_string(),
+        json!({
+            "requires_confirmation": true,
+            "blocker_count": 1,
+            "blocker_messages": [message]
+        }),
+    );
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn count_symbol_occurrences_outside_range(
+    text: &str,
+    symbol: &str,
+    exclude_start: usize,
+    exclude_end: usize,
+) -> usize {
+    if symbol.is_empty() {
+        return 0;
+    }
+
+    let mut count = 0usize;
+    let mut search_start = 0usize;
+    while search_start <= text.len() {
+        let Some(haystack) = text.get(search_start..) else {
+            break;
+        };
+        let Some(relative_start) = haystack.find(symbol) else {
+            break;
+        };
+        let start = search_start + relative_start;
+        let end = start + symbol.len();
+        if (start < exclude_start || start >= exclude_end)
+            && has_symbol_text_boundaries(text, start, end)
+        {
+            count += 1;
+        }
+        search_start = end;
+    }
+
+    count
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn has_symbol_text_boundaries(text: &str, start: usize, end: usize) -> bool {
+    let before = text.get(..start).and_then(|prefix| prefix.chars().next_back());
+    let after = text.get(end..).and_then(|suffix| suffix.chars().next());
+    !before.is_some_and(is_perl_identifier_char) && !after.is_some_and(is_perl_identifier_char)
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn is_perl_identifier_char(ch: char) -> bool {
+    ch == '_' || ch.is_ascii_alphanumeric()
 }
 
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
