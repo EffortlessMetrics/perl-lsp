@@ -67,3 +67,30 @@ fn substitution_empty_quoted_replacement_closes_before_next_statement() -> TestR
     assert!(saw_substitution, "expected substitution token in {source}");
     Ok(())
 }
+
+#[test]
+fn substitution_apostrophe_replacement_closes_before_comment_apostrophes() -> TestResult {
+    let source = r#"$name =~ s/\bo'(\w)/O'\u$1/igo; # Irish names such as 'O'Malley, O'Reilly'
+$name =~ s/\[[^\]]*\]//g;"#;
+    let mut lexer = PerlLexer::new(source);
+    let mut substitutions = Vec::new();
+
+    while let Some(token) = lexer.next_token() {
+        if matches!(token.token_type, TokenType::Error(_)) {
+            return Err(format!("unexpected lexer error token: {token:?}").into());
+        }
+        if matches!(token.token_type, TokenType::Substitution) {
+            substitutions.push(token.text.to_string());
+        }
+        if matches!(token.token_type, TokenType::EOF) {
+            break;
+        }
+    }
+
+    assert_eq!(
+        substitutions,
+        vec![r#"s/\bo'(\w)/O'\u$1/igo"#, r#"s/\[[^\]]*\]//g"#],
+        "expected each substitution to close before the trailing comment or next statement",
+    );
+    Ok(())
+}
