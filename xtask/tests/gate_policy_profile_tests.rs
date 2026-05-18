@@ -82,6 +82,35 @@ fn parser_corpus_pr_policy_is_unambiguous() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
+fn release_history_pr_gates_have_realistic_timeout_headroom()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = project_root();
+    let policy_path = root.join(".ci/gate-policy.yaml");
+    let content = fs::read_to_string(policy_path)?;
+    let parsed: GatePolicyDoc = serde_yaml_ng::from_str(&content)?;
+
+    let gates: HashMap<_, _> =
+        parsed.gates.into_iter().map(|gate| (gate.name.clone(), gate)).collect();
+
+    for gate_name in ["release_history", "release_history_check"] {
+        let gate = gates.get(gate_name).ok_or_else(|| format!("missing {gate_name} gate"))?;
+        assert_eq!(gate.tier, "pr_fast", "{gate_name} must stay in pr-fast");
+        assert!(gate.required, "{gate_name} must stay PR-blocking");
+        assert!(
+            gate.timeout_seconds.unwrap_or_default() >= 120,
+            "{gate_name} timeout must include cold or partially-cold xtask startup"
+        );
+        assert!(
+            gate.budgets.as_ref().and_then(|budget| budget.max_duration_ms).unwrap_or_default()
+                >= 90_000,
+            "{gate_name} duration budget must reflect observed pr-fast runtime"
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
 fn gate_registry_alignment_prevents_stale_parser_wiring() -> Result<(), Box<dyn std::error::Error>>
 {
     let root = project_root();
