@@ -1533,6 +1533,138 @@ fn refactor_runtime_blocker_ux_package_local_live_pilot_real_workspace_false_all
 }
 
 #[test]
+fn refactor_runtime_blocker_ux_package_local_live_pilot_dancer2_fallback_refreshes_after_edit()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_dancer2_workspace(&server)?;
+    let response =
+        files.get("lib/Dancer2/Core/Response.pm").ok_or("missing Dancer2 Response fixture")?;
+
+    let (header_line, header_character) = position_of(response, "header {")?;
+    let preview_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.previewPackageRename",
+            "arguments": [{
+                "textDocument": {"uri": DANCER2_RESPONSE_URI},
+                "position": {"line": header_line, "character": header_character},
+                "newName": "renamed_header"
+            }]
+        })))?
+        .ok_or("missing Dancer2 package rename false-allow preview result")?;
+
+    assert_eq!(preview_result.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        preview_result.get("provider_action").and_then(Value::as_str),
+        Some("perl.previewPackageRename")
+    );
+    assert_eq!(preview_result.get("decision").and_then(Value::as_str), Some("allowed"));
+    assert_eq!(
+        preview_result.get("reason").and_then(Value::as_str),
+        Some("compiler_preview_allowed")
+    );
+    assert_eq!(preview_result.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        preview_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+
+    let package_pilot = preview_result.get("package_pilot").ok_or("missing package_pilot")?;
+    assert_eq!(package_pilot.get("eligible").and_then(Value::as_bool), Some(true));
+    assert_eq!(package_pilot.get("reason").and_then(Value::as_str), Some("none"));
+    let compiler_edit_count = package_pilot
+        .get("edit_count")
+        .and_then(Value::as_u64)
+        .ok_or("missing Dancer2 package pilot edit count")?;
+    assert_eq!(
+        compiler_edit_count, 1,
+        "Dancer2 package pilot should see only the source-backed definition edit: {package_pilot}"
+    );
+    assert_json_array_contains(package_pilot, "edit_categories", "Definition")?;
+
+    let rename_request = json!({
+        "textDocument": {"uri": DANCER2_RESPONSE_URI},
+        "position": {"line": header_line, "character": header_character},
+        "newName": "renamed_header"
+    });
+    let live_result = server
+        .handle_rename_workspace(Some(rename_request.clone()))?
+        .ok_or("missing Dancer2 package-local live rename fallback result")?;
+    let live_edit_count = workspace_edit_change_count(&live_result)?;
+    assert!(
+        live_edit_count > usize::try_from(compiler_edit_count)?,
+        "workspace guard must catch the Dancer2 package-pilot false allow and return broader current-source fallback edits: compiler={compiler_edit_count}, live={live_edit_count}, result={live_result}"
+    );
+    let live_response_texts = workspace_edit_texts_for_uri(&live_result, DANCER2_RESPONSE_URI)?;
+    assert!(
+        live_response_texts.iter().filter(|text| **text == "renamed_header").count() >= 2,
+        "workspace-index fallback must include Dancer2::Core::Response::header references: {live_result}"
+    );
+
+    let explanation = explain_provider_decision(&server, "rename")?;
+    let live_receipt = request_receipt(&explanation)?;
+    assert_eq!(live_receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        live_receipt.get("provider_action").and_then(Value::as_str),
+        Some("textDocument/rename")
+    );
+    assert_eq!(
+        live_receipt.get("reason").and_then(Value::as_str),
+        Some("full_index_workspace_edit")
+    );
+    assert_eq!(live_receipt.get("fallback_state").and_then(Value::as_str), Some("workspace_index"));
+    assert_eq!(
+        live_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
+        u64::try_from(live_edit_count).ok()
+    );
+    assert!(
+        live_receipt.get("claim_boundary").and_then(Value::as_str).is_some_and(|boundary| {
+            boundary.contains("package-local compiler facts")
+                && boundary.contains("broader compiler-backed refactor facts remain gated")
+        }),
+        "Dancer2 rename trace must preserve the package-local claim boundary: {live_receipt}"
+    );
+
+    let updated_response = response.replace(
+        "$self->header('Location', $url);",
+        "$self->header('Location', $url);\n    $self->header('X-Debug', '1');",
+    );
+    change_document(&server, DANCER2_RESPONSE_URI, 2, &updated_response)?;
+
+    let fresh_live_result = server
+        .handle_rename_workspace(Some(rename_request))?
+        .ok_or("missing Dancer2 package-local fresh fallback result")?;
+    let fresh_edit_count = workspace_edit_change_count(&fresh_live_result)?;
+    assert!(
+        fresh_edit_count > live_edit_count,
+        "current-source fallback must use fresh didChange state instead of stale package-pilot evidence: before={live_edit_count}, after={fresh_edit_count}, result={fresh_live_result}"
+    );
+    let fresh_response_texts =
+        workspace_edit_texts_for_uri(&fresh_live_result, DANCER2_RESPONSE_URI)?;
+    assert!(
+        fresh_response_texts.iter().filter(|text| **text == "renamed_header").count()
+            > live_response_texts.iter().filter(|text| **text == "renamed_header").count(),
+        "post-edit fallback should include the newly added Dancer2 header call: before={live_response_texts:?}, after={fresh_response_texts:?}"
+    );
+
+    let fresh_explanation = explain_provider_decision(&server, "rename")?;
+    let fresh_receipt = request_receipt(&fresh_explanation)?;
+    assert_eq!(
+        fresh_receipt.get("reason").and_then(Value::as_str),
+        Some("full_index_workspace_edit")
+    );
+    assert_eq!(
+        fresh_receipt.get("fallback_state").and_then(Value::as_str),
+        Some("workspace_index")
+    );
+    assert_eq!(
+        fresh_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
+        u64::try_from(fresh_edit_count).ok()
+    );
+
+    Ok(())
+}
+
+#[test]
 fn refactor_runtime_blocker_ux_package_local_live_pilot_catalyst_false_allow_blocks()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();

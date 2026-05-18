@@ -138,9 +138,9 @@ receipt support review closes the immediate semantic-token review routing item.
 The rename support review closes the immediate refactor review routing item
 without broadening live rename behavior.
 
-1. `test(rename): add additional project-shaped package/compiler-backed fallback/edit-freshness receipt before broader rename promotion`
-2. `feat(semantic-tokens): expose another reviewed scoped token class through live provider-decision traces`
-3. `docs(status): review generated workspace-symbol pilot after predicate-class proof`
+1. `feat(semantic-tokens): expose another reviewed scoped token class through live provider-decision traces`
+2. `docs(status): review generated workspace-symbol pilot after predicate-class proof`
+3. `test(safe-delete): add additional project-shaped false-allow and blocker receipts before broader symbol-delete promotion`
 
 Provider decision explanations are already partial-live through
 `perl.explainProviderDecision`; callers can attach a request-local
@@ -194,6 +194,10 @@ The RealBaseline false-allow receipt now proves that a compiler-allowed
 source-backed definition plan does not authorize the narrower package-local
 pilot when current workspace/source coverage finds broader references, preserves
 no-edit preview rollback, and refreshes fallback edits after `didChange`.
+The Dancer2 `header` fallback/edit-freshness receipt adds a second project shape:
+compiler preview sees only the source-backed definition edit, live rename falls
+back to broader current-source workspace-index edits, and `didChange` refreshes
+the fallback edit set before a new receipt is recorded.
 This is a narrow
 `partial-live-with-fallback` pilot, not a broad compiler-backed rename
 authorization.
