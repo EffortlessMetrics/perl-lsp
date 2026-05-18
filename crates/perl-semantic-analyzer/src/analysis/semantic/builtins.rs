@@ -801,6 +801,83 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
                           UNITCHECK runs before the requiring file's UNITCHECK.",
         }),
 
+        // utf8:: namespace — core Perl Unicode encoding/decoding functions.
+        // These are always available without `use utf8;`.  The `use utf8;`
+        // pragma controls source-file encoding, not the availability of these
+        // functions.  See `perldoc utf8` for the complete specification.
+        "utf8::encode" => Some(BuiltinDoc {
+            signature: "utf8::encode(SCALAR)",
+            description: "Converts `SCALAR` **in-place** from Perl's internal Unicode \
+                          representation into a sequence of octets (bytes) that represent the \
+                          corresponding UTF-8 encoded string.  After the call the UTF-8 flag is \
+                          turned **off**, and the string is a byte string in UTF-8 encoding.\n\n\
+                          Use this when you need raw UTF-8 bytes for I/O or binary protocols.  \
+                          It is the inverse of `utf8::decode`.\n\n\
+                          **Example**: `utf8::encode(my $bytes = \"café\"); # $bytes is now raw UTF-8 octets`",
+        }),
+        "utf8::decode" => Some(BuiltinDoc {
+            signature: "utf8::decode(SCALAR)",
+            description: "Decodes `SCALAR` **in-place** from a sequence of UTF-8 octets into \
+                          Perl's internal Unicode representation.  On success the UTF-8 flag is \
+                          turned **on** and returns true; on failure (malformed UTF-8) returns \
+                          false and leaves the string unchanged.\n\n\
+                          This is the inverse of `utf8::encode`.\n\n\
+                          **Example**: `if (utf8::decode($input)) { ... } # $input is now a character string`",
+        }),
+        "utf8::is_utf8" => Some(BuiltinDoc {
+            signature: "utf8::is_utf8(SCALAR)",
+            description: "Returns **true** if the UTF-8 flag is enabled for `SCALAR`, \
+                          false otherwise.  The UTF-8 flag indicates that Perl is treating \
+                          the string as a sequence of characters rather than octets.\n\n\
+                          **Note**: A false return does not mean the string is not valid UTF-8; \
+                          it only means the flag is off.  Use `utf8::valid` to check the bytes.  \
+                          **Do not use this for most application logic** — prefer character \
+                          semantics throughout and only check the flag for low-level \
+                          serialization/deserialization.",
+        }),
+        "utf8::valid" => Some(BuiltinDoc {
+            signature: "utf8::valid(SCALAR)",
+            description: "Returns **true** if `SCALAR` is a well-formed UTF-8 string (regardless \
+                          of whether the UTF-8 flag is on).  Returns false if the bytes do not \
+                          form valid UTF-8.\n\n\
+                          Unlike `utf8::is_utf8`, this inspects the **bytes** rather than the \
+                          flag, making it useful for validating raw bytes received from external \
+                          sources before decoding.",
+        }),
+        "utf8::upgrade" => Some(BuiltinDoc {
+            signature: "utf8::upgrade(SCALAR)",
+            description: "Converts `SCALAR` **in-place** from a byte string to Perl's internal \
+                          Unicode representation, turning on the UTF-8 flag.  This is a no-op if \
+                          the flag is already on.  Returns the number of octets necessary to \
+                          represent the string as UTF-8.\n\n\
+                          `upgrade` and `downgrade` are inverses.  Use `upgrade` when you have \
+                          a byte string that you know represents valid Latin-1 or ASCII and want \
+                          Perl to treat it as characters.",
+        }),
+        "utf8::downgrade" => Some(BuiltinDoc {
+            signature: "utf8::downgrade(SCALAR)\nutf8::downgrade(SCALAR, FAIL_OK)",
+            description: "Converts `SCALAR` **in-place** from Perl's internal Unicode \
+                          representation to a byte string, turning off the UTF-8 flag.  Only \
+                          succeeds if every code point in the string fits in a single byte \
+                          (i.e. the string contains no characters outside U+00FF).\n\n\
+                          If `FAIL_OK` is true, returns false on failure instead of dying.  \
+                          If `FAIL_OK` is omitted or false, dies with an error message on failure.\n\n\
+                          **Example**: `utf8::downgrade($str, 1) or die \"String has wide chars\";`",
+        }),
+        "utf8::native_to_unicode" => Some(BuiltinDoc {
+            signature: "utf8::native_to_unicode(CODEPOINT)",
+            description: "Returns the Unicode code point corresponding to the native platform \
+                          code point `CODEPOINT`.  On ASCII platforms (virtually all modern \
+                          systems) this is a no-op.  Useful for writing truly portable code \
+                          that runs correctly on both ASCII and EBCDIC platforms.",
+        }),
+        "utf8::unicode_to_native" => Some(BuiltinDoc {
+            signature: "utf8::unicode_to_native(CODEPOINT)",
+            description: "Returns the native platform code point corresponding to the Unicode \
+                          code point `CODEPOINT`.  On ASCII platforms (virtually all modern \
+                          systems) this is a no-op.  The inverse of `utf8::native_to_unicode`.",
+        }),
+
         _ => None,
     }
 }
@@ -1395,5 +1472,177 @@ mod tests {
             get_pragma_documentation("Moose").is_none(),
             "Moose is not a pragma and should return None"
         );
+    }
+
+    // ── utf8:: function documentation tests ────────────────────────────────────
+
+    #[test]
+    fn test_utf8_encode_has_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_builtin_documentation("utf8::encode")
+            .ok_or("utf8::encode should have hover docs")?;
+        assert!(
+            doc.signature.contains("utf8::encode"),
+            "utf8::encode signature should include the function name, got: {}",
+            doc.signature
+        );
+        assert!(
+            doc.description.contains("UTF-8") || doc.description.contains("octet"),
+            "utf8::encode description should mention UTF-8 encoding, got: {}",
+            doc.description
+        );
+        assert!(
+            doc.description.to_lowercase().contains("in-place")
+                || doc.description.to_lowercase().contains("in place"),
+            "utf8::encode description should mention in-place mutation, got: {}",
+            doc.description
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_utf8_decode_has_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_builtin_documentation("utf8::decode")
+            .ok_or("utf8::decode should have hover docs")?;
+        assert!(
+            doc.signature.contains("utf8::decode"),
+            "utf8::decode signature should include the function name, got: {}",
+            doc.signature
+        );
+        assert!(
+            doc.description.contains("UTF-8") || doc.description.contains("Unicode"),
+            "utf8::decode description should mention UTF-8 or Unicode, got: {}",
+            doc.description
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_utf8_is_utf8_has_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_builtin_documentation("utf8::is_utf8")
+            .ok_or("utf8::is_utf8 should have hover docs")?;
+        assert!(
+            doc.signature.contains("utf8::is_utf8"),
+            "utf8::is_utf8 signature should include the function name, got: {}",
+            doc.signature
+        );
+        assert!(
+            doc.description.contains("flag") || doc.description.contains("UTF-8"),
+            "utf8::is_utf8 description should mention the UTF-8 flag, got: {}",
+            doc.description
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_utf8_valid_has_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let doc =
+            get_builtin_documentation("utf8::valid").ok_or("utf8::valid should have hover docs")?;
+        assert!(
+            doc.signature.contains("utf8::valid"),
+            "utf8::valid signature should include the function name, got: {}",
+            doc.signature
+        );
+        assert!(
+            doc.description.contains("well-formed") || doc.description.contains("valid"),
+            "utf8::valid description should mention validation, got: {}",
+            doc.description
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_utf8_upgrade_has_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_builtin_documentation("utf8::upgrade")
+            .ok_or("utf8::upgrade should have hover docs")?;
+        assert!(
+            doc.signature.contains("utf8::upgrade"),
+            "utf8::upgrade signature should include the function name, got: {}",
+            doc.signature
+        );
+        assert!(
+            doc.description.contains("Unicode") || doc.description.contains("flag"),
+            "utf8::upgrade description should mention Unicode representation, got: {}",
+            doc.description
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_utf8_downgrade_has_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_builtin_documentation("utf8::downgrade")
+            .ok_or("utf8::downgrade should have hover docs")?;
+        assert!(
+            doc.signature.contains("utf8::downgrade"),
+            "utf8::downgrade signature should include the function name, got: {}",
+            doc.signature
+        );
+        assert!(
+            doc.signature.contains("FAIL_OK"),
+            "utf8::downgrade signature should include the optional FAIL_OK parameter, got: {}",
+            doc.signature
+        );
+        assert!(
+            doc.description.contains("byte") || doc.description.contains("octet"),
+            "utf8::downgrade description should mention byte conversion, got: {}",
+            doc.description
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_utf8_native_to_unicode_has_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_builtin_documentation("utf8::native_to_unicode")
+            .ok_or("utf8::native_to_unicode should have hover docs")?;
+        assert!(
+            doc.signature.contains("utf8::native_to_unicode"),
+            "utf8::native_to_unicode signature should include the function name, got: {}",
+            doc.signature
+        );
+        assert!(
+            doc.description.contains("Unicode") || doc.description.contains("code point"),
+            "utf8::native_to_unicode description should mention Unicode code points, got: {}",
+            doc.description
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_utf8_unicode_to_native_has_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_builtin_documentation("utf8::unicode_to_native")
+            .ok_or("utf8::unicode_to_native should have hover docs")?;
+        assert!(
+            doc.signature.contains("utf8::unicode_to_native"),
+            "utf8::unicode_to_native signature should include the function name, got: {}",
+            doc.signature
+        );
+        assert!(
+            doc.description.contains("Unicode") || doc.description.contains("native"),
+            "utf8::unicode_to_native description should mention Unicode or native, got: {}",
+            doc.description
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_all_utf8_builtin_functions_have_docs() {
+        // Verify every utf8:: function registered in the PHF table has a hover doc entry.
+        // This acts as a regression guard: if a new utf8:: function is added to the
+        // PHF lookup without a matching doc entry, this test will catch it.
+        let utf8_functions = [
+            "utf8::encode",
+            "utf8::decode",
+            "utf8::is_utf8",
+            "utf8::valid",
+            "utf8::upgrade",
+            "utf8::downgrade",
+            "utf8::native_to_unicode",
+            "utf8::unicode_to_native",
+        ];
+        for func in &utf8_functions {
+            assert!(
+                get_builtin_documentation(func).is_some(),
+                "utf8 builtin function '{func}' is registered in the PHF table but has no hover doc"
+            );
+        }
     }
 }
