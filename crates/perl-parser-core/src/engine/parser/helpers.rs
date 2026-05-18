@@ -375,6 +375,40 @@ impl<'a> Parser<'a> {
         matches!(kind, Some(TokenKind::And | TokenKind::Or | TokenKind::DefinedOr))
     }
 
+    fn is_sigil_argument_start(kind: TokenKind, text: &str) -> bool {
+        text.starts_with('$')
+            || text.starts_with('@')
+            || text.starts_with('%')
+            || matches!(
+                kind,
+                TokenKind::Backslash
+                    | TokenKind::ScalarSigil
+                    | TokenKind::ArraySigil
+                    | TokenKind::HashSigil
+                    | TokenKind::GlobSigil
+                    | TokenKind::SubSigil
+                    | TokenKind::BitwiseAnd
+                    | TokenKind::Star
+            )
+    }
+
+    fn should_continue_bare_call_after_qualified_arg(&mut self, args: &[Node]) -> bool {
+        let Some(last) = args.last() else {
+            return false;
+        };
+        let NodeKind::Identifier { name } = &last.kind else {
+            return false;
+        };
+        if !name.contains("::") || self.is_at_statement_end() {
+            return false;
+        }
+
+        self.tokens
+            .peek()
+            .ok()
+            .is_some_and(|token| Self::is_sigil_argument_start(token.kind, token.text.as_ref()))
+    }
+
     fn assignment_operator_text(kind: TokenKind) -> Option<&'static str> {
         match kind {
             TokenKind::Assign => Some("="),
@@ -1101,10 +1135,12 @@ impl<'a> Parser<'a> {
                 // Allow qualified names (e.g. `File::Spec`, `Scalar::Util`) as arguments.
                 // They start with uppercase but the `::` disambiguates them from constants.
                 if next_text.contains("::") {
-                    // Qualified name — check that the following token is `->` or `(`.
+                    // Qualified name — check that the following token is `->`, `(`,
+                    // or another explicit argument in a list-operator style call.
                     if let Ok(third) = self.tokens.peek_second() {
                         return third.kind == TokenKind::Arrow
-                            || third.kind == TokenKind::LeftParen;
+                            || third.kind == TokenKind::LeftParen
+                            || Self::is_sigil_argument_start(third.kind, third.text.as_ref());
                     }
                     return false;
                 }
@@ -1127,13 +1163,19 @@ impl<'a> Parser<'a> {
                 if Self::is_builtin_function(&next_text) {
                     if let Ok(third) = self.tokens.peek_second() {
                         let third_text: &str = &third.text;
-                        return third_text.starts_with('$')
-                            || third_text.starts_with('@')
-                            || third_text.starts_with('%')
-                            || third.kind == TokenKind::Star
-                            || third.kind == TokenKind::ScalarSigil
-                            || third.kind == TokenKind::ArraySigil
-                            || third.kind == TokenKind::HashSigil;
+                        return Self::is_sigil_argument_start(third.kind, third_text);
+                    }
+                }
+                if next_text.starts_with(|c: char| c.is_ascii_lowercase() || c == '_') {
+                    if self
+                        .tokens
+                        .peek_second()
+                        .ok()
+                        .is_some_and(|third| {
+                            Self::is_sigil_argument_start(third.kind, third.text.as_ref())
+                        })
+                    {
+                        return true;
                     }
                 }
                 // Check if the next-next token is `(` — that signals a function call
