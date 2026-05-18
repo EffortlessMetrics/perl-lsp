@@ -23,6 +23,7 @@ only change with explicit, reviewed intent.
 - **`Token`** -- a token with `kind: TokenKind`, `text: Arc<str>`, `start: usize`, `end: usize`
 - **`TokenRef<'src>`** -- borrowed token view with `kind`, `text: &'src str`, `start`, `end` for allocation-sensitive paths
 - **`TokenKind`** -- enum classifying every Perl token: keywords, operators, delimiters, literals, sigils, and special tokens
+- **Spelling tables** -- `KEYWORD_SPELLINGS`, `OPERATOR_SPELLINGS`, `DELIMITER_SPELLINGS`, and `SIGIL_SPELLINGS` define fixed source spellings and power `TokenKind::canonical_spelling()`
 
 ## Usage
 
@@ -35,6 +36,16 @@ assert_eq!(tok.kind, TokenKind::Identifier);
 let borrowed = TokenRef::new(TokenKind::Identifier, "foo", 0, 3);
 let owned = borrowed.to_owned_token();
 assert_eq!(owned, tok);
+```
+
+Fixed-spelling token metadata:
+
+```rust
+use perl_token::TokenKind;
+
+assert_eq!(TokenKind::Sub.canonical_spelling(), Some("sub"));
+assert_eq!(TokenKind::LeftBrace.canonical_spelling(), Some("{"));
+assert_eq!(TokenKind::Identifier.canonical_spelling(), None);
 ```
 
 Borrowed view from owned tokens:

@@ -21,6 +21,7 @@ import {
   copyProviderDecisionReceiptCommand,
   explainProviderDecisionCommand,
   previewSafeDeleteCommand,
+  showWorkspaceTrustReportCommand,
   validateIncludePaths,
   runPerlCriticOnActiveFile,
   setPerlCriticSeverity,
@@ -612,5 +613,66 @@ describe('extension UX warnings', () => {
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
       'Provider decision receipt copied.'
     );
+  });
+
+  test('shows the workspace trust report in the trust output channel', async () => {
+    const outputChannel = {
+      appendLine: jest.fn(),
+      show: jest.fn(),
+      dispose: jest.fn(),
+    };
+    (vscode.window.createOutputChannel as jest.Mock).mockReturnValueOnce(outputChannel);
+    const sendRequest = jest.fn(async () => ({
+      schema_version: 'workspace_trust_report.v1',
+      workspace: {
+        root_path: '/workspace',
+        workspace_folder_count: 1,
+        open_document_count: 2,
+      },
+      module_resolution: {
+        global_workspace_config: {
+          include_paths: ['lib'],
+          effective_include_paths: ['lib', 'local/lib/perl5'],
+          system_inc_status: 'configured_not_probed_by_report',
+          use_perl5lib: false,
+          perl5lib_entry_count: 0,
+          perl_path: '/usr/bin/perl',
+        },
+      },
+      index: {
+        state: 'ready',
+        availability: 'full',
+        indexed_file_count: 42,
+        indexed_symbol_count: 137,
+      },
+      providers: {
+        support_tiers: {
+          completion: 'partial-live-with-fallback',
+          workspace_trust_report: 'partial-live-with-fallback',
+        },
+        decision_trace_count: 3,
+      },
+      dynamic_boundaries: {
+        policy: 'Dynamic facts remain labeled.',
+      },
+      claim_boundary: 'Aggregates current runtime state only.',
+    }));
+
+    await showWorkspaceTrustReportCommand({ sendRequest } as any);
+
+    expect(sendRequest).toHaveBeenCalledWith(
+      'workspace/executeCommand',
+      {
+        command: 'perl.workspaceTrustReport',
+        arguments: [],
+      }
+    );
+    const rendered = outputChannel.appendLine.mock.calls
+      .map((call: unknown[]) => call[0])
+      .join('\n');
+    expect(rendered).toContain('Perl LSP Trust Report');
+    expect(rendered).toContain('completion: partial-live-with-fallback');
+    expect(rendered).toContain('Aggregates current runtime state only.');
+    expect(outputChannel.show).toHaveBeenCalled();
   });
 });

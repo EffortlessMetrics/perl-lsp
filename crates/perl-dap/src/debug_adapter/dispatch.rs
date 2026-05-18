@@ -149,7 +149,54 @@ impl DebugAdapter {
     }
 
     fn suggested_command(command: &str) -> Option<&'static str> {
-        Self::SUPPORTED_COMMANDS.iter().copied().find(|known| known.eq_ignore_ascii_case(command))
+        if let Some(case_suggestion) = Self::SUPPORTED_COMMANDS
+            .iter()
+            .copied()
+            .find(|known| known.eq_ignore_ascii_case(command))
+        {
+            return Some(case_suggestion);
+        }
+
+        Self::SUPPORTED_COMMANDS
+            .iter()
+            .copied()
+            .filter_map(|known| {
+                let distance = Self::command_edit_distance(command, known);
+                (distance <= Self::suggestion_threshold(command, known))
+                    .then_some((known, distance))
+            })
+            .min_by_key(|(known, distance)| (*distance, known.len()))
+            .map(|(known, _)| known)
+    }
+
+    fn suggestion_threshold(command: &str, known: &str) -> usize {
+        command.len().max(known.len()).saturating_div(4).clamp(1, 4)
+    }
+
+    fn command_edit_distance(left: &str, right: &str) -> usize {
+        let left = left.to_ascii_lowercase();
+        let right = right.to_ascii_lowercase();
+        let left_bytes = left.as_bytes();
+        let right_bytes = right.as_bytes();
+
+        let mut previous: Vec<usize> = (0..=right_bytes.len()).collect();
+        let mut current = vec![0; right_bytes.len() + 1];
+
+        for (left_index, left_byte) in left_bytes.iter().enumerate() {
+            current[0] = left_index + 1;
+
+            for (right_index, right_byte) in right_bytes.iter().enumerate() {
+                let substitution_cost = usize::from(left_byte != right_byte);
+                let deletion = previous[right_index + 1] + 1;
+                let insertion = current[right_index] + 1;
+                let substitution = previous[right_index] + substitution_cost;
+                current[right_index + 1] = deletion.min(insertion).min(substitution);
+            }
+
+            std::mem::swap(&mut previous, &mut current);
+        }
+
+        previous[right_bytes.len()]
     }
 
     pub(super) fn response_succeeded_for_command(

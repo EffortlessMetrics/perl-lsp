@@ -114,6 +114,37 @@ fn perlcritic_compat_report_prints_native_mapping() -> Result<(), Box<dyn std::e
 }
 
 #[test]
+fn check_project_missing_dir_errors() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempfile::tempdir()?;
+    let missing = dir.path().join("missing-project");
+    let missing_str = missing.to_str().ok_or("non-UTF-8 temp path")?;
+
+    let mut cmd = cargo_bin_cmd!("perl-lsp");
+    cmd.args(["--check-project", missing_str])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("directory not found"));
+
+    Ok(())
+}
+
+#[test]
+fn check_project_file_path_errors() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempfile::tempdir()?;
+    let file = dir.path().join("not-a-directory.pl");
+    std::fs::write(&file, "use strict;\n")?;
+    let file_str = file.to_str().ok_or("non-UTF-8 temp path")?;
+
+    let mut cmd = cargo_bin_cmd!("perl-lsp");
+    cmd.args(["--check-project", file_str])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("not a directory"));
+
+    Ok(())
+}
+
+#[test]
 fn completion_fish_produces_output() {
     let mut cmd = cargo_bin_cmd!("perl-lsp");
     cmd.args(["--completion", "fish"])

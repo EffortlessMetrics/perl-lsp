@@ -238,6 +238,36 @@ pub enum DiagnosticCode {
     CriticSeverity5,
 }
 
+fn is_undefined_variable_message(msg_lower: &str) -> bool {
+    contains_diagnostic_phrase(msg_lower, "not declared")
+        || contains_diagnostic_phrase(msg_lower, "undefined variable")
+        || (contains_diagnostic_phrase(msg_lower, "undefined")
+            && (contains_diagnostic_phrase(msg_lower, "variable")
+                || contains_diagnostic_phrase(msg_lower, "global symbol")))
+}
+
+fn contains_diagnostic_phrase(haystack: &str, needle: &str) -> bool {
+    haystack.match_indices(needle).any(|(start, matched)| {
+        let end = start + matched.len();
+        has_phrase_boundary(haystack, start, end)
+    })
+}
+
+fn has_phrase_boundary(haystack: &str, start: usize, end: usize) -> bool {
+    let bytes = haystack.as_bytes();
+    let before_is_word = start
+        .checked_sub(1)
+        .and_then(|index| bytes.get(index))
+        .is_some_and(|byte| is_phrase_word_byte(*byte));
+    let after_is_word = bytes.get(end).is_some_and(|byte| is_phrase_word_byte(*byte));
+
+    !before_is_word && !after_is_word
+}
+
+fn is_phrase_word_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
+}
+
 impl DiagnosticCode {
     /// Get the string representation of this code.
     pub fn as_str(&self) -> &'static str {
@@ -699,31 +729,42 @@ impl DiagnosticCode {
     /// Try to infer a diagnostic code from a message.
     pub fn from_message(msg: &str) -> Option<Self> {
         let msg_lower = msg.to_lowercase();
-        if msg_lower.contains("inside a begin block does not enable strict")
-            || msg_lower.contains("inside a phase block does not enable strict")
+        if contains_diagnostic_phrase(&msg_lower, "inside a begin block does not enable strict")
+            || contains_diagnostic_phrase(&msg_lower, "inside a phase block does not enable strict")
         {
             Some(Self::PhaseScopedStrictPragma)
-        } else if msg_lower.contains("inside a begin block does not enable warnings")
-            || msg_lower.contains("inside a phase block does not enable warnings")
-        {
+        } else if contains_diagnostic_phrase(
+            &msg_lower,
+            "inside a begin block does not enable warnings",
+        ) || contains_diagnostic_phrase(
+            &msg_lower,
+            "inside a phase block does not enable warnings",
+        ) {
             Some(Self::PhaseScopedWarningsPragma)
-        } else if msg_lower.contains("use strict") {
+        } else if contains_diagnostic_phrase(&msg_lower, "use strict") {
             Some(Self::MissingStrict)
-        } else if msg_lower.contains("use warnings") {
+        } else if contains_diagnostic_phrase(&msg_lower, "use warnings") {
             Some(Self::MissingWarnings)
-        } else if msg_lower.contains("unused variable") || msg_lower.contains("never used") {
+        } else if contains_diagnostic_phrase(&msg_lower, "unused variable")
+            || contains_diagnostic_phrase(&msg_lower, "never used")
+        {
             Some(Self::UnusedVariable)
-        } else if msg_lower.contains("undefined") || msg_lower.contains("not declared") {
+        } else if is_undefined_variable_message(&msg_lower) {
             Some(Self::UndefinedVariable)
-        } else if msg_lower.contains("bareword filehandle") {
+        } else if contains_diagnostic_phrase(&msg_lower, "bareword filehandle") {
             Some(Self::BarewordFilehandle)
-        } else if msg_lower.contains("two-argument") || msg_lower.contains("2-arg") {
+        } else if contains_diagnostic_phrase(&msg_lower, "two-argument")
+            || contains_diagnostic_phrase(&msg_lower, "2-argument")
+            || contains_diagnostic_phrase(&msg_lower, "2-arg")
+        {
             Some(Self::TwoArgOpen)
-        } else if msg_lower.contains("invalid prototype character")
-            || msg_lower.contains("illegal character in prototype")
+        } else if contains_diagnostic_phrase(&msg_lower, "invalid prototype character")
+            || contains_diagnostic_phrase(&msg_lower, "illegal character in prototype")
         {
             Some(Self::InvalidPrototype)
-        } else if msg_lower.contains("parse error") || msg_lower.contains("syntax error") {
+        } else if contains_diagnostic_phrase(&msg_lower, "parse error")
+            || contains_diagnostic_phrase(&msg_lower, "syntax error")
+        {
             Some(Self::ParseError)
         } else {
             None

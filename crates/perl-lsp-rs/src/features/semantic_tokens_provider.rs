@@ -691,8 +691,6 @@ function_two();
         let duration = start.elapsed();
         let avg_time = duration / 100;
 
-        println!("Average time for semantic tokens generation: {:?}", avg_time);
-
         // Target: <100µs per operation
         assert!(
             avg_time.as_micros() < 100,

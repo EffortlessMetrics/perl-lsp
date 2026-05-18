@@ -219,8 +219,12 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        let query =
-            params.as_ref().and_then(|p| p.get("query")).and_then(|q| q.as_str()).unwrap_or("");
+        let query = params
+            .as_ref()
+            .and_then(|p| p.get("query"))
+            .and_then(|q| q.as_str())
+            .unwrap_or("")
+            .trim();
         let cap = workspace_symbol_cap();
 
         tracing::debug!(query, cap, "Workspace symbol search v2");
@@ -406,6 +410,7 @@ impl LspServer {
             .and_then(|p| p.get("query"))
             .and_then(Value::as_str)
             .unwrap_or("")
+            .trim()
             .to_string();
 
         let live_provider_result = self.handle_workspace_symbols_v2(params)?;
@@ -485,7 +490,14 @@ impl LspServer {
 fn workspace_symbols_generated_dynamic_noise_receipt(query: &str) -> (Value, usize) {
     let candidates = vec![
         perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolShadowCandidate::shadow(
-            "generated:no-source:workspace-symbol:framework_accessor:virtual",
+            "generated:source-anchor:workspace-symbol:framework_accessor:virtual",
+            ProviderFactSourceKind::FrameworkAdapter,
+            Provenance::FrameworkSynthesis,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+        ),
+        perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolShadowCandidate::blocked(
+            "generated:no-source:workspace-symbol:runtime_installed_method:unanchored",
             ProviderFactSourceKind::FrameworkAdapter,
             Provenance::FrameworkSynthesis,
             Confidence::Medium,
@@ -517,7 +529,18 @@ fn workspace_symbols_generated_dynamic_noise_receipt(query: &str) -> (Value, usi
 
     let generated_candidate_count = candidates
         .iter()
-        .filter(|candidate| candidate.source == ProviderFactSourceKind::FrameworkAdapter)
+        .filter(|candidate| {
+            candidate.source == ProviderFactSourceKind::FrameworkAdapter
+                && candidate.fallback_state != ProviderFallbackState::Blocked
+        })
+        .count();
+    let generated_no_source_blocker_count = candidates
+        .iter()
+        .filter(|candidate| {
+            candidate.source == ProviderFactSourceKind::FrameworkAdapter
+                && candidate.fallback_state == ProviderFallbackState::Blocked
+                && candidate.identity.contains(":no-source:")
+        })
         .count();
     let dynamic_boundary_blocker_count = candidates
         .iter()
@@ -553,11 +576,17 @@ fn workspace_symbols_generated_dynamic_noise_receipt(query: &str) -> (Value, usi
             "schema_version": 1,
             "receipt_kind": "generated_dynamic_noise_expansion",
             "generated_candidate_count": generated_candidate_count,
+            "generated_false_exact_candidate_count": generated_candidate_count,
+            "generated_no_source_candidate_count": generated_no_source_blocker_count,
+            "generated_no_source_blocker_count": generated_no_source_blocker_count,
+            "generated_location_semantics": "source_anchor_not_exact_generated_body",
             "dynamic_boundary_blocker_count": dynamic_boundary_blocker_count,
+            "dynamic_false_exact_blocker_count": dynamic_boundary_blocker_count,
             "stale_fact_blocker_count": stale_fact_blocker_count,
             "fallback_noise_candidate_count": fallback_noise_candidate_count,
             "no_live_behavior_change": true,
-            "claim_boundary": "workspace-symbol generated/dynamic/noise expansion receipt only; generated/no-source, dynamic, stale, and fallback/noise candidates remain gated outside the labeled source-backed generated pilot",
+            "edit_freshness_policy": "labeled generated workspace-symbol queries must recompute from fresh document state after didChange; stale compiler-fact shadow candidates remain blocked by the gated-expansion receipt",
+            "claim_boundary": "workspace-symbol generated/dynamic/noise expansion receipt only; generated/no-source false-exact candidates, dynamic-boundary candidates, stale compiler-fact shadow candidates, and fallback/noise candidates remain gated outside the labeled source-backed generated pilot",
             "shadow_receipt": shadow.receipt,
         }),
         candidate_count,
@@ -603,8 +632,12 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        let query =
-            params.as_ref().and_then(|p| p.get("query")).and_then(|q| q.as_str()).unwrap_or("");
+        let query = params
+            .as_ref()
+            .and_then(|p| p.get("query"))
+            .and_then(|q| q.as_str())
+            .unwrap_or("")
+            .trim();
 
         tracing::debug!(query, "Workspace symbol search");
 

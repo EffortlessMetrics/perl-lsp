@@ -384,6 +384,21 @@ function stringField(value: Record<string, unknown> | undefined, field: string):
     return typeof fieldValue === 'string' ? fieldValue : undefined;
 }
 
+function numberField(value: Record<string, unknown> | undefined, field: string): number | undefined {
+    const fieldValue = value?.[field];
+    return typeof fieldValue === 'number' ? fieldValue : undefined;
+}
+
+function booleanField(value: Record<string, unknown> | undefined, field: string): boolean | undefined {
+    const fieldValue = value?.[field];
+    return typeof fieldValue === 'boolean' ? fieldValue : undefined;
+}
+
+function arrayField(value: Record<string, unknown> | undefined, field: string): unknown[] {
+    const fieldValue = value?.[field];
+    return Array.isArray(fieldValue) ? fieldValue : [];
+}
+
 function providerDecisionJson(value: unknown): string {
     return JSON.stringify(value, null, 2);
 }
@@ -391,7 +406,7 @@ function providerDecisionJson(value: unknown): string {
 async function executeLspCommand(
     activeClient: LspExecuteCommandClient | undefined,
     command: string,
-    argument: Record<string, unknown>
+    argument?: Record<string, unknown>
 ): Promise<unknown | undefined> {
     if (!activeClient) {
         vscode.window.showWarningMessage(serverNotRunningMessage());
@@ -401,7 +416,7 @@ async function executeLspCommand(
     try {
         return await activeClient.sendRequest('workspace/executeCommand', {
             command,
-            arguments: [argument],
+            arguments: argument === undefined ? [] : [argument],
         });
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
@@ -436,6 +451,101 @@ async function showProviderDecisionResult(title: string, result: unknown): Promi
     if (action === 'Show Output') {
         channel.show();
     }
+}
+
+function appendSupportTierLines(lines: string[], supportTiers: Record<string, unknown> | undefined): void {
+    if (!supportTiers) {
+        lines.push('- support tiers: unavailable');
+        return;
+    }
+
+    for (const [surface, tier] of Object.entries(supportTiers).sort(([left], [right]) => left.localeCompare(right))) {
+        if (typeof tier === 'string') {
+            lines.push(`- ${surface}: ${tier}`);
+        }
+    }
+}
+
+function formatWorkspaceTrustReport(result: unknown): string {
+    const report = asObject(result);
+    const workspace = asObject(report?.workspace);
+    const moduleResolution = asObject(report?.module_resolution);
+    const globalConfig = asObject(moduleResolution?.global_workspace_config);
+    const index = asObject(report?.index);
+    const providers = asObject(report?.providers);
+    const supportTiers = asObject(providers?.support_tiers);
+    const dynamicBoundaries = asObject(report?.dynamic_boundaries);
+
+    const rootPath = stringField(workspace, 'root_path') ?? '(none)';
+    const folderCount = numberField(workspace, 'workspace_folder_count') ?? 0;
+    const openDocumentCount = numberField(workspace, 'open_document_count') ?? 0;
+    const includePaths = arrayField(globalConfig, 'include_paths');
+    const effectiveIncludePaths = arrayField(globalConfig, 'effective_include_paths');
+    const usePerl5lib = booleanField(globalConfig, 'use_perl5lib');
+    const perl5libCount = numberField(globalConfig, 'perl5lib_entry_count') ?? 0;
+    const indexState = stringField(index, 'state') ?? 'unknown';
+    const indexAvailability = stringField(index, 'availability') ?? 'unknown';
+    const indexedFileCount = numberField(index, 'indexed_file_count') ?? 0;
+    const indexedSymbolCount = numberField(index, 'indexed_symbol_count') ?? 0;
+    const traceCount = numberField(providers, 'decision_trace_count') ?? 0;
+
+    const lines = [
+        'Perl LSP Trust Report',
+        '',
+        `Schema: ${stringField(report, 'schema_version') ?? 'unknown'}`,
+        `Root: ${rootPath}`,
+        `Workspace folders: ${folderCount}`,
+        `Open documents: ${openDocumentCount}`,
+        '',
+        'Module resolution / @INC',
+        `- configured include paths: ${includePaths.length}`,
+        `- effective include paths: ${effectiveIncludePaths.length}`,
+        `- system @INC: ${stringField(globalConfig, 'system_inc_status') ?? 'unknown'}`,
+        `- PERL5LIB enabled: ${usePerl5lib === undefined ? 'unknown' : String(usePerl5lib)}`,
+        `- PERL5LIB entries: ${perl5libCount}`,
+        `- perl.path: ${stringField(globalConfig, 'perl_path') ?? '(unconfigured)'}`,
+        '',
+        'Index',
+        `- state: ${indexState}`,
+        `- availability: ${indexAvailability}`,
+        `- indexed files: ${indexedFileCount}`,
+        `- indexed symbols: ${indexedSymbolCount}`,
+        '',
+        'Provider support tiers',
+    ];
+
+    appendSupportTierLines(lines, supportTiers);
+
+    lines.push(
+        '',
+        'Provider decision traces',
+        `- persisted trace keys: ${traceCount}`,
+        '',
+        'Dynamic boundaries',
+        `- ${stringField(dynamicBoundaries, 'policy') ?? 'Generated, dynamic, stale, low-confidence, ambiguous, and fallback facts remain bounded by provider policy.'}`,
+        '',
+        'Claim boundary',
+        stringField(report, 'claim_boundary') ?? 'This report is bounded to current runtime state.',
+        '',
+        'Raw report JSON',
+        providerDecisionJson(result),
+    );
+
+    return lines.join('\n');
+}
+
+export async function showWorkspaceTrustReportCommand(
+    activeClient: LspExecuteCommandClient | undefined = client
+): Promise<void> {
+    const result = await executeLspCommand(activeClient, 'perl.workspaceTrustReport');
+    if (result === undefined) {
+        return;
+    }
+
+    const channel = trustOutputChannel();
+    channel.appendLine('');
+    channel.appendLine(formatWorkspaceTrustReport(result));
+    channel.show();
 }
 
 export async function explainProviderDecisionCommand(
@@ -812,6 +922,13 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     );
 
+    const showWorkspaceTrustReportCommandDisposable = vscode.commands.registerCommand(
+        'perl-lsp.showWorkspaceTrustReport',
+        async () => {
+            await showWorkspaceTrustReportCommand(client);
+        }
+    );
+
     const whatsNewManager = new WhatsNewManager(context, outputChannel);
     const showWhatsNewCommand = vscode.commands.registerCommand('perl-lsp.showWhatsNew', async () => {
         await whatsNewManager.showWhatsNew();
@@ -1120,6 +1237,7 @@ export async function activate(context: vscode.ExtensionContext) {
         explainProviderDecisionCommandDisposable,
         previewSafeDeleteCommandDisposable,
         copyProviderDecisionReceiptCommandDisposable,
+        showWorkspaceTrustReportCommandDisposable,
         showVersionCommand,
         statusMenuCommand,
         reinstallCommand,

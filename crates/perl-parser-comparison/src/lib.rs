@@ -6,7 +6,7 @@
 //!
 //! # Design
 //!
-//! Each test case records a [`Verdict`] for each parser — not a pass/fail bit,
+//! Each test case records a [`Verdict`] for each parser - not a pass/fail bit,
 //! but a *category* of outcome: `Correct`, `WrongButPlausible`, `SilentlyEmpty`,
 //! `Errors`, or `Crashes`.  The suite asserts that each parser produces its
 //! *expected* verdict.  When a parser improves (or regresses) the expected
@@ -42,8 +42,8 @@
     clippy::missing_errors_doc,
     clippy::missing_panics_doc
 )]
-// Tests in this crate may use panic-based helpers (must/must_some).
-#![cfg_attr(test, allow(clippy::panic, clippy::unwrap_used, clippy::expect_used))]
+// Tests in this crate use assertion macros to preserve compact verdict receipts.
+#![cfg_attr(test, allow(clippy::panic))]
 
 pub mod harness;
 pub mod outcomes;

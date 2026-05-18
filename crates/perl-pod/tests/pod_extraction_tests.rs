@@ -763,3 +763,72 @@ Second list:
     assert!(method_doc.contains("- two"), "second list item; got: {method_doc}");
     assert!(method_doc.contains("- three"), "third list item in second list; got: {method_doc}");
 }
+
+// --- Tests for formatted =head2 keys (#9380 bug: strip_pod_formatting not applied to heading) ---
+
+/// `=head2 C<new>` should be keyed as `new`, not `C<new>`.
+#[test]
+fn head2_code_formatted_heading_is_stripped() {
+    let source = r#"
+=head2 C<new>
+
+Constructs a new Foo object.
+
+=cut
+"#;
+    let doc = extract_pod(source);
+    assert!(
+        doc.methods.contains_key("new"),
+        "method key should be stripped bare name 'new'; keys: {:?}",
+        doc.methods.keys().collect::<Vec<_>>()
+    );
+    assert!(!doc.methods.contains_key("C<new>"), "method key must NOT be the raw 'C<new>' string");
+}
+
+/// `=head2 B<bold_method>` should strip bold markup.
+#[test]
+fn head2_bold_formatted_heading_is_stripped() {
+    let source = "=head2 B<bold_method>\n\nDoes something bold.\n\n=cut\n";
+    let doc = extract_pod(source);
+    assert!(
+        doc.methods.contains_key("bold_method"),
+        "bold markup should be stripped; keys: {:?}",
+        doc.methods.keys().collect::<Vec<_>>()
+    );
+}
+
+/// `=head2 I<italic_name>` should strip italic markup.
+#[test]
+fn head2_italic_formatted_heading_is_stripped() {
+    let source = "=head2 I<some_method>\n\nItalic method docs.\n\n=cut\n";
+    let doc = extract_pod(source);
+    assert!(
+        doc.methods.contains_key("some_method"),
+        "italic markup should be stripped; keys: {:?}",
+        doc.methods.keys().collect::<Vec<_>>()
+    );
+}
+
+/// A plain unformatted `=head2 plain` heading still works after the refactor.
+#[test]
+fn head2_plain_heading_key_unchanged() {
+    let source = "=head2 plain_method\n\nPlain docs.\n\n=cut\n";
+    let doc = extract_pod(source);
+    assert!(
+        doc.methods.contains_key("plain_method"),
+        "plain heading should still work; keys: {:?}",
+        doc.methods.keys().collect::<Vec<_>>()
+    );
+}
+
+/// `=head2 C<new>` body content is still accessible after key normalization.
+#[test]
+fn head2_formatted_heading_body_preserved() {
+    let source = "=head2 C<new>\n\nConstructs a new Foo object.\n\n=cut\n";
+    let doc = extract_pod(source);
+    let body = doc.methods.get("new").map(String::as_str).unwrap_or("");
+    assert!(
+        body.contains("Constructs"),
+        "body text should be preserved after key normalization; got: {body}"
+    );
+}
