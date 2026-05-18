@@ -29,7 +29,9 @@ pub(crate) const ALLOWED_COMMANDS: &[&str] = &[
     "perl.extractVariable",
     "perl.extractSubroutine",
     "perl.optimizeImports",
+    "perl.workspaceTrustReport",
     "perl.previewSafeDelete",
+    "perl.safeDeleteSymbol",
     "perl.previewPackageRename",
 ];
 

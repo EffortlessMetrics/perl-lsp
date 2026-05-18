@@ -202,8 +202,15 @@ impl ExecuteCommandProvider {
                 let file_path = self.resolve_path_from_args(&arguments)?;
                 Ok(self.go_to_implementation(&file_path))
             }
+            "perl.workspaceTrustReport" => {
+                Err("perl.workspaceTrustReport requires the live LSP runtime state".to_string())
+            }
             "perl.previewSafeDelete" => {
                 Err("perl.previewSafeDelete requires the live LSP runtime workspace index"
+                    .to_string())
+            }
+            "perl.safeDeleteSymbol" => {
+                Err("perl.safeDeleteSymbol requires the live LSP runtime workspace index"
                     .to_string())
             }
             "perl.previewPackageRename" => {
@@ -1300,7 +1307,9 @@ pub fn get_supported_commands() -> Vec<String> {
         "perl.goToTest".to_string(),
         "perl.goToImplementation".to_string(),
         "perl.explainProviderDecision".to_string(),
+        "perl.workspaceTrustReport".to_string(),
         "perl.previewSafeDelete".to_string(),
+        "perl.safeDeleteSymbol".to_string(),
         "perl.previewPackageRename".to_string(),
     ]
 }

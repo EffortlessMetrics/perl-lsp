@@ -28,10 +28,10 @@
 //! - **Req 5.6**: Empty list (not error) when no candidates found.
 
 use perl_semantic_facts::{
-    AnchorId, DefinitionCandidate, DefinitionRank, DefinitionRankReason, EntityFact, EntityId,
-    EntityKind, FileId, OccurrenceFact, OccurrenceKind, PlanBlocker, PlanBlockerReason,
-    PlanWarning, PlannedEdit, PlannedEditCategory, Provenance, RenamePlan, SafeDeletePlan, ScopeId,
-    ValueShape, VisibleSymbol, VisibleSymbolSource,
+    AnchorFact, AnchorId, Confidence, DefinitionCandidate, DefinitionRank, DefinitionRankReason,
+    EntityFact, EntityId, EntityKind, FileId, OccurrenceFact, OccurrenceKind, PlanBlocker,
+    PlanBlockerReason, PlanWarning, PlannedEdit, PlannedEditCategory, Provenance, RenamePlan,
+    SafeDeletePlan, ScopeId, ValueShape, VisibleSymbol, VisibleSymbolSource,
 };
 
 use super::imports::ImportExportIndex;
@@ -648,21 +648,46 @@ impl<'a> SemanticQueries for WorkspaceSemanticQueries<'a> {
 
         // ── Collect definition occurrences ──
         let bare = bare_name(&old_name);
-        if let Some(info) = entity_info.as_ref()
+        if let Some((info, shard)) = self.find_entity_with_shard(entity_id)
             && is_definition_kind(info.kind)
             && let Some(anchor_id) = info.anchor_id
-            && let Some(shard) = self
-                .fact_shards
-                .values()
-                .find(|shard| shard.anchors.iter().any(|anchor| anchor.id == anchor_id))
         {
-            edits.push(PlannedEdit::new(
-                anchor_id,
-                shard.file_id,
-                PlannedEditCategory::Definition,
-                bare.clone(),
-                new_name.to_string(),
-            ));
+            match shard
+                .anchors
+                .iter()
+                .find(|anchor| anchor.id == anchor_id && anchor.file_id == shard.file_id)
+            {
+                Some(anchor)
+                    if is_high_confidence_source_backed(info.provenance, info.confidence)
+                        && is_high_confidence_source_backed(
+                            anchor.provenance,
+                            anchor.confidence,
+                        ) =>
+                {
+                    edits.push(PlannedEdit::new(
+                        anchor_id,
+                        shard.file_id,
+                        PlannedEditCategory::Definition,
+                        bare.clone(),
+                        new_name.to_string(),
+                    ));
+                }
+                Some(anchor) => blockers.push(non_source_backed_edit_blocker(
+                    &bare,
+                    Some(anchor.id),
+                    info.provenance == Provenance::DynamicBoundary
+                        || anchor.provenance == Provenance::DynamicBoundary,
+                    "Definition anchor",
+                )),
+                None => blockers.push(PlanBlocker::new(
+                    PlanBlockerReason::UnclassifiedOccurrence,
+                    Some(anchor_id),
+                    format!(
+                        "Definition anchor for '{}' was not found in the owning fact shard.",
+                        bare
+                    ),
+                )),
+            }
         }
         for shard in self.fact_shards.values() {
             for occ in &shard.occurrences {
@@ -684,13 +709,34 @@ impl<'a> SemanticQueries for WorkspaceSemanticQueries<'a> {
 
                 match category {
                     Some(cat) => {
-                        edits.push(PlannedEdit::new(
-                            occ.anchor_id,
-                            shard.file_id,
-                            cat,
-                            bare.clone(),
-                            new_name.to_string(),
-                        ));
+                        if let Some(anchor) = source_backed_anchor_for_edit(shard, occ.anchor_id) {
+                            if is_high_confidence_source_backed(occ.provenance, occ.confidence) {
+                                edits.push(PlannedEdit::new(
+                                    anchor.id,
+                                    shard.file_id,
+                                    cat,
+                                    bare.clone(),
+                                    new_name.to_string(),
+                                ));
+                            } else {
+                                blockers.push(non_source_backed_edit_blocker(
+                                    &bare,
+                                    Some(anchor.id),
+                                    occ.provenance == Provenance::DynamicBoundary
+                                        || anchor.provenance == Provenance::DynamicBoundary,
+                                    "Occurrence",
+                                ));
+                            }
+                        } else {
+                            blockers.push(PlanBlocker::new(
+                                PlanBlockerReason::UnclassifiedOccurrence,
+                                Some(occ.anchor_id),
+                                format!(
+                                    "Occurrence anchor for '{}' was not high-confidence source-backed.",
+                                    bare
+                                ),
+                            ));
+                        }
                     }
                     None => {
                         // Unclassified occurrence → block rather than silently
@@ -723,13 +769,37 @@ impl<'a> SemanticQueries for WorkspaceSemanticQueries<'a> {
             let category = classify_occurrence(edge.kind);
             match category {
                 Some(cat) => {
-                    edits.push(PlannedEdit::new(
-                        edge.anchor_id,
-                        edge.file_id,
-                        cat,
-                        bare.clone(),
-                        new_name.to_string(),
-                    ));
+                    let maybe_anchor = self
+                        .shard_for_file(edge.file_id)
+                        .and_then(|shard| source_backed_anchor_for_edit(shard, edge.anchor_id));
+                    if let Some(anchor) = maybe_anchor {
+                        if is_high_confidence_source_backed(edge.provenance, edge.confidence) {
+                            edits.push(PlannedEdit::new(
+                                anchor.id,
+                                edge.file_id,
+                                cat,
+                                bare.clone(),
+                                new_name.to_string(),
+                            ));
+                        } else {
+                            blockers.push(non_source_backed_edit_blocker(
+                                &bare,
+                                Some(anchor.id),
+                                edge.provenance == Provenance::DynamicBoundary
+                                    || anchor.provenance == Provenance::DynamicBoundary,
+                                "Reference",
+                            ));
+                        }
+                    } else {
+                        blockers.push(PlanBlocker::new(
+                            PlanBlockerReason::UnclassifiedOccurrence,
+                            Some(edge.anchor_id),
+                            format!(
+                                "Reference anchor for '{}' was not high-confidence source-backed.",
+                                bare
+                            ),
+                        ));
+                    }
                 }
                 None => {
                     blockers.push(PlanBlocker::new(
@@ -747,13 +817,7 @@ impl<'a> SemanticQueries for WorkspaceSemanticQueries<'a> {
         // ── Cross-module export check (Req 16.3) ──
         // If the symbol is exported and referenced from other modules,
         // add a CrossModuleExport blocker.
-        let entity_file_id = entity_info.as_ref().and_then(|e| {
-            e.anchor_id.and_then(|aid| {
-                self.fact_shards
-                    .values()
-                    .find_map(|s| s.anchors.iter().find(|a| a.id == aid).map(|_| s.file_id))
-            })
-        });
+        let entity_file_id = self.find_entity_with_shard(entity_id).map(|(_, shard)| shard.file_id);
         let is_imported = entity_file_id
             .map(|fid| self.import_export_index.is_imported_by_other_file(&bare, fid))
             .unwrap_or(false);
@@ -796,7 +860,7 @@ impl<'a> SemanticQueries for WorkspaceSemanticQueries<'a> {
         // Deduplicate edits by anchor_id (an occurrence may appear in both
         // the shard scan and the reference index).
         edits.sort_by_key(|e| (e.file_id, e.anchor_id));
-        edits.dedup_by_key(|e| e.anchor_id);
+        edits.dedup_by_key(|e| (e.file_id, e.anchor_id));
 
         RenamePlan::new(entity_id, old_name, new_name.to_string(), edits, blockers, warnings)
     }
@@ -1084,6 +1148,16 @@ impl<'a> WorkspaceSemanticQueries<'a> {
         None
     }
 
+    /// Look up an entity and the shard that owns it.
+    fn find_entity_with_shard(&self, entity_id: EntityId) -> Option<(&EntityFact, &FileFactShard)> {
+        for shard in self.fact_shards.values() {
+            if let Some(entity) = shard.entities.iter().find(|e| e.id == entity_id) {
+                return Some((entity, shard));
+            }
+        }
+        None
+    }
+
     /// Return method candidates filtered by a receiver's [`ValueShape`].
     ///
     /// When the shape resolves to a known package (`Object` or
@@ -1274,6 +1348,43 @@ fn import_export_definition_rank(
 fn is_import_export_definition_candidate(candidate: &DefinitionCandidate) -> bool {
     matches!(candidate.rank, DefinitionRank::ExplicitImport | DefinitionRank::DefaultExport)
         && candidate.provenance == Provenance::ImportExportInference
+}
+
+fn is_high_confidence_source_backed(provenance: Provenance, confidence: Confidence) -> bool {
+    confidence == Confidence::High
+        && matches!(
+            provenance,
+            Provenance::ExactAst | Provenance::DesugaredAst | Provenance::LiteralRequireImport
+        )
+}
+
+fn source_backed_anchor_for_edit(
+    shard: &FileFactShard,
+    anchor_id: AnchorId,
+) -> Option<&AnchorFact> {
+    shard.anchors.iter().find(|anchor| {
+        anchor.id == anchor_id
+            && anchor.file_id == shard.file_id
+            && is_high_confidence_source_backed(anchor.provenance, anchor.confidence)
+    })
+}
+
+fn non_source_backed_edit_blocker(
+    symbol: &str,
+    anchor_id: Option<AnchorId>,
+    dynamic_boundary: bool,
+    site: &str,
+) -> PlanBlocker {
+    let reason = if dynamic_boundary {
+        PlanBlockerReason::DynamicBoundary
+    } else {
+        PlanBlockerReason::AmbiguousReference
+    };
+    PlanBlocker::new(
+        reason,
+        anchor_id,
+        format!("{site} for '{symbol}' is not high-confidence source-backed."),
+    )
 }
 
 /// Classify an [`OccurrenceKind`] into a [`PlannedEditCategory`] for rename.
@@ -2575,6 +2686,227 @@ mod tests {
         assert_eq!(edit.category, PlannedEditCategory::Definition);
         assert_eq!(edit.old_text, "bar");
         assert_eq!(edit.new_text, "baz");
+        Ok(())
+    }
+
+    #[test]
+    fn rename_plan_uses_entity_owner_when_anchor_ids_collide_across_files()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let entity_id = EntityId(100);
+        let anchor_id = AnchorId(10);
+        let wrong_file = FileId(1);
+        let target_file = FileId(2);
+
+        let wrong_shard = make_shard(
+            "file:///lib/Wrong.pm",
+            wrong_file,
+            vec![AnchorFact {
+                id: anchor_id,
+                file_id: wrong_file,
+                span_start_byte: 0,
+                span_end_byte: 12,
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            }],
+            vec![],
+            vec![],
+            vec![],
+        );
+        let target_shard = make_shard(
+            "file:///lib/Target.pm",
+            target_file,
+            vec![AnchorFact {
+                id: anchor_id,
+                file_id: target_file,
+                span_start_byte: 30,
+                span_end_byte: 45,
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            }],
+            vec![EntityFact {
+                id: entity_id,
+                kind: EntityKind::Subroutine,
+                canonical_name: "Target::bar".to_string(),
+                anchor_id: Some(anchor_id),
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            }],
+            vec![],
+            vec![],
+        );
+        let mut shards = HashMap::new();
+        shards.insert(wrong_shard.source_uri.clone(), wrong_shard);
+        shards.insert(target_shard.source_uri.clone(), target_shard);
+
+        let ref_index = ReferenceIndex::new();
+        let ie_index = ImportExportIndex::new();
+        let queries = build_queries(&ref_index, &ie_index, &shards);
+
+        let plan = queries.rename_plan(entity_id, "baz");
+
+        assert!(plan.blockers.is_empty(), "source-backed target should not block: {plan:?}");
+        let edit = plan.edits.first().ok_or("missing definition edit")?;
+        assert_eq!(edit.anchor_id, anchor_id);
+        assert_eq!(edit.file_id, target_file);
+        assert_eq!(edit.category, PlannedEditCategory::Definition);
+        Ok(())
+    }
+
+    #[test]
+    fn rename_plan_blocks_low_confidence_entity_anchor_without_definition_occurrence()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let file_id = FileId(1);
+        let entity_id = EntityId(100);
+        let anchor_id = AnchorId(10);
+        let shard = make_shard(
+            "file:///lib/Foo.pm",
+            file_id,
+            vec![AnchorFact {
+                id: anchor_id,
+                file_id,
+                span_start_byte: 0,
+                span_end_byte: 15,
+                scope_id: None,
+                provenance: Provenance::NameHeuristic,
+                confidence: Confidence::Low,
+            }],
+            vec![EntityFact {
+                id: entity_id,
+                kind: EntityKind::Subroutine,
+                canonical_name: "Foo::bar".to_string(),
+                anchor_id: Some(anchor_id),
+                scope_id: None,
+                provenance: Provenance::NameHeuristic,
+                confidence: Confidence::Low,
+            }],
+            vec![],
+            vec![],
+        );
+        let mut shards = HashMap::new();
+        shards.insert(shard.source_uri.clone(), shard);
+
+        let ref_index = ReferenceIndex::new();
+        let ie_index = ImportExportIndex::new();
+        let queries = build_queries(&ref_index, &ie_index, &shards);
+
+        let plan = queries.rename_plan(entity_id, "baz");
+
+        assert!(plan.edits.is_empty(), "low-confidence entity anchor must not authorize edits");
+        assert!(
+            plan.blockers.iter().any(|blocker| {
+                blocker.reason == PlanBlockerReason::AmbiguousReference
+                    && blocker.anchor_id == Some(anchor_id)
+            }),
+            "low-confidence entity anchor should block with AmbiguousReference: {plan:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn rename_plan_keeps_same_anchor_id_reference_edits_in_distinct_files()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let entity_id = EntityId(100);
+        let def_anchor = AnchorId(10);
+        let ref_anchor = AnchorId(20);
+        let file_one = FileId(1);
+        let file_two = FileId(2);
+
+        let shard_one = make_shard(
+            "file:///lib/Foo.pm",
+            file_one,
+            vec![
+                AnchorFact {
+                    id: def_anchor,
+                    file_id: file_one,
+                    span_start_byte: 0,
+                    span_end_byte: 15,
+                    scope_id: None,
+                    provenance: Provenance::ExactAst,
+                    confidence: Confidence::High,
+                },
+                AnchorFact {
+                    id: ref_anchor,
+                    file_id: file_one,
+                    span_start_byte: 50,
+                    span_end_byte: 53,
+                    scope_id: None,
+                    provenance: Provenance::ExactAst,
+                    confidence: Confidence::High,
+                },
+            ],
+            vec![EntityFact {
+                id: entity_id,
+                kind: EntityKind::Subroutine,
+                canonical_name: "Foo::bar".to_string(),
+                anchor_id: Some(def_anchor),
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            }],
+            vec![OccurrenceFact {
+                id: OccurrenceId(200),
+                kind: OccurrenceKind::Reference,
+                entity_id: Some(entity_id),
+                anchor_id: ref_anchor,
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            }],
+            vec![],
+        );
+        let shard_two = make_shard(
+            "file:///lib/Caller.pm",
+            file_two,
+            vec![AnchorFact {
+                id: ref_anchor,
+                file_id: file_two,
+                span_start_byte: 20,
+                span_end_byte: 23,
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            }],
+            vec![],
+            vec![OccurrenceFact {
+                id: OccurrenceId(201),
+                kind: OccurrenceKind::Reference,
+                entity_id: Some(entity_id),
+                anchor_id: ref_anchor,
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            }],
+            vec![],
+        );
+        let mut shards = HashMap::new();
+        shards.insert(shard_one.source_uri.clone(), shard_one);
+        shards.insert(shard_two.source_uri.clone(), shard_two);
+
+        let ref_index = ReferenceIndex::new();
+        let ie_index = ImportExportIndex::new();
+        let queries = build_queries(&ref_index, &ie_index, &shards);
+
+        let plan = queries.rename_plan(entity_id, "baz");
+
+        assert!(plan.blockers.is_empty(), "source-backed references should not block: {plan:?}");
+        let reference_edit_files: std::collections::HashSet<_> = plan
+            .edits
+            .iter()
+            .filter(|edit| {
+                edit.anchor_id == ref_anchor && edit.category == PlannedEditCategory::Reference
+            })
+            .map(|edit| edit.file_id)
+            .collect();
+        assert_eq!(
+            reference_edit_files.len(),
+            2,
+            "same anchor id in two files must keep both edits"
+        );
+        assert!(reference_edit_files.contains(&file_one));
+        assert!(reference_edit_files.contains(&file_two));
         Ok(())
     }
 
@@ -4203,27 +4535,29 @@ mod tests {
                 // Every expected occurrence should appear in the plan edits
                 // with the correct category.
                 for (anchor_id, expected_cat) in &expected {
-                    let matching_edit = plan
+                    if let Some(edit) = plan
                         .edits
                         .iter()
-                        .find(|e| e.anchor_id == *anchor_id);
-                    prop_assert!(
-                        matching_edit.is_some(),
-                        "expected an edit for anchor {:?} with category {:?}, \
-                         but no matching edit found in plan. edits: {:?}",
-                        anchor_id,
-                        expected_cat,
-                        plan.edits,
-                    );
-                    let edit = matching_edit.expect("checked above");
-                    prop_assert_eq!(
-                        edit.category,
-                        *expected_cat,
-                        "edit for anchor {:?} should have category {:?} but had {:?}",
-                        anchor_id,
-                        expected_cat,
-                        edit.category,
-                    );
+                        .find(|e| e.anchor_id == *anchor_id)
+                    {
+                        prop_assert_eq!(
+                            edit.category,
+                            *expected_cat,
+                            "edit for anchor {:?} should have category {:?} but had {:?}",
+                            anchor_id,
+                            expected_cat,
+                            edit.category,
+                        );
+                    } else {
+                        prop_assert!(
+                            false,
+                            "expected an edit for anchor {:?} with category {:?}, \
+                             but no matching edit found in plan. edits: {:?}",
+                            anchor_id,
+                            expected_cat,
+                            plan.edits,
+                        );
+                    }
                 }
             }
         }

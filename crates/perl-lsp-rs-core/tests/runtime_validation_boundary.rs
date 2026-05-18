@@ -232,6 +232,7 @@ fn validate_lsp_request_execute_command_all_allowed_commands_pass() -> anyhow::R
         "perl.extractSubroutine",
         "perl.optimizeImports",
         "perl.previewSafeDelete",
+        "perl.safeDeleteSymbol",
         "perl.previewPackageRename",
     ];
 
