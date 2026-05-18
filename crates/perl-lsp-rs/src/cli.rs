@@ -226,8 +226,25 @@ struct FileError {
 }
 
 fn run_check_project(dir: &str) -> i32 {
+    let root = Path::new(dir);
+    let metadata = match root.metadata() {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            eprintln!("{dir}: directory not found");
+            return 1;
+        }
+        Err(error) => {
+            eprintln!("{dir}: cannot access directory: {error}");
+            return 1;
+        }
+    };
+    if !metadata.is_dir() {
+        eprintln!("{dir}: not a directory");
+        return 1;
+    }
+
     let extensions: &[&str] = &["pm", "pl", "t"];
-    let walker = walkdir::WalkDir::new(dir).follow_links(true).into_iter();
+    let walker = walkdir::WalkDir::new(root).follow_links(true).into_iter();
 
     let mut total = 0usize;
     let mut clean = 0usize;
