@@ -1170,6 +1170,12 @@ impl<'a> Parser<'a> {
                                         self.peek_kind(),
                                         Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
                                     ) {
+                                        if self
+                                            .consume_bare_lvalue_assignment_separator(bare_name)?
+                                        {
+                                            break;
+                                        }
+
                                         self.consume_token()?;
                                         if self.is_at_statement_end() {
                                             break;
