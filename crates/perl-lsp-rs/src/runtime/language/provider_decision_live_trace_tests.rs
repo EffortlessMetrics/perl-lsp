@@ -40,6 +40,44 @@ has display_name => (is => 'rw');
 
 1;
 "#;
+const NO_SUB_SEMANTIC_TOKEN_URI: &str = "file:///workspace/lib/Trace/NoSub.pm";
+const NO_SUB_SEMANTIC_TOKEN_DOC: &str = r#"use strict;
+1;
+"#;
+const PACKAGE_SEMANTIC_TOKEN_URI: &str = "file:///workspace/lib/Trace/PackageTokens.pm";
+const PACKAGE_SEMANTIC_TOKEN_DOC: &str = r#"package Trace::PackageTokens;
+
+1;
+"#;
+const METHOD_SEMANTIC_TOKEN_URI: &str = "file:///workspace/lib/Trace/MethodTokens.pm";
+const METHOD_SEMANTIC_TOKEN_DOC: &str = r#"use feature 'class';
+
+class Trace::MethodTokens {
+    method greet {
+        return "hello";
+    }
+}
+
+1;
+"#;
+const METHOD_CALL_SEMANTIC_TOKEN_URI: &str = "file:///workspace/lib/Trace/MethodCallTokens.pm";
+const METHOD_CALL_SEMANTIC_TOKEN_DOC: &str = r#"use strict;
+use warnings;
+
+my $c = context();
+$c->stash;
+
+1;
+"#;
+const FIELD_SEMANTIC_TOKEN_URI: &str = "file:///workspace/lib/Trace/FieldTokens.pm";
+const FIELD_SEMANTIC_TOKEN_DOC: &str = r#"use feature 'class';
+
+class Trace::FieldTokens {
+    field $name;
+}
+
+1;
+"#;
 
 fn create_server() -> LspServer {
     let output =
@@ -116,6 +154,91 @@ fn open_generated_workspace_symbol_document(
     Ok(())
 }
 
+#[cfg(feature = "workspace")]
+fn seed_ready_generated_workspace_symbol_index(
+    server: &LspServer,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let coordinator = server.coordinator().ok_or("missing workspace index coordinator")?;
+    let url = url::Url::parse(GENERATED_WORKSPACE_SYMBOL_URI)?;
+    coordinator
+        .index()
+        .index_file(url, GENERATED_WORKSPACE_SYMBOL_DOC.to_string())
+        .map_err(|error| format!("failed to seed generated workspace symbol index: {error}"))?;
+    coordinator
+        .transition_to_ready(coordinator.index().file_count(), coordinator.index().symbol_count());
+    Ok(())
+}
+
+fn open_no_sub_semantic_token_document(
+    server: &LspServer,
+) -> Result<(), Box<dyn std::error::Error>> {
+    server.test_handle_did_open(Some(json!({
+        "textDocument": {
+            "uri": NO_SUB_SEMANTIC_TOKEN_URI,
+            "text": NO_SUB_SEMANTIC_TOKEN_DOC,
+            "languageId": "perl",
+            "version": 1
+        }
+    })))?;
+    Ok(())
+}
+
+fn open_package_semantic_token_document(
+    server: &LspServer,
+) -> Result<(), Box<dyn std::error::Error>> {
+    server.test_handle_did_open(Some(json!({
+        "textDocument": {
+            "uri": PACKAGE_SEMANTIC_TOKEN_URI,
+            "text": PACKAGE_SEMANTIC_TOKEN_DOC,
+            "languageId": "perl",
+            "version": 1
+        }
+    })))?;
+    Ok(())
+}
+
+fn open_method_semantic_token_document(
+    server: &LspServer,
+) -> Result<(), Box<dyn std::error::Error>> {
+    server.test_handle_did_open(Some(json!({
+        "textDocument": {
+            "uri": METHOD_SEMANTIC_TOKEN_URI,
+            "text": METHOD_SEMANTIC_TOKEN_DOC,
+            "languageId": "perl",
+            "version": 1
+        }
+    })))?;
+    Ok(())
+}
+
+fn open_method_call_semantic_token_document(
+    server: &LspServer,
+) -> Result<(), Box<dyn std::error::Error>> {
+    server.test_handle_did_open(Some(json!({
+        "textDocument": {
+            "uri": METHOD_CALL_SEMANTIC_TOKEN_URI,
+            "text": METHOD_CALL_SEMANTIC_TOKEN_DOC,
+            "languageId": "perl",
+            "version": 1
+        }
+    })))?;
+    Ok(())
+}
+
+fn open_field_semantic_token_document(
+    server: &LspServer,
+) -> Result<(), Box<dyn std::error::Error>> {
+    server.test_handle_did_open(Some(json!({
+        "textDocument": {
+            "uri": FIELD_SEMANTIC_TOKEN_URI,
+            "text": FIELD_SEMANTIC_TOKEN_DOC,
+            "languageId": "perl",
+            "version": 1
+        }
+    })))?;
+    Ok(())
+}
+
 fn position_after(needle: &str) -> Result<(u32, u32), Box<dyn std::error::Error>> {
     for (line_idx, line) in TRACE_DOC.lines().enumerate() {
         if let Some(character) = line.find(needle) {
@@ -161,6 +284,40 @@ fn request_receipt<'a>(
     explanation
         .get("request_receipt")
         .ok_or_else(|| format!("missing {provider} request_receipt").into())
+}
+
+fn generated_workspace_symbol_pilot_receipt(
+    server: &LspServer,
+) -> Result<Value, Box<dyn std::error::Error>> {
+    let mut last_receipt = None;
+
+    for _ in 0..5 {
+        #[cfg(feature = "workspace")]
+        seed_ready_generated_workspace_symbol_index(server)?;
+
+        response_result(
+            server.handle_request(request(
+                6,
+                "workspace/symbol",
+                Some(json!({"query": "display_name"})),
+            )),
+            "workspace generated symbols",
+        )?;
+
+        let explanation = explain_provider_decision(server, "workspace_symbols")?;
+        let receipt = request_receipt(&explanation, "workspace_symbols")?.clone();
+        if receipt.get("decision").and_then(Value::as_str) == Some("acted") {
+            return Ok(receipt);
+        }
+        last_receipt = Some(receipt);
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+
+    Err(format!(
+        "generated workspace-symbol pilot did not reach ready-index trace; last receipt: {}",
+        last_receipt.unwrap_or(Value::Null)
+    )
+    .into())
 }
 
 fn assert_live_trace(receipt: &Value, provider: &str, action: &str) {
@@ -356,17 +513,7 @@ fn live_workspace_symbol_generated_pilot_persists_labeled_provider_trace()
     initialize(&server)?;
     open_generated_workspace_symbol_document(&server)?;
 
-    response_result(
-        server.handle_request(request(
-            6,
-            "workspace/symbol",
-            Some(json!({"query": "display_name"})),
-        )),
-        "workspace generated symbols",
-    )?;
-
-    let explanation = explain_provider_decision(&server, "workspace_symbols")?;
-    let receipt = request_receipt(&explanation, "workspace_symbols")?;
+    let receipt = generated_workspace_symbol_pilot_receipt(&server)?;
     assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("acted"));
     assert_eq!(
         receipt.get("reason").and_then(Value::as_str),
@@ -394,8 +541,8 @@ fn live_workspace_symbol_generated_pilot_persists_labeled_provider_trace()
 }
 
 #[test]
-fn live_semantic_tokens_request_persists_provider_trace() -> Result<(), Box<dyn std::error::Error>>
-{
+fn live_semantic_tokens_request_persists_compiler_token_live_slice_trace()
+-> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();
     initialize(&server)?;
     open_trace_document(&server)?;
@@ -413,6 +560,341 @@ fn live_semantic_tokens_request_persists_provider_trace() -> Result<(), Box<dyn 
 
     let explanation = explain_provider_decision(&server, "semantic_tokens")?;
     let receipt = request_receipt(&explanation, "semantic_tokens")?;
-    assert_live_trace(receipt, "semantic_tokens", "textDocument/semanticTokens/full");
+    assert_eq!(receipt.get("schema_version").and_then(Value::as_str), Some("provider_decision.v1"));
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("semantic_tokens"));
+    assert_eq!(
+        receipt.get("provider_action").and_then(Value::as_str),
+        Some("textDocument/semanticTokens/full")
+    );
+    assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("acted"));
+    assert_eq!(
+        receipt.get("reason").and_then(Value::as_str),
+        Some("source_backed_compiler_token_live_slice")
+    );
+    assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("compiler_fact"));
+    assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("high"));
+    assert_eq!(receipt.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        receipt.get("source_backed_state").and_then(Value::as_str),
+        Some("source_backed_subroutine_declaration_live_token_match")
+    );
+    assert_eq!(receipt.get("fallback").and_then(Value::as_str), Some("none"));
+    assert_eq!(
+        receipt.get("live_cutover").and_then(Value::as_str),
+        Some("partial_live_source_backed_compiler_token")
+    );
+    assert_eq!(
+        receipt.get("compiler_token_class").and_then(Value::as_str),
+        Some("subroutine_declaration")
+    );
+    assert_eq!(receipt.get("live_token_type").and_then(Value::as_str), Some("function"));
+    assert_eq!(receipt.get("live_token_match_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(receipt.get("no_live_token_output_change").and_then(Value::as_bool), Some(true));
+    assert!(
+        receipt.get("live_provider_result_count").and_then(Value::as_u64).unwrap_or(0) > 0,
+        "semantic-token live slice must include a live token count: {receipt}"
+    );
+    let boundary =
+        receipt.get("claim_boundary").and_then(Value::as_str).ok_or("missing boundary")?;
+    assert!(
+        boundary.contains("generated/no-source")
+            && boundary.contains("dynamic-boundary")
+            && boundary.contains("low-confidence"),
+        "semantic-token live slice must preserve blocked boundaries: {boundary}"
+    );
+    assert!(
+        explanation
+            .get("user_message")
+            .and_then(Value::as_str)
+            .is_some_and(|message| message
+                .contains("source-backed compiler subroutine-declaration live slice")),
+        "explanation must surface the live-slice request detail: {explanation}"
+    );
+    Ok(())
+}
+
+#[test]
+fn live_semantic_tokens_request_exposes_reviewed_method_declaration_trace()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    initialize(&server)?;
+    open_method_semantic_token_document(&server)?;
+
+    response_result(
+        server.handle_request(request(
+            5,
+            "textDocument/semanticTokens/full",
+            Some(json!({
+                "textDocument": {"uri": METHOD_SEMANTIC_TOKEN_URI, "version": 1}
+            })),
+        )),
+        "semantic tokens method declaration",
+    )?;
+
+    let explanation = explain_provider_decision(&server, "semantic_tokens")?;
+    let receipt = request_receipt(&explanation, "semantic_tokens")?;
+    assert_eq!(receipt.get("schema_version").and_then(Value::as_str), Some("provider_decision.v1"));
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("semantic_tokens"));
+    assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("acted"));
+    assert_eq!(
+        receipt.get("reason").and_then(Value::as_str),
+        Some("source_backed_compiler_token_live_slice")
+    );
+    assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("compiler_fact"));
+    assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("high"));
+    assert_eq!(receipt.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        receipt.get("source_backed_state").and_then(Value::as_str),
+        Some("source_backed_method_declaration_live_token_match")
+    );
+    assert_eq!(
+        receipt.get("compiler_token_class").and_then(Value::as_str),
+        Some("method_declaration")
+    );
+    assert_eq!(receipt.get("live_token_type").and_then(Value::as_str), Some("method"));
+    assert_eq!(receipt.get("live_token_match_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(receipt.get("fallback").and_then(Value::as_str), Some("none"));
+    assert_eq!(receipt.get("no_live_token_output_change").and_then(Value::as_bool), Some(true));
+
+    let boundary =
+        receipt.get("claim_boundary").and_then(Value::as_str).ok_or("missing boundary")?;
+    assert!(
+        boundary.contains("broader method classes")
+            && boundary.contains("generated/no-source")
+            && boundary.contains("dynamic-boundary"),
+        "method-declaration trace must preserve scoped blockers: {boundary}"
+    );
+    assert!(
+        explanation
+            .get("user_message")
+            .and_then(Value::as_str)
+            .is_some_and(|message| message.contains("compiler method-declaration live trace")),
+        "explanation must surface the reviewed method-declaration trace: {explanation}"
+    );
+    Ok(())
+}
+
+#[test]
+fn live_semantic_tokens_request_exposes_reviewed_method_call_trace()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    initialize(&server)?;
+    open_method_call_semantic_token_document(&server)?;
+
+    response_result(
+        server.handle_request(request(
+            5,
+            "textDocument/semanticTokens/full",
+            Some(json!({
+                "textDocument": {"uri": METHOD_CALL_SEMANTIC_TOKEN_URI, "version": 1}
+            })),
+        )),
+        "semantic tokens method call",
+    )?;
+
+    let explanation = explain_provider_decision(&server, "semantic_tokens")?;
+    let receipt = request_receipt(&explanation, "semantic_tokens")?;
+    assert_eq!(receipt.get("schema_version").and_then(Value::as_str), Some("provider_decision.v1"));
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("semantic_tokens"));
+    assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("acted"));
+    assert_eq!(
+        receipt.get("reason").and_then(Value::as_str),
+        Some("source_backed_compiler_token_live_slice")
+    );
+    assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("compiler_fact"));
+    assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("high"));
+    assert_eq!(receipt.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        receipt.get("source_backed_state").and_then(Value::as_str),
+        Some("source_backed_method_call_live_token_match")
+    );
+    assert_eq!(receipt.get("compiler_token_class").and_then(Value::as_str), Some("method_call"));
+    assert_eq!(receipt.get("live_token_type").and_then(Value::as_str), Some("method"));
+    assert_eq!(receipt.get("live_token_match_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(receipt.get("fallback").and_then(Value::as_str), Some("none"));
+    assert_eq!(receipt.get("no_live_token_output_change").and_then(Value::as_bool), Some(true));
+
+    let boundary =
+        receipt.get("claim_boundary").and_then(Value::as_str).ok_or("missing boundary")?;
+    assert!(
+        boundary.contains("broader method classes")
+            && boundary.contains("generated/no-source")
+            && boundary.contains("dynamic-boundary"),
+        "method-call trace must preserve scoped blockers: {boundary}"
+    );
+    assert!(
+        explanation
+            .get("user_message")
+            .and_then(Value::as_str)
+            .is_some_and(|message| message.contains("compiler method-call live trace")),
+        "explanation must surface the reviewed method-call trace: {explanation}"
+    );
+    Ok(())
+}
+
+#[test]
+fn live_semantic_tokens_request_exposes_reviewed_package_declaration_trace()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    initialize(&server)?;
+    open_package_semantic_token_document(&server)?;
+
+    response_result(
+        server.handle_request(request(
+            5,
+            "textDocument/semanticTokens/full",
+            Some(json!({
+                "textDocument": {"uri": PACKAGE_SEMANTIC_TOKEN_URI, "version": 1}
+            })),
+        )),
+        "semantic tokens package declaration",
+    )?;
+
+    let explanation = explain_provider_decision(&server, "semantic_tokens")?;
+    let receipt = request_receipt(&explanation, "semantic_tokens")?;
+    assert_eq!(receipt.get("schema_version").and_then(Value::as_str), Some("provider_decision.v1"));
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("semantic_tokens"));
+    assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("acted"));
+    assert_eq!(
+        receipt.get("reason").and_then(Value::as_str),
+        Some("source_backed_compiler_token_live_slice")
+    );
+    assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("compiler_fact"));
+    assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("high"));
+    assert_eq!(receipt.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        receipt.get("source_backed_state").and_then(Value::as_str),
+        Some("source_backed_package_declaration_live_token_match")
+    );
+    assert_eq!(
+        receipt.get("compiler_token_class").and_then(Value::as_str),
+        Some("package_declaration")
+    );
+    assert_eq!(receipt.get("live_token_type").and_then(Value::as_str), Some("namespace"));
+    assert_eq!(receipt.get("live_token_match_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(receipt.get("fallback").and_then(Value::as_str), Some("none"));
+    assert_eq!(receipt.get("no_live_token_output_change").and_then(Value::as_bool), Some(true));
+
+    let boundary =
+        receipt.get("claim_boundary").and_then(Value::as_str).ok_or("missing boundary")?;
+    assert!(
+        boundary.contains("generated/no-source")
+            && boundary.contains("dynamic-boundary")
+            && boundary.contains("low-confidence"),
+        "package-declaration trace must preserve scoped blockers: {boundary}"
+    );
+    assert!(
+        explanation
+            .get("user_message")
+            .and_then(Value::as_str)
+            .is_some_and(|message| message.contains("compiler package-declaration live trace")),
+        "explanation must surface the reviewed package-declaration trace: {explanation}"
+    );
+    Ok(())
+}
+
+#[test]
+fn live_semantic_tokens_request_exposes_reviewed_field_declaration_trace()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    initialize(&server)?;
+    open_field_semantic_token_document(&server)?;
+
+    response_result(
+        server.handle_request(request(
+            5,
+            "textDocument/semanticTokens/full",
+            Some(json!({
+                "textDocument": {"uri": FIELD_SEMANTIC_TOKEN_URI, "version": 1}
+            })),
+        )),
+        "semantic tokens field declaration",
+    )?;
+
+    let explanation = explain_provider_decision(&server, "semantic_tokens")?;
+    let receipt = request_receipt(&explanation, "semantic_tokens")?;
+    assert_eq!(receipt.get("schema_version").and_then(Value::as_str), Some("provider_decision.v1"));
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("semantic_tokens"));
+    assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("acted"));
+    assert_eq!(
+        receipt.get("reason").and_then(Value::as_str),
+        Some("source_backed_compiler_token_live_slice")
+    );
+    assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("compiler_fact"));
+    assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("high"));
+    assert_eq!(receipt.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        receipt.get("source_backed_state").and_then(Value::as_str),
+        Some("source_backed_field_declaration_live_token_match")
+    );
+    assert_eq!(
+        receipt.get("compiler_token_class").and_then(Value::as_str),
+        Some("field_declaration")
+    );
+    assert_eq!(receipt.get("live_token_type").and_then(Value::as_str), Some("variable"));
+    assert_eq!(receipt.get("live_token_match_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(receipt.get("fallback").and_then(Value::as_str), Some("none"));
+    assert_eq!(receipt.get("no_live_token_output_change").and_then(Value::as_bool), Some(true));
+
+    let boundary =
+        receipt.get("claim_boundary").and_then(Value::as_str).ok_or("missing boundary")?;
+    assert!(
+        boundary.contains("broader variable classes")
+            && boundary.contains("generated/no-source")
+            && boundary.contains("dynamic-boundary"),
+        "field-declaration trace must preserve scoped blockers: {boundary}"
+    );
+    assert!(
+        explanation
+            .get("user_message")
+            .and_then(Value::as_str)
+            .is_some_and(|message| message.contains("compiler field-declaration live trace")),
+        "explanation must surface the reviewed field-declaration trace: {explanation}"
+    );
+    Ok(())
+}
+
+#[test]
+fn live_semantic_tokens_request_falls_back_without_compiler_token_slice()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    initialize(&server)?;
+    open_no_sub_semantic_token_document(&server)?;
+
+    response_result(
+        server.handle_request(request(
+            5,
+            "textDocument/semanticTokens/full",
+            Some(json!({
+                "textDocument": {"uri": NO_SUB_SEMANTIC_TOKEN_URI, "version": 1}
+            })),
+        )),
+        "semantic tokens without compiler slice",
+    )?;
+
+    let explanation = explain_provider_decision(&server, "semantic_tokens")?;
+    let receipt = request_receipt(&explanation, "semantic_tokens")?;
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("semantic_tokens"));
+    assert_eq!(
+        receipt.get("provider_action").and_then(Value::as_str),
+        Some("textDocument/semanticTokens/full")
+    );
+    assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("fallback"));
+    assert_eq!(receipt.get("reason").and_then(Value::as_str), Some("no_compiler_token_class"));
+    assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("parser_syntax"));
+    assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("medium"));
+    assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        receipt.get("source_backed_state").and_then(Value::as_str),
+        Some("compiler_token_live_slice_not_proven")
+    );
+    assert_eq!(receipt.get("fallback").and_then(Value::as_str), Some("legacy_provider"));
+    assert_eq!(receipt.get("live_cutover").and_then(Value::as_str), Some("fallback_only"));
+    assert_eq!(receipt.get("no_live_token_output_change").and_then(Value::as_bool), Some(true));
     Ok(())
 }

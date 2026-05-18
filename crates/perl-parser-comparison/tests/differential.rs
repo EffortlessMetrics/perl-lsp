@@ -22,7 +22,7 @@
 
 use perl_parser_comparison::{Verdict, parse_v1, parse_v2, parse_v3};
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// --- Helpers ------------------------------------------------------------------
 
 /// Print a comparison row for --nocapture diagnostic output.
 fn print_row(category: &str, label: &str, v1: &Verdict, v2: &Verdict, v3: &Verdict) {
@@ -44,7 +44,7 @@ fn assert_verdict(result: &perl_parser_comparison::ParseResult, expected: &Verdi
     );
 }
 
-// ─── Category 0: Control cases (well-formed simple Perl) ──────────────────────
+// --- Category 0: Control cases (well-formed simple Perl) ----------------------
 
 /// Control case: simple variable assignment.
 #[test]
@@ -85,9 +85,9 @@ fn cat0_if_statement() {
     assert_verdict(&r3, &Verdict::Correct, "if_statement");
 }
 
-// ─── Category 1: `/` — division vs. regex ─────────────────────────────────────
+// --- Category 1: `/` - division vs. regex -------------------------------------
 
-/// Cat 1a: unambiguous division — both sides are terms.
+/// Cat 1a: unambiguous division - both sides are terms.
 #[test]
 fn cat1_division_between_terms() {
     let src = "my $avg = $sum / $count;";
@@ -100,7 +100,7 @@ fn cat1_division_between_terms() {
     assert_verdict(&r3, &Verdict::Correct, "division_between_terms");
 }
 
-/// Cat 1b: regex after `if` keyword — `/` must start regex.
+/// Cat 1b: regex after `if` keyword - `/` must start regex.
 ///
 /// v1 can confuse `/` after `if(...)` with division in some inputs.
 #[test]
@@ -129,7 +129,7 @@ fn cat1_division_assign() {
     assert_verdict(&r3, &Verdict::Correct, "division_assign");
 }
 
-/// Cat 1d: regex match in list context — `/` must start regex.
+/// Cat 1d: regex match in list context - `/` must start regex.
 #[test]
 fn cat1_regex_in_list_context() {
     let src = "my @m = /pattern/;";
@@ -144,7 +144,7 @@ fn cat1_regex_in_list_context() {
 
 /// Cat 1e: regex after closing paren (the hard case).
 ///
-/// `if ($x) /pattern/` — after `)` ends a group, the `/` starts a regex.
+/// `if ($x) /pattern/` - after `)` ends a group, the `/` starts a regex.
 /// This is the case that most reliably defeats context-free scanners.
 #[test]
 fn cat1_regex_after_closing_paren() {
@@ -160,7 +160,7 @@ fn cat1_regex_after_closing_paren() {
     assert_verdict(&r3, &Verdict::Correct, "regex_after_closing_paren");
 }
 
-/// Cat 1f: nested division — multiple `/` on one line.
+/// Cat 1f: nested division - multiple `/` on one line.
 #[test]
 fn cat1_nested_division() {
     let src = "my $r = ($a / $b) / ($c / $d);";
@@ -173,7 +173,7 @@ fn cat1_nested_division() {
     assert_verdict(&r3, &Verdict::Correct, "nested_division");
 }
 
-// ─── Category 2: Heredoc body deferral ────────────────────────────────────────
+// --- Category 2: Heredoc body deferral ----------------------------------------
 
 /// Cat 2a: basic single heredoc.
 ///
@@ -190,15 +190,15 @@ fn cat2_basic_heredoc() {
     assert_verdict(&r3, &Verdict::Correct, "basic_heredoc");
 }
 
-/// Cat 2b: multiple heredocs on one line — the classic tree-sitter breaker.
+/// Cat 2b: multiple heredocs on one line - the classic tree-sitter breaker.
 ///
 /// `print <<A, <<B;\naaa\nA\nbbb\nB\n`
 ///
 /// v1 (tree-sitter-c): accepts with no ERROR nodes, but silently loses body
-///   content — only the first heredoc_content is captured, second is lost.
+///   content - only the first heredoc_content is captured, second is lost.
 ///   Verdict: Correct (no error nodes) but structurally incomplete.
-/// v2 (Pest): accepts but heredoc bodies are empty strings — SilentlyEmpty.
-/// v3: handles FIFO queue correctly — Correct, both bodies present.
+/// v2 (Pest): accepts but heredoc bodies are empty strings - SilentlyEmpty.
+/// v3: handles FIFO queue correctly - Correct, both bodies present.
 #[test]
 fn cat2_multiple_heredocs_on_one_line() {
     let src = "print <<A, <<B;\naaa\nA\nbbb\nB\n";
@@ -213,10 +213,10 @@ fn cat2_multiple_heredocs_on_one_line() {
     assert_verdict(&r1, &Verdict::Correct, "multiple_heredocs_on_one_line (v1 no error nodes)");
     let v1_has_bbb = r1.sexp_contains("bbb");
     println!(
-        "    v1 multi-heredoc: has_bbb={v1_has_bbb} (expected false — body lost); sexp={}",
+        "    v1 multi-heredoc: has_bbb={v1_has_bbb} (expected false - body lost); sexp={}",
         &r1.sexp[..r1.sexp.len().min(400)]
     );
-    // v1 silently loses the second heredoc body (bbb) — this is the gap
+    // v1 silently loses the second heredoc body (bbb) - this is the gap
     assert!(
         !v1_has_bbb,
         "v1 should silently lose second heredoc body 'bbb'; sexp: {}",
@@ -288,7 +288,7 @@ fn cat2_non_interpolating_heredoc() {
     assert_verdict(&r3, &Verdict::Correct, "non_interpolating_heredoc");
 }
 
-/// Cat 2e: heredoc body non-empty in v3 — structural assertion.
+/// Cat 2e: heredoc body non-empty in v3 - structural assertion.
 ///
 /// Verifies that v3 actually populates the `content` field of the Heredoc node.
 #[test]
@@ -304,7 +304,7 @@ fn cat2_v3_heredoc_body_populated() {
     );
 }
 
-// ─── Category 3: `{}` — hash vs. block vs. bare block ─────────────────────────
+// --- Category 3: `{}` - hash vs. block vs. bare block -------------------------
 
 /// Cat 3a: unambiguous hash reference (in assignment context).
 #[test]
@@ -325,7 +325,7 @@ fn cat3_hashref_in_assignment() {
     );
 }
 
-/// Cat 3b: `map { $_ * 2 }` — block, not hash.
+/// Cat 3b: `map { $_ * 2 }` - block, not hash.
 #[test]
 fn cat3_map_block() {
     let src = "my @x = map { $_ * 2 } @list;";
@@ -344,13 +344,13 @@ fn cat3_map_block() {
     );
 }
 
-/// Cat 3c: `map { a => $_ }` — hash-like content inside a map block.
+/// Cat 3c: `map { a => $_ }` - hash-like content inside a map block.
 ///
 /// The CORRECT parse is: block containing `a => $_` (an expression statement).
 /// v1 and v2 may parse this as a hash-ref instead.
 ///
 /// - v1: may produce error nodes or parse as hash
-/// - v2: parses as `hash_ref` — WrongButPlausible
+/// - v2: parses as `hash_ref` - WrongButPlausible
 /// - v3: correctly parses as block
 #[test]
 fn cat3_map_block_with_hashlike_content() {
@@ -360,12 +360,12 @@ fn cat3_map_block_with_hashlike_content() {
     let r3 = parse_v3(src);
     print_row("3", "map_block_with_hashlike_content", &r1.verdict, &r2.verdict, &r3.verdict);
 
-    // v1: produces ERROR nodes — the tree-sitter grammar cannot resolve the
+    // v1: produces ERROR nodes - the tree-sitter grammar cannot resolve the
     // ambiguity between block and hash-ref in `map { a => $_ }`.
     // The sexp shows: (ERROR (anonymous_hash_expression ...)) with variable parsed wrong.
     assert_verdict(&r1, &Verdict::Errors, "map_block_hashlike (v1 expected error nodes)");
 
-    // v2: parses as hash_ref — wrong but plausible; parse succeeds
+    // v2: parses as hash_ref - wrong but plausible; parse succeeds
     assert_eq!(r2.verdict, Verdict::Correct, "v2 parse must succeed");
     let v2_is_hash_ref = r2.sexp_contains("hash_ref");
     let v2_is_block = r2.sexp_contains("(block");
@@ -428,9 +428,9 @@ fn cat3_sort_block() {
     assert_verdict(&r3, &Verdict::Correct, "sort_block");
 }
 
-// ─── Category 4: Quote-like operators ────────────────────────────────────────
+// --- Category 4: Quote-like operators ----------------------------------------
 
-/// Cat 4a: q{} — single-quoted string with braces.
+/// Cat 4a: q{} - single-quoted string with braces.
 #[test]
 fn cat4_q_with_braces() {
     let src = "my $x = q{hello world};";
@@ -443,7 +443,7 @@ fn cat4_q_with_braces() {
     assert_verdict(&r3, &Verdict::Correct, "q_with_braces");
 }
 
-/// Cat 4b: qq() — double-quoted string with parens.
+/// Cat 4b: qq() - double-quoted string with parens.
 #[test]
 fn cat4_qq_with_parens() {
     let src = "my $x = qq(hello $name);";
@@ -456,7 +456,7 @@ fn cat4_qq_with_parens() {
     assert_verdict(&r3, &Verdict::Correct, "qq_with_parens");
 }
 
-/// Cat 4c: qw[] — word list with brackets.
+/// Cat 4c: qw[] - word list with brackets.
 #[test]
 fn cat4_qw_with_brackets() {
     let src = "my @a = qw[one two three];";
@@ -469,7 +469,7 @@ fn cat4_qw_with_brackets() {
     assert_verdict(&r3, &Verdict::Correct, "qw_with_brackets");
 }
 
-/// Cat 4d: qr/pattern/i — regex with flags.
+/// Cat 4d: qr/pattern/i - regex with flags.
 #[test]
 fn cat4_qr_regex_with_flags() {
     let src = "my $re = qr/pattern/i;";
@@ -508,7 +508,7 @@ fn cat4_s_pipe_delimiter() {
     assert_verdict(&r3, &Verdict::Correct, "s_pipe_delimiter");
 }
 
-/// Cat 4g: tr[a-c][A-C] — transliteration with brackets.
+/// Cat 4g: tr[a-c][A-C] - transliteration with brackets.
 #[test]
 fn cat4_tr_brackets() {
     let src = "my $s = 'abc'; $s =~ tr[a-c][A-C];";
@@ -521,11 +521,11 @@ fn cat4_tr_brackets() {
     assert_verdict(&r3, &Verdict::Correct, "tr_brackets");
 }
 
-/// Cat 4h: s{foo}/bar/g — MIXED delimiters (brace open, slash close).
+/// Cat 4h: s{foo}/bar/g - MIXED delimiters (brace open, slash close).
 ///
 /// This is the deep silent-failure case from PR #9168.
 /// - v1: may produce error nodes or accept with wrong parse
-/// - v2: accepts but empty replacement; trailing `bar/g` parsed as division — SilentlyEmpty
+/// - v2: accepts but empty replacement; trailing `bar/g` parsed as division - SilentlyEmpty
 /// - v3: correctly parses the mixed-delimiter substitution
 #[test]
 fn cat4_s_mixed_delimiters_brace_slash() {
@@ -571,9 +571,9 @@ fn cat4_s_mixed_delimiters_brace_slash() {
     );
 }
 
-// ─── Category 5: Special/punctuation variables ────────────────────────────────
+// --- Category 5: Special/punctuation variables --------------------------------
 
-/// Cat 5a: `$/` — input record separator.
+/// Cat 5a: `$/` - input record separator.
 #[test]
 fn cat5_dollar_slash() {
     let src = "local $/ = undef;";
@@ -586,7 +586,7 @@ fn cat5_dollar_slash() {
     assert_verdict(&r3, &Verdict::Correct, "dollar_slash");
 }
 
-/// Cat 5b: `$$` — process ID.
+/// Cat 5b: `$$` - process ID.
 #[test]
 fn cat5_dollar_dollar() {
     let src = "print $$;";
@@ -599,7 +599,7 @@ fn cat5_dollar_dollar() {
     assert_verdict(&r3, &Verdict::Correct, "dollar_dollar");
 }
 
-/// Cat 5c: `$!` — errno variable.
+/// Cat 5c: `$!` - errno variable.
 #[test]
 fn cat5_dollar_bang() {
     let src = "die $!;";
@@ -612,7 +612,7 @@ fn cat5_dollar_bang() {
     assert_verdict(&r3, &Verdict::Correct, "dollar_bang");
 }
 
-/// Cat 5d: `$@` — error variable.
+/// Cat 5d: `$@` - error variable.
 #[test]
 fn cat5_dollar_at() {
     let src = "warn $@;";
@@ -625,7 +625,7 @@ fn cat5_dollar_at() {
     assert_verdict(&r3, &Verdict::Correct, "dollar_at");
 }
 
-/// Cat 5e: `$^W` — warnings flag.
+/// Cat 5e: `$^W` - warnings flag.
 #[test]
 fn cat5_dollar_caret_w() {
     let src = "$^W = 1;";
@@ -638,11 +638,11 @@ fn cat5_dollar_caret_w() {
     assert_verdict(&r3, &Verdict::Correct, "dollar_caret_W");
 }
 
-/// Cat 5f: `${^MATCH}` — named capture variable.
+/// Cat 5f: `${^MATCH}` - named capture variable.
 ///
 /// This is the deep silent-failure from PR #9168.
 /// - v1: may accept or error depending on whether `${^MATCH}` is in the catalog
-/// - v2: accepts but variable name is truncated to `${` — SilentlyEmpty
+/// - v2: accepts but variable name is truncated to `${` - SilentlyEmpty
 /// - v3: correctly parses as a single variable with name `^MATCH`
 #[test]
 fn cat5_dollar_caret_match_named_capture() {
@@ -662,7 +662,7 @@ fn cat5_dollar_caret_match_named_capture() {
         "    v2 ${{^MATCH}}: has_MATCH={v2_has_match}, sexp={}",
         &r2.sexp[..r2.sexp.len().min(300)]
     );
-    // v2 is expected to NOT contain MATCH — it truncates to `${`
+    // v2 is expected to NOT contain MATCH - it truncates to `${`
     assert!(
         !v2_has_match,
         "v2 should truncate dollar-caret-MATCH variable name (known silent failure); sexp: {}",
@@ -678,7 +678,7 @@ fn cat5_dollar_caret_match_named_capture() {
     );
 }
 
-/// Cat 5g: `$_` — default variable.
+/// Cat 5g: `$_` - default variable.
 #[test]
 fn cat5_dollar_underscore() {
     let src = "for (@x) { print $_; }";
@@ -691,7 +691,7 @@ fn cat5_dollar_underscore() {
     assert_verdict(&r3, &Verdict::Correct, "dollar_underscore");
 }
 
-/// Cat 5h: `$&` — match variable.
+/// Cat 5h: `$&` - match variable.
 #[test]
 fn cat5_dollar_ampersand() {
     let src = "print $&;";
@@ -704,7 +704,7 @@ fn cat5_dollar_ampersand() {
     assert_verdict(&r3, &Verdict::Correct, "dollar_ampersand");
 }
 
-/// Cat 5i: `$1` — numbered capture group.
+/// Cat 5i: `$1` - numbered capture group.
 #[test]
 fn cat5_numbered_capture() {
     let src = "if ('abc' =~ /(.)/) { print $1; }";
@@ -717,9 +717,9 @@ fn cat5_numbered_capture() {
     assert_verdict(&r3, &Verdict::Correct, "numbered_capture");
 }
 
-// ─── Category 6: Indirect object syntax ──────────────────────────────────────
+// --- Category 6: Indirect object syntax --------------------------------------
 
-/// Cat 6a: `new Foo()` — indirect object method call.
+/// Cat 6a: `new Foo()` - indirect object method call.
 #[test]
 fn cat6_indirect_new() {
     let src = "my $obj = new Foo();";
@@ -732,7 +732,7 @@ fn cat6_indirect_new() {
     assert_verdict(&r3, &Verdict::Correct, "indirect_new");
 }
 
-/// Cat 6b: `new Foo('arg')` — indirect new with argument.
+/// Cat 6b: `new Foo('arg')` - indirect new with argument.
 #[test]
 fn cat6_indirect_new_with_arg() {
     let src = "my $obj = new Foo('arg');";
@@ -745,7 +745,7 @@ fn cat6_indirect_new_with_arg() {
     assert_verdict(&r3, &Verdict::Correct, "indirect_new_with_arg");
 }
 
-/// Cat 6c: `print STDERR "message"` — print with filehandle.
+/// Cat 6c: `print STDERR "message"` - print with filehandle.
 #[test]
 fn cat6_print_with_filehandle() {
     let src = "print STDERR \"oops\\n\";";
@@ -758,7 +758,7 @@ fn cat6_print_with_filehandle() {
     assert_verdict(&r3, &Verdict::Correct, "print_with_filehandle");
 }
 
-/// Cat 6d: `Foo->new()` — explicit arrow-method call (unambiguous).
+/// Cat 6d: `Foo->new()` - explicit arrow-method call (unambiguous).
 #[test]
 fn cat6_arrow_method_call() {
     let src = "my $obj = Foo->new();";
@@ -771,12 +771,12 @@ fn cat6_arrow_method_call() {
     assert_verdict(&r3, &Verdict::Correct, "arrow_method_call");
 }
 
-// ─── Category 7: Format declarations ─────────────────────────────────────────
+// --- Category 7: Format declarations -----------------------------------------
 
 /// Cat 7a: simple format declaration.
 ///
 /// - v1: may produce error nodes (format DSL is hard for GLR)
-/// - v2: accepts but body is empty — SilentlyEmpty (atomic rule strips sub-rules)
+/// - v2: accepts but body is empty - SilentlyEmpty (atomic rule strips sub-rules)
 /// - v3: correctly captures name and body
 #[test]
 fn cat7_simple_format_declaration() {
@@ -793,7 +793,7 @@ fn cat7_simple_format_declaration() {
     assert_eq!(r2.verdict, Verdict::Correct, "v2 must accept format declaration");
     let v2_has_body = r2.sexp_contains("@<<<<<<<") || r2.sexp_contains("name");
     println!("    v2 format: has_body={v2_has_body}, sexp={}", &r2.sexp[..r2.sexp.len().min(300)]);
-    // v2 loses body content — the atomic rule collapses to empty format_lines
+    // v2 loses body content - the atomic rule collapses to empty format_lines
     assert!(
         !v2_has_body,
         "v2 should silently lose format body (known limitation); sexp: {}",
@@ -858,9 +858,9 @@ fn cat7_format_followed_by_code() {
     );
 }
 
-// ─── Garbage / rejection cases ────────────────────────────────────────────────
+// --- Garbage / rejection cases ------------------------------------------------
 
-/// Garbage: pure nonsense — should be rejected or produce heavy error nodes.
+/// Garbage: pure nonsense - should be rejected or produce heavy error nodes.
 #[test]
 fn garbage_pure_nonsense() {
     let src = "@@@ this is not perl at all $$$ <<<";
@@ -877,7 +877,7 @@ fn garbage_pure_nonsense() {
     assert_ne!(r3.verdict, Verdict::Crashes, "garbage must not crash v3");
 }
 
-/// Garbage: unclosed sub — should be rejected.
+/// Garbage: unclosed sub - should be rejected.
 #[test]
 fn garbage_unclosed_sub() {
     let src = "sub broken { my $x = ";
@@ -894,7 +894,7 @@ fn garbage_unclosed_sub() {
     assert_eq!(r2.verdict, Verdict::Errors, "v2 should reject unclosed sub");
 }
 
-/// Garbage: JavaScript-style function — not Perl.
+/// Garbage: JavaScript-style function - not Perl.
 #[test]
 fn garbage_javascript_style_function() {
     let src = "function foo() { return 42; }";
@@ -909,9 +909,9 @@ fn garbage_javascript_style_function() {
     assert_ne!(r3.verdict, Verdict::Crashes, "js_fn must not crash v3");
 }
 
-/// Garbage: invalid double-sigil `my @@x = 5` — discovered in PR #9168.
+/// Garbage: invalid double-sigil `my @@x = 5` - discovered in PR #9168.
 ///
-/// v2 accepts this with wrong AST — a silent failure.
+/// v2 accepts this with wrong AST - a silent failure.
 /// v3 should reject or produce error nodes.
 #[test]
 fn garbage_double_sigil_array() {
@@ -931,7 +931,7 @@ fn garbage_double_sigil_array() {
     assert_ne!(r1.verdict, Verdict::Crashes, "double_sigil must not crash v1");
     assert_ne!(r2.verdict, Verdict::Crashes, "double_sigil must not crash v2");
     assert_ne!(r3.verdict, Verdict::Crashes, "double_sigil must not crash v3");
-    // v2 accepts with wrong AST — record this known-bad behavior
+    // v2 accepts with wrong AST - record this known-bad behavior
     // (it parses @@x as variable_declaration @@ then assignment x=5)
     // v3 should produce error nodes
     assert!(
@@ -941,7 +941,7 @@ fn garbage_double_sigil_array() {
     );
 }
 
-/// Garbage: random punctuation — should be rejected.
+/// Garbage: random punctuation - should be rejected.
 #[test]
 fn garbage_random_punctuation() {
     let src = "} ) ] ; => => => ;;";
@@ -958,13 +958,13 @@ fn garbage_random_punctuation() {
     assert_eq!(r2.verdict, Verdict::Errors, "v2 should reject random punctuation");
 }
 
-// ─── Summary printer ─────────────────────────────────────────────────────────
+// --- Summary printer ---------------------------------------------------------
 
 /// Print summary header at start of test run.
 /// (Tests run in parallel so this may not be first in --nocapture output.)
 #[test]
 fn zzz_print_summary_header() {
-    let line: String = "─".repeat(80);
+    let line: String = "-".repeat(80);
     println!("\n  {line}");
     println!("  Differential Parser Comparison Suite");
     println!("  v1 = tree-sitter-perl-c (C FFI)");

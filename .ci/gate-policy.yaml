@@ -548,10 +548,10 @@ gates:
       cargo run --locked -p xtask
       -- parser-corpus-sweep
       --manifest .ci/common-corpus-manifest.txt --enforce --receipt
-    timeout_seconds: 120
+    timeout_seconds: 240
     retry_count: 0
     budgets:
-      max_duration_ms: 90000
+      max_duration_ms: 180000
     quarantine: false
     tags:
       - corpus

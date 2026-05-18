@@ -371,6 +371,7 @@ describe('perl-lsp trust explanation commands', () => {
     ['perl-lsp.explainProviderDecision', 'Explain Provider Decision'],
     ['perl-lsp.previewSafeDelete', 'Preview Safe Delete'],
     ['perl-lsp.copyProviderDecisionReceipt', 'Copy Provider Decision Receipt'],
+    ['perl-lsp.showWorkspaceTrustReport', 'Show Workspace Trust Report'],
   ])('%s is declared as a Perl LSP command', (id, title) => {
     const cmd = pkg.contributes.commands.find((c: any) => c.command === id);
     expect(commandIds).toContain(id);
@@ -387,6 +388,12 @@ describe('perl-lsp trust explanation commands', () => {
     const entry = paletteEntries.find((e: any) => e.command === id);
     expect(entry).toBeDefined();
     expect(entry.when).toContain('editorLangId == perl');
+  });
+
+  test('workspace trust report is available when a workspace is open', () => {
+    const entry = paletteEntries.find((e: any) => e.command === 'perl-lsp.showWorkspaceTrustReport');
+    expect(entry).toBeDefined();
+    expect(entry.when).toContain('workspaceFolderCount');
   });
 });
 

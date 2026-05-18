@@ -1,7 +1,7 @@
 //! Outcome categories for differential parser testing.
 //!
 //! Each test case records a [`Verdict`] for each parser.  The verdict is not
-//! just pass/fail — it classifies *how* the parser handled the input.  This
+//! just pass/fail - it classifies *how* the parser handled the input.  This
 //! makes the disagreement table the durable artifact: when a parser improves,
 //! the expected verdict changes intentionally rather than silently.
 
@@ -13,6 +13,7 @@ use std::fmt;
 /// expected verdict for every (case, parser) combination is recorded in the
 /// test and must be updated intentionally when parser behaviour changes.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Verdict {
     /// Parser produced a structurally correct AST for this input.
     ///
@@ -24,7 +25,7 @@ pub enum Verdict {
     /// Parser accepted the input but the AST is plausibly wrong.
     ///
     /// Example: Pest parses `map { a => $_ }` as a hash-ref rather than a
-    /// block — the parse succeeds, but the semantic interpretation is wrong.
+    /// block - the parse succeeds, but the semantic interpretation is wrong.
     WrongButPlausible,
 
     /// Parser accepted the input but key content is silently absent.
