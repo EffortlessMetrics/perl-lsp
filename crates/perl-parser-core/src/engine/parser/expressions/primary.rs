@@ -1157,26 +1157,7 @@ impl<'a> Parser<'a> {
             }
 
             TokenKind::My | TokenKind::Our | TokenKind::State => {
-                let looks_like_declaration = self
-                    .tokens
-                    .peek_second()
-                    .ok()
-                    .is_some_and(|next| {
-                        matches!(
-                            next.kind,
-                            TokenKind::ScalarSigil
-                                | TokenKind::ArraySigil
-                                | TokenKind::HashSigil
-                                | TokenKind::SubSigil
-                                | TokenKind::GlobSigil
-                                | TokenKind::LeftParen
-                        ) || (next.kind == TokenKind::Identifier
-                            && next
-                                .text
-                                .chars()
-                                .next()
-                                .is_some_and(|c| matches!(c, '$' | '@' | '%' | '&' | '*')))
-                    });
+                let looks_like_declaration = self.next_token_starts_variable_declaration();
 
                 if self.is_keyword_before_fat_arrow() || !looks_like_declaration {
                     let token = self.tokens.next()?;
@@ -1185,7 +1166,7 @@ impl<'a> Parser<'a> {
                         SourceLocation { start: token.start, end: token.end },
                     ))
                 } else {
-                    self.parse_declaration_arg()
+                    self.parse_declaration_expression()
                 }
             }
 
