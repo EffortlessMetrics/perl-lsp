@@ -13,6 +13,8 @@ Update the underlying proof first, then refresh this matrix. Generated receipt
 details remain in [semantic shadow compare](semantic_shadow_compare.md),
 [semantic scorecard](semantic_scorecard.md), and parser/status artifacts.
 Provider cutover state remains in [provider cutover](provider_cutover.md).
+Class-level promotion, fallback, blocker, and defer decisions are tracked in
+[provider promotion ledger](provider_promotion_ledger.md).
 Real-workspace timing proof lives in the
 [2026-05-13 Mojolicious baseline](../../forensics/2026-05-13-real-workspace-baseline-mojolicious.md)
 and the
