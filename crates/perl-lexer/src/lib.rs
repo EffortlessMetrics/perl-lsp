@@ -1933,12 +1933,15 @@ impl<'a> PerlLexer<'a> {
                 if let Some(next) = candidate {
                     // `s => 1` should remain a fat-arrow hash key, not quote op.
                     let is_fat_arrow = next == '=' && char_after_next == Some('>');
+                    let is_filetest_s = text == "s"
+                        && self.input.get(..start).is_some_and(|prefix| prefix.ends_with('-'));
                     let is_paired_delim = matches!(next, '{' | '[' | '(' | '<');
                     let is_quote_char = matches!(next, '\'' | '"') && text != "s";
                     let transliteration_allows_whitespace = text == "tr" || text == "y";
                     let substitution_disallows_whitespace = text == "s" && has_whitespace;
                     let is_valid_delim = Self::is_quote_delim(next)
                         && !is_fat_arrow
+                        && !is_filetest_s
                         && !substitution_disallows_whitespace
                         && (!has_whitespace
                             || is_paired_delim
@@ -2023,6 +2026,10 @@ impl<'a> PerlLexer<'a> {
                             // Fat-arrow autoquoting: `s => value` — `=` followed by `>` is '=>',
                             // not a valid substitution delimiter. Treat as identifier.
                             let is_fat_arrow = next == '=' && char_after_next == Some('>');
+                            let is_filetest_s =
+                                op == "s" && self.input.get(..start).is_some_and(|prefix| {
+                                    prefix.ends_with('-')
+                                });
 
                             // When whitespace precedes the delimiter, only unambiguous
                             // delimiters are accepted:
@@ -2042,6 +2049,7 @@ impl<'a> PerlLexer<'a> {
                                 self.hash_brace_depth > 0 && matches!(next, ',' | '}');
                             let is_valid_delim = Self::is_quote_delim(next)
                                 && !is_fat_arrow
+                                && !is_filetest_s
                                 && !is_hash_subscript_bare_key_boundary
                                 && (!has_whitespace
                                     || is_paired_delim
