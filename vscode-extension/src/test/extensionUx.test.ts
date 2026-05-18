@@ -702,12 +702,24 @@ describe('extension UX warnings', () => {
           version_status: 'not_probed_by_report',
         },
         perldoc: {
-          status: 'not_probed_by_report',
+          status: 'oracle_contract_reported_not_run',
         },
         dap: {
           status: 'not_probed_by_lsp_workspace_report',
         },
         claim_boundary: 'Setup hints are derived from current configuration only.',
+      },
+      client_runtime_state: {
+        source: 'vscode-extension',
+        perldoc: {
+          status: 'client_surface_registered',
+        },
+        dap: {
+          status: 'client_state_reported',
+          managed_adapter_exists: true,
+          active_perl_debug_session: false,
+          launch_json_workspace_count: 1,
+        },
       },
       index: {
         state: 'ready',
@@ -728,13 +740,39 @@ describe('extension UX warnings', () => {
       claim_boundary: 'Aggregates current runtime state only.',
     }));
 
-    await showWorkspaceTrustReportCommand({ sendRequest } as any);
+    await showWorkspaceTrustReportCommand({ sendRequest } as any, () => ({
+      schema_version: 'workspace_trust_client_runtime.v1',
+      source: 'vscode-extension',
+      perldoc: {
+        status: 'client_surface_registered',
+      },
+      dap: {
+        status: 'client_state_reported',
+        managed_adapter_exists: true,
+        active_perl_debug_session: false,
+        launch_json_workspace_count: 1,
+      },
+    }));
 
     expect(sendRequest).toHaveBeenCalledWith(
       'workspace/executeCommand',
       {
         command: 'perl.workspaceTrustReport',
-        arguments: [],
+        arguments: [{
+          client_runtime_state: {
+            schema_version: 'workspace_trust_client_runtime.v1',
+            source: 'vscode-extension',
+            perldoc: {
+              status: 'client_surface_registered',
+            },
+            dap: {
+              status: 'client_state_reported',
+              managed_adapter_exists: true,
+              active_perl_debug_session: false,
+              launch_json_workspace_count: 1,
+            },
+          },
+        }],
       }
     );
     const rendered = outputChannel.appendLine.mock.calls
@@ -743,8 +781,12 @@ describe('extension UX warnings', () => {
     expect(rendered).toContain('Perl LSP Trust Report');
     expect(rendered).toContain('Setup hints');
     expect(rendered).toContain('Perl binary: configured_not_probed_by_report');
-    expect(rendered).toContain('perldoc: not_probed_by_report');
+    expect(rendered).toContain('perldoc: oracle_contract_reported_not_run');
     expect(rendered).toContain('DAP Perl: not_probed_by_lsp_workspace_report');
+    expect(rendered).toContain('Client runtime state');
+    expect(rendered).toContain('perldoc surface: client_surface_registered');
+    expect(rendered).toContain('DAP adapter: client_state_reported');
+    expect(rendered).toContain('DAP managed adapter exists: true');
     expect(rendered).toContain('PERL5LIB is not inherited by workspace module resolution.');
     expect(rendered).toContain('Setup hints are derived from current configuration only.');
     expect(rendered).toContain('completion: partial-live-with-fallback');

@@ -5,7 +5,12 @@ import { execFile } from 'child_process';
 import { LanguageClient, TransportKind, Trace } from 'vscode-languageclient/node';
 import type { LanguageClientOptions, ServerOptions } from 'vscode-languageclient/node';
 import { PerlTestAdapter } from './testAdapter';
-import { activateDebugger, rewriteTestLensCommand, parseDebugTestLaunchTarget } from './debugAdapter';
+import {
+    activateDebugger,
+    hasLaunchJson,
+    rewriteTestLensCommand,
+    parseDebugTestLaunchTarget,
+} from './debugAdapter';
 import { BinaryDownloader, parseLocalVersion } from './downloader';
 import { OnboardingManager } from './onboarding';
 import type { HealthCheckResult } from './onboarding';
@@ -430,6 +435,35 @@ function providerDecisionJson(value: unknown): string {
     return JSON.stringify(value, null, 2);
 }
 
+export function workspaceTrustClientRuntimeState(
+    context?: vscode.ExtensionContext
+): Record<string, unknown> {
+    const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
+    const managedDapPath = context ? BinaryDownloader.getLocalDapPath(context) : undefined;
+    const managedAdapterExists = managedDapPath ? fs.existsSync(managedDapPath) : false;
+    const launchJsonWorkspaceCount = workspaceFolders.filter(folder => hasLaunchJson(folder.uri.fsPath)).length;
+    const activeDebugSession = vscode.debug.activeDebugSession;
+
+    return {
+        schema_version: 'workspace_trust_client_runtime.v1',
+        source: 'vscode-extension',
+        perldoc: {
+            status: 'client_surface_registered',
+            uri_scheme: 'perldoc',
+            client_surface: 'perldoc virtual documents are served by the LSP textDocumentContent path',
+        },
+        dap: {
+            status: 'client_state_reported',
+            adapter_registered: true,
+            active_perl_debug_session: activeDebugSession?.type === 'perl',
+            managed_adapter_exists: managedAdapterExists,
+            launch_json_workspace_count: launchJsonWorkspaceCount,
+            workspace_folder_count: workspaceFolders.length,
+        },
+        claim_boundary: 'VS Code client runtime state reads extension/debugger state only. It does not start DAP, run perldoc, probe Perl, or change provider behavior.',
+    };
+}
+
 async function executeLspCommand(
     activeClient: LspExecuteCommandClient | undefined,
     command: string,
@@ -503,10 +537,13 @@ function formatWorkspaceTrustReport(result: unknown): string {
     const supportTiers = asObject(providers?.support_tiers);
     const dynamicBoundaries = asObject(report?.dynamic_boundaries);
     const setupHints = asObject(report?.setup_hints);
+    const clientRuntime = asObject(report?.client_runtime_state);
     const setupHintItems = arrayField(setupHints, 'hints');
     const perlBinary = asObject(setupHints?.perl_binary);
     const perldoc = asObject(setupHints?.perldoc);
     const dap = asObject(setupHints?.dap);
+    const clientPerldoc = asObject(clientRuntime?.perldoc);
+    const clientDap = asObject(clientRuntime?.dap);
 
     const rootPath = stringField(workspace, 'root_path') ?? '(none)';
     const folderCount = numberField(workspace, 'workspace_folder_count') ?? 0;
@@ -544,6 +581,14 @@ function formatWorkspaceTrustReport(result: unknown): string {
         `- Perl version: ${stringField(perlBinary, 'version_status') ?? 'unknown'}`,
         `- perldoc: ${stringField(perldoc, 'status') ?? 'unknown'}`,
         `- DAP Perl: ${stringField(dap, 'status') ?? 'unknown'}`,
+        '',
+        'Client runtime state',
+        `- source: ${stringField(clientRuntime, 'source') ?? 'unknown'}`,
+        `- perldoc surface: ${stringField(clientPerldoc, 'status') ?? 'unknown'}`,
+        `- DAP adapter: ${stringField(clientDap, 'status') ?? 'unknown'}`,
+        `- DAP managed adapter exists: ${String(booleanField(clientDap, 'managed_adapter_exists') ?? false)}`,
+        `- DAP active Perl session: ${String(booleanField(clientDap, 'active_perl_debug_session') ?? false)}`,
+        `- DAP launch.json workspaces: ${numberField(clientDap, 'launch_json_workspace_count') ?? 0}`,
     ];
 
     for (const item of setupHintItems.slice(0, 5)) {
@@ -652,9 +697,12 @@ function formatMissingModuleLookup(result: unknown): string {
 }
 
 export async function showWorkspaceTrustReportCommand(
-    activeClient: LspExecuteCommandClient | undefined = client
+    activeClient: LspExecuteCommandClient | undefined = client,
+    clientRuntimeState: () => Record<string, unknown> = workspaceTrustClientRuntimeState
 ): Promise<void> {
-    const result = await executeLspCommand(activeClient, 'perl.workspaceTrustReport');
+    const result = await executeLspCommand(activeClient, 'perl.workspaceTrustReport', {
+        client_runtime_state: clientRuntimeState(),
+    });
     if (result === undefined) {
         return;
     }
@@ -1119,7 +1167,7 @@ export async function activate(context: vscode.ExtensionContext) {
     const showWorkspaceTrustReportCommandDisposable = vscode.commands.registerCommand(
         'perl-lsp.showWorkspaceTrustReport',
         async () => {
-            await showWorkspaceTrustReportCommand(client);
+            await showWorkspaceTrustReportCommand(client, () => workspaceTrustClientRuntimeState(context));
         }
     );
 

@@ -247,7 +247,25 @@ fn test_execute_command_workspace_trust_report() -> Result<(), Box<dyn std::erro
         method: "workspace/executeCommand".to_string(),
         params: Some(json!({
             "command": "perl.workspaceTrustReport",
-            "arguments": []
+            "arguments": [{
+                "client_runtime_state": {
+                    "source": "vscode-extension",
+                    "perldoc": {
+                        "status": "client_surface_registered",
+                        "uri_scheme": "perldoc",
+                        "client_surface": "virtual_document"
+                    },
+                    "dap": {
+                        "status": "client_state_reported",
+                        "adapter_registered": true,
+                        "active_perl_debug_session": false,
+                        "managed_adapter_exists": true,
+                        "launch_json_workspace_count": 1,
+                        "workspace_folder_count": 1
+                    },
+                    "ignored": "not copied"
+                }
+            }]
         })),
         id: Some(json!(2)),
     };
@@ -296,11 +314,33 @@ fn test_execute_command_workspace_trust_report() -> Result<(), Box<dyn std::erro
     );
     assert_eq!(
         result.pointer("/setup_hints/perldoc/status").and_then(|value| value.as_str()),
-        Some("not_probed_by_report")
+        Some("oracle_contract_reported_not_run")
+    );
+    assert_eq!(
+        result.pointer("/setup_hints/perldoc/run_status").and_then(|value| value.as_str()),
+        Some("not_run_by_report")
     );
     assert_eq!(
         result.pointer("/setup_hints/dap/status").and_then(|value| value.as_str()),
         Some("not_probed_by_lsp_workspace_report")
+    );
+    assert_eq!(
+        result.pointer("/client_runtime_state/source").and_then(|value| value.as_str()),
+        Some("vscode-extension")
+    );
+    assert_eq!(
+        result.pointer("/client_runtime_state/perldoc/uri_scheme").and_then(|value| value.as_str()),
+        Some("perldoc")
+    );
+    assert_eq!(
+        result
+            .pointer("/client_runtime_state/dap/managed_adapter_exists")
+            .and_then(|value| value.as_bool()),
+        Some(true)
+    );
+    assert!(
+        result.pointer("/client_runtime_state/ignored").is_none(),
+        "client runtime state should be sanitized to known fields"
     );
     assert!(
         result.get("index").and_then(|value| value.as_object()).is_some(),

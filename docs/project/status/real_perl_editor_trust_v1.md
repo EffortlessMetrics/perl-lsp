@@ -163,10 +163,16 @@ The workspace trust report setup-hint pass closes the current first-run setup
 hint routing item by reporting advisory Perl/PERL5LIB/perldoc/DAP boundaries
 from existing state only; it does not resolve Perl, run perldoc, inspect DAP
 sessions, or promote broader setup-health claims.
+The DAP/perldoc runtime-state pass closes the current trust-report runtime-state
+routing item by adding the perldoc oracle contract from configuration without
+resolving or running perldoc and by carrying sanitized VS Code client
+DAP/perldoc state into the report; it does not start DAP, run perldoc, probe
+Perl, inspect debug-session internals, scan workspace files, or promote broader
+setup-health claims.
 
 1. `test(workspace-symbols): add additional generated/no-source project variant only if broader generated-symbol expansion is being considered`
 2. `test(rename): keep package/compiler-backed fallback and edit-freshness receipts current before broader promotion`
-3. `feat(ux): integrate DAP/perldoc runtime state into the trust report before broader setup-health claims`
+3. `feat(ux): add launch-configuration/module-path parsing receipts before broader setup-health claims`
 
 Provider decision explanations are already partial-live through
 `perl.explainProviderDecision`; callers can attach a request-local
@@ -211,10 +217,11 @@ explain-diagnostic, missing-module lookup, safe-delete preview, copyable
 receipt, and workspace trust report commands without changing provider
 behavior, safe-delete edit authorization, scanning files, probing Perl, or
 promoting support tiers.
-`perl.workspaceTrustReport` now includes advisory setup hints and explicit
-Perl binary, perldoc, and DAP probe boundaries derived from current config and
-environment counts only; the VS Code output renders those hints without
-running probes or changing subprocess behavior.
+`perl.workspaceTrustReport` now includes advisory setup hints, explicit Perl
+binary/perldoc/DAP probe boundaries, the perldoc oracle contract, and sanitized
+VS Code client DAP/perldoc runtime state; the VS Code output renders those
+hints without running perldoc, starting DAP, probing Perl, scanning workspace
+files, or changing subprocess behavior.
 
 Package-local rename live support has now moved from preview-only to a narrow
 pilot. The compiler-allowed preview receipt proves the eligible no-edit UX shape

@@ -1379,7 +1379,7 @@ impl LspServer {
                     return self.run_subtest(subtest_name);
                 }
                 "perl.workspaceTrustReport" => {
-                    return self.workspace_trust_report();
+                    return self.workspace_trust_report(arguments.first());
                 }
                 "perl.previewSafeDelete" => {
                     let request = arguments

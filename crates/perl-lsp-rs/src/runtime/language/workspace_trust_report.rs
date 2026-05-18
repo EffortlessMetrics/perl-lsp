@@ -114,15 +114,68 @@ fn setup_hints_summary(config: &WorkspaceConfig) -> Value {
             "version_status": "not_probed_by_report",
             "args_count": config.perl_args.len(),
         },
-        "perldoc": {
-            "status": "not_probed_by_report",
-            "policy": "perldoc:// requests use the Perl oracle environment when opened; this report does not run perldoc.",
-        },
+        "perldoc": perldoc_runtime_state(config),
         "dap": {
             "status": "not_probed_by_lsp_workspace_report",
             "policy": "DAP Perl path and module paths are configured by debug launch state and are not probed by this read-only LSP trust report.",
         },
         "claim_boundary": "Setup hints are derived from current configuration and environment counts only. They do not resolve Perl, run perldoc, inspect DAP sessions, scan files, or change provider behavior.",
+    })
+}
+
+fn perldoc_runtime_state(config: &WorkspaceConfig) -> Value {
+    json!({
+        "status": "oracle_contract_reported_not_run",
+        "run_status": "not_run_by_report",
+        "binary_source": if configured_perl_path(config).is_some() {
+            "configured_perl_toolchain_or_perldoc_on_path_when_opened"
+        } else {
+            "perldoc_on_path_when_opened"
+        },
+        "timeout_ms": 10_000,
+        "allow_perl5lib": config.use_perl5lib,
+        "allow_perl5opt": false,
+        "allow_local_lib": false,
+        "lc_all": "C",
+        "argv_policy": "perldoc -T -- <module>",
+        "policy": "perldoc:// requests use the Perl oracle environment when opened; this report exposes the contract from configuration but does not resolve or run perldoc.",
+    })
+}
+
+fn string_field(value: Option<&Value>, field: &str) -> Option<String> {
+    value.and_then(|object| object.get(field)).and_then(Value::as_str).map(str::to_string)
+}
+
+fn bool_field(value: Option<&Value>, field: &str) -> Option<bool> {
+    value.and_then(|object| object.get(field)).and_then(Value::as_bool)
+}
+
+fn number_field(value: Option<&Value>, field: &str) -> Option<u64> {
+    value.and_then(|object| object.get(field)).and_then(Value::as_u64)
+}
+
+fn client_runtime_state_summary(argument: Option<&Value>) -> Value {
+    let client_state = argument.and_then(|value| value.get("client_runtime_state"));
+    let perldoc = client_state.and_then(|value| value.get("perldoc"));
+    let dap = client_state.and_then(|value| value.get("dap"));
+
+    json!({
+        "schema_version": "workspace_trust_client_runtime.v1",
+        "source": string_field(client_state, "source").unwrap_or_else(|| "not_supplied".to_string()),
+        "perldoc": {
+            "status": string_field(perldoc, "status").unwrap_or_else(|| "not_supplied".to_string()),
+            "uri_scheme": string_field(perldoc, "uri_scheme"),
+            "client_surface": string_field(perldoc, "client_surface"),
+        },
+        "dap": {
+            "status": string_field(dap, "status").unwrap_or_else(|| "not_supplied".to_string()),
+            "adapter_registered": bool_field(dap, "adapter_registered"),
+            "active_perl_debug_session": bool_field(dap, "active_perl_debug_session"),
+            "managed_adapter_exists": bool_field(dap, "managed_adapter_exists"),
+            "launch_json_workspace_count": number_field(dap, "launch_json_workspace_count"),
+            "workspace_folder_count": number_field(dap, "workspace_folder_count"),
+        },
+        "claim_boundary": "Client runtime state is caller-supplied and sanitized to known fields. It does not start DAP, run perldoc, probe Perl, scan workspace files, or change provider behavior.",
     })
 }
 
@@ -243,7 +296,10 @@ fn index_report(server: &LspServer) -> Value {
 }
 
 impl LspServer {
-    pub(crate) fn workspace_trust_report(&self) -> Result<Option<Value>, JsonRpcError> {
+    pub(crate) fn workspace_trust_report(
+        &self,
+        argument: Option<&Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         let root_path = self.root_path.lock().clone();
         let folders = self.workspace_folders.lock().clone();
         let global_config = self.workspace_config.lock().clone();
@@ -284,6 +340,7 @@ impl LspServer {
                 "policy": "Configured include paths and optional PERL5LIB participation are reported without probing interpreter startup @INC.",
             },
             "setup_hints": setup_hints_summary(&global_config),
+            "client_runtime_state": client_runtime_state_summary(argument),
             "index": index_report(self),
             "providers": {
                 "support_tiers": support_tiers_summary(),
