@@ -472,7 +472,6 @@ fn semantic_token_package_declaration_candidate(
     ))
 }
 
-#[cfg(any(test, feature = "expose_lsp_test_api"))]
 fn semantic_token_method_declaration_candidate(
     source: &str,
 ) -> Option<crate::semantic_tokens::SemanticTokenShadowCandidate> {
@@ -604,30 +603,86 @@ fn semantic_tokens_live_slice_provider_trace(
     live_token_count: usize,
     provider_action: &'static str,
 ) -> Value {
-    let Some(candidate) = semantic_token_subroutine_declaration_candidate(source) else {
+    let mut saw_compiler_token_candidate = false;
+
+    let subroutine_candidate = semantic_token_subroutine_declaration_candidate(source);
+    saw_compiler_token_candidate |= subroutine_candidate.is_some();
+    if let Some(trace) = semantic_tokens_live_slice_provider_trace_for_candidate(
+        subroutine_candidate,
+        Some(live_provider_result),
+        live_token_count,
+        provider_action,
+        SemanticTokenLiveSliceTraceSpec {
+            live_token_type: "function",
+            compiler_token_class: "subroutine_declaration",
+            source_backed_state: "source_backed_subroutine_declaration_live_token_match",
+            user_message: "Semantic tokens used the source-backed compiler subroutine-declaration live slice because it matched the existing parser/HIR function token. No new semantic tokens were emitted.",
+            claim_boundary: "only source-backed compiler subroutine-declaration spans that exactly match existing live parser/HIR function tokens participate; generated/no-source, stale, dynamic-boundary, low-confidence, fallback, and unmatched compiler candidates remain blocked, fallback-only, or shadowed",
+        },
+    ) {
+        return trace;
+    }
+
+    let method_declaration_candidate = semantic_token_method_declaration_candidate(source);
+    saw_compiler_token_candidate |= method_declaration_candidate.is_some();
+    if let Some(trace) = semantic_tokens_live_slice_provider_trace_for_candidate(
+        method_declaration_candidate,
+        Some(live_provider_result),
+        live_token_count,
+        provider_action,
+        SemanticTokenLiveSliceTraceSpec {
+            live_token_type: "method",
+            compiler_token_class: "method_declaration",
+            source_backed_state: "source_backed_method_declaration_live_token_match",
+            user_message: "Semantic tokens exposed the source-backed compiler method-declaration live trace because it matched the existing parser/HIR method token. No new semantic tokens were emitted.",
+            claim_boundary: "only source-backed compiler method-declaration spans that exactly match existing live parser/HIR method tokens participate; generated/no-source, stale, dynamic-boundary, low-confidence, fallback, broader method classes, and unmatched compiler candidates remain blocked, fallback-only, or shadowed",
+        },
+    ) {
+        return trace;
+    }
+
+    if !saw_compiler_token_candidate {
         return semantic_tokens_fallback_provider_trace(
             provider_action,
             live_token_count,
             "no_compiler_token_class",
-            "semantic tokens used the existing parser/HIR provider; no source-backed compiler token class matched this request",
-        );
-    };
-    let live_pilot = semantic_tokens_live_contains_span(
-        Some(live_provider_result),
-        candidate.source_span.as_ref(),
-        "function",
-    );
-
-    if !live_pilot {
-        return semantic_tokens_fallback_provider_trace(
-            provider_action,
-            live_token_count,
-            "compiler_token_span_not_live",
-            "semantic tokens used the existing parser/HIR provider; the compiler token candidate did not match a live token span",
+            "semantic tokens used the existing parser/HIR provider; no reviewed source-backed compiler token class matched this request",
         );
     }
 
-    json!({
+    semantic_tokens_fallback_provider_trace(
+        provider_action,
+        live_token_count,
+        "compiler_token_span_not_live",
+        "semantic tokens used the existing parser/HIR provider; the reviewed compiler token candidate did not match a live token span",
+    )
+}
+
+struct SemanticTokenLiveSliceTraceSpec {
+    live_token_type: &'static str,
+    compiler_token_class: &'static str,
+    source_backed_state: &'static str,
+    user_message: &'static str,
+    claim_boundary: &'static str,
+}
+
+fn semantic_tokens_live_slice_provider_trace_for_candidate(
+    candidate: Option<crate::semantic_tokens::SemanticTokenShadowCandidate>,
+    live_provider_result: Option<&Value>,
+    live_token_count: usize,
+    provider_action: &'static str,
+    spec: SemanticTokenLiveSliceTraceSpec,
+) -> Option<Value> {
+    let candidate = candidate?;
+    if !semantic_tokens_live_contains_span(
+        live_provider_result,
+        candidate.source_span.as_ref(),
+        spec.live_token_type,
+    ) {
+        return None;
+    }
+
+    Some(json!({
         "provider": "semantic_tokens",
         "provider_action": provider_action,
         "decision": "acted",
@@ -636,19 +691,19 @@ fn semantic_tokens_live_slice_provider_trace(
         "confidence": "high",
         "freshness": "fresh",
         "source_backed": true,
-        "source_backed_state": "source_backed_subroutine_declaration_live_token_match",
+        "source_backed_state": spec.source_backed_state,
         "dynamic_boundary": false,
         "fallback_state": "none",
         "live_provider_result_kind": "semantic_token_data",
         "live_provider_result_count": u64::try_from(live_token_count).unwrap_or(u64::MAX),
         "live_cutover": "partial_live_source_backed_compiler_token",
-        "compiler_token_class": "subroutine_declaration",
-        "live_token_type": "function",
+        "compiler_token_class": spec.compiler_token_class,
+        "live_token_type": spec.live_token_type,
         "live_token_match_count": 1,
         "no_live_token_output_change": true,
-        "user_message": "Semantic tokens used the source-backed compiler subroutine-declaration live slice because it matched the existing parser/HIR function token. No new semantic tokens were emitted.",
-        "claim_boundary": "only source-backed compiler subroutine-declaration spans that exactly match existing live parser/HIR function tokens participate; generated/no-source, stale, dynamic-boundary, low-confidence, fallback, and unmatched compiler candidates remain blocked, fallback-only, or shadowed",
-    })
+        "user_message": spec.user_message,
+        "claim_boundary": spec.claim_boundary,
+    }))
 }
 
 fn semantic_tokens_fallback_provider_trace(
@@ -672,7 +727,7 @@ fn semantic_tokens_fallback_provider_trace(
         "live_provider_result_kind": "semantic_token_data",
         "live_provider_result_count": u64::try_from(live_token_count).unwrap_or(u64::MAX),
         "live_cutover": "fallback_only",
-        "compiler_token_class": "subroutine_declaration",
+        "compiler_token_class": "reviewed_scoped_token_class",
         "no_live_token_output_change": true,
         "user_message": user_message,
         "claim_boundary": "parser/HIR semantic tokens remain the fallback for requests without a source-backed compiler token span matching existing live output; no compiler-backed token expansion",
