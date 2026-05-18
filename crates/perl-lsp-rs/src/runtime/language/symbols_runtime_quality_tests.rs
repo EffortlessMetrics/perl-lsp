@@ -68,6 +68,16 @@ has display_alias => (is => 'rw');
 1;
 "#;
 
+const PREDICATE_MODULE_URI: &str = "file:///workspace/lib/Symbols/PredicatePilot.pm";
+
+const PREDICATE_MODULE: &str = r#"package Symbols::PredicatePilot;
+use Moo;
+
+has status => (is => 'rw', predicate => 1);
+
+1;
+"#;
+
 fn create_server() -> LspServer {
     let output =
         Arc::new(Mutex::new(Box::new(Cursor::new(Vec::new())) as Box<dyn std::io::Write + Send>));
@@ -116,6 +126,11 @@ fn open_symbol_workspace(server: &LspServer) -> Result<(), Box<dyn std::error::E
 
 fn open_generated_symbol_workspace(server: &LspServer) -> Result<(), Box<dyn std::error::Error>> {
     open_document(server, GENERATED_MODULE_URI, GENERATED_MODULE)?;
+    Ok(())
+}
+
+fn open_predicate_symbol_workspace(server: &LspServer) -> Result<(), Box<dyn std::error::Error>> {
+    open_document(server, PREDICATE_MODULE_URI, PREDICATE_MODULE)?;
     Ok(())
 }
 
@@ -615,6 +630,102 @@ fn workspace_symbols_runtime_quality_receipt_proves_scoped_generated_symbol_cuto
     assert!(
         boundary.contains("remain gated outside the labeled source-backed generated pilot"),
         "cutover proof must keep unproven generated-symbol expansion gated: {boundary}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn workspace_symbols_runtime_quality_receipt_proves_predicate_generated_symbol_class()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    open_predicate_symbol_workspace(&server)?;
+    let params = json!({"query": "has_status"});
+
+    let live_result =
+        server.test_handle_workspace_symbols(Some(params.clone()))?.ok_or("missing live result")?;
+    let live_symbols = live_result.as_array().ok_or("workspace/symbol result must be an array")?;
+    let generated_symbol = live_symbols
+        .iter()
+        .find(|symbol| symbol_name(symbol) == Some("has_status [generated/framework]"))
+        .ok_or("missing labeled predicate workspace symbol")?;
+
+    assert!(
+        live_symbols.iter().all(|symbol| symbol_name(symbol) != Some("has_status")),
+        "predicate pilot must not expose an unlabeled exact generated symbol: {live_symbols:?}"
+    );
+    assert_eq!(
+        generated_symbol.get("containerName").and_then(Value::as_str),
+        Some("Symbols::PredicatePilot [generated/framework]"),
+        "predicate pilot must label the containing framework class"
+    );
+    assert_eq!(
+        generated_symbol
+            .get("location")
+            .and_then(|location| location.get("uri"))
+            .and_then(Value::as_str),
+        Some(PREDICATE_MODULE_URI),
+        "predicate pilot must point to the source framework declaration file"
+    );
+
+    let receipt = server
+        .test_workspace_symbols_runtime_quality_receipt(Some(params))?
+        .ok_or("missing workspace symbols receipt")?;
+    assert_eq!(
+        receipt.get("live_provider_result"),
+        Some(&live_result),
+        "predicate receipt must describe the actual live workspace/symbol result"
+    );
+    assert_eq!(
+        receipt.get("shadow_state").and_then(Value::as_str),
+        Some("partial_live_generated_labeled_pilot"),
+        "predicate query must remain inside the scoped generated-label live pilot"
+    );
+
+    let compiler_receipt = receipt.get("compiler_receipt").ok_or("missing compiler receipt")?;
+    assert_eq!(
+        compiler_receipt.get("source").and_then(Value::as_str),
+        Some("FrameworkAdapter"),
+        "predicate cutover must stay framework-adapter scoped"
+    );
+    assert_eq!(
+        compiler_receipt.get("provenance").and_then(Value::as_str),
+        Some("FrameworkAnchor"),
+        "predicate cutover must be anchored to the framework declaration"
+    );
+    assert_eq!(
+        compiler_receipt.get("confidence").and_then(Value::as_str),
+        Some("Medium"),
+        "predicate cutover must not overclaim high-confidence exact source facts"
+    );
+    assert_eq!(
+        compiler_receipt.get("source_backed_count").and_then(Value::as_u64),
+        Some(0),
+        "predicate pilot must not inflate exact source-backed syntax counts"
+    );
+    assert_eq!(
+        compiler_receipt.get("generated_pilot_count").and_then(Value::as_u64),
+        Some(1),
+        "predicate pilot must count only the labeled generated member"
+    );
+    assert_eq!(
+        compiler_receipt.get("generated_pilot_location_semantics").and_then(Value::as_str),
+        Some("source_anchor_not_exact_generated_body"),
+        "predicate pilot must not claim exact generated method bodies"
+    );
+
+    let gated_receipt =
+        receipt.get("gated_expansion_receipt").ok_or("missing gated expansion receipt")?;
+    assert_eq!(
+        gated_receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(true),
+        "broader generated/dynamic/noise expansion must remain gated"
+    );
+    let boundary =
+        gated_receipt.get("claim_boundary").and_then(Value::as_str).ok_or("missing boundary")?;
+    assert!(
+        boundary.contains("remain gated outside the labeled source-backed generated pilot"),
+        "predicate proof must keep unproven generated-symbol expansion gated: {boundary}"
     );
 
     Ok(())
