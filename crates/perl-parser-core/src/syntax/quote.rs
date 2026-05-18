@@ -127,7 +127,7 @@ pub fn extract_substitution_parts_strict(
     } else {
         // Paired pattern delimiters still allow either paired or non-paired delimiters
         // for the replacement side (e.g. s{foo}/bar/ and s[foo]{bar}).
-        let trimmed = skip_paired_substitution_replacement_gap(rest1);
+        let trimmed = skip_paired_replacement_gap(rest1);
         if let Some(rd) = trimmed.chars().next() {
             let repl_closing = get_closing_delimiter(rd);
             extract_delimited_content_strict(trimmed, rd, repl_closing)
@@ -154,7 +154,7 @@ pub fn extract_substitution_parts_strict(
     Ok((pattern, replacement, modifiers))
 }
 
-fn skip_paired_substitution_replacement_gap(mut text: &str) -> &str {
+fn skip_paired_replacement_gap(mut text: &str) -> &str {
     let mut comment_eligible = false;
     loop {
         let trimmed = text.trim_start_matches(char::is_whitespace);
@@ -461,7 +461,7 @@ pub fn extract_transliteration_parts_strict(
         let (body, rest, found_closing) = extract_unpaired_body_skip_strings(rest1, closing);
         (body, rest, found_closing)
     } else {
-        let trimmed = rest1.trim_start();
+        let trimmed = skip_paired_replacement_gap(rest1);
         if let Some(repl_delimiter) = trimmed.chars().next() {
             // After a paired search delimiter (e.g. `{...}`), the replacement must
             // also start with a valid non-alphanumeric, non-whitespace delimiter.

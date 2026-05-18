@@ -707,20 +707,91 @@ impl LspServer {
                 .get("fallback_state")
                 .and_then(Value::as_str)
                 .is_some_and(|fallback| fallback == "none");
-        let source_guard_accepts = source_guard_request
+        let source_guard_context = source_guard_request.as_ref().and_then(|request| {
+            let uri = req_uri(request).ok()?;
+            let (line, character) = req_position(request).ok()?;
+            let (symbol, byte_offset) = self.refactor_runtime_symbol(uri, line, character)?;
+            Some((uri, line, character, symbol, usize::try_from(byte_offset).ok()?))
+        });
+        let source_guard_result = source_guard_context.as_ref().and_then(
+            |(uri, _line, _character, symbol, byte_offset)| {
+                self.safe_delete_symbol_live_source_guard(uri, *byte_offset, symbol)
+            },
+        );
+        let source_guard_accepts = source_guard_result.unwrap_or(false);
+        let live_edit_guards_ready = compiler_allowed && rollback_is_safe && source_guard_accepts;
+        let current_source_reference_count = source_guard_context
             .as_ref()
-            .and_then(|request| {
-                let uri = req_uri(request).ok()?;
-                let (line, character) = req_position(request).ok()?;
-                let (symbol, byte_offset) = self.refactor_runtime_symbol(uri, line, character)?;
-                self.safe_delete_symbol_live_source_guard(
-                    uri,
-                    usize::try_from(byte_offset).ok()?,
-                    &symbol,
-                )
+            .and_then(|(uri, _line, _character, symbol, byte_offset)| {
+                self.safe_delete_current_source_reference_count(uri, *byte_offset, symbol)
             })
-            .unwrap_or(false);
-        let can_return_edit = compiler_allowed && rollback_is_safe && source_guard_accepts;
+            .unwrap_or(0);
+        let current_source_blocks = live_edit_guards_ready && current_source_reference_count > 0;
+        if current_source_blocks {
+            mark_safe_delete_current_source_reference_blocker(
+                &mut receipt,
+                current_source_reference_count,
+            );
+        }
+        let source_guard_blocks = source_guard_result.is_some()
+            && !source_guard_accepts
+            && !current_source_blocks
+            && (compiler_allowed
+                || (receipt.get("decision").and_then(Value::as_str) == Some("fallback")
+                    && receipt.get("fallback_state").and_then(Value::as_str)
+                        == Some("compiler_missing")));
+        if source_guard_blocks {
+            mark_safe_delete_source_guard_blocker(&mut receipt);
+        }
+        let workspace_identity_guard_evaluated =
+            live_edit_guards_ready && !current_source_blocks && !source_guard_blocks;
+        let live_identity_blockers = if workspace_identity_guard_evaluated {
+            source_guard_context
+                .as_ref()
+                .map(|(uri, line, character, symbol, _byte_offset)| {
+                    self.safe_delete_symbol_live_workspace_identity_blockers(
+                        uri, *line, *character, symbol,
+                    )
+                })
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        if !live_identity_blockers.is_empty() {
+            enrich_safe_delete_decision_trace(
+                &mut receipt,
+                Some(live_identity_blockers.as_slice()),
+                "compiler_receipt_missing",
+            );
+        }
+        let workspace_identity_guard_accepts =
+            workspace_identity_guard_evaluated && live_identity_blockers.is_empty();
+        let workspace_reference_count = if live_edit_guards_ready
+            && !current_source_blocks
+            && !source_guard_blocks
+            && workspace_identity_guard_accepts
+        {
+            source_guard_context
+                .as_ref()
+                .and_then(|(uri, line, character, symbol, _byte_offset)| {
+                    self.safe_delete_workspace_reference_count(uri, *line, *character, symbol)
+                })
+                .unwrap_or(0)
+        } else {
+            0
+        };
+        let workspace_reference_blocks = live_edit_guards_ready
+            && !current_source_blocks
+            && !source_guard_blocks
+            && workspace_reference_count > 0;
+        if workspace_reference_blocks {
+            mark_safe_delete_workspace_reference_blocker(&mut receipt, workspace_reference_count);
+        }
+        let can_return_edit = live_edit_guards_ready
+            && !current_source_blocks
+            && !source_guard_blocks
+            && !workspace_reference_blocks
+            && workspace_identity_guard_accepts;
         let workspace_edit = if can_return_edit {
             rollback_proof
                 .get("planned_delete_workspace_edit")
@@ -749,15 +820,47 @@ impl LspServer {
                 }),
             );
             object.insert(
+                "live_pilot_workspace_identity_guard".to_string(),
+                json!(if !workspace_identity_guard_evaluated {
+                    "not_evaluated"
+                } else if workspace_identity_guard_accepts {
+                    "accepted"
+                } else {
+                    "ambiguous_workspace_identity"
+                }),
+            );
+            if !live_identity_blockers.is_empty() {
+                object.insert("fallback_state".to_string(), json!("no_edit"));
+                object.insert(
+                    "live_blocker_ux".to_string(),
+                    safe_delete_live_blocker_ux_json(Some(live_identity_blockers.as_slice())),
+                );
+                object.insert(
+                    "live_pilot_guard_blocker_reasons".to_string(),
+                    json!(
+                        live_identity_blockers
+                            .iter()
+                            .map(|blocker| format!("{:?}", blocker.reason))
+                            .collect::<Vec<_>>()
+                    ),
+                );
+            }
+            object.insert(
                 "returned_workspace_edit_count".to_string(),
                 json!(returned_workspace_edit_count),
             );
+            object.insert(
+                "current_source_reference_count".to_string(),
+                json!(current_source_reference_count),
+            );
+            object
+                .insert("workspace_reference_count".to_string(), json!(workspace_reference_count));
             object.insert("workspace_edit".to_string(), workspace_edit);
             object.insert("user_message".to_string(), json!(user_message));
             object.insert(
                 "claim_boundary".to_string(),
                 json!(
-                    "narrow safe-delete live pilot only; returns a source-backed symbol-delete WorkspaceEdit when compiler proof and rollback proof both pass"
+                    "narrow safe-delete live pilot only; returns a source-backed symbol-delete WorkspaceEdit when compiler proof, exact source guard, current-source/workspace reference guards, workspace identity guard, and rollback proof all pass"
                 ),
             );
             object
@@ -773,6 +876,55 @@ impl LspServer {
         }
 
         self.record_safe_delete_decision_receipt(receipt)
+    }
+
+    #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+    fn safe_delete_symbol_live_workspace_identity_blockers(
+        &self,
+        uri: &str,
+        line: u32,
+        character: u32,
+        symbol: &str,
+    ) -> Vec<PlanBlocker> {
+        let workspace_symbol_key = {
+            let documents = self.documents_guard();
+            self.get_document(&documents, uri)
+                .and_then(|doc| {
+                    let ast = doc.ast.as_ref()?;
+                    let offset = self.pos16_to_offset(doc, line, character);
+                    let current_package = crate::declaration::current_package_at(ast, offset);
+                    crate::declaration::symbol_at_cursor_with_source(
+                        ast,
+                        offset,
+                        current_package,
+                        &doc.text,
+                    )
+                })
+                .map(|key| super::to_workspace_symbol_key(&key))
+        };
+        let Some(workspace_symbol_key) = workspace_symbol_key else {
+            return Vec::new();
+        };
+
+        let IndexAccessMode::Full(coordinator) = route_index_access(self.coordinator()) else {
+            return Vec::new();
+        };
+        let index = coordinator.index();
+
+        match crate::features::workspace_rename::build_rename_edit(
+            index.as_ref(),
+            &workspace_symbol_key,
+            symbol,
+        ) {
+            Ok(_) => Vec::new(),
+            Err(refusal) => vec![PlanBlocker::new(
+                PlanBlockerReason::AmbiguousReference,
+                None,
+                format!(
+                    "Symbol '{symbol}' has ambiguous workspace identity, so the live safe-delete pilot will not return edits: {refusal}"
+                ),
+            )],
+        }
     }
 
     fn record_safe_delete_decision_receipt(
@@ -857,6 +1009,59 @@ impl LspServer {
                 Some(false)
             })
             .flatten()
+    }
+
+    #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+    fn safe_delete_current_source_reference_count(
+        &self,
+        uri: &str,
+        byte_offset: usize,
+        symbol: &str,
+    ) -> Option<usize> {
+        let documents = self.documents_guard();
+        let doc = self.get_document(&documents, uri)?;
+        let (delete_start, delete_end) =
+            safe_delete_subroutine_delete_range(&doc.text, byte_offset, symbol)?;
+        Some(count_symbol_occurrences_outside_range(&doc.text, symbol, delete_start, delete_end))
+    }
+
+    #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+    fn safe_delete_workspace_reference_count(
+        &self,
+        uri: &str,
+        line: u32,
+        character: u32,
+        symbol: &str,
+    ) -> Option<usize> {
+        let workspace_symbol_key = {
+            let documents = self.documents_guard();
+            self.get_document(&documents, uri)
+                .and_then(|doc| {
+                    let ast = doc.ast.as_ref()?;
+                    let offset = self.pos16_to_offset(doc, line, character);
+                    let current_package = crate::declaration::current_package_at(ast, offset);
+                    crate::declaration::symbol_at_cursor_with_source(
+                        ast,
+                        offset,
+                        current_package,
+                        &doc.text,
+                    )
+                })
+                .map(|key| super::to_workspace_symbol_key(&key))
+        };
+        let workspace_symbol_key = workspace_symbol_key?;
+        let symbol_name = if workspace_symbol_key.pkg.is_empty() {
+            workspace_symbol_key.name.to_string()
+        } else {
+            format!("{}::{}", workspace_symbol_key.pkg.as_ref(), workspace_symbol_key.name.as_ref())
+        };
+
+        let IndexAccessMode::Full(coordinator) = route_index_access(self.coordinator()) else {
+            return None;
+        };
+        let index = coordinator.index();
+        let usage_count = index.count_usages(&symbol_name);
+        if usage_count > 0 { Some(usage_count) } else { Some(index.count_usages(symbol)) }
     }
 }
 
@@ -1671,6 +1876,150 @@ fn safe_delete_symbol_delete_unavailable_json(reason: &'static str) -> Value {
         "reason": reason,
         "claim_boundary": "safe-delete edit rollback proof only; no live symbol-level delete edits are applied"
     })
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn mark_safe_delete_current_source_reference_blocker(receipt: &mut Value, reference_count: usize) {
+    let symbol = receipt.get("symbol").and_then(Value::as_str).unwrap_or("symbol");
+    let message = format!(
+        "Symbol '{symbol}' still has {reference_count} reference(s) in the current open document."
+    );
+
+    let Some(object) = receipt.as_object_mut() else {
+        return;
+    };
+    object.insert("decision".to_string(), json!("blocked"));
+    object.insert("reason".to_string(), json!("references_exist"));
+    object.insert("fact_source".to_string(), json!("current_source"));
+    object.insert("confidence".to_string(), json!("high"));
+    object.insert("freshness".to_string(), json!("fresh"));
+    object.insert("fallback_state".to_string(), json!("no_edit"));
+    object.insert("blocker_count".to_string(), json!(1));
+    object.insert("blocker_reasons".to_string(), json!(["ReferencesExist"]));
+    object.insert("dynamic_boundary".to_string(), json!(false));
+    object.insert(
+        "current_source_delete_guard".to_string(),
+        json!("blocked_by_current_source_reference"),
+    );
+    object.insert(
+        "live_blocker_ux".to_string(),
+        json!({
+            "requires_confirmation": true,
+            "blocker_count": 1,
+            "blocker_messages": [message]
+        }),
+    );
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn mark_safe_delete_workspace_reference_blocker(receipt: &mut Value, reference_count: usize) {
+    let symbol = receipt.get("symbol").and_then(Value::as_str).unwrap_or("symbol");
+    let message =
+        format!("Symbol '{symbol}' still has {reference_count} reference(s) in the workspace.");
+
+    let Some(object) = receipt.as_object_mut() else {
+        return;
+    };
+    object.insert("decision".to_string(), json!("blocked"));
+    object.insert("reason".to_string(), json!("references_exist"));
+    object.insert("fact_source".to_string(), json!("workspace_index"));
+    object.insert("confidence".to_string(), json!("high"));
+    object.insert("freshness".to_string(), json!("fresh"));
+    object.insert("fallback_state".to_string(), json!("no_edit"));
+    object.insert("blocker_count".to_string(), json!(1));
+    object.insert("blocker_reasons".to_string(), json!(["ReferencesExist"]));
+    object.insert("dynamic_boundary".to_string(), json!(false));
+    object.insert("workspace_reference_guard".to_string(), json!("blocked_by_workspace_reference"));
+    object.insert(
+        "live_blocker_ux".to_string(),
+        json!({
+            "requires_confirmation": true,
+            "blocker_count": 1,
+            "blocker_reasons": ["ReferencesExist"],
+            "blocker_messages": [message]
+        }),
+    );
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn mark_safe_delete_source_guard_blocker(receipt: &mut Value) {
+    let symbol = receipt.get("symbol").and_then(Value::as_str).unwrap_or("symbol");
+    let message = format!("Symbol '{symbol}' is not an exact source-backed subroutine definition.");
+
+    let Some(object) = receipt.as_object_mut() else {
+        return;
+    };
+    object.insert("decision".to_string(), json!("blocked"));
+    object.insert("reason".to_string(), json!("not_source_backed_exact_subroutine_definition"));
+    object.insert("fact_source".to_string(), json!("current_source"));
+    object.insert("confidence".to_string(), json!("high"));
+    object.insert("freshness".to_string(), json!("fresh"));
+    object.insert("fallback_state".to_string(), json!("no_edit"));
+    object.insert("blocker_count".to_string(), json!(1));
+    object
+        .insert("blocker_reasons".to_string(), json!(["NotSourceBackedExactSubroutineDefinition"]));
+    object.insert("dynamic_boundary".to_string(), json!(false));
+    object.insert(
+        "current_source_delete_guard".to_string(),
+        json!("not_source_backed_exact_subroutine_definition"),
+    );
+    object.insert(
+        "live_blocker_ux".to_string(),
+        json!({
+            "provider": "safe_delete",
+            "decision": "blocked",
+            "fallback": "no_edit",
+            "requires_confirmation": true,
+            "blocker_count": 1,
+            "blocker_reasons": ["NotSourceBackedExactSubroutineDefinition"],
+            "blocker_messages": [message]
+        }),
+    );
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn count_symbol_occurrences_outside_range(
+    text: &str,
+    symbol: &str,
+    exclude_start: usize,
+    exclude_end: usize,
+) -> usize {
+    if symbol.is_empty() {
+        return 0;
+    }
+
+    let mut count = 0usize;
+    let mut search_start = 0usize;
+    while search_start <= text.len() {
+        let Some(haystack) = text.get(search_start..) else {
+            break;
+        };
+        let Some(relative_start) = haystack.find(symbol) else {
+            break;
+        };
+        let start = search_start + relative_start;
+        let end = start + symbol.len();
+        if (start < exclude_start || start >= exclude_end)
+            && has_symbol_text_boundaries(text, start, end)
+        {
+            count += 1;
+        }
+        search_start = end;
+    }
+
+    count
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn has_symbol_text_boundaries(text: &str, start: usize, end: usize) -> bool {
+    let before = text.get(..start).and_then(|prefix| prefix.chars().next_back());
+    let after = text.get(end..).and_then(|suffix| suffix.chars().next());
+    !before.is_some_and(is_perl_identifier_char) && !after.is_some_and(is_perl_identifier_char)
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn is_perl_identifier_char(ch: char) -> bool {
+    ch == '_' || ch.is_ascii_alphanumeric()
 }
 
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]

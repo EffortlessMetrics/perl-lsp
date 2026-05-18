@@ -101,9 +101,11 @@ pub fn get_supported_commands() -> Vec<String> {
         "perl.goToTest".to_string(),
         "perl.goToImplementation".to_string(),
         "perl.explainProviderDecision".to_string(),
+        "perl.workspaceTrustReport".to_string(),
         "perl.previewSafeDelete".to_string(),
         "perl.safeDeleteSymbol".to_string(),
         "perl.previewPackageRename".to_string(),
+        "perl.explainMissingModuleLookup".to_string(),
     ]
 }
 
@@ -226,6 +228,16 @@ mod tests {
         );
     }
 
+    /// Verify that `perl.workspaceTrustReport` is included in the supported commands list.
+    #[test]
+    fn workspace_trust_report_command_id_is_registered() {
+        let cmds = get_supported_commands();
+        assert!(
+            cmds.iter().any(|c| c == "perl.workspaceTrustReport"),
+            "perl.workspaceTrustReport must be in get_supported_commands"
+        );
+    }
+
     /// Verify that `perl.previewSafeDelete` is included in the supported commands list.
     #[test]
     fn preview_safe_delete_command_id_is_registered() {
@@ -253,6 +265,16 @@ mod tests {
         assert!(
             cmds.iter().any(|c| c == "perl.previewPackageRename"),
             "perl.previewPackageRename must be in get_supported_commands"
+        );
+    }
+
+    /// Verify that `perl.explainMissingModuleLookup` is included in the supported commands list.
+    #[test]
+    fn explain_missing_module_lookup_command_id_is_registered() {
+        let cmds = get_supported_commands();
+        assert!(
+            cmds.iter().any(|c| c == "perl.explainMissingModuleLookup"),
+            "perl.explainMissingModuleLookup must be in get_supported_commands"
         );
     }
 

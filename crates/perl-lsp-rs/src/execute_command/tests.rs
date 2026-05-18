@@ -184,6 +184,10 @@ fn test_supported_commands_includes_go_to_test() {
         "perl.explainProviderDecision should be in supported commands list"
     );
     assert!(
+        commands.contains(&"perl.workspaceTrustReport".to_string()),
+        "perl.workspaceTrustReport should be in supported commands list"
+    );
+    assert!(
         commands.contains(&"perl.previewSafeDelete".to_string()),
         "perl.previewSafeDelete should be in supported commands list"
     );
@@ -194,6 +198,10 @@ fn test_supported_commands_includes_go_to_test() {
     assert!(
         commands.contains(&"perl.previewPackageRename".to_string()),
         "perl.previewPackageRename should be in supported commands list"
+    );
+    assert!(
+        commands.contains(&"perl.explainMissingModuleLookup".to_string()),
+        "perl.explainMissingModuleLookup should be in supported commands list"
     );
 }
 
@@ -1553,8 +1561,15 @@ fn test_execute_command_multi_root_security() -> Result<(), Box<dyn std::error::
 #[test]
 fn test_supported_commands_includes_all_advertised() {
     let commands = get_supported_commands();
-    let required =
-        ["perl.runTest", "perl.runTestFile", "perl.runSubtest", "perl.debugFile", "perl.debugTest"];
+    let required = [
+        "perl.runTest",
+        "perl.runTestFile",
+        "perl.runSubtest",
+        "perl.debugFile",
+        "perl.debugTest",
+        "perl.workspaceTrustReport",
+        "perl.explainMissingModuleLookup",
+    ];
     for cmd in &required {
         assert!(
             commands.contains(&cmd.to_string()),

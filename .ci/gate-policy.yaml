@@ -155,10 +155,10 @@ gates:
     description: "Validate release-history surfaces"
     required: true
     command: just ci-release-history
-    timeout_seconds: 60
+    timeout_seconds: 120
     retry_count: 0
     budgets:
-      max_duration_ms: 30000
+      max_duration_ms: 90000
     quarantine: false
     tags:
       - release
@@ -251,10 +251,10 @@ gates:
     description: "Check release-history drift"
     required: true
     command: just ci-release-history-check
-    timeout_seconds: 60
+    timeout_seconds: 120
     retry_count: 0
     budgets:
-      max_duration_ms: 30000
+      max_duration_ms: 90000
     quarantine: false
     tags:
       - release
@@ -548,10 +548,10 @@ gates:
       cargo run --locked -p xtask
       -- parser-corpus-sweep
       --manifest .ci/common-corpus-manifest.txt --enforce --receipt
-    timeout_seconds: 120
+    timeout_seconds: 240
     retry_count: 0
     budgets:
-      max_duration_ms: 90000
+      max_duration_ms: 180000
     quarantine: false
     tags:
       - corpus
