@@ -1135,6 +1135,7 @@ impl<'a> Parser<'a> {
             | TokenKind::Check
             | TokenKind::Init
             | TokenKind::Unitcheck
+            | TokenKind::Defer
             | TokenKind::Undef
             // Word-operators (also valid bareword sub names)
             | TokenKind::WordAnd    // sub and { ... }
