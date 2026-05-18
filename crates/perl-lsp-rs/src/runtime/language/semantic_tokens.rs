@@ -281,6 +281,18 @@ impl LspServer {
                 "scoped compiler method-call class cutover proof only; method calls may count as compiler-token identities only when their source-backed span already matches existing live parser/HIR method tokens, and no new token output is emitted",
             ));
         }
+        if let Some(candidate) = semantic_token_self_method_call_candidate(&doc.text) {
+            receipts.push(Self::semantic_tokens_class_specific_expansion_receipt(
+                live_provider_result,
+                candidate,
+                "self_method_call",
+                "method",
+                "matched_existing_live_method_token",
+                "unmatched_existing_live_method_token",
+                true,
+                "scoped compiler self method-call class cutover proof only; $self method calls may count as compiler-token identities only when their source-backed span already matches existing live parser/HIR method tokens, and no new token output is emitted",
+            ));
+        }
         if let Some(candidate) = semantic_token_class_field_declaration_candidate(&doc.text) {
             receipts.push(Self::semantic_tokens_class_specific_expansion_receipt(
                 live_provider_result,
@@ -508,8 +520,22 @@ fn semantic_token_method_declaration_candidate(
 fn semantic_token_method_call_candidate(
     source: &str,
 ) -> Option<crate::semantic_tokens::SemanticTokenShadowCandidate> {
-    let receiver_start = source.find("$c->")?;
-    let mut name_start = receiver_start + "$c->".len();
+    semantic_token_receiver_method_call_candidate(source, "$c->", "method_call")
+}
+
+fn semantic_token_self_method_call_candidate(
+    source: &str,
+) -> Option<crate::semantic_tokens::SemanticTokenShadowCandidate> {
+    semantic_token_receiver_method_call_candidate(source, "$self->", "self_method_call")
+}
+
+fn semantic_token_receiver_method_call_candidate(
+    source: &str,
+    receiver_marker: &str,
+    token_class: &str,
+) -> Option<crate::semantic_tokens::SemanticTokenShadowCandidate> {
+    let receiver_start = source.find(receiver_marker)?;
+    let mut name_start = receiver_start + receiver_marker.len();
 
     while let Some(ch) = source[name_start..].chars().next() {
         if ch.is_whitespace() {
@@ -538,7 +564,7 @@ fn semantic_token_method_call_candidate(
     )?;
 
     Some(crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
-        format!("token:method_call:{name}:compiler"),
+        format!("token:{token_class}:{name}:compiler"),
         ProviderFactSourceKind::CompilerFact,
         Provenance::SemanticAnalyzer,
         Confidence::Medium,
@@ -651,6 +677,24 @@ fn semantic_tokens_live_slice_provider_trace(
             source_backed_state: "source_backed_method_call_live_token_match",
             user_message: "Semantic tokens exposed the source-backed compiler method-call live trace because it matched the existing parser/HIR method token. No new semantic tokens were emitted.",
             claim_boundary: "only source-backed compiler method-call spans that exactly match existing live parser/HIR method tokens participate; generated/no-source, stale, dynamic-boundary, low-confidence, fallback, broader method classes, and unmatched compiler candidates remain blocked, fallback-only, or shadowed",
+        },
+    ) {
+        return trace;
+    }
+
+    let self_method_call_candidate = semantic_token_self_method_call_candidate(source);
+    saw_compiler_token_candidate |= self_method_call_candidate.is_some();
+    if let Some(trace) = semantic_tokens_live_slice_provider_trace_for_candidate(
+        self_method_call_candidate,
+        Some(live_provider_result),
+        live_token_count,
+        provider_action,
+        SemanticTokenLiveSliceTraceSpec {
+            live_token_type: "method",
+            compiler_token_class: "self_method_call",
+            source_backed_state: "source_backed_self_method_call_live_token_match",
+            user_message: "Semantic tokens exposed the source-backed compiler $self method-call live trace because it matched the existing parser/HIR method token. No new semantic tokens were emitted.",
+            claim_boundary: "only source-backed compiler $self method-call spans that exactly match existing live parser/HIR method tokens participate; generated/no-source, stale, dynamic-boundary, low-confidence, fallback, broader receiver classes, and unmatched compiler candidates remain blocked, fallback-only, or shadowed",
         },
     ) {
         return trace;

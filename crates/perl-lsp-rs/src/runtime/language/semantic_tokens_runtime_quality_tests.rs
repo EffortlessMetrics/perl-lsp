@@ -205,6 +205,26 @@ class TokenGreeter {
 "#;
 
 /// Empty Perl file — no declarations at all.
+const SELF_METHOD_CALL_MODULE: &str = r#"package TokenSelfCall;
+use strict;
+use warnings;
+
+my $self = current_object();
+$self->status;
+
+1;
+"#;
+
+const UPDATED_SELF_METHOD_CALL_MODULE: &str = r#"package TokenSelfCall;
+use strict;
+use warnings;
+
+my $self = current_object();
+$self->status_updated;
+
+1;
+"#;
+
 const EMPTY_PERL: &str = r#"1;
 "#;
 
@@ -833,6 +853,128 @@ fn semantic_tokens_runtime_quality_receipt_proves_source_backed_method_call_comp
             .filter_map(Value::as_str)
             .any(|identity| identity == "token:method_call:stash:compiler"),
         "class-specific receipt must authorize only the method-call identity; got: {identities:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_proves_source_backed_self_method_call_compiler_token_parity()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    let self_call_uri = "file:///workspace/lib/TokenSelfCall.pm";
+    open_document(&server, self_call_uri, SELF_METHOD_CALL_MODULE);
+
+    let params = json!({ "textDocument": {"uri": self_call_uri} });
+    let live_result =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+
+    assert_eq!(
+        receipt.get("live_provider_result"),
+        Some(&live_result),
+        "self method-call class proof must compare against the exact live token output"
+    );
+    assert_eq!(
+        receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(true),
+        "self method-call class receipt must not change live semantic-token behavior"
+    );
+    assert_eq!(
+        receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "self method-call class receipt must not emit additional semantic tokens"
+    );
+
+    let (method_start, method_end, expected_line, expected_start, expected_length) =
+        method_call_name_span(SELF_METHOD_CALL_MODULE, "status")?;
+    let method_span = crate::semantic_tokens::SemanticTokenShadowSpan::from_byte_offsets(
+        SELF_METHOD_CALL_MODULE,
+        method_start,
+        method_end,
+    )
+    .ok_or("expected source-backed self method-call compiler span")?;
+    assert_eq!(method_span.range.start.line, expected_line);
+    assert_eq!(method_span.range.start.character, expected_start);
+    assert_eq!(method_span.single_line_lsp_length(), Some(expected_length));
+
+    let method_receipt = class_specific_receipt(&receipt, "self_method_call")?;
+    assert_eq!(method_receipt.get("source").and_then(Value::as_str), Some("CompilerFact"));
+    assert_eq!(method_receipt.get("provenance").and_then(Value::as_str), Some("SemanticAnalyzer"));
+    assert_eq!(method_receipt.get("freshness").and_then(Value::as_str), Some("Fresh"));
+    assert_eq!(method_receipt.get("fallback_state").and_then(Value::as_str), Some("Primary"));
+    assert_eq!(
+        method_receipt.get("approved_for_live_cutover").and_then(Value::as_bool),
+        Some(true),
+        "self method calls are the scoped class under cutover proof"
+    );
+    assert_eq!(
+        method_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "self method-call receipt may join the scoped compiler-token live pilot only with parity proof"
+    );
+    assert_eq!(
+        method_receipt.get("live_output_parity").and_then(Value::as_bool),
+        Some(true),
+        "source-backed self method-call compiler span must match existing live method token output"
+    );
+    assert_eq!(
+        method_receipt.get("parity_state").and_then(Value::as_str),
+        Some("matched_existing_live_method_token")
+    );
+    assert_eq!(method_receipt.get("live_token_type").and_then(Value::as_str), Some("method"));
+    assert_eq!(method_receipt.get("live_token_match_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(method_receipt.get("candidate_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        method_receipt.get("source_backed_span_count").and_then(Value::as_u64),
+        Some(1),
+        "self method-call candidate must be source-backed"
+    );
+    assert_eq!(method_receipt.get("missing_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(method_receipt.get("invalid_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(
+        method_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true)
+    );
+
+    let method_token_type =
+        *crate::semantic_tokens::legend().map.get("method").ok_or("missing method token")?;
+    let live_match_count = decode_semantic_tokens(&live_result)?
+        .iter()
+        .filter(|token| {
+            token.line == expected_line
+                && token.start == expected_start
+                && token.length == expected_length
+                && token.token_type == method_token_type
+        })
+        .count();
+    assert_eq!(
+        live_match_count, 1,
+        "source-backed self method-call compiler span must match exactly one existing live method token"
+    );
+
+    let claim_boundary = must_some(method_receipt.get("claim_boundary").and_then(Value::as_str));
+    assert!(
+        claim_boundary.contains("$self method calls")
+            && claim_boundary.contains("no new token output is emitted"),
+        "self method-call receipt must preserve the output-neutral boundary; got: {claim_boundary}"
+    );
+
+    let shadow_receipt = must_some(method_receipt.get("shadow_receipt").and_then(Value::as_object));
+    let new_result = must_some(shadow_receipt.get("new_result").and_then(Value::as_object));
+    assert_eq!(
+        new_result.get("match_count").and_then(Value::as_u64),
+        Some(1),
+        "source-backed self method-call compiler candidates may count only through the scoped class identity"
+    );
+    let identities = must_some(new_result.get("identities").and_then(Value::as_array));
+    assert!(
+        identities
+            .iter()
+            .filter_map(Value::as_str)
+            .any(|identity| identity == "token:self_method_call:status:compiler"),
+        "class-specific receipt must authorize only the self method-call identity; got: {identities:?}"
     );
 
     Ok(())
@@ -2005,6 +2147,70 @@ fn semantic_tokens_runtime_quality_receipt_refreshes_method_call_live_pilot_afte
         updated_method_receipt.get("live_token_match_count").and_then(Value::as_u64),
         Some(1),
         "post-edit source-backed method call must still match the live token stream"
+    );
+    assert_eq!(
+        updated_method_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "edit-freshness proof must remain output-neutral"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_refreshes_self_method_call_live_pilot_after_edit()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    let self_call_uri = "file:///workspace/lib/TokenSelfCall.pm";
+    open_document(&server, self_call_uri, SELF_METHOD_CALL_MODULE);
+
+    let params = json!({ "textDocument": {"uri": self_call_uri} });
+    let initial_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let initial_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params.clone()))));
+    let initial_method_receipt = class_specific_receipt(&initial_receipt, "self_method_call")?;
+    let initial_identity = first_shadow_identity(initial_method_receipt)?;
+    assert!(
+        initial_identity.contains("status"),
+        "initial self method-call compiler identity should use the opened source: {initial_identity}"
+    );
+    assert_eq!(
+        initial_method_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "initial self method call should be the scoped class live pilot"
+    );
+
+    change_document(&server, self_call_uri, 2, UPDATED_SELF_METHOD_CALL_MODULE);
+
+    let updated_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let updated_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+    let updated_method_receipt = class_specific_receipt(&updated_receipt, "self_method_call")?;
+    let updated_identity = first_shadow_identity(updated_method_receipt)?;
+
+    assert_ne!(
+        updated_live, initial_live,
+        "live semantic-token output must refresh after the self method-call edit"
+    );
+    assert_ne!(
+        updated_identity, initial_identity,
+        "self method-call compiler identity must refresh after didChange"
+    );
+    assert!(
+        updated_identity.contains("status_updated"),
+        "updated self method-call compiler identity should use the edited source: {updated_identity}"
+    );
+    assert_eq!(
+        updated_method_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "post-edit self method call should remain in the scoped class live pilot"
+    );
+    assert_eq!(
+        updated_method_receipt.get("live_token_match_count").and_then(Value::as_u64),
+        Some(1),
+        "post-edit source-backed self method call must still match the live token stream"
     );
     assert_eq!(
         updated_method_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
