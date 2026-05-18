@@ -43,6 +43,45 @@ fn completion_labels(items: &[Value]) -> Vec<&str> {
     items.iter().filter_map(|item| item.get("label").and_then(Value::as_str)).collect()
 }
 
+fn wait_for_diagnostics_matching(
+    server: &common::LspServer,
+    uri: &str,
+    timeout: Duration,
+    predicate: impl Fn(&[Value]) -> bool,
+) -> Result<Value, Box<dyn std::error::Error>> {
+    let deadline = Instant::now() + timeout;
+    let mut last_payload: Option<Value> = None;
+
+    while Instant::now() < deadline {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        let Some(notification) = common::read_notification_method(
+            server,
+            "textDocument/publishDiagnostics",
+            remaining.min(Duration::from_millis(250)),
+        ) else {
+            continue;
+        };
+
+        if notification.pointer("/params/uri").and_then(Value::as_str) != Some(uri) {
+            continue;
+        }
+
+        last_payload = Some(notification.clone());
+        let diagnostics = notification
+            .pointer("/params/diagnostics")
+            .and_then(Value::as_array)
+            .ok_or("publishDiagnostics payload missing diagnostics array")?;
+        if predicate(diagnostics) {
+            return Ok(notification);
+        }
+    }
+
+    Err(format!(
+        "timeout waiting for matching publishDiagnostics for {uri}; last payload: {last_payload:#?}"
+    )
+    .into())
+}
+
 fn diagnostic_items(response: &Value) -> Result<&Vec<Value>, Box<dyn std::error::Error>> {
     let result = response.get("result").ok_or("diagnostic response missing result")?;
     let items = result.get("items").ok_or("diagnostic result missing items")?;
@@ -51,6 +90,153 @@ fn diagnostic_items(response: &Value) -> Result<&Vec<Value>, Box<dyn std::error:
 
 fn diagnostic_messages(items: &[Value]) -> Vec<&str> {
     items.iter().filter_map(|item| item.get("message").and_then(Value::as_str)).collect()
+}
+
+#[test]
+fn lsp_smoke_e2e_push_diagnostics_clear_after_fix() -> Result<(), Box<dyn std::error::Error>> {
+    let server = common::start_lsp_server();
+    let request_timeout = Duration::from_secs(3);
+    let diagnostics_timeout = Duration::from_secs(5);
+    let init_timeout = common::timeout_scaler::TimeoutProfile::Initialization.timeout();
+    let uri = "file:///tmp/lsp_smoke_e2e_diagnostics.pl";
+
+    let init_response = send_request_with_timeout(
+        &server,
+        101,
+        "initialize",
+        json!({
+            "processId": null,
+            "rootUri": null,
+            "capabilities": {
+                "textDocument": {
+                    "publishDiagnostics": {
+                        "relatedInformation": true,
+                        "versionSupport": true
+                    }
+                }
+            }
+        }),
+        init_timeout,
+    )?;
+    assert!(init_response.get("error").is_none(), "initialize returned error: {init_response:#}");
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "initialized",
+            "params": {}
+        }),
+    );
+
+    let broken_source = r#"use strict;
+use warnings;
+
+sub broken {
+    if ($_[0] > 10 {
+        return $_[0];
+    }
+}
+"#;
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": broken_source
+                }
+            }
+        }),
+    );
+
+    let broken_diagnostics =
+        wait_for_diagnostics_matching(&server, uri, diagnostics_timeout, |diagnostics| {
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.get("source").and_then(Value::as_str) == Some("perl-parser")
+                    && diagnostic.get("severity").and_then(Value::as_i64) == Some(1)
+            })
+        })?;
+    let broken_items = broken_diagnostics
+        .pointer("/params/diagnostics")
+        .and_then(Value::as_array)
+        .ok_or("broken diagnostics payload missing diagnostics array")?;
+    assert!(
+        !broken_items.is_empty(),
+        "broken source should publish at least one diagnostic: {broken_diagnostics:#}"
+    );
+
+    let fixed_source = r#"use strict;
+use warnings;
+
+sub broken {
+    if ($_[0] > 10) {
+        return $_[0];
+    }
+}
+
+my $answer = broken(11);
+print $answer;
+"#;
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didChange",
+            "params": {
+                "textDocument": { "uri": uri, "version": 2 },
+                "contentChanges": [{ "text": fixed_source }]
+            }
+        }),
+    );
+
+    let fixed_diagnostics =
+        wait_for_diagnostics_matching(&server, uri, diagnostics_timeout, |diagnostics| {
+            diagnostics.is_empty()
+        })?;
+    assert_eq!(
+        fixed_diagnostics.pointer("/params/version").and_then(Value::as_i64),
+        Some(2),
+        "clear diagnostics notification should carry the didChange version"
+    );
+
+    let hover_response = send_request_with_timeout(
+        &server,
+        102,
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 3, "character": 4 }
+        }),
+        request_timeout,
+    )?;
+    assert!(
+        hover_response.get("error").is_none(),
+        "server should remain responsive after diagnostics clear: {hover_response:#}"
+    );
+
+    let shutdown_response =
+        send_request_with_timeout(&server, 103, "shutdown", json!(null), request_timeout)?;
+    assert!(
+        shutdown_response.get("error").is_none(),
+        "shutdown returned error: {shutdown_response:#}"
+    );
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+            "params": null
+        }),
+    );
+
+    Ok(())
 }
 
 #[test]
