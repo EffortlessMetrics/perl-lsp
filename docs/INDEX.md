@@ -34,6 +34,7 @@ Choose the path that matches what you are trying to do:
 | Share project settings with my team | [Project Configuration File (.perl-lsp.toml)](reference/CONFIG.md#project-configuration-file-perl-lsptoml) |
 | Migrate from perltidy or perlcritic to native tooling | [Native Tooling Migration](how-to/NATIVE_TOOLING_MIGRATION.md) |
 | Troubleshoot startup, indexing, or editor issues | [Troubleshooting](how-to/TROUBLESHOOTING.md) |
+| Understand editor trust, fallbacks, and receipts | [Editor Trust](how-to/EDITOR_TRUST.md) |
 | Understand the server architecture | [Architecture Overview](reference/ARCHITECTURE_OVERVIEW.md) |
 | Understand measured editor trust and the Rust Perl replacement path | [Measured Perl Editor Trust](explanation/MEASURED_PERL_EDITOR_TRUST.md) |
 | Understand the compiler-backed LSP direction | [Compiler-Backed LSP Roadmap](project/COMPILER_BACKED_LSP_ROADMAP.md) |
@@ -67,6 +68,7 @@ Task-focused instructions for common workflows (goal-oriented).
 - [Editor Setup](how-to/EDITOR_SETUP.md)
 - [Native Tooling Migration](how-to/NATIVE_TOOLING_MIGRATION.md)
 - [Troubleshooting](how-to/TROUBLESHOOTING.md)
+- [Editor Trust](how-to/EDITOR_TRUST.md)
 - [Continuous Testing](how-to/CONTINUOUS_TESTING.md)
 - [Contributing LSP Features](how-to/CONTRIBUTING_LSP.md)
 - [Threading Configuration Guide](how-to/THREADING_CONFIGURATION_GUIDE.md)
