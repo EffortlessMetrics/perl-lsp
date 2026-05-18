@@ -45,8 +45,12 @@
 // Tests in this crate use assertion macros to preserve compact verdict receipts.
 #![cfg_attr(test, allow(clippy::panic))]
 
+pub mod corpus_walker;
 pub mod harness;
 pub mod outcomes;
 
+pub use corpus_walker::{
+    AggregateStats, DisagreementKind, FileRecord, classify, format_report, walk_corpora,
+};
 pub use harness::{ParseResult, parse_v1, parse_v2, parse_v3};
 pub use outcomes::Verdict;

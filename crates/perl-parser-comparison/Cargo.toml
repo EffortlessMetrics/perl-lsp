@@ -16,9 +16,14 @@ perl-parser-core = { workspace = true }
 perl-parser-pest = { workspace = true }
 tree-sitter-perl-c = { workspace = true }
 tree-sitter = { workspace = true }
+walkdir = { workspace = true }
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }
+
+[[bin]]
+name = "corpus_differential"
+path = "src/bin/corpus_differential.rs"
 
 [lib]
 doctest = false
