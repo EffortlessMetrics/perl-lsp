@@ -1,18 +1,23 @@
 use perl_lexer::{Checkpointable, PerlLexer, Token, TokenType};
 use proptest::prelude::*;
 
+mod prop_support;
+
+use prop_support::mixed_source;
+const REGRESS_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/_proptest-regressions/prop_checkpoint_and_span_invariants"
+);
+
 fn token_signature(token: &Token) -> (String, usize, usize, String) {
     (format!("{:?}", token.token_type), token.start, token.end, token.text.to_string())
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig {
-        cases: 192,
-        ..ProptestConfig::default()
-    })]
+    #![proptest_config(prop_support::persisted_config(REGRESS_DIR, 192))]
 
     #[test]
-    fn lexer_emits_monotonic_valid_spans(input in ".{0,256}") {
+    fn lexer_emits_monotonic_valid_spans(input in mixed_source(96)) {
         let mut lexer = PerlLexer::new(&input);
         let mut previous_end = 0usize;
 
@@ -46,7 +51,7 @@ proptest! {
 
     #[test]
     fn restoring_checkpoint_preserves_forward_progress(
-        input in ".{0,200}",
+        input in mixed_source(80),
         split_tokens in 0usize..40,
     ) {
         let mut lexer = PerlLexer::new(&input);
@@ -91,7 +96,7 @@ proptest! {
         prop_assert!(false, "lexer exceeded token budget after restore");
     }
     #[test]
-    fn collect_tokens_matches_manual_iteration(input in ".{0,200}") {
+    fn collect_tokens_matches_manual_iteration(input in mixed_source(80)) {
         let mut manual_lexer = PerlLexer::new(&input);
         let mut manual = Vec::new();
 
