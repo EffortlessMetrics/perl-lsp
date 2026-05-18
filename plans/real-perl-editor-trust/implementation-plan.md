@@ -1,6 +1,6 @@
 # Real Perl Editor Trust Implementation Plan
 
-Status: active
+Status: completed
 Owner: perl-lsp maintainers
 Linked proposal: [PLSP-PROP-0001](../../docs/proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
 Linked specs:
@@ -11,7 +11,7 @@ Linked specs:
 Linked ADRs:
 - [PLSP-ADR-0001](../../docs/adr/PLSP-ADR-0001-generated-status-is-control-plane.md)
 - [PLSP-ADR-0002](../../docs/adr/PLSP-ADR-0002-confidence-before-cutover.md)
-Active goal: [active.toml](../../.perl-lsp/goals/active.toml)
+Goal manifest: [active.toml](../../.perl-lsp/goals/active.toml)
 
 ## Current State
 
@@ -647,14 +647,17 @@ Completion audit
 - Provider confidence: `provider_confidence_matrix.md` maps provider source,
   confidence, freshness, fallback, runtime comparison, real-workspace links,
   live state, and next proof.
-- Real-workspace proof: the 2026-05-13 Mojolicious Windows receipt records the
-  covered editor-latency surfaces and explicit deferrals.
+- Real-workspace proof: the Mojolicious and Dancer2 Windows receipts record the
+  covered editor-latency surfaces and explicit deferrals; the real-project
+  resource receipt records fixture file, line, and byte shape while leaving RSS
+  and heap ceilings to memory plateau receipts.
 - Support claims: `SUPPORT_TIERS.md` maps user-facing claims to proof commands,
   status docs, known limitations, and next promotion proof.
 
 Proof commands
 
 ```bash
+cargo run -p xtask -- parser-corpus-sweep --manifest .ci/common-corpus-manifest.txt --enforce --receipt
 cargo xtask update-status --only parser --check
 cargo xtask semantic-scorecard --check
 cargo xtask semantic-shadow-compare --check

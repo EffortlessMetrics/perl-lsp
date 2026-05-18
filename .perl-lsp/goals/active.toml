@@ -1,12 +1,14 @@
 id = "plsp-real-perl-editor-trust"
 title = "Real Perl editor trust"
-status = "active"
+status = "completed"
 owner = "codex-swarm"
 created = "2026-05-13"
+completed = "2026-05-18"
 
 proposal = "docs/proposals/PLSP-PROP-0001-real-perl-editor-trust.md"
 plan = "plans/real-perl-editor-trust/implementation-plan.md"
 status_pointer = "docs/project/status/parser_accuracy_next.md"
+closeout_receipt = "plans/real-perl-editor-trust/implementation-plan.md#work-item-lane-closeout"
 
 specs = [
   "docs/specs/PLSP-SPEC-0001-parser-compatibility-bucket-closeout.md",
