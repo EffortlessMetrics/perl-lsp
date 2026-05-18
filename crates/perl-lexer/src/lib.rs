@@ -3062,6 +3062,9 @@ impl<'a> PerlLexer<'a> {
         quote: char,
         delim: char,
     ) -> Option<(usize, bool)> {
+        if Self::is_word_apostrophe(self.input, start, quote) {
+            return None;
+        }
         // Adjacent quotes are literal replacement text (for example s/"/""/g),
         // not a string literal to skip while hunting for the replacement delimiter.
         if self.input.get(..start).and_then(|text| text.chars().next_back()) == Some(quote) {
@@ -3107,6 +3110,14 @@ impl<'a> PerlLexer<'a> {
         }
 
         None
+    }
+
+    fn is_word_apostrophe(input: &str, pos: usize, quote: char) -> bool {
+        quote == '\''
+            && input
+                .get(..pos)
+                .and_then(|text| text.chars().next_back())
+                .is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == '_')
     }
 
     fn parse_transliteration(&mut self, start: usize) -> Option<Token> {
