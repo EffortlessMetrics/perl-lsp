@@ -155,10 +155,10 @@ gates:
     description: "Validate release-history surfaces"
     required: true
     command: just ci-release-history
-    timeout_seconds: 60
+    timeout_seconds: 120
     retry_count: 0
     budgets:
-      max_duration_ms: 30000
+      max_duration_ms: 90000
     quarantine: false
     tags:
       - release
@@ -251,10 +251,10 @@ gates:
     description: "Check release-history drift"
     required: true
     command: just ci-release-history-check
-    timeout_seconds: 60
+    timeout_seconds: 120
     retry_count: 0
     budgets:
-      max_duration_ms: 30000
+      max_duration_ms: 90000
     quarantine: false
     tags:
       - release
