@@ -17,8 +17,11 @@ Active goal: [active.toml](../../.perl-lsp/goals/active.toml)
 
 - [parser accuracy next](../../docs/project/status/parser_accuracy_next.md)
   reports 0 active failure packets and no measurement gaps.
-- Parser capability work routes through
-  [parser raw failure buckets](../../docs/project/status/parser.md#raw-failure-buckets).
+- Parser bucket capability work routes through
+  [parser raw failure buckets](../../docs/project/status/parser.md#raw-failure-buckets)
+  only when generated parser status lists a nonzero raw bucket or a current
+  source-backed fixture fails against the parser. When parser status lists
+  `none`, do not start raw-bucket work from stale context.
 - Raw bucket counts are point-in-time corpus receipt data. Fixture-only PRs may
   lock source-backed shapes, but only fresh corpus receipts may claim bucket
   movement.
@@ -346,19 +349,21 @@ lands.
 
 ## Work item: raw-bucket-fixture-lane
 
-Status: active
+Status: deferred while generated parser status lists no nonzero raw bucket
 Linked proposal: [PLSP-PROP-0001](../../docs/proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
 Linked spec: [PLSP-SPEC-0001](../../docs/specs/PLSP-SPEC-0001-parser-compatibility-bucket-closeout.md), [PLSP-SPEC-0004](../../docs/specs/PLSP-SPEC-0004-corpus-receipt-freshness.md)
 Linked ADR: [PLSP-ADR-0001](../../docs/adr/PLSP-ADR-0001-generated-status-is-control-plane.md)
-Blocks: linux-corpus-refresh, support-claim-refresh
-Blocked by: generated-status-control-plane-adr
+Blocks: none until a current nonzero raw bucket or failing fixture reopens it
+Blocked by: generated parser status listing no nonzero raw bucket
 
 Goal
 
-Continue source-backed fixture or narrow parser-fix work from
-`parser.md#raw-failure-buckets`.
+Do not start raw-bucket work while generated parser status lists `none`. Resume
+source-backed fixture or narrow parser-fix work only from a fresh Linux corpus
+receipt, a generated nonzero raw bucket, or a focused source-backed fixture that
+fails against the current parser.
 
-Current shape analysis:
+Historical shape analysis:
 [unclosed_paren_identifier shape analysis](../../docs/project/status/parser_unclosed_paren_identifier_shapes.md).
 AST boundary receipts:
 `../../crates/perl-parser-core/tests/list_operator_boundary_receipts.rs`.
@@ -370,8 +375,8 @@ movement.
 
 Production delta
 
-Each PR locks one real-Perl parser shape or fixes one narrow parser behavior
-with focused tests.
+When this lane is reopened, each PR locks one real-Perl parser shape or fixes
+one narrow parser behavior with focused tests.
 
 Non-goals
 
@@ -380,8 +385,10 @@ runtime change in fixture-only PRs.
 
 Acceptance
 
-Each PR names the generated status pointer, states receipt freshness, keeps the
-scope PR-sized, and states allowed and unproven claims.
+When this lane is reopened, each PR names the generated status pointer, states
+receipt freshness, keeps the scope PR-sized, and states allowed and unproven
+claims. If generated status still lists `none`, the PR must identify a current
+failing source-backed fixture instead of a stale bucket name.
 
 Proof commands
 
@@ -627,10 +634,13 @@ Completion audit
 - Source-of-truth stack: proposal, specs, ADRs, implementation plan, and active
   goal manifest are present.
 - Parser control plane: `parser_accuracy_next.md` reports 0 active failure
-  packets and routes capability work to `parser.md#raw-failure-buckets`.
-- Parser claim boundary: `parser.md` records the stale system-Perl receipt and
-  the raw `unclosed_paren_identifier` bucket; fixture-only work remains active
-  and must not claim bucket-count movement.
+  packets and hands capability work to `parser.md#raw-failure-buckets` only
+  when generated parser status lists a nonzero raw bucket.
+- Parser claim boundary: current generated parser status lists no nonzero raw
+  bucket, so raw-bucket fixture work is not active from stale context. Future
+  parser fixture/fix work must start from a fresh Linux corpus receipt, a
+  generated nonzero raw bucket, or a current failing source-backed fixture and
+  must not claim bucket-count movement without regenerated corpus proof.
 - Linux corpus refresh: deferred on this Windows host because the Linux
   system-Perl roots are unavailable; a dedicated Linux corpus refresh lane owns
   the fresh receipt.

@@ -94,3 +94,60 @@ $name =~ s/\[[^\]]*\]//g;"#;
     );
     Ok(())
 }
+
+#[test]
+fn substitution_quote_replacement_closes_before_comment_quote() -> TestResult {
+    let source = r#"for (@tokens) {
+    s/^"//;     #"
+    s/"$//;     #"
+    s/""/"/g;   #"
+}
+if ($conditional =~ /^(and|&&)$/) { }"#;
+    let mut lexer = PerlLexer::new(source);
+    let mut substitutions = Vec::new();
+
+    while let Some(token) = lexer.next_token() {
+        if matches!(token.token_type, TokenType::Error(_)) {
+            return Err(format!("unexpected lexer error token: {token:?}").into());
+        }
+        if matches!(token.token_type, TokenType::Substitution) {
+            substitutions.push(token.text.to_string());
+        }
+        if matches!(token.token_type, TokenType::EOF) {
+            break;
+        }
+    }
+
+    assert_eq!(
+        substitutions,
+        vec![r#"s/^"//"#, r#"s/"$//"#, r#"s/""/"/g"#],
+        "expected quote replacement to close before the trailing comment quote",
+    );
+    Ok(())
+}
+
+#[test]
+fn filetest_s_before_right_paren_is_not_substitution() -> TestResult {
+    let source = "if (-s) { unlink($target); }";
+    let mut lexer = PerlLexer::new(source);
+    let mut token_texts = Vec::new();
+
+    while let Some(token) = lexer.next_token() {
+        if matches!(token.token_type, TokenType::Substitution) {
+            return Err(format!("filetest -s was lexed as substitution: {token:?}").into());
+        }
+        if !matches!(token.token_type, TokenType::Whitespace | TokenType::EOF) {
+            token_texts.push(token.text.to_string());
+        }
+        if matches!(token.token_type, TokenType::EOF) {
+            break;
+        }
+    }
+
+    assert_eq!(
+        token_texts,
+        vec!["if", "(", "-", "s", ")", "{", "unlink", "(", "$target", ")", ";", "}"],
+    );
+
+    Ok(())
+}

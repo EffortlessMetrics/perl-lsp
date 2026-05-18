@@ -545,6 +545,41 @@ fn link_target_with_unicode_module_name_is_percent_encoded() {
 }
 
 #[test]
+fn e_format_code_decodes_numeric_codepoints() -> Result<(), Box<dyn std::error::Error>> {
+    let doc = extract_pod("=head1 NAME\n\nE<65>E<0x20>E<0x3BB>\n\n=cut\n");
+    assert_eq!(doc.name.as_deref(), Some("A λ"));
+    Ok(())
+}
+
+#[test]
+fn e_format_code_decodes_core_entities() -> Result<(), Box<dyn std::error::Error>> {
+    let doc = extract_pod(
+        "=head1 NAME\n\nUse E<181>, E<0x201E>, E<075>, E<sol>, and E<verbar>.\n\n=cut\n",
+    );
+    assert_eq!(doc.name.as_deref(), Some("Use µ, „, =, /, and |."));
+    Ok(())
+}
+
+#[test]
+fn double_angle_formatting_keeps_angle_operators() -> Result<(), Box<dyn std::error::Error>> {
+    let doc = extract_pod("=head2 compare\n\nUse C<< $left <=> $right >>.\n\n=cut\n");
+    assert_eq!(doc.methods.get("compare").map(String::as_str), Some("Use $left <=> $right."));
+    Ok(())
+}
+
+#[test]
+fn double_angle_links_render_markdown() -> Result<(), Box<dyn std::error::Error>> {
+    let doc = extract_pod(
+        "=head1 DESCRIPTION\n\nSee L<< the wanted callback|File::Find/The wanted function >>.\n\n=cut\n",
+    );
+    assert_eq!(
+        doc.description.as_deref(),
+        Some("See [the wanted callback](perl-module://File::Find/The%20wanted%20function).")
+    );
+    Ok(())
+}
+
+#[test]
 fn multiple_pod_blocks() {
     let source = r#"
 package Multi;

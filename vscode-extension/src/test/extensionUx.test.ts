@@ -22,6 +22,7 @@ import {
   explainDiagnosticCommand,
   explainMissingModuleLookupCommand,
   explainProviderDecisionCommand,
+  previewPackageRenameCommand,
   previewSafeDeleteCommand,
   showWorkspaceTrustReportCommand,
   validateIncludePaths,
@@ -29,6 +30,7 @@ import {
   setPerlCriticSeverity,
   syncPerlCriticConfiguration,
   warnAboutPerlExtensionConflicts,
+  workspaceTrustClientRuntimeState,
 } from '../extension';
 
 function makeContext(version = '0.12.3'): any {
@@ -628,6 +630,53 @@ describe('extension UX warnings', () => {
     );
   });
 
+  test('previews package rename through the no-edit LSP command', async () => {
+    const sendRequest = jest.fn(async () => ({
+      provider: 'rename',
+      decision: 'allowed',
+      user_message: 'Package rename preview is available. No edits were applied.',
+    }));
+    (vscode.window.showInputBox as jest.Mock).mockResolvedValue('renamed_shared');
+    (vscode.window as any).activeTextEditor = {
+      document: {
+        languageId: 'perl',
+        uri: vscode.Uri.file('/workspace/lib/Foo.pm'),
+        getText: jest.fn(() => 'shared'),
+        getWordRangeAtPosition: jest.fn(() => ({ start: { line: 12, character: 4 }, end: { line: 12, character: 10 } })),
+      },
+      selection: {
+        active: { line: 12, character: 4 },
+        isEmpty: true,
+      },
+    };
+
+    await previewPackageRenameCommand({ sendRequest } as any);
+
+    expect(vscode.window.showInputBox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        value: 'shared',
+        placeHolder: 'renamed_symbol',
+      })
+    );
+    expect(sendRequest).toHaveBeenCalledWith(
+      'workspace/executeCommand',
+      {
+        command: 'perl.previewPackageRename',
+        arguments: [
+          {
+            textDocument: { uri: 'file:///workspace/lib/Foo.pm' },
+            position: { line: 12, character: 4 },
+            newName: 'renamed_shared',
+          },
+        ],
+      }
+    );
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      'Package rename preview is available. No edits were applied.',
+      'Show Output'
+    );
+  });
+
   test('copies the provider decision bug-report payload', async () => {
     const sendRequest = jest.fn(async () => ({
       provider: 'safe_delete',
@@ -661,6 +710,79 @@ describe('extension UX warnings', () => {
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
       'Provider decision receipt copied.'
     );
+  });
+
+  test('summarizes launch configuration module paths without copying raw paths', () => {
+    const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-launch-config-'));
+    fs.mkdirSync(path.join(workspaceDir, '.vscode'), { recursive: true });
+    fs.writeFileSync(path.join(workspaceDir, '.vscode', 'launch.json'), '{}');
+
+    (vscode.workspace as any).workspaceFolders = [
+      {
+        name: 'workspace',
+        uri: vscode.Uri.file(workspaceDir),
+      },
+    ];
+
+    (vscode.workspace.getConfiguration as jest.Mock).mockImplementation((section?: string) => {
+      if (section === 'launch') {
+        return {
+          get: jest.fn((key: string, defaultValue?: unknown) => {
+            if (key !== 'configurations') {
+              return defaultValue;
+            }
+            return [
+              {
+                type: 'perl',
+                request: 'launch',
+                name: 'Perl launch',
+                program: '${workspaceFolder}/script/app.pl',
+                cwd: 'script',
+                perlPath: '/opt/perl/bin/perl',
+                includePaths: ['${workspaceFolder}/lib', 'local/lib/perl5', 42],
+              },
+              {
+                type: 'perl',
+                request: 'attach',
+                name: 'Perl attach',
+                includePaths: ['t/lib'],
+              },
+              {
+                type: 'node',
+                request: 'launch',
+                name: 'Ignored non-Perl launch',
+                includePaths: ['node_modules'],
+              },
+            ];
+          }),
+        };
+      }
+      return {
+        get: jest.fn((_key: string, defaultValue?: unknown) => defaultValue),
+        has: jest.fn(() => false),
+        inspect: jest.fn(),
+        update: jest.fn(),
+      };
+    });
+
+    const state = workspaceTrustClientRuntimeState();
+    const dap = state.dap as Record<string, unknown>;
+    const launchConfiguration = dap.launch_configuration as Record<string, unknown>;
+    const includePathCounts = launchConfiguration.include_path_kind_counts as Record<string, number>;
+
+    expect(dap.launch_json_workspace_count).toBe(1);
+    expect(launchConfiguration.status).toBe('client_launch_config_reported');
+    expect(launchConfiguration.configuration_count).toBe(3);
+    expect(launchConfiguration.perl_configuration_count).toBe(2);
+    expect(launchConfiguration.launch_request_count).toBe(1);
+    expect(launchConfiguration.attach_request_count).toBe(1);
+    expect(launchConfiguration.include_paths_configured_count).toBe(2);
+    expect(launchConfiguration.include_path_entry_count).toBe(3);
+    expect(launchConfiguration.non_string_include_path_count).toBe(1);
+    expect(includePathCounts.workspace_variable).toBe(1);
+    expect(includePathCounts.relative).toBe(2);
+    expect(JSON.stringify(state)).not.toContain('/opt/perl/bin/perl');
+    expect(JSON.stringify(state)).not.toContain('local/lib/perl5');
   });
 
   test('shows the workspace trust report in the trust output channel', async () => {
@@ -719,6 +841,15 @@ describe('extension UX warnings', () => {
           managed_adapter_exists: true,
           active_perl_debug_session: false,
           launch_json_workspace_count: 1,
+          launch_configuration: {
+            status: 'client_launch_config_reported',
+            configuration_count: 2,
+            perl_configuration_count: 1,
+            include_paths_configured_count: 1,
+            include_path_entry_count: 2,
+            perl_path_configured_count: 1,
+            claim_boundary: 'Launch configuration state reports counts and path classes only.',
+          },
         },
       },
       index: {
@@ -751,6 +882,15 @@ describe('extension UX warnings', () => {
         managed_adapter_exists: true,
         active_perl_debug_session: false,
         launch_json_workspace_count: 1,
+        launch_configuration: {
+          status: 'client_launch_config_reported',
+          configuration_count: 2,
+          perl_configuration_count: 1,
+          include_paths_configured_count: 1,
+          include_path_entry_count: 2,
+          perl_path_configured_count: 1,
+          claim_boundary: 'Launch configuration state reports counts and path classes only.',
+        },
       },
     }));
 
@@ -770,6 +910,15 @@ describe('extension UX warnings', () => {
               managed_adapter_exists: true,
               active_perl_debug_session: false,
               launch_json_workspace_count: 1,
+              launch_configuration: {
+                status: 'client_launch_config_reported',
+                configuration_count: 2,
+                perl_configuration_count: 1,
+                include_paths_configured_count: 1,
+                include_path_entry_count: 2,
+                perl_path_configured_count: 1,
+                claim_boundary: 'Launch configuration state reports counts and path classes only.',
+              },
             },
           },
         }],
@@ -787,6 +936,10 @@ describe('extension UX warnings', () => {
     expect(rendered).toContain('perldoc surface: client_surface_registered');
     expect(rendered).toContain('DAP adapter: client_state_reported');
     expect(rendered).toContain('DAP managed adapter exists: true');
+    expect(rendered).toContain('DAP launch configs: 2');
+    expect(rendered).toContain('DAP Perl configs: 1');
+    expect(rendered).toContain('DAP includePaths entries: 2');
+    expect(rendered).toContain('launch config boundary: Launch configuration state reports counts and path classes only.');
     expect(rendered).toContain('PERL5LIB is not inherited by workspace module resolution.');
     expect(rendered).toContain('Setup hints are derived from current configuration only.');
     expect(rendered).toContain('completion: partial-live-with-fallback');

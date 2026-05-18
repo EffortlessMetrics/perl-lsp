@@ -150,14 +150,17 @@ pub enum SuggestionPriority {
 /// Import optimizer for analyzing and optimizing Perl import statements
 ///
 /// The optimizer currently supports:
-/// - Parsing basic `use Module qw(symbols)` statements
+/// - Parsing `use Module qw(...)` statements across common `qw` delimiters
 /// - Detecting unused imported symbols
 /// - Finding duplicate imports that can be merged
 /// - Generating consolidated import statements
 pub struct ImportOptimizer;
 
-static USE_STATEMENT_RE: LazyLock<Result<Regex, regex::Error>> =
-    LazyLock::new(|| Regex::new(r"^\s*use\s+([A-Za-z0-9_:]+)(?:\s+qw\(([^)]*)\))?\s*;"));
+static USE_STATEMENT_RE: LazyLock<Result<Regex, regex::Error>> = LazyLock::new(|| {
+    Regex::new(
+        r"^\s*use\s+([A-Za-z0-9_:]+)(?:\s+qw\s*(?:\(([^)]*)\)|/([^/]*)/|\[([^\]]*)\]|\{([^}]*)\}|<([^>]*)>))?\s*;",
+    )
+});
 static DUMPER_RE: LazyLock<Result<Regex, regex::Error>> =
     LazyLock::new(|| Regex::new(r"\bDumper\b"));
 static STRING_RE: LazyLock<Result<Regex, regex::Error>> =
@@ -654,6 +657,38 @@ print "First: " . first { $_ > 3 } @nums;
             .find(|u| u.module == "Scalar::Util")
             .ok_or("Scalar::Util unused imports not found")?;
         assert_eq!(scalar_util_unused.symbols, vec!["blessed", "reftype"]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_qw_alternate_delimiter_import_parsing() -> Result<(), Box<dyn std::error::Error>> {
+        let optimizer = ImportOptimizer::new();
+        let content = r#"use List::Util qw/max min/;
+use Scalar::Util qw<blessed reftype>;
+use File::Spec qw[catfile catdir];
+use Data::Dumper qw{Dumper};
+
+my $max = max(1, 2);
+my $path = catfile("tmp", "file");
+print Dumper({ blessed => blessed($path) });
+"#;
+
+        let analysis = optimizer.analyze_content(content)?;
+
+        assert_eq!(analysis.imports.len(), 4);
+        assert_eq!(analysis.imports[0].symbols, vec!["max", "min"]);
+        assert_eq!(analysis.imports[1].symbols, vec!["blessed", "reftype"]);
+        assert_eq!(analysis.imports[2].symbols, vec!["catfile", "catdir"]);
+        assert_eq!(analysis.imports[3].symbols, vec!["Dumper"]);
+
+        let unused: Vec<_> = analysis
+            .unused_imports
+            .iter()
+            .flat_map(|unused| unused.symbols.iter().map(String::as_str))
+            .collect();
+        assert!(unused.contains(&"min"));
+        assert!(unused.contains(&"reftype"));
+        assert!(unused.contains(&"catdir"));
         Ok(())
     }
 
