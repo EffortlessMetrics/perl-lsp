@@ -482,3 +482,10 @@ fn test_data_compare_percent_y_hash_copy_clean() {
     // The `%y` declaration must not degrade into the `y///` transliteration alias.
     assert_no_errors("sub f { my %x = %$x; my %y = %$y; }");
 }
+
+#[test]
+fn test_debconf_autoload_my_from_our_binding_clean() {
+    // Debconf::Base::AUTOLOAD derives a field name from a localized package
+    // variable and immediately applies a substitution to the declaration expr.
+    assert_no_errors(r#"(my $field = our $AUTOLOAD) =~ s/.*://;"#);
+}

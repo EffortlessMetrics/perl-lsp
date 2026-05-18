@@ -595,6 +595,13 @@ impl<'a> Parser<'a> {
         if self.peek_kind() == Some(TokenKind::Sub) && self.next_token_starts_anonymous_sub() {
             return false;
         }
+        if matches!(
+            self.peek_kind(),
+            Some(TokenKind::My | TokenKind::Our | TokenKind::State)
+        ) && self.next_token_starts_variable_declaration()
+        {
+            return false;
+        }
 
         match self.peek_kind() {
             Some(kind) if kind.is_recovery_boundary() => true,
@@ -619,6 +626,25 @@ impl<'a> Parser<'a> {
             | None => true,
             _ => false,
         }
+    }
+
+    fn next_token_starts_variable_declaration(&mut self) -> bool {
+        self.tokens.peek_second().ok().is_some_and(|next| {
+            matches!(
+                next.kind,
+                TokenKind::ScalarSigil
+                    | TokenKind::ArraySigil
+                    | TokenKind::HashSigil
+                    | TokenKind::SubSigil
+                    | TokenKind::GlobSigil
+                    | TokenKind::LeftParen
+            ) || (next.kind == TokenKind::Identifier
+                && next
+                    .text
+                    .chars()
+                    .next()
+                    .is_some_and(|c| matches!(c, '$' | '@' | '%' | '&' | '*')))
+        })
     }
 
     /// Returns true when `sub` is followed by tokens that start an anonymous
