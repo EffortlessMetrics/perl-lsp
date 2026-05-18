@@ -804,6 +804,12 @@
         "icon": "$(search)"
       },
       {
+        "command": "perl-lsp.explainDiagnostic",
+        "title": "Explain This Diagnostic",
+        "category": "Perl LSP",
+        "icon": "$(comment-discussion)"
+      },
+      {
         "command": "perl-lsp.reportIssue",
         "title": "Report Issue",
         "category": "Perl",
@@ -922,6 +928,10 @@
         },
         {
           "command": "perl-lsp.explainMissingModuleLookup",
+          "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.explainDiagnostic",
           "when": "editorLangId == perl"
         },
         {

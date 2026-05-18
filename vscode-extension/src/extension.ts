@@ -704,6 +704,29 @@ export async function explainProviderDecisionCommand(
     }
 }
 
+export async function explainDiagnosticCommand(
+    activeClient: LspExecuteCommandClient | undefined = client,
+    request?: unknown
+): Promise<void> {
+    const requestObject = asObject(request);
+    const argument: Record<string, unknown> = requestObject
+        ? { ...requestObject }
+        : providerDecisionArgument('diagnostics');
+
+    if (typeof argument.provider !== 'string') {
+        argument.provider = 'diagnostics';
+    }
+
+    const result = await executeLspCommand(
+        activeClient,
+        'perl.explainProviderDecision',
+        argument
+    );
+    if (result !== undefined) {
+        await showProviderDecisionResult('Diagnostic explanation', result);
+    }
+}
+
 export async function previewSafeDeleteCommand(
     activeClient: LspExecuteCommandClient | undefined = client
 ): Promise<void> {
@@ -1076,6 +1099,13 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     );
 
+    const explainDiagnosticCommandDisposable = vscode.commands.registerCommand(
+        'perl-lsp.explainDiagnostic',
+        async (request?: unknown) => {
+            await explainDiagnosticCommand(client, request);
+        }
+    );
+
     const whatsNewManager = new WhatsNewManager(context, outputChannel);
     const showWhatsNewCommand = vscode.commands.registerCommand('perl-lsp.showWhatsNew', async () => {
         await whatsNewManager.showWhatsNew();
@@ -1386,6 +1416,7 @@ export async function activate(context: vscode.ExtensionContext) {
         copyProviderDecisionReceiptCommandDisposable,
         showWorkspaceTrustReportCommandDisposable,
         explainMissingModuleLookupCommandDisposable,
+        explainDiagnosticCommandDisposable,
         showVersionCommand,
         statusMenuCommand,
         reinstallCommand,

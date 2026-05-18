@@ -19,6 +19,7 @@ jest.mock('vscode-languageclient/node', () => ({
 }));
 import {
   copyProviderDecisionReceiptCommand,
+  explainDiagnosticCommand,
   explainMissingModuleLookupCommand,
   explainProviderDecisionCommand,
   previewSafeDeleteCommand,
@@ -541,6 +542,52 @@ describe('extension UX warnings', () => {
     );
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
       'Goto definition used fallback.',
+      'Show Output'
+    );
+  });
+
+  test('explains a diagnostic through the provider decision command', async () => {
+    const requestReceipt = {
+      provider: 'diagnostics',
+      decision: 'acted',
+      diagnostic_explanation: {
+        schema_version: 'diagnostic_explanation.v1',
+        diagnostic_explanations: [
+          {
+            code: 'PL701',
+            trust_boundary: 'module_resolution',
+          },
+        ],
+      },
+    };
+    const sendRequest = jest.fn(async () => ({
+      provider: 'diagnostics',
+      decision: 'acted',
+      user_message: 'Diagnostic explanation is available.',
+    }));
+
+    await explainDiagnosticCommand(
+      { sendRequest } as any,
+      {
+        provider: 'diagnostics',
+        request_receipt: requestReceipt,
+      }
+    );
+
+    expect(sendRequest).toHaveBeenCalledWith(
+      'workspace/executeCommand',
+      {
+        command: 'perl.explainProviderDecision',
+        arguments: [
+          {
+            provider: 'diagnostics',
+            request_receipt: requestReceipt,
+          },
+        ],
+      }
+    );
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      'Diagnostic explanation is available.',
       'Show Output'
     );
   });
