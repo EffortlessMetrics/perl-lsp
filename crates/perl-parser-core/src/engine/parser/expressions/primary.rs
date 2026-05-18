@@ -511,7 +511,7 @@ impl<'a> Parser<'a> {
 
             TokenKind::Eval => {
                 // Check for autoquoting: `eval => value`
-                if self.is_keyword_before_fat_arrow() {
+                if self.is_keyword_hash_key_boundary() {
                     let token = self.tokens.next()?;
                     Ok(Node::new(
                         NodeKind::Identifier { name: token.text.to_string() },
@@ -524,7 +524,7 @@ impl<'a> Parser<'a> {
 
             TokenKind::Do => {
                 // Check for autoquoting: `do => value`
-                if self.is_keyword_before_fat_arrow() {
+                if self.is_keyword_hash_key_boundary() {
                     let token = self.tokens.next()?;
                     Ok(Node::new(
                         NodeKind::Identifier { name: token.text.to_string() },
@@ -539,7 +539,7 @@ impl<'a> Parser<'a> {
             // This allows 'sub' to be used as a hash key or identifier in expressions
             TokenKind::Try => {
                 // Check for autoquoting: `try => value`
-                if self.is_keyword_before_fat_arrow() {
+                if self.is_keyword_hash_key_boundary() {
                     let token = self.tokens.next()?;
                     Ok(Node::new(
                         NodeKind::Identifier { name: token.text.to_string() },
@@ -552,7 +552,7 @@ impl<'a> Parser<'a> {
 
             TokenKind::Defer => {
                 // Check for autoquoting: `defer => value` (e.g. in feature.pm hash)
-                if self.is_keyword_before_fat_arrow() {
+                if self.is_keyword_hash_key_boundary() {
                     let token = self.tokens.next()?;
                     Ok(Node::new(
                         NodeKind::Identifier { name: token.text.to_string() },
@@ -665,6 +665,14 @@ impl<'a> Parser<'a> {
                             }
                         }
                         "tie" => {
+                            if self.is_keyword_hash_key_boundary() {
+                                let tok = self.tokens.next()?;
+                                return Ok(Node::new(
+                                    NodeKind::Identifier { name: tok.text.to_string() },
+                                    SourceLocation { start: tok.start, end: tok.end },
+                                ));
+                            }
+
                             let token = self.tokens.next()?;
                             let start = token.start;
                             let variable = if matches!(
@@ -712,6 +720,14 @@ impl<'a> Parser<'a> {
                             ))
                         }
                         "untie" => {
+                            if self.is_keyword_hash_key_boundary() {
+                                let tok = self.tokens.next()?;
+                                return Ok(Node::new(
+                                    NodeKind::Identifier { name: tok.text.to_string() },
+                                    SourceLocation { start: tok.start, end: tok.end },
+                                ));
+                            }
+
                             let token = self.tokens.next()?;
                             let start = token.start;
                             let variable = Box::new(self.parse_assignment()?);

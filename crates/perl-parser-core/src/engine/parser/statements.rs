@@ -83,6 +83,21 @@ impl<'a> Parser<'a> {
             .unwrap_or(false)
     }
 
+    /// Check whether the current keyword-like token is being used as a bare
+    /// hash key rather than as its keyword/operator meaning.
+    ///
+    /// Perl permits reserved words as hash keys without quotes:
+    /// `$self->{defer}` and `$bits{tie}` are valid. In those subscript
+    /// contexts the token that follows the key is the subscript delimiter,
+    /// so expression parsing should produce a bare identifier/string instead
+    /// of dispatching to the keyword parser.
+    fn is_keyword_hash_key_boundary(&mut self) -> bool {
+        self.tokens
+            .peek_second()
+            .ok()
+            .is_some_and(|t| matches!(t.kind, TokenKind::RightBrace | TokenKind::FatArrow))
+    }
+
     fn is_async_sub_start(&mut self) -> bool {
         self.peek_kind() == Some(TokenKind::Identifier)
             && self.tokens.peek().ok().is_some_and(|t| t.text.as_ref() == "async")
@@ -1162,7 +1177,7 @@ impl<'a> Parser<'a> {
             kind,
             TokenKind::Question      // ternary `?` operator
             | TokenKind::Colon       // chained ternary else-part
-            | TokenKind::Comma      // expression continuation
+            | TokenKind::Comma       // expression continuation
             | TokenKind::FatArrow   // hash key-value context
             | TokenKind::RightParen // closing paren
             | TokenKind::RightBracket // closing bracket

@@ -1339,45 +1339,76 @@ impl<'a> Parser<'a> {
     }
 
     /// Attempt to parse a keyword or word operator (`not`, `and`, `or`, `xor`,
-    /// `do`, `eval`, `cmp`) as a bareword hash key when it appears directly
-    /// before `}`.
+    /// `do`, `eval`, `cmp`, etc.) as a bareword hash key when it appears directly
+    /// before `}` or as part of a comma-separated hash slice.
     ///
     /// Returns `Some(Node)` if the current token is a keyword/operator followed
-    /// by `}`, otherwise returns `None` to fall through to general expression
-    /// parsing.
+    /// by `}` or `,`, otherwise returns `None` to fall through to general
+    /// expression parsing.
     fn try_parse_keyword_bareword_key(&mut self) -> ParseResult<Option<Node>> {
-        let Some(kind) = self.peek_kind() else {
+        if !self.peek_is_keyword_bareword_key() {
             return Ok(None);
+        }
+
+        let first = self.consume_as_bareword_identifier()?;
+        let start = first.location.start;
+
+        if self.peek_kind() != Some(TokenKind::Comma) {
+            return Ok(Some(first));
+        }
+
+        let mut elements = vec![first];
+        while self.peek_kind() == Some(TokenKind::Comma) {
+            self.consume_token()?; // consume `,`
+            if self.peek_kind() == Some(TokenKind::RightBrace) {
+                break;
+            }
+
+            if self.peek_is_keyword_bareword_key() {
+                elements.push(self.consume_as_bareword_identifier()?);
+            } else {
+                elements.push(self.parse_assignment()?);
+            }
+        }
+
+        let end = elements.last().map(|n| n.location.end).unwrap_or(start);
+        Ok(Some(Node::new(NodeKind::ArrayLiteral { elements }, SourceLocation { start, end })))
+    }
+
+    fn peek_is_keyword_bareword_key(&mut self) -> bool {
+        let Ok(first) = self.tokens.peek() else {
+            return false;
         };
 
-        let is_simple_keyword_key = matches!(
-            kind,
+        let is_keyword_key = matches!(
+            first.kind,
             TokenKind::WordNot
                 | TokenKind::WordAnd
                 | TokenKind::WordOr
                 | TokenKind::WordXor
                 | TokenKind::Do
                 | TokenKind::Eval
+                | TokenKind::Try
+                | TokenKind::Defer
                 | TokenKind::StringCompare
-        );
+        ) || matches!(first.text.as_ref(), "tie" | "untie");
 
-        if !is_simple_keyword_key {
-            return Ok(None);
+        if !is_keyword_key {
+            return false;
         }
 
-        let Ok(second) = self.tokens.peek_second() else {
-            return Ok(None);
-        };
+        self.tokens
+            .peek_second()
+            .ok()
+            .is_some_and(|second| matches!(second.kind, TokenKind::RightBrace | TokenKind::Comma))
+    }
 
-        if second.kind != TokenKind::RightBrace {
-            return Ok(None);
-        }
-
+    fn consume_as_bareword_identifier(&mut self) -> ParseResult<Node> {
         let token = self.tokens.next()?;
-        Ok(Some(Node::new(
+        Ok(Node::new(
             NodeKind::Identifier { name: token.text.to_string() },
             SourceLocation { start: token.start, end: token.end },
-        )))
+        ))
     }
 
     /// Attempt to parse a quote-operator name (`m`, `s`, `q`, `qq`, `qw`, `qr`,
