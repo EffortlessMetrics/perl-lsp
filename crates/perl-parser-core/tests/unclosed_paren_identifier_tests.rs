@@ -205,6 +205,13 @@ fn for_with_map_block() {
 }
 
 #[test]
+fn for_with_map_method_expr() {
+    // From Unicode::Collate: map EXPR may be a method call inside a
+    // parenthesized foreach list.
+    assert_clean_parse(r#"for my $vwt (map $self->getWt($_), @$subE) { push @wt, $vwt }"#);
+}
+
+#[test]
 fn for_with_grep_block() {
     assert_clean_parse(r#"for my $x (grep { defined $_ } @items) { print $x }"#);
 }
