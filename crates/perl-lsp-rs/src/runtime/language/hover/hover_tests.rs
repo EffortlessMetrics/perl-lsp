@@ -106,8 +106,10 @@ fn missing_module_hover_gives_actionable_next_steps() {
         value.contains("Module not found in workspace or configured include paths"),
         "missing module hover should explain the failure scope: {value}"
     );
+    let test_lib_display = std::path::Path::new("t").join("lib").display().to_string();
+    let test_lib_line = format!("- `{test_lib_display}`");
     assert!(value.contains("- `lib`"), "missing module hover should list lib: {value}");
-    assert!(value.contains("- `t/lib`"), "missing module hover should list t/lib: {value}");
+    assert!(value.contains(&test_lib_line), "missing module hover should list t/lib: {value}");
     assert!(
         value.contains("cpanm Definitely::Missing::Module"),
         "missing module hover should suggest an install command: {value}"
