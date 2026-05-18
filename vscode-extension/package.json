@@ -798,6 +798,12 @@
         "icon": "$(checklist)"
       },
       {
+        "command": "perl-lsp.explainMissingModuleLookup",
+        "title": "Explain Missing Module Lookup",
+        "category": "Perl LSP",
+        "icon": "$(search)"
+      },
+      {
         "command": "perl-lsp.reportIssue",
         "title": "Report Issue",
         "category": "Perl",
@@ -913,6 +919,10 @@
         {
           "command": "perl-lsp.showWorkspaceTrustReport",
           "when": "workspaceFolderCount >= 1"
+        },
+        {
+          "command": "perl-lsp.explainMissingModuleLookup",
+          "when": "editorLangId == perl"
         },
         {
           "command": "perl-lsp.reportIssue"
