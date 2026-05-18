@@ -1388,6 +1388,7 @@ impl<'a> Parser<'a> {
                 | TokenKind::WordXor
                 | TokenKind::Do
                 | TokenKind::Eval
+                | TokenKind::Local
                 | TokenKind::Try
                 | TokenKind::Defer
                 | TokenKind::StringCompare
