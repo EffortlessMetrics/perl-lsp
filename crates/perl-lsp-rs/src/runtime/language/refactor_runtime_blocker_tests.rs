@@ -62,6 +62,31 @@ sub caller {
 1;
 "#;
 
+const CROSS_PROJECT_SOURCE_URI: &str = "file:///workspace/lib/CrossProject/Source.pm";
+const CROSS_PROJECT_CALLER_URI: &str = "file:///workspace/lib/CrossProject/Caller.pm";
+
+const CROSS_PROJECT_SOURCE_MODULE: &str = r#"package CrossProject::Shared;
+use strict;
+use warnings;
+
+sub used_target {
+    return 1;
+}
+
+1;
+"#;
+
+const CROSS_PROJECT_CALLER_MODULE: &str = r#"package CrossProject::Shared;
+use strict;
+use warnings;
+
+sub caller {
+    return CrossProject::Shared::used_target();
+}
+
+1;
+"#;
+
 const DANCER2_DSL_URI: &str = "file:///workspace/lib/Dancer2/Core/DSL.pm";
 const DANCER2_APP_URI: &str = "file:///workspace/lib/Dancer2/Core/App.pm";
 const DANCER2_RESPONSE_URI: &str = "file:///workspace/lib/Dancer2/Core/Response.pm";
@@ -348,7 +373,9 @@ fn assert_safe_delete_decision_trace(
             || claim_boundary
                 == "scoped safe-delete UX preview only; no live symbol-level delete edits are applied"
             || claim_boundary
-                == "narrow safe-delete live pilot only; returns a source-backed symbol-delete WorkspaceEdit when compiler proof, exact source guard, current-source reference guard, workspace identity guard, and rollback proof all pass",
+                == "narrow safe-delete live pilot only; returns a source-backed symbol-delete WorkspaceEdit when compiler proof, exact source guard, current-source reference guard, workspace identity guard, and rollback proof all pass"
+            || claim_boundary
+                == "narrow safe-delete live pilot only; returns a source-backed symbol-delete WorkspaceEdit when compiler proof, exact source guard, current-source/workspace reference guards, workspace identity guard, and rollback proof all pass",
         "unexpected safe-delete claim boundary: {claim_boundary}"
     );
     Ok(())
@@ -2940,7 +2967,7 @@ fn refactor_runtime_blocker_ux_safe_delete_live_pilot_returns_source_backed_edit
     assert_eq!(
         live_result.get("claim_boundary").and_then(Value::as_str),
         Some(
-            "narrow safe-delete live pilot only; returns a source-backed symbol-delete WorkspaceEdit when compiler proof, exact source guard, current-source reference guard, workspace identity guard, and rollback proof all pass"
+            "narrow safe-delete live pilot only; returns a source-backed symbol-delete WorkspaceEdit when compiler proof, exact source guard, current-source/workspace reference guards, workspace identity guard, and rollback proof all pass"
         )
     );
 
@@ -3187,11 +3214,14 @@ fn refactor_runtime_blocker_ux_safe_delete_live_pilot_blocks_dancer2_referenced_
             .is_some_and(|source| source == "compiler_fact" || source == "current_source"),
         "referenced Dancer2 method blocker should be compiler-backed or current-source backed: {blocked_result}"
     );
+    assert_eq!(blocked_result.get("confidence").and_then(Value::as_str), Some("high"));
+    assert_eq!(blocked_result.get("freshness").and_then(Value::as_str), Some("fresh"));
     assert_eq!(blocked_result.get("fallback_state").and_then(Value::as_str), Some("no_edit"));
     assert_eq!(
         blocked_result.get("live_symbol_delete_enabled").and_then(Value::as_bool),
         Some(false)
     );
+    assert_eq!(blocked_result.get("edits_applied").and_then(Value::as_bool), Some(false));
     assert_eq!(
         blocked_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
         Some(0)
@@ -3205,10 +3235,109 @@ fn refactor_runtime_blocker_ux_safe_delete_live_pilot_blocks_dancer2_referenced_
     );
     assert_safe_delete_decision_trace(&blocked_result, "blocked", "references_exist", "no_edit")?;
 
+    let live_blocker_ux = blocked_result.get("live_blocker_ux").ok_or("missing live_blocker_ux")?;
+    assert_json_array_contains(&blocked_result, "blocker_reasons", "ReferencesExist")?;
+    assert_json_array_contains(live_blocker_ux, "blocker_messages", "still has")?;
+
     let explanation = explain_provider_decision(&server, "safe_delete")?;
     let request_receipt = request_receipt(&explanation)?;
     assert_eq!(request_receipt.get("decision").and_then(Value::as_str), Some("blocked"));
     assert_eq!(request_receipt.get("reason").and_then(Value::as_str), Some("references_exist"));
+    assert!(
+        request_receipt
+            .get("fact_source")
+            .and_then(Value::as_str)
+            .is_some_and(|source| source == "compiler_fact" || source == "current_source"),
+        "persisted Dancer2 receipt should keep the referenced-source blocker: {request_receipt}"
+    );
+    assert_eq!(request_receipt.get("confidence").and_then(Value::as_str), Some("high"));
+    assert_eq!(request_receipt.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(
+        request_receipt.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_live_pilot_blocks_cross_file_referenced_source_backed_sub()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    open_document(&server, CROSS_PROJECT_SOURCE_URI, CROSS_PROJECT_SOURCE_MODULE)?;
+    open_document(&server, CROSS_PROJECT_CALLER_URI, CROSS_PROJECT_CALLER_MODULE)?;
+
+    let (target_line, target_character) =
+        position_of(CROSS_PROJECT_SOURCE_MODULE, "used_target {")?;
+    let blocked_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.safeDeleteSymbol",
+            "arguments": [{
+                "textDocument": {"uri": CROSS_PROJECT_SOURCE_URI},
+                "position": {"line": target_line, "character": target_character}
+            }]
+        })))?
+        .ok_or("missing cross-file referenced safe-delete blocker result")?;
+
+    assert_eq!(blocked_result.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        blocked_result.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(blocked_result.get("decision").and_then(Value::as_str), Some("blocked"));
+    assert_eq!(blocked_result.get("symbol").and_then(Value::as_str), Some("used_target"));
+    assert_eq!(blocked_result.get("reason").and_then(Value::as_str), Some("references_exist"));
+    assert_eq!(blocked_result.get("fact_source").and_then(Value::as_str), Some("workspace_index"));
+    assert_eq!(blocked_result.get("confidence").and_then(Value::as_str), Some("high"));
+    assert_eq!(blocked_result.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(blocked_result.get("fallback_state").and_then(Value::as_str), Some("no_edit"));
+    assert_eq!(
+        blocked_result.get("live_symbol_delete_enabled").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(blocked_result.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        blocked_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        blocked_result
+            .pointer("/workspace_edit/changes")
+            .and_then(Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0)
+    );
+    assert_safe_delete_decision_trace(&blocked_result, "blocked", "references_exist", "no_edit")?;
+    assert_eq!(
+        blocked_result.get("current_source_reference_count").and_then(Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(blocked_result.get("workspace_reference_count").and_then(Value::as_u64), Some(1));
+    assert!(
+        blocked_result.get("current_source_delete_guard").is_none(),
+        "cross-file referenced-source receipt must be workspace-reference blocked, not current-source guarded: {blocked_result}"
+    );
+    assert_eq!(
+        blocked_result.get("workspace_reference_guard").and_then(Value::as_str),
+        Some("blocked_by_workspace_reference")
+    );
+
+    let live_blocker_ux = blocked_result.get("live_blocker_ux").ok_or("missing live_blocker_ux")?;
+    assert_json_array_contains(live_blocker_ux, "blocker_reasons", "ReferencesExist")?;
+    assert_json_array_contains(live_blocker_ux, "blocker_messages", "still has")?;
+
+    let explanation = explain_provider_decision(&server, "safe_delete")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(request_receipt.get("decision").and_then(Value::as_str), Some("blocked"));
+    assert_eq!(request_receipt.get("symbol").and_then(Value::as_str), Some("used_target"));
+    assert_eq!(request_receipt.get("reason").and_then(Value::as_str), Some("references_exist"));
+    assert_eq!(request_receipt.get("fact_source").and_then(Value::as_str), Some("workspace_index"));
+    assert_eq!(request_receipt.get("confidence").and_then(Value::as_str), Some("high"));
+    assert_eq!(request_receipt.get("freshness").and_then(Value::as_str), Some("fresh"));
     assert_eq!(
         request_receipt.get("returned_workspace_edit_count").and_then(Value::as_u64),
         Some(0)
