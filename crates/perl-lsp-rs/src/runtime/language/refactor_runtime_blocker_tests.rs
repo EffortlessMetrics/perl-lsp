@@ -3306,6 +3306,130 @@ fn refactor_runtime_blocker_ux_safe_delete_live_pilot_blocks_non_subroutine_and_
 }
 
 #[test]
+fn refactor_runtime_blocker_ux_safe_delete_live_pilot_blocks_generated_and_dynamic_boundaries()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_dancer2_workspace(&server)?;
+    let app = files.get("lib/Dancer2/Core/App.pm").ok_or("missing Dancer2 Core App fixture")?;
+    let plugin = files.get("lib/Dancer2/Plugin.pm").ok_or("missing Dancer2 Plugin fixture")?;
+
+    let (routes_line, routes_character) = position_of(app, "routes      =>")?;
+    let generated_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.safeDeleteSymbol",
+            "arguments": [{
+                "textDocument": {"uri": DANCER2_APP_URI},
+                "position": {"line": routes_line, "character": routes_character},
+                "compilerPlanFixture": "generated_member"
+            }]
+        })))?
+        .ok_or("missing generated-member safe-delete live blocker result")?;
+    assert_eq!(generated_result.get("symbol").and_then(Value::as_str), Some("routes"));
+    assert_eq!(
+        generated_result.get("compiler_plan_fixture").and_then(Value::as_str),
+        Some("generated_member")
+    );
+    assert_safe_delete_decision_trace(
+        &generated_result,
+        "blocked",
+        "generated_no_source",
+        "no_edit",
+    )?;
+    assert_eq!(
+        generated_result.get("fact_source").and_then(Value::as_str),
+        Some("framework_adapter")
+    );
+    assert_eq!(
+        generated_result.get("live_symbol_delete_enabled").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        generated_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        generated_result
+            .pointer("/workspace_edit/changes")
+            .and_then(Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0)
+    );
+    assert!(
+        generated_result.get("current_source_delete_guard").is_none(),
+        "generated/no-source blocker should remain compiler-driven, not source-guard promoted: {generated_result}"
+    );
+    let generated_blocker_ux =
+        generated_result.get("live_blocker_ux").ok_or("missing generated live_blocker_ux")?;
+    assert_json_array_contains(generated_blocker_ux, "blocker_reasons", "GeneratedMember")?;
+
+    let generated_explanation = explain_provider_decision(&server, "safe_delete")?;
+    let generated_receipt = request_receipt(&generated_explanation)?;
+    assert_eq!(generated_receipt.get("symbol").and_then(Value::as_str), Some("routes"));
+    assert_eq!(
+        generated_receipt.get("reason").and_then(Value::as_str),
+        Some("generated_no_source")
+    );
+    assert_eq!(
+        generated_receipt.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+
+    let (plugin_keywords_line, plugin_keywords_character) = position_of(plugin, "plugin_keywords")?;
+    let dynamic_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.safeDeleteSymbol",
+            "arguments": [{
+                "textDocument": {"uri": DANCER2_PLUGIN_URI},
+                "position": {"line": plugin_keywords_line, "character": plugin_keywords_character},
+                "compilerPlanFixture": "dynamic_boundary"
+            }]
+        })))?
+        .ok_or("missing dynamic-boundary safe-delete live blocker result")?;
+    assert_eq!(dynamic_result.get("symbol").and_then(Value::as_str), Some("plugin_keywords"));
+    assert_eq!(
+        dynamic_result.get("compiler_plan_fixture").and_then(Value::as_str),
+        Some("dynamic_boundary")
+    );
+    assert_safe_delete_decision_trace(&dynamic_result, "blocked", "dynamic_boundary", "no_edit")?;
+    assert_eq!(dynamic_result.get("fact_source").and_then(Value::as_str), Some("dynamic_boundary"));
+    assert_eq!(dynamic_result.get("dynamic_boundary").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        dynamic_result.get("live_symbol_delete_enabled").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        dynamic_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        dynamic_result
+            .pointer("/workspace_edit/changes")
+            .and_then(Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0)
+    );
+    assert!(
+        dynamic_result.get("current_source_delete_guard").is_none(),
+        "dynamic blocker should remain dynamic-boundary driven, not source-guard promoted: {dynamic_result}"
+    );
+    let dynamic_blocker_ux =
+        dynamic_result.get("live_blocker_ux").ok_or("missing dynamic live_blocker_ux")?;
+    assert_json_array_contains(dynamic_blocker_ux, "blocker_reasons", "DynamicBoundary")?;
+
+    let dynamic_explanation = explain_provider_decision(&server, "safe_delete")?;
+    let dynamic_receipt = request_receipt(&dynamic_explanation)?;
+    assert_eq!(dynamic_receipt.get("symbol").and_then(Value::as_str), Some("plugin_keywords"));
+    assert_eq!(dynamic_receipt.get("reason").and_then(Value::as_str), Some("dynamic_boundary"));
+    assert_eq!(dynamic_receipt.get("dynamic_boundary").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        dynamic_receipt.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+
+    Ok(())
+}
+
+#[test]
 fn refactor_runtime_blocker_ux_safe_delete_live_pilot_blocks_dancer2_referenced_source_backed_method()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();
