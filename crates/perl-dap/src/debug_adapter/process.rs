@@ -1948,4 +1948,24 @@ mod tests {
             "expected perl-lsp.perl.path guidance, got: {message}"
         );
     }
+
+    #[test]
+    fn format_perl_spawn_error_preserves_non_not_found_error_detail() {
+        let error = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "permission denied");
+        let message = format_perl_spawn_error("/secure/perl", &error);
+
+        assert!(message.contains("/secure/perl"), "expected interpreter path, got: {message}");
+        assert!(
+            message.contains("permission denied"),
+            "expected original error detail, got: {message}"
+        );
+        assert!(
+            message.contains("file permissions"),
+            "expected permission remediation guidance, got: {message}"
+        );
+        assert!(
+            !message.contains("Install Perl"),
+            "non-NotFound errors should not use missing-perl guidance, got: {message}"
+        );
+    }
 }

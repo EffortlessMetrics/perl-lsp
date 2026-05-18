@@ -588,6 +588,7 @@ impl Scheduler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_tdd_support::must_some;
 
     // =====================================================================
     // Existing classification tests
@@ -724,10 +725,11 @@ mod tests {
         heap.push(make_queued_read("textDocument/hover", 3));
 
         // Pop order must be: hover, completion, references, workspace/symbol
-        assert_eq!(heap.pop().unwrap().request.method, "textDocument/hover");
-        assert_eq!(heap.pop().unwrap().request.method, "textDocument/completion");
-        assert_eq!(heap.pop().unwrap().request.method, "textDocument/references");
-        assert_eq!(heap.pop().unwrap().request.method, "workspace/symbol");
+        let mut pop_method = || must_some(heap.pop()).request.method;
+        assert_eq!(pop_method(), "textDocument/hover");
+        assert_eq!(pop_method(), "textDocument/completion");
+        assert_eq!(pop_method(), "textDocument/references");
+        assert_eq!(pop_method(), "workspace/symbol");
     }
 
     // =====================================================================
@@ -741,8 +743,7 @@ mod tests {
             "position": { "line": 5, "character": 10 }
         });
         let key = extract_dedup_key("textDocument/hover", Some(&params), RequestPriority::Hover);
-        assert!(key.is_some());
-        let key = key.unwrap();
+        let key = must_some(key);
         assert_eq!(key.method, "textDocument/hover");
         assert_eq!(key.uri, "file:///test.pl");
         assert_eq!(key.line, 5);
@@ -893,8 +894,7 @@ mod tests {
             Some(&params),
             RequestPriority::Completion,
         );
-        assert!(key.is_some());
-        let key = key.unwrap();
+        let key = must_some(key);
         assert_eq!(key.method, "textDocument/inlineCompletion");
         assert_eq!(key.uri, "file:///test.pl");
         assert_eq!(key.line, 5);

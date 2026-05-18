@@ -27,6 +27,30 @@ generated `2026-04-28`, Perl `5.038002`, and `86` resolved roots. This note
 does not claim current corpus movement or bucket reduction. Linux corpus
 refresh remains the proof step before any bucket-count movement is claimed.
 
+## 2026-05-18 Linux Refresh Outcome
+
+A fresh WSL system-corpus sweep on commit `f52dd0065` produced a new local
+receipt at `target/receipts/system-corpus-sweep.json`, but it failed ratchet
+enforcement and therefore did not update `.ci/parser-corpus-baseline.json` or
+generated parser status.
+
+Refresh summary:
+
+- total files: 7095
+- clean files: 6935, up from the committed baseline's 6871
+- dirty files: 112, down from 176
+- total ERROR nodes: 228, down from 536
+- `unclosed_paren_identifier`: absent from the fresh first-error buckets
+- ratchet violations: `unexpected_rparen_expr` increased from 8 to 18 and
+  `unexpected_rbrace_expr` increased from 6 to 8
+
+See [Linux system corpus refresh](../../forensics/2026-05-18-linux-system-corpus-refresh.md)
+for the measurement details and claim boundary. This note remains useful as an
+archive of the stale source-backed shape analysis, but it should not start a
+runtime parser repair by itself. The next current bucket investigation should
+use a source-backed `unexpected_rparen_expr` or `unexpected_rbrace_expr` fixture,
+or another ratchet-clearing Linux corpus receipt.
+
 ## Stale Source Families
 
 The stale receipt lists these duplicated source families under
@@ -191,7 +215,9 @@ receipt before any raw bucket-count claim.
 
 ## Recommended Next Parser PR
 
-Do not start a runtime repair from this stale bucket note alone. Start the
+Do not start a runtime repair from this stale bucket note alone. The 2026-05-18
+refresh did not reproduce `unclosed_paren_identifier` as a current first-error
+bucket and failed ratchet on adjacent delimiter buckets. Start the
 list-operator boundary lane only when current evidence supplies a failing
 source-backed case:
 
@@ -215,9 +241,10 @@ Valid starting evidence:
 - a focused, source-backed fixture reproduces a boundary failure against the
   current parser.
 
-Otherwise, the next bucket-count action is a dedicated Linux corpus refresh.
-Fixture-only PRs should continue only when a new real-Perl source shape is not
-covered by the existing groups above.
+Otherwise, route capability work to the fresh receipt's current blocking
+bucket, starting with `unexpected_rparen_expr`. Fixture-only PRs should continue
+only when a new real-Perl source shape is not covered by the existing groups
+above.
 
 Recent closeouts:
 
