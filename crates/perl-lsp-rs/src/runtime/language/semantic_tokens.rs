@@ -429,7 +429,6 @@ fn semantic_token_subroutine_declaration_candidate(
     ))
 }
 
-#[cfg(any(test, feature = "expose_lsp_test_api"))]
 fn semantic_token_package_declaration_candidate(
     source: &str,
 ) -> Option<crate::semantic_tokens::SemanticTokenShadowCandidate> {
@@ -636,6 +635,24 @@ fn semantic_tokens_live_slice_provider_trace(
             source_backed_state: "source_backed_method_declaration_live_token_match",
             user_message: "Semantic tokens exposed the source-backed compiler method-declaration live trace because it matched the existing parser/HIR method token. No new semantic tokens were emitted.",
             claim_boundary: "only source-backed compiler method-declaration spans that exactly match existing live parser/HIR method tokens participate; generated/no-source, stale, dynamic-boundary, low-confidence, fallback, broader method classes, and unmatched compiler candidates remain blocked, fallback-only, or shadowed",
+        },
+    ) {
+        return trace;
+    }
+
+    let package_declaration_candidate = semantic_token_package_declaration_candidate(source);
+    saw_compiler_token_candidate |= package_declaration_candidate.is_some();
+    if let Some(trace) = semantic_tokens_live_slice_provider_trace_for_candidate(
+        package_declaration_candidate,
+        Some(live_provider_result),
+        live_token_count,
+        provider_action,
+        SemanticTokenLiveSliceTraceSpec {
+            live_token_type: "namespace",
+            compiler_token_class: "package_declaration",
+            source_backed_state: "source_backed_package_declaration_live_token_match",
+            user_message: "Semantic tokens exposed the source-backed compiler package-declaration live trace because it matched the existing parser/HIR namespace token. No new semantic tokens were emitted.",
+            claim_boundary: "only source-backed compiler package-declaration spans that exactly match existing live parser/HIR namespace tokens participate; generated/no-source, stale, dynamic-boundary, low-confidence, fallback, and unmatched compiler candidates remain blocked, fallback-only, or shadowed",
         },
     ) {
         return trace;
