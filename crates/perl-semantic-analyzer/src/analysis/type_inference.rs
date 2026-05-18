@@ -1,3 +1,4 @@
+use crate::analysis::type_facts::TypeFact;
 use crate::ast::{Node, NodeKind};
 use std::collections::HashMap;
 use std::fmt;
@@ -131,6 +132,8 @@ pub struct TypeLocation {
 pub struct TypeEnvironment {
     /// Variable types in current scope
     variables: HashMap<String, PerlType>,
+    /// Rich variable facts in current scope
+    variable_facts: HashMap<String, TypeFact>,
     /// Subroutine signatures
     subroutines: HashMap<String, PerlType>,
     /// Parent scope (for nested scopes)
@@ -146,13 +149,19 @@ impl Default for TypeEnvironment {
 impl TypeEnvironment {
     /// Creates a new empty type environment
     pub fn new() -> Self {
-        Self { variables: HashMap::new(), subroutines: HashMap::new(), parent: None }
+        Self {
+            variables: HashMap::new(),
+            variable_facts: HashMap::new(),
+            subroutines: HashMap::new(),
+            parent: None,
+        }
     }
 
     /// Creates a new type environment with a parent scope
     pub fn with_parent(parent: TypeEnvironment) -> Self {
         Self {
             variables: HashMap::new(),
+            variable_facts: HashMap::new(),
             subroutines: HashMap::new(),
             parent: Some(Box::new(parent)),
         }
@@ -160,12 +169,26 @@ impl TypeEnvironment {
 
     /// Sets the type for a variable in the current scope
     pub fn set_variable(&mut self, name: String, ty: PerlType) {
-        self.variables.insert(name, ty);
+        self.variables.insert(name.clone(), ty.clone());
+        self.variable_facts.insert(name, TypeFact::from_erased_type(ty));
+    }
+
+    /// Sets the rich type fact for a variable in the current scope.
+    pub fn set_variable_fact(&mut self, name: String, fact: TypeFact) {
+        self.variables.insert(name.clone(), fact.erased_type());
+        self.variable_facts.insert(name, fact);
     }
 
     /// Gets the type of a variable, searching parent scopes if needed
     pub fn get_variable(&self, name: &str) -> Option<&PerlType> {
         self.variables.get(name).or_else(|| self.parent.as_ref().and_then(|p| p.get_variable(name)))
+    }
+
+    /// Gets the rich type fact for a variable, searching parent scopes if needed.
+    pub fn get_variable_fact(&self, name: &str) -> Option<&TypeFact> {
+        self.variable_facts
+            .get(name)
+            .or_else(|| self.parent.as_ref().and_then(|p| p.get_variable_fact(name)))
     }
 
     /// Sets the type signature for a subroutine in the current scope
@@ -851,6 +874,11 @@ impl TypeInferenceEngine {
     /// Gets the inferred type for a variable by name
     pub fn get_type_at(&self, name: &str) -> Option<PerlType> {
         self.global_env.get_variable(name).cloned()
+    }
+
+    /// Gets the inferred rich type fact for a variable by name.
+    pub fn get_fact_at(&self, name: &str) -> Option<TypeFact> {
+        self.global_env.get_variable_fact(name).cloned()
     }
 
     /// Returns a human-readable type label for use in hover text.
