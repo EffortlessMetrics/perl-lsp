@@ -1650,6 +1650,15 @@ impl<'a> PerlLexer<'a> {
         !c.is_ascii_alphanumeric() && !c.is_whitespace()
     }
 
+    #[inline]
+    fn immediately_follows_sigil_prefix(&self, start: usize) -> bool {
+        start > 0
+            && matches!(
+                Self::byte_at(self.input_bytes, start.saturating_sub(1)),
+                b'$' | b'@' | b'%' | b'&' | b'*'
+            )
+    }
+
     /// Try to parse a v-string (version string) like `v5.26.0` or `v5.10`.
     ///
     /// A v-string starts with `v` followed by one or more digits, then optionally
@@ -1746,21 +1755,25 @@ impl<'a> PerlLexer<'a> {
             // Special case: substitution/transliteration with single-quote delimiter
             // The single quote is considered an identifier continuation, so we need to
             // detect these operators before consuming it as part of an identifier.
-            if !self.after_arrow
+            let follows_sigil_prefix = self.immediately_follows_sigil_prefix(start);
+            if !follows_sigil_prefix
+                && !self.after_arrow
                 && self.hash_brace_depth == 0
                 && ch == 's'
                 && self.peek_char(1) == Some('\'')
             {
                 self.advance(); // consume 's'
                 return self.parse_substitution(start);
-            } else if !self.after_arrow
+            } else if !follows_sigil_prefix
+                && !self.after_arrow
                 && self.hash_brace_depth == 0
                 && ch == 'y'
                 && self.peek_char(1) == Some('\'')
             {
                 self.advance(); // consume 'y'
                 return self.parse_transliteration(start);
-            } else if !self.after_arrow
+            } else if !follows_sigil_prefix
+                && !self.after_arrow
                 && self.hash_brace_depth == 0
                 && ch == 't'
                 && self.peek_char(1) == Some('r')
@@ -1900,6 +1913,7 @@ impl<'a> PerlLexer<'a> {
             #[allow(clippy::collapsible_if)]
             if !self.after_sub
                 && !self.after_arrow
+                && !follows_sigil_prefix
                 && self.hash_brace_depth == 0
                 && matches!(text, "s" | "tr" | "y")
             {
@@ -1919,12 +1933,15 @@ impl<'a> PerlLexer<'a> {
                 if let Some(next) = candidate {
                     // `s => 1` should remain a fat-arrow hash key, not quote op.
                     let is_fat_arrow = next == '=' && char_after_next == Some('>');
+                    let is_filetest_s = text == "s"
+                        && self.input.get(..start).is_some_and(|prefix| prefix.ends_with('-'));
                     let is_paired_delim = matches!(next, '{' | '[' | '(' | '<');
                     let is_quote_char = matches!(next, '\'' | '"') && text != "s";
                     let transliteration_allows_whitespace = text == "tr" || text == "y";
                     let substitution_disallows_whitespace = text == "s" && has_whitespace;
                     let is_valid_delim = Self::is_quote_delim(next)
                         && !is_fat_arrow
+                        && !is_filetest_s
                         && !substitution_disallows_whitespace
                         && (!has_whitespace
                             || is_paired_delim
@@ -1973,6 +1990,7 @@ impl<'a> PerlLexer<'a> {
                     // quote expressions in slices (`@h{qw/a b/}`).
                     op if !self.after_sub
                         && !self.after_arrow
+                        && !follows_sigil_prefix
                         && quote_handler::is_quote_operator(op)
                         && (self.hash_brace_depth == 0
                             || matches!(op, "q" | "qq" | "qw" | "qr" | "qx")) =>
@@ -2008,6 +2026,10 @@ impl<'a> PerlLexer<'a> {
                             // Fat-arrow autoquoting: `s => value` — `=` followed by `>` is '=>',
                             // not a valid substitution delimiter. Treat as identifier.
                             let is_fat_arrow = next == '=' && char_after_next == Some('>');
+                            let is_filetest_s =
+                                op == "s" && self.input.get(..start).is_some_and(|prefix| {
+                                    prefix.ends_with('-')
+                                });
 
                             // When whitespace precedes the delimiter, only unambiguous
                             // delimiters are accepted:
@@ -2027,6 +2049,7 @@ impl<'a> PerlLexer<'a> {
                                 self.hash_brace_depth > 0 && matches!(next, ',' | '}');
                             let is_valid_delim = Self::is_quote_delim(next)
                                 && !is_fat_arrow
+                                && !is_filetest_s
                                 && !is_hash_subscript_bare_key_boundary
                                 && (!has_whitespace
                                     || is_paired_delim
@@ -3047,7 +3070,21 @@ impl<'a> PerlLexer<'a> {
         quote: char,
         delim: char,
     ) -> Option<(usize, bool)> {
+        if Self::is_word_apostrophe(self.input, start, quote) {
+            return None;
+        }
+        // Adjacent quotes are literal replacement text (for example s/"/""/g),
+        // not a string literal to skip while hunting for the replacement delimiter.
+        if self.input.get(..start).and_then(|text| text.chars().next_back()) == Some(quote) {
+            return None;
+        }
         let mut pos = start.checked_add(quote.len_utf8())?;
+        if self.input.get(pos..).is_some_and(|text| text.starts_with(delim)) {
+            return None;
+        }
+        if self.input.get(pos..).is_some_and(|text| text.starts_with(quote)) {
+            return None;
+        }
         let mut escaped = false;
         let mut contains_delim = false;
 
@@ -3084,6 +3121,14 @@ impl<'a> PerlLexer<'a> {
         }
 
         None
+    }
+
+    fn is_word_apostrophe(input: &str, pos: usize, quote: char) -> bool {
+        quote == '\''
+            && input
+                .get(..pos)
+                .and_then(|text| text.chars().next_back())
+                .is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == '_')
     }
 
     fn parse_transliteration(&mut self, start: usize) -> Option<Token> {
