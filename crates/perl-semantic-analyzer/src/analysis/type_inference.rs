@@ -1,5 +1,9 @@
+use crate::analysis::type_facts::{
+    ArrayShape, DynamicBoundary, HashShape, ShapeFact, TypeEvidence, TypeFact,
+};
 use crate::ast::{Node, NodeKind};
-use std::collections::HashMap;
+use perl_semantic_facts::Confidence;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::sync::Arc;
 
@@ -100,6 +104,93 @@ impl fmt::Display for PerlType {
     }
 }
 
+fn confidence_rank(confidence: Confidence) -> u8 {
+    match confidence {
+        Confidence::High => 2,
+        Confidence::Medium => 1,
+        Confidence::Low => 0,
+    }
+}
+
+fn lower_confidence(left: Confidence, right: Confidence) -> Confidence {
+    if confidence_rank(left) <= confidence_rank(right) { left } else { right }
+}
+
+fn unify_type_facts(facts: &[TypeFact]) -> TypeFact {
+    if facts.is_empty() {
+        return TypeFact::unknown();
+    }
+
+    let mut tys = Vec::new();
+    let mut confidence = Confidence::High;
+    let mut evidence = Vec::new();
+    let mut dynamic_boundary = None;
+
+    for fact in facts {
+        if !tys.iter().any(|ty| ty == &fact.ty) {
+            tys.push(fact.ty.clone());
+        }
+        confidence = lower_confidence(confidence, fact.confidence);
+        evidence.extend(fact.evidence.clone());
+        if dynamic_boundary.is_none() {
+            dynamic_boundary = fact.dynamic_boundary.clone();
+        }
+    }
+
+    let ty = match tys.as_slice() {
+        [] => PerlType::Any,
+        [only] => only.clone(),
+        _ => PerlType::Union(tys),
+    };
+
+    TypeFact { ty, confidence, evidence, dynamic_boundary, shape: None }
+}
+
+fn append_evidence(mut evidence: Vec<TypeEvidence>, next: TypeEvidence) -> Vec<TypeEvidence> {
+    evidence.push(next);
+    evidence
+}
+
+fn static_hash_key(node: &Node) -> Option<String> {
+    match &node.kind {
+        NodeKind::Identifier { name } => Some(name.clone()),
+        NodeKind::String { value, .. } | NodeKind::Number { value } => Some(value.clone()),
+        _ => None,
+    }
+}
+
+fn looks_like_package(name: &str) -> bool {
+    name.contains("::") || name.chars().next().is_some_and(char::is_uppercase)
+}
+
+fn static_package_expr(node: &Node) -> Option<String> {
+    match &node.kind {
+        NodeKind::Identifier { name } if looks_like_package(name) => Some(name.clone()),
+        _ => None,
+    }
+}
+
+fn plain_hash_slot(node: &Node) -> Option<(String, String)> {
+    let NodeKind::Binary { op, left, right } = &node.kind else {
+        return None;
+    };
+
+    if op != "{}" {
+        return None;
+    }
+
+    let NodeKind::Variable { sigil, name } = &left.kind else {
+        return None;
+    };
+
+    if sigil != "$" {
+        return None;
+    }
+
+    let key = static_hash_key(right)?;
+    Some((name.clone(), key))
+}
+
 /// Type constraint for type checking
 #[derive(Debug, Clone)]
 pub struct TypeConstraint {
@@ -131,6 +222,8 @@ pub struct TypeLocation {
 pub struct TypeEnvironment {
     /// Variable types in current scope
     variables: HashMap<String, PerlType>,
+    /// Rich variable facts in current scope
+    variable_facts: HashMap<String, TypeFact>,
     /// Subroutine signatures
     subroutines: HashMap<String, PerlType>,
     /// Parent scope (for nested scopes)
@@ -146,13 +239,19 @@ impl Default for TypeEnvironment {
 impl TypeEnvironment {
     /// Creates a new empty type environment
     pub fn new() -> Self {
-        Self { variables: HashMap::new(), subroutines: HashMap::new(), parent: None }
+        Self {
+            variables: HashMap::new(),
+            variable_facts: HashMap::new(),
+            subroutines: HashMap::new(),
+            parent: None,
+        }
     }
 
     /// Creates a new type environment with a parent scope
     pub fn with_parent(parent: TypeEnvironment) -> Self {
         Self {
             variables: HashMap::new(),
+            variable_facts: HashMap::new(),
             subroutines: HashMap::new(),
             parent: Some(Box::new(parent)),
         }
@@ -163,9 +262,48 @@ impl TypeEnvironment {
         self.variables.insert(name, ty);
     }
 
+    /// Sets the rich type fact for a variable in the current scope.
+    pub fn set_variable_fact(&mut self, name: String, fact: TypeFact) {
+        self.variables.insert(name.clone(), fact.erased_type());
+        self.variable_facts.insert(name, fact);
+    }
+
     /// Gets the type of a variable, searching parent scopes if needed
     pub fn get_variable(&self, name: &str) -> Option<&PerlType> {
         self.variables.get(name).or_else(|| self.parent.as_ref().and_then(|p| p.get_variable(name)))
+    }
+
+    /// Gets the rich type fact for a variable, searching parent scopes if needed.
+    pub fn get_variable_fact(&self, name: &str) -> Option<&TypeFact> {
+        self.variable_facts
+            .get(name)
+            .or_else(|| self.parent.as_ref().and_then(|p| p.get_variable_fact(name)))
+    }
+
+    /// Gets a cloned rich type fact for a variable.
+    pub fn get_fact_at(&self, name: &str) -> Option<TypeFact> {
+        self.get_variable_fact(name).cloned()
+    }
+
+    /// Updates or creates a static hash slot fact in the current scope.
+    pub fn update_hash_slot(&mut self, name: &str, key: &str, fact: TypeFact) {
+        let mut base_fact =
+            self.get_variable_fact(name).cloned().unwrap_or_else(TypeFact::unknown_hash);
+        let mut shape = match base_fact.shape.take() {
+            Some(ShapeFact::Hash(shape)) => shape,
+            _ => HashShape { slots: BTreeMap::new(), fallback_value: None },
+        };
+
+        shape.slots.insert(key.to_string(), fact);
+        let slot_facts: Vec<TypeFact> = shape.slots.values().cloned().collect();
+        let fallback = unify_type_facts(&slot_facts);
+        base_fact.ty = PerlType::Hash {
+            key: Box::new(PerlType::Scalar(ScalarType::String)),
+            value: Box::new(fallback.ty.clone()),
+        };
+        shape.fallback_value = Some(Box::new(fallback));
+        base_fact.shape = Some(ShapeFact::Hash(shape));
+        self.set_variable_fact(name.to_string(), base_fact);
     }
 
     /// Sets the type signature for a subroutine in the current scope
@@ -278,6 +416,394 @@ impl TypeInferenceEngine {
             "defined".to_string(),
             Subroutine { params: vec![Any], returns: vec![Scalar(Boolean)] },
         );
+    }
+
+    /// Infer a rich type fact for an expression node.
+    pub fn infer_expr_fact(&mut self, node: &Node, env: &mut TypeEnvironment) -> TypeFact {
+        match &node.kind {
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                let mut last = TypeFact::high(PerlType::Void, Vec::new());
+                for statement in statements {
+                    last = self.infer_expr_fact(statement, env);
+                }
+                last
+            }
+            NodeKind::ExpressionStatement { expression } => self.infer_expr_fact(expression, env),
+            NodeKind::Variable { sigil, name } => {
+                if let Some(fact) = env.get_variable_fact(name) {
+                    return fact.clone();
+                }
+
+                let ty = match sigil.as_str() {
+                    "$" => PerlType::Scalar(ScalarType::Mixed),
+                    "@" => PerlType::Array(Box::new(PerlType::Any)),
+                    "%" => PerlType::Hash {
+                        key: Box::new(PerlType::Scalar(ScalarType::String)),
+                        value: Box::new(PerlType::Any),
+                    },
+                    "*" => PerlType::Glob,
+                    _ => PerlType::Any,
+                };
+                TypeFact::high(ty, Vec::new())
+            }
+            NodeKind::Number { value } => {
+                let scalar = if value.contains('.') || value.contains('e') || value.contains('E') {
+                    ScalarType::Float
+                } else {
+                    ScalarType::Integer
+                };
+                TypeFact::high(PerlType::Scalar(scalar), vec![TypeEvidence::Literal])
+            }
+            NodeKind::String { .. } => {
+                TypeFact::high(PerlType::Scalar(ScalarType::String), vec![TypeEvidence::Literal])
+            }
+            NodeKind::Undef => {
+                TypeFact::high(PerlType::Scalar(ScalarType::Undef), vec![TypeEvidence::Literal])
+            }
+            NodeKind::HashLiteral { pairs } => self.infer_hash_literal_fact(pairs, env),
+            NodeKind::ArrayLiteral { elements } => self.infer_array_literal_fact(elements, env),
+            NodeKind::Assignment { lhs, rhs, op } if op == "=" => {
+                self.apply_assignment_fact(lhs, rhs, env)
+            }
+            NodeKind::Binary { op, left, right } if op == "=" => {
+                self.apply_assignment_fact(left, right, env)
+            }
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+                self.infer_variable_declaration_fact(variable, initializer.as_deref(), env)
+            }
+            NodeKind::MethodCall { object, method, args } => {
+                self.infer_method_call_fact(object, method, args, env)
+            }
+            NodeKind::FunctionCall { name, args } => self.infer_function_call_fact(name, args, env),
+            NodeKind::Binary { op, left, right } if op == "{}" => {
+                self.infer_plain_hash_slot(left, right, env)
+            }
+            NodeKind::Binary { op, left, right } if op == "->{}" => {
+                self.infer_hashref_slot(left, right, env)
+            }
+            NodeKind::Binary { op, left, right } if op == "[]" || op == "->[]" => {
+                self.infer_array_slot_fact(op, left, right, env)
+            }
+            _ => TypeFact::unknown(),
+        }
+    }
+
+    fn infer_variable_declaration_fact(
+        &mut self,
+        variable: &Node,
+        initializer: Option<&Node>,
+        env: &mut TypeEnvironment,
+    ) -> TypeFact {
+        let NodeKind::Variable { sigil, name } = &variable.kind else {
+            return TypeFact::unknown();
+        };
+
+        let mut fact = if sigil == "%" {
+            initializer
+                .map(|init| self.infer_hash_initializer_fact(init, env))
+                .unwrap_or_else(TypeFact::unknown_hash)
+        } else {
+            initializer.map(|init| self.infer_expr_fact(init, env)).unwrap_or_else(|| {
+                TypeFact::high(PerlType::Scalar(ScalarType::Undef), vec![TypeEvidence::Literal])
+            })
+        };
+
+        fact.evidence = append_evidence(
+            fact.evidence,
+            TypeEvidence::VariableInitializer { name: name.clone() },
+        );
+        env.set_variable_fact(name.clone(), fact.clone());
+        self.global_env.set_variable_fact(name.clone(), fact.clone());
+        fact
+    }
+
+    fn infer_hash_initializer_fact(&mut self, init: &Node, env: &mut TypeEnvironment) -> TypeFact {
+        match &init.kind {
+            NodeKind::HashLiteral { pairs } => self.infer_hash_literal_fact(pairs, env),
+            NodeKind::ArrayLiteral { elements } => {
+                self.infer_hash_from_array_elements(elements, env)
+            }
+            _ => self.infer_expr_fact(init, env),
+        }
+    }
+
+    fn infer_hash_literal_fact(
+        &mut self,
+        pairs: &[(Node, Node)],
+        env: &mut TypeEnvironment,
+    ) -> TypeFact {
+        let mut slots = BTreeMap::new();
+        let mut value_facts = Vec::new();
+
+        for (key_node, value_node) in pairs {
+            let value_fact = self.infer_expr_fact(value_node, env);
+            value_facts.push(value_fact.clone());
+
+            if let Some(key) = static_hash_key(key_node) {
+                slots.insert(
+                    key.clone(),
+                    TypeFact {
+                        evidence: append_evidence(
+                            value_fact.evidence.clone(),
+                            TypeEvidence::HashSlot { hash: "<literal>".to_string(), key },
+                        ),
+                        ..value_fact
+                    },
+                );
+            }
+        }
+
+        self.hash_fact_from_slots(slots, value_facts)
+    }
+
+    fn infer_hash_from_array_elements(
+        &mut self,
+        elements: &[Node],
+        env: &mut TypeEnvironment,
+    ) -> TypeFact {
+        let mut slots = BTreeMap::new();
+        let mut value_facts = Vec::new();
+
+        for pair in elements.chunks(2) {
+            let Some(value_node) = pair.get(1) else {
+                continue;
+            };
+            let value_fact = self.infer_expr_fact(value_node, env);
+            value_facts.push(value_fact.clone());
+
+            if let Some(key_node) = pair.first() {
+                if let Some(key) = static_hash_key(key_node) {
+                    slots.insert(
+                        key.clone(),
+                        TypeFact {
+                            evidence: append_evidence(
+                                value_fact.evidence.clone(),
+                                TypeEvidence::HashSlot { hash: "<literal>".to_string(), key },
+                            ),
+                            ..value_fact
+                        },
+                    );
+                }
+            }
+        }
+
+        self.hash_fact_from_slots(slots, value_facts)
+    }
+
+    fn hash_fact_from_slots(
+        &self,
+        slots: BTreeMap<String, TypeFact>,
+        value_facts: Vec<TypeFact>,
+    ) -> TypeFact {
+        let fallback = unify_type_facts(&value_facts);
+        TypeFact {
+            ty: PerlType::Hash {
+                key: Box::new(PerlType::Scalar(ScalarType::String)),
+                value: Box::new(fallback.ty.clone()),
+            },
+            confidence: Confidence::High,
+            evidence: vec![TypeEvidence::Literal],
+            dynamic_boundary: None,
+            shape: Some(ShapeFact::Hash(HashShape {
+                slots,
+                fallback_value: Some(Box::new(fallback)),
+            })),
+        }
+    }
+
+    fn infer_array_literal_fact(
+        &mut self,
+        elements: &[Node],
+        env: &mut TypeEnvironment,
+    ) -> TypeFact {
+        let mut indexed = BTreeMap::new();
+        let mut element_facts = Vec::new();
+        for (index, element) in elements.iter().enumerate() {
+            let fact = self.infer_expr_fact(element, env);
+            indexed.insert(index, fact.clone());
+            element_facts.push(fact);
+        }
+        let element = unify_type_facts(&element_facts);
+        TypeFact {
+            ty: PerlType::Array(Box::new(element.ty.clone())),
+            confidence: Confidence::High,
+            evidence: vec![TypeEvidence::Literal],
+            dynamic_boundary: None,
+            shape: Some(ShapeFact::Array(ArrayShape { indexed, element: Some(Box::new(element)) })),
+        }
+    }
+
+    fn apply_assignment_fact(
+        &mut self,
+        lhs: &Node,
+        rhs: &Node,
+        env: &mut TypeEnvironment,
+    ) -> TypeFact {
+        let rhs_fact = self.infer_expr_fact(rhs, env);
+
+        if let Some((base_name, key)) = plain_hash_slot(lhs) {
+            let slot_fact = TypeFact {
+                evidence: append_evidence(
+                    rhs_fact.evidence.clone(),
+                    TypeEvidence::HashSlot { hash: base_name.clone(), key: key.clone() },
+                ),
+                ..rhs_fact.clone()
+            };
+            env.update_hash_slot(&base_name, &key, slot_fact.clone());
+            self.global_env.update_hash_slot(&base_name, &key, slot_fact);
+            return rhs_fact;
+        }
+
+        if let NodeKind::Variable { name, .. } = &lhs.kind {
+            let mut assigned = rhs_fact.clone();
+            assigned.evidence =
+                append_evidence(assigned.evidence, TypeEvidence::Assignment { name: name.clone() });
+            env.set_variable_fact(name.clone(), assigned.clone());
+            self.global_env.set_variable_fact(name.clone(), assigned);
+        }
+
+        rhs_fact
+    }
+
+    fn infer_plain_hash_slot(
+        &mut self,
+        left: &Node,
+        right: &Node,
+        env: &mut TypeEnvironment,
+    ) -> TypeFact {
+        let Some(key) = static_hash_key(right) else {
+            return TypeFact::dynamic(DynamicBoundary::DynamicHashKey);
+        };
+
+        let NodeKind::Variable { sigil, name } = &left.kind else {
+            return TypeFact::unknown();
+        };
+
+        if sigil != "$" {
+            return TypeFact::unknown();
+        }
+
+        let Some(base_fact) = env.get_variable_fact(name) else {
+            return TypeFact::unknown();
+        };
+
+        match &base_fact.shape {
+            Some(ShapeFact::Hash(shape)) => shape
+                .slots
+                .get(&key)
+                .cloned()
+                .or_else(|| shape.fallback_value.as_ref().map(|fact| (**fact).clone()))
+                .map(|fact| TypeFact {
+                    evidence: append_evidence(
+                        fact.evidence,
+                        TypeEvidence::HashSlot { hash: name.clone(), key },
+                    ),
+                    ..fact
+                })
+                .unwrap_or_else(TypeFact::unknown),
+            _ => TypeFact::unknown(),
+        }
+    }
+
+    fn infer_hashref_slot(
+        &mut self,
+        left: &Node,
+        right: &Node,
+        env: &mut TypeEnvironment,
+    ) -> TypeFact {
+        let Some(key) = static_hash_key(right) else {
+            return TypeFact::dynamic(DynamicBoundary::DynamicHashKey);
+        };
+
+        let base_fact = self.infer_expr_fact(left, env);
+        match &base_fact.shape {
+            Some(ShapeFact::Hash(shape)) => shape
+                .slots
+                .get(&key)
+                .cloned()
+                .or_else(|| shape.fallback_value.as_ref().map(|fact| (**fact).clone()))
+                .map(|fact| TypeFact {
+                    evidence: append_evidence(
+                        fact.evidence,
+                        TypeEvidence::HashRefSlot { base: "<expr>".to_string(), key },
+                    ),
+                    ..fact
+                })
+                .unwrap_or_else(TypeFact::unknown),
+            Some(ShapeFact::Object(object)) => {
+                object.fields.get(&key).cloned().unwrap_or_else(TypeFact::unknown)
+            }
+            _ => TypeFact::unknown(),
+        }
+    }
+
+    fn infer_array_slot_fact(
+        &mut self,
+        _op: &str,
+        left: &Node,
+        right: &Node,
+        env: &mut TypeEnvironment,
+    ) -> TypeFact {
+        let base_fact = self.infer_expr_fact(left, env);
+        let index = static_hash_key(right).and_then(|value| value.parse::<usize>().ok());
+        match (&base_fact.shape, index) {
+            (Some(ShapeFact::Array(shape)), Some(index)) => shape
+                .indexed
+                .get(&index)
+                .cloned()
+                .or_else(|| shape.element.as_ref().map(|fact| (**fact).clone()))
+                .unwrap_or_else(TypeFact::unknown),
+            (Some(ShapeFact::Array(shape)), None) => shape
+                .element
+                .as_ref()
+                .map(|fact| (**fact).clone())
+                .unwrap_or_else(TypeFact::unknown),
+            _ => TypeFact::unknown(),
+        }
+    }
+
+    fn infer_method_call_fact(
+        &mut self,
+        object: &Node,
+        method: &str,
+        _args: &[Node],
+        _env: &mut TypeEnvironment,
+    ) -> TypeFact {
+        if method == "new" {
+            if let Some(package) = static_package_expr(object) {
+                return TypeFact::high(
+                    PerlType::Object(package.clone()),
+                    vec![TypeEvidence::ConstructorCall { package }],
+                );
+            }
+        }
+
+        TypeFact::unknown()
+    }
+
+    fn infer_function_call_fact(
+        &mut self,
+        name: &str,
+        _args: &[Node],
+        env: &mut TypeEnvironment,
+    ) -> TypeFact {
+        if let Some(sig) = self.builtins.get(name) {
+            if let PerlType::Subroutine { returns, .. } = sig {
+                return TypeFact::high(
+                    returns.first().cloned().unwrap_or(PerlType::Void),
+                    vec![TypeEvidence::Heuristic { reason: format!("builtin {name}") }],
+                );
+            }
+        }
+
+        if let Some(PerlType::Subroutine { returns, .. }) = env.get_subroutine(name) {
+            return TypeFact::high(
+                returns.first().cloned().unwrap_or(PerlType::Void),
+                vec![TypeEvidence::Heuristic { reason: format!("subroutine {name}") }],
+            );
+        }
+
+        TypeFact::unknown()
     }
 
     /// Infer types for an AST
@@ -468,7 +994,9 @@ impl TypeInferenceEngine {
 
                     // Assignment operators
                     "=" | "+=" | "-=" | "*=" | "/=" | ".=" => {
-                        env.set_variable(self.extract_var_name(left), right_ty.clone());
+                        let name = self.extract_var_name(left);
+                        env.set_variable(name.clone(), right_ty.clone());
+                        env.set_variable_fact(name, TypeFact::high(right_ty.clone(), Vec::new()));
                         Ok(right_ty)
                     }
 
@@ -621,9 +1149,17 @@ impl TypeInferenceEngine {
                         }
                     };
 
-                    // Store in both environments using the name WITHOUT sigil
-                    self.global_env.set_variable(clean_name.to_string(), inferred_type.clone());
-                    env.set_variable(clean_name.to_string(), inferred_type.clone());
+                    // Store in both environments using the name WITHOUT sigil.
+                    let fact = if sigil == "%" {
+                        initializer
+                            .as_deref()
+                            .map(|init| self.infer_hash_initializer_fact(init, env))
+                            .unwrap_or_else(TypeFact::unknown_hash)
+                    } else {
+                        TypeFact::high(inferred_type.clone(), Vec::new())
+                    };
+                    self.global_env.set_variable_fact(clean_name.to_string(), fact.clone());
+                    env.set_variable_fact(clean_name.to_string(), fact);
 
                     inferred_type
                 } else {
@@ -851,6 +1387,11 @@ impl TypeInferenceEngine {
     /// Gets the inferred type for a variable by name
     pub fn get_type_at(&self, name: &str) -> Option<PerlType> {
         self.global_env.get_variable(name).cloned()
+    }
+
+    /// Gets the inferred rich fact for a variable by name.
+    pub fn get_fact_at(&self, name: &str) -> Option<TypeFact> {
+        self.global_env.get_fact_at(name)
     }
 
     /// Returns a human-readable type label for use in hover text.
