@@ -13,6 +13,25 @@ like (#0000) or (#9999) will fail CI.
 ## Changes
 <!-- List changed files and what each change does -->
 
+## Source-of-truth links
+<!-- Use N/A when this PR is not part of a source-of-truth lane. -->
+Proposal:
+Spec:
+ADR:
+Plan item:
+Active goal:
+
+## Scope
+- [ ] Proposal / why
+- [ ] Spec / behavior contract
+- [ ] ADR / durable decision
+- [ ] Plan / sequencing
+- [ ] Active goal / current execution state
+- [ ] Runtime / implementation
+- [ ] Policy ledger
+- [ ] Support-tier update
+- [ ] Generated status / receipt
+
 ## Test
 <!-- What test was added? Does it fail before the fix and pass after? -->
 
@@ -30,6 +49,12 @@ like (#0000) or (#9999) will fail CI.
 - [ ] Close-only behavior is distinct from delete/folder-removal behavior.
 - [ ] Delayed background work cannot repopulate stale state.
 - [ ] A regression test, receipt, snapshot counter, or debug counter covers the state.
+
+## Claim boundary
+<!-- What may be claimed after this PR? What may not be claimed yet? -->
+
+## Rollback
+<!-- How can this PR be reverted safely? -->
 
 ## What I considered but didn't do
 <!-- Alternative approaches, related issues found, scope decisions -->

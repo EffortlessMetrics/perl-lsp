@@ -8,6 +8,27 @@ The orchestrator reads `CLAUDE.md`. This file is for you.
 
 ---
 
+## Repo source-of-truth stack
+
+This repo uses a linked source-of-truth stack:
+
+```text
+Roadmap -> Proposal -> Spec -> ADR -> Plan -> Active goal -> PR -> Proof
+```
+
+Before changing files for lane work, read:
+
+1. `docs/reference/SPEC_SYSTEM.md`
+2. `.perl-lsp/goals/active.toml`
+3. the linked implementation plan
+4. the linked spec for the selected work item
+5. linked ADRs
+
+Work on exactly one work item per PR, run the listed proof commands, and stop
+instead of guessing when linked artifacts are missing or contradictory.
+
+---
+
 ## Context you can read
 
 | Resource | Purpose |

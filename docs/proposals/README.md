@@ -4,6 +4,9 @@ Proposals describe why a lane exists: the user pain, product motivation,
 alternatives considered, and success criteria that make the work worth doing.
 They are the PRD layer for `perl-lsp` planning.
 
+See [SPEC_SYSTEM.md](../reference/SPEC_SYSTEM.md) for the full
+source-of-truth stack and agent workflow.
+
 | Layer | Owns | Must not do |
 |---|---|---|
 | Proposal | User problem, affected surfaces, success criteria, alternatives, non-goals, claim boundary | PR sequencing, proof command ownership, generated metric state |

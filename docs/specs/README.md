@@ -3,6 +3,9 @@
 Specs define what must be true for a behavior, status surface, or proof lane.
 They are contracts for acceptance, proof requirements, and claim boundaries.
 
+See [SPEC_SYSTEM.md](../reference/SPEC_SYSTEM.md) for the full
+source-of-truth stack and agent workflow.
+
 | Layer | Owns | Must not do |
 |---|---|---|
 | Spec | Behavior contract, acceptance criteria, proof requirements, status interpretation, claim limits | Product motivation, broad roadmap, PR sequence, active queue ownership |

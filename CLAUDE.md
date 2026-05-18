@@ -2,6 +2,19 @@
 
 **Latest Release**: 0.14.0 | **Metrics**: [status/index.md](docs/project/status/index.md) | **API Stability**: [STABILITY.md](docs/reference/STABILITY.md) | **Implementation agents**: [AGENTS.md](AGENTS.md)
 
+## Repo source-of-truth stack
+
+This repo uses a linked source-of-truth stack for lane work:
+
+```text
+Roadmap -> Proposal -> Spec -> ADR -> Plan -> Active goal -> PR -> Proof
+```
+
+Before routing or executing lane work, use `docs/reference/SPEC_SYSTEM.md`,
+`.perl-lsp/goals/active.toml`, the linked implementation plan, linked specs,
+and linked ADRs to identify the current work item, proof commands, and claim
+boundaries.
+
 ## Orchestration Model
 
 perl-lsp's orchestration is an *Octopus Cluster* — see [docs/reference/OCTOPUS_CLUSTER.md](docs/reference/OCTOPUS_CLUSTER.md) for the umbrella framing.

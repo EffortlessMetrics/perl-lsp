@@ -4,6 +4,9 @@ Active goals are machine-readable current-state manifests for `perl-lsp` lanes.
 They let agents identify the current objective, active work item, proof commands,
 and status pointers without scraping chat or hand-maintained narrative.
 
+See [SPEC_SYSTEM.md](../../docs/reference/SPEC_SYSTEM.md) for the full
+source-of-truth stack and agent workflow.
+
 | Layer | Owns | Must not do |
 |---|---|---|
 | Active goal | Machine-readable current work, status pointers, active work-item IDs, proof command list | Prose-only strategy, generated status content, durable design rationale |

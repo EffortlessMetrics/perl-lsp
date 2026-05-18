@@ -2,6 +2,9 @@
 
 This directory contains Architecture Decision Records (ADRs) for significant design decisions in the Perl LSP project.
 
+See [SPEC_SYSTEM.md](../reference/SPEC_SYSTEM.md) for the full
+source-of-truth stack and agent workflow.
+
 ## Source-of-Truth Layer
 
 ADRs describe durable decisions: the architecture, policy, or operating model
