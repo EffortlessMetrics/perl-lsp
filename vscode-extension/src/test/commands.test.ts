@@ -373,6 +373,7 @@ describe('perl-lsp trust explanation commands', () => {
     ['perl-lsp.copyProviderDecisionReceipt', 'Copy Provider Decision Receipt'],
     ['perl-lsp.showWorkspaceTrustReport', 'Show Workspace Trust Report'],
     ['perl-lsp.explainMissingModuleLookup', 'Explain Missing Module Lookup'],
+    ['perl-lsp.explainDiagnostic', 'Explain This Diagnostic'],
   ])('%s is declared as a Perl LSP command', (id, title) => {
     const cmd = pkg.contributes.commands.find((c: any) => c.command === id);
     expect(commandIds).toContain(id);
@@ -386,6 +387,7 @@ describe('perl-lsp trust explanation commands', () => {
     'perl-lsp.previewSafeDelete',
     'perl-lsp.copyProviderDecisionReceipt',
     'perl-lsp.explainMissingModuleLookup',
+    'perl-lsp.explainDiagnostic',
   ])('%s is available from the Perl command palette', (id) => {
     const entry = paletteEntries.find((e: any) => e.command === id);
     expect(entry).toBeDefined();
