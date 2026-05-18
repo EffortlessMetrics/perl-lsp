@@ -62,6 +62,21 @@ sub caller {
 1;
 "#;
 
+const SAFE_DELETE_BOUNDARY_URI: &str = "file:///workspace/lib/SafeDelete/Boundary.pm";
+
+const SAFE_DELETE_BOUNDARY_MODULE: &str = r#"package SafeDelete::Boundary;
+use strict;
+use warnings;
+
+our $CONFIG = 1;
+
+sub keep {
+    return 1;
+}
+
+1;
+"#;
+
 const CROSS_PROJECT_SOURCE_URI: &str = "file:///workspace/lib/CrossProject/Source.pm";
 const CROSS_PROJECT_CALLER_URI: &str = "file:///workspace/lib/CrossProject/Caller.pm";
 
@@ -378,6 +393,67 @@ fn assert_safe_delete_decision_trace(
                 == "narrow safe-delete live pilot only; returns a source-backed symbol-delete WorkspaceEdit when compiler proof, exact source guard, current-source/workspace reference guards, workspace identity guard, and rollback proof all pass",
         "unexpected safe-delete claim boundary: {claim_boundary}"
     );
+    Ok(())
+}
+
+fn assert_safe_delete_live_source_guard_blocked(
+    receipt: &Value,
+    expected_symbol: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(receipt.get("symbol").and_then(Value::as_str), Some(expected_symbol));
+    assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("current_source"));
+    assert_eq!(
+        receipt.get("live_pilot_source_guard").and_then(Value::as_str),
+        Some("not_source_backed_exact_subroutine_definition")
+    );
+    assert_eq!(
+        receipt.get("current_source_delete_guard").and_then(Value::as_str),
+        Some("not_source_backed_exact_subroutine_definition")
+    );
+    assert_eq!(
+        receipt.get("live_pilot_workspace_identity_guard").and_then(Value::as_str),
+        Some("not_evaluated")
+    );
+    assert_eq!(receipt.get("live_symbol_delete_enabled").and_then(Value::as_bool), Some(false));
+    assert_eq!(receipt.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(receipt.get("returned_workspace_edit_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(
+        receipt
+            .pointer("/workspace_edit/changes")
+            .and_then(Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0)
+    );
+    assert_safe_delete_decision_trace(
+        receipt,
+        "blocked",
+        "not_source_backed_exact_subroutine_definition",
+        "no_edit",
+    )?;
+
+    let live_blocker_ux = receipt.get("live_blocker_ux").ok_or("missing live_blocker_ux")?;
+    assert_json_array_contains(
+        live_blocker_ux,
+        "blocker_reasons",
+        "NotSourceBackedExactSubroutineDefinition",
+    )?;
+
+    let message = receipt
+        .get("user_message")
+        .and_then(Value::as_str)
+        .ok_or("missing safe-delete source guard user_message")?;
+    assert!(
+        message.contains("Safe delete refused")
+            && message.contains(expected_symbol)
+            && message.contains("No edits were returned"),
+        "source guard message should explain the no-edit refusal: {message}"
+    );
+
     Ok(())
 }
 
@@ -3171,6 +3247,55 @@ fn refactor_runtime_blocker_ux_safe_delete_live_pilot_catalyst_false_allow_block
     assert_eq!(
         request_receipt.get("live_symbol_delete_enabled").and_then(Value::as_bool),
         Some(false)
+    );
+    assert_eq!(
+        request_receipt.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_live_pilot_blocks_non_subroutine_and_package_wide()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    open_document(&server, SAFE_DELETE_BOUNDARY_URI, SAFE_DELETE_BOUNDARY_MODULE)?;
+
+    let (config_line, config_character) = position_of(SAFE_DELETE_BOUNDARY_MODULE, "$CONFIG =")?;
+    let variable_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.safeDeleteSymbol",
+            "arguments": [{
+                "textDocument": {"uri": SAFE_DELETE_BOUNDARY_URI},
+                "position": {"line": config_line, "character": config_character}
+            }]
+        })))?
+        .ok_or("missing non-subroutine safe-delete blocker result")?;
+    assert_safe_delete_live_source_guard_blocked(&variable_result, "$CONFIG")?;
+
+    let (package_line, package_character) = position_of(SAFE_DELETE_BOUNDARY_MODULE, "Boundary;")?;
+    let package_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.safeDeleteSymbol",
+            "arguments": [{
+                "textDocument": {"uri": SAFE_DELETE_BOUNDARY_URI},
+                "position": {"line": package_line, "character": package_character}
+            }]
+        })))?
+        .ok_or("missing package-wide safe-delete blocker result")?;
+    assert_safe_delete_live_source_guard_blocked(&package_result, "Boundary")?;
+
+    let explanation = explain_provider_decision(&server, "safe_delete")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(request_receipt.get("symbol").and_then(Value::as_str), Some("Boundary"));
+    assert_eq!(
+        request_receipt.get("reason").and_then(Value::as_str),
+        Some("not_source_backed_exact_subroutine_definition")
     );
     assert_eq!(
         request_receipt.get("returned_workspace_edit_count").and_then(Value::as_u64),
