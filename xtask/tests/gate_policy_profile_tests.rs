@@ -21,6 +21,13 @@ struct PolicyGate {
     tier: String,
     #[serde(default = "default_true")]
     required: bool,
+    timeout_seconds: Option<u64>,
+    budgets: Option<GateBudgets>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GateBudgets {
+    max_duration_ms: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -55,6 +62,15 @@ fn parser_corpus_pr_policy_is_unambiguous() -> Result<(), Box<dyn std::error::Er
 
     assert_eq!(common.tier, "merge_gate");
     assert!(common.required, "common_corpus_clean must stay PR-blocking");
+    assert!(
+        common.timeout_seconds.unwrap_or_default() >= 240,
+        "common_corpus_clean timeout must include cold CI xtask startup"
+    );
+    assert!(
+        common.budgets.as_ref().and_then(|budget| budget.max_duration_ms).unwrap_or_default()
+            >= 180_000,
+        "common_corpus_clean duration budget must reflect CI startup overhead"
+    );
 
     assert_eq!(parser.tier, "merge_gate");
     assert!(!parser.required, "parser_corpus_ratchet must be advisory in PR merge-gate profile");
