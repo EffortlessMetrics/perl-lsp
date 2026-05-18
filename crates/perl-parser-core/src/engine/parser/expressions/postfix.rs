@@ -1313,10 +1313,11 @@ impl<'a> Parser<'a> {
     /// Parse hash subscript key expression, treating lone keywords as bare
     /// identifiers when they appear as `$h->{keyword}` or `$h{keyword}`.
     ///
-    /// Keywords like `not`, `and`, `or`, `xor`, `do`, `eval` would normally be
-    /// consumed as operators or statement keywords. When one of these appears
-    /// inside a hash subscript followed immediately by `}`, it should be treated
-    /// as a bare hash key instead.
+    /// Keywords like `not`, `and`, `or`, `xor`, `do`, `eval`, `local`, `tie`,
+    /// and `untie` would normally be consumed as operators, statement keywords,
+    /// or builtin calls. When one of these appears inside a hash subscript
+    /// followed immediately by `}`, it should be treated as a bare hash key
+    /// instead.
     ///
     /// Additionally handles quote-operator names (`m`, `s`, `q`, etc.) when used
     /// as hash subscript keys. The lexer suppresses quote-op detection inside
@@ -1324,7 +1325,8 @@ impl<'a> Parser<'a> {
     /// This function builds a proper parse tree node for them, including support
     /// for hash slices like `@h{m, s}` which require a list node.
     fn parse_hash_subscript_key(&mut self) -> ParseResult<Node> {
-        // Try keyword/operator-as-bareword first (not, and, or, xor, do, eval, cmp)
+        // Try keyword/operator-as-bareword first (not, and, or, xor, do, eval,
+        // cmp, local, tie, untie).
         if let Some(node) = self.try_parse_keyword_bareword_key()? {
             return Ok(node);
         }
@@ -1338,9 +1340,9 @@ impl<'a> Parser<'a> {
         self.parse_expression()
     }
 
-    /// Attempt to parse a keyword or word operator (`not`, `and`, `or`, `xor`,
-    /// `do`, `eval`, `cmp`) as a bareword hash key when it appears directly
-    /// before `}`.
+    /// Attempt to parse a keyword, word operator, or builtin-like word (`not`,
+    /// `and`, `or`, `xor`, `do`, `eval`, `cmp`, `local`, `tie`, `untie`) as a
+    /// bareword hash key when it appears directly before `}`.
     ///
     /// Returns `Some(Node)` if the current token is a keyword/operator followed
     /// by `}`, otherwise returns `None` to fall through to general expression
@@ -1358,10 +1360,17 @@ impl<'a> Parser<'a> {
                 | TokenKind::WordXor
                 | TokenKind::Do
                 | TokenKind::Eval
+                | TokenKind::Local
                 | TokenKind::StringCompare
         );
 
-        if !is_simple_keyword_key {
+        let is_builtin_like_key = self
+            .tokens
+            .peek()
+            .ok()
+            .is_some_and(|token| matches!(token.text.as_ref(), "tie" | "untie"));
+
+        if !is_simple_keyword_key && !is_builtin_like_key {
             return Ok(None);
         }
 

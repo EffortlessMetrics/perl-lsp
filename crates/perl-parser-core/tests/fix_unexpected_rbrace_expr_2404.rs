@@ -83,3 +83,38 @@ fn test_dbix_hash_splice_with_semicolon_terminated_deref_body() {
 }"#,
     );
 }
+
+#[test]
+fn test_op_private_deref_hash_slice_assignment() {
+    // From B::Op_private: generated bitfield tables assign to hash slices
+    // through a braced dereference whose inner key can be a builtin name.
+    assert_clean_parse(
+        r#"@{$bits{tie}}{3,2,1,0} = (
+    'OPpASSIGN_COMMON_SCALAR',
+    'OPpASSIGN_COMMON_RC1',
+    'OPpASSIGN_COMMON_AGG',
+    'OPpASSIGN_TRUEBOOL',
+);"#,
+    );
+}
+
+#[test]
+fn test_op_private_untie_hash_key_assignment() {
+    // From B::Op_private: `untie` is a builtin at expression start but a bare
+    // hash key inside `$bits{untie}`.
+    assert_clean_parse(r#"$bits{untie}{0} = $bf[0];"#);
+}
+
+#[test]
+fn test_dpkg_grep_block_values_hash_deref() {
+    // From Dpkg::Shlibs::Objdump::Object: grep block-list calls may take a
+    // values expression over a braced hash dereference as their list operand.
+    assert_clean_parse(
+        r#"sub get_exported_dynamic_symbols {
+    my $self = shift;
+    return grep {
+        $_->{defined} && $_->{dynamic} && !$_->{local}
+    } values %{$self->{dynsyms}};
+}"#,
+    );
+}
