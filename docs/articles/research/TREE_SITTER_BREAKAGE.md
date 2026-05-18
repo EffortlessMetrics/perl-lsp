@@ -354,7 +354,7 @@ The suite defines five verdict categories: `Correct` (structural property satisf
 
 ### Reading the disagreement table
 
-The PR #9170 body contains the full disagreement table (rows for all 50 cases, columns for v1/v2/v3, with asterisks marking silent-failure cases where the parse succeeds but a structural assertion reveals missing content). The test file at `crates/perl-parser-comparison/tests/differential.rs` is the live, executable record — when a parser's behavior changes, the expected verdict in the test must change intentionally, making regressions and improvements both visible.
+Running `cargo test -p perl-parser-comparison -- --nocapture` prints the disagreement table (rows for all 50 cases, columns for v1/v2/v3, with asterisks marking silent-failure cases where the parse succeeds but a structural assertion reveals missing content). The test file at `crates/perl-parser-comparison/tests/differential.rs` is the live, executable record — when a parser's behavior changes, the expected verdict in the test must change intentionally, making regressions and improvements both visible.
 
 ### What the empirical data confirmed and what it surfaced beyond the theory
 
