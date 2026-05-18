@@ -11,7 +11,7 @@ use common::test_utils::generators;
 use common::{initialize_lsp, read_response, send_notification, send_request, start_lsp_server};
 
 /// Performance requirements
-const MAX_INIT_TIME: Duration = Duration::from_millis(1000);
+const MAX_INIT_TIME: Duration = Duration::from_secs(1);
 const MAX_PARSE_TIME_PER_KB: Duration = Duration::from_micros(500);
 const MAX_DIAGNOSTIC_TIME: Duration = Duration::from_millis(100);
 const MAX_SYMBOL_TIME: Duration = Duration::from_millis(50);

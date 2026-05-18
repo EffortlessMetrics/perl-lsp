@@ -223,7 +223,7 @@ mod tests {
         let count = Arc::new(AtomicUsize::new(0));
         let c = Arc::clone(&count);
         let debouncer =
-            DiagnosticDebouncer::with_interval(Duration::from_millis(5000), move |_| {
+            DiagnosticDebouncer::with_interval(Duration::from_secs(5), move |_| {
                 c.fetch_add(1, Ordering::SeqCst);
             });
         debouncer.schedule("file:///test.pl");

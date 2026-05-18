@@ -286,7 +286,7 @@ fn test_multiple_provider_cancellation_with_context_ac1() -> Result<(), Box<dyn 
     // Validate all cancellations with enhanced error context
     for (id, method, _params, _provider_type) in &provider_scenarios {
         let response =
-            read_response_matching_i64(&fixture.server, *id, Duration::from_millis(1000));
+            read_response_matching_i64(&fixture.server, *id, Duration::from_secs(1));
 
         if let Some(resp) = response {
             if let Some(error) = resp.get("error") {
@@ -797,7 +797,7 @@ fn test_cross_file_navigation_cancellation_ac3() -> Result<(), Box<dyn std::erro
         3..=4 => Duration::from_secs(8),  // Moderate: reduced timeout
         _ => Duration::from_secs(5),      // Unconstrained: shorter timeout
     };
-    drain_until_quiet(&fixture.server, Duration::from_millis(1000), cross_file_timeout);
+    drain_until_quiet(&fixture.server, Duration::from_secs(1), cross_file_timeout);
 
     // Test definition resolution cancellation across files
     let definition_id = 4001;
@@ -905,7 +905,7 @@ fn test_workspace_symbol_dual_pattern_cancellation_ac3() -> Result<(), Box<dyn s
         3..=4 => Duration::from_secs(12), // Moderate: reduced timeout
         _ => Duration::from_secs(8),      // Unconstrained: shorter timeout
     };
-    drain_until_quiet(&fixture.server, Duration::from_millis(1000), large_file_timeout);
+    drain_until_quiet(&fixture.server, Duration::from_secs(1), large_file_timeout);
 
     // Test qualified pattern search with cancellation
     let qualified_search_id = 5001;

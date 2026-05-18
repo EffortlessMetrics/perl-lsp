@@ -481,7 +481,7 @@ fn update_only_deadline() -> Result<(), Box<dyn std::error::Error>> {
 
     limits.update_from_value(&settings);
 
-    assert_eq!(limits.workspace_scan_deadline, Duration::from_millis(5000));
+    assert_eq!(limits.workspace_scan_deadline, Duration::from_secs(5));
     assert_eq!(limits.file_index_deadline, Duration::from_secs(5)); // unchanged
     Ok(())
 }

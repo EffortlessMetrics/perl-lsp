@@ -216,7 +216,7 @@ fn update_workspace_scan_deadline_ms() -> Result<(), Box<dyn std::error::Error>>
     let mut limits = LspLimits::default();
     let settings = serde_json::json!({ "limits": { "workspaceScanDeadlineMs": 60000 } });
     limits.update_from_value(&settings);
-    assert_eq!(limits.workspace_scan_deadline, Duration::from_millis(60000));
+    assert_eq!(limits.workspace_scan_deadline, Duration::from_secs(60));
     Ok(())
 }
 
@@ -225,7 +225,7 @@ fn update_reference_search_deadline_ms() -> Result<(), Box<dyn std::error::Error
     let mut limits = LspLimits::default();
     let settings = serde_json::json!({ "limits": { "referenceSearchDeadlineMs": 5000 } });
     limits.update_from_value(&settings);
-    assert_eq!(limits.reference_search_deadline, Duration::from_millis(5000));
+    assert_eq!(limits.reference_search_deadline, Duration::from_secs(5));
     Ok(())
 }
 
@@ -251,8 +251,8 @@ fn update_multiple_fields_at_once() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(limits.ast_cache_max_entries, 200);
     assert_eq!(limits.max_indexed_files, 25_000);
     assert_eq!(limits.max_total_symbols, 750_000);
-    assert_eq!(limits.workspace_scan_deadline, Duration::from_millis(45000));
-    assert_eq!(limits.reference_search_deadline, Duration::from_millis(3000));
+    assert_eq!(limits.workspace_scan_deadline, Duration::from_secs(45));
+    assert_eq!(limits.reference_search_deadline, Duration::from_secs(3));
     Ok(())
 }
 

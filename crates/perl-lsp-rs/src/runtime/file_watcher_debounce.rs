@@ -266,7 +266,7 @@ mod tests {
         let count = Arc::new(AtomicUsize::new(0));
         let c = Arc::clone(&count);
         let debouncer =
-            FileWatcherDebouncer::with_interval(Duration::from_millis(5000), move |_uris| {
+            FileWatcherDebouncer::with_interval(Duration::from_secs(5), move |_uris| {
                 c.fetch_add(1, Ordering::SeqCst);
             });
         debouncer.schedule("file:///test.pl");
