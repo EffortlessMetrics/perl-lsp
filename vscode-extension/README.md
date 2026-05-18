@@ -206,6 +206,7 @@ Open the command palette (`Ctrl+Shift+P`) and search for "Perl":
 | **Perl: Reinstall Server Binary** | Re-download the managed binary |
 | **Perl: Organize Use Statements** | Sort and clean `use` statements |
 | **Perl: Run Tests in Current File** | Run tests in the active `.t` or `.pl` file |
+| **Perl LSP: Show Workspace Trust Report** | Show workspace roots, module-resolution configuration, index state, support tiers, provider-decision traces, and dynamic-boundary policy in the output channel |
 | **Perl: Show Output Channel** | Open the extension output log |
 | **Perl: Show Status Menu** | Quick-access menu for all actions |
 

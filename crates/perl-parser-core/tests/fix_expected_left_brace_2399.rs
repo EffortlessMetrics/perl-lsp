@@ -88,6 +88,20 @@ sub qux { return "hello" }
     );
 }
 
+#[test]
+fn test_sub_defer_keyword_name() {
+    // From Tie::File: `defer` is a keyword token, but remains a valid
+    // subroutine name in ordinary Perl packages.
+    assert_clean_parse(
+        r#"
+sub defer {
+    my $self = shift;
+    $self->{defer} = 1;
+}
+"#,
+    );
+}
+
 // ---- String eval (eval $expr, eval $var) ----
 
 #[test]

@@ -7,7 +7,7 @@
 
 | --- | --- | --- | --- |
 | <!-- BEGIN: PARSER_TRACKING_TABLE -->
-| **Ubuntu system Perl** | 96.8% clean (`6871/7095`) / 20.5% salvage | Compatibility baseline; Perl `5.038002`, `48` unreadable, `36` recovery-only, `140` ERROR-node files, `0` catastrophic, baseline `2026-04-28` | `.ci/parser-corpus-baseline.json` |
+| **Ubuntu system Perl** | 99.3% clean (`7047/7095`) / insufficient_data salvage | Compatibility baseline; Perl `5.038002`, `48` unreadable, `0` recovery-only, `0` ERROR-node files, `0` catastrophic, baseline `2026-05-18` | `.ci/parser-corpus-baseline.json` |
 | **CPAN top 1000** | 95.3% clean (`8931/9372`) / insufficient_data salvage | Ecosystem breadth baseline; `6` unreadable, `insufficient_data` recovery-only, `insufficient_data` ERROR-node files, `insufficient_data` catastrophic, cached downloads in `target/cpan-corpus/.cpanm`, baseline `2026-04-09` | `.ci/cpan-corpus-baseline.json` |
 | **Project corpus** | 100.0% clean (`96/96`) | Deterministic regression baseline; `74` `test_corpus/` + `22` `perl-corpus` files, `0` errors, `0` timeouts, `0` panics, `66/69` NodeKinds, `12/12` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |
 <!-- END: PARSER_TRACKING_TABLE -->
@@ -60,10 +60,10 @@ Failures in the system-Perl baseline grouped by cluster. Counts come from `first
 <!-- BEGIN: PARSER_FAILURE_WORKLIST -->
 | transliteration / quote parsing | 0 |
 | declaration / package parsing | 0 |
-| heredoc / delimiter handling | 56 |
-| recovery-only failures | 38 |
+| heredoc / delimiter handling | 0 |
+| recovery-only failures | 0 |
 | encoding / multibyte | 0 |
-| other | 46 |
+| other | 0 |
 <!-- END: PARSER_FAILURE_WORKLIST -->
 
 ### Raw Failure Buckets
@@ -71,27 +71,13 @@ Failures in the system-Perl baseline grouped by cluster. Counts come from `first
 Raw first-error buckets from the same system-Perl receipt, grouped by cluster so the generated worklist can be split into one parser-fix lane at a time.
 
 <!-- BEGIN: PARSER_FAILURE_RECEIPT_NOTE -->
-Receipt snapshot: profile `system`, commit `3c287d7db`, generated `2026-04-28`, Perl `5.038002`, `86` resolved roots. Raw bucket counts are point-in-time compatibility data; before starting a parser-fix lane from a bucket, rerun `cargo xtask parser-corpus-sweep --baseline .ci/parser-corpus-baseline.json --enforce --receipt` on Linux or add a focused fixture when system roots are unavailable.
+Receipt snapshot: profile `system`, commit `f201b498c`, generated `2026-05-18`, Perl `5.038002`, `86` resolved roots. Raw bucket counts are point-in-time compatibility data; before starting a parser-fix lane from a bucket, rerun `cargo xtask parser-corpus-sweep --baseline .ci/parser-corpus-baseline.json --enforce --receipt` on Linux or add a focused fixture when system roots are unavailable.
 <!-- END: PARSER_FAILURE_RECEIPT_NOTE -->
 
 | Cluster | Bucket | Files |
 | --- | --- | --- |
 <!-- BEGIN: PARSER_FAILURE_BUCKETS -->
-| heredoc / delimiter handling | `unclosed_paren_identifier` | 22 |
-| heredoc / delimiter handling | `unclosed_brace` | 10 |
-| heredoc / delimiter handling | `unexpected_rparen_expr` | 8 |
-| heredoc / delimiter handling | `expected_left_brace` | 6 |
-| heredoc / delimiter handling | `unexpected_rbrace_expr` | 6 |
-| heredoc / delimiter handling | `unclosed_bracket` | 2 |
-| heredoc / delimiter handling | `unclosed_paren` | 2 |
-| recovery-only failures | `unexpected_token_in_expr` | 38 |
-| other | `unexpected_assign_expr` | 12 |
-| other | `unexpected_comma_expr` | 10 |
-| other | `unexpected_eq_expr` | 10 |
-| other | `expected_colon` | 4 |
-| other | `expected_comma` | 4 |
-| other | `unexpected_word_op_or` | 4 |
-| other | `substitution_misparse` | 2 |
+| none | n/a | 0 |
 <!-- END: PARSER_FAILURE_BUCKETS -->
 
 <!-- BEGIN: PARSER_METRICS_BULLETS -->

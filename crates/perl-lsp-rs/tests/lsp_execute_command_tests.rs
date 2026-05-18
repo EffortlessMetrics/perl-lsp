@@ -3,6 +3,7 @@ use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
 use std::fs;
 use tempfile::TempDir;
+use url::Url;
 
 fn setup_server(root_path: Option<String>) -> LspServer {
     let server = LspServer::new();
@@ -226,8 +227,313 @@ fn test_execute_command_capabilities() -> Result<(), Box<dyn std::error::Error>>
     assert!(command_strs.contains(&"perl.runTestSub"));
     assert!(command_strs.contains(&"perl.runCritic"));
     assert!(command_strs.contains(&"perl.explainProviderDecision"));
+    assert!(command_strs.contains(&"perl.workspaceTrustReport"));
     assert!(command_strs.contains(&"perl.previewSafeDelete"));
+    assert!(command_strs.contains(&"perl.safeDeleteSymbol"));
     assert!(command_strs.contains(&"perl.previewPackageRename"));
+    assert!(command_strs.contains(&"perl.explainMissingModuleLookup"));
+
+    Ok(())
+}
+
+#[test]
+fn test_execute_command_workspace_trust_report() -> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = TempDir::new()?;
+    let root_path = temp_dir.path().to_string_lossy().to_string();
+    let server = setup_server(Some(root_path));
+
+    let execute_request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "workspace/executeCommand".to_string(),
+        params: Some(json!({
+            "command": "perl.workspaceTrustReport",
+            "arguments": [{
+                "client_runtime_state": {
+                    "source": "vscode-extension",
+                    "perldoc": {
+                        "status": "client_surface_registered",
+                        "uri_scheme": "perldoc",
+                        "client_surface": "virtual_document"
+                    },
+                    "dap": {
+                        "status": "client_state_reported",
+                        "adapter_registered": true,
+                        "active_perl_debug_session": false,
+                        "managed_adapter_exists": true,
+                        "launch_json_workspace_count": 1,
+                        "workspace_folder_count": 1,
+                        "launch_configuration": {
+                            "status": "client_launch_config_reported",
+                            "configuration_count": 3,
+                            "perl_configuration_count": 2,
+                            "launch_request_count": 1,
+                            "attach_request_count": 1,
+                            "perl_path_configured_count": 1,
+                            "include_paths_configured_count": 2,
+                            "include_path_entry_count": 3,
+                            "non_string_include_path_count": 1,
+                            "program_configured_count": 1,
+                            "cwd_configured_count": 1,
+                            "include_path_kind_counts": {
+                                "workspace_variable": 1,
+                                "relative": 2,
+                                "raw_path_value": 99
+                            },
+                            "perl_path_kind_counts": {
+                                "absolute": 1
+                            },
+                            "program_path_kind_counts": {
+                                "workspace_variable": 1
+                            },
+                            "cwd_path_kind_counts": {
+                                "relative": 1
+                            },
+                            "raw_include_paths": ["secret/lib"],
+                            "claim_boundary": "Launch configuration state reports counts and path classes only."
+                        }
+                    },
+                    "ignored": "not copied"
+                }
+            }]
+        })),
+        id: Some(json!(2)),
+    };
+
+    let response = server
+        .handle_request(execute_request)
+        .ok_or("No response from workspace-trust-report command")?;
+    let result = response.result.ok_or("No result in workspace-trust-report response")?;
+
+    assert_eq!(
+        result.get("schema_version").and_then(|value| value.as_str()),
+        Some("workspace_trust_report.v1")
+    );
+    assert_eq!(
+        result.get("command").and_then(|value| value.as_str()),
+        Some("perl.workspaceTrustReport")
+    );
+    assert!(
+        result
+            .get("claim_boundary")
+            .and_then(|value| value.as_str())
+            .is_some_and(|claim| claim.contains("does not scan files")),
+        "report must state its no-scan claim boundary"
+    );
+    assert!(
+        result.get("workspace").and_then(|value| value.as_object()).is_some(),
+        "report should include workspace state"
+    );
+    assert!(
+        result
+            .get("module_resolution")
+            .and_then(|value| value.get("global_workspace_config"))
+            .is_some(),
+        "report should include module-resolution config state"
+    );
+    assert_eq!(
+        result.pointer("/setup_hints/perl_binary/version_status").and_then(|value| value.as_str()),
+        Some("not_probed_by_report")
+    );
+    assert!(
+        result
+            .pointer("/setup_hints/claim_boundary")
+            .and_then(|value| value.as_str())
+            .is_some_and(|claim| claim.contains("do not resolve Perl")),
+        "setup hints should preserve the no-probe boundary"
+    );
+    assert_eq!(
+        result.pointer("/setup_hints/perldoc/status").and_then(|value| value.as_str()),
+        Some("oracle_contract_reported_not_run")
+    );
+    assert_eq!(
+        result.pointer("/setup_hints/perldoc/run_status").and_then(|value| value.as_str()),
+        Some("not_run_by_report")
+    );
+    assert_eq!(
+        result.pointer("/setup_hints/dap/status").and_then(|value| value.as_str()),
+        Some("not_probed_by_lsp_workspace_report")
+    );
+    assert_eq!(
+        result.pointer("/client_runtime_state/source").and_then(|value| value.as_str()),
+        Some("vscode-extension")
+    );
+    assert_eq!(
+        result.pointer("/client_runtime_state/perldoc/uri_scheme").and_then(|value| value.as_str()),
+        Some("perldoc")
+    );
+    assert_eq!(
+        result
+            .pointer("/client_runtime_state/dap/managed_adapter_exists")
+            .and_then(|value| value.as_bool()),
+        Some(true)
+    );
+    assert_eq!(
+        result
+            .pointer("/client_runtime_state/dap/launch_configuration/status")
+            .and_then(|value| value.as_str()),
+        Some("client_launch_config_reported")
+    );
+    assert_eq!(
+        result
+            .pointer("/client_runtime_state/dap/launch_configuration/include_path_entry_count")
+            .and_then(|value| value.as_u64()),
+        Some(3)
+    );
+    assert_eq!(
+        result
+            .pointer(
+                "/client_runtime_state/dap/launch_configuration/include_path_kind_counts/workspace_variable",
+            )
+            .and_then(|value| value.as_u64()),
+        Some(1)
+    );
+    assert!(
+        result
+            .pointer("/client_runtime_state/dap/launch_configuration/include_path_kind_counts/raw_path_value")
+            .is_none(),
+        "launch path class counts should be sanitized to known classes"
+    );
+    assert!(
+        result
+            .pointer("/client_runtime_state/dap/launch_configuration/raw_include_paths")
+            .is_none(),
+        "raw launch include paths should not be copied into the report"
+    );
+    assert!(
+        result.pointer("/client_runtime_state/ignored").is_none(),
+        "client runtime state should be sanitized to known fields"
+    );
+    assert!(
+        result.get("index").and_then(|value| value.as_object()).is_some(),
+        "report should include index state"
+    );
+    assert_eq!(
+        result
+            .get("providers")
+            .and_then(|value| value.get("support_tiers"))
+            .and_then(|value| value.get("completion"))
+            .and_then(|value| value.as_str()),
+        Some("partial-live-with-fallback")
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_execute_command_explain_missing_module_lookup() -> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = TempDir::new()?;
+    let root_path = temp_dir.path().to_string_lossy().to_string();
+    let server = setup_server(Some(root_path));
+
+    let script_path = temp_dir.path().join("script.pl");
+    let script_content = "use Missing::Payload;\n";
+    fs::write(&script_path, script_content)?;
+    let script_uri = Url::from_file_path(&script_path)
+        .map_err(|_| "failed to convert script path to file URI")?
+        .to_string();
+
+    let open_request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "textDocument/didOpen".to_string(),
+        params: Some(json!({
+            "textDocument": {
+                "uri": script_uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": script_content
+            }
+        })),
+        id: None,
+    };
+    let _ = server.handle_request(open_request);
+
+    let execute_request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "workspace/executeCommand".to_string(),
+        params: Some(json!({
+            "command": "perl.explainMissingModuleLookup",
+            "arguments": [{
+                "module": "Missing::Payload",
+                "textDocument": {"uri": script_uri},
+                "position": {"line": 0, "character": 4}
+            }]
+        })),
+        id: Some(json!(2)),
+    };
+
+    let response = server
+        .handle_request(execute_request)
+        .ok_or("No response from explain-missing-module-lookup command")?;
+    let result = response.result.ok_or("No result in explain-missing-module-lookup response")?;
+
+    assert_eq!(
+        result.get("schema_version").and_then(|value| value.as_str()),
+        Some("missing_module_lookup_explanation.v1")
+    );
+    assert_eq!(
+        result.get("command").and_then(|value| value.as_str()),
+        Some("perl.explainMissingModuleLookup")
+    );
+    assert_eq!(
+        result.get("requested_module").and_then(|value| value.as_str()),
+        Some("Missing::Payload")
+    );
+    assert_eq!(
+        result.get("expected_relative_path").and_then(|value| value.as_str()),
+        Some("Missing/Payload.pm")
+    );
+    assert_eq!(result.get("document_open").and_then(|value| value.as_bool()), Some(true));
+    assert!(
+        result
+            .get("claim_boundary")
+            .and_then(|value| value.as_str())
+            .is_some_and(|claim| claim.contains("no workspace scan")),
+        "missing-module explanation must state its explanation-only claim boundary"
+    );
+
+    let module_resolution =
+        result.get("module_resolution").ok_or("missing module_resolution payload")?;
+    assert_eq!(
+        module_resolution
+            .get("result")
+            .and_then(|value| value.get("status"))
+            .and_then(|value| value.as_str()),
+        Some("not_found")
+    );
+    assert_eq!(
+        module_resolution.get("perl5lib_policy").and_then(|value| value.as_str()),
+        Some("enabled_but_environment_empty")
+    );
+    let include_paths = module_resolution
+        .get("effective_include_paths")
+        .and_then(|value| value.as_array())
+        .ok_or("missing effective_include_paths")?;
+    assert!(
+        include_paths.iter().any(|entry| {
+            entry.get("source").and_then(|value| value.as_str()) == Some("workspace includePaths")
+                && entry.get("candidate_paths").and_then(|value| value.as_array()).is_some_and(
+                    |candidates| {
+                        candidates.iter().any(|candidate| {
+                            candidate.get("path").and_then(|value| value.as_str()).is_some_and(
+                                |path| path.contains("Missing") && path.contains("Payload.pm"),
+                            )
+                        })
+                    },
+                )
+        }),
+        "workspace includePaths candidate should include Missing/Payload.pm: {include_paths:?}"
+    );
+
+    let copyable_payload = result.get("copyable_payload").ok_or("missing copyable_payload")?;
+    assert_eq!(
+        copyable_payload.get("provider").and_then(|value| value.as_str()),
+        Some("module_resolution")
+    );
+    assert_eq!(copyable_payload.get("result").and_then(|value| value.as_str()), Some("not_found"));
+    assert_eq!(
+        copyable_payload.get("support_tier_link").and_then(|value| value.as_str()),
+        Some("docs/project/status/SUPPORT_TIERS.md#claim-rows")
+    );
 
     Ok(())
 }

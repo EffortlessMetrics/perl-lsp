@@ -56,19 +56,34 @@ fn is_forward_range(range: &Range) -> bool {
     (range.start.line, range.start.character) <= (range.end.line, range.end.character)
 }
 
+fn line_content_char_len(rope: &Rope, line: usize) -> usize {
+    let line_slice = rope.line(line);
+    let mut chars = line_slice.len_chars();
+
+    if chars > 0 && line_slice.char(chars - 1) == '\n' {
+        chars -= 1;
+    }
+    if chars > 0 && line_slice.char(chars - 1) == '\r' {
+        chars -= 1;
+    }
+
+    chars
+}
+
 fn lsp_pos_to_char_with_alignment(rope: &Rope, pos: Position, enc: PosEnc) -> (usize, bool) {
     if pos.line as usize >= rope.len_lines() {
         return (rope.len_chars(), true);
     }
 
-    let line_char0 = rope.line_to_char(pos.line as usize);
-    let line_slice = rope.line(pos.line as usize);
+    let line = pos.line as usize;
+    let line_char0 = rope.line_to_char(line);
+    let line_slice = rope.line(line);
+    let content_chars = line_content_char_len(rope, line);
 
     match enc {
         PosEnc::Utf8 => {
-            let mut char_idx = 0usize;
             let mut bytes = 0u32;
-            for ch in line_slice.chars() {
+            for (char_idx, ch) in line_slice.chars().take(content_chars).enumerate() {
                 let next = bytes + ch.len_utf8() as u32;
                 if next == pos.character {
                     return (line_char0 + char_idx + 1, true);
@@ -77,14 +92,12 @@ fn lsp_pos_to_char_with_alignment(rope: &Rope, pos: Position, enc: PosEnc) -> (u
                     return (line_char0 + char_idx, false);
                 }
                 bytes = next;
-                char_idx += 1;
             }
-            (line_char0 + char_idx, bytes == pos.character)
+            (line_char0 + content_chars, bytes == pos.character)
         }
         PosEnc::Utf16 => {
-            let mut char_idx = 0usize;
             let mut utf16_units = 0u32;
-            for ch in line_slice.chars() {
+            for (char_idx, ch) in line_slice.chars().take(content_chars).enumerate() {
                 let next = utf16_units + ch.len_utf16() as u32;
                 if next == pos.character {
                     return (line_char0 + char_idx + 1, true);
@@ -93,9 +106,8 @@ fn lsp_pos_to_char_with_alignment(rope: &Rope, pos: Position, enc: PosEnc) -> (u
                     return (line_char0 + char_idx, false);
                 }
                 utf16_units = next;
-                char_idx += 1;
             }
-            (line_char0 + char_idx, utf16_units == pos.character)
+            (line_char0 + content_chars, utf16_units == pos.character)
         }
     }
 }
@@ -153,7 +165,7 @@ pub fn byte_to_lsp_pos(rope: &Rope, byte: usize, enc: PosEnc) -> Position {
     let char_idx = rope.byte_to_char(byte);
     let line = rope.char_to_line(char_idx);
     let line_char0 = rope.line_to_char(line);
-    let col_chars = char_idx - line_char0;
+    let col_chars = (char_idx - line_char0).min(line_content_char_len(rope, line));
 
     let character = match enc {
         PosEnc::Utf8 => {
@@ -322,6 +334,45 @@ mod tests {
         assert_eq!(char_idx, 4, "UTF-8 byte offset should map to correct char");
     }
 
+    /// Test that positions past line end clamp before the line break.
+    #[test]
+    fn test_position_past_line_end_clamps_before_newline() {
+        let rope = Rope::from_str("abc\ndef");
+
+        let char_idx = lsp_pos_to_char(&rope, Position { line: 0, character: 99 }, PosEnc::Utf16);
+
+        assert_eq!(char_idx, 3, "Past-EOL positions must not consume the newline");
+    }
+
+    /// Test that CRLF line endings are treated as line terminators, not LSP columns.
+    #[test]
+    fn test_position_past_crlf_line_end_clamps_before_line_break() {
+        let rope = Rope::from_str("abc\r\ndef");
+
+        let char_idx = lsp_pos_to_char(&rope, Position { line: 0, character: 4 }, PosEnc::Utf16);
+
+        assert_eq!(char_idx, 3, "Past-EOL positions must not land inside CRLF");
+    }
+
+    /// Test that invalid EOL-overflow edits insert at line end rather than on the next line.
+    #[test]
+    fn test_apply_change_past_line_end_inserts_before_newline() {
+        let mut doc = Doc { rope: Rope::from_str("abc\ndef"), version: 1 };
+
+        let change = TextDocumentContentChangeEvent {
+            range: Some(Range {
+                start: Position { line: 0, character: 99 },
+                end: Position { line: 0, character: 99 },
+            }),
+            range_length: None,
+            text: "!".to_string(),
+        };
+
+        apply_changes(&mut doc, &[change], PosEnc::Utf16);
+
+        assert_eq!(doc.rope.to_string(), "abc!\ndef");
+    }
+
     /// Test byte_to_lsp_pos returns correct UTF-16 character count.
     #[test]
     fn test_byte_to_lsp_pos_utf16_emoji() {
@@ -333,6 +384,16 @@ mod tests {
         // "hi " = 3 UTF-16 units, emoji = 2 UTF-16 units, so 'x' is at character 5
         assert_eq!(pos.line, 0);
         assert_eq!(pos.character, 5, "UTF-16 character should account for emoji surrogate pair");
+    }
+
+    /// Test byte_to_lsp_pos clamps byte offsets inside line terminators to line end.
+    #[test]
+    fn test_byte_to_lsp_pos_clamps_line_terminator_to_line_end() {
+        let rope = Rope::from_str("abc\r\ndef");
+
+        let pos = byte_to_lsp_pos(&rope, 4, PosEnc::Utf16);
+
+        assert_eq!(pos, Position { line: 0, character: 3 });
     }
 
     /// Test roundtrip: byte -> lsp position -> byte

@@ -10,6 +10,8 @@ use perl_diagnostics::codes::{
     DiagnosticCategory, DiagnosticCode, DiagnosticSeverity, DiagnosticTag,
 };
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 // ---------------------------------------------------------------------------
 // Helper: all DiagnosticCode variants for exhaustive iteration
 // ---------------------------------------------------------------------------
@@ -1031,6 +1033,25 @@ fn from_message_2_arg_variant() {
         DiagnosticCode::from_message("found a 2-arg open call"),
         Some(DiagnosticCode::TwoArgOpen)
     );
+    assert_eq!(
+        DiagnosticCode::from_message("found a 2-argument open call"),
+        Some(DiagnosticCode::TwoArgOpen)
+    );
+}
+
+#[test]
+fn from_message_avoids_undefined_non_variable_false_positives() -> TestResult {
+    assert_eq!(DiagnosticCode::from_message("numeric comparison with undefined value"), None);
+    assert_eq!(DiagnosticCode::from_message("Undefined subroutine &main::missing called"), None);
+    Ok(())
+}
+
+#[test]
+fn from_message_avoids_embedded_phrase_false_positives() -> TestResult {
+    assert_eq!(DiagnosticCode::from_message("found 12-arg helper"), None);
+    assert_eq!(DiagnosticCode::from_message("internal parser reports never usedful state"), None);
+    assert_eq!(DiagnosticCode::from_message("module name contains undefined_behavior"), None);
+    Ok(())
 }
 
 #[test]

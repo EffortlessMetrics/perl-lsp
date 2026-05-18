@@ -7,7 +7,7 @@
 //! Receipt signals:
 //! - query latency and repeated-request candidate-count delta
 //! - useful hits versus unrelated/noisy hits for representative queries
-//! - generated `has` candidate names while compiler-generated labels remain gated
+//! - generated `has` candidate names while source-backed generated labels stay bounded
 //! - dynamic-boundary-shaped names observed separately from exact symbols
 //! - stale/fresh query behavior after editing an open document
 
@@ -59,6 +59,7 @@ struct WorkspaceSymbolProbeReport {
     top_n_noise_count: usize,
     unrelated_hit_count: usize,
     generated_candidate_count: usize,
+    generated_candidate_live_hits: Vec<String>,
     generated_label_hits: Vec<String>,
     dynamic_boundary_candidate_count: usize,
     dynamic_boundary_live_hits: Vec<String>,
@@ -241,6 +242,22 @@ fn matching_symbol_names(symbols: &[Value], substrings: &[&str]) -> Vec<String> 
     names
 }
 
+fn exact_unproven_generated_name_hits(
+    symbols: &[Value],
+    candidate_names: &[&str],
+    useful_substrings: &[&str],
+) -> Vec<String> {
+    let mut names = symbols
+        .iter()
+        .filter_map(workspace_symbol_name)
+        .filter(|name| candidate_names.contains(&name.as_str()))
+        .filter(|name| !useful_substrings.iter().any(|useful| name.eq_ignore_ascii_case(useful)))
+        .collect::<Vec<_>>();
+    names.sort();
+    names.dedup();
+    names
+}
+
 fn count_unrelated_hits(symbols: &[Value], query: &str, useful_substrings: &[&str]) -> usize {
     symbols
         .iter()
@@ -272,6 +289,11 @@ fn run_probe(
         first.symbols.iter().filter(|symbol| is_valid_workspace_symbol_shape(symbol)).count();
     let invalid_shape_count = first.symbols.len().saturating_sub(valid_shape_count);
     let useful_hits = matching_symbol_names(&first.symbols, probe.useful_substrings);
+    let generated_candidate_live_hits = exact_unproven_generated_name_hits(
+        &first.symbols,
+        probe.generated_candidate_names,
+        probe.useful_substrings,
+    );
     let generated_label_hits = matching_symbol_names(
         &first.symbols,
         &["generated", "framework", "virtual", "FrameworkAdapter"],
@@ -303,6 +325,7 @@ fn run_probe(
             probe.useful_substrings,
         ),
         generated_candidate_count: probe.generated_candidate_names.len(),
+        generated_candidate_live_hits,
         generated_label_hits,
         dynamic_boundary_candidate_count: probe.dynamic_boundary_names.len(),
         dynamic_boundary_live_hits,
@@ -430,13 +453,14 @@ fn scenario_33_mojolicious_workspace_symbol_noise_receipt() {
                     recorder.mark_first_useful_result(probe.name);
                 }
                 eprintln!(
-                    "workspace_symbol_probe={} query={} count={} useful_hits={:?} top_noise={} unrelated={} generated_labels={:?} dynamic_hits={:?}",
+                    "workspace_symbol_probe={} query={} count={} useful_hits={:?} top_noise={} unrelated={} generated_live_hits={:?} generated_labels={:?} dynamic_hits={:?}",
                     report.name,
                     report.query,
                     report.first_count,
                     report.useful_hits,
                     report.top_n_noise_count,
                     report.unrelated_hit_count,
+                    report.generated_candidate_live_hits,
                     report.generated_label_hits,
                     report.dynamic_boundary_live_hits
                 );
@@ -470,8 +494,16 @@ fn scenario_33_mojolicious_workspace_symbol_noise_receipt() {
                 reports.iter().map(|report| report.candidate_count_delta).sum();
             let generated_candidate_total: usize =
                 reports.iter().map(|report| report.generated_candidate_count).sum();
+            let generated_live_symbol_total: usize =
+                reports.iter().map(|report| report.generated_candidate_live_hits.len()).sum();
             let generated_label_total: usize =
                 reports.iter().map(|report| report.generated_label_hits.len()).sum();
+            let generated_label_names_are_labeled = reports.iter().all(|report| {
+                report
+                    .generated_label_hits
+                    .iter()
+                    .all(|name| name.contains("[generated/framework]"))
+            });
             let dynamic_boundary_candidate_total: usize =
                 reports.iter().map(|report| report.dynamic_boundary_candidate_count).sum();
             let dynamic_boundary_live_symbol_total: usize =
@@ -489,7 +521,7 @@ fn scenario_33_mojolicious_workspace_symbol_noise_receipt() {
                 "schema_version": 1,
                 "project": "mojolicious",
                 "surface": "workspace_symbols",
-                "claim_boundary": "real-workspace workspace-symbol noise receipt only; no provider behavior changed or promoted",
+                "claim_boundary": "real-workspace workspace-symbol noise receipt only; generated labels may appear only for source-backed pilot symbols and do not promote broad generated/dynamic behavior",
                 "fixture_file_count": fixture_files.len(),
                 "probe_count": reports.len(),
                 "live_symbol_total": live_symbol_total,
@@ -499,6 +531,7 @@ fn scenario_33_mojolicious_workspace_symbol_noise_receipt() {
                 "candidate_count_delta_total": candidate_count_delta_total,
                 "invalid_shape_total": invalid_shape_total,
                 "generated_candidate_total": generated_candidate_total,
+                "generated_live_symbol_total": generated_live_symbol_total,
                 "generated_label_total": generated_label_total,
                 "dynamic_boundary_candidate_total": dynamic_boundary_candidate_total,
                 "dynamic_boundary_live_symbol_total": dynamic_boundary_live_symbol_total,
@@ -540,8 +573,12 @@ fn scenario_33_mojolicious_workspace_symbol_noise_receipt() {
                 candidate_count_delta_total == 0,
             )?;
             recorder.check(
-                "receipt recorded generated candidates as still gated",
-                generated_candidate_total > 0 && generated_label_total == 0,
+                "receipt recorded generated candidates without exact generated-name promotion",
+                generated_candidate_total > 0 && generated_live_symbol_total == 0,
+            )?;
+            recorder.check(
+                "generated-label pilot symbols stayed explicitly labeled",
+                generated_label_names_are_labeled,
             )?;
             recorder.check(
                 "receipt covered dynamic-boundary-shaped names without requiring promotion",
