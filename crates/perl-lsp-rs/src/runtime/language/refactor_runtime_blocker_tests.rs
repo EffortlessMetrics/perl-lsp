@@ -348,7 +348,7 @@ fn assert_safe_delete_decision_trace(
             || claim_boundary
                 == "scoped safe-delete UX preview only; no live symbol-level delete edits are applied"
             || claim_boundary
-                == "narrow safe-delete live pilot only; returns a source-backed symbol-delete WorkspaceEdit when compiler proof and rollback proof both pass",
+                == "narrow safe-delete live pilot only; returns a source-backed symbol-delete WorkspaceEdit when compiler proof, exact source guard, current-source reference guard, workspace identity guard, and rollback proof all pass",
         "unexpected safe-delete claim boundary: {claim_boundary}"
     );
     Ok(())
@@ -2940,7 +2940,7 @@ fn refactor_runtime_blocker_ux_safe_delete_live_pilot_returns_source_backed_edit
     assert_eq!(
         live_result.get("claim_boundary").and_then(Value::as_str),
         Some(
-            "narrow safe-delete live pilot only; returns a source-backed symbol-delete WorkspaceEdit when compiler proof and rollback proof both pass"
+            "narrow safe-delete live pilot only; returns a source-backed symbol-delete WorkspaceEdit when compiler proof, exact source guard, current-source reference guard, workspace identity guard, and rollback proof all pass"
         )
     );
 
@@ -3068,6 +3068,86 @@ fn refactor_runtime_blocker_ux_safe_delete_live_pilot_records_second_project_sou
             .pointer("/symbol_delete_edit_rollback/rollback_verification")
             .and_then(Value::as_str),
         Some("restores_original")
+    );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_live_pilot_catalyst_false_allow_blocks()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_catalyst_workspace(&server)?;
+    let dispatcher =
+        files.get("lib/Catalyst/Dispatcher.pm").ok_or("missing Catalyst Dispatcher fixture")?;
+
+    let (get_action_line, get_action_character) = position_of(dispatcher, "get_action {")?;
+    let live_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.safeDeleteSymbol",
+            "arguments": [{
+                "textDocument": {"uri": CATALYST_DISPATCHER_URI},
+                "position": {"line": get_action_line, "character": get_action_character}
+            }]
+        })))?
+        .ok_or("missing Catalyst safe-delete live pilot result")?;
+
+    assert_eq!(live_result.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        live_result.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(live_result.get("symbol").and_then(Value::as_str), Some("get_action"));
+    assert_eq!(live_result.get("decision").and_then(Value::as_str), Some("blocked"));
+    assert_eq!(
+        live_result.get("reason").and_then(Value::as_str),
+        Some("ambiguous_low_confidence_candidates")
+    );
+    assert_eq!(live_result.get("fallback_state").and_then(Value::as_str), Some("no_edit"));
+    assert_eq!(live_result.get("live_symbol_delete_enabled").and_then(Value::as_bool), Some(false));
+    assert_eq!(live_result.get("returned_workspace_edit_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(
+        live_result
+            .pointer("/workspace_edit/changes")
+            .and_then(Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0)
+    );
+    assert_safe_delete_decision_trace(
+        &live_result,
+        "blocked",
+        "ambiguous_low_confidence_candidates",
+        "no_edit",
+    )?;
+
+    let live_blocker_ux = live_result.get("live_blocker_ux").ok_or("missing live_blocker_ux")?;
+    assert_json_array_contains(live_blocker_ux, "blocker_reasons", "AmbiguousReference")?;
+    assert_eq!(
+        live_result.get("live_pilot_workspace_identity_guard").and_then(Value::as_str),
+        Some("ambiguous_workspace_identity")
+    );
+    assert!(
+        live_result
+            .get("claim_boundary")
+            .and_then(Value::as_str)
+            .is_some_and(|boundary| boundary.contains("narrow safe-delete live pilot")),
+        "Catalyst safe-delete receipt must preserve the live-pilot claim boundary: {live_result}"
+    );
+
+    let explanation = explain_provider_decision(&server, "safe_delete")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(request_receipt.get("symbol").and_then(Value::as_str), Some("get_action"));
+    assert_eq!(
+        request_receipt.get("live_symbol_delete_enabled").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        request_receipt.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
     );
 
     Ok(())

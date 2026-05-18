@@ -707,44 +707,56 @@ impl LspServer {
                 .get("fallback_state")
                 .and_then(Value::as_str)
                 .is_some_and(|fallback| fallback == "none");
-        let source_guard_accepts = source_guard_request
+        let source_guard_context = source_guard_request.as_ref().and_then(|request| {
+            let uri = req_uri(request).ok()?;
+            let (line, character) = req_position(request).ok()?;
+            let (symbol, byte_offset) = self.refactor_runtime_symbol(uri, line, character)?;
+            Some((uri, line, character, symbol, usize::try_from(byte_offset).ok()?))
+        });
+        let source_guard_accepts = source_guard_context
             .as_ref()
-            .and_then(|request| {
-                let uri = req_uri(request).ok()?;
-                let (line, character) = req_position(request).ok()?;
-                let (symbol, byte_offset) = self.refactor_runtime_symbol(uri, line, character)?;
-                self.safe_delete_symbol_live_source_guard(
-                    uri,
-                    usize::try_from(byte_offset).ok()?,
-                    &symbol,
-                )
+            .and_then(|(uri, _line, _character, symbol, byte_offset)| {
+                self.safe_delete_symbol_live_source_guard(uri, *byte_offset, symbol)
             })
             .unwrap_or(false);
-        let current_source_reference_count = source_guard_request
+        let live_edit_guards_ready = compiler_allowed && rollback_is_safe && source_guard_accepts;
+        let current_source_reference_count = source_guard_context
             .as_ref()
-            .and_then(|request| {
-                let uri = req_uri(request).ok()?;
-                let (line, character) = req_position(request).ok()?;
-                let (symbol, byte_offset) = self.refactor_runtime_symbol(uri, line, character)?;
-                self.safe_delete_current_source_reference_count(
-                    uri,
-                    usize::try_from(byte_offset).ok()?,
-                    &symbol,
-                )
+            .and_then(|(uri, _line, _character, symbol, byte_offset)| {
+                self.safe_delete_current_source_reference_count(uri, *byte_offset, symbol)
             })
             .unwrap_or(0);
-        let current_source_blocks = compiler_allowed
-            && rollback_is_safe
-            && source_guard_accepts
-            && current_source_reference_count > 0;
+        let current_source_blocks = live_edit_guards_ready && current_source_reference_count > 0;
         if current_source_blocks {
             mark_safe_delete_current_source_reference_blocker(
                 &mut receipt,
                 current_source_reference_count,
             );
         }
+        let workspace_identity_guard_evaluated = live_edit_guards_ready && !current_source_blocks;
+        let live_identity_blockers = if workspace_identity_guard_evaluated {
+            source_guard_context
+                .as_ref()
+                .map(|(uri, line, character, symbol, _byte_offset)| {
+                    self.safe_delete_symbol_live_workspace_identity_blockers(
+                        uri, *line, *character, symbol,
+                    )
+                })
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        if !live_identity_blockers.is_empty() {
+            enrich_safe_delete_decision_trace(
+                &mut receipt,
+                Some(live_identity_blockers.as_slice()),
+                "compiler_receipt_missing",
+            );
+        }
+        let workspace_identity_guard_accepts =
+            workspace_identity_guard_evaluated && live_identity_blockers.is_empty();
         let can_return_edit =
-            compiler_allowed && rollback_is_safe && source_guard_accepts && !current_source_blocks;
+            live_edit_guards_ready && !current_source_blocks && workspace_identity_guard_accepts;
         let workspace_edit = if can_return_edit {
             rollback_proof
                 .get("planned_delete_workspace_edit")
@@ -773,6 +785,32 @@ impl LspServer {
                 }),
             );
             object.insert(
+                "live_pilot_workspace_identity_guard".to_string(),
+                json!(if !workspace_identity_guard_evaluated {
+                    "not_evaluated"
+                } else if workspace_identity_guard_accepts {
+                    "accepted"
+                } else {
+                    "ambiguous_workspace_identity"
+                }),
+            );
+            if !live_identity_blockers.is_empty() {
+                object.insert("fallback_state".to_string(), json!("no_edit"));
+                object.insert(
+                    "live_blocker_ux".to_string(),
+                    safe_delete_live_blocker_ux_json(Some(live_identity_blockers.as_slice())),
+                );
+                object.insert(
+                    "live_pilot_guard_blocker_reasons".to_string(),
+                    json!(
+                        live_identity_blockers
+                            .iter()
+                            .map(|blocker| format!("{:?}", blocker.reason))
+                            .collect::<Vec<_>>()
+                    ),
+                );
+            }
+            object.insert(
                 "returned_workspace_edit_count".to_string(),
                 json!(returned_workspace_edit_count),
             );
@@ -785,7 +823,7 @@ impl LspServer {
             object.insert(
                 "claim_boundary".to_string(),
                 json!(
-                    "narrow safe-delete live pilot only; returns a source-backed symbol-delete WorkspaceEdit when compiler proof and rollback proof both pass"
+                    "narrow safe-delete live pilot only; returns a source-backed symbol-delete WorkspaceEdit when compiler proof, exact source guard, current-source reference guard, workspace identity guard, and rollback proof all pass"
                 ),
             );
             object
@@ -801,6 +839,55 @@ impl LspServer {
         }
 
         self.record_safe_delete_decision_receipt(receipt)
+    }
+
+    #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+    fn safe_delete_symbol_live_workspace_identity_blockers(
+        &self,
+        uri: &str,
+        line: u32,
+        character: u32,
+        symbol: &str,
+    ) -> Vec<PlanBlocker> {
+        let workspace_symbol_key = {
+            let documents = self.documents_guard();
+            self.get_document(&documents, uri)
+                .and_then(|doc| {
+                    let ast = doc.ast.as_ref()?;
+                    let offset = self.pos16_to_offset(doc, line, character);
+                    let current_package = crate::declaration::current_package_at(ast, offset);
+                    crate::declaration::symbol_at_cursor_with_source(
+                        ast,
+                        offset,
+                        current_package,
+                        &doc.text,
+                    )
+                })
+                .map(|key| super::to_workspace_symbol_key(&key))
+        };
+        let Some(workspace_symbol_key) = workspace_symbol_key else {
+            return Vec::new();
+        };
+
+        let IndexAccessMode::Full(coordinator) = route_index_access(self.coordinator()) else {
+            return Vec::new();
+        };
+        let index = coordinator.index();
+
+        match crate::features::workspace_rename::build_rename_edit(
+            index.as_ref(),
+            &workspace_symbol_key,
+            symbol,
+        ) {
+            Ok(_) => Vec::new(),
+            Err(refusal) => vec![PlanBlocker::new(
+                PlanBlockerReason::AmbiguousReference,
+                None,
+                format!(
+                    "Symbol '{symbol}' has ambiguous workspace identity, so the live safe-delete pilot will not return edits: {refusal}"
+                ),
+            )],
+        }
     }
 
     fn record_safe_delete_decision_receipt(
