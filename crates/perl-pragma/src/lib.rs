@@ -326,6 +326,7 @@ impl PragmaState {
     /// Returns `true` if the given feature name is currently enabled.
     #[must_use]
     pub fn has_feature(&self, feature: &str) -> bool {
+        let feature = canonical_feature_query(feature);
         self.features.contains(&feature)
     }
 
@@ -378,58 +379,191 @@ pub fn version_implies_warnings(version: PerlVersion) -> bool {
 ///
 /// Mirrors the Perl `feature` pragma bundle semantics: each `use vX.Y`
 /// declaration implicitly enables the same features as `use feature ':X.Y'`.
-/// Features that were removed from a bundle (e.g. `switch` removed in v5.38)
-/// are **not** included for that version and above.
+/// Features that were removed from a bundle (for example `switch` removed in
+/// v5.36 and `smartmatch` removed in v5.42) are **not** included for that
+/// version and above. Versions older than v5.10 load the `:default` bundle.
 ///
 /// Reference: <https://perldoc.perl.org/feature#FEATURE-BUNDLES>
 #[must_use]
 pub fn features_enabled_by_version(version: PerlVersion) -> Vec<&'static str> {
-    let mut features = Vec::new();
+    let bundle = if version < PerlVersion::new(5, 10) {
+        DEFAULT_FEATURES
+    } else if version >= PerlVersion::new(5, 42) {
+        BUNDLE_5_42_FEATURES
+    } else if version >= PerlVersion::new(5, 40) {
+        BUNDLE_5_40_FEATURES
+    } else if version >= PerlVersion::new(5, 38) {
+        BUNDLE_5_38_FEATURES
+    } else if version >= PerlVersion::new(5, 36) {
+        BUNDLE_5_36_FEATURES
+    } else if version >= PerlVersion::new(5, 34) {
+        BUNDLE_5_34_FEATURES
+    } else if version >= PerlVersion::new(5, 28) {
+        BUNDLE_5_28_FEATURES
+    } else if version >= PerlVersion::new(5, 24) {
+        BUNDLE_5_24_FEATURES
+    } else if version >= PerlVersion::new(5, 16) {
+        BUNDLE_5_16_FEATURES
+    } else if version >= PerlVersion::new(5, 12) {
+        BUNDLE_5_12_FEATURES
+    } else {
+        BUNDLE_5_10_FEATURES
+    };
 
-    // v5.10 bundle: say, state, switch (given/when)
-    if version >= PerlVersion::new(5, 10) {
-        features.extend_from_slice(&["say", "state", "switch"]);
-    }
-
-    // v5.12 bundle adds: unicode_strings
-    if version >= PerlVersion::new(5, 12) {
-        features.push("unicode_strings");
-    }
-
-    // v5.16 bundle adds: unicode_eval, evalbytes, current_sub, fc
-    if version >= PerlVersion::new(5, 16) {
-        features.extend_from_slice(&["unicode_eval", "evalbytes", "current_sub", "fc"]);
-    }
-
-    // v5.20 bundle adds: postfix_deref (experimental; stable-bundled at v5.26)
-    // We track it from v5.20 so explicit `use feature 'postfix_deref'` on v5.20 works.
-    if version >= PerlVersion::new(5, 20) {
-        features.push("postfix_deref");
-    }
-
-    // v5.34 bundle adds: try (experimental)
-    if version >= PerlVersion::new(5, 34) {
-        features.push("try");
-    }
-
-    // v5.36 bundle adds: signatures (stable), defer, isa
-    if version >= PerlVersion::new(5, 36) {
-        features.extend_from_slice(&["signatures", "defer", "isa"]);
-    }
-
-    // v5.38 bundle adds: class, field, method; removes: switch (given/when deprecated)
-    if version >= PerlVersion::new(5, 38) {
-        features.extend_from_slice(&["class", "field", "method"]);
-        features.retain(|&f| f != "switch");
-    }
-
-    // v5.40 bundle adds: builtin
-    if version >= PerlVersion::new(5, 40) {
-        features.push("builtin");
-    }
-
-    features
+    bundle.to_vec()
 }
+
+const DEFAULT_FEATURES: &[&str] = &[
+    "indirect",
+    "multidimensional",
+    "bareword_filehandles",
+    "apostrophe_as_package_separator",
+    "smartmatch",
+];
+
+const BUNDLE_5_10_FEATURES: &[&str] = &[
+    "apostrophe_as_package_separator",
+    "bareword_filehandles",
+    "indirect",
+    "multidimensional",
+    "say",
+    "smartmatch",
+    "state",
+    "switch",
+];
+
+const BUNDLE_5_12_FEATURES: &[&str] = &[
+    "apostrophe_as_package_separator",
+    "bareword_filehandles",
+    "indirect",
+    "multidimensional",
+    "say",
+    "smartmatch",
+    "state",
+    "switch",
+    "unicode_strings",
+];
+
+const BUNDLE_5_16_FEATURES: &[&str] = &[
+    "apostrophe_as_package_separator",
+    "bareword_filehandles",
+    "current_sub",
+    "evalbytes",
+    "fc",
+    "indirect",
+    "multidimensional",
+    "say",
+    "smartmatch",
+    "state",
+    "switch",
+    "unicode_eval",
+    "unicode_strings",
+];
+
+const BUNDLE_5_24_FEATURES: &[&str] = &[
+    "apostrophe_as_package_separator",
+    "bareword_filehandles",
+    "current_sub",
+    "evalbytes",
+    "fc",
+    "indirect",
+    "multidimensional",
+    "postderef_qq",
+    "say",
+    "smartmatch",
+    "state",
+    "switch",
+    "unicode_eval",
+    "unicode_strings",
+];
+
+const BUNDLE_5_28_FEATURES: &[&str] = &[
+    "apostrophe_as_package_separator",
+    "bareword_filehandles",
+    "bitwise",
+    "current_sub",
+    "evalbytes",
+    "fc",
+    "indirect",
+    "multidimensional",
+    "postderef_qq",
+    "say",
+    "smartmatch",
+    "state",
+    "switch",
+    "unicode_eval",
+    "unicode_strings",
+];
+
+const BUNDLE_5_34_FEATURES: &[&str] = BUNDLE_5_28_FEATURES;
+
+const BUNDLE_5_36_FEATURES: &[&str] = &[
+    "apostrophe_as_package_separator",
+    "bareword_filehandles",
+    "bitwise",
+    "current_sub",
+    "evalbytes",
+    "fc",
+    "isa",
+    "postderef_qq",
+    "say",
+    "signatures",
+    "smartmatch",
+    "state",
+    "unicode_eval",
+    "unicode_strings",
+];
+
+const BUNDLE_5_38_FEATURES: &[&str] = &[
+    "apostrophe_as_package_separator",
+    "bitwise",
+    "current_sub",
+    "evalbytes",
+    "fc",
+    "isa",
+    "module_true",
+    "postderef_qq",
+    "say",
+    "signatures",
+    "smartmatch",
+    "state",
+    "unicode_eval",
+    "unicode_strings",
+];
+
+const BUNDLE_5_40_FEATURES: &[&str] = &[
+    "apostrophe_as_package_separator",
+    "bitwise",
+    "current_sub",
+    "evalbytes",
+    "fc",
+    "isa",
+    "module_true",
+    "postderef_qq",
+    "say",
+    "signatures",
+    "smartmatch",
+    "state",
+    "try",
+    "unicode_eval",
+    "unicode_strings",
+];
+
+const BUNDLE_5_42_FEATURES: &[&str] = &[
+    "bitwise",
+    "current_sub",
+    "evalbytes",
+    "fc",
+    "isa",
+    "module_true",
+    "postderef_qq",
+    "say",
+    "signatures",
+    "state",
+    "try",
+    "unicode_eval",
+    "unicode_strings",
+];
 
 pub(crate) fn enable_effective_version_semantics(state: &mut PragmaState, version: PerlVersion) {
     if version_implies_strict(version) {
@@ -456,12 +590,18 @@ fn known_feature_name(name: &str) -> Option<&'static str> {
         "say" => Some("say"),
         "state" => Some("state"),
         "switch" => Some("switch"),
+        "smartmatch" => Some("smartmatch"),
         "unicode_strings" => Some("unicode_strings"),
         "unicode_eval" => Some("unicode_eval"),
         "evalbytes" => Some("evalbytes"),
         "current_sub" => Some("current_sub"),
         "fc" => Some("fc"),
-        "postfix_deref" => Some("postfix_deref"),
+        "lexical_subs" => Some("lexical_subs"),
+        "postderef" => Some("postderef"),
+        "postderef_qq" | "postfix_deref" => Some("postderef_qq"),
+        "refaliasing" => Some("refaliasing"),
+        "bitwise" => Some("bitwise"),
+        "declared_refs" => Some("declared_refs"),
         "try" => Some("try"),
         "signatures" => Some("signatures"),
         "defer" => Some("defer"),
@@ -469,7 +609,14 @@ fn known_feature_name(name: &str) -> Option<&'static str> {
         "class" => Some("class"),
         "field" => Some("field"),
         "method" => Some("method"),
-        "builtin" => Some("builtin"),
+        "builtin" | "module_true" => Some("module_true"),
+        "indirect" => Some("indirect"),
+        "multidimensional" => Some("multidimensional"),
+        "bareword_filehandles" => Some("bareword_filehandles"),
+        "extra_paired_delimiters" => Some("extra_paired_delimiters"),
+        "apostrophe_as_package_separator" => Some("apostrophe_as_package_separator"),
+        "keyword_any" => Some("keyword_any"),
+        "keyword_all" => Some("keyword_all"),
         _ => None,
     }
 }
@@ -477,22 +624,43 @@ fn known_feature_name(name: &str) -> Option<&'static str> {
 const ALL_KNOWN_FEATURES: &[&str] = &[
     "say",
     "state",
+    "smartmatch",
     "switch",
     "unicode_strings",
     "unicode_eval",
     "evalbytes",
     "current_sub",
     "fc",
-    "postfix_deref",
-    "try",
+    "lexical_subs",
+    "postderef",
+    "postderef_qq",
     "signatures",
-    "defer",
+    "refaliasing",
+    "bitwise",
+    "declared_refs",
     "isa",
+    "indirect",
+    "multidimensional",
+    "bareword_filehandles",
+    "try",
+    "defer",
+    "extra_paired_delimiters",
+    "module_true",
     "class",
     "field",
     "method",
-    "builtin",
+    "apostrophe_as_package_separator",
+    "keyword_any",
+    "keyword_all",
 ];
+
+fn canonical_feature_query(feature: &str) -> &str {
+    match feature {
+        "builtin" => "module_true",
+        "postfix_deref" => "postderef_qq",
+        _ => feature,
+    }
+}
 
 fn enable_feature_name(state: &mut PragmaState, name: &str) -> bool {
     if name == "signatures" {
@@ -531,10 +699,11 @@ fn disable_feature_name(state: &mut PragmaState, name: &str) -> bool {
 
 pub(crate) fn apply_feature_state(state: &mut PragmaState, args: &[String], enabled: bool) -> bool {
     if !enabled && args.is_empty() {
+        let default_features = DEFAULT_FEATURES.to_vec();
         let changed =
-            !state.features.is_empty() || state.unicode_strings || state.signatures_strict;
-        state.features.clear();
-        state.unicode_strings = false;
+            state.features != default_features || state.unicode_strings || state.signatures_strict;
+        state.features = default_features;
+        state.unicode_strings = state.has_feature("unicode_strings");
         state.signatures_strict = false;
         return changed;
     }
@@ -550,6 +719,13 @@ pub(crate) fn apply_feature_state(state: &mut PragmaState, args: &[String], enab
                 continue;
             }
 
+            if enabled && item == ":default" {
+                for feature in DEFAULT_FEATURES {
+                    changed |= enable_feature_name(state, feature);
+                }
+                continue;
+            }
+
             if !enabled && item == ":all" {
                 let had_features =
                     !state.features.is_empty() || state.unicode_strings || state.signatures_strict;
@@ -557,6 +733,13 @@ pub(crate) fn apply_feature_state(state: &mut PragmaState, args: &[String], enab
                 state.unicode_strings = false;
                 state.signatures_strict = false;
                 changed |= had_features;
+                continue;
+            }
+
+            if !enabled && item == ":default" {
+                for feature in DEFAULT_FEATURES {
+                    changed |= disable_feature_name(state, feature);
+                }
                 continue;
             }
 
