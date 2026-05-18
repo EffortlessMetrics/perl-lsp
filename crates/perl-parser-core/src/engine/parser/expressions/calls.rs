@@ -497,8 +497,13 @@ impl<'a> Parser<'a> {
             self.expect_closing_delimiter(TokenKind::RightParen)?;
 
             let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
-                self.tokens.next()?; // consume =
-                Some(Box::new(self.parse_assignment()?))
+                let op_token = self.tokens.next()?; // consume =
+                let rhs = if let Some(missing) = self.recover_missing_infix_rhs(op_token.start) {
+                    missing
+                } else {
+                    self.parse_assignment()?
+                };
+                Some(Box::new(rhs))
             } else {
                 None
             };
@@ -536,8 +541,13 @@ impl<'a> Parser<'a> {
             self.expect_closing_delimiter(TokenKind::RightParen)?; // consume )
 
             let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
-                self.tokens.next()?; // consume =
-                Some(Box::new(self.parse_assignment()?))
+                let op_token = self.tokens.next()?; // consume =
+                let rhs = if let Some(missing) = self.recover_missing_infix_rhs(op_token.start) {
+                    missing
+                } else {
+                    self.parse_assignment()?
+                };
+                Some(Box::new(rhs))
             } else {
                 None
             };
@@ -561,8 +571,13 @@ impl<'a> Parser<'a> {
             };
 
             let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
-                self.tokens.next()?; // consume =
-                Some(Box::new(self.parse_assignment()?))
+                let op_token = self.tokens.next()?; // consume =
+                let rhs = if let Some(missing) = self.recover_missing_infix_rhs(op_token.start) {
+                    missing
+                } else {
+                    self.parse_assignment()?
+                };
+                Some(Box::new(rhs))
             } else {
                 None
             };
