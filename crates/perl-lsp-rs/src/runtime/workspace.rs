@@ -490,7 +490,14 @@ impl LspServer {
 fn workspace_symbols_generated_dynamic_noise_receipt(query: &str) -> (Value, usize) {
     let candidates = vec![
         perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolShadowCandidate::shadow(
-            "generated:no-source:workspace-symbol:framework_accessor:virtual",
+            "generated:source-anchor:workspace-symbol:framework_accessor:virtual",
+            ProviderFactSourceKind::FrameworkAdapter,
+            Provenance::FrameworkSynthesis,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+        ),
+        perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolShadowCandidate::blocked(
+            "generated:no-source:workspace-symbol:runtime_installed_method:unanchored",
             ProviderFactSourceKind::FrameworkAdapter,
             Provenance::FrameworkSynthesis,
             Confidence::Medium,
@@ -522,7 +529,18 @@ fn workspace_symbols_generated_dynamic_noise_receipt(query: &str) -> (Value, usi
 
     let generated_candidate_count = candidates
         .iter()
-        .filter(|candidate| candidate.source == ProviderFactSourceKind::FrameworkAdapter)
+        .filter(|candidate| {
+            candidate.source == ProviderFactSourceKind::FrameworkAdapter
+                && candidate.fallback_state != ProviderFallbackState::Blocked
+        })
+        .count();
+    let generated_no_source_blocker_count = candidates
+        .iter()
+        .filter(|candidate| {
+            candidate.source == ProviderFactSourceKind::FrameworkAdapter
+                && candidate.fallback_state == ProviderFallbackState::Blocked
+                && candidate.identity.contains(":no-source:")
+        })
         .count();
     let dynamic_boundary_blocker_count = candidates
         .iter()
@@ -559,6 +577,8 @@ fn workspace_symbols_generated_dynamic_noise_receipt(query: &str) -> (Value, usi
             "receipt_kind": "generated_dynamic_noise_expansion",
             "generated_candidate_count": generated_candidate_count,
             "generated_false_exact_candidate_count": generated_candidate_count,
+            "generated_no_source_candidate_count": generated_no_source_blocker_count,
+            "generated_no_source_blocker_count": generated_no_source_blocker_count,
             "generated_location_semantics": "source_anchor_not_exact_generated_body",
             "dynamic_boundary_blocker_count": dynamic_boundary_blocker_count,
             "dynamic_false_exact_blocker_count": dynamic_boundary_blocker_count,

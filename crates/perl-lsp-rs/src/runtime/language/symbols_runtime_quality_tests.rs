@@ -78,6 +78,19 @@ has status => (is => 'rw', predicate => 1);
 1;
 "#;
 
+const NOSOURCE_MODULE_URI: &str = "file:///workspace/lib/Symbols/NoSourceRuntime.pm";
+
+const NOSOURCE_MODULE: &str = r#"package Symbols::NoSourceRuntime;
+use Moo;
+
+my $runtime_method = 'runtime_only';
+__PACKAGE__->meta->add_method($runtime_method => sub {
+    return 'dynamic';
+});
+
+1;
+"#;
+
 fn create_server() -> LspServer {
     let output =
         Arc::new(Mutex::new(Box::new(Cursor::new(Vec::new())) as Box<dyn std::io::Write + Send>));
@@ -131,6 +144,11 @@ fn open_generated_symbol_workspace(server: &LspServer) -> Result<(), Box<dyn std
 
 fn open_predicate_symbol_workspace(server: &LspServer) -> Result<(), Box<dyn std::error::Error>> {
     open_document(server, PREDICATE_MODULE_URI, PREDICATE_MODULE)?;
+    Ok(())
+}
+
+fn open_no_source_symbol_workspace(server: &LspServer) -> Result<(), Box<dyn std::error::Error>> {
+    open_document(server, NOSOURCE_MODULE_URI, NOSOURCE_MODULE)?;
     Ok(())
 }
 
@@ -726,6 +744,85 @@ fn workspace_symbols_runtime_quality_receipt_proves_predicate_generated_symbol_c
     assert!(
         boundary.contains("remain gated outside the labeled source-backed generated pilot"),
         "predicate proof must keep unproven generated-symbol expansion gated: {boundary}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn workspace_symbols_runtime_quality_receipt_blocks_generated_no_source_candidate()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    open_no_source_symbol_workspace(&server)?;
+    let params = json!({"query": "runtime_only"});
+
+    let receipt = server
+        .test_workspace_symbols_runtime_quality_receipt(Some(params))?
+        .ok_or("missing no-source workspace symbols receipt")?;
+
+    assert_eq!(
+        receipt.get("shadow_state").and_then(Value::as_str),
+        Some("shadowed"),
+        "runtime-installed no-source method must not enter the generated-label live pilot"
+    );
+    assert_eq!(
+        receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(true),
+        "generated/no-source proof must not broaden live workspace-symbol behavior"
+    );
+    assert_eq!(
+        receipt.get("compiler_receipt"),
+        Some(&Value::Null),
+        "no-source runtime-generated method must not produce source-backed compiler receipt"
+    );
+
+    let live_symbols = receipt
+        .get("live_provider_result")
+        .and_then(Value::as_array)
+        .ok_or("missing no-source live provider result")?;
+    assert!(
+        live_symbols.iter().all(|symbol| {
+            symbol_name(symbol) != Some("runtime_only")
+                && symbol_name(symbol) != Some("runtime_only [generated/framework]")
+        }),
+        "generated/no-source method must not appear as exact or labeled workspace symbol: {live_symbols:?}"
+    );
+
+    let expansion_receipt =
+        receipt.get("gated_expansion_receipt").ok_or("missing gated expansion receipt")?;
+    assert_eq!(
+        expansion_receipt.get("generated_no_source_candidate_count").and_then(Value::as_u64),
+        Some(1),
+        "receipt must measure the generated/no-source candidate separately"
+    );
+    assert_eq!(
+        expansion_receipt.get("generated_no_source_blocker_count").and_then(Value::as_u64),
+        Some(1),
+        "generated/no-source candidate must stay blocked"
+    );
+    assert_eq!(
+        expansion_receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(true),
+        "generated/no-source blocker receipt must be proof-only"
+    );
+    let boundary = expansion_receipt
+        .get("claim_boundary")
+        .and_then(Value::as_str)
+        .ok_or("missing boundary")?;
+    assert!(
+        boundary.contains("generated/no-source false-exact candidates")
+            && boundary.contains("remain gated"),
+        "claim boundary must keep generated/no-source candidates gated: {boundary}"
+    );
+
+    let shadow_receipt = expansion_receipt.get("shadow_receipt").ok_or("missing shadow receipt")?;
+    let traces = shadow_receipt
+        .get("fact_source_traces")
+        .and_then(Value::as_array)
+        .ok_or("missing fact-source traces")?;
+    assert!(
+        trace_with_fields(traces, "FrameworkAdapter", "FrameworkSynthesis", "Blocked"),
+        "generated/no-source framework candidate must stay blocked: {traces:?}"
     );
 
     Ok(())
