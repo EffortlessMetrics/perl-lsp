@@ -4685,6 +4685,49 @@ has display_name => (is => 'rw');
     }
 
     #[test]
+    fn search_symbols_returns_labeled_predicate_generated_members()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///lib/Generated/PredicatePilot.pm";
+        let code = r#"package Generated::PredicatePilot;
+use Moo;
+has status => (is => 'rw', predicate => 1);
+1;
+"#;
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let source_symbols = index.search_source_symbols("has_status");
+        assert!(
+            source_symbols.is_empty(),
+            "predicate generated members must not enter the exact source-symbol slice"
+        );
+
+        let generated_symbols = index.search_generated_workspace_symbols("has_status");
+        assert_eq!(generated_symbols.len(), 1);
+        let symbol = &generated_symbols[0];
+        assert_eq!(symbol.name, "has_status [generated/framework]");
+        assert_eq!(symbol.kind, SymbolKind::Method);
+        assert_eq!(symbol.qualified_name.as_deref(), Some("Generated::PredicatePilot::has_status"));
+        assert_eq!(
+            symbol.container_name.as_deref(),
+            Some("Generated::PredicatePilot [generated/framework]")
+        );
+        assert!(!symbol.has_body);
+        assert_eq!(symbol.uri, uri);
+        assert!(
+            symbol.range.end.byte > symbol.range.start.byte,
+            "predicate generated symbol must be anchored to the source framework declaration"
+        );
+
+        let live_symbols = index.search_symbols("has_status");
+        assert!(
+            live_symbols.is_empty(),
+            "general workspace index search must stay source-backed for predicate generated members"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_extract_constant_names_accepts_quoted_hash_form() {
         let names = extract_constant_names_from_use_args(&[
             "{".to_string(),
