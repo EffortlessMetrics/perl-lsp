@@ -19,6 +19,7 @@ my $ready = 1;
 my $call = target();
 my $prefix = $re;
 "#;
+const MISSING_MODULE_DIAGNOSTIC_DOC: &str = "use Missing::Payload;\n";
 
 const WORKSPACE_SYMBOL_URI: &str = "file:///workspace/lib/Trace/Symbols.pm";
 const WORKSPACE_SYMBOL_DOC: &str = r#"package Trace::Symbols;
@@ -137,6 +138,41 @@ fn open_trace_document(server: &LspServer) -> Result<(), Box<dyn std::error::Err
         }
     })))?;
     Ok(())
+}
+
+fn open_missing_module_diagnostic_document(
+    server: &LspServer,
+) -> Result<(tempfile::TempDir, String), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let workspace = temp.path().join("workspace");
+    std::fs::create_dir_all(workspace.join("lib"))?;
+    let script = workspace.join("script.pl");
+    let uri =
+        url::Url::from_file_path(&script).map_err(|()| "failed to build script URI")?.to_string();
+    let folder_uri = url::Url::from_directory_path(&workspace)
+        .map_err(|()| "failed to build workspace URI")?
+        .to_string();
+
+    *server.root_path.lock() = Some(workspace.clone());
+    let mut config = perl_lsp_rs_core::config::WorkspaceConfig::default();
+    config.include_paths = vec!["lib".to_string()];
+    config.use_system_inc = false;
+    config.use_perl5lib = false;
+    server.workspace_folders.lock().push(
+        crate::runtime::workspace_folder::WorkspaceFolderState::new(folder_uri)
+            .with_path(workspace)
+            .with_effective_workspace_config(config),
+    );
+
+    server.test_handle_did_open(Some(json!({
+        "textDocument": {
+            "uri": uri,
+            "text": MISSING_MODULE_DIAGNOSTIC_DOC,
+            "languageId": "perl",
+            "version": 1
+        }
+    })))?;
+    Ok((temp, uri))
 }
 
 fn open_workspace_symbol_document(server: &LspServer) -> Result<(), Box<dyn std::error::Error>> {
@@ -456,6 +492,101 @@ fn live_diagnostic_request_persists_provider_trace() -> Result<(), Box<dyn std::
     let receipt = request_receipt(&explanation, "diagnostics")?;
     assert_live_trace(receipt, "diagnostics", "textDocument/diagnostic");
     assert_eq!(receipt.get("live_provider_result_kind").and_then(Value::as_str), Some("items"));
+    Ok(())
+}
+
+#[test]
+fn live_diagnostic_request_attaches_explainable_payload() -> Result<(), Box<dyn std::error::Error>>
+{
+    let server = create_server();
+    initialize(&server)?;
+    let (_temp, uri) = open_missing_module_diagnostic_document(&server)?;
+
+    let diagnostic_result = response_result(
+        server.handle_request(request(
+            5,
+            "textDocument/diagnostic",
+            Some(json!({
+                "textDocument": {"uri": uri}
+            })),
+        )),
+        "diagnostic",
+    )?;
+    let diagnostics = diagnostic_result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("diagnostic result missing items")?;
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.get("code").and_then(Value::as_str) == Some("PL701")),
+        "diagnostic request must return PL701 for the missing module fixture: {diagnostic_result}"
+    );
+
+    let explanation = explain_provider_decision(&server, "diagnostics")?;
+    let receipt = request_receipt(&explanation, "diagnostics")?;
+    assert_live_trace(receipt, "diagnostics", "textDocument/diagnostic");
+    assert_eq!(
+        receipt.get("diagnostic_explanation_schema").and_then(Value::as_str),
+        Some("diagnostic_explanation.v1")
+    );
+    assert_eq!(
+        receipt.get("claim_boundary").and_then(Value::as_str),
+        Some(
+            "records live diagnostic explanation payload only; no new suppression, severity, or support-tier promotion"
+        )
+    );
+    let diagnostic_explanation =
+        receipt.get("diagnostic_explanation").ok_or("missing diagnostic explanation payload")?;
+    assert_eq!(
+        diagnostic_explanation.get("schema_version").and_then(Value::as_str),
+        Some("diagnostic_explanation.v1")
+    );
+    let explanations = diagnostic_explanation
+        .get("diagnostic_explanations")
+        .and_then(Value::as_array)
+        .ok_or("missing diagnostic explanation items")?;
+    let pl701 = explanations
+        .iter()
+        .find(|item| item.get("code").and_then(Value::as_str) == Some("PL701"))
+        .ok_or("missing PL701 diagnostic explanation")?;
+    assert_eq!(pl701.get("trust_boundary").and_then(Value::as_str), Some("module_resolution"));
+    let module_resolution =
+        pl701.get("module_resolution").ok_or("missing PL701 module-resolution explanation")?;
+    assert_eq!(
+        module_resolution.get("requested_module").and_then(Value::as_str),
+        Some("Missing::Payload")
+    );
+    assert_eq!(
+        module_resolution.get("expected_relative_path").and_then(Value::as_str),
+        Some("Missing/Payload.pm")
+    );
+    assert_eq!(
+        module_resolution.get("effective_include_paths_reported").and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(module_resolution.get("searched_inc_reported").and_then(Value::as_bool), Some(true));
+    let reported_inc_paths = module_resolution
+        .get("reported_inc_paths")
+        .and_then(Value::as_array)
+        .ok_or("missing reported @INC paths")?;
+    assert!(
+        reported_inc_paths
+            .iter()
+            .any(|path| path.as_str().is_some_and(|path| path.contains("lib"))),
+        "PL701 explanation should keep reported @INC path context: {module_resolution}"
+    );
+    assert!(
+        receipt
+            .get("user_message")
+            .and_then(Value::as_str)
+            .is_some_and(|message| message.contains("PL701")),
+        "diagnostic receipt should include a user-facing PL701 summary: {receipt}"
+    );
+    let copyable_receipt = explanation
+        .pointer("/copyable_payload/request_receipt/diagnostic_explanation/schema_version")
+        .and_then(Value::as_str);
+    assert_eq!(copyable_receipt, Some("diagnostic_explanation.v1"));
     Ok(())
 }
 
