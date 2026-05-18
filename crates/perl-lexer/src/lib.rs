@@ -1650,6 +1650,15 @@ impl<'a> PerlLexer<'a> {
         !c.is_ascii_alphanumeric() && !c.is_whitespace()
     }
 
+    #[inline]
+    fn immediately_follows_sigil_prefix(&self, start: usize) -> bool {
+        start > 0
+            && matches!(
+                Self::byte_at(self.input_bytes, start.saturating_sub(1)),
+                b'$' | b'@' | b'%' | b'&' | b'*'
+            )
+    }
+
     /// Try to parse a v-string (version string) like `v5.26.0` or `v5.10`.
     ///
     /// A v-string starts with `v` followed by one or more digits, then optionally
@@ -1746,21 +1755,25 @@ impl<'a> PerlLexer<'a> {
             // Special case: substitution/transliteration with single-quote delimiter
             // The single quote is considered an identifier continuation, so we need to
             // detect these operators before consuming it as part of an identifier.
-            if !self.after_arrow
+            let follows_sigil_prefix = self.immediately_follows_sigil_prefix(start);
+            if !follows_sigil_prefix
+                && !self.after_arrow
                 && self.hash_brace_depth == 0
                 && ch == 's'
                 && self.peek_char(1) == Some('\'')
             {
                 self.advance(); // consume 's'
                 return self.parse_substitution(start);
-            } else if !self.after_arrow
+            } else if !follows_sigil_prefix
+                && !self.after_arrow
                 && self.hash_brace_depth == 0
                 && ch == 'y'
                 && self.peek_char(1) == Some('\'')
             {
                 self.advance(); // consume 'y'
                 return self.parse_transliteration(start);
-            } else if !self.after_arrow
+            } else if !follows_sigil_prefix
+                && !self.after_arrow
                 && self.hash_brace_depth == 0
                 && ch == 't'
                 && self.peek_char(1) == Some('r')
@@ -1900,6 +1913,7 @@ impl<'a> PerlLexer<'a> {
             #[allow(clippy::collapsible_if)]
             if !self.after_sub
                 && !self.after_arrow
+                && !follows_sigil_prefix
                 && self.hash_brace_depth == 0
                 && matches!(text, "s" | "tr" | "y")
             {
@@ -1973,6 +1987,7 @@ impl<'a> PerlLexer<'a> {
                     // quote expressions in slices (`@h{qw/a b/}`).
                     op if !self.after_sub
                         && !self.after_arrow
+                        && !follows_sigil_prefix
                         && quote_handler::is_quote_operator(op)
                         && (self.hash_brace_depth == 0
                             || matches!(op, "q" | "qq" | "qw" | "qr" | "qx")) =>
