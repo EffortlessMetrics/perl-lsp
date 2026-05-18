@@ -551,3 +551,37 @@ fn given_cursor_when_explicit_map_offset_is_before_first_pragma_then_default_sna
     assert_eq!(state, map.state_at(5));
     assert!(!state.strict_vars, "no pragma has started at offset 5");
 }
+
+#[test]
+fn given_use_warnings_when_qw_categories_are_disabled_then_each_category_is_tracked()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("warnings", &[], 0, 15),
+        no_node("warnings", &["qw(uninitialized deprecated)"], 16, 55),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 30);
+    assert!(state.warnings);
+    assert!(!state.is_warning_active("uninitialized"));
+    assert!(!state.is_warning_active("deprecated"));
+    assert!(state.is_warning_active("void"));
+    Ok(())
+}
+
+#[test]
+fn given_disabled_warning_categories_when_specific_category_is_reenabled_then_other_disabled_categories_remain()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("warnings", &[], 0, 15),
+        no_node("warnings", &["qw(uninitialized deprecated)"], 16, 55),
+        use_node("warnings", &["'deprecated'"], 56, 84),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 70);
+    assert!(state.warnings);
+    assert!(!state.is_warning_active("uninitialized"));
+    assert!(state.is_warning_active("deprecated"));
+    Ok(())
+}

@@ -1334,6 +1334,47 @@ fn no_warnings_multiple_categories_all_recorded() -> Result<(), Box<dyn std::err
 }
 
 #[test]
+fn no_warnings_qw_categories_are_recorded_individually() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("warnings", &[], 0, 15),
+        no_node("warnings", &["qw(uninitialized redefine)"], 16, 55),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+
+    assert!(state.warnings, "category disables must preserve global warnings");
+    assert_eq!(
+        state.disabled_warning_categories,
+        vec!["uninitialized".to_string(), "redefine".to_string()],
+        "qw(...) warning categories should be expanded before tracking"
+    );
+    assert!(!state.is_warning_active("uninitialized"));
+    assert!(!state.is_warning_active("redefine"));
+    assert!(state.is_warning_active("deprecated"));
+    Ok(())
+}
+
+#[test]
+fn no_warnings_space_separated_category_string_is_split() -> Result<(), Box<dyn std::error::Error>>
+{
+    let ast = program(vec![
+        use_node("warnings", &[], 0, 15),
+        no_node("warnings", &["'uninitialized redefine'"], 16, 55),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+
+    assert_eq!(
+        state.disabled_warning_categories,
+        vec!["uninitialized".to_string(), "redefine".to_string()],
+        "quoted warning category lists should match strict/feature argument splitting"
+    );
+    assert!(!state.is_warning_active("uninitialized"));
+    assert!(!state.is_warning_active("redefine"));
+    Ok(())
+}
+
+#[test]
 fn no_warnings_category_tracking_is_bounded() -> Result<(), Box<dyn std::error::Error>> {
     let mut statements = Vec::new();
     statements.push(use_node("warnings", &[], 0, 15));
