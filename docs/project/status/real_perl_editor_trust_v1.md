@@ -174,10 +174,16 @@ setup-health parsing receipt by carrying sanitized VS Code launch configuration
 counts and path classes into the trust report. It does not copy raw launch
 paths, start DAP, resolve Perl, probe module paths, inspect debug-session
 internals, or promote broader setup-health claims.
+The DAP module-path behavior receipt closes the current setup-health behavior
+boundary by proving native DAP launch `includePaths` are still report/config
+metadata rather than `@INC` authority for syntax-check or debug-launch
+subprocesses. Explicit launch `env.PERL5LIB` remains the current module-path
+authority. This receipt records the limitation without changing DAP launch
+behavior or promoting broader setup-health claims.
 
 1. `test(workspace-symbols): add additional generated/no-source project variant only if broader generated-symbol expansion is being considered`
 2. `test(rename): keep package/compiler-backed fallback and edit-freshness receipts current before broader promotion`
-3. `test(dap): add explicit DAP module-path behavior receipts before broader setup-health claims`
+3. `test(dap): add DAP includePaths cutover proof only if native DAP module-path behavior is being promoted`
 
 Provider decision explanations are already partial-live through
 `perl.explainProviderDecision`; callers can attach a request-local
