@@ -199,6 +199,10 @@ fn test_supported_commands_includes_go_to_test() {
         commands.contains(&"perl.previewPackageRename".to_string()),
         "perl.previewPackageRename should be in supported commands list"
     );
+    assert!(
+        commands.contains(&"perl.explainMissingModuleLookup".to_string()),
+        "perl.explainMissingModuleLookup should be in supported commands list"
+    );
 }
 
 #[test]
@@ -1564,6 +1568,7 @@ fn test_supported_commands_includes_all_advertised() {
         "perl.debugFile",
         "perl.debugTest",
         "perl.workspaceTrustReport",
+        "perl.explainMissingModuleLookup",
     ];
     for cmd in &required {
         assert!(

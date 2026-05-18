@@ -18,3 +18,4 @@ expression: "&commands"
 - perl.previewSafeDelete
 - perl.safeDeleteSymbol
 - perl.previewPackageRename
+- perl.explainMissingModuleLookup
