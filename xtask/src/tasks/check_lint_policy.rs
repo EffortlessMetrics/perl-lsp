@@ -31,7 +31,6 @@ const REQUIRED_PLANNED: &[&str] = &[
     "clippy::manual_checked_ops",
     "clippy::manual_take",
     "clippy::manual_pop_if",
-    "clippy::duration_suboptimal_units",
     "clippy::unnecessary_trailing_comma",
 ];
 

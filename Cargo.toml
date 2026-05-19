@@ -374,6 +374,7 @@ dbg_macro = "deny"
 # collapsible_match: ~20 lib sites across perl-lsp-rs-core; tracked in #8561; defer to post-0.14.0 cleanup.
 collapsible_match = { level = "allow", priority = 1 }
 decimal_bitwise_operands = "warn"
+duration_suboptimal_units = "warn"
 
 [workspace.lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)', 'cfg(feature, values("slow_tests"))'] }

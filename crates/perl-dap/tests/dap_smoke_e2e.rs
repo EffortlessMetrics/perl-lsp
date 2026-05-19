@@ -18,7 +18,7 @@ fn smoke_timeout() -> Duration {
     if std::env::var_os("LLVM_PROFILE_FILE").is_some()
         || std::env::var_os("CARGO_LLVM_COV").is_some()
     {
-        Duration::from_secs(60)
+        Duration::from_mins(1)
     } else {
         Duration::from_secs(10)
     }

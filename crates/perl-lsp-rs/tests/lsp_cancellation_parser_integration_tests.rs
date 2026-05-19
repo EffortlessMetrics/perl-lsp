@@ -1563,7 +1563,7 @@ fn test_multi_tier_resolver_cancellation_ac8() -> Result<(), Box<dyn std::error:
         }
 
         // AC:8 Performance requirement validation
-        assert!(resolution_duration < Duration::from_millis(1000),
+        assert!(resolution_duration < Duration::from_secs(1),
                "Multi-tier resolution should complete within 1 second");
     }
     */
