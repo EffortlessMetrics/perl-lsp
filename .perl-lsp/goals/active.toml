@@ -16,6 +16,7 @@ specs = [
   "docs/specs/PLSP-SPEC-0007-receiver-fact-completion.md",
   "docs/specs/PLSP-SPEC-0008-edit-producing-provider-safety.md",
   "docs/specs/PLSP-SPEC-0009-workspace-trust-report.md",
+  "docs/specs/PLSP-SPEC-0010-support-claim-map.md",
 ]
 
 adrs = [
@@ -25,13 +26,11 @@ adrs = [
 ]
 
 in_flight_contracts = [
-  "PR #9477: support claim map contract (PLSP-SPEC-0010)",
   "PR #9478: trust-lane CI routing contract (PLSP-SPEC-0011)",
+  "PR #9481: user-facing trust surfaces contract (PLSP-SPEC-0012)",
 ]
 
-needed_contracts = [
-  "user-facing trust surfaces contract",
-]
+needed_contracts = []
 
 objective = """
 Make the existing Real Perl Editor Trust control plane visible and useful in
@@ -72,7 +71,7 @@ status_docs = [
 [[work_item]]
 id = "editor-trust-user-facing-contracts"
 status = "in_progress"
-spec = "docs/specs/PLSP-SPEC-0002-provider-confidence-receipts.md"
+spec = "PR #9481: user-facing trust surfaces contract"
 plan = "plans/editor-trust-ux-closeout/implementation-plan.md#work-item-editor-trust-user-facing-contracts"
 current_pointer = "docs/project/status/real_perl_editor_trust_v1.md"
 claim_boundary = "Spec and docs work only; no provider behavior or support-tier promotion."

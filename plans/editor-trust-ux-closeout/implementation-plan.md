@@ -20,8 +20,8 @@ not promote provider behavior from docs or receipt-only PRs.
 
 Current in-flight contract PRs:
 
-- #9477: support claim map contract (`PLSP-SPEC-0010`)
 - #9478: trust-lane CI routing contract (`PLSP-SPEC-0011`)
+- #9481: user-facing trust surfaces contract (`PLSP-SPEC-0012`)
 
 Current merged contract anchors:
 
@@ -31,6 +31,7 @@ Current merged contract anchors:
 - [PLSP-SPEC-0007](../../docs/specs/PLSP-SPEC-0007-receiver-fact-completion.md)
 - [PLSP-SPEC-0008](../../docs/specs/PLSP-SPEC-0008-edit-producing-provider-safety.md)
 - [PLSP-SPEC-0009](../../docs/specs/PLSP-SPEC-0009-workspace-trust-report.md)
+- [PLSP-SPEC-0010](../../docs/specs/PLSP-SPEC-0010-support-claim-map.md)
 - [PLSP-ADR-0001](../../docs/adr/PLSP-ADR-0001-generated-status-is-control-plane.md)
 - [PLSP-ADR-0002](../../docs/adr/PLSP-ADR-0002-confidence-before-cutover.md)
 - [PLSP-ADR-0003](../../docs/adr/PLSP-ADR-0003-preview-before-edit.md)
@@ -50,9 +51,9 @@ Status owners:
 
 Status: in progress
 Linked proposal: [PLSP-PROP-0001](../../docs/proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
-Linked spec: [PLSP-SPEC-0002](../../docs/specs/PLSP-SPEC-0002-provider-confidence-receipts.md)
+Linked spec: PR #9481 user-facing trust surfaces contract
 Blocks: user-facing trust docs, command documentation, setup troubleshooting
-Blocked by: in-flight contract PR review
+Blocked by: user-facing trust surfaces contract review
 
 Goal
 
