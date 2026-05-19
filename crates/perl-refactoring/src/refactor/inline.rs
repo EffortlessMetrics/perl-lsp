@@ -731,6 +731,13 @@ fn rename_collisions(body: &str, outer_vars: &[String]) -> String {
 
 /// Replace occurrences of `var` in `text` that are complete variable
 /// references (not a prefix of a longer variable name).
+///
+/// A match is only replaced when both boundaries are clean:
+/// - The character *after* the match is not an identifier character (`[A-Za-z0-9_]`).
+/// - The character *before* the match is not a Perl sigil (`$`, `@`, `%`, `*`, `&`),
+///   which means the match is part of a dereference expression like `$$foo`.
+///   In that case, the replacement is braced so the dereference operator is
+///   preserved as `${replacement}` rather than corrupted into `$replacement`.
 fn replace_whole_var(text: &str, var: &str, replacement: &str) -> String {
     let mut result = String::with_capacity(text.len());
     let mut pos = 0;
@@ -739,8 +746,19 @@ fn replace_whole_var(text: &str, var: &str, replacement: &str) -> String {
             let after = pos + var.len();
             let next_is_alphanum =
                 text[after..].chars().next().is_some_and(|c| c.is_alphanumeric() || c == '_');
+            // A preceding sigil means this is a dereference (e.g. $$foo, @$foo).
+            // Brace the replacement so the dereference operator keeps binding to
+            // the argument expression.
+            let prev_is_sigil =
+                text[..pos].chars().next_back().is_some_and(|c| "$@%*&".contains(c));
             if !next_is_alphanum {
-                result.push_str(replacement);
+                if prev_is_sigil {
+                    result.push('{');
+                    result.push_str(replacement);
+                    result.push('}');
+                } else {
+                    result.push_str(replacement);
+                }
                 pos = after;
                 continue;
             }
@@ -750,6 +768,35 @@ fn replace_whole_var(text: &str, var: &str, replacement: &str) -> String {
         pos += c.len_utf8();
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::replace_whole_var;
+
+    #[test]
+    fn replace_whole_var_does_not_match_inside_deref() {
+        let text = "my $x = $$foo + @$foo + %$foo + $foo;";
+        let result = replace_whole_var(text, "$foo", "$bar");
+
+        assert!(
+            result.contains("${$bar}"),
+            "$$foo dereference must preserve the scalar deref operator; got: {result}"
+        );
+        assert!(
+            result.contains("@{$bar}"),
+            "@$foo dereference must preserve the array deref operator; got: {result}"
+        );
+        assert!(
+            result.contains("%{$bar}"),
+            "%$foo dereference must preserve the hash deref operator; got: {result}"
+        );
+        assert!(result.contains(" + $bar;"), "standalone $foo must be replaced; got: {result}");
+        assert!(
+            !result.contains("$$bar"),
+            "replacement must not produce unbraced $$bar dereference; got: {result}"
+        );
+    }
 }
 
 /// Extract the expression value from a body containing a single `return`.

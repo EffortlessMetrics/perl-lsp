@@ -38,7 +38,7 @@ impl<'a> ByteCursor<'a> {
 
     fn next_char(&mut self) -> char {
         let selector = self.next_u8();
-        if selector % 5 == 0 {
+        if selector.is_multiple_of(5) {
             return UNICODE_TOKEN_CHARS[usize::from(selector) % UNICODE_TOKEN_CHARS.len()];
         }
 

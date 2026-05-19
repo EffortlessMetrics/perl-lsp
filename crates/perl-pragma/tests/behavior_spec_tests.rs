@@ -205,15 +205,15 @@ fn given_use_feature_signatures_when_querying_state_then_effective_strict_modes_
 }
 
 #[test]
-fn given_use_v5_38_when_querying_state_then_switch_feature_is_not_available_but_modern_features_are()
- {
+fn given_use_v5_38_when_querying_state_then_removed_features_are_absent_but_modern_features_are() {
     let ast = program(vec![use_node("v5.38", &[], 0, 10)]);
     let map = PragmaTracker::build(&ast);
 
     let state = PragmaTracker::state_for_offset(&map, 5);
-    assert!(state.has_feature("class"));
-    assert!(state.has_feature("method"));
+    assert!(state.has_feature("module_true"));
+    assert!(state.has_feature("signatures"));
     assert!(!state.has_feature("switch"));
+    assert!(!state.has_feature("bareword_filehandles"));
 }
 
 #[test]
@@ -550,4 +550,38 @@ fn given_cursor_when_explicit_map_offset_is_before_first_pragma_then_default_sna
     assert_eq!(snapshot, environment.snapshot_at(5));
     assert_eq!(state, map.state_at(5));
     assert!(!state.strict_vars, "no pragma has started at offset 5");
+}
+
+#[test]
+fn given_use_warnings_when_qw_categories_are_disabled_then_each_category_is_tracked()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("warnings", &[], 0, 15),
+        no_node("warnings", &["qw(uninitialized deprecated)"], 16, 55),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 30);
+    assert!(state.warnings);
+    assert!(!state.is_warning_active("uninitialized"));
+    assert!(!state.is_warning_active("deprecated"));
+    assert!(state.is_warning_active("void"));
+    Ok(())
+}
+
+#[test]
+fn given_disabled_warning_categories_when_specific_category_is_reenabled_then_other_disabled_categories_remain()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("warnings", &[], 0, 15),
+        no_node("warnings", &["qw(uninitialized deprecated)"], 16, 55),
+        use_node("warnings", &["'deprecated'"], 56, 84),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 70);
+    assert!(state.warnings);
+    assert!(!state.is_warning_active("uninitialized"));
+    assert!(state.is_warning_active("deprecated"));
+    Ok(())
 }

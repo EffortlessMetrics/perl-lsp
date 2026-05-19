@@ -33,7 +33,7 @@ parser status.
 | Receipt state | Definition | Allowed use | Claim boundary |
 |---|---|---|---|
 | Fresh receipt | The corpus sweep was rerun for the PR or current lane and parser status was regenerated from that receipt | Route bucket closeout, update counts, close cluster rows when counts prove it | May claim measured bucket movement for the refreshed corpus |
-| Stale receipt | The corpus sweep predates current parser work or was generated on an older commit | Discover source-backed fixture shapes and prioritize the next lane | Must not claim current bucket movement |
+| Stale receipt | The corpus sweep predates current parser work or was generated on an older commit | Discover source-backed fixture shapes when current generated status still lists a nonzero bucket or a current fixture fails | Must not claim current bucket movement |
 | Fixture-only PR | The PR adds focused source-backed coverage without changing parser runtime behavior | Lock a real-Perl shape and prevent regression | Must not claim corpus improvement or bucket reduction |
 | Parser-fix PR without fresh corpus | The PR changes parser behavior for a narrow fixture-backed failure but cannot refresh the corpus | Claim the fixture-backed behavior fix | Must not claim broad corpus movement |
 | Refreshed corpus PR | The PR reruns the corpus receipt and updates generated parser status only through tooling | Update raw bucket counts and close rows when the generated output proves it | Must avoid unrelated parser/runtime changes |
@@ -41,7 +41,11 @@ parser status.
 ## Lane Rules
 
 When [parser accuracy next](../project/status/parser_accuracy_next.md) has no
-active failure packets and points to raw buckets, agents must:
+active failure packets and points to raw buckets, agents must first confirm
+that generated parser status lists a nonzero raw bucket or that a current
+source-backed fixture fails against the parser. If generated status lists
+`none` and there is no current failing fixture, agents must not start
+raw-bucket work from stale context.
 
 1. Read the receipt snapshot and freshness note in
    [parser raw failure buckets](../project/status/parser.md#raw-failure-buckets).
@@ -54,15 +58,16 @@ active failure packets and points to raw buckets, agents must:
    receipt.
 
 If the required Linux roots are unavailable, the PR may continue as
-fixture-only discovery. The PR must say that Linux receipt refresh was deferred
-and that bucket-count movement remains unproven.
+fixture-only discovery only from current failing evidence. The PR must say that
+Linux receipt refresh was deferred and that bucket-count movement remains
+unproven.
 
 ## Valid Claims
 
 Fixture-only PRs may say:
 
 ```text
-Locks a source-backed parser shape from the stale raw bucket queue.
+Locks a source-backed parser shape from current failing raw-bucket evidence.
 Does not claim raw bucket reduction without a refreshed Linux corpus receipt.
 ```
 
@@ -136,8 +141,9 @@ git diff --check
 
 ## Claim Boundaries
 
-Stale corpus receipts may route work, but they are not proof of the current
-parser state.
+Stale corpus receipts may route work only when current generated parser status
+still lists a nonzero bucket or the PR identifies a current source-backed
+fixture failure. They are not proof of the current parser state.
 
 Fixture-only PRs preserve discovered real-Perl shapes. They do not prove that a
 raw bucket shrank.
