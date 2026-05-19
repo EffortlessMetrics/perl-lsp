@@ -138,12 +138,18 @@ commands = [
 
 [[work_item]]
 id = "trust-lane-ci-routing"
-status = "ready"
+status = "completed"
 spec = "docs/specs/PLSP-SPEC-0011-trust-lane-ci-routing.md"
 plan = "plans/editor-trust-ux-closeout/implementation-plan.md#work-item-trust-lane-ci-routing"
 current_pointer = "docs/ci/pr-plan.md"
+receipt = "docs/ci/pr-plan.md"
+policy_receipt = "policy/trust-lanes.toml"
+workflow_receipt = ".github/workflows/pr-plan.yml"
+script_receipt = "scripts/ci/pr_plan.py"
+validator_receipt = "scripts/ci/validate_trust_lanes.py"
 claim_boundary = "CI routing may classify proof cost; it does not prove provider behavior or promote support claims."
 commands = [
+  "python scripts/ci/validate_trust_lanes.py --strict",
   "python scripts/ci/validate_risk_packs.py --strict",
   "cargo xtask check-support-claims",
   "git diff --check",
