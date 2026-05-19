@@ -260,7 +260,7 @@ the relevant receipt command.
 | Provider surface | Current state | Current source of truth | Next proof |
 | --- | --- | --- | --- |
 | Diagnostics | `partial live` | Existing semantic queries suppress selected dynamic false positives, plus high-confidence imported/generated visible-symbol facts; fallback diagnostics remain available | Broader false-positive / false-negative fixture receipts before any additional diagnostic families move live |
-| Completion | `partial live / shadowed` | Existing completion paths remain live; high-confidence imported/exported compiler visible-symbol facts can contribute live candidates with legacy fallback; semantic-shadow fixtures and the Mojolicious scenario 28 ranking receipt trace generated labels, rank deltas, useful/noisy additions, and dynamic-boundary blockers without promoting those families | Additional real-workspace candidate quality across more project shapes before any broader generated, dynamic, method, or workspace-wide live cutover |
+| Completion | `partial live / source-backed receiver pilot / shadowed` | Existing completion paths remain live; high-confidence imported/exported compiler visible-symbol facts can contribute live candidates with legacy fallback; the receiver-fact pilot can contribute exact method candidates only from fresh high-confidence source-backed receiver facts; semantic-shadow fixtures, the Mojolicious scenario 28 ranking receipt, and receiver pilot receipts trace generated labels, rank deltas, useful/noisy additions, exact hash-slot receiver ranking, and dynamic-boundary blockers without promoting broader generated, dynamic, unknown, or workspace-wide method families | Additional real-workspace receiver quality across more project shapes before any broader generated, dynamic, method, or workspace-wide live cutover |
 | Hover | `partial live / provenance-backed` | Runtime hover uses compiler-fact cutover for traced compiler fact, framework-adapter, and dynamic-boundary paths when fresh workspace facts are available; legacy hover remains fallback; hover cutover/shadow code labels imported, generated, dynamic-boundary, and fallback paths with fact-source traces and source/confidence text; Mojolicious scenario 29 records project-shaped hover surfaces without behavior changes | Additional project-shape hover quality receipts before broader generated/dynamic expansion |
 | Definition / goto | `partial live / ranked-shadowed` | A single fresh, high-confidence, source-backed `ExactAst`, explicit import, default export, or export-tag candidate can drive live `textDocument/definition` with legacy fallback. Generated/no-source, dynamic-boundary, low-confidence, ambiguous, stale, and broader real-workspace candidates remain traced as fallback/shadow proof. Mojolicious scenario 30 records module-resolution, exact-local, imported-symbol, and dynamic-boundary-shaped definition probes without behavior changes. | Broader generated/dynamic migration requires additional project-shape receipts and no false-exact source-location claims |
 | References | `partial live / ranked-shadowed` | Fresh, high-confidence, source-backed `ExactAst`, `ImportExportInference`, or `LiteralRequireImport` occurrence references can drive live `textDocument/references` when `includeDeclaration=false`; generated/no-source, dynamic-boundary, low-confidence, ambiguous, stale, and declaration-including requests remain traced as fallback/shadow proof. Mojolicious scenario 30 records exact-local, imported-symbol, and declaration-including boundary reference probes without behavior changes. | Broader references migration requires precision/recall receipts for generated, coderef, typeglob, and declaration-including cases |
@@ -305,6 +305,15 @@ the relevant receipt command.
   generated/no-source blocker receipt and Modern OO scenario 43 no-source
   assertions close the immediate proof request without broadening live
   workspace-symbol behavior.
+
+- Completion note, 2026-05-19: `source_backed_hash_slot_receiver_uses_exact_completion_pilot`
+  and `dynamic_hash_key_receiver_preserves_imported_fallback` record the first
+  source-backed receiver-fact completion pilot. The allowed live class is fresh,
+  high-confidence, source-backed receiver evidence that ranks exact method
+  candidates above fallback. Dynamic hash keys remain fallback-preserving and do
+  not become exact hash-slot receiver facts. This does not authorize broad
+  generated, dynamic, unknown, low-confidence, stale, or workspace-wide method
+  completion.
 
 - Semantic-token note, 2026-05-18: method-declaration, package-declaration,
   field-declaration, method-call, and self-method-call parity have moved to scoped
