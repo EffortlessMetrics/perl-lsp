@@ -18,7 +18,9 @@ Current provider cutover state:
 
 ## Claim Boundary
 
-Current receiver-facts work is semantic substrate only.
+Receiver facts are semantic substrate by default. A separate completion cutover
+receipt now consumes one narrow source-backed receiver class, but facts-only PRs
+remain substrate-only until provider-specific proof promotes another class.
 
 It may claim:
 
@@ -26,11 +28,13 @@ It may claim:
 - receiver extraction over existing `TypeFact` and `ShapeFact` evidence
 - source-derived constructor and plain-hash slot facts where tests prove them
 - dynamic-key boundaries for receiver extraction
-- no completion candidate behavior change
+- no completion candidate behavior change unless the PR is explicitly a
+  provider cutover receipt tied to [PLSP-SPEC-0007](../../specs/PLSP-SPEC-0007-receiver-fact-completion.md)
 
 It may not claim:
 
-- receiver-backed completion cutover
+- receiver-backed completion cutover beyond the separately proved narrow
+  source-backed pilot
 - hover, goto, diagnostics, or refactor behavior changes
 - support-tier promotion
 - hashref, bless-field, accessor-return, or chained method-return facts until
@@ -55,20 +59,20 @@ no support-tier promotion
 | `hash_slot_receiver` | `partial` | `receiver_facts` module test `hash_slot_receiver_uses_known_slot_fact`; `receiver_expression_facts` tests for plain hash literals and slot assignment | Works when `TypeEnvironment` contains a `HashShape`; source-derived plain `%hash` literals and `$hash{key}` assignments can now populate that shape. Hashref, bless-field, and accessor-return source inference remain pending. |
 | `hashref_slot_receiver` | `partial` | `receiver_facts` module test `hashref_slot_receiver_preserves_hashref_kind`; PR [#9468](https://github.com/EffortlessMetrics/perl-lsp/pull/9468) | Works when the base fact already has a hash shape; `$hashref->{key}` fact production from source declarations is still missing. |
 | `array_index_receiver` | `partial` | `receiver_facts` module tests for static and dynamic array indexes; PR [#9468](https://github.com/EffortlessMetrics/perl-lsp/pull/9468) | Static indexes can use existing `ArrayShape` facts; dynamic indexes remain non-exact. |
-| `dynamic_key_boundary` | `landed` | `receiver_facts` module test `dynamic_hash_key_marks_dynamic_boundary`; `TypeFact::dynamic` test in `type_facts.rs`; `receiver_expression_facts` dynamic plain-hash-key test | Proven for receiver extraction and plain hash expression facts. Provider boundary receipts remain pending. |
+| `dynamic_key_boundary` | `landed` | `receiver_facts` module test `dynamic_hash_key_marks_dynamic_boundary`; `TypeFact::dynamic` test in `type_facts.rs`; `receiver_expression_facts` dynamic plain-hash-key test; completion provider test `dynamic_hash_key_receiver_preserves_imported_fallback` | Proven for receiver extraction, plain hash expression facts, and the first completion-provider boundary receipt. Additional provider boundary receipts remain pending for other receiver forms. |
 | `expression_inference` | `partial` | `crates/perl-semantic-analyzer/tests/receiver_expression_facts.rs`; `TypeInferenceEngine::infer_expr_fact` | Constructor calls, plain hash literals, plain hash slot assignment, static plain hash slot reads, and dynamic plain hash keys are facts-only substrate. Hashref slots, bless fields, accessor returns, and chained method-return facts remain pending. |
 | `receiver_fact_api` | `landed` | `crates/perl-semantic-analyzer/src/analysis/receiver_facts.rs`; PR [#9468](https://github.com/EffortlessMetrics/perl-lsp/pull/9468) | API extracts facts from existing AST and supplied environment facts; method-call chains remain unknown until explicit rules land. |
-| `completion_cutover` | `blocked` | No completion provider usage of `ReceiverFact` on current `master` | Blocked by facts-only fixtures, expression inference, provider fallback proof, and receiver confidence receipts. |
+| `completion_cutover` | `narrow-pilot` | Completion provider tests `source_backed_hash_slot_receiver_uses_exact_completion_pilot` and `dynamic_hash_key_receiver_preserves_imported_fallback`; PR [#9502](https://github.com/EffortlessMetrics/perl-lsp/pull/9502) | Only fresh high-confidence source-backed receiver facts may authorize exact receiver completion. Unknown, dynamic, generated/no-source, stale, and low-confidence receiver shapes stay fallback, shadowed, or blocked. |
 
 ## Provider Cutover Dashboard
 
 ```text
 receiver_fact_completion_cutover:
   facts_substrate: partial
-  completion_consumes_fact: no
-  fallback_proven: pending
-  dynamic_boundary_proven: partial receiver-extraction only
-  support_claim_allowed: no
+  completion_consumes_fact: narrow source-backed pilot
+  fallback_proven: dynamic hash key preserves fallback
+  dynamic_boundary_proven: receiver extraction plus completion-provider boundary
+  support_claim_allowed: partial-live-with-fallback only
 ```
 
 ## Next Implementation Steps
@@ -77,10 +81,10 @@ receiver_fact_completion_cutover:
    expression facts without changing provider output.
 2. Add facts-only fixtures that prove source-derived `$hashref`, `$self`, and
    framework accessor receiver facts without changing provider output.
-3. Add provider confidence receipts for exact, fallback, and dynamic receiver
-   cases.
-4. Cut completion over only after the facts-only and provider fallback receipts
-   pass.
+3. Add real-workspace and additional receiver-form provider confidence receipts
+   for exact, fallback, and dynamic receiver cases.
+4. Broaden completion only after facts-only and provider fallback receipts pass
+   for the new receiver class.
 
 ## Proof Commands
 
