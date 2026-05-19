@@ -6,7 +6,7 @@
 
 use super::super::*;
 use perl_lsp_rs_core::providers::missing_module::ModuleSearchPathDisplay;
-use perl_module::resolution::{build_effective_inc_roots, IncRoot};
+use perl_module::resolution::{IncRoot, build_effective_inc_roots};
 use std::path::PathBuf;
 
 mod assembly;
@@ -216,9 +216,11 @@ mod tests {
         config.resolution_timeout_ms = 123;
 
         let server = LspServer::new();
-        *server.workspace_folders.lock() = vec![WorkspaceFolderState::new(workspace_uri.clone())
-            .with_path(workspace.clone())
-            .with_effective_workspace_config(config)];
+        *server.workspace_folders.lock() = vec![
+            WorkspaceFolderState::new(workspace_uri.clone())
+                .with_path(workspace.clone())
+                .with_effective_workspace_config(config),
+        ];
         *server.root_path.lock() = Some(workspace.clone());
 
         let source = "use lib 't/lib';\nuse Demo::Worker;\n";
@@ -268,9 +270,11 @@ mod tests {
         config.use_system_inc = false;
 
         let server = LspServer::new();
-        *server.workspace_folders.lock() = vec![WorkspaceFolderState::new(workspace_uri.clone())
-            .with_path(workspace.clone())
-            .with_effective_workspace_config(config)];
+        *server.workspace_folders.lock() = vec![
+            WorkspaceFolderState::new(workspace_uri.clone())
+                .with_path(workspace.clone())
+                .with_effective_workspace_config(config),
+        ];
         *server.root_path.lock() = Some(workspace.clone());
 
         let source = "use MyModule;\n";
@@ -304,9 +308,11 @@ mod tests {
         let config = perl_lsp_rs_core::config::WorkspaceConfig::default();
 
         let server = LspServer::new();
-        *server.workspace_folders.lock() = vec![WorkspaceFolderState::new(workspace_uri.clone())
-            .with_path(workspace.clone())
-            .with_effective_workspace_config(config)];
+        *server.workspace_folders.lock() = vec![
+            WorkspaceFolderState::new(workspace_uri.clone())
+                .with_path(workspace.clone())
+                .with_effective_workspace_config(config),
+        ];
         *server.root_path.lock() = Some(workspace.clone());
 
         // `use lib 'lib'` then `no lib 'lib'` cancels the path at this offset.
@@ -335,9 +341,11 @@ mod tests {
         let workspace_uri = file_uri(&workspace)?;
         let config = perl_lsp_rs_core::config::WorkspaceConfig::default();
         let server = LspServer::new();
-        *server.workspace_folders.lock() = vec![WorkspaceFolderState::new(workspace_uri.clone())
-            .with_path(workspace.clone())
-            .with_effective_workspace_config(config)];
+        *server.workspace_folders.lock() = vec![
+            WorkspaceFolderState::new(workspace_uri.clone())
+                .with_path(workspace.clone())
+                .with_effective_workspace_config(config),
+        ];
         *server.root_path.lock() = Some(workspace.clone());
 
         let source = "use Foo;\n";
