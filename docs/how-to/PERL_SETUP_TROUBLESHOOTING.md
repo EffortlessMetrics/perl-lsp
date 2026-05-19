@@ -225,6 +225,8 @@ and confirm the root and include paths match the project you intended to edit.
 For setup-related reports, include:
 
 - output from **Perl LSP: Show Workspace Trust Report**
+- the `copyable_payload` object from the workspace trust report when you need
+  structured setup evidence without raw local paths
 - output from **Perl LSP: Explain Missing Module Lookup**, when PL701 or module
   lookup is involved
 - the relevant `includePaths`, `.perl-lsp.toml`, or `launch.json` snippet with

@@ -5,6 +5,7 @@ Reads:
   policy/ci-budget.toml
   policy/ci-lanes.toml
   policy/ci-risk-packs.toml
+  policy/trust-lanes.toml
 
 Inputs:
   --base, --head     git refs (defaults: origin/master, HEAD)
@@ -126,6 +127,233 @@ def lane_paths_match(lane: dict[str, Any], files: list[str]) -> bool:
     if not patterns:
         return True
     return any(path_matches_glob(f, p) for f in files for p in patterns)
+
+
+TRUST_LANE_RULES: dict[str, list[tuple[str, list[str]]]] = {
+    "parser_fixture_only": [
+        (
+            "parser fixture or generated parser status",
+            [
+                "crates/perl-parser*/tests/**",
+                "crates/perl-parser*/fixtures/**",
+                "tests/fixtures/parser/**",
+                "docs/project/status/parser.md",
+                "docs/project/status/parser_accuracy_next.md",
+            ],
+        )
+    ],
+    "parser_runtime_fix": [
+        (
+            "parser, lexer, or parser-core runtime source",
+            [
+                "crates/perl-parser*/src/**",
+                "crates/perl-lexer/src/**",
+                "crates/perl-parser-core/src/**",
+            ],
+        )
+    ],
+    "provider_receipt": [
+        (
+            "provider receipt, shadow, scorecard, or runtime proof",
+            [
+                "docs/project/status/provider_confidence_matrix.md",
+                "docs/project/status/provider_cutover.md",
+                "docs/project/status/provider_promotion_ledger.md",
+                "docs/project/status/semantic_scorecard.md",
+                "docs/project/status/semantic_shadow_compare.md",
+                "crates/perl-lsp-rs/tests/**",
+                "crates/perl-lsp-rs-core/tests/**",
+                "crates/perl-lsp-ux-tests/**",
+            ],
+        )
+    ],
+    "provider_live_cutover": [
+        (
+            "live provider runtime source",
+            [
+                "crates/perl-lsp-rs/src/runtime/**",
+                "crates/perl-lsp-rs-core/src/providers/**",
+                "crates/perl-lsp-core/src/**",
+                "crates/perl-lsp-feature-*/src/**",
+            ],
+        )
+    ],
+    "support_claim_change": [
+        (
+            "public support claim surface",
+            [
+                "README.md",
+                "vscode-extension/README.md",
+                "docs/project/status/SUPPORT_TIERS.md",
+            ],
+        )
+    ],
+    "subprocess_seam": [
+        (
+            "Perl, module path, perldoc, DAP, or launch seam",
+            [
+                "crates/perl-dap*/**",
+                "crates/perl-module*/**",
+                "crates/*perldoc*/**",
+                "crates/*oracle*/**",
+                "vscode-extension/src/**launch**",
+                "vscode-extension/src/**dap**",
+            ],
+        )
+    ],
+    "real_workspace_receipt": [
+        (
+            "real-workspace baseline or livability receipt",
+            [
+                "docs/forensics/**",
+                "crates/perl-lsp-ux-tests/**",
+                "crates/perl-lsp-rs/tests/**real_workspace**",
+                "crates/perl-lsp-rs/tests/**baseline**",
+            ],
+        )
+    ],
+    "release_proof": [
+        (
+            "release, packaging, managed-binary, or distribution surface",
+            [
+                "RELEASE_HISTORY.md",
+                "CHANGELOG.md",
+                ".github/workflows/publish*.yml",
+                ".github/workflows/release*.yml",
+                "docs/release/**",
+                "vscode-extension/package.json",
+                "vscode-extension/package-lock.json",
+            ],
+        )
+    ],
+    "dependency_update": [
+        (
+            "dependency graph, lockfile, or toolchain surface",
+            [
+                "Cargo.toml",
+                "Cargo.lock",
+                "**/Cargo.toml",
+                "rust-toolchain*",
+                "package.json",
+                "package-lock.json",
+                "pnpm-lock.yaml",
+                "npm-shrinkwrap.json",
+            ],
+        )
+    ],
+    "docs_status_only": [
+        (
+            "docs, status, spec, ADR, policy, or CI-planning control surface",
+            [
+                "docs/**",
+                "**/*.md",
+                "policy/**",
+                "scripts/ci/pr_plan.py",
+                "scripts/ci/validate_*",
+                ".github/workflows/pr-plan.yml",
+            ],
+        )
+    ],
+}
+
+
+def match_trust_lane_files(
+    files: list[str],
+    *,
+    class_id: str,
+) -> list[dict[str, Any]]:
+    matches: list[dict[str, Any]] = []
+    for reason, patterns in TRUST_LANE_RULES.get(class_id, []):
+        matched = sorted(
+            {path for path in files if any(path_matches_glob(path, p) for p in patterns)}
+        )
+        if matched:
+            matches.append({"reason": reason, "files": matched})
+    return matches
+
+
+def trust_lane_entry(
+    class_id: str,
+    class_doc: dict[str, Any],
+    matches: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "id": class_id,
+        "risk_rank": class_doc.get("risk_rank"),
+        "claim_boundary": class_doc.get("claim_boundary", ""),
+        "required_checks": class_doc.get("required_checks", []),
+        "optional_checks": class_doc.get("optional_checks", []),
+        "skipped_by_policy_checks": class_doc.get("skipped_by_policy_checks", []),
+        "widening_triggers": class_doc.get("widening_triggers", []),
+        "receipt_paths": class_doc.get("receipt_paths", []),
+        "support_claim_impact": class_doc.get("support_claim_impact", ""),
+        "matches": matches,
+    }
+
+
+def classify_trust_lanes(
+    files: list[str],
+    trust_lanes_doc: dict[str, Any],
+    *,
+    estimated_lem: float,
+    band: str,
+    selected_lanes: list[dict[str, Any]],
+) -> dict[str, Any]:
+    classes = trust_lanes_doc.get("class", {})
+    matched: list[dict[str, Any]] = []
+
+    if isinstance(classes, dict):
+        for class_id, class_doc in classes.items():
+            if not isinstance(class_doc, dict):
+                continue
+            matches = match_trust_lane_files(files, class_id=class_id)
+            if matches:
+                matched.append(trust_lane_entry(class_id, class_doc, matches))
+
+    matched.sort(
+        key=lambda entry: (
+            int(entry["risk_rank"]) if isinstance(entry.get("risk_rank"), int) else 0,
+            str(entry["id"]),
+        ),
+        reverse=True,
+    )
+    strongest = matched[0] if matched else None
+    changed_surface = sorted(
+        {
+            match["reason"]
+            for entry in matched
+            for match in entry.get("matches", [])
+            if isinstance(match.get("reason"), str)
+        }
+    )
+
+    result: dict[str, Any] = {
+        "schema_version": trust_lanes_doc.get("schema_version", 1),
+        "policy": trust_lanes_doc.get("policy", "trust-lanes"),
+        "status": trust_lanes_doc.get("status", "advisory"),
+        "spec": trust_lanes_doc.get("spec"),
+        "classes": matched,
+        "strongest_class": strongest,
+        "changed_surface": changed_surface,
+        "hosted_ci_estimate": {
+            "estimated_lem": estimated_lem,
+            "band": band,
+            "selected_lanes": len(selected_lanes),
+        },
+    }
+    if strongest:
+        result["required_proof"] = strongest.get("required_checks", [])
+        result["skipped_by_policy_checks"] = strongest.get(
+            "skipped_by_policy_checks", []
+        )
+        result["widening_triggers"] = strongest.get("widening_triggers", [])
+        result["support_claim_impact"] = strongest.get("support_claim_impact", "")
+    else:
+        result["required_proof"] = []
+        result["skipped_by_policy_checks"] = []
+        result["widening_triggers"] = []
+        result["support_claim_impact"] = ""
+    return result
 
 
 def select_lanes(
@@ -307,6 +535,51 @@ def render_summary(plan: dict[str, Any]) -> str:
             f"{'✓' if lane['blocking'] else ''} | {origin} |"
         )
 
+    trust_lanes = plan.get("trust_lanes") or {}
+    strongest = trust_lanes.get("strongest_class")
+    if strongest:
+        lines.append("")
+        lines.append("## Trust lane (advisory)")
+        lines.append("")
+        lines.append(
+            f"**Strongest class:** `{strongest['id']}` "
+            f"(risk rank `{strongest.get('risk_rank', '?')}`)"
+        )
+        classes = trust_lanes.get("classes") or []
+        class_ids = [entry.get("id") for entry in classes if entry.get("id")]
+        if class_ids:
+            lines.append(f"**Matched classes:** {', '.join(f'`{c}`' for c in class_ids)}")
+        lines.append("")
+        lines.append(str(strongest.get("claim_boundary", "")))
+        changed_surface = trust_lanes.get("changed_surface") or []
+        if changed_surface:
+            lines.append("")
+            lines.append("Changed surface:")
+            for surface in changed_surface:
+                lines.append(f"- {surface}")
+        required = strongest.get("required_checks") or []
+        if required:
+            lines.append("")
+            lines.append("Required proof:")
+            for item in required:
+                lines.append(f"- {item}")
+        skipped_checks = strongest.get("skipped_by_policy_checks") or []
+        if skipped_checks:
+            lines.append("")
+            lines.append("Skipped by policy:")
+            for item in skipped_checks:
+                lines.append(f"- {item}")
+        widening = strongest.get("widening_triggers") or []
+        if widening:
+            lines.append("")
+            lines.append("Widen if:")
+            for item in widening:
+                lines.append(f"- {item}")
+        support_impact = strongest.get("support_claim_impact")
+        if support_impact:
+            lines.append("")
+            lines.append(f"Support claim impact: {support_impact}")
+
     skipped = plan["selection"].get("skipped_lanes") or []
     if skipped:
         lines.append("")
@@ -379,6 +652,9 @@ def main() -> int:
         "--risk-packs", type=Path, default=Path("policy/ci-risk-packs.toml")
     )
     parser.add_argument(
+        "--trust-lanes", type=Path, default=Path("policy/trust-lanes.toml")
+    )
+    parser.add_argument(
         "--json-out", type=Path, default=Path("target/ci/ci-plan.json")
     )
     parser.add_argument(
@@ -394,6 +670,7 @@ def main() -> int:
     budget_doc = read_toml(args.budget)
     lanes_doc = read_toml(args.lanes)
     risk_packs_doc = read_toml(args.risk_packs)
+    trust_lanes_doc = read_toml(args.trust_lanes)
 
     budget = budget_doc.get("budget", {})
     multipliers = budget_doc.get("runner_multipliers", {})
@@ -466,6 +743,14 @@ def main() -> int:
                 "selected lanes."
             )
 
+    trust_lanes = classify_trust_lanes(
+        files,
+        trust_lanes_doc,
+        estimated_lem=estimated_lem,
+        band=band,
+        selected_lanes=selected_lanes,
+    )
+
     plan: dict[str, Any] = {
         "schema_version": 1,
         "repo": "perl-lsp",
@@ -491,6 +776,7 @@ def main() -> int:
             "lanes": selected_lanes,
             "skipped_lanes": skipped_lanes,
         },
+        "trust_lanes": trust_lanes,
         "warnings": warnings,
         "guard": {
             "hard_ceiling_exceeded": band == "over_ceiling",
@@ -511,7 +797,7 @@ def main() -> int:
     if args.summary:
         summary_path = Path(args.summary)
         summary_path.parent.mkdir(parents=True, exist_ok=True)
-        with summary_path.open("a") as f:
+        with summary_path.open("a", encoding="utf-8") as f:
             f.write(render_summary(plan))
 
     print(json.dumps({"estimated_lem": estimated_lem, "band": band, "lanes": len(selected_lanes)}))

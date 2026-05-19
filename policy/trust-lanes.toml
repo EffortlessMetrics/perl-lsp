@@ -1,0 +1,304 @@
+# Trust Lane Classification Policy
+#
+# This file encodes the trust-lane classes from
+# docs/specs/PLSP-SPEC-0011-trust-lane-ci-routing.md.
+#
+# It is advisory classification metadata. It does not skip branch-protection
+# checks, promote support tiers, or prove provider behavior by itself.
+
+schema_version = 1
+policy = "trust-lanes"
+owner = "EffortlessMetrics"
+status = "advisory"
+updated = "2026-05-19"
+spec = "docs/specs/PLSP-SPEC-0011-trust-lane-ci-routing.md"
+
+classification_rule = "Classify by the strongest claim made by the PR; when multiple classes apply, use the highest-risk class or the union of required checks."
+enforcement_boundary = "This policy is review metadata until a classifier or PR summary consumes it. It cannot waive required CI or promote user-facing claims."
+
+[class.parser_fixture_only]
+risk_rank = 20
+claim_boundary = "Adds or updates parser fixtures/status receipts without parser runtime changes."
+required_checks = [
+  "focused parser fixture test",
+  "parser accuracy check",
+  "parser status or generated-status check",
+  "ratchet or freshness check when generated status changes",
+  "formatting and diff whitespace checks",
+]
+optional_checks = [
+  "parser runtime crate check when fixture shape touches shared helpers",
+  "corpus receipt refresh when corpus movement is claimed",
+]
+skipped_by_policy_checks = [
+  "provider UX tests when no provider behavior changes",
+  "live provider shadow or cutover checks",
+  "release packaging checks",
+]
+widening_triggers = [
+  "parser runtime source changed",
+  "support claim changed",
+  "generated status changed unexpectedly",
+  "corpus bucket movement is claimed",
+  "provider behavior, diagnostics, or completion output changed",
+]
+receipt_paths = [
+  "docs/project/status/parser.md",
+  "docs/project/status/parser_accuracy_next.md",
+]
+support_claim_impact = "No support-tier promotion unless a separate support-claim change cites fresh corpus or provider proof."
+
+[class.parser_runtime_fix]
+risk_rank = 50
+claim_boundary = "Changes parser, lexer, AST, token, POD, regex, or source-position runtime behavior."
+required_checks = [
+  "focused parser runtime tests for the changed grammar family",
+  "parser accuracy check",
+  "parser status generation check",
+  "ratchet or corpus freshness proof when bucket movement is claimed",
+  "impacted downstream parser consumer check when AST or token contracts change",
+]
+optional_checks = [
+  "property, fuzz, or corpus lane for broad runtime surfaces",
+  "UX or provider smoke when parser output feeds user-visible behavior",
+]
+skipped_by_policy_checks = [
+  "release proof unless release files changed",
+]
+widening_triggers = [
+  "AST shape changes",
+  "generated status shifts beyond the targeted bucket",
+  "provider behavior changes",
+  "support tiers or README claims change",
+]
+receipt_paths = [
+  "docs/project/status/parser.md",
+  "docs/project/status/parser_accuracy_next.md",
+]
+support_claim_impact = "Parser bucket or compatibility claims require fresh generated status evidence."
+
+[class.provider_receipt]
+risk_rank = 60
+claim_boundary = "Adds provider proof, traces, shadows, labels, or blocker receipts without live cutover."
+required_checks = [
+  "provider-specific receipt test or shadow comparison",
+  "confidence, freshness, and fallback evidence check where available",
+  "provider confidence matrix check",
+  "support-claim check when wording or tiers change",
+]
+optional_checks = [
+  "semantic scorecard",
+  "semantic shadow compare",
+  "real-workspace receipt for noisy or project-shaped surfaces",
+]
+skipped_by_policy_checks = [
+  "live provider cutover proof when behavior remains shadow, labeled, or receipt-only",
+]
+widening_triggers = [
+  "live provider behavior changes",
+  "fallback behavior changes",
+  "edit-producing provider starts returning edits",
+  "generated, dynamic, stale, or low-confidence facts become user-visible",
+]
+receipt_paths = [
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/provider_cutover.md",
+  "docs/project/status/semantic_scorecard.md",
+  "docs/project/status/semantic_shadow_compare.md",
+]
+support_claim_impact = "Receipt-only PRs may add evidence but must not promote support tiers."
+
+[class.provider_live_cutover]
+risk_rank = 90
+claim_boundary = "Broadens or enables live provider behavior from proven facts."
+required_checks = [
+  "provider-specific receipt proof",
+  "fallback proof",
+  "blocker proof for stale, dynamic, generated, low-confidence, and ambiguous facts",
+  "semantic shadow compare",
+  "provider confidence matrix check",
+  "support-claim check",
+  "real-workspace receipt when the provider is noisy, destructive, or project-scale",
+  "rollback or no-edit proof for edit-producing providers",
+]
+optional_checks = [
+  "UX scenario tests",
+  "workspace memory or latency smoke",
+  "VS Code command-surface smoke when editor commands change",
+]
+skipped_by_policy_checks = [
+  "none by default; skipped checks must state why the cutover cannot affect that surface",
+]
+widening_triggers = [
+  "support tier changes",
+  "returned edits are introduced",
+  "fallback is removed or reordered",
+  "generated/no-source or dynamic facts are promoted",
+  "workspace index freshness or identity guards change",
+]
+receipt_paths = [
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/provider_cutover.md",
+  "docs/project/status/provider_promotion_ledger.md",
+]
+support_claim_impact = "Support tier may change only after proof and an explicit support-claim update."
+
+[class.support_claim_change]
+risk_rank = 80
+claim_boundary = "Changes public support tiers, README claims, status claim rows, or proof wording."
+required_checks = [
+  "support-claim validator",
+  "provider confidence matrix validator when provider rows are referenced",
+  "link or docs check when available",
+]
+optional_checks = [
+  "semantic scorecard or shadow compare for semantic/provider claim changes",
+  "parser status check for parser claim changes",
+]
+skipped_by_policy_checks = [
+  "provider runtime tests when the PR is docs-only and only narrows or clarifies claims",
+]
+widening_triggers = [
+  "public docs claim broader live behavior",
+  "a support tier is promoted",
+  "proof commands change to reference newly generated evidence",
+]
+receipt_paths = [
+  "docs/project/status/SUPPORT_TIERS.md",
+]
+support_claim_impact = "Every changed claim must map to tier, proof, status owner, known limitation, and next promotion proof."
+
+[class.subprocess_seam]
+risk_rank = 70
+claim_boundary = "Changes Perl binary, @INC, perldoc, DAP, launch config, or subprocess environment behavior."
+required_checks = [
+  "seam-specific unit or runtime test",
+  "workspace trust or setup-report receipt when user-visible state changes",
+  "support-claim check when setup claims change",
+  "platform proof when paths, process environment, or Perl binary resolution changes",
+]
+optional_checks = [
+  "UX scenario for PL701, perldoc, DAP, or launch-config behavior",
+  "Windows guardrails for path or environment changes",
+]
+skipped_by_policy_checks = [
+  "parser corpus checks when parser behavior is unchanged",
+]
+widening_triggers = [
+  "Perl binary selection changes",
+  "@INC, include paths, PERL5LIB, perldoc, DAP, or launch env authority changes",
+  "sensitive path redaction behavior changes",
+]
+receipt_paths = [
+  "docs/project/status/SUPPORT_TIERS.md",
+  "docs/project/status/ux_capability_dashboard.md",
+]
+support_claim_impact = "Setup claims must say whether state is observed, configured, supplied by the client, or actively probed."
+
+[class.real_workspace_receipt]
+risk_rank = 75
+claim_boundary = "Adds or changes real-project editor baseline, latency, memory, or livability receipts."
+required_checks = [
+  "scenario-specific real-workspace receipt",
+  "parser/provider/status check for any claim the receipt supports",
+  "memory or latency receipt when resource behavior is claimed",
+]
+optional_checks = [
+  "broader UX suite",
+  "nightly real-repo or memory plateau lane",
+]
+skipped_by_policy_checks = [
+  "release proof unless packaging changes",
+]
+widening_triggers = [
+  "a real-project receipt is used to promote a support tier",
+  "resource claims are added to README or support tiers",
+  "new project baselines change fixture download, checkout, or cache behavior",
+]
+receipt_paths = [
+  "docs/forensics/",
+  "docs/project/status/semantic_scorecard.md",
+  "docs/project/status/semantic_shadow_compare.md",
+]
+support_claim_impact = "Real-workspace claims must name project shape, measured surface, and known limits."
+
+[class.release_proof]
+risk_rank = 100
+claim_boundary = "Changes release, publish, packaging, semver, managed-binary, or distribution proof."
+required_checks = [
+  "release packaging or publish dry-run proof",
+  "changelog or release-history check where applicable",
+  "managed-binary or extension packaging smoke when release surface changes",
+]
+optional_checks = [
+  "full CI or release-check label",
+  "install smoke",
+]
+skipped_by_policy_checks = [
+  "parser/provider deep proof when no runtime or support claim changes",
+]
+widening_triggers = [
+  "package graph changes",
+  "published artifacts, managed binaries, or marketplace files change",
+  "version or release-history claims change",
+]
+receipt_paths = [
+  "RELEASE_HISTORY.md",
+  "docs/project/status/SUPPORT_TIERS.md",
+]
+support_claim_impact = "Release PRs must not imply new provider support unless support proof exists."
+
+[class.dependency_update]
+risk_rank = 40
+claim_boundary = "Changes dependency graph, lockfile, toolchain, or dependency policy."
+required_checks = [
+  "lockfile or manifest validation",
+  "security/dependency audit lane when dependency risk changes",
+  "affected crate check or smoke",
+]
+optional_checks = [
+  "full merge gate for broad dependency churn",
+  "release dry-run for publish-sensitive dependencies",
+]
+skipped_by_policy_checks = [
+  "provider receipts when public behavior is unaffected",
+]
+widening_triggers = [
+  "dependency is used in parser, provider, subprocess, security, or release code",
+  "MSRV or toolchain changes",
+  "generated code or build scripts change",
+]
+receipt_paths = [
+  "Cargo.toml",
+  "Cargo.lock",
+  "policy/ci-risk-packs.toml",
+]
+support_claim_impact = "Dependency PRs do not change support claims unless public behavior changes."
+
+[class.docs_status_only]
+risk_rank = 10
+claim_boundary = "Changes prose, specs, ADRs, dashboards, generated status, policy, or advisory CI-planning output without product/provider behavior changes."
+required_checks = [
+  "diff whitespace check",
+  "docs checker or status validator for the touched docs surface",
+  "generated-status check when generated docs are changed",
+  "planner or policy validator when PR-plan, workflow, or policy files change",
+]
+optional_checks = [
+  "support-claim validator when public claim wording changes",
+  "provider matrix check when provider status links or rows change",
+]
+skipped_by_policy_checks = [
+  "Rust compile and runtime tests when no code, generated receipt, or support claim behavior changed",
+]
+widening_triggers = [
+  "docs add or promote public behavior claims",
+  "specs redefine provider or edit-producing behavior",
+  "generated status is hand-edited",
+  "advisory CI-planning changes touch workflow, policy, scripts, or release files",
+]
+receipt_paths = [
+  "docs/specs/",
+  "docs/project/status/",
+]
+support_claim_impact = "Docs-only PRs may clarify or narrow claims; promotions require proof."
