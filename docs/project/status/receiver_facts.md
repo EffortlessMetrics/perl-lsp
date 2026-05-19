@@ -30,8 +30,8 @@ It may claim:
   where tests prove them
 - source-derived framework accessor-return facts where tests prove package-like
   `isa` declarations
-- source-derived direct method-return facts where tests prove a static
-  constructor return
+- source-derived method-return facts where tests prove a static constructor
+  return or a local variable initialized from one
 - dynamic-key boundaries for receiver extraction
 - no completion candidate behavior change unless the PR is explicitly a
   provider cutover receipt tied to [PLSP-SPEC-0007](../../specs/PLSP-SPEC-0007-receiver-fact-completion.md)
@@ -42,8 +42,8 @@ It may not claim:
   source-backed pilot
 - hover, goto, diagnostics, or refactor behavior changes
 - support-tier promotion
-- broader chained method-return facts until focused fixtures prove those source
-  shapes
+- broader chained or conditional method-return facts until focused fixtures
+  prove those source shapes
 
 Facts-only PRs must keep this wording in their claim boundary:
 
@@ -65,10 +65,10 @@ no support-tier promotion
 | `hashref_slot_receiver` | `partial` | `receiver_facts` module test `hashref_slot_receiver_preserves_hashref_kind`; `receiver_expression_facts` tests for hashref literals and slot assignment | Works when the base fact already has a hash shape; source-derived `$hashref->{key}` facts are proven for hashref literals and slot assignment. Broader chained method-return source inference remains pending. |
 | `bless_field_receiver` | `partial` | `receiver_expression_facts` tests for static bless fields and dynamic bless class fallback; `receiver_facts` module test `object_field_receiver_preserves_fallback` | Static `bless { field => Package->new }, 'Class'` populates medium-confidence object-field facts for `$self->{field}`. Dynamic bless class names fail closed. This is semantic substrate only and does not broaden completion. |
 | `accessor_return_receiver` | `partial` | `receiver_expression_facts` tests for Moo/Moose package-like `isa` accessor returns and dynamic `isa` fallback | Static framework declarations such as `has db => (isa => 'MyApp::DB')` populate medium-confidence object-shape facts for `$service->db`. The erased type remains `Any`, dynamic/non-package `isa` values fail closed, and this is semantic substrate only with no completion cutover. |
-| `method_return_receiver` | `partial` | `receiver_expression_facts` tests for direct static constructor method returns and dynamic constructor fallback | A method body with a single `return MyApp::DB->new` or implicit `MyApp::DB->new` expression can populate a medium-confidence object-shape fact for `$service->db`. The erased type remains `Any`, dynamic constructor receivers fail closed, and this is semantic substrate only with no completion cutover. |
+| `method_return_receiver` | `partial` | `receiver_expression_facts` tests for direct static constructor method returns, local constructor variable returns, and dynamic constructor fallback | A method body with a single `return MyApp::DB->new`, implicit `MyApp::DB->new` expression, or `my $db = MyApp::DB->new; return $db;` shape can populate a medium-confidence object-shape fact for `$service->db`. The erased type remains `Any`; dynamic constructor receivers and dynamic reassignments fail closed; and this is semantic substrate only with no completion cutover. |
 | `array_index_receiver` | `partial` | `receiver_facts` module tests for static and dynamic array indexes; PR [#9468](https://github.com/EffortlessMetrics/perl-lsp/pull/9468) | Static indexes can use existing `ArrayShape` facts; dynamic indexes remain non-exact. |
 | `dynamic_key_boundary` | `landed` | `receiver_facts` module test `dynamic_hash_key_marks_dynamic_boundary`; `TypeFact::dynamic` test in `type_facts.rs`; `receiver_expression_facts` dynamic plain-hash-key test; completion provider test `dynamic_hash_key_receiver_preserves_imported_fallback` | Proven for receiver extraction, plain hash expression facts, and the first completion-provider boundary receipt. Additional provider boundary receipts remain pending for other receiver forms. |
-| `expression_inference` | `partial` | `crates/perl-semantic-analyzer/tests/receiver_expression_facts.rs`; `TypeInferenceEngine::infer_expr_fact` | Constructor calls, plain hash literals, plain hash slot assignment, hashref literals, hashref slot assignment, static plain/hashref slot reads, static bless fields, framework accessor returns, direct static constructor method returns, dynamic plain hash keys, dynamic bless classes, dynamic/non-package accessor `isa` values, and dynamic method-return constructors are facts-only substrate. Broader chained method-return facts remain pending. |
+| `expression_inference` | `partial` | `crates/perl-semantic-analyzer/tests/receiver_expression_facts.rs`; `TypeInferenceEngine::infer_expr_fact` | Constructor calls, plain hash literals, plain hash slot assignment, hashref literals, hashref slot assignment, static plain/hashref slot reads, static bless fields, framework accessor returns, direct static constructor method returns, local constructor variable method returns, dynamic plain hash keys, dynamic bless classes, dynamic/non-package accessor `isa` values, dynamic method-return constructors, and dynamic method-return variable reassignments are facts-only substrate. Broader chained and conditional method-return facts remain pending. |
 | `receiver_fact_api` | `landed` | `crates/perl-semantic-analyzer/src/analysis/receiver_facts.rs`; PR [#9468](https://github.com/EffortlessMetrics/perl-lsp/pull/9468) | API extracts facts from existing AST and supplied environment facts; broader method-call chains remain unknown until explicit rules land. |
 | `completion_cutover` | `narrow-pilot` | Completion provider tests `source_backed_hash_slot_receiver_uses_exact_completion_pilot` and `dynamic_hash_key_receiver_preserves_imported_fallback`; PR [#9502](https://github.com/EffortlessMetrics/perl-lsp/pull/9502) | Only fresh high-confidence source-backed receiver facts may authorize exact receiver completion. Unknown, dynamic, generated/no-source, stale, and low-confidence receiver shapes stay fallback, shadowed, or blocked. |
 
@@ -87,8 +87,8 @@ receiver_fact_completion_cutover:
 
 1. Add facts-only fixtures that prove source-derived `$self` and framework
    accessor receiver facts without changing provider output.
-2. Extend method-return expression facts beyond direct static constructor
-   returns without changing provider output.
+2. Extend method-return expression facts beyond direct and local-variable
+   constructor returns without changing provider output.
 3. Add real-workspace and additional receiver-form provider confidence receipts
    for exact, fallback, and dynamic receiver cases.
 4. Broaden completion only after facts-only and provider fallback receipts pass
