@@ -20,7 +20,6 @@ fn ascii_alphanumeric_or_underscore() -> impl Strategy<Value = char> {
     ]
 }
 
-
 /// Generate a plain ASCII Perl identifier without a sigil.
 pub fn perl_identifier() -> impl Strategy<Value = String> {
     (
