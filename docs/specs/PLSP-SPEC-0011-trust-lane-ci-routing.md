@@ -1,4 +1,4 @@
-# PLSP-SPEC-0010: Trust-lane CI routing
+# PLSP-SPEC-0011: Trust-lane CI routing
 
 Status: proposed
 Owner: perl-lsp maintainers
