@@ -223,6 +223,31 @@ mod tests {
     }
 
     #[test]
+    fn fix_duplicate_hash_keys_empty_on_invalid_range() {
+        let source = "my %h = (foo => 1, foo => 2);\n";
+        let diagnostic = diagnostic_for(
+            (source.len() + 1, source.len() + 4),
+            "Duplicate hash key 'foo' -- only the last value will be used",
+        );
+
+        let actions = fix_duplicate_hash_keys(source, &diagnostic);
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn fix_duplicate_hash_keys_empty_on_non_char_boundary_range() {
+        let source = "my %h = (\"\u{e9}\" => 1, \"\u{e9}\" => 2);\n";
+        let char_start = must_some(source.find('\u{e9}'));
+        let diagnostic = diagnostic_for(
+            (char_start + 1, char_start + 2),
+            "Duplicate hash key 'e' -- only the last value will be used",
+        );
+
+        let actions = fix_duplicate_hash_keys(source, &diagnostic);
+        assert!(actions.is_empty());
+    }
+
+    #[test]
     fn fix_duplicate_hash_keys_no_delete_for_multiline_value() {
         let source = "my %h = (\n    foo => 1,\n    foo => {\n        nested => 1,\n    },\n);\n";
         let key_start = must_some(source.rfind("foo => {"));
