@@ -20,6 +20,7 @@ specs = [
   "docs/specs/PLSP-SPEC-0011-trust-lane-ci-routing.md",
   "docs/specs/PLSP-SPEC-0012-user-facing-trust-surfaces.md",
   "docs/specs/PLSP-SPEC-0013-agent-build-storage-and-gates.md",
+  "docs/specs/PLSP-SPEC-0014-refactor-acceptance.md",
 ]
 
 adrs = [
