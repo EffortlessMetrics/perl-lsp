@@ -90,11 +90,16 @@ contract lands.
 
 ## Work item: editor-trust-user-docs
 
-Status: ready
+Status: completed
 Linked proposal: [PLSP-PROP-0001](../../docs/proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
-Linked spec: [PLSP-SPEC-0002](../../docs/specs/PLSP-SPEC-0002-provider-confidence-receipts.md)
+Linked spec: [PLSP-SPEC-0012](../../docs/specs/PLSP-SPEC-0012-user-facing-trust-surfaces.md)
 Blocks: README claim refresh, VS Code command docs
 Blocked by: none
+Receipt: [Editor Trust](../../docs/how-to/EDITOR_TRUST.md)
+Supporting receipts:
+[Perl Setup Troubleshooting](../../docs/how-to/PERL_SETUP_TROUBLESHOOTING.md),
+[VS Code README](../../vscode-extension/README.md),
+[Commands reference](../../docs/reference/COMMANDS_REFERENCE.md)
 
 Goal
 
@@ -117,6 +122,13 @@ Docs explain partial-live-with-fallback, fallback reasons, safe-edit previews,
 dynamic Perl boundaries, `@INC`/module resolution, workspace trust report,
 provider explanations, diagnostic explanations, and copyable receipts in plain
 language while linking to status/support truth sources.
+
+Current implementation status
+
+The user-facing guide, setup troubleshooting guide, VS Code trust-claim docs,
+and command reference now cover the trust and explanation surfaces. This work
+item is documentation only; it does not promote support tiers or broaden
+provider behavior.
 
 Proof commands
 
