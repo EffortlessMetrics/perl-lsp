@@ -53,7 +53,7 @@ impl E2ETestFixture {
             5..=8 => Duration::from_secs(30), // Lightly constrained environment
             _ => Duration::from_secs(20),     // Unconstrained environment
         };
-        drain_until_quiet(&server, Duration::from_millis(2000), adaptive_initialization_timeout);
+        drain_until_quiet(&server, Duration::from_secs(2), adaptive_initialization_timeout);
 
         Self { server, test_workspace, scenario_runner, performance_monitor }
     }
@@ -210,7 +210,7 @@ fn create_e2e_test_scenarios() -> Vec<E2ETestScenario> {
         performance_requirements: E2EPerformanceRequirements {
             max_total_duration: Duration::from_secs(5),
             max_memory_growth: 50 * 1024 * 1024, // 50MB
-            max_individual_operation: Duration::from_millis(2000),
+            max_individual_operation: Duration::from_secs(2),
             min_cancellation_response_time: Duration::from_millis(50),
         },
     }]

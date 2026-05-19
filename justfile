@@ -378,6 +378,7 @@ fuzz-bounded:
     @cargo +nightly fuzz run lsp_navigation -- -max_total_time=60 || echo "  LSP navigation fuzzing complete"
     @cargo +nightly fuzz run parser_integration -- -max_total_time=60 || echo "  Parser integration fuzzing complete"
     @cargo +nightly fuzz run quote_operators -- -max_total_time=60 || echo "  Quote operators fuzzing complete"
+    @cargo +nightly fuzz run semantic_model -- -max_total_time=60 || echo "  Semantic model fuzzing complete"
     @cargo +nightly fuzz run symbol_query_ranking -- -max_total_time=60 || echo "  Symbol query ranking fuzzing complete"
     @cargo +nightly fuzz run substitution_parsing -- -max_total_time=60 || echo "  Substitution fuzzing complete"
     @cargo +nightly fuzz run utf16_roundtrip -- -max_total_time=60 || echo "  UTF-16 roundtrip fuzzing complete"
@@ -440,7 +441,7 @@ doctor-env:
     @echo "=============================================="
     @echo "  perl-lsp developer environment doctor"
     @echo "=============================================="
-    @cargo xtask devex-doctor
+    @{{cargo_safe}} xtask devex-doctor
 
 # Short alias for the developer environment quick check
 devex: doctor-env
@@ -804,7 +805,7 @@ devex-targeted base='' mode='all':
         exit 1
     fi
     echo "Running targeted checks (base=$base, mode={{mode}})..."
-    cargo xtask targeted-checks --base "$base" --mode "{{mode}}"
+    {{cargo_safe}} xtask targeted-checks --base "$base" --mode "{{mode}}"
 
 # Show recent upstream commits using an auto-detected base ref.
 # Helpful in detached or minimal-clone environments where origin/master may not exist.
@@ -2203,6 +2204,7 @@ fuzz-regression duration='30':
     @just fuzz lsp_cancellation_registry {{duration}} || true
     @just fuzz parser_integration {{duration}} || true
     @just fuzz quote_operators {{duration}} || true
+    @just fuzz semantic_model {{duration}} || true
     @just fuzz symbol_query_ranking {{duration}} || true
     @just fuzz substitution_parsing {{duration}} || true
     @just fuzz lsp_navigation {{duration}} || true

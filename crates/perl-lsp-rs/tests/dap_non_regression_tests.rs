@@ -41,7 +41,7 @@ fn test_lsp_features_unaffected_by_dap() -> Result<()> {
 
     // Wait for diagnostics or settle time to ensure file is processed
     std::thread::sleep(Duration::from_millis(500));
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(1000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(1));
 
     // AC1: hover
     let hover_id = 100;
@@ -185,7 +185,7 @@ fn test_lsp_response_time_maintained() -> Result<()> {
     );
 
     std::thread::sleep(Duration::from_millis(500));
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(1000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(1));
 
     // AC2: measure latency across 10 requests, assert p50 < 100ms
     let mut latencies = Vec::with_capacity(10);
@@ -247,8 +247,8 @@ fn test_workspace_navigation_with_dap() -> Result<()> {
     );
 
     // Wait for indexing
-    std::thread::sleep(Duration::from_millis(1000));
-    drain_until_quiet(&server, Duration::from_millis(200), Duration::from_millis(2000));
+    std::thread::sleep(Duration::from_secs(1));
+    drain_until_quiet(&server, Duration::from_millis(200), Duration::from_secs(2));
 
     // Verify workspace symbol search works
     let search_id = 300;
@@ -301,7 +301,7 @@ fn test_lsp_dap_memory_isolation() -> Result<()> {
     );
 
     std::thread::sleep(Duration::from_millis(500));
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(1000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(1));
 
     // Send multiple LSP requests to test responsiveness under load
     for i in 0..50 {
@@ -372,7 +372,7 @@ fn test_lsp_test_pass_rate_100_percent() -> Result<()> {
     );
 
     std::thread::sleep(Duration::from_millis(500));
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(1000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(1));
 
     // Test hover
     let hover_id = 600;
@@ -442,7 +442,7 @@ fn test_concurrent_lsp_dap_sessions() -> Result<()> {
     );
 
     std::thread::sleep(Duration::from_millis(500));
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(1000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(1));
 
     // Send concurrent requests
     let hover_id = 700;
@@ -512,7 +512,7 @@ fn test_incremental_parsing_during_debugging() -> Result<()> {
     );
 
     std::thread::sleep(Duration::from_millis(500));
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(1000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(1));
 
     // Apply ranged (incremental) edit — insert a new line at line 1
     let start_time = Instant::now();
@@ -596,7 +596,7 @@ fn test_performance_baseline_no_regression() -> Result<()> {
     );
 
     std::thread::sleep(Duration::from_millis(500));
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(1000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(1));
 
     let mut latencies = Vec::with_capacity(10);
     for i in 0..10 {

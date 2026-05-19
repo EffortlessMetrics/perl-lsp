@@ -1886,14 +1886,14 @@ fn test_lsp_regression_prevention_ac11() {
                 "position": { "line": 7, "character": 8 }
             }),
             expected_result_type: ResultType::Success,
-            max_duration: Duration::from_millis(1000),
+            max_duration: Duration::from_secs(1),
         },
         RegressionTestCase {
             name: "workspace_symbol_regression_test".to_string(),
             method: "workspace/symbol".to_string(),
             params: json!({ "query": "test" }),
             expected_result_type: ResultType::Success,
-            max_duration: Duration::from_millis(2000),
+            max_duration: Duration::from_secs(2),
         },
     ];
 

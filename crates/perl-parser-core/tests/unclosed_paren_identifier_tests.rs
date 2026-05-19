@@ -133,6 +133,30 @@ fn class_accessor_style() {
 }
 
 #[test]
+fn b_deparse_nested_imported_bare_call_argument() {
+    assert_clean_parse(
+        r#"
+sub quoted_const_str {
+    my ($self, $str) = @_;
+    return single_delim("qq", '"', uninterp(escape_str unback $str), $self);
+}
+"#,
+    );
+}
+
+#[test]
+fn mime_lite_parenthesized_wrap_qualified_class_and_ref_arg() {
+    assert_clean_parse(
+        r#"
+sub as_string {
+    my $buf = "";
+    my $io = (wrap MIME::Lite::IO_Scalar \$buf);
+}
+"#,
+    );
+}
+
+#[test]
 fn test_more_subtest() {
     assert_clean_parse(r#"subtest("widget tests" => sub { ok(1); });"#);
 }
@@ -202,6 +226,13 @@ has(config => (
 fn for_with_map_block() {
     // for my $x (map { $_->name } @items) { ... }
     assert_clean_parse(r#"for my $x (map { $_->name } @items) { print $x }"#);
+}
+
+#[test]
+fn for_with_map_method_expr() {
+    // From Unicode::Collate: map EXPR may be a method call inside a
+    // parenthesized foreach list.
+    assert_clean_parse(r#"for my $vwt (map $self->getWt($_), @$subE) { push @wt, $vwt }"#);
 }
 
 #[test]
@@ -903,6 +934,13 @@ fn caller_zero() {
 fn caller_one() {
     // caller 1 — one level up
     assert_clean_parse(r#"my @c = caller 1;"#);
+}
+
+#[test]
+fn caller_paren_list_assignment() {
+    // From Unicode::Normalize: caller(N) may appear on the RHS of a lexical
+    // list assignment in this bucket's source-backed corpus files.
+    assert_clean_parse(r#"my (undef, $file, $line) = caller(1);"#);
 }
 
 #[test]

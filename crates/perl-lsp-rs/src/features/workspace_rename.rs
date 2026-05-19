@@ -692,8 +692,7 @@ $var;
             kind: SymKind::Sub,
         };
 
-        let edits = build_rename_edit(&idx, &key, "welcome")
-            .expect("main-package rename should not return a hard error");
+        let edits = build_rename_edit(&idx, &key, "welcome")?;
         assert!(
             edits.is_empty(),
             "main-package rename must return empty edits (fall-through to same-file), got: {edits:?}"
