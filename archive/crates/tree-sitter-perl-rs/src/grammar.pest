@@ -192,7 +192,7 @@ until_statement = {
 }
 
 for_statement = {
-    label? ~ "for" ~ !(ASCII_ALPHANUMERIC | "_") ~ (
+    label? ~ for_keyword ~ (
         // C-style for loop
         ("(" ~ (for_init | assignment_expression)? ~ ";" ~ expression? ~ ";" ~ expression? ~ ")" ~ block) |
         // foreach-style for loop with variable declaration
@@ -205,12 +205,15 @@ for_statement = {
 }
 
 foreach_statement = {
-    label? ~ "foreach" ~ !(ASCII_ALPHANUMERIC | "_") ~ (
+    label? ~ foreach_keyword ~ (
         (loop_variable_declarator ~ variable ~ "(" ~ expression ~ ")" ~ block) |
         (variable ~ "(" ~ expression ~ ")" ~ block) |
         ("(" ~ expression ~ ")" ~ block)
     )
 }
+
+for_keyword = @{ "for" ~ !(ASCII_ALPHANUMERIC | "_") }
+foreach_keyword = @{ "foreach" ~ !(ASCII_ALPHANUMERIC | "_") }
 
 loop_variable_declarator = { "my" | "our" | "local" | "state" }
 

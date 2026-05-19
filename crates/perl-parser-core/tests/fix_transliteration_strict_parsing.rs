@@ -38,6 +38,12 @@ fn transliteration_strict_handles_edge_cases() {
 }
 
 #[test]
+fn transliteration_allows_line_comment_between_paired_delimiters() {
+    assert_clean_parse("$x =~ tr{abc} # document replacement list\n {xyz};");
+    assert_clean_parse("$x =~ y[abc] # document replacement list\n {xyz}r;");
+}
+
+#[test]
 fn transliteration_supports_mixed_paired_delimiters() {
     assert_clean_parse(r#"$x =~ tr[a-z]{A-Z}d;"#);
     assert_clean_parse(r#"$x =~ y<abc>[xyz]r;"#);

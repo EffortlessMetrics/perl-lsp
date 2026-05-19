@@ -53,7 +53,7 @@ procfs = "0.18.0"
 
 [dev-dependencies]
 assert_cmd = "2.2.2"
-filetime = "0.2.27"
+filetime = "0.2.29"
 perl-tdd-support = { workspace = true }
 
 [features]

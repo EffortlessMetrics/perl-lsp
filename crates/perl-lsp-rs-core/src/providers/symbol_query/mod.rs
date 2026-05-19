@@ -7,7 +7,7 @@ use std::cmp::Ordering;
 
 /// Returns `true` when a symbol name matches the provided query.
 ///
-/// Matching strategy order:
+/// Matching strategy order after trimming leading/trailing query whitespace:
 /// 1. Empty query (matches everything)
 /// 2. Exact case-insensitive match
 /// 3. Prefix case-insensitive match
@@ -15,6 +15,7 @@ use std::cmp::Ordering;
 /// 5. Subsequence/fuzzy case-insensitive match
 #[must_use]
 pub fn matches_query(name: &str, query: &str) -> bool {
+    let query = query.trim();
     if query.is_empty() {
         return true;
     }
@@ -49,7 +50,7 @@ pub fn matches_query(name: &str, query: &str) -> bool {
 /// length), with lexicographic order as the final tiebreaker.
 #[must_use]
 pub fn compare_names_by_query(a: &str, b: &str, query: &str) -> Ordering {
-    let query_lower = query.to_lowercase();
+    let query_lower = query.trim().to_lowercase();
     let a_lower = a.to_lowercase();
     let b_lower = b.to_lowercase();
 
@@ -117,6 +118,19 @@ mod tests {
         assert!(matches_query("foobar", "bar"));
         assert!(matches_query("foobar", "fb"));
         assert!(!matches_query("alpha", "zq"));
+    }
+
+    #[test]
+    fn query_matching_ignores_outer_whitespace() {
+        assert!(matches_query("foobar", "  foo  "));
+        assert!(matches_query("foobar", "  fb  "));
+        assert!(matches_query("anything", "   "));
+    }
+
+    #[test]
+    fn query_ranking_ignores_outer_whitespace() {
+        let ordered = compare_names_by_query("foo", "foobar", "  foo  ");
+        assert!(ordered.is_lt(), "exact trimmed query match must rank before prefix match");
     }
 
     #[test]
