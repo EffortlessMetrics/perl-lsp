@@ -112,6 +112,7 @@ Decision records, project status, and planning documents.
 - [Receiver-Fact Completion Spec](specs/PLSP-SPEC-0007-receiver-fact-completion.md)
 - [Edit-Producing Provider Safety Spec](specs/PLSP-SPEC-0008-edit-producing-provider-safety.md)
 - [Workspace Trust Report Spec](specs/PLSP-SPEC-0009-workspace-trust-report.md)
+- [User-Facing Trust Surfaces Spec](specs/PLSP-SPEC-0012-user-facing-trust-surfaces.md)
 - [Receiver Expression Facts Spec](specs/PLSP-SPEC-0005-receiver-expression-facts.md) and [Receiver Facts Implementation Plan](project/RECEIVER_FACTS_IMPLEMENTATION_PLAN.md)
 - [Project Milestones](project/MILESTONES.md)
 - [Feature Governance](project/FEATURE_GOVERNANCE.md)
