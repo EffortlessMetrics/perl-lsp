@@ -226,6 +226,8 @@ pub struct TypeInferenceEngine {
     builtins: HashMap<String, PerlType>,
     /// Framework accessor return facts keyed by `(package, accessor)`.
     accessor_return_facts: HashMap<(String, String), TypeFact>,
+    /// Narrow source-backed method return facts keyed by `(package, method)`.
+    method_return_facts: HashMap<(String, String), TypeFact>,
     /// Type aliases from use statements
     _type_aliases: HashMap<String, PerlType>,
 }
@@ -244,6 +246,7 @@ impl TypeInferenceEngine {
             constraints: Vec::new(),
             builtins: HashMap::new(),
             accessor_return_facts: HashMap::new(),
+            method_return_facts: HashMap::new(),
             _type_aliases: HashMap::new(),
         };
 
@@ -321,6 +324,7 @@ impl TypeInferenceEngine {
     /// Infer types for an AST
     pub fn infer(&mut self, ast: &Node) -> Result<PerlType, Vec<TypeConstraint>> {
         self.refresh_accessor_return_facts(ast);
+        self.refresh_method_return_facts(ast);
 
         // We need to use a temporary environment that has global_env as parent,
         // or just use global_env directly if we want to persist top-level declarations?
@@ -808,6 +812,11 @@ impl TypeInferenceEngine {
         }
     }
 
+    fn refresh_method_return_facts(&mut self, ast: &Node) {
+        self.method_return_facts.clear();
+        collect_method_return_facts(ast, None, &mut self.method_return_facts);
+    }
+
     fn method_call_expr_fact(
         &mut self,
         object: &Node,
@@ -821,9 +830,11 @@ impl TypeInferenceEngine {
             return fact;
         };
 
+        let key = (package, method.to_string());
         self.accessor_return_facts
-            .get(&(package, method.to_string()))
+            .get(&key)
             .cloned()
+            .or_else(|| self.method_return_facts.get(&key).cloned())
             .unwrap_or_else(TypeFact::unknown)
     }
 
@@ -1237,6 +1248,95 @@ fn accessor_return_fact(method: &str, field: &str, package: &str) -> TypeFact {
     });
     fact.shape = Some(ShapeFact::Object(ObjectShape::new(package.to_string(), BTreeMap::new())));
     fact
+}
+
+fn method_return_fact(method: &str, package: &str) -> TypeFact {
+    let mut fact = fact_with_evidence(
+        PerlType::Any,
+        Confidence::Medium,
+        TypeEvidence::MethodReturn { method: method.to_string(), package: package.to_string() },
+    );
+    fact.evidence.push(TypeEvidence::ConstructorCall { package: package.to_string() });
+    fact.shape = Some(ShapeFact::Object(ObjectShape::new(package.to_string(), BTreeMap::new())));
+    fact
+}
+
+fn collect_method_return_facts(
+    node: &Node,
+    package: Option<&str>,
+    out: &mut HashMap<(String, String), TypeFact>,
+) {
+    match &node.kind {
+        NodeKind::Program { statements } | NodeKind::Block { statements } => {
+            collect_method_return_facts_from_statements(statements, package, out);
+        }
+        NodeKind::Package { name, block: Some(block), .. } => {
+            collect_method_return_facts(block, Some(name.as_str()), out);
+        }
+        NodeKind::Subroutine { name: Some(method), body, .. } => {
+            if let (Some(package), Some(fact)) =
+                (package, static_method_body_return_fact(method, body))
+            {
+                out.insert((package.to_string(), method.clone()), fact);
+            }
+        }
+        NodeKind::Method { name, body, .. } => {
+            if let (Some(package), Some(fact)) =
+                (package, static_method_body_return_fact(name, body))
+            {
+                out.insert((package.to_string(), name.clone()), fact);
+            }
+        }
+        _ => {
+            for child in node.children() {
+                collect_method_return_facts(child, package, out);
+            }
+        }
+    }
+}
+
+fn collect_method_return_facts_from_statements(
+    statements: &[Node],
+    package: Option<&str>,
+    out: &mut HashMap<(String, String), TypeFact>,
+) {
+    let mut current_package = package.map(ToOwned::to_owned);
+    for statement in statements {
+        match &statement.kind {
+            NodeKind::Package { name, block: None, .. } => {
+                current_package = Some(name.clone());
+            }
+            NodeKind::Package { name, block: Some(block), .. } => {
+                collect_method_return_facts(block, Some(name.as_str()), out);
+            }
+            _ => {
+                collect_method_return_facts(statement, current_package.as_deref(), out);
+            }
+        }
+    }
+}
+
+fn static_method_body_return_fact(method: &str, body: &Node) -> Option<TypeFact> {
+    let NodeKind::Block { statements } = &body.kind else {
+        return None;
+    };
+    let [statement] = statements.as_slice() else {
+        return None;
+    };
+    static_method_return_expr_fact(method, statement)
+}
+
+fn static_method_return_expr_fact(method: &str, node: &Node) -> Option<TypeFact> {
+    match &node.kind {
+        NodeKind::ExpressionStatement { expression } => {
+            static_method_return_expr_fact(method, expression)
+        }
+        NodeKind::Return { value: Some(value) } => static_method_return_expr_fact(method, value),
+        NodeKind::MethodCall { object, method: called_method, .. } if called_method == "new" => {
+            static_package_node(object).map(|package| method_return_fact(method, &package))
+        }
+        _ => None,
+    }
 }
 
 fn attribute_generates_reader(mode: Option<AccessorType>) -> bool {

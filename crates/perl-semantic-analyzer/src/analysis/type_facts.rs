@@ -187,6 +187,13 @@ pub enum TypeEvidence {
         /// Backing field or attribute name.
         field: String,
     },
+    /// Method-return evidence, such as `$self->db` returning a constructed package.
+    MethodReturn {
+        /// Method name.
+        method: String,
+        /// Returned package shape.
+        package: String,
+    },
     /// Moose/Moo `isa` evidence for an attribute.
     MooseIsa {
         /// Attribute name.
