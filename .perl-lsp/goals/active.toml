@@ -17,17 +17,14 @@ specs = [
   "docs/specs/PLSP-SPEC-0008-edit-producing-provider-safety.md",
   "docs/specs/PLSP-SPEC-0009-workspace-trust-report.md",
   "docs/specs/PLSP-SPEC-0010-support-claim-map.md",
+  "docs/specs/PLSP-SPEC-0011-trust-lane-ci-routing.md",
+  "docs/specs/PLSP-SPEC-0012-user-facing-trust-surfaces.md",
 ]
 
 adrs = [
   "docs/adr/PLSP-ADR-0001-generated-status-is-control-plane.md",
   "docs/adr/PLSP-ADR-0002-confidence-before-cutover.md",
   "docs/adr/PLSP-ADR-0003-preview-before-edit.md",
-]
-
-in_flight_contracts = [
-  "PR #9478: trust-lane CI routing contract (PLSP-SPEC-0011)",
-  "PR #9481: user-facing trust surfaces contract (PLSP-SPEC-0012)",
 ]
 
 needed_contracts = []
@@ -70,8 +67,8 @@ status_docs = [
 
 [[work_item]]
 id = "editor-trust-user-facing-contracts"
-status = "in_progress"
-spec = "PR #9481: user-facing trust surfaces contract"
+status = "completed"
+spec = "docs/specs/PLSP-SPEC-0012-user-facing-trust-surfaces.md"
 plan = "plans/editor-trust-ux-closeout/implementation-plan.md#work-item-editor-trust-user-facing-contracts"
 current_pointer = "docs/project/status/real_perl_editor_trust_v1.md"
 claim_boundary = "Spec and docs work only; no provider behavior or support-tier promotion."
@@ -100,7 +97,7 @@ status = "completed"
 spec = "docs/specs/PLSP-SPEC-0009-workspace-trust-report.md"
 plan = "plans/editor-trust-ux-closeout/implementation-plan.md#work-item-workspace-trust-schema-snapshots"
 current_pointer = "docs/project/status/SUPPORT_TIERS.md"
-receipt = "PR #9463: test(ux): snapshot workspace trust report schema"
+receipt = "crates/perl-lsp-rs/tests/lsp_execute_command_tests.rs::test_execute_command_workspace_trust_report_schema_snapshot"
 claim_boundary = "Report existing state only; do not probe Perl, run perldoc, launch DAP, scan files, or promote tiers."
 commands = [
   "cargo test -p perl-lsp-rs --test lsp_execute_command_tests test_execute_command_workspace_trust_report --profile agent --locked -- --nocapture --test-threads=1",
@@ -137,8 +134,8 @@ commands = [
 
 [[work_item]]
 id = "trust-lane-ci-routing"
-status = "planned"
-spec = "PR #9478: trust-lane CI routing contract"
+status = "ready"
+spec = "docs/specs/PLSP-SPEC-0011-trust-lane-ci-routing.md"
 plan = "plans/editor-trust-ux-closeout/implementation-plan.md#work-item-trust-lane-ci-routing"
 current_pointer = "docs/ci/pr-plan.md"
 claim_boundary = "CI routing may classify proof cost; it does not prove provider behavior or promote support claims."

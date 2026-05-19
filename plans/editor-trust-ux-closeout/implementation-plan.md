@@ -18,11 +18,6 @@ user-facing editor-trust product. It does not reopen broad parser bucket work
 while generated parser status lists no current nonzero raw bucket, and it does
 not promote provider behavior from docs or receipt-only PRs.
 
-Current in-flight contract PRs:
-
-- #9478: trust-lane CI routing contract (`PLSP-SPEC-0011`)
-- #9481: user-facing trust surfaces contract (`PLSP-SPEC-0012`)
-
 Current merged contract anchors:
 
 - [PLSP-SPEC-0002](../../docs/specs/PLSP-SPEC-0002-provider-confidence-receipts.md)
@@ -32,6 +27,8 @@ Current merged contract anchors:
 - [PLSP-SPEC-0008](../../docs/specs/PLSP-SPEC-0008-edit-producing-provider-safety.md)
 - [PLSP-SPEC-0009](../../docs/specs/PLSP-SPEC-0009-workspace-trust-report.md)
 - [PLSP-SPEC-0010](../../docs/specs/PLSP-SPEC-0010-support-claim-map.md)
+- [PLSP-SPEC-0011](../../docs/specs/PLSP-SPEC-0011-trust-lane-ci-routing.md)
+- [PLSP-SPEC-0012](../../docs/specs/PLSP-SPEC-0012-user-facing-trust-surfaces.md)
 - [PLSP-ADR-0001](../../docs/adr/PLSP-ADR-0001-generated-status-is-control-plane.md)
 - [PLSP-ADR-0002](../../docs/adr/PLSP-ADR-0002-confidence-before-cutover.md)
 - [PLSP-ADR-0003](../../docs/adr/PLSP-ADR-0003-preview-before-edit.md)
@@ -49,15 +46,15 @@ Status owners:
 
 ## Work item: editor-trust-user-facing-contracts
 
-Status: in progress
+Status: completed
 Linked proposal: [PLSP-PROP-0001](../../docs/proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
-Linked spec: PR #9481 user-facing trust surfaces contract
+Linked specs: [PLSP-SPEC-0011](../../docs/specs/PLSP-SPEC-0011-trust-lane-ci-routing.md), [PLSP-SPEC-0012](../../docs/specs/PLSP-SPEC-0012-user-facing-trust-surfaces.md)
 Blocks: user-facing trust docs, command documentation, setup troubleshooting
-Blocked by: user-facing trust surfaces contract review
+Blocked by: none
 
 Goal
 
-Encode the remaining user-facing trust contracts in durable specs and ADRs so
+Encode the remaining user-facing trust contracts in durable specs so
 agents do not need chat context to know what explanations, receipts, previews,
 workspace trust, support claims, and CI routing may claim.
 
@@ -87,7 +84,7 @@ git diff --check
 
 Rollback
 
-Revert the affected spec or ADR PR. If a contract is wrong, leave the active
+Revert the affected spec PR. If a contract is wrong, leave the active
 goal in place and mark the specific work item blocked until a replacement
 contract lands.
 
@@ -97,7 +94,7 @@ Status: ready
 Linked proposal: [PLSP-PROP-0001](../../docs/proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
 Linked spec: [PLSP-SPEC-0002](../../docs/specs/PLSP-SPEC-0002-provider-confidence-receipts.md)
 Blocks: README claim refresh, VS Code command docs
-Blocked by: user-facing trust surface contract
+Blocked by: none
 
 Goal
 
@@ -140,7 +137,7 @@ Status: completed
 Linked proposal: [PLSP-PROP-0001](../../docs/proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
 Linked spec: [PLSP-SPEC-0009](../../docs/specs/PLSP-SPEC-0009-workspace-trust-report.md)
 Blocks: setup troubleshooting docs, support-front-door docs
-Receipt: PR #9463 `test(ux): snapshot workspace trust report schema`
+Receipt: `crates/perl-lsp-rs/tests/lsp_execute_command_tests.rs::test_execute_command_workspace_trust_report_schema_snapshot`
 
 Goal
 
@@ -268,11 +265,11 @@ revert live behavior before changing docs.
 
 ## Work item: trust-lane-ci-routing
 
-Status: planned
+Status: ready
 Linked proposal: [PLSP-PROP-0001](../../docs/proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
-Linked spec: PR #9478 trust-lane CI routing contract
+Linked spec: [PLSP-SPEC-0011](../../docs/specs/PLSP-SPEC-0011-trust-lane-ci-routing.md)
 Blocks: cheap parser fixture lane, hosted CI exposure estimate
-Blocked by: trust-lane CI routing contract review
+Blocked by: none
 
 Goal
 
