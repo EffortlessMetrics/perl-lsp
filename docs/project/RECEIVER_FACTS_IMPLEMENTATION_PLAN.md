@@ -1,6 +1,6 @@
 # Receiver Facts Implementation Plan
 
-Status: partial substrate landed; completion cutover blocked
+Status: partial substrate plus constructor/plain-hash expression facts landed; completion cutover blocked
 Owner: perl-lsp maintainers
 Spec: [PLSP-SPEC-0005: Receiver expression facts](../specs/PLSP-SPEC-0005-receiver-expression-facts.md)
 Related proposal: [PLSP-PROP-0001: Real Perl editor trust](../proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
@@ -30,9 +30,11 @@ facts-only semantic substrate. It adds the rich fact model, a parallel
 type-environment fact map, and a receiver-fact extractor over existing
 `TypeFact` and `ShapeFact` evidence.
 
-That foundation does not yet add source-level expression inference and does not
-change completion candidates. Current detailed status lives in
-[receiver_facts.md](status/receiver_facts.md). The active claim boundary remains:
+That foundation has started source-level expression inference for constructor
+calls, plain hash literals, plain hash slot assignments, static plain hash slot
+reads, and dynamic plain hash keys. It still does not change completion
+candidates. Current detailed status lives in [receiver_facts.md](status/receiver_facts.md).
+The active claim boundary remains:
 
 ```text
 semantic substrate only
@@ -100,6 +102,10 @@ lookup for existing variable types.
 ```
 
 ### PR 2 — Expression fact inference for constructors and plain hashes
+
+**Status:** landed as facts-only substrate for constructor calls, plain hash
+literals, plain hash slot assignments, static plain hash slot reads, and dynamic
+plain hash keys. Provider output is unchanged.
 
 **Primary files**
 
