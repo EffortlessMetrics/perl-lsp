@@ -10,27 +10,15 @@
 //! |------|----------|-------------|
 //! | `PL409` | Warning | `goto LABEL` references a label that is not defined in the file |
 
-use super::super::internal_types::{Diagnostic, RelatedInformation};
-use perl_diagnostics::codes::DiagnosticCode;
-use perl_diagnostics::codes::DiagnosticSeverity;
+mod diagnostic;
+mod labels;
+mod target;
+
+use super::super::internal_types::Diagnostic;
 use perl_parser_core::ast::{Node, NodeKind};
-use perl_semantic_analyzer::symbol::{SymbolKind, SymbolTable};
+use perl_semantic_analyzer::symbol::SymbolTable;
 
 use super::super::walker::walk_node;
-
-fn has_label(symbol_table: &SymbolTable, label: &str) -> bool {
-    symbol_table
-        .symbols
-        .get(label)
-        .is_some_and(|symbols| symbols.iter().any(|symbol| symbol.kind == SymbolKind::Label))
-}
-
-fn goto_target_is_plain_label(target: &Node) -> Option<&str> {
-    match &target.kind {
-        NodeKind::Identifier { name } => Some(name.as_str()),
-        _ => None,
-    }
-}
 
 /// Warn when a `goto LABEL` target does not have a matching label symbol.
 pub fn check_goto_labels(
@@ -43,26 +31,15 @@ pub fn check_goto_labels(
             return;
         };
 
-        let Some(label) = goto_target_is_plain_label(target) else {
+        let Some(label) = target::plain_label_name(target) else {
             return;
         };
 
-        if has_label(symbol_table, label) {
+        if labels::has_label(symbol_table, label) {
             return;
         }
 
-        diagnostics.push(Diagnostic {
-            range: (target.location.start, target.location.end),
-            severity: DiagnosticSeverity::Warning,
-            code: Some(DiagnosticCode::GotoUndefinedLabel.as_str().to_string()),
-            message: format!("Goto label '{label}' is not defined in this file"),
-            related_information: vec![RelatedInformation {
-                location: (target.location.start, target.location.end),
-                message: "Define the label or use a dynamic goto form only when the target is known at runtime.".to_string(),
-            }],
-            tags: Vec::new(),
-            suggestion: Some(format!("Add a '{label}:' label or remove the goto")),
-        });
+        diagnostics.push(diagnostic::undefined_label(target, label));
     });
 }
 
