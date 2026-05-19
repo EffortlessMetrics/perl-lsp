@@ -163,6 +163,70 @@ fn hashref_slot_assignment_updates_later_receiver_fact() -> Result<(), String> {
 }
 
 #[test]
+fn bless_hash_field_resolves_medium_confidence_receiver_fact() -> Result<(), String> {
+    let code =
+        "my $self = bless { db => MyApp::DB->new }, 'MyApp::Service'; $self->{db}->connect;";
+    let ast = parse_ast(code)?;
+    let mut engine = TypeInferenceEngine::new();
+
+    engine.infer(&ast).map_err(|err| format!("inference failed: {err:?}"))?;
+
+    let self_fact = engine.get_fact_at("self").ok_or_else(|| "missing self fact".to_string())?;
+    assert_eq!(self_fact.ty, PerlType::Object("MyApp::Service".to_string()));
+    assert_eq!(self_fact.confidence, Confidence::Medium);
+    let ShapeFact::Object(shape) =
+        self_fact.shape.as_ref().ok_or_else(|| "missing object shape".to_string())?
+    else {
+        return Err("self fact should carry object shape".to_string());
+    };
+    assert!(shape.fields.contains_key("db"));
+    assert!(self_fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::BlessLiteral { package } if package == "MyApp::Service")
+    }));
+
+    let receiver = method_receiver(&ast, "connect")?;
+    let fact = engine.infer_expr_fact(receiver);
+
+    assert_eq!(fact.ty, PerlType::Object("MyApp::DB".to_string()));
+    assert_eq!(fact.confidence, Confidence::Medium);
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::ConstructorCall { package } if package == "MyApp::DB")
+    }));
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::BlessLiteral { package } if package == "MyApp::Service")
+    }));
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::HashRefSlot { base, key } if base == "$self" && key == "db")
+    }));
+    Ok(())
+}
+
+#[test]
+fn dynamic_bless_class_does_not_expose_exact_object_field_fact() -> Result<(), String> {
+    let code = "my $class = 'MyApp::Service'; my $self = bless { db => MyApp::DB->new }, $class; $self->{db}->connect;";
+    let ast = parse_ast(code)?;
+    let mut engine = TypeInferenceEngine::new();
+
+    engine.infer(&ast).map_err(|err| format!("inference failed: {err:?}"))?;
+
+    let self_fact = engine.get_fact_at("self").ok_or_else(|| "missing self fact".to_string())?;
+    assert_eq!(self_fact.ty, PerlType::Any);
+    assert_eq!(self_fact.confidence, Confidence::Low);
+    assert_eq!(self_fact.dynamic_boundary, Some(DynamicBoundary::DynamicBlessClass));
+
+    let receiver = method_receiver(&ast, "connect")?;
+    let fact = engine.infer_expr_fact(receiver);
+
+    assert_eq!(fact.ty, PerlType::Any);
+    assert_eq!(fact.confidence, Confidence::Low);
+    assert_eq!(fact.dynamic_boundary, Some(DynamicBoundary::DynamicBlessClass));
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::HashRefSlot { base, key } if base == "$self" && key == "db")
+    }));
+    Ok(())
+}
+
+#[test]
 fn dynamic_plain_hash_key_fails_closed() -> Result<(), String> {
     let code = "my %services = (db => MyApp::DB->new); $services{$name}->connect;";
     let ast = parse_ast(code)?;

@@ -18,9 +18,10 @@ completion consumer are implemented or partially implemented as tracked in
 
 Current implementation state and next source-shape work live in the status doc
 and receiver-facts implementation plan, not in this spec. Hashref literal and
-slot-assignment inference are fixture-backed facts-only substrate. Bless-field
-facts, accessor-return facts, and chained method-return facts remain bounded by
-their own future fixtures and provider receipts.
+slot-assignment inference are fixture-backed facts-only substrate. Static
+`bless { field => Package->new }, 'Class'` field inference is fixture-backed as
+medium-confidence substrate. Accessor-return facts and chained method-return
+facts remain bounded by their own future fixtures and provider receipts.
 
 ## Contract
 
