@@ -122,7 +122,7 @@ support_receipt = "docs/project/status/SUPPORT_TIERS.md"
 cutover_receipt = "docs/project/status/provider_cutover.md"
 confidence_receipt = "docs/project/status/provider_confidence_matrix.md"
 pilot_receipt = "crates/perl-lsp-rs-core/src/providers/completion/completion/tests.rs"
-claim_boundary = "Facts and receipts before live completion; unknown and dynamic receivers preserve legacy fallback."
+claim_boundary = "Narrow source-backed receiver completion pilot only; unknown and dynamic receivers preserve legacy fallback."
 commands = [
   "cargo test -p perl-semantic-analyzer --lib receiver_fact --profile agent --locked -- --nocapture",
   "cargo test -p perl-lsp-rs-core --lib completion --profile agent --locked -- --nocapture",
