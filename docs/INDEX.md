@@ -114,7 +114,7 @@ Decision records, project status, and planning documents.
 - [Workspace Trust Report Spec](specs/PLSP-SPEC-0009-workspace-trust-report.md)
 - [Support Claim Map Spec](specs/PLSP-SPEC-0010-support-claim-map.md)
 - [User-Facing Trust Surfaces Spec](specs/PLSP-SPEC-0012-user-facing-trust-surfaces.md)
-- [Receiver Expression Facts Spec](specs/PLSP-SPEC-0005-receiver-expression-facts.md) and [Receiver Facts Implementation Plan](project/RECEIVER_FACTS_IMPLEMENTATION_PLAN.md)
+- [Receiver Expression Facts Spec](specs/PLSP-SPEC-0005-receiver-expression-facts.md), [Receiver Facts Implementation Plan](project/RECEIVER_FACTS_IMPLEMENTATION_PLAN.md), and [Receiver Facts Status](project/status/receiver_facts.md)
 - [Project Milestones](project/MILESTONES.md)
 - [Feature Governance](project/FEATURE_GOVERNANCE.md)
 - [Metric Stack](project/metrics/README.md) — contributor-facing summary of the layered scorecard model and the ratchet
