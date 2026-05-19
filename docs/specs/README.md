@@ -26,6 +26,7 @@ generated sections.
 - [PLSP-SPEC-0004: Corpus receipt freshness](PLSP-SPEC-0004-corpus-receipt-freshness.md)
 - [PLSP-SPEC-0005: Receiver expression facts](PLSP-SPEC-0005-receiver-expression-facts.md)
 - [PLSP-SPEC-0006: PR queue disposition](PLSP-SPEC-0006-pr-queue-disposition.md)
+- [PLSP-SPEC-0010: Trust-lane CI routing](PLSP-SPEC-0010-trust-lane-ci-routing.md)
 
 ## Acceptance and Proof
 
