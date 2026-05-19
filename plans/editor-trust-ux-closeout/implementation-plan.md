@@ -277,11 +277,17 @@ revert live behavior before changing docs.
 
 ## Work item: trust-lane-ci-routing
 
-Status: ready
+Status: completed
 Linked proposal: [PLSP-PROP-0001](../../docs/proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
 Linked spec: [PLSP-SPEC-0011](../../docs/specs/PLSP-SPEC-0011-trust-lane-ci-routing.md)
 Blocks: cheap parser fixture lane, hosted CI exposure estimate
 Blocked by: none
+Receipt: [PR Plan trust-lane summary](../../docs/ci/pr-plan.md)
+Supporting receipts:
+[trust-lane policy](../../policy/trust-lanes.toml),
+[PR Plan workflow](../../.github/workflows/pr-plan.yml),
+[PR Plan classifier](../../scripts/ci/pr_plan.py),
+[trust-lane validator](../../scripts/ci/validate_trust_lanes.py)
 
 Goal
 
@@ -303,9 +309,19 @@ Acceptance
 PR summary or receipt names the trust-lane class, changed surface, required
 proof, skipped-by-policy checks, hosted-CI estimate, and widening triggers.
 
+Current implementation status
+
+The advisory PR Plan summary reads `policy/trust-lanes.toml`, classifies
+changed files, emits a `trust_lanes` block in `ci-plan.json`, and renders the
+trust-lane class, required proof, skipped-by-policy checks, support claim
+impact, and widening triggers in the step summary. This is receipt-producing CI
+metadata only; it does not skip branch protection, prove provider behavior, or
+promote support tiers.
+
 Proof commands
 
 ```bash
+python scripts/ci/validate_trust_lanes.py --strict
 python scripts/ci/validate_risk_packs.py --strict
 cargo xtask check-support-claims
 git diff --check
