@@ -927,16 +927,15 @@ pub(super) fn detail_with_evidence(base: String, evidence: &ReceiverEvidence) ->
 
 /// Classify the receiver of a `->` method-completion call site.
 ///
-/// Tries the type-inference engine first (matching the historical
-/// precedence of `infer_receiver_package_from_type_engine`), then falls
-/// back to text-pattern receiver inference. Returns
+/// Tries exact source-backed receiver facts first, then falls back to the
+/// historical type-engine and text-pattern receiver inference paths. Returns
 /// [`ReceiverEvidence::Unknown`] when no evidence is found.
 pub(super) fn classify_receiver(
     context: &CompletionContext,
     source: &str,
     type_engine: Option<&TypeInferenceEngine>,
 ) -> ReceiverEvidence {
-    if let Some(evidence) = source_backed_receiver_fact_evidence(context, type_engine) {
+    if let Some(evidence) = source_backed_receiver_fact_evidence(context, source, type_engine) {
         return evidence;
     }
     if let Some(pkg) = type_engine_receiver(context, type_engine) {
@@ -947,8 +946,14 @@ pub(super) fn classify_receiver(
 
 fn source_backed_receiver_fact_evidence(
     context: &CompletionContext,
+    source: &str,
     type_engine: Option<&TypeInferenceEngine>,
 ) -> Option<ReceiverEvidence> {
+    let current_prefix = source.get(context.prefix_start..context.position)?;
+    if current_prefix != context.prefix.as_str() {
+        return None;
+    }
+
     let receiver_source = context.prefix.strip_suffix("->")?.trim();
     if receiver_source.is_empty() {
         return None;
