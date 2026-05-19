@@ -15,8 +15,6 @@ specs = [
   "docs/specs/PLSP-SPEC-0002-provider-confidence-receipts.md",
   "docs/specs/PLSP-SPEC-0003-real-workspace-editor-baseline.md",
   "docs/specs/PLSP-SPEC-0004-corpus-receipt-freshness.md",
-  "docs/specs/PLSP-SPEC-0005-receiver-expression-facts.md",
-  "docs/specs/PLSP-SPEC-0006-pr-queue-disposition.md",
 ]
 
 adrs = [
@@ -50,29 +48,10 @@ status_docs = [
   "docs/project/status/parser.md",
   "docs/project/status/provider_cutover.md",
   "docs/project/status/provider_confidence_matrix.md",
-  "docs/project/status/receiver_facts.md",
   "docs/project/status/SUPPORT_TIERS.md",
   "docs/project/status/ux_capability_dashboard.md",
   "docs/project/status/semantic_scorecard.md",
   "docs/project/status/semantic_shadow_compare.md",
-]
-
-[[work_item]]
-id = "receiver-facts-foundation"
-status = "partial"
-spec = "docs/specs/PLSP-SPEC-0005-receiver-expression-facts.md"
-adr = "docs/adr/PLSP-ADR-0002-confidence-before-cutover.md"
-plan = "docs/project/RECEIVER_FACTS_IMPLEMENTATION_PLAN.md"
-current_pointer = "docs/project/status/receiver_facts.md"
-receipt = "https://github.com/EffortlessMetrics/perl-lsp/pull/9468"
-claim_boundary = "Semantic substrate only; no completion candidate behavior change and no support-tier promotion."
-commands = [
-  "MIN_FREE_GB=20 MAX_USED_PCT=95 ./scripts/cargo-safe test -p perl-semantic-analyzer --test type_facts --profile agent --locked",
-  "MIN_FREE_GB=20 MAX_USED_PCT=95 ./scripts/cargo-safe test -p perl-semantic-analyzer --lib receiver_facts --profile agent --locked -- --nocapture",
-  "MIN_FREE_GB=20 MAX_USED_PCT=95 ./scripts/cargo-safe check --all-targets -p perl-semantic-analyzer --profile agent --locked",
-  "MIN_FREE_GB=20 MAX_USED_PCT=95 ./scripts/cargo-safe clippy -p perl-semantic-analyzer --profile agent --locked -- -D warnings -A missing_docs",
-  "MIN_FREE_GB=20 MAX_USED_PCT=95 ./scripts/cargo-safe xtask fmt",
-  "git diff --check",
 ]
 
 [[work_item]]
