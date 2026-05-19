@@ -4,6 +4,7 @@
 //! parser property tests can spend cases on AST invariants instead of filtering
 //! out invalid random text.
 
+mod chars;
 mod expressions;
 mod identifiers;
 mod literals;

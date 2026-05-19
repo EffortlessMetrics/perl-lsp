@@ -20,6 +20,8 @@ pub mod index;
 /// Package graph edge extraction from inheritance and role-composition patterns.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod package_graph_extractor;
+/// Receiver facts for trust-bounded method completion.
+pub mod receiver_facts;
 /// Scope analysis for variable and subroutine resolution.
 #[allow(missing_docs)]
 pub mod scope_analyzer;
