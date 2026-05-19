@@ -14,24 +14,23 @@ specs = [
   "docs/specs/PLSP-SPEC-0003-real-workspace-editor-baseline.md",
   "docs/specs/PLSP-SPEC-0005-receiver-expression-facts.md",
   "docs/specs/PLSP-SPEC-0007-receiver-fact-completion.md",
+  "docs/specs/PLSP-SPEC-0008-edit-producing-provider-safety.md",
+  "docs/specs/PLSP-SPEC-0009-workspace-trust-report.md",
 ]
 
 adrs = [
   "docs/adr/PLSP-ADR-0001-generated-status-is-control-plane.md",
   "docs/adr/PLSP-ADR-0002-confidence-before-cutover.md",
+  "docs/adr/PLSP-ADR-0003-preview-before-edit.md",
 ]
 
 in_flight_contracts = [
-  "PR #9474: edit-producing provider safety",
-  "PR #9475: broad Real Perl Editor Trust v1 boundary draft; review for overlap before merge",
-  "PR #9476: workspace trust report contract",
-  "PR #9477: support claim map contract",
-  "PR #9478: trust-lane CI routing contract",
+  "PR #9477: support claim map contract (PLSP-SPEC-0010)",
+  "PR #9478: trust-lane CI routing contract (PLSP-SPEC-0011)",
 ]
 
 needed_contracts = [
   "user-facing trust surfaces contract",
-  "preview-before-edit ADR if not covered by the edit-producing provider safety PR",
 ]
 
 objective = """
@@ -98,10 +97,11 @@ commands = [
 
 [[work_item]]
 id = "workspace-trust-schema-snapshots"
-status = "ready"
-spec = "PR #9476: workspace trust report contract"
+status = "completed"
+spec = "docs/specs/PLSP-SPEC-0009-workspace-trust-report.md"
 plan = "plans/editor-trust-ux-closeout/implementation-plan.md#work-item-workspace-trust-schema-snapshots"
 current_pointer = "docs/project/status/SUPPORT_TIERS.md"
+receipt = "PR #9463: test(ux): snapshot workspace trust report schema"
 claim_boundary = "Report existing state only; do not probe Perl, run perldoc, launch DAP, scan files, or promote tiers."
 commands = [
   "cargo test -p perl-lsp-rs --test lsp_execute_command_tests test_execute_command_workspace_trust_report --profile agent --locked -- --nocapture --test-threads=1",
@@ -125,7 +125,7 @@ commands = [
 [[work_item]]
 id = "edit-provider-safety-refresh"
 status = "planned"
-spec = "PR #9474: edit-producing provider safety"
+spec = "docs/specs/PLSP-SPEC-0008-edit-producing-provider-safety.md"
 plan = "plans/editor-trust-ux-closeout/implementation-plan.md#work-item-edit-provider-safety-refresh"
 current_pointer = "docs/project/status/provider_confidence_matrix.md"
 claim_boundary = "Rename and safe-delete remain narrow pilots until false-allow, freshness, blocker, and rollback proof justify more."

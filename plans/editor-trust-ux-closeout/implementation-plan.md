@@ -20,12 +20,8 @@ not promote provider behavior from docs or receipt-only PRs.
 
 Current in-flight contract PRs:
 
-- #9474: edit-producing provider safety
-- #9475: broad Real Perl Editor Trust v1 boundary draft; review for overlap
-  before merge
-- #9476: workspace trust report contract
-- #9477: support claim map contract
-- #9478: trust-lane CI routing contract
+- #9477: support claim map contract (`PLSP-SPEC-0010`)
+- #9478: trust-lane CI routing contract (`PLSP-SPEC-0011`)
 
 Current merged contract anchors:
 
@@ -33,8 +29,11 @@ Current merged contract anchors:
 - [PLSP-SPEC-0003](../../docs/specs/PLSP-SPEC-0003-real-workspace-editor-baseline.md)
 - [PLSP-SPEC-0005](../../docs/specs/PLSP-SPEC-0005-receiver-expression-facts.md)
 - [PLSP-SPEC-0007](../../docs/specs/PLSP-SPEC-0007-receiver-fact-completion.md)
+- [PLSP-SPEC-0008](../../docs/specs/PLSP-SPEC-0008-edit-producing-provider-safety.md)
+- [PLSP-SPEC-0009](../../docs/specs/PLSP-SPEC-0009-workspace-trust-report.md)
 - [PLSP-ADR-0001](../../docs/adr/PLSP-ADR-0001-generated-status-is-control-plane.md)
 - [PLSP-ADR-0002](../../docs/adr/PLSP-ADR-0002-confidence-before-cutover.md)
+- [PLSP-ADR-0003](../../docs/adr/PLSP-ADR-0003-preview-before-edit.md)
 
 Status owners:
 
@@ -136,11 +135,11 @@ claim changes.
 
 ## Work item: workspace-trust-schema-snapshots
 
-Status: ready
+Status: completed
 Linked proposal: [PLSP-PROP-0001](../../docs/proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
-Linked spec: PR #9476 workspace trust report contract
+Linked spec: [PLSP-SPEC-0009](../../docs/specs/PLSP-SPEC-0009-workspace-trust-report.md)
 Blocks: setup troubleshooting docs, support-front-door docs
-Blocked by: workspace trust report contract review
+Receipt: PR #9463 `test(ux): snapshot workspace trust report schema`
 
 Goal
 
@@ -225,9 +224,9 @@ the pilot first and keep facts-only evidence for follow-up.
 
 Status: planned
 Linked proposal: [PLSP-PROP-0001](../../docs/proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
-Linked spec: PR #9474 edit-producing provider safety
+Linked spec: [PLSP-SPEC-0008](../../docs/specs/PLSP-SPEC-0008-edit-producing-provider-safety.md)
 Blocks: rename/safe-delete support review
-Blocked by: edit-producing provider safety contract review
+Blocked by: provider fact or workspace-index changes that require refreshed edit-safety proof
 
 Goal
 
