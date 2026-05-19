@@ -19,11 +19,15 @@ The repository already has advisory CI economics and risk-pack infrastructure:
 - [CI lanes policy](../../policy/ci-lanes.toml)
 - [CI risk packs policy](../../policy/ci-risk-packs.toml)
 - [CI lane whitelist](../../policy/ci-lane-whitelist.toml)
+- [trust-lane classification policy](../../policy/trust-lanes.toml)
 
 This spec defines the trust-lane contract those surfaces must satisfy before
 trust-lane routing can become a review or CI decision boundary. Current next
 work, branch order, and open PR queue state belong in the routing dashboard,
 implementation plans, PR bodies, and issue comments rather than this spec.
+The advisory trust-lane policy records class metadata for reviewers and future
+classifiers; it does not skip branch-protection checks, route CI by itself, or
+promote support tiers.
 
 ## Contract
 
@@ -37,9 +41,10 @@ result must be visible to reviewers through the PR plan summary, a receipt, or
 an equivalent CI step summary.
 
 This spec does not authorize skipping required branch-protection checks by
-itself. A later policy or validator PR may encode the classes in files such as
-`policy/trust-lanes.toml` or extend existing risk-pack policy, but it must
-preserve the contract below.
+itself. `policy/trust-lanes.toml` encodes the classes as advisory policy
+metadata, and later classifier, validator, or PR-summary work may consume that
+file or extend existing risk-pack policy, but it must preserve the contract
+below.
 
 ## Lane Classes
 
