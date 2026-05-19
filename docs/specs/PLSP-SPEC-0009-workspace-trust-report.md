@@ -1,4 +1,4 @@
-# PLSP-SPEC-0008: Workspace trust report
+# PLSP-SPEC-0009: Workspace trust report
 
 Status: proposed
 Owner: perl-lsp maintainers
