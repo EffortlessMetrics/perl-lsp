@@ -22,6 +22,12 @@ fn test_hash_deref_package_name() {
 }
 
 #[test]
+fn test_scalar_deref_qualified_hash_element() {
+    let source = r#"die "duplicate" if (${Log::Log4perl::Level::LEVELS{$cust_prio}});"#;
+    assert_clean_parse(source);
+}
+
+#[test]
 fn test_array_deref_function_call() {
     let source = r#"my @r = @{get_items()};"#;
     assert_clean_parse(source);

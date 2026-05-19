@@ -262,10 +262,10 @@ mod tests {
         let request_result = sender.send_request(7, "workspace/configuration", json!({}));
 
         for result in [response_result, notification_result, request_result] {
-            match result {
-                Ok(()) => panic!("expected BrokenPipe error when outbound channel is closed"),
-                Err(err) => assert_eq!(err.kind(), std::io::ErrorKind::BrokenPipe),
-            }
+            assert!(
+                matches!(result, Err(err) if err.kind() == std::io::ErrorKind::BrokenPipe),
+                "closed outbound channel should return BrokenPipe"
+            );
         }
     }
 

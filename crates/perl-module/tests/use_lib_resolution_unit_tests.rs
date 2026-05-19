@@ -519,15 +519,38 @@ fn double_quoted_path_with_escaped_double_quote() {
 }
 
 #[test]
-fn single_quoted_path_with_escaped_single_quote() {
+fn double_quoted_path_with_escaped_double_quote_and_semicolon()
+-> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"use lib "path/\"with;quote"; use lib 'also';"#;
+
+    let paths = extract_use_lib_paths(source);
+
+    assert_eq!(
+        paths,
+        vec![
+            UseLibPath { path: r#"path/\"with;quote"#.to_string(), from_findbin: false },
+            UseLibPath { path: "also".to_string(), from_findbin: false },
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn single_quoted_path_with_escaped_single_quote() -> Result<(), Box<dyn std::error::Error>> {
     // Edge case: single-quoted string with escaped single quote.
     // In Perl, only \\ and \' are special in single quotes.
     let source = r"use lib 'it\'s; a path'; use lib 'also';";
 
     let paths = extract_use_lib_paths(source);
 
-    // Should extract both paths without being confused by the \' in the first path.
-    assert!(paths.len() >= 2, "Expected at least 2 paths, got {}", paths.len());
+    assert_eq!(
+        paths,
+        vec![
+            UseLibPath { path: r"it\'s; a path".to_string(), from_findbin: false },
+            UseLibPath { path: "also".to_string(), from_findbin: false },
+        ]
+    );
+    Ok(())
 }
 
 #[test]

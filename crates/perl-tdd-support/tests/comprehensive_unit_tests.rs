@@ -742,7 +742,7 @@ fn make_test_metadata() -> IgnoredTestMetadata {
         priority: 2,
         ignore_reason: "Requires feature flag, see issue #123".to_string(),
         complexity: ComplexityLevel::Medium,
-        target_timeline: Duration::from_secs(7 * 24 * 3600),
+        target_timeline: Duration::from_hours(168),
         dependencies: vec!["dep_1".to_string()],
         success_criteria: vec!["passes locally".to_string(), "passes CI".to_string()],
         workflow_integration: LspWorkflowStage::Parse,
@@ -854,7 +854,7 @@ fn guardian_warns_on_low_complexity_long_timeline() -> Result<(), Box<dyn std::e
     let guardian = IgnoredTestGuardian::new(gov);
     let mut meta = make_test_metadata();
     meta.complexity = ComplexityLevel::Low;
-    meta.target_timeline = Duration::from_secs(30 * 24 * 3600); // 30 days
+    meta.target_timeline = Duration::from_hours(720); // 30 days
     let result = guardian.validate_new_ignored_test(&meta);
     assert!(result.warnings.iter().any(|w| w.contains("shorter timeline")));
     Ok(())
@@ -960,11 +960,8 @@ fn guardian_trend_report_with_data() -> Result<(), Box<dyn std::error::Error>> {
     let mut guardian = IgnoredTestGuardian::new(gov);
     let now = SystemTime::now();
 
-    let data = vec![
-        (now - Duration::from_secs(3600), 10),
-        (now - Duration::from_secs(1800), 12),
-        (now, 15),
-    ];
+    let data =
+        vec![(now - Duration::from_hours(1), 10), (now - Duration::from_mins(30), 12), (now, 15)];
     guardian.set_historical_data(data);
 
     let report = guardian.generate_trend_report();

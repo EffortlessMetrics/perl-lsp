@@ -36,13 +36,13 @@ const CPANM_STANDALONE_URL: &str = "https://cpanmin.us";
 const METACPAN_API: &str = "https://fastapi.metacpan.org/v1/distribution/_search";
 /// Hard timeout for a batch cpanm invocation. Batch installs fall back to
 /// per-distribution retries when one distribution wedges inside configure/build.
-const CPANM_BATCH_TIMEOUT: Duration = Duration::from_secs(300);
+const CPANM_BATCH_TIMEOUT: Duration = Duration::from_mins(5);
 /// Number of distributions installed per cpanm batch invocation.
 const CPANM_BATCH_SIZE: usize = 25;
 /// Hard timeout for a single-distribution retry. Native-heavy distributions
 /// such as `PDL` legitimately need more wall-clock time than a whole batch
 /// should get before we split it apart.
-const CPANM_SINGLE_DIST_TIMEOUT: Duration = Duration::from_secs(300);
+const CPANM_SINGLE_DIST_TIMEOUT: Duration = Duration::from_mins(5);
 
 /// Return the workspace root path, anchored at compile time to the xtask
 /// crate's manifest directory. This makes every relative CPAN corpus path

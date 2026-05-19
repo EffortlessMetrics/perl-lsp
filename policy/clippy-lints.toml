@@ -768,10 +768,11 @@ level = "warn"
 activate_when_msrv = "1.95"
 reason = "Use collection APIs that encode predicate-and-pop intent directly."
 
-[[planned]]
+[[lint]]
 name = "clippy::duration_suboptimal_units"
 level = "warn"
-activate_when_msrv = "1.95"
+status = "active"
+class = "readability"
 reason = "Make durations legible without mental unit conversion."
 
 [[planned]]
