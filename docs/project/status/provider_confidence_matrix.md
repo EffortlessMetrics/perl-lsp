@@ -18,7 +18,10 @@ Class-level promotion, fallback, blocker, and defer decisions are tracked in
 Real-workspace timing proof lives in the
 [2026-05-13 Mojolicious baseline](../../forensics/2026-05-13-real-workspace-baseline-mojolicious.md)
 and the
-[2026-05-14 Dancer2 baseline](../../forensics/2026-05-14-real-workspace-baseline-dancer2.md).
+[2026-05-14 Dancer2 baseline](../../forensics/2026-05-14-real-workspace-baseline-dancer2.md),
+with the
+[2026-05-19 Catalyst baseline](../../forensics/2026-05-19-real-workspace-baseline-catalyst.md)
+as the third fixture anchor.
 User-facing support claims are mapped in [SUPPORT_TIERS.md](SUPPORT_TIERS.md).
 The Real Perl Editor Trust v1 routing dashboard is
 [real_perl_editor_trust_v1.md](real_perl_editor_trust_v1.md).
