@@ -245,8 +245,9 @@ pub fn rename_cutover<Q: SemanticQueries>(
 ///
 /// This reuses the cutover receipt path but applies a narrower policy envelope:
 /// source-backed definition/reference edits only, no blockers, and at least one
-/// edit. The returned proof is receipt-only; callers must not treat it as live
-/// package/compiler-backed rename authorization.
+/// edit. The returned proof is not sufficient on its own for live package
+/// rename authorization; live callers must separately prove the materialized
+/// edit set, source-backed anchors, and workspace ambiguity guard.
 pub fn rename_package_pilot_proof<Q: SemanticQueries>(
     legacy_allowed: bool,
     semantic_queries: &Q,

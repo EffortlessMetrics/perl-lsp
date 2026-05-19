@@ -1,7 +1,7 @@
 use std::thread;
 use std::time::Duration;
 
-use perl_workspace::slo::{OperationResult, OperationType, SloConfig, SloTracker};
+use perl_workspace::slo::{OperationResult, OperationType, Regime, SloConfig, SloTracker};
 
 fn operation_type_index(operation_type: OperationType) -> usize {
     match operation_type {
@@ -128,4 +128,57 @@ fn given_all_statistics_are_collected_when_reset_is_called_then_tracker_state_is
 
     tracker.reset();
     assert!(tracker.all_statistics().values().all(|stats| stats.total_count == 0));
+}
+
+#[test]
+fn given_regime_tagged_operations_when_statistics_are_requested_then_counts_are_grouped_by_regime()
+{
+    let tracker = SloTracker::new(SloConfig { sample_window_size: 16, ..SloConfig::default() });
+
+    let cold_start = tracker.start_operation(OperationType::FileIndexing);
+    tracker.record_operation_type_with_regime(
+        OperationType::FileIndexing,
+        cold_start,
+        OperationResult::Success,
+        Regime::Cold,
+    );
+
+    for _ in 0..2 {
+        let warm_start = tracker.start_operation(OperationType::FileIndexing);
+        tracker.record_operation_type_with_regime(
+            OperationType::FileIndexing,
+            warm_start,
+            OperationResult::Success,
+            Regime::Warm,
+        );
+    }
+
+    for _ in 0..3 {
+        let incremental_start = tracker.start_operation(OperationType::FileIndexing);
+        tracker.record_operation_type_with_regime(
+            OperationType::FileIndexing,
+            incremental_start,
+            OperationResult::Failure("edit failed".to_string()),
+            Regime::Incremental,
+        );
+    }
+
+    let by_regime = tracker.statistics_by_regime(OperationType::FileIndexing);
+
+    assert_eq!(by_regime[&Regime::Cold].total_count, 1);
+    assert_eq!(by_regime[&Regime::Warm].total_count, 2);
+    assert_eq!(by_regime[&Regime::Incremental].total_count, 3);
+    assert_eq!(by_regime[&Regime::Incremental].failure_count, 3);
+    assert_eq!(tracker.statistics(OperationType::FileIndexing).total_count, 6);
+}
+
+#[test]
+fn given_legacy_recording_api_when_operation_is_recorded_then_sample_is_tagged_warm_by_default() {
+    let tracker = SloTracker::default();
+    let start = tracker.start_operation(OperationType::Hover);
+    tracker.record_operation_type(OperationType::Hover, start, OperationResult::Success);
+
+    assert_eq!(tracker.sample_count_by_regime(OperationType::Hover, Regime::Warm), 1);
+    assert_eq!(tracker.sample_count_by_regime(OperationType::Hover, Regime::Cold), 0);
+    assert_eq!(tracker.sample_count_by_regime(OperationType::Hover, Regime::Incremental), 0);
 }

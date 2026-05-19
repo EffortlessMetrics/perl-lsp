@@ -11,29 +11,34 @@ project docs when you need exact release facts, receipts, or milestone detail.
 
 - Active milestone plan: [docs/project/ROADMAP.md](docs/project/ROADMAP.md)
 - Current truth and receipts: [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md)
+- Release readiness and channel proof: [docs/project/status/release.md](docs/project/status/release.md)
 - Compiler-backed LSP build-out: [docs/project/COMPILER_BACKED_LSP_ROADMAP.md](docs/project/COMPILER_BACKED_LSP_ROADMAP.md)
-- Published release tracking: [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases)
+- CI/control-plane wave: [docs/project/CI_WAVE_EXECUTION_PLAN.md](docs/project/CI_WAVE_EXECUTION_PLAN.md)
+- Editor-trust wave: [docs/project/EDITOR_TRUST_WAVE.md](docs/project/EDITOR_TRUST_WAVE.md)
+- Provider cutover dashboard: [docs/project/status/provider_cutover.md](docs/project/status/provider_cutover.md)
+- Real Perl editor trust dashboard: [docs/project/status/real_perl_editor_trust_v1.md](docs/project/status/real_perl_editor_trust_v1.md)
+- Published release tracking: [RELEASE_HISTORY.md](RELEASE_HISTORY.md) and [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases)
 
-## Now (post-v0.12.3 ship / pre-announcement cleanup)
+## Now (v0.14.0 public-alpha channel closeout)
 
-- `v0.12.3` shipped to GitHub Releases, VS Code Marketplace, and Open VSX on 2026-04-09
-- crates.io intentionally remains on `0.12.2` while the registry window is still deferred
-- Pre-announcement plumbing: license badge fix, Docker arm64 timeout fix, dependency triage, harness archival, SRP microcrate extractions
-- Distribution channel verification across GitHub Releases, VS Code Marketplace, Open VSX, Docker Hub, and the delayed crates.io line
-- See [docs/project/ROADMAP.md](docs/project/ROADMAP.md) "Now (post-v0.12.3 / pre-v0.13.0)" for the active item list
+- `v0.14.0` is the current public-alpha release line; verify live channel state before citing completion
+- GitHub Release and crates.io surfaces show `v0.14.0` live, while channel closeout still needs explicit receipts across Docker, VS Code Marketplace, Open VSX, and the owned Homebrew tap path
+- Keep package-version language separate from product-posture language: SemVer package version, public-alpha product promise
+- CI/control-plane work is sequenced through narrow lanes in [docs/project/CI_WAVE_EXECUTION_PLAN.md](docs/project/CI_WAVE_EXECUTION_PLAN.md), starting with `update-status --write` streaming
+- See [docs/project/ROADMAP.md](docs/project/ROADMAP.md) for the canonical active item list, exit criteria, and post-release sequencing
 
-## Next (v0.13.0 — public alpha announcement)
+## Next (post-v0.14.0)
 
-- 0.12.x line built confidence across parser, diagnostics, refactoring, distribution, AI inline completion
-- Quality cleanup PRs land, version bump to 0.13.0
-- Seamless install story verified across all distribution channels
-- Announcement blog post / release notes
+- Close release-channel receipts before starting broad cleanup
+- Continue compiler-backed provider cutovers with source/freshness/provenance receipts and live fallback behavior
+- Resume parser, corpus, semantic, DAP, and editor-trust hardening through one-lane, one-PR acceptance receipts
+- Keep the install story verified across all distribution channels and keep release notes tied to concrete receipts
 
-## Beyond v0.13.0
+## Beyond v0.14.0
 
 - Stability contract for APIs and advertised wire behavior
 - Performance hardening for larger workspaces
-- Security posture and documentation hardening
+- Security and supply-chain posture hardening
 - Path to `v1.0.0`
 
 ## Update Rules
