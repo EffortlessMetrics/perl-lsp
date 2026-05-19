@@ -9,6 +9,10 @@ use perl_lsp_rs_core::config::{Perl5LibPrecedence, WorkspaceConfig};
 use std::sync::atomic::Ordering;
 
 const WORKSPACE_TRUST_REPORT_SCHEMA_VERSION: &str = "workspace_trust_report.v1";
+const WORKSPACE_TRUST_REPORT_COPYABLE_PAYLOAD_SCHEMA_VERSION: &str =
+    "workspace_trust_report_copyable.v1";
+const SUPPORT_TIER_LINK: &str = "docs/project/status/SUPPORT_TIERS.md#claim-rows";
+const DYNAMIC_BOUNDARY_POLICY: &str = "Generated, dynamic, stale, low-confidence, ambiguous, and fallback facts remain labeled, gated, or blocked according to each provider support tier.";
 
 fn perl5lib_precedence_label(precedence: &Perl5LibPrecedence) -> &'static str {
     match precedence {
@@ -271,6 +275,77 @@ fn support_tiers_summary() -> Value {
     })
 }
 
+fn workspace_root_class(workspace_roots: &[String]) -> &'static str {
+    match workspace_roots.len() {
+        0 => "none",
+        1 => "single_root",
+        _ => "multi_root",
+    }
+}
+
+fn workspace_root_hash(workspace_roots: &[String]) -> Option<String> {
+    if workspace_roots.is_empty() {
+        return None;
+    }
+
+    let mut roots = workspace_roots.iter().map(|root| root.replace('\\', "/")).collect::<Vec<_>>();
+    roots.sort();
+    Some(format!("{:x}", md5::compute(roots.join("\n"))))
+}
+
+fn workspace_trust_copyable_payload(
+    workspace_roots: &[String],
+    workspace_folder_count: usize,
+    open_document_count: usize,
+    global_config: &WorkspaceConfig,
+    setup_hints: &Value,
+    client_runtime_state: &Value,
+    provider_trace_count: usize,
+) -> Value {
+    let perl5lib_paths = perl5lib_paths(global_config);
+    json!({
+        "schema_version": WORKSPACE_TRUST_REPORT_COPYABLE_PAYLOAD_SCHEMA_VERSION,
+        "perl_lsp_version": env!("CARGO_PKG_VERSION"),
+        "provider": "workspace_trust_report",
+        "command": "perl.workspaceTrustReport",
+        "workspace_root_class": workspace_root_class(workspace_roots),
+        "workspace_root_hash": workspace_root_hash(workspace_roots),
+        "workspace_folder_count": workspace_folder_count,
+        "open_document_count": open_document_count,
+        "configured_include_path_count": global_config.include_paths.len(),
+        "effective_include_path_count": global_config.effective_include_paths(&perl5lib_paths).len(),
+        "use_system_inc": global_config.use_system_inc,
+        "system_inc_status": if global_config.use_system_inc {
+            "configured_not_probed_by_report"
+        } else {
+            "disabled"
+        },
+        "use_perl5lib": global_config.use_perl5lib,
+        "perl5lib_entry_count": perl5lib_paths.len(),
+        "perl5lib_precedence": perl5lib_precedence_label(&global_config.perl5lib_precedence),
+        "perl_binary_resolution_status": setup_hints
+            .pointer("/perl_binary/resolution_status")
+            .and_then(Value::as_str),
+        "perldoc_status": setup_hints.pointer("/perldoc/status").and_then(Value::as_str),
+        "perldoc_run_status": setup_hints
+            .pointer("/perldoc/run_status")
+            .and_then(Value::as_str),
+        "dap_status": setup_hints.pointer("/dap/status").and_then(Value::as_str),
+        "client_runtime_schema_version": client_runtime_state
+            .get("schema_version")
+            .and_then(Value::as_str),
+        "client_runtime_source": client_runtime_state.get("source").and_then(Value::as_str),
+        "launch_configuration_status": client_runtime_state
+            .pointer("/dap/launch_configuration/status")
+            .and_then(Value::as_str),
+        "provider_support_tiers": support_tiers_summary(),
+        "decision_trace_count": provider_trace_count,
+        "dynamic_boundary_policy": DYNAMIC_BOUNDARY_POLICY,
+        "support_tier_link": SUPPORT_TIER_LINK,
+        "claim_boundary": "Copyable workspace trust payload summarizes existing server/client state only. It does not scan files, probe Perl, run perldoc, launch DAP, change provider behavior, upload telemetry, or promote support tiers.",
+    })
+}
+
 #[cfg(feature = "workspace")]
 fn index_report(server: &LspServer) -> Value {
     let Some(coordinator) = server.coordinator() else {
@@ -376,6 +451,27 @@ impl LspServer {
             })
             .collect();
 
+        let mut workspace_roots = folders
+            .iter()
+            .filter_map(|folder| folder.path.as_ref().map(|path| path.display().to_string()))
+            .collect::<Vec<_>>();
+        if workspace_roots.is_empty() {
+            if let Some(root_path) = root_path.as_ref() {
+                workspace_roots.push(root_path.display().to_string());
+            }
+        }
+        let setup_hints = setup_hints_summary(&global_config);
+        let client_runtime_state = client_runtime_state_summary(argument);
+        let copyable_payload = workspace_trust_copyable_payload(
+            &workspace_roots,
+            folders.len(),
+            open_document_count,
+            &global_config,
+            &setup_hints,
+            &client_runtime_state,
+            provider_trace_keys.len(),
+        );
+
         Ok(Some(json!({
             "schema_version": WORKSPACE_TRUST_REPORT_SCHEMA_VERSION,
             "command": "perl.workspaceTrustReport",
@@ -391,8 +487,8 @@ impl LspServer {
                 "global_workspace_config": workspace_config_summary(&global_config),
                 "policy": "Configured include paths and optional PERL5LIB participation are reported without probing interpreter startup @INC.",
             },
-            "setup_hints": setup_hints_summary(&global_config),
-            "client_runtime_state": client_runtime_state_summary(argument),
+            "setup_hints": setup_hints,
+            "client_runtime_state": client_runtime_state,
             "index": index_report(self),
             "providers": {
                 "support_tiers": support_tiers_summary(),
@@ -400,8 +496,9 @@ impl LspServer {
                 "decision_trace_keys": provider_trace_keys,
             },
             "dynamic_boundaries": {
-                "policy": "Generated, dynamic, stale, low-confidence, ambiguous, and fallback facts remain labeled, gated, or blocked according to each provider support tier."
+                "policy": DYNAMIC_BOUNDARY_POLICY
             },
+            "copyable_payload": copyable_payload,
         })))
     }
 }

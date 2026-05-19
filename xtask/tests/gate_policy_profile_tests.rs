@@ -126,12 +126,12 @@ fn conflict_marker_gate_has_local_runtime_headroom() -> Result<(), Box<dyn std::
     assert_eq!(gate.tier, "pr_fast", "conflict marker scan must stay in pr-fast");
     assert!(gate.required, "conflict marker scan must stay PR-blocking");
     assert!(
-        gate.timeout_seconds.unwrap_or_default() >= 60,
+        gate.timeout_seconds.unwrap_or_default() >= 120,
         "conflict marker timeout must include Windows and mounted-worktree headroom"
     );
     assert!(
         gate.budgets.as_ref().and_then(|budget| budget.max_duration_ms).unwrap_or_default()
-            >= 45_000,
+            >= 120_000,
         "conflict marker budget must reflect observed local runtime"
     );
 

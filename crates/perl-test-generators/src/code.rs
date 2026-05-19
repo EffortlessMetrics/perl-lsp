@@ -7,19 +7,24 @@
 use proptest::prelude::*;
 use proptest::strategy::BoxedStrategy;
 
+fn ascii_letter_or_underscore() -> impl Strategy<Value = char> {
+    prop_oneof![prop::char::range('a', 'z'), prop::char::range('A', 'Z'), Just('_')]
+}
+
+fn ascii_alphanumeric_or_underscore() -> impl Strategy<Value = char> {
+    prop_oneof![
+        prop::char::range('a', 'z'),
+        prop::char::range('A', 'Z'),
+        prop::char::range('0', '9'),
+        Just('_'),
+    ]
+}
+
 /// Generate a plain ASCII Perl identifier without a sigil.
 pub fn perl_identifier() -> impl Strategy<Value = String> {
     (
-        prop_oneof![prop::char::range('a', 'z'), prop::char::range('A', 'Z'), Just('_')],
-        prop::collection::vec(
-            prop_oneof![
-                prop::char::range('a', 'z'),
-                prop::char::range('A', 'Z'),
-                prop::char::range('0', '9'),
-                Just('_'),
-            ],
-            0..=10_usize,
-        ),
+        ascii_letter_or_underscore(),
+        prop::collection::vec(ascii_alphanumeric_or_underscore(), 0..=10_usize),
     )
         .prop_map(|(first, rest)| std::iter::once(first).chain(rest).collect())
 }
@@ -37,14 +42,7 @@ pub fn integer_literal() -> impl Strategy<Value = String> {
 /// Generate a simple single-quoted string literal.
 pub fn single_quoted_string_literal() -> impl Strategy<Value = String> {
     prop::collection::vec(
-        prop_oneof![
-            prop::char::range('a', 'z'),
-            prop::char::range('A', 'Z'),
-            prop::char::range('0', '9'),
-            Just(' '),
-            Just('_'),
-            Just('-'),
-        ],
+        prop_oneof![ascii_alphanumeric_or_underscore(), Just(' '), Just('-')],
         0..=16_usize,
     )
     .prop_map(|chars| {
