@@ -90,6 +90,10 @@ If the editor is using a helper extension or plugin, check its own logs too.
 - Open the project root that contains the module tree, not just a subdirectory.
 - If you are using vendored or local libraries, make sure the editor config
   points at them explicitly.
+- For PL701 or `@INC` mismatches, run **Perl LSP: Explain Missing Module
+  Lookup** and **Perl LSP: Show Workspace Trust Report**. See
+  [Perl Setup Troubleshooting](PERL_SETUP_TROUBLESHOOTING.md) for the full
+  setup checklist.
 
 ## Formatting Or Code Actions Are Missing
 
@@ -218,6 +222,8 @@ Report an issue when you can include:
 
 - `perllsp --version`
 - `perllsp --health`
+- **Perl LSP: Show Workspace Trust Report** output for setup or module-path
+  problems
 - the editor name and version
 - the workspace layout
 - the smallest code sample that reproduces the problem

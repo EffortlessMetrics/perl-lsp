@@ -248,6 +248,8 @@ The `perllsp` binary works with any editor that supports the Language Server Pro
   true missing fact, low-confidence evidence, or a dynamic boundary.
 - Run **Perl LSP: Show Workspace Trust Report** if module paths, Perl binary,
   or setup policy may be involved.
+- For Perl binary, `@INC`, `PERL5LIB`, perldoc, or DAP module-path mismatches,
+  see the [Perl setup troubleshooting guide](../docs/how-to/PERL_SETUP_TROUBLESHOOTING.md).
 - Set `perl-lsp.enableDiagnostics` to `false` to disable diagnostics.
 - File an issue with the copied provider receipt if you see false positives.
 

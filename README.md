@@ -106,6 +106,7 @@ The current architecture collapsed the old microcrate graph into a smaller publi
 | Getting started | [docs/tutorials/GETTING_STARTED.md](docs/tutorials/GETTING_STARTED.md) |
 | Configuration | [docs/reference/CONFIG.md](docs/reference/CONFIG.md) |
 | Troubleshooting | [docs/how-to/TROUBLESHOOTING.md](docs/how-to/TROUBLESHOOTING.md) |
+| Perl setup troubleshooting | [docs/how-to/PERL_SETUP_TROUBLESHOOTING.md](docs/how-to/PERL_SETUP_TROUBLESHOOTING.md) |
 | Editor trust and receipts | [docs/how-to/EDITOR_TRUST.md](docs/how-to/EDITOR_TRUST.md) |
 | Project status and metrics | [docs/project/status/index.md](docs/project/status/index.md) |
 | Measured editor trust | [docs/explanation/MEASURED_PERL_EDITOR_TRUST.md](docs/explanation/MEASURED_PERL_EDITOR_TRUST.md) |

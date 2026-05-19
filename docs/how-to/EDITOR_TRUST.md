@@ -112,6 +112,9 @@ Start with **Perl LSP: Show Workspace Trust Report**. It aggregates existing
 server state and setup hints without scanning the workspace, running perldoc,
 starting DAP, probing Perl, or promoting support claims.
 
+For setup-specific checks, see
+[Perl Setup Troubleshooting](PERL_SETUP_TROUBLESHOOTING.md).
+
 ## Filing A Useful Bug Report
 
 When behavior looks wrong:
