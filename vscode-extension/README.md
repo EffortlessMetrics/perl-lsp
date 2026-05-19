@@ -16,18 +16,25 @@ A fast, native Perl 5 language server extension. Written in Rust for speed and r
 
 > **Public Alpha** -- This extension is under active development. Every feature listed below is wired up and exercised by tests, but as an alpha you will find edge cases where behavior is incomplete or wrong. Please [report issues](https://github.com/EffortlessMetrics/perl-lsp/issues/new/choose) if you encounter problems. For what the project's headline numbers mean (and do not mean), see the [status overview](https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/project/status/index.md).
 
+`perl-lsp` uses proof-backed answers where it has fresh, source-backed facts and
+keeps fallback or no-edit behavior where Perl is dynamic, generated, stale,
+ambiguous, or low confidence. See the [editor trust guide](../docs/how-to/EDITOR_TRUST.md)
+for support-tier boundaries, explanations, previews, and copyable receipts.
+
 ## Features
 
 ### Navigation and Intelligence
-- **Go to Definition** -- Jump to any symbol declaration across files
-- **Find References** -- Find all usages of a symbol across your project
-- **Hover Documentation** -- Instant docs for functions, variables, and modules
-- **Auto-completion** -- Smart suggestions for variables, functions, and module names
+- **Go to Definition** -- Jump to source-backed definitions where proof is available, with fallback for ambiguous or dynamic cases
+- **Find References** -- Find source-backed usages and keep fallback behavior for unsupported shapes
+- **Hover Documentation** -- Show provenance-backed docs and module-lookup explanations where available
+- **Auto-completion** -- Rank proof-backed variables, functions, and modules while preserving fallback for uncertain candidates
 - **Signature Help** -- Real-time parameter hints as you type function calls
-- **Symbol Navigation** -- Outline view, breadcrumbs, and workspace symbol search
+- **Symbol Navigation** -- Outline view, breadcrumbs, and workspace symbol search with generated/dynamic boundaries labeled or gated
 
 ### Refactoring and Code Actions
-- **Rename** -- Safe renaming of symbols across files
+- **Rename** -- Scoped lexical and package-local renames only where source-backed proof and fallback guards pass
+- **Preview Safe Delete** -- Preview allowed, blocked, or refused symbol deletion before any edit is returned
+- **Preview Package Rename** -- Preview package/compiler-backed rename evidence without authorizing broad edits
 - **Extract Variable** -- Pull out expressions into named variables
 - **Extract Subroutine** -- Create functions from selected code blocks
 - **Organize Imports** -- Sort and clean `use` statements (`Shift+Alt+O`)
@@ -37,6 +44,7 @@ A fast, native Perl 5 language server extension. Written in Rust for speed and r
 - **Undefined Variables** -- Catch typos under `use strict`
 - **Unused Variables** -- Find dead code
 - **Missing Pragmas** -- Suggest `strict` and `warnings`
+- **Diagnostic Explanations** -- Explain PL701/PL109 evidence, fallback, and setup boundaries when receipts are available
 - **Document Formatting** -- Format with `perltidy` (`Shift+Alt+F`)
 
 ### Advanced Features
