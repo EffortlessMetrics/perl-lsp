@@ -1,6 +1,6 @@
 # PLSP-SPEC-0011: Trust-lane CI routing
 
-Status: proposed
+Status: accepted
 Owner: perl-lsp maintainers
 Linked proposal: [PLSP-PROP-0001](../proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
 Linked ADRs: [PLSP-ADR-0001](../adr/PLSP-ADR-0001-generated-status-is-control-plane.md),
@@ -11,7 +11,8 @@ provider confidence matrix, parser status, Real Perl Editor Trust dashboard
 
 ## Current implementation status
 
-The repository already has advisory CI economics and risk-pack infrastructure:
+This spec is accepted as the trust-lane CI routing contract. The repository
+already has advisory CI economics and risk-pack infrastructure:
 
 - [PR plan](../ci/pr-plan.md)
 - [risk packs](../ci/risk-packs.md)

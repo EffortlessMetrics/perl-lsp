@@ -1,6 +1,6 @@
 # PLSP-SPEC-0009: Workspace trust report
 
-Status: proposed
+Status: accepted
 Owner: perl-lsp maintainers
 Linked proposal: [PLSP-PROP-0001](../proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
 Linked specs:
@@ -11,6 +11,20 @@ Linked ADRs:
 Linked plan: [Real Perl Editor Trust implementation plan](../../plans/real-perl-editor-trust/implementation-plan.md)
 Status impact: support tiers, provider confidence matrix, real editor trust
 dashboard, VS Code command documentation, setup troubleshooting docs
+
+## Current implementation status
+
+This spec is accepted as the workspace trust report contract. The current
+report and VS Code output surface are implemented as read-only views over
+existing server and client state, with schema coverage tracked from
+`lsp_execute_command_tests` and support evidence owned by
+[SUPPORT_TIERS.md](../project/status/SUPPORT_TIERS.md) and
+[real_perl_editor_trust_v1.md](../project/status/real_perl_editor_trust_v1.md).
+
+Current setup hints, perldoc/DAP state, launch-configuration classes, and
+module-path boundaries remain report-only. They do not probe Perl, run
+`perldoc`, launch DAP, scan the workspace, or promote setup-health support
+tiers.
 
 ## Contract
 
