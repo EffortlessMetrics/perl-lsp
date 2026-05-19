@@ -256,6 +256,13 @@ Linked spec: [PLSP-SPEC-0008](../../docs/specs/PLSP-SPEC-0008-edit-producing-pro
 Blocks: rename/safe-delete support review
 Blocked by: provider fact or workspace-index changes that require refreshed edit-safety proof
 
+Trigger condition
+
+Run this work item only when rename facts, safe-delete facts, workspace-index
+behavior, or edit-producing provider code changes. Docs-only changes,
+unrelated refactors, receiver-completion work, parser fixtures, workspace-trust
+reporting, or CI routing do not require a new edit-safety receipt by default.
+
 Goal
 
 Keep rename and safe-delete false-allow, edit-freshness, blocker, and rollback
@@ -277,6 +284,17 @@ Acceptance
 Generated/no-source, dynamic, referenced, imported/exported, stale,
 low-confidence, ambiguous, non-subroutine, and package-wide cases return no
 edit or fallback with explicit reasons and copyable receipts.
+
+Current implementation status
+
+Current rename and safe-delete receipts have already been reviewed in the
+provider confidence matrix, support tiers, provider cutover notes, and Real Perl
+Editor Trust dashboard. Rename remains limited to same-file lexical rename and
+the narrow package-local pilot; safe-delete remains limited to the exact
+unreferenced source-backed subroutine pilot with current-source, workspace
+reference, workspace identity, and rollback guards. This work item stays planned
+as a trigger-based maintenance lane, not as the next unconditional provider
+cutover.
 
 Proof commands
 
