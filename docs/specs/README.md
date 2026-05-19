@@ -26,6 +26,9 @@ generated sections.
 - [PLSP-SPEC-0004: Corpus receipt freshness](PLSP-SPEC-0004-corpus-receipt-freshness.md)
 - [PLSP-SPEC-0005: Receiver expression facts](PLSP-SPEC-0005-receiver-expression-facts.md)
 - [PLSP-SPEC-0006: PR queue disposition](PLSP-SPEC-0006-pr-queue-disposition.md)
+- [PLSP-SPEC-0007: Receiver-fact completion](PLSP-SPEC-0007-receiver-fact-completion.md)
+- [PLSP-SPEC-0008: Edit-producing provider safety](PLSP-SPEC-0008-edit-producing-provider-safety.md)
+- [PLSP-SPEC-0009: Workspace trust report](PLSP-SPEC-0009-workspace-trust-report.md)
 
 ## Acceptance and Proof
 
