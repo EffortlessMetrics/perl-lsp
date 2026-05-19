@@ -49,6 +49,7 @@ of copying generated values:
 - [parser accuracy next](../project/status/parser_accuracy_next.md)
 - [parser status](../project/status/parser.md)
 - [provider cutover](../project/status/provider_cutover.md)
+- [receiver facts](../project/status/receiver_facts.md)
 - [semantic scorecard](../project/status/semantic_scorecard.md)
 - [semantic shadow compare](../project/status/semantic_shadow_compare.md)
 - [semantic capability dashboard](../project/status/semantic_capability_dashboard.md)
