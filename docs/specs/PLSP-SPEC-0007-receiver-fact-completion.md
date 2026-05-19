@@ -1,12 +1,27 @@
 # PLSP-SPEC-0007: Receiver-fact completion
 
-Status: proposed
+Status: accepted
 Owner: perl-lsp maintainers
 Linked proposal: [PLSP-PROP-0001](../proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
 Linked ADRs: [PLSP-ADR-0002](../adr/PLSP-ADR-0002-confidence-before-cutover.md)
 Linked plan: [Receiver facts implementation plan](../project/RECEIVER_FACTS_IMPLEMENTATION_PLAN.md)
 Status impact: provider confidence matrix, provider cutover, semantic scorecard,
 semantic shadow compare, UX capability dashboard, support tiers
+
+## Current implementation status
+
+This spec is accepted as the receiver-aware completion cutover contract. The
+current implementation has landed a narrow source-backed receiver completion
+pilot for the proved hash-slot class, plus fallback preservation for dynamic
+hash keys. Current evidence lives in [receiver_facts.md](../project/status/receiver_facts.md),
+[provider_confidence_matrix.md](../project/status/provider_confidence_matrix.md),
+[provider_cutover.md](../project/status/provider_cutover.md), and
+[SUPPORT_TIERS.md](../project/status/SUPPORT_TIERS.md).
+
+Completion remains `partial-live-with-fallback`. Broader receiver forms,
+generated/no-source members, dynamic keys, stale facts, low-confidence facts,
+and unknown receivers remain fallback, blocked, or future receipt work until a
+separate PR satisfies this contract.
 
 ## Contract
 

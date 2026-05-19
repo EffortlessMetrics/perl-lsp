@@ -1,6 +1,6 @@
 # PLSP-SPEC-0012: User-facing trust surfaces
 
-Status: proposed
+Status: accepted
 Owner: perl-lsp maintainers
 Linked proposal: [PLSP-PROP-0001](../proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
 Linked specs:
@@ -13,6 +13,23 @@ Linked ADRs:
 Linked plan: [Real Perl Editor Trust implementation plan](../../plans/real-perl-editor-trust/implementation-plan.md)
 Status impact: provider confidence matrix, provider cutover, support tiers,
 workspace trust report, diagnostic explanations, VS Code command surfaces
+
+## Current implementation status
+
+This spec is accepted as the user-facing trust surface contract. Provider
+decision explanations, copyable provider receipts, diagnostic explanations,
+explain-diagnostic actions, missing-module lookup explanations, workspace trust
+report output, and VS Code command-palette presentation now exist as bounded
+trust surfaces.
+
+Current evidence and public claim boundaries live in
+[provider_confidence_matrix.md](../project/status/provider_confidence_matrix.md),
+[provider_cutover.md](../project/status/provider_cutover.md),
+[SUPPORT_TIERS.md](../project/status/SUPPORT_TIERS.md), and
+[real_perl_editor_trust_v1.md](../project/status/real_perl_editor_trust_v1.md).
+Future explanation or command-surface PRs must preserve this spec's rule that
+presentation explains existing evidence without creating facts or broadening
+provider behavior.
 
 ## Contract
 

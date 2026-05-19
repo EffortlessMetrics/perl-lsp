@@ -1,12 +1,23 @@
 # PLSP-SPEC-0013: Agent build storage and gates
 
-Status: proposed
+Status: accepted
 Owner: perl-lsp maintainers
 Linked proposal: [PLSP-PROP-0001](../proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
 Linked ADRs: [PLSP-ADR-0001](../adr/PLSP-ADR-0001-generated-status-is-control-plane.md)
 Linked plan: [0.14.0 Readiness Queue](../releases/0.14.0-readiness.md)
 Status impact: local proof commands, gate receipts, storage hygiene, CI
 hardening status, PR disposition comments
+
+## Current implementation status
+
+This spec is accepted as the agent proof and storage-hygiene contract. The
+current repo already routes agent Cargo proof through `./scripts/cargo-safe`,
+uses `./scripts/storage-doctor` as the storage receipt, and records gate timeout
+classification as control-plane evidence rather than product behavior proof.
+
+This spec governs how agents report local proof. It does not replace
+trust-lane CI routing, provider receipts, parser status, release gates, or
+support-tier evidence.
 
 ## Contract
 
