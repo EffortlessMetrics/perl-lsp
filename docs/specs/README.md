@@ -32,6 +32,7 @@ generated sections.
 - [PLSP-SPEC-0010: Support claim map](PLSP-SPEC-0010-support-claim-map.md)
 - [PLSP-SPEC-0011: Trust-lane CI routing](PLSP-SPEC-0011-trust-lane-ci-routing.md)
 - [PLSP-SPEC-0012: User-facing trust surfaces](PLSP-SPEC-0012-user-facing-trust-surfaces.md)
+- [PLSP-SPEC-0013: Agent build storage and gates](PLSP-SPEC-0013-agent-build-storage-and-gates.md)
 
 ## Acceptance and Proof
 
