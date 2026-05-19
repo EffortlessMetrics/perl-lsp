@@ -180,6 +180,13 @@ pub enum TypeEvidence {
         /// Blessed package.
         package: String,
     },
+    /// Accessor return evidence, such as `$self->db` returning the `db` field.
+    AccessorReturn {
+        /// Accessor method name.
+        method: String,
+        /// Backing field or attribute name.
+        field: String,
+    },
     /// Moose/Moo `isa` evidence for an attribute.
     MooseIsa {
         /// Attribute name.

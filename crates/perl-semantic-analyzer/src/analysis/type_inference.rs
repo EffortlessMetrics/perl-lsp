@@ -1,3 +1,4 @@
+use super::class_model::{AccessorType, ClassModelBuilder};
 use super::type_facts::{
     ArrayShape, DynamicBoundary, HashShape, ObjectShape, ShapeFact, TypeEvidence, TypeFact,
 };
@@ -223,6 +224,8 @@ pub struct TypeInferenceEngine {
     constraints: Vec<TypeConstraint>,
     /// Built-in function signatures
     builtins: HashMap<String, PerlType>,
+    /// Framework accessor return facts keyed by `(package, accessor)`.
+    accessor_return_facts: HashMap<(String, String), TypeFact>,
     /// Type aliases from use statements
     _type_aliases: HashMap<String, PerlType>,
 }
@@ -240,6 +243,7 @@ impl TypeInferenceEngine {
             global_env: TypeEnvironment::new(),
             constraints: Vec::new(),
             builtins: HashMap::new(),
+            accessor_return_facts: HashMap::new(),
             _type_aliases: HashMap::new(),
         };
 
@@ -316,6 +320,8 @@ impl TypeInferenceEngine {
 
     /// Infer types for an AST
     pub fn infer(&mut self, ast: &Node) -> Result<PerlType, Vec<TypeConstraint>> {
+        self.refresh_accessor_return_facts(ast);
+
         // We need to use a temporary environment that has global_env as parent,
         // or just use global_env directly if we want to persist top-level declarations?
         // Usually top-level declarations should persist.
@@ -743,6 +749,9 @@ impl TypeInferenceEngine {
                 static_package_node(object)
                     .map_or_else(TypeFact::unknown, |package| constructor_fact(&package))
             }
+            NodeKind::MethodCall { object, method, .. } => {
+                self.method_call_expr_fact(object, method, env)
+            }
             NodeKind::Assignment { lhs, rhs, op } if op == "=" => {
                 self.assign_expr_fact(lhs, rhs, env)
             }
@@ -779,6 +788,43 @@ impl TypeInferenceEngine {
         };
         fact.evidence.push(TypeEvidence::VariableInitializer { name: name.to_string() });
         fact
+    }
+
+    fn refresh_accessor_return_facts(&mut self, ast: &Node) {
+        self.accessor_return_facts.clear();
+
+        for model in ClassModelBuilder::new().build(ast) {
+            for attr in model.attributes {
+                if !attribute_generates_reader(attr.is) {
+                    continue;
+                }
+                let Some(package) = package_like_isa(attr.isa.as_deref()) else {
+                    continue;
+                };
+                let method = attr.accessor_name.clone();
+                let fact = accessor_return_fact(&method, &attr.name, &package);
+                self.accessor_return_facts.insert((model.name.clone(), method), fact);
+            }
+        }
+    }
+
+    fn method_call_expr_fact(
+        &mut self,
+        object: &Node,
+        method: &str,
+        env: &mut TypeEnvironment,
+    ) -> TypeFact {
+        let object_fact = self.infer_expr_fact_in_env(object, env);
+        let Some(package) = object_package_from_fact(&object_fact) else {
+            let mut fact = TypeFact::unknown();
+            fact.dynamic_boundary = object_fact.dynamic_boundary;
+            return fact;
+        };
+
+        self.accessor_return_facts
+            .get(&(package, method.to_string()))
+            .cloned()
+            .unwrap_or_else(TypeFact::unknown)
     }
 
     fn assign_expr_fact(&mut self, lhs: &Node, rhs: &Node, env: &mut TypeEnvironment) -> TypeFact {
@@ -1177,6 +1223,45 @@ fn constructor_fact(package: &str) -> TypeFact {
     );
     fact.shape = Some(ShapeFact::Object(ObjectShape::new(package.to_string(), BTreeMap::new())));
     fact
+}
+
+fn accessor_return_fact(method: &str, field: &str, package: &str) -> TypeFact {
+    let mut fact = fact_with_evidence(
+        PerlType::Any,
+        Confidence::Medium,
+        TypeEvidence::MooseIsa { attr: field.to_string(), isa: package.to_string() },
+    );
+    fact.evidence.push(TypeEvidence::AccessorReturn {
+        method: method.to_string(),
+        field: field.to_string(),
+    });
+    fact.shape = Some(ShapeFact::Object(ObjectShape::new(package.to_string(), BTreeMap::new())));
+    fact
+}
+
+fn attribute_generates_reader(mode: Option<AccessorType>) -> bool {
+    !matches!(mode, Some(AccessorType::Bare))
+}
+
+fn package_like_isa(isa: Option<&str>) -> Option<String> {
+    let candidate = isa?.trim();
+    if candidate.contains("::") { Some(candidate.to_string()) } else { None }
+}
+
+fn object_package_from_fact(fact: &TypeFact) -> Option<String> {
+    object_package_from_type(&fact.ty).or_else(|| match &fact.shape {
+        Some(ShapeFact::Object(shape)) => Some(shape.package.clone()),
+        _ => None,
+    })
+}
+
+fn object_package_from_type(ty: &PerlType) -> Option<String> {
+    match ty {
+        PerlType::Object(package) => Some(package.clone()),
+        PerlType::Reference(inner) => object_package_from_type(inner),
+        PerlType::Union(types) => types.iter().find_map(object_package_from_type),
+        _ => None,
+    }
 }
 
 fn object_fields_from_bless_reference(
