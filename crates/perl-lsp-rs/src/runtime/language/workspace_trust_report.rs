@@ -17,14 +17,222 @@ fn perl5lib_precedence_label(precedence: &Perl5LibPrecedence) -> &'static str {
     }
 }
 
-fn workspace_config_summary(config: &WorkspaceConfig) -> Value {
-    let perl5lib_paths = if config.use_perl5lib {
-        std::env::var("PERL5LIB")
-            .map(|value| WorkspaceConfig::parse_perl5lib(&value))
-            .unwrap_or_default()
+fn configured_perl_path(config: &WorkspaceConfig) -> Option<&str> {
+    match config.perl_path.as_deref().map(str::trim) {
+        Some(path) if !path.is_empty() => Some(path),
+        _ => None,
+    }
+}
+
+fn perl5lib_paths(config: &WorkspaceConfig) -> Vec<String> {
+    if !config.use_perl5lib {
+        return Vec::new();
+    }
+
+    std::env::var("PERL5LIB")
+        .map(|value| WorkspaceConfig::parse_perl5lib(&value))
+        .unwrap_or_default()
+}
+
+fn setup_hint(code: &str, severity: &str, message: &str, action: &str) -> Value {
+    json!({
+        "code": code,
+        "severity": severity,
+        "message": message,
+        "action": action,
+    })
+}
+
+fn setup_hints_summary(config: &WorkspaceConfig) -> Value {
+    let perl5lib_paths = perl5lib_paths(config);
+    let mut hints = Vec::new();
+
+    if configured_perl_path(config).is_none() {
+        hints.push(setup_hint(
+            "perl_path_uses_path",
+            "info",
+            "No explicit Perl binary is configured; perl-lsp will resolve `perl` from PATH when a subprocess needs it.",
+            "Set `perl.workspace.perlPath` when the editor should use a specific Perl.",
+        ));
+    }
+
+    if config.include_paths.is_empty() {
+        hints.push(setup_hint(
+            "include_paths_empty",
+            "warning",
+            "No workspace include paths are configured.",
+            "Configure `perl.workspace.includePaths` so module resolution can find project libraries.",
+        ));
+    } else if config.include_paths.iter().any(|path| path.trim().is_empty()) {
+        hints.push(setup_hint(
+            "include_path_empty_entry",
+            "warning",
+            "At least one configured include path is empty.",
+            "Remove empty entries from `perl.workspace.includePaths`.",
+        ));
+    }
+
+    if config.use_perl5lib {
+        if perl5lib_paths.is_empty() {
+            hints.push(setup_hint(
+                "perl5lib_enabled_empty",
+                "info",
+                "PERL5LIB participation is enabled, but the current environment has no PERL5LIB entries.",
+                "Configure `perl.workspace.includePaths` for project-specific libraries instead of relying on ambient shell state.",
+            ));
+        }
     } else {
-        Vec::new()
-    };
+        hints.push(setup_hint(
+            "perl5lib_disabled",
+            "info",
+            "PERL5LIB is not inherited by workspace module resolution.",
+            "Configure `perl.workspace.includePaths` for paths the editor should search.",
+        ));
+    }
+
+    if config.use_system_inc {
+        hints.push(setup_hint(
+            "system_inc_not_probed_by_report",
+            "info",
+            "Interpreter startup @INC is enabled, but the workspace trust report does not probe Perl.",
+            "Use provider receipts or module lookup explanations for request-local @INC evidence.",
+        ));
+    }
+
+    let hint_count = hints.len();
+    json!({
+        "status": "advisory",
+        "hint_count": hint_count,
+        "hints": hints,
+        "perl_binary": {
+            "configured_path": configured_perl_path(config),
+            "resolution_status": if configured_perl_path(config).is_some() {
+                "configured_not_probed_by_report"
+            } else {
+                "uses_path_when_needed_not_probed_by_report"
+            },
+            "version_status": "not_probed_by_report",
+            "args_count": config.perl_args.len(),
+        },
+        "perldoc": perldoc_runtime_state(config),
+        "dap": {
+            "status": "not_probed_by_lsp_workspace_report",
+            "policy": "DAP Perl path and module paths are configured by debug launch state and are not probed by this read-only LSP trust report.",
+        },
+        "claim_boundary": "Setup hints are derived from current configuration and environment counts only. They do not resolve Perl, run perldoc, inspect DAP sessions, scan files, or change provider behavior.",
+    })
+}
+
+fn perldoc_runtime_state(config: &WorkspaceConfig) -> Value {
+    json!({
+        "status": "oracle_contract_reported_not_run",
+        "run_status": "not_run_by_report",
+        "binary_source": if configured_perl_path(config).is_some() {
+            "configured_perl_toolchain_or_perldoc_on_path_when_opened"
+        } else {
+            "perldoc_on_path_when_opened"
+        },
+        "timeout_ms": 10_000,
+        "allow_perl5lib": config.use_perl5lib,
+        "allow_perl5opt": false,
+        "allow_local_lib": false,
+        "lc_all": "C",
+        "argv_policy": "perldoc -T -- <module>",
+        "policy": "perldoc:// requests use the Perl oracle environment when opened; this report exposes the contract from configuration but does not resolve or run perldoc.",
+    })
+}
+
+fn string_field(value: Option<&Value>, field: &str) -> Option<String> {
+    value.and_then(|object| object.get(field)).and_then(Value::as_str).map(str::to_string)
+}
+
+fn bool_field(value: Option<&Value>, field: &str) -> Option<bool> {
+    value.and_then(|object| object.get(field)).and_then(Value::as_bool)
+}
+
+fn number_field(value: Option<&Value>, field: &str) -> Option<u64> {
+    value.and_then(|object| object.get(field)).and_then(Value::as_u64)
+}
+
+fn allowed_launch_path_class(key: &str) -> bool {
+    matches!(
+        key,
+        "absolute"
+            | "relative"
+            | "workspace_variable"
+            | "file_variable"
+            | "other_variable"
+            | "home_relative"
+            | "command"
+            | "empty"
+            | "unknown"
+    )
+}
+
+fn path_class_counts_field(value: Option<&Value>, field: &str) -> Value {
+    let mut counts = serde_json::Map::new();
+    if let Some(object) = value.and_then(|parent| parent.get(field)).and_then(Value::as_object) {
+        for (key, count) in object {
+            if allowed_launch_path_class(key) {
+                if let Some(count) = count.as_u64() {
+                    counts.insert(key.clone(), json!(count));
+                }
+            }
+        }
+    }
+    Value::Object(counts)
+}
+
+fn launch_configuration_summary(dap: Option<&Value>) -> Value {
+    let launch_config = dap.and_then(|value| value.get("launch_configuration"));
+    json!({
+        "status": string_field(launch_config, "status").unwrap_or_else(|| "not_supplied".to_string()),
+        "configuration_count": number_field(launch_config, "configuration_count"),
+        "perl_configuration_count": number_field(launch_config, "perl_configuration_count"),
+        "launch_request_count": number_field(launch_config, "launch_request_count"),
+        "attach_request_count": number_field(launch_config, "attach_request_count"),
+        "perl_path_configured_count": number_field(launch_config, "perl_path_configured_count"),
+        "include_paths_configured_count": number_field(launch_config, "include_paths_configured_count"),
+        "include_path_entry_count": number_field(launch_config, "include_path_entry_count"),
+        "non_string_include_path_count": number_field(launch_config, "non_string_include_path_count"),
+        "program_configured_count": number_field(launch_config, "program_configured_count"),
+        "cwd_configured_count": number_field(launch_config, "cwd_configured_count"),
+        "include_path_kind_counts": path_class_counts_field(launch_config, "include_path_kind_counts"),
+        "perl_path_kind_counts": path_class_counts_field(launch_config, "perl_path_kind_counts"),
+        "program_path_kind_counts": path_class_counts_field(launch_config, "program_path_kind_counts"),
+        "cwd_path_kind_counts": path_class_counts_field(launch_config, "cwd_path_kind_counts"),
+        "claim_boundary": string_field(launch_config, "claim_boundary").unwrap_or_else(|| "Launch configuration state was not supplied by the client.".to_string()),
+    })
+}
+
+fn client_runtime_state_summary(argument: Option<&Value>) -> Value {
+    let client_state = argument.and_then(|value| value.get("client_runtime_state"));
+    let perldoc = client_state.and_then(|value| value.get("perldoc"));
+    let dap = client_state.and_then(|value| value.get("dap"));
+
+    json!({
+        "schema_version": "workspace_trust_client_runtime.v1",
+        "source": string_field(client_state, "source").unwrap_or_else(|| "not_supplied".to_string()),
+        "perldoc": {
+            "status": string_field(perldoc, "status").unwrap_or_else(|| "not_supplied".to_string()),
+            "uri_scheme": string_field(perldoc, "uri_scheme"),
+            "client_surface": string_field(perldoc, "client_surface"),
+        },
+        "dap": {
+            "status": string_field(dap, "status").unwrap_or_else(|| "not_supplied".to_string()),
+            "adapter_registered": bool_field(dap, "adapter_registered"),
+            "active_perl_debug_session": bool_field(dap, "active_perl_debug_session"),
+            "managed_adapter_exists": bool_field(dap, "managed_adapter_exists"),
+            "launch_json_workspace_count": number_field(dap, "launch_json_workspace_count"),
+            "workspace_folder_count": number_field(dap, "workspace_folder_count"),
+            "launch_configuration": launch_configuration_summary(dap),
+        },
+        "claim_boundary": "Client runtime state is caller-supplied and sanitized to known fields. It does not start DAP, run perldoc, probe Perl, scan workspace files beyond client-reported launch configuration state, or change provider behavior.",
+    })
+}
+
+fn workspace_config_summary(config: &WorkspaceConfig) -> Value {
+    let perl5lib_paths = perl5lib_paths(config);
     json!({
         "include_paths": &config.include_paths,
         "effective_include_paths": config.effective_include_paths(&perl5lib_paths),
@@ -140,7 +348,10 @@ fn index_report(server: &LspServer) -> Value {
 }
 
 impl LspServer {
-    pub(crate) fn workspace_trust_report(&self) -> Result<Option<Value>, JsonRpcError> {
+    pub(crate) fn workspace_trust_report(
+        &self,
+        argument: Option<&Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
         let root_path = self.root_path.lock().clone();
         let folders = self.workspace_folders.lock().clone();
         let global_config = self.workspace_config.lock().clone();
@@ -180,6 +391,8 @@ impl LspServer {
                 "global_workspace_config": workspace_config_summary(&global_config),
                 "policy": "Configured include paths and optional PERL5LIB participation are reported without probing interpreter startup @INC.",
             },
+            "setup_hints": setup_hints_summary(&global_config),
+            "client_runtime_state": client_runtime_state_summary(argument),
             "index": index_report(self),
             "providers": {
                 "support_tiers": support_tiers_summary(),

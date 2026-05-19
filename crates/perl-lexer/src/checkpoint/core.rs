@@ -28,6 +28,8 @@ pub struct LexerCheckpoint {
     pub paren_depth: usize,
     /// Current position with line/column tracking
     pub current_pos: Position,
+    /// Whether the terminal EOF token has already been emitted.
+    pub eof_emitted: bool,
     /// Additional context for complex states
     pub context: CheckpointContext,
 }
@@ -62,6 +64,7 @@ impl LexerCheckpoint {
             after_var_subscript: false,
             paren_depth: 0,
             current_pos: Position::start(),
+            eof_emitted: false,
             context: CheckpointContext::Normal,
         }
     }
@@ -89,6 +92,7 @@ impl LexerCheckpoint {
                 || self.hash_brace_depth != other.hash_brace_depth
                 || self.after_var_subscript != other.after_var_subscript
                 || self.paren_depth != other.paren_depth,
+            eof_state_changed: self.eof_emitted != other.eof_emitted,
             context_changed: self.context != other.context,
         }
     }
@@ -114,9 +118,11 @@ impl LexerCheckpoint {
             if self.position >= start.saturating_add(old_len) {
                 self.position = self.position.saturating_sub(old_len).saturating_add(new_len);
                 self.current_pos = Position::start();
+                self.eof_emitted = false;
             } else {
                 self.position = start;
                 self.current_pos = Position::start();
+                self.eof_emitted = false;
                 self.mode = LexerMode::ExpectTerm;
                 self.delimiter_stack.clear();
                 self.in_prototype = false;

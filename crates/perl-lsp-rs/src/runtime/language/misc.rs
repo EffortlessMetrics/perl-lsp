@@ -19,9 +19,23 @@ use std::sync::OnceLock;
 use std::time::Instant;
 
 static INLINE_VALUE_REGEX: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
-const DIAGNOSTIC_EXPLANATION_SCHEMA_VERSION: &str = "diagnostic_explanation.v1";
+pub(super) const DIAGNOSTIC_EXPLANATION_SCHEMA_VERSION: &str = "diagnostic_explanation.v1";
 const MAX_DIAGNOSTIC_EXPLANATIONS: usize = 8;
 const MAX_REPORTED_INC_PATHS: usize = 8;
+
+fn truncate_inlay_hint_label(hint: &mut Value, max_chars: usize) {
+    let Some(label) = hint.get_mut("label") else {
+        return;
+    };
+    let Some(text) = label.as_str() else {
+        return;
+    };
+    if text.chars().count() <= max_chars {
+        return;
+    }
+
+    *label = Value::String(text.chars().take(max_chars).collect());
+}
 
 struct LiveProviderResultShape {
     decision: &'static str,
@@ -116,33 +130,9 @@ fn diagnostic_explanation_payload(
         return None;
     };
 
-    let diagnostics = collect_diagnostic_values(value);
-    let diagnostic_count = diagnostics.len();
-    let explanations: Vec<Value> = diagnostics
-        .iter()
-        .take(MAX_DIAGNOSTIC_EXPLANATIONS)
-        .map(|diagnostic| diagnostic_explanation(diagnostic))
-        .collect();
+    let diagnostics: Vec<Value> = collect_diagnostic_values(value).into_iter().cloned().collect();
 
-    let truncated = diagnostic_count.saturating_sub(explanations.len());
-    let user_message = diagnostic_explanation_user_message(diagnostic_count, &explanations);
-    let has_dynamic_boundary = explanations.iter().any(|explanation| {
-        explanation.get("trust_boundary").and_then(Value::as_str) == Some("dynamic_boundary")
-    });
-
-    Some((
-        json!({
-            "schema_version": DIAGNOSTIC_EXPLANATION_SCHEMA_VERSION,
-            "provider_action": method,
-            "diagnostic_count": diagnostic_count,
-            "diagnostic_explanations": explanations,
-            "truncated_diagnostic_explanations": truncated,
-            "dynamic_boundary_detected": has_dynamic_boundary,
-            "claim_boundary": "explains returned diagnostics only; no new suppression, severity, or support-tier promotion",
-        }),
-        user_message,
-        has_dynamic_boundary,
-    ))
+    Some(diagnostic_explanation_payload_from_diagnostics(method, &diagnostics))
 }
 
 fn collect_diagnostic_values(value: &Value) -> Vec<&Value> {
@@ -158,6 +148,35 @@ fn collect_diagnostic_values(value: &Value) -> Vec<&Value> {
     }
 
     if nested.is_empty() { items.iter().collect() } else { nested }
+}
+
+pub(super) fn diagnostic_explanation_payload_from_diagnostics(
+    method: &str,
+    diagnostics: &[Value],
+) -> (Value, String, bool) {
+    let diagnostic_count = diagnostics.len();
+    let explanations: Vec<Value> =
+        diagnostics.iter().take(MAX_DIAGNOSTIC_EXPLANATIONS).map(diagnostic_explanation).collect();
+
+    let truncated = diagnostic_count.saturating_sub(explanations.len());
+    let user_message = diagnostic_explanation_user_message(diagnostic_count, &explanations);
+    let has_dynamic_boundary = explanations.iter().any(|explanation| {
+        explanation.get("trust_boundary").and_then(Value::as_str) == Some("dynamic_boundary")
+    });
+
+    (
+        json!({
+            "schema_version": DIAGNOSTIC_EXPLANATION_SCHEMA_VERSION,
+            "provider_action": method,
+            "diagnostic_count": diagnostic_count,
+            "diagnostic_explanations": explanations,
+            "truncated_diagnostic_explanations": truncated,
+            "dynamic_boundary_detected": has_dynamic_boundary,
+            "claim_boundary": "explains returned diagnostics only; no new suppression, severity, or support-tier promotion",
+        }),
+        user_message,
+        has_dynamic_boundary,
+    )
 }
 
 fn diagnostic_explanation(diagnostic: &Value) -> Value {
@@ -489,6 +508,21 @@ impl LspServer {
             return Ok(Some(json!([])));
         }
 
+        // Snapshot config once to avoid holding the lock across the hint generation.
+        let (hints_enabled, param_hints, type_hints, max_label_length) = {
+            let cfg = self.config.lock();
+            (
+                cfg.inlay_hints_enabled,
+                cfg.inlay_hints_parameter_hints,
+                cfg.inlay_hints_type_hints,
+                cfg.inlay_hints_max_length,
+            )
+        };
+
+        if !hints_enabled {
+            return Ok(Some(json!([])));
+        }
+
         let cap = inlay_hints_cap();
 
         if let Some(p) = params {
@@ -513,16 +547,20 @@ impl LspServer {
             })?;
             if let Some(ref ast) = doc.ast {
                 let mut hints = Vec::new();
-                hints.extend(crate::inlay_hints::parameter_hints(
-                    ast,
-                    &|off| self.offset_to_pos16(doc, off),
-                    range,
-                ));
-                hints.extend(crate::inlay_hints::trivial_type_hints(
-                    ast,
-                    &|off| self.offset_to_pos16(doc, off),
-                    range,
-                ));
+                if param_hints {
+                    hints.extend(crate::inlay_hints::parameter_hints(
+                        ast,
+                        &|off| self.offset_to_pos16(doc, off),
+                        range,
+                    ));
+                }
+                if type_hints {
+                    hints.extend(crate::inlay_hints::trivial_type_hints(
+                        ast,
+                        &|off| self.offset_to_pos16(doc, off),
+                        range,
+                    ));
+                }
 
                 // Add URI to hint data for later resolution.
                 // Merge with any existing data (e.g. functionName/paramIndex from
@@ -541,8 +579,12 @@ impl LspServer {
                     })
                     .collect();
 
-                // Apply cap to inlay hints
                 let mut result = enriched_hints;
+                for hint in &mut result {
+                    truncate_inlay_hint_label(hint, max_label_length);
+                }
+
+                // Apply cap to inlay hints.
                 if result.len() > cap {
                     tracing::debug!(from = result.len(), to = cap, "InlayHints: capping");
                     result.truncate(cap);
@@ -1337,7 +1379,7 @@ impl LspServer {
                     return self.run_subtest(subtest_name);
                 }
                 "perl.workspaceTrustReport" => {
-                    return self.workspace_trust_report();
+                    return self.workspace_trust_report(arguments.first());
                 }
                 "perl.previewSafeDelete" => {
                     let request = arguments
