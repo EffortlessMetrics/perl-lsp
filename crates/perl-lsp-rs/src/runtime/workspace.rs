@@ -84,6 +84,17 @@ fn is_permission_denied_error(e: &std::io::Error) -> bool {
 #[cfg(feature = "workspace")]
 use text_decode::read_text_with_encoding_fallback;
 
+#[cfg(feature = "workspace")]
+fn read_watched_file_content(uri: &str, purpose: &str) -> Option<String> {
+    uri_to_fs_path(uri).and_then(|path| match read_text_with_encoding_fallback(&path) {
+        Ok(content) => Some(content),
+        Err(e) => {
+            tracing::debug!("Failed to read file for {} ({}): {}", purpose, path.display(), e);
+            None
+        }
+    })
+}
+
 /// RAII guard that clears the `indexing_in_progress` flag on drop.
 ///
 /// Ensures the flag is always cleared, even if the indexing thread panics.
@@ -1143,57 +1154,52 @@ impl LspServer {
             coordinator.notify_change(uri);
         }
 
-        // Re-index the file if it is a Perl source file
+        let mut loaded_content: Option<String> = None;
+
+        // Re-index the file if it is a Perl source file.
         #[cfg(feature = "workspace")]
         if let Some(coordinator) = self.coordinator() {
-            let workspace_index = coordinator.index();
             if is_perl_source_uri(uri) {
-                if let Some(path) = uri_to_fs_path(uri) {
-                    match read_text_with_encoding_fallback(&path) {
-                        Ok(content) => {
-                            if let Ok(url) = url::Url::parse(uri) {
-                                // Clear old index data before re-indexing
-                                workspace_index.clear_file(uri);
-                                match workspace_index.index_file(url, content.clone()) {
-                                    Ok(()) => tracing::debug!("Re-indexed file: {}", uri),
-                                    Err(e) => {
-                                        tracing::warn!("Failed to re-index file {}: {}", uri, e);
-                                    }
-                                }
+                if loaded_content.is_none() {
+                    loaded_content = read_watched_file_content(uri, "re-indexing");
+                }
+
+                let workspace_index = coordinator.index();
+                if let Ok(url) = url::Url::parse(uri) {
+                    if let Some(content) = loaded_content.as_ref() {
+                        // Clear old index data before re-indexing
+                        workspace_index.clear_file(uri);
+                        match workspace_index.index_file(url, content.clone()) {
+                            Ok(()) => tracing::debug!("Re-indexed file: {}", uri),
+                            Err(e) => {
+                                tracing::warn!("Failed to re-index file {}: {}", uri, e);
                             }
-                        }
-                        Err(e) => {
-                            tracing::debug!(
-                                "Failed to read file for re-indexing ({}): {}",
-                                path.display(),
-                                e
-                            );
                         }
                     }
                 }
             }
         }
 
-        // Also update our internal document store if the document is open
+        // Also update our internal document store if the document is open.
         #[cfg(feature = "workspace")]
         {
-            let mut documents = self.documents.lock();
-            if let Some(doc) = self.get_document_mut(&mut documents, uri) {
-                if let Some(path) = uri_to_fs_path(uri) {
-                    match read_text_with_encoding_fallback(&path) {
-                        Ok(content) => {
-                            doc.text = content;
-                            doc.version += 1;
-                            // Clear cached AST so it is regenerated on next access
-                            doc.ast = None;
-                        }
-                        Err(e) => {
-                            tracing::debug!(
-                                "Failed to read file for document store update ({}): {}",
-                                path.display(),
-                                e
-                            );
-                        }
+            let document_is_open = {
+                let documents = self.documents.lock();
+                self.get_document(&documents, uri).is_some()
+            };
+
+            if document_is_open {
+                if loaded_content.is_none() {
+                    loaded_content = read_watched_file_content(uri, "document store update");
+                }
+
+                if let Some(content) = loaded_content {
+                    let mut documents = self.documents.lock();
+                    if let Some(doc) = self.get_document_mut(&mut documents, uri) {
+                        doc.text = content;
+                        doc.version += 1;
+                        // Clear cached AST so it is regenerated on next access.
+                        doc.ast = None;
                     }
                 }
             }
