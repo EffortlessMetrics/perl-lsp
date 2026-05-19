@@ -561,6 +561,18 @@ fn ts_substitution_e_skips_punctuated_string() -> Result<(), Box<dyn std::error:
 }
 
 #[test]
+fn ts_substitution_e_skips_list_operator_string() -> Result<(), Box<dyn std::error::Error>> {
+    let src = r#"$str =~ s/token/join '/', @parts/ge;"#;
+    let texts = collect_texts(src);
+
+    assert!(
+        texts.iter().any(|text| text == "s/token/join '/', @parts/ge"),
+        "expected full substitution token in {texts:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn ts_transliteration_with_ranges() -> Result<(), Box<dyn std::error::Error>> {
     let text = first_text("tr/a-zA-Z/A-Za-z/");
     assert_eq!(text, "tr/a-zA-Z/A-Za-z/");

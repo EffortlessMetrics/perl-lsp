@@ -3131,7 +3131,7 @@ impl<'a> PerlLexer<'a> {
     // replacement expressions; literal replacement quotes still let the next
     // delimiter close the substitution.
     fn can_start_replacement_expression_quote(input: &str, pos: usize) -> bool {
-        input
+        if input
             .get(..pos)
             .and_then(|text| text.chars().rev().find(|ch| !ch.is_whitespace()))
             .is_some_and(|ch| {
@@ -3156,6 +3156,44 @@ impl<'a> PerlLexer<'a> {
                         | '>'
                 )
             })
+        {
+            return true;
+        }
+
+        Self::has_list_operator_before_replacement_quote(input, pos)
+    }
+
+    fn has_list_operator_before_replacement_quote(input: &str, pos: usize) -> bool {
+        let Some(prefix) = input.get(..pos).map(str::trim_end) else {
+            return false;
+        };
+        let start = prefix
+            .char_indices()
+            .rev()
+            .find(|(_, ch)| !ch.is_ascii_alphanumeric() && *ch != '_')
+            .map_or(0, |(idx, ch)| idx + ch.len_utf8());
+        let word = &prefix[start..];
+
+        matches!(
+            word,
+            "join"
+                | "split"
+                | "sprintf"
+                | "printf"
+                | "pack"
+                | "unpack"
+                | "substr"
+                | "index"
+                | "rindex"
+                | "lc"
+                | "lcfirst"
+                | "uc"
+                | "ucfirst"
+                | "quotemeta"
+                | "chr"
+                | "ord"
+                | "reverse"
+        )
     }
 
     fn is_word_apostrophe(input: &str, pos: usize, quote: char) -> bool {
