@@ -387,6 +387,7 @@ fn hash_slot_type_fact(container_fact: &TypeFact, evidence: &TypeEvidence) -> Op
             .get(key)
             .cloned()
             .or_else(|| shape.fallback_value.as_ref().map(|fact| fact.as_ref().clone())),
+        Some(ShapeFact::Object(shape)) => shape.fields.get(key).cloned(),
         _ => None,
     }
 }
@@ -567,6 +568,21 @@ mod tests {
         }
     }
 
+    fn object_field_shape_fact(field: &str, field_package: &str) -> TypeFact {
+        let mut fields = BTreeMap::new();
+        fields.insert(field.to_string(), object_fact(field_package, Confidence::Medium));
+        TypeFact {
+            ty: PerlType::Object("My::Controller".to_string()),
+            confidence: Confidence::Medium,
+            evidence: vec![TypeEvidence::BlessLiteral { package: "My::Controller".to_string() }],
+            dynamic_boundary: None,
+            shape: Some(ShapeFact::Object(super::super::type_facts::ObjectShape::new(
+                "My::Controller".to_string(),
+                fields,
+            ))),
+        }
+    }
+
     fn array_shape_fact(index: usize, package: &str) -> TypeFact {
         let mut indexed = BTreeMap::new();
         indexed.insert(index, object_fact(package, Confidence::High));
@@ -708,6 +724,23 @@ mod tests {
         assert_eq!(fact.fallback_state, ReceiverFallbackState::Exact);
         assert!(fact.evidence.iter().any(|evidence| {
             matches!(evidence, TypeEvidence::HashRefSlot { base, key } if base == "$services" && key == "mailer")
+        }));
+        Ok(())
+    }
+
+    #[test]
+    fn object_field_receiver_preserves_fallback() -> Result<(), String> {
+        let mut env = TypeEnvironment::new();
+        env.set_variable_fact("self".to_string(), object_field_shape_fact("db", "My::DB"));
+
+        let fact = receiver_fact_for("$self->{db}->connect();", "connect", &env)?;
+
+        assert_eq!(fact.kind, ReceiverKind::HashRefSlot);
+        assert_eq!(fact.package.as_deref(), Some("My::DB"));
+        assert_eq!(fact.confidence, Confidence::Medium);
+        assert_eq!(fact.fallback_state, ReceiverFallbackState::Fallback);
+        assert!(fact.evidence.iter().any(|evidence| {
+            matches!(evidence, TypeEvidence::HashRefSlot { base, key } if base == "$self" && key == "db")
         }));
         Ok(())
     }

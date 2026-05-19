@@ -19,6 +19,7 @@ use perl_semantic_analyzer::{
         ReceiverKind, receiver_fact_for_method_call,
     },
     semantic::SemanticModel,
+    type_facts::TypeEvidence,
     type_inference::{PerlType, TypeInferenceEngine},
 };
 use perl_semantic_facts::{
@@ -1012,6 +1013,15 @@ fn method_call_named<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
 }
 
 fn exact_receiver_fact_evidence(fact: &ReceiverFact) -> Option<ReceiverEvidence> {
+    if fact.confidence == Confidence::Medium
+        && fact.freshness == ReceiverFactFreshness::Fresh
+        && fact.dynamic_boundary.is_none()
+        && fact.source_range.is_some()
+        && let Some(package) = literal_bless_package_from_fact(fact)
+    {
+        return Some(ReceiverEvidence::LiteralBless(package));
+    }
+
     if fact.confidence != Confidence::High
         || fact.freshness != ReceiverFactFreshness::Fresh
         || fact.fallback_state != ReceiverFallbackState::Exact
@@ -1033,6 +1043,16 @@ fn exact_receiver_fact_evidence(fact: &ReceiverFact) -> Option<ReceiverEvidence>
         | ReceiverKind::Unknown => None,
         _ => None,
     }
+}
+
+fn literal_bless_package_from_fact(fact: &ReceiverFact) -> Option<String> {
+    let package = fact.package.as_ref()?;
+    fact.evidence.iter().find_map(|evidence| match evidence {
+        TypeEvidence::BlessLiteral { package: evidence_package } if evidence_package == package => {
+            Some(package.clone())
+        }
+        _ => None,
+    })
 }
 
 /// Type-engine arm of [`classify_receiver`]. Extracted from the legacy

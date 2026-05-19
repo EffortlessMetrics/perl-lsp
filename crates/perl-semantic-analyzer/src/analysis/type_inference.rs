@@ -736,6 +736,9 @@ impl TypeInferenceEngine {
             }
             NodeKind::ArrayLiteral { elements } => self.array_literal_fact(elements, env),
             NodeKind::HashLiteral { pairs } => self.hash_literal_fact(pairs, env),
+            NodeKind::FunctionCall { name, args } if name == "bless" => {
+                self.bless_expr_fact(args, env)
+            }
             NodeKind::MethodCall { object, method, .. } if method == "new" => {
                 static_package_node(object)
                     .map_or_else(TypeFact::unknown, |package| constructor_fact(&package))
@@ -861,6 +864,28 @@ impl TypeInferenceEngine {
         hash_shape_fact(slots, TypeEvidence::Literal)
     }
 
+    fn bless_expr_fact(&mut self, args: &[Node], env: &mut TypeEnvironment) -> TypeFact {
+        let Some(reference) = args.first() else {
+            return TypeFact::unknown();
+        };
+        let Some(package_node) = args.get(1) else {
+            return TypeFact::dynamic(DynamicBoundary::DynamicBlessClass);
+        };
+        let Some(package) = static_package_node(package_node) else {
+            return TypeFact::dynamic(DynamicBoundary::DynamicBlessClass);
+        };
+
+        let reference_fact = self.infer_expr_fact_in_env(reference, env);
+        let fields = object_fields_from_bless_reference(reference_fact, &package);
+        let mut fact = fact_with_evidence(
+            PerlType::Object(package.clone()),
+            Confidence::Medium,
+            TypeEvidence::BlessLiteral { package: package.clone() },
+        );
+        fact.shape = Some(ShapeFact::Object(ObjectShape::new(package, fields)));
+        fact
+    }
+
     fn array_literal_fact(&mut self, elements: &[Node], env: &mut TypeEnvironment) -> TypeFact {
         let mut indexed = BTreeMap::new();
         for (index, element) in elements.iter().enumerate() {
@@ -907,8 +932,22 @@ impl TypeInferenceEngine {
                         fact
                     },
                 ),
+            Some(ShapeFact::Object(shape)) if op == "->{}" => {
+                shape.fields.get(&key).cloned().map_or_else(
+                    || {
+                        let mut fact = TypeFact::unknown();
+                        fact.evidence.push(evidence.clone());
+                        fact
+                    },
+                    |mut fact| {
+                        fact.evidence.push(evidence.clone());
+                        fact
+                    },
+                )
+            }
             _ => {
                 let mut fact = TypeFact::unknown();
+                fact.dynamic_boundary = container_fact.dynamic_boundary;
                 fact.evidence.push(evidence);
                 fact
             }
@@ -1137,6 +1176,28 @@ fn constructor_fact(package: &str) -> TypeFact {
         TypeEvidence::ConstructorCall { package: package.to_string() },
     );
     fact.shape = Some(ShapeFact::Object(ObjectShape::new(package.to_string(), BTreeMap::new())));
+    fact
+}
+
+fn object_fields_from_bless_reference(
+    reference_fact: TypeFact,
+    package: &str,
+) -> BTreeMap<String, TypeFact> {
+    match reference_fact.shape {
+        Some(ShapeFact::Hash(shape)) => shape
+            .slots
+            .into_iter()
+            .map(|(name, fact)| (name, bless_field_fact(fact, package)))
+            .collect(),
+        _ => BTreeMap::new(),
+    }
+}
+
+fn bless_field_fact(mut fact: TypeFact, package: &str) -> TypeFact {
+    if fact.confidence == Confidence::High {
+        fact.confidence = Confidence::Medium;
+    }
+    fact.evidence.push(TypeEvidence::BlessLiteral { package: package.to_string() });
     fact
 }
 
