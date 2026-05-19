@@ -263,6 +263,92 @@ fn package_and_phase_blocks_restore_lexical_state_after_exit() {
 }
 
 #[test]
+fn deeply_nested_mixed_pragmas_restore_each_outer_scope() -> Result<(), Box<dyn std::error::Error>>
+{
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        use_node("warnings", &[], 13, 28),
+        use_node("feature", &["'signatures'"], 29, 54),
+        use_node("builtin", &["qw(true floor)"], 55, 82),
+        package_block(
+            "P",
+            block(
+                vec![
+                    no_node("warnings", &["uninitialized"], 92, 122),
+                    no_node("feature", &["'signatures'"], 123, 148),
+                    eval_node(
+                        block(
+                            vec![
+                                use_node("locale", &["':not_characters'"], 158, 186),
+                                no_node("builtin", &["qw(floor)"], 187, 209),
+                                phase_block(
+                                    "BEGIN",
+                                    block(
+                                        vec![
+                                            no_node("strict", &["refs"], 221, 237),
+                                            use_node("encoding", &["'UTF-8'"], 238, 260),
+                                        ],
+                                        219,
+                                        262,
+                                    ),
+                                    211,
+                                    264,
+                                ),
+                            ],
+                            156,
+                            266,
+                        ),
+                        154,
+                        268,
+                    ),
+                ],
+                90,
+                270,
+            ),
+            84,
+            272,
+        ),
+        use_node("utf8", &[], 273, 283),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let in_package = PragmaTracker::state_for_offset(&map, 130);
+    assert!(in_package.strict_refs);
+    assert!(in_package.warnings);
+    assert!(!in_package.is_warning_active("uninitialized"));
+    assert!(!in_package.has_feature("signatures"));
+    assert!(in_package.has_builtin_import("floor"));
+
+    let in_eval = PragmaTracker::state_for_offset(&map, 195);
+    assert!(in_eval.locale);
+    assert_eq!(in_eval.locale_scope.as_deref(), Some(":not_characters"));
+    assert!(in_eval.has_builtin_import("true"));
+    assert!(!in_eval.has_builtin_import("floor"));
+    assert!(!in_eval.has_feature("signatures"));
+
+    let in_phase = PragmaTracker::state_for_offset(&map, 245);
+    assert!(!in_phase.strict_refs);
+    assert_eq!(in_phase.encoding.as_deref(), Some("UTF-8"));
+    assert!(in_phase.locale);
+    assert!(!in_phase.has_builtin_import("floor"));
+
+    let after_package = PragmaTracker::state_for_offset(&map, 278);
+    assert!(after_package.strict_vars);
+    assert!(after_package.strict_subs);
+    assert!(after_package.strict_refs);
+    assert!(after_package.warnings);
+    assert!(after_package.is_warning_active("uninitialized"));
+    assert!(after_package.has_feature("signatures"));
+    assert!(after_package.has_builtin_import("true"));
+    assert!(after_package.has_builtin_import("floor"));
+    assert!(!after_package.locale);
+    assert!(after_package.locale_scope.is_none());
+    assert!(after_package.encoding.is_none());
+    assert!(after_package.utf8);
+    Ok(())
+}
+
+#[test]
 fn no_builtin_bare_clears_all_imports() {
     let ast = program(vec![
         use_node("builtin", &["qw(true floor weaken)"], 0, 33),
