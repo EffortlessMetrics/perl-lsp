@@ -114,14 +114,21 @@ commands = [
 
 [[work_item]]
 id = "receiver-fact-completion"
-status = "ready"
+status = "completed"
 spec = "docs/specs/PLSP-SPEC-0007-receiver-fact-completion.md"
 plan = "plans/editor-trust-ux-closeout/implementation-plan.md#work-item-receiver-fact-completion"
-current_pointer = "docs/specs/PLSP-SPEC-0005-receiver-expression-facts.md"
-claim_boundary = "Facts and receipts before live completion; unknown and dynamic receivers preserve legacy fallback."
+current_pointer = "docs/project/status/receiver_facts.md"
+fact_receipt = "docs/project/status/receiver_facts.md"
+support_receipt = "docs/project/status/SUPPORT_TIERS.md"
+cutover_receipt = "docs/project/status/provider_cutover.md"
+confidence_receipt = "docs/project/status/provider_confidence_matrix.md"
+pilot_receipt = "crates/perl-lsp-rs-core/src/providers/completion/completion/tests.rs"
+claim_boundary = "Narrow source-backed receiver completion pilot only; unknown and dynamic receivers preserve legacy fallback."
 commands = [
   "cargo test -p perl-semantic-analyzer --lib receiver_fact --profile agent --locked -- --nocapture",
   "cargo test -p perl-lsp-rs-core --lib completion --profile agent --locked -- --nocapture",
+  "cargo xtask check-support-claims",
+  "cargo xtask check-provider-confidence-matrix",
   "git diff --check",
 ]
 

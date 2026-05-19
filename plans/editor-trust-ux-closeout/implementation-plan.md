@@ -187,11 +187,17 @@ work item blocked and keep docs from promising a stable payload.
 
 ## Work item: receiver-fact-completion
 
-Status: ready
+Status: completed
 Linked proposal: [PLSP-PROP-0001](../../docs/proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
 Linked specs: [PLSP-SPEC-0005](../../docs/specs/PLSP-SPEC-0005-receiver-expression-facts.md), [PLSP-SPEC-0007](../../docs/specs/PLSP-SPEC-0007-receiver-fact-completion.md)
-Blocks: receiver-fact completion ranking receipt, narrow receiver completion pilot
+Blocks: broader receiver-form completion expansion
 Blocked by: none
+Receipt: [receiver facts status](../../docs/project/status/receiver_facts.md)
+Supporting receipts:
+[support tiers](../../docs/project/status/SUPPORT_TIERS.md),
+[provider cutover](../../docs/project/status/provider_cutover.md),
+[provider confidence matrix](../../docs/project/status/provider_confidence_matrix.md),
+`crates/perl-lsp-rs-core/src/providers/completion/completion/tests.rs`
 
 Goal
 
@@ -217,11 +223,23 @@ freshness, dynamic boundary, source range, and fallback state. Completion
 receipt proves source-backed `$self`/object/package/hashref known-slot ranking,
 dynamic fallback, and unknown fallback before any pilot.
 
+Current implementation status
+
+Receiver facts, expression-fact substrate, completion ranking receipts, the
+narrow source-backed receiver completion pilot, and the support review have
+landed. Completion remains partial-live-with-fallback: only fresh,
+high-confidence, source-backed receiver evidence may contribute exact method
+candidates in the narrow pilot, while unknown, dynamic, generated/no-source,
+stale, low-confidence, and broader workspace-wide method shapes remain
+fallback, shadowed, or blocked.
+
 Proof commands
 
 ```bash
 cargo test -p perl-semantic-analyzer --lib receiver_fact --profile agent --locked -- --nocapture
 cargo test -p perl-lsp-rs-core --lib completion --profile agent --locked -- --nocapture
+cargo xtask check-support-claims
+cargo xtask check-provider-confidence-matrix
 git diff --check
 ```
 
