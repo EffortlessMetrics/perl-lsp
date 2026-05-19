@@ -277,6 +277,24 @@ fn dynamic_moo_accessor_isa_stays_non_exact() -> Result<(), String> {
 }
 
 #[test]
+fn parametrized_moo_accessor_isa_stays_non_exact() -> Result<(), String> {
+    let code = "package MyApp::Service; use Moo; has dbs => (is => 'ro', isa => 'ArrayRef[MyApp::DB]'); my $service = MyApp::Service->new; $service->dbs->connect;";
+    let ast = parse_ast(code)?;
+    let mut engine = TypeInferenceEngine::new();
+
+    engine.infer(&ast).map_err(|err| format!("inference failed: {err:?}"))?;
+
+    let receiver = method_receiver(&ast, "connect")?;
+    let fact = engine.infer_expr_fact(receiver);
+
+    assert_eq!(fact.ty, PerlType::Any);
+    assert_eq!(fact.confidence, Confidence::Low);
+    assert!(fact.shape.is_none());
+    assert!(fact.evidence.is_empty());
+    Ok(())
+}
+
+#[test]
 fn method_return_constructor_records_medium_confidence_object_shape() -> Result<(), String> {
     let code = "package MyApp::Service; sub db { return MyApp::DB->new; } my $service = MyApp::Service->new; $service->db->connect;";
     let ast = parse_ast(code)?;

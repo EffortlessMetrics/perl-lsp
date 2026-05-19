@@ -1345,7 +1345,31 @@ fn attribute_generates_reader(mode: Option<AccessorType>) -> bool {
 
 fn package_like_isa(isa: Option<&str>) -> Option<String> {
     let candidate = isa?.trim();
-    if candidate.contains("::") { Some(candidate.to_string()) } else { None }
+    if is_simple_package_name(candidate) { Some(candidate.to_string()) } else { None }
+}
+
+fn is_simple_package_name(candidate: &str) -> bool {
+    let mut segments = candidate.split("::");
+    let Some(first) = segments.next() else { return false };
+    if !is_package_segment(first) {
+        return false;
+    }
+
+    let mut has_namespace = false;
+    for segment in segments {
+        has_namespace = true;
+        if !is_package_segment(segment) {
+            return false;
+        }
+    }
+    has_namespace
+}
+
+fn is_package_segment(segment: &str) -> bool {
+    let mut chars = segment.chars();
+    let Some(first) = chars.next() else { return false };
+    (first.is_ascii_alphabetic() || first == '_')
+        && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
 }
 
 fn object_package_from_fact(fact: &TypeFact) -> Option<String> {
