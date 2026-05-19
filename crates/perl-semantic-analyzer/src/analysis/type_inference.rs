@@ -932,11 +932,8 @@ impl TypeInferenceEngine {
                         fact
                     },
                 ),
-            Some(ShapeFact::Object(shape)) if op == "->{}" => shape
-                .fields
-                .get(&key)
-                .cloned()
-                .map_or_else(
+            Some(ShapeFact::Object(shape)) if op == "->{}" => {
+                shape.fields.get(&key).cloned().map_or_else(
                     || {
                         let mut fact = TypeFact::unknown();
                         fact.evidence.push(evidence.clone());
@@ -946,7 +943,8 @@ impl TypeInferenceEngine {
                         fact.evidence.push(evidence.clone());
                         fact
                     },
-                ),
+                )
+            }
             _ => {
                 let mut fact = TypeFact::unknown();
                 fact.dynamic_boundary = container_fact.dynamic_boundary;

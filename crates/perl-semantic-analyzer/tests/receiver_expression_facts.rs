@@ -164,8 +164,7 @@ fn hashref_slot_assignment_updates_later_receiver_fact() -> Result<(), String> {
 
 #[test]
 fn bless_hash_field_resolves_medium_confidence_receiver_fact() -> Result<(), String> {
-    let code =
-        "my $self = bless { db => MyApp::DB->new }, 'MyApp::Service'; $self->{db}->connect;";
+    let code = "my $self = bless { db => MyApp::DB->new }, 'MyApp::Service'; $self->{db}->connect;";
     let ast = parse_ast(code)?;
     let mut engine = TypeInferenceEngine::new();
 
