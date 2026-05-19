@@ -636,6 +636,11 @@ fn semantic_token_lexical_variable_declaration_candidate(
     source: &str,
 ) -> Option<crate::semantic_tokens::SemanticTokenShadowCandidate> {
     let marker_start = source.find("my ")?;
+    let line_start = source[..marker_start].rfind('\n').map_or(0, |offset| offset + 1);
+    if !source[line_start..marker_start].chars().all(char::is_whitespace) {
+        return None;
+    }
+
     let mut name_start = marker_start + "my ".len();
 
     while let Some(ch) = source[name_start..].chars().next() {
