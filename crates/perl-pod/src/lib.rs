@@ -439,6 +439,20 @@ fn is_pod_format_code(c: char) -> bool {
 mod tests {
     use super::*;
 
+    #[test]
+    fn first_paragraph_stops_at_first_blank_line() {
+        let text = "first line\nsecond line\n\nthird line";
+
+        assert_eq!(first_paragraph(text), "first line\nsecond line");
+    }
+
+    #[test]
+    fn first_paragraph_skips_leading_blank_before_text() {
+        let text = "\nfirst paragraph\n\nsecond paragraph";
+
+        assert_eq!(first_paragraph(text), "first paragraph");
+    }
+
     // ── decode_pod_entity ────────────────────────────────────────────────────
 
     #[test]
@@ -446,6 +460,7 @@ mod tests {
         // Unknown entity names fall through to the `_` branch and are returned as-is.
         assert_eq!(decode_pod_entity("nbsp"), "nbsp");
         assert_eq!(decode_pod_entity("unknown"), "unknown");
+        assert_eq!(decode_pod_entity("copy"), "copy");
     }
 
     #[test]
@@ -503,6 +518,13 @@ mod tests {
         );
     }
 
+    #[test]
+    fn strip_pod_formatting_handles_nested_text_and_entities() {
+        let text = "Use B<I<strict>> and C<$value E<lt> 10>";
+
+        assert_eq!(strip_pod_formatting(text), "Use strict and $value < 10");
+    }
+
     // ── encode_pod_link_target ───────────────────────────────────────────────
 
     #[test]
@@ -517,6 +539,18 @@ mod tests {
         assert_eq!(
             encode_pod_link_target("A::Module/section-name_v1.0~"),
             "A::Module/section-name_v1.0~"
+        );
+        assert_eq!(
+            encode_pod_link_target("Module::Name/path-._~/Section"),
+            "Module::Name/path-._~/Section"
+        );
+    }
+
+    #[test]
+    fn encode_link_percent_encodes_markdown_breakers() {
+        assert_eq!(
+            encode_pod_link_target("Module Name/[section](x)"),
+            "Module%20Name/%5Bsection%5D%28x%29"
         );
     }
 
@@ -548,5 +582,12 @@ mod tests {
         assert_eq!(encode_pod_link_target("\t"), "%09");
         assert_eq!(encode_pod_link_target("\n"), "%0A");
         assert_eq!(encode_pod_link_target("a\tb"), "a%09b");
+    }
+
+    #[test]
+    fn markdown_link_text_escapes_only_link_delimiters() {
+        let text = r"back\slash [label] (target)";
+
+        assert_eq!(escape_markdown_link_text(text), r"back\\slash \[label\] (target)");
     }
 }
