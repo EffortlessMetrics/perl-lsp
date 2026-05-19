@@ -126,6 +126,12 @@ Resource inventory proof:
 cargo test -p perl-lsp-rs --test real_project_latency test_real_project_resource_inventory_receipt --profile agent --locked -- --nocapture
 ```
 
+Opt-in memory/resource bridge proof:
+
+```bash
+cargo test -p perl-lsp-rs --test real_project_latency real_project_memory_resource_receipt --profile agent --locked -- --include-ignored --nocapture --test-threads=1
+```
+
 Semantic/provider status proof:
 
 ```bash

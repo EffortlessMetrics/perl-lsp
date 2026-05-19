@@ -29,7 +29,9 @@
 
 mod common;
 
-use common::{initialize_lsp, send_notification, send_request, start_lsp_server};
+use common::{
+    drain_until_quiet, initialize_lsp, send_notification, send_request, start_lsp_server,
+};
 use serde_json::{Map, Value, json};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -63,6 +65,12 @@ struct ResourceProfile {
     perl_file_count: usize,
     source_line_count: usize,
     source_bytes: usize,
+}
+
+#[derive(Debug, Clone)]
+struct ProjectSourceFile {
+    path: PathBuf,
+    content: String,
 }
 
 /// All 5 metrics for a single project.
@@ -199,6 +207,56 @@ fn collect_resource_profile_inner(dir: &Path, profile: &mut ResourceProfile) {
             }
         }
     }
+}
+
+fn collect_project_source_files(dir: &Path) -> Vec<ProjectSourceFile> {
+    let mut files = Vec::new();
+    collect_project_source_files_inner(dir, &mut files);
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+    files
+}
+
+fn collect_project_source_files_inner(dir: &Path, files: &mut Vec<ProjectSourceFile>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_project_source_files_inner(&path, files);
+        } else if is_perl_source_path(&path)
+            && let Ok(content) = fs::read_to_string(&path)
+        {
+            files.push(ProjectSourceFile { path, content });
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn best_effort_process_rss_kb(pid: u32) -> Option<u64> {
+    let status = fs::read_to_string(format!("/proc/{pid}/status")).ok()?;
+    let line = status.lines().find(|line| line.starts_with("VmRSS:"))?;
+    line.split_whitespace().nth(1).and_then(|raw| raw.parse::<u64>().ok())
+}
+
+#[cfg(target_os = "windows")]
+fn best_effort_process_rss_kb(pid: u32) -> Option<u64> {
+    let output = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-Command", &format!("(Get-Process -Id {pid}).WorkingSet64")])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8(output.stdout).ok()?;
+    let bytes = stdout.trim().parse::<u64>().ok()?;
+    Some(bytes / 1024)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+fn best_effort_process_rss_kb(_pid: u32) -> Option<u64> {
+    None
 }
 
 /// Compute percentile (0–100) from a sorted sample slice (values in ms).
@@ -862,6 +920,123 @@ fn test_real_project_resource_inventory_receipt() -> Result<(), Box<dyn std::err
             )
         })?;
     assert_eq!(project_count, fixtures.len(), "resource inventory should cover each fixture");
+    eprintln!("{}", serde_json::to_string_pretty(&receipt)?);
+    Ok(())
+}
+
+#[test]
+#[ignore = "real-workspace memory lane - starts LSP and records best-effort process RSS"]
+fn real_project_memory_resource_receipt() -> Result<(), Box<dyn std::error::Error>> {
+    let fixtures = [&MOJOLICIOUS_FIXTURE, &DANCER2_FIXTURE, &CATALYST_FIXTURE];
+    let mut projects = Map::new();
+
+    for fixture in fixtures {
+        let root = fixture_path(fixture);
+        assert!(
+            root.exists(),
+            "Real project fixture directory missing for memory receipt: {}",
+            root.display()
+        );
+
+        let profile = collect_resource_profile(&root);
+        let source_files = collect_project_source_files(&root);
+        assert!(
+            profile.perl_file_count > 0,
+            "Memory receipt for '{}' must include Perl files",
+            fixture.name
+        );
+        assert_eq!(
+            source_files.len(),
+            profile.perl_file_count,
+            "Memory receipt for '{}' should open every readable Perl fixture file",
+            fixture.name
+        );
+
+        let server = start_lsp_server();
+        initialize_lsp(&server);
+        let pid = { server.process.lock().unwrap_or_else(|e| e.into_inner()).id() };
+        let rss_after_initialize_kb = best_effort_process_rss_kb(pid);
+
+        for (idx, source) in source_files.iter().enumerate() {
+            let version = i32::try_from(idx + 1).unwrap_or(i32::MAX);
+            open_document(&server, &file_uri(&source.path), &source.content);
+            send_notification(
+                &server,
+                json!({
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/didChange",
+                    "params": {
+                        "textDocument": {
+                            "uri": file_uri(&source.path),
+                            "version": version + 1000
+                        },
+                        "contentChanges": [{ "text": source.content }]
+                    }
+                }),
+            );
+        }
+
+        drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(3));
+        let _workspace_symbols = send_request(
+            &server,
+            json!({
+                "jsonrpc": "2.0",
+                "method": "workspace/symbol",
+                "params": { "query": "new" }
+            }),
+        );
+        drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(3));
+
+        let rss_after_project_load_kb = best_effort_process_rss_kb(pid);
+        if let Some(rss_kb) = rss_after_project_load_kb {
+            assert!(rss_kb > 0, "Memory receipt for '{}' measured a zero RSS value", fixture.name);
+        }
+        let rss_growth_kb = match (rss_after_initialize_kb, rss_after_project_load_kb) {
+            (Some(before), Some(after)) => Some(after.saturating_sub(before)),
+            _ => None,
+        };
+        let measurement_state =
+            if rss_after_project_load_kb.is_some() { "measured" } else { "unavailable_on_host" };
+
+        projects.insert(
+            fixture.name.to_string(),
+            json!({
+                "fixture_dir": fixture.dir,
+                "opened_perl_files": source_files.len(),
+                "resource_profile": resource_profile_to_json(&profile),
+                "memory_profile": {
+                    "state": measurement_state,
+                    "metric": "child_process_rss_kb_best_effort",
+                    "rss_kb_after_initialize": rss_after_initialize_kb,
+                    "rss_kb_after_project_load": rss_after_project_load_kb,
+                    "rss_growth_kb_after_project_load": rss_growth_kb,
+                    "operations": [
+                        "initialize",
+                        "didOpen every readable Perl fixture file",
+                        "didChange same content for freshness accounting",
+                        "workspace/symbol query"
+                    ]
+                }
+            }),
+        );
+    }
+
+    let receipt = json!({
+        "schema_version": 1,
+        "kind": "real_project_memory_resource_receipt",
+        "projects": projects,
+        "claim_boundary": "best-effort real-project fixture RSS/resource receipt only; no heap ceiling, plateau threshold, or provider cutover claim",
+        "separate_plateau_receipt": "docs/project/status/memory_plateau.md"
+    });
+
+    let project_count =
+        receipt.get("projects").and_then(Value::as_object).map(Map::len).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "memory resource receipt missing projects object",
+            )
+        })?;
+    assert_eq!(project_count, fixtures.len(), "memory receipt should cover each fixture");
     eprintln!("{}", serde_json::to_string_pretty(&receipt)?);
     Ok(())
 }
