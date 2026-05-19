@@ -25,6 +25,9 @@ path = "../crates/perl-lexer"
 [dependencies.perl-dap]
 path = "../crates/perl-dap"
 
+[dependencies.perl-module]
+path = "../crates/perl-module"
+
 [[bin]]
 name = "substitution_parsing"
 path = "fuzz_targets/substitution_parsing.rs"
@@ -100,6 +103,13 @@ bench = false
 [[bin]]
 name = "structured_perl_programs"
 path = "fuzz_targets/structured_perl_programs.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "module_surface"
+path = "fuzz_targets/module_surface.rs"
 test = false
 doc = false
 bench = false
