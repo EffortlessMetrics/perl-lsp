@@ -28,6 +28,7 @@ generated sections.
 - [PLSP-SPEC-0006: PR queue disposition](PLSP-SPEC-0006-pr-queue-disposition.md)
 - [PLSP-SPEC-0007: Receiver-fact completion](PLSP-SPEC-0007-receiver-fact-completion.md)
 - [PLSP-SPEC-0008: Edit-producing provider safety](PLSP-SPEC-0008-edit-producing-provider-safety.md)
+- [PLSP-SPEC-0009: Workspace trust report](PLSP-SPEC-0009-workspace-trust-report.md)
 
 ## Acceptance and Proof
 
