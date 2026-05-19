@@ -24,7 +24,7 @@ of current evidence.
 | Provider live/shadow state and cutover rules | [provider_cutover.md](provider_cutover.md) |
 | Compiler-backed provider receipts | [semantic_shadow_compare.md](semantic_shadow_compare.md), [semantic_scorecard.md](semantic_scorecard.md) |
 | UX/provider capability context | [ux_capability_dashboard.md](ux_capability_dashboard.md) |
-| Real-workspace baseline anchors | [2026-05-13 Mojolicious baseline](../../forensics/2026-05-13-real-workspace-baseline-mojolicious.md), [2026-05-14 Dancer2 baseline](../../forensics/2026-05-14-real-workspace-baseline-dancer2.md) |
+| Real-workspace baseline anchors | [2026-05-13 Mojolicious baseline](../../forensics/2026-05-13-real-workspace-baseline-mojolicious.md), [2026-05-14 Dancer2 baseline](../../forensics/2026-05-14-real-workspace-baseline-dancer2.md), [2026-05-19 Catalyst baseline](../../forensics/2026-05-19-real-workspace-baseline-catalyst.md) |
 | Lane plan and active work | [Real Perl Editor Trust plan](../../../plans/real-perl-editor-trust/implementation-plan.md), [Editor Trust UX closeout plan](../../../plans/editor-trust-ux-closeout/implementation-plan.md), [active goal manifest](../../../.perl-lsp/goals/active.toml) |
 
 ## Provider Trust Loop
