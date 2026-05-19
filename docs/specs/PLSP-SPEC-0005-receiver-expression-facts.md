@@ -17,9 +17,10 @@ completion consumer are implemented or partially implemented as tracked in
 [receiver_facts.md](../project/status/receiver_facts.md).
 
 Current implementation state and next source-shape work live in the status doc
-and receiver-facts implementation plan, not in this spec. Hashref source
-inference, bless-field facts, accessor-return facts, and chained method-return
-facts remain bounded by their own future fixtures and provider receipts.
+and receiver-facts implementation plan, not in this spec. Hashref literal and
+slot-assignment inference are fixture-backed facts-only substrate. Bless-field
+facts, accessor-return facts, and chained method-return facts remain bounded by
+their own future fixtures and provider receipts.
 
 ## Contract
 

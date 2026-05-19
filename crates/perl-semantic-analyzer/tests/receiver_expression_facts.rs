@@ -112,6 +112,57 @@ fn plain_hash_slot_assignment_updates_later_receiver_fact() -> Result<(), String
 }
 
 #[test]
+fn hashref_literal_slot_resolves_source_derived_receiver_fact() -> Result<(), String> {
+    let code = "my $services = { db => MyApp::DB->new }; $services->{db}->connect;";
+    let ast = parse_ast(code)?;
+    let mut engine = TypeInferenceEngine::new();
+
+    engine.infer(&ast).map_err(|err| format!("inference failed: {err:?}"))?;
+
+    let services =
+        engine.get_fact_at("services").ok_or_else(|| "missing services fact".to_string())?;
+    assert!(matches!(services.shape, Some(ShapeFact::Hash(_))));
+
+    let receiver = method_receiver(&ast, "connect")?;
+    let fact = engine.infer_expr_fact(receiver);
+
+    assert_eq!(fact.ty, PerlType::Object("MyApp::DB".to_string()));
+    assert_eq!(fact.confidence, Confidence::High);
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(
+            evidence,
+            TypeEvidence::HashRefSlot { base, key } if base == "$services" && key == "db"
+        )
+    }));
+    Ok(())
+}
+
+#[test]
+fn hashref_slot_assignment_updates_later_receiver_fact() -> Result<(), String> {
+    let code = "my $services = {}; $services->{db} = MyApp::DB->new; $services->{db}->connect;";
+    let ast = parse_ast(code)?;
+    let mut engine = TypeInferenceEngine::new();
+
+    engine.infer(&ast).map_err(|err| format!("inference failed: {err:?}"))?;
+
+    let receiver = method_receiver(&ast, "connect")?;
+    let fact = engine.infer_expr_fact(receiver);
+
+    assert_eq!(fact.ty, PerlType::Object("MyApp::DB".to_string()));
+    assert_eq!(fact.confidence, Confidence::High);
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::Assignment { name } if name == "services")
+    }));
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(
+            evidence,
+            TypeEvidence::HashRefSlot { base, key } if base == "$services" && key == "db"
+        )
+    }));
+    Ok(())
+}
+
+#[test]
 fn dynamic_plain_hash_key_fails_closed() -> Result<(), String> {
     let code = "my %services = (db => MyApp::DB->new); $services{$name}->connect;";
     let ast = parse_ast(code)?;
