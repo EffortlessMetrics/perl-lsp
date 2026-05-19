@@ -3079,7 +3079,8 @@ impl<'a> PerlLexer<'a> {
             return None;
         }
         let mut pos = start.checked_add(quote.len_utf8())?;
-        if self.input.get(pos..).is_some_and(|text| text.starts_with(delim)) {
+        let expression_quote = Self::can_start_replacement_expression_quote(self.input, start);
+        if !expression_quote && self.input.get(pos..).is_some_and(|text| text.starts_with(delim)) {
             return None;
         }
         if self.input.get(pos..).is_some_and(|text| text.starts_with(quote)) {
@@ -3090,6 +3091,9 @@ impl<'a> PerlLexer<'a> {
 
         while let Some(ch) = self.input.get(pos..).and_then(|text| text.chars().next()) {
             if matches!(ch, '\n' | '\r') {
+                return None;
+            }
+            if !expression_quote && matches!(ch, ';' | '#') {
                 return None;
             }
 
@@ -3121,6 +3125,37 @@ impl<'a> PerlLexer<'a> {
         }
 
         None
+    }
+
+    // Only skip delimiter-bearing inner strings in positions that look like
+    // replacement expressions; literal replacement quotes still let the next
+    // delimiter close the substitution.
+    fn can_start_replacement_expression_quote(input: &str, pos: usize) -> bool {
+        input
+            .get(..pos)
+            .and_then(|text| text.chars().rev().find(|ch| !ch.is_whitespace()))
+            .is_some_and(|ch| {
+                matches!(
+                    ch,
+                    '(' | '['
+                        | '{'
+                        | ','
+                        | '='
+                        | ':'
+                        | '?'
+                        | '!'
+                        | '~'
+                        | '+'
+                        | '-'
+                        | '*'
+                        | '%'
+                        | '&'
+                        | '|'
+                        | '^'
+                        | '<'
+                        | '>'
+                )
+            })
     }
 
     fn is_word_apostrophe(input: &str, pos: usize, quote: char) -> bool {
