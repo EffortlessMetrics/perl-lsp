@@ -65,6 +65,103 @@ fn double_quoted_args_produce_entries() -> Result<(), String> {
 }
 
 #[test]
+fn same_line_require_import_pair_is_extracted() -> Result<(), String> {
+    let source = "require Foo; Foo->import(qw(alpha beta));\n";
+    let entries = extract_require_import_symbols(source);
+
+    if entries.len() != 2 {
+        return Err(format!("expected 2 entries, got {}: {entries:?}", entries.len()));
+    }
+    let names: Vec<&str> = entries.iter().map(|e| e.symbol.as_str()).collect();
+    if !names.contains(&"alpha") || !names.contains(&"beta") {
+        return Err(format!("missing same-line imports in {names:?}"));
+    }
+    if entries.iter().any(|e| e.import_byte_offset != 13) {
+        return Err(format!("expected import_byte_offset=13, got {entries:?}"));
+    }
+    Ok(())
+}
+
+#[test]
+fn indented_require_and_import_offsets_are_precise() -> Result<(), String> {
+    let source = "  require Foo;\n    Foo->import('bar');\n";
+    let entries = extract_require_import_symbols(source);
+
+    let entry = entries.first().ok_or("expected one import entry")?;
+    if entry.require_byte_offset != 2 {
+        return Err(format!(
+            "expected indented require_byte_offset=2, got {}",
+            entry.require_byte_offset
+        ));
+    }
+    if entry.import_byte_offset != 19 {
+        return Err(format!(
+            "expected indented import_byte_offset=19, got {}",
+            entry.import_byte_offset
+        ));
+    }
+    Ok(())
+}
+
+#[test]
+fn malformed_bareword_module_names_are_rejected() -> Result<(), String> {
+    let source = "require Foo:::Bar;\nFoo:::Bar->import('baz');\n";
+    let entries = extract_require_import_symbols(source);
+    if !entries.is_empty() {
+        return Err(format!("expected no entries for malformed module name, got {entries:?}"));
+    }
+    Ok(())
+}
+
+#[test]
+fn whitespace_around_import_method_call_is_tolerated() -> Result<(), String> {
+    let source = "require Foo::Bar;\nFoo::Bar  ->  import  ( 'alpha', \"beta\" );\n";
+    let entries = extract_require_import_symbols(source);
+
+    if entries.len() != 2 {
+        return Err(format!("expected 2 entries, got {}: {entries:?}", entries.len()));
+    }
+    let names: Vec<&str> = entries.iter().map(|e| e.symbol.as_str()).collect();
+    if !names.contains(&"alpha") || !names.contains(&"beta") {
+        return Err(format!("missing symbols in {names:?}"));
+    }
+    Ok(())
+}
+
+#[test]
+fn qw_list_with_non_paren_delimiter_produces_entries() -> Result<(), String> {
+    let cases = [
+        ("Foo->import(qw[alpha beta]);", ["alpha", "beta"]),
+        ("Foo->import(qw{gamma delta});", ["gamma", "delta"]),
+        ("Foo->import(qw<epsilon zeta>);", ["epsilon", "zeta"]),
+        ("Foo->import(qw/eta theta/);", ["eta", "theta"]),
+        ("Foo->import(qw!iota kappa!);", ["iota", "kappa"]),
+    ];
+
+    for (import_line, expected_names) in cases {
+        let source = format!("require Foo;\n{import_line}\n");
+        let entries = extract_require_import_symbols(&source);
+        let names: Vec<&str> = entries.iter().map(|entry| entry.symbol.as_str()).collect();
+
+        if names != expected_names {
+            return Err(format!("expected {expected_names:?} for {import_line:?}, got {names:?}"));
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn malformed_qw_list_is_rejected() -> Result<(), String> {
+    let source = "require Foo;\nFoo->import(qw[alpha beta));\n";
+    let entries = extract_require_import_symbols(source);
+    if !entries.is_empty() {
+        return Err(format!("expected no entries for malformed qw list, got {entries:?}"));
+    }
+    Ok(())
+}
+
+#[test]
 fn nested_module_name_is_preserved() -> Result<(), String> {
     let source = "require Module::Nested;\nModule::Nested->import('foo');\n";
     let entries = extract_require_import_symbols(source);

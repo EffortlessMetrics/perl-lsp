@@ -14,13 +14,11 @@ use std::path::{Path, PathBuf};
 use toml::Value as TomlValue;
 use walkdir::{DirEntry, WalkDir};
 
-mod badges;
 mod cli;
 mod commands;
 mod git_hooks;
 mod process;
 
-use crate::badges::cmd_generate_badges;
 use crate::cli::{Cli, CliCommand};
 use crate::git_hooks::cmd_install_githooks;
 #[cfg(test)]
@@ -1488,6 +1486,10 @@ fn find_cancel_test_binary(repo_root: &Path) -> Option<PathBuf> {
         }
     }
     None
+}
+
+fn cmd_generate_badges(repo_root: &Path, check_mode: bool) -> Result<i32> {
+    commands::badges::generate(repo_root, check_mode)
 }
 
 fn read_required_usize(path: &Path) -> Result<usize> {

@@ -1,9 +1,19 @@
 use perl_lexer::PerlLexer;
 use proptest::prelude::*;
 
+mod prop_support;
+
+use prop_support::mixed_source;
+const REGRESS_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/_proptest-regressions/prop_lexer_token_stream_invariants"
+);
+
 fn perlish_input() -> impl Strategy<Value = String> {
     let perl_fragment = prop_oneof![
         "[a-zA-Z_][a-zA-Z0-9_]{0,12}".prop_map(|id| format!("my ${id} = 1;\n")),
+        "[a-zA-Z_][a-zA-Z0-9_]{0,12}".prop_map(|id| format!("my ${id} = 1;\r\n")),
+        "[\\p{L}_][\\p{L}\\p{N}_]{0,8}".prop_map(|id| format!("my ${id} = 1;\n")),
         "[a-zA-Z_][a-zA-Z0-9_]{0,12}".prop_map(|id| format!("if (${id}) {{ print ${id}; }}\n")),
         "[a-zA-Z_][a-zA-Z0-9_]{0,12}".prop_map(|id| format!("${id} =~ m/[a-z]+/;\n")),
         "[a-zA-Z_][a-zA-Z0-9_]{0,12}".prop_map(|id| format!("s/{id}/x/g;\n")),
@@ -16,10 +26,7 @@ fn perlish_input() -> impl Strategy<Value = String> {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig {
-        cases: 300,
-        ..ProptestConfig::default()
-    })]
+    #![proptest_config(prop_support::persisted_config(REGRESS_DIR, 300))]
 
     #[test]
     fn token_stream_spans_are_monotonic_and_in_bounds(input in perlish_input()) {
@@ -41,6 +48,24 @@ proptest! {
         }
 
         prop_assert!(false, "tokenization did not terminate within configured bound");
+    }
+
+    #[test]
+    fn tokenization_is_deterministic_for_mixed_source(input in mixed_source(96)) {
+        let mut lexer1 = PerlLexer::new(&input);
+        let tokens1 = lexer1.collect_tokens();
+
+        let mut lexer2 = PerlLexer::new(&input);
+        let tokens2 = lexer2.collect_tokens();
+
+        prop_assert_eq!(tokens1.len(), tokens2.len(), "token count mismatch");
+
+        for (left, right) in tokens1.iter().zip(tokens2.iter()) {
+            prop_assert_eq!(left.start, right.start, "start mismatch");
+            prop_assert_eq!(left.end, right.end, "end mismatch");
+            prop_assert_eq!(&left.text, &right.text, "text mismatch");
+            prop_assert_eq!(&left.token_type, &right.token_type, "token kind mismatch");
+        }
     }
 
     #[test]

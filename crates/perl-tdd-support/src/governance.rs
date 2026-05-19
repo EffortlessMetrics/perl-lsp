@@ -297,7 +297,7 @@ impl IgnoredTestGuardian {
             .require_complexity_assessment
         {
             if test_info.complexity == ComplexityLevel::Low
-                && test_info.target_timeline > Duration::from_secs(7 * 24 * 3600)
+                && test_info.target_timeline > Duration::from_hours(168)
             {
                 warnings.push("Low complexity test should have shorter timeline".to_string());
             }
@@ -413,7 +413,7 @@ impl IgnoredTestGuardian {
 
         // Deduct for old tests
         if let Ok(duration) = SystemTime::now().duration_since(test_info.last_assessed) {
-            if duration > Duration::from_secs(90 * 24 * 3600) {
+            if duration > Duration::from_hours(2160) {
                 // 90 days
                 score -= 25.0;
             }

@@ -1191,4 +1191,194 @@ mod tests {
         assert_eq!(report, deserialized);
         Ok(())
     }
+
+    // ── LatencyThresholds::for_query — additional edge cases ──
+
+    #[test]
+    fn latency_thresholds_for_query_empty_string_returns_none()
+    -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(LatencyThresholds::for_query(""), None);
+        Ok(())
+    }
+
+    #[test]
+    fn latency_thresholds_for_query_case_sensitive() -> Result<(), Box<dyn std::error::Error>> {
+        // Match arms are lowercase only — uppercase must return None.
+        assert_eq!(LatencyThresholds::for_query("SYMBOL_AT"), None);
+        assert_eq!(LatencyThresholds::for_query("Symbol_At"), None);
+        assert_eq!(LatencyThresholds::for_query("DEFINITIONS"), None);
+        assert_eq!(LatencyThresholds::for_query("REFERENCES"), None);
+        assert_eq!(LatencyThresholds::for_query("VISIBLE_SYMBOLS_AT"), None);
+        Ok(())
+    }
+
+    #[test]
+    fn latency_thresholds_for_query_constants_match_arms() -> Result<(), Box<dyn std::error::Error>>
+    {
+        // Lock in the exact threshold values from Req 19.
+        assert_eq!(
+            LatencyThresholds::for_query("symbol_at"),
+            Some(LatencyThresholds::SYMBOL_AT_MICROS)
+        );
+        assert_eq!(
+            LatencyThresholds::for_query("definitions"),
+            Some(LatencyThresholds::DEFINITIONS_MICROS)
+        );
+        assert_eq!(
+            LatencyThresholds::for_query("references"),
+            Some(LatencyThresholds::REFERENCES_MICROS)
+        );
+        assert_eq!(
+            LatencyThresholds::for_query("visible_symbols_at"),
+            Some(LatencyThresholds::VISIBLE_SYMBOLS_AT_MICROS)
+        );
+        // Sanity-check the actual constant values from Req 19.
+        assert_eq!(LatencyThresholds::SYMBOL_AT_MICROS, 5_000);
+        assert_eq!(LatencyThresholds::DEFINITIONS_MICROS, 10_000);
+        assert_eq!(LatencyThresholds::REFERENCES_MICROS, 20_000);
+        assert_eq!(LatencyThresholds::VISIBLE_SYMBOLS_AT_MICROS, 15_000);
+        Ok(())
+    }
+
+    // ── VerdictCounts::record — per-variant isolation and accumulation ──
+
+    #[test]
+    fn verdict_counts_record_same_only() -> Result<(), Box<dyn std::error::Error>> {
+        let mut counts = VerdictCounts::default();
+        counts.record(ShadowCompareVerdict::Same);
+        assert_eq!(counts.same, 1);
+        assert_eq!(counts.improved, 0);
+        assert_eq!(counts.regression, 0);
+        assert_eq!(counts.ambiguous, 0);
+        assert_eq!(counts.unavailable, 0);
+        assert_eq!(counts.total(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn verdict_counts_record_improved_only() -> Result<(), Box<dyn std::error::Error>> {
+        let mut counts = VerdictCounts::default();
+        counts.record(ShadowCompareVerdict::Improved);
+        assert_eq!(counts.same, 0);
+        assert_eq!(counts.improved, 1);
+        assert_eq!(counts.regression, 0);
+        assert_eq!(counts.ambiguous, 0);
+        assert_eq!(counts.unavailable, 0);
+        assert_eq!(counts.total(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn verdict_counts_record_regression_only() -> Result<(), Box<dyn std::error::Error>> {
+        let mut counts = VerdictCounts::default();
+        counts.record(ShadowCompareVerdict::Regression);
+        assert_eq!(counts.same, 0);
+        assert_eq!(counts.improved, 0);
+        assert_eq!(counts.regression, 1);
+        assert_eq!(counts.ambiguous, 0);
+        assert_eq!(counts.unavailable, 0);
+        assert_eq!(counts.total(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn verdict_counts_record_ambiguous_only() -> Result<(), Box<dyn std::error::Error>> {
+        let mut counts = VerdictCounts::default();
+        counts.record(ShadowCompareVerdict::Ambiguous);
+        assert_eq!(counts.same, 0);
+        assert_eq!(counts.improved, 0);
+        assert_eq!(counts.regression, 0);
+        assert_eq!(counts.ambiguous, 1);
+        assert_eq!(counts.unavailable, 0);
+        assert_eq!(counts.total(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn verdict_counts_record_unavailable_only() -> Result<(), Box<dyn std::error::Error>> {
+        let mut counts = VerdictCounts::default();
+        counts.record(ShadowCompareVerdict::Unavailable);
+        assert_eq!(counts.same, 0);
+        assert_eq!(counts.improved, 0);
+        assert_eq!(counts.regression, 0);
+        assert_eq!(counts.ambiguous, 0);
+        assert_eq!(counts.unavailable, 1);
+        assert_eq!(counts.total(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn verdict_counts_total_accumulates_many_of_same_variant()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut counts = VerdictCounts::default();
+        for _ in 0..100 {
+            counts.record(ShadowCompareVerdict::Same);
+        }
+        assert_eq!(counts.same, 100);
+        assert_eq!(counts.total(), 100);
+        Ok(())
+    }
+
+    #[test]
+    fn verdict_counts_total_saturates_at_max() -> Result<(), Box<dyn std::error::Error>> {
+        // Make the mathematical total exceed u64::MAX and verify it saturates instead of wrapping.
+        let mut counts = VerdictCounts {
+            same: u64::MAX / 5,
+            improved: u64::MAX / 5,
+            regression: u64::MAX / 5,
+            ambiguous: u64::MAX / 5,
+            unavailable: u64::MAX / 5,
+        };
+        counts.record(ShadowCompareVerdict::Same);
+        counts.record(ShadowCompareVerdict::Improved);
+        counts.record(ShadowCompareVerdict::Regression);
+        counts.record(ShadowCompareVerdict::Ambiguous);
+        counts.record(ShadowCompareVerdict::Unavailable);
+        assert_eq!(counts.total(), u64::MAX);
+        Ok(())
+    }
+
+    #[test]
+    fn verdict_counts_record_saturates_individual_field() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let mut counts = VerdictCounts { same: u64::MAX, ..VerdictCounts::default() };
+        counts.record(ShadowCompareVerdict::Same);
+        assert_eq!(counts.same, u64::MAX);
+        assert_eq!(counts.total(), u64::MAX);
+        Ok(())
+    }
+
+    // ── compute_p95 — two-element slice and clamping ──
+
+    #[test]
+    fn compute_p95_two_elements() -> Result<(), Box<dyn std::error::Error>> {
+        // 2 elements: idx = ceil(2 * 0.95) = ceil(1.9) = 2; clamped = min(2, 2) - 1 = 1.
+        // So p95 = sorted_durations[1] = the larger element.
+        let samples = [Duration::from_millis(1), Duration::from_millis(2)];
+        let p95 = super::compute_p95(&samples);
+        assert_eq!(p95, Duration::from_millis(2));
+        Ok(())
+    }
+
+    #[test]
+    fn compute_p95_clamping_does_not_exceed_last_element() -> Result<(), Box<dyn std::error::Error>>
+    {
+        // With 1 element: idx = ceil(1 * 0.95) = 1; clamped = min(1, 1) - 1 = 0.
+        // Must return the only element, not panic with out-of-bounds.
+        let samples = [Duration::from_micros(999)];
+        let p95 = super::compute_p95(&samples);
+        assert_eq!(p95, Duration::from_micros(999));
+        Ok(())
+    }
+
+    #[test]
+    fn compute_p95_twenty_samples_index_is_18() -> Result<(), Box<dyn std::error::Error>> {
+        // 20 elements: idx = ceil(20 * 0.95) = ceil(19.0) = 19;
+        // clamped = min(19, 20) - 1 = 18 → samples[18] (0-based) = 19th value.
+        // Samples 0..20ms: [0ms, 1ms, ..., 19ms]. Index 18 → 18ms.
+        let samples: Vec<Duration> = (0..20).map(Duration::from_millis).collect();
+        let p95 = super::compute_p95(&samples);
+        assert_eq!(p95, Duration::from_millis(18));
+        Ok(())
+    }
 }

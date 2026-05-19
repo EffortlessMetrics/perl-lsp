@@ -54,7 +54,7 @@ $cou
         }),
     );
     // Wait for the async document parse to complete before requesting completion
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     // Request completion at position after "$cou"
     let response = send_request(
@@ -112,7 +112,7 @@ my @data = qw(a b c);
             }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     let response = send_request(
         &server,
@@ -167,7 +167,7 @@ my %settings = ();
             }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     let response = send_request(
         &server,
@@ -229,7 +229,7 @@ proc
             }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     let response = send_request(
         &server,
@@ -279,7 +279,7 @@ fn test_builtin_completion() -> Result<(), Box<dyn std::error::Error>> {
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     let response = send_request(
         &server,
@@ -329,7 +329,7 @@ fn test_keyword_completion() -> Result<(), Box<dyn std::error::Error>> {
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     let response = send_request(
         &server,
@@ -386,7 +386,7 @@ fn test_special_variable_completion() -> Result<(), Box<dyn std::error::Error>> 
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     let response = send_request(
         &server,
@@ -449,7 +449,7 @@ fn test_method_completion() -> Result<(), Box<dyn std::error::Error>> {
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     let response = send_request(
         &server,
@@ -515,7 +515,7 @@ va
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     // Request completion at position after "va"
     let response = send_request(
@@ -568,7 +568,7 @@ fn test_completion_details() -> Result<(), Box<dyn std::error::Error>> {
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     let response = send_request(
         &server,
@@ -625,7 +625,7 @@ fn test_empty_prefix_completion() -> Result<(), Box<dyn std::error::Error>> {
             }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     let response = send_request(
         &server,
@@ -678,7 +678,7 @@ fn test_no_completion_in_comments() -> Result<(), Box<dyn std::error::Error>> {
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     let response = send_request(
         &server,
@@ -727,7 +727,7 @@ MyModule::"#
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     // Test package member completion (qualified name after ::)
     let response = send_request(
@@ -785,7 +785,7 @@ List::Util::"#
             }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     let response = send_request(
         &server,
@@ -848,7 +848,7 @@ Cwd::"#
             }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     let response = send_request(
         &server,
@@ -891,7 +891,7 @@ fn test_snippet_completion() -> Result<(), Box<dyn std::error::Error>> {
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     let response = send_request(
         &server,
@@ -975,7 +975,7 @@ $arr"#
             }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     let response = send_request(
         &server,
@@ -1025,7 +1025,7 @@ fn test_completion_ranking() -> Result<(), Box<dyn std::error::Error>> {
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     let response = send_request(
         &server,
@@ -1090,7 +1090,7 @@ fn test_completion_scope_distance_ranking() -> Result<(), Box<dyn std::error::Er
             }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     // Line 3 is "    my $x = $scope" (18 chars); character 18 places the cursor
     // immediately after '$scope', triggering prefix-based completion.
@@ -1187,7 +1187,7 @@ $p"#
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     // First completion request with "$p"
     let response1 = send_request(
@@ -1235,7 +1235,7 @@ $pre"#
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     // Second completion request with "$pre"
     let response2 = send_request(
@@ -1281,7 +1281,7 @@ $prefi"#
         }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     // Third completion request with "$prefi"
     let response3 = send_request(
@@ -1335,7 +1335,7 @@ fn test_function_completion_has_commit_characters() -> Result<(), Box<dyn std::e
             }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     let response = send_request(
         &server,
@@ -1396,7 +1396,7 @@ fn test_variable_completion_has_commit_characters() -> Result<(), Box<dyn std::e
             }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     let response = send_request(
         &server,
@@ -1458,7 +1458,7 @@ fn test_module_completion_has_commit_characters() -> Result<(), Box<dyn std::err
             }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     let response = send_request(
         &server,
@@ -1524,7 +1524,7 @@ fn test_keyword_completion_has_no_commit_characters() -> Result<(), Box<dyn std:
             }
         }),
     );
-    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
     let response = send_request(
         &server,
@@ -1594,7 +1594,7 @@ fn test_cross_editor_completion_capability_profiles() -> Result<(), Box<dyn std:
                 }
             }),
         );
-        drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+        drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
 
         let variable_completion = send_request(
             &server,
