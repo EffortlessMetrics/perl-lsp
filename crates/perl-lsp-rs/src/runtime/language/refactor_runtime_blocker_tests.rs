@@ -3306,6 +3306,102 @@ fn refactor_runtime_blocker_ux_safe_delete_live_pilot_blocks_non_subroutine_and_
 }
 
 #[test]
+fn refactor_runtime_blocker_ux_safe_delete_live_pilot_blocks_imported_symbol_false_allow()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_semantic_real_workspace(&server)?;
+    let util = files.get("lib/RealBaseline/Util.pm").ok_or("missing RealBaseline Util fixture")?;
+
+    let (helper_line, helper_character) = position_of(util, "helper {")?;
+    let blocked_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.safeDeleteSymbol",
+            "arguments": [{
+                "textDocument": {"uri": REAL_BASELINE_UTIL_URI},
+                "position": {"line": helper_line, "character": helper_character}
+            }]
+        })))?
+        .ok_or("missing imported-symbol safe-delete live blocker result")?;
+
+    assert_eq!(blocked_result.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        blocked_result.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(blocked_result.get("symbol").and_then(Value::as_str), Some("helper"));
+    assert_eq!(blocked_result.get("decision").and_then(Value::as_str), Some("blocked"));
+    assert_eq!(blocked_result.get("reason").and_then(Value::as_str), Some("references_exist"));
+    assert_eq!(blocked_result.get("fact_source").and_then(Value::as_str), Some("compiler_fact"));
+    assert_eq!(blocked_result.get("confidence").and_then(Value::as_str), Some("high"));
+    assert_eq!(blocked_result.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(blocked_result.get("fallback_state").and_then(Value::as_str), Some("no_edit"));
+    assert_eq!(
+        blocked_result.get("live_pilot_source_guard").and_then(Value::as_str),
+        Some("source_backed_exact_subroutine_definition")
+    );
+    assert_eq!(
+        blocked_result.get("live_pilot_workspace_identity_guard").and_then(Value::as_str),
+        Some("not_evaluated")
+    );
+    assert_eq!(
+        blocked_result.get("live_symbol_delete_enabled").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(blocked_result.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        blocked_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        blocked_result
+            .pointer("/workspace_edit/changes")
+            .and_then(Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0)
+    );
+    assert_safe_delete_decision_trace(&blocked_result, "blocked", "references_exist", "no_edit")?;
+    assert_json_array_contains(&blocked_result, "blocker_reasons", "ImportedSymbol")?;
+
+    let live_blocker_ux = blocked_result.get("live_blocker_ux").ok_or("missing live_blocker_ux")?;
+    assert_json_array_contains(live_blocker_ux, "blocker_reasons", "ImportedSymbol")?;
+    assert_json_array_contains(live_blocker_ux, "blocker_messages", "imported by another file")?;
+
+    let rollback_proof =
+        blocked_result.get("symbol_delete_edit_rollback").ok_or("missing rollback proof")?;
+    assert_eq!(rollback_proof.get("blocked_before_edit").and_then(Value::as_bool), Some(true));
+    assert_eq!(rollback_proof.get("rollback_required").and_then(Value::as_bool), Some(false));
+    assert_eq!(rollback_proof.get("rollback_safe").and_then(Value::as_bool), Some(true));
+
+    let message = blocked_result
+        .get("user_message")
+        .and_then(Value::as_str)
+        .ok_or("missing imported-symbol safe-delete blocked user_message")?;
+    assert!(
+        message.contains("Safe delete refused")
+            && message.contains("helper")
+            && message.contains("No edits were returned"),
+        "blocked message should explain the imported-symbol no-edit path: {message}"
+    );
+
+    let explanation = explain_provider_decision(&server, "safe_delete")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(request_receipt.get("symbol").and_then(Value::as_str), Some("helper"));
+    assert_eq!(request_receipt.get("decision").and_then(Value::as_str), Some("blocked"));
+    assert_eq!(request_receipt.get("reason").and_then(Value::as_str), Some("references_exist"));
+    assert_json_array_contains(request_receipt, "blocker_reasons", "ImportedSymbol")?;
+    assert_eq!(
+        request_receipt.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+
+    Ok(())
+}
+
+#[test]
 fn refactor_runtime_blocker_ux_safe_delete_live_pilot_blocks_generated_and_dynamic_boundaries()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();
