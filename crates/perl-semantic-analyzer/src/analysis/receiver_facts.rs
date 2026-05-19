@@ -408,10 +408,35 @@ fn with_extra_evidence(mut fact: TypeFact, evidence: TypeEvidence) -> TypeFact {
 }
 
 fn fallback_state_for_fact(package: Option<&str>, fact: &TypeFact) -> ReceiverFallbackState {
-    if package.is_some() && fact.confidence == Confidence::High && fact.dynamic_boundary.is_none() {
+    if package.is_some_and(|package| type_fact_has_exact_package(fact, package))
+        && fact.confidence == Confidence::High
+        && fact.dynamic_boundary.is_none()
+    {
         ReceiverFallbackState::Exact
     } else {
         ReceiverFallbackState::Fallback
+    }
+}
+
+fn type_fact_has_exact_package(fact: &TypeFact, package: &str) -> bool {
+    if type_has_exact_package(&fact.ty, package) {
+        return true;
+    }
+
+    matches!(
+        (&fact.ty, &fact.shape),
+        (PerlType::Any, Some(ShapeFact::Object(shape))) if shape.package == package
+    )
+}
+
+fn type_has_exact_package(ty: &PerlType, package: &str) -> bool {
+    match ty {
+        PerlType::Object(candidate) => candidate == package,
+        PerlType::Reference(inner) => type_has_exact_package(inner, package),
+        PerlType::Union(types) => {
+            !types.is_empty() && types.iter().all(|ty| type_has_exact_package(ty, package))
+        }
+        _ => false,
     }
 }
 
@@ -554,6 +579,19 @@ mod tests {
         }
     }
 
+    fn union_object_fact(first: &str, second: &str) -> TypeFact {
+        TypeFact {
+            ty: PerlType::Union(vec![
+                PerlType::Object(first.to_string()),
+                PerlType::Object(second.to_string()),
+            ]),
+            confidence: Confidence::High,
+            evidence: vec![TypeEvidence::WorkspaceSymbol { package: first.to_string() }],
+            dynamic_boundary: None,
+            shape: None,
+        }
+    }
+
     fn receiver_fact_for(
         code: &str,
         method: &str,
@@ -624,6 +662,20 @@ mod tests {
         assert_eq!(fact.kind, ReceiverKind::ObjectVariable);
         assert_eq!(fact.package.as_deref(), Some("My::Service"));
         assert_eq!(fact.confidence, Confidence::Medium);
+        assert_eq!(fact.fallback_state, ReceiverFallbackState::Fallback);
+        Ok(())
+    }
+
+    #[test]
+    fn union_object_receiver_preserves_fallback() -> Result<(), String> {
+        let mut env = TypeEnvironment::new();
+        env.set_variable_fact("object".to_string(), union_object_fact("My::Service", "Other"));
+
+        let fact = receiver_fact_for("$object->run();", "run", &env)?;
+
+        assert_eq!(fact.kind, ReceiverKind::ObjectVariable);
+        assert_eq!(fact.package.as_deref(), Some("My::Service"));
+        assert_eq!(fact.confidence, Confidence::High);
         assert_eq!(fact.fallback_state, ReceiverFallbackState::Fallback);
         Ok(())
     }
