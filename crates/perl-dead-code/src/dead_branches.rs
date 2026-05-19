@@ -82,8 +82,19 @@ pub(crate) fn detect_dead_branches(file_path: &Path, text: &str, out: &mut Vec<D
 
 fn is_always_false(condition: &str) -> bool {
     let c = condition.trim();
-    matches!(c, "0" | "\"\"" | "''" | "undef")
-        || (c.starts_with('(') && c.ends_with(')') && is_always_false(&c[1..c.len() - 1]))
+    if c == "undef" {
+        return true;
+    }
+    if quoted_literal(c).is_some_and(|inner| inner.is_empty() || inner == "0") {
+        return true;
+    }
+    if c.parse::<i64>().is_ok_and(|n| n == 0) {
+        return true;
+    }
+    if c.parse::<f64>().is_ok_and(|n| n == 0.0) {
+        return true;
+    }
+    c.starts_with('(') && c.ends_with(')') && is_always_false(&c[1..c.len() - 1])
 }
 
 fn is_always_true(condition: &str) -> bool {
@@ -94,13 +105,19 @@ fn is_always_true(condition: &str) -> bool {
     if c.parse::<f64>().is_ok_and(|n| n != 0.0) {
         return true;
     }
-    if (c.starts_with('"') && c.ends_with('"') || c.starts_with('\'') && c.ends_with('\''))
-        && c.len() > 2
-    {
-        let inner = &c[1..c.len() - 1];
-        return inner != "0";
+    if let Some(inner) = quoted_literal(c) {
+        return !inner.is_empty() && inner != "0";
     }
     c.starts_with('(') && c.ends_with(')') && is_always_true(&c[1..c.len() - 1])
+}
+
+fn quoted_literal(condition: &str) -> Option<&str> {
+    let is_quoted = condition.starts_with('"') && condition.ends_with('"')
+        || condition.starts_with("'") && condition.ends_with("'");
+    if is_quoted && condition.len() >= 2 {
+        return Some(&condition[1..condition.len() - 1]);
+    }
+    None
 }
 
 fn extract_balanced_parens(s: &str) -> Option<&str> {
@@ -151,6 +168,17 @@ mod tests {
     #[test]
     fn always_false_zero() {
         assert!(is_always_false("0"));
+    }
+
+    #[test]
+    fn always_false_decimal_zero() {
+        assert!(is_always_false("0.0"));
+    }
+
+    #[test]
+    fn always_false_quoted_zero() {
+        assert!(is_always_false("\"0\""));
+        assert!(is_always_false("'0'"));
     }
 
     #[test]
@@ -277,6 +305,11 @@ mod tests {
     fn always_true_string_zero_not_true() {
         // "0" inside quotes — inner is "0" so not always true
         assert!(!is_always_true("\"0\""));
+    }
+
+    #[test]
+    fn always_true_decimal_zero_not_true() {
+        assert!(!is_always_true("0.0"));
     }
 
     #[test]

@@ -207,3 +207,53 @@ fn scenario_workspace_analysis_aggregates_unreachable_and_dead_branch() -> Resul
     assert!(analysis.dead_code.iter().any(|item| item.code_type == DeadCodeType::DeadBranch));
     Ok(())
 }
+
+#[test]
+fn scenario_falsey_numeric_and_string_literals_are_dead_branches() -> Result<(), String> {
+    // Given false literals that are easy to miss when normalizing Perl truthiness
+    let cases = [
+        ("scenario_if_decimal_zero.pl", "if (0.0) {\n    print 'dead';\n}\n"),
+        ("scenario_if_double_quoted_zero.pl", "if (\"0\") {\n    print 'dead';\n}\n"),
+        ("scenario_if_single_quoted_zero.pl", "if ('0') {\n    print 'dead';\n}\n"),
+    ];
+
+    // Then each literal is classified as an always-false branch condition
+    for (source_name, source) in cases {
+        assert_has_dead_branch(source_name, source)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn scenario_unless_falsey_literals_are_not_dead_branches() -> Result<(), String> {
+    // Given unless blocks whose falsey conditions make the body reachable
+    let cases = [
+        ("scenario_unless_decimal_zero.pl", "unless (0.0) {\n    print 'live';\n}\n"),
+        ("scenario_unless_double_quoted_zero.pl", "unless (\"0\") {\n    print 'live';\n}\n"),
+        ("scenario_unless_single_quoted_zero.pl", "unless ('0') {\n    print 'live';\n}\n"),
+    ];
+
+    // Then none of those reachable unless bodies are reported as dead branches
+    for (source_name, source) in cases {
+        assert_no_dead_branch(source_name, source)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn scenario_dead_branch_accepts_open_brace_on_next_line() -> Result<(), String> {
+    // Given a style where the opening brace starts the following line
+    let detector = detector_with_single_file(
+        "file:///scenario_next_line_brace.pl",
+        "if (0)\n{\n    print 'dead';\n}\nprint 'live';\n",
+    )?;
+
+    // When dead-code analysis runs on that file
+    let dead_code = detect_for_path(&detector, "/scenario_next_line_brace.pl")?;
+
+    // Then the whole block is still reported as a dead branch
+    assert!(dead_code.iter().any(|item| {
+        item.code_type == DeadCodeType::DeadBranch && item.start_line == 1 && item.end_line == 4
+    }));
+    Ok(())
+}
