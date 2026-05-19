@@ -167,6 +167,7 @@ fn parse_quote_like_operator(bytes: &[u8], start: usize) -> Option<usize> {
     None
 }
 
+#[derive(Clone, Copy)]
 enum QuoteLikeKind {
     SingleSegment,
     DoubleSegment,
@@ -221,7 +222,7 @@ fn consume_delimited_segment(bytes: &[u8], start: usize) -> Option<usize> {
         idx += 1;
     }
 
-    None
+    Some(bytes.len())
 }
 
 fn is_identifier_byte(b: u8) -> bool {
@@ -229,13 +230,13 @@ fn is_identifier_byte(b: u8) -> bool {
 }
 
 fn is_operator_boundary(bytes: &[u8], op_end: usize) -> bool {
-    match bytes.get(op_end) {
-        Some(next) => {
-            !(is_identifier_byte(*next)
-                || matches!(next, b'$' | b'@' | b'%' | b'\'' | b':' | b'#' | b'{' | b'['))
-        }
-        None => true,
+    // Require a non-identifier boundary after multi-character operators so
+    // identifiers like `qqx` aren't mistaken for `qq`.
+    if op_end < bytes.len() && is_identifier_byte(bytes[op_end]) {
+        return false;
     }
+
+    true
 }
 
 fn matching_delimiter(open: u8) -> (u8, bool) {
