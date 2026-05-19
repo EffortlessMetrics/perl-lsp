@@ -1,6 +1,12 @@
 use perl_lexer::PerlLexer;
 use proptest::prelude::*;
 
+mod prop_support;
+
+use prop_support::mixed_source;
+const REGRESS_DIR: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/tests/_proptest-regressions/prop_lexer_termination");
+
 fn matching_delimiter(open: char) -> char {
     match open {
         '(' => ')',
@@ -12,13 +18,10 @@ fn matching_delimiter(open: char) -> char {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig {
-        cases: 256,
-        ..ProptestConfig::default()
-    })]
+    #![proptest_config(prop_support::persisted_config(REGRESS_DIR, 256))]
 
     #[test]
-    fn lexer_terminates_without_panics(s in ".{0,300}") {
+    fn lexer_terminates_without_panics(s in mixed_source(120)) {
         // This test ensures:
         // 1. The lexer never panics (no underflows, no slice bounds errors)
         // 2. The lexer always terminates (no infinite loops)

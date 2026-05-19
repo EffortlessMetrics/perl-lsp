@@ -357,6 +357,6 @@ mod tests {
         assert_eq!(config.timeout_duration(), Duration::from_millis(DEFAULT_TIMEOUT_MS as u64));
 
         let config = TcpAttachConfig::new("localhost".to_string(), 13603).with_timeout(10000);
-        assert_eq!(config.timeout_duration(), Duration::from_millis(10000));
+        assert_eq!(config.timeout_duration(), Duration::from_secs(10));
     }
 }

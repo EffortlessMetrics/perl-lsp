@@ -8,6 +8,7 @@
 
 use perl_dap::DapMessage;
 use perl_dap::DebugAdapter;
+use perl_lsp_rs_core::config::PerlOracleEnv;
 use perl_tdd_support::must_some;
 use serde_json::json;
 use std::fs;
@@ -19,6 +20,10 @@ fn write_script(dir: &tempfile::TempDir, filename: &str, content: &str) -> std::
         panic!("write test script failed: {e}");
     }
     path
+}
+
+fn perl_available() -> bool {
+    PerlOracleEnv::for_dap_test_fixture().is_some()
 }
 
 // ── syntax error cases ──────────────────────────────────────────────────────
@@ -234,6 +239,57 @@ fn test_launch_syntax_check_honors_perl5lib_env_override() -> Result<(), Box<dyn
                     "Launch should honor PERL5LIB during syntax check, got: {msg}"
                 );
             }
+        }
+        _ => return Err("Expected a Response message".into()),
+    }
+    Ok(())
+}
+
+#[test]
+fn test_launch_include_paths_are_receipt_only_until_dap_module_path_cutover()
+-> Result<(), Box<dyn std::error::Error>> {
+    if !perl_available() {
+        return Ok(());
+    }
+
+    let mut adapter = DebugAdapter::new();
+    let tmp = tempfile::tempdir()?;
+    let lib_dir = tmp.path().join("lib");
+    fs::create_dir_all(lib_dir.join("TrustReceipt"))?;
+
+    fs::write(
+        lib_dir.join("TrustReceipt").join("Helper.pm"),
+        "package TrustReceipt::Helper;\nsub ok { 1 }\n1;\n",
+    )?;
+
+    let script = write_script(
+        &tmp,
+        "needs_launch_include_paths.pl",
+        "use strict;\nuse warnings;\nuse TrustReceipt::Helper;\nprint TrustReceipt::Helper::ok();\n",
+    );
+
+    let args = json!({
+        "program": must_some(script.to_str()),
+        "cwd": must_some(tmp.path().to_str()),
+        "args": [],
+        "includePaths": [must_some(lib_dir.to_str())],
+        "env": {}
+    });
+
+    let response = adapter.handle_request(1, "launch", Some(args));
+
+    match response {
+        DapMessage::Response { success, message, .. } => {
+            assert!(
+                !success,
+                "launch.json includePaths must not be treated as native DAP module-resolution authority without a DAP module-path cutover receipt"
+            );
+            let msg = must_some(message);
+            assert!(
+                msg.contains("Module TrustReceipt::Helper not found")
+                    || msg.contains("TrustReceipt/Helper.pm"),
+                "Launch should report the module as unresolved when only launch.json includePaths are provided, got: {msg}"
+            );
         }
         _ => return Err("Expected a Response message".into()),
     }

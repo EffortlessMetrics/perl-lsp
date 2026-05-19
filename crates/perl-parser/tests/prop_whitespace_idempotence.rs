@@ -1,9 +1,14 @@
 use proptest::prelude::*;
 
+const REGRESS_DIR: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/tests/_proptest-regressions/prop_whitespace_idempotence");
+
 // Include the shared utilities (which includes TokenType import)
 include!("prop_test_utils.rs");
 
 proptest! {
+    #![proptest_config(parser_proptest_config(REGRESS_DIR, 256))]
+
     #[test]
     fn respace_preserving_is_idempotent(
         s in ".{0,200}",

@@ -369,24 +369,7 @@ mutation-regression:
 
 # Bounded fuzz run (quick fuzzing for CI/nightly)
 fuzz-bounded:
-    @echo "🔥 Running bounded fuzz testing (60 seconds per target)..."
-    @cargo +nightly fuzz run builtin_functions -- -max_total_time=60 || echo "  Builtin functions fuzzing complete"
-    @cargo +nightly fuzz run declaration_parsing -- -max_total_time=60 || echo "  Declaration parsing fuzzing complete"
-    @cargo +nightly fuzz run heredoc_parsing -- -max_total_time=60 || echo "  Heredoc fuzzing complete"
-    @cargo +nightly fuzz run incremental_edit_sequences -- -max_total_time=60 || echo "  Incremental edit sequences fuzzing complete"
-    @cargo +nightly fuzz run lsp_cancellation_registry -- -max_total_time=60 || echo "  LSP cancellation registry fuzzing complete"
-    @cargo +nightly fuzz run lsp_navigation -- -max_total_time=60 || echo "  LSP navigation fuzzing complete"
-    @cargo +nightly fuzz run parser_integration -- -max_total_time=60 || echo "  Parser integration fuzzing complete"
-    @cargo +nightly fuzz run quote_operators -- -max_total_time=60 || echo "  Quote operators fuzzing complete"
-    @cargo +nightly fuzz run semantic_model -- -max_total_time=60 || echo "  Semantic model fuzzing complete"
-    @cargo +nightly fuzz run symbol_query_ranking -- -max_total_time=60 || echo "  Symbol query ranking fuzzing complete"
-    @cargo +nightly fuzz run substitution_parsing -- -max_total_time=60 || echo "  Substitution fuzzing complete"
-    @cargo +nightly fuzz run utf16_roundtrip -- -max_total_time=60 || echo "  UTF-16 roundtrip fuzzing complete"
-    @cargo +nightly fuzz run unicode_positions -- -max_total_time=60 || echo "  Unicode positions fuzzing complete"
-    @cargo +nightly fuzz run lexer_tokenization -- -max_total_time=60 || echo "  Lexer tokenization fuzzing complete"
-    @cargo +nightly fuzz run dap_eval_validator -- -max_total_time=60 || echo "  DAP eval validator fuzzing complete"
-    @cargo +nightly fuzz run dap_stack_parser -- -max_total_time=60 || echo "  DAP stack parser fuzzing complete"
-    @echo "✅ Fuzz testing complete"
+    @./scripts/fuzz-bounded --duration 60
 
 # `bench` is the canonical benchmark target; keep this as a compatibility alias.
 benchmarks: bench
@@ -2202,6 +2185,7 @@ fuzz-regression duration='30':
     @just fuzz heredoc_parsing {{duration}} || true
     @just fuzz incremental_edit_sequences {{duration}} || true
     @just fuzz lsp_cancellation_registry {{duration}} || true
+    @just fuzz module_surface {{duration}} || true
     @just fuzz parser_integration {{duration}} || true
     @just fuzz quote_operators {{duration}} || true
     @just fuzz semantic_model {{duration}} || true

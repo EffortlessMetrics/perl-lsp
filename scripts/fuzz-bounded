@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    cat <<'USAGE'
+Usage: scripts/fuzz-bounded [--list] [--duration SECONDS] [-- TARGET...]
+
+Runs every cargo-fuzz binary declared in fuzz/Cargo.toml with a bounded time
+budget. Set FUZZ_MAX_LEN and FUZZ_TIMEOUT to override libFuzzer limits.
+USAGE
+}
+
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+duration=${FUZZ_DURATION:-60}
+list_only=0
+targets=()
+
+while (($#)); do
+    case "$1" in
+        --list)
+            list_only=1
+            shift
+            ;;
+        --duration)
+            if (($# < 2)); then
+                echo "error: --duration requires a value" >&2
+                usage >&2
+                exit 2
+            fi
+            duration=$2
+            shift 2
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        --)
+            shift
+            targets+=("$@")
+            break
+            ;;
+        *)
+            targets+=("$1")
+            shift
+            ;;
+    esac
+done
+
+if [[ ! $duration =~ ^[0-9]+$ ]] || ((duration == 0)); then
+    echo "error: duration must be a positive integer number of seconds" >&2
+    exit 2
+fi
+
+mapfile -t discovered_targets < <(
+    cargo metadata \
+        --manifest-path "$repo_root/fuzz/Cargo.toml" \
+        --no-deps \
+        --format-version 1 \
+    | python3 -c 'import json, sys
+metadata = json.load(sys.stdin)
+targets = sorted(
+    target["name"]
+    for package in metadata["packages"]
+    for target in package["targets"]
+    if "bin" in target["kind"]
+)
+print("\n".join(targets))'
+)
+
+if ((${#targets[@]} == 0)); then
+    targets=("${discovered_targets[@]}")
+fi
+
+if ((list_only)); then
+    printf '%s\n' "${targets[@]}"
+    exit 0
+fi
+
+declare -A known=()
+for target in "${discovered_targets[@]}"; do
+    known["$target"]=1
+done
+
+unknown=()
+for target in "${targets[@]}"; do
+    if [[ -z ${known[$target]+x} ]]; then
+        unknown+=("$target")
+    fi
+done
+
+if ((${#unknown[@]} > 0)); then
+    echo "error: unknown fuzz target(s): ${unknown[*]}" >&2
+    echo "known targets:" >&2
+    printf '  %s\n' "${discovered_targets[@]}" >&2
+    exit 2
+fi
+
+max_len=${FUZZ_MAX_LEN:-1000}
+timeout=${FUZZ_TIMEOUT:-25}
+
+echo "🔥 Running ${#targets[@]} fuzz target(s) for ${duration}s each"
+for target in "${targets[@]}"; do
+    echo ">>> cargo +nightly fuzz run $target -- -max_total_time=$duration -max_len=$max_len -timeout=$timeout"
+    cargo +nightly fuzz run "$target" -- \
+        -max_total_time="$duration" \
+        -max_len="$max_len" \
+        -timeout="$timeout"
+done
+echo "✅ Bounded fuzz testing complete"

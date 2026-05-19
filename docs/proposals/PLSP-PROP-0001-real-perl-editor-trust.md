@@ -42,7 +42,8 @@ to those sources instead of duplicating their tables.
 
 - [parser accuracy next](../project/status/parser_accuracy_next.md) reports no
   active failure packets and no measurement gaps, then hands off capability
-  work to raw parser buckets.
+  work to raw parser buckets only when generated parser status lists a nonzero
+  raw bucket.
 - [parser status](../project/status/parser.md) tracks the three parser baseline
   model: Ubuntu system Perl, CPAN top 1000, and the repo-owned project corpus.
 - [parser status](../project/status/parser.md#parser-accuracy-observability)
@@ -56,9 +57,13 @@ to those sources instead of duplicating their tables.
   [semantic shadow compare](../project/status/semantic_shadow_compare.md) own
   compiler-backed provider proof and regression status.
 
-At proposal creation time, the generated parser handoff points to the largest
+At proposal creation time, the generated parser handoff pointed to the largest
 raw bucket inside the largest nonzero failure cluster, with stale bucket counts
-treated as discovery input until a refreshed corpus receipt proves movement.
+treated as discovery input until a refreshed corpus receipt proved movement.
+When current generated status lists `none`, agents must not start parser
+bucket work from those historical names; they should refresh corpus evidence,
+use a current failing source-backed fixture, or move to the next provider or
+real-workspace trust lane.
 
 ## Operational Evidence
 
@@ -79,7 +84,9 @@ operator pattern remembered from prior transcripts.
 ## Success Criteria
 
 - parser measurement queue routes to capability work when clear
-- raw buckets are split into PR-sized fixture or parser-fix lanes
+- raw buckets are split into PR-sized fixture or parser-fix lanes only when
+  generated status lists a current nonzero bucket or a current source-backed
+  fixture fails
 - stale corpus receipts are labeled and refreshed before bucket-count claims
 - fixture-only PRs lock source-backed real-Perl shapes without claiming count
   reduction
@@ -96,8 +103,10 @@ Use generated status as a control plane.
 
 `parser_accuracy_next.md` points to measurement gaps when they exist. When
 measurement wiring is clear, it points to `parser.md#raw-failure-buckets`.
-Each raw bucket lane either refreshes the corpus receipt or lands focused,
-source-backed fixtures without claiming bucket-count reduction.
+Raw bucket lanes proceed only from current nonzero generated bucket rows or
+current failing source-backed fixtures. If generated status lists `none`, the
+valid next step is to refresh corpus evidence or move to provider and
+real-workspace trust work, not to restart stale bucket names.
 
 Provider cutover proceeds only after confidence and freshness receipts prove the
 candidate behavior. Stale facts, low-confidence facts, dynamic boundaries, and
@@ -209,7 +218,8 @@ git diff --check
 The lane can close when all of these are true:
 
 - parser measurement status routes clear measurement queues to raw capability
-  buckets without chat context
+  buckets without chat context only when generated status lists current
+  nonzero bucket evidence
 - raw-bucket fixture/fix lanes state receipt freshness and avoid stale
   bucket-count claims
 - provider confidence receipts cover completion, goto, hover, references,

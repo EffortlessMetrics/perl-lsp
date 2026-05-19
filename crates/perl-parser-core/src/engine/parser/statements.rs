@@ -1002,6 +1002,12 @@ impl<'a> Parser<'a> {
                                 // For other functions, require commas (or fat arrows) between arguments
                                 // Perl allows `push @array => $value` as well as `push @array, $value`
                                 while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
+                                    if self
+                                        .consume_bare_lvalue_assignment_separator(func_name.as_ref())?
+                                    {
+                                        break;
+                                    }
+
                                     self.consume_token()?; // consume comma or fat arrow
 
                                     // Handle `, =>` (comma then fat arrow) — consume
@@ -1032,6 +1038,8 @@ impl<'a> Parser<'a> {
                                 NodeKind::FunctionCall { name: func_name.to_string(), args },
                                 SourceLocation { start, end },
                             );
+                            let call = self
+                                .parse_lvalue_builtin_assignment_tail(func_name.as_ref(), call)?;
                             self.parse_named_unary_statement_tail(call)
                         }
                     }

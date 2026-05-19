@@ -18,9 +18,13 @@ capability work.
 When [parser accuracy next](../project/status/parser_accuracy_next.md) has no
 active failure packets and no measurement gaps, agents must follow
 [parser raw failure buckets](../project/status/parser.md#raw-failure-buckets)
-for capability work. The next parser capability lane is the largest raw bucket
-inside the largest nonzero parser failure cluster unless the implementation
-plan explicitly parks it with a reason.
+for capability work only when generated parser status lists a nonzero raw
+bucket. The next parser capability lane is the largest raw bucket inside the
+largest nonzero parser failure cluster unless the implementation plan
+explicitly parks it with a reason. If generated status lists `none`, agents
+must not start bucket work from stale context; they must refresh the corpus
+receipt, identify a current failing source-backed fixture, or move to the next
+provider or real-workspace trust lane.
 
 Generated sections are not hand-edited. Status changes must come from xtask
 generators and be covered by the relevant parser status checks.
@@ -33,14 +37,15 @@ discovery, but they do not prove current bucket movement unless refreshed.
 | Receipt state | Allowed use | Claim boundary |
 |---|---|---|
 | Fresh corpus receipt | Route parser-fix lanes and update bucket counts | May claim bucket count movement when generated status updates prove it |
-| Stale corpus receipt | Discover source-backed fixture shapes | Must not claim bucket count movement |
+| Stale corpus receipt | Discover source-backed fixture shapes when current generated status still lists a nonzero bucket or a current fixture fails | Must not claim bucket count movement |
 | Fixture-only PR | Lock one source-backed real-Perl shape | Must not claim corpus improvement or bucket reduction |
 | Parser-fix PR | Change parser behavior for one narrow failure shape | May claim behavior fix only for covered fixtures until corpus receipt refresh |
 
 Before starting a bucket-count closeout claim, refresh the Linux corpus receipt
 with the corpus sweep command when the required roots are available. When the
-roots are not available, continue with fixture extraction only and state that
-fresh corpus movement is deferred.
+roots are not available, continue with fixture extraction only when current
+generated status lists a nonzero bucket or a current source-backed fixture
+fails against the parser. State that fresh corpus movement is deferred.
 
 ## Bucket Lane Shape
 
@@ -48,22 +53,26 @@ Each raw bucket lane must stay PR-sized.
 
 1. Verify current status pointers in `parser_accuracy_next.md` and `parser.md`.
 2. Check receipt freshness in `parser.md#raw-failure-buckets`.
-3. Refresh the Linux corpus receipt when available.
-4. If the receipt cannot be refreshed, extract one focused source-backed fixture.
-5. Add no parser runtime change unless the new fixture fails.
-6. Keep fixture-only PRs separate from parser runtime fixes.
-7. Run focused parser tests and parser status checks.
-8. Regenerate generated status only through xtask commands.
-9. State the claim boundary in the PR body.
+3. Stop if generated status lists `none` and no current source-backed fixture
+   fails against the parser.
+4. Refresh the Linux corpus receipt when available.
+5. If the receipt cannot be refreshed, extract one focused source-backed
+   fixture from current failing evidence.
+6. Add no parser runtime change unless the new fixture fails.
+7. Keep fixture-only PRs separate from parser runtime fixes.
+8. Run focused parser tests and parser status checks.
+9. Regenerate generated status only through xtask commands.
+10. State the claim boundary in the PR body.
 
 ## Current Example
 
-The current example bucket is owned by
+Historical example bucket routing is owned by
 [parser raw failure buckets](../project/status/parser.md#raw-failure-buckets).
 At spec creation time, the largest listed raw bucket is
 `unclosed_paren_identifier` under the `heredoc / delimiter handling` cluster.
 This example is illustrative; agents must re-read generated status before
-starting work.
+starting work and must not use this stale bucket name when generated status
+lists `none`.
 
 Valid PR shapes:
 
@@ -86,6 +95,8 @@ Invalid PR shapes:
 A parser bucket PR satisfies this spec when:
 
 - the PR names the source status pointer it follows
+- the PR starts from a current nonzero raw bucket or a current failing
+  source-backed fixture
 - the PR states whether the corpus receipt is fresh or stale
 - fixture-only PRs add one focused source-backed fixture and no parser runtime
   behavior change

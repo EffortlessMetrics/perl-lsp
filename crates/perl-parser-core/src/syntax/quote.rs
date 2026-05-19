@@ -597,6 +597,9 @@ fn scan_inner_string(
     quote: char,
     delimiter: char,
 ) -> Option<(usize, bool)> {
+    if is_word_apostrophe(text, pos, quote) {
+        return None;
+    }
     // Adjacent quotes are literal replacement text (for example s/"/""/g),
     // not a string literal to skip while hunting for the replacement delimiter.
     if text.get(..pos).and_then(|prefix| prefix.chars().next_back()) == Some(quote) {
@@ -636,6 +639,14 @@ fn scan_inner_string(
         local_pos += ch.len_utf8();
     }
     end_of_string.map(|end| (end, contains_delim))
+}
+
+fn is_word_apostrophe(text: &str, pos: usize, quote: char) -> bool {
+    quote == '\''
+        && text
+            .get(..pos)
+            .and_then(|prefix| prefix.chars().next_back())
+            .is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == '_')
 }
 
 /// Like `extract_unpaired_body` but skips over string literals (`"..."` / `'...'`)
