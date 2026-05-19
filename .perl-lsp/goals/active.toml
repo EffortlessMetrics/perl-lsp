@@ -80,10 +80,14 @@ commands = [
 
 [[work_item]]
 id = "editor-trust-user-docs"
-status = "ready"
-spec = "docs/specs/PLSP-SPEC-0002-provider-confidence-receipts.md"
+status = "completed"
+spec = "docs/specs/PLSP-SPEC-0012-user-facing-trust-surfaces.md"
 plan = "plans/editor-trust-ux-closeout/implementation-plan.md#work-item-editor-trust-user-docs"
 current_pointer = "docs/project/status/SUPPORT_TIERS.md"
+receipt = "docs/how-to/EDITOR_TRUST.md"
+setup_receipt = "docs/how-to/PERL_SETUP_TROUBLESHOOTING.md"
+vscode_receipt = "vscode-extension/README.md"
+commands_receipt = "docs/reference/COMMANDS_REFERENCE.md"
 claim_boundary = "Plain-language docs must link to support tiers and avoid broad CPAN/static/refactor claims."
 commands = [
   "cargo xtask check-support-claims",

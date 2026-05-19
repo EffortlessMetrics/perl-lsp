@@ -70,7 +70,7 @@ The initial classes are:
 | `real_workspace_receipt` | Adds or changes real-project editor baseline, latency, memory, or livability receipts. |
 | `release_proof` | Changes release, publish, packaging, semver, managed-binary, or distribution proof. |
 | `dependency_update` | Changes dependency graph, lockfile, toolchain, or dependency policy. |
-| `docs_status_only` | Changes prose, specs, ADRs, dashboards, or generated status without behavior changes. |
+| `docs_status_only` | Changes prose, specs, ADRs, dashboards, generated status, policy, or advisory CI-planning output without product/provider behavior changes. |
 
 When a PR matches multiple classes, routing must use the highest-risk class or
 the union of required checks. A lower-cost class must not hide a behavior change
@@ -400,6 +400,7 @@ Required checks:
 - diff whitespace check
 - docs checker or status validator for the touched docs surface
 - generated-status check when generated docs are changed
+- planner or policy validator when PR-plan, workflow, or policy files change
 
 Optional checks:
 
@@ -416,7 +417,7 @@ Widen if:
 - docs add or promote public behavior claims
 - specs redefine provider or edit-producing behavior
 - generated status is hand-edited
-- docs-only PR touches workflow, policy, or release files
+- advisory CI-planning changes touch workflow, policy, scripts, or release files
 
 Receipt path:
 
