@@ -1143,59 +1143,46 @@ impl LspServer {
             coordinator.notify_change(uri);
         }
 
-        // Re-index the file if it is a Perl source file
+        let loaded_content =
+            uri_to_fs_path(uri).and_then(|path| match read_text_with_encoding_fallback(&path) {
+                Ok(content) => Some(content),
+                Err(e) => {
+                    tracing::debug!(
+                        "Failed to read file for watcher processing ({}): {}",
+                        path.display(),
+                        e
+                    );
+                    None
+                }
+            });
+
+        // Re-index the file if it is a Perl source file.
         #[cfg(feature = "workspace")]
-        if let Some(coordinator) = self.coordinator() {
+        if let (Some(content), Some(coordinator)) = (loaded_content.as_ref(), self.coordinator()) {
             let workspace_index = coordinator.index();
             if is_perl_source_uri(uri) {
-                if let Some(path) = uri_to_fs_path(uri) {
-                    match read_text_with_encoding_fallback(&path) {
-                        Ok(content) => {
-                            if let Ok(url) = url::Url::parse(uri) {
-                                // Clear old index data before re-indexing
-                                workspace_index.clear_file(uri);
-                                match workspace_index.index_file(url, content.clone()) {
-                                    Ok(()) => tracing::debug!("Re-indexed file: {}", uri),
-                                    Err(e) => {
-                                        tracing::warn!("Failed to re-index file {}: {}", uri, e);
-                                    }
-                                }
-                            }
-                        }
+                if let Ok(url) = url::Url::parse(uri) {
+                    // Clear old index data before re-indexing
+                    workspace_index.clear_file(uri);
+                    match workspace_index.index_file(url, content.clone()) {
+                        Ok(()) => tracing::debug!("Re-indexed file: {}", uri),
                         Err(e) => {
-                            tracing::debug!(
-                                "Failed to read file for re-indexing ({}): {}",
-                                path.display(),
-                                e
-                            );
+                            tracing::warn!("Failed to re-index file {}: {}", uri, e);
                         }
                     }
                 }
             }
         }
 
-        // Also update our internal document store if the document is open
+        // Also update our internal document store if the document is open.
         #[cfg(feature = "workspace")]
-        {
+        if let Some(content) = loaded_content {
             let mut documents = self.documents.lock();
             if let Some(doc) = self.get_document_mut(&mut documents, uri) {
-                if let Some(path) = uri_to_fs_path(uri) {
-                    match read_text_with_encoding_fallback(&path) {
-                        Ok(content) => {
-                            doc.text = content;
-                            doc.version += 1;
-                            // Clear cached AST so it is regenerated on next access
-                            doc.ast = None;
-                        }
-                        Err(e) => {
-                            tracing::debug!(
-                                "Failed to read file for document store update ({}): {}",
-                                path.display(),
-                                e
-                            );
-                        }
-                    }
-                }
+                doc.text = content;
+                doc.version += 1;
+                // Clear cached AST so it is regenerated on next access.
+                doc.ast = None;
             }
         }
 
