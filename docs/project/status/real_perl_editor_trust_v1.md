@@ -4,7 +4,7 @@
 > It does not generate metrics, broaden live provider behavior, or replace the
 > provider-specific proof surfaces.
 
-Last reviewed: 2026-05-18.
+Last reviewed: 2026-05-19.
 
 This page answers:
 
@@ -45,6 +45,68 @@ explain-provider-decision exposes the receipt boundary
 The loop is only trusted where each answer can identify its fact source,
 confidence, freshness, source-backed range, fallback state, and dynamic-boundary
 blocker when relevant.
+
+## Release-Candidate Boundary
+
+Real Perl Editor Trust v1 is now a release-candidate boundary for the current
+editor trust surface. It is not a broad provider cutover or a stable/GA product
+claim. The boundary freezes the current support posture so future work can use
+the promotion ledger instead of widening surfaces by default.
+
+### Live With Fallback
+
+These surfaces may use compiler facts only inside their scoped promotion rules,
+and each keeps fallback behavior for unsupported or uncertain cases:
+
+- Completion: partial live visible-symbol support for high-confidence imported
+  and exported facts.
+- Hover: partial live provenance-backed compiler, framework-adapter, and
+  dynamic-boundary explanations.
+- Definition and references: partial live exact/imported source-backed slices.
+- Diagnostics: partial live suppressions and conservative explanations for
+  selected high-confidence semantic evidence.
+- Document symbols: partial live source-backed parser-syntax symbols.
+- Workspace symbols: partial live source-backed ready-index symbols plus the
+  bounded generated-label pilot.
+- Semantic tokens: existing parser/HIR output plus narrow source-backed
+  compiler-token trace slices that emit no new token output.
+- Rename: same-file lexical rename plus the narrow package-local pilot.
+- Safe delete: exact unreferenced source-backed subroutine pilot with current
+  source, workspace reference, workspace identity, and rollback guards.
+
+### Preview Or Explanation Only
+
+These surfaces are user-facing trust UX, not broader edit authorization:
+
+- `perl.previewPackageRename` exposes planned edits, blockers, fallback state,
+  and rollback/no-edit proof without authorizing broad package rename.
+- `perl.previewSafeDelete` exposes allowed/blocked no-edit plans when live delete
+  proof is incomplete.
+- `perl.explainProviderDecision`, diagnostic explanations, missing-module lookup,
+  and workspace trust report expose copyable receipts and setup boundaries.
+- Workspace trust report setup hints are advisory and derived from existing
+  state only; they do not probe Perl, run perldoc, start DAP, or change
+  subprocess behavior.
+
+### Blocked Or Deferred
+
+These cases remain blocked, fallback-only, receipt-only, or deferred until a
+new row in the promotion ledger names the fact class, promotion rule, fallback
+rule, blocker rule, and receipt:
+
+- Broad generated/no-source workspace-symbol promotion.
+- Broad compiler-backed semantic-token output.
+- Broad package/compiler-backed rename.
+- Generated, imported/exported, no-source, dynamic, stale, ambiguous, or
+  referenced safe-delete requests.
+- Diagnostic correctness claims beyond the scoped explanation and selected
+  suppression receipts.
+- DAP `includePaths` behavior cutover beyond the current report/config metadata
+  boundary.
+
+New compiler facts, including receiver-expression facts for future
+receiver-aware method completion, are substrate only until a provider row
+promotes one fact class through the ledger.
 
 ## Current Dashboard
 
