@@ -224,14 +224,14 @@ pub fn folding_ranges_from_text(src: &str, limit: usize) -> Vec<serde_json::Valu
         let trimmed = line.trim_start();
 
         // Skip lines that look like strings (basic heuristic)
-        if trimmed.starts_with('"') || trimmed.starts_with('\'') || trimmed.starts_with('`') {
+        if line_looks_like_string(trimmed) {
             continue;
         }
 
         // POD documentation blocks
-        if trimmed.starts_with("=pod") || trimmed.starts_with("=head") {
+        if line_starts_pod(trimmed) {
             pod_start = Some(i);
-        } else if trimmed.starts_with("=cut") {
+        } else if line_ends_pod(trimmed) {
             if let Some(start) = pod_start.take() {
                 if i > start {
                     out.push(serde_json::json!({
@@ -314,6 +314,18 @@ fn count_braces_in_line(line: &str) -> (usize, usize) {
     }
 
     (opens, closes)
+}
+
+fn line_looks_like_string(line: &str) -> bool {
+    line.starts_with('"') || line.starts_with('\'') || line.starts_with('`')
+}
+
+fn line_starts_pod(line: &str) -> bool {
+    line.starts_with("=pod") || line.starts_with("=head")
+}
+
+fn line_ends_pod(line: &str) -> bool {
+    line.starts_with("=cut")
 }
 
 #[cfg(test)]
@@ -457,5 +469,20 @@ sub foo {
     fn test_count_braces_in_comments() {
         // Braces after # should be ignored
         assert_eq!(count_braces_in_line("my $x = 1; # { comment"), (0, 0));
+    }
+
+    #[test]
+    fn test_folding_line_heuristics() {
+        assert!(line_looks_like_string(r#""quoted""#));
+        assert!(line_looks_like_string("'quoted'"));
+        assert!(line_looks_like_string("`quoted`"));
+        assert!(!line_looks_like_string("sub foo {"));
+
+        assert!(line_starts_pod("=pod"));
+        assert!(line_starts_pod("=head1 NAME"));
+        assert!(!line_starts_pod("=cut"));
+
+        assert!(line_ends_pod("=cut"));
+        assert!(!line_ends_pod("=pod"));
     }
 }
