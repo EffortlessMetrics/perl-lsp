@@ -104,15 +104,16 @@ rule, blocker rule, and receipt:
 - DAP `includePaths` behavior cutover beyond the current report/config metadata
   boundary.
 
-New compiler facts, including receiver-expression facts for future
-receiver-aware method completion, are substrate only until a provider row
-promotes one fact class through the ledger.
+New compiler facts are substrate only until a provider row promotes one fact
+class through the ledger. Receiver-expression facts now have one narrow
+source-backed completion pilot; every other receiver class remains substrate,
+fallback, or blocked until its own receipt promotes it.
 
 ## Current Dashboard
 
 | Surface | Current state | Real-workspace receipt state | Fallback / blocker coverage | Next proof |
 | --- | --- | --- | --- | --- |
-| Completion | `partial live / shadowed` | Mojolicious visible-symbol ranking receipt covers candidate counts, top-N churn, useful/noisy additions, generated labels, and dynamic/fallback labels for scenario 28 | Legacy fallback; generated and dynamic-boundary candidates remain shadowed or blocked; ordinary completion requests persist provider-local decision traces for explain-provider-decision | Additional project-shape completion quality receipts before broader generated, dynamic, method, or workspace-wide completion cutover |
+| Completion | `partial live / source-backed receiver pilot / shadowed` | Mojolicious visible-symbol ranking receipt covers candidate counts, top-N churn, useful/noisy additions, generated labels, and dynamic/fallback labels for scenario 28; receiver pilot receipts prove exact source-backed hash-slot receiver ranking and dynamic hash-key fallback preservation | Legacy fallback; unknown, generated/no-source, stale, low-confidence, and dynamic-boundary receiver candidates remain fallback, shadowed, or blocked; ordinary completion requests persist provider-local decision traces for explain-provider-decision | Additional real-workspace receiver-quality receipts before broader generated, dynamic, method, or workspace-wide completion cutover |
 | Hover | `partial live / provenance-backed` | Mojolicious scenario 29 records exact, imported, generated/framework, dynamic-shaped, module-resolution, and fallback/missing-fact hover surfaces | Legacy fallback; imported, generated, dynamic-boundary, and fallback paths are labeled in receipts | Additional project-shape hover quality receipts before broader generated/dynamic expansion |
 | Goto definition | `partial live exact/imported` | Mojolicious scenario 30 records module-resolution, exact-local, imported-symbol, and dynamic-boundary-shaped definition probes | Legacy fallback for generated/no-source, dynamic, stale, low-confidence, and ambiguous candidates; ordinary goto-definition requests persist provider-local decision traces for explain-provider-decision | Additional generated/dynamic project-shape receipts with no false-exact source-location claims |
 | References | `partial live exact/imported` | Mojolicious scenario 30 records exact-local, imported-symbol, and declaration-including boundary reference probes | Legacy fallback for generated/no-source, declaration-including, coderef, typeglob, dynamic, stale, low-confidence, and ambiguous cases; ordinary references requests persist provider-local decision traces for explain-provider-decision | Precision/recall receipts for generated, coderef, typeglob, dynamic, and broader declaration-including cases |
@@ -251,6 +252,13 @@ metadata rather than `@INC` authority for syntax-check or debug-launch
 subprocesses. Explicit launch `env.PERL5LIB` remains the current module-path
 authority. This receipt records the limitation without changing DAP launch
 behavior or promoting broader setup-health claims.
+The receiver-aware completion pilot closes the current receiver-fact completion
+cutover item for one source-backed class: exact hash-slot receiver facts may
+rank method candidates above fallback, while dynamic hash keys preserve bounded
+fallback and do not become exact receiver evidence. Completion remains
+`partial-live-with-fallback`; broader generated, dynamic, unknown,
+low-confidence, stale, and workspace-wide method completion still need separate
+proof.
 
 1. `test(workspace-symbols): add additional generated/no-source project variant only if broader generated-symbol expansion is being considered`
 2. `test(rename): keep package/compiler-backed fallback and edit-freshness receipts current before broader promotion`
