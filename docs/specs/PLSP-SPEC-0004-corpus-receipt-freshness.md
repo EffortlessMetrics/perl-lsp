@@ -1,13 +1,32 @@
 # PLSP-SPEC-0004: Corpus receipt freshness
 
-Status: proposed
+Status: accepted
 Owner: perl-lsp maintainers
 Linked proposal: [PLSP-PROP-0001](../proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
 Linked specs:
 - [PLSP-SPEC-0001](PLSP-SPEC-0001-parser-compatibility-bucket-closeout.md)
-Linked ADRs: planned `PLSP-ADR-0001`
-Linked plan: planned `plans/real-perl-editor-trust/implementation-plan.md`
+Linked ADRs: [PLSP-ADR-0001](../adr/PLSP-ADR-0001-generated-status-is-control-plane.md)
+Linked plan: [Real Perl Editor Trust implementation plan](../../plans/real-perl-editor-trust/implementation-plan.md)
+Implemented by:
+- [parser status](../project/status/parser.md)
+- [parser accuracy next](../project/status/parser_accuracy_next.md)
+- [Linux corpus refresh receipt](../forensics/2026-05-18-linux-system-corpus-refresh.md)
+- [Real Perl Editor Trust implementation plan](../../plans/real-perl-editor-trust/implementation-plan.md)
+- [completed active goal manifest](../../.perl-lsp/goals/active.toml)
 Status impact: parser status, parser raw buckets, support claims
+
+## Current implementation status
+
+This spec is implemented as a control-plane rule. Current evidence lives in:
+
+- [parser status](../project/status/parser.md)
+- [parser accuracy next](../project/status/parser_accuracy_next.md)
+- [Linux corpus refresh receipt](../forensics/2026-05-18-linux-system-corpus-refresh.md)
+- [Real Perl Editor Trust routing dashboard](../project/status/real_perl_editor_trust_v1.md)
+- [Real Perl Editor Trust implementation plan](../../plans/real-perl-editor-trust/implementation-plan.md)
+
+Current next work is not stored here; see the routing dashboard and generated
+parser status.
 
 ## Contract
 

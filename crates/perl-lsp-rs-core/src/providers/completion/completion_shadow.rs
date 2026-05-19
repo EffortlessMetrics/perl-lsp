@@ -32,7 +32,7 @@
 //!   Dynamic/Unavailable → show low or omit.
 
 use perl_semantic_facts::{
-    Confidence, DefinitionCandidate, FileId, Provenance, ProviderFactFreshness,
+    Confidence, DefinitionCandidate, EntityKind, FileId, Provenance, ProviderFactFreshness,
     ProviderFactSourceKind, ProviderFactTrace, ProviderFallbackState, ProviderSurface, ScopeId,
     VisibleSymbol, VisibleSymbolSource,
 };
@@ -154,6 +154,8 @@ pub fn method_completion_shadow<Q: SemanticQueries>(
             .extend(semantic_queries.method_candidates(receiver_package, method_name));
     }
     let new_summary = method_candidates_to_summary(&semantic_candidates);
+    let fact_source_traces =
+        method_completion_fact_source_traces(&semantic_candidates, ProviderFallbackState::Shadow);
 
     let input_label = if method_prefix.is_empty() {
         format!("{receiver_package}->")
@@ -161,12 +163,17 @@ pub fn method_completion_shadow<Q: SemanticQueries>(
         format!("{receiver_package}->{method_prefix}")
     };
 
-    let receipt = SemanticShadowCompareReceipt::from_summaries(
+    let receipt = SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
         ShadowQueryName::MethodCandidates,
         ShadowQueryInput { symbol: input_label },
         old_summary,
         new_summary,
-        vec![format!("probed_methods={}", probed_methods.len())],
+        vec![
+            format!("receiver_package={receiver_package}"),
+            format!("method_prefix={method_prefix}"),
+            format!("probed_methods={}", probed_methods.len()),
+        ],
+        fact_source_traces,
     );
 
     tracing::debug!(
@@ -580,6 +587,47 @@ fn method_candidate_identity(candidate: &DefinitionCandidate) -> String {
         Some(name) if !name.is_empty() => name.to_string(),
         _ => candidate.canonical_name.clone(),
     }
+}
+
+fn method_completion_fact_source_traces(
+    candidates: &[DefinitionCandidate],
+    fallback_state: ProviderFallbackState,
+) -> Vec<ProviderFactTrace> {
+    let mut traces = Vec::new();
+    for candidate in candidates {
+        let source = match candidate.kind {
+            EntityKind::GeneratedMember => ProviderFactSourceKind::FrameworkAdapter,
+            EntityKind::ExternalSymbol | EntityKind::Unknown => ProviderFactSourceKind::Fallback,
+            _ => ProviderFactSourceKind::SemanticFact,
+        };
+        traces.push(ProviderFactTrace::new(
+            ProviderSurface::Completion,
+            source,
+            candidate.provenance,
+            candidate.confidence,
+            ProviderFactFreshness::Fresh,
+            fallback_state,
+            None,
+            Some(candidate.anchor_id),
+            Some(1),
+        ));
+    }
+
+    if traces.is_empty() {
+        traces.push(ProviderFactTrace::new(
+            ProviderSurface::Completion,
+            ProviderFactSourceKind::Fallback,
+            Provenance::SearchFallback,
+            Confidence::Low,
+            ProviderFactFreshness::NotApplicable,
+            ProviderFallbackState::Fallback,
+            None,
+            None,
+            Some(1),
+        ));
+    }
+
+    traces
 }
 
 #[cfg(test)]
@@ -1011,6 +1059,37 @@ mod tests {
     }
 
     #[test]
+    fn method_shadow_receipt_records_source_backed_receiver_fact_trace()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let candidate = make_method_candidate(
+            "bark",
+            "Dog::bark",
+            "Dog",
+            EntityKind::Method,
+            DefinitionRank::SamePackage,
+            DefinitionRankReason::SamePackage,
+            10,
+        );
+        let queries = MethodCandidateStub::new(vec![("Dog", "bark", vec![candidate])]);
+
+        let result =
+            method_completion_shadow(vec!["bark".to_string()], vec![], &queries, "Dog", "ba");
+
+        assert!(result.receipt.notes.iter().any(|note| note == "receiver_package=Dog"));
+        assert!(result.receipt.notes.iter().any(|note| note == "method_prefix=ba"));
+        assert!(result.receipt.fact_source_traces.iter().any(|trace| {
+            trace.surface == ProviderSurface::Completion
+                && trace.source == ProviderFactSourceKind::SemanticFact
+                && trace.provenance == Provenance::ExactAst
+                && trace.confidence == Confidence::High
+                && trace.freshness == ProviderFactFreshness::Fresh
+                && trace.fallback_state == ProviderFallbackState::Shadow
+                && trace.anchor_id == Some(AnchorId(110))
+        }));
+        Ok(())
+    }
+
+    #[test]
     fn method_shadow_reports_improved_for_inherited_probe() -> Result<(), Box<dyn std::error::Error>>
     {
         let candidate = make_method_candidate(
@@ -1050,6 +1129,26 @@ mod tests {
     }
 
     #[test]
+    fn method_shadow_receipt_records_fallback_trace_when_receiver_fact_missing()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let queries = MethodCandidateStub::new(vec![]);
+
+        let result =
+            method_completion_shadow(vec!["name".to_string()], vec![], &queries, "Person", "");
+
+        assert!(result.receipt.fact_source_traces.iter().any(|trace| {
+            trace.surface == ProviderSurface::Completion
+                && trace.source == ProviderFactSourceKind::Fallback
+                && trace.provenance == Provenance::SearchFallback
+                && trace.confidence == Confidence::Low
+                && trace.freshness == ProviderFactFreshness::NotApplicable
+                && trace.fallback_state == ProviderFallbackState::Fallback
+                && trace.anchor_id.is_none()
+        }));
+        Ok(())
+    }
+
+    #[test]
     fn method_shadow_supports_generated_member_candidates() -> Result<(), Box<dyn std::error::Error>>
     {
         let candidate = make_method_candidate(
@@ -1068,6 +1167,13 @@ mod tests {
 
         assert_eq!(result.receipt.new_result.identities, vec!["name".to_string()]);
         assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Improved);
+        assert!(result.receipt.fact_source_traces.iter().any(|trace| {
+            trace.surface == ProviderSurface::Completion
+                && trace.source == ProviderFactSourceKind::FrameworkAdapter
+                && trace.provenance == Provenance::ExactAst
+                && trace.confidence == Confidence::High
+                && trace.fallback_state == ProviderFallbackState::Shadow
+        }));
         Ok(())
     }
 

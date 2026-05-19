@@ -1,6 +1,9 @@
-use super::type_facts::TypeFact;
+use super::type_facts::{
+    ArrayShape, DynamicBoundary, HashShape, ObjectShape, ShapeFact, TypeEvidence, TypeFact,
+};
 use crate::ast::{Node, NodeKind};
-use std::collections::HashMap;
+use perl_semantic_facts::Confidence;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::sync::Arc;
 
@@ -359,6 +362,15 @@ impl TypeInferenceEngine {
         Ok(ty)
     }
 
+    /// Infer a rich type fact for an expression using the engine's current
+    /// global environment.
+    pub fn infer_expr_fact(&mut self, expr: &Node) -> TypeFact {
+        let mut env = std::mem::take(&mut self.global_env);
+        let fact = self.infer_expr_fact_in_env(expr, &mut env);
+        self.global_env = env;
+        fact
+    }
+
     /// Infer type for a single node
     fn infer_node(
         &mut self,
@@ -471,6 +483,16 @@ impl TypeInferenceEngine {
                 Ok(Hash { key: Box::new(key_type), value: Box::new(value_type) })
             }
 
+            NodeKind::Assignment { lhs, rhs, op } => {
+                if op == "=" {
+                    let fact = self.assign_expr_fact(lhs, rhs, env);
+                    Ok(fact.erased_type())
+                } else {
+                    let rhs_ty = self.infer_node(rhs, env)?;
+                    Ok(rhs_ty)
+                }
+            }
+
             NodeKind::Binary { left, op, right } => {
                 let left_ty = self.infer_node(left, env)?;
                 let right_ty = self.infer_node(right, env)?;
@@ -499,6 +521,10 @@ impl TypeInferenceEngine {
 
                     // Assignment operators
                     "=" | "+=" | "-=" | "*=" | "/=" | ".=" => {
+                        if op == "=" {
+                            let fact = self.assign_expr_fact(left, right, env);
+                            return Ok(fact.erased_type());
+                        }
                         env.set_variable(self.extract_var_name(left), right_ty.clone());
                         Ok(right_ty)
                     }
@@ -596,65 +622,9 @@ impl TypeInferenceEngine {
                     // Strip sigil from name for storage
                     let clean_name = name.trim_start_matches(['$', '@', '%']);
 
-                    // Infer type based on sigil and initializer
-                    let inferred_type = if sigil == "@" {
-                        // Array variable - infer element type from initializer if available
-                        if let Some(init) = initializer {
-                            self.infer_node(init, env)?
-                        } else {
-                            PerlType::Array(Box::new(PerlType::Any))
-                        }
-                    } else if sigil == "%" {
-                        // Hash variable - infer key/value types from initializer if available
-                        if let Some(init) = initializer {
-                            // Check if initializer is an ArrayLiteral (which is how hash literals in parens are parsed)
-                            if let NodeKind::ArrayLiteral { elements } = &init.kind {
-                                // Convert array elements to hash type
-                                if elements.is_empty() {
-                                    PerlType::Hash {
-                                        key: Box::new(PerlType::Scalar(ScalarType::String)),
-                                        value: Box::new(PerlType::Any),
-                                    }
-                                } else if elements.len() % 2 == 0 {
-                                    // Treat as key-value pairs
-                                    let mut value_types = Vec::new();
-                                    for i in (1..elements.len()).step_by(2) {
-                                        value_types.push(self.infer_node(&elements[i], env)?);
-                                    }
-                                    let value_type = self.unify_types(&value_types);
-                                    PerlType::Hash {
-                                        key: Box::new(PerlType::Scalar(ScalarType::String)),
-                                        value: Box::new(value_type),
-                                    }
-                                } else {
-                                    // Odd number of elements - still treat as hash
-                                    PerlType::Hash {
-                                        key: Box::new(PerlType::Scalar(ScalarType::String)),
-                                        value: Box::new(PerlType::Any),
-                                    }
-                                }
-                            } else {
-                                // Normal hash literal or other expression
-                                self.infer_node(init, env)?
-                            }
-                        } else {
-                            PerlType::Hash {
-                                key: Box::new(PerlType::Scalar(ScalarType::String)),
-                                value: Box::new(PerlType::Any),
-                            }
-                        }
-                    } else {
-                        // Scalar variable - infer from initializer
-                        if let Some(init) = initializer {
-                            self.infer_node(init, env)?
-                        } else {
-                            PerlType::Scalar(ScalarType::Undef)
-                        }
-                    };
-
-                    // Store in both environments using the name WITHOUT sigil
-                    self.global_env.set_variable(clean_name.to_string(), inferred_type.clone());
-                    env.set_variable(clean_name.to_string(), inferred_type.clone());
+                    let fact = self.declared_variable_fact(sigil, clean_name, initializer, env);
+                    let inferred_type = fact.erased_type();
+                    env.set_variable_fact(clean_name.to_string(), fact);
 
                     inferred_type
                 } else {
@@ -727,6 +697,282 @@ impl TypeInferenceEngine {
         // Simplified signature parsing
         // In a full implementation, this would parse Perl 5.20+ signatures
         Ok(vec![PerlType::Any])
+    }
+
+    fn infer_expr_fact_in_env(&mut self, node: &Node, env: &mut TypeEnvironment) -> TypeFact {
+        use PerlType::*;
+        use ScalarType::*;
+
+        match &node.kind {
+            NodeKind::ExpressionStatement { expression } => {
+                self.infer_expr_fact_in_env(expression, env)
+            }
+            NodeKind::Number { value } => {
+                let ty = if value.contains('.') || value.contains('e') || value.contains('E') {
+                    Scalar(Float)
+                } else {
+                    Scalar(Integer)
+                };
+                fact_with_evidence(ty, Confidence::High, TypeEvidence::Literal)
+            }
+            NodeKind::String { .. } => {
+                fact_with_evidence(Scalar(String), Confidence::High, TypeEvidence::Literal)
+            }
+            NodeKind::Undef => {
+                fact_with_evidence(Scalar(Undef), Confidence::High, TypeEvidence::Literal)
+            }
+            NodeKind::Variable { sigil, name } => env.get_fact_at(name).unwrap_or_else(|| {
+                let ty = env.get_variable(name).cloned().unwrap_or_else(|| match sigil.as_str() {
+                    "$" => Scalar(Mixed),
+                    "@" => Array(Box::new(Any)),
+                    "%" => Hash { key: Box::new(Scalar(String)), value: Box::new(Any) },
+                    "*" => Glob,
+                    _ => Any,
+                });
+                TypeFact::new(ty, Confidence::Low)
+            }),
+            NodeKind::VariableWithAttributes { variable, .. } => {
+                self.infer_expr_fact_in_env(variable, env)
+            }
+            NodeKind::ArrayLiteral { elements } => self.array_literal_fact(elements, env),
+            NodeKind::HashLiteral { pairs } => self.hash_literal_fact(pairs, env),
+            NodeKind::FunctionCall { name, args } if name == "bless" => {
+                self.bless_expr_fact(args, env)
+            }
+            NodeKind::MethodCall { object, method, .. } if method == "new" => {
+                static_package_node(object)
+                    .map_or_else(TypeFact::unknown, |package| constructor_fact(&package))
+            }
+            NodeKind::Assignment { lhs, rhs, op } if op == "=" => {
+                self.assign_expr_fact(lhs, rhs, env)
+            }
+            NodeKind::Binary { left, op, right } if op == "=" => {
+                self.assign_expr_fact(left, right, env)
+            }
+            NodeKind::Binary { left, op, right } if op == "{}" || op == "->{}" => {
+                self.hash_slot_expr_fact(op, left, right, env)
+            }
+            NodeKind::Binary { left, op, right } if op == "[]" || op == "->[]" => {
+                self.array_index_expr_fact(left, right, env)
+            }
+            _ => self
+                .infer_node(node, env)
+                .map_or_else(|_| TypeFact::unknown(), |ty| TypeFact::new(ty, Confidence::Low)),
+        }
+    }
+
+    fn declared_variable_fact(
+        &mut self,
+        sigil: &str,
+        name: &str,
+        initializer: &Option<Box<Node>>,
+        env: &mut TypeEnvironment,
+    ) -> TypeFact {
+        let mut fact = match (sigil, initializer) {
+            ("%", Some(init)) => self.hash_initializer_fact(init, env),
+            ("%", None) => TypeFact::unknown_hash(),
+            ("@", Some(init)) => self.infer_expr_fact_in_env(init, env),
+            ("@", None) => TypeFact::new(PerlType::Array(Box::new(PerlType::Any)), Confidence::Low),
+            ("$", Some(init)) => self.infer_expr_fact_in_env(init, env),
+            ("$", None) => TypeFact::new(PerlType::Scalar(ScalarType::Undef), Confidence::Low),
+            _ => TypeFact::unknown(),
+        };
+        fact.evidence.push(TypeEvidence::VariableInitializer { name: name.to_string() });
+        fact
+    }
+
+    fn assign_expr_fact(&mut self, lhs: &Node, rhs: &Node, env: &mut TypeEnvironment) -> TypeFact {
+        let mut rhs_fact = self.infer_expr_fact_in_env(rhs, env);
+
+        if let Some(name) = variable_name(lhs) {
+            rhs_fact.evidence.push(TypeEvidence::Assignment { name: name.to_string() });
+            env.set_variable_fact(name.to_string(), rhs_fact.clone());
+            return rhs_fact;
+        }
+
+        if let Some((hash_name, key, is_hashref_slot)) = static_hash_slot_target(lhs) {
+            rhs_fact.evidence.push(TypeEvidence::Assignment { name: hash_name.clone() });
+            let slot_evidence = if is_hashref_slot {
+                TypeEvidence::HashRefSlot { base: format!("${hash_name}"), key: key.clone() }
+            } else {
+                TypeEvidence::HashSlot { hash: format!("${hash_name}"), key: key.clone() }
+            };
+            rhs_fact.evidence.push(slot_evidence);
+            let mut hash_fact = env.get_fact_at(&hash_name).unwrap_or_else(TypeFact::unknown_hash);
+            let mut shape = match hash_fact.shape.take() {
+                Some(ShapeFact::Hash(shape)) => shape,
+                _ => HashShape::new(BTreeMap::new(), None),
+            };
+            shape.slots.insert(key, rhs_fact.clone());
+            hash_fact.ty = hash_type_from_slot_facts(shape.slots.values());
+            hash_fact.confidence = Confidence::High;
+            hash_fact.shape = Some(ShapeFact::Hash(shape));
+            env.set_variable_fact(hash_name, hash_fact);
+            return rhs_fact;
+        }
+
+        rhs_fact
+    }
+
+    fn hash_initializer_fact(&mut self, init: &Node, env: &mut TypeEnvironment) -> TypeFact {
+        match &init.kind {
+            NodeKind::ArrayLiteral { elements } => self.hash_literal_elements_fact(elements, env),
+            NodeKind::HashLiteral { pairs } => self.hash_literal_fact(pairs, env),
+            _ => self.infer_expr_fact_in_env(init, env),
+        }
+    }
+
+    fn hash_literal_fact(&mut self, pairs: &[(Node, Node)], env: &mut TypeEnvironment) -> TypeFact {
+        let mut slots = BTreeMap::new();
+        for (key, value) in pairs {
+            if let Some(key) = static_hash_key(key) {
+                let mut value_fact = self.infer_expr_fact_in_env(value, env);
+                value_fact
+                    .evidence
+                    .push(TypeEvidence::HashSlot { hash: "literal".to_string(), key: key.clone() });
+                slots.insert(key, value_fact);
+            }
+        }
+
+        hash_shape_fact(slots, TypeEvidence::Literal)
+    }
+
+    fn hash_literal_elements_fact(
+        &mut self,
+        elements: &[Node],
+        env: &mut TypeEnvironment,
+    ) -> TypeFact {
+        if !elements.len().is_multiple_of(2) {
+            return hash_shape_fact(BTreeMap::new(), TypeEvidence::Literal);
+        }
+
+        let mut slots = BTreeMap::new();
+        for pair in elements.chunks(2) {
+            let [key, value] = pair else {
+                continue;
+            };
+            let Some(key) = static_hash_key(key) else {
+                return hash_shape_fact(BTreeMap::new(), TypeEvidence::Literal);
+            };
+            let mut value_fact = self.infer_expr_fact_in_env(value, env);
+            value_fact
+                .evidence
+                .push(TypeEvidence::HashSlot { hash: "literal".to_string(), key: key.clone() });
+            slots.insert(key, value_fact);
+        }
+
+        hash_shape_fact(slots, TypeEvidence::Literal)
+    }
+
+    fn bless_expr_fact(&mut self, args: &[Node], env: &mut TypeEnvironment) -> TypeFact {
+        let Some(reference) = args.first() else {
+            return TypeFact::unknown();
+        };
+        let Some(package_node) = args.get(1) else {
+            return TypeFact::dynamic(DynamicBoundary::DynamicBlessClass);
+        };
+        let Some(package) = static_package_node(package_node) else {
+            return TypeFact::dynamic(DynamicBoundary::DynamicBlessClass);
+        };
+
+        let reference_fact = self.infer_expr_fact_in_env(reference, env);
+        let fields = object_fields_from_bless_reference(reference_fact, &package);
+        let mut fact = fact_with_evidence(
+            PerlType::Object(package.clone()),
+            Confidence::Medium,
+            TypeEvidence::BlessLiteral { package: package.clone() },
+        );
+        fact.shape = Some(ShapeFact::Object(ObjectShape::new(package, fields)));
+        fact
+    }
+
+    fn array_literal_fact(&mut self, elements: &[Node], env: &mut TypeEnvironment) -> TypeFact {
+        let mut indexed = BTreeMap::new();
+        for (index, element) in elements.iter().enumerate() {
+            indexed.insert(index, self.infer_expr_fact_in_env(element, env));
+        }
+        let ty = PerlType::Array(Box::new(hash_value_type(indexed.values())));
+        let mut fact = fact_with_evidence(ty, Confidence::High, TypeEvidence::Literal);
+        fact.shape = Some(ShapeFact::Array(ArrayShape::new(indexed, None)));
+        fact
+    }
+
+    fn hash_slot_expr_fact(
+        &mut self,
+        op: &str,
+        left: &Node,
+        right: &Node,
+        env: &mut TypeEnvironment,
+    ) -> TypeFact {
+        let Some(key) = static_hash_key(right) else {
+            return TypeFact::dynamic(DynamicBoundary::DynamicHashKey);
+        };
+
+        let container_fact = self.infer_expr_fact_in_env(left, env);
+        let evidence = if op == "->{}" {
+            TypeEvidence::HashRefSlot { base: receiver_base_label(left), key: key.clone() }
+        } else {
+            TypeEvidence::HashSlot { hash: receiver_base_label(left), key: key.clone() }
+        };
+
+        match container_fact.shape {
+            Some(ShapeFact::Hash(shape)) => shape
+                .slots
+                .get(&key)
+                .cloned()
+                .or_else(|| shape.fallback_value.as_ref().map(|fact| fact.as_ref().clone()))
+                .map_or_else(
+                    || {
+                        let mut fact = TypeFact::unknown();
+                        fact.evidence.push(evidence.clone());
+                        fact
+                    },
+                    |mut fact| {
+                        fact.evidence.push(evidence.clone());
+                        fact
+                    },
+                ),
+            Some(ShapeFact::Object(shape)) if op == "->{}" => {
+                shape.fields.get(&key).cloned().map_or_else(
+                    || {
+                        let mut fact = TypeFact::unknown();
+                        fact.evidence.push(evidence.clone());
+                        fact
+                    },
+                    |mut fact| {
+                        fact.evidence.push(evidence.clone());
+                        fact
+                    },
+                )
+            }
+            _ => {
+                let mut fact = TypeFact::unknown();
+                fact.dynamic_boundary = container_fact.dynamic_boundary;
+                fact.evidence.push(evidence);
+                fact
+            }
+        }
+    }
+
+    fn array_index_expr_fact(
+        &mut self,
+        left: &Node,
+        right: &Node,
+        env: &mut TypeEnvironment,
+    ) -> TypeFact {
+        let Some(index) = static_array_index(right) else {
+            return TypeFact::dynamic(DynamicBoundary::UnknownReceiver);
+        };
+
+        match self.infer_expr_fact_in_env(left, env).shape {
+            Some(ShapeFact::Array(shape)) => shape
+                .indexed
+                .get(&index)
+                .cloned()
+                .or_else(|| shape.element.as_ref().map(|fact| fact.as_ref().clone()))
+                .unwrap_or_else(TypeFact::unknown),
+            _ => TypeFact::unknown(),
+        }
     }
 
     /// Extract variable name from a node
@@ -889,6 +1135,12 @@ impl TypeInferenceEngine {
         self.global_env.get_fact_at(name)
     }
 
+    /// Returns the current global type environment for provider-level
+    /// source-backed fact lookups.
+    pub fn environment(&self) -> &TypeEnvironment {
+        &self.global_env
+    }
+
     /// Returns a human-readable type label for use in hover text.
     ///
     /// Returns `None` if the variable has not been tracked by the engine.
@@ -909,6 +1161,131 @@ impl TypeInferenceEngine {
             .cloned()
             .collect()
     }
+}
+
+fn fact_with_evidence(ty: PerlType, confidence: Confidence, evidence: TypeEvidence) -> TypeFact {
+    let mut fact = TypeFact::new(ty, confidence);
+    fact.evidence.push(evidence);
+    fact
+}
+
+fn constructor_fact(package: &str) -> TypeFact {
+    let mut fact = fact_with_evidence(
+        PerlType::Object(package.to_string()),
+        Confidence::High,
+        TypeEvidence::ConstructorCall { package: package.to_string() },
+    );
+    fact.shape = Some(ShapeFact::Object(ObjectShape::new(package.to_string(), BTreeMap::new())));
+    fact
+}
+
+fn object_fields_from_bless_reference(
+    reference_fact: TypeFact,
+    package: &str,
+) -> BTreeMap<String, TypeFact> {
+    match reference_fact.shape {
+        Some(ShapeFact::Hash(shape)) => shape
+            .slots
+            .into_iter()
+            .map(|(name, fact)| (name, bless_field_fact(fact, package)))
+            .collect(),
+        _ => BTreeMap::new(),
+    }
+}
+
+fn bless_field_fact(mut fact: TypeFact, package: &str) -> TypeFact {
+    if fact.confidence == Confidence::High {
+        fact.confidence = Confidence::Medium;
+    }
+    fact.evidence.push(TypeEvidence::BlessLiteral { package: package.to_string() });
+    fact
+}
+
+fn hash_shape_fact(slots: BTreeMap<String, TypeFact>, evidence: TypeEvidence) -> TypeFact {
+    let confidence = if slots.is_empty() { Confidence::Low } else { Confidence::High };
+    let mut fact =
+        fact_with_evidence(hash_type_from_slot_facts(slots.values()), confidence, evidence);
+    fact.shape = Some(ShapeFact::Hash(HashShape::new(slots, None)));
+    fact
+}
+
+fn hash_type_from_slot_facts<'a, I>(facts: I) -> PerlType
+where
+    I: IntoIterator<Item = &'a TypeFact>,
+{
+    PerlType::Hash {
+        key: Box::new(PerlType::Scalar(ScalarType::String)),
+        value: Box::new(hash_value_type(facts)),
+    }
+}
+
+fn hash_value_type<'a, I>(facts: I) -> PerlType
+where
+    I: IntoIterator<Item = &'a TypeFact>,
+{
+    let mut values = facts.into_iter();
+    let Some(first) = values.next() else {
+        return PerlType::Any;
+    };
+    let first_ty = first.erased_type();
+    if values.all(|fact| fact.erased_type() == first_ty) { first_ty } else { PerlType::Any }
+}
+
+fn static_package_node(node: &Node) -> Option<String> {
+    match &node.kind {
+        NodeKind::Identifier { name } => Some(name.clone()),
+        NodeKind::String { value, .. } => normalize_literal(value),
+        _ => None,
+    }
+}
+
+fn variable_name(node: &Node) -> Option<&str> {
+    match &node.kind {
+        NodeKind::Variable { name, .. } => Some(name.as_str()),
+        NodeKind::VariableWithAttributes { variable, .. } => variable_name(variable),
+        _ => None,
+    }
+}
+
+fn static_hash_slot_target(node: &Node) -> Option<(String, String, bool)> {
+    let NodeKind::Binary { op, left, right } = &node.kind else {
+        return None;
+    };
+    if op != "{}" && op != "->{}" {
+        return None;
+    }
+    let name = variable_name(left)?;
+    let key = static_hash_key(right)?;
+    Some((name.to_string(), key, op == "->{}"))
+}
+
+fn static_hash_key(node: &Node) -> Option<String> {
+    match &node.kind {
+        NodeKind::String { value, .. } => normalize_literal(value),
+        NodeKind::Identifier { name } => Some(name.clone()),
+        NodeKind::Number { value } => Some(value.clone()),
+        _ => None,
+    }
+}
+
+fn static_array_index(node: &Node) -> Option<usize> {
+    match &node.kind {
+        NodeKind::Number { value } => value.parse().ok(),
+        _ => None,
+    }
+}
+
+fn receiver_base_label(node: &Node) -> String {
+    match &node.kind {
+        NodeKind::Variable { sigil, name } => format!("{sigil}{name}"),
+        NodeKind::VariableWithAttributes { variable, .. } => receiver_base_label(variable),
+        _ => node.kind.kind_name().to_string(),
+    }
+}
+
+fn normalize_literal(value: &str) -> Option<String> {
+    let normalized = value.trim().trim_matches('\'').trim_matches('"').trim();
+    if normalized.is_empty() { None } else { Some(normalized.to_string()) }
 }
 
 /// Type-based code completion suggestions

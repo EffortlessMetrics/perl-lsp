@@ -1,12 +1,27 @@
 # PLSP-SPEC-0005: Receiver expression facts
 
-Status: proposed
+Status: accepted
 Owner: perl-lsp maintainers
 Linked proposal: [PLSP-PROP-0001](../proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
 Linked ADRs: none yet
 Linked plan: [Receiver facts implementation plan](../project/RECEIVER_FACTS_IMPLEMENTATION_PLAN.md)
 Status impact: provider cutover, semantic scorecard, semantic capability dashboard,
 UX capability dashboard
+
+## Current implementation status
+
+This spec is accepted as the receiver-fact substrate contract. The initial fact
+model, type-environment fact map, receiver fact API, static package and object
+receiver facts, plain-hash slot inference, dynamic-key boundary, and the first
+completion consumer are implemented or partially implemented as tracked in
+[receiver_facts.md](../project/status/receiver_facts.md).
+
+Current implementation state and next source-shape work live in the status doc
+and receiver-facts implementation plan, not in this spec. Hashref literal and
+slot-assignment inference are fixture-backed facts-only substrate. Static
+`bless { field => Package->new }, 'Class'` field inference is fixture-backed as
+medium-confidence substrate. Accessor-return facts and chained method-return
+facts remain bounded by their own future fixtures and provider receipts.
 
 ## Contract
 

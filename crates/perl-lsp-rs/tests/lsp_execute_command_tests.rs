@@ -447,7 +447,7 @@ fn test_execute_command_workspace_trust_report_schema_snapshot()
 -> Result<(), Box<dyn std::error::Error>> {
     let temp_dir = TempDir::new()?;
     let root_path = temp_dir.path().to_string_lossy().to_string();
-    let server = setup_server(Some(root_path));
+    let server = setup_server(Some(root_path.clone()));
 
     let execute_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -519,6 +519,7 @@ fn test_execute_command_workspace_trust_report_schema_snapshot()
             "claim_boundary",
             "client_runtime_state",
             "command",
+            "copyable_payload",
             "dynamic_boundaries",
             "index",
             "module_resolution",
@@ -649,8 +650,44 @@ fn test_execute_command_workspace_trust_report_schema_snapshot()
         sorted_object_keys_at(&result, "/providers")?,
         expected_keys(&["decision_trace_count", "decision_trace_keys", "support_tiers"])
     );
-
     let support_tier_keys = sorted_object_keys_at(&result, "/providers/support_tiers")?;
+    assert_eq!(
+        sorted_object_keys_at(&result, "/copyable_payload")?,
+        expected_keys(&[
+            "claim_boundary",
+            "client_runtime_schema_version",
+            "client_runtime_source",
+            "command",
+            "configured_include_path_count",
+            "dap_status",
+            "decision_trace_count",
+            "dynamic_boundary_policy",
+            "effective_include_path_count",
+            "launch_configuration_status",
+            "open_document_count",
+            "perl5lib_entry_count",
+            "perl5lib_precedence",
+            "perl_binary_resolution_status",
+            "perl_lsp_version",
+            "perldoc_run_status",
+            "perldoc_status",
+            "provider",
+            "provider_support_tiers",
+            "schema_version",
+            "support_tier_link",
+            "system_inc_status",
+            "use_perl5lib",
+            "use_system_inc",
+            "workspace_folder_count",
+            "workspace_root_class",
+            "workspace_root_hash",
+        ])
+    );
+    assert_eq!(
+        sorted_object_keys_at(&result, "/copyable_payload/provider_support_tiers")?,
+        support_tier_keys
+    );
+
     for required_tier in [
         "completion",
         "diagnostics",
@@ -675,6 +712,62 @@ fn test_execute_command_workspace_trust_report_schema_snapshot()
     assert_eq!(
         result.pointer("/client_runtime_state/schema_version").and_then(Value::as_str),
         Some("workspace_trust_client_runtime.v1")
+    );
+    assert_eq!(
+        result.pointer("/copyable_payload/schema_version").and_then(Value::as_str),
+        Some("workspace_trust_report_copyable.v1")
+    );
+    assert_eq!(
+        result.pointer("/copyable_payload/provider").and_then(Value::as_str),
+        Some("workspace_trust_report")
+    );
+    assert_eq!(
+        result.pointer("/copyable_payload/command").and_then(Value::as_str),
+        Some("perl.workspaceTrustReport")
+    );
+    assert_eq!(
+        result.pointer("/copyable_payload/workspace_root_class").and_then(Value::as_str),
+        Some("single_root")
+    );
+    assert!(
+        result.pointer("/copyable_payload/workspace_root_hash").and_then(Value::as_str).is_some(),
+        "copyable payload should use a workspace root hash instead of relying on raw paths"
+    );
+    let copyable_payload_text =
+        serde_json::to_string(result.get("copyable_payload").ok_or("missing copyable_payload")?)?;
+    assert!(
+        !copyable_payload_text.contains(&root_path),
+        "copyable payload must not include the raw workspace root"
+    );
+    assert_eq!(
+        result.pointer("/copyable_payload/client_runtime_source").and_then(Value::as_str),
+        Some("vscode-extension")
+    );
+    assert_eq!(
+        result.pointer("/copyable_payload/client_runtime_schema_version").and_then(Value::as_str),
+        Some("workspace_trust_client_runtime.v1")
+    );
+    assert_eq!(
+        result.pointer("/copyable_payload/launch_configuration_status").and_then(Value::as_str),
+        Some("client_launch_config_reported")
+    );
+    assert_eq!(
+        result
+            .pointer("/copyable_payload/provider_support_tiers/workspace_trust_report")
+            .and_then(Value::as_str),
+        Some("partial-live-with-fallback")
+    );
+    assert_eq!(
+        result.pointer("/copyable_payload/support_tier_link").and_then(Value::as_str),
+        Some("docs/project/status/SUPPORT_TIERS.md#claim-rows")
+    );
+    assert!(
+        result.pointer("/copyable_payload/claim_boundary").and_then(Value::as_str).is_some_and(
+            |claim| claim.contains("does not scan files")
+                && claim.contains("probe Perl")
+                && claim.contains("promote support tiers")
+        ),
+        "copyable payload must preserve the report-only claim boundary"
     );
     assert!(
         result.get("claim_boundary").and_then(Value::as_str).is_some_and(|claim| claim
