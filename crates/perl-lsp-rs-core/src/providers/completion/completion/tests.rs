@@ -2222,6 +2222,95 @@ sub connect { }
 }
 
 #[test]
+fn medium_confidence_accessor_return_receiver_preserves_imported_fallback()
+-> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/MyApp/DB.pm")?,
+        r#"package MyApp::DB;
+sub connect { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = r#"use MyApp::DB;
+package MyApp::Service;
+use Moo;
+has db => (is => 'ro', isa => 'MyApp::DB');
+my $service = MyApp::Service->new;
+$service->db->connect;"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index_and_source(&ast, code, Some(index));
+    let position = must_some(code.find("$service->db->")) + "$service->db->".len();
+    let completions = provider.get_completions(code, position);
+
+    let connect = must_some(completions.iter().find(|c| c.label == "connect"));
+    let detail = must_some(connect.detail.as_deref());
+    assert!(
+        detail.contains("receiver: unknown, low confidence"),
+        "medium-confidence accessor-return facts must preserve fallback, not exact receiver evidence; got {detail:?}"
+    );
+    assert!(
+        !detail.contains("receiver: source-backed object")
+            && !detail.contains("receiver: hash slot")
+            && !detail.contains("receiver: literal bless"),
+        "medium-confidence accessor-return facts must not be promoted to exact receiver detail; got {detail:?}"
+    );
+    let sort_text = must_some(connect.sort_text.as_deref());
+    assert!(
+        sort_text.starts_with("6_"),
+        "medium-confidence accessor-return fallback should keep fallback tier 6; got {sort_text:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn medium_confidence_method_return_receiver_preserves_imported_fallback()
+-> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/MyApp/DB.pm")?,
+        r#"package MyApp::DB;
+sub connect { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = r#"use MyApp::DB;
+package MyApp::Service;
+sub db { return MyApp::DB->new; }
+my $service = MyApp::Service->new;
+$service->db->connect;"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index_and_source(&ast, code, Some(index));
+    let position = must_some(code.find("$service->db->")) + "$service->db->".len();
+    let completions = provider.get_completions(code, position);
+
+    let connect = must_some(completions.iter().find(|c| c.label == "connect"));
+    let detail = must_some(connect.detail.as_deref());
+    assert!(
+        detail.contains("receiver: unknown, low confidence"),
+        "medium-confidence method-return facts must preserve fallback, not exact receiver evidence; got {detail:?}"
+    );
+    assert!(
+        !detail.contains("receiver: source-backed object")
+            && !detail.contains("receiver: hash slot")
+            && !detail.contains("receiver: literal bless"),
+        "medium-confidence method-return facts must not be promoted to exact receiver detail; got {detail:?}"
+    );
+    let sort_text = must_some(connect.sort_text.as_deref());
+    assert!(
+        sort_text.starts_with("6_"),
+        "medium-confidence method-return fallback should keep fallback tier 6; got {sort_text:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn dynamic_hash_key_receiver_preserves_imported_fallback() -> Result<(), Box<dyn std::error::Error>>
 {
     let index = Arc::new(WorkspaceIndex::new());
