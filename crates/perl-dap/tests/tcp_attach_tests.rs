@@ -54,11 +54,11 @@ fn test_tcp_attach_config_validation() {
 fn test_tcp_attach_timeout_duration() {
     // Test default timeout
     let config = create_valid_config();
-    assert_eq!(config.timeout_duration(), Duration::from_millis(5000));
+    assert_eq!(config.timeout_duration(), Duration::from_secs(5));
 
     // Test custom timeout
     let config = create_valid_config().with_timeout(10000);
-    assert_eq!(config.timeout_duration(), Duration::from_millis(10000));
+    assert_eq!(config.timeout_duration(), Duration::from_secs(10));
 }
 
 #[test]

@@ -1732,6 +1732,7 @@ dependencies = [
  "perl-parser-core",
  "perl-semantic-analyzer",
  "perl-tdd-support",
+ "perl-test-generators",
  "perl-uri",
  "perl-workspace",
  "proptest",

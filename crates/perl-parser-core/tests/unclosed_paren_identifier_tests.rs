@@ -133,6 +133,30 @@ fn class_accessor_style() {
 }
 
 #[test]
+fn b_deparse_nested_imported_bare_call_argument() {
+    assert_clean_parse(
+        r#"
+sub quoted_const_str {
+    my ($self, $str) = @_;
+    return single_delim("qq", '"', uninterp(escape_str unback $str), $self);
+}
+"#,
+    );
+}
+
+#[test]
+fn mime_lite_parenthesized_wrap_qualified_class_and_ref_arg() {
+    assert_clean_parse(
+        r#"
+sub as_string {
+    my $buf = "";
+    my $io = (wrap MIME::Lite::IO_Scalar \$buf);
+}
+"#,
+    );
+}
+
+#[test]
 fn test_more_subtest() {
     assert_clean_parse(r#"subtest("widget tests" => sub { ok(1); });"#);
 }

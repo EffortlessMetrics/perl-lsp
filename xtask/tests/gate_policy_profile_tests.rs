@@ -111,6 +111,34 @@ fn release_history_pr_gates_have_realistic_timeout_headroom()
 }
 
 #[test]
+fn conflict_marker_gate_has_local_runtime_headroom() -> Result<(), Box<dyn std::error::Error>> {
+    let root = project_root();
+    let policy_path = root.join(".ci/gate-policy.yaml");
+    let content = fs::read_to_string(policy_path)?;
+    let parsed: GatePolicyDoc = serde_yaml_ng::from_str(&content)?;
+
+    let gate = parsed
+        .gates
+        .into_iter()
+        .find(|gate| gate.name == "check_conflict_markers")
+        .ok_or("missing check_conflict_markers gate")?;
+
+    assert_eq!(gate.tier, "pr_fast", "conflict marker scan must stay in pr-fast");
+    assert!(gate.required, "conflict marker scan must stay PR-blocking");
+    assert!(
+        gate.timeout_seconds.unwrap_or_default() >= 60,
+        "conflict marker timeout must include Windows and mounted-worktree headroom"
+    );
+    assert!(
+        gate.budgets.as_ref().and_then(|budget| budget.max_duration_ms).unwrap_or_default()
+            >= 45_000,
+        "conflict marker budget must reflect observed local runtime"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn gate_registry_alignment_prevents_stale_parser_wiring() -> Result<(), Box<dyn std::error::Error>>
 {
     let root = project_root();

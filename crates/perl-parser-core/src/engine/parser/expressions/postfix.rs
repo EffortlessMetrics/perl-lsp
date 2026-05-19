@@ -1116,6 +1116,11 @@ impl<'a> Parser<'a> {
                                         args.push(self.parse_assignment_or_declaration()?);
                                     }
 
+                                    while self.should_continue_bare_call_after_qualified_arg(&args)
+                                    {
+                                        args.push(self.parse_assignment_or_declaration()?);
+                                    }
+
                                     // Special case: print/say/printf/exec/send with indirect object.
                                     // `print $fh $msg` / `send $sock $msg` — first arg is the
                                     // filehandle/socket (no comma before remaining args).
@@ -1170,6 +1175,12 @@ impl<'a> Parser<'a> {
                                         self.peek_kind(),
                                         Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
                                     ) {
+                                        if self
+                                            .consume_bare_lvalue_assignment_separator(bare_name)?
+                                        {
+                                            break;
+                                        }
+
                                         self.consume_token()?;
                                         if self.is_at_statement_end() {
                                             break;

@@ -27,7 +27,7 @@ fn test_malformed_headers_handling() -> Result<(), Box<dyn std::error::Error>> {
 
     // PR #173: Enhanced malformed frame recovery should handle this gracefully
     // Server should continue processing or send an appropriate response
-    let _response = common::read_response_timeout(&server, Duration::from_millis(1000));
+    let _response = common::read_response_timeout(&server, Duration::from_secs(1));
 
     // Verify server didn't crash and either processed request or handled error gracefully
     // The enhanced error handling should maintain session continuity
@@ -142,7 +142,7 @@ fn test_server_specific_header_parsing() -> Result<(), Box<dyn std::error::Error
 
     // PR #173: Our server should handle duplicate headers gracefully
     // Enhanced frame parsing should either process the request or handle error appropriately
-    let response = common::read_response_timeout(&server, Duration::from_millis(1000));
+    let response = common::read_response_timeout(&server, Duration::from_secs(1));
 
     // Verify our specific implementation handles duplicate headers
     // Server should either parse successfully or provide enhanced error response
@@ -289,7 +289,7 @@ fn test_header_case_sensitivity() -> Result<(), Box<dyn std::error::Error>> {
 
     // PR #173: Enhanced header parsing should handle case-insensitive headers correctly
     // Our implementation should follow HTTP/LSP standards for case-insensitive headers
-    let response = common::read_response_timeout(&server, Duration::from_millis(1000));
+    let response = common::read_response_timeout(&server, Duration::from_secs(1));
 
     match response {
         Some(resp) => {
