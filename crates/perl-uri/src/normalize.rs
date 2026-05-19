@@ -8,6 +8,7 @@ use url::Url;
 /// - Valid URIs are parsed and re-serialized
 /// - File paths are converted to `file://` URIs
 /// - Malformed `file://` URIs are reconstructed
+/// - Legacy Windows `file://C:\...` forms are canonicalized to `file:///c:/...`
 /// - Special URIs (e.g., `untitled:`) are preserved as-is
 ///
 /// # Examples
@@ -32,10 +33,14 @@ use url::Url;
 /// # Platform Support
 ///
 /// The full implementation is only available on non-`wasm32` targets.
-/// On `wasm32`, only URI parsing is performed without filesystem operations.
+/// On `wasm32`, legacy Windows URI normalization and URI parsing are performed
+/// without filesystem operations.
 #[cfg(not(target_arch = "wasm32"))]
-#[must_use]
 pub fn normalize_uri(uri: &str) -> String {
+    if let Some(normalized) = crate::classify::normalize_legacy_windows_uri(uri) {
+        return normalized;
+    }
+
     let path = std::path::Path::new(uri);
 
     // Raw absolute filesystem paths should normalize to file:// URIs before
@@ -84,8 +89,11 @@ pub fn normalize_uri(uri: &str) -> String {
 
 /// Normalize a URI to a consistent form (wasm32 version - no filesystem).
 #[cfg(target_arch = "wasm32")]
-#[must_use]
 pub fn normalize_uri(uri: &str) -> String {
+    if let Some(normalized) = crate::classify::normalize_legacy_windows_uri(uri) {
+        return normalized;
+    }
+
     // On wasm32, just try to parse as URL or return as-is
     if let Ok(url) = Url::parse(uri) { url.to_string() } else { uri.to_string() }
 }

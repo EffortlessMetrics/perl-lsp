@@ -83,6 +83,21 @@ impl<'a> Parser<'a> {
             .unwrap_or(false)
     }
 
+    /// Check whether the current keyword-like token is being used as a bare
+    /// hash key rather than as its keyword/operator meaning.
+    ///
+    /// Perl permits reserved words as hash keys without quotes:
+    /// `$self->{defer}` and `$bits{tie}` are valid. In those subscript
+    /// contexts the token that follows the key is the subscript delimiter,
+    /// so expression parsing should produce a bare identifier/string instead
+    /// of dispatching to the keyword parser.
+    fn is_keyword_hash_key_boundary(&mut self) -> bool {
+        self.tokens
+            .peek_second()
+            .ok()
+            .is_some_and(|t| matches!(t.kind, TokenKind::RightBrace | TokenKind::FatArrow))
+    }
+
     fn is_async_sub_start(&mut self) -> bool {
         self.peek_kind() == Some(TokenKind::Identifier)
             && self.tokens.peek().ok().is_some_and(|t| t.text.as_ref() == "async")
@@ -445,9 +460,10 @@ impl<'a> Parser<'a> {
                     if self.is_indirect_call_pattern(&text) {
                         // Parse indirect call but DON'T return early - let it go through
                         // the same modifier/semicolon handling as other statements.
-                        // Word operators (or, and, xor) may follow: `print $fh "msg" or die`.
+                        // Short-circuit operators may follow: `print $fh "msg" or die`,
+                        // `close FH || croak`.
                         let call = self.parse_indirect_call()?;
-                        Ok(self.parse_word_or_expr(call)?)
+                        Ok(self.parse_named_unary_statement_tail(call)?)
                     } else {
                         self.parse_expression_statement()
                     }
@@ -608,8 +624,11 @@ impl<'a> Parser<'a> {
         func_name: &str,
         allow_no_args: bool,
     ) -> ParseResult<Node> {
+        let binary_operator_starts_missing_arg = self.peek_kind().is_some_and(Self::is_binary_operator)
+            && !(Self::is_optional_arg_builtin(func_name)
+                && self.is_explicit_sub_sigil_argument_start());
         let omit_optional_arg = allow_no_args
-            && (self.peek_kind().is_some_and(Self::is_binary_operator)
+            && (binary_operator_starts_missing_arg
                 || self.peek_kind() == Some(TokenKind::Slash)
                 // Nullary/named-unary builtins at statement start may be
                 // followed by a comma operator:
@@ -847,6 +866,12 @@ impl<'a> Parser<'a> {
                         | Some(TokenKind::Foreach)
                         | Some(TokenKind::RightBrace)
                         | Some(TokenKind::Eof)
+                        // Word operators bind below list operators, so they terminate a
+                        // zero-argument builtin call instead of starting its arguments.
+                        | Some(TokenKind::WordOr)
+                        | Some(TokenKind::WordAnd)
+                        | Some(TokenKind::WordXor)
+                        | Some(TokenKind::WordNot)
                         | None => {
                             // No arguments - return as function call with empty args
                             let end = self.previous_position();
@@ -977,6 +1002,12 @@ impl<'a> Parser<'a> {
                                 // For other functions, require commas (or fat arrows) between arguments
                                 // Perl allows `push @array => $value` as well as `push @array, $value`
                                 while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
+                                    if self
+                                        .consume_bare_lvalue_assignment_separator(func_name.as_ref())?
+                                    {
+                                        break;
+                                    }
+
                                     self.consume_token()?; // consume comma or fat arrow
 
                                     // Handle `, =>` (comma then fat arrow) — consume
@@ -1007,6 +1038,8 @@ impl<'a> Parser<'a> {
                                 NodeKind::FunctionCall { name: func_name.to_string(), args },
                                 SourceLocation { start, end },
                             );
+                            let call = self
+                                .parse_lvalue_builtin_assignment_tail(func_name.as_ref(), call)?;
                             self.parse_named_unary_statement_tail(call)
                         }
                     }
@@ -1156,7 +1189,7 @@ impl<'a> Parser<'a> {
             kind,
             TokenKind::Question      // ternary `?` operator
             | TokenKind::Colon       // chained ternary else-part
-            | TokenKind::Comma      // expression continuation
+            | TokenKind::Comma       // expression continuation
             | TokenKind::FatArrow   // hash key-value context
             | TokenKind::RightParen // closing paren
             | TokenKind::RightBracket // closing bracket

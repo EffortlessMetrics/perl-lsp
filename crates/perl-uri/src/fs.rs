@@ -37,7 +37,6 @@ use crate::mojibake::repair_path_mojibake;
 /// # Platform Support
 ///
 /// This function is not available on `wasm32` targets (no filesystem).
-#[must_use]
 pub fn uri_to_fs_path(uri: &str) -> Option<PathBuf> {
     // Parse the URI
     let url = Url::parse(uri).ok()?;
@@ -61,7 +60,6 @@ pub fn uri_to_fs_path(uri: &str) -> Option<PathBuf> {
 /// - `file://` URIs that map to local filesystem paths
 ///
 /// It returns `None` for non-file schemes, invalid inputs, and relative paths.
-#[must_use]
 pub fn source_path_from_uri_or_path(input: &str) -> Option<PathBuf> {
     let path = Path::new(input);
     if path.is_absolute() {

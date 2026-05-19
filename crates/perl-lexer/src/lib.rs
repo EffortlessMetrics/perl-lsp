@@ -135,7 +135,7 @@
     clippy::uninlined_format_args
 )]
 
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 pub mod api;
 pub mod builtins;
@@ -165,6 +165,10 @@ pub use token::{StringPart, Token, TokenType};
 use unicode::{is_perl_identifier_continue, is_perl_identifier_start};
 
 use crate::heredoc::HeredocSpec;
+use crate::lexer::helpers::{
+    empty_arc, is_builtin_function, is_compound_operator, is_keyword_fast, is_quote_op_word_prefix,
+    truncate_preview,
+};
 use crate::limits::{
     HEREDOC_TIMEOUT_MS, MAX_DELIM_NEST, MAX_HEREDOC_BYTES, MAX_HEREDOC_DEPTH, MAX_REGEX_BYTES,
 };
@@ -591,208 +595,7 @@ impl<'a> PerlLexer<'a> {
         self.mode = LexerMode::InFormatBody;
     }
 
-    // Internal helper methods
-
-    #[allow(clippy::inline_always)] // Performance critical in lexer hot path
-    #[inline(always)]
-    fn byte_at(bytes: &[u8], index: usize) -> u8 {
-        debug_assert!(index < bytes.len());
-        match bytes.get(index) {
-            Some(&byte) => byte,
-            None => 0,
-        }
-    }
-
-    /// Ensure the internal byte offset points at a UTF-8 char boundary.
-    ///
-    /// This is a defensive guard against malformed intermediate offsets from
-    /// complex lookahead/backtracking paths so downstream slicing never panics.
-    #[inline]
-    fn normalize_char_boundary(&mut self) {
-        while self.position < self.input.len() && !self.input.is_char_boundary(self.position) {
-            self.position += 1;
-        }
-    }
-
-    #[allow(clippy::inline_always)] // Performance critical in lexer hot path
-    #[inline(always)]
-    fn current_char(&self) -> Option<char> {
-        if self.position < self.input_bytes.len() {
-            if !self.input.is_char_boundary(self.position) {
-                return None;
-            }
-            // For ASCII, direct access is safe
-            let byte = Self::byte_at(self.input_bytes, self.position);
-            if byte < 128 {
-                Some(byte as char)
-            } else {
-                // For non-ASCII, fall back to proper UTF-8 parsing
-                self.input.get(self.position..).and_then(|s| s.chars().next())
-            }
-        } else {
-            None
-        }
-    }
-
-    #[inline(always)]
-    fn peek_char(&self, offset: usize) -> Option<char> {
-        if offset > self.config.max_lookahead {
-            return None;
-        }
-        if !self.input.is_char_boundary(self.position) {
-            return None;
-        }
-
-        let pos = self.position.checked_add(offset)?;
-        if pos < self.input_bytes.len() {
-            // For ASCII, direct access is safe
-            let byte = Self::byte_at(self.input_bytes, pos);
-            if byte < 128 {
-                Some(byte as char)
-            } else {
-                // For non-ASCII, use chars iterator
-                self.input.get(self.position..).and_then(|s| s.chars().nth(offset))
-            }
-        } else {
-            None
-        }
-    }
-
-    #[allow(clippy::inline_always)] // Performance critical in lexer hot path
-    #[inline(always)]
-    fn advance(&mut self) {
-        if self.position < self.input_bytes.len() {
-            if !self.input.is_char_boundary(self.position) {
-                self.normalize_char_boundary();
-                return;
-            }
-            let byte = Self::byte_at(self.input_bytes, self.position);
-            if byte < 128 {
-                // ASCII fast path
-                self.position += 1;
-            } else if let Some(ch) = self.input.get(self.position..).and_then(|s| s.chars().next())
-            {
-                self.position += ch.len_utf8();
-            }
-        }
-    }
-
-    /// General-purpose balanced-segment consumer (no quote-boundary recovery).
-    ///
-    /// For use inside double-quoted string interpolation where the outer `"` must
-    /// act as a recovery boundary, use [`consume_balanced_segment_in_string`] instead.
-    #[allow(dead_code)]
-    #[inline]
-    fn consume_balanced_segment(&mut self, open: char, close: char) -> Option<usize> {
-        if self.current_char() != Some(open) {
-            return None;
-        }
-
-        let mut depth = 1usize;
-        self.advance();
-        while let Some(ch) = self.current_char() {
-            match ch {
-                '\\' => {
-                    self.advance();
-                    if self.current_char().is_some() {
-                        self.advance();
-                    }
-                }
-                c if c == open => {
-                    depth += 1;
-                    self.advance();
-                }
-                c if c == close => {
-                    self.advance();
-                    depth -= 1;
-                    if depth == 0 {
-                        return Some(self.position);
-                    }
-                }
-                _ => self.advance(),
-            }
-        }
-
-        None
-    }
-
-    #[inline]
-    fn consume_balanced_segment_in_string(
-        &mut self,
-        open: char,
-        close: char,
-        terminator: char,
-    ) -> Option<usize> {
-        if self.current_char() != Some(open) {
-            return None;
-        }
-
-        let mut depth = 1usize;
-        self.advance();
-        while let Some(ch) = self.current_char() {
-            match ch {
-                '\\' => {
-                    self.advance();
-                    if self.current_char().is_some() {
-                        self.advance();
-                    }
-                }
-                c if c == terminator => {
-                    // Local recovery for interpolation tails in quoted strings:
-                    // stop at the closing quote so the outer string parser can
-                    // still terminate this token cleanly.
-                    return None;
-                }
-                c if c == open => {
-                    depth += 1;
-                    self.advance();
-                }
-                c if c == close => {
-                    self.advance();
-                    depth -= 1;
-                    if depth == 0 {
-                        return Some(self.position);
-                    }
-                }
-                _ => self.advance(),
-            }
-        }
-
-        None
-    }
-
-    /// Fast byte-level check for ASCII characters
-    #[inline]
-    fn peek_byte(&self, offset: usize) -> Option<u8> {
-        if offset > self.config.max_lookahead {
-            return None;
-        }
-
-        let pos = self.position.checked_add(offset)?;
-        if pos < self.input_bytes.len() { Some(self.input_bytes[pos]) } else { None }
-    }
-
-    /// Check if the next bytes match a pattern (ASCII only)
-    #[inline]
-    fn matches_bytes(&self, pattern: &[u8]) -> bool {
-        let Some(end_offset) = pattern.len().checked_sub(1) else {
-            return true;
-        };
-
-        if end_offset > self.config.max_lookahead {
-            return false;
-        }
-
-        let Some(end) = self.position.checked_add(pattern.len()) else {
-            return false;
-        };
-
-        if end <= self.input_bytes.len() {
-            &self.input_bytes[self.position..end] == pattern
-        } else {
-            false
-        }
-    }
+    // Token-specific parsing methods
 
     #[inline]
     fn skip_whitespace_and_comments(&mut self) -> Option<()> {
@@ -1650,6 +1453,15 @@ impl<'a> PerlLexer<'a> {
         !c.is_ascii_alphanumeric() && !c.is_whitespace()
     }
 
+    #[inline]
+    fn immediately_follows_sigil_prefix(&self, start: usize) -> bool {
+        start > 0
+            && matches!(
+                Self::byte_at(self.input_bytes, start.saturating_sub(1)),
+                b'$' | b'@' | b'%' | b'&' | b'*'
+            )
+    }
+
     /// Try to parse a v-string (version string) like `v5.26.0` or `v5.10`.
     ///
     /// A v-string starts with `v` followed by one or more digits, then optionally
@@ -1746,21 +1558,25 @@ impl<'a> PerlLexer<'a> {
             // Special case: substitution/transliteration with single-quote delimiter
             // The single quote is considered an identifier continuation, so we need to
             // detect these operators before consuming it as part of an identifier.
-            if !self.after_arrow
+            let follows_sigil_prefix = self.immediately_follows_sigil_prefix(start);
+            if !follows_sigil_prefix
+                && !self.after_arrow
                 && self.hash_brace_depth == 0
                 && ch == 's'
                 && self.peek_char(1) == Some('\'')
             {
                 self.advance(); // consume 's'
                 return self.parse_substitution(start);
-            } else if !self.after_arrow
+            } else if !follows_sigil_prefix
+                && !self.after_arrow
                 && self.hash_brace_depth == 0
                 && ch == 'y'
                 && self.peek_char(1) == Some('\'')
             {
                 self.advance(); // consume 'y'
                 return self.parse_transliteration(start);
-            } else if !self.after_arrow
+            } else if !follows_sigil_prefix
+                && !self.after_arrow
                 && self.hash_brace_depth == 0
                 && ch == 't'
                 && self.peek_char(1) == Some('r')
@@ -1900,6 +1716,7 @@ impl<'a> PerlLexer<'a> {
             #[allow(clippy::collapsible_if)]
             if !self.after_sub
                 && !self.after_arrow
+                && !follows_sigil_prefix
                 && self.hash_brace_depth == 0
                 && matches!(text, "s" | "tr" | "y")
             {
@@ -1919,12 +1736,15 @@ impl<'a> PerlLexer<'a> {
                 if let Some(next) = candidate {
                     // `s => 1` should remain a fat-arrow hash key, not quote op.
                     let is_fat_arrow = next == '=' && char_after_next == Some('>');
+                    let is_filetest_s = text == "s"
+                        && self.input.get(..start).is_some_and(|prefix| prefix.ends_with('-'));
                     let is_paired_delim = matches!(next, '{' | '[' | '(' | '<');
                     let is_quote_char = matches!(next, '\'' | '"') && text != "s";
                     let transliteration_allows_whitespace = text == "tr" || text == "y";
                     let substitution_disallows_whitespace = text == "s" && has_whitespace;
                     let is_valid_delim = Self::is_quote_delim(next)
                         && !is_fat_arrow
+                        && !is_filetest_s
                         && !substitution_disallows_whitespace
                         && (!has_whitespace
                             || is_paired_delim
@@ -1973,6 +1793,7 @@ impl<'a> PerlLexer<'a> {
                     // quote expressions in slices (`@h{qw/a b/}`).
                     op if !self.after_sub
                         && !self.after_arrow
+                        && !follows_sigil_prefix
                         && quote_handler::is_quote_operator(op)
                         && (self.hash_brace_depth == 0
                             || matches!(op, "q" | "qq" | "qw" | "qr" | "qx")) =>
@@ -2008,6 +1829,10 @@ impl<'a> PerlLexer<'a> {
                             // Fat-arrow autoquoting: `s => value` — `=` followed by `>` is '=>',
                             // not a valid substitution delimiter. Treat as identifier.
                             let is_fat_arrow = next == '=' && char_after_next == Some('>');
+                            let is_filetest_s =
+                                op == "s" && self.input.get(..start).is_some_and(|prefix| {
+                                    prefix.ends_with('-')
+                                });
 
                             // When whitespace precedes the delimiter, only unambiguous
                             // delimiters are accepted:
@@ -2027,6 +1852,7 @@ impl<'a> PerlLexer<'a> {
                                 self.hash_brace_depth > 0 && matches!(next, ',' | '}');
                             let is_valid_delim = Self::is_quote_delim(next)
                                 && !is_fat_arrow
+                                && !is_filetest_s
                                 && !is_hash_subscript_bare_key_boundary
                                 && (!has_whitespace
                                     || is_paired_delim
@@ -3047,12 +2873,30 @@ impl<'a> PerlLexer<'a> {
         quote: char,
         delim: char,
     ) -> Option<(usize, bool)> {
+        if Self::is_word_apostrophe(self.input, start, quote) {
+            return None;
+        }
+        // Adjacent quotes are literal replacement text (for example s/"/""/g),
+        // not a string literal to skip while hunting for the replacement delimiter.
+        if self.input.get(..start).and_then(|text| text.chars().next_back()) == Some(quote) {
+            return None;
+        }
         let mut pos = start.checked_add(quote.len_utf8())?;
+        let expression_quote = Self::can_start_replacement_expression_quote(self.input, start);
+        if !expression_quote && self.input.get(pos..).is_some_and(|text| text.starts_with(delim)) {
+            return None;
+        }
+        if self.input.get(pos..).is_some_and(|text| text.starts_with(quote)) {
+            return None;
+        }
         let mut escaped = false;
         let mut contains_delim = false;
 
         while let Some(ch) = self.input.get(pos..).and_then(|text| text.chars().next()) {
             if matches!(ch, '\n' | '\r') {
+                return None;
+            }
+            if !expression_quote && matches!(ch, ';' | '#') {
                 return None;
             }
 
@@ -3084,6 +2928,45 @@ impl<'a> PerlLexer<'a> {
         }
 
         None
+    }
+
+    // Only skip delimiter-bearing inner strings in positions that look like
+    // replacement expressions; literal replacement quotes still let the next
+    // delimiter close the substitution.
+    fn can_start_replacement_expression_quote(input: &str, pos: usize) -> bool {
+        input
+            .get(..pos)
+            .and_then(|text| text.chars().rev().find(|ch| !ch.is_whitespace()))
+            .is_some_and(|ch| {
+                matches!(
+                    ch,
+                    '(' | '['
+                        | '{'
+                        | ','
+                        | '='
+                        | ':'
+                        | '?'
+                        | '!'
+                        | '~'
+                        | '+'
+                        | '-'
+                        | '*'
+                        | '%'
+                        | '&'
+                        | '|'
+                        | '^'
+                        | '<'
+                        | '>'
+                )
+            })
+    }
+
+    fn is_word_apostrophe(input: &str, pos: usize, quote: char) -> bool {
+        quote == '\''
+            && input
+                .get(..pos)
+                .and_then(|text| text.chars().next_back())
+                .is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == '_')
     }
 
     fn parse_transliteration(&mut self, start: usize) -> Option<Token> {
@@ -3370,110 +3253,6 @@ impl<'a> PerlLexer<'a> {
         // Unterminated regex - EOF reached before closing /
         // Parser will emit diagnostic for unterminated literal
         None
-    }
-}
-
-// Pre-allocated empty Arc to avoid repeated allocations
-static EMPTY_ARC: OnceLock<Arc<str>> = OnceLock::new();
-
-#[inline(always)]
-fn empty_arc() -> Arc<str> {
-    EMPTY_ARC.get_or_init(|| Arc::from("")).clone()
-}
-
-fn truncate_preview(text: &str, max_chars: usize) -> String {
-    match text.char_indices().nth(max_chars) {
-        Some((idx, _)) => format!("{}...", &text[..idx]),
-        None => text.to_string(),
-    }
-}
-
-#[inline(always)]
-fn is_keyword_fast(word: &str) -> bool {
-    // Fast length-based rejection for most cases.
-    // Lexer keywords are currently bounded to 1..=9 characters.
-    matches!(word.len(), 1..=9) && is_lexer_keyword(word)
-}
-
-#[inline]
-fn is_builtin_function(word: &str) -> bool {
-    BARE_TERM_BUILTINS.binary_search(&word).is_ok()
-}
-
-#[inline(always)]
-fn is_quote_op_word_prefix(word: &[u8]) -> bool {
-    matches!(word, b"m" | b"q" | b"qq" | b"qw" | b"qx" | b"qr")
-}
-
-const BARE_TERM_BUILTINS: &[&str] = &[
-    "abs", "chomp", "chop", "chr", "close", "defined", "delete", "each", "exists", "hex", "int",
-    "join", "keys", "lc", "lcfirst", "length", "oct", "open", "ord", "pack", "print", "push",
-    "read", "ref", "reverse", "rindex", "say", "scalar", "splice", "sprintf", "sqrt", "substr",
-    "tie", "uc", "ucfirst", "unpack", "unshift", "untie", "values", "write",
-];
-
-/// Fast lookup table for compound operator second characters
-const COMPOUND_SECOND_CHARS: &[u8] = b"=<>&|+->.~*:";
-
-#[inline]
-fn is_compound_operator(first: char, second: char) -> bool {
-    // Optimized compound operator lookup using perfect hashing for common cases
-    // Convert to bytes for faster comparison (most operators are ASCII)
-    if first.is_ascii() && second.is_ascii() {
-        let first_byte = first as u8;
-        let second_byte = second as u8;
-
-        if !COMPOUND_SECOND_CHARS.contains(&second_byte) {
-            return false;
-        }
-
-        // Use lookup table approach for maximum performance
-        match (first_byte, second_byte) {
-            // Assignment operators
-            (b'+' | b'-' | b'*' | b'/' | b'%' | b'&' | b'|' | b'^' | b'.', b'=') => true,
-
-            // Comparison operators
-            (b'<' | b'>' | b'=' | b'!', b'=') => true,
-
-            // Pattern operators
-            (b'=' | b'!', b'~') => true,
-
-            // Increment/decrement
-            (b'+', b'+') | (b'-', b'-') => true,
-
-            // Logical operators
-            (b'&', b'&') | (b'|', b'|') => true,
-
-            // Shift operators
-            (b'<', b'<') | (b'>', b'>') => true,
-
-            // Other compound operators
-            (b'*', b'*')
-            | (b'/', b'/')
-            | (b'-' | b'=', b'>')
-            | (b'.', b'.')
-            | (b'~', b'~')
-            | (b':', b':') => true,
-
-            _ => false,
-        }
-    } else {
-        // Fallback for non-ASCII (should be rare)
-        matches!(
-            (first, second),
-            ('+' | '-' | '*' | '/' | '%' | '&' | '|' | '^' | '.' | '<' | '>' | '=' | '!', '=')
-                | ('=' | '!' | '~', '~')
-                | ('+', '+')
-                | ('-', '-' | '>')
-                | ('&', '&')
-                | ('|', '|')
-                | ('<', '<')
-                | ('>' | '=', '>')
-                | ('*', '*')
-                | ('/', '/')
-                | ('.', '.')
-                | (':', ':')
-        )
     }
 }
 

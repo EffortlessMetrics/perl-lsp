@@ -157,7 +157,7 @@ mod tests {
         fn test_normalize_uri_absolute_path() {
             let path = std::env::temp_dir().join("normalize-uri-absolute.pl");
             let raw_path = path.to_string_lossy();
-            let expected = must(fs_path_to_uri(&path));
+            let expected = uri_key(&must(fs_path_to_uri(&path)));
 
             assert_eq!(normalize_uri(raw_path.as_ref()), expected);
         }

@@ -535,6 +535,32 @@ fn ts_substitution_escaped_delimiters() -> Result<(), Box<dyn std::error::Error>
 }
 
 #[test]
+fn ts_substitution_e_skips_quoted_delimiter() -> Result<(), Box<dyn std::error::Error>> {
+    let src = r#"$str =~ s/([A-Za-z]+)/join('/', @parts)/ge;"#;
+    let kinds = collect_kinds(src);
+    let texts = collect_texts(src);
+
+    assert!(kinds.contains(&TokenKind::Substitution));
+    assert!(
+        texts.iter().any(|text| text == "s/([A-Za-z]+)/join('/', @parts)/ge"),
+        "expected full substitution token in {texts:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn ts_substitution_e_skips_punctuated_string() -> Result<(), Box<dyn std::error::Error>> {
+    let src = r#"$str =~ s/token/join(';/#', @parts)/ge;"#;
+    let texts = collect_texts(src);
+
+    assert!(
+        texts.iter().any(|text| text == "s/token/join(';/#', @parts)/ge"),
+        "expected full substitution token in {texts:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn ts_transliteration_with_ranges() -> Result<(), Box<dyn std::error::Error>> {
     let text = first_text("tr/a-zA-Z/A-Za-z/");
     assert_eq!(text, "tr/a-zA-Z/A-Za-z/");

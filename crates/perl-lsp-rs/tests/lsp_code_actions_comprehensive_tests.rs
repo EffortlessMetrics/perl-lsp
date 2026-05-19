@@ -182,7 +182,7 @@ fn create_code_actions_server() -> Result<(LspHarness, TempWorkspace), Box<dyn s
     harness.did_save(&workspace.uri("pragmas.pl")).ok();
     harness.did_save(&workspace.uri("undefined.pl")).ok();
 
-    harness.wait_for_idle(Duration::from_millis(1000));
+    harness.wait_for_idle(Duration::from_secs(1));
 
     Ok((harness, workspace))
 }

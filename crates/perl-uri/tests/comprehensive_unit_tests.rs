@@ -453,6 +453,38 @@ mod normalize_uri_tests {
     }
 
     #[test]
+    fn legacy_windows_file_uri_becomes_canonical_file_uri() {
+        assert_eq!(
+            normalize_uri(r"file://C:\Users\dev\script.pl"),
+            "file:///c:/Users/dev/script.pl"
+        );
+        assert_eq!(
+            normalize_uri("file://D:/projects/App/lib/Module.pm"),
+            "file:///d:/projects/App/lib/Module.pm"
+        );
+    }
+
+    #[test]
+    fn legacy_windows_file_uri_encodes_key_segments() {
+        assert_eq!(
+            normalize_uri(r"file://C:\My Project\a#b?.pl"),
+            "file:///c:/My%20Project/a%23b%3F.pl"
+        );
+        assert_eq!(
+            normalize_uri(r"D:\projects\ümlaut\module%.pm"),
+            "file:///d:/projects/%C3%BCmlaut/module%25.pm"
+        );
+    }
+
+    #[test]
+    fn bare_windows_path_becomes_canonical_file_uri() {
+        assert_eq!(
+            normalize_uri(r"C:\Users\dev\plain_path.pl"),
+            "file:///c:/Users/dev/plain_path.pl"
+        );
+    }
+
+    #[test]
     fn https_uri_preserved() {
         let result = normalize_uri("https://example.com/path");
         assert!(result.starts_with("https://"));

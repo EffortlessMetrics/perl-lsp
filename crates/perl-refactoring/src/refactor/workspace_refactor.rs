@@ -64,7 +64,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, LazyLock};
 
 /// Errors that can occur during workspace refactoring operations
 #[derive(Debug, Clone)]
@@ -117,12 +117,36 @@ impl fmt::Display for RefactorError {
 
 impl std::error::Error for RefactorError {}
 
-// Move regex outside loop to avoid recompilation
-static IMPORT_BLOCK_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+fn is_whole_symbol_match(text: &str, start: usize, end: usize, old_name: &str) -> bool {
+    if old_name.starts_with(['$', '@', '%']) {
+        return !next_char_is_symbol_continuation(text, end);
+    }
 
-/// Get the import block regex, returning None if compilation failed
+    !previous_char_is_symbol_continuation(text, start)
+        && !next_char_is_symbol_continuation(text, end)
+}
+
+fn previous_char_is_symbol_continuation(text: &str, start: usize) -> bool {
+    text.get(..start)
+        .and_then(|prefix| prefix.chars().next_back())
+        .is_some_and(is_symbol_continuation)
+}
+
+fn next_char_is_symbol_continuation(text: &str, end: usize) -> bool {
+    text.get(end..).and_then(|suffix| suffix.chars().next()).is_some_and(is_symbol_continuation)
+}
+
+fn is_symbol_continuation(ch: char) -> bool {
+    ch == '_' || ch.is_alphanumeric()
+}
+
+// Keep regex compilation out of hot paths. Store Option instead of panicking on an impossible literal failure.
+static IMPORT_BLOCK_RE: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r"(?m)^(?:use\s+[\w:]+[^\n]*\n)+").ok());
+
+/// Get the import block regex, returning None if compilation failed.
 fn get_import_block_regex() -> Option<&'static Regex> {
-    IMPORT_BLOCK_RE.get_or_init(|| Regex::new(r"(?m)^(?:use\s+[\w:]+[^\n]*\n)+")).as_ref().ok()
+    IMPORT_BLOCK_RE.as_ref()
 }
 
 /// A file edit as part of a refactoring operation
@@ -282,9 +306,7 @@ impl WorkspaceRefactor {
         let store = self._index.document_store();
 
         if locations.is_empty() {
-            // Fallback naive search with performance optimizations
-            let _old_name_bytes = old_name.as_bytes();
-
+            // Fallback naive search with performance optimizations.
             for doc in store.all_documents() {
                 // Pre-check if the document even contains the target string to avoid unnecessary work
                 if !doc.text.contains(old_name) {
@@ -293,22 +315,30 @@ impl WorkspaceRefactor {
 
                 let idx = doc.line_index.clone();
                 let mut pos = 0;
-                let _text_bytes = doc.text.as_bytes();
 
-                // Use faster byte-based searching with matches iterator
+                // Use byte offsets from `find`, but only accept whole-symbol matches.
                 while let Some(found) = doc.text[pos..].find(old_name) {
                     let start = pos + found;
                     let end = start + old_name.len();
+                    pos = end;
 
-                    // Early bounds checking to avoid invalid positions
+                    // Early bounds checking to avoid invalid positions.
                     if start >= doc.text.len() || end > doc.text.len() {
                         break;
                     }
 
+                    if !is_whole_symbol_match(&doc.text, start, end, old_name) {
+                        continue;
+                    }
+
                     let (start_line, start_col) = idx.offset_to_position(start);
                     let (end_line, end_col) = idx.offset_to_position(end);
-                    let start_byte = idx.position_to_offset(start_line, start_col).unwrap_or(0);
-                    let end_byte = idx.position_to_offset(end_line, end_col).unwrap_or(0);
+                    let Some(start_byte) = idx.position_to_offset(start_line, start_col) else {
+                        continue;
+                    };
+                    let Some(end_byte) = idx.position_to_offset(end_line, end_col) else {
+                        continue;
+                    };
                     locations.push(crate::workspace_index::Location {
                         uri: doc.uri.clone(),
                         range: crate::position::Range {
@@ -324,9 +354,8 @@ impl WorkspaceRefactor {
                             },
                         },
                     });
-                    pos = end;
 
-                    // Limit the number of matches to prevent runaway performance issues
+                    // Limit the number of matches to prevent runaway performance issues.
                     if locations.len() >= 1000 {
                         break;
                     }
@@ -1026,6 +1055,39 @@ mod tests {
         let refactor = WorkspaceRefactor::new(index);
         let result = refactor.rename_symbol("$foo", "$bar", &paths[0], (0, 0))?;
         assert!(!result.file_edits.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn fallback_symbol_match_rejects_variable_prefix_collisions()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let text = "my $foo = 1; my $foobar = $foo + 1;";
+        let foo_decl = text.find("$foo").ok_or("missing first $foo")?;
+        let foobar = text.find("$foobar").ok_or("missing $foobar")?;
+        let foo_use = text.rfind("$foo").ok_or("missing last $foo")?;
+
+        assert!(is_whole_symbol_match(text, foo_decl, foo_decl + "$foo".len(), "$foo"));
+        assert!(!is_whole_symbol_match(text, foobar, foobar + "$foo".len(), "$foo"));
+        assert!(is_whole_symbol_match(text, foo_use, foo_use + "$foo".len(), "$foo"));
+        Ok(())
+    }
+
+    #[test]
+    fn fallback_symbol_match_rejects_bare_substring_collisions()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let text = "sub foo { foobar(); Foo::foo(); foo_bar(); foo(); }";
+        let definition = text.find("foo").ok_or("missing foo definition")?;
+        let foobar = text.find("foobar").ok_or("missing foobar")?;
+        let qualified =
+            text.find("::foo").map(|offset| offset + 2).ok_or("missing qualified foo")?;
+        let foo_bar = text.find("foo_bar").ok_or("missing foo_bar")?;
+        let call = text.rfind("foo();").ok_or("missing foo call")?;
+
+        assert!(is_whole_symbol_match(text, definition, definition + "foo".len(), "foo"));
+        assert!(!is_whole_symbol_match(text, foobar, foobar + "foo".len(), "foo"));
+        assert!(is_whole_symbol_match(text, qualified, qualified + "foo".len(), "foo"));
+        assert!(!is_whole_symbol_match(text, foo_bar, foo_bar + "foo".len(), "foo"));
+        assert!(is_whole_symbol_match(text, call, call + "foo".len(), "foo"));
         Ok(())
     }
 

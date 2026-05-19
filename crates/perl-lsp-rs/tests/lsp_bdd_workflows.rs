@@ -1893,7 +1893,7 @@ Foo::do_foo();
                 "textDocument": { "uri": main_uri },
                 "position": { "line": line, "character": col + 4 } // offset for "use "
             }),
-            std::time::Duration::from_millis(1000),
+            std::time::Duration::from_secs(1),
         )
         .unwrap_or(serde_json::Value::Null);
 
@@ -1945,7 +1945,7 @@ sub main_func {}
             json!({
                 "textDocument": { "uri": uri }
             }),
-            std::time::Duration::from_millis(1000),
+            std::time::Duration::from_secs(1),
         )
         .unwrap_or(serde_json::Value::Null);
 

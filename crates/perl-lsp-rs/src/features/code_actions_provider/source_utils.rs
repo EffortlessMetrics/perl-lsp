@@ -2,6 +2,10 @@
 
 use super::CodeActionsProvider;
 
+pub(super) fn is_valid_source_range(source: &str, range: (usize, usize)) -> bool {
+    range.0 <= range.1 && source.get(range.0..range.1).is_some()
+}
+
 pub(super) fn ranges_overlap(r1: (usize, usize), r2: (usize, usize)) -> bool {
     if r1.0 == r1.1 {
         return r2.0 <= r1.0 && r1.0 <= r2.1;
