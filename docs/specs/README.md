@@ -30,6 +30,7 @@ generated sections.
 - [PLSP-SPEC-0008: Edit-producing provider safety](PLSP-SPEC-0008-edit-producing-provider-safety.md)
 - [PLSP-SPEC-0009: Workspace trust report](PLSP-SPEC-0009-workspace-trust-report.md)
 - [PLSP-SPEC-0010: Support claim map](PLSP-SPEC-0010-support-claim-map.md)
+- [PLSP-SPEC-0011: Trust-lane CI routing](PLSP-SPEC-0011-trust-lane-ci-routing.md)
 
 ## Acceptance and Proof
 
