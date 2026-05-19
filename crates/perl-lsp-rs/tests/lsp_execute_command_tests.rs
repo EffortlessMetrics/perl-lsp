@@ -1,6 +1,6 @@
 //! Tests for LSP execute command functionality
 use perl_lsp::{JsonRpcRequest, LspServer};
-use serde_json::json;
+use serde_json::{Value, json};
 use std::fs;
 use tempfile::TempDir;
 use url::Url;
@@ -32,6 +32,29 @@ fn setup_server(root_path: Option<String>) -> LspServer {
 
     let _initialized_response = server.handle_request(initialized_request);
     server
+}
+
+fn test_error(message: impl Into<String>) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidData, message.into())
+}
+
+fn sorted_object_keys_at(
+    value: &Value,
+    pointer: &str,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let object = value
+        .pointer(pointer)
+        .and_then(Value::as_object)
+        .ok_or_else(|| test_error(format!("expected object at JSON pointer {pointer}")))?;
+    let mut keys: Vec<String> = object.keys().cloned().collect();
+    keys.sort();
+    Ok(keys)
+}
+
+fn expected_keys(keys: &[&str]) -> Vec<String> {
+    let mut expected: Vec<String> = keys.iter().map(|key| (*key).to_string()).collect();
+    expected.sort();
+    expected
 }
 
 #[test]
@@ -415,6 +438,269 @@ fn test_execute_command_workspace_trust_report() -> Result<(), Box<dyn std::erro
             .and_then(|value| value.as_str()),
         Some("partial-live-with-fallback")
     );
+
+    Ok(())
+}
+
+#[test]
+fn test_execute_command_workspace_trust_report_schema_snapshot()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = TempDir::new()?;
+    let root_path = temp_dir.path().to_string_lossy().to_string();
+    let server = setup_server(Some(root_path));
+
+    let execute_request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "workspace/executeCommand".to_string(),
+        params: Some(json!({
+            "command": "perl.workspaceTrustReport",
+            "arguments": [{
+                "client_runtime_state": {
+                    "source": "vscode-extension",
+                    "perldoc": {
+                        "status": "client_surface_registered",
+                        "uri_scheme": "perldoc",
+                        "client_surface": "virtual_document",
+                        "raw_secret": "must-not-copy"
+                    },
+                    "dap": {
+                        "status": "client_state_reported",
+                        "adapter_registered": true,
+                        "active_perl_debug_session": false,
+                        "managed_adapter_exists": true,
+                        "launch_json_workspace_count": 1,
+                        "workspace_folder_count": 1,
+                        "launch_configuration": {
+                            "status": "client_launch_config_reported",
+                            "configuration_count": 2,
+                            "perl_configuration_count": 1,
+                            "launch_request_count": 1,
+                            "attach_request_count": 0,
+                            "perl_path_configured_count": 1,
+                            "include_paths_configured_count": 1,
+                            "include_path_entry_count": 2,
+                            "non_string_include_path_count": 0,
+                            "program_configured_count": 1,
+                            "cwd_configured_count": 1,
+                            "include_path_kind_counts": {
+                                "workspace_variable": 1,
+                                "relative": 1,
+                                "raw_path_value": 1
+                            },
+                            "perl_path_kind_counts": {
+                                "absolute": 1
+                            },
+                            "program_path_kind_counts": {
+                                "workspace_variable": 1
+                            },
+                            "cwd_path_kind_counts": {
+                                "relative": 1
+                            },
+                            "raw_include_paths": ["secret/lib"],
+                            "raw_perl_path": "/opt/private/perl",
+                            "claim_boundary": "Launch configuration state reports counts and path classes only."
+                        }
+                    },
+                    "ignored": "must-not-copy"
+                }
+            }]
+        })),
+        id: Some(json!(2)),
+    };
+
+    let response = server
+        .handle_request(execute_request)
+        .ok_or("No response from workspace-trust-report command")?;
+    let result = response.result.ok_or("No result in workspace-trust-report response")?;
+
+    assert_eq!(
+        sorted_object_keys_at(&result, "")?,
+        expected_keys(&[
+            "claim_boundary",
+            "client_runtime_state",
+            "command",
+            "dynamic_boundaries",
+            "index",
+            "module_resolution",
+            "providers",
+            "schema_version",
+            "setup_hints",
+            "user_message",
+            "workspace",
+        ])
+    );
+    assert_eq!(
+        sorted_object_keys_at(&result, "/workspace")?,
+        expected_keys(&["folders", "open_document_count", "root_path", "workspace_folder_count"])
+    );
+    assert_eq!(
+        sorted_object_keys_at(&result, "/module_resolution")?,
+        expected_keys(&["global_workspace_config", "policy"])
+    );
+    assert_eq!(
+        sorted_object_keys_at(&result, "/module_resolution/global_workspace_config")?,
+        expected_keys(&[
+            "effective_include_paths",
+            "include_paths",
+            "perl5lib_entry_count",
+            "perl5lib_precedence",
+            "perl_args_count",
+            "perl_path",
+            "resolution_timeout_ms",
+            "system_inc_status",
+            "use_perl5lib",
+            "use_system_inc",
+        ])
+    );
+    assert_eq!(
+        sorted_object_keys_at(&result, "/setup_hints")?,
+        expected_keys(&[
+            "claim_boundary",
+            "dap",
+            "hints",
+            "hint_count",
+            "perldoc",
+            "perl_binary",
+            "status"
+        ])
+    );
+    assert_eq!(
+        sorted_object_keys_at(&result, "/setup_hints/perl_binary")?,
+        expected_keys(&["args_count", "configured_path", "resolution_status", "version_status"])
+    );
+    assert_eq!(
+        sorted_object_keys_at(&result, "/setup_hints/perldoc")?,
+        expected_keys(&[
+            "allow_local_lib",
+            "allow_perl5lib",
+            "allow_perl5opt",
+            "argv_policy",
+            "binary_source",
+            "lc_all",
+            "policy",
+            "run_status",
+            "status",
+            "timeout_ms",
+        ])
+    );
+    assert_eq!(
+        sorted_object_keys_at(&result, "/client_runtime_state")?,
+        expected_keys(&["claim_boundary", "dap", "perldoc", "schema_version", "source"])
+    );
+    assert_eq!(
+        sorted_object_keys_at(&result, "/client_runtime_state/perldoc")?,
+        expected_keys(&["client_surface", "status", "uri_scheme"])
+    );
+    assert_eq!(
+        sorted_object_keys_at(&result, "/client_runtime_state/dap")?,
+        expected_keys(&[
+            "active_perl_debug_session",
+            "adapter_registered",
+            "launch_configuration",
+            "launch_json_workspace_count",
+            "managed_adapter_exists",
+            "status",
+            "workspace_folder_count",
+        ])
+    );
+    assert_eq!(
+        sorted_object_keys_at(&result, "/client_runtime_state/dap/launch_configuration")?,
+        expected_keys(&[
+            "attach_request_count",
+            "claim_boundary",
+            "configuration_count",
+            "cwd_configured_count",
+            "cwd_path_kind_counts",
+            "include_path_entry_count",
+            "include_path_kind_counts",
+            "include_paths_configured_count",
+            "launch_request_count",
+            "non_string_include_path_count",
+            "perl_configuration_count",
+            "perl_path_configured_count",
+            "perl_path_kind_counts",
+            "program_configured_count",
+            "program_path_kind_counts",
+            "status",
+        ])
+    );
+    assert_eq!(
+        sorted_object_keys_at(
+            &result,
+            "/client_runtime_state/dap/launch_configuration/include_path_kind_counts"
+        )?,
+        expected_keys(&["relative", "workspace_variable"])
+    );
+    assert_eq!(
+        sorted_object_keys_at(&result, "/index")?,
+        expected_keys(&[
+            "availability",
+            "file_count",
+            "indexed_file_count",
+            "indexed_symbol_count",
+            "indexing_in_progress",
+            "pending_index_tasks",
+            "reason",
+            "state",
+            "symbol_count",
+        ])
+    );
+    assert_eq!(
+        sorted_object_keys_at(&result, "/providers")?,
+        expected_keys(&["decision_trace_count", "decision_trace_keys", "support_tiers"])
+    );
+
+    let support_tier_keys = sorted_object_keys_at(&result, "/providers/support_tiers")?;
+    for required_tier in [
+        "completion",
+        "diagnostics",
+        "provider_decision_explanations",
+        "real_workspace_baseline",
+        "rename",
+        "safe_delete",
+        "semantic_tokens",
+        "workspace_symbols",
+        "workspace_trust_report",
+    ] {
+        assert!(
+            support_tier_keys.iter().any(|key| key == required_tier),
+            "workspace trust report support tiers should include {required_tier}"
+        );
+    }
+
+    assert_eq!(
+        result.get("schema_version").and_then(Value::as_str),
+        Some("workspace_trust_report.v1")
+    );
+    assert_eq!(
+        result.pointer("/client_runtime_state/schema_version").and_then(Value::as_str),
+        Some("workspace_trust_client_runtime.v1")
+    );
+    assert!(
+        result.get("claim_boundary").and_then(Value::as_str).is_some_and(|claim| claim
+            .contains("does not scan files")
+            && claim.contains("probe Perl")),
+        "top-level claim boundary must keep the report read-only"
+    );
+    assert!(
+        result.pointer("/setup_hints/claim_boundary").and_then(Value::as_str).is_some_and(
+            |claim| claim.contains("do not resolve Perl") && claim.contains("run perldoc")
+        ),
+        "setup hints must preserve no-probe/no-perldoc boundaries"
+    );
+    assert!(
+        result
+            .pointer("/client_runtime_state/claim_boundary")
+            .and_then(Value::as_str)
+            .is_some_and(|claim| claim.contains("sanitized to known fields")),
+        "client runtime state must document sanitization"
+    );
+
+    let report_text = serde_json::to_string(&result)?;
+    assert!(!report_text.contains("secret/lib"), "raw include paths must not be copied");
+    assert!(!report_text.contains("/opt/private/perl"), "raw Perl paths must not be copied");
+    assert!(!report_text.contains("raw_path_value"), "unknown path classes must not be copied");
+    assert!(!report_text.contains("must-not-copy"), "unknown client fields must not be copied");
 
     Ok(())
 }
