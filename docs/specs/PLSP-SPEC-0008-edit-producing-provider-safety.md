@@ -1,4 +1,4 @@
-# PLSP-SPEC-0006: Edit-producing provider safety
+# PLSP-SPEC-0008: Edit-producing provider safety
 
 Status: accepted
 Owner: perl-lsp maintainers

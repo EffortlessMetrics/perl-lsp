@@ -6,7 +6,7 @@ Owner: perl-lsp maintainers
 Linked proposal: [PLSP-PROP-0001](../proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
 Linked specs:
 - [PLSP-SPEC-0002](../specs/PLSP-SPEC-0002-provider-confidence-receipts.md)
-- [PLSP-SPEC-0006](../specs/PLSP-SPEC-0006-edit-producing-provider-safety.md)
+- [PLSP-SPEC-0008](../specs/PLSP-SPEC-0008-edit-producing-provider-safety.md)
 Linked plan: [Real Perl Editor Trust implementation plan](../../plans/real-perl-editor-trust/implementation-plan.md)
 
 ## Context
@@ -90,7 +90,7 @@ broader edit classes must still be explainable without returning edits.
 
 ## Follow-up Obligations
 
-- Keep [PLSP-SPEC-0006](../specs/PLSP-SPEC-0006-edit-producing-provider-safety.md)
+- Keep [PLSP-SPEC-0008](../specs/PLSP-SPEC-0008-edit-producing-provider-safety.md)
   linked from rename and safe-delete cutover work.
 - Keep preview commands documented as user-facing product surfaces.
 - Keep support tiers explicit that rename and safe delete are
