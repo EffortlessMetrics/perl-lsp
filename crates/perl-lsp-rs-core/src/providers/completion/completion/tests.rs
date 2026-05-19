@@ -1687,18 +1687,17 @@ sub bark { }
 #[test]
 fn detail_includes_receiver_evidence_for_constructor_assignment()
 -> Result<(), Box<dyn std::error::Error>> {
-    // For `my $x = Foo->new; $x->`, two receiver-evidence paths could
+    // For `my $x = Foo->new; $x->`, three receiver-evidence paths could
     // legitimately fire:
+    //   - source-backed receiver fact from the semantic fact layer
     //   - text-pattern `ConstructorAssignment` (matches `Foo->new`
     //     assignment in the source)
     //   - `TypeInferenceEngine` (which DOES infer `$x : Foo` from
     //     constructor-method calls in production today, contrary to the
     //     `bless`-only limitation)
     //
-    // `classify_receiver` tries the type engine first, so production
-    // currently produces `TypeEngine` for this fixture. Both
-    // suffix labels are correct receiver evidence; this test asserts
-    // either is present rather than pinning one path.
+    // The exact source-backed receiver fact is preferred when available, but
+    // the legacy labels remain valid fallback paths.
     let index = Arc::new(WorkspaceIndex::new());
     index.index_file(
         Url::parse("file:///workspace/Foo.pm")?,
@@ -1720,10 +1719,11 @@ $x->"#;
     let bark = must_some(completions.iter().find(|c| c.label == "bark"));
     let detail = must_some(bark.detail.as_deref());
     assert!(
-        detail.contains("receiver: constructor assignment")
+        detail.contains("receiver: source-backed object")
+            || detail.contains("receiver: constructor assignment")
             || detail.contains("receiver: type engine"),
         "my $$x = Foo->new; $$x->bark detail should include receiver evidence \
-         (constructor assignment or type engine); got {detail:?}"
+         (source-backed object, constructor assignment, or type engine); got {detail:?}"
     );
     Ok(())
 }
@@ -1800,9 +1800,10 @@ sub bark { }
 #[test]
 fn detail_includes_medium_confidence_label_for_type_engine_or_constructor_assignment()
 -> Result<(), Box<dyn std::error::Error>> {
-    // For `my $x = Foo->new; $x->`, two paths can fire:
-    //   - TypeEngine (medium) → labelled
-    //   - ConstructorAssignment (high) → unlabelled
+    // For `my $x = Foo->new; $x->`, three paths can fire:
+    //   - SourceBackedObject (high) -> unlabelled
+    //   - TypeEngine (medium) -> labelled
+    //   - ConstructorAssignment (high) -> unlabelled
     //
     // Outcome C from #7925: detail must include the medium label only
     // when the firing variant is medium-confidence. This test asserts the
@@ -1831,11 +1832,12 @@ $x->"#;
 
     let has_type_engine = detail.contains("receiver: type engine");
     let has_constructor = detail.contains("receiver: constructor assignment");
+    let has_source_backed = detail.contains("receiver: source-backed object");
     let has_medium_label = detail.contains("medium confidence");
 
     assert!(
-        has_type_engine || has_constructor,
-        "constructor-assignment fixture must emit one of the two valid receiver labels; got {detail:?}"
+        has_type_engine || has_constructor || has_source_backed,
+        "constructor-assignment fixture must emit one valid receiver label; got {detail:?}"
     );
     if has_type_engine {
         assert!(
@@ -1843,10 +1845,10 @@ $x->"#;
             "TypeEngine evidence is medium-confidence; detail must include `medium confidence`; got {detail:?}"
         );
     } else {
-        // ConstructorAssignment fired; high-confidence, unlabelled.
+        // ConstructorAssignment/source-backed object fired; high-confidence, unlabelled.
         assert!(
             !has_medium_label,
-            "ConstructorAssignment is high-confidence; detail must NOT include `medium confidence`; got {detail:?}"
+            "High-confidence receiver evidence must NOT include `medium confidence`; got {detail:?}"
         );
     }
     Ok(())
@@ -2182,6 +2184,81 @@ $obj->"#;
     );
     let sort_text = must_some(bark.sort_text.as_deref());
     assert!(sort_text.starts_with("6_"), "fallback sort_text should be tier 6; got {sort_text:?}");
+    Ok(())
+}
+
+#[test]
+fn source_backed_hash_slot_receiver_uses_exact_completion_pilot()
+-> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/MyApp/DB.pm")?,
+        r#"package MyApp::DB;
+sub connect { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = "my %services = (db => MyApp::DB->new); $services{db}->connect;";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index_and_source(&ast, code, Some(index));
+    let position = must_some(code.find("$services{db}->")) + "$services{db}->".len();
+    let completions = provider.get_completions(code, position);
+
+    let connect = must_some(completions.iter().find(|c| c.label == "connect"));
+    let detail = must_some(connect.detail.as_deref());
+    assert!(
+        detail.contains("receiver: hash slot"),
+        "source-backed hash-slot receiver should be exact and labeled; got {detail:?}"
+    );
+    let sort_text = must_some(connect.sort_text.as_deref());
+    assert!(
+        sort_text.starts_with("2_") || sort_text.starts_with("3_"),
+        "exact receiver completion should rank above fallback tier 6; got {sort_text:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn dynamic_hash_key_receiver_preserves_imported_fallback() -> Result<(), Box<dyn std::error::Error>>
+{
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/MyApp/DB.pm")?,
+        r#"package MyApp::DB;
+sub connect { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = r#"use MyApp::DB;
+my %services = (db => MyApp::DB->new);
+my $name = "db";
+$services{$name}->connect;"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index_and_source(&ast, code, Some(index));
+    let position = must_some(code.find("$services{$name}->")) + "$services{$name}->".len();
+    let completions = provider.get_completions(code, position);
+
+    let connect = must_some(completions.iter().find(|c| c.label == "connect"));
+    let detail = must_some(connect.detail.as_deref());
+    assert!(
+        detail.contains("receiver: unknown, low confidence"),
+        "dynamic hash key must preserve bounded fallback, not exact hash-slot evidence; got {detail:?}"
+    );
+    assert!(
+        !detail.contains("receiver: hash slot"),
+        "dynamic hash key must not be labeled as an exact hash-slot receiver; got {detail:?}"
+    );
+    let sort_text = must_some(connect.sort_text.as_deref());
+    assert!(
+        sort_text.starts_with("6_"),
+        "dynamic hash-key fallback should keep fallback tier 6; got {sort_text:?}"
+    );
     Ok(())
 }
 

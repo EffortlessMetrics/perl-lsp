@@ -13,6 +13,11 @@ use crate::providers::completion::module_scan_cache::{ModuleCompletionScanCache,
 use perl_module::path::module_name_to_path;
 use perl_parser_core::SourceLocation;
 use perl_semantic_analyzer::{
+    Node, NodeKind, Parser,
+    receiver_facts::{
+        ReceiverFact, ReceiverFactContext, ReceiverFactFreshness, ReceiverFallbackState,
+        ReceiverKind, receiver_fact_for_method_call,
+    },
     semantic::SemanticModel,
     type_inference::{PerlType, TypeInferenceEngine},
 };
@@ -792,17 +797,9 @@ pub fn add_use_qw_import_completions(
 /// Classification of how a method-completion receiver was inferred at the
 /// call site.
 ///
-/// This is *typed receiver-evidence provenance*: it does not change which
-/// candidates appear in the completion list, and it does not (yet) reorder
-/// candidates. It records *why* a particular package was inferred, so that
-/// a later PR can wire confidence into ordering or explanation when a real
-/// seam emerges.
-///
-/// Today, the existing method-completion path infers a single receiver
-/// package and collects candidates only from that package's `@ISA` graph;
-/// there are no candidates from multiple receiver sources competing for
-/// ordering, so confidence has nothing to re-order between. Outcome B in
-/// issue #7910: provenance + classification tests, no ranking change.
+/// This is *typed receiver-evidence provenance*: source-backed exact facts may
+/// drive the narrow semantic method-completion pilot, while weaker evidence
+/// keeps the existing fallback path.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum ReceiverEvidence {
     /// Literal package name on the left of `->`, e.g. `Foo->method` or
@@ -826,6 +823,12 @@ pub(super) enum ReceiverEvidence {
     /// engine's source, but at this layer we treat all engine results as
     /// medium.
     TypeEngine(String),
+    /// Receiver was resolved by the semantic receiver-fact layer and met the
+    /// exact/fresh/high-confidence provider cutover bar.
+    ObjectFact(String),
+    /// Static hash slot, e.g. `$services{db}->`, resolved through a fresh
+    /// source-backed receiver fact.
+    HashSlotFact(String),
     /// No receiver evidence found, OR a positively-detected dynamic form
     /// (e.g. `bless {}, $class`, expression-tail class, nested call,
     /// Positively-detected dynamic / fail-closed receiver form — e.g.
@@ -851,7 +854,9 @@ impl ReceiverEvidence {
             | Self::SelfOrThis(p)
             | Self::ConstructorAssignment(p)
             | Self::LiteralBless(p)
-            | Self::TypeEngine(p) => Some(p.as_str()),
+            | Self::TypeEngine(p)
+            | Self::ObjectFact(p)
+            | Self::HashSlotFact(p) => Some(p.as_str()),
             Self::Dynamic | Self::Unknown => None,
         }
     }
@@ -878,6 +883,7 @@ impl ReceiverEvidence {
             Self::StaticPackage(_) | Self::SelfOrThis(_) | Self::ConstructorAssignment(_) => {
                 Some(Confidence::High)
             }
+            Self::ObjectFact(_) | Self::HashSlotFact(_) => Some(Confidence::High),
             Self::LiteralBless(_) | Self::TypeEngine(_) => Some(Confidence::Medium),
             Self::Dynamic | Self::Unknown => None,
         }
@@ -895,6 +901,8 @@ impl ReceiverEvidence {
             Self::ConstructorAssignment(_) => Some("receiver: constructor assignment"),
             Self::LiteralBless(_) => Some("receiver: literal bless"),
             Self::TypeEngine(_) => Some("receiver: type engine"),
+            Self::ObjectFact(_) => Some("receiver: source-backed object"),
+            Self::HashSlotFact(_) => Some("receiver: hash slot"),
             Self::Dynamic | Self::Unknown => None,
         }
     }
@@ -928,10 +936,98 @@ pub(super) fn classify_receiver(
     source: &str,
     type_engine: Option<&TypeInferenceEngine>,
 ) -> ReceiverEvidence {
+    if let Some(evidence) = source_backed_receiver_fact_evidence(context, type_engine) {
+        return evidence;
+    }
     if let Some(pkg) = type_engine_receiver(context, type_engine) {
         return ReceiverEvidence::TypeEngine(pkg);
     }
     classify_text_pattern_receiver(context, source)
+}
+
+fn source_backed_receiver_fact_evidence(
+    context: &CompletionContext,
+    type_engine: Option<&TypeInferenceEngine>,
+) -> Option<ReceiverEvidence> {
+    let receiver_source = context.prefix.strip_suffix("->")?.trim();
+    if receiver_source.is_empty() {
+        return None;
+    }
+
+    let fact = receiver_fact_for_arrow_receiver(receiver_source, type_engine?)?;
+    exact_receiver_fact_evidence(&fact)
+}
+
+fn receiver_fact_for_arrow_receiver(
+    receiver_source: &str,
+    type_engine: &TypeInferenceEngine,
+) -> Option<ReceiverFact> {
+    const PROBE_METHOD: &str = "__plsp_receiver_probe";
+    let probe_source = format!("{receiver_source}->{PROBE_METHOD}();");
+    let mut parser = Parser::new(&probe_source);
+    let ast = parser.parse().ok()?;
+    let call = method_call_named(&ast, PROBE_METHOD)?;
+    Some(receiver_fact_for_method_call(
+        call,
+        ReceiverFactContext::new(Some(type_engine.environment())).with_source(&probe_source),
+    ))
+}
+
+fn method_call_named<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
+    if let NodeKind::MethodCall { method, .. } = &node.kind
+        && method == name
+    {
+        return Some(node);
+    }
+
+    match &node.kind {
+        NodeKind::Program { statements } => {
+            statements.iter().find_map(|child| method_call_named(child, name))
+        }
+        NodeKind::ExpressionStatement { expression } => method_call_named(expression, name),
+        NodeKind::VariableDeclaration { initializer, .. } => {
+            initializer.as_deref().and_then(|child| method_call_named(child, name))
+        }
+        NodeKind::Assignment { lhs, rhs, .. } => {
+            method_call_named(lhs, name).or_else(|| method_call_named(rhs, name))
+        }
+        NodeKind::MethodCall { object, args, .. } => method_call_named(object, name)
+            .or_else(|| args.iter().find_map(|child| method_call_named(child, name))),
+        NodeKind::Binary { left, right, .. } => {
+            method_call_named(left, name).or_else(|| method_call_named(right, name))
+        }
+        NodeKind::ArrayLiteral { elements } => {
+            elements.iter().find_map(|child| method_call_named(child, name))
+        }
+        NodeKind::HashLiteral { pairs } => pairs.iter().find_map(|(key, value)| {
+            method_call_named(key, name).or_else(|| method_call_named(value, name))
+        }),
+        _ => None,
+    }
+}
+
+fn exact_receiver_fact_evidence(fact: &ReceiverFact) -> Option<ReceiverEvidence> {
+    if fact.confidence != Confidence::High
+        || fact.freshness != ReceiverFactFreshness::Fresh
+        || fact.fallback_state != ReceiverFallbackState::Exact
+        || fact.dynamic_boundary.is_some()
+        || fact.source_range.is_none()
+    {
+        return None;
+    }
+
+    let package = fact.package.clone()?;
+    match fact.kind {
+        ReceiverKind::StaticPackage => Some(ReceiverEvidence::StaticPackage(package)),
+        ReceiverKind::SelfReceiver => Some(ReceiverEvidence::SelfOrThis(package)),
+        ReceiverKind::ObjectVariable => Some(ReceiverEvidence::ObjectFact(package)),
+        ReceiverKind::HashSlot => Some(ReceiverEvidence::HashSlotFact(package)),
+        ReceiverKind::HashRefSlot
+        | ReceiverKind::ArrayIndex
+        | ReceiverKind::DynamicKey
+        | ReceiverKind::Unknown => None,
+        _ => None,
+    }
 }
 
 /// Type-engine arm of [`classify_receiver`]. Extracted from the legacy
@@ -1364,12 +1460,9 @@ pub fn add_workspace_method_completions(
         return;
     }
 
-    // The receiver-evidence kind / confidence is now classified, but is not
-    // yet used to reorder or annotate completions: today's pipeline scopes
-    // candidates to a single inferred package's `@ISA` graph, so there are no
-    // candidates from multiple receiver sources competing for ordering. A
-    // future PR can wire confidence into ranking or detail text once a real
-    // seam emerges. See issue #7910 (outcome B).
+    // Prefer semantic receiver facts only when they meet the narrow live pilot
+    // bar. Medium, dynamic, unknown, and unsupported facts fall back through the
+    // existing receiver classifier instead of suppressing legacy behavior.
     let evidence = classify_receiver(context, source, type_engine);
     let Some(package_name) = evidence.package().map(str::to_string) else {
         // No exact receiver package. Trigger bounded Unknown-receiver
@@ -1690,11 +1783,8 @@ fn method_symbol_defining_packages(
 }
 
 fn is_confident_method_candidate(candidate: &DefinitionCandidate) -> bool {
-    matches!(candidate.confidence, Confidence::High | Confidence::Medium)
-        && matches!(
-            candidate.kind,
-            EntityKind::Method | EntityKind::Subroutine | EntityKind::GeneratedMember
-        )
+    candidate.confidence == Confidence::High
+        && matches!(candidate.kind, EntityKind::Method | EntityKind::Subroutine)
 }
 
 fn semantic_method_candidate_sort_key(
