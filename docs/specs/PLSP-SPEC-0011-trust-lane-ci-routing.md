@@ -482,6 +482,7 @@ Policy or validator PRs that encode this spec must also run the relevant
 policy checks. At minimum:
 
 ```bash
+python scripts/ci/validate_trust_lanes.py --strict
 python scripts/ci/validate_risk_packs.py --strict
 cargo xtask check-support-claims
 ```
