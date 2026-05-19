@@ -1,4 +1,4 @@
-# PLSP-SPEC-0009: Support claim map
+# PLSP-SPEC-0010: Support claim map
 
 Status: accepted
 Owner: perl-lsp maintainers
