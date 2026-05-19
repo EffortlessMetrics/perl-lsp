@@ -100,6 +100,15 @@ $count++;
 
 1;
 "#;
+const NON_DECLARATION_LEXICAL_VARIABLE_SEMANTIC_TOKEN_URI: &str =
+    "file:///workspace/lib/Trace/NonDeclarationLexicalVariableTokens.pm";
+const NON_DECLARATION_LEXICAL_VARIABLE_SEMANTIC_TOKEN_DOC: &str = r#"use strict;
+use warnings;
+
+print "my $count";
+
+1;
+"#;
 
 fn create_server() -> LspServer {
     let output =
@@ -317,6 +326,20 @@ fn open_lexical_variable_semantic_token_document(
         "textDocument": {
             "uri": LEXICAL_VARIABLE_SEMANTIC_TOKEN_URI,
             "text": LEXICAL_VARIABLE_SEMANTIC_TOKEN_DOC,
+            "languageId": "perl",
+            "version": 1
+        }
+    })))?;
+    Ok(())
+}
+
+fn open_non_declaration_lexical_variable_semantic_token_document(
+    server: &LspServer,
+) -> Result<(), Box<dyn std::error::Error>> {
+    server.test_handle_did_open(Some(json!({
+        "textDocument": {
+            "uri": NON_DECLARATION_LEXICAL_VARIABLE_SEMANTIC_TOKEN_URI,
+            "text": NON_DECLARATION_LEXICAL_VARIABLE_SEMANTIC_TOKEN_DOC,
             "languageId": "perl",
             "version": 1
         }
@@ -1160,6 +1183,45 @@ fn live_semantic_tokens_request_exposes_reviewed_lexical_variable_declaration_tr
         ),
         "explanation must surface the reviewed lexical-variable declaration trace: {explanation}"
     );
+    Ok(())
+}
+
+#[test]
+fn live_semantic_tokens_request_blocks_string_shaped_lexical_variable_false_declaration()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    initialize(&server)?;
+    open_non_declaration_lexical_variable_semantic_token_document(&server)?;
+
+    response_result(
+        server.handle_request(request(
+            5,
+            "textDocument/semanticTokens/full",
+            Some(json!({
+                "textDocument": {
+                    "uri": NON_DECLARATION_LEXICAL_VARIABLE_SEMANTIC_TOKEN_URI,
+                    "version": 1
+                }
+            })),
+        )),
+        "semantic tokens non-declaration lexical variable",
+    )?;
+
+    let explanation = explain_provider_decision(&server, "semantic_tokens")?;
+    let receipt = request_receipt(&explanation, "semantic_tokens")?;
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("semantic_tokens"));
+    assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("fallback"));
+    assert_eq!(receipt.get("reason").and_then(Value::as_str), Some("no_compiler_token_class"));
+    assert_eq!(
+        receipt.get("source_backed_state").and_then(Value::as_str),
+        Some("compiler_token_live_slice_not_proven")
+    );
+    assert_ne!(
+        receipt.get("compiler_token_class").and_then(Value::as_str),
+        Some("lexical_variable_declaration"),
+        "string-shaped `my $var` text must not be explained as a lexical declaration"
+    );
+    assert_eq!(receipt.get("no_live_token_output_change").and_then(Value::as_bool), Some(true));
     Ok(())
 }
 
