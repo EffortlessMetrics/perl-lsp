@@ -57,10 +57,10 @@ no support-tier promotion
 | `static_package_receiver` | `landed` | `receiver_facts` module test `static_constructor_receiver_records_package`; PR [#9468](https://github.com/EffortlessMetrics/perl-lsp/pull/9468) | Static package receivers can produce high-confidence constructor evidence. |
 | `object_variable_receiver` | `landed` | `receiver_facts` module tests for `$self` and `$object`; PR [#9468](https://github.com/EffortlessMetrics/perl-lsp/pull/9468) | Exact package requires a supplied type-environment fact. Unknown object variables stay low confidence. |
 | `hash_slot_receiver` | `partial` | `receiver_facts` module test `hash_slot_receiver_uses_known_slot_fact`; `receiver_expression_facts` tests for plain hash literals and slot assignment | Works when `TypeEnvironment` contains a `HashShape`; source-derived plain `%hash` literals and `$hash{key}` assignments can now populate that shape. Hashref, bless-field, and accessor-return source inference remain pending. |
-| `hashref_slot_receiver` | `partial` | `receiver_facts` module test `hashref_slot_receiver_preserves_hashref_kind`; PR [#9468](https://github.com/EffortlessMetrics/perl-lsp/pull/9468) | Works when the base fact already has a hash shape; `$hashref->{key}` fact production from source declarations is still missing. |
+| `hashref_slot_receiver` | `partial` | `receiver_facts` module test `hashref_slot_receiver_preserves_hashref_kind`; `receiver_expression_facts` tests for hashref literals and slot assignment | Works when the base fact already has a hash shape; source-derived `$hashref->{key}` facts are proven for hashref literals and slot assignment. Bless-field, accessor-return, and chained method-return source inference remain pending. |
 | `array_index_receiver` | `partial` | `receiver_facts` module tests for static and dynamic array indexes; PR [#9468](https://github.com/EffortlessMetrics/perl-lsp/pull/9468) | Static indexes can use existing `ArrayShape` facts; dynamic indexes remain non-exact. |
 | `dynamic_key_boundary` | `landed` | `receiver_facts` module test `dynamic_hash_key_marks_dynamic_boundary`; `TypeFact::dynamic` test in `type_facts.rs`; `receiver_expression_facts` dynamic plain-hash-key test; completion provider test `dynamic_hash_key_receiver_preserves_imported_fallback` | Proven for receiver extraction, plain hash expression facts, and the first completion-provider boundary receipt. Additional provider boundary receipts remain pending for other receiver forms. |
-| `expression_inference` | `partial` | `crates/perl-semantic-analyzer/tests/receiver_expression_facts.rs`; `TypeInferenceEngine::infer_expr_fact` | Constructor calls, plain hash literals, plain hash slot assignment, static plain hash slot reads, and dynamic plain hash keys are facts-only substrate. Hashref slots, bless fields, accessor returns, and chained method-return facts remain pending. |
+| `expression_inference` | `partial` | `crates/perl-semantic-analyzer/tests/receiver_expression_facts.rs`; `TypeInferenceEngine::infer_expr_fact` | Constructor calls, plain hash literals, plain hash slot assignment, hashref literals, hashref slot assignment, static plain/hashref slot reads, and dynamic plain hash keys are facts-only substrate. Bless fields, accessor returns, and chained method-return facts remain pending. |
 | `receiver_fact_api` | `landed` | `crates/perl-semantic-analyzer/src/analysis/receiver_facts.rs`; PR [#9468](https://github.com/EffortlessMetrics/perl-lsp/pull/9468) | API extracts facts from existing AST and supplied environment facts; method-call chains remain unknown until explicit rules land. |
 | `completion_cutover` | `narrow-pilot` | Completion provider tests `source_backed_hash_slot_receiver_uses_exact_completion_pilot` and `dynamic_hash_key_receiver_preserves_imported_fallback`; PR [#9502](https://github.com/EffortlessMetrics/perl-lsp/pull/9502) | Only fresh high-confidence source-backed receiver facts may authorize exact receiver completion. Unknown, dynamic, generated/no-source, stale, and low-confidence receiver shapes stay fallback, shadowed, or blocked. |
 
@@ -77,10 +77,10 @@ receiver_fact_completion_cutover:
 
 ## Next Implementation Steps
 
-1. Add hashref, bless-field, accessor-return, and chained method-return
-   expression facts without changing provider output.
-2. Add facts-only fixtures that prove source-derived `$hashref`, `$self`, and
-   framework accessor receiver facts without changing provider output.
+1. Add bless-field, accessor-return, and chained method-return expression facts
+   without changing provider output.
+2. Add facts-only fixtures that prove source-derived `$self` and framework
+   accessor receiver facts without changing provider output.
 3. Add real-workspace and additional receiver-form provider confidence receipts
    for exact, fallback, and dynamic receiver cases.
 4. Broaden completion only after facts-only and provider fallback receipts pass

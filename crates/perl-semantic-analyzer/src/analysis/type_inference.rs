@@ -787,11 +787,14 @@ impl TypeInferenceEngine {
             return rhs_fact;
         }
 
-        if let Some((hash_name, key)) = static_hash_slot_target(lhs) {
+        if let Some((hash_name, key, is_hashref_slot)) = static_hash_slot_target(lhs) {
             rhs_fact.evidence.push(TypeEvidence::Assignment { name: hash_name.clone() });
-            rhs_fact
-                .evidence
-                .push(TypeEvidence::HashSlot { hash: format!("${hash_name}"), key: key.clone() });
+            let slot_evidence = if is_hashref_slot {
+                TypeEvidence::HashRefSlot { base: format!("${hash_name}"), key: key.clone() }
+            } else {
+                TypeEvidence::HashSlot { hash: format!("${hash_name}"), key: key.clone() }
+            };
+            rhs_fact.evidence.push(slot_evidence);
             let mut hash_fact = env.get_fact_at(&hash_name).unwrap_or_else(TypeFact::unknown_hash);
             let mut shape = match hash_fact.shape.take() {
                 Some(ShapeFact::Hash(shape)) => shape,
@@ -1183,16 +1186,16 @@ fn variable_name(node: &Node) -> Option<&str> {
     }
 }
 
-fn static_hash_slot_target(node: &Node) -> Option<(String, String)> {
+fn static_hash_slot_target(node: &Node) -> Option<(String, String, bool)> {
     let NodeKind::Binary { op, left, right } = &node.kind else {
         return None;
     };
-    if op != "{}" {
+    if op != "{}" && op != "->{}" {
         return None;
     }
     let name = variable_name(left)?;
     let key = static_hash_key(right)?;
-    Some((name.to_string(), key))
+    Some((name.to_string(), key, op == "->{}"))
 }
 
 fn static_hash_key(node: &Node) -> Option<String> {
