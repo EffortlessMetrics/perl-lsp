@@ -277,6 +277,67 @@ fn dynamic_moo_accessor_isa_stays_non_exact() -> Result<(), String> {
 }
 
 #[test]
+fn method_return_constructor_records_medium_confidence_object_shape() -> Result<(), String> {
+    let code = "package MyApp::Service; sub db { return MyApp::DB->new; } my $service = MyApp::Service->new; $service->db->connect;";
+    let ast = parse_ast(code)?;
+    let mut engine = TypeInferenceEngine::new();
+
+    engine.infer(&ast).map_err(|err| format!("inference failed: {err:?}"))?;
+
+    let receiver = method_receiver(&ast, "connect")?;
+    let fact = engine.infer_expr_fact(receiver);
+
+    assert_eq!(fact.ty, PerlType::Any);
+    assert_eq!(fact.confidence, Confidence::Medium);
+    assert_eq!(object_shape_package(&fact)?, "MyApp::DB");
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::MethodReturn { method, package } if method == "db" && package == "MyApp::DB")
+    }));
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::ConstructorCall { package } if package == "MyApp::DB")
+    }));
+    Ok(())
+}
+
+#[test]
+fn implicit_method_return_constructor_records_object_shape() -> Result<(), String> {
+    let code = "package MyApp::Service; sub cache { MyApp::Cache->new; } my $service = MyApp::Service->new; $service->cache->get;";
+    let ast = parse_ast(code)?;
+    let mut engine = TypeInferenceEngine::new();
+
+    engine.infer(&ast).map_err(|err| format!("inference failed: {err:?}"))?;
+
+    let receiver = method_receiver(&ast, "get")?;
+    let fact = engine.infer_expr_fact(receiver);
+
+    assert_eq!(fact.ty, PerlType::Any);
+    assert_eq!(fact.confidence, Confidence::Medium);
+    assert_eq!(object_shape_package(&fact)?, "MyApp::Cache");
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::MethodReturn { method, package } if method == "cache" && package == "MyApp::Cache")
+    }));
+    Ok(())
+}
+
+#[test]
+fn dynamic_method_return_constructor_stays_non_exact() -> Result<(), String> {
+    let code = "package MyApp::Service; sub db { return $class->new; } my $service = MyApp::Service->new; $service->db->connect;";
+    let ast = parse_ast(code)?;
+    let mut engine = TypeInferenceEngine::new();
+
+    engine.infer(&ast).map_err(|err| format!("inference failed: {err:?}"))?;
+
+    let receiver = method_receiver(&ast, "connect")?;
+    let fact = engine.infer_expr_fact(receiver);
+
+    assert_eq!(fact.ty, PerlType::Any);
+    assert_eq!(fact.confidence, Confidence::Low);
+    assert!(fact.shape.is_none());
+    assert!(fact.evidence.is_empty());
+    Ok(())
+}
+
+#[test]
 fn dynamic_plain_hash_key_fails_closed() -> Result<(), String> {
     let code = "my %services = (db => MyApp::DB->new); $services{$name}->connect;";
     let ast = parse_ast(code)?;

@@ -22,8 +22,10 @@ slot-assignment inference are fixture-backed facts-only substrate. Static
 `bless { field => Package->new }, 'Class'` field inference is fixture-backed as
 medium-confidence substrate. Framework accessor-return facts for package-like
 `isa` declarations are fixture-backed as medium-confidence substrate with erased
-type compatibility preserved. Chained method-return facts remain bounded by
-their own future fixtures and provider receipts.
+type compatibility preserved. Direct static-constructor method-return facts are
+fixture-backed as medium-confidence substrate with erased type compatibility
+preserved. Broader chained method-return facts remain bounded by their own
+future fixtures and provider receipts.
 
 ## Contract
 
@@ -87,6 +89,7 @@ The initial evidence vocabulary must cover:
 - Object::Pad fields
 - workspace-symbol evidence
 - accessor-return evidence
+- method-return evidence
 - heuristic evidence
 
 The initial dynamic-boundary vocabulary must cover:
@@ -226,6 +229,7 @@ and constructor-call evidence.
 Later method-return rules may extend the same fact path for:
 
 - Moo/Moose accessors from `has ... isa => 'Package'`
+- direct method bodies that return a static constructor
 - Object::Pad reader/accessor field methods
 - `DBI->connect(...)` returning `DBI::db`
 - `$dbh->prepare(...)` returning `DBI::st`
@@ -296,6 +300,7 @@ analyzer test surface should cover these scenarios:
 | dynamic key | package is `None`; dynamic boundary is `DynamicHashKey` |
 | bless object field | `$self->{db}` resolves to `MyApp::DB`, medium confidence after bless-field slice |
 | Moo/Moose accessor | `$self->db` or another source-backed object accessor resolves to `MyApp::DB` after framework-accessor slice, as medium-confidence substrate until provider receipts promote it |
+| direct method return | `$self->db` or another source-backed object method resolves to `MyApp::DB` after a direct `return MyApp::DB->new` slice, as medium-confidence substrate until provider receipts promote it |
 
 After facts-only tests pass, LSP completion tests must prove:
 
