@@ -801,26 +801,27 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
                           UNITCHECK runs before the requiring file's UNITCHECK.",
         }),
 
-        // utf8:: namespace — core Perl Unicode encoding/decoding functions.
+        // utf8:: namespace - core Perl Unicode encoding/decoding functions.
         // These are always available without `use utf8;`.  The `use utf8;`
         // pragma controls source-file encoding, not the availability of these
         // functions.  See `perldoc utf8` for the complete specification.
         "utf8::encode" => Some(BuiltinDoc {
             signature: "utf8::encode(SCALAR)",
             description: "Converts `SCALAR` **in-place** from Perl's internal Unicode \
-                          representation into a sequence of octets (bytes) that represent the \
-                          corresponding UTF-8 encoded string.  After the call the UTF-8 flag is \
-                          turned **off**, and the string is a byte string in UTF-8 encoding.\n\n\
+                          representation into Perl's extended UTF-8 octets. Each character is \
+                          replaced by one or more byte-valued characters, and the UTF-8 flag is \
+                          turned **off**. The function returns nothing.\n\n\
                           Use this when you need raw UTF-8 bytes for I/O or binary protocols.  \
                           It is the inverse of `utf8::decode`.\n\n\
-                          **Example**: `utf8::encode(my $bytes = \"café\"); # $bytes is now raw UTF-8 octets`",
+                          **Example**: `utf8::encode($bytes); # $bytes is now raw UTF-8 octets`",
         }),
         "utf8::decode" => Some(BuiltinDoc {
             signature: "utf8::decode(SCALAR)",
-            description: "Decodes `SCALAR` **in-place** from a sequence of UTF-8 octets into \
-                          Perl's internal Unicode representation.  On success the UTF-8 flag is \
-                          turned **on** and returns true; on failure (malformed UTF-8) returns \
-                          false and leaves the string unchanged.\n\n\
+            description: "Attempts to decode `SCALAR` **in-place** from Perl's extended UTF-8 \
+                          octets into the corresponding character sequence. Returns true on \
+                          success and false on malformed input; on failure the string is left \
+                          unchanged. The UTF-8 flag is turned on only when the decoded string \
+                          contains multibyte UTF-8 characters.\n\n\
                           This is the inverse of `utf8::encode`.\n\n\
                           **Example**: `if (utf8::decode($input)) { ... } # $input is now a character string`",
         }),
@@ -829,37 +830,38 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
             description: "Returns **true** if the UTF-8 flag is enabled for `SCALAR`, \
                           false otherwise.  The UTF-8 flag indicates that Perl is treating \
                           the string as a sequence of characters rather than octets.\n\n\
-                          **Note**: A false return does not mean the string is not valid UTF-8; \
-                          it only means the flag is off.  Use `utf8::valid` to check the bytes.  \
-                          **Do not use this for most application logic** — prefer character \
-                          semantics throughout and only check the flag for low-level \
-                          serialization/deserialization.",
+                          **Note**: A false return does not mean the string is invalid; it only \
+                          means the flag is off.  **Do not use this for most application logic** \
+                          - prefer character semantics throughout and only inspect the flag for \
+                          debugging, tests, filenames, or low-level serialization boundaries.",
         }),
         "utf8::valid" => Some(BuiltinDoc {
             signature: "utf8::valid(SCALAR)",
-            description: "Returns **true** if `SCALAR` is a well-formed UTF-8 string (regardless \
-                          of whether the UTF-8 flag is on).  Returns false if the bytes do not \
-                          form valid UTF-8.\n\n\
-                          Unlike `utf8::is_utf8`, this inspects the **bytes** rather than the \
-                          flag, making it useful for validating raw bytes received from external \
-                          sources before decoding.",
+            description: "Internal consistency check for Perl's UTF-8 string state. Returns \
+                          true when `SCALAR` is either stored as bytes or is well-formed Perl \
+                          extended UTF-8 with the UTF-8 flag on. It can return true for ordinary \
+                          byte strings, so it is **not** a general raw-input UTF-8 validator.\n\n\
+                          This routine mainly exists so Perl's own tests can assert that string \
+                          operations left a scalar in a consistent internal state. Use \
+                          `utf8::decode` or the `Encode` module when validating external bytes.",
         }),
         "utf8::upgrade" => Some(BuiltinDoc {
             signature: "utf8::upgrade(SCALAR)",
-            description: "Converts `SCALAR` **in-place** from a byte string to Perl's internal \
-                          Unicode representation, turning on the UTF-8 flag.  This is a no-op if \
-                          the flag is already on.  Returns the number of octets necessary to \
-                          represent the string as UTF-8.\n\n\
+            description: "Converts `SCALAR` **in-place** from the platform native 8-bit encoding \
+                          (Latin-1 on ASCII platforms, EBCDIC on EBCDIC platforms) to Perl's \
+                          internal Unicode representation. This is a no-op if the string is \
+                          already upgraded. Returns the number of octets necessary to represent \
+                          the string as UTF-8.\n\n\
                           `upgrade` and `downgrade` are inverses.  Use `upgrade` when you have \
-                          a byte string that you know represents valid Latin-1 or ASCII and want \
-                          Perl to treat it as characters.",
+                          a native byte string and want Perl to treat it with Unicode semantics. \
+                          It does not decode arbitrary external encodings; use `Encode` for that.",
         }),
         "utf8::downgrade" => Some(BuiltinDoc {
             signature: "utf8::downgrade(SCALAR)\nutf8::downgrade(SCALAR, FAIL_OK)",
             description: "Converts `SCALAR` **in-place** from Perl's internal Unicode \
-                          representation to a byte string, turning off the UTF-8 flag.  Only \
-                          succeeds if every code point in the string fits in a single byte \
-                          (i.e. the string contains no characters outside U+00FF).\n\n\
+                          representation to the equivalent octet sequence in the platform native \
+                          8-bit encoding, turning off the UTF-8 flag. Only succeeds if the string \
+                          can be represented in that native encoding.\n\n\
                           If `FAIL_OK` is true, returns false on failure instead of dying.  \
                           If `FAIL_OK` is omitted or false, dies with an error message on failure.\n\n\
                           **Example**: `utf8::downgrade($str, 1) or die \"String has wide chars\";`",
@@ -1474,7 +1476,7 @@ mod tests {
         );
     }
 
-    // ── utf8:: function documentation tests ────────────────────────────────────
+    // -- utf8:: function documentation tests ------------------------------------
 
     #[test]
     fn test_utf8_encode_has_docs() -> Result<(), Box<dyn std::error::Error>> {
@@ -1543,8 +1545,15 @@ mod tests {
             doc.signature
         );
         assert!(
-            doc.description.contains("well-formed") || doc.description.contains("valid"),
-            "utf8::valid description should mention validation, got: {}",
+            doc.description.contains("Internal consistency")
+                || doc.description.contains("consistent internal state"),
+            "utf8::valid description should describe the internal consistency check, got: {}",
+            doc.description
+        );
+        assert!(
+            doc.description.contains("not")
+                && doc.description.contains("raw-input UTF-8 validator"),
+            "utf8::valid description should avoid presenting it as a raw input validator, got: {}",
             doc.description
         );
         Ok(())
