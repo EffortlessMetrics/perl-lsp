@@ -1164,12 +1164,12 @@ mod tests {
 
     #[test]
     fn test_pl408_duplicate_hash_key_rename_action() {
-        // PL408: duplicate hash key 'host' on a multiline hash — offers rename and delete
+        // PL408: duplicate hash key 'host' on a multiline hash offers rename and delete.
         let source = "my %cfg = (\n    host => 'db1',\n    host => 'db2',\n);\n";
         let mut parser = Parser::new(source);
         let ast = must(parser.parse());
-        // Second 'host' key
-        let dup_start = source.rfind("host").unwrap();
+        // Second 'host' key.
+        let dup_start = must_some(source.rfind("host"));
         let dup_end = dup_start + "host".len();
         let diagnostics = vec![make_diagnostic(
             dup_start,
@@ -1181,11 +1181,9 @@ mod tests {
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
 
-        // Must offer a rename action
-        let rename = actions
-            .iter()
-            .find(|a| a.title.contains("Rename") && a.title.contains("host"))
-            .expect("PL408 should produce a rename action for duplicate key");
+        let rename = must_some(
+            actions.iter().find(|a| a.title.contains("Rename") && a.title.contains("host")),
+        );
         assert_eq!(rename.edit.changes[0].new_text, "host_2");
         assert_eq!(rename.edit.changes[0].location.start, dup_start);
         assert_eq!(rename.edit.changes[0].location.end, dup_end);
@@ -1193,11 +1191,11 @@ mod tests {
 
     #[test]
     fn test_pl408_duplicate_hash_key_delete_preferred_for_multiline() {
-        // PL408: delete action is preferred and removes only the duplicate line
+        // PL408: delete action is preferred and removes only the duplicate line.
         let source = "my %cfg = (\n    host => 'db1',\n    host => 'db2',\n);\n";
         let mut parser = Parser::new(source);
         let ast = must(parser.parse());
-        let dup_start = source.rfind("host").unwrap();
+        let dup_start = must_some(source.rfind("host"));
         let dup_end = dup_start + "host".len();
         let diagnostics = vec![make_diagnostic(
             dup_start,
@@ -1209,10 +1207,9 @@ mod tests {
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
 
-        let delete = actions
-            .iter()
-            .find(|a| a.title.contains("Remove") && a.title.contains("host"))
-            .expect("PL408 should produce a remove action for multiline duplicate key");
+        let delete = must_some(
+            actions.iter().find(|a| a.title.contains("Remove") && a.title.contains("host")),
+        );
         assert!(delete.is_preferred, "remove action should be preferred");
 
         let rewritten = apply_action(source, delete);
@@ -1221,11 +1218,11 @@ mod tests {
 
     #[test]
     fn test_pl408_inline_hash_only_rename_no_delete() {
-        // PL408: inline hash — delete is suppressed; only rename is offered
+        // PL408: inline hash suppresses delete; only rename is offered.
         let source = "my %h = (foo => 1, foo => 2);\n";
         let mut parser = Parser::new(source);
         let ast = must(parser.parse());
-        let dup_start = source.rfind("foo").unwrap();
+        let dup_start = must_some(source.rfind("foo"));
         let dup_end = dup_start + "foo".len();
         let diagnostics = vec![make_diagnostic(
             dup_start,
@@ -1252,7 +1249,7 @@ mod tests {
         let source = "my %h = (\n    'key' => 1,\n    'key' => 2,\n);\n";
         let mut parser = Parser::new(source);
         let ast = must(parser.parse());
-        let dup_start = source.rfind("'key'").unwrap();
+        let dup_start = must_some(source.rfind("'key'"));
         let dup_end = dup_start + "'key'".len();
         let diagnostics = vec![make_diagnostic(
             dup_start,
