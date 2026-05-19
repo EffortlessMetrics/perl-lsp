@@ -257,3 +257,86 @@ fn scenario_dead_branch_accepts_open_brace_on_next_line() -> Result<(), String> 
     }));
     Ok(())
 }
+
+#[test]
+fn scenario_comments_after_terminator_do_not_hide_next_unreachable_statement() -> Result<(), String>
+{
+    // Given an unconditional terminator followed by comments and then code
+    let detector = detector_with_single_file(
+        "file:///scenario_comment_gap.pl",
+        "return 1; # done\n# explanatory comment\n    # indented comment\nprint 'never';\n",
+    )?;
+
+    // When dead-code analysis runs on that file
+    let dead_code = detect_for_path(&detector, "/scenario_comment_gap.pl")?;
+
+    // Then comments are skipped and the next real statement is reported
+    assert!(dead_code.iter().any(|item| {
+        item.code_type == DeadCodeType::UnreachableCode
+            && item.start_line == 4
+            && item.reason.contains("return")
+    }));
+    Ok(())
+}
+
+#[test]
+fn scenario_inner_block_terminator_does_not_leak_to_outer_scope() -> Result<(), String> {
+    // Given a terminator inside an inner block followed by live outer-scope code
+    let detector = detector_with_single_file(
+        "file:///scenario_inner_block.pl",
+        "if ($ok) {\n    return 1;\n}\nprint 'still reachable outside block';\n",
+    )?;
+
+    // When dead-code analysis runs on that file
+    let dead_code = detect_for_path(&detector, "/scenario_inner_block.pl")?;
+
+    // Then the statement after the closed block is not marked unreachable
+    assert!(
+        dead_code.iter().all(|item| item.code_type != DeadCodeType::UnreachableCode),
+        "inner-block terminator must not mark outer code unreachable; got {dead_code:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn scenario_postfix_loop_terminators_are_not_unconditional() -> Result<(), String> {
+    // Given terminator-looking statements guarded by postfix loop/list conditions
+    let cases = [
+        ("scenario_return_for.pl", "return $item for @items;\nsay 'after';\n"),
+        ("scenario_die_foreach.pl", "die $error foreach @errors;\nsay 'after';\n"),
+        ("scenario_exit_until.pl", "exit until $done;\nsay 'after';\n"),
+        ("scenario_return_when.pl", "return $value when /match/;\nsay 'after';\n"),
+    ];
+
+    // Then none should produce unreachable-code diagnostics
+    for (source_name, source) in cases {
+        let uri = format!("file:///{source_name}");
+        let path = format!("/{source_name}");
+        let detector = detector_with_single_file(&uri, source)?;
+        let dead_code = detect_for_path(&detector, &path)?;
+        assert!(
+            dead_code.iter().all(|item| item.code_type != DeadCodeType::UnreachableCode),
+            "{source_name} must not produce unreachable code; got {dead_code:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn scenario_constant_branch_literals_distinguish_boolean_contexts() -> Result<(), String> {
+    // Given falsey literals in positive boolean contexts and truthy literals in inverse contexts
+    let cases = [
+        (
+            "scenario_elsif_empty.pl",
+            "if ($x) {\n    say 'x';\n}\nelsif ('') {\n    say 'dead';\n}\n",
+        ),
+        ("scenario_while_undef.pl", "while (undef) {\n    say 'dead';\n}\n"),
+        ("scenario_until_nonzero.pl", "until (2) {\n    say 'dead';\n}\n"),
+    ];
+
+    // Then each branch shape is still recognized as dead
+    for (source_name, source) in cases {
+        assert_has_dead_branch(source_name, source)?;
+    }
+    Ok(())
+}
