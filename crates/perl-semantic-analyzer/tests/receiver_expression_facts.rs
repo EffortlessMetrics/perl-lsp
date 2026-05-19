@@ -49,6 +49,16 @@ fn method_receiver<'a>(node: &'a Node, name: &str) -> Result<&'a Node, String> {
     }
 }
 
+fn object_shape_package(
+    fact: &perl_semantic_analyzer::analysis::type_facts::TypeFact,
+) -> Result<&str, String> {
+    let shape = fact.shape.as_ref().ok_or_else(|| "missing object shape".to_string())?;
+    match shape {
+        ShapeFact::Object(object) => Ok(object.package.as_str()),
+        _ => Err("fact should carry object shape".to_string()),
+    }
+}
+
 #[test]
 fn constructor_expr_fact_records_object_package() -> Result<(), String> {
     let ast = parse_ast("MyApp::DB->new();")?;
@@ -222,6 +232,47 @@ fn dynamic_bless_class_does_not_expose_exact_object_field_fact() -> Result<(), S
     assert!(fact.evidence.iter().any(|evidence| {
         matches!(evidence, TypeEvidence::HashRefSlot { base, key } if base == "$self" && key == "db")
     }));
+    Ok(())
+}
+
+#[test]
+fn moo_accessor_return_records_medium_confidence_object_shape() -> Result<(), String> {
+    let code = "package MyApp::Service; use Moo; has db => (is => 'ro', isa => 'MyApp::DB'); my $service = MyApp::Service->new; $service->db->connect;";
+    let ast = parse_ast(code)?;
+    let mut engine = TypeInferenceEngine::new();
+
+    engine.infer(&ast).map_err(|err| format!("inference failed: {err:?}"))?;
+
+    let receiver = method_receiver(&ast, "connect")?;
+    let fact = engine.infer_expr_fact(receiver);
+
+    assert_eq!(fact.ty, PerlType::Any);
+    assert_eq!(fact.confidence, Confidence::Medium);
+    assert_eq!(object_shape_package(&fact)?, "MyApp::DB");
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::MooseIsa { attr, isa } if attr == "db" && isa == "MyApp::DB")
+    }));
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::AccessorReturn { method, field } if method == "db" && field == "db")
+    }));
+    Ok(())
+}
+
+#[test]
+fn dynamic_moo_accessor_isa_stays_non_exact() -> Result<(), String> {
+    let code = "package MyApp::Service; use Moo; my $type = 'MyApp::DB'; has db => (is => 'ro', isa => $type); my $service = MyApp::Service->new; $service->db->connect;";
+    let ast = parse_ast(code)?;
+    let mut engine = TypeInferenceEngine::new();
+
+    engine.infer(&ast).map_err(|err| format!("inference failed: {err:?}"))?;
+
+    let receiver = method_receiver(&ast, "connect")?;
+    let fact = engine.infer_expr_fact(receiver);
+
+    assert_eq!(fact.ty, PerlType::Any);
+    assert_eq!(fact.confidence, Confidence::Low);
+    assert!(fact.shape.is_none());
+    assert!(fact.evidence.is_empty());
     Ok(())
 }
 

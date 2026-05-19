@@ -20,8 +20,10 @@ Current implementation state and next source-shape work live in the status doc
 and receiver-facts implementation plan, not in this spec. Hashref literal and
 slot-assignment inference are fixture-backed facts-only substrate. Static
 `bless { field => Package->new }, 'Class'` field inference is fixture-backed as
-medium-confidence substrate. Accessor-return facts and chained method-return
-facts remain bounded by their own future fixtures and provider receipts.
+medium-confidence substrate. Framework accessor-return facts for package-like
+`isa` declarations are fixture-backed as medium-confidence substrate with erased
+type compatibility preserved. Chained method-return facts remain bounded by
+their own future fixtures and provider receipts.
 
 ## Contract
 
@@ -84,6 +86,7 @@ The initial evidence vocabulary must cover:
 - Moo/Moose `isa`
 - Object::Pad fields
 - workspace-symbol evidence
+- accessor-return evidence
 - heuristic evidence
 
 The initial dynamic-boundary vocabulary must cover:
@@ -292,7 +295,7 @@ analyzer test surface should cover these scenarios:
 | hashref literal slot | `$services->{db}` resolves to `MyApp::DB` |
 | dynamic key | package is `None`; dynamic boundary is `DynamicHashKey` |
 | bless object field | `$self->{db}` resolves to `MyApp::DB`, medium confidence after bless-field slice |
-| Moo/Moose accessor | `$self->db` resolves to `MyApp::DB` after framework-accessor slice |
+| Moo/Moose accessor | `$self->db` or another source-backed object accessor resolves to `MyApp::DB` after framework-accessor slice, as medium-confidence substrate until provider receipts promote it |
 
 After facts-only tests pass, LSP completion tests must prove:
 
