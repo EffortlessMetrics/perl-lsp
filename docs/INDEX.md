@@ -107,6 +107,7 @@ Decision records, project status, and planning documents.
 - [0.14.0 Readiness Queue](releases/0.14.0-readiness.md) — current-release meta-roadmap: drain queue + implementation phase + release lock
 - [Project Roadmap](project/ROADMAP.md)
 - [Compiler-Backed LSP Roadmap](project/COMPILER_BACKED_LSP_ROADMAP.md)
+- [PR Queue Disposition Spec](specs/PLSP-SPEC-0006-pr-queue-disposition.md)
 - [Receiver Expression Facts Spec](specs/PLSP-SPEC-0005-receiver-expression-facts.md) and [Receiver Facts Implementation Plan](project/RECEIVER_FACTS_IMPLEMENTATION_PLAN.md)
 - [Project Milestones](project/MILESTONES.md)
 - [Feature Governance](project/FEATURE_GOVERNANCE.md)
