@@ -67,6 +67,18 @@ pub enum ReceiverFactFreshness {
     Unknown,
 }
 
+/// Fallback posture completion must preserve for this receiver fact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ReceiverFallbackState {
+    /// The receiver fact is exact enough to drive receiver-scoped completion.
+    Exact,
+    /// The receiver fact is not exact; completion must preserve legacy fallback.
+    Fallback,
+    /// The receiver fact cannot participate in completion.
+    Blocked,
+}
+
 /// Trust-bounded evidence about a method-call receiver.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
@@ -87,6 +99,8 @@ pub struct ReceiverFact {
     pub dynamic_boundary: Option<DynamicBoundary>,
     /// Source-backed byte range for the receiver expression.
     pub source_range: Option<(usize, usize)>,
+    /// Fallback posture completion must preserve for this receiver.
+    pub fallback_state: ReceiverFallbackState,
 }
 
 impl ReceiverFact {
@@ -100,6 +114,7 @@ impl ReceiverFact {
             freshness: ReceiverFactFreshness::Unknown,
             dynamic_boundary: Some(DynamicBoundary::UnknownReceiver),
             source_range: Some((receiver.location.start, receiver.location.end)),
+            fallback_state: ReceiverFallbackState::Fallback,
         }
     }
 
@@ -113,11 +128,13 @@ impl ReceiverFact {
             freshness: ReceiverFactFreshness::Unknown,
             dynamic_boundary: Some(DynamicBoundary::DynamicHashKey),
             source_range: Some((receiver.location.start, receiver.location.end)),
+            fallback_state: ReceiverFallbackState::Fallback,
         }
     }
 
     fn from_type_fact(kind: ReceiverKind, fact: TypeFact, receiver: &Node) -> Self {
         let package = package_from_type_fact(&fact);
+        let fallback_state = fallback_state_for_fact(package.as_deref(), &fact);
         Self {
             kind,
             package,
@@ -127,6 +144,7 @@ impl ReceiverFact {
             freshness: ReceiverFactFreshness::Fresh,
             dynamic_boundary: fact.dynamic_boundary,
             source_range: Some((receiver.location.start, receiver.location.end)),
+            fallback_state,
         }
     }
 }
@@ -205,6 +223,7 @@ fn variable_receiver_fact(
             freshness: ReceiverFactFreshness::Unknown,
             dynamic_boundary: None,
             source_range: Some((receiver.location.start, receiver.location.end)),
+            fallback_state: ReceiverFallbackState::Fallback,
         };
     }
 
@@ -231,6 +250,7 @@ fn static_package_receiver(
         freshness: ReceiverFactFreshness::Fresh,
         dynamic_boundary: None,
         source_range: Some((receiver.location.start, receiver.location.end)),
+        fallback_state: ReceiverFallbackState::Exact,
     }
 }
 
@@ -270,6 +290,7 @@ fn hash_receiver_fact(
             freshness: ReceiverFactFreshness::Unknown,
             dynamic_boundary: None,
             source_range: Some((receiver.location.start, receiver.location.end)),
+            fallback_state: ReceiverFallbackState::Fallback,
         };
     };
 
@@ -290,6 +311,7 @@ fn hash_receiver_fact(
         freshness: ReceiverFactFreshness::Fresh,
         dynamic_boundary: container_fact.dynamic_boundary,
         source_range: Some((receiver.location.start, receiver.location.end)),
+        fallback_state: ReceiverFallbackState::Fallback,
     }
 }
 
@@ -310,6 +332,7 @@ fn array_receiver_fact(
             freshness: ReceiverFactFreshness::Unknown,
             dynamic_boundary: None,
             source_range: Some((receiver.location.start, receiver.location.end)),
+            fallback_state: ReceiverFallbackState::Fallback,
         };
     };
 
@@ -323,6 +346,7 @@ fn array_receiver_fact(
             freshness: ReceiverFactFreshness::Unknown,
             dynamic_boundary: Some(DynamicBoundary::UnknownReceiver),
             source_range: Some((receiver.location.start, receiver.location.end)),
+            fallback_state: ReceiverFallbackState::Fallback,
         };
     };
 
@@ -343,6 +367,7 @@ fn array_receiver_fact(
         freshness: ReceiverFactFreshness::Fresh,
         dynamic_boundary: container_fact.dynamic_boundary,
         source_range: Some((receiver.location.start, receiver.location.end)),
+        fallback_state: ReceiverFallbackState::Fallback,
     }
 }
 
@@ -380,6 +405,14 @@ fn array_index_type_fact(container_fact: &TypeFact, index: usize) -> Option<Type
 fn with_extra_evidence(mut fact: TypeFact, evidence: TypeEvidence) -> TypeFact {
     fact.evidence.push(evidence);
     fact
+}
+
+fn fallback_state_for_fact(package: Option<&str>, fact: &TypeFact) -> ReceiverFallbackState {
+    if package.is_some() && fact.confidence == Confidence::High && fact.dynamic_boundary.is_none() {
+        ReceiverFallbackState::Exact
+    } else {
+        ReceiverFallbackState::Fallback
+    }
 }
 
 fn variable_identity(node: &Node) -> Option<(&str, &str)> {
@@ -543,6 +576,7 @@ mod tests {
         assert_eq!(fact.package.as_deref(), Some("Foo::Bar"));
         assert_eq!(fact.confidence, Confidence::High);
         assert_eq!(fact.freshness, ReceiverFactFreshness::Fresh);
+        assert_eq!(fact.fallback_state, ReceiverFallbackState::Exact);
         assert!(matches!(
             fact.evidence.first(),
             Some(TypeEvidence::ConstructorCall { package }) if package == "Foo::Bar"
@@ -562,6 +596,7 @@ mod tests {
         assert_eq!(fact.confidence, Confidence::High);
         assert!(matches!(fact.shape, Some(ShapeFact::Object(_))));
         assert_eq!(fact.dynamic_boundary, None);
+        assert_eq!(fact.fallback_state, ReceiverFallbackState::Exact);
         Ok(())
     }
 
@@ -575,6 +610,21 @@ mod tests {
         assert_eq!(fact.kind, ReceiverKind::ObjectVariable);
         assert_eq!(fact.package.as_deref(), Some("My::Service"));
         assert_eq!(fact.freshness, ReceiverFactFreshness::Fresh);
+        assert_eq!(fact.fallback_state, ReceiverFallbackState::Exact);
+        Ok(())
+    }
+
+    #[test]
+    fn medium_confidence_object_receiver_preserves_fallback() -> Result<(), String> {
+        let mut env = TypeEnvironment::new();
+        env.set_variable_fact("object".to_string(), object_fact("My::Service", Confidence::Medium));
+
+        let fact = receiver_fact_for("$object->run();", "run", &env)?;
+
+        assert_eq!(fact.kind, ReceiverKind::ObjectVariable);
+        assert_eq!(fact.package.as_deref(), Some("My::Service"));
+        assert_eq!(fact.confidence, Confidence::Medium);
+        assert_eq!(fact.fallback_state, ReceiverFallbackState::Fallback);
         Ok(())
     }
 
@@ -587,6 +637,7 @@ mod tests {
 
         assert_eq!(fact.kind, ReceiverKind::HashSlot);
         assert_eq!(fact.package.as_deref(), Some("My::Mailer"));
+        assert_eq!(fact.fallback_state, ReceiverFallbackState::Exact);
         assert!(fact.evidence.iter().any(|evidence| {
             matches!(evidence, TypeEvidence::HashSlot { hash, key } if hash == "$services" && key == "mailer")
         }));
@@ -602,6 +653,7 @@ mod tests {
 
         assert_eq!(fact.kind, ReceiverKind::HashRefSlot);
         assert_eq!(fact.package.as_deref(), Some("My::Mailer"));
+        assert_eq!(fact.fallback_state, ReceiverFallbackState::Exact);
         assert!(fact.evidence.iter().any(|evidence| {
             matches!(evidence, TypeEvidence::HashRefSlot { base, key } if base == "$services" && key == "mailer")
         }));
@@ -619,6 +671,7 @@ mod tests {
         assert_eq!(fact.confidence, Confidence::Low);
         assert_eq!(fact.dynamic_boundary, Some(DynamicBoundary::DynamicHashKey));
         assert_eq!(fact.package, None);
+        assert_eq!(fact.fallback_state, ReceiverFallbackState::Fallback);
         Ok(())
     }
 
@@ -632,6 +685,7 @@ mod tests {
         assert_eq!(fact.kind, ReceiverKind::ArrayIndex);
         assert_eq!(fact.package.as_deref(), Some("My::Item"));
         assert_eq!(fact.confidence, Confidence::High);
+        assert_eq!(fact.fallback_state, ReceiverFallbackState::Exact);
         Ok(())
     }
 
@@ -646,6 +700,7 @@ mod tests {
         assert_eq!(fact.package, None);
         assert_eq!(fact.confidence, Confidence::Low);
         assert_eq!(fact.dynamic_boundary, Some(DynamicBoundary::UnknownReceiver));
+        assert_eq!(fact.fallback_state, ReceiverFallbackState::Fallback);
         Ok(())
     }
 
@@ -659,6 +714,7 @@ mod tests {
         assert_eq!(fact.confidence, Confidence::Low);
         assert_eq!(fact.dynamic_boundary, Some(DynamicBoundary::UnknownReceiver));
         assert_eq!(fact.package, None);
+        assert_eq!(fact.fallback_state, ReceiverFallbackState::Fallback);
         Ok(())
     }
 }
