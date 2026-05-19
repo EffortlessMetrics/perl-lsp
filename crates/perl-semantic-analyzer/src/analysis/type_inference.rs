@@ -1093,6 +1093,12 @@ impl TypeInferenceEngine {
         self.global_env.get_fact_at(name)
     }
 
+    /// Returns the current global type environment for provider-level
+    /// source-backed fact lookups.
+    pub fn environment(&self) -> &TypeEnvironment {
+        &self.global_env
+    }
+
     /// Returns a human-readable type label for use in hover text.
     ///
     /// Returns `None` if the variable has not been tracked by the engine.
