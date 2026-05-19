@@ -2,6 +2,7 @@ name: Methodology Gate
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   merge_group:
   push:
     branches:
@@ -13,17 +14,31 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}
 
 jobs:
   methodology-gate:
-    runs-on: ubuntu-latest
+    name: Methodology Gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Advisory gate (required=false in .ci/policies/required-checks.toml).
+    # Skip on draft PRs so iterative WIP pushes don't burn compute on a non-blocking gate.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: 1.95.0
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          cache-on-failure: true
+          shared-key: methodology-gate-${{ hashFiles('Cargo.lock') }}
+          save-if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
 
       - name: Run methodology gate (advisory)
         run: |
