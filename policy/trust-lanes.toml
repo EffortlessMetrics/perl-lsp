@@ -277,11 +277,12 @@ support_claim_impact = "Dependency PRs do not change support claims unless publi
 
 [class.docs_status_only]
 risk_rank = 10
-claim_boundary = "Changes prose, specs, ADRs, dashboards, or generated status without behavior changes."
+claim_boundary = "Changes prose, specs, ADRs, dashboards, generated status, policy, or advisory CI-planning output without product/provider behavior changes."
 required_checks = [
   "diff whitespace check",
   "docs checker or status validator for the touched docs surface",
   "generated-status check when generated docs are changed",
+  "planner or policy validator when PR-plan, workflow, or policy files change",
 ]
 optional_checks = [
   "support-claim validator when public claim wording changes",
@@ -294,7 +295,7 @@ widening_triggers = [
   "docs add or promote public behavior claims",
   "specs redefine provider or edit-producing behavior",
   "generated status is hand-edited",
-  "docs-only PR touches workflow, policy, or release files",
+  "advisory CI-planning changes touch workflow, policy, scripts, or release files",
 ]
 receipt_paths = [
   "docs/specs/",
