@@ -162,4 +162,102 @@ mod tests {
             assert_eq!(idx.position_to_byte(line, col), Some(byte));
         }
     }
+
+    #[test]
+    fn columns_are_byte_offsets_for_multibyte_chars() {
+        // "αβ\nγ" — α=0xCEB1 (2 bytes at 0,1), β=0xCEB2 (2 bytes at 2,3),
+        // \n at byte 4, γ=0xCEB3 (2 bytes at 5,6).
+        let text = "αβ\nγ";
+        let idx = LineIndex::new(text);
+        assert_eq!(idx.byte_to_position(0), (0, 0)); // start of α
+        assert_eq!(idx.byte_to_position(2), (0, 2)); // start of β (byte column, not char)
+        assert_eq!(idx.byte_to_position(4), (0, 4)); // newline
+        assert_eq!(idx.byte_to_position(5), (1, 0)); // start of γ
+        assert_eq!(idx.byte_to_position(6), (1, 1)); // continuation byte of γ
+        // Column accounting is in bytes — column 2 on line 0 is the *byte* offset of β.
+        assert_eq!(idx.position_to_byte(0, 2), Some(2));
+        assert_eq!(idx.position_to_byte(1, 0), Some(5));
+    }
+
+    #[test]
+    fn four_byte_emoji_at_line_boundary() {
+        // 😀 = U+1F600, encoded as F0 9F 98 80 (4 bytes).
+        // "a\n😀b" — a=0, \n=1, emoji=2..6, b=6.
+        let text = "a\n😀b";
+        let idx = LineIndex::new(text);
+        assert_eq!(idx.byte_to_position(2), (1, 0)); // first byte of emoji starts line 1
+        assert_eq!(idx.byte_to_position(5), (1, 3)); // last continuation byte of emoji
+        assert_eq!(idx.byte_to_position(6), (1, 4)); // 'b' immediately after emoji
+        assert_eq!(idx.position_to_byte(1, 0), Some(2));
+        assert_eq!(idx.position_to_byte(1, 4), Some(6));
+    }
+
+    #[test]
+    fn crlf_keeps_carriage_return_on_preceding_line() {
+        // Only \n terminates a line; \r is content. "a\r\nb": a=0, \r=1, \n=2, b=3.
+        let text = "a\r\nb";
+        let idx = LineIndex::new(text);
+        assert_eq!(idx.byte_to_position(0), (0, 0));
+        assert_eq!(idx.byte_to_position(1), (0, 1)); // \r still on line 0
+        assert_eq!(idx.byte_to_position(2), (0, 2)); // \n still on line 0
+        assert_eq!(idx.byte_to_position(3), (1, 0)); // b starts line 1
+        // position_to_byte_checked: line 0 ends at the \n (col 2), col 3 is the next line.
+        assert_eq!(idx.position_to_byte_checked(0, 2), Some(2));
+        assert_eq!(idx.position_to_byte_checked(0, 3), None);
+    }
+
+    #[test]
+    fn consecutive_newlines_create_empty_lines() {
+        // "\n\n\n" — four lines (0..3), each starting at byte 0,1,2,3 respectively;
+        // line 3 is empty trailing line.
+        let text = "\n\n\n";
+        let idx = LineIndex::new(text);
+        assert_eq!(idx.byte_to_position(0), (0, 0)); // newline of line 0
+        assert_eq!(idx.byte_to_position(1), (1, 0)); // newline of line 1
+        assert_eq!(idx.byte_to_position(2), (2, 0)); // newline of line 2
+        assert_eq!(idx.byte_to_position(3), (3, 0)); // empty trailing line
+        // Each non-final empty line addresses exactly one byte (its newline).
+        assert_eq!(idx.position_to_byte(1, 0), Some(1));
+        assert_eq!(idx.position_to_byte(1, 1), None); // past line 1's only byte
+        assert_eq!(idx.position_to_byte(3, 0), Some(3));
+        assert_eq!(idx.position_to_byte(3, 1), None);
+    }
+
+    #[test]
+    fn single_newline_is_two_lines() {
+        // "\n" — line 0 has just the newline (1 addressable byte); line 1 is empty.
+        let idx = LineIndex::new("\n");
+        assert_eq!(idx.byte_to_position(0), (0, 0));
+        assert_eq!(idx.byte_to_position(1), (1, 0));
+        assert_eq!(idx.position_to_byte(0, 0), Some(0));
+        assert_eq!(idx.position_to_byte(0, 1), None); // col 1 on line 0 is past the newline
+        assert_eq!(idx.position_to_byte(1, 0), Some(1));
+        assert_eq!(idx.position_to_byte_checked(0, 0), Some(0));
+        assert_eq!(idx.position_to_byte_checked(1, 0), Some(1));
+    }
+
+    #[test]
+    fn position_to_byte_checked_at_trailing_empty_line() {
+        // "foo\n" — line 1 is empty; col 0 is the only valid position.
+        let idx = LineIndex::new("foo\n");
+        assert_eq!(idx.position_to_byte_checked(1, 0), Some(4));
+        assert_eq!(idx.position_to_byte_checked(1, 1), None);
+        assert_eq!(idx.position_to_byte_checked(2, 0), None);
+    }
+
+    #[test]
+    fn unicode_roundtrip_at_every_char_boundary() {
+        // Roundtrip across multibyte boundaries — every char_indices() position
+        // must map back to itself.
+        let text = "héllo\n世界\n🎉end";
+        let idx = LineIndex::new(text);
+        for (byte, _) in text.char_indices() {
+            let (line, col) = idx.byte_to_position(byte);
+            assert_eq!(
+                idx.position_to_byte(line, col),
+                Some(byte),
+                "roundtrip failed at byte {byte}"
+            );
+        }
+    }
 }

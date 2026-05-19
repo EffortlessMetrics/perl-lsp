@@ -102,7 +102,7 @@ impl SecurityContext {
             && let Some(last) = *last_guard
         {
             // If we've had 10+ violations in the last minute
-            last.elapsed() < std::time::Duration::from_secs(60)
+            last.elapsed() < std::time::Duration::from_mins(1)
         } else {
             false
         }

@@ -191,3 +191,112 @@ fn common_prefix_len(a: &[u8], b: &[u8]) -> usize {
     }
     i
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::VecDeque;
+    use std::sync::Arc;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    fn pending(label: &str, allow_indent: bool) -> PendingHeredoc {
+        PendingHeredoc {
+            label: Arc::from(label),
+            allow_indent,
+            quote: QuoteKind::Unquoted,
+            decl_span: ByteSpan { start: 0, end: 0 },
+        }
+    }
+
+    fn slice(src: &[u8], span: ByteSpan) -> Result<&str, Box<dyn std::error::Error>> {
+        Ok(std::str::from_utf8(&src[span.start..span.end])?)
+    }
+
+    #[test]
+    fn collect_all_consumes_heredocs_in_fifo_order() -> TestResult {
+        let src = b"one\nEOF\ntwo\nBAR\nrest";
+        let mut pending_docs = VecDeque::new();
+        pending_docs.push_back(pending("EOF", false));
+        pending_docs.push_back(pending("BAR", false));
+
+        let result = collect_all(src, 0, pending_docs);
+
+        assert_eq!(result.terminators_found, vec![true, true]);
+        assert_eq!(result.contents.len(), 2);
+        assert_eq!(slice(src, result.contents[0].segments[0])?, "one");
+        assert_eq!(slice(src, result.contents[1].segments[0])?, "two");
+        assert_eq!(result.next_offset, 16);
+
+        Ok(())
+    }
+
+    #[test]
+    fn collect_all_strips_indented_heredoc_baseline_from_content_segments() -> TestResult {
+        let src = b"    first\n  second\n  EOF\nafter";
+        let mut pending_docs = VecDeque::new();
+        pending_docs.push_back(pending("EOF", true));
+
+        let result = collect_all(src, 0, pending_docs);
+        let content = &result.contents[0];
+
+        assert_eq!(result.terminators_found, vec![true]);
+        assert!(content.terminated);
+        assert_eq!(slice(src, content.segments[0])?, "  first");
+        assert_eq!(slice(src, content.segments[1])?, "second");
+        assert_eq!(content.full_span, ByteSpan { start: 2, end: 18 });
+        assert_eq!(result.next_offset, 25);
+
+        Ok(())
+    }
+
+    #[test]
+    fn collect_all_matches_crlf_terminators_without_including_line_endings() -> TestResult {
+        let src = b"alpha\r\nEOF\r\nafter";
+        let mut pending_docs = VecDeque::new();
+        pending_docs.push_back(pending("EOF", false));
+
+        let result = collect_all(src, 0, pending_docs);
+        let content = &result.contents[0];
+
+        assert_eq!(result.terminators_found, vec![true]);
+        assert_eq!(slice(src, content.segments[0])?, "alpha");
+        assert_eq!(content.full_span, ByteSpan { start: 0, end: 5 });
+        assert_eq!(result.next_offset, 12);
+
+        Ok(())
+    }
+
+    #[test]
+    fn collect_all_reports_unterminated_content_and_stops_at_eof() -> TestResult {
+        let src = b"alpha\nbeta";
+        let mut pending_docs = VecDeque::new();
+        pending_docs.push_back(pending("EOF", false));
+
+        let result = collect_all(src, 0, pending_docs);
+        let content = &result.contents[0];
+
+        assert_eq!(result.terminators_found, vec![false]);
+        assert!(!content.terminated);
+        assert_eq!(content.segments.len(), 2);
+        assert_eq!(slice(src, content.segments[0])?, "alpha");
+        assert_eq!(slice(src, content.segments[1])?, "beta");
+        assert_eq!(result.next_offset, src.len());
+
+        Ok(())
+    }
+
+    #[test]
+    fn collect_all_preserves_spaces_when_indent_is_not_allowed() -> TestResult {
+        let src = b"  content\nEOF\n";
+        let mut pending_docs = VecDeque::new();
+        pending_docs.push_back(pending("EOF", false));
+
+        let result = collect_all(src, 0, pending_docs);
+
+        assert_eq!(slice(src, result.contents[0].segments[0])?, "  content");
+        assert_eq!(result.contents[0].full_span, ByteSpan { start: 0, end: 9 });
+
+        Ok(())
+    }
+}

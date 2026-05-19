@@ -4,6 +4,9 @@
 //! Provides quick fixes, refactoring actions, and source actions.
 
 use super::super::*;
+use super::misc::{
+    DIAGNOSTIC_EXPLANATION_SCHEMA_VERSION, diagnostic_explanation_payload_from_diagnostics,
+};
 use crate::protocol::{req_range, req_uri};
 use std::sync::LazyLock;
 
@@ -49,6 +52,33 @@ fn display_diagnostic_message(diagnostic: &crate::features::diagnostics::Diagnos
         Some(suggestion) => format!("{}\nSuggestion: {}", diagnostic.message, suggestion),
         None => diagnostic.message.clone(),
     }
+}
+
+fn diagnostic_severity_value(severity: crate::features::diagnostics::DiagnosticSeverity) -> u8 {
+    match severity {
+        crate::features::diagnostics::DiagnosticSeverity::Error => 1,
+        crate::features::diagnostics::DiagnosticSeverity::Warning => 2,
+        crate::features::diagnostics::DiagnosticSeverity::Information => 3,
+        crate::features::diagnostics::DiagnosticSeverity::Hint => 4,
+    }
+}
+
+fn diagnostic_range_intersects_selection(
+    diagnostic: (usize, usize),
+    selection: (usize, usize),
+) -> bool {
+    let (diag_start, diag_end) = diagnostic;
+    let (sel_start, sel_end) = selection;
+
+    if sel_start == sel_end {
+        return diag_start <= sel_start && sel_start <= diag_end;
+    }
+
+    diag_start < sel_end && sel_start < diag_end
+}
+
+fn diagnostic_code_is_explainable(code: Option<&str>) -> bool {
+    matches!(code, Some("PL701" | "PL109"))
 }
 
 /// Byte-offset-agnostic representation of an LSP range used only for
@@ -289,6 +319,13 @@ impl LspServer {
 
             // Get code actions from both providers
             let mut code_actions: Vec<Value> = Vec::new();
+            self.add_explain_diagnostic_code_actions(
+                &mut code_actions,
+                uri,
+                doc,
+                (start_offset, end_offset),
+                &diagnostics,
+            );
 
             // Add Perl::Critic quick fixes
             let builtin_analyzer = BuiltInAnalyzer::new();
@@ -770,6 +807,98 @@ impl LspServer {
 }
 
 impl LspServer {
+    fn add_explain_diagnostic_code_actions(
+        &self,
+        code_actions: &mut Vec<Value>,
+        uri: &str,
+        doc: &crate::runtime::DocumentState,
+        selection_range: (usize, usize),
+        diagnostics: &[crate::features::diagnostics::Diagnostic],
+    ) {
+        for diagnostic in diagnostics {
+            if !diagnostic_code_is_explainable(diagnostic.code.as_deref()) {
+                continue;
+            }
+            if !diagnostic_range_intersects_selection(diagnostic.range, selection_range) {
+                continue;
+            }
+
+            code_actions.push(self.explain_diagnostic_code_action(uri, doc, diagnostic));
+        }
+    }
+
+    fn explain_diagnostic_code_action(
+        &self,
+        uri: &str,
+        doc: &crate::runtime::DocumentState,
+        diagnostic: &crate::features::diagnostics::Diagnostic,
+    ) -> Value {
+        let diagnostic_value = self.lsp_diagnostic_value(doc, diagnostic);
+        let (diagnostic_payload, user_message, has_dynamic_boundary) =
+            diagnostic_explanation_payload_from_diagnostics(
+                "textDocument/codeAction",
+                std::slice::from_ref(&diagnostic_value),
+            );
+        let (line, character) = self.offset_to_pos16(doc, diagnostic.range.0);
+        let receipt = json!({
+            "provider": "diagnostics",
+            "provider_action": "textDocument/codeAction",
+            "decision": "acted",
+            "reason": "diagnostic_explanation",
+            "fact_source": "provider_runtime",
+            "confidence": "low",
+            "freshness": "fresh",
+            "source_backed": false,
+            "source_backed_state": "diagnostic_returned_by_live_provider",
+            "dynamic_boundary": has_dynamic_boundary,
+            "fallback": "none",
+            "diagnostic_explanation_schema": DIAGNOSTIC_EXPLANATION_SCHEMA_VERSION,
+            "diagnostic_explanation": diagnostic_payload,
+            "user_message": user_message,
+            "workspace_trust_report_command": "perl.workspaceTrustReport",
+            "claim_boundary": "code action explains an existing diagnostic only; no new suppression, severity, or support-tier promotion",
+        });
+
+        json!({
+            "title": "Explain this diagnostic",
+            "kind": "quickfix",
+            "diagnostics": [diagnostic_value],
+            "command": {
+                "title": "Explain this diagnostic",
+                "command": "perl-lsp.explainDiagnostic",
+                "arguments": [{
+                    "provider": "diagnostics",
+                    "request_receipt": receipt,
+                    "request_position": {
+                        "uri_scheme": uri.split_once(':').map(|(scheme, _)| scheme).unwrap_or("file"),
+                        "line": line,
+                        "character": character,
+                    },
+                }]
+            }
+        })
+    }
+
+    fn lsp_diagnostic_value(
+        &self,
+        doc: &crate::runtime::DocumentState,
+        diagnostic: &crate::features::diagnostics::Diagnostic,
+    ) -> Value {
+        let (start_line, start_character) = self.offset_to_pos16(doc, diagnostic.range.0);
+        let (end_line, end_character) = self.offset_to_pos16(doc, diagnostic.range.1);
+
+        json!({
+            "range": {
+                "start": {"line": start_line, "character": start_character},
+                "end": {"line": end_line, "character": end_character},
+            },
+            "severity": diagnostic_severity_value(diagnostic.severity),
+            "code": diagnostic.code.clone(),
+            "source": "perl-lsp",
+            "message": display_diagnostic_message(diagnostic),
+        })
+    }
+
     fn context_diagnostics_for_code_actions(
         &self,
         params: &Value,
@@ -853,6 +982,102 @@ mod tests {
             }
         })));
         assert!(result.is_ok(), "didOpen failed: {result:?}");
+    }
+
+    #[test]
+    fn code_action_runtime_offers_explain_diagnostic_for_pl701_and_pl109()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///explain-diagnostic.pl";
+        let text = "use Missing::Payload;\nprint bareword;\n";
+        open_test_document(&server, uri, text);
+
+        let response = server.handle_code_action(Some(json!({
+            "textDocument": { "uri": uri },
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": 1, "character": 14 }
+            },
+            "context": {
+                "diagnostics": [
+                    {
+                        "range": {
+                            "start": { "line": 0, "character": 4 },
+                            "end": { "line": 0, "character": 20 }
+                        },
+                        "severity": 2,
+                        "code": "PL701",
+                        "source": "perl-lsp",
+                        "message": "Module 'Missing::Payload' not found in configured @INC paths.\nSearched @INC:\n- /workspace/lib (workspace includePaths)"
+                    },
+                    {
+                        "range": {
+                            "start": { "line": 1, "character": 6 },
+                            "end": { "line": 1, "character": 14 }
+                        },
+                        "severity": 1,
+                        "code": "PL109",
+                        "source": "perl-lsp",
+                        "message": "Symbol may be unresolved; dynamic boundary prevents static confirmation."
+                    }
+                ]
+            }
+        })))?;
+        let response = response.ok_or("missing code action response")?;
+        let actions = response.as_array().ok_or("code action response must be an array")?;
+        let explain_actions: Vec<&Value> = actions
+            .iter()
+            .filter(|action| {
+                action.get("title").and_then(Value::as_str) == Some("Explain this diagnostic")
+            })
+            .collect();
+
+        assert_eq!(
+            explain_actions.len(),
+            2,
+            "expected PL701 and PL109 explain actions: {actions:#?}"
+        );
+
+        for action in explain_actions {
+            assert_eq!(action.get("kind").and_then(Value::as_str), Some("quickfix"));
+            assert!(action.get("edit").is_none(), "explain action must not edit code: {action}");
+            assert_eq!(
+                action.pointer("/command/command").and_then(Value::as_str),
+                Some("perl-lsp.explainDiagnostic")
+            );
+            assert_eq!(
+                action.pointer("/command/arguments/0/provider").and_then(Value::as_str),
+                Some("diagnostics")
+            );
+            assert_eq!(
+                action
+                    .pointer(
+                        "/command/arguments/0/request_receipt/diagnostic_explanation/schema_version"
+                    )
+                    .and_then(Value::as_str),
+                Some("diagnostic_explanation.v1")
+            );
+            assert_eq!(
+                action
+                    .pointer("/command/arguments/0/request_receipt/workspace_trust_report_command")
+                    .and_then(Value::as_str),
+                Some("perl.workspaceTrustReport")
+            );
+        }
+
+        let codes: Vec<&str> = actions
+            .iter()
+            .filter(|action| action.get("title").and_then(Value::as_str) == Some("Explain this diagnostic"))
+            .filter_map(|action| {
+                action
+                    .pointer("/command/arguments/0/request_receipt/diagnostic_explanation/diagnostic_explanations/0/code")
+                    .and_then(Value::as_str)
+            })
+            .collect();
+        assert!(codes.contains(&"PL701"), "missing PL701 explain receipt: {actions:#?}");
+        assert!(codes.contains(&"PL109"), "missing PL109 explain receipt: {actions:#?}");
+
+        Ok(())
     }
 
     #[test]
