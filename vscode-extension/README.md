@@ -206,6 +206,13 @@ Open the command palette (`Ctrl+Shift+P`) and search for "Perl":
 | **Perl: Reinstall Server Binary** | Re-download the managed binary |
 | **Perl: Organize Use Statements** | Sort and clean `use` statements |
 | **Perl: Run Tests in Current File** | Run tests in the active `.t` or `.pl` file |
+| **Perl LSP: Explain Provider Decision** | Show why the last provider acted, fell back, or refused |
+| **Perl LSP: Copy Provider Decision Receipt** | Copy a structured local receipt for issue reports |
+| **Perl LSP: Show Workspace Trust Report** | Show workspace roots, module-resolution configuration, index state, support tiers, provider-decision traces, and dynamic-boundary policy in the output channel |
+| **Perl LSP: Explain This Diagnostic** | Explain PL701/PL109 diagnostics in the output channel when a receipt is available |
+| **Perl LSP: Explain Missing Module Lookup** | Show the current missing-module `@INC` lookup state and setup boundary |
+| **Perl LSP: Preview Safe Delete** | Preview whether symbol deletion is allowed, blocked, or refused before editing |
+| **Perl LSP: Preview Package Rename** | Preview package/compiler-backed rename evidence without authorizing an edit |
 | **Perl: Show Output Channel** | Open the extension output log |
 | **Perl: Show Status Menu** | Quick-access menu for all actions |
 
@@ -237,8 +244,12 @@ The `perllsp` binary works with any editor that supports the Language Server Pro
 - Check `perl-lsp.enableFormatting` is `true`
 
 **Diagnostics too noisy?**
-- Set `perl-lsp.enableDiagnostics` to `false` to disable
-- File an issue if you see false positives
+- Run **Perl LSP: Explain This Diagnostic** to see whether the warning is a
+  true missing fact, low-confidence evidence, or a dynamic boundary.
+- Run **Perl LSP: Show Workspace Trust Report** if module paths, Perl binary,
+  or setup policy may be involved.
+- Set `perl-lsp.enableDiagnostics` to `false` to disable diagnostics.
+- File an issue with the copied provider receipt if you see false positives.
 
 ## Known Issues
 

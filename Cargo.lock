@@ -1745,6 +1745,7 @@ dependencies = [
  "perl-parser-core",
  "perl-semantic-analyzer",
  "perl-tdd-support",
+ "perl-test-generators",
  "perl-uri",
  "perl-workspace",
  "proptest",
@@ -1766,6 +1767,19 @@ name = "perl-parser-bench"
 version = "0.14.0"
 dependencies = [
  "perl-parser",
+ "walkdir",
+]
+
+[[package]]
+name = "perl-parser-comparison"
+version = "0.14.0"
+dependencies = [
+ "perl-ast",
+ "perl-parser-core",
+ "perl-parser-pest",
+ "perl-tdd-support",
+ "tree-sitter",
+ "tree-sitter-perl-c",
  "walkdir",
 ]
 
@@ -1804,6 +1818,9 @@ dependencies = [
 [[package]]
 name = "perl-pod"
 version = "0.14.0"
+dependencies = [
+ "tempfile",
+]
 
 [[package]]
 name = "perl-position-tracking"

@@ -371,6 +371,120 @@ impl<'a> Parser<'a> {
             )
     }
 
+    fn is_symbolic_short_circuit_operator(kind: Option<TokenKind>) -> bool {
+        matches!(kind, Some(TokenKind::And | TokenKind::Or | TokenKind::DefinedOr))
+    }
+
+    fn is_sigil_argument_start(kind: TokenKind, text: &str) -> bool {
+        text.starts_with('$')
+            || text.starts_with('@')
+            || text.starts_with('%')
+            || matches!(
+                kind,
+                TokenKind::Backslash
+                    | TokenKind::ScalarSigil
+                    | TokenKind::ArraySigil
+                    | TokenKind::HashSigil
+                    | TokenKind::GlobSigil
+                    | TokenKind::SubSigil
+                    | TokenKind::BitwiseAnd
+                    | TokenKind::Star
+            )
+    }
+
+    fn should_continue_bare_call_after_qualified_arg(&mut self, args: &[Node]) -> bool {
+        let Some(last) = args.last() else {
+            return false;
+        };
+        let NodeKind::Identifier { name } = &last.kind else {
+            return false;
+        };
+        if !name.contains("::") || self.is_at_statement_end() {
+            return false;
+        }
+
+        self.tokens
+            .peek()
+            .ok()
+            .is_some_and(|token| Self::is_sigil_argument_start(token.kind, token.text.as_ref()))
+    }
+
+    fn assignment_operator_text(kind: TokenKind) -> Option<&'static str> {
+        match kind {
+            TokenKind::Assign => Some("="),
+            TokenKind::PlusAssign => Some("+="),
+            TokenKind::MinusAssign => Some("-="),
+            TokenKind::StarAssign => Some("*="),
+            TokenKind::SlashAssign => Some("/="),
+            TokenKind::PercentAssign => Some("%="),
+            TokenKind::DotAssign => Some(".="),
+            TokenKind::AndAssign => Some("&="),
+            TokenKind::OrAssign => Some("|="),
+            TokenKind::XorAssign => Some("^="),
+            TokenKind::PowerAssign => Some("**="),
+            TokenKind::LeftShiftAssign => Some("<<="),
+            TokenKind::RightShiftAssign => Some(">>="),
+            TokenKind::LogicalAndAssign => Some("&&="),
+            TokenKind::LogicalOrAssign => Some("||="),
+            TokenKind::DefinedOrAssign => Some("//="),
+            _ => None,
+        }
+    }
+
+    fn consume_bare_lvalue_assignment_separator(&mut self, func_name: &str) -> ParseResult<bool> {
+        if func_name != "substr" || self.peek_kind() != Some(TokenKind::Comma) {
+            return Ok(false);
+        }
+
+        if self
+            .tokens
+            .peek_second()
+            .ok()
+            .and_then(|token| Self::assignment_operator_text(token.kind))
+            .is_none()
+        {
+            return Ok(false);
+        }
+
+        self.consume_token()?;
+        Ok(true)
+    }
+
+    fn parse_lvalue_builtin_assignment_tail(
+        &mut self,
+        func_name: &str,
+        expr: Node,
+    ) -> ParseResult<Node> {
+        if func_name != "substr" {
+            return Ok(expr);
+        }
+
+        let Some(op) = self.peek_kind().and_then(Self::assignment_operator_text) else {
+            return Ok(expr);
+        };
+
+        let op_token = self.tokens.next()?;
+        let rhs = if let Some(missing) = self.recover_missing_infix_rhs(op_token.start) {
+            missing
+        } else {
+            self.parse_assignment()?
+        };
+        let start = expr.location.start;
+        let end = rhs.location.end;
+
+        Ok(Node::new(
+            NodeKind::Assignment { lhs: Box::new(expr), rhs: Box::new(rhs), op: op.to_string() },
+            SourceLocation { start, end },
+        ))
+    }
+
+    fn is_explicit_sub_sigil_argument_start(&mut self) -> bool {
+        matches!(self.peek_kind(), Some(TokenKind::SubSigil | TokenKind::BitwiseAnd))
+            && self.tokens.peek_second().is_ok_and(|token| {
+                token.kind == TokenKind::LeftBrace || Self::can_be_sub_name(token.kind)
+            })
+    }
+
     /// Peek at the next token's kind
     fn peek_kind(&mut self) -> Option<TokenKind> {
         self.tokens.peek().ok().map(|t| t.kind)
@@ -595,6 +709,13 @@ impl<'a> Parser<'a> {
         if self.peek_kind() == Some(TokenKind::Sub) && self.next_token_starts_anonymous_sub() {
             return false;
         }
+        if matches!(
+            self.peek_kind(),
+            Some(TokenKind::My | TokenKind::Our | TokenKind::State)
+        ) && self.next_token_starts_variable_declaration()
+        {
+            return false;
+        }
 
         match self.peek_kind() {
             Some(kind) if kind.is_recovery_boundary() => true,
@@ -619,6 +740,25 @@ impl<'a> Parser<'a> {
             | None => true,
             _ => false,
         }
+    }
+
+    fn next_token_starts_variable_declaration(&mut self) -> bool {
+        self.tokens.peek_second().ok().is_some_and(|next| {
+            matches!(
+                next.kind,
+                TokenKind::ScalarSigil
+                    | TokenKind::ArraySigil
+                    | TokenKind::HashSigil
+                    | TokenKind::SubSigil
+                    | TokenKind::GlobSigil
+                    | TokenKind::LeftParen
+            ) || (next.kind == TokenKind::Identifier
+                && next
+                    .text
+                    .chars()
+                    .next()
+                    .is_some_and(|c| matches!(c, '$' | '@' | '%' | '&' | '*')))
+        })
     }
 
     /// Returns true when `sub` is followed by tokens that start an anonymous
@@ -915,6 +1055,14 @@ impl<'a> Parser<'a> {
         if name.contains("::") {
             return true;
         }
+
+        // Filter::Simple exports an uppercase FILTER block form:
+        // `FILTER { s/foo/bar/g; };`. Treat only that DSL keyword as a
+        // bare block call so ordinary uppercase constants remain expressions.
+        if name == "FILTER" {
+            return true;
+        }
+
         // Only lowercase/underscore-leading identifiers
         name.starts_with(|c: char| c.is_ascii_lowercase() || c == '_')
     }
@@ -987,10 +1135,12 @@ impl<'a> Parser<'a> {
                 // Allow qualified names (e.g. `File::Spec`, `Scalar::Util`) as arguments.
                 // They start with uppercase but the `::` disambiguates them from constants.
                 if next_text.contains("::") {
-                    // Qualified name — check that the following token is `->` or `(`.
+                    // Qualified name — check that the following token is `->`, `(`,
+                    // or another explicit argument in a list-operator style call.
                     if let Ok(third) = self.tokens.peek_second() {
                         return third.kind == TokenKind::Arrow
-                            || third.kind == TokenKind::LeftParen;
+                            || third.kind == TokenKind::LeftParen
+                            || Self::is_sigil_argument_start(third.kind, third.text.as_ref());
                     }
                     return false;
                 }
@@ -1013,13 +1163,19 @@ impl<'a> Parser<'a> {
                 if Self::is_builtin_function(&next_text) {
                     if let Ok(third) = self.tokens.peek_second() {
                         let third_text: &str = &third.text;
-                        return third_text.starts_with('$')
-                            || third_text.starts_with('@')
-                            || third_text.starts_with('%')
-                            || third.kind == TokenKind::Star
-                            || third.kind == TokenKind::ScalarSigil
-                            || third.kind == TokenKind::ArraySigil
-                            || third.kind == TokenKind::HashSigil;
+                        return Self::is_sigil_argument_start(third.kind, third_text);
+                    }
+                }
+                if next_text.starts_with(|c: char| c.is_ascii_lowercase() || c == '_') {
+                    if self
+                        .tokens
+                        .peek_second()
+                        .ok()
+                        .is_some_and(|third| {
+                            Self::is_sigil_argument_start(third.kind, third.text.as_ref())
+                        })
+                    {
+                        return true;
                     }
                 }
                 // Check if the next-next token is `(` — that signals a function call
@@ -1090,6 +1246,7 @@ impl<'a> Parser<'a> {
             | TokenKind::Check
             | TokenKind::Init
             | TokenKind::Unitcheck
+            | TokenKind::Defer
             | TokenKind::Undef
             // Word-operators (also valid bareword sub names)
             | TokenKind::WordAnd    // sub and { ... }

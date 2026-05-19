@@ -64,66 +64,78 @@ mod tests {
     // --- variants with positions ---
 
     #[test]
-    fn lexer_error_unterminated_string_returns_position() {
+    fn lexer_error_unterminated_string_returns_position() -> Result<(), Box<dyn std::error::Error>>
+    {
         let err = LexerError::UnterminatedString { position: 7 };
         assert_eq!(err.position(), Some(7));
+        Ok(())
     }
 
     #[test]
-    fn lexer_error_unterminated_regex_returns_position() {
+    fn lexer_error_unterminated_regex_returns_position() -> Result<(), Box<dyn std::error::Error>> {
         let err = LexerError::UnterminatedRegex { position: 42 };
         assert_eq!(err.position(), Some(42));
+        Ok(())
     }
 
     #[test]
-    fn lexer_error_invalid_escape_returns_position() {
+    fn lexer_error_invalid_escape_returns_position() -> Result<(), Box<dyn std::error::Error>> {
         let err = LexerError::InvalidEscape { char: 'z', position: 15 };
         assert_eq!(err.position(), Some(15));
+        Ok(())
     }
 
     #[test]
-    fn lexer_error_invalid_number_returns_position() {
+    fn lexer_error_invalid_number_returns_position() -> Result<(), Box<dyn std::error::Error>> {
         let err = LexerError::InvalidNumber { position: 3, reason: "bad digit".into() };
         assert_eq!(err.position(), Some(3));
+        Ok(())
     }
 
     #[test]
-    fn lexer_error_unexpected_char_returns_position() {
+    fn lexer_error_unexpected_char_returns_position() -> Result<(), Box<dyn std::error::Error>> {
         let err = LexerError::UnexpectedChar { char: '@', position: 99 };
         assert_eq!(err.position(), Some(99));
+        Ok(())
     }
 
     #[test]
-    fn lexer_error_invalid_utf8_returns_position() {
+    fn lexer_error_invalid_utf8_returns_position() -> Result<(), Box<dyn std::error::Error>> {
         let err = LexerError::InvalidUtf8 { position: 0 };
         assert_eq!(err.position(), Some(0));
+        Ok(())
     }
 
     #[test]
-    fn lexer_error_heredoc_error_returns_position() {
+    fn lexer_error_heredoc_error_returns_position() -> Result<(), Box<dyn std::error::Error>> {
         let err = LexerError::HeredocError { position: 256, reason: "no terminator".into() };
         assert_eq!(err.position(), Some(256));
+        Ok(())
     }
 
     // --- variant without a position ---
 
     #[test]
-    fn lexer_error_other_returns_none() {
+    fn lexer_error_other_returns_none() -> Result<(), Box<dyn std::error::Error>> {
         let err = LexerError::Other("something went wrong".into());
         assert_eq!(err.position(), None);
+        Ok(())
     }
 
     // --- edge values ---
 
     #[test]
-    fn lexer_error_position_zero_is_returned_correctly() {
+    fn lexer_error_position_zero_is_returned_correctly() -> Result<(), Box<dyn std::error::Error>> {
         let err = LexerError::UnterminatedString { position: 0 };
         assert_eq!(err.position(), Some(0));
+        Ok(())
     }
 
     #[test]
-    fn lexer_error_position_usize_max_is_returned_correctly() {
+    fn lexer_error_position_usize_max_is_returned_correctly()
+    -> Result<(), Box<dyn std::error::Error>> {
         let err = LexerError::UnterminatedString { position: usize::MAX };
         assert_eq!(err.position(), Some(usize::MAX));
+        Ok(())
     }
 }

@@ -88,6 +88,28 @@ fn path_empty_module_name_returns_fallback() -> Result<(), Box<dyn std::error::E
 }
 
 // ---------------------------------------------------------------------------
+// resolve_module_path: relative include traversal is ignored
+// ---------------------------------------------------------------------------
+
+#[test]
+fn path_skips_traversing_relative_include_path() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let root = temp.path().join("workspace");
+    let outside = temp.path().join("escape_lib").join("Escape").join("Mod.pm");
+    let fallback = root.join("lib").join("Escape").join("Mod.pm");
+
+    std::fs::create_dir_all(outside.parent().ok_or("no outside parent")?)?;
+    std::fs::create_dir_all(fallback.parent().ok_or("no fallback parent")?)?;
+    std::fs::write(&outside, "package Escape::Mod; 'outside';")?;
+    std::fs::write(&fallback, "package Escape::Mod; 'fallback';")?;
+
+    let resolved = resolve_module_path(&root, "Escape::Mod", &["../escape_lib".to_string()]);
+
+    assert_eq!(resolved, Some(fallback));
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // resolve_module_uri: multiple workspace folders
 // ---------------------------------------------------------------------------
 
@@ -122,6 +144,76 @@ fn uri_resolves_from_second_workspace_folder() -> Result<(), Box<dyn std::error:
             assert!(uri.ends_with("Only/Here.pm"));
         }
         other => return Err(format!("expected Resolved, got {other:?}").into()),
+    }
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// resolve_module_uri: relative include traversal is ignored
+// ---------------------------------------------------------------------------
+
+#[test]
+fn uri_skips_traversing_workspace_include_path() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let workspace = temp.path().join("workspace");
+    let outside = temp.path().join("escape_lib").join("Leak").join("Mod.pm");
+
+    std::fs::create_dir_all(outside.parent().ok_or("no outside parent")?)?;
+    std::fs::write(&outside, "package Leak::Mod; 1;")?;
+
+    let ws_uri =
+        url::Url::from_file_path(&workspace).map_err(|()| "failed to create URI")?.to_string();
+
+    let result = resolve_module_uri(
+        "Leak::Mod",
+        &[],
+        &[ws_uri],
+        &["../escape_lib".to_string()],
+        false,
+        &[],
+        Duration::from_millis(200),
+    );
+
+    assert_eq!(result, ModuleUriResolution::NotFound);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// resolve_module_uri: whitespace and dot include normalization
+// ---------------------------------------------------------------------------
+
+#[test]
+fn uri_trims_and_normalizes_include_paths() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let workspace = temp.path().join("ws");
+    let module_file = workspace.join("lib").join("Trimmed").join("Path.pm");
+
+    std::fs::create_dir_all(module_file.parent().ok_or("no module parent")?)?;
+    std::fs::write(&module_file, "package Trimmed::Path; 1;")?;
+
+    let ws_uri =
+        url::Url::from_file_path(&workspace).map_err(|()| "failed to create URI")?.to_string();
+
+    let result = resolve_module_uri(
+        "Trimmed::Path",
+        &[],
+        &[ws_uri],
+        &["   ".to_string(), " ./lib/ ".to_string(), "lib".to_string()],
+        false,
+        &[],
+        Duration::from_millis(200),
+    );
+
+    match result {
+        ModuleUriResolution::Resolved(uri) => {
+            assert!(uri.ends_with("Trimmed/Path.pm"), "unexpected resolved URI: {uri}");
+        }
+        other => {
+            return Err(
+                format!("expected Resolved for normalized include path, got {other:?}").into()
+            );
+        }
     }
 
     Ok(())

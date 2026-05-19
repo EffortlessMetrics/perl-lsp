@@ -786,10 +786,34 @@
         "icon": "$(shield)"
       },
       {
+        "command": "perl-lsp.previewPackageRename",
+        "title": "Preview Package Rename",
+        "category": "Perl LSP",
+        "icon": "$(symbol-method)"
+      },
+      {
         "command": "perl-lsp.copyProviderDecisionReceipt",
         "title": "Copy Provider Decision Receipt",
         "category": "Perl LSP",
         "icon": "$(copy)"
+      },
+      {
+        "command": "perl-lsp.showWorkspaceTrustReport",
+        "title": "Show Workspace Trust Report",
+        "category": "Perl LSP",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "perl-lsp.explainMissingModuleLookup",
+        "title": "Explain Missing Module Lookup",
+        "category": "Perl LSP",
+        "icon": "$(search)"
+      },
+      {
+        "command": "perl-lsp.explainDiagnostic",
+        "title": "Explain This Diagnostic",
+        "category": "Perl LSP",
+        "icon": "$(comment-discussion)"
       },
       {
         "command": "perl-lsp.reportIssue",
@@ -901,7 +925,23 @@
           "when": "editorLangId == perl"
         },
         {
+          "command": "perl-lsp.previewPackageRename",
+          "when": "editorLangId == perl"
+        },
+        {
           "command": "perl-lsp.copyProviderDecisionReceipt",
+          "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.showWorkspaceTrustReport",
+          "when": "workspaceFolderCount >= 1"
+        },
+        {
+          "command": "perl-lsp.explainMissingModuleLookup",
+          "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.explainDiagnostic",
           "when": "editorLangId == perl"
         },
         {
