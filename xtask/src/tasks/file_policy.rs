@@ -1627,6 +1627,35 @@ fn render_proposal_markdown(
     }
     out.push('\n');
 
+    let migration_candidates: Vec<_> = groups
+        .iter()
+        .filter_map(|(group_key, files)| {
+            group_migration_rule(files).map(|rule| (group_key, files, rule))
+        })
+        .collect();
+
+    out.push_str("## Rust migration candidates\n\n");
+    if migration_candidates.is_empty() {
+        out.push_str("No unclassified repo-automation scripts were detected in this proposal.\n\n");
+    } else {
+        out.push_str(
+            "These groups contain non-Rust automation that should be reviewed for conversion \
+             into Rust-owned tooling before broad allowlist promotion.\n\n",
+        );
+        out.push_str(
+            "| Group | Files | Recommended destination | Rationale |\n|---|---:|---|---|\n",
+        );
+        for (group_key, files, rule) in &migration_candidates {
+            out.push_str(&format!(
+                "| `{group_key}` | {} | `{}` | {} |\n",
+                files.len(),
+                rule.target,
+                rule.rationale
+            ));
+        }
+        out.push('\n');
+    }
+
     out.push_str(&format!("## Groups by {group_label}\n\n"));
     for (group_key, files) in groups {
         let entry_id = entries
@@ -1641,6 +1670,12 @@ fn render_proposal_markdown(
         out.push_str(&format!("- Proposed entry: `{entry_id}`\n"));
         out.push_str("- `owner`: TBD — must be set before promotion\n");
         out.push_str("- `surface`: unclassified — must be refined\n");
+        if let Some(rule) = group_migration_rule(files) {
+            out.push_str(&format!(
+                "- Rust migration review: {} Target: `{}`.\n",
+                rule.rationale, rule.target
+            ));
+        }
         // Show first 10 files as examples.
         if !files.is_empty() {
             out.push_str("- Sample files:\n");
@@ -1660,6 +1695,273 @@ fn render_proposal_markdown(
     out.push_str("3. Copy approved entries into `policy/non-rust-allowlist.toml`.\n");
     out.push_str("4. Run `cargo xtask check-file-policy --mode advisory` to verify.\n");
     out.push_str("5. Do NOT promote entries with `owner = \"TBD\"`.\n");
+
+    out
+}
+
+// ---------------------------------------------------------------------------
+// Migration candidate finder — `cargo xtask non-rust migration-candidates`
+// ---------------------------------------------------------------------------
+
+/// Output format for non-Rust migration candidate reports.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MigrationCandidateFormat {
+    /// Human-readable Markdown.
+    Markdown,
+    /// Machine-readable JSON.
+    Json,
+}
+
+/// Configuration for `cargo xtask non-rust migration-candidates`.
+pub struct MigrationCandidatesConfig {
+    /// Output format.
+    pub format: MigrationCandidateFormat,
+    /// Optional output path. Prints to stdout when omitted.
+    pub output: Option<std::path::PathBuf>,
+    /// Maximum number of candidates to include.
+    pub limit: Option<usize>,
+    /// Override the workspace root used for `git ls-files` (test seam).
+    pub root_override: Option<std::path::PathBuf>,
+}
+
+/// One non-Rust file that looks like a Rust migration candidate.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct MigrationCandidate {
+    /// Repo-relative path.
+    pub path: String,
+    /// Language family inferred from extension and filename.
+    pub language: String,
+    /// Suggested Rust-owned destination.
+    pub target: String,
+    /// Stable priority bucket for review ordering.
+    pub priority: String,
+    /// Why the file belongs in the suggested target.
+    pub rationale: String,
+}
+
+#[derive(Clone, Copy)]
+struct MigrationRule {
+    language: &'static str,
+    target: &'static str,
+    priority: &'static str,
+    rationale: &'static str,
+}
+
+/// Entry point for `cargo xtask non-rust migration-candidates`.
+///
+/// The command is intentionally read-only. It identifies script-style tooling
+/// that is already in a Rust-owned architectural lane (for example corpus
+/// tooling belongs in `perl-corpus`, repo automation belongs in `xtask`) and
+/// emits a deterministic review queue for future focused migration PRs.
+pub fn non_rust_migration_candidates(root: &Path, config: MigrationCandidatesConfig) -> Result<()> {
+    let effective_root: std::path::PathBuf =
+        if let Some(ref r) = config.root_override { r.clone() } else { root.to_path_buf() };
+
+    let mut candidates = collect_migration_candidates(effective_root.as_path())?;
+    if let Some(limit) = config.limit {
+        candidates.truncate(limit);
+    }
+
+    let rendered = match config.format {
+        MigrationCandidateFormat::Markdown => render_migration_candidates_markdown(&candidates),
+        MigrationCandidateFormat::Json => serde_json::to_string_pretty(&candidates)?,
+    };
+
+    if let Some(output) = config.output {
+        if let Some(parent) = output.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+            fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
+        }
+        fs::write(&output, rendered).with_context(|| format!("writing {}", output.display()))?;
+        println!("wrote {} migration candidates to {}", candidates.len(), output.display());
+    } else {
+        println!("{rendered}");
+    }
+
+    Ok(())
+}
+
+fn collect_migration_candidates(root: &Path) -> Result<Vec<MigrationCandidate>> {
+    let tracked = list_tracked_files(root)?;
+    let mut candidates: Vec<MigrationCandidate> = tracked
+        .iter()
+        .filter_map(|path| {
+            migration_rule_for_path(path).map(|rule| candidate_from_rule(path, rule))
+        })
+        .collect();
+
+    candidates.sort_by(|a, b| {
+        priority_rank(&a.priority)
+            .cmp(&priority_rank(&b.priority))
+            .then_with(|| a.target.cmp(&b.target))
+            .then_with(|| a.path.cmp(&b.path))
+    });
+    Ok(candidates)
+}
+
+fn candidate_from_rule(path: &str, rule: MigrationRule) -> MigrationCandidate {
+    MigrationCandidate {
+        path: path.to_string(),
+        language: rule.language.to_string(),
+        target: rule.target.to_string(),
+        priority: rule.priority.to_string(),
+        rationale: rule.rationale.to_string(),
+    }
+}
+
+fn priority_rank(priority: &str) -> u8 {
+    match priority {
+        "high" => 0,
+        "medium" => 1,
+        "low" => 2,
+        _ => 3,
+    }
+}
+
+fn migration_rule_for_path(path: &str) -> Option<MigrationRule> {
+    let language = script_language(path)?;
+
+    if path.starts_with("tools/corpus_") || path == "tools/add_metadata.py" {
+        return Some(MigrationRule {
+            language,
+            target: "crates/perl-corpus",
+            priority: "high",
+            rationale: "Corpus linting, indexing, and metadata helpers belong with the Rust corpus crate and its `perl-corpus` CLI.",
+        });
+    }
+
+    if path.starts_with("benchmarks/scripts/") {
+        return Some(MigrationRule {
+            language,
+            target: "xtask benchmark/metrics tasks",
+            priority: "medium",
+            rationale: "Benchmark orchestration and result formatting should share Rust workspace metadata, receipts, and error handling through xtask.",
+        });
+    }
+
+    if path.starts_with("ci/") {
+        return Some(MigrationRule {
+            language,
+            target: "xtask policy/check tasks",
+            priority: "medium",
+            rationale: "CI policy checks should use the same Rust policy modules that local agent and gate commands exercise.",
+        });
+    }
+
+    if path.starts_with("scripts/ci/") || path.starts_with("scripts/policy/") {
+        return Some(MigrationRule {
+            language,
+            target: "xtask policy/check tasks",
+            priority: "medium",
+            rationale: "Policy and CI receipts are core repository automation and should be implemented as typed xtask tasks.",
+        });
+    }
+
+    if path.starts_with("scripts/") && path.ends_with(".py") {
+        return Some(MigrationRule {
+            language,
+            target: "xtask tasks",
+            priority: "medium",
+            rationale: "Python repository automation should migrate to xtask when it does not require a Python-specific ecosystem API.",
+        });
+    }
+
+    if path.starts_with("bin/") || path.starts_with("tools/") {
+        return Some(MigrationRule {
+            language,
+            target: "xtask tasks",
+            priority: "medium",
+            rationale: "Repository helper scripts should migrate to typed xtask tasks when they do not require a language-specific ecosystem API.",
+        });
+    }
+
+    if path == "install.sh" || path == "install.ps1" {
+        return Some(MigrationRule {
+            language,
+            target: "install-surface checks",
+            priority: "low",
+            rationale: "Installer validation and shared install-surface logic should live in Rust-owned release checks.",
+        });
+    }
+
+    if path.starts_with("scripts/check-") || path.starts_with("scripts/validate-") {
+        return Some(MigrationRule {
+            language,
+            target: "xtask policy/check tasks",
+            priority: "low",
+            rationale: "Shell validation wrappers are candidates for typed xtask checks once their external command surface is stable.",
+        });
+    }
+
+    None
+}
+
+fn group_migration_rule(files: &[String]) -> Option<MigrationRule> {
+    files.iter().find_map(|file| migration_rule_for_path(file))
+}
+
+fn script_language(path: &str) -> Option<&'static str> {
+    let basename = path.rsplit('/').next().unwrap_or(path);
+    let ext = basename.rsplit_once('.').map(|(_, ext)| ext).unwrap_or("");
+    match ext {
+        "py" => Some("python"),
+        "sh" | "bash" | "zsh" | "fish" => Some("shell"),
+        "ps1" | "bat" | "cmd" => Some("shell"),
+        "js" => Some("javascript"),
+        "ts" => Some("typescript"),
+        "rb" => Some("ruby"),
+        "pl" => Some("perl"),
+        _ => None,
+    }
+}
+
+fn render_migration_candidates_markdown(candidates: &[MigrationCandidate]) -> String {
+    let mut by_priority: BTreeMap<&str, usize> = BTreeMap::new();
+    let mut by_target: BTreeMap<&str, usize> = BTreeMap::new();
+    for candidate in candidates {
+        *by_priority.entry(candidate.priority.as_str()).or_default() += 1;
+        *by_target.entry(candidate.target.as_str()).or_default() += 1;
+    }
+
+    let mut out = String::new();
+    out.push_str("# Non-Rust Migration Candidates\n\n");
+    out.push_str("> AUTO-GENERATED by `cargo xtask non-rust migration-candidates`.\n");
+    out.push_str("> Use this as a review queue; migrate one concern per PR.\n\n");
+
+    out.push_str("## Summary\n\n");
+    out.push_str("| Metric | Value |\n|---|---|\n");
+    out.push_str(&format!("| Candidates | {} |\n", candidates.len()));
+    out.push_str(&format!("| Targets | {} |\n", by_target.len()));
+    out.push('\n');
+
+    out.push_str("## By priority\n\n");
+    out.push_str("| Priority | Count |\n|---|---:|\n");
+    for priority in ["high", "medium", "low"] {
+        if let Some(count) = by_priority.get(priority) {
+            out.push_str(&format!("| {priority} | {count} |\n"));
+        }
+    }
+    out.push('\n');
+
+    out.push_str("## By target\n\n");
+    out.push_str("| Target | Count |\n|---|---:|\n");
+    for (target, count) in by_target {
+        out.push_str(&format!("| `{target}` | {count} |\n"));
+    }
+    out.push('\n');
+
+    out.push_str("## Candidates\n\n");
+    out.push_str("| Priority | Path | Language | Target | Rationale |\n");
+    out.push_str("|---|---|---|---|---|\n");
+    for candidate in candidates {
+        out.push_str(&format!(
+            "| {} | `{}` | {} | `{}` | {} |\n",
+            candidate.priority,
+            candidate.path,
+            candidate.language,
+            candidate.target,
+            candidate.rationale
+        ));
+    }
 
     out
 }
@@ -1695,6 +1997,57 @@ mod tests {
             broad_glob_reason: None,
             retired: false,
         }
+    }
+
+    // --- migration candidate finder ---
+
+    #[test]
+    fn migration_rule_routes_corpus_tools_to_perl_corpus() -> Result<()> {
+        let candidate = migration_rule_for_path("tools/corpus_lint.py")
+            .ok_or_else(|| eyre!("expected corpus lint tool to be a migration candidate"))?;
+
+        assert_eq!(candidate.language, "python");
+        assert_eq!(candidate.priority, "high");
+        assert_eq!(candidate.target, "crates/perl-corpus");
+        assert!(candidate.rationale.contains("perl-corpus"));
+        Ok(())
+    }
+
+    #[test]
+    fn migration_rule_routes_ci_shell_checks_to_xtask_policy() -> Result<()> {
+        let candidate = migration_rule_for_path("ci/check_doc_hygiene.sh")
+            .ok_or_else(|| eyre!("expected CI shell check to be a migration candidate"))?;
+
+        assert_eq!(candidate.language, "shell");
+        assert_eq!(candidate.priority, "medium");
+        assert_eq!(candidate.target, "xtask policy/check tasks");
+        Ok(())
+    }
+
+    #[test]
+    fn migration_rule_ignores_data_and_rust_files() {
+        assert!(migration_rule_for_path("test_corpus/basic_constructs.pl").is_none());
+        assert!(migration_rule_for_path("xtask/src/main.rs").is_none());
+    }
+
+    #[test]
+    fn render_migration_candidates_markdown_summarizes_targets() {
+        let candidates = vec![candidate_from_rule(
+            "tools/corpus_index.py",
+            MigrationRule {
+                language: "python",
+                target: "crates/perl-corpus",
+                priority: "high",
+                rationale: "Corpus indexing belongs in the Rust corpus CLI.",
+            },
+        )];
+
+        let report = render_migration_candidates_markdown(&candidates);
+
+        assert!(report.contains("# Non-Rust Migration Candidates"));
+        assert!(report.contains("| Candidates | 1 |"));
+        assert!(report.contains("`tools/corpus_index.py`"));
+        assert!(report.contains("`crates/perl-corpus`"));
     }
 
     // --- is_rust_file ---

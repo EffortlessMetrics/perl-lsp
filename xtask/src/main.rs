@@ -1695,6 +1695,34 @@ enum NonRustCommand {
         #[arg(long, default_value = "policy/non-rust-debt.toml")]
         debt: PathBuf,
     },
+
+    /// Find non-Rust tooling that should be migrated into Rust-owned surfaces.
+    MigrationCandidates {
+        /// Output format.
+        #[arg(long, value_enum, default_value = "markdown")]
+        format: MigrationCandidateFormatArg,
+
+        /// Optional output path (prints to stdout if omitted).
+        #[arg(long)]
+        output: Option<PathBuf>,
+
+        /// Limit the number of candidates in the report.
+        #[arg(long)]
+        limit: Option<usize>,
+
+        /// Override the workspace root used for `git ls-files`. Test seam only.
+        #[arg(long, hide = true)]
+        root: Option<PathBuf>,
+    },
+}
+
+/// CLI-facing output format for non-Rust migration candidate reports.
+#[derive(Clone, Copy, Debug, clap::ValueEnum)]
+enum MigrationCandidateFormatArg {
+    /// Human-readable Markdown.
+    Markdown,
+    /// Machine-readable JSON.
+    Json,
 }
 
 /// CLI-facing grouping argument (mirrors `file_policy::ProposeGroupBy`).
@@ -3280,6 +3308,18 @@ fn main() -> Result<()> {
                     allowlist_path: allowlist,
                     debt_path: debt,
                 })
+            }
+            NonRustCommand::MigrationCandidates { format, output, limit, root: root_override } => {
+                use tasks::file_policy::{MigrationCandidateFormat, MigrationCandidatesConfig};
+                let root = utils::project_root()?;
+                let format = match format {
+                    MigrationCandidateFormatArg::Markdown => MigrationCandidateFormat::Markdown,
+                    MigrationCandidateFormatArg::Json => MigrationCandidateFormat::Json,
+                };
+                tasks::file_policy::non_rust_migration_candidates(
+                    &root,
+                    MigrationCandidatesConfig { format, output, limit, root_override },
+                )
             }
         },
         Commands::CheckFilePolicy { mode, json, allowlist, root: root_override } => {
