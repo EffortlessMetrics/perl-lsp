@@ -184,6 +184,13 @@ mod tests {
     }
 
     #[test]
+    fn test_find_data_marker_uses_byte_offsets_with_unicode_prefix() {
+        let src = "say '\u{1F600}';\n__DATA__\npayload";
+        assert_eq!(find_data_marker_byte_lexed(src), Some(12));
+        assert_eq!(split_code_and_data(src), ("say '\u{1F600}';\n", Some("__DATA__\npayload")));
+    }
+
+    #[test]
     // Allow deprecated call to verify compatibility wrapper behavior.
     #[allow(deprecated)]
     fn test_find_data_marker_deprecated_matches_lexed_helper() {
