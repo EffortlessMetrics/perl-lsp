@@ -1106,7 +1106,7 @@ fn from_message_real_perl_subroutine_redefined() {
         ),
         Some(DiagnosticCode::DuplicateSubroutine),
     );
-    // Must require both "subroutine" and "redefined" — "redefined" alone is not sufficient
+    // Must require both "subroutine" and "redefined"; "redefined" alone is not sufficient.
     assert_eq!(DiagnosticCode::from_message("value redefined at line 5"), None);
 }
 
