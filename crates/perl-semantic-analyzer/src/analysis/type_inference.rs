@@ -1338,14 +1338,27 @@ fn static_method_return_expr_fact(method: &str, node: &Node) -> Option<TypeFact>
 
 fn static_method_local_return_fact(method: &str, statements: &[Node]) -> Option<TypeFact> {
     let returned_name = returned_variable_name(statements.last()?)?;
-    let mut package = None;
+    let mut returned_local_declared = false;
+    let mut returned_package = None;
 
     for statement in &statements[..statements.len().saturating_sub(1)] {
-        match local_return_assignment_package(statement, returned_name) {
-            Some(Some(candidate)) => {
-                package = Some(candidate);
+        match local_return_declaration_package(statement, returned_name) {
+            Some(LocalReturnDeclaration::Lexical(candidate)) => {
+                returned_local_declared = true;
+                returned_package = candidate.map(LocalReturnPackage::Initializer);
+                continue;
             }
-            Some(None) => {
+            Some(LocalReturnDeclaration::NonLexical) => {
+                return None;
+            }
+            None => {}
+        }
+
+        match local_return_assignment_package(statement, returned_name) {
+            Some(Some(candidate)) if returned_local_declared => {
+                returned_package = Some(LocalReturnPackage::Assignment(candidate));
+            }
+            Some(_) => {
                 return None;
             }
             None if local_return_statement_blocks_static_fact(statement, returned_name) => {
@@ -1355,11 +1368,35 @@ fn static_method_local_return_fact(method: &str, statements: &[Node]) -> Option<
         }
     }
 
-    package.map(|package| {
+    returned_package.map(|returned_package| {
+        let (package, evidence) = returned_package.into_parts(returned_name);
         let mut fact = method_return_fact(method, &package);
-        fact.evidence.push(TypeEvidence::VariableInitializer { name: returned_name.to_string() });
+        fact.evidence.push(evidence);
         fact
     })
+}
+
+enum LocalReturnDeclaration {
+    Lexical(Option<String>),
+    NonLexical,
+}
+
+enum LocalReturnPackage {
+    Initializer(String),
+    Assignment(String),
+}
+
+impl LocalReturnPackage {
+    fn into_parts(self, returned_name: &str) -> (String, TypeEvidence) {
+        match self {
+            Self::Initializer(package) => {
+                (package, TypeEvidence::VariableInitializer { name: returned_name.to_string() })
+            }
+            Self::Assignment(package) => {
+                (package, TypeEvidence::Assignment { name: returned_name.to_string() })
+            }
+        }
+    }
 }
 
 fn returned_variable_name(node: &Node) -> Option<&str> {
@@ -1370,15 +1407,37 @@ fn returned_variable_name(node: &Node) -> Option<&str> {
     }
 }
 
+fn local_return_declaration_package(
+    node: &Node,
+    returned_name: &str,
+) -> Option<LocalReturnDeclaration> {
+    match &node.kind {
+        NodeKind::ExpressionStatement { expression } => {
+            local_return_declaration_package(expression, returned_name)
+        }
+        NodeKind::VariableDeclaration { declarator, variable, initializer, .. }
+            if variable_name(variable) == Some(returned_name) =>
+        {
+            if is_lexical_return_declarator(declarator) {
+                Some(LocalReturnDeclaration::Lexical(
+                    initializer.as_deref().and_then(static_constructor_package),
+                ))
+            } else {
+                Some(LocalReturnDeclaration::NonLexical)
+            }
+        }
+        _ => None,
+    }
+}
+
+fn is_lexical_return_declarator(declarator: &str) -> bool {
+    matches!(declarator, "my" | "state")
+}
+
 fn local_return_assignment_package(node: &Node, returned_name: &str) -> Option<Option<String>> {
     match &node.kind {
         NodeKind::ExpressionStatement { expression } => {
             local_return_assignment_package(expression, returned_name)
-        }
-        NodeKind::VariableDeclaration { variable, initializer, .. }
-            if variable_name(variable) == Some(returned_name) =>
-        {
-            Some(initializer.as_deref().and_then(static_constructor_package))
         }
         NodeKind::Assignment { lhs, rhs, op }
             if op == "=" && variable_name(lhs) == Some(returned_name) =>

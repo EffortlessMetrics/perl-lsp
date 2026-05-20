@@ -361,6 +361,49 @@ fn method_return_local_constructor_variable_records_object_shape() -> Result<(),
 }
 
 #[test]
+fn method_return_lexical_assignment_records_assignment_evidence() -> Result<(), String> {
+    let code = "package MyApp::Service; sub db { my $db; $db = MyApp::DB->new; return $db; } my $service = MyApp::Service->new; $service->db->connect;";
+    let ast = parse_ast(code)?;
+    let mut engine = TypeInferenceEngine::new();
+
+    engine.infer(&ast).map_err(|err| format!("inference failed: {err:?}"))?;
+
+    let receiver = method_receiver(&ast, "connect")?;
+    let fact = engine.infer_expr_fact(receiver);
+
+    assert_eq!(fact.ty, PerlType::Any);
+    assert_eq!(fact.confidence, Confidence::Medium);
+    assert_eq!(object_shape_package(&fact)?, "MyApp::DB");
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::MethodReturn { method, package } if method == "db" && package == "MyApp::DB")
+    }));
+    assert!(
+        fact.evidence.iter().any(|evidence| {
+            matches!(evidence, TypeEvidence::Assignment { name } if name == "db")
+        })
+    );
+    Ok(())
+}
+
+#[test]
+fn bare_assigned_method_return_variable_stays_non_exact() -> Result<(), String> {
+    let code = "package MyApp::Service; sub db { $db = MyApp::DB->new; return $db; } my $service = MyApp::Service->new; $service->db->connect;";
+    let ast = parse_ast(code)?;
+    let mut engine = TypeInferenceEngine::new();
+
+    engine.infer(&ast).map_err(|err| format!("inference failed: {err:?}"))?;
+
+    let receiver = method_receiver(&ast, "connect")?;
+    let fact = engine.infer_expr_fact(receiver);
+
+    assert_eq!(fact.ty, PerlType::Any);
+    assert_eq!(fact.confidence, Confidence::Low);
+    assert!(fact.shape.is_none());
+    assert!(fact.evidence.is_empty());
+    Ok(())
+}
+
+#[test]
 fn dynamic_reassigned_method_return_variable_stays_non_exact() -> Result<(), String> {
     let code = "package MyApp::Service; sub db { my $db = MyApp::DB->new; $db = $class->new; return $db; } my $service = MyApp::Service->new; $service->db->connect;";
     let ast = parse_ast(code)?;
