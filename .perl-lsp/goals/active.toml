@@ -1,64 +1,42 @@
-id = "plsp-editor-trust-ux-closeout"
-title = "Editor trust UX closeout"
+id = "plsp-swarm-real-perl-editor-trust"
+title = "perl-lsp-swarm execution lane"
 status = "active"
 owner = "codex-swarm"
-created = "2026-05-19"
+created = "2026-05-20"
 
 proposal = "docs/proposals/PLSP-PROP-0001-real-perl-editor-trust.md"
-plan = "plans/editor-trust-ux-closeout/implementation-plan.md"
-previous_goal = ".perl-lsp/goals/archive/2026-05-18-real-perl-editor-trust.toml"
+plan = "plans/real-perl-editor-trust/implementation-plan.md"
 status_pointer = "docs/project/status/real_perl_editor_trust_v1.md"
-
-specs = [
-  "docs/specs/PLSP-SPEC-0002-provider-confidence-receipts.md",
-  "docs/specs/PLSP-SPEC-0003-real-workspace-editor-baseline.md",
-  "docs/specs/PLSP-SPEC-0005-receiver-expression-facts.md",
-  "docs/specs/PLSP-SPEC-0007-receiver-fact-completion.md",
-  "docs/specs/PLSP-SPEC-0008-edit-producing-provider-safety.md",
-  "docs/specs/PLSP-SPEC-0009-workspace-trust-report.md",
-  "docs/specs/PLSP-SPEC-0010-support-claim-map.md",
-  "docs/specs/PLSP-SPEC-0011-trust-lane-ci-routing.md",
-  "docs/specs/PLSP-SPEC-0012-user-facing-trust-surfaces.md",
-  "docs/specs/PLSP-SPEC-0013-agent-build-storage-and-gates.md",
-  "docs/specs/PLSP-SPEC-0014-refactor-acceptance.md",
-]
-
-adrs = [
-  "docs/adr/PLSP-ADR-0001-generated-status-is-control-plane.md",
-  "docs/adr/PLSP-ADR-0002-confidence-before-cutover.md",
-  "docs/adr/PLSP-ADR-0003-preview-before-edit.md",
-]
-
-needed_contracts = []
+operating_model = "docs/swarm/operating-model.md"
 
 objective = """
-Make the existing Real Perl Editor Trust control plane visible and useful in
-normal editor workflows: explanations, receipts, workspace trust state,
-preview-first refactors, receiver-aware completion, and claim-shaped CI proof.
+Make perl-lsp-swarm the active execution repo for Real Perl Editor Trust work
+while keeping perl-lsp as the canonical release, history, and package-lineage
+repo until curated sync and release steps promote swarm work back upstream.
 """
 
 end_state = [
-  "User-facing trust and setup surfaces are documented, snapshotted, and supportable from receipts.",
-  "Receiver-aware completion has a narrow source-backed pilot with fallback-preserving proof.",
-  "Rename and safe-delete remain bounded by false-allow, freshness, blocker, and rollback receipts.",
-  "Workspace trust report and setup docs are the support front door.",
-  "Support claims, README claims, and VS Code command docs match proof tiers.",
-  "CI routing classifies PRs by trust lane and names required proof.",
+  "All new development targets perl-lsp-swarm by default.",
+  "perl-lsp receives curated sync and release-lineage PRs only.",
+  "Trust, compiler substrate, and reliability work are routed through explicit lanes.",
+  "Promotion-ledger work names promotion, fallback, blocker, and receipt boundaries.",
+  "Spec hardening and receipts land in swarm before release-lineage sync.",
 ]
 
 claim_boundaries = [
-  "Do not claim parser bucket reduction without a refreshed corpus receipt.",
-  "Do not broaden live provider behavior from receipt PRs alone.",
-  "Do not hand-edit generated status sections.",
-  "Do not claim all-CPAN support or full dynamic Perl inference.",
-  "Do not promote edit-producing providers without rollback, blocker, fallback, and no-edit proof.",
-  "Do not turn generated, dynamic, stale, or low-confidence facts into exact source-backed claims.",
+  "Do not treat perl-lsp-swarm as just another branch farm.",
+  "Do not broaden provider behavior from receipt or docs work alone.",
+  "Do not promote rename, safe-delete, generated symbols, semantic tokens, or diagnostics without a promotion-ledger row and receipt.",
+  "Do not treat generated, dynamic, stale, ambient, unknown, or low-confidence facts as exact source-backed facts.",
+  "Do not use perl-lsp for routine feature development once the swarm execution lane is active.",
+  "Do not claim release-lineage sync until a separate sync protocol and curated upstream PR exist.",
 ]
 
 status_docs = [
   "docs/project/status/real_perl_editor_trust_v1.md",
   "docs/project/status/provider_cutover.md",
   "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/provider_promotion_ledger.md",
   "docs/project/status/SUPPORT_TIERS.md",
   "docs/project/status/ux_capability_dashboard.md",
   "docs/project/status/semantic_scorecard.md",
@@ -68,103 +46,137 @@ status_docs = [
   "docs/project/status/parser.md",
 ]
 
+specs = [
+  "docs/specs/PLSP-SPEC-0015-real-perl-editor-trust-v1-boundary.md",
+  "docs/specs/PLSP-SPEC-0016-provider-decision-receipt-v1.md",
+  "docs/specs/PLSP-SPEC-0017-fact-provenance-and-source-backing.md",
+  "docs/specs/PLSP-SPEC-0018-edit-authorization-contract.md",
+  "docs/specs/PLSP-SPEC-0019-semantic-token-class-promotion-contract.md",
+  "docs/specs/PLSP-SPEC-0020-workspace-symbol-generated-label-contract.md",
+  "docs/specs/PLSP-SPEC-0021-diagnostic-explanation-v1.md",
+  "docs/specs/PLSP-SPEC-0022-module-path-authority.md",
+  "docs/specs/PLSP-SPEC-0023-ambient-inputs.md",
+  "docs/specs/PLSP-SPEC-0024-framework-fact-adapters.md",
+  "docs/specs/PLSP-SPEC-0025-pir-v0.md",
+]
+
+[current]
+lane = "real_perl_editor_trust_v1"
+repo = "perl-lsp-swarm"
+release_lineage_repo = "perl-lsp"
+status = "swarm_execution_cutover"
+
+[limits]
+trust_prs = 2
+substrate_prs = 2
+reliability_prs = 4
+
+[[lanes]]
+id = "trust"
+pr_cap = 2
+owns = [
+  "provider_promotion_ledger",
+  "real_perl_editor_trust_v1_boundary",
+  "workspace_symbols",
+  "semantic_tokens",
+  "rename",
+  "safe_delete",
+  "diagnostic_explanations",
+  "workspace_trust_report",
+]
+rule = "No broadening; every PR must name promotion, fallback, blocker, and receipt boundaries when it touches trusted provider behavior."
+
+[[lanes]]
+id = "substrate"
+pr_cap = 2
+owns = [
+  "lexer_parser_proptest",
+  "constant_provider_proof",
+  "prototype_table",
+  "bareword_classifier",
+  "pir_skeleton",
+  "determinism_prep",
+  "oracle_prep",
+]
+rule = "No provider cutover unless the trust lane explicitly promotes a fact class."
+
+[[lanes]]
+id = "reliability"
+pr_cap = 4
+owns = [
+  "fuzzing",
+  "e2e_diagnostics",
+  "devex",
+  "docs",
+  "srp_refactors",
+  "coverage",
+  "policy_cleanup",
+  "published_api_hygiene",
+]
+rule = "Merge clean leaf work; escalate trust-adjacent surfaces instead of treating them as cleanup."
+
+[trust.next]
+items = [
+  "swarm_pr_template_and_review_rules",
+  "old_repo_release_lineage_marker",
+  "swarm_sync_protocol",
+  "real_perl_editor_trust_smoke_receipt",
+  "workspace_symbol_generated_no_source_proof",
+  "semantic_token_scoped_class_proof",
+  "safe_delete_referenced_source_blockers",
+  "rename_fallback_edit_freshness_receipt",
+]
+
+[substrate.next]
+items = [
+  "constant_provider_proof",
+  "prototype_table",
+  "bareword_classifier",
+  "determinism_receipt_v1_spec",
+  "differential_oracle_contract",
+]
+
+[reliability.next]
+items = [
+  "cleanup_train_queue_review",
+  "policy_cleanup",
+  "published_api_hygiene",
+  "devex_storage_safe_validation",
+]
+
 [[work_item]]
-id = "editor-trust-user-facing-contracts"
-status = "completed"
-spec = "docs/specs/PLSP-SPEC-0012-user-facing-trust-surfaces.md"
-plan = "plans/editor-trust-ux-closeout/implementation-plan.md#work-item-editor-trust-user-facing-contracts"
-current_pointer = "docs/project/status/real_perl_editor_trust_v1.md"
-claim_boundary = "Spec and docs work only; no provider behavior or support-tier promotion."
+id = "swarm-operating-manifest"
+status = "active"
+lane = "trust"
+claim_boundary = "Control-plane docs only; no code behavior, provider output, CI workflow, or release-lineage sync change."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "docs/swarm/operating-model.md",
+]
 commands = [
-  "cargo xtask check-support-claims",
+  "python -c \"import pathlib, tomllib; tomllib.loads(pathlib.Path('.perl-lsp/goals/active.toml').read_text())\"",
+  "cargo xtask ci-hygiene check-doc-paths docs",
   "cargo xtask check-provider-confidence-matrix",
-  "git diff --check",
-]
-
-[[work_item]]
-id = "editor-trust-user-docs"
-status = "completed"
-spec = "docs/specs/PLSP-SPEC-0012-user-facing-trust-surfaces.md"
-plan = "plans/editor-trust-ux-closeout/implementation-plan.md#work-item-editor-trust-user-docs"
-current_pointer = "docs/project/status/SUPPORT_TIERS.md"
-receipt = "docs/how-to/EDITOR_TRUST.md"
-setup_receipt = "docs/how-to/PERL_SETUP_TROUBLESHOOTING.md"
-vscode_receipt = "vscode-extension/README.md"
-commands_receipt = "docs/reference/COMMANDS_REFERENCE.md"
-claim_boundary = "Plain-language docs must link to support tiers and avoid broad CPAN/static/refactor claims."
-commands = [
   "cargo xtask check-support-claims",
-  "cargo xtask check-provider-confidence-matrix",
+  "cargo xtask check-provider-promotion-ledger",
   "git diff --check",
 ]
 
 [[work_item]]
-id = "workspace-trust-schema-snapshots"
-status = "completed"
-spec = "docs/specs/PLSP-SPEC-0009-workspace-trust-report.md"
-plan = "plans/editor-trust-ux-closeout/implementation-plan.md#work-item-workspace-trust-schema-snapshots"
-current_pointer = "docs/project/status/SUPPORT_TIERS.md"
-receipt = "crates/perl-lsp-rs/tests/lsp_execute_command_tests.rs::test_execute_command_workspace_trust_report_schema_snapshot"
-claim_boundary = "Report existing state only; do not probe Perl, run perldoc, launch DAP, scan files, or promote tiers."
-commands = [
-  "cargo test -p perl-lsp-rs --test lsp_execute_command_tests test_execute_command_workspace_trust_report --profile agent --locked -- --nocapture --test-threads=1",
-  "cargo xtask check-support-claims",
-  "git diff --check",
-]
-
-[[work_item]]
-id = "receiver-fact-completion"
-status = "completed"
-spec = "docs/specs/PLSP-SPEC-0007-receiver-fact-completion.md"
-plan = "plans/editor-trust-ux-closeout/implementation-plan.md#work-item-receiver-fact-completion"
-current_pointer = "docs/project/status/receiver_facts.md"
-fact_receipt = "docs/project/status/receiver_facts.md"
-support_receipt = "docs/project/status/SUPPORT_TIERS.md"
-cutover_receipt = "docs/project/status/provider_cutover.md"
-confidence_receipt = "docs/project/status/provider_confidence_matrix.md"
-pilot_receipt = "crates/perl-lsp-rs-core/src/providers/completion/completion/tests.rs"
-claim_boundary = "Narrow source-backed receiver completion pilot only; unknown and dynamic receivers preserve legacy fallback."
-commands = [
-  "cargo test -p perl-semantic-analyzer --lib receiver_fact --profile agent --locked -- --nocapture",
-  "cargo test -p perl-lsp-rs-core --lib completion --profile agent --locked -- --nocapture",
-  "cargo xtask check-support-claims",
-  "cargo xtask check-provider-confidence-matrix",
-  "git diff --check",
-]
-
-[[work_item]]
-id = "edit-provider-safety-refresh"
+id = "swarm-pr-template-review-rules"
 status = "planned"
-spec = "docs/specs/PLSP-SPEC-0008-edit-producing-provider-safety.md"
-plan = "plans/editor-trust-ux-closeout/implementation-plan.md#work-item-edit-provider-safety-refresh"
-current_pointer = "docs/project/status/provider_confidence_matrix.md"
-trigger = "Run only when rename facts, safe-delete facts, workspace-index behavior, or edit-producing provider code changes."
-current_status = "Current rename and safe-delete receipts are reviewed and bounded; no refresh is required from docs-only or unrelated refactor work."
-rename_receipt = "docs/project/status/provider_confidence_matrix.md"
-safe_delete_receipt = "docs/project/status/provider_confidence_matrix.md"
-claim_boundary = "Rename and safe-delete remain narrow pilots until false-allow, freshness, blocker, and rollback proof justify more."
-commands = [
-  "cargo test -p perl-lsp-rs --lib refactor_runtime_blocker_ux_safe_delete --profile agent --locked -- --nocapture --test-threads=1",
-  "cargo test -p perl-lsp-rs-core --lib safe_delete_shadow --profile agent --locked -- --nocapture",
-  "cargo xtask check-support-claims",
-  "git diff --check",
-]
+lane = "trust"
+claim_boundary = "GitHub template and review-rule docs only; no label mutation in this PR unless the orchestrator explicitly assigns it."
 
 [[work_item]]
-id = "trust-lane-ci-routing"
-status = "completed"
-spec = "docs/specs/PLSP-SPEC-0011-trust-lane-ci-routing.md"
-plan = "plans/editor-trust-ux-closeout/implementation-plan.md#work-item-trust-lane-ci-routing"
-current_pointer = "docs/ci/pr-plan.md"
-receipt = "docs/ci/pr-plan.md"
-policy_receipt = "policy/trust-lanes.toml"
-workflow_receipt = ".github/workflows/pr-plan.yml"
-script_receipt = "scripts/ci/pr_plan.py"
-validator_receipt = "scripts/ci/validate_trust_lanes.py"
-claim_boundary = "CI routing may classify proof cost; it does not prove provider behavior or promote support claims."
-commands = [
-  "python scripts/ci/validate_trust_lanes.py --strict",
-  "python scripts/ci/validate_risk_packs.py --strict",
-  "cargo xtask check-support-claims",
-  "git diff --check",
-]
+id = "old-repo-release-lineage-marker"
+status = "planned"
+lane = "trust"
+repo = "perl-lsp"
+claim_boundary = "Old repo marker only; no swarm source sync or release claim."
+
+[[work_item]]
+id = "swarm-sync-protocol"
+status = "planned"
+lane = "trust"
+claim_boundary = "Sync policy docs only; no branch protection, mirror, or release automation change."
