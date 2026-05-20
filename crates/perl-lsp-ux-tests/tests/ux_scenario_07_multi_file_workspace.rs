@@ -11,12 +11,9 @@
 //! - `textDocument/definition` MUST NOT crash (empty result is acceptable).
 //! - Server remains responsive after workspace indexing.
 
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 use std::time::Duration;
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 #[test]
 fn scenario_07_multi_file_workspace_opens_without_crash() {

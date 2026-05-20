@@ -13,12 +13,9 @@
 //! - A null/empty result is acceptable (degraded mode).
 //! - No crash signatures after the request.
 
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 use std::time::Duration;
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 /// Perl source with a clearly-named sub and variable for hover targets.
 const HOVER_SOURCE: &str = "\
