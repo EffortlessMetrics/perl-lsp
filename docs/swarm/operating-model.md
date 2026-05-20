@@ -21,6 +21,18 @@ All new development targets perl-lsp-swarm.
 perl-lsp receives curated sync and release-lineage PRs only.
 ```
 
+Current lineage rule:
+
+```text
+perl-lsp-swarm is currently a content-sync development repo, not a full-history
+mirror of perl-lsp.
+```
+
+The full source commit graph and GitHub contributor graph remain authoritative in
+`perl-lsp` until a separate history-preserving mirror/fork decision replaces this
+content-sync model. Sync PRs must record the exact source repository, source
+branch, source SHA, swarm target, and sync commit or PR.
+
 ## Active Manifest
 
 The machine-readable current lane lives in
