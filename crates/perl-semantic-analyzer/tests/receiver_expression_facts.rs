@@ -379,6 +379,24 @@ fn dynamic_reassigned_method_return_variable_stays_non_exact() -> Result<(), Str
 }
 
 #[test]
+fn conditional_reassigned_method_return_variable_stays_non_exact() -> Result<(), String> {
+    let code = "package MyApp::Service; sub db { my $db = MyApp::DB->new; if ($flag) { $db = $class->new; } return $db; } my $service = MyApp::Service->new; $service->db->connect;";
+    let ast = parse_ast(code)?;
+    let mut engine = TypeInferenceEngine::new();
+
+    engine.infer(&ast).map_err(|err| format!("inference failed: {err:?}"))?;
+
+    let receiver = method_receiver(&ast, "connect")?;
+    let fact = engine.infer_expr_fact(receiver);
+
+    assert_eq!(fact.ty, PerlType::Any);
+    assert_eq!(fact.confidence, Confidence::Low);
+    assert!(fact.shape.is_none());
+    assert!(fact.evidence.is_empty());
+    Ok(())
+}
+
+#[test]
 fn dynamic_method_return_constructor_stays_non_exact() -> Result<(), String> {
     let code = "package MyApp::Service; sub db { return $class->new; } my $service = MyApp::Service->new; $service->db->connect;";
     let ast = parse_ast(code)?;
