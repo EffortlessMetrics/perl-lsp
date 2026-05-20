@@ -22,7 +22,7 @@ of current evidence.
 | Provider decision receipt schema and explanation payload contract | [PLSP-SPEC-0016](../../specs/PLSP-SPEC-0016-provider-decision-receipt-v1.md), [provider_decision.v1.schema.json](../../../schemas/provider_decision.v1.schema.json) |
 | User-facing support claims and known limitations | [SUPPORT_TIERS.md](SUPPORT_TIERS.md) |
 | Provider fact source, confidence, freshness, fallback, and next proof | [provider_confidence_matrix.md](provider_confidence_matrix.md) |
-| Provider promotion, fallback, blocker, and defer decisions by fact class | [provider_promotion_ledger.md](provider_promotion_ledger.md) |
+| Provider promotion, fallback, blocker, and defer decisions by fact class | [provider_promotion_ledger.md](provider_promotion_ledger.md), [provider-promotion-ledger.toml](../../../policy/provider-promotion-ledger.toml) |
 | Provider live/shadow state and cutover rules | [provider_cutover.md](provider_cutover.md) |
 | Compiler-backed provider receipts | [semantic_shadow_compare.md](semantic_shadow_compare.md), [semantic_scorecard.md](semantic_scorecard.md) |
 | UX/provider capability context | [ux_capability_dashboard.md](ux_capability_dashboard.md) |
