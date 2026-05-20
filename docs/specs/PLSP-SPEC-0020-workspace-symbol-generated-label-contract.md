@@ -156,21 +156,19 @@ git diff --check
 Class-behavior PRs must add or update focused workspace-symbol runtime
 receipts for the touched class.
 
-## Future Validator
-
-A future validator may be exposed as:
+Workspace-symbol class policy changes must also run:
 
 ```bash
 cargo xtask check-workspace-symbol-classes
 ```
 
-That validator should check:
+That validator checks:
 
-- every live generated-symbol class has a policy row
+- the policy shape and linked spec/status paths
 - every generated live row requires an explicit label
 - every generated live row requires a source declaration anchor
 - generated/no-source and dynamic rows are blocked
-- status docs and policy do not disagree on live generated classes
+- source-backed exact rows do not require generated labels
 - blocker names align with the provider promotion ledger blocker registry
 
 ## Non-goals

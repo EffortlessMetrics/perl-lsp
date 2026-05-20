@@ -80,6 +80,9 @@ enum Commands {
     /// Validate semantic-token class promotion registry.
     CheckSemanticTokenClasses,
 
+    /// Validate workspace-symbol class promotion registry.
+    CheckWorkspaceSymbolClasses,
+
     /// Capture a GitHub PR queue snapshot for disconnected maintainership.
     Queue {
         #[command(subcommand)]
@@ -2505,6 +2508,7 @@ fn main() -> Result<()> {
         Commands::CheckSupportClaims => provider_confidence_matrix::run_support_claims(),
         Commands::CheckProviderPromotionLedger => provider_promotion_ledger::run(),
         Commands::CheckSemanticTokenClasses => semantic_token_classes::run(),
+        Commands::CheckWorkspaceSymbolClasses => workspace_symbol_classes::run(),
         Commands::Queue { command } => match command {
             QueueCommand::Snapshot { out, fixture } => queue_snapshot::run_snapshot(out, fixture),
             QueueCommand::Health { receipt, fixture } => {
