@@ -9,6 +9,9 @@ use std::path::Path;
 use regex::Regex;
 use serde::Deserialize;
 
+const TOKEN_KIND_SOURCE: &str = "crates/perl-token/src/kind.rs";
+const TOKEN_KIND_FALLBACK_SOURCE: &str = "crates/perl-token/src/lib.rs";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -66,8 +69,7 @@ pub struct TokenHealthMetrics {
 // ---------------------------------------------------------------------------
 
 pub fn collect_token_health_metrics(root: &Path) -> TokenHealthMetrics {
-    let token_src = root.join("crates/perl-token/src/lib.rs");
-    let token_lib = fs::read_to_string(token_src).unwrap_or_default();
+    let token_lib = read_token_kind_source(root);
     let variants = token_kind_variants(&token_lib);
     let display_name_arms = token_display_name_arms(&token_lib);
     let category_counts = token_category_counts(&token_lib);
@@ -148,6 +150,12 @@ pub fn collect_token_health_metrics(root: &Path) -> TokenHealthMetrics {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+fn read_token_kind_source(root: &Path) -> String {
+    fs::read_to_string(root.join(TOKEN_KIND_SOURCE))
+        .or_else(|_| fs::read_to_string(root.join(TOKEN_KIND_FALLBACK_SOURCE)))
+        .unwrap_or_default()
+}
 
 fn crate_depends_on_token(root: &Path, cargo_toml: &str) -> bool {
     fs::read_to_string(root.join(cargo_toml)).ok().is_some_and(|content| {
@@ -351,8 +359,7 @@ mod tests {
     #[test]
     fn token_kind_variants_matches_actual_enum() {
         let root = project_root().expect("project root");
-        let src = std::fs::read_to_string(root.join("crates/perl-token/src/lib.rs"))
-            .expect("perl-token/src/lib.rs must exist");
+        let src = read_token_kind_source(&root);
         let variants = token_kind_variants(&src);
         assert!(
             !variants.is_empty(),
@@ -373,7 +380,7 @@ mod tests {
         // guarantees this, but a double-check costs nothing).
         for name in &variants {
             assert!(
-                name.chars().next().map_or(false, |c| c.is_uppercase()),
+                name.chars().next().is_some_and(|c| c.is_uppercase()),
                 "extracted variant {name:?} does not start with uppercase"
             );
         }
@@ -395,8 +402,7 @@ mod tests {
     #[test]
     fn display_name_arms_match_variant_count() {
         let root = project_root().expect("project root");
-        let src = std::fs::read_to_string(root.join("crates/perl-token/src/lib.rs"))
-            .expect("perl-token/src/lib.rs must exist");
+        let src = read_token_kind_source(&root);
         let variants = token_kind_variants(&src);
         let arms = token_display_name_arms(&src);
         assert_eq!(
@@ -414,8 +420,7 @@ mod tests {
     #[test]
     fn all_variants_are_categorised() {
         let root = project_root().expect("project root");
-        let src = std::fs::read_to_string(root.join("crates/perl-token/src/lib.rs"))
-            .expect("perl-token/src/lib.rs must exist");
+        let src = read_token_kind_source(&root);
         let variants = token_kind_variants(&src);
         let counts = token_category_counts(&src);
         let total: usize = counts.values().sum();
@@ -486,5 +491,68 @@ mod tests {
                 metrics.performance_row
             );
         }
+    }
+
+    #[test]
+    fn collect_token_health_metrics_reads_split_kind_module() -> std::io::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let root = tmp.path();
+        let token_src = root.join("crates/perl-token/src");
+        std::fs::create_dir_all(&token_src)?;
+        std::fs::create_dir_all(root.join("crates/perl-lexer"))?;
+        std::fs::create_dir_all(root.join("crates/perl-parser-core"))?;
+
+        std::fs::write(
+            token_src.join("lib.rs"),
+            "mod kind;\npub use kind::{TokenCategory, TokenKind, TokenKindMetadata};\n",
+        )?;
+        std::fs::write(
+            token_src.join("kind.rs"),
+            r#"
+pub enum TokenKind {
+    // ===== Keywords =====
+    My,
+    // ===== Operators =====
+    Plus,
+}
+
+#[non_exhaustive]
+pub enum TokenCategory {
+    Keyword,
+    Operator,
+}
+
+#[non_exhaustive]
+pub struct TokenKindMetadata {
+    pub category: TokenCategory,
+    pub display_name: &'static str,
+}
+
+impl TokenKind {
+    pub fn display_name(self) -> &'static str {
+        match self {
+            TokenKind::My => "'my'",
+            TokenKind::Plus => "'+'",
+        }
+    }
+}
+"#,
+        )?;
+        std::fs::write(root.join("crates/perl-lexer/Cargo.toml"), "perl-token = {}\n")?;
+        std::fs::write(root.join("crates/perl-parser-core/Cargo.toml"), "perl-token = {}\n")?;
+        std::fs::write(root.join("crates/perl-token/Cargo.toml"), "[dependencies]\n")?;
+
+        let metrics = collect_token_health_metrics(root);
+
+        assert_eq!(metrics.variant_count, 2);
+        assert_eq!(metrics.metadata_coverage_count, 2);
+        assert_eq!(metrics.display_name_coverage_count, 2);
+        assert_eq!(metrics.metadata_status, "PASS");
+        assert_eq!(
+            metrics.category_partition_status,
+            "PASS (2 tokens partitioned across canonical groups)"
+        );
+
+        Ok(())
     }
 }
