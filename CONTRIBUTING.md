@@ -11,12 +11,12 @@ Clone, check the environment, and run the fast local gate:
 ```bash
 git clone https://github.com/EffortlessMetrics/perl-lsp.git
 cd perl-lsp
-nix develop                   # Recommended: Rust 1.93.1 + all repo tools
+nix develop                   # Recommended: Rust 1.95.0 + all repo tools
 just devex
 just pr-fast
 ```
 
-No Nix? Install Rust via [rustup](https://rustup.rs/) (MSRV 1.93, toolchain `1.93.1` pinned in `rust-toolchain.toml`), install `just`, then run the same commands:
+No Nix? Install Rust via [rustup](https://rustup.rs/) (MSRV 1.95, toolchain `1.95.0` pinned in `rust-toolchain.toml`), install `just`, then run the same commands:
 
 ```bash
 cargo install just
@@ -28,7 +28,7 @@ just pr-fast
 
 ### Prerequisites
 
-- **Rust** toolchain (pinned via `rust-toolchain.toml`, MSRV 1.93, channel `1.93.1`)
+- **Rust** toolchain (pinned via `rust-toolchain.toml`, MSRV 1.95, channel `1.95.0`)
 - **Nix** (recommended, not required) for a fully reproducible dev environment — `nix develop` drops you into a shell with all tools present
 - **just** — task runner used for all build/test/lint commands (`cargo install just` or via Nix)
 
@@ -44,7 +44,7 @@ cd perl-lsp
 
 **2. Enter the dev environment**
 ```bash
-nix develop          # Recommended: pins Rust 1.93.1 + all tools
+nix develop          # Recommended: pins Rust 1.95.0 + all tools
 # No Nix? Install rustup and then: cargo install just
 ```
 Success: your shell prompt changes (or you see the nix shellHook banner listing available commands).
