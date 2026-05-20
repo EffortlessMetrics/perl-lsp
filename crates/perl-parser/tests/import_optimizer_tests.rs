@@ -266,3 +266,49 @@ z();
     assert!(lines[2].contains("Zebra"));
     Ok(())
 }
+
+#[test]
+fn ignores_symbols_mentioned_in_inline_comments_and_strings() -> TestResult {
+    let code = r#"use Test::Helpers qw(real_helper comment_helper string_helper regex_helper);
+
+real_helper(); # comment_helper should not count as a real usage
+my $message = "string_helper appears only in a string";
+my $pattern = qr/regex_helper/;
+"#;
+
+    let optimizer = ImportOptimizer::new();
+    let analysis = optimizer.analyze_content(code)?;
+
+    let unused = analysis
+        .unused_imports
+        .iter()
+        .find(|entry| entry.module == "Test::Helpers")
+        .ok_or("Missing Test::Helpers unused imports")?;
+
+    assert!(!unused.symbols.contains(&"real_helper".to_string()));
+    assert!(unused.symbols.contains(&"comment_helper".to_string()));
+    assert!(unused.symbols.contains(&"string_helper".to_string()));
+    assert!(unused.symbols.contains(&"regex_helper".to_string()));
+    Ok(())
+}
+
+#[test]
+fn ignores_known_exports_mentioned_only_in_non_code_text() -> TestResult {
+    let code = r#"use LWP::UserAgent;
+
+# LWP::UserAgent appears only in a comment.
+my $message = "LWP::UserAgent appears only in a string";
+"#;
+
+    let optimizer = ImportOptimizer::new();
+    let analysis = optimizer.analyze_content(code)?;
+
+    let unused = analysis
+        .unused_imports
+        .iter()
+        .find(|entry| entry.module == "LWP::UserAgent")
+        .ok_or("Missing LWP::UserAgent unused import")?;
+
+    assert!(unused.symbols.contains(&"(bare import)".to_string()));
+    Ok(())
+}
