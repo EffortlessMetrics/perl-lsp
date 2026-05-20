@@ -38,16 +38,15 @@ impl PerlLexer<'_> {
     }
 
     #[inline]
-    pub(crate) fn find_line_end(bytes: &[u8], start: usize) -> (usize, usize) {
+    pub(crate) fn find_line_end(bytes: &[u8], start: usize) -> usize {
         if start >= bytes.len() {
-            return (start, start);
+            return start;
         }
 
-        let end = bytes[start..]
+        bytes[start..]
             .iter()
             .position(|&byte| byte == b'\n' || byte == b'\r')
-            .map_or(bytes.len(), |offset| start + offset);
-        (end, end)
+            .map_or(bytes.len(), |offset| start + offset)
     }
 }
 
@@ -70,9 +69,9 @@ mod tests {
     #[test]
     fn find_line_end_handles_crlf_and_bounds() {
         let bytes = b"first\r\nsecond";
-        assert_eq!(PerlLexer::find_line_end(bytes, 0), (5, 5));
-        assert_eq!(PerlLexer::find_line_end(bytes, 7), (13, 13));
-        assert_eq!(PerlLexer::find_line_end(bytes, bytes.len()), (13, 13));
-        assert_eq!(PerlLexer::find_line_end(bytes, bytes.len() + 1), (14, 14));
+        assert_eq!(PerlLexer::find_line_end(bytes, 0), 5);
+        assert_eq!(PerlLexer::find_line_end(bytes, 7), 13);
+        assert_eq!(PerlLexer::find_line_end(bytes, bytes.len()), 13);
+        assert_eq!(PerlLexer::find_line_end(bytes, bytes.len() + 1), 14);
     }
 }
