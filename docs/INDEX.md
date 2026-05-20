@@ -34,6 +34,8 @@ Choose the path that matches what you are trying to do:
 | Share project settings with my team | [Project Configuration File (.perl-lsp.toml)](reference/CONFIG.md#project-configuration-file-perl-lsptoml) |
 | Migrate from perltidy or perlcritic to native tooling | [Native Tooling Migration](how-to/NATIVE_TOOLING_MIGRATION.md) |
 | Troubleshoot startup, indexing, or editor issues | [Troubleshooting](how-to/TROUBLESHOOTING.md) |
+| Troubleshoot Perl binary, `@INC`, `PERL5LIB`, perldoc, or DAP setup | [Perl Setup Troubleshooting](how-to/PERL_SETUP_TROUBLESHOOTING.md) |
+| Understand editor trust, fallbacks, and receipts | [Editor Trust](how-to/EDITOR_TRUST.md) |
 | Understand the server architecture | [Architecture Overview](reference/ARCHITECTURE_OVERVIEW.md) |
 | Understand measured editor trust and the Rust Perl replacement path | [Measured Perl Editor Trust](explanation/MEASURED_PERL_EDITOR_TRUST.md) |
 | Understand the compiler-backed LSP direction | [Compiler-Backed LSP Roadmap](project/COMPILER_BACKED_LSP_ROADMAP.md) |
@@ -67,6 +69,8 @@ Task-focused instructions for common workflows (goal-oriented).
 - [Editor Setup](how-to/EDITOR_SETUP.md)
 - [Native Tooling Migration](how-to/NATIVE_TOOLING_MIGRATION.md)
 - [Troubleshooting](how-to/TROUBLESHOOTING.md)
+- [Perl Setup Troubleshooting](how-to/PERL_SETUP_TROUBLESHOOTING.md)
+- [Editor Trust](how-to/EDITOR_TRUST.md)
 - [Continuous Testing](how-to/CONTINUOUS_TESTING.md)
 - [Contributing LSP Features](how-to/CONTRIBUTING_LSP.md)
 - [Threading Configuration Guide](how-to/THREADING_CONFIGURATION_GUIDE.md)
@@ -103,6 +107,17 @@ Decision records, project status, and planning documents.
 - [0.14.0 Readiness Queue](releases/0.14.0-readiness.md) — current-release meta-roadmap: drain queue + implementation phase + release lock
 - [Project Roadmap](project/ROADMAP.md)
 - [Compiler-Backed LSP Roadmap](project/COMPILER_BACKED_LSP_ROADMAP.md)
+- [Preview Before Edit ADR](adr/PLSP-ADR-0003-preview-before-edit.md)
+- [PR Queue Disposition Spec](specs/PLSP-SPEC-0006-pr-queue-disposition.md)
+- [Receiver-Fact Completion Spec](specs/PLSP-SPEC-0007-receiver-fact-completion.md)
+- [Edit-Producing Provider Safety Spec](specs/PLSP-SPEC-0008-edit-producing-provider-safety.md)
+- [Workspace Trust Report Spec](specs/PLSP-SPEC-0009-workspace-trust-report.md)
+- [Support Claim Map Spec](specs/PLSP-SPEC-0010-support-claim-map.md)
+- [Trust-Lane CI Routing Spec](specs/PLSP-SPEC-0011-trust-lane-ci-routing.md)
+- [User-Facing Trust Surfaces Spec](specs/PLSP-SPEC-0012-user-facing-trust-surfaces.md)
+- [Agent Build Storage and Gates Spec](specs/PLSP-SPEC-0013-agent-build-storage-and-gates.md)
+- [Refactor Acceptance Spec](specs/PLSP-SPEC-0014-refactor-acceptance.md)
+- [Receiver Expression Facts Spec](specs/PLSP-SPEC-0005-receiver-expression-facts.md), [Receiver Facts Implementation Plan](project/RECEIVER_FACTS_IMPLEMENTATION_PLAN.md), and [Receiver Facts Status](project/status/receiver_facts.md)
 - [Project Milestones](project/MILESTONES.md)
 - [Feature Governance](project/FEATURE_GOVERNANCE.md)
 - [Metric Stack](project/metrics/README.md) — contributor-facing summary of the layered scorecard model and the ratchet

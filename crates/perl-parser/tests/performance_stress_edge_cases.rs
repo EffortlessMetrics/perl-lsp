@@ -10,7 +10,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 /// Maximum parsing time for performance tests (in seconds)
-const MAX_PERFORMANCE_PARSE_TIME: Duration = Duration::from_secs(60);
+const MAX_PERFORMANCE_PARSE_TIME: Duration = Duration::from_mins(1);
 
 /// Maximum memory usage threshold (in MB)
 const _MAX_MEMORY_THRESHOLD_MB: usize = 1000;

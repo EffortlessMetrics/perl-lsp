@@ -5,39 +5,37 @@ This file is the short planning snapshot for sequencing work. Use
 plan and [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) for
 evidence-backed status and release facts.
 
-## DONE — v0.12.2 through v0.12.8 (consolidated and shipped)
+## DONE — v0.12.x and v0.13.x public-alpha foundation
 
-- Work consolidated and merged 2026-04-02 (~70 PRs): CI gates, error handling, test coverage, parser confidence, performance, distribution, AI inline completion, packaging, announcement polish
-- `v0.12.3` is the live GitHub/editor release line as of 2026-04-09 with binaries, SBOM, SHA256SUMS, VS Code Marketplace, and Open VSX published
-- crates.io intentionally remains on `v0.12.2` while the registry window is deferred
+- The 0.12.x line built confidence across parser corpus, diagnostics, refactoring, distribution, packaging, and announcement polish
+- The 0.13.x line moved the public-alpha posture forward while preserving release-channel discipline and evidence-backed status docs
+- Earlier release facts are historical; verify current workspace version, crate surface, and channel state against the truth sources before quoting them
 
-## NOW — post-v0.12.3 / pre-announcement cleanup
+## NOW — v0.14.0 channel closeout and post-release proof
 
-- License badge fixed (canonical SPDX text in all 126 LICENSE files), GitHub now reports `Apache-2.0` instead of `NOASSERTION`
-- Docker arm64 timeout fix landed (Dockerfile MSRV pin + workflow timeout bump)
-- Dependency triage complete: 7 dependabot PRs merged including 3 majors (eslint v10, actions/cache v5, similar 3.0.0)
-- Keep public guidance explicit about the current channel split: GitHub Releases plus editor marketplaces are on `v0.12.3`; crates.io remains on `v0.12.2`
-- SRP microcrate extractions in flight (anti_pattern_detector, bench_parser) to free the dead `tree-sitter-perl-rs` harness for archival
-- Publishing the modern parsers as `tree-sitter-perl-c` (C tree-sitter FFI) and a new `tree-sitter-perl-rs` (Rust v3 facade with tree-sitter-compatible output)
-- Per-crate publish blockers cleared (perl-lsp-ai-provider unblocked, perl-heredoc-anti-patterns extraction in progress)
+- `v0.14.0` is the current public-alpha release line; GitHub Release and crates.io surfaces show it live, but full channel closeout still needs explicit receipts
+- Keep release proof explicit across GitHub Releases, crates.io, Docker, VS Code Marketplace, Open VSX, and the owned Homebrew tap path
+- Keep package-version language separate from product-posture language: SemVer package version, public-alpha product promise
+- Land CI/control-plane follow-up as reviewable lanes, with #7404 (`update-status --write` streaming) first
+- Keep parser corpus lanes, compiler-backed provider dashboards, and install-surface receipts linked rather than duplicated in this short snapshot
 
-## NEXT — v0.13.0 public alpha announcement
+## NEXT — post-v0.14.0
 
-- Re-trigger crates.io publish after the SRP extractions and harness archival land
-- Final smoke test across all distribution channels
-- Bump workspace to `0.13.0`
-- Announcement blog post / release notes
+- Close channel receipts before broad cleanup
+- Resume parser, corpus, semantic, DAP, and editor-trust hardening after release proof is complete
+- Continue compiler-backed provider cutovers through provenance-backed, live-with-fallback slices
+- Burn down deferred `v0.14.0` successor issues by ledger rather than by undocumented cleanup
 
-## LATER — beyond v0.13.0
+## LATER — beyond v0.14.0
 
 - Stability contract for APIs and advertised wire behavior
 - Performance hardening for larger workspaces
-- Security posture and documentation hardening
+- Security and supply-chain posture hardening
 - Path to `v1.0.0`
 
 ## Working Rules
 
-- Last updated: `2026-04-09`
+- Last updated: `2026-05-19`
 - Keep “current release line” separate from “next milestone”.
 - Put receipts and computed metrics in [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md), not here.
 - Put detailed milestone criteria in [docs/project/ROADMAP.md](docs/project/ROADMAP.md), not here.

@@ -147,7 +147,7 @@ fn scale_duration(base: Duration, factor: f64) -> Duration {
 pub fn get_short_timeout() -> Duration {
     let base = match effective_thread_count() {
         1..=2 => Duration::from_millis(1500),
-        3..=4 => Duration::from_millis(1000),
+        3..=4 => Duration::from_secs(1),
         5..=8 => Duration::from_millis(750),
         _ => Duration::from_millis(500),
     };

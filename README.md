@@ -42,32 +42,23 @@ Perl has decades of real production code, but editor tooling still struggles wit
 
 ## Status at a glance
 
-These are behavioral and corpus-backed signals, not feature-inventory counts. Protocol coverage and full capability catalogs live in the generated status docs.
+The README is a front door, not the metric source of truth. Current release posture, corpus counts, LSP coverage, workspace receipts, and native-tooling readiness live in the status docs so the numbers can be regenerated and reviewed in one place.
 
-| Area | Current signal |
-|---|---:|
-| Release track | `v0.14.0` public-alpha patch |
-| Published crate surface | 31 crates in `[workspace.metadata.publish.allow]` |
-| Ubuntu system Perl corpus | 94.5% clean (`2825/2990`) |
-| CPAN top 1000 corpus | 95.3% clean (`8931/9372`) |
-| Project parser corpus | 100.0% clean (`95/95`) |
-| Parser NodeKind coverage | 65/69 |
-| Parser reliability | 0 project-corpus timeouts / 0 panics |
-| Editor UX scenarios | 23 scenario files tracked |
-| First-five-minutes UX workflows | 21 workflows tracked |
-| Issue-regression UX workflows | 13 workflows tracked |
-| Workspace stale-index defects | 0 / 7 tested scenarios |
-| Multi-root workspace tests | 8 / 8 |
-| Memory-control closeout | Known retained-state/session-creep class closed with guardrails ([closeout](docs/large-workspaces/MEMORY_CONTROL_CLOSEOUT.md)) |
-| Native tooling readiness | Native formatter and native critic are default-ready; `perltidy` / `perlcritic` remain explicit compatibility adapters ([status](docs/project/status/native_tooling.md)) |
-
-See [project status](docs/project/status/index.md), [parser status](docs/project/status/parser.md), [workspace status](docs/project/status/workspace.md), and [quality metrics](docs/project/status/quality.md) for generated details.
+| Area | Source |
+|---|---|
+| Release posture | [release status](docs/project/status/release.md) |
+| Project status | [status overview](docs/project/status/index.md) |
+| Real Perl Editor Trust | [user guide](docs/how-to/EDITOR_TRUST.md), [trust dashboard](docs/project/status/real_perl_editor_trust_v1.md) |
+| LSP and DAP coverage | [LSP status](docs/project/status/lsp.md), [DAP status](docs/project/status/dap.md) |
+| Parser corpus and coverage | [parser status](docs/project/status/parser.md) |
+| Workspace/indexing | [workspace status](docs/project/status/workspace.md) |
+| Native formatter and critic | [native tooling status](docs/project/status/native_tooling.md) |
 
 ## What works
 
-- **Editor workflows**: completion, diagnostics, hover, go-to-definition, references, rename, formatting, semantic tokens, inlay hints, code actions, code lens, and workspace symbols.
+- **Measured editor workflows**: completion, diagnostics, hover, go-to-definition, references, rename, safe-delete, semantic tokens, code actions, and workspace symbols use proof-backed paths where available and fallback or refuse unsafe cases where support is bounded.
 - **Parser stack**: native lexer, parser-core, parser facade, corpus ratchets, and tree-sitter integration.
-- **UX testing**: 23 tracked editor UX scenarios, including first-five-minutes flows, issue-regression guards, cross-file navigation, diagnostics-after-edit, workspace churn, and rename.
+- **UX testing**: tracked editor UX scenarios cover first-five-minutes flows, issue-regression guards, cross-file navigation, diagnostics-after-edit, workspace churn, and rename.
 - **Workspace intelligence**: module resolution, symbol indexing, stale-index guards, multi-root workspaces, and workspace-aware rename.
 - **Debug adapter**: breakpoints, stepping, stack frames, variables, evaluate, and launch/attach flows.
 - **Editor support**: VS Code, Open VSX, Neovim, Vim, Emacs, Helix, Zed, Sublime, and any editor with LSP support.
@@ -90,7 +81,7 @@ Do not install `perl-lsp` from crates.io; that is a different project.
 
 ## Crate surface
 
-The v0.13 architecture collapsed the old microcrate graph into a smaller published surface. Most implementation detail now lives in modules behind focused public crates.
+The current architecture collapsed the old microcrate graph into a smaller published surface. Most implementation detail now lives in modules behind focused public crates.
 
 | Need | Crate |
 |---|---|
@@ -115,6 +106,8 @@ The v0.13 architecture collapsed the old microcrate graph into a smaller publish
 | Getting started | [docs/tutorials/GETTING_STARTED.md](docs/tutorials/GETTING_STARTED.md) |
 | Configuration | [docs/reference/CONFIG.md](docs/reference/CONFIG.md) |
 | Troubleshooting | [docs/how-to/TROUBLESHOOTING.md](docs/how-to/TROUBLESHOOTING.md) |
+| Perl setup troubleshooting | [docs/how-to/PERL_SETUP_TROUBLESHOOTING.md](docs/how-to/PERL_SETUP_TROUBLESHOOTING.md) |
+| Editor trust and receipts | [docs/how-to/EDITOR_TRUST.md](docs/how-to/EDITOR_TRUST.md) |
 | Project status and metrics | [docs/project/status/index.md](docs/project/status/index.md) |
 | Measured editor trust | [docs/explanation/MEASURED_PERL_EDITOR_TRUST.md](docs/explanation/MEASURED_PERL_EDITOR_TRUST.md) |
 | Roadmap | [docs/project/ROADMAP.md](docs/project/ROADMAP.md) |

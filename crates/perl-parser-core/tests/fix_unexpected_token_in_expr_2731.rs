@@ -66,6 +66,22 @@ fn test_umask_before_or_in_bitwise_not() {
 }
 
 #[test]
+fn test_defined_qualified_sub_before_and() {
+    // From Data::Dump: `&utf8::is_utf8` is an explicit defined() argument,
+    // not a nullary `defined` followed by a bitwise-AND expression.
+    assert_clean_parse(r#"if (defined &utf8::is_utf8 && !utf8::is_utf8($_[0])) { }"#);
+}
+
+#[test]
+fn test_indirect_call_before_symbolic_or() {
+    // From File::MimeInfo / MIME::Lite / IPC::Cmd: symbolic short-circuit
+    // operators terminate bare or indirect-call arguments.
+    assert_clean_parse(r#"close GLOB || croak "Could not open file";"#);
+    assert_clean_parse(r#"my $DATA = new FileHandle || Carp::croak "can't get filehandle";"#);
+    assert_clean_parse(r#"alarm $timeout || 0;"#);
+}
+
+#[test]
 fn test_statement_start_builtin_paren_call_comparison_or_do() {
     // From IPC::Cmd: statement-start builtin with explicit parens followed by
     // an equality comparison and a low-precedence `or do` fallback.

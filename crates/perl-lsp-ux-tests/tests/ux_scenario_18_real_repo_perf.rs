@@ -5,6 +5,7 @@
 #![cfg(feature = "integration-test")]
 
 use anyhow::{Context, Result, bail};
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{LspEvent, ScenarioConfig, UxHarness};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -22,10 +23,6 @@ const REAL_WORLD_FIXTURES: &[&str] = &[
     "test_corpus/real_world/web_framework_patterns.pl",
     "test_corpus/real_world/medium_module.pl",
 ];
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 fn repo_root() -> Result<PathBuf> {
     Path::new(env!("CARGO_MANIFEST_DIR"))

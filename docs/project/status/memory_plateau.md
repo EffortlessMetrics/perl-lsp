@@ -49,6 +49,21 @@ Use `--history-dir <path>` to include archived receipt directories. The command
 is evidence-only: it does not run a memory workload or participate in PR gates
 unless a workflow invokes it explicitly.
 
+## Real-Workspace Resource Bridge
+
+The real-workspace latency harness includes an opt-in bridge receipt that opens
+every readable Perl fixture file for Mojolicious, Dancer2, and Catalyst, then
+records each fixture's file/line/byte inventory plus best-effort child-process
+RSS after project load:
+
+```bash
+cargo test -p perl-lsp-rs --test real_project_latency real_project_memory_resource_receipt --profile agent --locked -- --include-ignored --nocapture --test-threads=1
+```
+
+This is a project-shaped memory/resource receipt, not a plateau gate. It does
+not set heap ceilings, replace `cargo xtask metrics memory`, or promote any
+provider support claim by itself.
+
 ## Failure Triage
 
 When a plateau gate fails, file a **Memory Regression** issue and include the

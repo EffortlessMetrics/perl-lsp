@@ -286,7 +286,14 @@ impl<'a> Parser<'a> {
             let start = token.start;
 
             // Parse the expression inside the braces
-            let expr = self.parse_expression()?;
+            let expr = if sigil == "$" {
+                match self.try_parse_braced_qualified_scalar()? {
+                    Some(expr) => expr,
+                    None => self.parse_expression()?,
+                }
+            } else {
+                self.parse_expression()?
+            };
 
             self.consume_deref_body_terminators()?;
             self.expect(TokenKind::RightBrace)?;
@@ -332,14 +339,18 @@ impl<'a> Parser<'a> {
             let inner_start = token.start + sigil.len() + 1; // after sigil and {
             let inner_end = token.end;
 
-            // Create an identifier node for the captured name
-            let mut inner = Node::new(
-                NodeKind::Identifier { name: inner_name.to_string() },
-                SourceLocation { start: inner_start, end: inner_end },
-            );
+            let mut inner = if sigil == "$" && self.peek_kind() == Some(TokenKind::DoubleColon) {
+                self.parse_qualified_scalar_tail(inner_name.to_string(), inner_start, inner_end)?
+            } else {
+                // Create an identifier node for the captured name
+                let inner = Node::new(
+                    NodeKind::Identifier { name: inner_name.to_string() },
+                    SourceLocation { start: inner_start, end: inner_end },
+                );
 
-            // Parse postfix chain (handles function call parens, method calls, etc.)
-            inner = self.parse_postfix_chain(inner)?;
+                // Parse postfix chain (handles function call parens, method calls, etc.)
+                self.parse_postfix_chain(inner)?
+            };
             if self.peek_kind() == Some(TokenKind::Question) {
                 // `${ref($x) ? $x : fallback($x)}` may enter this partial-deref
                 // path when the lexer greedily captures `${ref` as one token.
@@ -438,6 +449,50 @@ impl<'a> Parser<'a> {
                 SourceLocation { start: token.start, end },
             ))
         }
+    }
+
+    fn try_parse_braced_qualified_scalar(&mut self) -> ParseResult<Option<Node>> {
+        if self.peek_kind() != Some(TokenKind::Identifier) {
+            return Ok(None);
+        }
+
+        if self.tokens.peek_second()?.kind != TokenKind::DoubleColon {
+            return Ok(None);
+        }
+
+        let first = self.tokens.next()?;
+        self.parse_qualified_scalar_tail(first.text.to_string(), first.start, first.end)
+            .map(Some)
+    }
+
+    fn parse_qualified_scalar_tail(
+        &mut self,
+        mut full_name: String,
+        start: usize,
+        mut end: usize,
+    ) -> ParseResult<Node> {
+        while self.peek_kind() == Some(TokenKind::DoubleColon) {
+            self.tokens.next()?;
+            full_name.push_str("::");
+
+            if self.peek_kind() == Some(TokenKind::Identifier) {
+                let name_token = self.tokens.next()?;
+                full_name.push_str(&name_token.text);
+                end = name_token.end;
+            } else {
+                return Err(ParseError::syntax(
+                    "Expected identifier after :: in package-qualified variable",
+                    self.current_position(),
+                ));
+            }
+        }
+
+        let variable = Node::new(
+            NodeKind::Variable { sigil: "$".to_string(), name: full_name },
+            SourceLocation { start, end },
+        );
+
+        self.parse_postfix_chain(variable)
     }
 
     fn consume_deref_body_terminators(&mut self) -> ParseResult<()> {

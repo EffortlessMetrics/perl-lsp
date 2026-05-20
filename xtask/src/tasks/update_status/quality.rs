@@ -61,7 +61,7 @@ pub(super) fn collect_per_crate_test_counts(root: &Path) -> BTreeMap<String, usi
     let output = run_cmd_merged(
         root,
         &["cargo", "test", "--workspace", "--lib", "--exclude", "tree-sitter-perl", "--", "--list"],
-        Duration::from_secs(180),
+        Duration::from_mins(3),
     );
     if output.is_empty() {
         return BTreeMap::new();

@@ -975,6 +975,15 @@ sub merge {
     assert_clean_parse(source);
 }
 
+#[test]
+fn test_mail_address_substitution_comment_apostrophes_before_next_substitution() {
+    let source = r#"
+s/\bo'(\w)/O'\u$1/igo; # Irish names such as 'O'Malley, O'Reilly'
+s/\[[^\]]*\]//g;
+"#;
+    assert_clean_parse(source);
+}
+
 // =============================================================================
 // Full file parse tests (to detect cascading errors)
 // =============================================================================

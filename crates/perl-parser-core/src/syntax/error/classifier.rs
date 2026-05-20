@@ -196,8 +196,8 @@ impl ErrorClassifier {
             }
         }
 
-        // Check if we're at EOF
-        if error_node.location.start >= source.len() - 1 {
+        // Check if we're at EOF; use saturating_sub to avoid underflow on empty source
+        if source.is_empty() || error_node.location.start >= source.len().saturating_sub(1) {
             return ParseErrorKind::UnexpectedEof;
         }
 
