@@ -1,18 +1,80 @@
 use perl_lexer::{Checkpointable, PerlLexer, Token, TokenType};
 use proptest::prelude::*;
+use proptest::test_runner::TestCaseError;
+
+mod prop_support;
+
+use prop_support::mixed_source;
+const REGRESS_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/_proptest-regressions/prop_checkpoint_and_span_invariants"
+);
 
 fn token_signature(token: &Token) -> (String, usize, usize, String) {
     (format!("{:?}", token.token_type), token.start, token.end, token.text.to_string())
 }
 
+fn collect_signatures_until_eof(
+    lexer: &mut PerlLexer<'_>,
+    max_tokens: usize,
+) -> Result<Vec<(String, usize, usize, String)>, TestCaseError> {
+    let mut tokens = Vec::new();
+
+    for _ in 0..max_tokens {
+        let Some(token) = lexer.next_token() else {
+            return Ok(tokens);
+        };
+
+        let is_eof = matches!(token.token_type, TokenType::EOF);
+        tokens.push(token_signature(&token));
+        if is_eof {
+            return Ok(tokens);
+        }
+    }
+
+    Err(TestCaseError::fail(format!(
+        "lexer exceeded token budget of {max_tokens} while collecting signatures"
+    )))
+}
+
+fn assert_restored_checkpoint_replays_identical_suffix(
+    input: &str,
+    split_tokens: usize,
+) -> Result<(), TestCaseError> {
+    let mut lexer = PerlLexer::new(input);
+
+    for _ in 0..split_tokens {
+        let Some(token) = lexer.next_token() else {
+            return Ok(());
+        };
+
+        if matches!(token.token_type, TokenType::EOF) {
+            return Ok(());
+        }
+    }
+
+    let checkpoint = lexer.checkpoint();
+    let max_tokens = input.len().max(1) * 3 + 32;
+
+    let first_pass = collect_signatures_until_eof(&mut lexer, max_tokens)?;
+    lexer.restore(&checkpoint);
+    let replay = collect_signatures_until_eof(&mut lexer, max_tokens)?;
+
+    prop_assert_eq!(replay, first_pass);
+    Ok(())
+}
+
+#[test]
+fn restored_checkpoint_replays_identical_suffix_for_eof_regression() -> Result<(), TestCaseError> {
+    let input = "$\u{3347a}A%0a\u{7f}\u{00a1}\u{00a1}(0''\u{3347a}a";
+    assert_restored_checkpoint_replays_identical_suffix(input, 0)
+}
+
 proptest! {
-    #![proptest_config(ProptestConfig {
-        cases: 192,
-        ..ProptestConfig::default()
-    })]
+    #![proptest_config(prop_support::persisted_config(REGRESS_DIR, 192))]
 
     #[test]
-    fn lexer_emits_monotonic_valid_spans(input in ".{0,256}") {
+    fn lexer_emits_monotonic_valid_spans(input in mixed_source(96)) {
         let mut lexer = PerlLexer::new(&input);
         let mut previous_end = 0usize;
 
@@ -46,7 +108,7 @@ proptest! {
 
     #[test]
     fn restoring_checkpoint_preserves_forward_progress(
-        input in ".{0,200}",
+        input in mixed_source(80),
         split_tokens in 0usize..40,
     ) {
         let mut lexer = PerlLexer::new(&input);
@@ -90,8 +152,17 @@ proptest! {
 
         prop_assert!(false, "lexer exceeded token budget after restore");
     }
+
     #[test]
-    fn collect_tokens_matches_manual_iteration(input in ".{0,200}") {
+    fn restored_checkpoint_replays_identical_token_suffix(
+        input in mixed_source(80),
+        split_tokens in 0usize..40,
+    ) {
+        assert_restored_checkpoint_replays_identical_suffix(&input, split_tokens)?;
+    }
+
+    #[test]
+    fn collect_tokens_matches_manual_iteration(input in mixed_source(80)) {
         let mut manual_lexer = PerlLexer::new(&input);
         let mut manual = Vec::new();
 

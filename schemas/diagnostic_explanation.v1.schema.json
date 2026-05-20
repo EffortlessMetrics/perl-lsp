@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/perl-lsp/schemas/diagnostic_explanation.v1.schema.json",
+  "title": "Diagnostic explanation v1",
+  "description": "Additive schema for perl-lsp diagnostic explanation payloads attached to provider decision receipts.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "surface",
+    "decision",
+    "provider_action",
+    "fact_source",
+    "confidence",
+    "freshness",
+    "diagnostic_count",
+    "diagnostic_explanations",
+    "truncated_diagnostic_explanations",
+    "dynamic_boundary_detected",
+    "claim_boundary"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "diagnostic_explanation.v1"
+    },
+    "surface": {
+      "const": "diagnostics"
+    },
+    "decision": {
+      "const": "explanation_only"
+    },
+    "provider_action": {
+      "type": "string",
+      "enum": [
+        "textDocument/diagnostic",
+        "workspace/diagnostic"
+      ]
+    },
+    "fact_source": {
+      "const": "provider_runtime"
+    },
+    "confidence": {
+      "enum": [
+        "low"
+      ]
+    },
+    "freshness": {
+      "enum": [
+        "fresh"
+      ]
+    },
+    "diagnostic_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "diagnostic_explanations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/diagnostic_explanation_item"
+      }
+    },
+    "truncated_diagnostic_explanations": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "dynamic_boundary_detected": {
+      "type": "boolean"
+    },
+    "claim_boundary": {
+      "const": "explains returned diagnostics only; no new suppression, severity, or support-tier promotion"
+    }
+  },
+  "$defs": {
+    "diagnostic_explanation_item": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "trust_boundary",
+        "severity",
+        "summary",
+        "reason",
+        "why_diagnostic_fired",
+        "why_diagnostic_was_not_suppressed"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "trust_boundary": {
+          "type": "string",
+          "enum": [
+            "module_resolution",
+            "dynamic_boundary",
+            "low_confidence",
+            "ambiguous_evidence",
+            "stale_fact",
+            "generated_or_not_source_backed",
+            "conservative_diagnostic"
+          ]
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "error",
+            "warning",
+            "information",
+            "hint",
+            "unknown"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "why_diagnostic_fired": {
+          "type": "string"
+        },
+        "why_diagnostic_was_not_suppressed": {
+          "type": "string"
+        },
+        "module_resolution": {
+          "$ref": "#/$defs/module_resolution"
+        }
+      }
+    },
+    "module_resolution": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "requested_module",
+        "expected_relative_path",
+        "reported_inc_paths",
+        "effective_include_paths_reported",
+        "workspace_include_paths_labeled",
+        "perl5lib_policy",
+        "searched_inc_reported"
+      ],
+      "properties": {
+        "requested_module": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expected_relative_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reported_inc_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "effective_include_paths_reported": {
+          "type": "boolean"
+        },
+        "workspace_include_paths_labeled": {
+          "type": "boolean"
+        },
+        "perl5lib_policy": {
+          "type": "string",
+          "enum": [
+            "reported_in_effective_search_context",
+            "not_reported_in_diagnostic_search_context"
+          ]
+        },
+        "searched_inc_reported": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

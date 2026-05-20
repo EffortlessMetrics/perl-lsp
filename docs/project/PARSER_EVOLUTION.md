@@ -420,7 +420,7 @@ The parser is validated against a comprehensive test corpus:
 
 ### Fuzz Testing
 
-Seven fuzz targets exercise the most fragile parsing paths:
+Cargo-fuzz targets exercise the most fragile parsing paths; `fuzz/Cargo.toml` is the source of truth for the active target list. Representative targets include:
 
 - `parser_integration` -- parser, trivia, and symbol-extraction integration
 - `heredoc_parsing` -- heredoc edge cases
@@ -429,6 +429,7 @@ Seven fuzz targets exercise the most fragile parsing paths:
 - `unicode_positions` -- UTF-8/UTF-16 position mapping
 - `lsp_navigation` -- LSP feature integration
 - `lsp_cancellation_registry` -- concurrent request handling
+- `module_surface` -- module naming, import/reference extraction, token replacement, and rename helpers
 
 Bounded fuzzing runs for 60 seconds per target as part of the nightly CI.
 

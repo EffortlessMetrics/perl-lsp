@@ -1,3 +1,5 @@
+use crate::syntax::cursor::quoted_literal_end;
+
 use super::parser::{parse_named_capture_name, parse_named_capture_name_from};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -15,6 +17,10 @@ pub(crate) fn extract_named_captures(pattern: &str) -> Vec<CaptureGroup> {
 
     while i < bytes.len() {
         if bytes[i] == b'\\' {
+            if let Some(end) = quoted_literal_end(bytes, i) {
+                i = end;
+                continue;
+            }
             i += 2;
             continue;
         }
@@ -70,6 +76,20 @@ pub(crate) fn extract_named_captures(pattern: &str) -> Vec<CaptureGroup> {
                         });
                         continue;
                     }
+                } else if i + 1 < bytes.len() && bytes[i] == b'P' && bytes[i + 1] == b'<' {
+                    i += 1;
+                    if let Some((name, next)) = parse_named_capture_name(bytes, i, b'<', b'>') {
+                        capture_index += 1;
+                        i = next;
+                        let (subpattern, next_i) = collect_subpattern(bytes, i);
+                        i = next_i;
+                        result.push(CaptureGroup {
+                            name,
+                            index: capture_index,
+                            pattern: subpattern,
+                        });
+                        continue;
+                    }
                 }
                 continue;
             }
@@ -89,6 +109,10 @@ fn collect_subpattern(bytes: &[u8], mut i: usize) -> (String, usize) {
     let mut depth = 1usize;
     while i < bytes.len() && depth > 0 {
         if bytes[i] == b'\\' {
+            if let Some(end) = quoted_literal_end(bytes, i) {
+                i = end;
+                continue;
+            }
             i += 2;
             continue;
         }

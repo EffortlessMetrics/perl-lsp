@@ -2,35 +2,30 @@
 //!
 //! This receipt exercises `workspace/symbol` over the committed Catalyst
 //! skeleton workspace and records a third real-project quality signal for the
-//! workspace-symbol provider without changing provider behavior.
+//! workspace-symbol provider while bounding the generated-label pilot.
 //!
 //! Receipt signals:
 //! - query latency and repeated-request candidate-count delta
 //! - useful hits versus unrelated/noisy hits for representative queries
-//! - generated/framework candidate names while compiler-generated labels remain gated
+//! - generated/framework candidate names plus at least one explicitly labeled generated pilot symbol
 //! - dynamic-boundary-shaped names observed separately from exact symbols
 //! - stale/fresh query behavior after editing an open document
 
-use anyhow::{Context, Result};
+use anyhow::Result;
+use perl_lsp_ux_tests::binary_available;
+use perl_lsp_ux_tests::missing_binary_skip;
 use perl_lsp_ux_tests::{
-    ScenarioConfig, UxCiTier, UxComponent, UxHarness, UxScenarioSkip, run_ux_scenario,
+    ProjectFixtureFile as FixtureFile, UxCiTier, UxComponent, UxHarness, create_fixture_harness,
+    fixture_content, load_catalyst_fixture_files, open_all_fixture_files, run_ux_scenario,
 };
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeSet;
-use std::fs;
-use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 const SCENARIO_FILE: &str = "ux_scenario_41_catalyst_workspace_symbol_noise.rs";
 const TOP_N: usize = 12;
 const FRESHNESS_FILE: &str = "lib/Catalyst/Dispatcher.pm";
-
-#[derive(Debug)]
-struct FixtureFile {
-    relative_path: String,
-    content: String,
-}
 
 #[derive(Debug)]
 struct WorkspaceSymbolProbe {
@@ -61,6 +56,10 @@ struct WorkspaceSymbolProbeReport {
     generated_candidate_count: usize,
     generated_candidate_live_hits: Vec<String>,
     generated_label_hits: Vec<String>,
+    first_useful_source_rank: Option<usize>,
+    first_generated_label_rank: Option<usize>,
+    generated_label_after_useful_source: bool,
+    generated_label_before_useful_source_count: usize,
     dynamic_boundary_candidate_count: usize,
     dynamic_boundary_live_hits: Vec<String>,
     stale_or_fallback_label_hits: Vec<String>,
@@ -86,86 +85,6 @@ struct TimedSymbols {
     latency_ms: u128,
 }
 
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
-
-fn missing_binary_skip() -> UxScenarioSkip {
-    UxScenarioSkip::infra("PERL_LSP_BIN not set and target/debug/perl-lsp not found")
-}
-
-fn workspace_root() -> Result<PathBuf> {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
-        .map(Path::to_path_buf)
-        .context("CARGO_MANIFEST_DIR must be nested under the workspace root")
-}
-
-fn catalyst_fixture_root() -> Result<PathBuf> {
-    Ok(workspace_root()?.join("test_corpus").join("real_projects").join("catalyst_skeleton"))
-}
-
-fn is_perl_source(path: &Path) -> bool {
-    path.extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| matches!(extension, "pm" | "pl" | "t"))
-}
-
-fn collect_perl_files(root: &Path, dir: &Path, files: &mut Vec<FixtureFile>) -> Result<()> {
-    for entry in fs::read_dir(dir).with_context(|| format!("reading {}", dir.display()))? {
-        let entry = entry.with_context(|| format!("reading an entry under {}", dir.display()))?;
-        let path = entry.path();
-        if path.is_dir() {
-            collect_perl_files(root, &path, files)?;
-        } else if is_perl_source(&path) {
-            let relative_path = path
-                .strip_prefix(root)
-                .with_context(|| format!("stripping fixture root from {}", path.display()))?
-                .to_string_lossy()
-                .replace('\\', "/");
-            let content =
-                fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
-            files.push(FixtureFile { relative_path, content });
-        }
-    }
-    Ok(())
-}
-
-fn load_catalyst_fixture_files() -> Result<Vec<FixtureFile>> {
-    let root = catalyst_fixture_root()?;
-    let mut files = Vec::new();
-    collect_perl_files(&root, &root, &mut files)?;
-    files.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
-    Ok(files)
-}
-
-fn create_catalyst_harness(files: &[FixtureFile]) -> Result<UxHarness> {
-    let mut config = ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
-        .env("PERL_LSP_WORKSPACE", "1");
-
-    for file in files {
-        config = config.with_file(&file.relative_path, &file.content);
-    }
-
-    UxHarness::new(config)
-}
-
-fn open_all_fixture_files(harness: &UxHarness, files: &[FixtureFile]) -> Result<()> {
-    for file in files {
-        harness.open_file(&file.relative_path, &file.content)?;
-    }
-    Ok(())
-}
-
-fn fixture_content<'a>(files: &'a [FixtureFile], relative_path: &str) -> Result<&'a str> {
-    files
-        .iter()
-        .find(|file| file.relative_path == relative_path)
-        .map(|file| file.content.as_str())
-        .with_context(|| format!("missing fixture file {relative_path}"))
-}
-
 fn timed_workspace_symbols(harness: &UxHarness, query: &str) -> Result<TimedSymbols> {
     let started = Instant::now();
     let symbols = harness.workspace_symbols(query)?;
@@ -184,6 +103,22 @@ fn workspace_symbol_text(symbol: &Value) -> String {
         }
     }
     parts.join("\n")
+}
+
+fn workspace_symbol_has_generated_label(symbol: &Value) -> bool {
+    workspace_symbol_text(symbol).contains("[generated/framework]")
+}
+
+fn workspace_symbol_matches_any(symbol: &Value, substrings: &[&str]) -> bool {
+    let haystack = workspace_symbol_text(symbol);
+    substrings.iter().any(|needle| haystack.contains(needle))
+}
+
+fn first_symbol_rank_matching<F>(symbols: &[Value], predicate: F) -> Option<usize>
+where
+    F: Fn(&Value) -> bool,
+{
+    symbols.iter().position(predicate)
 }
 
 fn is_valid_position(position: &Value) -> bool {
@@ -221,12 +156,17 @@ fn symbol_name_sample(symbols: &[Value]) -> Vec<String> {
     symbols.iter().take(TOP_N).filter_map(workspace_symbol_name).collect()
 }
 
-fn exact_symbol_name_hits(symbols: &[Value], candidates: &[&str]) -> Vec<String> {
+fn exact_unproven_generated_name_hits(
+    symbols: &[Value],
+    candidates: &[&str],
+    useful_substrings: &[&str],
+) -> Vec<String> {
     let candidate_names = candidates.iter().copied().collect::<BTreeSet<_>>();
     let mut names = symbols
         .iter()
         .filter_map(workspace_symbol_name)
         .filter(|name| candidate_names.contains(name.as_str()))
+        .filter(|name| !useful_substrings.iter().any(|useful| name.eq_ignore_ascii_case(useful)))
         .collect::<Vec<_>>();
     names.sort();
     names.dedup();
@@ -314,8 +254,11 @@ fn run_probe(
         first.symbols.iter().filter(|symbol| is_valid_workspace_symbol_shape(symbol)).count();
     let invalid_shape_count = first.symbols.len().saturating_sub(valid_shape_count);
     let useful_hits = matching_symbol_names(&first.symbols, probe.useful_substrings);
-    let generated_candidate_live_hits =
-        exact_symbol_name_hits(&first.symbols, probe.generated_candidate_names);
+    let generated_candidate_live_hits = exact_unproven_generated_name_hits(
+        &first.symbols,
+        probe.generated_candidate_names,
+        probe.useful_substrings,
+    );
     let generated_label_hits = matching_symbol_names(
         &first.symbols,
         &["generated", "framework", "virtual", "FrameworkAdapter"],
@@ -326,6 +269,25 @@ fn run_probe(
         &first.symbols,
         &["stale", "fallback", "low confidence", "dynamic boundary"],
     );
+    let first_useful_source_rank = first_symbol_rank_matching(&first.symbols, |symbol| {
+        !workspace_symbol_has_generated_label(symbol)
+            && workspace_symbol_matches_any(symbol, probe.useful_substrings)
+    });
+    let first_generated_label_rank =
+        first_symbol_rank_matching(&first.symbols, workspace_symbol_has_generated_label);
+    let generated_label_after_useful_source = matches!(
+        (first_useful_source_rank, first_generated_label_rank),
+        (Some(source_rank), Some(generated_rank)) if source_rank < generated_rank
+    );
+    let generated_label_before_useful_source_count = first
+        .symbols
+        .iter()
+        .enumerate()
+        .filter(|(rank, symbol)| {
+            workspace_symbol_has_generated_label(symbol)
+                && first_useful_source_rank.is_none_or(|source_rank| *rank < source_rank)
+        })
+        .count();
 
     Ok(WorkspaceSymbolProbeReport {
         name: probe.name,
@@ -349,6 +311,10 @@ fn run_probe(
         generated_candidate_count: probe.generated_candidate_names.len(),
         generated_candidate_live_hits,
         generated_label_hits,
+        first_useful_source_rank,
+        first_generated_label_rank,
+        generated_label_after_useful_source,
+        generated_label_before_useful_source_count,
         dynamic_boundary_candidate_count: probe.dynamic_boundary_names.len(),
         dynamic_boundary_live_hits,
         stale_or_fallback_label_hits,
@@ -466,7 +432,7 @@ fn scenario_41_catalyst_workspace_symbol_noise_receipt() {
             recorder
                 .check("Catalyst fixture has committed Perl files", !fixture_files.is_empty())?;
 
-            let harness = create_catalyst_harness(&fixture_files)?;
+            let harness = create_fixture_harness(&fixture_files)?;
             open_all_fixture_files(&harness, &fixture_files)?;
             std::thread::sleep(Duration::from_millis(500));
 
@@ -523,6 +489,18 @@ fn scenario_41_catalyst_workspace_symbol_noise_receipt() {
                 reports.iter().map(|report| report.generated_candidate_count).sum();
             let generated_label_total: usize =
                 reports.iter().map(|report| report.generated_label_hits.len()).sum();
+            let generated_label_names_are_labeled = reports.iter().all(|report| {
+                report
+                    .generated_label_hits
+                    .iter()
+                    .all(|name| name.contains("[generated/framework]"))
+            });
+            let generated_label_rank_proof_count =
+                reports.iter().filter(|report| report.generated_label_after_useful_source).count();
+            let generated_label_before_useful_source_total: usize = reports
+                .iter()
+                .map(|report| report.generated_label_before_useful_source_count)
+                .sum();
             let generated_live_symbol_total: usize =
                 reports.iter().map(|report| report.generated_candidate_live_hits.len()).sum();
             let dynamic_boundary_candidate_total: usize =
@@ -558,7 +536,7 @@ fn scenario_41_catalyst_workspace_symbol_noise_receipt() {
                 "schema_version": 1,
                 "project": "catalyst",
                 "surface": "workspace_symbols",
-                "claim_boundary": "third-project workspace-symbol noise receipt only; no provider behavior changed or promoted",
+                "claim_boundary": "third-project workspace-symbol noise receipt only; generated labels may appear only for source-backed pilot symbols and do not promote broad generated/dynamic behavior",
                 "fixture_file_count": fixture_files.len(),
                 "probe_count": reports.len(),
                 "live_symbol_total": live_symbol_total,
@@ -570,6 +548,8 @@ fn scenario_41_catalyst_workspace_symbol_noise_receipt() {
                 "generated_candidate_total": generated_candidate_total,
                 "generated_live_symbol_total": generated_live_symbol_total,
                 "generated_label_total": generated_label_total,
+                "generated_label_rank_proof_count": generated_label_rank_proof_count,
+                "generated_label_before_useful_source_total": generated_label_before_useful_source_total,
                 "generated_source_hits": generated_source_hits,
                 "generated_source_missing": generated_source_missing,
                 "dynamic_boundary_candidate_total": dynamic_boundary_candidate_total,
@@ -613,10 +593,17 @@ fn scenario_41_catalyst_workspace_symbol_noise_receipt() {
                 candidate_count_delta_total == 0,
             )?;
             recorder.check(
-                "receipt recorded generated candidates as still gated from live names and labels",
-                generated_candidate_total > 0
-                    && generated_live_symbol_total == 0
-                    && generated_label_total == 0,
+                "receipt recorded generated candidates without exact generated-name promotion",
+                generated_candidate_total > 0 && generated_live_symbol_total == 0,
+            )?;
+            recorder.check(
+                "generated-label pilot surfaced at least one explicitly labeled real-project symbol",
+                generated_label_total > 0 && generated_label_names_are_labeled,
+            )?;
+            recorder.check(
+                "generated-label pilot ranks after useful source-backed project symbols",
+                generated_label_rank_proof_count > 0
+                    && generated_label_before_useful_source_total == 0,
             )?;
             recorder.check(
                 "configured generated candidates are backed by Catalyst fixture source",

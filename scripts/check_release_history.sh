@@ -180,15 +180,22 @@ run_install_surface_check() {
         ! find Cargo.toml Cargo.lock xtask/Cargo.toml xtask/src -type f -newer "$bin" -print -quit | grep -q .
     }
 
-    if xtask_binary_is_fresh target/debug/xtask; then
-        target/debug/xtask install-surface-check
-        return
+    local candidate
+    if [[ -n "${CARGO_TARGET_DIR:-}" ]]; then
+        for candidate in "$CARGO_TARGET_DIR/debug/xtask" "$CARGO_TARGET_DIR/debug/xtask.exe"; do
+            if xtask_binary_is_fresh "$candidate"; then
+                "$candidate" install-surface-check
+                return
+            fi
+        done
     fi
 
-    if xtask_binary_is_fresh target/debug/xtask.exe; then
-        target/debug/xtask.exe install-surface-check
-        return
-    fi
+    for candidate in target/debug/xtask target/debug/xtask.exe; do
+        if xtask_binary_is_fresh "$candidate"; then
+            "$candidate" install-surface-check
+            return
+        fi
+    done
 
     if cargo metadata --no-deps --format-version 1 >/dev/null 2>&1; then
         cargo xtask install-surface-check

@@ -3,6 +3,29 @@
 use proptest::prelude::*;
 use std::collections::HashSet;
 
+/// Build a consistent proptest configuration for parser property suites.
+///
+/// The `PROPTEST_CASES` environment variable lets CI lanes and local agents
+/// scale coverage without editing test code, while direct failure persistence
+/// keeps shrink reproducers next to the test that owns them.
+pub fn parser_proptest_config(
+    regress_dir: &'static str,
+    default_cases: u32,
+) -> proptest::test_runner::Config {
+    let cases = std::env::var("PROPTEST_CASES")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(default_cases);
+
+    proptest::test_runner::Config {
+        cases,
+        failure_persistence: Some(Box::new(proptest::test_runner::FileFailurePersistence::Direct(
+            regress_dir,
+        ))),
+        ..proptest::test_runner::Config::default()
+    }
+}
+
 /// All delimiter pairs we'll consider for q/qq/qr/m/s/tr/y.
 pub const DELIMS: &[(char, char)] = &[
     // Paired

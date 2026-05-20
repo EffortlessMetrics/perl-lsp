@@ -6335,7 +6335,7 @@ fn render_next_pointer_status_receipt(artifact: &ParserAccuracyArtifact) -> Stri
         if has_no_gaps {
             output.push_str("\n## Capability Handoff\n\n");
             output.push_str(
-                "Measurement wiring is clear. Follow [`parser.md`](parser.md#raw-failure-buckets) for capability work; take the largest raw bucket inside the largest nonzero parser failure cluster as the next parser lane and keep it separate from measurement-only work.\n",
+                "Measurement wiring is clear. Follow [`parser.md`](parser.md#raw-failure-buckets) for capability work only when the generated parser status lists a nonzero raw failure bucket. If parser status lists `none`, do not start parser bucket work from stale context; refresh the Linux corpus receipt or move to the next provider or real-workspace trust lane.\n",
             );
         }
     }
@@ -8545,9 +8545,11 @@ sub dynamic_boundary_case {
         assert!(pointer.contains("## Capability Handoff"));
         assert!(pointer.contains("parser.md#raw-failure-buckets"));
         assert!(
-            pointer
-                .contains("largest raw bucket inside the largest nonzero parser failure cluster")
+            pointer.contains(
+                "only when the generated parser status lists a nonzero raw failure bucket"
+            )
         );
+        assert!(pointer.contains("do not start parser bucket work from stale context"));
         assert!(matches!(
             (
                 pointer.find("Use the measurement gap table only"),

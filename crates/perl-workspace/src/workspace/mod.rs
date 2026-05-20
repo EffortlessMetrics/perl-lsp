@@ -46,7 +46,7 @@ pub use production_coordinator::{
     CoordinatorStatistics, ProductionCoordinatorConfig, ProductionIndexCoordinator,
     WorkspaceCacheManager,
 };
-pub use slo::{OperationResult, OperationType, SloConfig, SloStatistics, SloTracker};
+pub use slo::{OperationResult, OperationType, Regime, SloConfig, SloStatistics, SloTracker};
 pub use state_machine::{
     BuildPhase, DegradationReason, IndexState, IndexStateKind, IndexStateMachine,
     InvalidationReason, ResourceKind, TransitionResult,

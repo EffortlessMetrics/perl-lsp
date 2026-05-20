@@ -78,62 +78,72 @@ mod tests {
     // --- is_expect_term ---
 
     #[test]
-    fn lexer_mode_expect_term_is_term() {
+    fn lexer_mode_expect_term_is_term() -> Result<(), Box<dyn std::error::Error>> {
         assert!(LexerMode::ExpectTerm.is_expect_term());
+        Ok(())
     }
 
     #[test]
-    fn lexer_mode_expect_operator_is_not_term() {
+    fn lexer_mode_expect_operator_is_not_term() -> Result<(), Box<dyn std::error::Error>> {
         assert!(!LexerMode::ExpectOperator.is_expect_term());
+        Ok(())
     }
 
     #[test]
-    fn lexer_mode_expect_delimiter_is_not_term() {
+    fn lexer_mode_expect_delimiter_is_not_term() -> Result<(), Box<dyn std::error::Error>> {
         assert!(!LexerMode::ExpectDelimiter.is_expect_term());
+        Ok(())
     }
 
     #[test]
-    fn lexer_mode_in_format_body_is_not_term() {
+    fn lexer_mode_in_format_body_is_not_term() -> Result<(), Box<dyn std::error::Error>> {
         assert!(!LexerMode::InFormatBody.is_expect_term());
+        Ok(())
     }
 
     #[test]
-    fn lexer_mode_in_data_section_is_not_term() {
+    fn lexer_mode_in_data_section_is_not_term() -> Result<(), Box<dyn std::error::Error>> {
         assert!(!LexerMode::InDataSection.is_expect_term());
+        Ok(())
     }
 
     // --- is_expect_operator ---
 
     #[test]
-    fn lexer_mode_expect_operator_is_operator() {
+    fn lexer_mode_expect_operator_is_operator() -> Result<(), Box<dyn std::error::Error>> {
         assert!(LexerMode::ExpectOperator.is_expect_operator());
+        Ok(())
     }
 
     #[test]
-    fn lexer_mode_expect_term_is_not_operator() {
+    fn lexer_mode_expect_term_is_not_operator() -> Result<(), Box<dyn std::error::Error>> {
         assert!(!LexerMode::ExpectTerm.is_expect_operator());
+        Ok(())
     }
 
     #[test]
-    fn lexer_mode_expect_delimiter_is_not_operator() {
+    fn lexer_mode_expect_delimiter_is_not_operator() -> Result<(), Box<dyn std::error::Error>> {
         assert!(!LexerMode::ExpectDelimiter.is_expect_operator());
+        Ok(())
     }
 
     #[test]
-    fn lexer_mode_in_format_body_is_not_operator() {
+    fn lexer_mode_in_format_body_is_not_operator() -> Result<(), Box<dyn std::error::Error>> {
         assert!(!LexerMode::InFormatBody.is_expect_operator());
+        Ok(())
     }
 
     #[test]
-    fn lexer_mode_in_data_section_is_not_operator() {
+    fn lexer_mode_in_data_section_is_not_operator() -> Result<(), Box<dyn std::error::Error>> {
         assert!(!LexerMode::InDataSection.is_expect_operator());
+        Ok(())
     }
 
     // --- mutual exclusion ---
     // No mode is simultaneously term-expecting AND operator-expecting.
 
     #[test]
-    fn lexer_mode_no_variant_is_both_term_and_operator() {
+    fn lexer_mode_no_variant_is_both_term_and_operator() -> Result<(), Box<dyn std::error::Error>> {
         let modes = [
             LexerMode::ExpectTerm,
             LexerMode::ExpectOperator,
@@ -147,12 +157,14 @@ mod tests {
                 "{mode:?} should not be both term-expecting and operator-expecting",
             );
         }
+        Ok(())
     }
 
     // --- default ---
 
     #[test]
-    fn lexer_mode_default_is_expect_term() {
+    fn lexer_mode_default_is_expect_term() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(LexerMode::default(), LexerMode::ExpectTerm);
+        Ok(())
     }
 }
