@@ -792,6 +792,7 @@ devex-targeted base='' mode='all':
 
 # Show recent upstream commits using an auto-detected base ref.
 # Helpful in detached or minimal-clone environments where origin/master may not exist.
+# Falls back to HEAD so local-only clones still satisfy the onboarding preflight.
 upstream-log count='20' base='':
     #!/usr/bin/env bash
     set -euo pipefail
@@ -817,9 +818,9 @@ upstream-log count='20' base='':
         base="master"
     fi
     if [ -z "$base" ]; then
-        echo "ERROR: Could not auto-detect base ref."
-        echo "Hint: run 'just upstream-log <count> <base-ref>' (example: just upstream-log 20 origin/master)."
-        exit 1
+        base="HEAD"
+        echo "WARN: Could not auto-detect base ref; showing local HEAD instead."
+        echo "Hint: pass an explicit ref when remote history is available (example: just upstream-log 20 origin/master)."
     fi
     echo "Showing last $count commits from $base"
     git log "$base" --oneline -n "$count"
