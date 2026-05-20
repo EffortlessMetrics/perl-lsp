@@ -6,6 +6,8 @@ Linked proposal: [PLSP-PROP-0001](../proposals/PLSP-PROP-0001-real-perl-editor-t
 Linked ADRs:
 - [PLSP-ADR-0002](../adr/PLSP-ADR-0002-confidence-before-cutover.md)
 - [PLSP-ADR-0003](../adr/PLSP-ADR-0003-preview-before-edit.md)
+Linked specs:
+- [PLSP-SPEC-0018](PLSP-SPEC-0018-edit-authorization-contract.md)
 Linked plan: [Real Perl Editor Trust implementation plan](../../plans/real-perl-editor-trust/implementation-plan.md)
 Status impact: provider confidence matrix, provider cutover, support tiers,
 semantic shadow compare, UX capability dashboard
@@ -23,6 +25,8 @@ missing.
 This spec sharpens [PLSP-SPEC-0002](PLSP-SPEC-0002-provider-confidence-receipts.md)
 for providers that can return edits. It does not replace the provider receipt
 contract; it defines the additional safety bar for edit output.
+The shared Allowed/PreviewOnly/Blocked/Fallback state model is defined by
+[PLSP-SPEC-0018](PLSP-SPEC-0018-edit-authorization-contract.md).
 
 ## Shared Safety Rules
 
