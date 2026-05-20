@@ -1,3 +1,4 @@
+use super::class_model::{AccessorType, ClassModelBuilder};
 use super::type_facts::{
     ArrayShape, DynamicBoundary, HashShape, ObjectShape, ShapeFact, TypeEvidence, TypeFact,
 };
@@ -223,6 +224,10 @@ pub struct TypeInferenceEngine {
     constraints: Vec<TypeConstraint>,
     /// Built-in function signatures
     builtins: HashMap<String, PerlType>,
+    /// Framework accessor return facts keyed by `(package, accessor)`.
+    accessor_return_facts: HashMap<(String, String), TypeFact>,
+    /// Narrow source-backed method return facts keyed by `(package, method)`.
+    method_return_facts: HashMap<(String, String), TypeFact>,
     /// Type aliases from use statements
     _type_aliases: HashMap<String, PerlType>,
 }
@@ -240,6 +245,8 @@ impl TypeInferenceEngine {
             global_env: TypeEnvironment::new(),
             constraints: Vec::new(),
             builtins: HashMap::new(),
+            accessor_return_facts: HashMap::new(),
+            method_return_facts: HashMap::new(),
             _type_aliases: HashMap::new(),
         };
 
@@ -316,6 +323,9 @@ impl TypeInferenceEngine {
 
     /// Infer types for an AST
     pub fn infer(&mut self, ast: &Node) -> Result<PerlType, Vec<TypeConstraint>> {
+        self.refresh_accessor_return_facts(ast);
+        self.refresh_method_return_facts(ast);
+
         // We need to use a temporary environment that has global_env as parent,
         // or just use global_env directly if we want to persist top-level declarations?
         // Usually top-level declarations should persist.
@@ -736,9 +746,15 @@ impl TypeInferenceEngine {
             }
             NodeKind::ArrayLiteral { elements } => self.array_literal_fact(elements, env),
             NodeKind::HashLiteral { pairs } => self.hash_literal_fact(pairs, env),
+            NodeKind::FunctionCall { name, args } if name == "bless" => {
+                self.bless_expr_fact(args, env)
+            }
             NodeKind::MethodCall { object, method, .. } if method == "new" => {
                 static_package_node(object)
                     .map_or_else(TypeFact::unknown, |package| constructor_fact(&package))
+            }
+            NodeKind::MethodCall { object, method, .. } => {
+                self.method_call_expr_fact(object, method, env)
             }
             NodeKind::Assignment { lhs, rhs, op } if op == "=" => {
                 self.assign_expr_fact(lhs, rhs, env)
@@ -778,6 +794,50 @@ impl TypeInferenceEngine {
         fact
     }
 
+    fn refresh_accessor_return_facts(&mut self, ast: &Node) {
+        self.accessor_return_facts.clear();
+
+        for model in ClassModelBuilder::new().build(ast) {
+            for attr in model.attributes {
+                if !attribute_generates_reader(attr.is) {
+                    continue;
+                }
+                let Some(package) = package_like_isa(attr.isa.as_deref()) else {
+                    continue;
+                };
+                let method = attr.accessor_name.clone();
+                let fact = accessor_return_fact(&method, &attr.name, &package);
+                self.accessor_return_facts.insert((model.name.clone(), method), fact);
+            }
+        }
+    }
+
+    fn refresh_method_return_facts(&mut self, ast: &Node) {
+        self.method_return_facts.clear();
+        collect_method_return_facts(ast, None, &mut self.method_return_facts);
+    }
+
+    fn method_call_expr_fact(
+        &mut self,
+        object: &Node,
+        method: &str,
+        env: &mut TypeEnvironment,
+    ) -> TypeFact {
+        let object_fact = self.infer_expr_fact_in_env(object, env);
+        let Some(package) = object_package_from_fact(&object_fact) else {
+            let mut fact = TypeFact::unknown();
+            fact.dynamic_boundary = object_fact.dynamic_boundary;
+            return fact;
+        };
+
+        let key = (package, method.to_string());
+        self.accessor_return_facts
+            .get(&key)
+            .cloned()
+            .or_else(|| self.method_return_facts.get(&key).cloned())
+            .unwrap_or_else(TypeFact::unknown)
+    }
+
     fn assign_expr_fact(&mut self, lhs: &Node, rhs: &Node, env: &mut TypeEnvironment) -> TypeFact {
         let mut rhs_fact = self.infer_expr_fact_in_env(rhs, env);
 
@@ -787,11 +847,14 @@ impl TypeInferenceEngine {
             return rhs_fact;
         }
 
-        if let Some((hash_name, key)) = static_hash_slot_target(lhs) {
+        if let Some((hash_name, key, is_hashref_slot)) = static_hash_slot_target(lhs) {
             rhs_fact.evidence.push(TypeEvidence::Assignment { name: hash_name.clone() });
-            rhs_fact
-                .evidence
-                .push(TypeEvidence::HashSlot { hash: format!("${hash_name}"), key: key.clone() });
+            let slot_evidence = if is_hashref_slot {
+                TypeEvidence::HashRefSlot { base: format!("${hash_name}"), key: key.clone() }
+            } else {
+                TypeEvidence::HashSlot { hash: format!("${hash_name}"), key: key.clone() }
+            };
+            rhs_fact.evidence.push(slot_evidence);
             let mut hash_fact = env.get_fact_at(&hash_name).unwrap_or_else(TypeFact::unknown_hash);
             let mut shape = match hash_fact.shape.take() {
                 Some(ShapeFact::Hash(shape)) => shape,
@@ -858,6 +921,28 @@ impl TypeInferenceEngine {
         hash_shape_fact(slots, TypeEvidence::Literal)
     }
 
+    fn bless_expr_fact(&mut self, args: &[Node], env: &mut TypeEnvironment) -> TypeFact {
+        let Some(reference) = args.first() else {
+            return TypeFact::unknown();
+        };
+        let Some(package_node) = args.get(1) else {
+            return TypeFact::dynamic(DynamicBoundary::DynamicBlessClass);
+        };
+        let Some(package) = static_package_node(package_node) else {
+            return TypeFact::dynamic(DynamicBoundary::DynamicBlessClass);
+        };
+
+        let reference_fact = self.infer_expr_fact_in_env(reference, env);
+        let fields = object_fields_from_bless_reference(reference_fact, &package);
+        let mut fact = fact_with_evidence(
+            PerlType::Object(package.clone()),
+            Confidence::Medium,
+            TypeEvidence::BlessLiteral { package: package.clone() },
+        );
+        fact.shape = Some(ShapeFact::Object(ObjectShape::new(package, fields)));
+        fact
+    }
+
     fn array_literal_fact(&mut self, elements: &[Node], env: &mut TypeEnvironment) -> TypeFact {
         let mut indexed = BTreeMap::new();
         for (index, element) in elements.iter().enumerate() {
@@ -904,8 +989,22 @@ impl TypeInferenceEngine {
                         fact
                     },
                 ),
+            Some(ShapeFact::Object(shape)) if op == "->{}" => {
+                shape.fields.get(&key).cloned().map_or_else(
+                    || {
+                        let mut fact = TypeFact::unknown();
+                        fact.evidence.push(evidence.clone());
+                        fact
+                    },
+                    |mut fact| {
+                        fact.evidence.push(evidence.clone());
+                        fact
+                    },
+                )
+            }
             _ => {
                 let mut fact = TypeFact::unknown();
+                fact.dynamic_boundary = container_fact.dynamic_boundary;
                 fact.evidence.push(evidence);
                 fact
             }
@@ -1137,6 +1236,275 @@ fn constructor_fact(package: &str) -> TypeFact {
     fact
 }
 
+fn accessor_return_fact(method: &str, field: &str, package: &str) -> TypeFact {
+    let mut fact = fact_with_evidence(
+        PerlType::Any,
+        Confidence::Medium,
+        TypeEvidence::MooseIsa { attr: field.to_string(), isa: package.to_string() },
+    );
+    fact.evidence.push(TypeEvidence::AccessorReturn {
+        method: method.to_string(),
+        field: field.to_string(),
+    });
+    fact.shape = Some(ShapeFact::Object(ObjectShape::new(package.to_string(), BTreeMap::new())));
+    fact
+}
+
+fn method_return_fact(method: &str, package: &str) -> TypeFact {
+    let mut fact = fact_with_evidence(
+        PerlType::Any,
+        Confidence::Medium,
+        TypeEvidence::MethodReturn { method: method.to_string(), package: package.to_string() },
+    );
+    fact.evidence.push(TypeEvidence::ConstructorCall { package: package.to_string() });
+    fact.shape = Some(ShapeFact::Object(ObjectShape::new(package.to_string(), BTreeMap::new())));
+    fact
+}
+
+fn collect_method_return_facts(
+    node: &Node,
+    package: Option<&str>,
+    out: &mut HashMap<(String, String), TypeFact>,
+) {
+    match &node.kind {
+        NodeKind::Program { statements } | NodeKind::Block { statements } => {
+            collect_method_return_facts_from_statements(statements, package, out);
+        }
+        NodeKind::Package { name, block: Some(block), .. } => {
+            collect_method_return_facts(block, Some(name.as_str()), out);
+        }
+        NodeKind::Subroutine { name: Some(method), body, .. } => {
+            if let (Some(package), Some(fact)) =
+                (package, static_method_body_return_fact(method, body))
+            {
+                out.insert((package.to_string(), method.clone()), fact);
+            }
+        }
+        NodeKind::Method { name, body, .. } => {
+            if let (Some(package), Some(fact)) =
+                (package, static_method_body_return_fact(name, body))
+            {
+                out.insert((package.to_string(), name.clone()), fact);
+            }
+        }
+        _ => {
+            for child in node.children() {
+                collect_method_return_facts(child, package, out);
+            }
+        }
+    }
+}
+
+fn collect_method_return_facts_from_statements(
+    statements: &[Node],
+    package: Option<&str>,
+    out: &mut HashMap<(String, String), TypeFact>,
+) {
+    let mut current_package = package.map(ToOwned::to_owned);
+    for statement in statements {
+        match &statement.kind {
+            NodeKind::Package { name, block: None, .. } => {
+                current_package = Some(name.clone());
+            }
+            NodeKind::Package { name, block: Some(block), .. } => {
+                collect_method_return_facts(block, Some(name.as_str()), out);
+            }
+            _ => {
+                collect_method_return_facts(statement, current_package.as_deref(), out);
+            }
+        }
+    }
+}
+
+fn static_method_body_return_fact(method: &str, body: &Node) -> Option<TypeFact> {
+    let NodeKind::Block { statements } = &body.kind else {
+        return None;
+    };
+    if let [statement] = statements.as_slice() {
+        return static_method_return_expr_fact(method, statement);
+    }
+    static_method_local_return_fact(method, statements)
+}
+
+fn static_method_return_expr_fact(method: &str, node: &Node) -> Option<TypeFact> {
+    match &node.kind {
+        NodeKind::ExpressionStatement { expression } => {
+            static_method_return_expr_fact(method, expression)
+        }
+        NodeKind::Return { value: Some(value) } => static_method_return_expr_fact(method, value),
+        _ => static_constructor_package(node).map(|package| method_return_fact(method, &package)),
+    }
+}
+
+fn static_method_local_return_fact(method: &str, statements: &[Node]) -> Option<TypeFact> {
+    let returned_name = returned_variable_name(statements.last()?)?;
+    let mut package = None;
+
+    for statement in &statements[..statements.len().saturating_sub(1)] {
+        match local_return_assignment_package(statement, returned_name) {
+            Some(Some(candidate)) => {
+                package = Some(candidate);
+            }
+            Some(None) => {
+                return None;
+            }
+            None if local_return_statement_blocks_static_fact(statement, returned_name) => {
+                return None;
+            }
+            None => {}
+        }
+    }
+
+    package.map(|package| {
+        let mut fact = method_return_fact(method, &package);
+        fact.evidence.push(TypeEvidence::VariableInitializer { name: returned_name.to_string() });
+        fact
+    })
+}
+
+fn returned_variable_name(node: &Node) -> Option<&str> {
+    match &node.kind {
+        NodeKind::ExpressionStatement { expression } => returned_variable_name(expression),
+        NodeKind::Return { value: Some(value) } => variable_name(value),
+        _ => variable_name(node),
+    }
+}
+
+fn local_return_assignment_package(node: &Node, returned_name: &str) -> Option<Option<String>> {
+    match &node.kind {
+        NodeKind::ExpressionStatement { expression } => {
+            local_return_assignment_package(expression, returned_name)
+        }
+        NodeKind::VariableDeclaration { variable, initializer, .. }
+            if variable_name(variable) == Some(returned_name) =>
+        {
+            Some(initializer.as_deref().and_then(static_constructor_package))
+        }
+        NodeKind::Assignment { lhs, rhs, op }
+            if op == "=" && variable_name(lhs) == Some(returned_name) =>
+        {
+            Some(static_constructor_package(rhs))
+        }
+        NodeKind::Binary { left, op, right }
+            if op == "=" && variable_name(left) == Some(returned_name) =>
+        {
+            Some(static_constructor_package(right))
+        }
+        _ => None,
+    }
+}
+
+fn local_return_statement_blocks_static_fact(node: &Node, returned_name: &str) -> bool {
+    match &node.kind {
+        NodeKind::ExpressionStatement { expression } => {
+            local_return_statement_blocks_static_fact(expression, returned_name)
+        }
+        NodeKind::Assignment { lhs, .. } if variable_name(lhs) == Some(returned_name) => true,
+        NodeKind::Binary { left, .. } if variable_name(left) == Some(returned_name) => true,
+        NodeKind::Block { .. }
+        | NodeKind::Eval { .. }
+        | NodeKind::Do { .. }
+        | NodeKind::Defer { .. }
+        | NodeKind::Try { .. }
+        | NodeKind::If { .. }
+        | NodeKind::While { .. }
+        | NodeKind::For { .. }
+        | NodeKind::Foreach { .. }
+        | NodeKind::Given { .. }
+        | NodeKind::When { .. }
+        | NodeKind::Default { .. }
+        | NodeKind::StatementModifier { .. }
+        | NodeKind::Return { .. }
+        | NodeKind::LoopControl { .. }
+        | NodeKind::Goto { .. } => true,
+        _ => node_mentions_variable(node, returned_name),
+    }
+}
+
+fn node_mentions_variable(node: &Node, name: &str) -> bool {
+    if variable_name(node) == Some(name) {
+        return true;
+    }
+    let mut found = false;
+    node.for_each_child(|child| {
+        if !found && node_mentions_variable(child, name) {
+            found = true;
+        }
+    });
+    found
+}
+
+fn attribute_generates_reader(mode: Option<AccessorType>) -> bool {
+    !matches!(mode, Some(AccessorType::Bare))
+}
+
+fn package_like_isa(isa: Option<&str>) -> Option<String> {
+    let candidate = isa?.trim();
+    if is_simple_package_name(candidate) { Some(candidate.to_string()) } else { None }
+}
+
+fn is_simple_package_name(candidate: &str) -> bool {
+    let mut segments = candidate.split("::");
+    let Some(first) = segments.next() else { return false };
+    if !is_package_segment(first) {
+        return false;
+    }
+
+    let mut has_namespace = false;
+    for segment in segments {
+        has_namespace = true;
+        if !is_package_segment(segment) {
+            return false;
+        }
+    }
+    has_namespace
+}
+
+fn is_package_segment(segment: &str) -> bool {
+    let mut chars = segment.chars();
+    let Some(first) = chars.next() else { return false };
+    (first.is_ascii_alphabetic() || first == '_')
+        && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+}
+
+fn object_package_from_fact(fact: &TypeFact) -> Option<String> {
+    object_package_from_type(&fact.ty).or_else(|| match &fact.shape {
+        Some(ShapeFact::Object(shape)) => Some(shape.package.clone()),
+        _ => None,
+    })
+}
+
+fn object_package_from_type(ty: &PerlType) -> Option<String> {
+    match ty {
+        PerlType::Object(package) => Some(package.clone()),
+        PerlType::Reference(inner) => object_package_from_type(inner),
+        PerlType::Union(types) => types.iter().find_map(object_package_from_type),
+        _ => None,
+    }
+}
+
+fn object_fields_from_bless_reference(
+    reference_fact: TypeFact,
+    package: &str,
+) -> BTreeMap<String, TypeFact> {
+    match reference_fact.shape {
+        Some(ShapeFact::Hash(shape)) => shape
+            .slots
+            .into_iter()
+            .map(|(name, fact)| (name, bless_field_fact(fact, package)))
+            .collect(),
+        _ => BTreeMap::new(),
+    }
+}
+
+fn bless_field_fact(mut fact: TypeFact, package: &str) -> TypeFact {
+    if fact.confidence == Confidence::High {
+        fact.confidence = Confidence::Medium;
+    }
+    fact.evidence.push(TypeEvidence::BlessLiteral { package: package.to_string() });
+    fact
+}
+
 fn hash_shape_fact(slots: BTreeMap<String, TypeFact>, evidence: TypeEvidence) -> TypeFact {
     let confidence = if slots.is_empty() { Confidence::Low } else { Confidence::High };
     let mut fact =
@@ -1175,6 +1543,16 @@ fn static_package_node(node: &Node) -> Option<String> {
     }
 }
 
+fn static_constructor_package(node: &Node) -> Option<String> {
+    match &node.kind {
+        NodeKind::ExpressionStatement { expression } => static_constructor_package(expression),
+        NodeKind::MethodCall { object, method, .. } if method == "new" => {
+            static_package_node(object)
+        }
+        _ => None,
+    }
+}
+
 fn variable_name(node: &Node) -> Option<&str> {
     match &node.kind {
         NodeKind::Variable { name, .. } => Some(name.as_str()),
@@ -1183,16 +1561,16 @@ fn variable_name(node: &Node) -> Option<&str> {
     }
 }
 
-fn static_hash_slot_target(node: &Node) -> Option<(String, String)> {
+fn static_hash_slot_target(node: &Node) -> Option<(String, String, bool)> {
     let NodeKind::Binary { op, left, right } = &node.kind else {
         return None;
     };
-    if op != "{}" {
+    if op != "{}" && op != "->{}" {
         return None;
     }
     let name = variable_name(left)?;
     let key = static_hash_key(right)?;
-    Some((name.to_string(), key))
+    Some((name.to_string(), key, op == "->{}"))
 }
 
 fn static_hash_key(node: &Node) -> Option<String> {

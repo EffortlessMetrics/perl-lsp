@@ -258,6 +258,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_inline_value_regexes_compile() {
+        assert!(PERL_VAR_RE.is_some());
+        assert!(BRACED_PERL_VAR_RE.is_some());
+        assert!(SCALAR_VAR_RE.is_some());
+    }
+
+    #[test]
+    fn test_collect_line_variables_keeps_code_scalars_visible() {
+        let line = "my $x = 1;";
+        let matches = collect_line_variables(line, false);
+        assert_eq!(matches, vec![(3, 5, "$x".to_string())]);
+
+        let code_mask = code_byte_mask(line);
+        assert!(code_mask[3..5].iter().all(|is_code| *is_code));
+    }
+
+    #[test]
     fn test_collect_inline_values_legacy() {
         let source = "my $x = 1;\nmy $y = $x + 2;";
         let values = collect_inline_values(source, 1, 2);
@@ -513,6 +530,16 @@ mod tests {
         assert!(values.iter().any(|v| v.text == "$lit = ?"));
         assert!(!values.iter().any(|v| v.text.contains("$fake")));
         assert!(!values.iter().any(|v| v.text.contains("$ghost")));
+    }
+
+    #[test]
+    fn test_unclosed_quote_like_operator_masks_to_end_of_line() {
+        let source = "my $real = 1; my $str = qq($fake";
+        let values = collect_inline_values_with_runtime(source, 1, 1, None);
+        assert_eq!(values.len(), 2);
+        assert!(values.iter().any(|v| v.text == "$real = ?"));
+        assert!(values.iter().any(|v| v.text == "$str = ?"));
+        assert!(!values.iter().any(|v| v.text.contains("$fake")));
     }
 
     #[test]
