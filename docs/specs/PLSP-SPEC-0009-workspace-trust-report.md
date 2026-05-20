@@ -6,6 +6,8 @@ Linked proposal: [PLSP-PROP-0001](../proposals/PLSP-PROP-0001-real-perl-editor-t
 Linked specs:
 - [PLSP-SPEC-0002](PLSP-SPEC-0002-provider-confidence-receipts.md)
 - [PLSP-SPEC-0003](PLSP-SPEC-0003-real-workspace-editor-baseline.md)
+- [PLSP-SPEC-0022](PLSP-SPEC-0022-module-path-authority.md)
+- [PLSP-SPEC-0023](PLSP-SPEC-0023-ambient-inputs.md)
 Linked ADRs:
 - [PLSP-ADR-0002](../adr/PLSP-ADR-0002-confidence-before-cutover.md)
 Linked plan: [Real Perl Editor Trust implementation plan](../../plans/real-perl-editor-trust/implementation-plan.md)
