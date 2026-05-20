@@ -2530,14 +2530,80 @@ fn is_excluded_for_print_check(path: &Path) -> bool {
 /// first 30 lines of the file (the module-doc / crate-doc block).
 fn file_has_print_allow(lines: &[String]) -> bool {
     for line in lines.iter().take(30) {
-        if line.contains("#![allow(clippy::print_stderr)]")
-            || line.contains("#![allow(clippy::print_stdout)]")
-            || (line.contains("#![allow(") && line.contains("print_"))
-        {
+        if line_has_inner_print_allow_attr(line) {
             return true;
         }
     }
     false
+}
+
+fn line_has_inner_print_allow_attr(line: &str) -> bool {
+    line.contains("#![allow(")
+        && (line.contains("clippy::print_stderr")
+            || line.contains("clippy::print_stdout")
+            || line.contains("clippy::print_"))
+}
+
+fn line_has_outer_print_allow_attr(line: &str) -> bool {
+    line.contains("#[allow(")
+        && (line.contains("clippy::print_stderr")
+            || line.contains("clippy::print_stdout")
+            || line.contains("clippy::print_"))
+}
+
+fn line_is_whole_line_comment(line: &str) -> bool {
+    line.trim_start().starts_with("//")
+}
+
+#[derive(Default)]
+struct PrintAllowScope {
+    pending_attr: bool,
+    active_brace_depth: usize,
+}
+
+impl PrintAllowScope {
+    fn note_attribute(&mut self) {
+        self.pending_attr = true;
+    }
+
+    fn allows_current_line(&self) -> bool {
+        self.pending_attr || self.active_brace_depth > 0
+    }
+
+    fn observe_line(&mut self, line: &str) {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || line_is_whole_line_comment(line) || trimmed.starts_with("#[") {
+            return;
+        }
+
+        if self.active_brace_depth > 0 {
+            self.apply_brace_delta(line);
+            return;
+        }
+
+        if self.pending_attr {
+            self.pending_attr = false;
+            let delta = brace_delta(line);
+            if delta > 0 {
+                self.active_brace_depth = delta as usize;
+            }
+        }
+    }
+
+    fn apply_brace_delta(&mut self, line: &str) {
+        let delta = brace_delta(line);
+        if delta.is_negative() {
+            self.active_brace_depth = self.active_brace_depth.saturating_sub(delta.unsigned_abs());
+        } else {
+            self.active_brace_depth = self.active_brace_depth.saturating_add(delta as usize);
+        }
+    }
+}
+
+fn brace_delta(line: &str) -> isize {
+    let opens = line.chars().filter(|ch| *ch == '{').count() as isize;
+    let closes = line.chars().filter(|ch| *ch == '}').count() as isize;
+    opens - closes
 }
 
 /// Enforce that library source files do not contain raw `println!` / `eprintln!` /
@@ -2561,10 +2627,7 @@ fn file_has_print_allow(lines: &[String]) -> bool {
 /// in `ci/print_in_lib_baseline.txt`; the check fails if the current count exceeds it.
 fn cmd_check_print_in_lib(repo_root: &Path) -> Result<i32> {
     let print_re = Regex::new(r"(println!|eprintln!|print!\(|eprint!\()")?;
-    let comment_re = Regex::new(r"^\s*//")?;
     let debug_attr_re = Regex::new(r"#\[cfg\(debug_assertions\)\]")?;
-    let fn_allow_re =
-        Regex::new(r"#\[allow\(clippy::print_stderr\)|#\[allow\(clippy::print_stdout\)")?;
     let mut offenders = Vec::new();
 
     for path in walk_rust_source_files_for_ci_checks(repo_root)? {
@@ -2581,44 +2644,36 @@ fn cmd_check_print_in_lib(repo_root: &Path) -> Result<i32> {
 
         let test_start = first_cfg_test_line_number(&path).unwrap_or(usize::MAX);
 
-        // Sliding window of the last few non-blank lines seen, used for context checks.
-        // We use this to detect `#[cfg(debug_assertions)]` blocks and function-level
-        // `#[allow(clippy::print_*)]` attributes that precede the print macro.
-        let mut recent: std::collections::VecDeque<String> = std::collections::VecDeque::new();
-        const WINDOW: usize = 6;
+        let mut debug_assertions_scope = PrintAllowScope::default();
+        let mut print_allow_scope = PrintAllowScope::default();
 
         for (index, line) in lines.iter().enumerate() {
             let line_no = index + 1;
             if line_no >= test_start {
                 break;
             }
-            if comment_re.is_match(line) {
-                if !line.trim().is_empty() {
-                    recent.push_back(line.clone());
-                    if recent.len() > WINDOW {
-                        recent.pop_front();
-                    }
-                }
+
+            if debug_attr_re.is_match(line) {
+                debug_assertions_scope.note_attribute();
+            }
+            if line_has_outer_print_allow_attr(line) {
+                print_allow_scope.note_attribute();
+            }
+
+            if line_is_whole_line_comment(line) {
                 continue;
             }
 
             if print_re.is_match(line) {
-                // Allow if any line in the recent window is a debug_assertions cfg
-                // (debug-only guardrail blocks) or a function-level allow attribute.
-                let context_allows = recent
-                    .iter()
-                    .any(|ctx| debug_attr_re.is_match(ctx) || fn_allow_re.is_match(ctx));
-                if !context_allows {
+                if !debug_assertions_scope.allows_current_line()
+                    && !print_allow_scope.allows_current_line()
+                {
                     offenders.push(format!("{rel}:{line_no}:{}", line.trim()));
                 }
             }
 
-            if !line.trim().is_empty() {
-                recent.push_back(line.clone());
-                if recent.len() > WINDOW {
-                    recent.pop_front();
-                }
-            }
+            debug_assertions_scope.observe_line(line);
+            print_allow_scope.observe_line(line);
         }
     }
 
