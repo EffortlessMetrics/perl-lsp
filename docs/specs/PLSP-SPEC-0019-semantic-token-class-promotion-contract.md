@@ -94,8 +94,13 @@ Each promoted or traced class must define:
 - receipt sources
 - claim boundary
 
-The current registry is advisory until a dedicated validator lands, but PRs
-that touch semantic-token class behavior must keep the registry and status
+The registry is checked by:
+
+```bash
+cargo xtask check-semantic-token-classes
+```
+
+PRs that touch semantic-token class behavior must keep the registry and status
 claims in agreement.
 
 ## Provider Rules
@@ -161,6 +166,7 @@ A semantic-token PR satisfies this spec when:
 Docs-only changes to this spec or policy may use:
 
 ```bash
+cargo xtask check-semantic-token-classes
 cargo xtask check-provider-confidence-matrix
 cargo xtask check-support-claims
 cargo xtask check-provider-promotion-ledger
@@ -172,22 +178,16 @@ git diff --check
 Class-behavior PRs must add or update focused semantic-token runtime and shadow
 receipts for the touched class.
 
-## Future Validator
+## Validator Contract
 
-A future validator may be exposed as:
-
-```bash
-cargo xtask check-semantic-token-classes
-```
-
-That validator should check:
+The validator checks:
 
 - every live compiler-token class has a policy row
 - every policy row has receipt sources
 - every `partial_live_trace` class requires exact live-token match
 - every current row is output-neutral unless explicitly reviewed otherwise
-- blocker names are drawn from the provider promotion ledger blocker registry
-- status docs and policy do not disagree on promoted/traced classes
+- blocker names are drawn from the provider promotion ledger blocker registry,
+  plus the semantic-token-local `unmatched_span` blocker
 
 ## Non-goals
 
