@@ -860,9 +860,15 @@ impl<'a> Parser<'a> {
                             // Also applies to optional-arg builtins (defined, length, ord, etc.)
                             // that implicitly use $_ when no explicit argument is given, so that
                             // `defined && ...`, `length > 0`, `ord >= 32` parse correctly.
+                            let next_is_binary_operator =
+                                self.peek_kind().is_some_and(Self::is_binary_operator);
+                            let optional_arg_has_explicit_sub_arg =
+                                Self::is_optional_arg_builtin(bare_name)
+                                    && self.is_explicit_sub_sigil_argument_start();
                             let is_nullary_without_args = (Self::is_nullary_builtin(bare_name)
-                                || Self::is_optional_arg_builtin(bare_name))
-                                && self.peek_kind().is_some_and(Self::is_binary_operator);
+                                || (Self::is_optional_arg_builtin(bare_name)
+                                    && !optional_arg_has_explicit_sub_arg))
+                                && next_is_binary_operator;
 
                             // When a builtin is followed by a comma, it should be treated
                             // as having no arguments.  The comma belongs to an enclosing
@@ -1110,6 +1116,11 @@ impl<'a> Parser<'a> {
                                         args.push(self.parse_assignment_or_declaration()?);
                                     }
 
+                                    while self.should_continue_bare_call_after_qualified_arg(&args)
+                                    {
+                                        args.push(self.parse_assignment_or_declaration()?);
+                                    }
+
                                     // Special case: print/say/printf/exec/send with indirect object.
                                     // `print $fh $msg` / `send $sock $msg` — first arg is the
                                     // filehandle/socket (no comma before remaining args).
@@ -1164,6 +1175,12 @@ impl<'a> Parser<'a> {
                                         self.peek_kind(),
                                         Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
                                     ) {
+                                        if self
+                                            .consume_bare_lvalue_assignment_separator(bare_name)?
+                                        {
+                                            break;
+                                        }
+
                                         self.consume_token()?;
                                         if self.is_at_statement_end() {
                                             break;
@@ -1339,45 +1356,77 @@ impl<'a> Parser<'a> {
     }
 
     /// Attempt to parse a keyword or word operator (`not`, `and`, `or`, `xor`,
-    /// `do`, `eval`, `cmp`) as a bareword hash key when it appears directly
-    /// before `}`.
+    /// `do`, `eval`, `cmp`, etc.) as a bareword hash key when it appears directly
+    /// before `}` or as part of a comma-separated hash slice.
     ///
     /// Returns `Some(Node)` if the current token is a keyword/operator followed
-    /// by `}`, otherwise returns `None` to fall through to general expression
-    /// parsing.
+    /// by `}` or `,`, otherwise returns `None` to fall through to general
+    /// expression parsing.
     fn try_parse_keyword_bareword_key(&mut self) -> ParseResult<Option<Node>> {
-        let Some(kind) = self.peek_kind() else {
+        if !self.peek_is_keyword_bareword_key() {
             return Ok(None);
+        }
+
+        let first = self.consume_as_bareword_identifier()?;
+        let start = first.location.start;
+
+        if self.peek_kind() != Some(TokenKind::Comma) {
+            return Ok(Some(first));
+        }
+
+        let mut elements = vec![first];
+        while self.peek_kind() == Some(TokenKind::Comma) {
+            self.consume_token()?; // consume `,`
+            if self.peek_kind() == Some(TokenKind::RightBrace) {
+                break;
+            }
+
+            if self.peek_is_keyword_bareword_key() {
+                elements.push(self.consume_as_bareword_identifier()?);
+            } else {
+                elements.push(self.parse_assignment()?);
+            }
+        }
+
+        let end = elements.last().map(|n| n.location.end).unwrap_or(start);
+        Ok(Some(Node::new(NodeKind::ArrayLiteral { elements }, SourceLocation { start, end })))
+    }
+
+    fn peek_is_keyword_bareword_key(&mut self) -> bool {
+        let Ok(first) = self.tokens.peek() else {
+            return false;
         };
 
-        let is_simple_keyword_key = matches!(
-            kind,
+        let is_keyword_key = matches!(
+            first.kind,
             TokenKind::WordNot
                 | TokenKind::WordAnd
                 | TokenKind::WordOr
                 | TokenKind::WordXor
                 | TokenKind::Do
                 | TokenKind::Eval
+                | TokenKind::Local
+                | TokenKind::Try
+                | TokenKind::Defer
                 | TokenKind::StringCompare
-        );
+        ) || matches!(first.text.as_ref(), "tie" | "untie");
 
-        if !is_simple_keyword_key {
-            return Ok(None);
+        if !is_keyword_key {
+            return false;
         }
 
-        let Ok(second) = self.tokens.peek_second() else {
-            return Ok(None);
-        };
+        self.tokens
+            .peek_second()
+            .ok()
+            .is_some_and(|second| matches!(second.kind, TokenKind::RightBrace | TokenKind::Comma))
+    }
 
-        if second.kind != TokenKind::RightBrace {
-            return Ok(None);
-        }
-
+    fn consume_as_bareword_identifier(&mut self) -> ParseResult<Node> {
         let token = self.tokens.next()?;
-        Ok(Some(Node::new(
+        Ok(Node::new(
             NodeKind::Identifier { name: token.text.to_string() },
             SourceLocation { start: token.start, end: token.end },
-        )))
+        ))
     }
 
     /// Attempt to parse a quote-operator name (`m`, `s`, `q`, `qq`, `qw`, `qr`,

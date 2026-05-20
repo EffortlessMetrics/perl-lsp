@@ -146,7 +146,7 @@ fn test_timeout_profiles_are_appropriate() {
         standard >= std::time::Duration::from_secs(1),
         "Standard timeout should be at least 1s"
     );
-    assert!(stress <= std::time::Duration::from_secs(120), "Stress timeout should be at most 120s");
+    assert!(stress <= std::time::Duration::from_mins(2), "Stress timeout should be at most 120s");
 }
 
 /// Test that CI environment detection works
@@ -173,7 +173,7 @@ fn test_adaptive_timeout_scaling() {
 
     // Timeout should be reasonable
     assert!(timeout >= std::time::Duration::from_secs(2), "Timeout should be at least 2s");
-    assert!(timeout <= std::time::Duration::from_secs(60), "Timeout should be at most 60s");
+    assert!(timeout <= std::time::Duration::from_mins(1), "Timeout should be at most 60s");
 
     // In CI, timeout should be longer
     if env.is_ci {

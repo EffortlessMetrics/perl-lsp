@@ -25,6 +25,7 @@ mod hierarchy;
 mod hover;
 mod mason;
 mod misc;
+mod missing_module_lookup;
 mod moniker;
 mod navigation;
 mod references;
@@ -33,6 +34,7 @@ mod semantic_tokens;
 mod streaming;
 mod symbols;
 mod virtual_content;
+mod workspace_trust_report;
 
 #[cfg(test)]
 mod navigation_runtime_quality_tests;

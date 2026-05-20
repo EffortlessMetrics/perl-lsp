@@ -350,7 +350,7 @@ impl LspLimits {
         Self {
             max_indexed_files: 50_000,
             max_total_symbols: 2_000_000,
-            workspace_scan_deadline: Duration::from_secs(120),
+            workspace_scan_deadline: Duration::from_mins(2),
             memory_budget: MemoryBudget::large_workspace(),
             ..Default::default()
         }

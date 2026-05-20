@@ -1,4 +1,5 @@
 use perl_pod::{extract_pod, extract_pod_from_file};
+use std::io::Write as _;
 use std::path::Path;
 
 #[test]
@@ -544,6 +545,41 @@ fn link_target_with_unicode_module_name_is_percent_encoded() {
 }
 
 #[test]
+fn e_format_code_decodes_numeric_codepoints() -> Result<(), Box<dyn std::error::Error>> {
+    let doc = extract_pod("=head1 NAME\n\nE<65>E<0x20>E<0x3BB>\n\n=cut\n");
+    assert_eq!(doc.name.as_deref(), Some("A λ"));
+    Ok(())
+}
+
+#[test]
+fn e_format_code_decodes_core_entities() -> Result<(), Box<dyn std::error::Error>> {
+    let doc = extract_pod(
+        "=head1 NAME\n\nUse E<181>, E<0x201E>, E<075>, E<sol>, and E<verbar>.\n\n=cut\n",
+    );
+    assert_eq!(doc.name.as_deref(), Some("Use µ, „, =, /, and |."));
+    Ok(())
+}
+
+#[test]
+fn double_angle_formatting_keeps_angle_operators() -> Result<(), Box<dyn std::error::Error>> {
+    let doc = extract_pod("=head2 compare\n\nUse C<< $left <=> $right >>.\n\n=cut\n");
+    assert_eq!(doc.methods.get("compare").map(String::as_str), Some("Use $left <=> $right."));
+    Ok(())
+}
+
+#[test]
+fn double_angle_links_render_markdown() -> Result<(), Box<dyn std::error::Error>> {
+    let doc = extract_pod(
+        "=head1 DESCRIPTION\n\nSee L<< the wanted callback|File::Find/The wanted function >>.\n\n=cut\n",
+    );
+    assert_eq!(
+        doc.description.as_deref(),
+        Some("See [the wanted callback](perl-module://File::Find/The%20wanted%20function).")
+    );
+    Ok(())
+}
+
+#[test]
 fn multiple_pod_blocks() {
     let source = r#"
 package Multi;
@@ -569,4 +605,351 @@ sub run { }
     let doc = extract_pod(source);
     assert_eq!(doc.name.as_deref(), Some("Multi - Multiple POD blocks"));
     assert!(doc.methods.contains_key("run"));
+}
+
+// ── New coverage gap tests ────────────────────────────────────────────────
+
+/// `PodDoc::is_empty()` returns `false` when the doc has content.
+/// Exercises the `False` branches of the short-circuit `&&` chain (lines 31-33).
+#[test]
+fn is_empty_returns_false_when_doc_has_content() {
+    let doc = extract_pod("=head1 NAME\n\nFoo - something\n\n=cut\n");
+    assert!(!doc.is_empty(), "doc with a name should not be empty");
+}
+
+/// `=begin` as the very first directive triggers `in_pod` (line 74 True branch).
+/// Without this, POD mode never starts and the body would be skipped.
+#[test]
+fn begin_directive_starts_pod_mode() {
+    let source = "=begin pod\n\n=head1 NAME\n\nBegin::Module - started with =begin\n\n=cut\n";
+    let doc = extract_pod(source);
+    assert_eq!(
+        doc.name.as_deref(),
+        Some("Begin::Module - started with =begin"),
+        "=begin should initiate POD mode so subsequent sections are parsed"
+    );
+}
+
+/// `=for` as the very first directive triggers `in_pod` (line 75 True branch).
+#[test]
+fn for_directive_starts_pod_mode() {
+    let source =
+        "=for html <b>intro</b>\n\n=head1 NAME\n\nFor::Module - started with =for\n\n=cut\n";
+    let doc = extract_pod(source);
+    assert_eq!(doc.name.as_deref(), Some("For::Module - started with =for"));
+}
+
+/// `=item` appearing as the very first content line in a section (body is empty).
+/// Covers the `!body.is_empty()` False branch at line 109 — we should NOT push
+/// an extra newline when the body is still empty.
+#[test]
+fn item_as_first_line_in_section_no_leading_newline() {
+    let source = "=head2 options\n\n=item alpha\n\nFirst item.\n\n=cut\n";
+    let doc = extract_pod(source);
+    let method_doc = doc.methods.get("options").map(String::as_str).unwrap_or("");
+    // The item should appear but must not start with a blank line
+    assert!(method_doc.contains("- alpha"), "item text should be present; got: {method_doc}");
+    assert!(
+        !method_doc.starts_with('\n'),
+        "method doc must not start with a leading newline; got: {method_doc:?}"
+    );
+}
+
+/// `=begin` inside an active POD block hits the skip-directive branch (line 144).
+/// The directive line itself is skipped; subsequent content lines are still accumulated.
+#[test]
+fn begin_directive_line_inside_pod_is_skipped() {
+    // Only the "=begin html" line itself is skipped — the content of the block
+    // continues to accumulate. The directive line ("=begin html") must not
+    // appear verbatim in the output.
+    let source = "=head1 NAME\n\n=begin html\nMy::Module - real name\n=end html\n\n=cut\n";
+    let doc = extract_pod(source);
+    let name = doc.name.as_deref().unwrap_or("");
+    assert!(
+        !name.contains("=begin html"),
+        "the =begin directive line itself should not appear in name; got: {name}"
+    );
+    assert!(
+        name.contains("My::Module - real name"),
+        "content after the =begin line should still be captured; got: {name}"
+    );
+}
+
+/// `=end` inside an active POD block hits the skip-directive branch (line 145).
+#[test]
+fn end_directive_inside_pod_is_skipped() {
+    let source = "=head1 NAME\n\nMy::Module - real\n\n=end\n\n=cut\n";
+    let doc = extract_pod(source);
+    let name = doc.name.as_deref().unwrap_or("");
+    assert!(name.contains("My::Module - real"), "name should be captured before =end; got: {name}");
+    assert!(
+        !name.contains("=end"),
+        "the =end directive line should not appear in name; got: {name}"
+    );
+}
+
+/// `=for` inside an active POD block hits the skip-directive branch (line 146).
+#[test]
+fn for_directive_inside_pod_is_skipped() {
+    let source =
+        "=head1 NAME\n\n=for comment this is a private note\n\nMy::ForModule - the name\n\n=cut\n";
+    let doc = extract_pod(source);
+    let name = doc.name.as_deref().unwrap_or("");
+    assert!(
+        name.contains("My::ForModule - the name"),
+        "text after =for directive should be captured; got: {name}"
+    );
+    assert!(!name.contains("private note"), "=for content should not appear in name; got: {name}");
+}
+
+/// `flush_section` called on a section whose body is empty (line 198-199 True branch).
+/// This happens when two section headers appear back-to-back with no content between them.
+#[test]
+fn flush_section_with_empty_body_is_silently_ignored() {
+    // =head1 NAME immediately followed by =head1 SYNOPSIS — the NAME section has no body
+    let source = "=head1 NAME\n\n=head1 SYNOPSIS\n\nuse Empty::Name;\n\n=cut\n";
+    let doc = extract_pod(source);
+    // NAME should be absent (empty body → flush is a no-op)
+    assert!(doc.name.is_none(), "empty NAME body should produce no name; got: {:?}", doc.name);
+    // SYNOPSIS should still be captured
+    assert!(
+        doc.synopsis.as_deref().is_some_and(|s| s.contains("use Empty::Name")),
+        "synopsis should be captured; got: {:?}",
+        doc.synopsis
+    );
+}
+
+/// `extract_pod_from_file` success path (line 45) — read a real temp file.
+#[test]
+fn extract_pod_from_file_success() -> Result<(), Box<dyn std::error::Error>> {
+    let mut tmp = tempfile::NamedTempFile::new()?;
+    write!(tmp, "=head1 NAME\n\nTempFile::Module - loaded from disk\n\n=cut\n")?;
+    let doc = extract_pod_from_file(tmp.path())?;
+    assert_eq!(doc.name.as_deref(), Some("TempFile::Module - loaded from disk"));
+    Ok(())
+}
+
+/// Unknown `E<>` entity passes through as the entity name (line 373).
+/// e.g. `E<nbsp>` is not in the known set and should return "nbsp".
+#[test]
+fn unknown_e_entity_passes_through_as_text() {
+    let doc = extract_pod("=head1 NAME\n\nA E<nbsp> B\n\n=cut\n");
+    let name = doc.name.as_deref().unwrap_or("");
+    assert_eq!(name, "A nbsp B", "unknown E<> entity should pass through as text; got: {name}");
+}
+
+/// `extract_pod` with a DESCRIPTION section that has body content followed by a
+/// blank line — verifies that `first_paragraph` correctly truncates at the first
+/// blank line after actual content.
+///
+/// Note: the `!result.is_empty()` False branch inside `first_paragraph` (the
+/// "blank line before any content" path) is unreachable via `extract_pod` because
+/// `flush_section` calls `body.trim()` before passing the text to `first_paragraph`,
+/// which eliminates any leading blank lines.  That branch is implicitly dead code
+/// from the public API perspective.
+#[test]
+fn first_paragraph_truncates_at_blank_line() {
+    // Two blank lines appear between the =head1 directive and the actual content.
+    // The body accumulation loop skips them (both body and line are empty), so
+    // first_paragraph receives "Actual first line.\nSecond line." after trim().
+    let source = "=head1 DESCRIPTION\n\n\nActual first line.\nSecond line.\n\nNot in first paragraph.\n\n=cut\n";
+    let doc = extract_pod(source);
+    let desc = doc.description.as_deref().unwrap_or("");
+    assert!(
+        desc.contains("Actual first line."),
+        "first paragraph text should be present; got: {desc}"
+    );
+    assert!(
+        !desc.contains("Not in first paragraph."),
+        "second paragraph should be excluded; got: {desc}"
+    );
+}
+
+/// `=over`/`=back` nesting: multiple overlapping list blocks within a single section.
+/// Verifies that `in_over` toggles correctly across nested/sequential lists.
+#[test]
+fn multiple_sequential_over_back_blocks() {
+    let source = r#"
+=head2 lists
+
+First list:
+
+=over 4
+
+=item one
+
+=item two
+
+=back
+
+Second list:
+
+=over 4
+
+=item three
+
+=back
+
+=cut
+"#;
+    let doc = extract_pod(source);
+    let method_doc = doc.methods.get("lists").map(String::as_str).unwrap_or("");
+    assert!(method_doc.contains("- one"), "first list item; got: {method_doc}");
+    assert!(method_doc.contains("- two"), "second list item; got: {method_doc}");
+    assert!(method_doc.contains("- three"), "third list item in second list; got: {method_doc}");
+}
+
+// --- Tests for formatted =head2 keys (#9380 bug: strip_pod_formatting not applied to heading) ---
+
+/// `=head2 C<new>` should be keyed as `new`, not `C<new>`.
+#[test]
+fn head2_code_formatted_heading_is_stripped() {
+    let source = r#"
+=head2 C<new>
+
+Constructs a new Foo object.
+
+=cut
+"#;
+    let doc = extract_pod(source);
+    assert!(
+        doc.methods.contains_key("new"),
+        "method key should be stripped bare name 'new'; keys: {:?}",
+        doc.methods.keys().collect::<Vec<_>>()
+    );
+    assert!(!doc.methods.contains_key("C<new>"), "method key must NOT be the raw 'C<new>' string");
+}
+
+/// `=head2 B<bold_method>` should strip bold markup.
+#[test]
+fn head2_bold_formatted_heading_is_stripped() {
+    let source = "=head2 B<bold_method>\n\nDoes something bold.\n\n=cut\n";
+    let doc = extract_pod(source);
+    assert!(
+        doc.methods.contains_key("bold_method"),
+        "bold markup should be stripped; keys: {:?}",
+        doc.methods.keys().collect::<Vec<_>>()
+    );
+}
+
+/// `=head2 I<italic_name>` should strip italic markup.
+#[test]
+fn head2_italic_formatted_heading_is_stripped() {
+    let source = "=head2 I<some_method>\n\nItalic method docs.\n\n=cut\n";
+    let doc = extract_pod(source);
+    assert!(
+        doc.methods.contains_key("some_method"),
+        "italic markup should be stripped; keys: {:?}",
+        doc.methods.keys().collect::<Vec<_>>()
+    );
+}
+
+/// A plain unformatted `=head2 plain` heading still works after the refactor.
+#[test]
+fn head2_plain_heading_key_unchanged() {
+    let source = "=head2 plain_method\n\nPlain docs.\n\n=cut\n";
+    let doc = extract_pod(source);
+    assert!(
+        doc.methods.contains_key("plain_method"),
+        "plain heading should still work; keys: {:?}",
+        doc.methods.keys().collect::<Vec<_>>()
+    );
+}
+
+/// `=head2 C<new>` body content is still accessible after key normalization.
+#[test]
+fn head2_formatted_heading_body_preserved() {
+    let source = "=head2 C<new>\n\nConstructs a new Foo object.\n\n=cut\n";
+    let doc = extract_pod(source);
+    let body = doc.methods.get("new").map(String::as_str).unwrap_or("");
+    assert!(
+        body.contains("Constructs"),
+        "body text should be preserved after key normalization; got: {body}"
+    );
+}
+
+#[test]
+fn begin_for_and_end_directives_do_not_pollute_extracted_sections() {
+    let source = r#"
+=begin html
+
+<p>This renderer-specific block is ignored.</p>
+
+=end html
+
+=for comment This single-paragraph directive is ignored too.
+
+=head1 NAME
+
+Directive::Clean - real docs
+
+=cut
+"#;
+
+    let doc = extract_pod(source);
+
+    assert_eq!(doc.name.as_deref(), Some("Directive::Clean - real docs"));
+    assert!(doc.description.is_none());
+}
+
+#[test]
+fn list_items_without_active_section_do_not_create_documentation() {
+    let source = r#"
+=over 4
+
+=item B<ghost>
+
+This item is not under a named POD section.
+
+=back
+
+=cut
+"#;
+
+    let doc = extract_pod(source);
+
+    assert!(doc.is_empty());
+}
+
+#[test]
+fn empty_method_section_is_not_inserted() {
+    let source = r#"
+=head2 empty_method
+
+=head2 documented_method
+
+This method has text.
+
+=cut
+"#;
+
+    let doc = extract_pod(source);
+
+    assert!(!doc.methods.contains_key("empty_method"));
+    assert_eq!(
+        doc.methods.get("documented_method").map(String::as_str),
+        Some("This method has text.")
+    );
+}
+
+#[test]
+fn link_display_text_backslash_is_escaped() {
+    let doc = extract_pod("=head1 NAME\n\nL<C:\\Temp|File::Spec>\n\n=cut\n");
+    let name = doc.name.as_deref().unwrap_or("");
+
+    assert!(
+        name.contains("[C:\\\\Temp](perl-module://File::Spec)"),
+        "expected backslash in display text to be escaped; got: {name}"
+    );
+}
+
+#[test]
+fn link_display_text_strips_nested_formatting_before_escaping() {
+    let doc = extract_pod("=head1 NAME\n\nL<B<[docs]>|File::Path>\n\n=cut\n");
+    let name = doc.name.as_deref().unwrap_or("");
+
+    assert!(
+        name.contains("[\\[docs\\]](perl-module://File::Path)"),
+        "expected nested formatting to be stripped and markdown brackets escaped; got: {name}"
+    );
 }
