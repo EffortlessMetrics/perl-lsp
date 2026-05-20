@@ -11,6 +11,7 @@ Linked ADRs:
 Linked plan: [Real Perl Editor Trust implementation plan](../../plans/real-perl-editor-trust/implementation-plan.md)
 Status impact: support tiers, provider confidence matrix, real editor trust
 dashboard, VS Code command documentation, setup troubleshooting docs
+Schema: [workspace_trust_report.v1.schema.json](../../schemas/workspace_trust_report.v1.schema.json)
 
 ## Current implementation status
 
@@ -22,8 +23,9 @@ existing server and client state, with schema coverage tracked from
 [real_perl_editor_trust_v1.md](../project/status/real_perl_editor_trust_v1.md).
 
 Current setup hints, perldoc/DAP state, launch-configuration classes, and
-module-path boundaries remain report-only. They do not probe Perl, run
-`perldoc`, launch DAP, scan the workspace, or promote setup-health support
+module-path boundaries remain report-only. The payload shape is locked by
+`workspace_trust_report.v1`; neither the report nor the schema may probe Perl,
+run `perldoc`, launch DAP, scan the workspace, or promote setup-health support
 tiers.
 
 ## Contract
