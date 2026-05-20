@@ -1341,8 +1341,17 @@ fn static_method_local_return_fact(method: &str, statements: &[Node]) -> Option<
     let mut package = None;
 
     for statement in &statements[..statements.len().saturating_sub(1)] {
-        if let Some(candidate) = local_return_assignment_package(statement, returned_name) {
-            package = candidate;
+        match local_return_assignment_package(statement, returned_name) {
+            Some(Some(candidate)) => {
+                package = Some(candidate);
+            }
+            Some(None) => {
+                return None;
+            }
+            None if local_return_statement_blocks_static_fact(statement, returned_name) => {
+                return None;
+            }
+            None => {}
         }
     }
 
@@ -1383,6 +1392,46 @@ fn local_return_assignment_package(node: &Node, returned_name: &str) -> Option<O
         }
         _ => None,
     }
+}
+
+fn local_return_statement_blocks_static_fact(node: &Node, returned_name: &str) -> bool {
+    match &node.kind {
+        NodeKind::ExpressionStatement { expression } => {
+            local_return_statement_blocks_static_fact(expression, returned_name)
+        }
+        NodeKind::Assignment { lhs, .. } if variable_name(lhs) == Some(returned_name) => true,
+        NodeKind::Binary { left, .. } if variable_name(left) == Some(returned_name) => true,
+        NodeKind::Block { .. }
+        | NodeKind::Eval { .. }
+        | NodeKind::Do { .. }
+        | NodeKind::Defer { .. }
+        | NodeKind::Try { .. }
+        | NodeKind::If { .. }
+        | NodeKind::While { .. }
+        | NodeKind::For { .. }
+        | NodeKind::Foreach { .. }
+        | NodeKind::Given { .. }
+        | NodeKind::When { .. }
+        | NodeKind::Default { .. }
+        | NodeKind::StatementModifier { .. }
+        | NodeKind::Return { .. }
+        | NodeKind::LoopControl { .. }
+        | NodeKind::Goto { .. } => true,
+        _ => node_mentions_variable(node, returned_name),
+    }
+}
+
+fn node_mentions_variable(node: &Node, name: &str) -> bool {
+    if variable_name(node) == Some(name) {
+        return true;
+    }
+    let mut found = false;
+    node.for_each_child(|child| {
+        if !found && node_mentions_variable(child, name) {
+            found = true;
+        }
+    });
+    found
 }
 
 fn attribute_generates_reader(mode: Option<AccessorType>) -> bool {
