@@ -7,6 +7,7 @@ Linked specs:
 - [PLSP-SPEC-0002](PLSP-SPEC-0002-provider-confidence-receipts.md)
 - [PLSP-SPEC-0012](PLSP-SPEC-0012-user-facing-trust-surfaces.md)
 - [PLSP-SPEC-0015](PLSP-SPEC-0015-real-perl-editor-trust-v1-boundary.md)
+- [PLSP-SPEC-0017](PLSP-SPEC-0017-fact-provenance-and-source-backing.md)
 Linked ADRs:
 - [PLSP-ADR-0002](../adr/PLSP-ADR-0002-confidence-before-cutover.md)
 Linked plan: [Real Perl Editor Trust implementation plan](../../plans/real-perl-editor-trust/implementation-plan.md)
@@ -280,4 +281,3 @@ provider decision using the available evidence. They may not claim that the
 provider is broadly live, broadly compiler-backed, or safe for edit-producing
 behavior unless the provider promotion ledger and support tiers already support
 that claim.
-
