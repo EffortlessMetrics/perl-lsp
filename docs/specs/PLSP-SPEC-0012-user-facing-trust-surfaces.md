@@ -7,6 +7,7 @@ Linked specs:
 - [PLSP-SPEC-0002](PLSP-SPEC-0002-provider-confidence-receipts.md)
 - [PLSP-SPEC-0008](PLSP-SPEC-0008-edit-producing-provider-safety.md)
 - [PLSP-SPEC-0009](PLSP-SPEC-0009-workspace-trust-report.md)
+- [PLSP-SPEC-0016](PLSP-SPEC-0016-provider-decision-receipt-v1.md)
 Linked ADRs:
 - [PLSP-ADR-0002](../adr/PLSP-ADR-0002-confidence-before-cutover.md)
 - [PLSP-ADR-0003](../adr/PLSP-ADR-0003-preview-before-edit.md)
@@ -105,6 +106,9 @@ Acceptance rules:
 Provider decision explanations must explain why the provider acted, fell back,
 blocked, or deferred. They must preserve the provider confidence receipt fields
 defined by [PLSP-SPEC-0002](PLSP-SPEC-0002-provider-confidence-receipts.md).
+The stable v1 receipt shape is defined by
+[PLSP-SPEC-0016](PLSP-SPEC-0016-provider-decision-receipt-v1.md) and
+[schemas/provider_decision.v1.schema.json](../../schemas/provider_decision.v1.schema.json).
 
 If the request supplies a receipt, that receipt is the source of truth. If no
 receipt is available, the command may return a conservative fallback
