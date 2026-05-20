@@ -1685,6 +1685,17 @@ enum NonRustCommand {
         root: Option<PathBuf>,
     },
 
+    /// Validate the non-Rust allowlist/debt TOML schema without walking git.
+    ValidatePolicy {
+        /// Override the default allowlist path (`policy/non-rust-allowlist.toml`).
+        #[arg(long, default_value = "policy/non-rust-allowlist.toml")]
+        allowlist: PathBuf,
+
+        /// Override the default debt path (`policy/non-rust-debt.toml`).
+        #[arg(long, default_value = "policy/non-rust-debt.toml")]
+        debt: PathBuf,
+    },
+
     /// Find non-Rust tooling that should be migrated into Rust-owned surfaces.
     MigrationCandidates {
         /// Output format.
@@ -1702,17 +1713,6 @@ enum NonRustCommand {
         /// Override the workspace root used for `git ls-files`. Test seam only.
         #[arg(long, hide = true)]
         root: Option<PathBuf>,
-    },
-
-    /// Validate the non-Rust allowlist/debt TOML schema without walking git.
-    ValidatePolicy {
-        /// Override the default allowlist path (`policy/non-rust-allowlist.toml`).
-        #[arg(long, default_value = "policy/non-rust-allowlist.toml")]
-        allowlist: PathBuf,
-
-        /// Override the default debt path (`policy/non-rust-debt.toml`).
-        #[arg(long, default_value = "policy/non-rust-debt.toml")]
-        debt: PathBuf,
     },
 }
 
@@ -3302,6 +3302,13 @@ fn main() -> Result<()> {
                     ProposeConfig { output_dir, group_by, root_override },
                 )
             }
+            NonRustCommand::ValidatePolicy { allowlist, debt } => {
+                use tasks::file_policy::ValidateNonRustPolicyConfig;
+                tasks::file_policy::validate_non_rust_policy(ValidateNonRustPolicyConfig {
+                    allowlist_path: allowlist,
+                    debt_path: debt,
+                })
+            }
             NonRustCommand::MigrationCandidates { format, output, limit, root: root_override } => {
                 use tasks::file_policy::{MigrationCandidateFormat, MigrationCandidatesConfig};
                 let root = utils::project_root()?;
@@ -3313,13 +3320,6 @@ fn main() -> Result<()> {
                     &root,
                     MigrationCandidatesConfig { format, output, limit, root_override },
                 )
-            }
-            NonRustCommand::ValidatePolicy { allowlist, debt } => {
-                use tasks::file_policy::ValidateNonRustPolicyConfig;
-                tasks::file_policy::validate_non_rust_policy(ValidateNonRustPolicyConfig {
-                    allowlist_path: allowlist,
-                    debt_path: debt,
-                })
             }
         },
         Commands::CheckFilePolicy { mode, json, allowlist, root: root_override } => {
