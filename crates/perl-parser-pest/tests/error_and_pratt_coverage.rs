@@ -1,4 +1,5 @@
 use perl_parser_pest::error::{ParseErrorKind, ScannerError, UnicodeError};
+use perl_parser_pest::pratt_parser::Associativity;
 use perl_parser_pest::{ParseError, PrattParser};
 use perl_tdd_support::must_err;
 
@@ -98,15 +99,15 @@ fn pratt_operator_table_exposes_precedence_and_associativity()
 
     let assignment = parser.get_operator_info("=").ok_or("expected assignment operator info")?;
     assert_eq!(assignment.precedence.0, 3);
-    assert_eq!(format!("{:?}", assignment.associativity), "Right");
+    assert_eq!(assignment.associativity, Associativity::Right);
 
     let range = parser.get_operator_info("...").ok_or("expected range operator info")?;
     assert_eq!(range.precedence.0, 5);
-    assert_eq!(format!("{:?}", range.associativity), "None");
+    assert_eq!(range.associativity, Associativity::None);
 
     let match_operator = parser.get_operator_info("=~").ok_or("expected match operator info")?;
     assert_eq!(match_operator.precedence.0, 29);
-    assert_eq!(format!("{:?}", match_operator.associativity), "Left");
+    assert_eq!(match_operator.associativity, Associativity::Left);
 
     assert!(parser.get_operator_info("~~not-an-operator~~").is_none());
 
