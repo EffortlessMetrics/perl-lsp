@@ -108,6 +108,14 @@ impl Drop for IndexingGuard {
     }
 }
 
+fn parse_configuration_response_id(value: &Value) -> Option<i64> {
+    if let Some(id) = value.as_i64() {
+        return Some(id);
+    }
+
+    value.as_str().and_then(|raw| raw.parse::<i64>().ok())
+}
+
 impl LspServer {
     /// Request `workspace/configuration` for each workspace folder (if supported).
     pub(crate) fn request_workspace_configuration_for_folders(&self) {
@@ -177,7 +185,7 @@ impl LspServer {
         let Some(params) = params else {
             return;
         };
-        let Some(id) = params.get("id").and_then(|value| value.as_i64()) else {
+        let Some(id) = params.get("id").and_then(parse_configuration_response_id) else {
             return;
         };
 
