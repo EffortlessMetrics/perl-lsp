@@ -2834,8 +2834,8 @@ fn semantic_tokens_runtime_quality_receipt_handles_empty_document() {
             "textDocument": {"uri": empty_uri}
         })))));
 
-    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("semantic_tokens"),);
-    assert_eq!(receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true),);
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("semantic_tokens"));
+    assert_eq!(receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
     // An effectively empty file may produce zero tokens — that is valid.
     let count = receipt.get("live_provider_count").and_then(Value::as_u64).unwrap_or(u64::MAX);
     assert!(
@@ -2855,8 +2855,8 @@ fn semantic_tokens_runtime_quality_receipt_handles_minimal_document() {
             "textDocument": {"uri": minimal_uri}
         })))));
 
-    assert_eq!(receipt.get("shadow_state").and_then(Value::as_str), Some("shadowed"),);
-    assert_eq!(receipt.get("live_pilot_state").and_then(Value::as_str), Some("shadowed"),);
+    assert_eq!(receipt.get("shadow_state").and_then(Value::as_str), Some("shadowed"));
+    assert_eq!(receipt.get("live_pilot_state").and_then(Value::as_str), Some("shadowed"));
     assert!(
         receipt.get("compiler_receipt").map(Value::is_null).unwrap_or(false),
         "compiler_receipt must remain null for minimal document"

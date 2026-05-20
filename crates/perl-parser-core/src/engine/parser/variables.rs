@@ -1385,7 +1385,7 @@ mod code_dereference_tests {
     fn assert_no_errors(code: &str) {
         let ast = parse_program(code);
         let sexp = ast.to_sexp();
-        assert!(!sexp.contains("ERROR"), "Parse of `{}` produced ERROR nodes: {}", code, sexp,);
+        assert!(!sexp.contains("ERROR"), "Parse of `{}` produced ERROR nodes: {}", code, sexp);
     }
 
     #[test]
@@ -1396,7 +1396,7 @@ mod code_dereference_tests {
         let ast = parse_program(code);
         let sexp = ast.to_sexp();
         // Should contain the &{} operator and a function call structure
-        assert!(sexp.contains("&{}"), "Expected &{{}} dereference in sexp, got: {}", sexp,);
+        assert!(sexp.contains("&{}"), "Expected &{{}} dereference in sexp, got: {}", sexp);
     }
 
     #[test]
@@ -1406,8 +1406,8 @@ mod code_dereference_tests {
         assert_no_errors(code);
         let ast = parse_program(code);
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("&{}"), "Expected &{{}} dereference in sexp, got: {}", sexp,);
-        assert!(sexp.contains("arg"), "Expected argument in sexp, got: {}", sexp,);
+        assert!(sexp.contains("&{}"), "Expected &{{}} dereference in sexp, got: {}", sexp);
+        assert!(sexp.contains("arg"), "Expected argument in sexp, got: {}", sexp);
     }
 
     #[test]
@@ -1417,8 +1417,8 @@ mod code_dereference_tests {
         assert_no_errors(code);
         let ast = parse_program(code);
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("&{}"), "Expected &{{}} dereference in sexp, got: {}", sexp,);
-        assert!(sexp.contains("callback"), "Expected 'callback' key in sexp, got: {}", sexp,);
+        assert!(sexp.contains("&{}"), "Expected &{{}} dereference in sexp, got: {}", sexp);
+        assert!(sexp.contains("callback"), "Expected 'callback' key in sexp, got: {}", sexp);
     }
 
     #[test]
@@ -1428,7 +1428,7 @@ mod code_dereference_tests {
         assert_no_errors(code);
         let ast = parse_program(code);
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("call"), "Expected function call in sexp, got: {}", sexp,);
+        assert!(sexp.contains("call"), "Expected function call in sexp, got: {}", sexp);
     }
 
     #[test]
@@ -1449,7 +1449,7 @@ mod code_dereference_tests {
         assert_no_errors(code);
         let ast = parse_program(code);
         let sexp = ast.to_sexp();
-        assert!(sexp.contains("&{}"), "Expected &{{}} dereference in sexp, got: {}", sexp,);
+        assert!(sexp.contains("&{}"), "Expected &{{}} dereference in sexp, got: {}", sexp);
     }
 
     #[test]
@@ -1476,7 +1476,7 @@ mod code_dereference_tests {
                 // First arg is the Unary dereference node (&{$coderef}),
                 // remaining args are the actual arguments (may be combined into
                 // a single list node depending on comma parsing)
-                assert!(!args.is_empty(), "Expected at least 1 arg (the deref node)",);
+                assert!(!args.is_empty(), "Expected at least 1 arg (the deref node)");
                 // First arg should be the Unary &{} dereference
                 assert_eq!(
                     args.first().map(|a| a.kind.kind_name()),

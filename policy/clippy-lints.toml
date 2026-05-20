@@ -776,8 +776,9 @@ status = "active"
 class = "readability"
 reason = "Make durations legible without mental unit conversion."
 
-[[planned]]
+[[lint]]
 name = "clippy::unnecessary_trailing_comma"
 level = "warn"
-activate_when_msrv = "1.95"
+status = "active"
+class = "readability"
 reason = "Keep generated and hand-written format macro calls clean."

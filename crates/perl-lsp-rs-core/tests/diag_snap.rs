@@ -104,7 +104,7 @@ fn snapshot_missing_module_import() {
 #[test]
 fn snapshot_syntax_error_with_follow_on_statement() {
     let source =
-        concat!("use strict;\n", "use warnings;\n", "my $x = ;\n", "my $y = 2;\n", "print $y;\n",);
+        concat!("use strict;\n", "use warnings;\n", "my $x = ;\n", "my $y = 2;\n", "print $y;\n");
     let snapshot = normalize(diagnostics_for(source));
     assert_snapshot!("syntax_error_with_follow_on_statement", snapshot);
 }
