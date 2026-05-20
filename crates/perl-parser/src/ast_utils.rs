@@ -93,7 +93,8 @@ pub fn find_node_at_range(node: &Node, range: (usize, usize)) -> Option<&Node> {
 /// Get indentation at a position.
 #[must_use]
 pub fn get_indent_at(source: &str, pos: usize) -> String {
-    let line_start = source[..pos].rfind('\n').map_or(0, |p| p + 1);
+    let clamped_pos = pos.min(source.len());
+    let line_start = source[..clamped_pos].rfind('\n').map_or(0, |p| p + 1);
     let line = &source[line_start..];
 
     let mut indent = String::new();
@@ -152,5 +153,10 @@ mod tests {
         let src = "if (1) {\n    say 'x';\n}\n";
         let pos = src.find("say").unwrap_or(0);
         assert_eq!(get_indent_at(src, pos), "    ");
+    }
+    #[test]
+    fn get_indent_clamps_out_of_bounds_pos() {
+        let src = "line1\n  line2";
+        assert_eq!(get_indent_at(src, src.len() + 50), "  ");
     }
 }
