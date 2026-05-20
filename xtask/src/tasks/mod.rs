@@ -101,6 +101,7 @@ pub mod review_receipts;
 pub mod ripr_evidence;
 pub mod semantic_scorecard;
 pub mod semantic_shadow_compare;
+pub mod semantic_token_classes;
 pub mod srp_microcrates;
 pub mod swarm_summary;
 pub mod sync_release_docs;

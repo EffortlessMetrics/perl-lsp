@@ -77,6 +77,9 @@ enum Commands {
     /// Validate machine-readable Real Perl Editor Trust provider promotion ledger.
     CheckProviderPromotionLedger,
 
+    /// Validate semantic-token class promotion registry.
+    CheckSemanticTokenClasses,
+
     /// Capture a GitHub PR queue snapshot for disconnected maintainership.
     Queue {
         #[command(subcommand)]
@@ -2501,6 +2504,7 @@ fn main() -> Result<()> {
         Commands::CheckProviderConfidenceMatrix => provider_confidence_matrix::run(),
         Commands::CheckSupportClaims => provider_confidence_matrix::run_support_claims(),
         Commands::CheckProviderPromotionLedger => provider_promotion_ledger::run(),
+        Commands::CheckSemanticTokenClasses => semantic_token_classes::run(),
         Commands::Queue { command } => match command {
             QueueCommand::Snapshot { out, fixture } => queue_snapshot::run_snapshot(out, fixture),
             QueueCommand::Health { receipt, fixture } => {
