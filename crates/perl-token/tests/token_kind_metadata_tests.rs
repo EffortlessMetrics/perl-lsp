@@ -64,7 +64,8 @@ fn canonical_spelling_tables_cover_parser_facing_categories() {
                     "sigil {kind:?} needs canonical spelling metadata"
                 );
             }
-            TokenCategory::Identifier | TokenCategory::Literal | TokenCategory::Special => {}
+            // Required by #[non_exhaustive]: catch any future category variants.
+            _ => {}
         }
     }
 }

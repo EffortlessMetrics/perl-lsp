@@ -1405,6 +1405,59 @@ impl Node {
         self.location.start <= offset && offset < self.location.end
     }
 
+    /// Find the most specific node whose source span contains `offset`.
+    ///
+    /// Returns `None` when `offset` is outside this node. Otherwise, returns this
+    /// node or the deepest descendant whose span contains the offset. This is useful
+    /// for LSP features that need to map a cursor byte offset to the smallest AST
+    /// construct at that position.
+    ///
+    /// The same half-open span semantics as [`Node::contains_offset`] apply: start
+    /// positions are inclusive and end positions are exclusive.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use perl_ast::{Node, NodeKind, SourceLocation};
+    ///
+    /// let left = Node::new(
+    ///     NodeKind::Identifier { name: "left".to_string() },
+    ///     SourceLocation { start: 0, end: 4 },
+    /// );
+    /// let right = Node::new(
+    ///     NodeKind::Number { value: "1".to_string() },
+    ///     SourceLocation { start: 7, end: 8 },
+    /// );
+    /// let expr = Node::new(
+    ///     NodeKind::Binary {
+    ///         op: "+".to_string(),
+    ///         left: Box::new(left),
+    ///         right: Box::new(right),
+    ///     },
+    ///     SourceLocation { start: 0, end: 8 },
+    /// );
+    ///
+    /// assert_eq!(
+    ///     expr.find_deepest_containing_offset(7).map(|node| node.kind.kind_name()),
+    ///     Some("Number"),
+    /// );
+    /// assert_eq!(expr.find_deepest_containing_offset(8), None);
+    /// ```
+    #[inline]
+    pub fn find_deepest_containing_offset(&self, offset: usize) -> Option<&Node> {
+        if !self.contains_offset(offset) {
+            return None;
+        }
+
+        let mut result = self;
+        self.for_each_child(|child| {
+            if let Some(descendant) = child.find_deepest_containing_offset(offset) {
+                result = descendant;
+            }
+        });
+        Some(result)
+    }
+
     /// Returns the byte length of this node's source span.
     ///
     /// Uses saturating subtraction so malformed spans never underflow.

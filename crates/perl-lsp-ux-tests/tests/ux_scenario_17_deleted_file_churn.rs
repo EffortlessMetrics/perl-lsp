@@ -6,14 +6,11 @@
 //! Verifies that a real `workspace/didChangeWatchedFiles` Deleted event removes
 //! stale search results and cross-file definitions from the UX surface.
 
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 use serde_json::Value;
 use serde_json::json;
 use std::time::{Duration, Instant};
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 const MODULE_SOURCE: &str = "\
 package ModuleGone;\n\

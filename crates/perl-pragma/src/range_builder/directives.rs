@@ -22,9 +22,7 @@ pub(super) fn apply_use_directive(
             push_state(range, state, ranges);
         }
         "warnings" => {
-            state.warnings = true;
-            state.disabled_warning_categories.clear();
-            push_state(range, state, ranges);
+            apply_use_warnings(range, args, state, ranges);
         }
         "utf8" => {
             state.utf8 = true;
@@ -146,8 +144,7 @@ fn apply_conditional_use_target(
     match module {
         "strict" => set_strict_categories(state, args, true),
         "warnings" => {
-            state.warnings = true;
-            state.disabled_warning_categories.clear();
+            enable_warnings_categories(args, state);
         }
         "utf8" => state.utf8 = true,
         "encoding" => state.encoding = first_normalized_arg(args),
@@ -219,6 +216,31 @@ fn set_strict_categories(state: &mut PragmaState, args: &[String], enabled: bool
     }
 }
 
+fn apply_use_warnings(
+    range: Range<usize>,
+    args: &[String],
+    state: &mut PragmaState,
+    ranges: &mut Vec<(Range<usize>, PragmaState)>,
+) {
+    enable_warnings_categories(args, state);
+    push_state(range, state, ranges);
+}
+
+fn enable_warnings_categories(args: &[String], state: &mut PragmaState) {
+    state.warnings = true;
+
+    if args.is_empty() {
+        state.disabled_warning_categories.clear();
+        return;
+    }
+
+    for arg in args {
+        for category in pragma_arg_items(arg) {
+            state.disabled_warning_categories.retain(|disabled| disabled != &category);
+        }
+    }
+}
+
 fn apply_no_warnings(
     range: Range<usize>,
     args: &[String],
@@ -248,7 +270,9 @@ fn disable_warnings_categories(args: &[String], state: &mut PragmaState) {
     }
 
     for arg in args {
-        add_disabled_warning_category(state, normalized_pragma_token(arg));
+        for category in pragma_arg_items(arg) {
+            add_disabled_warning_category(state, &category);
+        }
     }
 }
 

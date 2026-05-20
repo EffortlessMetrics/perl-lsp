@@ -12,6 +12,7 @@
 //!   `workspaceFolderUri`.
 
 use anyhow::Result;
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -36,10 +37,6 @@ sub shared_action_4481 {\n\
 \n\
 1;\n\
 ";
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 const CORE_MODULE: &str = "\
 package CoreModule;\n\

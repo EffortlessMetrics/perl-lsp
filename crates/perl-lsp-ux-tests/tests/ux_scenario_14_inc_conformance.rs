@@ -46,13 +46,10 @@
 //! consumers. The test never panics due to a missing binary — it skips with a
 //! clear message.
 
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 use serde_json::json;
 use std::time::Duration;
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 /// Diagnostic code for missing module — PL701.
 const PL701: &str = "PL701";

@@ -637,7 +637,7 @@ fn make_minimal_governance() -> IgnoredTestGovernance {
             max_deviation: 2,
             deviation_threshold_percent: 20.0,
             baseline_date: SystemTime::now(),
-            next_review_date: SystemTime::now() + Duration::from_secs(30 * 24 * 3600),
+            next_review_date: SystemTime::now() + Duration::from_hours(720),
         },
         quality_gates: QualityGates {
             pre_commit: PreCommitValidation {
@@ -679,7 +679,7 @@ fn make_test_metadata_with_reason(reason: &str) -> IgnoredTestMetadata {
         priority: 2,
         ignore_reason: reason.to_string(),
         complexity: ComplexityLevel::Medium,
-        target_timeline: Duration::from_secs(7 * 24 * 3600),
+        target_timeline: Duration::from_hours(168),
         dependencies: vec!["dep_a".to_string()],
         success_criteria: vec![
             "criterion 1".to_string(),
@@ -765,7 +765,7 @@ fn test_quality_score_penalty_for_old_assessment() -> Result<(), Box<dyn std::er
         "This is a sufficiently long ignore reason for testing purposes",
     );
     // Assessed 120 days ago (>90 days threshold)
-    metadata.last_assessed = SystemTime::now() - Duration::from_secs(120 * 24 * 3600);
+    metadata.last_assessed = SystemTime::now() - Duration::from_hours(2880);
 
     let result_old = guardian.validate_new_ignored_test(&metadata);
 
@@ -796,12 +796,12 @@ fn test_quality_score_clamped_to_zero_minimum() -> Result<(), Box<dyn std::error
         priority: 4,
         ignore_reason: "x".to_string(),
         complexity: ComplexityLevel::Critical,
-        target_timeline: Duration::from_secs(3600),
+        target_timeline: Duration::from_hours(1),
         dependencies: vec![],
         success_criteria: vec![],
         workflow_integration: LspWorkflowStage::CrossCutting,
         performance_requirements: None,
-        last_assessed: SystemTime::now() - Duration::from_secs(365 * 24 * 3600),
+        last_assessed: SystemTime::now() - Duration::from_hours(8760),
     };
 
     let result = guardian.validate_new_ignored_test(&metadata);
@@ -904,7 +904,7 @@ fn test_trend_report_stable_trend() -> Result<(), Box<dyn std::error::Error>> {
 
     let now = SystemTime::now();
     // Two data points with very similar values -> stable
-    guardian.set_historical_data(vec![(now - Duration::from_secs(5 * 24 * 3600), 50), (now, 50)]);
+    guardian.set_historical_data(vec![(now - Duration::from_hours(120), 50), (now, 50)]);
     let report = guardian.generate_trend_report();
     assert_eq!(report.trend_direction, TrendDirection::Stable);
     Ok(())

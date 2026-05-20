@@ -31,6 +31,65 @@ fn sigil_mapping_covers_canonical_spellings() {
 }
 
 #[test]
+fn canonical_spelling_covers_fixed_spelling_tables() {
+    for &(spelling, kind) in KEYWORD_SPELLINGS {
+        assert_eq!(kind.canonical_spelling(), Some(spelling), "keyword: {kind:?}");
+    }
+
+    for &(spelling, kind) in OPERATOR_SPELLINGS {
+        assert_eq!(kind.canonical_spelling(), Some(spelling), "operator: {kind:?}");
+    }
+
+    for &(spelling, kind) in DELIMITER_SPELLINGS {
+        assert_eq!(kind.canonical_spelling(), Some(spelling), "delimiter: {kind:?}");
+    }
+
+    for &(spelling, kind) in SIGIL_SPELLINGS {
+        assert_eq!(kind.canonical_spelling(), Some(spelling), "sigil: {kind:?}");
+    }
+}
+
+#[test]
+fn canonical_spelling_is_none_for_value_carrying_tokens() {
+    let value_carrying = [
+        TokenKind::Identifier,
+        TokenKind::Number,
+        TokenKind::String,
+        TokenKind::Regex,
+        TokenKind::Substitution,
+        TokenKind::Transliteration,
+        TokenKind::QuoteSingle,
+        TokenKind::QuoteDouble,
+        TokenKind::QuoteWords,
+        TokenKind::QuoteCommand,
+        TokenKind::HeredocStart,
+        TokenKind::HeredocBody,
+        TokenKind::FormatBody,
+        TokenKind::DataMarker,
+        TokenKind::DataBody,
+        TokenKind::VString,
+        TokenKind::UnknownRest,
+        TokenKind::HeredocDepthLimit,
+        TokenKind::Eof,
+        TokenKind::Unknown,
+    ];
+
+    for kind in value_carrying {
+        assert_eq!(kind.canonical_spelling(), None, "value-carrying token: {kind:?}");
+    }
+}
+
+#[test]
+fn canonical_spelling_preserves_contextual_sigil_kinds() {
+    assert_eq!(TokenKind::Percent.canonical_spelling(), Some("%"));
+    assert_eq!(TokenKind::HashSigil.canonical_spelling(), Some("%"));
+    assert_eq!(TokenKind::BitwiseAnd.canonical_spelling(), Some("&"));
+    assert_eq!(TokenKind::SubSigil.canonical_spelling(), Some("&"));
+    assert_eq!(TokenKind::Star.canonical_spelling(), Some("*"));
+    assert_eq!(TokenKind::GlobSigil.canonical_spelling(), Some("*"));
+}
+
+#[test]
 fn mappings_are_case_sensitive_and_contextual() {
     assert_eq!(TokenKind::from_keyword("My"), None);
     assert_eq!(TokenKind::from_keyword("begin"), None);
