@@ -317,6 +317,18 @@ impl LspServer {
                 "scoped compiler lexical-variable declaration class cutover proof only; lexical variable declarations may count as compiler-token identities only when their source-backed span already matches existing live parser/HIR variable tokens, and no new token output is emitted",
             ));
         }
+        if let Some(candidate) = semantic_token_lexical_variable_use_candidate(&doc.text) {
+            receipts.push(Self::semantic_tokens_class_specific_expansion_receipt(
+                live_provider_result,
+                candidate,
+                "lexical_variable_use",
+                "variable",
+                "matched_existing_live_variable_token",
+                "unmatched_existing_live_variable_token",
+                true,
+                "scoped compiler lexical-variable use class cutover proof only; lexical variable uses may count as compiler-token identities only when their source-backed span already matches existing live parser/HIR variable tokens, and no new token output is emitted",
+            ));
+        }
 
         receipts
     }
@@ -641,6 +653,47 @@ fn semantic_token_lexical_variable_declaration_candidate(
         return None;
     }
 
+    let (name_start, name_end) = lexical_variable_name_after_my_marker(source, marker_start)?;
+
+    let name = &source[name_start..name_end];
+    let span = crate::semantic_tokens::SemanticTokenShadowSpan::from_byte_offsets(
+        source, name_start, name_end,
+    )?;
+
+    Some(crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
+        format!("token:lexical_variable_declaration:{name}:compiler"),
+        ProviderFactSourceKind::CompilerFact,
+        Provenance::SemanticAnalyzer,
+        Confidence::Medium,
+        ProviderFactFreshness::Fresh,
+        span,
+    ))
+}
+
+fn semantic_token_lexical_variable_use_candidate(
+    source: &str,
+) -> Option<crate::semantic_tokens::SemanticTokenShadowCandidate> {
+    let marker_start = source.find("my ")?;
+    let (name_start, name_end) = lexical_variable_use_span_after_declaration(source, marker_start)?;
+    let name = &source[name_start..name_end];
+    let span = crate::semantic_tokens::SemanticTokenShadowSpan::from_byte_offsets(
+        source, name_start, name_end,
+    )?;
+
+    Some(crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
+        format!("token:lexical_variable_use:{name}:compiler"),
+        ProviderFactSourceKind::CompilerFact,
+        Provenance::SemanticAnalyzer,
+        Confidence::Medium,
+        ProviderFactFreshness::Fresh,
+        span,
+    ))
+}
+
+fn lexical_variable_name_after_my_marker(
+    source: &str,
+    marker_start: usize,
+) -> Option<(usize, usize)> {
     let mut name_start = marker_start + "my ".len();
 
     while let Some(ch) = source[name_start..].chars().next() {
@@ -669,19 +722,29 @@ fn semantic_token_lexical_variable_declaration_candidate(
         return None;
     }
 
-    let name = &source[name_start..name_end];
-    let span = crate::semantic_tokens::SemanticTokenShadowSpan::from_byte_offsets(
-        source, name_start, name_end,
-    )?;
+    Some((name_start, name_end))
+}
 
-    Some(crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
-        format!("token:lexical_variable_declaration:{name}:compiler"),
-        ProviderFactSourceKind::CompilerFact,
-        Provenance::SemanticAnalyzer,
-        Confidence::Medium,
-        ProviderFactFreshness::Fresh,
-        span,
-    ))
+fn lexical_variable_use_span_after_declaration(
+    source: &str,
+    marker_start: usize,
+) -> Option<(usize, usize)> {
+    let (name_start, name_end) = lexical_variable_name_after_my_marker(source, marker_start)?;
+    let name = &source[name_start..name_end];
+    let mut search_start = name_end;
+
+    while let Some(relative_start) = source[search_start..].find(name) {
+        let use_start = search_start + relative_start;
+        let use_end = use_start + name.len();
+        let next_is_name_char =
+            source[use_end..].chars().next().is_some_and(is_subroutine_name_char);
+        if !next_is_name_char {
+            return Some((use_start, use_end));
+        }
+        search_start = use_end;
+    }
+
+    None
 }
 
 fn semantic_tokens_live_slice_provider_trace(
@@ -814,6 +877,24 @@ fn semantic_tokens_live_slice_provider_trace(
             source_backed_state: "source_backed_lexical_variable_declaration_live_token_match",
             user_message: "Semantic tokens exposed the source-backed compiler lexical-variable declaration live trace because it matched the existing parser/HIR variable token. No new semantic tokens were emitted.",
             claim_boundary: "only source-backed compiler lexical-variable declaration spans that exactly match existing live parser/HIR variable tokens participate; generated/no-source, stale, dynamic-boundary, low-confidence, fallback, broader variable classes, and unmatched compiler candidates remain blocked, fallback-only, or shadowed",
+        },
+    ) {
+        return trace;
+    }
+
+    let lexical_variable_use_candidate = semantic_token_lexical_variable_use_candidate(source);
+    saw_compiler_token_candidate |= lexical_variable_use_candidate.is_some();
+    if let Some(trace) = semantic_tokens_live_slice_provider_trace_for_candidate(
+        lexical_variable_use_candidate,
+        Some(live_provider_result),
+        live_token_count,
+        provider_action,
+        SemanticTokenLiveSliceTraceSpec {
+            live_token_type: "variable",
+            compiler_token_class: "lexical_variable_use",
+            source_backed_state: "source_backed_lexical_variable_use_live_token_match",
+            user_message: "Semantic tokens exposed the source-backed compiler lexical-variable use live trace because it matched the existing parser/HIR variable token. No new semantic tokens were emitted.",
+            claim_boundary: "only source-backed compiler lexical-variable use spans that exactly match existing live parser/HIR variable tokens participate; generated/no-source, stale, dynamic-boundary, low-confidence, fallback, broader variable classes, and unmatched compiler candidates remain blocked, fallback-only, or shadowed",
         },
     ) {
         return trace;
