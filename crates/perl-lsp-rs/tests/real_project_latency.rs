@@ -29,8 +29,10 @@
 
 mod common;
 
-use common::{initialize_lsp, send_notification, send_request, start_lsp_server};
-use serde_json::{Value, json};
+use common::{
+    drain_until_quiet, initialize_lsp, send_notification, send_request, start_lsp_server,
+};
+use serde_json::{Map, Value, json};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -57,11 +59,26 @@ struct LatencySummary {
     samples: usize,
 }
 
+/// Resource-shape inventory for a representative project fixture.
+#[derive(Debug, Clone)]
+struct ResourceProfile {
+    perl_file_count: usize,
+    source_line_count: usize,
+    source_bytes: usize,
+}
+
+#[derive(Debug, Clone)]
+struct ProjectSourceFile {
+    path: PathBuf,
+    content: String,
+}
+
 /// All 5 metrics for a single project.
 #[derive(Debug)]
 struct ProjectMetrics {
     name: String,
     file_count: usize,
+    resource_profile: ResourceProfile,
     cold_start_to_hover: LatencySummary,
     first_completion: LatencySummary,
     first_goto_definition: LatencySummary,
@@ -153,25 +170,93 @@ fn entry_file_path(fixture: &ProjectFixture) -> PathBuf {
     fixture_path(fixture).join(fixture.entry_file)
 }
 
-/// Count `.pm` and `.pl` files recursively in a directory.
-fn count_perl_files(dir: &Path) -> usize {
-    if !dir.exists() {
-        return 0;
-    }
-    let mut count = 0;
-    if let Ok(entries) = fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                count += count_perl_files(&path);
-            } else if let Some(ext) = path.extension() {
-                if ext == "pm" || ext == "pl" || ext == "t" {
-                    count += 1;
+fn is_perl_source_path(path: &Path) -> bool {
+    path.extension().is_some_and(|ext| ext == "pm" || ext == "pl" || ext == "t")
+}
+
+fn collect_resource_profile(dir: &Path) -> ResourceProfile {
+    let mut profile = ResourceProfile { perl_file_count: 0, source_line_count: 0, source_bytes: 0 };
+    collect_resource_profile_inner(dir, &mut profile);
+    profile
+}
+
+fn collect_resource_profile_inner(dir: &Path, profile: &mut ResourceProfile) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_resource_profile_inner(&path, profile);
+        } else if is_perl_source_path(&path) {
+            profile.perl_file_count += 1;
+            match fs::read_to_string(&path) {
+                Ok(content) => {
+                    profile.source_line_count += content.lines().count();
+                    profile.source_bytes += content.len();
+                }
+                Err(_) => {
+                    if let Ok(metadata) = fs::metadata(&path) {
+                        profile.source_bytes += match usize::try_from(metadata.len()) {
+                            Ok(bytes) => bytes,
+                            Err(_) => usize::MAX.saturating_sub(profile.source_bytes),
+                        };
+                    }
                 }
             }
         }
     }
-    count
+}
+
+fn collect_project_source_files(dir: &Path) -> Vec<ProjectSourceFile> {
+    let mut files = Vec::new();
+    collect_project_source_files_inner(dir, &mut files);
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+    files
+}
+
+fn collect_project_source_files_inner(dir: &Path, files: &mut Vec<ProjectSourceFile>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_project_source_files_inner(&path, files);
+        } else if is_perl_source_path(&path)
+            && let Ok(content) = fs::read_to_string(&path)
+        {
+            files.push(ProjectSourceFile { path, content });
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn best_effort_process_rss_kb(pid: u32) -> Option<u64> {
+    let status = fs::read_to_string(format!("/proc/{pid}/status")).ok()?;
+    let line = status.lines().find(|line| line.starts_with("VmRSS:"))?;
+    line.split_whitespace().nth(1).and_then(|raw| raw.parse::<u64>().ok())
+}
+
+#[cfg(target_os = "windows")]
+fn best_effort_process_rss_kb(pid: u32) -> Option<u64> {
+    let output = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-Command", &format!("(Get-Process -Id {pid}).WorkingSet64")])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8(output.stdout).ok()?;
+    let bytes = stdout.trim().parse::<u64>().ok()?;
+    Some(bytes / 1024)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+fn best_effort_process_rss_kb(_pid: u32) -> Option<u64> {
+    None
 }
 
 /// Compute percentile (0–100) from a sorted sample slice (values in ms).
@@ -496,9 +581,19 @@ fn empty_metric_json() -> Value {
     })
 }
 
+fn empty_resource_profile_json() -> Value {
+    json!({
+        "perl_file_count": Value::Null,
+        "source_line_count": Value::Null,
+        "source_bytes": Value::Null,
+        "rss_memory_state": "not_measured_by_latency_harness"
+    })
+}
+
 fn placeholder_project_json() -> Value {
     json!({
         "file_count": Value::Null,
+        "resource_profile": empty_resource_profile_json(),
         "metrics": {
             "cold_start_to_hover": empty_metric_json(),
             "first_completion": empty_metric_json(),
@@ -506,6 +601,15 @@ fn placeholder_project_json() -> Value {
             "incremental_reparse": empty_metric_json(),
             "workspace_symbol_query": empty_metric_json()
         }
+    })
+}
+
+fn resource_profile_to_json(profile: &ResourceProfile) -> Value {
+    json!({
+        "perl_file_count": profile.perl_file_count,
+        "source_line_count": profile.source_line_count,
+        "source_bytes": profile.source_bytes,
+        "rss_memory_state": "not_measured_by_latency_harness"
     })
 }
 
@@ -550,6 +654,7 @@ fn write_baseline(projects: &[ProjectMetrics]) {
             p.name.clone(),
             json!({
                 "file_count": p.file_count,
+                "resource_profile": resource_profile_to_json(&p.resource_profile),
                 "metrics": metrics
             }),
         );
@@ -622,7 +727,8 @@ fn measure_project(fixture: &ProjectFixture) -> ProjectMetrics {
     let entry_content = read_file_or_empty(&entry);
     assert!(!entry_content.is_empty(), "Fixture entry file is empty or missing: {entry:?}");
 
-    let file_count = count_perl_files(&path);
+    let resource_profile = collect_resource_profile(&path);
+    let file_count = resource_profile.perl_file_count;
     eprintln!("[{name}] measuring (file_count={file_count})", name = fixture.name);
 
     let cold_start = summarise(measure_cold_start_to_hover(fixture, &entry_content));
@@ -634,6 +740,7 @@ fn measure_project(fixture: &ProjectFixture) -> ProjectMetrics {
     ProjectMetrics {
         name: fixture.name.to_string(),
         file_count,
+        resource_profile,
         cold_start_to_hover: cold_start,
         first_completion: completion,
         first_goto_definition: definition,
@@ -715,6 +822,24 @@ fn test_real_project_latency_baseline_schema() {
     for name in &["mojolicious", "dancer2", "catalyst"] {
         assert!(projects.get(name).is_some(), "Baseline missing project '{name}'");
         let proj = &projects[name];
+        if let Some(resource_profile) = proj.get("resource_profile") {
+            assert!(
+                resource_profile.get("perl_file_count").is_some(),
+                "Project '{name}' resource_profile missing perl_file_count"
+            );
+            assert!(
+                resource_profile.get("source_line_count").is_some(),
+                "Project '{name}' resource_profile missing source_line_count"
+            );
+            assert!(
+                resource_profile.get("source_bytes").is_some(),
+                "Project '{name}' resource_profile missing source_bytes"
+            );
+            assert!(
+                resource_profile.get("rss_memory_state").is_some(),
+                "Project '{name}' resource_profile missing rss_memory_state"
+            );
+        }
         let metrics = proj
             .get("metrics")
             .unwrap_or_else(|| panic!("Project '{name}' missing 'metrics' in baseline"));
@@ -735,6 +860,185 @@ fn test_real_project_latency_baseline_schema() {
             assert!(m.get("samples").is_some(), "'{name}.{metric}' missing samples");
         }
     }
+}
+
+#[test]
+fn test_real_project_resource_inventory_receipt() -> Result<(), Box<dyn std::error::Error>> {
+    let fixtures = [&MOJOLICIOUS_FIXTURE, &DANCER2_FIXTURE, &CATALYST_FIXTURE];
+    let mut projects = Map::new();
+
+    for fixture in fixtures {
+        let root = fixture_path(fixture);
+        assert!(
+            root.exists(),
+            "Real project fixture directory missing for resource receipt: {}",
+            root.display()
+        );
+        let profile = collect_resource_profile(&root);
+        assert!(
+            profile.perl_file_count > 0,
+            "Resource receipt for '{}' must include Perl files",
+            fixture.name
+        );
+        assert!(
+            profile.source_line_count >= profile.perl_file_count,
+            "Resource receipt for '{}' must include at least one source line per file",
+            fixture.name
+        );
+        assert!(
+            profile.source_bytes > 0,
+            "Resource receipt for '{}' must include source bytes",
+            fixture.name
+        );
+
+        projects.insert(
+            fixture.name.to_string(),
+            json!({
+                "fixture_dir": fixture.dir,
+                "entry_file": fixture.entry_file,
+                "resource_profile": resource_profile_to_json(&profile),
+            }),
+        );
+    }
+
+    let receipt = json!({
+        "schema_version": 1,
+        "kind": "real_project_resource_inventory",
+        "projects": projects,
+        "memory_profile": {
+            "rss_state": "not_measured_by_this_receipt",
+            "separate_receipt": "docs/project/status/memory_plateau.md"
+        },
+        "claim_boundary": "real-project fixture resource inventory only; RSS plateau and memory ceilings remain separate receipts"
+    });
+
+    let project_count =
+        receipt.get("projects").and_then(Value::as_object).map(Map::len).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "resource inventory receipt missing projects object",
+            )
+        })?;
+    assert_eq!(project_count, fixtures.len(), "resource inventory should cover each fixture");
+    eprintln!("{}", serde_json::to_string_pretty(&receipt)?);
+    Ok(())
+}
+
+#[test]
+#[ignore = "real-workspace memory lane - starts LSP and records best-effort process RSS"]
+fn real_project_memory_resource_receipt() -> Result<(), Box<dyn std::error::Error>> {
+    let fixtures = [&MOJOLICIOUS_FIXTURE, &DANCER2_FIXTURE, &CATALYST_FIXTURE];
+    let mut projects = Map::new();
+
+    for fixture in fixtures {
+        let root = fixture_path(fixture);
+        assert!(
+            root.exists(),
+            "Real project fixture directory missing for memory receipt: {}",
+            root.display()
+        );
+
+        let profile = collect_resource_profile(&root);
+        let source_files = collect_project_source_files(&root);
+        assert!(
+            profile.perl_file_count > 0,
+            "Memory receipt for '{}' must include Perl files",
+            fixture.name
+        );
+        assert_eq!(
+            source_files.len(),
+            profile.perl_file_count,
+            "Memory receipt for '{}' should open every readable Perl fixture file",
+            fixture.name
+        );
+
+        let server = start_lsp_server();
+        initialize_lsp(&server);
+        let pid = { server.process.lock().unwrap_or_else(|e| e.into_inner()).id() };
+        let rss_after_initialize_kb = best_effort_process_rss_kb(pid);
+
+        for (idx, source) in source_files.iter().enumerate() {
+            let version = i32::try_from(idx + 1).unwrap_or(i32::MAX);
+            open_document(&server, &file_uri(&source.path), &source.content);
+            send_notification(
+                &server,
+                json!({
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/didChange",
+                    "params": {
+                        "textDocument": {
+                            "uri": file_uri(&source.path),
+                            "version": version + 1000
+                        },
+                        "contentChanges": [{ "text": source.content }]
+                    }
+                }),
+            );
+        }
+
+        drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(3));
+        let _workspace_symbols = send_request(
+            &server,
+            json!({
+                "jsonrpc": "2.0",
+                "method": "workspace/symbol",
+                "params": { "query": "new" }
+            }),
+        );
+        drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(3));
+
+        let rss_after_project_load_kb = best_effort_process_rss_kb(pid);
+        if let Some(rss_kb) = rss_after_project_load_kb {
+            assert!(rss_kb > 0, "Memory receipt for '{}' measured a zero RSS value", fixture.name);
+        }
+        let rss_growth_kb = match (rss_after_initialize_kb, rss_after_project_load_kb) {
+            (Some(before), Some(after)) => Some(after.saturating_sub(before)),
+            _ => None,
+        };
+        let measurement_state =
+            if rss_after_project_load_kb.is_some() { "measured" } else { "unavailable_on_host" };
+
+        projects.insert(
+            fixture.name.to_string(),
+            json!({
+                "fixture_dir": fixture.dir,
+                "opened_perl_files": source_files.len(),
+                "resource_profile": resource_profile_to_json(&profile),
+                "memory_profile": {
+                    "state": measurement_state,
+                    "metric": "child_process_rss_kb_best_effort",
+                    "rss_kb_after_initialize": rss_after_initialize_kb,
+                    "rss_kb_after_project_load": rss_after_project_load_kb,
+                    "rss_growth_kb_after_project_load": rss_growth_kb,
+                    "operations": [
+                        "initialize",
+                        "didOpen every readable Perl fixture file",
+                        "didChange same content for freshness accounting",
+                        "workspace/symbol query"
+                    ]
+                }
+            }),
+        );
+    }
+
+    let receipt = json!({
+        "schema_version": 1,
+        "kind": "real_project_memory_resource_receipt",
+        "projects": projects,
+        "claim_boundary": "best-effort real-project fixture RSS/resource receipt only; no heap ceiling, plateau threshold, or provider cutover claim",
+        "separate_plateau_receipt": "docs/project/status/memory_plateau.md"
+    });
+
+    let project_count =
+        receipt.get("projects").and_then(Value::as_object).map(Map::len).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "memory resource receipt missing projects object",
+            )
+        })?;
+    assert_eq!(project_count, fixtures.len(), "memory receipt should cover each fixture");
+    eprintln!("{}", serde_json::to_string_pretty(&receipt)?);
+    Ok(())
 }
 
 /// Latency benchmark: Mojolicious skeleton.

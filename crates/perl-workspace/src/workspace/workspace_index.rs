@@ -2900,6 +2900,16 @@ impl WorkspaceIndex {
     /// let _results = index.search_symbols("example");
     /// ```
     pub fn search_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
+        self.search_source_symbols(query)
+    }
+
+    /// Search only source-backed syntax symbols from the workspace index.
+    ///
+    /// Generated/framework members are excluded. Use this when a caller needs
+    /// to preserve the historical source-backed live slice for trust receipts
+    /// or fallback paths.
+    pub fn search_source_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
+        let query = query.trim();
         let query_lower = query.to_lowercase();
         let files = self.files.read();
         let mut results = Vec::new();
@@ -2917,6 +2927,117 @@ impl WorkspaceIndex {
             }
         }
         results
+    }
+
+    /// Search labeled generated/framework members backed by semantic source anchors.
+    ///
+    /// This is a narrow workspace-symbol pilot: returned symbols are explicitly
+    /// labeled as generated/framework members and point at the source declaration
+    /// that produced the member, not at an exact generated method body.
+    pub fn search_generated_workspace_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
+        let query = query.trim();
+        if query.is_empty() {
+            return Vec::new();
+        }
+
+        let query_lower = query.to_lowercase();
+        let source_backed_qualified_names = self.source_backed_qualified_names();
+        let shards = self.fact_shards.read();
+        let mut results = Vec::new();
+
+        for shard in shards.values() {
+            for entity in &shard.entities {
+                if entity.kind != EntityKind::GeneratedMember {
+                    continue;
+                }
+                if !is_framework_generated_member_entity(entity) {
+                    continue;
+                }
+                if source_backed_qualified_names.contains(&entity.canonical_name) {
+                    continue;
+                }
+                let Some((container_name, bare_name)) =
+                    split_qualified_symbol_name(&entity.canonical_name)
+                else {
+                    continue;
+                };
+                if !bare_name.to_lowercase().contains(&query_lower)
+                    && !entity.canonical_name.to_lowercase().contains(&query_lower)
+                {
+                    continue;
+                }
+                let Some(anchor_id) = entity.anchor_id else {
+                    continue;
+                };
+                let Some(range) = self.generated_member_anchor_range(shard, anchor_id) else {
+                    continue;
+                };
+
+                results.push(WorkspaceSymbol {
+                    name: format!("{bare_name} [generated/framework]"),
+                    kind: SymbolKind::Method,
+                    uri: shard.source_uri.clone(),
+                    range,
+                    qualified_name: Some(entity.canonical_name.clone()),
+                    documentation: Some(
+                        "Generated/framework member; virtual symbol anchored to source declaration"
+                            .to_string(),
+                    ),
+                    container_name: Some(format!("{container_name} [generated/framework]")),
+                    has_body: false,
+                    workspace_folder_uri: self.determine_folder_uri(&shard.source_uri),
+                });
+            }
+        }
+
+        sort_workspace_symbols(&mut results);
+        results
+    }
+
+    fn source_backed_qualified_names(&self) -> HashSet<String> {
+        let files = self.files.read();
+        let mut qualified_names = HashSet::new();
+        for file_index in files.values() {
+            for symbol in &file_index.symbols {
+                if let Some(name) = &symbol.qualified_name {
+                    qualified_names.insert(name.clone());
+                    continue;
+                }
+                if let Some(container) = &symbol.container_name {
+                    qualified_names.insert(format!("{container}::{}", symbol.name));
+                }
+            }
+        }
+        qualified_names
+    }
+
+    fn generated_member_anchor_range(
+        &self,
+        shard: &FileFactShard,
+        anchor_id: AnchorId,
+    ) -> Option<Range> {
+        let anchor = shard
+            .anchors
+            .iter()
+            .find(|anchor| anchor.id == anchor_id && anchor.file_id == shard.file_id)?;
+        if anchor.provenance != Provenance::FrameworkSynthesis
+            || anchor.confidence != Confidence::Medium
+        {
+            return None;
+        }
+        if anchor.span_end_byte <= anchor.span_start_byte {
+            return None;
+        }
+
+        let doc = self.document_store.get(&shard.source_uri)?;
+        let start = usize::try_from(anchor.span_start_byte).ok()?;
+        let end = usize::try_from(anchor.span_end_byte).ok()?;
+        doc.text.get(start..end)?;
+        let ((start_line, start_col), (end_line, end_col)) = doc.line_index.range(start, end);
+        Some(Range {
+            start: Position { byte: start, line: start_line, column: start_col },
+            end: Position { byte: end, line: end_line, column: end_col },
+        })
     }
 
     /// Find symbols by query (alias for search_symbols for compatibility)
@@ -3969,6 +4090,30 @@ fn symbol_decl_name(kind: &SymbolKind, name: &str) -> String {
     }
 }
 
+fn split_qualified_symbol_name(canonical_name: &str) -> Option<(&str, &str)> {
+    let (container, bare_name) = canonical_name.rsplit_once("::")?;
+    if container.is_empty() || bare_name.is_empty() {
+        return None;
+    }
+    Some((container, bare_name))
+}
+
+fn is_framework_generated_member_entity(entity: &EntityFact) -> bool {
+    entity.provenance == Provenance::FrameworkSynthesis && entity.confidence == Confidence::Medium
+}
+
+fn sort_workspace_symbols(symbols: &mut [WorkspaceSymbol]) {
+    symbols.sort_by(|left, right| {
+        left.name
+            .cmp(&right.name)
+            .then_with(|| left.uri.cmp(&right.uri))
+            .then_with(|| left.range.start.line.cmp(&right.range.start.line))
+            .then_with(|| left.range.start.column.cmp(&right.range.start.column))
+            .then_with(|| left.range.end.line.cmp(&right.range.end.line))
+            .then_with(|| left.range.end.column.cmp(&right.range.end.column))
+    });
+}
+
 /// Extract bare module names from the argument list of a `use parent` / `use base` statement.
 ///
 /// The `args` field of `NodeKind::Use` stores raw argument strings as the parser captured them.
@@ -4471,6 +4616,118 @@ use constant {
     }
 
     #[test]
+    fn search_symbols_returns_labeled_generated_framework_members()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///lib/Generated/Pilot.pm";
+        let code = r#"package Generated::Pilot;
+use Moo;
+has display_name => (is => 'rw');
+1;
+"#;
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let source_symbols = index.search_source_symbols("display_name");
+        assert!(
+            source_symbols.is_empty(),
+            "generated framework members must not enter the exact source-symbol slice"
+        );
+        let trimmed_source_symbols = index.search_source_symbols("  display_name  ");
+        assert!(
+            trimmed_source_symbols.is_empty(),
+            "trimmed generated framework member queries must not enter the exact source-symbol slice"
+        );
+
+        let generated_symbols = index.search_generated_workspace_symbols("display_name");
+        assert_eq!(generated_symbols.len(), 1);
+        let trimmed_generated_symbols =
+            index.search_generated_workspace_symbols("  display_name  ");
+        assert_eq!(trimmed_generated_symbols.len(), 1);
+        assert_eq!(trimmed_generated_symbols[0].name, "display_name [generated/framework]");
+        assert!(index.search_generated_workspace_symbols("   ").is_empty());
+        let symbol = &generated_symbols[0];
+        assert_eq!(symbol.name, "display_name [generated/framework]");
+        assert_eq!(symbol.kind, SymbolKind::Method);
+        assert_eq!(symbol.qualified_name.as_deref(), Some("Generated::Pilot::display_name"));
+        assert_eq!(
+            symbol.container_name.as_deref(),
+            Some("Generated::Pilot [generated/framework]")
+        );
+        assert!(!symbol.has_body);
+        assert_eq!(symbol.uri, uri);
+        assert!(
+            symbol.range.end.byte > symbol.range.start.byte,
+            "generated symbol must be anchored to the source framework declaration"
+        );
+
+        let live_symbols = index.search_symbols("display_name");
+        assert!(
+            live_symbols.is_empty(),
+            "general workspace index search must stay source-backed; generated pilot symbols are opt-in"
+        );
+
+        {
+            let mut shards = index.fact_shards.write();
+            let shard = shards.values_mut().next().ok_or("missing generated-member shard")?;
+            let entity = shard
+                .entities
+                .iter_mut()
+                .find(|entity| entity.canonical_name == "Generated::Pilot::display_name")
+                .ok_or("missing generated member entity")?;
+            entity.provenance = Provenance::ExactAst;
+        }
+        let non_framework_symbols = index.search_generated_workspace_symbols("display_name");
+        assert!(
+            non_framework_symbols.is_empty(),
+            "generated workspace-symbol pilot must require framework-synthesis provenance"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn search_symbols_returns_labeled_predicate_generated_members()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///lib/Generated/PredicatePilot.pm";
+        let code = r#"package Generated::PredicatePilot;
+use Moo;
+has status => (is => 'rw', predicate => 1);
+1;
+"#;
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let source_symbols = index.search_source_symbols("has_status");
+        assert!(
+            source_symbols.is_empty(),
+            "predicate generated members must not enter the exact source-symbol slice"
+        );
+
+        let generated_symbols = index.search_generated_workspace_symbols("has_status");
+        assert_eq!(generated_symbols.len(), 1);
+        let symbol = &generated_symbols[0];
+        assert_eq!(symbol.name, "has_status [generated/framework]");
+        assert_eq!(symbol.kind, SymbolKind::Method);
+        assert_eq!(symbol.qualified_name.as_deref(), Some("Generated::PredicatePilot::has_status"));
+        assert_eq!(
+            symbol.container_name.as_deref(),
+            Some("Generated::PredicatePilot [generated/framework]")
+        );
+        assert!(!symbol.has_body);
+        assert_eq!(symbol.uri, uri);
+        assert!(
+            symbol.range.end.byte > symbol.range.start.byte,
+            "predicate generated symbol must be anchored to the source framework declaration"
+        );
+
+        let live_symbols = index.search_symbols("has_status");
+        assert!(
+            live_symbols.is_empty(),
+            "general workspace index search must stay source-backed for predicate generated members"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_extract_constant_names_accepts_quoted_hash_form() {
         let names = extract_constant_names_from_use_args(&[
             "{".to_string(),
@@ -4592,11 +4849,10 @@ my $var = 42;
         must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
 
         let symbols = index.file_symbols(uri);
-        let pkg_sym = symbols.iter().find(|s| s.name == "Foo" && s.kind == SymbolKind::Package);
-        assert!(pkg_sym.is_some(), "Package symbol not found");
+        let pkg_sym =
+            must_some(symbols.iter().find(|s| s.name == "Foo" && s.kind == SymbolKind::Package));
         assert_eq!(
-            pkg_sym.unwrap().container_name,
-            None,
+            pkg_sym.container_name, None,
             "Package symbol must not carry a container (was 'main')"
         );
     }
@@ -4613,13 +4869,8 @@ my $var = 42;
         must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
 
         let symbols = index.file_symbols(uri);
-        let var_sym = symbols.iter().find(|s| s.name == "$x" && s.kind.is_variable());
-        assert!(var_sym.is_some(), "$x variable not indexed");
-        assert_eq!(
-            var_sym.unwrap().qualified_name,
-            None,
-            "my variable must not have a qualified_name"
-        );
+        let var_sym = must_some(symbols.iter().find(|s| s.name == "$x" && s.kind.is_variable()));
+        assert_eq!(var_sym.qualified_name, None, "my variable must not have a qualified_name");
 
         // `find_definition("Foo::x")` must not accidentally resolve to a lexical variable.
         assert!(

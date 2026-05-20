@@ -42,7 +42,7 @@ fn test_ignored_test_guardian_validation() -> TestResult {
             max_deviation: 5,
             deviation_threshold_percent: 10.0,
             baseline_date: SystemTime::now(),
-            next_review_date: SystemTime::now() + Duration::from_secs(30 * 24 * 3600),
+            next_review_date: SystemTime::now() + Duration::from_hours(720),
         },
         quality_gates: QualityGates {
             pre_commit: PreCommitValidation {
@@ -91,7 +91,7 @@ fn test_ignored_test_guardian_validation() -> TestResult {
         ignore_reason: "Requires implementation of enhanced error handling system (issue #144)"
             .to_string(),
         complexity: ComplexityLevel::Medium,
-        target_timeline: Duration::from_secs(14 * 24 * 3600), // 2 weeks
+        target_timeline: Duration::from_hours(336), // 2 weeks
         dependencies: vec!["error_context_system".to_string()],
         success_criteria: vec![
             "Error responses include enhanced context".to_string(),
@@ -129,7 +129,7 @@ fn test_ignored_test_guardian_validation() -> TestResult {
         success_criteria: vec![], // Missing criteria
         workflow_integration: LspWorkflowStage::CrossCutting,
         performance_requirements: None,
-        last_assessed: SystemTime::now() - Duration::from_secs(120 * 24 * 3600), // Old
+        last_assessed: SystemTime::now() - Duration::from_hours(2880), // Old
     };
 
     let poor_validation = guardian.validate_new_ignored_test(&poor_test);
@@ -174,7 +174,7 @@ fn test_baseline_regression_detection() -> TestResult {
             max_deviation: 5,                  // Allow max 5 new ignored tests
             deviation_threshold_percent: 11.0, // Allow max 11% increase (5/49 is 10.2%)
             baseline_date: SystemTime::now(),
-            next_review_date: SystemTime::now() + Duration::from_secs(30 * 24 * 3600),
+            next_review_date: SystemTime::now() + Duration::from_hours(720),
         },
         quality_gates: QualityGates {
             pre_commit: PreCommitValidation {
@@ -285,7 +285,7 @@ fn test_ignored_test_trend_reporting() -> TestResult {
             max_deviation: 5,
             deviation_threshold_percent: 10.0,
             baseline_date: SystemTime::now(),
-            next_review_date: SystemTime::now() + Duration::from_secs(30 * 24 * 3600),
+            next_review_date: SystemTime::now() + Duration::from_hours(720),
         },
         quality_gates: QualityGates {
             pre_commit: PreCommitValidation {
@@ -322,13 +322,13 @@ fn test_ignored_test_trend_reporting() -> TestResult {
     // Add historical data for trend analysis
     let now = SystemTime::now();
     let historical_data = vec![
-        (now - Duration::from_secs(30 * 24 * 3600), 60), // 30 days ago: 60 tests
-        (now - Duration::from_secs(25 * 24 * 3600), 58), // 25 days ago: 58 tests
-        (now - Duration::from_secs(20 * 24 * 3600), 55), // 20 days ago: 55 tests
-        (now - Duration::from_secs(15 * 24 * 3600), 52), // 15 days ago: 52 tests
-        (now - Duration::from_secs(10 * 24 * 3600), 50), // 10 days ago: 50 tests
-        (now - Duration::from_secs(5 * 24 * 3600), 49),  // 5 days ago: 49 tests
-        (now, 49),                                       // Today: 49 tests
+        (now - Duration::from_hours(720), 60), // 30 days ago: 60 tests
+        (now - Duration::from_hours(600), 58), // 25 days ago: 58 tests
+        (now - Duration::from_hours(480), 55), // 20 days ago: 55 tests
+        (now - Duration::from_hours(360), 52), // 15 days ago: 52 tests
+        (now - Duration::from_hours(240), 50), // 10 days ago: 50 tests
+        (now - Duration::from_hours(120), 49), // 5 days ago: 49 tests
+        (now, 49),                             // Today: 49 tests
     ];
 
     guardian.set_historical_data(historical_data);
@@ -363,11 +363,11 @@ fn test_ignored_test_trend_reporting() -> TestResult {
 
     // Test trend reporting with increasing trend
     let increasing_data = vec![
-        (now - Duration::from_secs(20 * 24 * 3600), 40), // 20 days ago: 40 tests
-        (now - Duration::from_secs(15 * 24 * 3600), 42), // 15 days ago: 42 tests
-        (now - Duration::from_secs(10 * 24 * 3600), 45), // 10 days ago: 45 tests
-        (now - Duration::from_secs(5 * 24 * 3600), 47),  // 5 days ago: 47 tests
-        (now, 49),                                       // Today: 49 tests
+        (now - Duration::from_hours(480), 40), // 20 days ago: 40 tests
+        (now - Duration::from_hours(360), 42), // 15 days ago: 42 tests
+        (now - Duration::from_hours(240), 45), // 10 days ago: 45 tests
+        (now - Duration::from_hours(120), 47), // 5 days ago: 47 tests
+        (now, 49),                             // Today: 49 tests
     ];
 
     guardian.set_historical_data(increasing_data);
@@ -404,7 +404,7 @@ fn test_test_quality_validation() -> TestResult {
             max_deviation: 5,
             deviation_threshold_percent: 10.0,
             baseline_date: SystemTime::now(),
-            next_review_date: SystemTime::now() + Duration::from_secs(30 * 24 * 3600),
+            next_review_date: SystemTime::now() + Duration::from_hours(720),
         },
         quality_gates: QualityGates {
             pre_commit: PreCommitValidation {
@@ -449,7 +449,7 @@ fn test_test_quality_validation() -> TestResult {
             priority: 1,
             ignore_reason: "Requires implementation of enhanced LSP error handling with comprehensive context and malformed frame recovery (issue #144-AC1-AC2)".to_string(),
             complexity: ComplexityLevel::High,
-            target_timeline: Duration::from_secs(21 * 24 * 3600), // 3 weeks
+            target_timeline: Duration::from_hours(504), // 3 weeks
             dependencies: vec![
                 "error_context_system".to_string(),
                 "frame_recovery_mechanism".to_string(),
@@ -480,7 +480,7 @@ fn test_test_quality_validation() -> TestResult {
             priority: 2,
             ignore_reason: "Requires performance baseline establishment for parsing efficiency (issue #418)".to_string(),
             complexity: ComplexityLevel::Medium,
-            target_timeline: Duration::from_secs(14 * 24 * 3600), // 2 weeks
+            target_timeline: Duration::from_hours(336), // 2 weeks
             dependencies: vec!["baseline_framework".to_string()],
             success_criteria: vec![
                 "Baseline established for parsing operations".to_string(),
@@ -488,7 +488,7 @@ fn test_test_quality_validation() -> TestResult {
             ],
             workflow_integration: LspWorkflowStage::Parse,
             performance_requirements: None,
-            last_assessed: SystemTime::now() - Duration::from_secs(30 * 24 * 3600), // 30 days old
+            last_assessed: SystemTime::now() - Duration::from_hours(720), // 30 days old
         }, 65.0, "Medium quality test with adequate documentation"),
 
         // Low quality test
@@ -505,7 +505,7 @@ fn test_test_quality_validation() -> TestResult {
             success_criteria: vec![],
             workflow_integration: LspWorkflowStage::CrossCutting,
             performance_requirements: None,
-            last_assessed: SystemTime::now() - Duration::from_secs(120 * 24 * 3600), // 120 days old
+            last_assessed: SystemTime::now() - Duration::from_hours(2880), // 120 days old
         }, 30.0, "Low quality test with minimal documentation"),
     ];
 
@@ -544,7 +544,7 @@ fn test_test_quality_validation() -> TestResult {
                 );
             }
             ComplexityLevel::Low => {
-                if test_metadata.target_timeline > Duration::from_secs(14 * 24 * 3600) {
+                if test_metadata.target_timeline > Duration::from_hours(336) {
                     assert!(
                         !validation_result.warnings.is_empty(),
                         "Low complexity with long timeline should generate warnings"

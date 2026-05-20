@@ -62,9 +62,51 @@ sub caller {
 1;
 "#;
 
+const SAFE_DELETE_BOUNDARY_URI: &str = "file:///workspace/lib/SafeDelete/Boundary.pm";
+
+const SAFE_DELETE_BOUNDARY_MODULE: &str = r#"package SafeDelete::Boundary;
+use strict;
+use warnings;
+
+our $CONFIG = 1;
+
+sub keep {
+    return 1;
+}
+
+1;
+"#;
+
+const CROSS_PROJECT_SOURCE_URI: &str = "file:///workspace/lib/CrossProject/Source.pm";
+const CROSS_PROJECT_CALLER_URI: &str = "file:///workspace/lib/CrossProject/Caller.pm";
+
+const CROSS_PROJECT_SOURCE_MODULE: &str = r#"package CrossProject::Shared;
+use strict;
+use warnings;
+
+sub used_target {
+    return 1;
+}
+
+1;
+"#;
+
+const CROSS_PROJECT_CALLER_MODULE: &str = r#"package CrossProject::Shared;
+use strict;
+use warnings;
+
+sub caller {
+    return CrossProject::Shared::used_target();
+}
+
+1;
+"#;
+
 const DANCER2_DSL_URI: &str = "file:///workspace/lib/Dancer2/Core/DSL.pm";
 const DANCER2_APP_URI: &str = "file:///workspace/lib/Dancer2/Core/App.pm";
+const DANCER2_RESPONSE_URI: &str = "file:///workspace/lib/Dancer2/Core/Response.pm";
 const DANCER2_PLUGIN_URI: &str = "file:///workspace/lib/Dancer2/Plugin.pm";
+const CATALYST_DISPATCHER_URI: &str = "file:///workspace/lib/Catalyst/Dispatcher.pm";
 const REAL_BASELINE_BASE_URI: &str = "file:///workspace/lib/RealBaseline/Base.pm";
 const REAL_BASELINE_UTIL_URI: &str = "file:///workspace/lib/RealBaseline/Util.pm";
 const REAL_BASELINE_APP_URI: &str = "file:///workspace/lib/RealBaseline/App.pm";
@@ -87,6 +129,24 @@ fn open_document(
             "languageId": "perl",
             "version": 1
         }
+    })))?;
+    Ok(())
+}
+
+fn change_document(
+    server: &LspServer,
+    uri: &str,
+    version: i32,
+    text: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    server.test_handle_did_change(Some(json!({
+        "textDocument": {
+            "uri": uri,
+            "version": version
+        },
+        "contentChanges": [
+            { "text": text }
+        ]
     })))?;
     Ok(())
 }
@@ -155,6 +215,16 @@ fn open_dancer2_workspace(
     server: &LspServer,
 ) -> Result<BTreeMap<String, String>, Box<dyn std::error::Error>> {
     let files = load_dancer2_fixture_files()?;
+    for (relative_path, content) in &files {
+        open_document(server, &format!("file:///workspace/{relative_path}"), content)?;
+    }
+    Ok(files)
+}
+
+fn open_catalyst_workspace(
+    server: &LspServer,
+) -> Result<BTreeMap<String, String>, Box<dyn std::error::Error>> {
+    let files = load_real_project_fixture_files("catalyst_skeleton")?;
     for (relative_path, content) in &files {
         open_document(server, &format!("file:///workspace/{relative_path}"), content)?;
     }
@@ -275,6 +345,12 @@ fn workspace_edit_texts_for_uri<'a>(
     Ok(edits.iter().filter_map(|edit| edit.get("newText").and_then(Value::as_str)).collect())
 }
 
+fn workspace_edit_change_count(edit: &Value) -> Result<usize, Box<dyn std::error::Error>> {
+    let changes =
+        edit.get("changes").and_then(Value::as_object).ok_or("missing workspace edit changes")?;
+    Ok(changes.values().filter_map(Value::as_array).map(Vec::len).sum())
+}
+
 fn assert_safe_delete_decision_trace(
     receipt: &Value,
     decision: &str,
@@ -287,7 +363,8 @@ fn assert_safe_delete_decision_trace(
         receipt.get("provider_action").and_then(Value::as_str).ok_or("missing provider_action")?;
     assert!(
         provider_action == "safeDelete/runtimeBlockerUxReceipt"
-            || provider_action == "perl.previewSafeDelete",
+            || provider_action == "perl.previewSafeDelete"
+            || provider_action == "perl.safeDeleteSymbol",
         "unexpected safe-delete provider_action: {provider_action}"
     );
     assert_eq!(receipt.get("decision").and_then(Value::as_str), Some(decision));
@@ -309,9 +386,74 @@ fn assert_safe_delete_decision_trace(
         claim_boundary
             == "records safe-delete blocker proof only; no live symbol-level delete behavior changes"
             || claim_boundary
-                == "scoped safe-delete UX preview only; no live symbol-level delete edits are applied",
+                == "scoped safe-delete UX preview only; no live symbol-level delete edits are applied"
+            || claim_boundary
+                == "narrow safe-delete live pilot only; returns a source-backed symbol-delete WorkspaceEdit when compiler proof, exact source guard, current-source reference guard, workspace identity guard, and rollback proof all pass"
+            || claim_boundary
+                == "narrow safe-delete live pilot only; returns a source-backed symbol-delete WorkspaceEdit when compiler proof, exact source guard, current-source/workspace reference guards, workspace identity guard, and rollback proof all pass",
         "unexpected safe-delete claim boundary: {claim_boundary}"
     );
+    Ok(())
+}
+
+fn assert_safe_delete_live_source_guard_blocked(
+    receipt: &Value,
+    expected_symbol: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(receipt.get("symbol").and_then(Value::as_str), Some(expected_symbol));
+    assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("current_source"));
+    assert_eq!(
+        receipt.get("live_pilot_source_guard").and_then(Value::as_str),
+        Some("not_source_backed_exact_subroutine_definition")
+    );
+    assert_eq!(
+        receipt.get("current_source_delete_guard").and_then(Value::as_str),
+        Some("not_source_backed_exact_subroutine_definition")
+    );
+    assert_eq!(
+        receipt.get("live_pilot_workspace_identity_guard").and_then(Value::as_str),
+        Some("not_evaluated")
+    );
+    assert_eq!(receipt.get("live_symbol_delete_enabled").and_then(Value::as_bool), Some(false));
+    assert_eq!(receipt.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(receipt.get("returned_workspace_edit_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(
+        receipt
+            .pointer("/workspace_edit/changes")
+            .and_then(Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0)
+    );
+    assert_safe_delete_decision_trace(
+        receipt,
+        "blocked",
+        "not_source_backed_exact_subroutine_definition",
+        "no_edit",
+    )?;
+
+    let live_blocker_ux = receipt.get("live_blocker_ux").ok_or("missing live_blocker_ux")?;
+    assert_json_array_contains(
+        live_blocker_ux,
+        "blocker_reasons",
+        "NotSourceBackedExactSubroutineDefinition",
+    )?;
+
+    let message = receipt
+        .get("user_message")
+        .and_then(Value::as_str)
+        .ok_or("missing safe-delete source guard user_message")?;
+    assert!(
+        message.contains("Safe delete refused")
+            && message.contains(expected_symbol)
+            && message.contains("No edits were returned"),
+        "source guard message should explain the no-edit refusal: {message}"
+    );
+
     Ok(())
 }
 
@@ -1060,6 +1202,223 @@ sub caller {
 }
 
 #[test]
+fn refactor_runtime_blocker_ux_package_rename_preview_records_dancer2_source_backed_pilot_without_cutover()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_dancer2_workspace(&server)?;
+    let response =
+        files.get("lib/Dancer2/Core/Response.pm").ok_or("missing Dancer2 Core Response fixture")?;
+
+    let (to_psgi_line, to_psgi_character) = position_of(response, "to_psgi {")?;
+    let preview_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.previewPackageRename",
+            "arguments": [{
+                "textDocument": {"uri": DANCER2_RESPONSE_URI},
+                "position": {"line": to_psgi_line, "character": to_psgi_character},
+                "newName": "renamed_to_psgi"
+            }]
+        })))?
+        .ok_or("missing Dancer2 package rename live-pilot preview result")?;
+
+    assert_eq!(preview_result.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        preview_result.get("provider_action").and_then(Value::as_str),
+        Some("perl.previewPackageRename")
+    );
+    assert_eq!(preview_result.get("decision").and_then(Value::as_str), Some("allowed"));
+    assert_eq!(
+        preview_result.get("reason").and_then(Value::as_str),
+        Some("compiler_preview_allowed")
+    );
+    assert_eq!(preview_result.get("fact_source").and_then(Value::as_str), Some("compiler_fact"));
+    assert_eq!(preview_result.get("confidence").and_then(Value::as_str), Some("high"));
+    assert_eq!(preview_result.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(preview_result.get("fallback_state").and_then(Value::as_str), Some("none"));
+    assert_eq!(preview_result.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        preview_result.get("live_package_rename_enabled").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        preview_result.get("trace_only_no_live_behavior_change").and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        preview_result.get("source_backed_state").and_then(Value::as_str),
+        Some("not_authorized_by_package_rename_preview")
+    );
+    assert_eq!(
+        preview_result
+            .pointer("/workspace_edit/changes")
+            .and_then(Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0),
+        "Dancer2 package rename preview must not return live edits: {preview_result}"
+    );
+    assert_eq!(
+        preview_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+
+    let package_pilot = preview_result.get("package_pilot").ok_or("missing package_pilot")?;
+    assert_eq!(package_pilot.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        package_pilot.get("eligible").and_then(Value::as_bool),
+        Some(true),
+        "Dancer2 package/compiler-backed pilot should be eligible before live cutover: {package_pilot}"
+    );
+    assert_eq!(package_pilot.get("reason").and_then(Value::as_str), Some("none"));
+    assert_eq!(package_pilot.get("blocker_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(package_pilot.get("no_live_rename_cutover").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        package_pilot.get("edit_count").and_then(Value::as_u64),
+        Some(1),
+        "Dancer2 source-backed pilot should record the package-local definition edit only: {package_pilot}"
+    );
+    assert_json_array_contains(package_pilot, "edit_categories", "Definition")?;
+
+    let fallback_noise = preview_result.get("fallback_noise").ok_or("missing fallback_noise")?;
+    assert_eq!(
+        fallback_noise.get("fallback_state").and_then(Value::as_str),
+        Some("compiler_allowed")
+    );
+    assert_eq!(
+        fallback_noise.get("compiler_requires_confirmation").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(fallback_noise.get("compiler_plan_edit_count").and_then(Value::as_u64), Some(1));
+
+    let rollback_receipt =
+        preview_result.get("rollback_receipt").ok_or("missing rollback_receipt")?;
+    assert_eq!(
+        rollback_receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.previewPackageRename")
+    );
+    assert_eq!(rollback_receipt.get("rollback_required").and_then(Value::as_bool), Some(false));
+    assert_eq!(rollback_receipt.get("rollback_safe").and_then(Value::as_bool), Some(true));
+    assert_eq!(rollback_receipt.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        rollback_receipt.get("fallback_state").and_then(Value::as_str),
+        Some("compiler_allowed")
+    );
+
+    let user_message = preview_result
+        .get("user_message")
+        .and_then(Value::as_str)
+        .ok_or("missing Dancer2 package rename preview user_message")?;
+    assert!(
+        user_message.contains("Package rename preview")
+            && user_message.contains("to_psgi")
+            && user_message.contains("renamed_to_psgi")
+            && user_message.contains("no package rename edits were applied"),
+        "Dancer2 preview message should explain the no-edit live-pilot proof: {user_message}"
+    );
+
+    let explanation = explain_provider_decision(&server, "rename")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.previewPackageRename")
+    );
+    assert_eq!(request_receipt.get("decision").and_then(Value::as_str), Some("allowed"));
+    assert_eq!(
+        request_receipt.pointer("/package_pilot/eligible").and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        request_receipt.pointer("/rollback_receipt/rollback_safe").and_then(Value::as_bool),
+        Some(true)
+    );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_package_local_live_pilot_dancer2_edit_freshness_falls_back_to_current_source()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_dancer2_workspace(&server)?;
+    let response =
+        files.get("lib/Dancer2/Core/Response.pm").ok_or("missing Dancer2 Core Response fixture")?;
+
+    let (to_psgi_line, to_psgi_character) = position_of(response, "to_psgi {")?;
+    let preview_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.previewPackageRename",
+            "arguments": [{
+                "textDocument": {"uri": DANCER2_RESPONSE_URI},
+                "position": {"line": to_psgi_line, "character": to_psgi_character},
+                "newName": "renamed_to_psgi"
+            }]
+        })))?
+        .ok_or("missing Dancer2 package rename edit-freshness preview result")?;
+
+    let package_pilot = preview_result.get("package_pilot").ok_or("missing package_pilot")?;
+    assert_eq!(preview_result.get("decision").and_then(Value::as_str), Some("allowed"));
+    assert_eq!(package_pilot.get("eligible").and_then(Value::as_bool), Some(true));
+    let compiler_edit_count = package_pilot
+        .get("edit_count")
+        .and_then(Value::as_u64)
+        .ok_or("missing package pilot edit count")?;
+    assert_eq!(
+        compiler_edit_count, 1,
+        "Dancer2 compiler preview should start with only the source-backed definition edit: {package_pilot}"
+    );
+    let rollback_receipt =
+        preview_result.get("rollback_receipt").ok_or("missing rollback_receipt")?;
+    assert_eq!(rollback_receipt.get("rollback_required").and_then(Value::as_bool), Some(false));
+    assert_eq!(rollback_receipt.get("rollback_safe").and_then(Value::as_bool), Some(true));
+    assert_eq!(rollback_receipt.get("edits_applied").and_then(Value::as_bool), Some(false));
+
+    let updated_response = response.replace(
+        "sub is_forwarded",
+        "sub as_array {\n    my $self = shift;\n    return $self->to_psgi;\n}\n\nsub is_forwarded",
+    );
+    change_document(&server, DANCER2_RESPONSE_URI, 2, &updated_response)?;
+
+    let rename_result = server
+        .handle_rename_workspace(Some(json!({
+            "textDocument": {"uri": DANCER2_RESPONSE_URI},
+            "position": {"line": to_psgi_line, "character": to_psgi_character},
+            "newName": "renamed_to_psgi"
+        })))?
+        .ok_or("missing Dancer2 package-local fresh fallback result")?;
+    let edit_count = workspace_edit_change_count(&rename_result)?;
+    assert!(
+        edit_count > usize::try_from(compiler_edit_count)?,
+        "Dancer2 current-source fallback must not promote the stale one-edit compiler preview after didChange: compiler={compiler_edit_count}, live={edit_count}, result={rename_result}"
+    );
+    let response_texts = workspace_edit_texts_for_uri(&rename_result, DANCER2_RESPONSE_URI)?;
+    assert!(
+        response_texts.iter().filter(|text| **text == "renamed_to_psgi").count() >= 2,
+        "fresh fallback should include the Dancer2 definition and newly added call: {rename_result}"
+    );
+
+    let explanation = explain_provider_decision(&server, "rename")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(request_receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("textDocument/rename")
+    );
+    assert_eq!(
+        request_receipt.get("reason").and_then(Value::as_str),
+        Some("full_index_workspace_edit")
+    );
+    assert_eq!(
+        request_receipt.get("fallback_state").and_then(Value::as_str),
+        Some("workspace_index")
+    );
+    assert_eq!(
+        request_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
+        u64::try_from(edit_count).ok()
+    );
+
+    Ok(())
+}
+
+#[test]
 fn refactor_runtime_blocker_ux_package_local_live_pilot_applies_exact_source_backed_plan()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();
@@ -1181,6 +1540,299 @@ sub caller {
         Some("workspace_index")
     );
     assert_eq!(request_receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(2));
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_package_local_live_pilot_blocks_real_workspace_imported_symbol_false_allow()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_semantic_real_workspace(&server)?;
+    let util = files.get("lib/RealBaseline/Util.pm").ok_or("missing RealBaseline Util fixture")?;
+
+    let (helper_line, helper_character) = position_of(util, "helper {")?;
+    let rename_result = server
+        .handle_rename_workspace(Some(json!({
+            "textDocument": {"uri": REAL_BASELINE_UTIL_URI},
+            "position": {"line": helper_line, "character": helper_character},
+            "newName": "renamed_helper"
+        })))?
+        .ok_or("missing package-local live rename blocker result")?;
+
+    let edit_count = rename_result
+        .get("changes")
+        .and_then(Value::as_object)
+        .map(|changes| changes.values().filter_map(Value::as_array).map(Vec::len).sum::<usize>())
+        .ok_or("missing package-local live rename blocker changes")?;
+    assert_eq!(
+        edit_count, 0,
+        "imported/exported real-workspace package symbol must not be falsely allowed as a package-local edit: {rename_result}"
+    );
+
+    let explanation = explain_provider_decision(&server, "rename")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(request_receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("textDocument/rename")
+    );
+    assert_eq!(
+        request_receipt.get("reason").and_then(Value::as_str),
+        Some("package_local_live_pilot_blocked")
+    );
+    assert_eq!(request_receipt.get("fallback_state").and_then(Value::as_str), Some("no_edit"));
+    assert_eq!(request_receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(request_receipt.get("symbol").and_then(Value::as_str), Some("helper"));
+    assert!(
+        request_receipt.get("claim_boundary").and_then(Value::as_str).is_some_and(|boundary| {
+            boundary.contains("package-local compiler facts")
+                && boundary.contains("broader compiler-backed refactor facts remain gated")
+        }),
+        "rename trace must preserve the package-local claim boundary: {request_receipt}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_package_local_live_pilot_real_workspace_false_allow_falls_back_with_fresh_rollback_boundary()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_semantic_real_workspace(&server)?;
+    let app = files.get("lib/RealBaseline/App.pm").ok_or("missing RealBaseline App fixture")?;
+
+    let (name_line, name_character) = position_of(app, "name {")?;
+    let preview_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.previewPackageRename",
+            "arguments": [{
+                "textDocument": {"uri": REAL_BASELINE_APP_URI},
+                "position": {"line": name_line, "character": name_character},
+                "newName": "renamed_name"
+            }]
+        })))?
+        .ok_or("missing package rename false-allow preview result")?;
+
+    assert_eq!(preview_result.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        preview_result.get("provider_action").and_then(Value::as_str),
+        Some("perl.previewPackageRename")
+    );
+    assert_eq!(preview_result.get("decision").and_then(Value::as_str), Some("allowed"));
+    assert_eq!(
+        preview_result.get("reason").and_then(Value::as_str),
+        Some("compiler_preview_allowed")
+    );
+    assert_eq!(preview_result.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        preview_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+
+    let package_pilot = preview_result.get("package_pilot").ok_or("missing package_pilot")?;
+    assert_eq!(package_pilot.get("eligible").and_then(Value::as_bool), Some(true));
+    assert_eq!(package_pilot.get("reason").and_then(Value::as_str), Some("none"));
+    let compiler_edit_count = package_pilot
+        .get("edit_count")
+        .and_then(Value::as_u64)
+        .ok_or("missing package pilot edit count")?;
+    assert_eq!(
+        compiler_edit_count, 1,
+        "RealBaseline package pilot should see only the source-backed definition edit: {package_pilot}"
+    );
+    assert_json_array_contains(package_pilot, "edit_categories", "Definition")?;
+
+    let rollback_receipt =
+        preview_result.get("rollback_receipt").ok_or("missing rollback_receipt")?;
+    assert_eq!(rollback_receipt.get("rollback_required").and_then(Value::as_bool), Some(false));
+    assert_eq!(rollback_receipt.get("rollback_safe").and_then(Value::as_bool), Some(true));
+    assert_eq!(rollback_receipt.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        rollback_receipt.get("live_package_rename_enabled").and_then(Value::as_bool),
+        Some(false)
+    );
+
+    let rename_request = json!({
+        "textDocument": {"uri": REAL_BASELINE_APP_URI},
+        "position": {"line": name_line, "character": name_character},
+        "newName": "renamed_name"
+    });
+    let live_result = server
+        .handle_rename_workspace(Some(rename_request.clone()))?
+        .ok_or("missing package-local live rename fallback result")?;
+    let live_edit_count = workspace_edit_change_count(&live_result)?;
+    assert!(
+        live_edit_count > usize::try_from(compiler_edit_count)?,
+        "workspace guard must catch the package-pilot false allow and return broader current-source fallback edits: compiler={compiler_edit_count}, live={live_edit_count}, result={live_result}"
+    );
+    let live_app_texts = workspace_edit_texts_for_uri(&live_result, REAL_BASELINE_APP_URI)?;
+    assert!(
+        live_app_texts.iter().filter(|text| **text == "renamed_name").count() >= 2,
+        "workspace-index fallback must include RealBaseline::App::name references in App.pm: {live_result}"
+    );
+
+    let explanation = explain_provider_decision(&server, "rename")?;
+    let live_receipt = request_receipt(&explanation)?;
+    assert_eq!(live_receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        live_receipt.get("provider_action").and_then(Value::as_str),
+        Some("textDocument/rename")
+    );
+    assert_eq!(
+        live_receipt.get("reason").and_then(Value::as_str),
+        Some("full_index_workspace_edit")
+    );
+    assert_eq!(live_receipt.get("fallback_state").and_then(Value::as_str), Some("workspace_index"));
+    assert_eq!(
+        live_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
+        u64::try_from(live_edit_count).ok()
+    );
+
+    let updated_app = app.replace("helper($self->name);", "helper($self->name);\n    $self->name;");
+    change_document(&server, REAL_BASELINE_APP_URI, 2, &updated_app)?;
+
+    let fresh_live_result = server
+        .handle_rename_workspace(Some(rename_request))?
+        .ok_or("missing package-local fresh fallback result")?;
+    let fresh_edit_count = workspace_edit_change_count(&fresh_live_result)?;
+    assert!(
+        fresh_edit_count > live_edit_count,
+        "current-source fallback must use fresh didChange state instead of stale package-pilot evidence: before={live_edit_count}, after={fresh_edit_count}, result={fresh_live_result}"
+    );
+    let fresh_app_texts = workspace_edit_texts_for_uri(&fresh_live_result, REAL_BASELINE_APP_URI)?;
+    assert!(
+        fresh_app_texts.iter().filter(|text| **text == "renamed_name").count()
+            > live_app_texts.iter().filter(|text| **text == "renamed_name").count(),
+        "post-edit fallback should include the newly added App.pm name call: before={live_app_texts:?}, after={fresh_app_texts:?}"
+    );
+
+    let fresh_explanation = explain_provider_decision(&server, "rename")?;
+    let fresh_receipt = request_receipt(&fresh_explanation)?;
+    assert_eq!(fresh_receipt.get("reason").and_then(Value::as_str), Some("same_file_semantic"));
+    assert_eq!(fresh_receipt.get("fallback_state").and_then(Value::as_str), Some("none"));
+    assert_eq!(
+        fresh_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
+        u64::try_from(fresh_edit_count).ok()
+    );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_package_local_live_pilot_catalyst_false_allow_blocks()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_catalyst_workspace(&server)?;
+    let dispatcher =
+        files.get("lib/Catalyst/Dispatcher.pm").ok_or("missing Catalyst Dispatcher fixture")?;
+
+    let (get_action_line, get_action_character) = position_of(dispatcher, "get_action {")?;
+    let preview_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.previewPackageRename",
+            "arguments": [{
+                "textDocument": {"uri": CATALYST_DISPATCHER_URI},
+                "position": {"line": get_action_line, "character": get_action_character},
+                "newName": "renamed_get_action"
+            }]
+        })))?
+        .ok_or("missing Catalyst package rename preview result")?;
+
+    assert_eq!(preview_result.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        preview_result.get("provider_action").and_then(Value::as_str),
+        Some("perl.previewPackageRename")
+    );
+    assert_eq!(preview_result.get("decision").and_then(Value::as_str), Some("allowed"));
+    assert_eq!(
+        preview_result.get("reason").and_then(Value::as_str),
+        Some("compiler_preview_allowed")
+    );
+    assert_eq!(preview_result.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        preview_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+
+    let package_pilot = preview_result.get("package_pilot").ok_or("missing package_pilot")?;
+    assert_eq!(package_pilot.get("eligible").and_then(Value::as_bool), Some(true));
+    assert_eq!(package_pilot.get("reason").and_then(Value::as_str), Some("none"));
+    let compiler_edit_count = package_pilot
+        .get("edit_count")
+        .and_then(Value::as_u64)
+        .ok_or("missing package pilot edit count")?;
+    assert_eq!(
+        compiler_edit_count, 1,
+        "Catalyst package pilot should see only the source-backed definition edit: {package_pilot}"
+    );
+    assert_json_array_contains(package_pilot, "edit_categories", "Definition")?;
+    assert!(
+        preview_result
+            .get("claim_boundary")
+            .and_then(Value::as_str)
+            .is_some_and(|boundary| boundary.contains("no package rename edits are applied")),
+        "Catalyst package rename preview must remain no-edit: {preview_result}"
+    );
+
+    let rename_request = json!({
+        "textDocument": {"uri": CATALYST_DISPATCHER_URI},
+        "position": {"line": get_action_line, "character": get_action_character},
+        "newName": "renamed_get_action"
+    });
+    let live_result = match server.handle_rename_workspace(Some(rename_request)) {
+        Ok(Some(result)) => {
+            let edit_count = workspace_edit_change_count(&result)?;
+            assert_eq!(
+                edit_count, 0,
+                "Catalyst ambiguous package-local false allow must not return edits: {result}"
+            );
+            Some(result)
+        }
+        Ok(None) => return Err("missing Catalyst package-local live rename result".into()),
+        Err(error) => {
+            assert_eq!(error.code, -32602);
+            assert!(
+                error.message.contains("ambiguous symbol identity"),
+                "Catalyst false-allow refusal should explain ambiguous project-shaped identity: {error:?}"
+            );
+            None
+        }
+    };
+    let live_edit_count = live_result.as_ref().map_or(Ok(0), workspace_edit_change_count)?;
+
+    let explanation = explain_provider_decision(&server, "rename")?;
+    let live_receipt = request_receipt(&explanation)?;
+    assert_eq!(live_receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        live_receipt.get("provider_action").and_then(Value::as_str),
+        Some("textDocument/rename")
+    );
+    assert!(
+        live_receipt.get("claim_boundary").and_then(Value::as_str).is_some_and(|boundary| {
+            boundary.contains("package-local compiler facts")
+                && boundary.contains("broader compiler-backed refactor facts remain gated")
+        }),
+        "Catalyst rename trace must preserve the package-local claim boundary: {live_receipt}"
+    );
+
+    let reason = live_receipt
+        .get("reason")
+        .and_then(Value::as_str)
+        .ok_or("missing Catalyst live rename reason")?;
+    assert_eq!(
+        reason, "package_local_live_pilot_ambiguous",
+        "Catalyst package-local false allow must be refused as ambiguous identity: {live_receipt}"
+    );
+    assert_eq!(
+        live_edit_count, 0,
+        "ambiguous package-local pilot must not return edits: {live_result:?}"
+    );
+    assert_eq!(
+        live_receipt.get("fallback_state").and_then(Value::as_str),
+        Some("ambiguous_identity")
+    );
+    assert_eq!(live_receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
 
     Ok(())
 }
@@ -2308,6 +2960,833 @@ fn refactor_runtime_blocker_ux_safe_delete_preview_command_returns_scoped_no_edi
         "allowed preview message should describe the no-edit preview path: {allowed_message}"
     );
     assert_safe_delete_decision_trace(&allowed_result, "allowed", "compiler_allowed", "none")?;
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_live_pilot_returns_source_backed_edit_only()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_semantic_real_workspace(&server)?;
+    let util = files.get("lib/RealBaseline/Util.pm").ok_or("missing RealBaseline Util fixture")?;
+    let base = files.get("lib/RealBaseline/Base.pm").ok_or("missing RealBaseline Base fixture")?;
+
+    let (helper_line, helper_character) = position_of(util, "helper {")?;
+    let blocked_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.safeDeleteSymbol",
+            "arguments": [{
+                "textDocument": {"uri": REAL_BASELINE_UTIL_URI},
+                "position": {"line": helper_line, "character": helper_character}
+            }]
+        })))?
+        .ok_or("missing safe-delete live pilot blocker result")?;
+    assert_eq!(
+        blocked_result.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(blocked_result.get("decision").and_then(Value::as_str), Some("blocked"));
+    assert_eq!(
+        blocked_result.get("live_symbol_delete_enabled").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        blocked_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        blocked_result
+            .pointer("/workspace_edit/changes")
+            .and_then(Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0)
+    );
+    assert_safe_delete_decision_trace(&blocked_result, "blocked", "references_exist", "no_edit")?;
+
+    let (reset_line, reset_character) = position_of(base, "reset {")?;
+    let live_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.safeDeleteSymbol",
+            "arguments": [{
+                "textDocument": {"uri": REAL_BASELINE_BASE_URI},
+                "position": {"line": reset_line, "character": reset_character}
+            }]
+        })))?
+        .ok_or("missing safe-delete live pilot result")?;
+    assert_eq!(live_result.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        live_result.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(live_result.get("decision").and_then(Value::as_str), Some("allowed"));
+    assert_eq!(live_result.get("reason").and_then(Value::as_str), Some("compiler_allowed"));
+    assert_eq!(live_result.get("fallback_state").and_then(Value::as_str), Some("none"));
+    assert_eq!(
+        live_result.get("trace_only_no_live_behavior_change").and_then(Value::as_bool),
+        Some(false),
+        "live pilot should return an edit: {live_result}"
+    );
+    assert_eq!(live_result.get("no_live_behavior_change").and_then(Value::as_bool), Some(false));
+    assert_eq!(live_result.get("source_backed").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        live_result.get("source_backed_state").and_then(Value::as_str),
+        Some("source_backed_subroutine_range")
+    );
+    assert_eq!(
+        live_result.get("live_pilot_source_guard").and_then(Value::as_str),
+        Some("source_backed_exact_subroutine_definition")
+    );
+    assert_eq!(live_result.get("live_symbol_delete_enabled").and_then(Value::as_bool), Some(true));
+    assert_eq!(live_result.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(live_result.get("returned_workspace_edit_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        live_result.get("claim_boundary").and_then(Value::as_str),
+        Some(
+            "narrow safe-delete live pilot only; returns a source-backed symbol-delete WorkspaceEdit when compiler proof, exact source guard, current-source/workspace reference guards, workspace identity guard, and rollback proof all pass"
+        )
+    );
+
+    let workspace_edit = live_result.get("workspace_edit").ok_or("missing live workspace_edit")?;
+    let live_texts = workspace_edit_texts_for_uri(workspace_edit, REAL_BASELINE_BASE_URI)?;
+    assert_eq!(live_texts, vec![""], "live pilot must return one delete edit");
+
+    let rollback_proof =
+        live_result.get("symbol_delete_edit_rollback").ok_or("missing rollback proof")?;
+    assert_eq!(
+        rollback_proof.get("rollback_verification").and_then(Value::as_str),
+        Some("restores_original")
+    );
+    assert_eq!(rollback_proof.get("rollback_safe").and_then(Value::as_bool), Some(true));
+
+    let message = live_result
+        .get("user_message")
+        .and_then(Value::as_str)
+        .ok_or("missing live pilot user_message")?;
+    assert!(
+        message.contains("Safe delete can remove")
+            && message.contains("reset")
+            && message.contains("WorkspaceEdit")
+            && message.contains("no edit was applied by the server"),
+        "live pilot message should explain the returned edit without server-side application: {message}"
+    );
+
+    let explanation = explain_provider_decision(&server, "safe_delete")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(
+        request_receipt.get("live_symbol_delete_enabled").and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        request_receipt
+            .pointer("/symbol_delete_edit_rollback/rollback_verification")
+            .and_then(Value::as_str),
+        Some("restores_original")
+    );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_live_pilot_records_second_project_source_backed_edit()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_dancer2_workspace(&server)?;
+    let response =
+        files.get("lib/Dancer2/Core/Response.pm").ok_or("missing Dancer2 Core Response fixture")?;
+
+    let (to_psgi_line, to_psgi_character) = position_of(response, "to_psgi {")?;
+    let live_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.safeDeleteSymbol",
+            "arguments": [{
+                "textDocument": {"uri": DANCER2_RESPONSE_URI},
+                "position": {"line": to_psgi_line, "character": to_psgi_character}
+            }]
+        })))?
+        .ok_or("missing Dancer2 safe-delete live pilot result")?;
+
+    assert_eq!(live_result.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        live_result.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(live_result.get("decision").and_then(Value::as_str), Some("allowed"));
+    assert_eq!(live_result.get("symbol").and_then(Value::as_str), Some("to_psgi"));
+    assert_eq!(live_result.get("reason").and_then(Value::as_str), Some("compiler_allowed"));
+    assert_eq!(live_result.get("fallback_state").and_then(Value::as_str), Some("none"));
+    assert_eq!(live_result.get("live_symbol_delete_enabled").and_then(Value::as_bool), Some(true));
+    assert_eq!(live_result.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(live_result.get("source_backed").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        live_result.get("source_backed_state").and_then(Value::as_str),
+        Some("source_backed_subroutine_range")
+    );
+    assert_eq!(
+        live_result.get("live_pilot_source_guard").and_then(Value::as_str),
+        Some("source_backed_exact_subroutine_definition")
+    );
+    assert_eq!(live_result.get("returned_workspace_edit_count").and_then(Value::as_u64), Some(1));
+
+    let workspace_edit =
+        live_result.get("workspace_edit").ok_or("missing Dancer2 live workspace_edit")?;
+    let live_texts = workspace_edit_texts_for_uri(workspace_edit, DANCER2_RESPONSE_URI)?;
+    assert_eq!(live_texts, vec![""], "Dancer2 live pilot must return one delete edit");
+
+    let rollback_proof =
+        live_result.get("symbol_delete_edit_rollback").ok_or("missing Dancer2 rollback proof")?;
+    assert_eq!(
+        rollback_proof.get("rollback_verification").and_then(Value::as_str),
+        Some("restores_original")
+    );
+    assert_eq!(rollback_proof.get("rollback_safe").and_then(Value::as_bool), Some(true));
+    assert_eq!(rollback_proof.get("source_backed").and_then(Value::as_bool), Some(true));
+    let rollback_edit = rollback_proof
+        .get("rollback_workspace_edit")
+        .ok_or("missing Dancer2 rollback_workspace_edit")?;
+    let rollback_texts = workspace_edit_texts_for_uri(rollback_edit, DANCER2_RESPONSE_URI)?;
+    let rollback_text = rollback_texts.first().ok_or("missing Dancer2 rollback insertion text")?;
+    assert!(
+        rollback_text.contains("sub to_psgi") && rollback_text.contains("$self->status"),
+        "Dancer2 rollback text must carry the source-backed symbol body: {rollback_text}"
+    );
+
+    let explanation = explain_provider_decision(&server, "safe_delete")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(request_receipt.get("symbol").and_then(Value::as_str), Some("to_psgi"));
+    assert_eq!(
+        request_receipt.get("live_symbol_delete_enabled").and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        request_receipt
+            .pointer("/symbol_delete_edit_rollback/rollback_verification")
+            .and_then(Value::as_str),
+        Some("restores_original")
+    );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_live_pilot_catalyst_false_allow_blocks()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_catalyst_workspace(&server)?;
+    let dispatcher =
+        files.get("lib/Catalyst/Dispatcher.pm").ok_or("missing Catalyst Dispatcher fixture")?;
+
+    let (get_action_line, get_action_character) = position_of(dispatcher, "get_action {")?;
+    let live_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.safeDeleteSymbol",
+            "arguments": [{
+                "textDocument": {"uri": CATALYST_DISPATCHER_URI},
+                "position": {"line": get_action_line, "character": get_action_character}
+            }]
+        })))?
+        .ok_or("missing Catalyst safe-delete live pilot result")?;
+
+    assert_eq!(live_result.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        live_result.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(live_result.get("symbol").and_then(Value::as_str), Some("get_action"));
+    assert_eq!(live_result.get("decision").and_then(Value::as_str), Some("blocked"));
+    assert_eq!(
+        live_result.get("reason").and_then(Value::as_str),
+        Some("ambiguous_low_confidence_candidates")
+    );
+    assert_eq!(live_result.get("fallback_state").and_then(Value::as_str), Some("no_edit"));
+    assert_eq!(live_result.get("live_symbol_delete_enabled").and_then(Value::as_bool), Some(false));
+    assert_eq!(live_result.get("returned_workspace_edit_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(
+        live_result
+            .pointer("/workspace_edit/changes")
+            .and_then(Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0)
+    );
+    assert_safe_delete_decision_trace(
+        &live_result,
+        "blocked",
+        "ambiguous_low_confidence_candidates",
+        "no_edit",
+    )?;
+
+    let live_blocker_ux = live_result.get("live_blocker_ux").ok_or("missing live_blocker_ux")?;
+    assert_json_array_contains(live_blocker_ux, "blocker_reasons", "AmbiguousReference")?;
+    assert_eq!(
+        live_result.get("live_pilot_workspace_identity_guard").and_then(Value::as_str),
+        Some("ambiguous_workspace_identity")
+    );
+    assert!(
+        live_result
+            .get("claim_boundary")
+            .and_then(Value::as_str)
+            .is_some_and(|boundary| boundary.contains("narrow safe-delete live pilot")),
+        "Catalyst safe-delete receipt must preserve the live-pilot claim boundary: {live_result}"
+    );
+
+    let explanation = explain_provider_decision(&server, "safe_delete")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(request_receipt.get("symbol").and_then(Value::as_str), Some("get_action"));
+    assert_eq!(
+        request_receipt.get("live_symbol_delete_enabled").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        request_receipt.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_live_pilot_blocks_non_subroutine_and_package_wide()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    open_document(&server, SAFE_DELETE_BOUNDARY_URI, SAFE_DELETE_BOUNDARY_MODULE)?;
+
+    let (config_line, config_character) = position_of(SAFE_DELETE_BOUNDARY_MODULE, "$CONFIG =")?;
+    let variable_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.safeDeleteSymbol",
+            "arguments": [{
+                "textDocument": {"uri": SAFE_DELETE_BOUNDARY_URI},
+                "position": {"line": config_line, "character": config_character}
+            }]
+        })))?
+        .ok_or("missing non-subroutine safe-delete blocker result")?;
+    assert_safe_delete_live_source_guard_blocked(&variable_result, "$CONFIG")?;
+
+    let (package_line, package_character) = position_of(SAFE_DELETE_BOUNDARY_MODULE, "Boundary;")?;
+    let package_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.safeDeleteSymbol",
+            "arguments": [{
+                "textDocument": {"uri": SAFE_DELETE_BOUNDARY_URI},
+                "position": {"line": package_line, "character": package_character}
+            }]
+        })))?
+        .ok_or("missing package-wide safe-delete blocker result")?;
+    assert_safe_delete_live_source_guard_blocked(&package_result, "Boundary")?;
+
+    let explanation = explain_provider_decision(&server, "safe_delete")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(request_receipt.get("symbol").and_then(Value::as_str), Some("Boundary"));
+    assert_eq!(
+        request_receipt.get("reason").and_then(Value::as_str),
+        Some("not_source_backed_exact_subroutine_definition")
+    );
+    assert_eq!(
+        request_receipt.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_live_pilot_blocks_imported_symbol_false_allow()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_semantic_real_workspace(&server)?;
+    let util = files.get("lib/RealBaseline/Util.pm").ok_or("missing RealBaseline Util fixture")?;
+
+    let (helper_line, helper_character) = position_of(util, "helper {")?;
+    let blocked_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.safeDeleteSymbol",
+            "arguments": [{
+                "textDocument": {"uri": REAL_BASELINE_UTIL_URI},
+                "position": {"line": helper_line, "character": helper_character}
+            }]
+        })))?
+        .ok_or("missing imported-symbol safe-delete live blocker result")?;
+
+    assert_eq!(blocked_result.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        blocked_result.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(blocked_result.get("symbol").and_then(Value::as_str), Some("helper"));
+    assert_eq!(blocked_result.get("decision").and_then(Value::as_str), Some("blocked"));
+    assert_eq!(blocked_result.get("reason").and_then(Value::as_str), Some("references_exist"));
+    assert_eq!(blocked_result.get("fact_source").and_then(Value::as_str), Some("compiler_fact"));
+    assert_eq!(blocked_result.get("confidence").and_then(Value::as_str), Some("high"));
+    assert_eq!(blocked_result.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(blocked_result.get("fallback_state").and_then(Value::as_str), Some("no_edit"));
+    assert_eq!(
+        blocked_result.get("live_pilot_source_guard").and_then(Value::as_str),
+        Some("source_backed_exact_subroutine_definition")
+    );
+    assert_eq!(
+        blocked_result.get("live_pilot_workspace_identity_guard").and_then(Value::as_str),
+        Some("not_evaluated")
+    );
+    assert_eq!(
+        blocked_result.get("live_symbol_delete_enabled").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(blocked_result.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        blocked_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        blocked_result
+            .pointer("/workspace_edit/changes")
+            .and_then(Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0)
+    );
+    assert_safe_delete_decision_trace(&blocked_result, "blocked", "references_exist", "no_edit")?;
+    assert_json_array_contains(&blocked_result, "blocker_reasons", "ImportedSymbol")?;
+
+    let live_blocker_ux = blocked_result.get("live_blocker_ux").ok_or("missing live_blocker_ux")?;
+    assert_json_array_contains(live_blocker_ux, "blocker_reasons", "ImportedSymbol")?;
+    assert_json_array_contains(live_blocker_ux, "blocker_messages", "imported by another file")?;
+
+    let rollback_proof =
+        blocked_result.get("symbol_delete_edit_rollback").ok_or("missing rollback proof")?;
+    assert_eq!(rollback_proof.get("blocked_before_edit").and_then(Value::as_bool), Some(true));
+    assert_eq!(rollback_proof.get("rollback_required").and_then(Value::as_bool), Some(false));
+    assert_eq!(rollback_proof.get("rollback_safe").and_then(Value::as_bool), Some(true));
+
+    let message = blocked_result
+        .get("user_message")
+        .and_then(Value::as_str)
+        .ok_or("missing imported-symbol safe-delete blocked user_message")?;
+    assert!(
+        message.contains("Safe delete refused")
+            && message.contains("helper")
+            && message.contains("No edits were returned"),
+        "blocked message should explain the imported-symbol no-edit path: {message}"
+    );
+
+    let explanation = explain_provider_decision(&server, "safe_delete")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(request_receipt.get("symbol").and_then(Value::as_str), Some("helper"));
+    assert_eq!(request_receipt.get("decision").and_then(Value::as_str), Some("blocked"));
+    assert_eq!(request_receipt.get("reason").and_then(Value::as_str), Some("references_exist"));
+    assert_json_array_contains(request_receipt, "blocker_reasons", "ImportedSymbol")?;
+    assert_eq!(
+        request_receipt.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_live_pilot_blocks_generated_and_dynamic_boundaries()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_dancer2_workspace(&server)?;
+    let app = files.get("lib/Dancer2/Core/App.pm").ok_or("missing Dancer2 Core App fixture")?;
+    let plugin = files.get("lib/Dancer2/Plugin.pm").ok_or("missing Dancer2 Plugin fixture")?;
+
+    let (routes_line, routes_character) = position_of(app, "routes      =>")?;
+    let generated_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.safeDeleteSymbol",
+            "arguments": [{
+                "textDocument": {"uri": DANCER2_APP_URI},
+                "position": {"line": routes_line, "character": routes_character},
+                "compilerPlanFixture": "generated_member"
+            }]
+        })))?
+        .ok_or("missing generated-member safe-delete live blocker result")?;
+    assert_eq!(generated_result.get("symbol").and_then(Value::as_str), Some("routes"));
+    assert_eq!(
+        generated_result.get("compiler_plan_fixture").and_then(Value::as_str),
+        Some("generated_member")
+    );
+    assert_safe_delete_decision_trace(
+        &generated_result,
+        "blocked",
+        "generated_no_source",
+        "no_edit",
+    )?;
+    assert_eq!(
+        generated_result.get("fact_source").and_then(Value::as_str),
+        Some("framework_adapter")
+    );
+    assert_eq!(
+        generated_result.get("live_symbol_delete_enabled").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        generated_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        generated_result
+            .pointer("/workspace_edit/changes")
+            .and_then(Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0)
+    );
+    assert!(
+        generated_result.get("current_source_delete_guard").is_none(),
+        "generated/no-source blocker should remain compiler-driven, not source-guard promoted: {generated_result}"
+    );
+    let generated_blocker_ux =
+        generated_result.get("live_blocker_ux").ok_or("missing generated live_blocker_ux")?;
+    assert_json_array_contains(generated_blocker_ux, "blocker_reasons", "GeneratedMember")?;
+
+    let generated_explanation = explain_provider_decision(&server, "safe_delete")?;
+    let generated_receipt = request_receipt(&generated_explanation)?;
+    assert_eq!(generated_receipt.get("symbol").and_then(Value::as_str), Some("routes"));
+    assert_eq!(
+        generated_receipt.get("reason").and_then(Value::as_str),
+        Some("generated_no_source")
+    );
+    assert_eq!(
+        generated_receipt.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+
+    let (plugin_keywords_line, plugin_keywords_character) = position_of(plugin, "plugin_keywords")?;
+    let dynamic_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.safeDeleteSymbol",
+            "arguments": [{
+                "textDocument": {"uri": DANCER2_PLUGIN_URI},
+                "position": {"line": plugin_keywords_line, "character": plugin_keywords_character},
+                "compilerPlanFixture": "dynamic_boundary"
+            }]
+        })))?
+        .ok_or("missing dynamic-boundary safe-delete live blocker result")?;
+    assert_eq!(dynamic_result.get("symbol").and_then(Value::as_str), Some("plugin_keywords"));
+    assert_eq!(
+        dynamic_result.get("compiler_plan_fixture").and_then(Value::as_str),
+        Some("dynamic_boundary")
+    );
+    assert_safe_delete_decision_trace(&dynamic_result, "blocked", "dynamic_boundary", "no_edit")?;
+    assert_eq!(dynamic_result.get("fact_source").and_then(Value::as_str), Some("dynamic_boundary"));
+    assert_eq!(dynamic_result.get("dynamic_boundary").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        dynamic_result.get("live_symbol_delete_enabled").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        dynamic_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        dynamic_result
+            .pointer("/workspace_edit/changes")
+            .and_then(Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0)
+    );
+    assert!(
+        dynamic_result.get("current_source_delete_guard").is_none(),
+        "dynamic blocker should remain dynamic-boundary driven, not source-guard promoted: {dynamic_result}"
+    );
+    let dynamic_blocker_ux =
+        dynamic_result.get("live_blocker_ux").ok_or("missing dynamic live_blocker_ux")?;
+    assert_json_array_contains(dynamic_blocker_ux, "blocker_reasons", "DynamicBoundary")?;
+
+    let dynamic_explanation = explain_provider_decision(&server, "safe_delete")?;
+    let dynamic_receipt = request_receipt(&dynamic_explanation)?;
+    assert_eq!(dynamic_receipt.get("symbol").and_then(Value::as_str), Some("plugin_keywords"));
+    assert_eq!(dynamic_receipt.get("reason").and_then(Value::as_str), Some("dynamic_boundary"));
+    assert_eq!(dynamic_receipt.get("dynamic_boundary").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        dynamic_receipt.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_live_pilot_blocks_dancer2_referenced_source_backed_method()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_dancer2_workspace(&server)?;
+    let response =
+        files.get("lib/Dancer2/Core/Response.pm").ok_or("missing Dancer2 Core Response fixture")?;
+
+    let (header_line, header_character) = position_of(response, "header {")?;
+    let blocked_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.safeDeleteSymbol",
+            "arguments": [{
+                "textDocument": {"uri": DANCER2_RESPONSE_URI},
+                "position": {"line": header_line, "character": header_character}
+            }]
+        })))?
+        .ok_or("missing Dancer2 referenced safe-delete blocker result")?;
+
+    assert_eq!(blocked_result.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        blocked_result.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(blocked_result.get("decision").and_then(Value::as_str), Some("blocked"));
+    assert_eq!(blocked_result.get("symbol").and_then(Value::as_str), Some("header"));
+    assert_eq!(blocked_result.get("reason").and_then(Value::as_str), Some("references_exist"));
+    assert!(
+        blocked_result
+            .get("fact_source")
+            .and_then(Value::as_str)
+            .is_some_and(|source| source == "compiler_fact" || source == "current_source"),
+        "referenced Dancer2 method blocker should be compiler-backed or current-source backed: {blocked_result}"
+    );
+    assert_eq!(blocked_result.get("confidence").and_then(Value::as_str), Some("high"));
+    assert_eq!(blocked_result.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(blocked_result.get("fallback_state").and_then(Value::as_str), Some("no_edit"));
+    assert_eq!(
+        blocked_result.get("live_symbol_delete_enabled").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(blocked_result.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        blocked_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        blocked_result
+            .pointer("/workspace_edit/changes")
+            .and_then(Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0)
+    );
+    assert_safe_delete_decision_trace(&blocked_result, "blocked", "references_exist", "no_edit")?;
+
+    let live_blocker_ux = blocked_result.get("live_blocker_ux").ok_or("missing live_blocker_ux")?;
+    assert_json_array_contains(&blocked_result, "blocker_reasons", "ReferencesExist")?;
+    assert_json_array_contains(live_blocker_ux, "blocker_messages", "still has")?;
+
+    let explanation = explain_provider_decision(&server, "safe_delete")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(request_receipt.get("decision").and_then(Value::as_str), Some("blocked"));
+    assert_eq!(request_receipt.get("reason").and_then(Value::as_str), Some("references_exist"));
+    assert!(
+        request_receipt
+            .get("fact_source")
+            .and_then(Value::as_str)
+            .is_some_and(|source| source == "compiler_fact" || source == "current_source"),
+        "persisted Dancer2 receipt should keep the referenced-source blocker: {request_receipt}"
+    );
+    assert_eq!(request_receipt.get("confidence").and_then(Value::as_str), Some("high"));
+    assert_eq!(request_receipt.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(
+        request_receipt.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_live_pilot_blocks_cross_file_referenced_source_backed_sub()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    open_document(&server, CROSS_PROJECT_SOURCE_URI, CROSS_PROJECT_SOURCE_MODULE)?;
+    open_document(&server, CROSS_PROJECT_CALLER_URI, CROSS_PROJECT_CALLER_MODULE)?;
+
+    let (target_line, target_character) =
+        position_of(CROSS_PROJECT_SOURCE_MODULE, "used_target {")?;
+    let blocked_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.safeDeleteSymbol",
+            "arguments": [{
+                "textDocument": {"uri": CROSS_PROJECT_SOURCE_URI},
+                "position": {"line": target_line, "character": target_character}
+            }]
+        })))?
+        .ok_or("missing cross-file referenced safe-delete blocker result")?;
+
+    assert_eq!(blocked_result.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        blocked_result.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(blocked_result.get("decision").and_then(Value::as_str), Some("blocked"));
+    assert_eq!(blocked_result.get("symbol").and_then(Value::as_str), Some("used_target"));
+    assert_eq!(blocked_result.get("reason").and_then(Value::as_str), Some("references_exist"));
+    assert_eq!(blocked_result.get("fact_source").and_then(Value::as_str), Some("workspace_index"));
+    assert_eq!(blocked_result.get("confidence").and_then(Value::as_str), Some("high"));
+    assert_eq!(blocked_result.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(blocked_result.get("fallback_state").and_then(Value::as_str), Some("no_edit"));
+    assert_eq!(
+        blocked_result.get("live_symbol_delete_enabled").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(blocked_result.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        blocked_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        blocked_result
+            .pointer("/workspace_edit/changes")
+            .and_then(Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0)
+    );
+    assert_safe_delete_decision_trace(&blocked_result, "blocked", "references_exist", "no_edit")?;
+    assert_eq!(
+        blocked_result.get("current_source_reference_count").and_then(Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(blocked_result.get("workspace_reference_count").and_then(Value::as_u64), Some(1));
+    assert!(
+        blocked_result.get("current_source_delete_guard").is_none(),
+        "cross-file referenced-source receipt must be workspace-reference blocked, not current-source guarded: {blocked_result}"
+    );
+    assert_eq!(
+        blocked_result.get("workspace_reference_guard").and_then(Value::as_str),
+        Some("blocked_by_workspace_reference")
+    );
+
+    let live_blocker_ux = blocked_result.get("live_blocker_ux").ok_or("missing live_blocker_ux")?;
+    assert_json_array_contains(live_blocker_ux, "blocker_reasons", "ReferencesExist")?;
+    assert_json_array_contains(live_blocker_ux, "blocker_messages", "still has")?;
+
+    let explanation = explain_provider_decision(&server, "safe_delete")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(request_receipt.get("decision").and_then(Value::as_str), Some("blocked"));
+    assert_eq!(request_receipt.get("symbol").and_then(Value::as_str), Some("used_target"));
+    assert_eq!(request_receipt.get("reason").and_then(Value::as_str), Some("references_exist"));
+    assert_eq!(request_receipt.get("fact_source").and_then(Value::as_str), Some("workspace_index"));
+    assert_eq!(request_receipt.get("confidence").and_then(Value::as_str), Some("high"));
+    assert_eq!(request_receipt.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(
+        request_receipt.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_live_pilot_blocks_dancer2_current_source_reference()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_dancer2_workspace(&server)?;
+    let response =
+        files.get("lib/Dancer2/Core/Response.pm").ok_or("missing Dancer2 Core Response fixture")?;
+
+    let (to_psgi_line, to_psgi_character) = position_of(response, "to_psgi {")?;
+    let preview_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.previewSafeDelete",
+            "arguments": [{
+                "textDocument": {"uri": DANCER2_RESPONSE_URI},
+                "position": {"line": to_psgi_line, "character": to_psgi_character}
+            }]
+        })))?
+        .ok_or("missing Dancer2 safe-delete edit-freshness preview result")?;
+
+    assert_eq!(preview_result.get("decision").and_then(Value::as_str), Some("allowed"));
+    assert_eq!(preview_result.get("symbol").and_then(Value::as_str), Some("to_psgi"));
+    assert_eq!(preview_result.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_safe_delete_decision_trace(&preview_result, "allowed", "compiler_allowed", "none")?;
+
+    let updated_response = response.replace(
+        "sub is_forwarded",
+        "sub as_array {\n    my $self = shift;\n    return $self->to_psgi;\n}\n\nsub is_forwarded",
+    );
+    change_document(&server, DANCER2_RESPONSE_URI, 2, &updated_response)?;
+
+    let blocked_result = server
+        .handle_execute_command(Some(json!({
+            "command": "perl.safeDeleteSymbol",
+            "arguments": [{
+                "textDocument": {"uri": DANCER2_RESPONSE_URI},
+                "position": {"line": to_psgi_line, "character": to_psgi_character}
+            }]
+        })))?
+        .ok_or("missing Dancer2 safe-delete edit-freshness blocker result")?;
+
+    assert_eq!(blocked_result.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        blocked_result.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(blocked_result.get("decision").and_then(Value::as_str), Some("blocked"));
+    assert_eq!(blocked_result.get("symbol").and_then(Value::as_str), Some("to_psgi"));
+    assert_eq!(blocked_result.get("reason").and_then(Value::as_str), Some("references_exist"));
+    assert_eq!(blocked_result.get("fact_source").and_then(Value::as_str), Some("current_source"));
+    assert_eq!(blocked_result.get("fallback_state").and_then(Value::as_str), Some("no_edit"));
+    assert_eq!(
+        blocked_result.get("current_source_reference_count").and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        blocked_result.get("live_symbol_delete_enabled").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(blocked_result.get("edits_applied").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        blocked_result.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        blocked_result
+            .pointer("/workspace_edit/changes")
+            .and_then(Value::as_object)
+            .map(serde_json::Map::len),
+        Some(0)
+    );
+    assert_safe_delete_decision_trace(&blocked_result, "blocked", "references_exist", "no_edit")?;
+
+    let message = blocked_result
+        .get("user_message")
+        .and_then(Value::as_str)
+        .ok_or("missing Dancer2 safe-delete blocked user_message")?;
+    assert!(
+        message.contains("Safe delete refused")
+            && message.contains("to_psgi")
+            && message.contains("No edits were returned"),
+        "blocked message should explain the current-source reference without edits: {message}"
+    );
+
+    let explanation = explain_provider_decision(&server, "safe_delete")?;
+    let request_receipt = request_receipt(&explanation)?;
+    assert_eq!(
+        request_receipt.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(request_receipt.get("decision").and_then(Value::as_str), Some("blocked"));
+    assert_eq!(request_receipt.get("reason").and_then(Value::as_str), Some("references_exist"));
+    assert_eq!(request_receipt.get("fact_source").and_then(Value::as_str), Some("current_source"));
+    assert_eq!(
+        request_receipt.get("returned_workspace_edit_count").and_then(Value::as_u64),
+        Some(0)
+    );
 
     Ok(())
 }
