@@ -34,6 +34,7 @@ generated sections.
 - [PLSP-SPEC-0012: User-facing trust surfaces](PLSP-SPEC-0012-user-facing-trust-surfaces.md)
 - [PLSP-SPEC-0013: Agent build storage and gates](PLSP-SPEC-0013-agent-build-storage-and-gates.md)
 - [PLSP-SPEC-0014: Refactor acceptance](PLSP-SPEC-0014-refactor-acceptance.md)
+- [PLSP-SPEC-0015: Real Perl Editor Trust v1 boundary](PLSP-SPEC-0015-real-perl-editor-trust-v1-boundary.md)
 
 ## Acceptance and Proof
 
