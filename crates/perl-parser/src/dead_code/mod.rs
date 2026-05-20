@@ -239,16 +239,17 @@ fn detect_unconditional_terminator(trimmed: &str) -> Option<&str> {
         None => after_terminator,
     }
     .trim_start();
-    if contains_postfix_condition(remainder) {
+    if contains_postfix_modifier(remainder) {
         return None;
     }
 
     Some(first)
 }
 
-fn contains_postfix_condition(remainder: &str) -> bool {
-    const CONDITIONS: [&str; 7] = ["if", "unless", "when", "while", "until", "for", "foreach"];
-    CONDITIONS.iter().any(|keyword| contains_keyword(remainder, keyword))
+fn contains_postfix_modifier(remainder: &str) -> bool {
+    const POSTFIX_MODIFIERS: [&str; 7] =
+        ["if", "unless", "when", "while", "until", "for", "foreach"];
+    POSTFIX_MODIFIERS.iter().any(|keyword| contains_keyword(remainder, keyword))
 }
 
 fn contains_keyword(text: &str, keyword: &str) -> bool {
@@ -266,7 +267,11 @@ fn is_keyword_boundary(ch: Option<char>) -> bool {
 /// Returns `true` if `condition` is a trivially-false constant expression.
 ///
 /// Matches: `0`, `""`, `''`, `undef`, `(0)`, `( 0 )` — the standard Perl idioms
-/// used to write permanently-dead `if`/`while`/`for` blocks.
+/// used to write permanently-dead `if`/`while`/`elsif` blocks.
+///
+/// Note: `for`/`foreach` are intentionally **not** guarded by this function.
+/// `for (0) {}` iterates once with `$_ = 0`; it is a list iterator, not a
+/// boolean guard, so it is never dead code.
 fn is_always_false(condition: &str) -> bool {
     let c = condition.trim();
     matches!(c, "0" | "\"\"" | "''" | "undef")
