@@ -1,0 +1,63 @@
+---
+source: crates/perl-lsp-rs/tests/lsp_provider_decision_explanation_snap.rs
+expression: scrub_version(result)
+---
+confidence: high
+copyable_payload:
+  confidence: high
+  decision: fallback
+  dynamic_boundary: false
+  fact_source: compiler_fact
+  fallback: legacy_provider
+  freshness: fresh
+  perl_lsp_version: "<version>"
+  provider: completion
+  reason: fallback_policy
+  receipt_id: completion-schema-snapshot
+  request_position:
+    character: 3
+    line: 2
+    uri_scheme: file
+  request_receipt:
+    confidence: medium
+    decision: fallback
+    dynamic_boundary: false
+    fact_source: compiler_fact
+    fallback: legacy_provider
+    fallback_state: legacy_provider
+    freshness: fresh
+    provider: completion
+    reason: caller_supplied_receipt
+    schema_version: provider_decision.v1
+    source_backed: true
+    user_message: Caller supplied receipt won over the persisted completion trace.
+  scenario: provider-decision-schema
+  schema_version: provider_decision_bug_report.v1
+  support_tier_link: "docs/project/status/SUPPORT_TIERS.md#claim-rows"
+  user_message: "Completion used fallback.\nProvider policy selected a conservative fallback path.\nFact source: compiler facts.\nConfidence: high. Freshness: fresh.\nDynamic boundary: no.\nFallback: legacy provider.\nRequest detail: Caller supplied receipt won over the persisted completion trace.\nReceipt: completion-schema-snapshot.\nScenario: provider-decision-schema."
+  workspace_root_class: single_root
+  workspace_root_hash: "<workspace-root-hash>"
+decision: fallback
+dynamic_boundary: false
+fact_source: compiler_fact
+fallback: legacy_provider
+freshness: fresh
+provider: completion
+reason: fallback_policy
+receipt_id: completion-schema-snapshot
+request_receipt:
+  confidence: medium
+  decision: fallback
+  dynamic_boundary: false
+  fact_source: compiler_fact
+  fallback: legacy_provider
+  fallback_state: legacy_provider
+  freshness: fresh
+  provider: completion
+  reason: caller_supplied_receipt
+  schema_version: provider_decision.v1
+  source_backed: true
+  user_message: Caller supplied receipt won over the persisted completion trace.
+scenario: provider-decision-schema
+schema_version: provider_decision.v1
+user_message: "Completion used fallback.\nProvider policy selected a conservative fallback path.\nFact source: compiler facts.\nConfidence: high. Freshness: fresh.\nDynamic boundary: no.\nFallback: legacy provider.\nRequest detail: Caller supplied receipt won over the persisted completion trace.\nReceipt: completion-schema-snapshot.\nScenario: provider-decision-schema."

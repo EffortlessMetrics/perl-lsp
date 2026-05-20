@@ -32,6 +32,7 @@ impl Checkpointable for PerlLexer<'_> {
             after_var_subscript: self.after_var_subscript,
             paren_depth: self.paren_depth,
             current_pos: self.current_pos,
+            eof_emitted: self.eof_emitted,
             context,
         }
     }
@@ -48,6 +49,7 @@ impl Checkpointable for PerlLexer<'_> {
         self.after_var_subscript = checkpoint.after_var_subscript;
         self.paren_depth = checkpoint.paren_depth;
         self.current_pos = checkpoint.current_pos;
+        self.eof_emitted = checkpoint.eof_emitted;
 
         // Handle special contexts
         use checkpoint::CheckpointContext;

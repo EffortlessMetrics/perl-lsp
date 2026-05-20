@@ -11,7 +11,7 @@ Advisory CI economics forecast. Runs once per PR via
 ## What it does
 
 1. Reads `policy/ci-budget.toml`, `policy/ci-lanes.toml`,
-   `policy/ci-risk-packs.toml`.
+   `policy/ci-risk-packs.toml`, and `policy/trust-lanes.toml`.
 2. Computes changed files via `git diff --name-only $BASE...$HEAD`.
 3. Classifies the diff into risk packs (parser, LSP, retained-state, etc).
 4. Selects lanes from three independent sources, recording the **origin** of
@@ -27,7 +27,11 @@ Advisory CI economics forecast. Runs once per PR via
    would have been selected but are skipped by paths-filter are reported in
    the `skipped_lanes` section so contributors can see they were considered.
 6. Sums `base_lem` per selected lane.
-7. Emits the band: `default` / `elevated` / `high` / `over_ceiling`.
+7. Classifies the diff against advisory trust-lane classes from
+   `policy/trust-lanes.toml`, recording the strongest class, required proof,
+   skipped-by-policy checks, widening triggers, support-claim impact, and
+   hosted-CI estimate.
+8. Emits the band: `default` / `elevated` / `high` / `over_ceiling`.
 
 ---
 
@@ -62,6 +66,27 @@ Advisory CI economics forecast. Runs once per PR via
        "default_pr": true, "blocking": true}
     ]
   },
+  "trust_lanes": {
+    "schema_version": 1,
+    "policy": "trust-lanes",
+    "status": "advisory",
+    "spec": "docs/specs/PLSP-SPEC-0011-trust-lane-ci-routing.md",
+    "strongest_class": {
+      "id": "parser_runtime_fix",
+      "risk_rank": 50,
+      "claim_boundary": "Changes parser, lexer, AST, token, POD, regex, or source-position runtime behavior.",
+      "required_checks": ["focused parser runtime tests for the changed grammar family"],
+      "skipped_by_policy_checks": ["release proof unless release files changed"],
+      "widening_triggers": ["AST shape changes"],
+      "support_claim_impact": "Parser bucket or compatibility claims require fresh generated status evidence."
+    },
+    "changed_surface": ["parser, lexer, or parser-core runtime source"],
+    "hosted_ci_estimate": {
+      "estimated_lem": 42.0,
+      "band": "elevated",
+      "selected_lanes": 5
+    }
+  },
   "warnings": []
 }
 ```
@@ -75,6 +100,9 @@ Advisory CI economics forecast. Runs once per PR via
 - **Not a billing source.** `estimated_usd` is display only.
 - **Not a runtime gate.** It does not trigger or skip downstream workflows. PR 12
   adds `xtask ci plan` which downstream lanes can read for `if:` conditions.
+- **Not support proof.** Trust-lane classification explains which proof a PR
+  should buy for its claim class; it does not prove provider behavior or
+  promote support tiers.
 
 ---
 

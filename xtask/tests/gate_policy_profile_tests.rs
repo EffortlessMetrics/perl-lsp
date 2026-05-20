@@ -21,6 +21,13 @@ struct PolicyGate {
     tier: String,
     #[serde(default = "default_true")]
     required: bool,
+    timeout_seconds: Option<u64>,
+    budgets: Option<GateBudgets>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GateBudgets {
+    max_duration_ms: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -55,12 +62,78 @@ fn parser_corpus_pr_policy_is_unambiguous() -> Result<(), Box<dyn std::error::Er
 
     assert_eq!(common.tier, "merge_gate");
     assert!(common.required, "common_corpus_clean must stay PR-blocking");
+    assert!(
+        common.timeout_seconds.unwrap_or_default() >= 240,
+        "common_corpus_clean timeout must include cold CI xtask startup"
+    );
+    assert!(
+        common.budgets.as_ref().and_then(|budget| budget.max_duration_ms).unwrap_or_default()
+            >= 180_000,
+        "common_corpus_clean duration budget must reflect CI startup overhead"
+    );
 
     assert_eq!(parser.tier, "merge_gate");
     assert!(!parser.required, "parser_corpus_ratchet must be advisory in PR merge-gate profile");
 
     assert_eq!(cpan.tier, "merge_gate");
     assert!(!cpan.required, "cpan_corpus_ratchet must never be PR-blocking");
+
+    Ok(())
+}
+
+#[test]
+fn release_history_pr_gates_have_realistic_timeout_headroom()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = project_root();
+    let policy_path = root.join(".ci/gate-policy.yaml");
+    let content = fs::read_to_string(policy_path)?;
+    let parsed: GatePolicyDoc = serde_yaml_ng::from_str(&content)?;
+
+    let gates: HashMap<_, _> =
+        parsed.gates.into_iter().map(|gate| (gate.name.clone(), gate)).collect();
+
+    for gate_name in ["release_history", "release_history_check"] {
+        let gate = gates.get(gate_name).ok_or_else(|| format!("missing {gate_name} gate"))?;
+        assert_eq!(gate.tier, "pr_fast", "{gate_name} must stay in pr-fast");
+        assert!(gate.required, "{gate_name} must stay PR-blocking");
+        assert!(
+            gate.timeout_seconds.unwrap_or_default() >= 120,
+            "{gate_name} timeout must include cold or partially-cold xtask startup"
+        );
+        assert!(
+            gate.budgets.as_ref().and_then(|budget| budget.max_duration_ms).unwrap_or_default()
+                >= 90_000,
+            "{gate_name} duration budget must reflect observed pr-fast runtime"
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn conflict_marker_gate_has_local_runtime_headroom() -> Result<(), Box<dyn std::error::Error>> {
+    let root = project_root();
+    let policy_path = root.join(".ci/gate-policy.yaml");
+    let content = fs::read_to_string(policy_path)?;
+    let parsed: GatePolicyDoc = serde_yaml_ng::from_str(&content)?;
+
+    let gate = parsed
+        .gates
+        .into_iter()
+        .find(|gate| gate.name == "check_conflict_markers")
+        .ok_or("missing check_conflict_markers gate")?;
+
+    assert_eq!(gate.tier, "pr_fast", "conflict marker scan must stay in pr-fast");
+    assert!(gate.required, "conflict marker scan must stay PR-blocking");
+    assert!(
+        gate.timeout_seconds.unwrap_or_default() >= 120,
+        "conflict marker timeout must include Windows and mounted-worktree headroom"
+    );
+    assert!(
+        gate.budgets.as_ref().and_then(|budget| budget.max_duration_ms).unwrap_or_default()
+            >= 120_000,
+        "conflict marker budget must reflect observed local runtime"
+    );
 
     Ok(())
 }

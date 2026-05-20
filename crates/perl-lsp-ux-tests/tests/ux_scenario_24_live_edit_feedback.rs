@@ -8,12 +8,9 @@
 //!   result (degraded mode).
 
 use anyhow::Result;
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 use std::time::Duration;
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 const UNDECLARED_SOURCE: &str = r#"use strict;
 use warnings;

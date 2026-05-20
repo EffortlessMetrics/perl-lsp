@@ -10,12 +10,9 @@
 //! The gate allows the scenario to appear in the default test run (with a
 //! reduced 1k-line version) so CI always exercises the code path.
 
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 use std::time::Duration;
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 fn generate_source(line_count: usize) -> String {
     let mut buf = String::with_capacity(line_count * 40);

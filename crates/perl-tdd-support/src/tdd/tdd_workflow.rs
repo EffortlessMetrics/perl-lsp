@@ -285,25 +285,49 @@ impl TddWorkflow {
             self.test_cache.insert(file.clone(), results.clone());
         }
 
-        // Update state based on results
+        // Update state based on the red-green-refactor cycle. Passing tests move the
+        // workflow to Green; entering Refactor is an explicit next step so callers
+        // can observe the complete cycle instead of skipping directly to Refactor.
         let (new_state, message) = if results.failed > 0 {
             (WorkflowState::Red, format!("{} tests failed", results.failed))
         } else if results.todo > 0 {
             (WorkflowState::Green, format!("All tests pass, {} TODOs remaining", results.todo))
         } else {
-            (WorkflowState::Refactor, "All tests pass! Ready to refactor".to_string())
+            (WorkflowState::Green, "All tests pass! Ready to refactor".to_string())
         };
 
         self.state = new_state.clone();
 
         let mut actions = vec![];
 
-        // Suggest refactorings if all tests pass
-        if new_state == WorkflowState::Refactor && self.config.auto_suggest_refactorings {
+        // Suggest refactorings once the suite is green, but keep the phase explicit.
+        if new_state == WorkflowState::Green && self.config.auto_suggest_refactorings {
             actions.push(TddAction::SuggestRefactorings);
         }
 
         TddCycleResult { phase: format!("{:?}", new_state), message, actions }
+    }
+
+    /// Move from green into the refactoring phase.
+    pub fn start_refactor(&mut self) -> TddCycleResult {
+        self.state = WorkflowState::Refactor;
+
+        TddCycleResult {
+            phase: "Refactor".to_string(),
+            message: "Refactoring phase - improve code while keeping tests green".to_string(),
+            actions: vec![TddAction::SuggestRefactorings, TddAction::UpdateCoverage],
+        }
+    }
+
+    /// Complete the current TDD cycle and return to idle.
+    pub fn complete_cycle(&mut self) -> TddCycleResult {
+        self.state = WorkflowState::Idle;
+
+        TddCycleResult {
+            phase: "Idle".to_string(),
+            message: "TDD cycle complete".to_string(),
+            actions: vec![TddAction::RunTests],
+        }
     }
 
     /// Get refactoring suggestions

@@ -241,7 +241,7 @@ fn large_workspace_overrides() -> Result<(), Box<dyn std::error::Error>> {
 
     assert_eq!(limits.max_indexed_files, 50_000);
     assert_eq!(limits.max_total_symbols, 2_000_000);
-    assert_eq!(limits.workspace_scan_deadline, Duration::from_secs(120));
+    assert_eq!(limits.workspace_scan_deadline, Duration::from_mins(2));
     Ok(())
 }
 
@@ -481,7 +481,7 @@ fn update_only_deadline() -> Result<(), Box<dyn std::error::Error>> {
 
     limits.update_from_value(&settings);
 
-    assert_eq!(limits.workspace_scan_deadline, Duration::from_millis(5000));
+    assert_eq!(limits.workspace_scan_deadline, Duration::from_secs(5));
     assert_eq!(limits.file_index_deadline, Duration::from_secs(5)); // unchanged
     Ok(())
 }

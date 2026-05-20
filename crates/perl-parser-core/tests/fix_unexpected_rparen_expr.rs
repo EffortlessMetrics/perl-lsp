@@ -475,3 +475,17 @@ fn test_subst_double_quoted_replacement_no_delimiter() {
 fn test_split_single_quote_string_without_space() {
     assert_no_errors(r#"@names = split' ', $val;"#);
 }
+
+#[test]
+fn test_data_compare_percent_y_hash_copy_clean() {
+    // Data::Compare::_Compare copies hashrefs into `%x` and `%y`.
+    // The `%y` declaration must not degrade into the `y///` transliteration alias.
+    assert_no_errors("sub f { my %x = %$x; my %y = %$y; }");
+}
+
+#[test]
+fn test_debconf_autoload_my_from_our_binding_clean() {
+    // Debconf::Base::AUTOLOAD derives a field name from a localized package
+    // variable and immediately applies a substitution to the declaration expr.
+    assert_no_errors(r#"(my $field = our $AUTOLOAD) =~ s/.*://;"#);
+}

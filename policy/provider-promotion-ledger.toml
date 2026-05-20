@@ -1,0 +1,432 @@
+# Machine-readable provider promotion ledger.
+#
+# Human-readable routing remains in:
+# docs/project/status/provider_promotion_ledger.md
+#
+# This policy records one row per provider fact class. It does not broaden live
+# provider behavior, promote support tiers, or replace provider-specific
+# receipts.
+
+schema_version = 1
+policy = "provider-promotion-ledger"
+owner = "perl-lsp maintainers"
+status = "advisory"
+updated = "2026-05-20"
+spec = "docs/specs/PLSP-SPEC-0015-real-perl-editor-trust-v1-boundary.md"
+human_ledger = "docs/project/status/provider_promotion_ledger.md"
+
+decision_states = [
+  "promote",
+  "fallback",
+  "block",
+  "defer",
+]
+
+blocker_registry = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "ambiguous_identity",
+  "imported_exported",
+  "typeglob_alias",
+  "autoload",
+  "symbolic_ref",
+  "dynamic_require",
+  "rollback_missing",
+  "current_source_reference",
+  "workspace_reference",
+  "unsupported_fact_class",
+  "unsafe_edit_blocked",
+  "missing_fact",
+  "fallback_policy",
+  "unknown",
+]
+
+[[provider_class]]
+surface = "Completion"
+fact_class = "Source-backed receiver fact"
+current_state = "source-backed receiver pilot"
+decision = "promote"
+next_proof = "Real-workspace receiver-quality receipts and additional receiver-form proof before broader method completion expansion"
+promotion_conditions = [
+  "fresh_high_confidence_source_backed_receiver_fact",
+  "receiver_fact_identifies_package_for_request",
+  "exact_receiver_candidates_rank_above_fallback",
+  "provider_receipts_preserved",
+]
+fallback_conditions = [
+  "unknown_receiver",
+  "unsupported_receiver",
+  "partial_receiver_evidence",
+  "dynamic_key_receiver_evidence",
+]
+blocker_conditions = [
+  "generated_no_source",
+  "stale_fact",
+  "low_confidence",
+  "dynamic_boundary",
+  "ambiguous_identity",
+  "unsupported_fact_class",
+]
+required_receipts = [
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+
+[[provider_class]]
+surface = "Semantic tokens"
+fact_class = "Subroutine declaration token"
+current_state = "partial live trace slice"
+decision = "promote"
+next_proof = "Another scoped compiler-token class proof before broader compiler-token promotion"
+promotion_conditions = [
+  "fresh_source_backed_compiler_span",
+  "span_matches_exactly_one_existing_live_function_token",
+  "emits_no_new_token_output",
+]
+fallback_conditions = [
+  "compiler_identity_absent",
+  "compiler_span_unmatched",
+]
+blocker_conditions = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "fallback_policy",
+  "unsupported_fact_class",
+]
+required_receipts = [
+  "docs/project/status/semantic_scorecard.md",
+  "docs/project/status/semantic_shadow_compare.md",
+]
+
+[[provider_class]]
+surface = "Semantic tokens"
+fact_class = "Method declaration token"
+current_state = "partial live trace slice"
+decision = "promote"
+next_proof = "Another scoped compiler-token class proof before broader compiler-token promotion"
+promotion_conditions = [
+  "fresh_source_backed_method_declaration_span",
+  "span_matches_exactly_one_existing_live_method_token",
+  "did_change_freshness_proven",
+  "emits_no_new_token_output",
+]
+fallback_conditions = [
+  "unproven_method_token_shape",
+]
+blocker_conditions = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "unsupported_fact_class",
+]
+required_receipts = [
+  "docs/project/status/semantic_scorecard.md",
+  "docs/project/status/semantic_shadow_compare.md",
+]
+
+[[provider_class]]
+surface = "Semantic tokens"
+fact_class = "Package declaration token"
+current_state = "partial live trace slice"
+decision = "promote"
+next_proof = "Another scoped compiler-token class proof before broader compiler-token promotion"
+promotion_conditions = [
+  "fresh_source_backed_package_declaration_span",
+  "span_matches_exactly_one_existing_live_namespace_token",
+  "did_change_freshness_proven",
+  "emits_no_new_token_output",
+]
+fallback_conditions = [
+  "unproven_namespace_token_shape",
+]
+blocker_conditions = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "fallback_policy",
+  "unsupported_fact_class",
+]
+required_receipts = [
+  "docs/project/status/semantic_scorecard.md",
+  "docs/project/status/semantic_shadow_compare.md",
+]
+
+[[provider_class]]
+surface = "Semantic tokens"
+fact_class = "Field declaration token"
+current_state = "partial live trace slice"
+decision = "promote"
+next_proof = "Another scoped compiler-token class proof before broader compiler-token promotion"
+promotion_conditions = [
+  "fresh_source_backed_field_declaration_span",
+  "span_matches_exactly_one_existing_live_variable_token",
+  "did_change_freshness_proven",
+  "emits_no_new_token_output",
+]
+fallback_conditions = [
+  "unproven_variable_token_shape",
+]
+blocker_conditions = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "unsupported_fact_class",
+]
+required_receipts = [
+  "docs/project/status/semantic_scorecard.md",
+  "docs/project/status/semantic_shadow_compare.md",
+]
+
+[[provider_class]]
+surface = "Semantic tokens"
+fact_class = "Method call token"
+current_state = "partial live trace slice"
+decision = "promote"
+next_proof = "Another scoped compiler-token class proof before broader compiler-token promotion"
+promotion_conditions = [
+  "fresh_source_backed_method_call_span",
+  "span_matches_exactly_one_existing_live_method_token",
+  "did_change_freshness_proven",
+  "emits_no_new_token_output",
+]
+fallback_conditions = [
+  "unproven_method_call_shape",
+]
+blocker_conditions = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "unsupported_fact_class",
+]
+required_receipts = [
+  "docs/project/status/semantic_scorecard.md",
+  "docs/project/status/semantic_shadow_compare.md",
+]
+
+[[provider_class]]
+surface = "Semantic tokens"
+fact_class = "Self method-call token"
+current_state = "partial live trace slice"
+decision = "promote"
+next_proof = "Another scoped compiler-token class proof before broader compiler-token promotion"
+promotion_conditions = [
+  "fresh_source_backed_self_method_call_span",
+  "span_matches_exactly_one_existing_live_method_token",
+  "did_change_freshness_proven",
+  "emits_no_new_token_output",
+]
+fallback_conditions = [
+  "unproven_receiver_specific_method_call_shape",
+]
+blocker_conditions = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "ambiguous_identity",
+  "unsupported_fact_class",
+]
+required_receipts = [
+  "docs/project/status/semantic_scorecard.md",
+  "docs/project/status/semantic_shadow_compare.md",
+]
+
+[[provider_class]]
+surface = "Workspace symbols"
+fact_class = "Source-backed exact symbol"
+current_state = "partial live"
+decision = "promote"
+next_proof = "Project-shape quality receipts before broader expansion"
+promotion_conditions = [
+  "non_empty_query",
+  "fresh_ready_workspace_index",
+  "high_confidence_source_backed_symbol",
+]
+fallback_conditions = [
+  "empty_query",
+  "partial_index",
+  "open_document_fallback",
+  "absent_ready_index_proof",
+]
+blocker_conditions = [
+  "stale_fact",
+  "dynamic_boundary",
+  "low_confidence",
+  "ambiguous_identity",
+  "generated_no_source",
+]
+required_receipts = [
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+
+[[provider_class]]
+surface = "Workspace symbols"
+fact_class = "Source-backed generated/framework symbol"
+current_state = "generated-label pilot"
+decision = "promote"
+next_proof = "Additional generated/no-source project variants and explicit-label rank/noise proof before broader generated-symbol expansion"
+promotion_conditions = [
+  "fresh_source_backed_generated_framework_member",
+  "explicit_generated_label",
+  "framework_declaration_anchor",
+  "bounded_confidence",
+  "generated_no_source_blocker_receipts_exist",
+]
+fallback_conditions = [
+  "source_anchor_missing",
+  "generated_label_missing",
+]
+blocker_conditions = [
+  "generated_no_source",
+  "stale_fact",
+  "dynamic_boundary",
+  "low_confidence",
+  "ambiguous_identity",
+  "fallback_policy",
+  "unsupported_fact_class",
+]
+required_receipts = [
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+
+[[provider_class]]
+surface = "Rename"
+fact_class = "Same-file lexical symbol"
+current_state = "narrow live"
+decision = "promote"
+next_proof = "Keep unsafe-edit receipts fresh when rename facts change"
+promotion_conditions = [
+  "current_document_has_exactly_one_source_backed_my_or_state_declaration_edit",
+  "references_remain_in_same_file",
+]
+fallback_conditions = [
+  "scoped_lexical_proof_absent",
+]
+blocker_conditions = [
+  "generated_no_source",
+  "imported_exported",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "ambiguous_identity",
+  "unsupported_fact_class",
+]
+required_receipts = [
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+
+[[provider_class]]
+surface = "Rename"
+fact_class = "Package-local source-backed plan"
+current_state = "package-local pilot"
+decision = "promote"
+next_proof = "Keep project-shaped unsafe-edit and edit-freshness receipts fresh; broader promotion deferred"
+promotion_conditions = [
+  "materialized_source_backed_semantic_edit_set",
+  "semantic_edit_set_matches_workspace_source_ambiguity_guard",
+  "rollback_no_edit_proof_preserved",
+]
+fallback_conditions = [
+  "compiler_plan_partial",
+  "current_source_coverage_requires_broader_fresh_edit_set",
+]
+blocker_conditions = [
+  "imported_exported",
+  "generated_no_source",
+  "dynamic_boundary",
+  "typeglob_alias",
+  "autoload",
+  "symbolic_ref",
+  "stale_fact",
+  "low_confidence",
+  "missing_fact",
+  "ambiguous_identity",
+  "rollback_missing",
+  "unsupported_fact_class",
+]
+required_receipts = [
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+
+[[provider_class]]
+surface = "Safe delete"
+fact_class = "Exact static source-backed subroutine"
+current_state = "source-backed pilot + current-source/workspace reference and identity guards"
+decision = "promote"
+next_proof = "Keep generated/dynamic blocker receipts fresh; broader promotion deferred"
+promotion_conditions = [
+  "compiler_plan_allowed",
+  "fresh_high_confidence_source_backed_subroutine",
+  "zero_compiler_references",
+  "zero_current_source_references",
+  "zero_workspace_index_references",
+  "workspace_identity_guard_accepts",
+  "rollback_proof_restores_original_text",
+]
+fallback_conditions = [
+  "preview_only_when_live_delete_proof_incomplete",
+]
+blocker_conditions = [
+  "imported_exported",
+  "generated_no_source",
+  "unsupported_fact_class",
+  "current_source_reference",
+  "workspace_reference",
+  "ambiguous_identity",
+  "typeglob_alias",
+  "autoload",
+  "symbolic_ref",
+  "dynamic_require",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "fallback_policy",
+  "rollback_missing",
+]
+required_receipts = [
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+
+[[provider_class]]
+surface = "Provider explanation"
+fact_class = "Request-local provider decision"
+current_state = "partial live schema"
+decision = "promote"
+next_proof = "Keep schema stable as providers add live slices"
+promotion_conditions = [
+  "provider_request_emits_or_persists_fact_source",
+  "provider_request_emits_or_persists_confidence",
+  "provider_request_emits_or_persists_freshness",
+  "provider_request_emits_or_persists_source_backed_state",
+  "provider_request_emits_or_persists_fallback_state",
+  "provider_request_emits_or_persists_blocker",
+  "provider_request_emits_or_persists_claim_boundary",
+  "provider_request_emits_or_persists_user_message",
+]
+fallback_conditions = [
+  "latest_trace_replay",
+  "request_local_receipt_payload",
+]
+blocker_conditions = [
+  "missing_fact",
+  "unknown",
+  "unsupported_fact_class",
+  "fallback_policy",
+]
+required_receipts = [
+  "docs/specs/PLSP-SPEC-0016-provider-decision-receipt-v1.md",
+  "schemas/provider_decision.v1.schema.json",
+]
