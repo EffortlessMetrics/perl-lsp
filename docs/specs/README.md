@@ -37,6 +37,7 @@ generated sections.
 - [PLSP-SPEC-0015: Real Perl Editor Trust v1 boundary](PLSP-SPEC-0015-real-perl-editor-trust-v1-boundary.md)
 - [PLSP-SPEC-0016: Provider decision receipt v1](PLSP-SPEC-0016-provider-decision-receipt-v1.md)
 - [PLSP-SPEC-0017: Fact provenance and source backing](PLSP-SPEC-0017-fact-provenance-and-source-backing.md)
+- [PLSP-SPEC-0018: Edit authorization contract](PLSP-SPEC-0018-edit-authorization-contract.md)
 
 ## Acceptance and Proof
 

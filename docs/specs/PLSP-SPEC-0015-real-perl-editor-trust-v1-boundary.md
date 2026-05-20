@@ -11,6 +11,7 @@ Linked specs:
 - [PLSP-SPEC-0012](PLSP-SPEC-0012-user-facing-trust-surfaces.md)
 - [PLSP-SPEC-0014](PLSP-SPEC-0014-refactor-acceptance.md)
 - [PLSP-SPEC-0017](PLSP-SPEC-0017-fact-provenance-and-source-backing.md)
+- [PLSP-SPEC-0018](PLSP-SPEC-0018-edit-authorization-contract.md)
 Linked ADRs:
 - [PLSP-ADR-0002](../adr/PLSP-ADR-0002-confidence-before-cutover.md)
 - [PLSP-ADR-0003](../adr/PLSP-ADR-0003-preview-before-edit.md)
