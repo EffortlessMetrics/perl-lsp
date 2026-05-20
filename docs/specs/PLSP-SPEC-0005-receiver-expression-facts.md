@@ -329,10 +329,13 @@ The handoff shape is:
    arrow context.
 2. Workspace method completion receives the optional receiver fact.
 3. Receiver evidence is derived from the fact when present.
-4. Legacy text-pattern classification runs only when no semantic receiver fact
-   is available.
-5. Exact package completion uses `ReceiverFact.package`.
-6. Unknown or dynamic receivers fall back according to provider confidence rules
+4. Exact receiver behavior may use `ReceiverFact.package` only when
+   `fallback_state == Exact` and provider-specific confidence guards pass.
+5. Legacy text-pattern classification remains available when no semantic
+   receiver fact is available or when the semantic receiver fact is `Fallback`.
+6. `Blocked` receiver facts must not authorize completion, navigation, or
+   edit-producing behavior.
+7. Unknown or dynamic receivers fall back according to provider confidence rules
    and must not be labeled as exact semantic receivers.
 
 Completion details for exact receiver facts should include receiver kind,
