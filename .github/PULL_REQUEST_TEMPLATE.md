@@ -10,6 +10,38 @@ like (#0000) or (#9999) will fail CI.
 ## Summary
 <!-- What changed and why. Link the issue: Fixes #NNN -->
 
+## Lane
+<!-- Pick one. See docs/swarm/review-rules.md. -->
+- [ ] trust
+- [ ] substrate
+- [ ] reliability
+
+## Claim Boundary
+<!-- What changes, and what does this PR explicitly not claim? -->
+
+## Promotion Discipline
+<!-- Required for trust-lane PRs. Write N/A for substrate or reliability PRs. -->
+- Surface:
+- Fact class:
+- Promotion rule:
+- Fallback rule:
+- Blocker rule:
+- Receipt:
+
+## Behavior
+- [ ] no behavior change
+- [ ] preview only
+- [ ] scoped pilot
+- [ ] live behavior change
+
+## Risk Surfaces
+- [ ] edit-producing
+- [ ] provider behavior
+- [ ] subprocess
+- [ ] path/module resolution
+- [ ] public API
+- [ ] parser/lexer core
+
 ## Changes
 <!-- List changed files and what each change does -->
 
@@ -17,6 +49,8 @@ like (#0000) or (#9999) will fail CI.
 <!-- What test was added? Does it fail before the fix and pass after? -->
 
 ## Verification
+- [ ] Lane and risk surface are declared above.
+- [ ] Trust-lane PRs name promotion, fallback, blocker, and receipt boundaries.
 - [ ] `cargo xtask fmt` — clean
 - [ ] I used a narrow orthogonal pass first (freshness check, truth-check, or targeted repro) before the broader gate.
 - [ ] `cargo clippy -p <crate> --tests` — clean
