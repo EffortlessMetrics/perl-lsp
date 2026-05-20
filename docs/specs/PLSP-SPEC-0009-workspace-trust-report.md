@@ -6,11 +6,14 @@ Linked proposal: [PLSP-PROP-0001](../proposals/PLSP-PROP-0001-real-perl-editor-t
 Linked specs:
 - [PLSP-SPEC-0002](PLSP-SPEC-0002-provider-confidence-receipts.md)
 - [PLSP-SPEC-0003](PLSP-SPEC-0003-real-workspace-editor-baseline.md)
+- [PLSP-SPEC-0022](PLSP-SPEC-0022-module-path-authority.md)
+- [PLSP-SPEC-0023](PLSP-SPEC-0023-ambient-inputs.md)
 Linked ADRs:
 - [PLSP-ADR-0002](../adr/PLSP-ADR-0002-confidence-before-cutover.md)
 Linked plan: [Real Perl Editor Trust implementation plan](../../plans/real-perl-editor-trust/implementation-plan.md)
 Status impact: support tiers, provider confidence matrix, real editor trust
 dashboard, VS Code command documentation, setup troubleshooting docs
+Schema: [workspace_trust_report.v1.schema.json](../../schemas/workspace_trust_report.v1.schema.json)
 
 ## Current implementation status
 
@@ -22,8 +25,9 @@ existing server and client state, with schema coverage tracked from
 [real_perl_editor_trust_v1.md](../project/status/real_perl_editor_trust_v1.md).
 
 Current setup hints, perldoc/DAP state, launch-configuration classes, and
-module-path boundaries remain report-only. They do not probe Perl, run
-`perldoc`, launch DAP, scan the workspace, or promote setup-health support
+module-path boundaries remain report-only. The payload shape is locked by
+`workspace_trust_report.v1`; neither the report nor the schema may probe Perl,
+run `perldoc`, launch DAP, scan the workspace, or promote setup-health support
 tiers.
 
 ## Contract

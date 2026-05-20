@@ -11,11 +11,8 @@
 //! - No error-level `window/showMessage` for encoding issues.
 //! - Hover and completion MUST NOT crash (empty results OK).
 
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 #[test]
 fn scenario_09_utf8_bom_file_does_not_crash() {

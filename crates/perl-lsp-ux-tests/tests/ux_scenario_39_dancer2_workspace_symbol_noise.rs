@@ -11,26 +11,21 @@
 //! - dynamic-boundary-shaped names observed separately from exact symbols
 //! - stale/fresh query behavior after editing an open document
 
-use anyhow::{Context, Result};
+use anyhow::Result;
+use perl_lsp_ux_tests::binary_available;
+use perl_lsp_ux_tests::missing_binary_skip;
 use perl_lsp_ux_tests::{
-    ScenarioConfig, UxCiTier, UxComponent, UxHarness, UxScenarioSkip, run_ux_scenario,
+    ProjectFixtureFile as FixtureFile, UxCiTier, UxComponent, UxHarness, create_fixture_harness,
+    fixture_content, load_dancer2_fixture_files, open_all_fixture_files, run_ux_scenario,
 };
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeSet;
-use std::fs;
-use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 const SCENARIO_FILE: &str = "ux_scenario_39_dancer2_workspace_symbol_noise.rs";
 const TOP_N: usize = 12;
 const FRESHNESS_FILE: &str = "lib/Dancer2/Plugin.pm";
-
-#[derive(Debug)]
-struct FixtureFile {
-    relative_path: String,
-    content: String,
-}
 
 #[derive(Debug)]
 struct WorkspaceSymbolProbe {
@@ -84,86 +79,6 @@ struct FreshnessReport {
 struct TimedSymbols {
     symbols: Vec<Value>,
     latency_ms: u128,
-}
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
-
-fn missing_binary_skip() -> UxScenarioSkip {
-    UxScenarioSkip::infra("PERL_LSP_BIN not set and target/debug/perl-lsp not found")
-}
-
-fn workspace_root() -> Result<PathBuf> {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
-        .map(Path::to_path_buf)
-        .context("CARGO_MANIFEST_DIR must be nested under the workspace root")
-}
-
-fn dancer2_fixture_root() -> Result<PathBuf> {
-    Ok(workspace_root()?.join("test_corpus").join("real_projects").join("dancer2_skeleton"))
-}
-
-fn is_perl_source(path: &Path) -> bool {
-    path.extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| matches!(extension, "pm" | "pl" | "t"))
-}
-
-fn collect_perl_files(root: &Path, dir: &Path, files: &mut Vec<FixtureFile>) -> Result<()> {
-    for entry in fs::read_dir(dir).with_context(|| format!("reading {}", dir.display()))? {
-        let entry = entry.with_context(|| format!("reading an entry under {}", dir.display()))?;
-        let path = entry.path();
-        if path.is_dir() {
-            collect_perl_files(root, &path, files)?;
-        } else if is_perl_source(&path) {
-            let relative_path = path
-                .strip_prefix(root)
-                .with_context(|| format!("stripping fixture root from {}", path.display()))?
-                .to_string_lossy()
-                .replace('\\', "/");
-            let content =
-                fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
-            files.push(FixtureFile { relative_path, content });
-        }
-    }
-    Ok(())
-}
-
-fn load_dancer2_fixture_files() -> Result<Vec<FixtureFile>> {
-    let root = dancer2_fixture_root()?;
-    let mut files = Vec::new();
-    collect_perl_files(&root, &root, &mut files)?;
-    files.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
-    Ok(files)
-}
-
-fn create_dancer2_harness(files: &[FixtureFile]) -> Result<UxHarness> {
-    let mut config = ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
-        .env("PERL_LSP_WORKSPACE", "1");
-
-    for file in files {
-        config = config.with_file(&file.relative_path, &file.content);
-    }
-
-    UxHarness::new(config)
-}
-
-fn open_all_fixture_files(harness: &UxHarness, files: &[FixtureFile]) -> Result<()> {
-    for file in files {
-        harness.open_file(&file.relative_path, &file.content)?;
-    }
-    Ok(())
-}
-
-fn fixture_content<'a>(files: &'a [FixtureFile], relative_path: &str) -> Result<&'a str> {
-    files
-        .iter()
-        .find(|file| file.relative_path == relative_path)
-        .map(|file| file.content.as_str())
-        .with_context(|| format!("missing fixture file {relative_path}"))
 }
 
 fn timed_workspace_symbols(harness: &UxHarness, query: &str) -> Result<TimedSymbols> {
@@ -434,7 +349,7 @@ fn scenario_39_dancer2_workspace_symbol_noise_receipt() {
             recorder
                 .check("dancer2 fixture has committed Perl files", !fixture_files.is_empty())?;
 
-            let harness = create_dancer2_harness(&fixture_files)?;
+            let harness = create_fixture_harness(&fixture_files)?;
             open_all_fixture_files(&harness, &fixture_files)?;
             std::thread::sleep(Duration::from_millis(500));
 

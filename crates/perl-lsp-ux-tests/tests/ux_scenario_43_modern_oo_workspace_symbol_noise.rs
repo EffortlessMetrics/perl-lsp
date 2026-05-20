@@ -14,9 +14,9 @@
 //! - stale/fresh query behavior after editing an open document
 
 use anyhow::{Context, Result};
-use perl_lsp_ux_tests::{
-    ScenarioConfig, UxCiTier, UxComponent, UxHarness, UxScenarioSkip, run_ux_scenario,
-};
+use perl_lsp_ux_tests::binary_available;
+use perl_lsp_ux_tests::missing_binary_skip;
+use perl_lsp_ux_tests::{ScenarioConfig, UxCiTier, UxComponent, UxHarness, run_ux_scenario};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -92,14 +92,6 @@ struct FreshnessReport {
 struct TimedSymbols {
     symbols: Vec<Value>,
     latency_ms: u128,
-}
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
-
-fn missing_binary_skip() -> UxScenarioSkip {
-    UxScenarioSkip::infra("PERL_LSP_BIN not set and target/debug/perl-lsp not found")
 }
 
 fn workspace_root() -> Result<PathBuf> {
