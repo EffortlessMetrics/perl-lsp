@@ -18,6 +18,7 @@ of current evidence.
 
 | Need | Source |
 | --- | --- |
+| Normative v1 boundary and promotion discipline | [PLSP-SPEC-0015](../../specs/PLSP-SPEC-0015-real-perl-editor-trust-v1-boundary.md) |
 | User-facing support claims and known limitations | [SUPPORT_TIERS.md](SUPPORT_TIERS.md) |
 | Provider fact source, confidence, freshness, fallback, and next proof | [provider_confidence_matrix.md](provider_confidence_matrix.md) |
 | Provider promotion, fallback, blocker, and defer decisions by fact class | [provider_promotion_ledger.md](provider_promotion_ledger.md) |
