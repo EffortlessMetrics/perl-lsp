@@ -14,6 +14,14 @@ behavior. The source of current evidence remains the provider-specific receipt,
 [provider confidence matrix](provider_confidence_matrix.md), and
 [provider cutover](provider_cutover.md).
 
+Machine-readable policy lives in
+[policy/provider-promotion-ledger.toml](../../../policy/provider-promotion-ledger.toml).
+Validate row parity and condition shape with:
+
+```bash
+cargo xtask check-provider-promotion-ledger
+```
+
 ## Operating Rule
 
 Every row must support one of four decisions:
