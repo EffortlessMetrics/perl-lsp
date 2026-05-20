@@ -9,6 +9,7 @@ Linked specs:
 - [PLSP-SPEC-0015](PLSP-SPEC-0015-real-perl-editor-trust-v1-boundary.md)
 - [PLSP-SPEC-0016](PLSP-SPEC-0016-provider-decision-receipt-v1.md)
 - [PLSP-SPEC-0018](PLSP-SPEC-0018-edit-authorization-contract.md)
+- [PLSP-SPEC-0020](PLSP-SPEC-0020-workspace-symbol-generated-label-contract.md)
 Linked ADRs:
 - [PLSP-ADR-0002](../adr/PLSP-ADR-0002-confidence-before-cutover.md)
 Linked plan: [Real Perl Editor Trust implementation plan](../../plans/real-perl-editor-trust/implementation-plan.md)
