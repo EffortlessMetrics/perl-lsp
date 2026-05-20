@@ -375,6 +375,7 @@ dbg_macro = "deny"
 collapsible_match = { level = "allow", priority = 1 }
 decimal_bitwise_operands = "warn"
 duration_suboptimal_units = "warn"
+needless_type_cast = "warn"
 
 [workspace.lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)', 'cfg(feature, values("slow_tests"))'] }

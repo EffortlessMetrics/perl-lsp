@@ -738,10 +738,11 @@ status = "active"
 class = "numeric"
 reason = "Make bit masks visually inspectable."
 
-[[planned]]
+[[lint]]
 name = "clippy::needless_type_cast"
 level = "warn"
-activate_when_msrv = "1.94"
+status = "active"
+class = "numeric"
 reason = "Avoid stale numeric type drift."
 
 [[planned]]
