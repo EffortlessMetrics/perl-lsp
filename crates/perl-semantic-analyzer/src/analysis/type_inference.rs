@@ -1320,10 +1320,10 @@ fn static_method_body_return_fact(method: &str, body: &Node) -> Option<TypeFact>
     let NodeKind::Block { statements } = &body.kind else {
         return None;
     };
-    let [statement] = statements.as_slice() else {
-        return None;
-    };
-    static_method_return_expr_fact(method, statement)
+    if let [statement] = statements.as_slice() {
+        return static_method_return_expr_fact(method, statement);
+    }
+    static_method_local_return_fact(method, statements)
 }
 
 fn static_method_return_expr_fact(method: &str, node: &Node) -> Option<TypeFact> {
@@ -1332,11 +1332,106 @@ fn static_method_return_expr_fact(method: &str, node: &Node) -> Option<TypeFact>
             static_method_return_expr_fact(method, expression)
         }
         NodeKind::Return { value: Some(value) } => static_method_return_expr_fact(method, value),
-        NodeKind::MethodCall { object, method: called_method, .. } if called_method == "new" => {
-            static_package_node(object).map(|package| method_return_fact(method, &package))
+        _ => static_constructor_package(node).map(|package| method_return_fact(method, &package)),
+    }
+}
+
+fn static_method_local_return_fact(method: &str, statements: &[Node]) -> Option<TypeFact> {
+    let returned_name = returned_variable_name(statements.last()?)?;
+    let mut package = None;
+
+    for statement in &statements[..statements.len().saturating_sub(1)] {
+        match local_return_assignment_package(statement, returned_name) {
+            Some(Some(candidate)) => {
+                package = Some(candidate);
+            }
+            Some(None) => {
+                return None;
+            }
+            None if local_return_statement_blocks_static_fact(statement, returned_name) => {
+                return None;
+            }
+            None => {}
+        }
+    }
+
+    package.map(|package| {
+        let mut fact = method_return_fact(method, &package);
+        fact.evidence.push(TypeEvidence::VariableInitializer { name: returned_name.to_string() });
+        fact
+    })
+}
+
+fn returned_variable_name(node: &Node) -> Option<&str> {
+    match &node.kind {
+        NodeKind::ExpressionStatement { expression } => returned_variable_name(expression),
+        NodeKind::Return { value: Some(value) } => variable_name(value),
+        _ => variable_name(node),
+    }
+}
+
+fn local_return_assignment_package(node: &Node, returned_name: &str) -> Option<Option<String>> {
+    match &node.kind {
+        NodeKind::ExpressionStatement { expression } => {
+            local_return_assignment_package(expression, returned_name)
+        }
+        NodeKind::VariableDeclaration { variable, initializer, .. }
+            if variable_name(variable) == Some(returned_name) =>
+        {
+            Some(initializer.as_deref().and_then(static_constructor_package))
+        }
+        NodeKind::Assignment { lhs, rhs, op }
+            if op == "=" && variable_name(lhs) == Some(returned_name) =>
+        {
+            Some(static_constructor_package(rhs))
+        }
+        NodeKind::Binary { left, op, right }
+            if op == "=" && variable_name(left) == Some(returned_name) =>
+        {
+            Some(static_constructor_package(right))
         }
         _ => None,
     }
+}
+
+fn local_return_statement_blocks_static_fact(node: &Node, returned_name: &str) -> bool {
+    match &node.kind {
+        NodeKind::ExpressionStatement { expression } => {
+            local_return_statement_blocks_static_fact(expression, returned_name)
+        }
+        NodeKind::Assignment { lhs, .. } if variable_name(lhs) == Some(returned_name) => true,
+        NodeKind::Binary { left, .. } if variable_name(left) == Some(returned_name) => true,
+        NodeKind::Block { .. }
+        | NodeKind::Eval { .. }
+        | NodeKind::Do { .. }
+        | NodeKind::Defer { .. }
+        | NodeKind::Try { .. }
+        | NodeKind::If { .. }
+        | NodeKind::While { .. }
+        | NodeKind::For { .. }
+        | NodeKind::Foreach { .. }
+        | NodeKind::Given { .. }
+        | NodeKind::When { .. }
+        | NodeKind::Default { .. }
+        | NodeKind::StatementModifier { .. }
+        | NodeKind::Return { .. }
+        | NodeKind::LoopControl { .. }
+        | NodeKind::Goto { .. } => true,
+        _ => node_mentions_variable(node, returned_name),
+    }
+}
+
+fn node_mentions_variable(node: &Node, name: &str) -> bool {
+    if variable_name(node) == Some(name) {
+        return true;
+    }
+    let mut found = false;
+    node.for_each_child(|child| {
+        if !found && node_mentions_variable(child, name) {
+            found = true;
+        }
+    });
+    found
 }
 
 fn attribute_generates_reader(mode: Option<AccessorType>) -> bool {
@@ -1444,6 +1539,16 @@ fn static_package_node(node: &Node) -> Option<String> {
     match &node.kind {
         NodeKind::Identifier { name } => Some(name.clone()),
         NodeKind::String { value, .. } => normalize_literal(value),
+        _ => None,
+    }
+}
+
+fn static_constructor_package(node: &Node) -> Option<String> {
+    match &node.kind {
+        NodeKind::ExpressionStatement { expression } => static_constructor_package(expression),
+        NodeKind::MethodCall { object, method, .. } if method == "new" => {
+            static_package_node(object)
+        }
         _ => None,
     }
 }
