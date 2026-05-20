@@ -7,14 +7,11 @@
 //! workspace and that same-named symbols from different folders remain
 //! disambiguatable via `workspaceFolderUri`.
 
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 use std::time::{Duration, Instant};
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 const RUNNER_A: &str = "\
 package Runner;\n\

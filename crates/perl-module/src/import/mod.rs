@@ -319,12 +319,15 @@ pub struct RequireImportEntry {
 ///
 /// # Recognised patterns
 ///
-/// - `require Module::Path;` followed (anywhere later) by
-///   `Module::Path->import(qw(a b c));`
+/// - `require Module::Path;` followed on the same or a later nearby line by
+///   `Module::Path->import(qw(a b c));` or another Perl `qw` delimiter
 /// - `require Module::Path;` followed by
 ///   `Module::Path->import('a', 'b');`
 /// - `require Module::Path;` followed by
 ///   `Module::Path->import("a", "b");`
+///
+/// Whitespace around `->`, `import`, and the call parentheses is tolerated
+/// for literal receiver calls.
 ///
 /// # Non-goals (not matched)
 ///
@@ -339,14 +342,15 @@ pub struct RequireImportEntry {
 pub fn extract_require_import_symbols(source: &str) -> Vec<RequireImportEntry> {
     let mut entries = Vec::new();
 
-    // Build a list of (byte_offset, trimmed_line) pairs.
+    // Build a list of (trimmed_byte_offset, trimmed_line) pairs.
     let lines: Vec<(usize, &str)> = {
         let mut v = Vec::new();
         let mut offset = 0usize;
         for line in source.split('\n') {
             let trimmed = line.trim();
             if !trimmed.is_empty() {
-                v.push((offset, trimmed));
+                let leading = line.len().saturating_sub(line.trim_start().len());
+                v.push((offset + leading, trimmed));
             }
             offset += line.len() + 1; // +1 for the '\n' we split on
         }
@@ -355,25 +359,34 @@ pub fn extract_require_import_symbols(source: &str) -> Vec<RequireImportEntry> {
 
     for (i, &(req_offset, req_line)) in lines.iter().enumerate() {
         // Match `require BarewordModule;`
-        let module = match parse_literal_require_line(req_line) {
-            Some(m) => m,
+        let parsed_require = match parse_literal_require_line(req_line) {
+            Some(parsed_require) => parsed_require,
             None => continue,
         };
+        let module = parsed_require.module;
+
+        if collect_literal_import_entries(
+            &mut entries,
+            module,
+            req_offset,
+            req_offset + parsed_require.tail_start,
+            parsed_require.tail,
+        ) {
+            continue;
+        }
 
         // Scan the remaining lines within a reasonable window (same scope, adjacent).
         // We allow up to 5 blank-skipped lines between require and import to handle
         // common real-world spacing without false positives across unrelated statements.
         let window_end = (i + 1 + 5).min(lines.len());
         for &(imp_offset, imp_line) in &lines[i + 1..window_end] {
-            if let Some(symbols) = parse_literal_import_call(imp_line, module) {
-                for symbol in symbols {
-                    entries.push(RequireImportEntry {
-                        module: module.to_string(),
-                        symbol,
-                        require_byte_offset: req_offset,
-                        import_byte_offset: imp_offset,
-                    });
-                }
+            if collect_literal_import_entries(
+                &mut entries,
+                module,
+                req_offset,
+                imp_offset,
+                imp_line,
+            ) {
                 // Consumed this import statement — move to next require.
                 break;
             }
@@ -396,32 +409,72 @@ pub fn extract_require_import_symbols(source: &str) -> Vec<RequireImportEntry> {
 /// - `require $var;` (variable)
 /// - `require "file.pm";` (quoted file path)
 /// - `require 'file.pm';` (quoted file path)
-fn parse_literal_require_line(line: &str) -> Option<&str> {
+struct ParsedLiteralRequire<'a> {
+    module: &'a str,
+    tail_start: usize,
+    tail: &'a str,
+}
+
+fn parse_literal_require_line(line: &str) -> Option<ParsedLiteralRequire<'_>> {
     let rest = line.strip_prefix("require")?;
     // Must have whitespace after `require`.
     if !rest.starts_with(|c: char| c.is_whitespace()) {
         return None;
     }
+    let leading_after_keyword = rest.len().saturating_sub(rest.trim_start().len());
     let rest = rest.trim_start();
     // Reject variables and quoted paths.
     if rest.starts_with('$') || rest.starts_with('"') || rest.starts_with('\'') {
         return None;
     }
-    // Extract the bareword module name up to `;` or end of string.
-    let end = rest.find(|c: char| c == ';' || c.is_whitespace()).unwrap_or(rest.len());
-    let module = &rest[..end];
+
+    let module_end = rest.find(|c: char| c == ';' || c.is_whitespace()).unwrap_or(rest.len());
+    let module = &rest[..module_end];
+    if !is_valid_bareword_module_name(module) {
+        return None;
+    }
+
+    let after_module = &rest[module_end..];
+    let semicolon_offset = after_module.find(';')?;
+    let tail_start = "require".len() + leading_after_keyword + module_end + semicolon_offset + 1;
+    Some(ParsedLiteralRequire { module, tail_start, tail: &line[tail_start..] })
+}
+
+fn is_valid_bareword_module_name(module: &str) -> bool {
     if module.is_empty() {
-        return None;
+        return false;
     }
-    // Must start with an uppercase or lowercase letter (not a sigil, digit, etc.).
-    if !module.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_') {
-        return None;
+
+    module.split("::").all(|part| {
+        !part.is_empty()
+            && part.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_')
+            && part.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+    })
+}
+
+fn collect_literal_import_entries(
+    entries: &mut Vec<RequireImportEntry>,
+    module: &str,
+    require_byte_offset: usize,
+    import_byte_offset: usize,
+    candidate: &str,
+) -> bool {
+    let leading = candidate.len().saturating_sub(candidate.trim_start().len());
+    let candidate = candidate.trim_start();
+
+    if let Some(symbols) = parse_literal_import_call(candidate, module) {
+        for symbol in symbols {
+            entries.push(RequireImportEntry {
+                module: module.to_string(),
+                symbol,
+                require_byte_offset,
+                import_byte_offset: import_byte_offset + leading,
+            });
+        }
+        return true;
     }
-    // Must consist only of identifier chars and `::` separators.
-    if !module.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == ':') {
-        return None;
-    }
-    Some(module)
+
+    false
 }
 
 /// Parse a line of the form `Module::Name->import(literal list);`.
@@ -430,9 +483,10 @@ fn parse_literal_require_line(line: &str) -> Option<&str> {
 /// expected module name with only literal arguments (`qw(...)`, `'x'`, `"x"`).
 /// Returns `None` when the line does not match or contains dynamic arguments.
 fn parse_literal_import_call(line: &str, expected_module: &str) -> Option<Vec<String>> {
-    // Line must start with `Module->import(` (possibly with whitespace).
-    let prefix = format!("{}->import(", expected_module);
-    let after_open = line.strip_prefix(prefix.as_str())?;
+    let after_module = line.strip_prefix(expected_module)?.trim_start();
+    let after_arrow = after_module.strip_prefix("->")?.trim_start();
+    let after_method = after_arrow.strip_prefix("import")?.trim_start();
+    let after_open = after_method.strip_prefix('(')?;
 
     // Find the matching close paren.
     let close_idx = after_open.rfind(')')?;
@@ -458,10 +512,7 @@ fn parse_literal_arg_list(args: &str) -> Option<Vec<String>> {
         return Some(Vec::new());
     }
 
-    // qw(...) form.
-    if let Some(inner) = trimmed.strip_prefix("qw(").and_then(|s| s.strip_suffix(')')) {
-        let words: Vec<String> =
-            inner.split_whitespace().filter(|w| !w.is_empty()).map(|w| w.to_string()).collect();
+    if let Some(words) = parse_qw_arg_list(trimmed) {
         return Some(words);
     }
 
@@ -493,6 +544,31 @@ fn parse_literal_arg_list(args: &str) -> Option<Vec<String>> {
     }
 
     Some(symbols)
+}
+
+fn parse_qw_arg_list(trimmed: &str) -> Option<Vec<String>> {
+    let after_operator = trimmed.strip_prefix("qw")?;
+    let delimiter = after_operator.chars().next()?;
+    if delimiter.is_ascii_alphanumeric() || delimiter == '_' || delimiter.is_whitespace() {
+        return None;
+    }
+
+    let closing = match delimiter {
+        '(' => ')',
+        '[' => ']',
+        '{' => '}',
+        '<' => '>',
+        other => other,
+    };
+
+    let inner_start = "qw".len() + delimiter.len_utf8();
+    let inner_end = trimmed.len().checked_sub(closing.len_utf8())?;
+    if inner_start > inner_end || !trimmed.ends_with(closing) {
+        return None;
+    }
+
+    let inner = &trimmed[inner_start..inner_end];
+    Some(inner.split_whitespace().filter(|word| !word.is_empty()).map(str::to_string).collect())
 }
 
 /// Return true when `line` indicates a new statement boundary that should stop

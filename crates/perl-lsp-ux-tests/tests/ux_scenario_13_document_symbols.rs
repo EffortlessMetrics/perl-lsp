@@ -13,12 +13,9 @@
 //! - An empty result is acceptable for degraded-mode servers.
 //! - No crash signatures after the request.
 
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 use std::time::Duration;
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 /// Source with two named subs and a package declaration — rich symbol table.
 const SYMBOLS_SOURCE: &str = "\

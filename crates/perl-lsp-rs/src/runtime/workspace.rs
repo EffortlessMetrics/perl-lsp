@@ -84,6 +84,17 @@ fn is_permission_denied_error(e: &std::io::Error) -> bool {
 #[cfg(feature = "workspace")]
 use text_decode::read_text_with_encoding_fallback;
 
+#[cfg(feature = "workspace")]
+fn read_watched_file_content(uri: &str, purpose: &str) -> Option<String> {
+    uri_to_fs_path(uri).and_then(|path| match read_text_with_encoding_fallback(&path) {
+        Ok(content) => Some(content),
+        Err(e) => {
+            tracing::debug!("Failed to read file for {} ({}): {}", purpose, path.display(), e);
+            None
+        }
+    })
+}
+
 /// RAII guard that clears the `indexing_in_progress` flag on drop.
 ///
 /// Ensures the flag is always cleared, even if the indexing thread panics.
@@ -219,8 +230,12 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        let query =
-            params.as_ref().and_then(|p| p.get("query")).and_then(|q| q.as_str()).unwrap_or("");
+        let query = params
+            .as_ref()
+            .and_then(|p| p.get("query"))
+            .and_then(|q| q.as_str())
+            .unwrap_or("")
+            .trim();
         let cap = workspace_symbol_cap();
 
         tracing::debug!(query, cap, "Workspace symbol search v2");
@@ -233,7 +248,8 @@ impl LspServer {
             match access_mode {
                 IndexAccessMode::Full(coordinator) => {
                     // Full query path: use workspace index
-                    let symbols = coordinator.index().search_symbols(query);
+                    let mut symbols = coordinator.index().search_source_symbols(query);
+                    symbols.extend(coordinator.index().search_generated_workspace_symbols(query));
 
                     // Convert to LSP format with yielding and result cap
                     let lsp_symbols: Vec<LspWorkspaceSymbol> = symbols
@@ -248,6 +264,15 @@ impl LspServer {
                             sym.into()
                         })
                         .collect();
+                    let generated_pilot_count = lsp_symbols
+                        .iter()
+                        .filter(|symbol| {
+                            workspace_symbol_has_generated_label(
+                                &symbol.name,
+                                symbol.container_name.as_deref(),
+                            )
+                        })
+                        .count();
 
                     if !lsp_symbols.is_empty() {
                         tracing::debug!(
@@ -258,6 +283,7 @@ impl LspServer {
                             query,
                             lsp_symbols.len(),
                             WorkspaceSymbolsTraceKind::SourceBackedReadyIndex,
+                            generated_pilot_count,
                         );
                         return Ok(Some(json!(lsp_symbols)));
                     }
@@ -269,7 +295,7 @@ impl LspServer {
                     // open-doc path only when the partial index is also empty.
                     tracing::debug!(reason, "Workspace symbol: querying partial index");
                     if let Some(coordinator) = self.coordinator() {
-                        let symbols = coordinator.index().search_symbols(query);
+                        let symbols = coordinator.index().search_source_symbols(query);
                         let lsp_symbols: Vec<LspWorkspaceSymbol> = symbols
                             .iter()
                             .take(cap)
@@ -290,6 +316,7 @@ impl LspServer {
                                 query,
                                 lsp_symbols.len(),
                                 WorkspaceSymbolsTraceKind::PartialIndexFallback,
+                                0,
                             );
                             return Ok(Some(json!(lsp_symbols)));
                         }
@@ -369,6 +396,7 @@ impl LspServer {
             query,
             all_symbols.len(),
             WorkspaceSymbolsTraceKind::OpenDocumentFallback,
+            0,
         );
         Ok(Some(json!(all_symbols)))
     }
@@ -380,8 +408,9 @@ impl LspServer {
     /// classified as the narrow source-backed live slice; fallback and unproven
     /// shapes remain gated.
     ///
-    /// Does not promote generated, stale, dynamic, ambiguous, partial-index, or
-    /// open-document fallback candidates.
+    /// Promotes only labeled source-backed generated/framework members in the
+    /// full ready index. Stale, dynamic, ambiguous, partial-index,
+    /// generated/no-source, and open-document fallback candidates remain gated.
     #[cfg(any(test, feature = "expose_lsp_test_api"))]
     pub(crate) fn workspace_symbols_runtime_quality_receipt(
         &self,
@@ -392,6 +421,7 @@ impl LspServer {
             .and_then(|p| p.get("query"))
             .and_then(Value::as_str)
             .unwrap_or("")
+            .trim()
             .to_string();
 
         let live_provider_result = self.handle_workspace_symbols_v2(params)?;
@@ -400,20 +430,40 @@ impl LspServer {
             _ => 0,
         };
         let source_backed_count = self.workspace_symbols_source_backed_count(&query);
-        let no_live_behavior_change = source_backed_count == 0;
-        let shadow_state =
-            if no_live_behavior_change { "shadowed" } else { "partial_live_source_backed" };
+        let generated_pilot_count =
+            workspace_symbols_labeled_generated_count(live_provider_result.as_ref());
+        let no_live_behavior_change = source_backed_count == 0 && generated_pilot_count == 0;
+        let shadow_state = match (source_backed_count > 0, generated_pilot_count > 0) {
+            (true, true) => "partial_live_source_backed_generated_pilot",
+            (true, false) => "partial_live_source_backed",
+            (false, true) => "partial_live_generated_labeled_pilot",
+            (false, false) => "shadowed",
+        };
         let compiler_receipt = if no_live_behavior_change {
             Value::Null
         } else {
+            let (source, provenance, confidence) =
+                match (source_backed_count > 0, generated_pilot_count > 0) {
+                    (true, true) => {
+                        ("CompilerFact+FrameworkAdapter", "MixedExactAstFrameworkAnchor", "Medium")
+                    }
+                    (true, false) => ("CompilerFact", "ExactAst", "High"),
+                    (false, true) => ("FrameworkAdapter", "FrameworkAnchor", "Medium"),
+                    (false, false) => ("None", "None", "None"),
+                };
             json!({
-                "source": "CompilerFact",
-                "provenance": "ExactAst",
-                "confidence": "High",
+                "source": source,
+                "provenance": provenance,
+                "confidence": confidence,
                 "freshness": "Fresh",
                 "fallback_state": "Primary",
                 "source_backed_count": source_backed_count,
-                "claim_boundary": "ready workspace index symbols only; generated, dynamic, stale, and partial-index candidates remain gated"
+                "source_backed_provenance": if source_backed_count > 0 { "ExactAst" } else { "None" },
+                "generated_pilot_count": generated_pilot_count,
+                "generated_pilot_provenance": if generated_pilot_count > 0 { "FrameworkAnchor" } else { "None" },
+                "generated_pilot_confidence": if generated_pilot_count > 0 { "Medium" } else { "None" },
+                "generated_pilot_location_semantics": if generated_pilot_count > 0 { "source_anchor_not_exact_generated_body" } else { "None" },
+                "claim_boundary": "ready workspace index source-backed symbols plus labeled source-backed generated/framework pilot symbols only; dynamic, stale, ambiguous, fallback/noise, and partial-index candidates remain gated"
             })
         };
         let (gated_expansion_receipt, gated_expansion_candidate_count) =
@@ -432,12 +482,14 @@ impl LspServer {
                 format!(
                     "workspace-symbol runtime quality receipt: query={:?}; live_provider_count={}; \
                      source_backed_compiler_symbols={}; \
+                     labeled_generated_pilot_symbols={}; \
                      generated_dynamic_noise_candidates={}; \
-                     fresh ready-state workspace index symbols are live for non-empty queries; \
-                     empty, partial-index, stale, dynamic, generated/no-source, and ambiguous cases keep fallback or gated behavior",
+                     fresh ready-state workspace index symbols and labeled source-backed generated/framework pilot symbols are live for non-empty queries; \
+                     empty, partial-index, stale, dynamic, generated/no-source, ambiguous, and fallback/noise cases keep fallback or gated behavior",
                     query,
                     live_provider_count,
                     source_backed_count,
+                    generated_pilot_count,
                     gated_expansion_candidate_count
                 )
             ]
@@ -449,7 +501,14 @@ impl LspServer {
 fn workspace_symbols_generated_dynamic_noise_receipt(query: &str) -> (Value, usize) {
     let candidates = vec![
         perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolShadowCandidate::shadow(
-            "generated:workspace-symbol:framework_accessor:virtual",
+            "generated:source-anchor:workspace-symbol:framework_accessor:virtual",
+            ProviderFactSourceKind::FrameworkAdapter,
+            Provenance::FrameworkSynthesis,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+        ),
+        perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolShadowCandidate::blocked(
+            "generated:no-source:workspace-symbol:runtime_installed_method:unanchored",
             ProviderFactSourceKind::FrameworkAdapter,
             Provenance::FrameworkSynthesis,
             Confidence::Medium,
@@ -481,7 +540,18 @@ fn workspace_symbols_generated_dynamic_noise_receipt(query: &str) -> (Value, usi
 
     let generated_candidate_count = candidates
         .iter()
-        .filter(|candidate| candidate.source == ProviderFactSourceKind::FrameworkAdapter)
+        .filter(|candidate| {
+            candidate.source == ProviderFactSourceKind::FrameworkAdapter
+                && candidate.fallback_state != ProviderFallbackState::Blocked
+        })
+        .count();
+    let generated_no_source_blocker_count = candidates
+        .iter()
+        .filter(|candidate| {
+            candidate.source == ProviderFactSourceKind::FrameworkAdapter
+                && candidate.fallback_state == ProviderFallbackState::Blocked
+                && candidate.identity.contains(":no-source:")
+        })
         .count();
     let dynamic_boundary_blocker_count = candidates
         .iter()
@@ -517,15 +587,42 @@ fn workspace_symbols_generated_dynamic_noise_receipt(query: &str) -> (Value, usi
             "schema_version": 1,
             "receipt_kind": "generated_dynamic_noise_expansion",
             "generated_candidate_count": generated_candidate_count,
+            "generated_false_exact_candidate_count": generated_candidate_count,
+            "generated_no_source_candidate_count": generated_no_source_blocker_count,
+            "generated_no_source_blocker_count": generated_no_source_blocker_count,
+            "generated_location_semantics": "source_anchor_not_exact_generated_body",
             "dynamic_boundary_blocker_count": dynamic_boundary_blocker_count,
+            "dynamic_false_exact_blocker_count": dynamic_boundary_blocker_count,
             "stale_fact_blocker_count": stale_fact_blocker_count,
             "fallback_noise_candidate_count": fallback_noise_candidate_count,
             "no_live_behavior_change": true,
-            "claim_boundary": "workspace-symbol generated/dynamic/noise expansion receipt only; generated, dynamic, stale, and fallback/noise candidates remain gated",
+            "edit_freshness_policy": "labeled generated workspace-symbol queries must recompute from fresh document state after didChange; stale compiler-fact shadow candidates remain blocked by the gated-expansion receipt",
+            "claim_boundary": "workspace-symbol generated/dynamic/noise expansion receipt only; generated/no-source false-exact candidates, dynamic-boundary candidates, stale compiler-fact shadow candidates, and fallback/noise candidates remain gated outside the labeled source-backed generated pilot",
             "shadow_receipt": shadow.receipt,
         }),
         candidate_count,
     )
+}
+
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+fn workspace_symbols_labeled_generated_count(result: Option<&Value>) -> usize {
+    match result {
+        Some(Value::Array(items)) => items
+            .iter()
+            .filter(|item| {
+                workspace_symbol_has_generated_label(
+                    item.get("name").and_then(Value::as_str).unwrap_or_default(),
+                    item.get("containerName").and_then(Value::as_str),
+                )
+            })
+            .count(),
+        _ => 0,
+    }
+}
+
+fn workspace_symbol_has_generated_label(name: &str, container_name: Option<&str>) -> bool {
+    name.contains("[generated/framework]")
+        || container_name.is_some_and(|container| container.contains("[generated/framework]"))
 }
 
 impl LspServer {
@@ -546,8 +643,12 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        let query =
-            params.as_ref().and_then(|p| p.get("query")).and_then(|q| q.as_str()).unwrap_or("");
+        let query = params
+            .as_ref()
+            .and_then(|p| p.get("query"))
+            .and_then(|q| q.as_str())
+            .unwrap_or("")
+            .trim();
 
         tracing::debug!(query, "Workspace symbol search");
 
@@ -1053,57 +1154,52 @@ impl LspServer {
             coordinator.notify_change(uri);
         }
 
-        // Re-index the file if it is a Perl source file
+        let mut loaded_content: Option<String> = None;
+
+        // Re-index the file if it is a Perl source file.
         #[cfg(feature = "workspace")]
         if let Some(coordinator) = self.coordinator() {
-            let workspace_index = coordinator.index();
             if is_perl_source_uri(uri) {
-                if let Some(path) = uri_to_fs_path(uri) {
-                    match read_text_with_encoding_fallback(&path) {
-                        Ok(content) => {
-                            if let Ok(url) = url::Url::parse(uri) {
-                                // Clear old index data before re-indexing
-                                workspace_index.clear_file(uri);
-                                match workspace_index.index_file(url, content.clone()) {
-                                    Ok(()) => tracing::debug!("Re-indexed file: {}", uri),
-                                    Err(e) => {
-                                        tracing::warn!("Failed to re-index file {}: {}", uri, e);
-                                    }
-                                }
+                if loaded_content.is_none() {
+                    loaded_content = read_watched_file_content(uri, "re-indexing");
+                }
+
+                let workspace_index = coordinator.index();
+                if let Ok(url) = url::Url::parse(uri) {
+                    if let Some(content) = loaded_content.as_ref() {
+                        // Clear old index data before re-indexing
+                        workspace_index.clear_file(uri);
+                        match workspace_index.index_file(url, content.clone()) {
+                            Ok(()) => tracing::debug!("Re-indexed file: {}", uri),
+                            Err(e) => {
+                                tracing::warn!("Failed to re-index file {}: {}", uri, e);
                             }
-                        }
-                        Err(e) => {
-                            tracing::debug!(
-                                "Failed to read file for re-indexing ({}): {}",
-                                path.display(),
-                                e
-                            );
                         }
                     }
                 }
             }
         }
 
-        // Also update our internal document store if the document is open
+        // Also update our internal document store if the document is open.
         #[cfg(feature = "workspace")]
         {
-            let mut documents = self.documents.lock();
-            if let Some(doc) = self.get_document_mut(&mut documents, uri) {
-                if let Some(path) = uri_to_fs_path(uri) {
-                    match read_text_with_encoding_fallback(&path) {
-                        Ok(content) => {
-                            doc.text = content;
-                            doc.version += 1;
-                            // Clear cached AST so it is regenerated on next access
-                            doc.ast = None;
-                        }
-                        Err(e) => {
-                            tracing::debug!(
-                                "Failed to read file for document store update ({}): {}",
-                                path.display(),
-                                e
-                            );
-                        }
+            let document_is_open = {
+                let documents = self.documents.lock();
+                self.get_document(&documents, uri).is_some()
+            };
+
+            if document_is_open {
+                if loaded_content.is_none() {
+                    loaded_content = read_watched_file_content(uri, "document store update");
+                }
+
+                if let Some(content) = loaded_content {
+                    let mut documents = self.documents.lock();
+                    if let Some(doc) = self.get_document_mut(&mut documents, uri) {
+                        doc.text = content;
+                        doc.version += 1;
+                        // Clear cached AST so it is regenerated on next access.
+                        doc.ast = None;
                     }
                 }
             }
@@ -1998,7 +2094,7 @@ impl LspServer {
         let IndexAccessMode::Full(coordinator) = route_index_access(self.coordinator()) else {
             return 0;
         };
-        coordinator.index().search_symbols(query).iter().take(workspace_symbol_cap()).count()
+        coordinator.index().search_source_symbols(query).iter().take(workspace_symbol_cap()).count()
     }
 
     fn record_workspace_symbols_provider_decision_trace(
@@ -2006,6 +2102,7 @@ impl LspServer {
         query: &str,
         result_count: usize,
         kind: WorkspaceSymbolsTraceKind,
+        generated_pilot_count: usize,
     ) {
         let (
             decision,
@@ -2017,6 +2114,20 @@ impl LspServer {
             fallback_state,
             claim_boundary,
         ) = match kind {
+            WorkspaceSymbolsTraceKind::SourceBackedReadyIndex
+                if !query.is_empty() && generated_pilot_count > 0 =>
+            {
+                (
+                    "acted",
+                    "source_backed_generated_label_pilot",
+                    "framework_adapter",
+                    "medium",
+                    true,
+                    "ready_workspace_index_generated_label_pilot",
+                    "none",
+                    "returns ready-state source-backed workspace index symbols plus labeled generated/framework pilot symbols; generated symbols point to source framework declarations, not exact generated method bodies; dynamic, stale, and ambiguous compiler candidates remain gated",
+                )
+            }
             WorkspaceSymbolsTraceKind::SourceBackedReadyIndex if !query.is_empty() => (
                 "acted",
                 "source_backed_high_confidence",
@@ -2075,9 +2186,14 @@ impl LspServer {
                 "fallback_state": fallback_state,
                 "live_provider_result_kind": "array",
                 "live_provider_result_count": result_count,
+                "generated_pilot_count": generated_pilot_count,
                 "query_empty": query.is_empty(),
                 "live_cutover": if source_backed {
-                    "partial_live_source_backed"
+                    if generated_pilot_count > 0 {
+                        "partial_live_source_backed_generated_pilot"
+                    } else {
+                        "partial_live_source_backed"
+                    }
                 } else {
                     "fallback_only"
                 },

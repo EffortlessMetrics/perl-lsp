@@ -5,6 +5,8 @@
 
 use perl_ast::{Node, NodeKind, SourceLocation};
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 fn loc(start: usize, end: usize) -> SourceLocation {
     SourceLocation { start, end }
 }
@@ -230,4 +232,63 @@ fn when_requesting_last_child_on_program_then_last_statement_is_returned() {
     let child = node.last_child();
 
     assert_eq!(child.map(|c| c.kind.kind_name()), Some("Identifier"));
+}
+
+#[test]
+fn when_finding_deepest_node_at_offset_then_smallest_containing_descendant_is_returned()
+-> TestResult {
+    let tree = Node::new(
+        NodeKind::Program {
+            statements: vec![Node::new(
+                NodeKind::ExpressionStatement {
+                    expression: Box::new(Node::new(
+                        NodeKind::Binary {
+                            op: "+".to_string(),
+                            left: Box::new(Node::new(
+                                NodeKind::Identifier { name: "left".to_string() },
+                                loc(0, 4),
+                            )),
+                            right: Box::new(Node::new(
+                                NodeKind::Number { value: "42".to_string() },
+                                loc(7, 9),
+                            )),
+                        },
+                        loc(0, 9),
+                    )),
+                },
+                loc(0, 10),
+            )],
+        },
+        loc(0, 10),
+    );
+
+    let found = tree.find_deepest_containing_offset(8);
+
+    assert_eq!(found.map(|node| node.kind.kind_name()), Some("Number"));
+    Ok(())
+}
+
+#[test]
+fn when_finding_deepest_node_at_gap_then_nearest_containing_ancestor_is_returned() -> TestResult {
+    let tree = Node::new(
+        NodeKind::Binary {
+            op: "+".to_string(),
+            left: Box::new(Node::new(NodeKind::Identifier { name: "left".to_string() }, loc(0, 4))),
+            right: Box::new(Node::new(NodeKind::Number { value: "42".to_string() }, loc(7, 9))),
+        },
+        loc(0, 9),
+    );
+
+    let found = tree.find_deepest_containing_offset(5);
+
+    assert_eq!(found.map(|node| node.kind.kind_name()), Some("Binary"));
+    Ok(())
+}
+
+#[test]
+fn when_finding_deepest_node_outside_span_then_none_is_returned() -> TestResult {
+    let tree = Node::new(NodeKind::Identifier { name: "left".to_string() }, loc(0, 4));
+
+    assert_eq!(tree.find_deepest_containing_offset(4), None);
+    Ok(())
 }

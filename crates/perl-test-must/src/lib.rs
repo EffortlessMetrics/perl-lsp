@@ -42,7 +42,7 @@
 pub fn must<T, E: std::fmt::Debug>(r: Result<T, E>) -> T {
     match r {
         Ok(v) => v,
-        Err(e) => panic!("unexpected Err<{}>: {e:?}", std::any::type_name::<E>()),
+        Err(e) => panic!("unexpected Err: {e:?} (unexpected Err<{}>)", std::any::type_name::<E>()),
     }
 }
 
@@ -69,7 +69,7 @@ pub fn must_err<T: std::fmt::Debug, E>(r: Result<T, E>) -> E {
     match r {
         Err(e) => e,
         Ok(v) => panic!(
-            "expected Err<{}>, got Ok<{}>({v:?})",
+            "expected Err, got Ok({v:?}): expected Err<{}>, got Ok<{}>({v:?})",
             std::any::type_name::<E>(),
             std::any::type_name::<T>()
         ),

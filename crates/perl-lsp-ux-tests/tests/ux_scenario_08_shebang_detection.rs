@@ -10,11 +10,8 @@
 //! - Hover, completion MUST NOT crash.
 //! - Null results are acceptable.
 
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 #[test]
 fn scenario_08_shebang_file_without_pl_extension() {

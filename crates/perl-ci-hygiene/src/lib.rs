@@ -182,7 +182,8 @@ pub fn categorize_ignore(reason: &str, context: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::source_paths;
+    use super::{categorize_ignore, source_paths};
+    use crate::version_sync::{is_pre_release, validate_version_format};
     use std::error::Error;
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -198,6 +199,95 @@ mod tests {
 
     fn contains_path(paths: &[PathBuf], suffix: &Path) -> bool {
         paths.iter().any(|path| path.ends_with(suffix))
+    }
+
+    #[test]
+    fn categorize_ignore_maps_documented_policy_buckets() -> Result<(), String> {
+        let cases = [
+            ("manual: regenerate snapshots", "", "manual"),
+            ("stress: memory.stress load.test", "", "stress"),
+            ("bug: parser.bug missing.initialize", "", "bug"),
+            ("infra: requires setup", "", "infra"),
+            ("feature: not implemented", "", "feature"),
+            ("brokenpipe: transport.flake", "", "brokenpipe"),
+            ("LSP protocol compliance fixture", "", "protocol"),
+            ("ignore", "", "bare"),
+            ("", "", "bare"),
+            ("needs triage", "AC: parser support", "infra"),
+            ("unknown skip reason", "AC: parser support", "feature"),
+            ("unknown skip reason", "ordinary context", "other"),
+        ];
+
+        for (reason, context, expected) in cases {
+            let actual = categorize_ignore(reason, context);
+            if actual != expected {
+                return Err(format!(
+                    "categorize_ignore({reason:?}, {context:?}) returned {actual:?}, expected {expected:?}"
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn categorize_ignore_handles_punctuation_normalized_legacy_reasons() -> Result<(), String> {
+        let cases = [
+            ("todo(#1234)", "infra"),
+            ("doesn.t.have.field", "feature"),
+            ("may.not.produce", "feature"),
+            ("recursion.limit.behavior", "feature"),
+            ("integration.test.that.spawns", "infra"),
+            ("clippy.warnings", "infra"),
+        ];
+
+        for (reason, expected) in cases {
+            let actual = categorize_ignore(reason, "");
+            if actual != expected {
+                return Err(format!(
+                    "categorize_ignore({reason:?}, \"\") returned {actual:?}, expected {expected:?}"
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn validate_version_format_accepts_stable_and_pre_release_versions() -> Result<(), String> {
+        for version in ["0.15.0", "1.2.3-rc1", "1.2.3-beta.2", "10.20.30-alpha-1"] {
+            validate_version_format(version)
+                .map_err(|err| format!("{version:?} should be valid: {err}"))?;
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn validate_version_format_rejects_malformed_versions() -> Result<(), String> {
+        for version in ["1", "1.2", "1.2.3.4", "1.2.x", "1.2.3-", "1.2.3+build"] {
+            if validate_version_format(version).is_ok() {
+                return Err(format!("{version:?} should be rejected"));
+            }
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn is_pre_release_only_tracks_dash_suffixes() -> Result<(), String> {
+        let cases = [("0.15.0", false), ("0.15.0-rc1", true), ("0.15.0-beta.2", true)];
+
+        for (version, expected) in cases {
+            let actual = is_pre_release(version);
+            if actual != expected {
+                return Err(format!(
+                    "is_pre_release({version:?}) returned {actual}, expected {expected}"
+                ));
+            }
+        }
+
+        Ok(())
     }
 
     #[test]

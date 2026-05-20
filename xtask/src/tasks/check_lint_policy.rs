@@ -26,12 +26,10 @@ const REQUIRED_PLANNED: &[&str] = &[
     "rust::function_casts_as_integer",
     "clippy::same_length_and_capacity",
     "clippy::manual_ilog2",
-    "clippy::needless_type_cast",
     "clippy::disallowed_fields",
     "clippy::manual_checked_ops",
     "clippy::manual_take",
     "clippy::manual_pop_if",
-    "clippy::duration_suboptimal_units",
     "clippy::unnecessary_trailing_comma",
 ];
 

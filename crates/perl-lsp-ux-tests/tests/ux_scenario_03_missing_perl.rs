@@ -11,12 +11,9 @@
 //! - Server MUST NOT crash during initialization.
 //! - Hover and completion may return null/empty — that is acceptable.
 
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 use std::time::Duration;
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 fn config_without_perl() -> ScenarioConfig {
     ScenarioConfig { path_restriction: Some(Vec::new()), ..Default::default() }

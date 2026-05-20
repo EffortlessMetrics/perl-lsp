@@ -121,12 +121,18 @@ fn parse_git_ls_files_output(root: &Path, stdout: &[u8]) -> (Vec<PathBuf>, usize
         }
 
         let path = root.join(relative_path);
-        if is_perl_discovery_path(&path) {
-            if seen.insert(path.clone()) {
-                files.push(path);
-            } else {
-                excluded_count += 1;
-            }
+        if !is_perl_discovery_path(&path) {
+            excluded_count += 1;
+            continue;
+        }
+
+        if should_require_existing_git_files(root) && !is_existing_regular_file(&path) {
+            excluded_count += 1;
+            continue;
+        }
+
+        if seen.insert(path.clone()) {
+            files.push(path);
         } else {
             excluded_count += 1;
         }
@@ -145,6 +151,14 @@ fn bytes_to_os_string(bytes: &[u8]) -> OsString {
 #[cfg(not(unix))]
 fn bytes_to_os_string(bytes: &[u8]) -> OsString {
     String::from_utf8_lossy(bytes).into_owned().into()
+}
+
+fn should_require_existing_git_files(root: &Path) -> bool {
+    root.is_dir()
+}
+
+fn is_existing_regular_file(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_file())
 }
 
 fn walk_discovery(root: &Path, start: Instant) -> DiscoveryResult {
@@ -412,6 +426,23 @@ mod tests {
 
         assert_eq!(files.len(), 1);
         assert_eq!(files[0], Path::new("/home/user/project/lib/Module.pm"));
+    }
+
+    #[test]
+    fn parse_git_output_filters_stale_and_non_file_entries_for_existing_roots() -> TestResult {
+        let tmp = tempfile::tempdir()?;
+        let root = tmp.path();
+
+        create_file(root, "lib/Current.pm")?;
+        fs::create_dir_all(root.join("lib/Directory.pm"))?;
+
+        let payload = b"lib/Current.pm\0lib/Deleted.pm\0lib/Directory.pm\0";
+        let (files, excluded_count) = parse_git_ls_files_output(root, payload);
+
+        assert_eq!(files, vec![root.join("lib/Current.pm")]);
+        assert_eq!(excluded_count, 2);
+
+        Ok(())
     }
 
     #[test]
