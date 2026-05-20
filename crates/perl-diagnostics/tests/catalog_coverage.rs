@@ -25,6 +25,7 @@ const DOCUMENTED_CATALOG_ENTRIES: &[(&str, CatalogFn, &str)] = &[
     ("bareword_filehandle", catalog::bareword_filehandle, "PL400"),
     ("two_arg_open", catalog::two_arg_open, "PL401"),
     ("implicit_return", catalog::implicit_return, "PL402"),
+    ("eval_error_flow", catalog::eval_error_flow, "PL407"),
 ];
 
 const UNDOCUMENTED_CATALOG_ENTRIES: &[(&str, CatalogFn, &str)] = &[
