@@ -16,6 +16,7 @@ on:
       - '.ci/gate-policy.yaml'
       - 'scripts/ci/validate_risk_packs.py'
       - 'scripts/ci/validate_gate_lane_mapping.py'
+      - 'scripts/ci/validate_trust_lanes.py'
       - '.github/workflows/policy-validators.yml'
   workflow_dispatch: {}
 
@@ -47,6 +48,10 @@ jobs:
       - name: Validate risk packs
         run: |
           python3 scripts/ci/validate_risk_packs.py --strict
+
+      - name: Validate trust lanes
+        run: |
+          python3 scripts/ci/validate_trust_lanes.py --strict
 
       - name: Validate gate -> lane mapping
         run: |

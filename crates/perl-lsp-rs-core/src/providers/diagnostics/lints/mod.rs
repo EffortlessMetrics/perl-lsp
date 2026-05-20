@@ -115,7 +115,7 @@
 //! |------|----------|-------------|
 //! | `PL408` | Warning | Hash key appears more than once in the same literal |
 //!
-//! ## Goto labels (`goto_label.rs`)
+//! ## Goto labels (`goto_label/`)
 //!
 //! | Code | Severity | Description |
 //! |------|----------|-------------|

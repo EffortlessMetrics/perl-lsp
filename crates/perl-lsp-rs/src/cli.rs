@@ -108,7 +108,11 @@ fn invocation_name(args: &[std::ffi::OsString]) -> String {
 }
 
 fn render_help_text(command_name: &str) -> String {
-    help_text().replace("perl-lsp", command_name)
+    let placeholder = "__PERL_LSP_COMMAND_NAME__";
+    help_text()
+        .replace("perl-lsp", placeholder)
+        .replace("perllsp", placeholder)
+        .replace(placeholder, command_name)
 }
 
 fn render_shell_completion(script: &str, command_name: &str) -> String {
@@ -203,6 +207,9 @@ fn run_check(command_name: &str, files: &[String]) -> i32 {
             }
             Err(e) => {
                 println!("{path}: FAIL - {e}");
+                for detail in format_parse_error_context(&source, &e) {
+                    println!("{detail}");
+                }
                 errors += 1;
             }
         }
@@ -216,14 +223,54 @@ fn run_check(command_name: &str, files: &[String]) -> i32 {
     if errors > 0 { 1 } else { 0 }
 }
 
+fn format_parse_error_context(source: &str, error: &perl_parser::ParseError) -> Vec<String> {
+    let contexts = perl_parser::error::get_error_contexts(std::slice::from_ref(error), source);
+    let Some(context) = contexts.first() else {
+        return Vec::new();
+    };
+
+    let line_number = context.line + 1;
+    let column_number = context.column + 1;
+    let mut lines = vec![format!("  --> line {line_number}, column {column_number}")];
+
+    if !context.source_line.is_empty() {
+        let gutter = line_number.to_string();
+        lines.push(format!("  {gutter} | {}", context.source_line));
+        lines.push(format!("  {} | {}^", " ".repeat(gutter.len()), " ".repeat(context.column)));
+    }
+
+    if let Some(suggestion) = &context.suggestion {
+        lines.push(format!("  help: {suggestion}"));
+    }
+
+    lines
+}
+
 struct FileError {
     path: String,
     errors: Vec<String>,
 }
 
 fn run_check_project(dir: &str) -> i32 {
+    let root = Path::new(dir);
+    let metadata = match root.metadata() {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            eprintln!("{dir}: directory not found");
+            return 1;
+        }
+        Err(error) => {
+            eprintln!("{dir}: cannot access directory: {error}");
+            return 1;
+        }
+    };
+    if !metadata.is_dir() {
+        eprintln!("{dir}: not a directory");
+        return 1;
+    }
+
     let extensions: &[&str] = &["pm", "pl", "t"];
-    let walker = walkdir::WalkDir::new(dir).follow_links(true).into_iter();
+    let walker = walkdir::WalkDir::new(root).follow_links(true).into_iter();
 
     let mut total = 0usize;
     let mut clean = 0usize;
@@ -579,7 +626,8 @@ fn print_version(command_name: &str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        categorize_error, invocation_name, remediation_hint_for_category, render_shell_completion,
+        categorize_error, format_parse_error_context, invocation_name,
+        remediation_hint_for_category, render_help_text, render_shell_completion,
     };
     use std::ffi::OsString;
 
@@ -596,6 +644,24 @@ mod tests {
     }
 
     #[test]
+    fn render_help_text_rewrites_usage_examples_for_invocation_name() {
+        let rendered = render_help_text("perl-lsp-rs");
+
+        assert!(rendered.contains("Usage: perl-lsp-rs [options]"));
+        assert!(rendered.contains("perl-lsp-rs --check lib/MyModule.pm"));
+        assert!(!rendered.contains("Usage: perllsp"));
+        assert!(!rendered.contains("perllsp --"));
+    }
+
+    #[test]
+    fn render_help_text_does_not_rewrite_inserted_command_name() {
+        let rendered = render_help_text("perllsp-dev");
+
+        assert!(rendered.contains("Usage: perllsp-dev [options]"));
+        assert!(!rendered.contains("perllsp-dev-dev"));
+    }
+
+    #[test]
     fn render_shell_completion_rewrites_function_and_command_names() {
         let script =
             "complete -F _perl_lsp perl-lsp\n# shell completion for perl-lsp and _perl_lsp";
@@ -604,6 +670,34 @@ mod tests {
         assert!(rendered.contains("_my_perl_lsp"));
         assert!(rendered.contains("my-perl-lsp"));
         assert!(!rendered.contains("complete -F _perl_lsp perl-lsp"));
+    }
+
+    #[test]
+    fn format_parse_error_context_adds_line_column_and_caret()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = "my $ok = 1;\nmy $broken = ;\n";
+        let error = perl_parser::ParseError::unexpected("expression", ";", 25);
+        let rendered = format_parse_error_context(source, &error);
+
+        assert!(rendered.iter().any(|line| line == "  --> line 2, column 14"));
+        assert!(rendered.iter().any(|line| line == "  2 | my $broken = ;"));
+        assert!(rendered.iter().any(|line| line == "    |              ^"));
+        Ok(())
+    }
+
+    #[test]
+    fn format_parse_error_context_includes_suggestions_when_available()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = "my $x = 1\n";
+        let error = perl_parser::ParseError::unexpected(";", "end of input", source.len());
+        let rendered = format_parse_error_context(source, &error);
+
+        assert!(
+            rendered
+                .iter()
+                .any(|line| line == "  help: add a semicolon ';' at the end of the statement")
+        );
+        Ok(())
     }
 
     #[test]

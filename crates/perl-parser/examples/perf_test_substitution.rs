@@ -109,7 +109,7 @@ sub process_text {
         let duration = start.elapsed();
         let avg_time = duration.as_nanos() as f64 / iterations as f64;
         let success_rate = (successful_parses as f64 / iterations as f64) * 100.0;
-        let avg_nodes = if successful_parses > 0 { total_nodes / successful_parses } else { 0 };
+        let avg_nodes = total_nodes.checked_div(successful_parses).unwrap_or(0);
 
         println!(
             "  Time: {:.2} µs/parse (total: {:.2} ms)",

@@ -65,23 +65,12 @@
 //! # }
 //! ```
 
-use super::modernize;
-use super::quick_fixes;
-use super::refactors;
-use super::types::QuickFixDiagnostic;
+use super::{diagnostic_routes, source_actions};
 
 pub use super::types::{CodeAction, CodeActionKind};
 
 use crate::providers::diagnostics::Diagnostic;
-use perl_diagnostics::codes::DiagnosticCode;
 use perl_parser_core::Node;
-
-/// Convert Diagnostic to QuickFixDiagnostic
-///
-/// Since Diagnostic already uses byte offsets, this is a simple copy.
-fn to_quick_fix_diagnostic(diag: &Diagnostic) -> QuickFixDiagnostic {
-    QuickFixDiagnostic { range: diag.range, message: diag.message.clone(), code: diag.code.clone() }
-}
 
 /// Code actions provider
 ///
@@ -104,195 +93,11 @@ impl CodeActionsProvider {
         range: (usize, usize),
         diagnostics: &[Diagnostic],
     ) -> Vec<CodeAction> {
-        let mut actions = Vec::new();
+        let mut actions = diagnostic_routes::quick_fixes_for_diagnostics(&self.source, diagnostics);
 
-        // Get quick fixes for diagnostics
-        for diagnostic in diagnostics {
-            let qf_diag = to_quick_fix_diagnostic(diagnostic);
-            if let Some(code) = &diagnostic.code {
-                let policy_code =
-                    code.strip_prefix("Perl::Critic::Policy::").unwrap_or(code.as_str());
-
-                match policy_code {
-                    // PL103: Undefined/undeclared variable
-                    c if c == DiagnosticCode::UndefinedVariable.as_str() => {
-                        actions.extend(quick_fixes::fix_undefined_variable(&self.source, &qf_diag));
-                    }
-                    // PL102: Unused variable
-                    c if c == DiagnosticCode::UnusedVariable.as_str() => {
-                        actions.extend(quick_fixes::fix_unused_variable(&self.source, &qf_diag));
-                    }
-                    "native.variables.unused_lexical" => {
-                        actions.extend(quick_fixes::fix_unused_variable(&self.source, &qf_diag));
-                    }
-                    // PL403: Assignment in condition
-                    c if c == DiagnosticCode::AssignmentInCondition.as_str()
-                        || c == "native.common.assignment_in_condition" =>
-                    {
-                        actions.extend(quick_fixes::fix_assignment_in_condition(
-                            &self.source,
-                            &qf_diag,
-                        ));
-                    }
-                    // PL100: Missing use strict
-                    c if c == DiagnosticCode::MissingStrict.as_str() => {
-                        actions.extend(quick_fixes::add_use_strict());
-                    }
-                    // PL101: Missing use warnings
-                    c if c == DiagnosticCode::MissingWarnings.as_str() => {
-                        actions.extend(quick_fixes::add_use_warnings());
-                    }
-                    // PL502: Phase-scoped use strict misconception
-                    c if c == DiagnosticCode::PhaseScopedStrictPragma.as_str() => {
-                        actions.extend(quick_fixes::move_use_strict_to_file_scope(
-                            &self.source,
-                            &qf_diag,
-                        ));
-                    }
-                    // PL503: Phase-scoped use warnings misconception
-                    c if c == DiagnosticCode::PhaseScopedWarningsPragma.as_str() => {
-                        actions.extend(quick_fixes::move_use_warnings_to_file_scope(
-                            &self.source,
-                            &qf_diag,
-                        ));
-                    }
-                    // PL500: Deprecated defined()
-                    c if c == DiagnosticCode::DeprecatedDefined.as_str()
-                        || c == "native.common.deprecated_defined" =>
-                    {
-                        actions.extend(quick_fixes::fix_deprecated_defined(&self.source, &qf_diag));
-                    }
-                    // PL404: Numeric comparison with undef
-                    "native.common.undef_comparison" => {
-                        actions.extend(quick_fixes::fix_native_undef_comparison(
-                            &self.source,
-                            &qf_diag,
-                        ));
-                    }
-                    c if c == DiagnosticCode::NumericComparisonWithUndef.as_str() => {
-                        actions.extend(quick_fixes::fix_numeric_undef(&self.source, &qf_diag));
-                    }
-                    // PL109: Unquoted bareword
-                    c if c == DiagnosticCode::UnquotedBareword.as_str() => {
-                        actions.extend(quick_fixes::fix_bareword(&self.source, &qf_diag));
-                    }
-                    // PL001: General parse error (stable code)
-                    // PL002: Syntax error — same quick-fix routing as PL001
-                    c if c == DiagnosticCode::ParseError.as_str()
-                        || c == DiagnosticCode::SyntaxError.as_str() =>
-                    {
-                        actions.extend(quick_fixes::fix_parse_error(&self.source, &qf_diag, c));
-                    }
-                    // parse-error-* subcodes (legacy subtype codes from error classifier)
-                    c if c.starts_with("parse-error-") => {
-                        actions.extend(quick_fixes::fix_parse_error(&self.source, &qf_diag, c));
-                    }
-                    // PL108: Unused parameter
-                    c if c == DiagnosticCode::UnusedParameter.as_str()
-                        || c == "native.variables.unused_parameter" =>
-                    {
-                        actions.extend(quick_fixes::fix_unused_parameter(&qf_diag));
-                    }
-                    // PL107: Duplicate parameter
-                    c if c == DiagnosticCode::DuplicateParameter.as_str()
-                        || c == "native.variables.duplicate_parameter" =>
-                    {
-                        actions.extend(quick_fixes::fix_duplicate_parameter(&qf_diag));
-                    }
-                    // PL110: Parameter shadows outer/global variable
-                    c if c == DiagnosticCode::ParameterShadowsGlobal.as_str()
-                        || c == "native.variables.parameter_shadows_global" =>
-                    {
-                        actions.extend(quick_fixes::fix_parameter_shadowing(&qf_diag));
-                    }
-                    // PL104: Variable shadowing
-                    c if c == DiagnosticCode::VariableShadowing.as_str()
-                        || c == "native.variables.shadowed_lexical" =>
-                    {
-                        actions.extend(quick_fixes::fix_variable_shadowing(&qf_diag));
-                    }
-                    // PL400: Bareword filehandle
-                    c if c == DiagnosticCode::BarewordFilehandle.as_str()
-                        || c == "native.io.bareword_filehandle" =>
-                    {
-                        actions.extend(quick_fixes::fix_bareword_filehandle(&qf_diag));
-                    }
-                    // Perl::Critic policy alias for bareword filehandle.
-                    "InputOutput::ProhibitBarewordFileHandles" => {
-                        actions.extend(quick_fixes::fix_bareword_filehandle(&qf_diag));
-                    }
-                    // PL401: Two-arg open
-                    c if c == DiagnosticCode::TwoArgOpen.as_str()
-                        || c == "native.io.two_arg_open" =>
-                    {
-                        actions.extend(quick_fixes::fix_two_arg_open(&self.source, &qf_diag));
-                    }
-                    // Perl::Critic policy aliases for two-arg open.
-                    "InputOutput::ProhibitTwoArgOpen"
-                    | "InputOutput::RequireBriefOpen"
-                    | "InputOutput::RequireThreeArgOpen" => {
-                        actions.extend(quick_fixes::fix_two_arg_open(&self.source, &qf_diag));
-                    }
-                    // Perl::Critic/native critic policies for missing strict/warnings.
-                    "TestingAndDebugging::RequireUseStrict"
-                    | "native.testing.require_use_strict" => {
-                        actions.extend(quick_fixes::add_use_strict());
-                    }
-                    "TestingAndDebugging::RequireUseWarnings"
-                    | "native.testing.require_use_warnings" => {
-                        actions.extend(quick_fixes::add_use_warnings());
-                    }
-                    // Perl::Critic policy alias for unused variables.
-                    "Variables::ProhibitUnusedVariables" => {
-                        actions.extend(quick_fixes::fix_unused_variable(&self.source, &qf_diag));
-                    }
-                    // PL200: Missing package declaration
-                    c if c == DiagnosticCode::MissingPackageDeclaration.as_str() => {
-                        actions.extend(quick_fixes::fix_missing_package_declaration(&self.source));
-                    }
-                    // PL105: Variable redeclaration (duplicate my)
-                    c if c == DiagnosticCode::VariableRedeclaration.as_str()
-                        || c == "native.variables.duplicate_lexical" =>
-                    {
-                        actions.extend(quick_fixes::fix_variable_redeclaration(
-                            &self.source,
-                            &qf_diag,
-                        ));
-                    }
-                    // PL111: Misspelled pragma
-                    c if c == DiagnosticCode::MisspelledPragma.as_str() => {
-                        actions.extend(quick_fixes::fix_misspelled_pragma(&self.source, &qf_diag));
-                    }
-                    // PL406: Unreachable code
-                    c if c == DiagnosticCode::UnreachableCode.as_str()
-                        || c == "native.common.unreachable_code" =>
-                    {
-                        actions.extend(quick_fixes::fix_unreachable_code(&self.source, &qf_diag));
-                    }
-                    // PL300: Duplicate subroutine
-                    c if c == DiagnosticCode::DuplicateSubroutine.as_str() => {
-                        actions.extend(quick_fixes::fix_duplicate_subroutine(&qf_diag));
-                    }
-                    // PL301: Missing return statement
-                    c if c == DiagnosticCode::MissingReturn.as_str() => {
-                        actions.extend(quick_fixes::fix_missing_return(&self.source, &qf_diag));
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        // Source-level lints (not diagnostic-driven)
-        // Only suggest shebang fix when the range includes the first line
-        if range.0 == 0 || !self.source[..range.0].contains('\n') {
-            actions.extend(quick_fixes::fix_hardcoded_shebang(&self.source));
-        }
-
-        // Get refactoring actions for selection
-        actions.extend(refactors::get_refactoring_actions(&self.source, ast, range));
-
-        // Get modernization suggestions
-        actions.extend(modernize::get_modernize_actions(&self.source));
+        actions.extend(source_actions::get_source_actions(&self.source, range));
+        actions.extend(super::refactors::get_refactoring_actions(&self.source, ast, range));
+        actions.extend(super::modernize::get_modernize_actions(&self.source));
 
         actions
     }
@@ -1155,5 +960,108 @@ mod tests {
                 "Expected parse error code {code} to produce at least one quick fix"
             );
         }
+    }
+
+    #[test]
+    fn test_pl408_duplicate_hash_key_rename_action() {
+        // PL408: duplicate hash key 'host' on a multiline hash offers rename and delete.
+        let source = "my %cfg = (\n    host => 'db1',\n    host => 'db2',\n);\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        // Second 'host' key.
+        let dup_start = must_some(source.rfind("host"));
+        let dup_end = dup_start + "host".len();
+        let diagnostics = vec![make_diagnostic(
+            dup_start,
+            dup_end,
+            "PL408",
+            "Duplicate hash key 'host' -- only the last value will be used",
+        )];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        let rename = must_some(
+            actions.iter().find(|a| a.title.contains("Rename") && a.title.contains("host")),
+        );
+        assert_eq!(rename.edit.changes[0].new_text, "host_2");
+        assert_eq!(rename.edit.changes[0].location.start, dup_start);
+        assert_eq!(rename.edit.changes[0].location.end, dup_end);
+    }
+
+    #[test]
+    fn test_pl408_duplicate_hash_key_delete_preferred_for_multiline() {
+        // PL408: delete action is preferred and removes only the duplicate line.
+        let source = "my %cfg = (\n    host => 'db1',\n    host => 'db2',\n);\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let dup_start = must_some(source.rfind("host"));
+        let dup_end = dup_start + "host".len();
+        let diagnostics = vec![make_diagnostic(
+            dup_start,
+            dup_end,
+            "PL408",
+            "Duplicate hash key 'host' -- only the last value will be used",
+        )];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        let delete = must_some(
+            actions.iter().find(|a| a.title.contains("Remove") && a.title.contains("host")),
+        );
+        assert!(delete.is_preferred, "remove action should be preferred");
+
+        let rewritten = apply_action(source, delete);
+        assert_eq!(rewritten, "my %cfg = (\n    host => 'db1',\n);\n");
+    }
+
+    #[test]
+    fn test_pl408_inline_hash_only_rename_no_delete() {
+        // PL408: inline hash suppresses delete; only rename is offered.
+        let source = "my %h = (foo => 1, foo => 2);\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let dup_start = must_some(source.rfind("foo"));
+        let dup_end = dup_start + "foo".len();
+        let diagnostics = vec![make_diagnostic(
+            dup_start,
+            dup_end,
+            "PL408",
+            "Duplicate hash key 'foo' -- only the last value will be used",
+        )];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        assert!(
+            !actions.iter().any(|a| a.title.contains("Remove")),
+            "should not offer delete for inline hash"
+        );
+        assert!(
+            actions.iter().any(|a| a.title.contains("Rename") && a.title.contains("foo")),
+            "should still offer rename for inline hash"
+        );
+    }
+
+    #[test]
+    fn test_pl408_single_quoted_key_rename_preserves_quotes() {
+        let source = "my %h = (\n    'key' => 1,\n    'key' => 2,\n);\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let dup_start = must_some(source.rfind("'key'"));
+        let dup_end = dup_start + "'key'".len();
+        let diagnostics = vec![make_diagnostic(
+            dup_start,
+            dup_end,
+            "PL408",
+            "Duplicate hash key 'key' -- only the last value will be used",
+        )];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        let rename = must_some(actions.iter().find(|a| a.title.contains("Rename")));
+        assert_eq!(rename.edit.changes[0].new_text, "'key_2'");
     }
 }

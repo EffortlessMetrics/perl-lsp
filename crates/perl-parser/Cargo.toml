@@ -104,6 +104,7 @@ proptest.workspace = true
 rstest = "0.26.1"
 perl-corpus = { workspace = true }
 perl-lsp-rs-core = { workspace = true }
+perl-test-generators = { workspace = true }
 
 [[bench]]
 name = "parser_benchmark"

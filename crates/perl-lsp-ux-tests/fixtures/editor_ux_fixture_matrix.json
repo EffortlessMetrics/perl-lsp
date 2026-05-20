@@ -1008,6 +1008,90 @@
       ]
     },
     {
+      "id": "catalyst_workspace_symbol_noise",
+      "scenario_file": "ux_scenario_41_catalyst_workspace_symbol_noise.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "component": "workspace_symbols",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "request workspace symbols over the Catalyst real-workspace fixture and record third-project generated, dynamic, noise, and freshness boundaries",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
+      ],
+      "expected_outcomes": [
+        "workspace-symbol requests return valid LSP shapes without JSON-RPC errors",
+        "receipt records useful project hits, noisy hit counts, generated/dynamic candidate boundaries, and edit freshness",
+        "compiler-backed workspace-symbol candidates remain shadowed without provider behavior promotion"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
+      "id": "modern_oo_workspace_symbol_noise",
+      "scenario_file": "ux_scenario_43_modern_oo_workspace_symbol_noise.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "component": "workspace_symbols",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "request workspace symbols over the Modern OO corpus fixture and record generated accessor, delegated-handle, role-composition, and method-modifier rank/noise boundaries",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
+      ],
+      "expected_outcomes": [
+        "workspace-symbol requests return valid LSP shapes without JSON-RPC errors",
+        "receipt records useful Modern OO hits, labeled generated symbols, generated exact-name gating, and edit freshness",
+        "broader generated/dynamic workspace-symbol candidates remain bounded without provider behavior promotion"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
+      "id": "catalyst_semantic_tokens_false_exact_freshness",
+      "scenario_file": "ux_scenario_42_catalyst_semantic_tokens_false_exact_freshness.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "component": "semantic_tokens",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "request semantic tokens over the Catalyst real-workspace fixture and record project-shaped false-exact and freshness boundaries",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
+      ],
+      "expected_outcomes": [
+        "semantic-token requests return valid 5-tuple data without JSON-RPC errors",
+        "generated and dynamic-looking Catalyst token shapes do not become exact symbol tokens",
+        "semantic-token text reflects an open-document edit without acting on stale source text"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "dancer2_diagnostics_quality",
       "scenario_file": "ux_scenario_40_dancer2_diagnostics_quality.rs",
       "subsystem_owner": "diagnostics",

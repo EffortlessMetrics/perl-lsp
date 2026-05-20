@@ -491,7 +491,7 @@ impl WorkspaceRename {
                 let is_word_end =
                     match_end >= text.len() || !is_identifier_char(text.as_bytes()[match_end]);
 
-                if is_word_start && is_word_end {
+                if is_word_start && is_word_end && is_rename_code_position(text, match_start) {
                     // AC:AC4 - Scope check: if we have a package context, verify this reference
                     // is in the correct scope
                     let in_scope = if let Some(ref pkg) = scope_package {
@@ -830,6 +830,60 @@ fn build_replacement_text(
     (match_start, new_bare.to_string())
 }
 
+/// Check whether a byte offset is in executable Perl code rather than trivia.
+fn is_rename_code_position(text: &str, offset: usize) -> bool {
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum ScanState {
+        Code,
+        SingleQuoted,
+        DoubleQuoted,
+        LineComment,
+    }
+
+    let mut state = ScanState::Code;
+    let mut escaped = false;
+
+    for (idx, byte) in text.bytes().enumerate() {
+        if idx >= offset {
+            return state == ScanState::Code;
+        }
+
+        match state {
+            ScanState::Code => match byte {
+                b'\'' => state = ScanState::SingleQuoted,
+                b'"' => state = ScanState::DoubleQuoted,
+                b'#' => state = ScanState::LineComment,
+                _ => {}
+            },
+            ScanState::SingleQuoted => {
+                if escaped {
+                    escaped = false;
+                } else if byte == b'\\' {
+                    escaped = true;
+                } else if byte == b'\'' {
+                    state = ScanState::Code;
+                }
+            }
+            ScanState::DoubleQuoted => {
+                if escaped {
+                    escaped = false;
+                } else if byte == b'\\' {
+                    escaped = true;
+                } else if byte == b'"' {
+                    state = ScanState::Code;
+                }
+            }
+            ScanState::LineComment => {
+                if byte == b'\n' {
+                    state = ScanState::Code;
+                }
+            }
+        }
+    }
+
+    state == ScanState::Code
+}
+
 /// Check if a byte is a valid Perl identifier character
 fn is_identifier_char(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
@@ -898,6 +952,90 @@ mod tests {
         assert_eq!(find_package_at_offset(text, 20), Some("Foo".to_string()));
         assert_eq!(find_package_at_offset(text, 45), Some("Bar".to_string()));
         assert_eq!(find_package_at_offset(text, 0), None);
+    }
+
+    #[test]
+    fn test_workspace_rename_leaves_comments_and_strings_unchanged()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("main.pl");
+        let content = concat!(
+            "sub target_name { target_name(); }\n",
+            "# target_name in comment must stay descriptive\n",
+            "my $single = 'target_name in single quoted text';\n",
+            "my $double = \"target_name in double quoted text\";\n",
+        );
+        std::fs::write(&path, content)?;
+
+        let index = WorkspaceIndex::new();
+        let uri = url::Url::from_file_path(&path)
+            .map_err(|_| format!("failed to create URL for {}", path.display()))?;
+        index.index_file_str(uri.as_str(), content)?;
+
+        let config = WorkspaceRenameConfig { create_backups: false, ..Default::default() };
+        let rename_engine = WorkspaceRename::new(index, config);
+        let result = rename_engine.rename_symbol("target_name", "renamed_name", &path, (0, 4))?;
+
+        assert_eq!(result.statistics.total_changes, 2);
+        rename_engine.apply_edits(&result)?;
+
+        let renamed = std::fs::read_to_string(&path)?;
+        assert!(renamed.contains("sub renamed_name { renamed_name(); }"));
+        assert!(renamed.contains("# target_name in comment must stay descriptive"));
+        assert!(renamed.contains("'target_name in single quoted text'"));
+        assert!(renamed.contains("\"target_name in double quoted text\""));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_rename_code_position_skips_comments_and_strings() -> Result<(), String> {
+        let text = concat!(
+            "sub old_name { old_name(); }\n",
+            "# old_name in comment must stay descriptive\n",
+            "my $single = 'old_name in single quoted text';\n",
+            "my $double = \"old_name in double quoted text\";\n",
+            "old_name();\n",
+        );
+
+        let definition = text
+            .find("old_name")
+            .ok_or_else(|| "definition occurrence should exist".to_string())?;
+        let comment = text
+            .find("old_name in comment")
+            .ok_or_else(|| "comment occurrence should exist".to_string())?;
+        let single = text
+            .find("old_name in single")
+            .ok_or_else(|| "single-quoted occurrence should exist".to_string())?;
+        let double = text
+            .find("old_name in double")
+            .ok_or_else(|| "double-quoted occurrence should exist".to_string())?;
+        let final_call = text
+            .rfind("old_name")
+            .ok_or_else(|| "final call occurrence should exist".to_string())?;
+
+        assert!(is_rename_code_position(text, definition));
+        assert!(!is_rename_code_position(text, comment));
+        assert!(!is_rename_code_position(text, single));
+        assert!(!is_rename_code_position(text, double));
+        assert!(is_rename_code_position(text, final_call));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_rename_code_position_respects_escaped_quotes() -> Result<(), String> {
+        let text = "my $text = \"escaped \\\" old_name still string\";\nold_name();\n";
+        let string_occurrence = text
+            .find("old_name still string")
+            .ok_or_else(|| "string occurrence should exist".to_string())?;
+        let code_occurrence =
+            text.rfind("old_name").ok_or_else(|| "code occurrence should exist".to_string())?;
+
+        assert!(!is_rename_code_position(text, string_occurrence));
+        assert!(is_rename_code_position(text, code_occurrence));
+
+        Ok(())
     }
 
     #[test]

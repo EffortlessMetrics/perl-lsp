@@ -205,15 +205,15 @@ fn given_use_feature_signatures_when_querying_state_then_effective_strict_modes_
 }
 
 #[test]
-fn given_use_v5_38_when_querying_state_then_switch_feature_is_not_available_but_modern_features_are()
- {
+fn given_use_v5_38_when_querying_state_then_removed_features_are_absent_but_modern_features_are() {
     let ast = program(vec![use_node("v5.38", &[], 0, 10)]);
     let map = PragmaTracker::build(&ast);
 
     let state = PragmaTracker::state_for_offset(&map, 5);
-    assert!(state.has_feature("class"));
-    assert!(state.has_feature("method"));
+    assert!(state.has_feature("module_true"));
+    assert!(state.has_feature("signatures"));
     assert!(!state.has_feature("switch"));
+    assert!(!state.has_feature("bareword_filehandles"));
 }
 
 #[test]
@@ -506,4 +506,82 @@ fn given_scoped_block_when_building_explicit_map_then_restore_point_is_zero_leng
     assert!(final_state.strict_vars);
     assert!(final_state.strict_subs);
     assert!(final_state.strict_refs);
+}
+
+/// Querying an empty `PragmaMap` via the explicit-map cursor API must return
+/// the default snapshot, matching `CompileTimePragmaEnvironment::snapshot_at`.
+/// This exercises the `entries.is_empty()` early-return branch in
+/// `PragmaQueryCursor::entry_for_offset` through the public `snapshot_at` /
+/// `state_at` methods (the existing empty-map test only covers the legacy
+/// tuple `state_for_offset` API).
+#[test]
+fn given_empty_explicit_pragma_map_when_using_cursor_then_default_snapshot_is_returned() {
+    let ast = program(vec![]);
+    let environment = CompileTimePragmaEnvironment::build(&ast);
+    let map = environment.map();
+    assert!(map.entries().is_empty(), "program without pragmas must produce empty map");
+
+    let mut cursor = map.cursor();
+    let snapshot = cursor.snapshot_at(map, 999);
+    let state = cursor.state_at(map, 999);
+
+    assert_eq!(snapshot, environment.snapshot_at(999));
+    assert_eq!(state, map.state_at(999));
+    assert_eq!(state, PragmaState::default());
+}
+
+/// Querying an offset that precedes the first pragma range via the explicit-map
+/// cursor API must return the default snapshot — same as the static
+/// `PragmaMap::snapshot_at`. This exercises the `entries[index].range.start >
+/// offset` branch in `entry_for_offset` where `partition_point` returns 0 and
+/// the index is not decremented (mirroring the legacy `state_for_offset`
+/// coverage for the same edge case).
+#[test]
+fn given_cursor_when_explicit_map_offset_is_before_first_pragma_then_default_snapshot_is_returned()
+{
+    let ast = program(vec![use_node("strict", &[], 10, 22)]);
+    let environment = CompileTimePragmaEnvironment::build(&ast);
+    let map = environment.map();
+
+    let mut cursor = map.cursor();
+    let snapshot = cursor.snapshot_at(map, 5);
+    let state = cursor.state_at(map, 5);
+
+    assert_eq!(snapshot, environment.snapshot_at(5));
+    assert_eq!(state, map.state_at(5));
+    assert!(!state.strict_vars, "no pragma has started at offset 5");
+}
+
+#[test]
+fn given_use_warnings_when_qw_categories_are_disabled_then_each_category_is_tracked()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("warnings", &[], 0, 15),
+        no_node("warnings", &["qw(uninitialized deprecated)"], 16, 55),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 30);
+    assert!(state.warnings);
+    assert!(!state.is_warning_active("uninitialized"));
+    assert!(!state.is_warning_active("deprecated"));
+    assert!(state.is_warning_active("void"));
+    Ok(())
+}
+
+#[test]
+fn given_disabled_warning_categories_when_specific_category_is_reenabled_then_other_disabled_categories_remain()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("warnings", &[], 0, 15),
+        no_node("warnings", &["qw(uninitialized deprecated)"], 16, 55),
+        use_node("warnings", &["'deprecated'"], 56, 84),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 70);
+    assert!(state.warnings);
+    assert!(!state.is_warning_active("uninitialized"));
+    assert!(state.is_warning_active("deprecated"));
+    Ok(())
 }

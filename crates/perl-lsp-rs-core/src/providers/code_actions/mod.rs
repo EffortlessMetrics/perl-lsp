@@ -20,10 +20,12 @@
 
 #[allow(clippy::module_inception)]
 mod code_actions;
+mod diagnostic_routes;
 mod enhanced;
 mod modernize;
 mod quick_fixes;
 mod refactors;
+mod source_actions;
 mod types;
 
 pub use code_actions::{CodeAction, CodeActionKind, CodeActionsProvider};
