@@ -1,0 +1,116 @@
+# Advisory workspace-symbol class promotion registry.
+#
+# This policy records reviewed workspace-symbol classes. It does not broaden
+# live workspace-symbol output or replace workspace-symbol receipts.
+
+schema_version = 1
+policy = "workspace-symbol-classes"
+owner = "perl-lsp maintainers"
+status = "advisory"
+updated = "2026-05-20"
+spec = "docs/specs/PLSP-SPEC-0020-workspace-symbol-generated-label-contract.md"
+support_tiers = "docs/project/status/SUPPORT_TIERS.md"
+provider_promotion_ledger = "policy/provider-promotion-ledger.toml"
+
+default_state = "blocked_unlisted"
+default_fallback = "legacy_workspace_symbol_index"
+required_generated_label = "[generated/framework]"
+
+receipt_sources = [
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+
+[[class]]
+name = "source_backed_exact_symbol"
+state = "partial_live"
+surface = "workspace_symbols"
+fact_provenance = "ExplicitSource"
+live = true
+requires_non_empty_query = true
+requires_ready_index = true
+requires_high_confidence = true
+requires_source_anchor = true
+requires_generated_label = false
+blocks = [
+  "stale_fact",
+  "dynamic_boundary",
+  "low_confidence",
+  "ambiguous_identity",
+  "generated_no_source",
+]
+claim_boundary = "Fresh ready-index source-backed symbols may answer live for non-empty queries."
+
+[[class]]
+name = "source_backed_generated_framework_symbol"
+state = "generated_label_pilot"
+surface = "workspace_symbols"
+fact_provenance = "SourceBackedGenerated"
+live = true
+requires_non_empty_query = true
+requires_ready_index = true
+requires_high_confidence = true
+requires_source_anchor = true
+requires_generated_label = true
+label = "[generated/framework]"
+blocks = [
+  "generated_no_source",
+  "stale_fact",
+  "dynamic_boundary",
+  "low_confidence",
+  "ambiguous_identity",
+  "fallback_policy",
+  "unsupported_fact_class",
+]
+claim_boundary = "Source-backed generated/framework members may appear only as labeled virtual symbols anchored to framework declarations."
+
+[[class]]
+name = "generated_no_source_candidate"
+state = "blocked"
+surface = "workspace_symbols"
+fact_provenance = "GeneratedNoSource"
+live = false
+requires_non_empty_query = false
+requires_ready_index = false
+requires_high_confidence = false
+requires_source_anchor = false
+requires_generated_label = true
+blocks = [
+  "generated_no_source",
+  "unsupported_fact_class",
+]
+claim_boundary = "Generated/no-source candidates may appear in receipts only and must not become live workspace-symbol results."
+
+[[class]]
+name = "dynamic_generated_candidate"
+state = "blocked"
+surface = "workspace_symbols"
+fact_provenance = "DynamicBoundary"
+live = false
+requires_non_empty_query = false
+requires_ready_index = false
+requires_high_confidence = false
+requires_source_anchor = false
+requires_generated_label = true
+blocks = [
+  "dynamic_boundary",
+  "unsupported_fact_class",
+]
+claim_boundary = "Dynamic generated candidates may explain fallback or blockers but must not become live workspace-symbol results."
+
+[[class]]
+name = "partial_index_generated_candidate"
+state = "blocked"
+surface = "workspace_symbols"
+fact_provenance = "Unknown"
+live = false
+requires_non_empty_query = true
+requires_ready_index = true
+requires_high_confidence = false
+requires_source_anchor = true
+requires_generated_label = true
+blocks = [
+  "fallback_policy",
+  "unsupported_fact_class",
+]
+claim_boundary = "Partial-index generated candidates remain fallback or receipt-only until a separate proof promotes them."
