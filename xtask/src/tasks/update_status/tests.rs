@@ -26,7 +26,7 @@ pub(super) fn count_tier_a_lib_tests(root: &Path) -> Option<usize> {
     let output = run_cmd(
         root,
         &["cargo", "test", "--workspace", "--lib", "--exclude", "tree-sitter-perl", "--", "--list"],
-        Duration::from_secs(180),
+        Duration::from_mins(3),
     );
     if output.is_empty() {
         return None;
@@ -57,7 +57,7 @@ pub(super) fn count_missing_docs_perl_parser(root: &Path) -> Option<usize> {
     let output = run_cmd(
         root,
         &["cargo", "check", "-p", "perl-parser", "--tests", "--message-format=json"],
-        Duration::from_secs(300),
+        Duration::from_mins(5),
     );
     if output.is_empty() {
         return None;

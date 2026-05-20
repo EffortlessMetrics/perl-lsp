@@ -1186,14 +1186,11 @@ mod tests {
         let uri = "file:///runtime-pressure.pl";
 
         server.install_diagnostic_debouncer(
-            diagnostic_debounce::DiagnosticDebouncer::with_interval(
-                Duration::from_secs(60),
-                |_| {},
-            ),
+            diagnostic_debounce::DiagnosticDebouncer::with_interval(Duration::from_mins(1), |_| {}),
         );
         server.install_file_watcher_debouncer(
             file_watcher_debounce::FileWatcherDebouncer::with_interval(
-                Duration::from_secs(60),
+                Duration::from_mins(1),
                 |_| {},
             ),
         );

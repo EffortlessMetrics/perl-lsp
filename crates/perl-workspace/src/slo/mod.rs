@@ -35,7 +35,7 @@
 
 use parking_lot::Mutex;
 use perl_parser_core::percentile::nearest_rank_percentile;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -125,6 +125,34 @@ impl OperationType {
     }
 }
 
+/// Runtime phase for an SLO operation sample.
+///
+/// Regime tags let scorecards distinguish startup/indexing work from warm
+/// interactive requests and edit-triggered incremental updates.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Regime {
+    /// Startup and initial indexing operations.
+    Cold,
+    /// Post-index interactive operations.
+    Warm,
+    /// Edit-triggered incremental operations.
+    Incremental,
+}
+
+impl Regime {
+    const ALL: [Self; 3] = [Self::Cold, Self::Warm, Self::Incremental];
+
+    /// Get a human-readable name for this regime.
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Cold => "cold",
+            Self::Warm => "warm",
+            Self::Incremental => "incremental",
+        }
+    }
+}
+
 /// Result of an SLO operation.
 #[derive(Clone, Debug)]
 pub enum OperationResult {
@@ -160,6 +188,8 @@ struct LatencySample {
     duration: Duration,
     /// Whether the operation succeeded
     success: bool,
+    /// Runtime phase where the operation occurred
+    regime: Regime,
 }
 
 /// SLO statistics for a specific operation type.
@@ -228,10 +258,15 @@ impl OperationSloTracker {
         }
     }
 
-    /// Record an operation result.
+    /// Record an operation result using the default warm regime.
     fn record(&mut self, duration: Duration, result: OperationResult) {
+        self.record_with_regime(duration, result, Regime::Warm);
+    }
+
+    /// Record an operation result with an explicit regime tag.
+    fn record_with_regime(&mut self, duration: Duration, result: OperationResult, regime: Regime) {
         let success = result.is_success();
-        let sample = LatencySample { duration, success };
+        let sample = LatencySample { duration, success, regime };
 
         // Add sample
         if self.samples.len() >= self.max_samples {
@@ -242,19 +277,31 @@ impl OperationSloTracker {
 
     /// Calculate SLO statistics for this operation.
     fn statistics(&self) -> SloStatistics {
-        if self.samples.is_empty() {
+        let samples: Vec<&LatencySample> = self.samples.iter().collect();
+        self.statistics_for_samples(&samples)
+    }
+
+    /// Calculate SLO statistics for one regime.
+    fn statistics_for_regime(&self, regime: Regime) -> SloStatistics {
+        let samples: Vec<&LatencySample> =
+            self.samples.iter().filter(|sample| sample.regime == regime).collect();
+        self.statistics_for_samples(&samples)
+    }
+
+    fn statistics_for_samples(&self, samples: &[&LatencySample]) -> SloStatistics {
+        if samples.is_empty() {
             return SloStatistics::default();
         }
 
-        let total_count = self.samples.len() as u64;
-        let success_count = self.samples.iter().filter(|s| s.success).count() as u64;
+        let total_count = samples.len() as u64;
+        let success_count = samples.iter().filter(|s| s.success).count() as u64;
         let failure_count = total_count - success_count;
         let error_rate =
             if total_count > 0 { failure_count as f64 / total_count as f64 } else { 0.0 };
 
         // Calculate percentiles
         let mut durations_ms: Vec<u64> =
-            self.samples.iter().map(|s| s.duration.as_millis() as u64).collect();
+            samples.iter().map(|s| s.duration.as_millis() as u64).collect();
         durations_ms.sort_unstable();
 
         let p50_ms = nearest_rank_percentile(&durations_ms, 50);
@@ -409,11 +456,22 @@ impl SloTracker {
         start: Instant,
         result: OperationResult,
     ) {
+        self.record_operation_type_with_regime(operation_type, start, result, Regime::Warm);
+    }
+
+    /// Record the completion of a specific operation type with a regime tag.
+    pub fn record_operation_type_with_regime(
+        &self,
+        operation_type: OperationType,
+        start: Instant,
+        result: OperationResult,
+        regime: Regime,
+    ) {
         let duration = start.elapsed();
         let mut trackers = self.trackers.lock();
 
         if let Some(tracker) = trackers.get_mut(&operation_type) {
-            tracker.record(duration, result);
+            tracker.record_with_regime(duration, result, regime);
         }
     }
 
@@ -454,9 +512,35 @@ impl SloTracker {
     /// let tracker = SloTracker::default();
     /// let all_stats = tracker.all_statistics();
     /// ```
-    pub fn all_statistics(&self) -> std::collections::HashMap<OperationType, SloStatistics> {
+    pub fn all_statistics(&self) -> HashMap<OperationType, SloStatistics> {
         let trackers = self.trackers.lock();
         trackers.iter().map(|(op_type, tracker)| (*op_type, tracker.statistics())).collect()
+    }
+
+    /// Get SLO statistics for a specific operation type grouped by regime.
+    pub fn statistics_by_regime(
+        &self,
+        operation_type: OperationType,
+    ) -> HashMap<Regime, SloStatistics> {
+        let trackers = self.trackers.lock();
+        Regime::ALL
+            .into_iter()
+            .map(|regime| {
+                let statistics =
+                    trackers.get(&operation_type).map_or_else(SloStatistics::default, |tracker| {
+                        tracker.statistics_for_regime(regime)
+                    });
+                (regime, statistics)
+            })
+            .collect()
+    }
+
+    /// Get the number of samples for a specific operation type and regime.
+    pub fn sample_count_by_regime(&self, operation_type: OperationType, regime: Regime) -> usize {
+        let trackers = self.trackers.lock();
+        trackers.get(&operation_type).map_or(0, |tracker| {
+            tracker.samples.iter().filter(|sample| sample.regime == regime).count()
+        })
     }
 
     /// Check if all SLOs are being met.

@@ -369,23 +369,7 @@ mutation-regression:
 
 # Bounded fuzz run (quick fuzzing for CI/nightly)
 fuzz-bounded:
-    @echo "🔥 Running bounded fuzz testing (60 seconds per target)..."
-    @cargo +nightly fuzz run builtin_functions -- -max_total_time=60 || echo "  Builtin functions fuzzing complete"
-    @cargo +nightly fuzz run declaration_parsing -- -max_total_time=60 || echo "  Declaration parsing fuzzing complete"
-    @cargo +nightly fuzz run heredoc_parsing -- -max_total_time=60 || echo "  Heredoc fuzzing complete"
-    @cargo +nightly fuzz run incremental_edit_sequences -- -max_total_time=60 || echo "  Incremental edit sequences fuzzing complete"
-    @cargo +nightly fuzz run lsp_cancellation_registry -- -max_total_time=60 || echo "  LSP cancellation registry fuzzing complete"
-    @cargo +nightly fuzz run lsp_navigation -- -max_total_time=60 || echo "  LSP navigation fuzzing complete"
-    @cargo +nightly fuzz run parser_integration -- -max_total_time=60 || echo "  Parser integration fuzzing complete"
-    @cargo +nightly fuzz run quote_operators -- -max_total_time=60 || echo "  Quote operators fuzzing complete"
-    @cargo +nightly fuzz run symbol_query_ranking -- -max_total_time=60 || echo "  Symbol query ranking fuzzing complete"
-    @cargo +nightly fuzz run substitution_parsing -- -max_total_time=60 || echo "  Substitution fuzzing complete"
-    @cargo +nightly fuzz run utf16_roundtrip -- -max_total_time=60 || echo "  UTF-16 roundtrip fuzzing complete"
-    @cargo +nightly fuzz run unicode_positions -- -max_total_time=60 || echo "  Unicode positions fuzzing complete"
-    @cargo +nightly fuzz run lexer_tokenization -- -max_total_time=60 || echo "  Lexer tokenization fuzzing complete"
-    @cargo +nightly fuzz run dap_eval_validator -- -max_total_time=60 || echo "  DAP eval validator fuzzing complete"
-    @cargo +nightly fuzz run dap_stack_parser -- -max_total_time=60 || echo "  DAP stack parser fuzzing complete"
-    @echo "✅ Fuzz testing complete"
+    @./scripts/fuzz-bounded --duration 60
 
 # `bench` is the canonical benchmark target; keep this as a compatibility alias.
 benchmarks: bench
@@ -440,7 +424,7 @@ doctor-env:
     @echo "=============================================="
     @echo "  perl-lsp developer environment doctor"
     @echo "=============================================="
-    @cargo xtask devex-doctor
+    @{{cargo_safe}} xtask devex-doctor
 
 # Short alias for the developer environment quick check
 devex: doctor-env
@@ -804,10 +788,11 @@ devex-targeted base='' mode='all':
         exit 1
     fi
     echo "Running targeted checks (base=$base, mode={{mode}})..."
-    cargo xtask targeted-checks --base "$base" --mode "{{mode}}"
+    {{cargo_safe}} xtask targeted-checks --base "$base" --mode "{{mode}}"
 
 # Show recent upstream commits using an auto-detected base ref.
 # Helpful in detached or minimal-clone environments where origin/master may not exist.
+# Falls back to HEAD so local-only clones still satisfy the onboarding preflight.
 upstream-log count='20' base='':
     #!/usr/bin/env bash
     set -euo pipefail
@@ -833,9 +818,9 @@ upstream-log count='20' base='':
         base="master"
     fi
     if [ -z "$base" ]; then
-        echo "ERROR: Could not auto-detect base ref."
-        echo "Hint: run 'just upstream-log <count> <base-ref>' (example: just upstream-log 20 origin/master)."
-        exit 1
+        base="HEAD"
+        echo "WARN: Could not auto-detect base ref; showing local HEAD instead."
+        echo "Hint: pass an explicit ref when remote history is available (example: just upstream-log 20 origin/master)."
     fi
     echo "Showing last $count commits from $base"
     git log "$base" --oneline -n "$count"
@@ -2201,8 +2186,10 @@ fuzz-regression duration='30':
     @just fuzz heredoc_parsing {{duration}} || true
     @just fuzz incremental_edit_sequences {{duration}} || true
     @just fuzz lsp_cancellation_registry {{duration}} || true
+    @just fuzz module_surface {{duration}} || true
     @just fuzz parser_integration {{duration}} || true
     @just fuzz quote_operators {{duration}} || true
+    @just fuzz semantic_model {{duration}} || true
     @just fuzz symbol_query_ranking {{duration}} || true
     @just fuzz substitution_parsing {{duration}} || true
     @just fuzz lsp_navigation {{duration}} || true

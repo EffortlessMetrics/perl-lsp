@@ -236,6 +236,7 @@ pub mod lint;
 pub mod loading;
 pub mod meta;
 pub mod metadata;
+pub mod metadata_backfill;
 pub mod prelude;
 pub mod sidecar;
 pub mod tie_interface;

@@ -68,13 +68,13 @@ mod tests {
     proptest! {
         #[test]
         fn variable_starts_with_sigil(v in variable()) {
-            assert!(v.starts_with('$') || v.starts_with('@') || v.starts_with('%'));
+            prop_assert!(v.starts_with('$') || v.starts_with('@') || v.starts_with('%'));
         }
 
         #[test]
         fn variable_body_is_valid(v in variable()) {
             let body = &v[1..];
-            assert!(!body.is_empty(), "variable body must not be empty: {}", v);
+            prop_assert!(!body.is_empty(), "variable body must not be empty: {}", v);
         }
 
         #[test]
