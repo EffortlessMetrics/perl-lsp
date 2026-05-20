@@ -1119,6 +1119,31 @@ fn full_tdd_workflow_get_status() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn full_tdd_workflow_green_then_refactor_cycle() -> Result<(), Box<dyn std::error::Error>> {
+    use std::path::PathBuf;
+
+    use perl_tdd_support::tdd_workflow::{TddAction, TddConfig, TddWorkflow, WorkflowState};
+
+    let mut wf = TddWorkflow::new(TddConfig::default());
+    wf.start_cycle("my_feature");
+
+    let green = wf.run_tests(&[PathBuf::from("t/my_feature.t")]);
+    assert_eq!(green.phase, "Green");
+    assert!(green.actions.iter().any(|action| matches!(action, TddAction::SuggestRefactorings)));
+    assert_eq!(wf.get_status().state, WorkflowState::Green);
+
+    let refactor = wf.start_refactor();
+    assert_eq!(refactor.phase, "Refactor");
+    assert_eq!(wf.get_status().state, WorkflowState::Refactor);
+
+    let idle = wf.complete_cycle();
+    assert_eq!(idle.phase, "Idle");
+    assert_eq!(wf.get_status().state, WorkflowState::Idle);
+
+    Ok(())
+}
+
+#[test]
 fn full_tdd_workflow_coverage_threshold_initially_not_met() -> Result<(), Box<dyn std::error::Error>>
 {
     use perl_tdd_support::tdd_workflow::{TddConfig, TddWorkflow};
