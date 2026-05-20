@@ -12,11 +12,8 @@
 //! - No Rust panic traces in error messages.
 //! - The server MUST still be alive after the failed formatting request.
 
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{FormatResult, ScenarioConfig, UxHarness};
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 fn config_without_perltidy() -> ScenarioConfig {
     // Exclude only perltidy from PATH, leaving perl and other tools available.

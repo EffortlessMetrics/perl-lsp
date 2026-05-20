@@ -83,13 +83,13 @@ fn tcp_attach_config_builder_pattern() {
 #[test]
 fn tcp_attach_config_default_timeout_duration() {
     let config = TcpAttachConfig::new("localhost".to_string(), 13603);
-    assert_eq!(config.timeout_duration(), Duration::from_millis(5000));
+    assert_eq!(config.timeout_duration(), Duration::from_secs(5));
 }
 
 #[test]
 fn tcp_attach_config_custom_timeout_duration() {
     let config = TcpAttachConfig::new("localhost".to_string(), 13603).with_timeout(15000);
-    assert_eq!(config.timeout_duration(), Duration::from_millis(15000));
+    assert_eq!(config.timeout_duration(), Duration::from_secs(15));
 }
 
 #[test]

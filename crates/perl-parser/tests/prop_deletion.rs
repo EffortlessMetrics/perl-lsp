@@ -1,5 +1,8 @@
 use proptest::prelude::*;
 
+const REGRESS_DIR: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/tests/_proptest-regressions/prop_deletion");
+
 // Include the shared utilities
 include!("prop_test_utils.rs");
 
@@ -48,6 +51,8 @@ pub fn delete_on_breakable(src: &str) -> String {
 }
 
 proptest! {
+    #![proptest_config(parser_proptest_config(REGRESS_DIR, 256))]
+
     #[test]
     fn delete_preserves_core_tokens(
         s in "[a-zA-Z0-9 \t\n()\\[\\];:,.+=\\-*]+",

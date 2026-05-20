@@ -156,6 +156,9 @@ impl<'a> Parser<'a> {
                                             | TokenKind::LessEqual
                                             | TokenKind::Equal
                                             | TokenKind::NotEqual
+                                            | TokenKind::RightParen
+                                            | TokenKind::RightBrace
+                                            | TokenKind::RightBracket
                                     )
                                 )
                             {

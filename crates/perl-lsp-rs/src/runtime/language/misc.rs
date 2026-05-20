@@ -15,122 +15,33 @@ use crate::protocol::{invalid_params, req_position, req_uri};
 use crate::state::{code_lens_cap, code_lens_resolve_deadline, inlay_hints_cap};
 use perl_lsp_rs_core::providers::normalize_provider_decision_receipt;
 use perl_parser_core::source_file::is_perl_source_uri;
-use std::sync::OnceLock;
 use std::time::Instant;
 
-static INLINE_VALUE_REGEX: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
-
-struct LiveProviderResultShape {
-    decision: &'static str,
-    reason: &'static str,
-    fallback_state: &'static str,
-    result_kind: &'static str,
-    result_count: usize,
-    error: Option<Value>,
-}
-
-fn live_provider_trace_key(method: &str) -> Option<&'static str> {
-    match method {
-        "textDocument/hover" => Some("hover"),
-        "textDocument/diagnostic" | "workspace/diagnostic" => Some("diagnostics"),
-        "textDocument/documentSymbol" => Some("document_symbols"),
-        "textDocument/semanticTokens/full" | "textDocument/semanticTokens/range" => {
-            Some("semantic_tokens")
-        }
-        _ => None,
-    }
-}
-
-fn live_provider_result_shape(
-    result: &Result<Option<Value>, JsonRpcError>,
-) -> LiveProviderResultShape {
-    match result {
-        Ok(Some(value)) => {
-            let (result_kind, result_count) = live_provider_value_shape(value);
-            let has_result = result_count > 0;
-            LiveProviderResultShape {
-                decision: if has_result { "acted" } else { "fallback" },
-                reason: if has_result { "live_provider_result" } else { "no_result" },
-                fallback_state: if has_result { "live_provider" } else { "no_result" },
-                result_kind,
-                result_count,
-                error: None,
-            }
-        }
-        Ok(None) => LiveProviderResultShape {
-            decision: "fallback",
-            reason: "no_result",
-            fallback_state: "no_result",
-            result_kind: "none",
-            result_count: 0,
-            error: None,
-        },
-        Err(error) => LiveProviderResultShape {
-            decision: "fallback",
-            reason: "provider_error",
-            fallback_state: "provider_error",
-            result_kind: "error",
-            result_count: 0,
-            error: Some(json!({
-                "code": error.code,
-                "message": error.message,
-            })),
-        },
-    }
-}
-
-fn live_provider_value_shape(value: &Value) -> (&'static str, usize) {
-    if value.is_null() {
-        return ("null", 0);
-    }
-    if let Some(items) = value.get("items").and_then(Value::as_array) {
-        return ("items", items.len());
-    }
-    if let Some(data) = value.get("data").and_then(Value::as_array) {
-        return ("semantic_token_data", data.len() / 5);
-    }
-    if let Some(changes) = value.get("changes").and_then(Value::as_object) {
-        let edit_count = changes.values().filter_map(Value::as_array).map(Vec::len).sum();
-        return ("workspace_edit_changes", edit_count);
-    }
-    if let Some(array) = value.as_array() {
-        return ("array", array.len());
-    }
-    if value.is_object() {
-        return ("object", 1);
-    }
-    ("scalar", 1)
-}
-
-fn unresolved_debug_perl_error(resolved: &std::path::Path) -> JsonRpcError {
-    JsonRpcError {
-        code: -32603,
-        message: format!(
-            "Cannot start Perl debugger for '{}': Perl binary could not be resolved from \
-             `perl.path` or PATH. Configure `perl.path` to an explicit Perl executable; \
-             refusing ambient fallback.",
-            resolved.display()
-        ),
-        data: Some(json!({"file": resolved.display().to_string()})),
-    }
-}
-
+mod debug_launch;
+mod inline_values;
+mod live_provider_trace;
 #[cfg(not(target_arch = "wasm32"))]
-fn debug_command_from_oracle(
-    oracle: Option<perl_lsp_rs_core::config::PerlOracleEnv>,
-    resolved: &std::path::Path,
-) -> Result<std::process::Command, JsonRpcError> {
-    oracle
-        .as_ref()
-        .map(perl_lsp_rs_core::config::PerlOracleEnv::into_command)
-        .ok_or_else(|| unresolved_debug_perl_error(resolved))
-}
+use debug_launch::debug_command_from_oracle;
+use inline_values::inline_value_regex;
+pub(super) use live_provider_trace::{
+    DIAGNOSTIC_EXPLANATION_SCHEMA_VERSION, diagnostic_explanation_payload_from_diagnostics,
+};
+use live_provider_trace::{
+    diagnostic_explanation_payload, live_provider_result_shape, live_provider_trace_key,
+};
 
-fn get_inline_value_regex() -> Option<&'static regex::Regex> {
-    INLINE_VALUE_REGEX
-        .get_or_init(|| regex::Regex::new(r"([$@%])([a-zA-Z_][a-zA-Z0-9_]*)"))
-        .as_ref()
-        .ok()
+fn truncate_inlay_hint_label(hint: &mut Value, max_chars: usize) {
+    let Some(label) = hint.get_mut("label") else {
+        return;
+    };
+    let Some(text) = label.as_str() else {
+        return;
+    };
+    if text.chars().count() <= max_chars {
+        return;
+    }
+
+    *label = Value::String(text.chars().take(max_chars).collect());
 }
 
 impl LspServer {
@@ -150,6 +61,13 @@ impl LspServer {
         let Some(provider) = live_provider_trace_key(method) else {
             return;
         };
+        if method == "textDocument/semanticTokens/full" && result.is_ok() {
+            // The semantic-token full handler records a provider-specific trace that
+            // distinguishes the source-backed compiler-token live slice from the
+            // parser/HIR fallback. Do not replace it with the generic dispatcher
+            // shape after the handler returns.
+            return;
+        }
 
         let shape = live_provider_result_shape(result);
         let mut receipt = serde_json::Map::new();
@@ -176,6 +94,25 @@ impl LspServer {
                 "records live provider request shape only; compiler-fact trust remains gated by surface receipts"
             ),
         );
+        if let Some((diagnostic_payload, user_message, has_dynamic_boundary)) =
+            diagnostic_explanation_payload(method, result)
+        {
+            receipt.insert(
+                "diagnostic_explanation_schema".to_string(),
+                json!(DIAGNOSTIC_EXPLANATION_SCHEMA_VERSION),
+            );
+            receipt.insert("diagnostic_explanation".to_string(), diagnostic_payload);
+            receipt.insert("user_message".to_string(), json!(user_message));
+            if has_dynamic_boundary {
+                receipt.insert("dynamic_boundary".to_string(), json!(true));
+            }
+            receipt.insert(
+                "claim_boundary".to_string(),
+                json!(
+                    "records live diagnostic explanation payload only; no new suppression, severity, or support-tier promotion"
+                ),
+            );
+        }
         if let Some(error) = shape.error {
             receipt.insert("provider_error".to_string(), error);
         }
@@ -215,6 +152,21 @@ impl LspServer {
             return Ok(Some(json!([])));
         }
 
+        // Snapshot config once to avoid holding the lock across the hint generation.
+        let (hints_enabled, param_hints, type_hints, max_label_length) = {
+            let cfg = self.config.lock();
+            (
+                cfg.inlay_hints_enabled,
+                cfg.inlay_hints_parameter_hints,
+                cfg.inlay_hints_type_hints,
+                cfg.inlay_hints_max_length,
+            )
+        };
+
+        if !hints_enabled {
+            return Ok(Some(json!([])));
+        }
+
         let cap = inlay_hints_cap();
 
         if let Some(p) = params {
@@ -239,16 +191,20 @@ impl LspServer {
             })?;
             if let Some(ref ast) = doc.ast {
                 let mut hints = Vec::new();
-                hints.extend(crate::inlay_hints::parameter_hints(
-                    ast,
-                    &|off| self.offset_to_pos16(doc, off),
-                    range,
-                ));
-                hints.extend(crate::inlay_hints::trivial_type_hints(
-                    ast,
-                    &|off| self.offset_to_pos16(doc, off),
-                    range,
-                ));
+                if param_hints {
+                    hints.extend(crate::inlay_hints::parameter_hints(
+                        ast,
+                        &|off| self.offset_to_pos16(doc, off),
+                        range,
+                    ));
+                }
+                if type_hints {
+                    hints.extend(crate::inlay_hints::trivial_type_hints(
+                        ast,
+                        &|off| self.offset_to_pos16(doc, off),
+                        range,
+                    ));
+                }
 
                 // Add URI to hint data for later resolution.
                 // Merge with any existing data (e.g. functionName/paramIndex from
@@ -267,8 +223,12 @@ impl LspServer {
                     })
                     .collect();
 
-                // Apply cap to inlay hints
                 let mut result = enriched_hints;
+                for hint in &mut result {
+                    truncate_inlay_hint_label(hint, max_label_length);
+                }
+
+                // Apply cap to inlay hints.
                 if result.len() > cap {
                     tracing::debug!(from = result.len(), to = cap, "InlayHints: capping");
                     result.truncate(cap);
@@ -754,7 +714,7 @@ impl LspServer {
                 let mut inline_values = Vec::new();
 
                 let lines: Vec<&str> = doc.text.lines().collect();
-                let Some(re) = get_inline_value_regex() else {
+                let Some(re) = inline_value_regex() else {
                     return Ok(Some(json!([])));
                 };
 
@@ -1062,6 +1022,9 @@ impl LspServer {
                         .ok_or_else(|| invalid_params("Missing subtest name argument"))?;
                     return self.run_subtest(subtest_name);
                 }
+                "perl.workspaceTrustReport" => {
+                    return self.workspace_trust_report(arguments.first());
+                }
                 "perl.previewSafeDelete" => {
                     let request = arguments
                         .first()
@@ -1069,12 +1032,26 @@ impl LspServer {
                         .ok_or_else(|| invalid_params("Missing safe-delete preview argument"))?;
                     return self.safe_delete_symbol_preview(Some(request));
                 }
+                "perl.safeDeleteSymbol" => {
+                    let request = arguments
+                        .first()
+                        .cloned()
+                        .ok_or_else(|| invalid_params("Missing safe-delete symbol argument"))?;
+                    return self.safe_delete_symbol_live_pilot(Some(request));
+                }
                 "perl.previewPackageRename" => {
                     let request = arguments
                         .first()
                         .cloned()
                         .ok_or_else(|| invalid_params("Missing package rename preview argument"))?;
                     return self.package_rename_preview(Some(request));
+                }
+                "perl.explainMissingModuleLookup" => {
+                    let request = arguments
+                        .first()
+                        .cloned()
+                        .ok_or_else(|| invalid_params("Missing missing-module lookup argument"))?;
+                    return self.explain_missing_module_lookup(Some(request));
                 }
                 "perl.debugTest" => {
                     let test_id = arguments
@@ -1170,7 +1147,7 @@ impl LspServer {
                         )?
                     };
                     #[cfg(target_arch = "wasm32")]
-                    return Err(unresolved_debug_perl_error(&resolved));
+                    return Err(debug_launch::unresolved_debug_perl_error(&resolved));
                     match debug_cmd
                         .arg("-d")
                         .arg("--")

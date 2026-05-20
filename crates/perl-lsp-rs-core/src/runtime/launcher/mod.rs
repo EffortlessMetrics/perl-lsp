@@ -256,7 +256,7 @@ pub struct LspArgs {
     #[arg(long, conflicts_with = "check")]
     pub check_project: Option<Option<String>>,
 
-    /// Generate shell completions (bash, zsh, fish, powershell)
+    /// Generate shell completions (bash, zsh, fish, powershell, pwsh)
     #[arg(long)]
     pub completion: Option<String>,
 
@@ -334,7 +334,7 @@ pub enum LaunchAction {
     },
     /// Generate shell completions for a given shell.
     Completion {
-        /// Target shell (bash, zsh, fish, powershell).
+        /// Target shell (bash, zsh, fish, powershell; pwsh aliases to powershell).
         shell: String,
     },
     /// Print version information.
@@ -443,7 +443,10 @@ impl fmt::Display for LaunchParseError {
                 write!(f, "Invalid port value: {raw_port}. {reason}")
             }
             Self::InvalidShell { raw_shell } => {
-                write!(f, "Unknown shell: {raw_shell}. Supported: bash, zsh, fish, powershell")
+                write!(
+                    f,
+                    "Unknown shell: {raw_shell}. Supported: bash, zsh, fish, powershell, pwsh"
+                )
             }
         }
     }
@@ -480,8 +483,11 @@ where
             } else if let Some(maybe_dir) = parsed_args.check_project {
                 let dir = maybe_dir.unwrap_or_else(|| ".".to_string());
                 LaunchAction::CheckProject { dir }
-            } else if let Some(shell) = parsed_args.completion {
-                LaunchAction::Completion { shell }
+            } else if let Some(raw_shell) = parsed_args.completion {
+                let shell = normalize_completion_shell(&raw_shell).ok_or_else(|| {
+                    LaunchParseError::InvalidShell { raw_shell: raw_shell.clone() }
+                })?;
+                LaunchAction::Completion { shell: shell.to_string() }
             } else if parsed_args.features_json {
                 LaunchAction::FeaturesJson
             } else if let Some(profile) = parsed_args.perltidy_compat_report {
@@ -564,11 +570,8 @@ fn prevalidate_cli_values(args: &[std::ffi::OsString]) -> Result<(), LaunchParse
                 return Err(LaunchParseError::MissingValue { option: "--completion".to_string() });
             }
 
-            match raw_shell.as_str() {
-                "bash" | "zsh" | "fish" | "powershell" => {}
-                _ => {
-                    return Err(LaunchParseError::InvalidShell { raw_shell });
-                }
+            if normalize_completion_shell(&raw_shell).is_none() {
+                return Err(LaunchParseError::InvalidShell { raw_shell });
             }
 
             index += 2;
@@ -637,7 +640,9 @@ pub fn help_text() -> String {
     out.push_str("                       Report native formatter compatibility for .perltidyrc\n");
     out.push_str("  --perlcritic-compat-report <profile>\n");
     out.push_str("                       Report native critic compatibility for .perlcriticrc\n");
-    out.push_str("  --completion <shell> Generate shell completions (bash, zsh, fish)\n");
+    out.push_str(
+        "  --completion <shell> Generate shell completions (bash, zsh, fish, powershell, pwsh)\n",
+    );
     out.push_str("  --help               Show this help message\n");
     out.push('\n');
     out.push_str("Examples:\n");
@@ -657,6 +662,7 @@ pub fn help_text() -> String {
     out.push_str("  PERL_LSP_LOG=1       Enable logging (alternative to --log)\n");
     out.push_str("  PERL_LSP_LOG_FILE=<path>\n");
     out.push_str("                       Also log to a daily-rotated file (max 5 files)\n");
+    out.push_str("  PERL_LSP_QUIET=1     Suppress the startup banner on stderr\n");
     out.push_str("  RUST_LOG=<filter>    Set tracing filter (e.g. perl_lsp=debug)\n");
     out.push_str("  NO_COLOR=1           Disable colored output\n");
     out
@@ -666,11 +672,21 @@ pub fn help_text() -> String {
 ///
 /// Returns `None` for unknown shell names.
 pub fn shell_completion(shell: &str) -> Option<&'static str> {
-    match shell {
+    match normalize_completion_shell(shell)? {
         "bash" => Some(BASH_COMPLETION),
         "zsh" => Some(ZSH_COMPLETION),
         "fish" => Some(FISH_COMPLETION),
         "powershell" => Some(POWERSHELL_COMPLETION),
+        _ => None,
+    }
+}
+
+fn normalize_completion_shell(shell: &str) -> Option<&'static str> {
+    match shell.to_ascii_lowercase().as_str() {
+        "bash" => Some("bash"),
+        "zsh" => Some("zsh"),
+        "fish" => Some("fish"),
+        "powershell" | "pwsh" => Some("powershell"),
         _ => None,
     }
 }
@@ -691,7 +707,7 @@ const BASH_COMPLETION: &str = r#"_perl_lsp() {
             return 0
             ;;
         --completion)
-            COMPREPLY=( $(compgen -W "bash zsh fish powershell" -- "${cur}") )
+            COMPREPLY=( $(compgen -W "bash zsh fish powershell pwsh" -- "${cur}") )
             return 0
             ;;
         --perltidy-compat-report|--perlcritic-compat-report)
@@ -730,7 +746,7 @@ _perl-lsp() {
         '--perltidy-compat-report[Report native formatter compatibility for .perltidyrc]:profile:_files' \
         '--perlcritic-compat-report[Report native critic compatibility for .perlcriticrc]:profile:_files' \
         '--feature-profile[Set feature profile]:profile:(ga-lock ga prod production all auto)' \
-        '--completion[Generate shell completions]:shell:(bash zsh fish powershell)' \
+        '--completion[Generate shell completions]:shell:(bash zsh fish powershell pwsh)' \
         '--help[Show help message]' \
         '*:file:_files -g "*.{pl,pm,t}"'
 }
@@ -752,7 +768,7 @@ complete -c perl-lsp -l features-json -d 'Output features catalog as JSON'
 complete -c perl-lsp -l perltidy-compat-report -F -d 'Report native formatter compatibility for .perltidyrc'
 complete -c perl-lsp -l perlcritic-compat-report -F -d 'Report native critic compatibility for .perlcriticrc'
 complete -c perl-lsp -l feature-profile -x -a 'ga-lock ga prod production all auto' -d 'Set feature profile'
-complete -c perl-lsp -l completion -x -a 'bash zsh fish powershell' -d 'Generate shell completions'
+complete -c perl-lsp -l completion -x -a 'bash zsh fish powershell pwsh' -d 'Generate shell completions'
 complete -c perl-lsp -l help -d 'Show help message'
 "#;
 
@@ -783,7 +799,7 @@ const POWERSHELL_COMPLETION: &str = r#"Register-ArgumentCompleter -Native -Comma
 
     switch ($prevWord) {
         '--completion' {
-            @('bash', 'zsh', 'fish', 'powershell') | Where-Object { $_ -like "$wordToComplete*" } |
+            @('bash', 'zsh', 'fish', 'powershell', 'pwsh') | Where-Object { $_ -like "$wordToComplete*" } |
                 ForEach-Object { [CompletionResult]::new($_, $_, 'ParameterValue', $_) }
             return
         }
@@ -1064,6 +1080,18 @@ mod tests {
     }
 
     #[test]
+    fn parse_completion_pwsh_alias_canonicalizes_to_powershell() {
+        let plan = must(parse_args(["perl-lsp", "--completion", "pwsh"]));
+        assert_eq!(plan.action, LaunchAction::Completion { shell: "powershell".to_string() });
+    }
+
+    #[test]
+    fn parse_completion_is_case_insensitive() {
+        let plan = must(parse_args(["perl-lsp", "--completion=PowerShell"]));
+        assert_eq!(plan.action, LaunchAction::Completion { shell: "powershell".to_string() });
+    }
+
+    #[test]
     fn parse_completion_unknown_shell_errors() {
         let result = parse_args(["perl-lsp", "--completion", "nushell"]);
         assert!(result.is_err());
@@ -1095,6 +1123,11 @@ mod tests {
     #[test]
     fn shell_completion_powershell_is_nonempty() {
         assert!(super::shell_completion("powershell").is_some());
+    }
+
+    #[test]
+    fn shell_completion_pwsh_alias_is_nonempty() {
+        assert!(super::shell_completion("pwsh").is_some());
     }
 
     #[test]
@@ -1167,6 +1200,15 @@ mod tests {
     fn help_mentions_completion_flag() {
         let text = super::help_text();
         assert!(text.contains("--completion"));
+        assert!(text.contains("powershell"));
+        assert!(text.contains("pwsh"));
+    }
+
+    #[test]
+    fn help_mentions_quiet_environment_flag() {
+        let text = super::help_text();
+        assert!(text.contains("PERL_LSP_QUIET=1"));
+        assert!(text.contains("startup banner"));
     }
 
     // -- --check-project flag -----------------------------------------

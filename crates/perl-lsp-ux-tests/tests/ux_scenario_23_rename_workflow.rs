@@ -9,13 +9,10 @@
 //!   MUST target the opened file and update multiple occurrences.
 
 use anyhow::{Context, Result};
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 use serde_json::{Value, json};
 use std::time::Duration;
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 

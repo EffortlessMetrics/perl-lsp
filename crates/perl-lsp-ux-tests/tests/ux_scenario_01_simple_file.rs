@@ -13,17 +13,9 @@
 //! - No crash signatures in the event log.
 //! - Completion request does not crash.
 
-use perl_lsp_ux_tests::{
-    ScenarioConfig, UxCiTier, UxComponent, UxHarness, UxScenarioSkip, run_ux_scenario,
-};
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
-
-fn missing_binary_skip() -> UxScenarioSkip {
-    UxScenarioSkip::infra("PERL_LSP_BIN not set and target/debug/perl-lsp not found")
-}
+use perl_lsp_ux_tests::binary_available;
+use perl_lsp_ux_tests::missing_binary_skip;
+use perl_lsp_ux_tests::{ScenarioConfig, UxCiTier, UxComponent, UxHarness, run_ux_scenario};
 
 #[test]
 fn scenario_01_server_starts_and_accepts_open() {

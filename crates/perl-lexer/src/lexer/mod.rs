@@ -1,5 +1,5 @@
 mod driver;
-mod helpers;
+pub(crate) mod helpers;
 mod state;
 
 pub use state::PerlLexer;

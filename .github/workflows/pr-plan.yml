@@ -63,6 +63,7 @@ jobs:
             --budget policy/ci-budget.toml \
             --lanes policy/ci-lanes.toml \
             --risk-packs policy/ci-risk-packs.toml \
+            --trust-lanes policy/trust-lanes.toml \
             --json-out target/ci/ci-plan.json \
             --summary "$GITHUB_STEP_SUMMARY"
 

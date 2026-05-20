@@ -27,19 +27,19 @@ fuzz_target!(|data: &[u8]| {
         let token = PerlLspCancellationToken::new(request_id.clone(), "fuzz-provider".to_string());
         let _ = registry.register_token(token);
 
-        if offset % 2 == 0 {
+        if offset.is_multiple_of(2) {
             let _ = registry.get_token(&request_id);
         }
 
-        if offset % 3 == 0 {
+        if offset.is_multiple_of(3) {
             let _ = registry.is_cancelled(&request_id);
         }
 
-        if offset % 5 == 0 {
+        if offset.is_multiple_of(5) {
             let _ = registry.cancel_request(&request_id);
         }
 
-        if offset % 7 == 0 {
+        if offset.is_multiple_of(7) {
             registry.remove_request(&request_id);
         }
 
