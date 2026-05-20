@@ -214,3 +214,63 @@ fn for_loop_with_undef_is_not_dead_branch() -> TestResult {
     );
     Ok(())
 }
+
+#[test]
+fn for_loop_with_explicit_variable_is_not_dead_branch() -> TestResult {
+    let index = WorkspaceIndex::new();
+    index_file_str(&index, "file:///script.pl", "for my $x (0) {\n    say $x;\n}\n")?;
+
+    let detector = DeadCodeDetector::new(index);
+    let dead = detector.analyze_file(&PathBuf::from("/script.pl"))?;
+
+    assert!(
+        !dead.iter().any(|d| d.code_type == DeadCodeType::DeadBranch),
+        "for my $x (0) iterates once with $x = 0; it is not dead code"
+    );
+    Ok(())
+}
+
+#[test]
+fn foreach_loop_with_explicit_variable_is_not_dead_branch() -> TestResult {
+    let index = WorkspaceIndex::new();
+    index_file_str(&index, "file:///script.pl", "foreach my $x (0) {\n    say $x;\n}\n")?;
+
+    let detector = DeadCodeDetector::new(index);
+    let dead = detector.analyze_file(&PathBuf::from("/script.pl"))?;
+
+    assert!(
+        !dead.iter().any(|d| d.code_type == DeadCodeType::DeadBranch),
+        "foreach my $x (0) iterates once with $x = 0; it is not dead code"
+    );
+    Ok(())
+}
+
+#[test]
+fn unless_with_always_true_condition_is_flagged() -> TestResult {
+    let index = WorkspaceIndex::new();
+    index_file_str(&index, "file:///script.pl", "unless (1) {\n    say 'never runs';\n}\n")?;
+
+    let detector = DeadCodeDetector::new(index);
+    let dead = detector.analyze_file(&PathBuf::from("/script.pl"))?;
+
+    assert!(
+        dead.iter().any(|d| d.code_type == DeadCodeType::DeadBranch),
+        "unless (1) body is never executed; should be flagged as a dead branch"
+    );
+    Ok(())
+}
+
+#[test]
+fn until_with_always_true_condition_is_flagged() -> TestResult {
+    let index = WorkspaceIndex::new();
+    index_file_str(&index, "file:///script.pl", "until (1) {\n    say 'never runs';\n}\n")?;
+
+    let detector = DeadCodeDetector::new(index);
+    let dead = detector.analyze_file(&PathBuf::from("/script.pl"))?;
+
+    assert!(
+        dead.iter().any(|d| d.code_type == DeadCodeType::DeadBranch),
+        "until (1) body is never executed; should be flagged as a dead branch"
+    );
+    Ok(())
+}
