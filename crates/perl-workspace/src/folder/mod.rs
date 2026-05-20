@@ -23,11 +23,19 @@ pub struct WorkspaceFolderChange {
 ///
 /// Workspace folders can be passed as absolute paths or `file://` URIs. For
 /// `file://` URIs this attempts to resolve through `perl_uri::uri_to_fs_path`.
-/// If URI resolution fails, the scheme prefix is trimmed and the remainder is
-/// interpreted as a path fallback.
+/// If URI resolution fails for a local file URI, the scheme prefix is trimmed
+/// and the remainder is interpreted as a path fallback. Remote file URI hosts
+/// are preserved as raw input instead of being converted into filesystem paths.
 #[must_use]
 pub fn workspace_folder_to_path(workspace_folder: &str) -> PathBuf {
     if has_file_uri_scheme(workspace_folder) {
+        // A URI with a non-local host (e.g. `file://evil.example.com/path`)
+        // must not be passed to platform URI conversion first: on Windows that
+        // can produce a UNC path like `\\evil.example.com\path`.
+        if file_uri_has_remote_host(workspace_folder) {
+            return PathBuf::from(workspace_folder);
+        }
+
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(path) = uri_to_fs_path(workspace_folder) {
             return path;
@@ -35,15 +43,6 @@ pub fn workspace_folder_to_path(workspace_folder: &str) -> PathBuf {
 
         if let Some(path) = parse_file_uri_fallback(workspace_folder) {
             return path;
-        }
-
-        // Only fall back to raw prefix-trim for local file URIs.  A URI with a
-        // non-local host (e.g. `file://evil.example.com/path`) must not reach
-        // this path, because `trim_file_uri_prefix` would strip the leading
-        // `//` and return `"evil.example.com/path"` — still leaking the remote
-        // hostname into a PathBuf that the caller may later open.
-        if file_uri_has_remote_host(workspace_folder) {
-            return PathBuf::from(workspace_folder);
         }
 
         return PathBuf::from(trim_file_uri_prefix(workspace_folder));

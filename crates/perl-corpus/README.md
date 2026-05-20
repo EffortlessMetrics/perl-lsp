@@ -17,7 +17,7 @@ Part of the [perl-lsp](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 - **Property-based generators**: 21 generator categories (regex, heredoc, glob, tie, I/O, expressions, OOP, and more)
 - **Randomized codegen**: Deterministic Perl code generation with seed control and coverage options
 - **Specialized fixtures**: Continue/redo, format statements, glob expressions, tie interface test cases
-- **CLI tool**: `perl-corpus lint`, `perl-corpus index`, `perl-corpus stats`, `perl-corpus gen`
+- **CLI tool**: `perl-corpus lint`, `perl-corpus index`, `perl-corpus add-metadata`, `perl-corpus stats`, `perl-corpus gen`
 
 ## Usage
 

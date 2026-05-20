@@ -15,16 +15,18 @@ pub fn find_declaration_position(source: &str, error_pos: usize) -> usize {
 }
 
 /// Find the start of the current statement.
+///
+/// Scans backwards from `pos` for the nearest `;` or `\n` and returns the
+/// byte index immediately after it, or 0 if no boundary is found.
 #[must_use]
 pub fn find_statement_start(source: &str, pos: usize) -> usize {
-    let mut i = pos.saturating_sub(1);
     let bytes = source.as_bytes();
+    let start = pos.min(bytes.len());
 
-    while i > 0 {
-        if bytes.get(i).is_some_and(|b| *b == b';' || *b == b'\n') {
+    for i in (0..start).rev() {
+        if bytes[i] == b';' || bytes[i] == b'\n' {
             return i + 1;
         }
-        i = i.saturating_sub(1);
     }
 
     0
@@ -114,6 +116,28 @@ mod tests {
         let src = "my $x = 1;\nmy $y = 2;";
         let pos = src.find("$y").unwrap_or(0);
         assert_eq!(find_statement_start(src, pos), src.find('\n').unwrap_or(0) + 1);
+    }
+
+    #[test]
+    fn finds_statement_start_when_terminator_is_at_index_zero() {
+        // Regression: the backwards scan must inspect byte 0. Previously the
+        // loop guard `while i > 0` skipped index 0, so a terminator at the
+        // very start of the source was never recognised.
+        assert_eq!(find_statement_start(";x", 1), 1);
+        assert_eq!(find_statement_start("\nfoo", 1), 1);
+    }
+
+    #[test]
+    fn returns_zero_when_no_terminator_precedes_pos() {
+        assert_eq!(find_statement_start("abc", 3), 0);
+        assert_eq!(find_statement_start("", 0), 0);
+        assert_eq!(find_statement_start("abc", 0), 0);
+    }
+
+    #[test]
+    fn handles_pos_beyond_source_len() {
+        let src = "foo;bar";
+        assert_eq!(find_statement_start(src, 100), 4);
     }
 
     #[test]
