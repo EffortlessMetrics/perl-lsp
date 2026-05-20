@@ -1081,7 +1081,6 @@ impl<'a> PerlLexer<'a> {
                         }
                     }
                     // Parse exponent digits (underscores allowed between digits)
-                    let exponent_start = self.position;
                     let mut saw_digit = false;
                     while self.position < self.input_bytes.len() {
                         let byte = self.input_bytes[self.position];
@@ -1100,7 +1099,6 @@ impl<'a> PerlLexer<'a> {
                     // Using e_pos (not exponent_start-1) avoids including 'e' in
                     // the number slice when a sign character was consumed.
                     if !saw_digit {
-                        let _ = exponent_start; // mark as intentionally unused
                         self.position = e_pos;
                     }
                     break;
