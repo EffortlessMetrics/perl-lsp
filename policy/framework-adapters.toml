@@ -1,0 +1,315 @@
+# Advisory framework fact adapter registry.
+#
+# This policy records reviewed framework adapter classes. It does not broaden
+# provider behavior, generated-symbol behavior, rename, or safe delete.
+
+schema_version = 1
+policy = "framework-adapters"
+owner = "perl-lsp maintainers"
+status = "advisory"
+updated = "2026-05-20"
+spec = "docs/specs/PLSP-SPEC-0024-framework-fact-adapters.md"
+fact_provenance_spec = "docs/specs/PLSP-SPEC-0017-fact-provenance-and-source-backing.md"
+edit_authorization_spec = "docs/specs/PLSP-SPEC-0018-edit-authorization-contract.md"
+workspace_symbol_spec = "docs/specs/PLSP-SPEC-0020-workspace-symbol-generated-label-contract.md"
+support_tiers = "docs/project/status/SUPPORT_TIERS.md"
+provider_promotion_ledger = "policy/provider-promotion-ledger.toml"
+
+default_state = "blocked_unlisted"
+default_generated_label = "[generated/framework]"
+default_rename_policy = "blocked_without_class_specific_edit_proof"
+default_safe_delete_policy = "blocked_without_class_specific_edit_proof"
+
+receipt_sources = [
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/provider_cutover.md",
+  "docs/project/status/semantic_shadow_compare.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+
+[[adapter]]
+framework = "Class::Tiny"
+fact_class = "generated_member"
+state = "planned"
+fact_provenance = "SourceBackedGenerated"
+source_anchor_required = true
+generated_label_required = true
+rename_policy = "block_generated_member_by_default"
+safe_delete_policy = "block_generated_member_by_default"
+provider_surfaces = [
+  "completion",
+  "hover",
+  "document_symbols",
+  "workspace_symbols",
+  "rename",
+  "safe_delete",
+]
+blocks = [
+  "generated_no_source",
+  "stale_fact",
+  "dynamic_boundary",
+  "low_confidence",
+  "ambiguous_identity",
+  "unsupported_fact_class",
+]
+claim_boundary = "Class::Tiny generated members require source declaration anchors and generated labels before provider use."
+
+[[adapter]]
+framework = "Moo"
+fact_class = "simple_has_generated_member"
+state = "planned"
+fact_provenance = "SourceBackedGenerated"
+source_anchor_required = true
+generated_label_required = true
+rename_policy = "block_generated_member_by_default"
+safe_delete_policy = "block_generated_member_by_default"
+provider_surfaces = [
+  "completion",
+  "hover",
+  "document_symbols",
+  "workspace_symbols",
+  "rename",
+  "safe_delete",
+]
+supported_forms = [
+  "has name => (is => 'ro')",
+  "has name => (is => 'rw')",
+  "reader",
+  "writer",
+  "predicate",
+  "clearer",
+]
+blocked_forms = [
+  "builder_without_static_name",
+  "handles_without_static_target",
+  "dynamic_attribute_name",
+  "runtime_metaclass_mutation",
+]
+blocks = [
+  "generated_no_source",
+  "stale_fact",
+  "dynamic_boundary",
+  "low_confidence",
+  "ambiguous_identity",
+  "unsupported_fact_class",
+]
+claim_boundary = "Simple Moo generated-member facts remain generated/labeled and block edits by default."
+
+[[adapter]]
+framework = "Moose"
+fact_class = "simple_has_inheritance_role"
+state = "planned"
+fact_provenance = "SourceBackedGenerated"
+source_anchor_required = true
+generated_label_required = true
+rename_policy = "block_generated_member_by_default"
+safe_delete_policy = "block_generated_member_by_default"
+provider_surfaces = [
+  "completion",
+  "hover",
+  "workspace_symbols",
+  "definition",
+  "references",
+  "rename",
+  "safe_delete",
+]
+supported_forms = [
+  "has name => (is => 'ro')",
+  "has name => (is => 'rw')",
+  "extends 'Parent'",
+  "with 'Role'",
+]
+blocked_forms = [
+  "dynamic_attribute_name",
+  "dynamic_extends",
+  "dynamic_with",
+  "metaclass_runtime_mutation",
+]
+blocks = [
+  "generated_no_source",
+  "stale_fact",
+  "dynamic_boundary",
+  "low_confidence",
+  "ambiguous_identity",
+  "unsupported_fact_class",
+]
+claim_boundary = "Simple Moose facts may model static generated members, inheritance, and roles only inside source-backed proof boundaries."
+
+[[adapter]]
+framework = "AUTOLOAD"
+fact_class = "dynamic_boundary"
+state = "planned"
+fact_provenance = "DynamicBoundary"
+source_anchor_required = false
+generated_label_required = false
+rename_policy = "blocked"
+safe_delete_policy = "blocked"
+provider_surfaces = [
+  "hover",
+  "definition",
+  "references",
+  "rename",
+  "safe_delete",
+  "determinism",
+]
+blocks = [
+  "autoload",
+  "dynamic_boundary",
+  "unsupported_fact_class",
+]
+claim_boundary = "AUTOLOAD-heavy packages emit dynamic boundaries that explain fallback and block unsafe edits."
+
+[[adapter]]
+framework = "DBIx::Class"
+fact_class = "static_subset"
+state = "deferred"
+fact_provenance = "SourceBackedGenerated"
+source_anchor_required = true
+generated_label_required = true
+rename_policy = "blocked_until_class_specific_receipt"
+safe_delete_policy = "blocked_until_class_specific_receipt"
+provider_surfaces = [
+  "hover",
+  "workspace_symbols",
+  "definition",
+  "references",
+  "rename",
+  "safe_delete",
+]
+blocks = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "unsupported_fact_class",
+]
+claim_boundary = "DBIx::Class support is deferred to a static source-backed subset; runtime schema loading remains dynamic."
+
+[[adapter]]
+framework = "Catalyst"
+fact_class = "route_symbol"
+state = "deferred"
+fact_provenance = "SourceBackedGenerated"
+source_anchor_required = true
+generated_label_required = true
+rename_policy = "blocked_until_class_specific_receipt"
+safe_delete_policy = "blocked_until_class_specific_receipt"
+provider_surfaces = [
+  "hover",
+  "workspace_symbols",
+  "definition",
+  "references",
+  "rename",
+  "safe_delete",
+]
+blocks = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "ambiguous_identity",
+  "stale_fact",
+  "unsupported_fact_class",
+]
+claim_boundary = "Catalyst route symbols require source-backed route/controller anchors and must not infer runtime route tables."
+
+[[adapter]]
+framework = "Dancer"
+fact_class = "route_symbol"
+state = "deferred"
+fact_provenance = "SourceBackedGenerated"
+source_anchor_required = true
+generated_label_required = true
+rename_policy = "blocked_until_class_specific_receipt"
+safe_delete_policy = "blocked_until_class_specific_receipt"
+provider_surfaces = [
+  "hover",
+  "workspace_symbols",
+  "definition",
+  "references",
+  "rename",
+  "safe_delete",
+]
+blocks = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "ambiguous_identity",
+  "stale_fact",
+  "unsupported_fact_class",
+]
+claim_boundary = "Dancer route symbols require static route anchors and stay virtual/labeled unless class-specific proof promotes them."
+
+[[adapter]]
+framework = "Test::More"
+fact_class = "import_fact"
+state = "deferred"
+fact_provenance = "ExplicitSource"
+source_anchor_required = true
+generated_label_required = false
+rename_policy = "block_imported_or_exported_by_default"
+safe_delete_policy = "block_imported_or_exported_by_default"
+provider_surfaces = [
+  "completion",
+  "hover",
+  "definition",
+  "references",
+  "diagnostics",
+  "rename",
+  "safe_delete",
+]
+blocks = [
+  "imported_exported",
+  "stale_fact",
+  "low_confidence",
+  "unsupported_fact_class",
+]
+claim_boundary = "Test::More imports may explain visibility but imported/exported edit behavior remains blocked by default."
+
+[[adapter]]
+framework = "Try::Tiny"
+fact_class = "import_fact"
+state = "deferred"
+fact_provenance = "ExplicitSource"
+source_anchor_required = true
+generated_label_required = false
+rename_policy = "block_imported_or_exported_by_default"
+safe_delete_policy = "block_imported_or_exported_by_default"
+provider_surfaces = [
+  "completion",
+  "hover",
+  "definition",
+  "references",
+  "diagnostics",
+  "rename",
+  "safe_delete",
+]
+blocks = [
+  "imported_exported",
+  "stale_fact",
+  "low_confidence",
+  "unsupported_fact_class",
+]
+claim_boundary = "Try::Tiny imports may explain visibility but imported/exported edit behavior remains blocked by default."
+
+[[adapter]]
+framework = "Object::Pad"
+fact_class = "class_field_method"
+state = "deferred"
+fact_provenance = "SourceBackedGenerated"
+source_anchor_required = true
+generated_label_required = true
+rename_policy = "blocked_until_class_specific_receipt"
+safe_delete_policy = "blocked_until_class_specific_receipt"
+provider_surfaces = [
+  "completion",
+  "hover",
+  "workspace_symbols",
+  "semantic_tokens",
+  "rename",
+  "safe_delete",
+]
+blocks = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "unsupported_fact_class",
+]
+claim_boundary = "Object::Pad facts are deferred until source-backed class/field/method receipts define exact boundaries."
