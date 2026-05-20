@@ -22,6 +22,7 @@ of current evidence.
 | Provider decision receipt schema and explanation payload contract | [PLSP-SPEC-0016](../../specs/PLSP-SPEC-0016-provider-decision-receipt-v1.md), [provider_decision.v1.schema.json](../../../schemas/provider_decision.v1.schema.json) |
 | Shared fact provenance and source-backing semantics | [PLSP-SPEC-0017](../../specs/PLSP-SPEC-0017-fact-provenance-and-source-backing.md) |
 | Shared edit authorization states for rename and safe delete | [PLSP-SPEC-0018](../../specs/PLSP-SPEC-0018-edit-authorization-contract.md) |
+| Semantic token class promotion rules | [PLSP-SPEC-0019](../../specs/PLSP-SPEC-0019-semantic-token-class-promotion-contract.md), [semantic-token-classes.toml](../../../policy/semantic-token-classes.toml) |
 | User-facing support claims and known limitations | [SUPPORT_TIERS.md](SUPPORT_TIERS.md) |
 | Provider fact source, confidence, freshness, fallback, and next proof | [provider_confidence_matrix.md](provider_confidence_matrix.md) |
 | Provider promotion, fallback, blocker, and defer decisions by fact class | [provider_promotion_ledger.md](provider_promotion_ledger.md), [provider-promotion-ledger.toml](../../../policy/provider-promotion-ledger.toml) |
