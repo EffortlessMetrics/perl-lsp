@@ -22,7 +22,119 @@ schema_version = 1
 policy = "ci-lane-whitelist"
 owner = "EffortlessMetrics"
 status = "advisory"
-updated = "2026-05-11"
+updated = "2026-05-20"
+
+# =============================================================================
+# Swarm routed Rust small lanes
+# =============================================================================
+
+[[lane]]
+id = "swarm_rust_small_route"
+workflow = ".github/workflows/em-ci-routed-rust.yml"
+job = "route-rust-small"
+tier = "frontdoor"
+kind = "control"
+blocking = true
+default_pr = true
+runner = "ubuntu_latest"
+base_lem = 1
+owner = "ci"
+intent = "Route trusted same-repo Rust Small PRs to CX53, CX43, or GitHub-hosted fallback without exposing self-hosted runners to fork PRs."
+failure_mode = "Swarm PRs either do not route to available trusted capacity or expose self-hosted capacity to untrusted forks."
+proof_obligation = "Emit router_target, router_reason, and router_error; fork PRs must select GitHub-hosted fallback."
+evidence = ["job output", "step-summary"]
+allowed_triggers = ["pull_request", "merge_group", "workflow_dispatch"]
+expensive = false
+duplicate_of = []
+review_after = "2026-06-20"
+expires = "2026-11-20"
+
+[[lane]]
+id = "swarm_rust_small_cx53"
+workflow = ".github/workflows/em-ci-routed-rust.yml"
+job = "rust-small-cx53"
+tier = "merge_gate"
+kind = "rust"
+blocking = false
+default_pr = true
+runner = "self_hosted_cx53"
+base_lem = 12
+owner = "ci"
+intent = "Run the Perl LSP Rust Small lane on the primary trusted CX53 runner when available."
+failure_mode = "Primary same-repo PR runner path does not prove the small Rust lane."
+proof_obligation = "Run cargo check --workspace --locked, parser smoke, and LSP smoke in the routed self-hosted lane."
+evidence = ["job output", "Perl LSP Rust Small Result"]
+allowed_triggers = ["pull_request", "merge_group", "workflow_dispatch"]
+expensive = true
+expensive_reason = "Workspace check compiles the full seeded source tree."
+duplicate_of = []
+review_after = "2026-06-20"
+expires = "2026-11-20"
+
+[[lane]]
+id = "swarm_rust_small_cx43"
+workflow = ".github/workflows/em-ci-routed-rust.yml"
+job = "rust-small-cx43"
+tier = "merge_gate"
+kind = "rust"
+blocking = false
+default_pr = true
+runner = "self_hosted_cx43"
+base_lem = 18
+owner = "ci"
+intent = "Run the Perl LSP Rust Small lane on the trusted CX43 backfill runner when CX53 is unavailable or forced."
+failure_mode = "Backfill same-repo PR runner path does not prove the small Rust lane."
+proof_obligation = "Run cargo check --workspace --locked, parser smoke, and LSP smoke in the routed self-hosted lane."
+evidence = ["job output", "Perl LSP Rust Small Result"]
+allowed_triggers = ["pull_request", "merge_group", "workflow_dispatch"]
+expensive = true
+expensive_reason = "Workspace check compiles the full seeded source tree on a smaller runner."
+duplicate_of = []
+review_after = "2026-06-20"
+expires = "2026-11-20"
+
+[[lane]]
+id = "swarm_rust_small_github"
+workflow = ".github/workflows/em-ci-routed-rust.yml"
+job = "rust-small-github"
+tier = "merge_gate"
+kind = "rust"
+blocking = false
+default_pr = true
+runner = "ubuntu_latest"
+base_lem = 24
+owner = "ci"
+intent = "Run the Perl LSP Rust Small lane on GitHub-hosted fallback for forks, missing runner token, or no idle trusted runner."
+failure_mode = "Forks or runner outages lack a safe small Rust proof path."
+proof_obligation = "Run cargo check --workspace --locked, parser smoke, and LSP smoke on GitHub-hosted Linux."
+evidence = ["job output", "Perl LSP Rust Small Result"]
+allowed_triggers = ["pull_request", "merge_group", "workflow_dispatch"]
+expensive = true
+expensive_reason = "GitHub-hosted fallback compiles the full seeded source tree without self-hosted cache guarantees."
+duplicate_of = []
+review_after = "2026-06-20"
+expires = "2026-11-20"
+
+[[lane]]
+id = "swarm_rust_small_result"
+workflow = ".github/workflows/em-ci-routed-rust.yml"
+job = "rust-small-result"
+tier = "merge_gate"
+kind = "control"
+blocking = true
+default_pr = true
+runner = "ubuntu_latest"
+base_lem = 1
+owner = "ci"
+intent = "Normalize conditional runner implementation jobs into the single branch-protection status."
+failure_mode = "Branch protection accidentally requires skipped implementation jobs instead of a stable result check."
+proof_obligation = "Require the selected target to pass and all unselected implementation jobs to skip."
+evidence = ["job output", "step-summary"]
+allowed_triggers = ["pull_request", "merge_group", "workflow_dispatch"]
+expensive = false
+duplicate_of = []
+review_after = "2026-06-20"
+expires = "2026-11-20"
 
 # =============================================================================
 # Frontdoor / control lanes
