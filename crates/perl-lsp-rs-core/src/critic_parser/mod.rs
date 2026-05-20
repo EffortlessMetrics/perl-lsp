@@ -86,6 +86,7 @@ pub fn parse_perlcritic_line(line: &str) -> Option<ParsedCriticLine> {
 #[cfg(test)]
 mod tests {
     use super::{parse_perlcritic_line, parse_perlcritic_output};
+    use perl_tdd_support::must_some;
 
     #[test]
     fn parse_perlcritic_line_rejects_zero_line_and_column() {
@@ -108,14 +109,14 @@ mod tests {
     #[test]
     fn parse_perlcritic_line_trims_crlf_line_endings() {
         let line = "lib/Foo.pm:1:1:5:TestingAndDebugging::RequireUseStrict:msg\r";
-        let parsed = parse_perlcritic_line(line).expect("valid perlcritic line");
+        let parsed = must_some(parse_perlcritic_line(line));
         assert_eq!(parsed.message, "msg");
     }
 
     #[test]
     fn parse_perlcritic_line_supports_windows_drive_paths() {
         let line = "C:\\project\\lib\\Foo.pm:10:4:2:TestingAndDebugging::RequireUseStrict:msg";
-        let parsed = parse_perlcritic_line(line).expect("valid windows path");
+        let parsed = must_some(parse_perlcritic_line(line));
         assert_eq!(parsed.file, "C:\\project\\lib\\Foo.pm");
         assert_eq!(parsed.line, 10);
         assert_eq!(parsed.column, 4);
@@ -139,8 +140,7 @@ mod tests {
     fn parse_perlcritic_line_accepts_severity_boundaries() {
         for sev in 1u8..=5 {
             let line = format!("lib/Foo.pm:1:1:{sev}:TestingAndDebugging::RequireUseStrict:msg");
-            let parsed =
-                parse_perlcritic_line(&line).unwrap_or_else(|| panic!("severity {sev} must parse"));
+            let parsed = must_some(parse_perlcritic_line(&line));
             assert_eq!(parsed.severity, sev);
         }
     }
@@ -164,7 +164,7 @@ mod tests {
         // Windows drive path + CRLF line ending: the `\r` trim must run before
         // parse, and the drive colon must still be treated as part of the file path.
         let line = "C:\\project\\lib\\Foo.pm:10:4:2:TestingAndDebugging::RequireUseStrict:msg\r";
-        let parsed = parse_perlcritic_line(line).expect("windows+CRLF must parse");
+        let parsed = must_some(parse_perlcritic_line(line));
         assert_eq!(parsed.file, "C:\\project\\lib\\Foo.pm");
         assert_eq!(parsed.line, 10);
         assert_eq!(parsed.message, "msg");
@@ -202,7 +202,7 @@ mod tests {
     fn parse_perlcritic_line_accepts_underscore_policy() {
         // Valid Perl package segment can start with underscore.
         let line = "lib/Foo.pm:1:1:3:_Private::Policy:msg";
-        let parsed = parse_perlcritic_line(line).expect("underscore policy must parse");
+        let parsed = must_some(parse_perlcritic_line(line));
         assert_eq!(parsed.policy, "_Private::Policy");
     }
 
@@ -211,7 +211,7 @@ mod tests {
         // The message after the policy may contain colons (e.g. "line: 12").
         // `tail[boundary + 1..]` should include them verbatim.
         let line = "lib/Foo.pm:1:1:3:TestingAndDebugging::RequireUseStrict:found at offset: 42";
-        let parsed = parse_perlcritic_line(line).expect("message with colons must parse");
+        let parsed = must_some(parse_perlcritic_line(line));
         assert_eq!(parsed.message, "found at offset: 42");
     }
 
@@ -219,7 +219,7 @@ mod tests {
     fn parse_perlcritic_line_handles_unicode_file_path() {
         // Non-ASCII in file path (char-based iteration, not byte).
         let line = "lib/日本/Foo.pm:1:1:3:TestingAndDebugging::RequireUseStrict:msg";
-        let parsed = parse_perlcritic_line(line).expect("unicode path must parse");
+        let parsed = must_some(parse_perlcritic_line(line));
         assert_eq!(parsed.file, "lib/日本/Foo.pm");
     }
 
@@ -242,7 +242,7 @@ mod tests {
     fn parse_perlcritic_line_handles_windows_drive_letter_path() {
         let line =
             r"C:\project\lib\Foo.pm:7:1:3:TestingAndDebugging::RequireUseStrict:missing strict";
-        let parsed = parse_perlcritic_line(line).expect("Windows drive-letter path must parse");
+        let parsed = must_some(parse_perlcritic_line(line));
         assert_eq!(parsed.file, r"C:\project\lib\Foo.pm");
         assert_eq!(parsed.line, 7);
         assert_eq!(parsed.column, 1);
@@ -255,7 +255,7 @@ mod tests {
     fn parse_perlcritic_line_allows_whitespace_around_numeric_and_policy_fields() {
         let line =
             " lib/Foo.pm : 7 : 9 : 2 : TestingAndDebugging::RequireUseStrict :  msg with spaces  ";
-        let parsed = parse_perlcritic_line(line).expect("line with surrounding spaces must parse");
+        let parsed = must_some(parse_perlcritic_line(line));
         assert_eq!(parsed.file, "lib/Foo.pm");
         assert_eq!(parsed.line, 7);
         assert_eq!(parsed.column, 9);

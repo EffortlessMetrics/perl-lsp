@@ -35,13 +35,10 @@ impl Scenario {
     }
 }
 
-fn first_link_of_type<'a>(links: &'a [Value], kind: &str) -> Option<&'a Value> {
-    links.iter().find(|link| link.pointer("/data/type").and_then(Value::as_str) == Some(kind))
-}
-
 #[test]
-fn textDocument_documentLink_responds_with_deferred_links() -> TestResult {
+fn text_document_document_link_responds_with_deferred_links() -> TestResult {
     let mut harness = LspHarness::new();
+    harness.initialize(None)?;
     let scenario = Scenario::new("use qw + use Data::Dumper resolve workflow");
 
     scenario.given("a document with use qw imports and other use statements");
@@ -76,8 +73,9 @@ my @modules = qw(Data::Dumper Getopt::Long);
 }
 
 #[test]
-fn textDocument_documentLink_resolvesTo_module_paths() -> TestResult {
+fn text_document_document_link_resolves_to_module_paths() -> TestResult {
     let mut harness = LspHarness::new();
+    harness.initialize(None)?;
     let scenario = Scenario::new("documentLink/resolve workflow");
 
     scenario.given("deferred DocumentLink from documentLink response");
@@ -98,7 +96,7 @@ use JSON::PP;
     assert!(!links.is_empty(), "expected deferred links");
 
     scenario.when("resolving the first link");
-    let first_link = &links[0];
+    let first_link = links.first().ok_or("expected first deferred link")?;
     let resolved = harness.request("documentLink/resolve", first_link.clone())?;
 
     scenario.then("received resolved link contains target module path");
@@ -112,8 +110,9 @@ use JSON::PP;
 }
 
 #[test]
-fn textDocument_documentLink_handles_missing_modules() -> TestResult {
+fn text_document_document_link_handles_missing_modules() -> TestResult {
     let mut harness = LspHarness::new();
+    harness.initialize(None)?;
     let scenario = Scenario::new("missing module graceful handling");
 
     scenario.given("document with use statement for non-existent module");

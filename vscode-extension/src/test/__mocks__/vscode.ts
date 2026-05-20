@@ -124,6 +124,7 @@ export const window = {
   showWarningMessage: jest.fn(async () => undefined),
   showInformationMessage: jest.fn(async () => undefined),
   showQuickPick: jest.fn(async () => undefined),
+  showInputBox: jest.fn(async () => undefined),
   showTextDocument: jest.fn(async () => undefined),
   withProgress: jest.fn(async (_options: any, task: any) => {
     const progress = { report: jest.fn() };

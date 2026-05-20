@@ -11,7 +11,7 @@ use pest::{
 use pest_derive::Parser;
 use regex::Regex;
 use stacker;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, LazyLock};
 
 #[derive(Parser)]
 #[grammar = "grammar.pest"]
@@ -340,39 +340,22 @@ impl PureRustPerlParser {
     }
 
     fn normalize_source(source: &str) -> String {
-        static LOOP_DECL_RE: OnceLock<Option<Regex>> = OnceLock::new();
-        static SIMPLE_SCALAR_DEREF_RE: OnceLock<Option<Regex>> = OnceLock::new();
-        static ASSIGN_BITNOT_RE: OnceLock<Option<Regex>> = OnceLock::new();
+        static SIMPLE_SCALAR_DEREF_RE: LazyLock<Option<Regex>> =
+            LazyLock::new(|| Regex::new(r"\$\$(?P<name>[A-Za-z_][A-Za-z0-9_:]*)").ok());
+        static ASSIGN_BITNOT_RE: LazyLock<Option<Regex>> =
+            LazyLock::new(|| Regex::new(r"=\s+~\s*(?P<expr>\$[A-Za-z_][A-Za-z0-9_:]*)").ok());
 
         // These are fixed patterns; if one ever fails to compile, skip normalization
         // rather than panicking inside production parser code.
-        let Some(loop_decl_re) = LOOP_DECL_RE
-            .get_or_init(|| {
-                Regex::new(
-                    r"\b(?P<kw>for(?:each)?)\s+(?:my|our|local|state)\s+(?P<var>\$[A-Za-z_][A-Za-z0-9_:]*)\s*(?P<paren>\()",
-                )
-                .ok()
-            })
-            .as_ref()
-        else {
+        let Some(scalar_deref_re) = SIMPLE_SCALAR_DEREF_RE.as_ref() else {
             return source.to_string();
         };
-        let Some(scalar_deref_re) = SIMPLE_SCALAR_DEREF_RE
-            .get_or_init(|| Regex::new(r"\$\$(?P<name>[A-Za-z_][A-Za-z0-9_:]*)").ok())
-            .as_ref()
-        else {
-            return source.to_string();
-        };
-        let Some(assign_bitnot_re) = ASSIGN_BITNOT_RE
-            .get_or_init(|| Regex::new(r"=\s+~\s*(?P<expr>\$[A-Za-z_][A-Za-z0-9_:]*)").ok())
-            .as_ref()
-        else {
+        let Some(assign_bitnot_re) = ASSIGN_BITNOT_RE.as_ref() else {
             return source.to_string();
         };
 
-        let normalized_loops = loop_decl_re.replace_all(source, "$kw $var $paren").into_owned();
         let normalized_derefs = scalar_deref_re
-            .replace_all(&normalized_loops, |caps: &regex::Captures<'_>| {
+            .replace_all(source, |caps: &regex::Captures<'_>| {
                 let variable = format!("${}", &caps["name"]);
                 format!("${{{}}}", variable)
             })
@@ -2805,55 +2788,59 @@ mod tests {
     fn test_basic_parsing() {
         let mut parser = PureRustPerlParser::new();
         let source = "$var";
-        let result = parser.parse(source);
-        assert!(result.is_ok());
-        let ast = must(result);
+        let ast = must(parser.parse(source));
         let sexp = parser.to_sexp(&ast);
-        println!("AST: {:?}", ast);
-        println!("S-expression: {}", sexp);
+
+        assert!(sexp.contains("(scalar_variable $var)"), "expected scalar variable; got: {sexp}");
     }
 
     #[test]
     fn test_variable_parsing() {
-        use perl_tdd_support::must;
         let mut parser = PureRustPerlParser::new();
         let source = "$scalar @array %hash";
-        let result = parser.parse(source);
-        assert!(result.is_ok());
-        let ast = must(result);
+        let ast = must(parser.parse(source));
         let sexp = parser.to_sexp(&ast);
-        println!("S-expression: {}", sexp);
+
+        assert!(sexp.contains("$scalar"), "expected scalar variable; got: {sexp}");
+        assert!(sexp.contains("@array"), "expected array variable; got: {sexp}");
+        assert!(
+            sexp.contains("(%)") && sexp.contains("(identifier hash)"),
+            "expected hash token shape; got: {sexp}"
+        );
     }
 
     #[test]
     fn test_assignment_parsing() {
         let mut parser = PureRustPerlParser::new();
         let source = "my $var = 42;";
-        let result = parser.parse(source);
-        let ast = must(result);
+        let ast = must(parser.parse(source));
         let sexp = parser.to_sexp(&ast);
-        println!("Success! AST: {:?}", ast);
-        println!("S-expression: {}", sexp);
+
+        assert!(sexp.contains("(variable_declaration"), "expected declaration; got: {sexp}");
+        assert!(sexp.contains("(number 42)"), "expected numeric initializer; got: {sexp}");
     }
 
     #[test]
     fn test_function_declaration() {
         let mut parser = PureRustPerlParser::new();
         let source = "sub hello { print 'Hello'; }";
-        let result = parser.parse(source);
-        let ast = must(result);
+        let ast = must(parser.parse(source));
         let sexp = parser.to_sexp(&ast);
-        println!("S-expression: {}", sexp);
+
+        assert!(
+            sexp.contains("(subroutine (identifier hello)"),
+            "expected subroutine declaration; got: {sexp}"
+        );
     }
 
     #[test]
     fn test_if_statement() {
         let mut parser = PureRustPerlParser::new();
         let source = "if ($x > 0) { print 'positive'; }";
-        let result = parser.parse(source);
-        let ast = must(result);
+        let ast = must(parser.parse(source));
         let sexp = parser.to_sexp(&ast);
-        println!("S-expression: {}", sexp);
+
+        assert!(sexp.contains("(if_statement"), "expected if statement; got: {sexp}");
     }
 
     #[test]
@@ -2868,21 +2855,25 @@ mod tests {
     fn test_array_assignment() {
         let mut parser = PureRustPerlParser::new();
         let source = "@array = (1, 2, 3);";
-        let result = parser.parse(source);
-        let ast = must(result);
+        let ast = must(parser.parse(source));
         let sexp = parser.to_sexp(&ast);
-        println!("Array assignment AST: {:?}", ast);
-        println!("S-expression: {}", sexp);
+
+        assert!(
+            sexp.contains("(assignment (array_variable @array)"),
+            "expected array assignment; got: {sexp}"
+        );
     }
 
     #[test]
     fn test_hash_assignment() {
         let mut parser = PureRustPerlParser::new();
         let source = "%hash = (a => 1, b => 2);";
-        let result = parser.parse(source);
-        let ast = must(result);
+        let ast = must(parser.parse(source));
         let sexp = parser.to_sexp(&ast);
-        println!("Hash assignment AST: {:?}", ast);
-        println!("S-expression: {}", sexp);
+
+        assert!(
+            sexp.contains("(assignment (hash_variable %hash)"),
+            "expected hash assignment; got: {sexp}"
+        );
     }
 }

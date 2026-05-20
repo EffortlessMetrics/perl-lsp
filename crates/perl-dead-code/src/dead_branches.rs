@@ -82,8 +82,19 @@ pub(crate) fn detect_dead_branches(file_path: &Path, text: &str, out: &mut Vec<D
 
 fn is_always_false(condition: &str) -> bool {
     let c = condition.trim();
-    matches!(c, "0" | "\"\"" | "''" | "undef")
-        || (c.starts_with('(') && c.ends_with(')') && is_always_false(&c[1..c.len() - 1]))
+    if c == "undef" {
+        return true;
+    }
+    if quoted_literal(c).is_some_and(|inner| inner.is_empty() || inner == "0") {
+        return true;
+    }
+    if c.parse::<i64>().is_ok_and(|n| n == 0) {
+        return true;
+    }
+    if c.parse::<f64>().is_ok_and(|n| n == 0.0) {
+        return true;
+    }
+    c.starts_with('(') && c.ends_with(')') && is_always_false(&c[1..c.len() - 1])
 }
 
 fn is_always_true(condition: &str) -> bool {
@@ -94,13 +105,19 @@ fn is_always_true(condition: &str) -> bool {
     if c.parse::<f64>().is_ok_and(|n| n != 0.0) {
         return true;
     }
-    if (c.starts_with('"') && c.ends_with('"') || c.starts_with('\'') && c.ends_with('\''))
-        && c.len() > 2
-    {
-        let inner = &c[1..c.len() - 1];
-        return inner != "0";
+    if let Some(inner) = quoted_literal(c) {
+        return !inner.is_empty() && inner != "0";
     }
     c.starts_with('(') && c.ends_with(')') && is_always_true(&c[1..c.len() - 1])
+}
+
+fn quoted_literal(condition: &str) -> Option<&str> {
+    let is_quoted = condition.starts_with('"') && condition.ends_with('"')
+        || condition.starts_with("'") && condition.ends_with("'");
+    if is_quoted && condition.len() >= 2 {
+        return Some(&condition[1..condition.len() - 1]);
+    }
+    None
 }
 
 fn extract_balanced_parens(s: &str) -> Option<&str> {
@@ -140,4 +157,241 @@ fn find_block_end(lines: &[&str], open_line: usize) -> usize {
         }
     }
     lines.len()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- is_always_false ---
+
+    #[test]
+    fn always_false_zero() {
+        assert!(is_always_false("0"));
+    }
+
+    #[test]
+    fn always_false_decimal_zero() {
+        assert!(is_always_false("0.0"));
+    }
+
+    #[test]
+    fn always_false_quoted_zero() {
+        assert!(is_always_false("\"0\""));
+        assert!(is_always_false("'0'"));
+    }
+
+    #[test]
+    fn always_false_empty_double_quotes() {
+        assert!(is_always_false("\"\""));
+    }
+
+    #[test]
+    fn always_false_empty_single_quotes() {
+        assert!(is_always_false("''"));
+    }
+
+    #[test]
+    fn always_false_undef() {
+        assert!(is_always_false("undef"));
+    }
+
+    #[test]
+    fn always_false_whitespace_only() {
+        // whitespace trims to "" which does not match any literal — not always false
+        assert!(!is_always_false("   "));
+    }
+
+    #[test]
+    fn always_false_empty_string() {
+        // empty string does not match any literal
+        assert!(!is_always_false(""));
+    }
+
+    #[test]
+    fn always_false_non_literal_variable() {
+        assert!(!is_always_false("$x"));
+    }
+
+    #[test]
+    fn always_false_non_literal_function_call() {
+        assert!(!is_always_false("foo()"));
+    }
+
+    #[test]
+    fn always_false_one() {
+        assert!(!is_always_false("1"));
+    }
+
+    #[test]
+    fn always_false_nonempty_string_a() {
+        assert!(!is_always_false("'a'"));
+    }
+
+    #[test]
+    fn always_false_nonempty_double_string_x() {
+        assert!(!is_always_false("\"x\""));
+    }
+
+    #[test]
+    fn always_false_wrapped_in_parens() {
+        // (0) should be always false due to recursive unwrapping
+        assert!(is_always_false("(0)"));
+    }
+
+    // --- is_always_true ---
+
+    #[test]
+    fn always_true_one() {
+        assert!(is_always_true("1"));
+    }
+
+    #[test]
+    fn always_true_nonzero_int() {
+        assert!(is_always_true("42"));
+    }
+
+    #[test]
+    fn always_true_nonempty_single_string() {
+        assert!(is_always_true("'a'"));
+    }
+
+    #[test]
+    fn always_true_nonempty_double_string() {
+        assert!(is_always_true("\"x\""));
+    }
+
+    #[test]
+    fn always_true_zero_is_not_true() {
+        assert!(!is_always_true("0"));
+    }
+
+    #[test]
+    fn always_true_empty_double_quotes_not_true() {
+        assert!(!is_always_true("\"\""));
+    }
+
+    #[test]
+    fn always_true_empty_single_quotes_not_true() {
+        assert!(!is_always_true("''"));
+    }
+
+    #[test]
+    fn always_true_undef_not_true() {
+        assert!(!is_always_true("undef"));
+    }
+
+    #[test]
+    fn always_true_whitespace_not_true() {
+        assert!(!is_always_true("   "));
+    }
+
+    #[test]
+    fn always_true_empty_not_true() {
+        assert!(!is_always_true(""));
+    }
+
+    #[test]
+    fn always_true_variable_not_true() {
+        assert!(!is_always_true("$x"));
+    }
+
+    #[test]
+    fn always_true_function_call_not_true() {
+        assert!(!is_always_true("foo()"));
+    }
+
+    #[test]
+    fn always_true_string_zero_not_true() {
+        // "0" inside quotes — inner is "0" so not always true
+        assert!(!is_always_true("\"0\""));
+    }
+
+    #[test]
+    fn always_true_decimal_zero_not_true() {
+        assert!(!is_always_true("0.0"));
+    }
+
+    #[test]
+    fn always_true_wrapped_in_parens() {
+        assert!(is_always_true("(1)"));
+    }
+
+    // --- extract_balanced_parens ---
+
+    #[test]
+    fn extract_simple() {
+        let result = extract_balanced_parens("(a)");
+        assert_eq!(result, Some("a"));
+    }
+
+    #[test]
+    fn extract_nested() {
+        let result = extract_balanced_parens("((a)(b))");
+        assert_eq!(result, Some("(a)(b)"));
+    }
+
+    #[test]
+    fn extract_empty_parens() {
+        let result = extract_balanced_parens("()");
+        assert_eq!(result, Some(""));
+    }
+
+    #[test]
+    fn extract_unbalanced_returns_none() {
+        let result = extract_balanced_parens("(a");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn extract_no_leading_paren_returns_none() {
+        let result = extract_balanced_parens("a)");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn extract_with_trailing_content() {
+        // only the first balanced group is extracted; trailing content ignored
+        let result = extract_balanced_parens("(a) { ... }");
+        assert_eq!(result, Some("a"));
+    }
+
+    // --- find_block_end ---
+
+    #[test]
+    fn find_block_end_simple() {
+        let lines = vec!["if (1) {", "    say 'hi';", "}"];
+        // open_line=0 means we start scanning from line index 0
+        assert_eq!(find_block_end(&lines, 0), 3);
+    }
+
+    #[test]
+    fn find_block_end_nested() {
+        let lines = vec!["if (1) {", "    if (2) {", "    }", "}"];
+        assert_eq!(find_block_end(&lines, 0), 4);
+    }
+
+    #[test]
+    fn find_block_end_missing_close_returns_len() {
+        let lines = vec!["if (1) {", "    say 'hi';"];
+        // no closing brace — returns lines.len()
+        assert_eq!(find_block_end(&lines, 0), 2);
+    }
+
+    #[test]
+    fn find_block_end_string_braces_counted() {
+        // The implementation counts all { and } characters including inside strings.
+        // This documents the current behavior: braces in strings are counted naively.
+        let lines = vec!["if (1) {", "    my $s = '{nested}';", "}"];
+        // line 1: '{nested}' contributes +1 then -1, net 0 extra depth
+        // so outer closing brace on line 2 closes at index 2 → returns 3
+        assert_eq!(find_block_end(&lines, 0), 3);
+    }
+
+    #[test]
+    fn find_block_end_starting_mid_slice() {
+        let lines = vec!["# preamble", "if (1) {", "    say 'hi';", "}"];
+        // start scanning from line 1
+        assert_eq!(find_block_end(&lines, 1), 4);
+    }
 }

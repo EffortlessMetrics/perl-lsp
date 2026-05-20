@@ -1,40 +1,46 @@
 {
-  "commit": "003176984",
-  "measured_at": "2026-05-14T10:25:21Z",
+  "commit": "07a052fde",
+  "measured_at": "2026-05-19T12:06:17Z",
   "projects": {
     "catalyst": {
-      "file_count": null,
+      "file_count": 11,
       "metrics": {
         "cold_start_to_hover": {
-          "p50_ms": null,
-          "p95_ms": null,
-          "p99_ms": null,
-          "samples": null
+          "p50_ms": 179,
+          "p95_ms": 480,
+          "p99_ms": 480,
+          "samples": 10
         },
         "first_completion": {
-          "p50_ms": null,
-          "p95_ms": null,
-          "p99_ms": null,
-          "samples": null
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "p99_ms": 0,
+          "samples": 10
         },
         "first_goto_definition": {
-          "p50_ms": null,
-          "p95_ms": null,
-          "p99_ms": null,
-          "samples": null
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "p99_ms": 0,
+          "samples": 10
         },
         "incremental_reparse": {
-          "p50_ms": null,
-          "p95_ms": null,
-          "p99_ms": null,
-          "samples": null
+          "p50_ms": 5,
+          "p95_ms": 6,
+          "p99_ms": 6,
+          "samples": 10
         },
         "workspace_symbol_query": {
-          "p50_ms": null,
-          "p95_ms": null,
-          "p99_ms": null,
-          "samples": null
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "p99_ms": 0,
+          "samples": 10
         }
+      },
+      "resource_profile": {
+        "perl_file_count": 11,
+        "rss_memory_state": "not_measured_by_latency_harness",
+        "source_bytes": 18620,
+        "source_line_count": 768
       }
     },
     "dancer2": {

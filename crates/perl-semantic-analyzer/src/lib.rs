@@ -69,7 +69,9 @@ pub use analysis::class_model;
 pub use analysis::declaration;
 #[cfg(not(target_arch = "wasm32"))]
 pub use analysis::index;
+pub use analysis::receiver_facts;
 pub use analysis::scope_analyzer;
 pub use analysis::semantic;
 pub use analysis::symbol;
+pub use analysis::type_facts;
 pub use analysis::type_inference;

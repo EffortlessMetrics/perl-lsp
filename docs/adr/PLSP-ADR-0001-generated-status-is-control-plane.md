@@ -21,7 +21,8 @@ The parser lane is the clearest example:
 - [parser accuracy next](../project/status/parser_accuracy_next.md) records
   whether measurement failures or gaps exist.
 - When measurement is clear, it points agents to
-  [parser raw failure buckets](../project/status/parser.md#raw-failure-buckets).
+  [parser raw failure buckets](../project/status/parser.md#raw-failure-buckets)
+  only when current generated status lists nonzero bucket evidence.
 - [parser status](../project/status/parser.md) records raw bucket rows,
   corpus receipt provenance, and freshness boundaries.
 
@@ -56,8 +57,9 @@ Positive consequences:
 
 - Agents can continue the lane from repository artifacts instead of chat
   transcripts.
-- Empty measurement queues can route directly to capability buckets without a
-  human remembering the next bucket.
+- Empty measurement queues can route directly to capability buckets when
+  generated status lists nonzero bucket evidence, without a human remembering
+  the next bucket.
 - Stale corpus data can still drive fixture discovery without becoming a
   current bucket-count claim.
 - Provider cutover work can stay gated on status-backed confidence and
@@ -81,7 +83,8 @@ Agents and maintainers must follow these rules:
 1. Read the relevant generated status file before choosing parser or provider
    work.
 2. Treat generated status pointers as the current route unless the
-   implementation plan explicitly parks them with a reason.
+   implementation plan explicitly parks them with a reason. Do not start
+   raw-bucket work when generated parser status lists `none`.
 3. Do not hand-edit generated sections.
 4. Do not copy generated metric tables into specs, ADRs, or plans.
 5. Link to generated status from specs and PR bodies.

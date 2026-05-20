@@ -1948,9 +1948,6 @@
 | `tests/perl-corpus/recovery/missing_delimiter.meta.toml` | `toml` |
 | `tests/perl-corpus/spans/utf16_crlf_positions.meta.toml` | `toml` |
 | `tokmd.toml` | `toml` |
-| `tools/add_metadata.py` | `py` |
-| `tools/corpus_index.py` | `py` |
-| `tools/corpus_lint.py` | `py` |
 | `tree-sitter-perl/.clang-format` | `` |
 | `tree-sitter-perl/.editorconfig` | `` |
 | `tree-sitter-perl/.eslintrc.cjs` | `cjs` |

@@ -344,3 +344,96 @@ fn format_allowed(values: &[&str]) -> String {
 fn format_set(values: &BTreeSet<String>) -> String {
     format!("{:?}", values)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn write_file(path: &Path, content: &str) -> Result<()> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|error| eyre!("failed to create {}: {error}", parent.display()))?;
+        }
+        fs::write(path, content)
+            .map_err(|error| eyre!("failed to write {}: {error}", path.display()))
+    }
+
+    fn write_agent(root: &Path, file: &str, name: &str, description: &str) -> Result<()> {
+        write_file(
+            &root.join(".claude/agents").join(file),
+            &format!("---\nname: {name}\ndescription: {description}\n---\n\nagent body\n"),
+        )
+    }
+
+    #[test]
+    fn frontmatter_only_validation_accepts_agent_files_without_roster() -> Result<()> {
+        let tmp = tempfile::tempdir()?;
+        write_agent(tmp.path(), "builder.md", "builder", "Build focused patches")?;
+
+        run(Some(tmp.path().to_path_buf()))
+    }
+
+    #[test]
+    fn roster_validation_accepts_matching_agent_contract() -> Result<()> {
+        let tmp = tempfile::tempdir()?;
+        write_agent(tmp.path(), "builder.md", "builder", "Build focused patches")?;
+        write_file(&tmp.path().join(".claude/commands/builder-read.md"), "command body\n")?;
+        write_file(&tmp.path().join(".claude/skills/swarm/SKILL.md"), "skill body\n")?;
+        write_file(
+            &tmp.path().join(".claude/agents/agent-roster.json"),
+            r#"{
+  "schema_version": 1,
+  "last_updated": "2026-05-20",
+  "agents": [
+    {
+      "name": "builder",
+      "class": "specialist_worker",
+      "category": "implementation",
+      "file": "builder.md",
+      "spawned_by": ["lead-build"],
+      "handoff_to": ["reviewer"],
+      "first_entrypoints": ["/builder-read", "/swarm"],
+      "description": "Build focused patches"
+    }
+  ]
+}
+"#,
+        )?;
+
+        run(Some(tmp.path().to_path_buf()))
+    }
+
+    #[test]
+    fn roster_validation_rejects_agent_file_without_roster_entry() -> Result<()> {
+        let tmp = tempfile::tempdir()?;
+        write_agent(tmp.path(), "builder.md", "builder", "Build focused patches")?;
+        write_agent(tmp.path(), "reviewer.md", "reviewer", "Review focused patches")?;
+        write_file(&tmp.path().join(".claude/commands/builder-read.md"), "command body\n")?;
+        write_file(
+            &tmp.path().join(".claude/agents/agent-roster.json"),
+            r#"{
+  "schema_version": 1,
+  "last_updated": "2026-05-20",
+  "agents": [
+    {
+      "name": "builder",
+      "class": "reusable_worker",
+      "file": "builder.md",
+      "spawned_by": ["lead-build"],
+      "handoff_to": ["reviewer"],
+      "first_entrypoints": ["/builder-read"],
+      "description": "Build focused patches"
+    }
+  ]
+}
+"#,
+        )?;
+
+        match run(Some(tmp.path().to_path_buf())) {
+            Ok(()) => bail!("missing roster entry should reject the file set"),
+            Err(error) => assert!(error.to_string().contains("file set does not match")),
+        }
+        Ok(())
+    }
+}

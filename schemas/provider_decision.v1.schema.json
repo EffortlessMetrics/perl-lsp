@@ -1,0 +1,363 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/perl-lsp/schemas/provider_decision.v1.schema.json",
+  "title": "Provider decision receipt v1",
+  "description": "Additive schema for perl-lsp provider decision explanations and copyable bug-report payloads.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "provider",
+    "decision",
+    "reason",
+    "fact_source",
+    "confidence",
+    "freshness",
+    "dynamic_boundary",
+    "fallback"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "provider_decision.v1"
+    },
+    "provider": {
+      "$ref": "#/$defs/provider"
+    },
+    "decision": {
+      "$ref": "#/$defs/decision"
+    },
+    "reason": {
+      "$ref": "#/$defs/reason"
+    },
+    "fact_source": {
+      "$ref": "#/$defs/fact_source"
+    },
+    "confidence": {
+      "$ref": "#/$defs/confidence"
+    },
+    "freshness": {
+      "$ref": "#/$defs/freshness"
+    },
+    "dynamic_boundary": {
+      "type": "boolean"
+    },
+    "fallback": {
+      "$ref": "#/$defs/fallback"
+    },
+    "receipt_id": {
+      "type": "string"
+    },
+    "scenario": {
+      "type": "string"
+    },
+    "request_receipt": {
+      "$ref": "#/$defs/request_receipt"
+    },
+    "user_message": {
+      "type": "string"
+    },
+    "copyable_payload": {
+      "$ref": "#/$defs/copyable_payload"
+    },
+    "source_backed": {
+      "type": "boolean"
+    },
+    "blocker": {
+      "$ref": "#/$defs/blocker"
+    },
+    "claim_boundary": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "provider": {
+      "type": "string",
+      "enum": [
+        "completion",
+        "goto_definition",
+        "references",
+        "hover",
+        "diagnostics",
+        "rename",
+        "safe_delete",
+        "workspace_symbols",
+        "document_symbols",
+        "semantic_tokens",
+        "module_resolution",
+        "dap_module_paths",
+        "perl_subprocess",
+        "workspace_trust_report",
+        "unknown"
+      ]
+    },
+    "decision": {
+      "type": "string",
+      "enum": [
+        "acted",
+        "fallback",
+        "blocked",
+        "shadowed"
+      ]
+    },
+    "reason": {
+      "type": "string",
+      "enum": [
+        "source_backed_high_confidence",
+        "ambiguous_low_confidence_candidates",
+        "stale_fact",
+        "low_confidence_fact",
+        "generated_no_source",
+        "dynamic_boundary",
+        "unsupported",
+        "missing_fact",
+        "shadow_only",
+        "unsafe_edit_blocked",
+        "fallback_policy",
+        "unknown"
+      ]
+    },
+    "fact_source": {
+      "type": "string",
+      "enum": [
+        "parser_syntax",
+        "legacy_workspace",
+        "semantic_fact",
+        "compiler_fact",
+        "framework_adapter",
+        "dynamic_boundary",
+        "fallback",
+        "unknown"
+      ]
+    },
+    "request_fact_source": {
+      "type": "string",
+      "enum": [
+        "parser_syntax",
+        "legacy_workspace",
+        "semantic_fact",
+        "compiler_fact",
+        "framework_adapter",
+        "dynamic_boundary",
+        "fallback",
+        "provider_runtime",
+        "unknown"
+      ]
+    },
+    "confidence": {
+      "type": "string",
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "freshness": {
+      "type": "string",
+      "enum": [
+        "fresh",
+        "stale",
+        "unknown",
+        "not_applicable"
+      ]
+    },
+    "fallback": {
+      "type": "string",
+      "enum": [
+        "none",
+        "legacy_provider",
+        "no_result",
+        "no_edit",
+        "require_confirmation",
+        "refresh_workspace_facts",
+        "shadow_receipt_only"
+      ]
+    },
+    "blocker": {
+      "type": "string",
+      "enum": [
+        "generated_no_source",
+        "dynamic_boundary",
+        "stale_fact",
+        "low_confidence",
+        "ambiguous_identity",
+        "imported_exported",
+        "typeglob_alias",
+        "autoload",
+        "symbolic_ref",
+        "dynamic_require",
+        "rollback_missing",
+        "current_source_reference",
+        "workspace_reference",
+        "unsupported_fact_class",
+        "unsafe_edit_blocked",
+        "missing_fact",
+        "fallback_policy",
+        "unknown"
+      ]
+    },
+    "request_position": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "uri_scheme": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "line": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "character": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "request_receipt": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "schema_version": {
+          "const": "provider_decision.v1"
+        },
+        "provider": {
+          "$ref": "#/$defs/provider"
+        },
+        "decision": {
+          "$ref": "#/$defs/decision"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "fact_source": {
+          "$ref": "#/$defs/request_fact_source"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidence"
+        },
+        "freshness": {
+          "$ref": "#/$defs/freshness"
+        },
+        "fallback": {
+          "$ref": "#/$defs/fallback"
+        },
+        "source_backed": {
+          "type": "boolean"
+        },
+        "dynamic_boundary": {
+          "type": "boolean"
+        },
+        "blocker": {
+          "$ref": "#/$defs/blocker"
+        },
+        "user_message": {
+          "type": "string"
+        }
+      }
+    },
+    "copyable_payload": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "schema_version",
+        "perl_lsp_version",
+        "workspace_root_class",
+        "provider",
+        "decision",
+        "reason",
+        "fact_source",
+        "confidence",
+        "freshness",
+        "fallback",
+        "dynamic_boundary",
+        "support_tier_link"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "provider_decision_bug_report.v1"
+        },
+        "perl_lsp_version": {
+          "type": "string"
+        },
+        "workspace_root_class": {
+          "type": "string"
+        },
+        "workspace_root_hash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "request_position": {
+          "$ref": "#/$defs/request_position"
+        },
+        "provider": {
+          "$ref": "#/$defs/provider"
+        },
+        "decision": {
+          "$ref": "#/$defs/decision"
+        },
+        "reason": {
+          "$ref": "#/$defs/reason"
+        },
+        "fact_source": {
+          "$ref": "#/$defs/fact_source"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidence"
+        },
+        "freshness": {
+          "$ref": "#/$defs/freshness"
+        },
+        "fallback": {
+          "$ref": "#/$defs/fallback"
+        },
+        "dynamic_boundary": {
+          "type": "boolean"
+        },
+        "receipt_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scenario": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "support_tier_link": {
+          "type": "string"
+        },
+        "user_message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "request_receipt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/request_receipt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

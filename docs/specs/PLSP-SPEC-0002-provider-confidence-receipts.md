@@ -1,12 +1,34 @@
 # PLSP-SPEC-0002: Provider confidence receipts
 
-Status: proposed
+Status: accepted
 Owner: perl-lsp maintainers
 Linked proposal: [PLSP-PROP-0001](../proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
-Linked ADRs: planned `PLSP-ADR-0002`
-Linked plan: planned `plans/real-perl-editor-trust/implementation-plan.md`
+Linked ADRs: [PLSP-ADR-0002](../adr/PLSP-ADR-0002-confidence-before-cutover.md)
+Linked plan: [Real Perl Editor Trust implementation plan](../../plans/real-perl-editor-trust/implementation-plan.md)
+Implemented by:
+- [provider confidence matrix](../project/status/provider_confidence_matrix.md)
+- [provider cutover](../project/status/provider_cutover.md)
+- [semantic scorecard](../project/status/semantic_scorecard.md)
+- [semantic shadow compare](../project/status/semantic_shadow_compare.md)
+- [support tiers](../project/status/SUPPORT_TIERS.md)
+- [completed active goal manifest](../../.perl-lsp/goals/active.toml)
 Status impact: provider cutover, semantic scorecard, semantic shadow compare,
 UX capability dashboard
+
+## Current implementation status
+
+This spec is implemented as a control-plane rule. Current evidence lives in:
+
+- [provider confidence matrix](../project/status/provider_confidence_matrix.md)
+- [provider cutover](../project/status/provider_cutover.md)
+- [semantic scorecard](../project/status/semantic_scorecard.md)
+- [semantic shadow compare](../project/status/semantic_shadow_compare.md)
+- [support tiers](../project/status/SUPPORT_TIERS.md)
+- [Real Perl Editor Trust routing dashboard](../project/status/real_perl_editor_trust_v1.md)
+- [Real Perl Editor Trust implementation plan](../../plans/real-perl-editor-trust/implementation-plan.md)
+
+Current next work is not stored here; see the routing dashboard and provider
+status surfaces.
 
 ## Contract
 
