@@ -121,6 +121,8 @@ pub(crate) enum CliCommand {
     CheckUnwrapsModules,
     /// Enforce production unwrap/panic-family budgets.
     CheckUnwrapsProd,
+    /// Enforce no raw print macros in library source (println!/eprintln! belong in tracing).
+    CheckPrintInLib,
     /// Execute the quick CI mirror.
     QuickCheck,
     /// Run heredoc integration tests, using xtask when available.

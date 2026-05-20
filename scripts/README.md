@@ -34,8 +34,8 @@ Scripts invoked by `just` CI tiers or GitHub Actions workflows.
 | Script | Purpose |
 |--------|---------|
 | `gate-local.sh` | Run the local merge gate (same as `just ci-gate`) |
-| `execute-gate.sh` | Run a named gate by identifier |
-| `run-gates.sh` | Run all gates in sequence |
+| `execute-gate.sh` | Compatibility shim for `cargo xtask gates --gate <name>` |
+| `run-gates.sh` | Compatibility shim for `cargo xtask gates --tier merge-gate --receipt` |
 | `e2e-gate.sh` | End-to-end gate (full pipeline validation) |
 | `e2e-validation.sh` | Extended E2E validation with real Perl files |
 | `production-gates-validation.sh` | Validate all production gates pass |
@@ -114,7 +114,7 @@ Run in order for a release. See [CONTRIBUTING.md](../CONTRIBUTING.md#release-wor
 | `control-plane-lock.sh` | Advisory single-writer lock for swarm operations |
 | `test-control-plane-lock.sh` | Test the lock implementation |
 | `swarm-summary.sh` | Summarize current swarm state |
-| `validate_swarm_agent_roster.py` | Validate agent roster completeness |
+| `cargo xtask validate-swarm-agent-roster` | Validate agent roster completeness |
 | `validate_swarm_findings.py` | Validate swarm-discovered findings |
 | `bulk-label-issues.sh` | Bulk-label GitHub issues by query |
 | `close-duplicate-prs.sh` | Close duplicate PRs by title |
@@ -134,7 +134,7 @@ Run in order for a release. See [CONTRIBUTING.md](../CONTRIBUTING.md#release-wor
 | `quick-receipts.sh` | Fast receipt generation for CI |
 | `llvm.sh` | LLVM toolchain helpers (coverage, profiling) |
 | `install.sh` | Install `perllsp` from a local build |
-| `list-gates.py` | List all defined just gates and their tiers |
+| `list-gates.py` | Compatibility shim for `cargo xtask gates --list` |
 | `verify_stacker.sh` | Verify stacker (stack-size extension) is working |
 | `test-lsp-cancellation.sh` | Test LSP request cancellation behavior |
 | `render-linux-packages.py` | Build Linux distribution packages |

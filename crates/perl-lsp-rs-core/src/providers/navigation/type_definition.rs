@@ -781,32 +781,6 @@ $obj->method();
 
         let locations = provider.find_type_definition(&ast, line, character, uri, &documents);
 
-        // Debug: print what we found
-        if let Some(ref locs) = locations {
-            eprintln!("Found {} locations", locs.len());
-            for loc in locs {
-                eprintln!("Location: {:?}", loc);
-            }
-        } else {
-            eprintln!("No locations found");
-
-            // Debug: try to find what node we're getting
-            // Use perl-parser-core for offset calculation
-            let offset =
-                perl_parser_core::engine::position::utf16_line_col_to_offset(code, line, character);
-            eprintln!("Offset: {}", offset);
-            if let Some(node) = provider.find_node_at_offset(&ast, offset) {
-                eprintln!("Node kind: {:?}", node.kind);
-                if let Some(type_name) = provider.extract_type_name(&node) {
-                    eprintln!("Extracted type name: {}", type_name);
-                } else {
-                    eprintln!("Could not extract type name from node");
-                }
-            } else {
-                eprintln!("Could not find node at offset");
-            }
-        }
-
         assert!(locations.is_some(), "Should find type definition for MyClass->new()");
         let locs = must_some(locations);
         assert_eq!(locs.len(), 1, "Should find exactly one definition");

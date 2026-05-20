@@ -24,8 +24,10 @@ medium-confidence substrate. Framework accessor-return facts for package-like
 `isa` declarations are fixture-backed as medium-confidence substrate with erased
 type compatibility preserved. Direct static-constructor method-return facts are
 fixture-backed as medium-confidence substrate with erased type compatibility
-preserved. Broader chained method-return facts remain bounded by their own
-future fixtures and provider receipts.
+preserved. Receiver facts expose explicit fallback state so provider consumers
+can distinguish exact, fallback-preserving, and blocked receiver evidence.
+Broader chained method-return facts remain bounded by their own future fixtures
+and provider receipts.
 
 ## Contract
 
@@ -152,6 +154,9 @@ The first implementation must handle these AST variants or fail closed:
 Dynamic boundaries must not be promoted to exact packages. A dynamic receiver may
 still participate in legacy fallback completion only when the fallback is labeled
 as low confidence or unknown, not as an exact semantic receiver.
+Expression inference that returns a receiver-shaped fact must set
+`fallback_state` consistently with the confidence, dynamic-boundary, freshness,
+and package evidence it returns.
 
 ## Static Hash and Hashref Requirements
 
@@ -246,18 +251,26 @@ contract such as:
 
 ```rust
 pub struct ReceiverFact {
-    pub receiver: ReceiverExpr,
-    pub fact: TypeFact,
+    pub kind: ReceiverKind,
     pub package: Option<String>,
+    pub shape: Option<ShapeFact>,
+    pub confidence: Confidence,
+    pub evidence: Vec<TypeEvidence>,
+    pub freshness: ReceiverFactFreshness,
+    pub dynamic_boundary: Option<DynamicBoundary>,
+    pub source_range: Option<(usize, usize)>,
+    pub fallback_state: ReceiverFallbackState,
 }
 ```
 
-`ReceiverExpr` must distinguish at least:
+`ReceiverKind` must distinguish at least:
 
 - static package
 - variable
 - hash slot
 - hashref slot
+- array index
+- dynamic key
 - method call receiver chains
 - unknown receiver
 
@@ -265,6 +278,44 @@ For a method call, `receiver_fact_for_method_call` must infer the object
 expression and set `package` only for exact object/reference-to-object facts.
 Unknown, dynamic, and low-confidence non-object receivers must not set an exact
 package.
+
+Every receiver fact must carry `fallback_state`. The fallback state is part of
+the semantic contract, not a provider-local display field:
+
+```rust
+pub enum ReceiverFallbackState {
+    Exact,
+    Fallback,
+    Blocked,
+}
+```
+
+Provider consumers may treat `Exact` as receiver-scoped evidence only when all
+other provider guards also pass. `Fallback` means the provider must preserve its
+legacy fallback path and may surface the receiver fact only as labeled evidence.
+`Blocked` means the receiver fact cannot authorize completion, navigation, or
+edit-producing behavior.
+
+## Receiver Fallback Semantics
+
+Receiver exactness is intentionally narrower than package availability.
+`package: Some(_)` alone is not enough to authorize exact provider behavior.
+
+| Receiver shape | Required fallback state |
+| --- | --- |
+| Exact source-backed receiver | May be `Exact` only when the fact is fresh, high-confidence, source-backed, and has no dynamic boundary. |
+| Union receiver | Must be `Fallback` unless every branch resolves to the same package or a class-specific proof resolves the ambiguity. |
+| Dynamic receiver | Must be `Fallback` or `Blocked`; it must never be promoted to exact behavior. |
+| Unknown receiver | Must be `Fallback` and low confidence unless a later fact class proves a stronger shape. |
+| Generated receiver | Must be labeled and fallback-preserving, or blocked; it must never be silently exact. |
+| Low- or medium-confidence receiver | Must be `Fallback` until a provider-specific promotion receipt proves the class. |
+| Stale receiver | Must be `Fallback` or `Blocked`; it must not authorize edits. |
+
+Generated, virtual, framework-derived, or no-source receiver evidence may help
+explain completion and hover output after the relevant provider receipt lands.
+It must not claim an exact generated method-body location, must not suppress
+fallback, and must not authorize rename or safe-delete unless a separate
+class-specific refactor proof exists.
 
 ## Provider Cutover Requirements
 
@@ -278,10 +329,13 @@ The handoff shape is:
    arrow context.
 2. Workspace method completion receives the optional receiver fact.
 3. Receiver evidence is derived from the fact when present.
-4. Legacy text-pattern classification runs only when no semantic receiver fact
-   is available.
-5. Exact package completion uses `ReceiverFact.package`.
-6. Unknown or dynamic receivers fall back according to provider confidence rules
+4. Exact receiver behavior may use `ReceiverFact.package` only when
+   `fallback_state == Exact` and provider-specific confidence guards pass.
+5. Legacy text-pattern classification remains available when no semantic
+   receiver fact is available or when the semantic receiver fact is `Fallback`.
+6. `Blocked` receiver facts must not authorize completion, navigation, or
+   edit-producing behavior.
+7. Unknown or dynamic receivers fall back according to provider confidence rules
    and must not be labeled as exact semantic receivers.
 
 Completion details for exact receiver facts should include receiver kind,
@@ -308,6 +362,16 @@ After facts-only tests pass, LSP completion tests must prove:
 - completion detail labels the receiver as hash-slot derived
 - completion detail labels confidence
 - `$services{$name}->` does not claim an exact `MyApp::DB` receiver
+
+Receiver-fact tests must also prove fallback posture:
+
+- fresh high-confidence source-backed receiver facts use `Exact`
+- medium-confidence accessor-return and method-return facts use `Fallback`
+- union receivers use `Fallback` unless ambiguity is explicitly resolved
+- dynamic hash keys and dynamic array indexes use `Fallback` or `Blocked`
+- unknown receivers use `Fallback`
+- generated or framework-derived receiver facts remain labeled and
+  fallback-preserving until provider-specific proof promotes the class
 
 ## Proof Commands
 

@@ -43,6 +43,7 @@ generated sections.
 - [PLSP-SPEC-0021: Diagnostic explanation v1](PLSP-SPEC-0021-diagnostic-explanation-v1.md)
 - [PLSP-SPEC-0022: Module path authority](PLSP-SPEC-0022-module-path-authority.md)
 - [PLSP-SPEC-0023: Ambient inputs](PLSP-SPEC-0023-ambient-inputs.md)
+- [PLSP-SPEC-0024: Framework fact adapter contract](PLSP-SPEC-0024-framework-fact-adapters.md)
 
 ## Acceptance and Proof
 

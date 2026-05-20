@@ -337,6 +337,41 @@ fn propose_emits_human_markdown() -> Result<()> {
     Ok(())
 }
 
+/// `propose` highlights automation groups that should move into Rust-owned
+/// tooling instead of being blindly accepted as long-lived non-Rust surfaces.
+#[test]
+fn propose_highlights_rust_migration_candidates() -> Result<()> {
+    let files: Vec<(&str, &str)> = vec![
+        ("scripts/build.sh", "#!/bin/bash"),
+        ("scripts/release.py", "print('release')"),
+        ("docs/guide.md", "# guide"),
+    ];
+    let (_tmp, root) = setup_repo(&files)?;
+
+    let output = run_propose(&root, &[])?;
+    assert!(
+        output.status.success(),
+        "propose must exit 0; stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let md_content = fs::read_to_string(root.join("target/policy/non-rust-proposal.md"))?;
+    assert!(
+        md_content.contains("## Rust migration candidates"),
+        "markdown must include a Rust migration candidate section"
+    );
+    assert!(
+        md_content.contains("`scripts`"),
+        "scripts group must be identified as a migration candidate: {md_content}"
+    );
+    assert!(
+        md_content.contains("xtask tasks"),
+        "automation scripts must recommend the xtask core design: {md_content}"
+    );
+
+    Ok(())
+}
+
 /// After `propose`, running advisory check against the proposed allowlist should
 /// exit 0 — the proposed allowlist actually covers the files it claims to.
 #[test]
