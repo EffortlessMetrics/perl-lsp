@@ -83,3 +83,20 @@ fn test_dbix_hash_splice_with_semicolon_terminated_deref_body() {
 }"#,
     );
 }
+
+#[test]
+fn test_file_find_wanted_sub_with_no_arg_filetest_if_else() {
+    let source = r#"
+find({
+    no_chdir => 1,
+    wanted => sub {
+        if (-s) {
+            unlink($target);
+        } else {
+            unlink($target);
+        }
+    }
+}, $patch_dir);
+"#;
+    assert_clean_parse(source);
+}

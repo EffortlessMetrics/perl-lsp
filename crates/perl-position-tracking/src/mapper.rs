@@ -335,6 +335,7 @@ pub fn last_line_column_utf8(text: &str) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_tdd_support::must_some;
 
     #[test]
     fn test_lf_positions() {
@@ -582,7 +583,7 @@ mod tests {
         // positions at the start of each character.
         for (byte_offset, col) in [(0u32, 0u32), (1, 1), (3, 2), (7, 4)] {
             let pos = Position { line: 0, character: col };
-            let got_byte = mapper.lsp_pos_to_byte(pos).expect("valid position must return Some");
+            let got_byte = must_some(mapper.lsp_pos_to_byte(pos));
             assert_eq!(
                 got_byte, byte_offset as usize,
                 "lsp_pos_to_byte for col {col} should be byte {byte_offset}"
@@ -604,9 +605,7 @@ mod tests {
         let mapper = PositionMapper::new(text);
 
         // lsp_pos_to_char: line 0, col 1 (UTF-16) → é starts at char index 1
-        let char_idx = mapper
-            .lsp_pos_to_char(Position { line: 0, character: 1 })
-            .expect("valid position must return Some");
+        let char_idx = must_some(mapper.lsp_pos_to_char(Position { line: 0, character: 1 }));
         assert_eq!(char_idx, 1, "char index of 'é' is 1");
 
         // char_to_lsp_pos: char index 1 → line 0, col 1 (UTF-16)
@@ -614,9 +613,7 @@ mod tests {
         assert_eq!(pos, Position { line: 0, character: 1 });
 
         // Another round: 'b' is char index 2
-        let char_b = mapper
-            .lsp_pos_to_char(Position { line: 0, character: 2 })
-            .expect("valid position must return Some");
+        let char_b = must_some(mapper.lsp_pos_to_char(Position { line: 0, character: 2 }));
         assert_eq!(char_b, 2);
         assert_eq!(mapper.char_to_lsp_pos(char_b), Position { line: 0, character: 2 });
     }
@@ -670,9 +667,7 @@ mod tests {
 
         // "hello\n" has 5 visible chars (cols 0..5) + newline.
         // Asking for col 9999 should clamp to the newline / end of line content.
-        let clamped = mapper
-            .lsp_pos_to_byte(Position { line: 0, character: 9999 })
-            .expect("out-of-bounds column must return Some (clamped)");
+        let clamped = must_some(mapper.lsp_pos_to_byte(Position { line: 0, character: 9999 }));
 
         // The byte returned must be within the span of line 0 (bytes 0..6 inclusive,
         // where byte 5 is '\n').  We accept anything in [0, 6].

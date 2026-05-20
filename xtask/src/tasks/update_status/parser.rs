@@ -392,10 +392,10 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
 
     let token = &metrics.token_metrics;
     let token_table = format!(
-        "| **TokenKind variants** | {} | enum size in `perl-token` | `crates/perl-token/src/lib.rs` |\n\
-         | **Token metadata coverage** | {}/{} ({}) | `display_name()` mappings for all variants | `crates/perl-token/src/lib.rs` + `.ci/metrics/baselines/token.json` |\n\
-         | **Category partition** | {} | keywords/operators/delimiters/literals/identifiers/special | `crates/perl-token/src/lib.rs` |\n\
-         | **Display-name coverage** | {}/{} | user-facing token labels present | `crates/perl-token/src/lib.rs` |\n\
+        "| **TokenKind variants** | {} | enum size in `perl-token` | `crates/perl-token/src/kind.rs` |\n\
+         | **Token metadata coverage** | {}/{} ({}) | `display_name()` mappings for all variants | `crates/perl-token/src/kind.rs` + `.ci/metrics/baselines/token.json` |\n\
+         | **Category partition** | {} | keywords/operators/delimiters/literals/identifiers/special | `crates/perl-token/src/kind.rs` |\n\
+         | **Display-name coverage** | {}/{} | user-facing token labels present | `crates/perl-token/src/kind.rs` |\n\
          | **Lexer/parser conformance** | {} | integration through shared token crate | `crates/perl-lexer/Cargo.toml` + `crates/perl-parser-core/Cargo.toml` |\n\
          | **Token perf (p50/p95)** | {} | key token operations benchmark health | `docs/project/status/token_performance_scorecard.json` |\n\
          | **Runtime dependencies** | {} | non-dev deps in `perl-token` | `crates/perl-token/Cargo.toml` |",

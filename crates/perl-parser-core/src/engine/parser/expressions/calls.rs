@@ -92,6 +92,9 @@ impl<'a> Parser<'a> {
                 | TokenKind::RightParen
                 | TokenKind::Comma
                 | TokenKind::Eof => return false,
+                // Word operators bind below list operators, so they terminate
+                // a zero-arg builtin call instead of starting an indirect object.
+                kind if kind.is_low_precedence_word_operator() => return false,
                 _ => {}
             }
 
@@ -301,18 +304,21 @@ impl<'a> Parser<'a> {
                         if third.kind == TokenKind::Arrow {
                             return false;
                         }
-                        // Word operators after $var means regular call with low-precedence
-                        // operator: func @list or die, func $arg and next, etc.
+                        // Short-circuit operators after $var mean a regular call with
+                        // the operator outside the argument: func $arg || die,
+                        // func @list or die, func $arg and next, etc.
                         // These are NOT indirect method calls.
-                        if matches!(
-                            third.kind,
-                            TokenKind::WordOr
-                                | TokenKind::WordAnd
-                                | TokenKind::WordXor
-                                | TokenKind::WordNot
-                                | TokenKind::Question
-                                | TokenKind::Semicolon
-                        ) {
+                        if Self::is_symbolic_short_circuit_operator(Some(third.kind))
+                            || matches!(
+                                third.kind,
+                                TokenKind::WordOr
+                                    | TokenKind::WordAnd
+                                    | TokenKind::WordXor
+                                    | TokenKind::WordNot
+                                    | TokenKind::Question
+                                    | TokenKind::Semicolon
+                            )
+                        {
                             return false;
                         }
                         return true;
@@ -377,6 +383,7 @@ impl<'a> Parser<'a> {
         // so they terminate argument collection for indirect calls.
         while !Self::is_statement_terminator(self.peek_kind())
             && !self.is_statement_modifier_keyword()
+            && !Self::is_symbolic_short_circuit_operator(self.peek_kind())
             && !matches!(
                 self.peek_kind(),
                 Some(
@@ -442,28 +449,41 @@ impl<'a> Parser<'a> {
             Some(TokenKind::My | TokenKind::Our | TokenKind::Local | TokenKind::State)
         ) && !self.is_keyword_before_fat_arrow()
         {
-            let decl = self.parse_declaration_arg()?;
-            // After a declaration that has no initializer (no `=` was consumed),
-            // binary operators like `&&`, `||`, `=~`, `?:`, etc. may follow.
-            // Apply the full binary-operator chain so that the declaration node
-            // is correctly used as the left operand.
-            //
-            // We detect the "no initializer" case by checking whether the
-            // declaration node itself contains an initializer.  If parse_declaration_arg
-            // already consumed an `=` and its rhs, parse_assignment() handled all
-            // operators inside the initializer — no further processing is needed.
-            let has_initializer = match &decl.kind {
-                NodeKind::VariableDeclaration { initializer, .. } => initializer.is_some(),
-                NodeKind::VariableListDeclaration { initializer, .. } => initializer.is_some(),
-                _ => true, // not a declaration node — treat as already-complete
-            };
-            if has_initializer {
-                Ok(decl)
-            } else {
-                self.parse_below_assignment_with(decl)
-            }
+            self.parse_declaration_expression()
         } else {
             self.parse_assignment()
+        }
+    }
+
+    /// Parse a declaration used as an expression and consume any binary operator
+    /// that binds to the declaration itself.
+    ///
+    /// This covers both argument-list contexts and RHS expression contexts:
+    ///
+    ///   `(our $AUTOLOAD =~ /pattern/)`
+    ///   `(my $field = our $AUTOLOAD) =~ s/.*://`
+    fn parse_declaration_expression(&mut self) -> ParseResult<Node> {
+        let decl = self.parse_declaration_arg()?;
+
+        // After a declaration that has no initializer (no `=` was consumed),
+        // binary operators like `&&`, `||`, `=~`, `?:`, etc. may follow.
+        // Apply the full binary-operator chain so that the declaration node
+        // is correctly used as the left operand.
+        //
+        // We detect the "no initializer" case by checking whether the
+        // declaration node itself contains an initializer. If parse_declaration_arg
+        // already consumed an `=` and its rhs, parse_assignment() handled all
+        // operators inside the initializer, so no further processing is needed.
+        let has_initializer = match &decl.kind {
+            NodeKind::VariableDeclaration { initializer, .. } => initializer.is_some(),
+            NodeKind::VariableListDeclaration { initializer, .. } => initializer.is_some(),
+            _ => true, // not a declaration node; treat as already complete
+        };
+
+        if has_initializer {
+            Ok(decl)
+        } else {
+            self.parse_below_assignment_with(decl)
         }
     }
 
@@ -497,8 +517,13 @@ impl<'a> Parser<'a> {
             self.expect_closing_delimiter(TokenKind::RightParen)?;
 
             let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
-                self.tokens.next()?; // consume =
-                Some(Box::new(self.parse_assignment()?))
+                let op_token = self.tokens.next()?; // consume =
+                let rhs = if let Some(missing) = self.recover_missing_infix_rhs(op_token.start) {
+                    missing
+                } else {
+                    self.parse_assignment()?
+                };
+                Some(Box::new(rhs))
             } else {
                 None
             };
@@ -536,8 +561,13 @@ impl<'a> Parser<'a> {
             self.expect_closing_delimiter(TokenKind::RightParen)?; // consume )
 
             let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
-                self.tokens.next()?; // consume =
-                Some(Box::new(self.parse_assignment()?))
+                let op_token = self.tokens.next()?; // consume =
+                let rhs = if let Some(missing) = self.recover_missing_infix_rhs(op_token.start) {
+                    missing
+                } else {
+                    self.parse_assignment()?
+                };
+                Some(Box::new(rhs))
             } else {
                 None
             };
@@ -561,8 +591,13 @@ impl<'a> Parser<'a> {
             };
 
             let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
-                self.tokens.next()?; // consume =
-                Some(Box::new(self.parse_assignment()?))
+                let op_token = self.tokens.next()?; // consume =
+                let rhs = if let Some(missing) = self.recover_missing_infix_rhs(op_token.start) {
+                    missing
+                } else {
+                    self.parse_assignment()?
+                };
+                Some(Box::new(rhs))
             } else {
                 None
             };

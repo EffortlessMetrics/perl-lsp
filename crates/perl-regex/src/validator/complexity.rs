@@ -1,4 +1,4 @@
-use crate::error::RegexError;
+use crate::{error::RegexError, syntax::cursor::quoted_literal_end};
 
 use super::{
     config::RegexValidationConfig,
@@ -18,6 +18,11 @@ pub(crate) fn check_complexity(
     while i < bytes.len() {
         match bytes[i] {
             b'\\' => {
+                if let Some(end) = quoted_literal_end(bytes, i) {
+                    i = end;
+                    continue;
+                }
+
                 if i + 1 < bytes.len() {
                     match bytes[i + 1] {
                         b'p' | b'P' => {

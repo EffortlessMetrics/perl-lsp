@@ -1637,6 +1637,38 @@ CORE::length($value);
     }
 
     #[test]
+    fn test_utf8_builtin_hover_for_function_call() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+my $value = "\x{100}";
+utf8::encode($value);
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let encode_pos = code.find("utf8::encode").ok_or("utf8::encode not found")?;
+        let hover = analyzer
+            .hover_info
+            .iter()
+            .find(|(loc, _)| loc.start <= encode_pos && loc.end > encode_pos);
+
+        assert!(hover.is_some(), "Should have hover info for utf8::encode builtin");
+        let (_, hover) = hover.ok_or("missing hover for utf8::encode")?;
+        assert!(
+            hover.signature.contains("utf8::encode"),
+            "Hover signature should contain utf8::encode, got: {}",
+            hover.signature
+        );
+        let documentation =
+            hover.documentation.as_deref().ok_or("utf8::encode hover should have docs")?;
+        assert!(
+            documentation.contains("extended UTF-8 octets"),
+            "Hover docs should describe utf8::encode semantics, got: {documentation}"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_package_hover_with_pod_name_section() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"
 =head1 NAME

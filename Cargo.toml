@@ -11,6 +11,7 @@ members = [
     "crates/perl-parser-bench",
     "crates/perl-parser-core",
     "crates/perl-parser-pest",
+    "crates/perl-parser-comparison",
     "crates/perl-semantic-analyzer",
     "crates/perl-semantic-facts",
     "crates/perl-workspace",
@@ -171,6 +172,7 @@ allow = [
     # (perl-dead-code absorbed into perl-parser::dead_code — Wave 4-Completion)
     "perl-parser",
     # (perl-parser-bench is benchmark-only; publish = false)
+    # (perl-parser-comparison is test-only; publish = false)
     "perl-parser-pest",
     "perl-corpus",
 
@@ -263,6 +265,7 @@ perl-lsp-perltidy = { path = "crates/perl-lsp-perltidy", version = "0.14.0" }
 # (perl-lsp-formatting absorbed into perl-lsp-rs-core::providers::formatting — Wave G1b)
 perl-tdd-support = { path = "crates/perl-tdd-support", version = "0.14.0" }
 perl-test-must = { path = "crates/perl-test-must", version = "0.14.0" }
+perl-test-generators = { path = "crates/perl-test-generators", version = "0.14.0" }
 # (perl-lsp-diagnostics absorbed into perl-lsp-rs-core::providers::diagnostics — Wave G1b)
 # (perl-lsp-semantic-tokens absorbed into perl-lsp-rs-core::providers::semantic_tokens — Wave G1b)
 # (perl-lsp-inlay-hints absorbed into perl-lsp-rs-core::providers — Wave G1a)
@@ -371,6 +374,8 @@ dbg_macro = "deny"
 # collapsible_match: ~20 lib sites across perl-lsp-rs-core; tracked in #8561; defer to post-0.14.0 cleanup.
 collapsible_match = { level = "allow", priority = 1 }
 decimal_bitwise_operands = "warn"
+duration_suboptimal_units = "warn"
+needless_type_cast = "warn"
 
 [workspace.lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)', 'cfg(feature, values("slow_tests"))'] }
