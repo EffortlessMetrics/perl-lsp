@@ -167,7 +167,12 @@ pub(super) fn diagnostic_explanation_payload_from_diagnostics(
     (
         json!({
             "schema_version": DIAGNOSTIC_EXPLANATION_SCHEMA_VERSION,
+            "surface": "diagnostics",
+            "decision": "explanation_only",
             "provider_action": method,
+            "fact_source": "provider_runtime",
+            "confidence": "low",
+            "freshness": "fresh",
             "diagnostic_count": diagnostic_count,
             "diagnostic_explanations": explanations,
             "truncated_diagnostic_explanations": truncated,
@@ -192,6 +197,12 @@ fn diagnostic_explanation(diagnostic: &Value) -> Value {
     explanation.insert("severity".to_string(), json!(diagnostic_severity_label(diagnostic)));
     explanation.insert("summary".to_string(), json!(diagnostic_summary(message)));
     explanation.insert("reason".to_string(), json!(diagnostic_trust_reason(trust_boundary)));
+    explanation
+        .insert("why_diagnostic_fired".to_string(), json!(diagnostic_fired_reason(trust_boundary)));
+    explanation.insert(
+        "why_diagnostic_was_not_suppressed".to_string(),
+        json!(diagnostic_not_suppressed_reason(trust_boundary)),
+    );
 
     if trust_boundary == "module_resolution" {
         explanation.insert("module_resolution".to_string(), pl701_module_resolution(message));
@@ -256,6 +267,50 @@ fn diagnostic_trust_reason(trust_boundary: &str) -> &'static str {
         _ => {
             "Diagnostic was returned by the live provider; no stronger trust boundary was inferred."
         }
+    }
+}
+
+fn diagnostic_fired_reason(trust_boundary: &str) -> &'static str {
+    match trust_boundary {
+        "module_resolution" => {
+            "The diagnostic provider returned missing-module evidence from the current module-resolution context."
+        }
+        "dynamic_boundary" => {
+            "The diagnostic provider returned a finding at a dynamic Perl boundary."
+        }
+        "low_confidence" => {
+            "The diagnostic provider returned a finding with low-confidence evidence."
+        }
+        "ambiguous_evidence" => {
+            "The diagnostic provider returned a finding where evidence remained ambiguous."
+        }
+        "stale_fact" => "The diagnostic provider returned a finding with stale fact context.",
+        "generated_or_not_source_backed" => {
+            "The diagnostic provider returned a finding involving generated or non-source-backed evidence."
+        }
+        _ => "The diagnostic provider returned the finding for the current request.",
+    }
+}
+
+fn diagnostic_not_suppressed_reason(trust_boundary: &str) -> &'static str {
+    match trust_boundary {
+        "module_resolution" => {
+            "No trusted source-backed module fact suppressed the missing-module diagnostic."
+        }
+        "dynamic_boundary" => {
+            "Dynamic evidence is labeled and does not suppress conservative diagnostics."
+        }
+        "low_confidence" => {
+            "Low-confidence evidence is visible and does not silently suppress diagnostics."
+        }
+        "ambiguous_evidence" => {
+            "Ambiguous evidence is visible and does not silently suppress diagnostics."
+        }
+        "stale_fact" => "Stale facts are not trusted to suppress diagnostics.",
+        "generated_or_not_source_backed" => {
+            "Generated or non-source-backed evidence is not trusted as an exact suppression fact."
+        }
+        _ => "No stronger trusted fact was available to suppress the returned diagnostic.",
     }
 }
 
