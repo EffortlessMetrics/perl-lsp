@@ -3,6 +3,7 @@ use crate::runtime::LspServer;
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 use std::io::Cursor;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 const TRACE_URI: &str = "file:///workspace/lib/Trace/Live.pm";
@@ -419,6 +420,64 @@ fn request_receipt<'a>(
         .ok_or_else(|| format!("missing {provider} request_receipt").into())
 }
 
+fn diagnostic_explanation_schema() -> Result<Value, Box<dyn std::error::Error>> {
+    let schema_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("schemas")
+        .join("diagnostic_explanation.v1.schema.json");
+    let schema_text = std::fs::read_to_string(&schema_path).map_err(|error| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("failed to read {}: {error}", schema_path.display()),
+        )
+    })?;
+    let schema = serde_json::from_str(&schema_text)?;
+    Ok(schema)
+}
+
+fn schema_required_fields(
+    schema: &Value,
+    pointer: &str,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let fields = schema.pointer(pointer).and_then(Value::as_array).ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("schema missing required array at {pointer}"),
+        )
+    })?;
+    let mut required = Vec::with_capacity(fields.len());
+    for field in fields {
+        let Some(name) = field.as_str() else {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("schema required array at {pointer} contains non-string item: {field}"),
+            )
+            .into());
+        };
+        required.push(name.to_string());
+    }
+    Ok(required)
+}
+
+fn assert_schema_required_fields_present(
+    value: &Value,
+    schema: &Value,
+    required_pointer: &str,
+    context: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for field in schema_required_fields(schema, required_pointer)? {
+        if value.get(&field).is_none() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("{context} missing schema-required field {field}: {value}"),
+            )
+            .into());
+        }
+    }
+    Ok(())
+}
+
 fn generated_workspace_symbol_pilot_receipt(
     server: &LspServer,
 ) -> Result<Value, Box<dyn std::error::Error>> {
@@ -610,21 +669,67 @@ fn live_diagnostic_request_attaches_explainable_payload() -> Result<(), Box<dyn 
     );
     let diagnostic_explanation =
         receipt.get("diagnostic_explanation").ok_or("missing diagnostic explanation payload")?;
+    let diagnostic_schema = diagnostic_explanation_schema()?;
+    assert_schema_required_fields_present(
+        diagnostic_explanation,
+        &diagnostic_schema,
+        "/required",
+        "diagnostic explanation payload",
+    )?;
     assert_eq!(
         diagnostic_explanation.get("schema_version").and_then(Value::as_str),
         Some("diagnostic_explanation.v1")
     );
+    assert_eq!(diagnostic_explanation.get("surface").and_then(Value::as_str), Some("diagnostics"));
+    assert_eq!(
+        diagnostic_explanation.get("decision").and_then(Value::as_str),
+        Some("explanation_only")
+    );
+    assert_eq!(
+        diagnostic_explanation.get("fact_source").and_then(Value::as_str),
+        Some("provider_runtime")
+    );
+    assert_eq!(diagnostic_explanation.get("confidence").and_then(Value::as_str), Some("low"));
+    assert_eq!(diagnostic_explanation.get("freshness").and_then(Value::as_str), Some("fresh"));
     let explanations = diagnostic_explanation
         .get("diagnostic_explanations")
         .and_then(Value::as_array)
         .ok_or("missing diagnostic explanation items")?;
+    for explanation in explanations {
+        assert_schema_required_fields_present(
+            explanation,
+            &diagnostic_schema,
+            "/$defs/diagnostic_explanation_item/required",
+            "diagnostic explanation item",
+        )?;
+    }
     let pl701 = explanations
         .iter()
         .find(|item| item.get("code").and_then(Value::as_str) == Some("PL701"))
         .ok_or("missing PL701 diagnostic explanation")?;
     assert_eq!(pl701.get("trust_boundary").and_then(Value::as_str), Some("module_resolution"));
+    assert!(
+        pl701
+            .get("why_diagnostic_fired")
+            .and_then(Value::as_str)
+            .is_some_and(|reason| reason.contains("module-resolution")),
+        "PL701 explanation should explain why the diagnostic fired: {pl701}"
+    );
+    assert!(
+        pl701
+            .get("why_diagnostic_was_not_suppressed")
+            .and_then(Value::as_str)
+            .is_some_and(|reason| reason.contains("module fact")),
+        "PL701 explanation should explain why it was not suppressed: {pl701}"
+    );
     let module_resolution =
         pl701.get("module_resolution").ok_or("missing PL701 module-resolution explanation")?;
+    assert_schema_required_fields_present(
+        module_resolution,
+        &diagnostic_schema,
+        "/$defs/module_resolution/required",
+        "PL701 module-resolution explanation",
+    )?;
     assert_eq!(
         module_resolution.get("requested_module").and_then(Value::as_str),
         Some("Missing::Payload")
