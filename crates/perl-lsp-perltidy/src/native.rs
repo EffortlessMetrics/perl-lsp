@@ -2143,7 +2143,10 @@ impl TextRange {
 
 #[cfg(test)]
 mod tests {
-    use super::split_trailing_comment;
+    use super::{
+        TextPosition, TextRange, literal_preserve_region, range_includes_line, split_line_ending,
+        split_trailing_comment,
+    };
 
     #[test]
     fn split_trailing_comment_ignores_hash_inside_backticks()
@@ -2155,6 +2158,46 @@ mod tests {
         let (code, comment) = split_trailing_comment("my$out=`printf '#value'`;");
         assert_eq!(code, "my$out=`printf '#value'`;");
         assert_eq!(comment, None);
+
+        Ok(())
+    }
+
+    #[test]
+    fn split_line_ending_preserves_crlf_lf_and_unterminated_lines()
+    -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(split_line_ending("my $x = 1;\r\n"), ("my $x = 1;", "\r\n"));
+        assert_eq!(split_line_ending("my $x = 1;\n"), ("my $x = 1;", "\n"));
+        assert_eq!(split_line_ending("my $x = 1;"), ("my $x = 1;", ""));
+
+        Ok(())
+    }
+
+    #[test]
+    fn range_includes_line_treats_zero_width_end_line_as_exclusive()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let range = TextRange::new(TextPosition::new(1, 0), TextPosition::new(3, 0));
+        assert!(!range_includes_line(range, 0));
+        assert!(range_includes_line(range, 1));
+        assert!(range_includes_line(range, 2));
+        assert!(!range_includes_line(range, 3));
+
+        let range = TextRange::new(TextPosition::new(1, 0), TextPosition::new(3, 4));
+        assert!(range_includes_line(range, 3));
+
+        Ok(())
+    }
+
+    #[test]
+    fn literal_preserve_region_detects_perl_constructs_that_must_not_be_reflowed()
+    -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(literal_preserve_region("=head1 NAME\nDemo\n=cut\n"), Some("POD"));
+        assert_eq!(
+            literal_preserve_region("my $x = 1;\n__DATA__\nraw\n"),
+            Some("DATA/END section")
+        );
+        assert_eq!(literal_preserve_region("my $text = <<~'EOF';\nbody\nEOF\n"), Some("heredoc"));
+        assert_eq!(literal_preserve_region("format STDOUT =\n@<<<<\n$x\n.\n"), Some("format body"));
+        assert_eq!(literal_preserve_region("my $x = 1;\n"), None);
 
         Ok(())
     }

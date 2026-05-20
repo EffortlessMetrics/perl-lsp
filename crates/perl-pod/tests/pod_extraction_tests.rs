@@ -545,6 +545,41 @@ fn link_target_with_unicode_module_name_is_percent_encoded() {
 }
 
 #[test]
+fn e_format_code_decodes_numeric_codepoints() -> Result<(), Box<dyn std::error::Error>> {
+    let doc = extract_pod("=head1 NAME\n\nE<65>E<0x20>E<0x3BB>\n\n=cut\n");
+    assert_eq!(doc.name.as_deref(), Some("A λ"));
+    Ok(())
+}
+
+#[test]
+fn e_format_code_decodes_core_entities() -> Result<(), Box<dyn std::error::Error>> {
+    let doc = extract_pod(
+        "=head1 NAME\n\nUse E<181>, E<0x201E>, E<075>, E<sol>, and E<verbar>.\n\n=cut\n",
+    );
+    assert_eq!(doc.name.as_deref(), Some("Use µ, „, =, /, and |."));
+    Ok(())
+}
+
+#[test]
+fn double_angle_formatting_keeps_angle_operators() -> Result<(), Box<dyn std::error::Error>> {
+    let doc = extract_pod("=head2 compare\n\nUse C<< $left <=> $right >>.\n\n=cut\n");
+    assert_eq!(doc.methods.get("compare").map(String::as_str), Some("Use $left <=> $right."));
+    Ok(())
+}
+
+#[test]
+fn double_angle_links_render_markdown() -> Result<(), Box<dyn std::error::Error>> {
+    let doc = extract_pod(
+        "=head1 DESCRIPTION\n\nSee L<< the wanted callback|File::Find/The wanted function >>.\n\n=cut\n",
+    );
+    assert_eq!(
+        doc.description.as_deref(),
+        Some("See [the wanted callback](perl-module://File::Find/The%20wanted%20function).")
+    );
+    Ok(())
+}
+
+#[test]
 fn multiple_pod_blocks() {
     let source = r#"
 package Multi;
@@ -762,4 +797,159 @@ Second list:
     assert!(method_doc.contains("- one"), "first list item; got: {method_doc}");
     assert!(method_doc.contains("- two"), "second list item; got: {method_doc}");
     assert!(method_doc.contains("- three"), "third list item in second list; got: {method_doc}");
+}
+
+// --- Tests for formatted =head2 keys (#9380 bug: strip_pod_formatting not applied to heading) ---
+
+/// `=head2 C<new>` should be keyed as `new`, not `C<new>`.
+#[test]
+fn head2_code_formatted_heading_is_stripped() {
+    let source = r#"
+=head2 C<new>
+
+Constructs a new Foo object.
+
+=cut
+"#;
+    let doc = extract_pod(source);
+    assert!(
+        doc.methods.contains_key("new"),
+        "method key should be stripped bare name 'new'; keys: {:?}",
+        doc.methods.keys().collect::<Vec<_>>()
+    );
+    assert!(!doc.methods.contains_key("C<new>"), "method key must NOT be the raw 'C<new>' string");
+}
+
+/// `=head2 B<bold_method>` should strip bold markup.
+#[test]
+fn head2_bold_formatted_heading_is_stripped() {
+    let source = "=head2 B<bold_method>\n\nDoes something bold.\n\n=cut\n";
+    let doc = extract_pod(source);
+    assert!(
+        doc.methods.contains_key("bold_method"),
+        "bold markup should be stripped; keys: {:?}",
+        doc.methods.keys().collect::<Vec<_>>()
+    );
+}
+
+/// `=head2 I<italic_name>` should strip italic markup.
+#[test]
+fn head2_italic_formatted_heading_is_stripped() {
+    let source = "=head2 I<some_method>\n\nItalic method docs.\n\n=cut\n";
+    let doc = extract_pod(source);
+    assert!(
+        doc.methods.contains_key("some_method"),
+        "italic markup should be stripped; keys: {:?}",
+        doc.methods.keys().collect::<Vec<_>>()
+    );
+}
+
+/// A plain unformatted `=head2 plain` heading still works after the refactor.
+#[test]
+fn head2_plain_heading_key_unchanged() {
+    let source = "=head2 plain_method\n\nPlain docs.\n\n=cut\n";
+    let doc = extract_pod(source);
+    assert!(
+        doc.methods.contains_key("plain_method"),
+        "plain heading should still work; keys: {:?}",
+        doc.methods.keys().collect::<Vec<_>>()
+    );
+}
+
+/// `=head2 C<new>` body content is still accessible after key normalization.
+#[test]
+fn head2_formatted_heading_body_preserved() {
+    let source = "=head2 C<new>\n\nConstructs a new Foo object.\n\n=cut\n";
+    let doc = extract_pod(source);
+    let body = doc.methods.get("new").map(String::as_str).unwrap_or("");
+    assert!(
+        body.contains("Constructs"),
+        "body text should be preserved after key normalization; got: {body}"
+    );
+}
+
+#[test]
+fn begin_for_and_end_directives_do_not_pollute_extracted_sections() {
+    let source = r#"
+=begin html
+
+<p>This renderer-specific block is ignored.</p>
+
+=end html
+
+=for comment This single-paragraph directive is ignored too.
+
+=head1 NAME
+
+Directive::Clean - real docs
+
+=cut
+"#;
+
+    let doc = extract_pod(source);
+
+    assert_eq!(doc.name.as_deref(), Some("Directive::Clean - real docs"));
+    assert!(doc.description.is_none());
+}
+
+#[test]
+fn list_items_without_active_section_do_not_create_documentation() {
+    let source = r#"
+=over 4
+
+=item B<ghost>
+
+This item is not under a named POD section.
+
+=back
+
+=cut
+"#;
+
+    let doc = extract_pod(source);
+
+    assert!(doc.is_empty());
+}
+
+#[test]
+fn empty_method_section_is_not_inserted() {
+    let source = r#"
+=head2 empty_method
+
+=head2 documented_method
+
+This method has text.
+
+=cut
+"#;
+
+    let doc = extract_pod(source);
+
+    assert!(!doc.methods.contains_key("empty_method"));
+    assert_eq!(
+        doc.methods.get("documented_method").map(String::as_str),
+        Some("This method has text.")
+    );
+}
+
+#[test]
+fn link_display_text_backslash_is_escaped() {
+    let doc = extract_pod("=head1 NAME\n\nL<C:\\Temp|File::Spec>\n\n=cut\n");
+    let name = doc.name.as_deref().unwrap_or("");
+
+    assert!(
+        name.contains("[C:\\\\Temp](perl-module://File::Spec)"),
+        "expected backslash in display text to be escaped; got: {name}"
+    );
+}
+
+#[test]
+fn link_display_text_strips_nested_formatting_before_escaping() {
+    let doc = extract_pod("=head1 NAME\n\nL<B<[docs]>|File::Path>\n\n=cut\n");
+    let name = doc.name.as_deref().unwrap_or("");
+
+    assert!(
+        name.contains("[\\[docs\\]](perl-module://File::Path)"),
+        "expected nested formatting to be stripped and markdown brackets escaped; got: {name}"
+    );
 }

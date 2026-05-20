@@ -5,12 +5,12 @@
 //! - `use if` / `no if` with `utf8`, `encoding`, and `locale` targets (conditional arms)
 //! - `use if` / `no if` with no recognized target (no-op paths)
 //! - `no feature ':VERSION'` bundle disable (feature_state `disable_feature_name` bundle path)
-//! - `apply_feature_state` no-args disabled path with nothing to clear (unchanged path)
+//! - `apply_feature_state` no-args disabled path restoring the default feature bundle
 //! - `apply_no_directive` for feature when no state change (no push path)
 //! - `LabeledStatement` and `StatementModifier` AST traversal
 //! - `PragmaSnapshot`/`PragmaState` conversions (`From` impls)
 //! - `PragmaMap::state_at`, `PragmaStateQuery` methods, `PragmaSnapshot` methods
-//! - `features_enabled_by_version` intermediate bundles (v5.16, v5.20, v5.34)
+//! - `features_enabled_by_version` documented bundle boundaries
 //! - `parse_perl_version` major-only without 'v' prefix
 //! - `normalize_snapshot` propagation of `signatures_strict`
 //! - `builtin_import_names` double-quoted single name
@@ -199,12 +199,27 @@ fn no_feature_version_bundle_only_removes_bundle_features() -> Result<(), Box<dy
 // ===========================================================================
 
 #[test]
-fn no_feature_bare_on_empty_state_is_noop() -> Result<(), Box<dyn std::error::Error>> {
-    // `no feature` with no args when features is empty — changed=false, no entry pushed
+fn no_feature_bare_on_empty_state_restores_default_bundle() -> Result<(), Box<dyn std::error::Error>>
+{
+    // `no feature` with no args resets to the documented :default bundle.
     let ast = program(vec![no_node("feature", &[], 0, 11)]);
     let map = PragmaTracker::build(&ast);
-    // apply_feature_state returns false (nothing to clear) → no entry pushed
-    assert!(map.is_empty(), "no feature on empty state must produce no map entry");
+    let state = PragmaTracker::state_for_offset(&map, 5);
+    assert!(state.has_feature("indirect"), "no feature must restore :default indirect");
+    assert!(
+        state.has_feature("multidimensional"),
+        "no feature must restore :default multidimensional"
+    );
+    assert!(
+        state.has_feature("bareword_filehandles"),
+        "no feature must restore :default bareword_filehandles"
+    );
+    assert!(
+        state.has_feature("apostrophe_as_package_separator"),
+        "no feature must restore :default apostrophe package separator"
+    );
+    assert!(state.has_feature("smartmatch"), "no feature must restore :default smartmatch");
+    assert!(!state.has_feature("say"), "no feature must not restore non-default say");
     Ok(())
 }
 
@@ -414,9 +429,12 @@ fn v5_16_enables_unicode_eval_evalbytes_current_sub_fc() -> Result<(), Box<dyn s
 }
 
 #[test]
-fn v5_20_enables_postfix_deref() -> Result<(), Box<dyn std::error::Error>> {
+fn v5_20_omits_postderef_bundle_feature() -> Result<(), Box<dyn std::error::Error>> {
     let features = features_enabled_by_version(PerlVersion::new(5, 20));
-    assert!(features.contains(&"postfix_deref"), "v5.20 must enable postfix_deref");
+    assert!(
+        !features.contains(&"postderef_qq"),
+        "v5.20 feature bundle must not include postderef_qq"
+    );
     // Should retain v5.16 features
     assert!(features.contains(&"unicode_eval"), "v5.20 must retain unicode_eval");
     assert!(features.contains(&"current_sub"), "v5.20 must retain current_sub");
@@ -424,35 +442,46 @@ fn v5_20_enables_postfix_deref() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn v5_34_enables_try() -> Result<(), Box<dyn std::error::Error>> {
+fn v5_34_omits_try_but_retains_5_28_bundle() -> Result<(), Box<dyn std::error::Error>> {
     let features = features_enabled_by_version(PerlVersion::new(5, 34));
-    assert!(features.contains(&"try"), "v5.34 must enable try");
+    assert!(!features.contains(&"try"), "v5.34 feature bundle must not include try");
     // Should retain earlier features
-    assert!(features.contains(&"postfix_deref"), "v5.34 must retain postfix_deref");
+    assert!(features.contains(&"postderef_qq"), "v5.34 must retain postderef_qq");
     assert!(features.contains(&"unicode_eval"), "v5.34 must retain unicode_eval");
-    // switch still present before v5.38
+    // switch still present before v5.36
     assert!(features.contains(&"switch"), "v5.34 must retain switch (not yet removed)");
     Ok(())
 }
 
 #[test]
-fn v5_38_enables_class_field_method_removes_switch() -> Result<(), Box<dyn std::error::Error>> {
+fn v5_38_enables_module_true_without_class_features() -> Result<(), Box<dyn std::error::Error>> {
     let features = features_enabled_by_version(PerlVersion::new(5, 38));
-    assert!(features.contains(&"class"), "v5.38 must enable class");
-    assert!(features.contains(&"field"), "v5.38 must enable field");
-    assert!(features.contains(&"method"), "v5.38 must enable method");
+    assert!(features.contains(&"module_true"), "v5.38 must enable module_true");
+    assert!(!features.contains(&"class"), "v5.38 feature bundle must not include class");
+    assert!(!features.contains(&"field"), "v5.38 feature bundle must not include field");
+    assert!(!features.contains(&"method"), "v5.38 feature bundle must not include method");
     assert!(!features.contains(&"switch"), "v5.38 must remove switch");
-    // try and signatures should be retained
-    assert!(features.contains(&"try"), "v5.38 must retain try from v5.34");
+    assert!(!features.contains(&"try"), "v5.38 feature bundle must not include try");
     assert!(features.contains(&"signatures"), "v5.38 must retain signatures from v5.36");
     Ok(())
 }
 
 #[test]
-fn v5_9_returns_empty_feature_set() -> Result<(), Box<dyn std::error::Error>> {
-    // Versions before v5.10 have no feature bundles
+fn v5_9_returns_default_feature_set() -> Result<(), Box<dyn std::error::Error>> {
+    // Versions before v5.10 implicitly load the :default bundle.
     let features = features_enabled_by_version(PerlVersion::new(5, 9));
-    assert!(features.is_empty(), "v5.9 must return empty feature set");
+    assert!(features.contains(&"indirect"), "v5.9 must include :default indirect");
+    assert!(features.contains(&"multidimensional"), "v5.9 must include :default multidimensional");
+    assert!(
+        features.contains(&"bareword_filehandles"),
+        "v5.9 must include :default bareword_filehandles"
+    );
+    assert!(
+        features.contains(&"apostrophe_as_package_separator"),
+        "v5.9 must include :default apostrophe package separator"
+    );
+    assert!(features.contains(&"smartmatch"), "v5.9 must include :default smartmatch");
+    assert!(!features.contains(&"say"), "v5.9 must not include v5.10 say");
     Ok(())
 }
 

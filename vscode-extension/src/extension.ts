@@ -5,7 +5,12 @@ import { execFile } from 'child_process';
 import { LanguageClient, TransportKind, Trace } from 'vscode-languageclient/node';
 import type { LanguageClientOptions, ServerOptions } from 'vscode-languageclient/node';
 import { PerlTestAdapter } from './testAdapter';
-import { activateDebugger, rewriteTestLensCommand, parseDebugTestLaunchTarget } from './debugAdapter';
+import {
+    activateDebugger,
+    hasLaunchJson,
+    rewriteTestLensCommand,
+    parseDebugTestLaunchTarget,
+} from './debugAdapter';
 import { BinaryDownloader, parseLocalVersion } from './downloader';
 import { OnboardingManager } from './onboarding';
 import type { HealthCheckResult } from './onboarding';
@@ -369,6 +374,74 @@ function activeSafeDeletePreviewArgument(): Record<string, unknown> | undefined 
     };
 }
 
+async function activePackageRenamePreviewArgument(): Promise<Record<string, unknown> | undefined> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.languageId !== 'perl') {
+        return undefined;
+    }
+
+    const selectedText = editor.selection.isEmpty
+        ? ''
+        : editor.document.getText(editor.selection).trim();
+    const wordRange = editor.document.getWordRangeAtPosition(editor.selection.active);
+    const wordText = wordRange ? editor.document.getText(wordRange).trim() : '';
+    const defaultValue = selectedText || wordText;
+
+    const newName = await vscode.window.showInputBox({
+        value: defaultValue,
+        placeHolder: 'renamed_symbol',
+        prompt: 'New package or symbol name for the no-edit rename preview',
+        validateInput: value => {
+            const trimmed = value.trim();
+            if (!trimmed) {
+                return 'Enter a new Perl package or symbol name.';
+            }
+            return isPerlModuleName(trimmed)
+                ? undefined
+                : 'Use a single Perl package or symbol name.';
+        },
+    });
+    if (!newName) {
+        return undefined;
+    }
+
+    return {
+        textDocument: { uri: editor.document.uri.toString() },
+        position: {
+            line: editor.selection.active.line,
+            character: editor.selection.active.character,
+        },
+        newName: newName.trim(),
+    };
+}
+
+function isPerlModuleName(value: string): boolean {
+    return /^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$/.test(value);
+}
+
+function moduleNameAtCursor(editor: vscode.TextEditor): string | undefined {
+    const selectedText = editor.document.getText(editor.selection).trim();
+    if (isPerlModuleName(selectedText)) {
+        return selectedText;
+    }
+
+    const active = editor.selection.active;
+    const lineText = editor.document.lineAt(active.line).text;
+    const modulePattern = /[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)+/g;
+    for (const match of lineText.matchAll(modulePattern)) {
+        const start = match.index ?? 0;
+        const end = start + match[0].length;
+        if (active.character >= start && active.character <= end) {
+            return match[0];
+        }
+    }
+
+    const useStatement = lineText.match(
+        /\b(?:use|require)\s+([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)/
+    );
+    return useStatement?.[1];
+}
+
 function trustOutputChannel(): vscode.OutputChannel {
     return outputChannel ?? vscode.window.createOutputChannel('Perl LSP Trust');
 }
@@ -401,6 +474,157 @@ function arrayField(value: Record<string, unknown> | undefined, field: string): 
 
 function providerDecisionJson(value: unknown): string {
     return JSON.stringify(value, null, 2);
+}
+
+function incrementCount(target: Record<string, number>, key: string): void {
+    target[key] = (target[key] ?? 0) + 1;
+}
+
+function classifyLaunchPath(value: string): string {
+    const trimmed = value.trim();
+    if (!trimmed) {
+        return 'empty';
+    }
+    if (trimmed.includes('${workspaceFolder')) {
+        return 'workspace_variable';
+    }
+    if (trimmed.includes('${file')) {
+        return 'file_variable';
+    }
+    if (/\$\{[^}]+}/.test(trimmed)) {
+        return 'other_variable';
+    }
+    if (trimmed.startsWith('~')) {
+        return 'home_relative';
+    }
+    if (path.isAbsolute(trimmed)) {
+        return 'absolute';
+    }
+    if (!trimmed.includes('/') && !trimmed.includes('\\')) {
+        return 'command';
+    }
+    return 'relative';
+}
+
+function collectLaunchConfigurationState(workspaceFolders: readonly vscode.WorkspaceFolder[]): Record<string, unknown> {
+    const includePathKindCounts: Record<string, number> = {};
+    const perlPathKindCounts: Record<string, number> = {};
+    const programPathKindCounts: Record<string, number> = {};
+    const cwdPathKindCounts: Record<string, number> = {};
+    let configurationCount = 0;
+    let perlConfigurationCount = 0;
+    let launchRequestCount = 0;
+    let attachRequestCount = 0;
+    let perlPathConfiguredCount = 0;
+    let includePathsConfiguredCount = 0;
+    let includePathEntryCount = 0;
+    let nonStringIncludePathCount = 0;
+    let programConfiguredCount = 0;
+    let cwdConfiguredCount = 0;
+
+    for (const folder of workspaceFolders) {
+        const launchConfigurations = vscode.workspace
+            .getConfiguration('launch', folder.uri)
+            .get<unknown[]>('configurations', []);
+        if (!Array.isArray(launchConfigurations)) {
+            continue;
+        }
+
+        for (const entry of launchConfigurations) {
+            if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+                continue;
+            }
+
+            configurationCount += 1;
+            const config = entry as Record<string, unknown>;
+            if (config.type !== 'perl') {
+                continue;
+            }
+
+            perlConfigurationCount += 1;
+            if (config.request === 'launch') {
+                launchRequestCount += 1;
+            } else if (config.request === 'attach') {
+                attachRequestCount += 1;
+            }
+
+            if (typeof config.perlPath === 'string') {
+                perlPathConfiguredCount += 1;
+                incrementCount(perlPathKindCounts, classifyLaunchPath(config.perlPath));
+            }
+
+            if (typeof config.program === 'string') {
+                programConfiguredCount += 1;
+                incrementCount(programPathKindCounts, classifyLaunchPath(config.program));
+            }
+
+            if (typeof config.cwd === 'string') {
+                cwdConfiguredCount += 1;
+                incrementCount(cwdPathKindCounts, classifyLaunchPath(config.cwd));
+            }
+
+            if (Array.isArray(config.includePaths)) {
+                includePathsConfiguredCount += 1;
+                for (const includePath of config.includePaths) {
+                    if (typeof includePath !== 'string') {
+                        nonStringIncludePathCount += 1;
+                        continue;
+                    }
+                    includePathEntryCount += 1;
+                    incrementCount(includePathKindCounts, classifyLaunchPath(includePath));
+                }
+            }
+        }
+    }
+
+    return {
+        status: 'client_launch_config_reported',
+        configuration_count: configurationCount,
+        perl_configuration_count: perlConfigurationCount,
+        launch_request_count: launchRequestCount,
+        attach_request_count: attachRequestCount,
+        perl_path_configured_count: perlPathConfiguredCount,
+        include_paths_configured_count: includePathsConfiguredCount,
+        include_path_entry_count: includePathEntryCount,
+        non_string_include_path_count: nonStringIncludePathCount,
+        program_configured_count: programConfiguredCount,
+        cwd_configured_count: cwdConfiguredCount,
+        include_path_kind_counts: includePathKindCounts,
+        perl_path_kind_counts: perlPathKindCounts,
+        program_path_kind_counts: programPathKindCounts,
+        cwd_path_kind_counts: cwdPathKindCounts,
+        claim_boundary: 'Launch configuration state is summarized from VS Code configuration only. It reports counts and path classes, not raw paths, and does not start DAP, resolve Perl, probe modules, or change debug behavior.',
+    };
+}
+
+export function workspaceTrustClientRuntimeState(
+    context?: vscode.ExtensionContext
+): Record<string, unknown> {
+    const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
+    const managedDapPath = context ? BinaryDownloader.getLocalDapPath(context) : undefined;
+    const managedAdapterExists = managedDapPath ? fs.existsSync(managedDapPath) : false;
+    const launchJsonWorkspaceCount = workspaceFolders.filter(folder => hasLaunchJson(folder.uri.fsPath)).length;
+    const activeDebugSession = vscode.debug.activeDebugSession;
+
+    return {
+        schema_version: 'workspace_trust_client_runtime.v1',
+        source: 'vscode-extension',
+        perldoc: {
+            status: 'client_surface_registered',
+            uri_scheme: 'perldoc',
+            client_surface: 'perldoc virtual documents are served by the LSP textDocumentContent path',
+        },
+        dap: {
+            status: 'client_state_reported',
+            adapter_registered: true,
+            active_perl_debug_session: activeDebugSession?.type === 'perl',
+            managed_adapter_exists: managedAdapterExists,
+            launch_json_workspace_count: launchJsonWorkspaceCount,
+            workspace_folder_count: workspaceFolders.length,
+            launch_configuration: collectLaunchConfigurationState(workspaceFolders),
+        },
+        claim_boundary: 'VS Code client runtime state reads extension/debugger state only. It does not start DAP, run perldoc, probe Perl, or change provider behavior.',
+    };
 }
 
 async function executeLspCommand(
@@ -475,6 +699,15 @@ function formatWorkspaceTrustReport(result: unknown): string {
     const providers = asObject(report?.providers);
     const supportTiers = asObject(providers?.support_tiers);
     const dynamicBoundaries = asObject(report?.dynamic_boundaries);
+    const setupHints = asObject(report?.setup_hints);
+    const clientRuntime = asObject(report?.client_runtime_state);
+    const setupHintItems = arrayField(setupHints, 'hints');
+    const perlBinary = asObject(setupHints?.perl_binary);
+    const perldoc = asObject(setupHints?.perldoc);
+    const dap = asObject(setupHints?.dap);
+    const clientPerldoc = asObject(clientRuntime?.perldoc);
+    const clientDap = asObject(clientRuntime?.dap);
+    const launchConfiguration = asObject(clientDap?.launch_configuration);
 
     const rootPath = stringField(workspace, 'root_path') ?? '(none)';
     const folderCount = numberField(workspace, 'workspace_folder_count') ?? 0;
@@ -505,6 +738,53 @@ function formatWorkspaceTrustReport(result: unknown): string {
         `- PERL5LIB entries: ${perl5libCount}`,
         `- perl.path: ${stringField(globalConfig, 'perl_path') ?? '(unconfigured)'}`,
         '',
+        'Setup hints',
+        `- status: ${stringField(setupHints, 'status') ?? 'unknown'}`,
+        `- hint count: ${numberField(setupHints, 'hint_count') ?? setupHintItems.length}`,
+        `- Perl binary: ${stringField(perlBinary, 'resolution_status') ?? 'unknown'}`,
+        `- Perl version: ${stringField(perlBinary, 'version_status') ?? 'unknown'}`,
+        `- perldoc: ${stringField(perldoc, 'status') ?? 'unknown'}`,
+        `- DAP Perl: ${stringField(dap, 'status') ?? 'unknown'}`,
+        '',
+        'Client runtime state',
+        `- source: ${stringField(clientRuntime, 'source') ?? 'unknown'}`,
+        `- perldoc surface: ${stringField(clientPerldoc, 'status') ?? 'unknown'}`,
+        `- DAP adapter: ${stringField(clientDap, 'status') ?? 'unknown'}`,
+        `- DAP managed adapter exists: ${String(booleanField(clientDap, 'managed_adapter_exists') ?? false)}`,
+        `- DAP active Perl session: ${String(booleanField(clientDap, 'active_perl_debug_session') ?? false)}`,
+        `- DAP launch.json workspaces: ${numberField(clientDap, 'launch_json_workspace_count') ?? 0}`,
+        `- DAP launch configs: ${numberField(launchConfiguration, 'configuration_count') ?? 0}`,
+        `- DAP Perl configs: ${numberField(launchConfiguration, 'perl_configuration_count') ?? 0}`,
+        `- DAP includePaths configs: ${numberField(launchConfiguration, 'include_paths_configured_count') ?? 0}`,
+        `- DAP includePaths entries: ${numberField(launchConfiguration, 'include_path_entry_count') ?? 0}`,
+        `- DAP perlPath configs: ${numberField(launchConfiguration, 'perl_path_configured_count') ?? 0}`,
+    ];
+
+    for (const item of setupHintItems.slice(0, 5)) {
+        const hint = asObject(item);
+        if (!hint) {
+            continue;
+        }
+        const severity = stringField(hint, 'severity') ?? 'info';
+        const message = stringField(hint, 'message') ?? 'Setup hint did not include a message.';
+        lines.push(`- ${severity}: ${message}`);
+        const action = stringField(hint, 'action');
+        if (action) {
+            lines.push(`  action: ${action}`);
+        }
+    }
+
+    const setupBoundary = stringField(setupHints, 'claim_boundary');
+    if (setupBoundary) {
+        lines.push(`- boundary: ${setupBoundary}`);
+    }
+    const launchConfigBoundary = stringField(launchConfiguration, 'claim_boundary');
+    if (launchConfigBoundary) {
+        lines.push(`- launch config boundary: ${launchConfigBoundary}`);
+    }
+
+    lines.push(
+        '',
         'Index',
         `- state: ${indexState}`,
         `- availability: ${indexAvailability}`,
@@ -512,8 +792,7 @@ function formatWorkspaceTrustReport(result: unknown): string {
         `- indexed symbols: ${indexedSymbolCount}`,
         '',
         'Provider support tiers',
-    ];
-
+    );
     appendSupportTierLines(lines, supportTiers);
 
     lines.push(
@@ -534,10 +813,69 @@ function formatWorkspaceTrustReport(result: unknown): string {
     return lines.join('\n');
 }
 
+function formatMissingModuleLookup(result: unknown): string {
+    const report = asObject(result);
+    const moduleResolution = asObject(report?.module_resolution);
+    const lookupResult = asObject(moduleResolution?.result);
+    const includePaths = arrayField(moduleResolution, 'effective_include_paths');
+
+    const lines = [
+        'Perl LSP Missing Module Lookup',
+        '',
+        `Module: ${stringField(report, 'requested_module') ?? '(unknown)'}`,
+        `Expected path: ${stringField(report, 'expected_relative_path') ?? '(unknown)'}`,
+        `Result: ${stringField(lookupResult, 'status') ?? 'unknown'}`,
+        `Why: ${stringField(lookupResult, 'why') ?? 'No lookup reason reported.'}`,
+        '',
+        'Module resolution / @INC',
+        `- PERL5LIB policy: ${stringField(moduleResolution, 'perl5lib_policy') ?? 'unknown'}`,
+        `- system @INC enabled: ${String(booleanField(moduleResolution, 'use_system_inc') ?? false)}`,
+        `- include roots: ${includePaths.length}`,
+    ];
+
+    for (const entry of includePaths.slice(0, 8)) {
+        const root = asObject(entry);
+        if (!root) {
+            continue;
+        }
+
+        const source = stringField(root, 'source') ?? 'unknown source';
+        const kind = stringField(root, 'kind') ?? 'unknown kind';
+        lines.push(`- ${stringField(root, 'path') ?? '(unknown path)'} (${source}, ${kind})`);
+
+        for (const candidate of arrayField(root, 'candidate_paths').slice(0, 2)) {
+            const candidateObject = asObject(candidate);
+            if (!candidateObject) {
+                continue;
+            }
+            const exists = booleanField(candidateObject, 'exists') === true ? 'exists' : 'missing';
+            lines.push(`  candidate: ${stringField(candidateObject, 'path') ?? '(unknown)'} [${exists}]`);
+        }
+    }
+
+    if (includePaths.length > 8) {
+        lines.push(`- ... and ${includePaths.length - 8} more include roots`);
+    }
+
+    lines.push(
+        '',
+        'Claim boundary',
+        stringField(report, 'claim_boundary') ?? 'This explanation is bounded to current runtime state.',
+        '',
+        'Raw lookup JSON',
+        providerDecisionJson(result),
+    );
+
+    return lines.join('\n');
+}
+
 export async function showWorkspaceTrustReportCommand(
-    activeClient: LspExecuteCommandClient | undefined = client
+    activeClient: LspExecuteCommandClient | undefined = client,
+    clientRuntimeState: () => Record<string, unknown> = workspaceTrustClientRuntimeState
 ): Promise<void> {
-    const result = await executeLspCommand(activeClient, 'perl.workspaceTrustReport');
+    const result = await executeLspCommand(activeClient, 'perl.workspaceTrustReport', {
+        client_runtime_state: clientRuntimeState(),
+    });
     if (result === undefined) {
         return;
     }
@@ -546,6 +884,60 @@ export async function showWorkspaceTrustReportCommand(
     channel.appendLine('');
     channel.appendLine(formatWorkspaceTrustReport(result));
     channel.show();
+}
+
+export async function explainMissingModuleLookupCommand(
+    activeClient: LspExecuteCommandClient | undefined = client,
+    moduleOverride?: string
+): Promise<unknown | undefined> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.languageId !== 'perl') {
+        vscode.window.showErrorMessage('Explain Missing Module Lookup requires an active Perl file.');
+        return undefined;
+    }
+
+    const moduleName = moduleOverride ?? moduleNameAtCursor(editor) ?? await vscode.window.showInputBox({
+        placeHolder: 'Missing::Module',
+        prompt: 'Module name to explain with perl-lsp @INC lookup state',
+        validateInput: value => {
+            if (!value.trim()) {
+                return 'Enter a Perl module name.';
+            }
+            return isPerlModuleName(value.trim()) ? undefined : 'Enter a valid Perl module name.';
+        },
+    });
+    if (!moduleName) {
+        return undefined;
+    }
+
+    const result = await executeLspCommand(activeClient, 'perl.explainMissingModuleLookup', {
+        module: moduleName.trim(),
+        textDocument: { uri: editor.document.uri.toString() },
+        position: {
+            line: editor.selection.active.line,
+            character: editor.selection.active.character,
+        },
+    });
+    if (result === undefined) {
+        return undefined;
+    }
+
+    const resultObject = asObject(result);
+    const message = stringField(resultObject, 'user_message') ?? 'Missing-module lookup explained.';
+    const status = stringField(asObject(asObject(resultObject?.module_resolution)?.result), 'status');
+    const channel = trustOutputChannel();
+    channel.appendLine('');
+    channel.appendLine(formatMissingModuleLookup(result));
+
+    const action = status === 'resolved'
+        ? await vscode.window.showInformationMessage(message, 'Show Output')
+        : await vscode.window.showWarningMessage(message, 'Show Output');
+
+    if (action === 'Show Output') {
+        channel.show();
+    }
+
+    return result;
 }
 
 export async function explainProviderDecisionCommand(
@@ -567,6 +959,29 @@ export async function explainProviderDecisionCommand(
     }
 }
 
+export async function explainDiagnosticCommand(
+    activeClient: LspExecuteCommandClient | undefined = client,
+    request?: unknown
+): Promise<void> {
+    const requestObject = asObject(request);
+    const argument: Record<string, unknown> = requestObject
+        ? { ...requestObject }
+        : providerDecisionArgument('diagnostics');
+
+    if (typeof argument.provider !== 'string') {
+        argument.provider = 'diagnostics';
+    }
+
+    const result = await executeLspCommand(
+        activeClient,
+        'perl.explainProviderDecision',
+        argument
+    );
+    if (result !== undefined) {
+        await showProviderDecisionResult('Diagnostic explanation', result);
+    }
+}
+
 export async function previewSafeDeleteCommand(
     activeClient: LspExecuteCommandClient | undefined = client
 ): Promise<void> {
@@ -579,6 +994,26 @@ export async function previewSafeDeleteCommand(
     const result = await executeLspCommand(activeClient, 'perl.previewSafeDelete', argument);
     if (result !== undefined) {
         await showProviderDecisionResult('Safe-delete preview', result);
+    }
+}
+
+export async function previewPackageRenameCommand(
+    activeClient: LspExecuteCommandClient | undefined = client
+): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.languageId !== 'perl') {
+        vscode.window.showErrorMessage('Preview Package Rename requires an active Perl file.');
+        return;
+    }
+
+    const argument = await activePackageRenamePreviewArgument();
+    if (!argument) {
+        return;
+    }
+
+    const result = await executeLspCommand(activeClient, 'perl.previewPackageRename', argument);
+    if (result !== undefined) {
+        await showProviderDecisionResult('Package rename preview', result);
     }
 }
 
@@ -915,6 +1350,13 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     );
 
+    const previewPackageRenameCommandDisposable = vscode.commands.registerCommand(
+        'perl-lsp.previewPackageRename',
+        async () => {
+            await previewPackageRenameCommand(client);
+        }
+    );
+
     const copyProviderDecisionReceiptCommandDisposable = vscode.commands.registerCommand(
         'perl-lsp.copyProviderDecisionReceipt',
         async (provider?: unknown) => {
@@ -925,7 +1367,24 @@ export async function activate(context: vscode.ExtensionContext) {
     const showWorkspaceTrustReportCommandDisposable = vscode.commands.registerCommand(
         'perl-lsp.showWorkspaceTrustReport',
         async () => {
-            await showWorkspaceTrustReportCommand(client);
+            await showWorkspaceTrustReportCommand(client, () => workspaceTrustClientRuntimeState(context));
+        }
+    );
+
+    const explainMissingModuleLookupCommandDisposable = vscode.commands.registerCommand(
+        'perl-lsp.explainMissingModuleLookup',
+        async (moduleName?: unknown) => {
+            await explainMissingModuleLookupCommand(
+                client,
+                typeof moduleName === 'string' ? moduleName : undefined
+            );
+        }
+    );
+
+    const explainDiagnosticCommandDisposable = vscode.commands.registerCommand(
+        'perl-lsp.explainDiagnostic',
+        async (request?: unknown) => {
+            await explainDiagnosticCommand(client, request);
         }
     );
 
@@ -1236,8 +1695,11 @@ export async function activate(context: vscode.ExtensionContext) {
         showParserAstCommand,
         explainProviderDecisionCommandDisposable,
         previewSafeDeleteCommandDisposable,
+        previewPackageRenameCommandDisposable,
         copyProviderDecisionReceiptCommandDisposable,
         showWorkspaceTrustReportCommandDisposable,
+        explainMissingModuleLookupCommandDisposable,
+        explainDiagnosticCommandDisposable,
         showVersionCommand,
         statusMenuCommand,
         reinstallCommand,

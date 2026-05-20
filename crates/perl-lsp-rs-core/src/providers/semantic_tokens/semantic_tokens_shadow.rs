@@ -224,7 +224,16 @@ fn semantic_token_candidate_can_count(candidate: &SemanticTokenShadowCandidate) 
 fn semantic_token_candidate_class_is_approved(candidate: &SemanticTokenShadowCandidate) -> bool {
     match candidate.source {
         ProviderFactSourceKind::ParserSyntax => true,
-        ProviderFactSourceKind::CompilerFact => candidate.identity.starts_with("token:function:"),
+        ProviderFactSourceKind::CompilerFact => {
+            candidate.identity.starts_with("token:function:")
+                || candidate.identity.starts_with("token:method_declaration:")
+                || candidate.identity.starts_with("token:method_call:")
+                || candidate.identity.starts_with("token:self_method_call:")
+                || candidate.identity.starts_with("token:package_declaration:")
+                || candidate.identity.starts_with("token:field_declaration:")
+                || candidate.identity.starts_with("token:lexical_variable_declaration:")
+                || candidate.identity.starts_with("token:lexical_variable_use:")
+        }
         _ => false,
     }
 }
@@ -699,6 +708,260 @@ mod tests {
         assert_eq!(trace.confidence, Confidence::High);
         assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
         assert_eq!(trace.fallback_state, ProviderFallbackState::Shadow);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_token_shadow_allows_scoped_method_declaration_class()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let candidate = shadow_candidate(
+            "token:method_declaration:greet:compiler",
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+            Some(valid_span(2, 11, 5)),
+            ProviderFallbackState::Primary,
+        );
+        let report = semantic_token_span_invariant_report(std::slice::from_ref(&candidate));
+        let result =
+            semantic_token_source_shadow(Vec::new(), vec![candidate], "method_declaration");
+
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Improved);
+        assert_eq!(result.receipt.old_result.match_count, 0);
+        assert_eq!(result.receipt.new_result.match_count, 1);
+        assert_eq!(
+            result.receipt.new_result.identities,
+            vec!["token:method_declaration:greet:compiler".to_string()]
+        );
+        assert_eq!(report.candidate_count, 1);
+        assert_eq!(report.source_backed_span_count, 1);
+        assert_eq!(report.missing_source_span_count, 0);
+        assert_eq!(report.invalid_source_span_count, 0);
+
+        let trace = first_trace(&result)?;
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.provenance, Provenance::SemanticAnalyzer);
+        assert_eq!(trace.confidence, Confidence::Medium);
+        assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Primary);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_token_shadow_allows_scoped_method_call_class()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let candidate = shadow_candidate(
+            "token:method_call:stash:compiler",
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+            Some(valid_span(4, 8, 5)),
+            ProviderFallbackState::Primary,
+        );
+        let report = semantic_token_span_invariant_report(std::slice::from_ref(&candidate));
+        let result = semantic_token_source_shadow(Vec::new(), vec![candidate], "method_call");
+
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Improved);
+        assert_eq!(result.receipt.old_result.match_count, 0);
+        assert_eq!(result.receipt.new_result.match_count, 1);
+        assert_eq!(
+            result.receipt.new_result.identities,
+            vec!["token:method_call:stash:compiler".to_string()]
+        );
+        assert_eq!(report.candidate_count, 1);
+        assert_eq!(report.source_backed_span_count, 1);
+        assert_eq!(report.missing_source_span_count, 0);
+        assert_eq!(report.invalid_source_span_count, 0);
+
+        let trace = first_trace(&result)?;
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.provenance, Provenance::SemanticAnalyzer);
+        assert_eq!(trace.confidence, Confidence::Medium);
+        assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Primary);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_token_shadow_allows_scoped_self_method_call_class()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let candidate = shadow_candidate(
+            "token:self_method_call:status:compiler",
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+            Some(valid_span(4, 12, 6)),
+            ProviderFallbackState::Primary,
+        );
+        let report = semantic_token_span_invariant_report(std::slice::from_ref(&candidate));
+        let result = semantic_token_source_shadow(Vec::new(), vec![candidate], "self_method_call");
+
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Improved);
+        assert_eq!(result.receipt.old_result.match_count, 0);
+        assert_eq!(result.receipt.new_result.match_count, 1);
+        assert_eq!(
+            result.receipt.new_result.identities,
+            vec!["token:self_method_call:status:compiler".to_string()]
+        );
+        assert_eq!(report.candidate_count, 1);
+        assert_eq!(report.source_backed_span_count, 1);
+        assert_eq!(report.missing_source_span_count, 0);
+        assert_eq!(report.invalid_source_span_count, 0);
+
+        let trace = first_trace(&result)?;
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.provenance, Provenance::SemanticAnalyzer);
+        assert_eq!(trace.confidence, Confidence::Medium);
+        assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Primary);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_token_shadow_allows_scoped_package_declaration_class()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let candidate = shadow_candidate(
+            "token:package_declaration:MyApp::Controller::Root:compiler",
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+            Some(valid_span(0, 8, 23)),
+            ProviderFallbackState::Primary,
+        );
+        let report = semantic_token_span_invariant_report(std::slice::from_ref(&candidate));
+        let result =
+            semantic_token_source_shadow(Vec::new(), vec![candidate], "package_declaration");
+
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Improved);
+        assert_eq!(result.receipt.old_result.match_count, 0);
+        assert_eq!(result.receipt.new_result.match_count, 1);
+        assert_eq!(
+            result.receipt.new_result.identities,
+            vec!["token:package_declaration:MyApp::Controller::Root:compiler".to_string()]
+        );
+        assert_eq!(report.candidate_count, 1);
+        assert_eq!(report.source_backed_span_count, 1);
+        assert_eq!(report.missing_source_span_count, 0);
+        assert_eq!(report.invalid_source_span_count, 0);
+
+        let trace = first_trace(&result)?;
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.provenance, Provenance::SemanticAnalyzer);
+        assert_eq!(trace.confidence, Confidence::Medium);
+        assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Primary);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_token_shadow_allows_scoped_field_declaration_class()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let candidate = shadow_candidate(
+            "token:field_declaration:$name:compiler",
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+            Some(valid_span(2, 10, 5)),
+            ProviderFallbackState::Primary,
+        );
+        let report = semantic_token_span_invariant_report(std::slice::from_ref(&candidate));
+        let result = semantic_token_source_shadow(Vec::new(), vec![candidate], "field_declaration");
+
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Improved);
+        assert_eq!(result.receipt.old_result.match_count, 0);
+        assert_eq!(result.receipt.new_result.match_count, 1);
+        assert_eq!(
+            result.receipt.new_result.identities,
+            vec!["token:field_declaration:$name:compiler".to_string()]
+        );
+        assert_eq!(report.candidate_count, 1);
+        assert_eq!(report.source_backed_span_count, 1);
+        assert_eq!(report.missing_source_span_count, 0);
+        assert_eq!(report.invalid_source_span_count, 0);
+
+        let trace = first_trace(&result)?;
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.provenance, Provenance::SemanticAnalyzer);
+        assert_eq!(trace.confidence, Confidence::Medium);
+        assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Primary);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_token_shadow_allows_scoped_lexical_variable_declaration_class()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let candidate = shadow_candidate(
+            "token:lexical_variable_declaration:$count:compiler",
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+            Some(valid_span(1, 3, 6)),
+            ProviderFallbackState::Primary,
+        );
+        let report = semantic_token_span_invariant_report(std::slice::from_ref(&candidate));
+        let result = semantic_token_source_shadow(Vec::new(), vec![candidate], "lexical_variable");
+
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Improved);
+        assert_eq!(result.receipt.old_result.match_count, 0);
+        assert_eq!(result.receipt.new_result.match_count, 1);
+        assert_eq!(
+            result.receipt.new_result.identities,
+            vec!["token:lexical_variable_declaration:$count:compiler".to_string()]
+        );
+        assert_eq!(report.candidate_count, 1);
+        assert_eq!(report.source_backed_span_count, 1);
+        assert_eq!(report.missing_source_span_count, 0);
+        assert_eq!(report.invalid_source_span_count, 0);
+
+        let trace = first_trace(&result)?;
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.provenance, Provenance::SemanticAnalyzer);
+        assert_eq!(trace.confidence, Confidence::Medium);
+        assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Primary);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_token_shadow_allows_scoped_lexical_variable_use_class()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let candidate = shadow_candidate(
+            "token:lexical_variable_use:$count:compiler",
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+            Some(valid_span(2, 0, 6)),
+            ProviderFallbackState::Primary,
+        );
+        let report = semantic_token_span_invariant_report(std::slice::from_ref(&candidate));
+        let result = semantic_token_source_shadow(Vec::new(), vec![candidate], "lexical_variable");
+
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Improved);
+        assert_eq!(result.receipt.old_result.match_count, 0);
+        assert_eq!(result.receipt.new_result.match_count, 1);
+        assert_eq!(
+            result.receipt.new_result.identities,
+            vec!["token:lexical_variable_use:$count:compiler".to_string()]
+        );
+        assert_eq!(report.candidate_count, 1);
+        assert_eq!(report.source_backed_span_count, 1);
+        assert_eq!(report.missing_source_span_count, 0);
+        assert_eq!(report.invalid_source_span_count, 0);
+
+        let trace = first_trace(&result)?;
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.provenance, Provenance::SemanticAnalyzer);
+        assert_eq!(trace.confidence, Confidence::Medium);
+        assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Primary);
         Ok(())
     }
 

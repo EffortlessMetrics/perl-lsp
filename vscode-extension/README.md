@@ -16,18 +16,25 @@ A fast, native Perl 5 language server extension. Written in Rust for speed and r
 
 > **Public Alpha** -- This extension is under active development. Every feature listed below is wired up and exercised by tests, but as an alpha you will find edge cases where behavior is incomplete or wrong. Please [report issues](https://github.com/EffortlessMetrics/perl-lsp/issues/new/choose) if you encounter problems. For what the project's headline numbers mean (and do not mean), see the [status overview](https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/project/status/index.md).
 
+`perl-lsp` uses proof-backed answers where it has fresh, source-backed facts and
+keeps fallback or no-edit behavior where Perl is dynamic, generated, stale,
+ambiguous, or low confidence. See the [editor trust guide](../docs/how-to/EDITOR_TRUST.md)
+for support-tier boundaries, explanations, previews, and copyable receipts.
+
 ## Features
 
 ### Navigation and Intelligence
-- **Go to Definition** -- Jump to any symbol declaration across files
-- **Find References** -- Find all usages of a symbol across your project
-- **Hover Documentation** -- Instant docs for functions, variables, and modules
-- **Auto-completion** -- Smart suggestions for variables, functions, and module names
+- **Go to Definition** -- Jump to source-backed definitions where proof is available, with fallback for ambiguous or dynamic cases
+- **Find References** -- Find source-backed usages and keep fallback behavior for unsupported shapes
+- **Hover Documentation** -- Show provenance-backed docs and module-lookup explanations where available
+- **Auto-completion** -- Rank proof-backed variables, functions, and modules while preserving fallback for uncertain candidates
 - **Signature Help** -- Real-time parameter hints as you type function calls
-- **Symbol Navigation** -- Outline view, breadcrumbs, and workspace symbol search
+- **Symbol Navigation** -- Outline view, breadcrumbs, and workspace symbol search with generated/dynamic boundaries labeled or gated
 
 ### Refactoring and Code Actions
-- **Rename** -- Safe renaming of symbols across files
+- **Rename** -- Scoped lexical and package-local renames only where source-backed proof and fallback guards pass
+- **Preview Safe Delete** -- Preview allowed, blocked, or refused symbol deletion before any edit is returned
+- **Preview Package Rename** -- Preview package/compiler-backed rename evidence without authorizing broad edits
 - **Extract Variable** -- Pull out expressions into named variables
 - **Extract Subroutine** -- Create functions from selected code blocks
 - **Organize Imports** -- Sort and clean `use` statements (`Shift+Alt+O`)
@@ -37,6 +44,7 @@ A fast, native Perl 5 language server extension. Written in Rust for speed and r
 - **Undefined Variables** -- Catch typos under `use strict`
 - **Unused Variables** -- Find dead code
 - **Missing Pragmas** -- Suggest `strict` and `warnings`
+- **Diagnostic Explanations** -- Explain PL701/PL109 evidence, fallback, and setup boundaries when receipts are available
 - **Document Formatting** -- Format with `perltidy` (`Shift+Alt+F`)
 
 ### Advanced Features
@@ -206,7 +214,13 @@ Open the command palette (`Ctrl+Shift+P`) and search for "Perl":
 | **Perl: Reinstall Server Binary** | Re-download the managed binary |
 | **Perl: Organize Use Statements** | Sort and clean `use` statements |
 | **Perl: Run Tests in Current File** | Run tests in the active `.t` or `.pl` file |
+| **Perl LSP: Explain Provider Decision** | Show why the last provider acted, fell back, or refused |
+| **Perl LSP: Copy Provider Decision Receipt** | Copy a structured local receipt for issue reports |
 | **Perl LSP: Show Workspace Trust Report** | Show workspace roots, module-resolution configuration, index state, support tiers, provider-decision traces, and dynamic-boundary policy in the output channel |
+| **Perl LSP: Explain This Diagnostic** | Explain PL701/PL109 diagnostics in the output channel when a receipt is available |
+| **Perl LSP: Explain Missing Module Lookup** | Show the current missing-module `@INC` lookup state and setup boundary |
+| **Perl LSP: Preview Safe Delete** | Preview whether symbol deletion is allowed, blocked, or refused before editing |
+| **Perl LSP: Preview Package Rename** | Preview package/compiler-backed rename evidence without authorizing an edit |
 | **Perl: Show Output Channel** | Open the extension output log |
 | **Perl: Show Status Menu** | Quick-access menu for all actions |
 
@@ -238,8 +252,14 @@ The `perllsp` binary works with any editor that supports the Language Server Pro
 - Check `perl-lsp.enableFormatting` is `true`
 
 **Diagnostics too noisy?**
-- Set `perl-lsp.enableDiagnostics` to `false` to disable
-- File an issue if you see false positives
+- Run **Perl LSP: Explain This Diagnostic** to see whether the warning is a
+  true missing fact, low-confidence evidence, or a dynamic boundary.
+- Run **Perl LSP: Show Workspace Trust Report** if module paths, Perl binary,
+  or setup policy may be involved.
+- For Perl binary, `@INC`, `PERL5LIB`, perldoc, or DAP module-path mismatches,
+  see the [Perl setup troubleshooting guide](../docs/how-to/PERL_SETUP_TROUBLESHOOTING.md).
+- Set `perl-lsp.enableDiagnostics` to `false` to disable diagnostics.
+- File an issue with the copied provider receipt if you see false positives.
 
 ## Known Issues
 

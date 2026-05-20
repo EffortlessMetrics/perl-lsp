@@ -74,6 +74,15 @@ enum Commands {
     /// Validate Real Perl Editor Trust support claim map.
     CheckSupportClaims,
 
+    /// Validate machine-readable Real Perl Editor Trust provider promotion ledger.
+    CheckProviderPromotionLedger,
+
+    /// Validate semantic-token class promotion registry.
+    CheckSemanticTokenClasses,
+
+    /// Validate workspace-symbol class promotion registry.
+    CheckWorkspaceSymbolClasses,
+
     /// Capture a GitHub PR queue snapshot for disconnected maintainership.
     Queue {
         #[command(subcommand)]
@@ -1468,6 +1477,13 @@ enum Commands {
     /// Remove stale `.claude/worktrees` entries and prune Git metadata.
     WorktreeCleanup,
 
+    /// Validate the committed Claude swarm agent roster contract.
+    ValidateSwarmAgentRoster {
+        /// Repository root containing `.claude/agents/agent-roster.json`.
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
+
     /// Show summary statistics from swarm-metrics.jsonl.
     SwarmSummary {
         /// Path to operations directory (defaults to `.ops-perl-lsp`).
@@ -1668,6 +1684,45 @@ enum NonRustCommand {
         #[arg(long, hide = true)]
         root: Option<PathBuf>,
     },
+
+    /// Validate the non-Rust allowlist/debt TOML schema without walking git.
+    ValidatePolicy {
+        /// Override the default allowlist path (`policy/non-rust-allowlist.toml`).
+        #[arg(long, default_value = "policy/non-rust-allowlist.toml")]
+        allowlist: PathBuf,
+
+        /// Override the default debt path (`policy/non-rust-debt.toml`).
+        #[arg(long, default_value = "policy/non-rust-debt.toml")]
+        debt: PathBuf,
+    },
+
+    /// Find non-Rust tooling that should be migrated into Rust-owned surfaces.
+    MigrationCandidates {
+        /// Output format.
+        #[arg(long, value_enum, default_value = "markdown")]
+        format: MigrationCandidateFormatArg,
+
+        /// Optional output path (prints to stdout if omitted).
+        #[arg(long)]
+        output: Option<PathBuf>,
+
+        /// Limit the number of candidates in the report.
+        #[arg(long)]
+        limit: Option<usize>,
+
+        /// Override the workspace root used for `git ls-files`. Test seam only.
+        #[arg(long, hide = true)]
+        root: Option<PathBuf>,
+    },
+}
+
+/// CLI-facing output format for non-Rust migration candidate reports.
+#[derive(Clone, Copy, Debug, clap::ValueEnum)]
+enum MigrationCandidateFormatArg {
+    /// Human-readable Markdown.
+    Markdown,
+    /// Machine-readable JSON.
+    Json,
 }
 
 /// CLI-facing grouping argument (mirrors `file_policy::ProposeGroupBy`).
@@ -2328,14 +2383,14 @@ enum DevexCommand {
     /// Plan the cheapest correct local proof commands for the current diff.
     Plan {
         /// Git base ref used for changed-file detection.
-        #[arg(long, default_value = "origin/master")]
+        #[arg(long, default_value = "auto")]
         base: String,
     },
 
     /// Emit a JSON receipt for the current local proof plan.
     Receipt {
         /// Git base ref used for changed-file detection.
-        #[arg(long, default_value = "origin/master")]
+        #[arg(long, default_value = "auto")]
         base: String,
 
         /// Output path for the JSON receipt.
@@ -2346,7 +2401,7 @@ enum DevexCommand {
     /// Show a local PR cockpit summary for the current diff.
     Cockpit {
         /// Git base ref used for changed-file detection.
-        #[arg(long, default_value = "origin/master")]
+        #[arg(long, default_value = "auto")]
         base: String,
 
         /// Output path for the JSON receipt refreshed by the cockpit.
@@ -2357,7 +2412,7 @@ enum DevexCommand {
     /// Print a paste-ready PR proof packet for the current diff.
     PrBody {
         /// Git base ref used for changed-file detection.
-        #[arg(long, default_value = "origin/master")]
+        #[arg(long, default_value = "auto")]
         base: String,
 
         /// Receipt path referenced by the generated PR body.
@@ -2497,6 +2552,9 @@ fn main() -> Result<()> {
         Commands::CheckDevexDocs => devex_docs::run(),
         Commands::CheckProviderConfidenceMatrix => provider_confidence_matrix::run(),
         Commands::CheckSupportClaims => provider_confidence_matrix::run_support_claims(),
+        Commands::CheckProviderPromotionLedger => provider_promotion_ledger::run(),
+        Commands::CheckSemanticTokenClasses => semantic_token_classes::run(),
+        Commands::CheckWorkspaceSymbolClasses => workspace_symbol_classes::run(),
         Commands::Queue { command } => match command {
             QueueCommand::Snapshot { out, fixture } => queue_snapshot::run_snapshot(out, fixture),
             QueueCommand::Health { receipt, fixture } => {
@@ -3186,6 +3244,7 @@ fn main() -> Result<()> {
             Ok(())
         }
         Commands::WorktreeCleanup => worktrees::cleanup(),
+        Commands::ValidateSwarmAgentRoster { root } => swarm_agent_roster::run(root),
         Commands::SwarmSummary { ops_dir, since, limit, format } => {
             swarm_summary::run(swarm_summary::SwarmSummaryConfig { ops_dir, since, limit, format })
         }
@@ -3241,6 +3300,25 @@ fn main() -> Result<()> {
                 tasks::file_policy::non_rust_propose(
                     &root,
                     ProposeConfig { output_dir, group_by, root_override },
+                )
+            }
+            NonRustCommand::ValidatePolicy { allowlist, debt } => {
+                use tasks::file_policy::ValidateNonRustPolicyConfig;
+                tasks::file_policy::validate_non_rust_policy(ValidateNonRustPolicyConfig {
+                    allowlist_path: allowlist,
+                    debt_path: debt,
+                })
+            }
+            NonRustCommand::MigrationCandidates { format, output, limit, root: root_override } => {
+                use tasks::file_policy::{MigrationCandidateFormat, MigrationCandidatesConfig};
+                let root = utils::project_root()?;
+                let format = match format {
+                    MigrationCandidateFormatArg::Markdown => MigrationCandidateFormat::Markdown,
+                    MigrationCandidateFormatArg::Json => MigrationCandidateFormat::Json,
+                };
+                tasks::file_policy::non_rust_migration_candidates(
+                    &root,
+                    MigrationCandidatesConfig { format, output, limit, root_override },
                 )
             }
         },
@@ -3305,5 +3383,51 @@ fn convert_gate_receipts_format(format: GateReceiptsFormat) -> gate_receipts::Ou
     match format {
         GateReceiptsFormat::Human => gate_receipts::OutputFormat::Human,
         GateReceiptsFormat::Json => gate_receipts::OutputFormat::Json,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type TestResult<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+    fn parse_devex_command(args: &[&str]) -> TestResult<DevexCommand> {
+        match Cli::try_parse_from(args)?.command {
+            Commands::Devex { command } => Ok(command),
+            _ => Err(std::io::Error::other("expected devex command").into()),
+        }
+    }
+
+    #[test]
+    fn devex_commands_default_to_auto_base() -> TestResult {
+        let cases = [
+            (["xtask", "devex", "plan"].as_slice(), "plan"),
+            (["xtask", "devex", "receipt"].as_slice(), "receipt"),
+            (["xtask", "devex", "cockpit"].as_slice(), "cockpit"),
+            (["xtask", "devex", "pr-body"].as_slice(), "pr-body"),
+        ];
+
+        for (args, name) in cases {
+            let base = match parse_devex_command(args)? {
+                DevexCommand::Plan { base }
+                | DevexCommand::Receipt { base, .. }
+                | DevexCommand::Cockpit { base, .. }
+                | DevexCommand::PrBody { base, .. } => base,
+            };
+            assert_eq!(base, "auto", "{name} should auto-detect the diff base by default");
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn devex_plan_respects_explicit_base() -> TestResult {
+        match parse_devex_command(&["xtask", "devex", "plan", "--base", "HEAD~1"])? {
+            DevexCommand::Plan { base } => assert_eq!(base, "HEAD~1"),
+            _ => return Err(std::io::Error::other("expected devex plan command").into()),
+        }
+
+        Ok(())
     }
 }

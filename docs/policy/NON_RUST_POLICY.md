@@ -15,9 +15,11 @@ docs/policy/NON_RUST_INVENTORY.md  # generated inventory (PR 3)
 Reader / writer:
 
 ```text
-cargo xtask non-rust inventory   # emit Markdown + JSON inventory
-cargo xtask non-rust propose     # propose entries for unallowlisted files
-cargo xtask check-file-policy    # enforce the allowlist
+cargo xtask non-rust inventory        # emit Markdown + JSON inventory
+cargo xtask non-rust propose          # propose entries for unallowlisted files
+cargo xtask non-rust validate-policy  # validate allowlist/debt TOML schema
+cargo xtask non-rust migration-candidates  # find tooling candidates to migrate into Rust-owned surfaces
+cargo xtask check-file-policy         # enforce the allowlist
 ```
 
 ## Schema

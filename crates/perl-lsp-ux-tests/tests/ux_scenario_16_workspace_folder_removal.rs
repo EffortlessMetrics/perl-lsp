@@ -7,13 +7,10 @@
 //! evicts its symbols from `workspace/symbol` results instead of leaving stale
 //! cross-folder state behind.
 
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 use serde_json::Value;
 use std::time::{Duration, Instant};
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 const MODULE_A: &str = "\
 package ModuleA;\n\

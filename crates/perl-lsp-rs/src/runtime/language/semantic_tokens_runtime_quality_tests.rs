@@ -106,9 +106,65 @@ __PACKAGE__->meta->make_immutable;
 1;
 "#;
 
-/// Class-syntax fixture used for the next compiler-token expansion receipt.
-/// The method name is source-backed by the compiler candidate, but the receipt
-/// must keep it shadowed until class-specific live-output parity is proven.
+const UPDATED_CATALYST_CONTROLLER_MODULE: &str = r#"package MyApp::Controller::Renamed;
+use Moose;
+use namespace::autoclean;
+
+BEGIN { extends 'Catalyst::Controller' }
+
+__PACKAGE__->config(namespace => '');
+
+sub index :Path :Args(0) {
+    my ($self, $c) = @_;
+    $c->stash(template => 'index.tt');
+}
+
+sub item :Local Args(1) {
+    my ($self, $c, $id) = @_;
+    my $action = "show_${id}";
+    return $c->forward("${self}::${action}");
+}
+
+sub generated_dispatch :Private {
+    my ($self, $c, $controller, $action) = @_;
+    return $c->forward("${controller}::${action}");
+}
+
+__PACKAGE__->meta->make_immutable;
+1;
+"#;
+
+const UPDATED_CATALYST_METHOD_CALL_MODULE: &str = r#"package MyApp::Controller::Root;
+use Moose;
+use namespace::autoclean;
+
+BEGIN { extends 'Catalyst::Controller' }
+
+__PACKAGE__->config(namespace => '');
+
+sub index :Path :Args(0) {
+    my ($self, $c) = @_;
+    $c->stash_updated(template => 'index.tt');
+}
+
+sub item :Local Args(1) {
+    my ($self, $c, $id) = @_;
+    my $action = "show_${id}";
+    return $c->forward("${self}::${action}");
+}
+
+sub generated_dispatch :Private {
+    my ($self, $c, $controller, $action) = @_;
+    return $c->forward("${controller}::${action}");
+}
+
+__PACKAGE__->meta->make_immutable;
+1;
+"#;
+
+/// Class-syntax fixture used for scoped compiler-token expansion receipts.
+/// Class-specific compiler candidates must stay output-neutral until each
+/// source-backed span matches an existing live parser/HIR token class.
 const CLASS_METHOD_MODULE: &str = r#"use feature 'class';
 
 class TokenGreeter {
@@ -122,7 +178,97 @@ class TokenGreeter {
 1;
 "#;
 
+const UPDATED_CLASS_METHOD_MODULE: &str = r#"use feature 'class';
+
+class TokenGreeter {
+    field $name :param;
+
+    method greet_again {
+        return "hello $name";
+    }
+}
+
+1;
+"#;
+
+const UPDATED_CLASS_FIELD_MODULE: &str = r#"use feature 'class';
+
+class TokenGreeter {
+    field $display_name :param;
+
+    method greet {
+        return "hello $display_name";
+    }
+}
+
+1;
+"#;
+
+/// Lexical-variable fixture used for a scoped compiler-token declaration receipt.
+/// The candidate must match an existing live parser/HIR `variable` token and
+/// remain output-neutral.
+const LEXICAL_VARIABLE_MODULE: &str = r#"use strict;
+use warnings;
+
+my $count = 1;
+$count++;
+
+1;
+"#;
+
+const UPDATED_LEXICAL_VARIABLE_MODULE: &str = r#"use strict;
+use warnings;
+
+my $total_count = 1;
+$total_count++;
+
+1;
+"#;
+
+/// Lexical-variable fixture used for a scoped compiler-token use receipt.
+/// The candidate must match an existing live parser/HIR `variable` token and
+/// remain output-neutral.
+const LEXICAL_VARIABLE_USE_MODULE: &str = r#"use strict;
+use warnings;
+
+for my $count (1) {
+    $count++;
+}
+
+1;
+"#;
+
+const UPDATED_LEXICAL_VARIABLE_USE_MODULE: &str = r#"use strict;
+use warnings;
+
+for my $total_count (1) {
+    $total_count++;
+}
+
+1;
+"#;
+
 /// Empty Perl file — no declarations at all.
+const SELF_METHOD_CALL_MODULE: &str = r#"package TokenSelfCall;
+use strict;
+use warnings;
+
+my $self = current_object();
+$self->status;
+
+1;
+"#;
+
+const UPDATED_SELF_METHOD_CALL_MODULE: &str = r#"package TokenSelfCall;
+use strict;
+use warnings;
+
+my $self = current_object();
+$self->status_updated;
+
+1;
+"#;
+
 const EMPTY_PERL: &str = r#"1;
 "#;
 
@@ -258,6 +404,33 @@ fn compiler_token_identity(receipt: &Value) -> Result<String, Box<dyn std::error
     Ok(identity.to_string())
 }
 
+fn class_specific_receipt<'a>(
+    receipt: &'a Value,
+    token_class: &str,
+) -> Result<&'a serde_json::Map<String, Value>, Box<dyn std::error::Error>> {
+    let expansion_receipts =
+        receipt.get("class_specific_expansion_receipts").and_then(Value::as_array).ok_or(
+            "expected class_specific_expansion_receipts array in semantic-token runtime receipt",
+        )?;
+    expansion_receipts
+        .iter()
+        .find(|receipt| receipt.get("token_class").and_then(Value::as_str) == Some(token_class))
+        .and_then(Value::as_object)
+        .ok_or_else(|| {
+            format!("expected class-specific semantic-token receipt for {token_class}").into()
+        })
+}
+
+fn first_shadow_identity(
+    receipt: &serde_json::Map<String, Value>,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let shadow_receipt = must_some(receipt.get("shadow_receipt").and_then(Value::as_object));
+    let new_result = must_some(shadow_receipt.get("new_result").and_then(Value::as_object));
+    let identities = must_some(new_result.get("identities").and_then(Value::as_array));
+    let identity = must_some(identities.first().and_then(Value::as_str));
+    Ok(identity.to_string())
+}
+
 fn source_line_lsp_lengths(source: &str) -> Result<Vec<u32>, Box<dyn std::error::Error>> {
     source.lines().map(|line| Ok(u32::try_from(line.encode_utf16().count())?)).collect()
 }
@@ -358,6 +531,48 @@ fn field_declaration_name_span(
     let length = u32::try_from(source[name_start..name_end].encode_utf16().count())?;
 
     Ok((name_start, name_end, line, start, length))
+}
+
+fn lexical_variable_declaration_name_span(
+    source: &str,
+    variable: &str,
+) -> Result<(usize, usize, u32, u32, u32), Box<dyn Error>> {
+    let marker = format!("my {variable}");
+    let marker_start =
+        source.find(&marker).ok_or("expected lexical variable declaration in fixture")?;
+    let name_start = marker_start + "my ".len();
+    let name_end = name_start + variable.len();
+
+    let prefix = &source[..name_start];
+    let line = u32::try_from(prefix.bytes().filter(|byte| *byte == b'\n').count())?;
+    let line_start = prefix.rfind('\n').map_or(0, |offset| offset + 1);
+    let start = u32::try_from(source[line_start..name_start].encode_utf16().count())?;
+    let length = u32::try_from(source[name_start..name_end].encode_utf16().count())?;
+
+    Ok((name_start, name_end, line, start, length))
+}
+
+fn lexical_variable_use_name_span(
+    source: &str,
+    variable: &str,
+) -> Result<(usize, usize, u32, u32, u32), Box<dyn Error>> {
+    let declaration_marker = format!("my {variable}");
+    let declaration_start = source
+        .find(&declaration_marker)
+        .ok_or("expected lexical variable declaration in fixture")?;
+    let use_start = source[declaration_start + declaration_marker.len()..]
+        .find(variable)
+        .map(|offset| declaration_start + declaration_marker.len() + offset)
+        .ok_or("expected lexical variable use in fixture")?;
+    let use_end = use_start + variable.len();
+
+    let prefix = &source[..use_start];
+    let line = u32::try_from(prefix.bytes().filter(|byte| *byte == b'\n').count())?;
+    let line_start = prefix.rfind('\n').map_or(0, |offset| offset + 1);
+    let start = u32::try_from(source[line_start..use_start].encode_utf16().count())?;
+    let length = u32::try_from(source[use_start..use_end].encode_utf16().count())?;
+
+    Ok((use_start, use_end, line, start, length))
 }
 
 fn assert_semantic_token_live_output_parity(uri: &str, source: &str) -> Result<(), Box<dyn Error>> {
@@ -500,16 +715,16 @@ fn semantic_tokens_runtime_quality_receipt_proves_source_backed_package_declarat
     assert_eq!(package_receipt.get("source").and_then(Value::as_str), Some("CompilerFact"));
     assert_eq!(package_receipt.get("provenance").and_then(Value::as_str), Some("SemanticAnalyzer"));
     assert_eq!(package_receipt.get("freshness").and_then(Value::as_str), Some("Fresh"));
-    assert_eq!(package_receipt.get("fallback_state").and_then(Value::as_str), Some("Shadow"));
+    assert_eq!(package_receipt.get("fallback_state").and_then(Value::as_str), Some("Primary"));
     assert_eq!(
         package_receipt.get("approved_for_live_cutover").and_then(Value::as_bool),
-        Some(false),
-        "package declarations must remain shadowed until explicit class-specific approval lands"
+        Some(true),
+        "package declarations are the scoped class under cutover proof"
     );
     assert_eq!(
         package_receipt.get("live_pilot").and_then(Value::as_bool),
-        Some(false),
-        "package declarations must not join the live compiler-token slice from parity proof alone"
+        Some(true),
+        "package declarations may join the scoped compiler-token live pilot only with parity proof"
     );
     assert_eq!(
         package_receipt.get("live_output_parity").and_then(Value::as_bool),
@@ -549,7 +764,7 @@ fn semantic_tokens_runtime_quality_receipt_proves_source_backed_package_declarat
 
     let package_candidate =
         crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
-            "token:namespace:MyApp::Controller::Root:compiler",
+            "token:package_declaration:MyApp::Controller::Root:compiler",
             ProviderFactSourceKind::CompilerFact,
             Provenance::SemanticAnalyzer,
             Confidence::Medium,
@@ -571,12 +786,16 @@ fn semantic_tokens_runtime_quality_receipt_proves_source_backed_package_declarat
     );
     assert_eq!(
         shadow.receipt.verdict,
-        ShadowCompareVerdict::Same,
-        "package compiler candidates remain receipt-only until class-specific cutover"
+        ShadowCompareVerdict::Improved,
+        "package compiler candidates may count only through the scoped package-declaration identity"
     );
     assert_eq!(
-        shadow.receipt.new_result.match_count, 0,
-        "package compiler candidates must not become semantic-token identities yet"
+        shadow.receipt.new_result.match_count, 1,
+        "package compiler candidates may become identities only after class-specific cutover proof"
+    );
+    assert_eq!(
+        shadow.receipt.new_result.identities,
+        vec!["token:package_declaration:MyApp::Controller::Root:compiler".to_string()]
     );
 
     let namespace_token_type =
@@ -597,8 +816,8 @@ fn semantic_tokens_runtime_quality_receipt_proves_source_backed_package_declarat
 
     let claim_boundary = must_some(package_receipt.get("claim_boundary").and_then(Value::as_str));
     assert!(
-        claim_boundary.contains("package declarations stay shadowed"),
-        "package receipt must preserve the no-cutover boundary; got: {claim_boundary}"
+        claim_boundary.contains("no new token output is emitted"),
+        "package receipt must preserve the output-neutral cutover boundary; got: {claim_boundary}"
     );
 
     Ok(())
@@ -645,36 +864,43 @@ fn semantic_tokens_runtime_quality_receipt_proves_source_backed_method_call_comp
     assert_eq!(method_span.range.start.character, expected_start);
     assert_eq!(method_span.single_line_lsp_length(), Some(expected_length));
 
-    let method_candidate =
-        crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
-            "token:method:Catalyst::Context::stash:compiler",
-            ProviderFactSourceKind::CompilerFact,
-            Provenance::SemanticAnalyzer,
-            Confidence::Medium,
-            ProviderFactFreshness::Fresh,
-            method_span,
-        );
-    let span_report = crate::semantic_tokens::semantic_token_span_invariant_report(
-        std::slice::from_ref(&method_candidate),
-    );
-    assert_eq!(span_report.candidate_count, 1);
-    assert_eq!(span_report.source_backed_span_count, 1);
-    assert_eq!(span_report.missing_source_span_count, 0);
-    assert_eq!(span_report.invalid_source_span_count, 0);
-
-    let shadow = crate::semantic_tokens::semantic_token_source_shadow(
-        Vec::new(),
-        vec![method_candidate],
-        "method_call",
+    let method_receipt = class_specific_receipt(&receipt, "method_call")?;
+    assert_eq!(method_receipt.get("source").and_then(Value::as_str), Some("CompilerFact"));
+    assert_eq!(method_receipt.get("provenance").and_then(Value::as_str), Some("SemanticAnalyzer"));
+    assert_eq!(method_receipt.get("freshness").and_then(Value::as_str), Some("Fresh"));
+    assert_eq!(method_receipt.get("fallback_state").and_then(Value::as_str), Some("Primary"));
+    assert_eq!(
+        method_receipt.get("approved_for_live_cutover").and_then(Value::as_bool),
+        Some(true),
+        "method calls are the scoped class under cutover proof"
     );
     assert_eq!(
-        shadow.receipt.verdict,
-        ShadowCompareVerdict::Same,
-        "method-call compiler candidates remain receipt-only until class-specific cutover"
+        method_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "method-call receipt may join the scoped compiler-token live pilot only with parity proof"
     );
     assert_eq!(
-        shadow.receipt.new_result.match_count, 0,
-        "method-call compiler candidates must not become semantic-token identities yet"
+        method_receipt.get("live_output_parity").and_then(Value::as_bool),
+        Some(true),
+        "source-backed method-call compiler span must match existing live method token output"
+    );
+    assert_eq!(
+        method_receipt.get("parity_state").and_then(Value::as_str),
+        Some("matched_existing_live_method_token")
+    );
+    assert_eq!(method_receipt.get("live_token_type").and_then(Value::as_str), Some("method"));
+    assert_eq!(method_receipt.get("live_token_match_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(method_receipt.get("candidate_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        method_receipt.get("source_backed_span_count").and_then(Value::as_u64),
+        Some(1),
+        "method-call candidate must be source-backed"
+    );
+    assert_eq!(method_receipt.get("missing_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(method_receipt.get("invalid_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(
+        method_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true)
     );
 
     let method_token_type =
@@ -693,11 +919,148 @@ fn semantic_tokens_runtime_quality_receipt_proves_source_backed_method_call_comp
         "source-backed method-call compiler span must match exactly one existing live method token"
     );
 
-    let compiler_receipt = must_some(receipt.get("compiler_receipt").and_then(Value::as_object));
+    let claim_boundary = must_some(method_receipt.get("claim_boundary").and_then(Value::as_str));
+    assert!(
+        claim_boundary.contains("no new token output is emitted"),
+        "method-call receipt must preserve the output-neutral boundary; got: {claim_boundary}"
+    );
+
+    let shadow_receipt = must_some(method_receipt.get("shadow_receipt").and_then(Value::as_object));
+    let new_result = must_some(shadow_receipt.get("new_result").and_then(Value::as_object));
     assert_eq!(
-        compiler_receipt.get("token_class").and_then(Value::as_str),
-        Some("subroutine_declaration"),
-        "runtime receipt must not broaden the live compiler-token class while proving method parity"
+        new_result.get("match_count").and_then(Value::as_u64),
+        Some(1),
+        "source-backed method-call compiler candidates may count only through the scoped class identity"
+    );
+    let identities = must_some(new_result.get("identities").and_then(Value::as_array));
+    assert!(
+        identities
+            .iter()
+            .filter_map(Value::as_str)
+            .any(|identity| identity == "token:method_call:stash:compiler"),
+        "class-specific receipt must authorize only the method-call identity; got: {identities:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_proves_source_backed_self_method_call_compiler_token_parity()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    let self_call_uri = "file:///workspace/lib/TokenSelfCall.pm";
+    open_document(&server, self_call_uri, SELF_METHOD_CALL_MODULE);
+
+    let params = json!({ "textDocument": {"uri": self_call_uri} });
+    let live_result =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+
+    assert_eq!(
+        receipt.get("live_provider_result"),
+        Some(&live_result),
+        "self method-call class proof must compare against the exact live token output"
+    );
+    assert_eq!(
+        receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(true),
+        "self method-call class receipt must not change live semantic-token behavior"
+    );
+    assert_eq!(
+        receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "self method-call class receipt must not emit additional semantic tokens"
+    );
+
+    let (method_start, method_end, expected_line, expected_start, expected_length) =
+        method_call_name_span(SELF_METHOD_CALL_MODULE, "status")?;
+    let method_span = crate::semantic_tokens::SemanticTokenShadowSpan::from_byte_offsets(
+        SELF_METHOD_CALL_MODULE,
+        method_start,
+        method_end,
+    )
+    .ok_or("expected source-backed self method-call compiler span")?;
+    assert_eq!(method_span.range.start.line, expected_line);
+    assert_eq!(method_span.range.start.character, expected_start);
+    assert_eq!(method_span.single_line_lsp_length(), Some(expected_length));
+
+    let method_receipt = class_specific_receipt(&receipt, "self_method_call")?;
+    assert_eq!(method_receipt.get("source").and_then(Value::as_str), Some("CompilerFact"));
+    assert_eq!(method_receipt.get("provenance").and_then(Value::as_str), Some("SemanticAnalyzer"));
+    assert_eq!(method_receipt.get("freshness").and_then(Value::as_str), Some("Fresh"));
+    assert_eq!(method_receipt.get("fallback_state").and_then(Value::as_str), Some("Primary"));
+    assert_eq!(
+        method_receipt.get("approved_for_live_cutover").and_then(Value::as_bool),
+        Some(true),
+        "self method calls are the scoped class under cutover proof"
+    );
+    assert_eq!(
+        method_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "self method-call receipt may join the scoped compiler-token live pilot only with parity proof"
+    );
+    assert_eq!(
+        method_receipt.get("live_output_parity").and_then(Value::as_bool),
+        Some(true),
+        "source-backed self method-call compiler span must match existing live method token output"
+    );
+    assert_eq!(
+        method_receipt.get("parity_state").and_then(Value::as_str),
+        Some("matched_existing_live_method_token")
+    );
+    assert_eq!(method_receipt.get("live_token_type").and_then(Value::as_str), Some("method"));
+    assert_eq!(method_receipt.get("live_token_match_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(method_receipt.get("candidate_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        method_receipt.get("source_backed_span_count").and_then(Value::as_u64),
+        Some(1),
+        "self method-call candidate must be source-backed"
+    );
+    assert_eq!(method_receipt.get("missing_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(method_receipt.get("invalid_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(
+        method_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true)
+    );
+
+    let method_token_type =
+        *crate::semantic_tokens::legend().map.get("method").ok_or("missing method token")?;
+    let live_match_count = decode_semantic_tokens(&live_result)?
+        .iter()
+        .filter(|token| {
+            token.line == expected_line
+                && token.start == expected_start
+                && token.length == expected_length
+                && token.token_type == method_token_type
+        })
+        .count();
+    assert_eq!(
+        live_match_count, 1,
+        "source-backed self method-call compiler span must match exactly one existing live method token"
+    );
+
+    let claim_boundary = must_some(method_receipt.get("claim_boundary").and_then(Value::as_str));
+    assert!(
+        claim_boundary.contains("$self method calls")
+            && claim_boundary.contains("no new token output is emitted"),
+        "self method-call receipt must preserve the output-neutral boundary; got: {claim_boundary}"
+    );
+
+    let shadow_receipt = must_some(method_receipt.get("shadow_receipt").and_then(Value::as_object));
+    let new_result = must_some(shadow_receipt.get("new_result").and_then(Value::as_object));
+    assert_eq!(
+        new_result.get("match_count").and_then(Value::as_u64),
+        Some(1),
+        "source-backed self method-call compiler candidates may count only through the scoped class identity"
+    );
+    let identities = must_some(new_result.get("identities").and_then(Value::as_array));
+    assert!(
+        identities
+            .iter()
+            .filter_map(Value::as_str)
+            .any(|identity| identity == "token:self_method_call:status:compiler"),
+        "class-specific receipt must authorize only the self method-call identity; got: {identities:?}"
     );
 
     Ok(())
@@ -741,16 +1104,16 @@ fn semantic_tokens_runtime_quality_receipt_proves_source_backed_field_declaratio
     assert_eq!(field_receipt.get("source").and_then(Value::as_str), Some("CompilerFact"));
     assert_eq!(field_receipt.get("provenance").and_then(Value::as_str), Some("SemanticAnalyzer"));
     assert_eq!(field_receipt.get("freshness").and_then(Value::as_str), Some("Fresh"));
-    assert_eq!(field_receipt.get("fallback_state").and_then(Value::as_str), Some("Shadow"));
+    assert_eq!(field_receipt.get("fallback_state").and_then(Value::as_str), Some("Primary"));
     assert_eq!(
         field_receipt.get("approved_for_live_cutover").and_then(Value::as_bool),
-        Some(false),
-        "field declarations must remain shadowed until explicit class-specific approval lands"
+        Some(true),
+        "field declarations are now the scoped class under cutover proof"
     );
     assert_eq!(
         field_receipt.get("live_pilot").and_then(Value::as_bool),
-        Some(false),
-        "field declarations must not join the live compiler-token slice from parity proof alone"
+        Some(true),
+        "field declarations may join the scoped compiler-token live pilot only with parity proof"
     );
     assert_eq!(
         field_receipt.get("live_output_parity").and_then(Value::as_bool),
@@ -790,7 +1153,7 @@ fn semantic_tokens_runtime_quality_receipt_proves_source_backed_field_declaratio
 
     let field_candidate =
         crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
-            "token:variable:$name:compiler",
+            "token:field_declaration:$name:compiler",
             ProviderFactSourceKind::CompilerFact,
             Provenance::SemanticAnalyzer,
             Confidence::Medium,
@@ -812,12 +1175,16 @@ fn semantic_tokens_runtime_quality_receipt_proves_source_backed_field_declaratio
     );
     assert_eq!(
         shadow.receipt.verdict,
-        ShadowCompareVerdict::Same,
-        "field compiler candidates remain receipt-only until class-specific cutover"
+        ShadowCompareVerdict::Improved,
+        "field compiler candidates may count only through the scoped class identity"
     );
     assert_eq!(
-        shadow.receipt.new_result.match_count, 0,
-        "field compiler candidates must not become semantic-token identities yet"
+        shadow.receipt.new_result.match_count, 1,
+        "field compiler candidates must count only after class-specific proof"
+    );
+    assert_eq!(
+        shadow.receipt.new_result.identities,
+        vec!["token:field_declaration:$name:compiler".to_string()]
     );
 
     let variable_token_type =
@@ -838,8 +1205,284 @@ fn semantic_tokens_runtime_quality_receipt_proves_source_backed_field_declaratio
 
     let claim_boundary = must_some(field_receipt.get("claim_boundary").and_then(Value::as_str));
     assert!(
-        claim_boundary.contains("field declarations stay shadowed"),
-        "field receipt must preserve the no-cutover boundary; got: {claim_boundary}"
+        claim_boundary.contains("no new token output is emitted"),
+        "field receipt must preserve the output-neutral cutover boundary; got: {claim_boundary}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_proves_source_backed_lexical_variable_declaration_compiler_token_parity()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    let lexical_uri = "file:///workspace/lib/TokenLexical.pm";
+    open_document(&server, lexical_uri, LEXICAL_VARIABLE_MODULE);
+
+    let params = json!({ "textDocument": {"uri": lexical_uri} });
+    let live_result =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+
+    assert_eq!(
+        receipt.get("live_provider_result"),
+        Some(&live_result),
+        "runtime receipt must compare lexical variable declarations against the exact live token output"
+    );
+    assert_eq!(
+        receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "lexical-variable receipt must not emit additional semantic tokens"
+    );
+
+    let lexical_receipt = class_specific_receipt(&receipt, "lexical_variable_declaration")?;
+
+    assert_eq!(lexical_receipt.get("source").and_then(Value::as_str), Some("CompilerFact"));
+    assert_eq!(lexical_receipt.get("provenance").and_then(Value::as_str), Some("SemanticAnalyzer"));
+    assert_eq!(lexical_receipt.get("freshness").and_then(Value::as_str), Some("Fresh"));
+    assert_eq!(lexical_receipt.get("fallback_state").and_then(Value::as_str), Some("Primary"));
+    assert_eq!(
+        lexical_receipt.get("approved_for_live_cutover").and_then(Value::as_bool),
+        Some(true),
+        "lexical variables are now the scoped class under cutover proof"
+    );
+    assert_eq!(
+        lexical_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "lexical variables may join the scoped compiler-token live pilot only with parity proof"
+    );
+    assert_eq!(
+        lexical_receipt.get("live_output_parity").and_then(Value::as_bool),
+        Some(true),
+        "source-backed lexical compiler span must match existing live variable token output"
+    );
+    assert_eq!(
+        lexical_receipt.get("parity_state").and_then(Value::as_str),
+        Some("matched_existing_live_variable_token")
+    );
+    assert_eq!(lexical_receipt.get("live_token_type").and_then(Value::as_str), Some("variable"));
+    assert_eq!(lexical_receipt.get("live_token_match_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(lexical_receipt.get("candidate_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        lexical_receipt.get("source_backed_span_count").and_then(Value::as_u64),
+        Some(1),
+        "lexical variable candidate must be source-backed"
+    );
+    assert_eq!(lexical_receipt.get("missing_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(lexical_receipt.get("invalid_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(
+        lexical_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true)
+    );
+
+    let (variable_start, variable_end, expected_line, expected_start, expected_length) =
+        lexical_variable_declaration_name_span(LEXICAL_VARIABLE_MODULE, "$count")?;
+    let variable_span = crate::semantic_tokens::SemanticTokenShadowSpan::from_byte_offsets(
+        LEXICAL_VARIABLE_MODULE,
+        variable_start,
+        variable_end,
+    )
+    .ok_or("expected source-backed lexical variable compiler span")?;
+    assert_eq!(variable_span.range.start.line, expected_line);
+    assert_eq!(variable_span.range.start.character, expected_start);
+    assert_eq!(variable_span.single_line_lsp_length(), Some(expected_length));
+
+    let variable_candidate =
+        crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
+            "token:lexical_variable_declaration:$count:compiler",
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+            variable_span,
+        );
+    let span_report = crate::semantic_tokens::semantic_token_span_invariant_report(
+        std::slice::from_ref(&variable_candidate),
+    );
+    assert_eq!(span_report.candidate_count, 1);
+    assert_eq!(span_report.source_backed_span_count, 1);
+    assert_eq!(span_report.missing_source_span_count, 0);
+    assert_eq!(span_report.invalid_source_span_count, 0);
+
+    let shadow = crate::semantic_tokens::semantic_token_source_shadow(
+        Vec::new(),
+        vec![variable_candidate],
+        "lexical_variable_declaration",
+    );
+    assert_eq!(
+        shadow.receipt.verdict,
+        ShadowCompareVerdict::Improved,
+        "lexical variable compiler candidates may count only through the scoped class identity"
+    );
+    assert_eq!(
+        shadow.receipt.new_result.match_count, 1,
+        "lexical variable compiler candidates must count only after class-specific proof"
+    );
+    assert_eq!(
+        shadow.receipt.new_result.identities,
+        vec!["token:lexical_variable_declaration:$count:compiler".to_string()]
+    );
+
+    let variable_token_type =
+        *crate::semantic_tokens::legend().map.get("variable").ok_or("missing variable token")?;
+    let live_match_count = decode_semantic_tokens(&live_result)?
+        .iter()
+        .filter(|token| {
+            token.line == expected_line
+                && token.start == expected_start
+                && token.length == expected_length
+                && token.token_type == variable_token_type
+        })
+        .count();
+    assert_eq!(
+        live_match_count, 1,
+        "source-backed lexical variable compiler span must match exactly one existing live variable token"
+    );
+
+    let claim_boundary = must_some(lexical_receipt.get("claim_boundary").and_then(Value::as_str));
+    assert!(
+        claim_boundary.contains("lexical variable declarations")
+            && claim_boundary.contains("no new token output is emitted"),
+        "lexical-variable receipt must preserve the output-neutral cutover boundary; got: {claim_boundary}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_proves_source_backed_lexical_variable_use_compiler_token_parity()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    let lexical_uri = "file:///workspace/lib/TokenLexicalUse.pm";
+    open_document(&server, lexical_uri, LEXICAL_VARIABLE_USE_MODULE);
+
+    let params = json!({ "textDocument": {"uri": lexical_uri} });
+    let live_result =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+
+    assert_eq!(
+        receipt.get("live_provider_result"),
+        Some(&live_result),
+        "runtime receipt must compare lexical variable uses against the exact live token output"
+    );
+    assert_eq!(
+        receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "lexical-variable use receipt must not emit additional semantic tokens"
+    );
+
+    let lexical_receipt = class_specific_receipt(&receipt, "lexical_variable_use")?;
+
+    assert_eq!(lexical_receipt.get("source").and_then(Value::as_str), Some("CompilerFact"));
+    assert_eq!(lexical_receipt.get("provenance").and_then(Value::as_str), Some("SemanticAnalyzer"));
+    assert_eq!(lexical_receipt.get("freshness").and_then(Value::as_str), Some("Fresh"));
+    assert_eq!(lexical_receipt.get("fallback_state").and_then(Value::as_str), Some("Primary"));
+    assert_eq!(
+        lexical_receipt.get("approved_for_live_cutover").and_then(Value::as_bool),
+        Some(true),
+        "lexical variable uses are now the scoped class under cutover proof"
+    );
+    assert_eq!(
+        lexical_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "lexical variable uses may join the scoped compiler-token live pilot only with parity proof"
+    );
+    assert_eq!(
+        lexical_receipt.get("live_output_parity").and_then(Value::as_bool),
+        Some(true),
+        "source-backed lexical use compiler span must match existing live variable token output"
+    );
+    assert_eq!(
+        lexical_receipt.get("parity_state").and_then(Value::as_str),
+        Some("matched_existing_live_variable_token")
+    );
+    assert_eq!(lexical_receipt.get("live_token_type").and_then(Value::as_str), Some("variable"));
+    assert_eq!(lexical_receipt.get("live_token_match_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(lexical_receipt.get("candidate_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        lexical_receipt.get("source_backed_span_count").and_then(Value::as_u64),
+        Some(1),
+        "lexical variable use candidate must be source-backed"
+    );
+    assert_eq!(lexical_receipt.get("missing_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(lexical_receipt.get("invalid_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(
+        lexical_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true)
+    );
+
+    let (variable_start, variable_end, expected_line, expected_start, expected_length) =
+        lexical_variable_use_name_span(LEXICAL_VARIABLE_USE_MODULE, "$count")?;
+    let variable_span = crate::semantic_tokens::SemanticTokenShadowSpan::from_byte_offsets(
+        LEXICAL_VARIABLE_USE_MODULE,
+        variable_start,
+        variable_end,
+    )
+    .ok_or("expected source-backed lexical variable use compiler span")?;
+    assert_eq!(variable_span.range.start.line, expected_line);
+    assert_eq!(variable_span.range.start.character, expected_start);
+    assert_eq!(variable_span.single_line_lsp_length(), Some(expected_length));
+
+    let variable_candidate =
+        crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
+            "token:lexical_variable_use:$count:compiler",
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+            variable_span,
+        );
+    let span_report = crate::semantic_tokens::semantic_token_span_invariant_report(
+        std::slice::from_ref(&variable_candidate),
+    );
+    assert_eq!(span_report.candidate_count, 1);
+    assert_eq!(span_report.source_backed_span_count, 1);
+    assert_eq!(span_report.missing_source_span_count, 0);
+    assert_eq!(span_report.invalid_source_span_count, 0);
+
+    let shadow = crate::semantic_tokens::semantic_token_source_shadow(
+        Vec::new(),
+        vec![variable_candidate],
+        "lexical_variable_use",
+    );
+    assert_eq!(
+        shadow.receipt.verdict,
+        ShadowCompareVerdict::Improved,
+        "lexical variable use compiler candidates may count only through the scoped class identity"
+    );
+    assert_eq!(
+        shadow.receipt.new_result.match_count, 1,
+        "lexical variable use compiler candidates must count only after class-specific proof"
+    );
+    assert_eq!(
+        shadow.receipt.new_result.identities,
+        vec!["token:lexical_variable_use:$count:compiler".to_string()]
+    );
+
+    let variable_token_type =
+        *crate::semantic_tokens::legend().map.get("variable").ok_or("missing variable token")?;
+    let live_match_count = decode_semantic_tokens(&live_result)?
+        .iter()
+        .filter(|token| {
+            token.line == expected_line
+                && token.start == expected_start
+                && token.length == expected_length
+                && token.token_type == variable_token_type
+        })
+        .count();
+    assert_eq!(
+        live_match_count, 1,
+        "source-backed lexical variable use compiler span must match exactly one existing live variable token"
+    );
+
+    let claim_boundary = must_some(lexical_receipt.get("claim_boundary").and_then(Value::as_str));
+    assert!(
+        claim_boundary.contains("lexical variable uses")
+            && claim_boundary.contains("no new token output is emitted"),
+        "lexical-variable use receipt must preserve the output-neutral cutover boundary; got: {claim_boundary}"
     );
 
     Ok(())
@@ -916,13 +1559,13 @@ fn semantic_tokens_runtime_quality_receipt_proves_source_backed_method_declarati
     assert_eq!(method_receipt.get("invalid_source_span_count").and_then(Value::as_u64), Some(0));
     assert_eq!(
         method_receipt.get("approved_for_live_cutover").and_then(Value::as_bool),
-        Some(false),
-        "method declarations must remain shadowed until explicit class-specific approval lands"
+        Some(true),
+        "method declarations are the scoped class under cutover proof"
     );
     assert_eq!(
         method_receipt.get("live_pilot").and_then(Value::as_bool),
-        Some(false),
-        "method declarations must not join the live compiler-token slice from parity proof alone"
+        Some(true),
+        "method declarations may join the scoped compiler-token live pilot only when live output parity is proven"
     );
 
     let (method_start, method_end, expected_line, expected_start, expected_length) =
@@ -939,7 +1582,7 @@ fn semantic_tokens_runtime_quality_receipt_proves_source_backed_method_declarati
 
     let method_candidate =
         crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
-            "token:method:greet:compiler",
+            "token:method_declaration:greet:compiler",
             ProviderFactSourceKind::CompilerFact,
             Provenance::SemanticAnalyzer,
             Confidence::Medium,
@@ -961,12 +1604,16 @@ fn semantic_tokens_runtime_quality_receipt_proves_source_backed_method_declarati
     );
     assert_eq!(
         shadow.receipt.verdict,
-        ShadowCompareVerdict::Same,
-        "method-declaration compiler candidates remain receipt-only until class-specific cutover"
+        ShadowCompareVerdict::Improved,
+        "method-declaration compiler candidates are the scoped approved class"
     );
     assert_eq!(
-        shadow.receipt.new_result.match_count, 0,
-        "method-declaration compiler candidates must not become semantic-token identities yet"
+        shadow.receipt.new_result.match_count, 1,
+        "method-declaration compiler candidates may count only through the scoped class identity"
+    );
+    assert_eq!(
+        shadow.receipt.new_result.identities,
+        vec!["token:method_declaration:greet:compiler".to_string()]
     );
 
     let method_token_type =
@@ -983,6 +1630,12 @@ fn semantic_tokens_runtime_quality_receipt_proves_source_backed_method_declarati
     assert_eq!(
         live_match_count, 1,
         "source-backed method-declaration compiler span must match exactly one existing live method token"
+    );
+
+    let claim_boundary = must_some(method_receipt.get("claim_boundary").and_then(Value::as_str));
+    assert!(
+        claim_boundary.contains("no new token output is emitted"),
+        "method receipt must preserve the output-neutral cutover boundary; got: {claim_boundary}"
     );
 
     Ok(())
@@ -1428,16 +2081,16 @@ fn semantic_tokens_runtime_quality_receipt_records_class_specific_method_expansi
     assert_eq!(method_receipt.get("source").and_then(Value::as_str), Some("CompilerFact"));
     assert_eq!(method_receipt.get("provenance").and_then(Value::as_str), Some("SemanticAnalyzer"));
     assert_eq!(method_receipt.get("freshness").and_then(Value::as_str), Some("Fresh"));
-    assert_eq!(method_receipt.get("fallback_state").and_then(Value::as_str), Some("Shadow"));
+    assert_eq!(method_receipt.get("fallback_state").and_then(Value::as_str), Some("Primary"));
     assert_eq!(
         method_receipt.get("approved_for_live_cutover").and_then(Value::as_bool),
-        Some(false),
-        "method declarations must remain shadowed until class-specific approval lands"
+        Some(true),
+        "method declarations are the scoped class under cutover proof"
     );
     assert_eq!(
         method_receipt.get("live_pilot").and_then(Value::as_bool),
-        Some(false),
-        "class-specific method receipt must not join the live compiler-token slice"
+        Some(true),
+        "class-specific method receipt may join the scoped compiler-token live pilot only with parity proof"
     );
     assert_eq!(
         method_receipt.get("live_output_parity").and_then(Value::as_bool),
@@ -1465,27 +2118,39 @@ fn semantic_tokens_runtime_quality_receipt_records_class_specific_method_expansi
 
     let claim_boundary = must_some(method_receipt.get("claim_boundary").and_then(Value::as_str));
     assert!(
-        claim_boundary.contains("method declarations stay shadowed"),
-        "class-specific receipt must preserve the no-cutover boundary; got: {claim_boundary}"
+        claim_boundary.contains("no new token output is emitted"),
+        "class-specific receipt must preserve the output-neutral boundary; got: {claim_boundary}"
     );
 
     let shadow_receipt = must_some(method_receipt.get("shadow_receipt").and_then(Value::as_object));
     let new_result = must_some(shadow_receipt.get("new_result").and_then(Value::as_object));
     assert_eq!(
         new_result.get("match_count").and_then(Value::as_u64),
-        Some(0),
-        "source-backed token:method compiler candidates must not become token identities yet"
+        Some(1),
+        "source-backed method-declaration compiler candidates may count only through the scoped class identity"
     );
     let identities = must_some(new_result.get("identities").and_then(Value::as_array));
     assert!(
-        identities.is_empty(),
-        "class-specific receipt must not authorize method token identities before approval"
+        identities
+            .iter()
+            .filter_map(Value::as_str)
+            .any(|identity| identity == "token:method_declaration:greet:compiler"),
+        "class-specific receipt must authorize only the method-declaration identity; got: {identities:?}"
     );
 
     let notes = must_some(receipt.get("notes").and_then(Value::as_str));
     assert!(
         notes.contains("class_specific_compiler_token_classes=2"),
         "runtime notes must count the class-specific expansion receipts; got: {notes}"
+    );
+    assert!(
+        notes.contains("class_specific_live_pilots=2"),
+        "runtime notes must count both scoped class live pilots; got: {notes}"
+    );
+    assert_eq!(
+        receipt.get("class_specific_live_pilot_count").and_then(Value::as_u64),
+        Some(2),
+        "runtime receipt must count the approved method- and field-declaration classes as live pilots"
     );
 
     Ok(())
@@ -1593,6 +2258,458 @@ fn semantic_tokens_runtime_quality_receipt_refreshes_after_document_edit()
         compiler_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
         Some(true),
         "edit-freshness proof must not broaden live semantic-token output"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_refreshes_method_declaration_live_pilot_after_edit()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    let class_uri = "file:///workspace/lib/TokenGreeter.pm";
+    open_document(&server, class_uri, CLASS_METHOD_MODULE);
+
+    let params = json!({ "textDocument": {"uri": class_uri} });
+    let initial_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let initial_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params.clone()))));
+    let initial_method_receipt = class_specific_receipt(&initial_receipt, "method_declaration")?;
+    let initial_identity = first_shadow_identity(initial_method_receipt)?;
+    assert!(
+        initial_identity.contains("greet"),
+        "initial method-declaration compiler identity should use the opened source: {initial_identity}"
+    );
+    assert_eq!(
+        initial_method_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "initial method declaration should be the scoped class live pilot"
+    );
+
+    change_document(&server, class_uri, 2, UPDATED_CLASS_METHOD_MODULE);
+
+    let updated_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let updated_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+    let updated_method_receipt = class_specific_receipt(&updated_receipt, "method_declaration")?;
+    let updated_identity = first_shadow_identity(updated_method_receipt)?;
+
+    assert_ne!(
+        updated_live, initial_live,
+        "live semantic-token output must refresh after the method declaration edit"
+    );
+    assert_ne!(
+        updated_identity, initial_identity,
+        "method-declaration compiler identity must refresh after didChange"
+    );
+    assert!(
+        updated_identity.contains("greet_again"),
+        "updated method-declaration compiler identity should use the edited source: {updated_identity}"
+    );
+    assert_eq!(
+        updated_method_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "post-edit method declaration should remain in the scoped class live pilot"
+    );
+    assert_eq!(
+        updated_method_receipt.get("live_token_match_count").and_then(Value::as_u64),
+        Some(1),
+        "post-edit source-backed method declaration must still match the live token stream"
+    );
+    assert_eq!(
+        updated_method_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "edit-freshness proof must remain output-neutral"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_refreshes_field_declaration_live_pilot_after_edit()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    let class_uri = "file:///workspace/lib/TokenGreeter.pm";
+    open_document(&server, class_uri, CLASS_METHOD_MODULE);
+
+    let params = json!({ "textDocument": {"uri": class_uri} });
+    let initial_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let initial_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params.clone()))));
+    let initial_field_receipt = class_specific_receipt(&initial_receipt, "field_declaration")?;
+    let initial_identity = first_shadow_identity(initial_field_receipt)?;
+    assert!(
+        initial_identity.contains("$name"),
+        "initial field-declaration compiler identity should use the opened source: {initial_identity}"
+    );
+    assert_eq!(
+        initial_field_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "initial field declaration should be the scoped class live pilot"
+    );
+
+    change_document(&server, class_uri, 2, UPDATED_CLASS_FIELD_MODULE);
+
+    let updated_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let updated_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+    let updated_field_receipt = class_specific_receipt(&updated_receipt, "field_declaration")?;
+    let updated_identity = first_shadow_identity(updated_field_receipt)?;
+
+    assert_ne!(
+        updated_live, initial_live,
+        "live semantic-token output must refresh after the field declaration edit"
+    );
+    assert_ne!(
+        updated_identity, initial_identity,
+        "field-declaration compiler identity must refresh after didChange"
+    );
+    assert!(
+        updated_identity.contains("$display_name"),
+        "updated field-declaration compiler identity should use the edited source: {updated_identity}"
+    );
+    assert_eq!(
+        updated_field_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "post-edit field declaration should remain in the scoped class live pilot"
+    );
+    assert_eq!(
+        updated_field_receipt.get("live_token_match_count").and_then(Value::as_u64),
+        Some(1),
+        "post-edit source-backed field declaration must still match the live token stream"
+    );
+    assert_eq!(
+        updated_field_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "edit-freshness proof must remain output-neutral"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_refreshes_lexical_variable_declaration_live_pilot_after_edit()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    let lexical_uri = "file:///workspace/lib/TokenLexical.pm";
+    open_document(&server, lexical_uri, LEXICAL_VARIABLE_MODULE);
+
+    let params = json!({ "textDocument": {"uri": lexical_uri} });
+    let initial_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let initial_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params.clone()))));
+    let initial_variable_receipt =
+        class_specific_receipt(&initial_receipt, "lexical_variable_declaration")?;
+    let initial_identity = first_shadow_identity(initial_variable_receipt)?;
+    assert!(
+        initial_identity.contains("$count"),
+        "initial lexical-variable compiler identity should use the opened source: {initial_identity}"
+    );
+    assert_eq!(
+        initial_variable_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "initial lexical variable should be the scoped class live pilot"
+    );
+
+    change_document(&server, lexical_uri, 2, UPDATED_LEXICAL_VARIABLE_MODULE);
+
+    let updated_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let updated_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+    let updated_variable_receipt =
+        class_specific_receipt(&updated_receipt, "lexical_variable_declaration")?;
+    let updated_identity = first_shadow_identity(updated_variable_receipt)?;
+
+    assert_ne!(
+        updated_live, initial_live,
+        "live semantic-token output must refresh after the lexical variable declaration edit"
+    );
+    assert_ne!(
+        updated_identity, initial_identity,
+        "lexical-variable compiler identity must refresh after didChange"
+    );
+    assert!(
+        updated_identity.contains("$total_count"),
+        "updated lexical-variable compiler identity should use the edited source: {updated_identity}"
+    );
+    assert_eq!(
+        updated_variable_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "post-edit lexical variable should remain in the scoped class live pilot"
+    );
+    assert_eq!(
+        updated_variable_receipt.get("live_token_match_count").and_then(Value::as_u64),
+        Some(1),
+        "post-edit source-backed lexical variable must still match the live token stream"
+    );
+    assert_eq!(
+        updated_variable_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "edit-freshness proof must remain output-neutral"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_refreshes_lexical_variable_use_live_pilot_after_edit()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    let lexical_uri = "file:///workspace/lib/TokenLexicalUse.pm";
+    open_document(&server, lexical_uri, LEXICAL_VARIABLE_USE_MODULE);
+
+    let params = json!({ "textDocument": {"uri": lexical_uri} });
+    let initial_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let initial_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params.clone()))));
+    let initial_variable_receipt =
+        class_specific_receipt(&initial_receipt, "lexical_variable_use")?;
+    let initial_identity = first_shadow_identity(initial_variable_receipt)?;
+    assert!(
+        initial_identity.contains("$count"),
+        "initial lexical-variable use compiler identity should use the opened source: {initial_identity}"
+    );
+    assert_eq!(
+        initial_variable_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "initial lexical variable use should be the scoped class live pilot"
+    );
+
+    change_document(&server, lexical_uri, 2, UPDATED_LEXICAL_VARIABLE_USE_MODULE);
+
+    let updated_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let updated_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+    let updated_variable_receipt =
+        class_specific_receipt(&updated_receipt, "lexical_variable_use")?;
+    let updated_identity = first_shadow_identity(updated_variable_receipt)?;
+
+    assert_ne!(
+        updated_live, initial_live,
+        "live semantic-token output must refresh after the lexical variable use edit"
+    );
+    assert_ne!(
+        updated_identity, initial_identity,
+        "lexical-variable use compiler identity must refresh after didChange"
+    );
+    assert!(
+        updated_identity.contains("$total_count"),
+        "updated lexical-variable use compiler identity should use the edited source: {updated_identity}"
+    );
+    assert_eq!(
+        updated_variable_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "post-edit lexical variable use should remain in the scoped class live pilot"
+    );
+    assert_eq!(
+        updated_variable_receipt.get("live_token_match_count").and_then(Value::as_u64),
+        Some(1),
+        "post-edit source-backed lexical variable use must still match the live token stream"
+    );
+    assert_eq!(
+        updated_variable_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "edit-freshness proof must remain output-neutral"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_refreshes_package_declaration_live_pilot_after_edit()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    let catalyst_uri = "file:///workspace/lib/MyApp/Controller/Root.pm";
+    open_document(&server, catalyst_uri, CATALYST_CONTROLLER_MODULE);
+
+    let params = json!({ "textDocument": {"uri": catalyst_uri} });
+    let initial_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let initial_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params.clone()))));
+    let initial_package_receipt = class_specific_receipt(&initial_receipt, "package_declaration")?;
+    let initial_identity = first_shadow_identity(initial_package_receipt)?;
+    assert!(
+        initial_identity.contains("MyApp::Controller::Root"),
+        "initial package-declaration compiler identity should use the opened source: {initial_identity}"
+    );
+    assert_eq!(
+        initial_package_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "initial package declaration should be the scoped class live pilot"
+    );
+
+    change_document(&server, catalyst_uri, 2, UPDATED_CATALYST_CONTROLLER_MODULE);
+
+    let updated_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let updated_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+    let updated_package_receipt = class_specific_receipt(&updated_receipt, "package_declaration")?;
+    let updated_identity = first_shadow_identity(updated_package_receipt)?;
+
+    assert_ne!(
+        updated_live, initial_live,
+        "live semantic-token output must refresh after the package declaration edit"
+    );
+    assert_ne!(
+        updated_identity, initial_identity,
+        "package-declaration compiler identity must refresh after didChange"
+    );
+    assert!(
+        updated_identity.contains("MyApp::Controller::Renamed"),
+        "updated package-declaration compiler identity should use the edited source: {updated_identity}"
+    );
+    assert_eq!(
+        updated_package_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "post-edit package declaration should remain in the scoped class live pilot"
+    );
+    assert_eq!(
+        updated_package_receipt.get("live_token_match_count").and_then(Value::as_u64),
+        Some(1),
+        "post-edit source-backed package declaration must still match the live token stream"
+    );
+    assert_eq!(
+        updated_package_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "edit-freshness proof must remain output-neutral"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_refreshes_method_call_live_pilot_after_edit()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    let catalyst_uri = "file:///workspace/lib/MyApp/Controller/Root.pm";
+    open_document(&server, catalyst_uri, CATALYST_CONTROLLER_MODULE);
+
+    let params = json!({ "textDocument": {"uri": catalyst_uri} });
+    let initial_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let initial_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params.clone()))));
+    let initial_method_receipt = class_specific_receipt(&initial_receipt, "method_call")?;
+    let initial_identity = first_shadow_identity(initial_method_receipt)?;
+    assert!(
+        initial_identity.contains("stash"),
+        "initial method-call compiler identity should use the opened source: {initial_identity}"
+    );
+    assert_eq!(
+        initial_method_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "initial method call should be the scoped class live pilot"
+    );
+
+    change_document(&server, catalyst_uri, 2, UPDATED_CATALYST_METHOD_CALL_MODULE);
+
+    let updated_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let updated_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+    let updated_method_receipt = class_specific_receipt(&updated_receipt, "method_call")?;
+    let updated_identity = first_shadow_identity(updated_method_receipt)?;
+
+    assert_ne!(
+        updated_live, initial_live,
+        "live semantic-token output must refresh after the method-call edit"
+    );
+    assert_ne!(
+        updated_identity, initial_identity,
+        "method-call compiler identity must refresh after didChange"
+    );
+    assert!(
+        updated_identity.contains("stash_updated"),
+        "updated method-call compiler identity should use the edited source: {updated_identity}"
+    );
+    assert_eq!(
+        updated_method_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "post-edit method call should remain in the scoped class live pilot"
+    );
+    assert_eq!(
+        updated_method_receipt.get("live_token_match_count").and_then(Value::as_u64),
+        Some(1),
+        "post-edit source-backed method call must still match the live token stream"
+    );
+    assert_eq!(
+        updated_method_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "edit-freshness proof must remain output-neutral"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_refreshes_self_method_call_live_pilot_after_edit()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    let self_call_uri = "file:///workspace/lib/TokenSelfCall.pm";
+    open_document(&server, self_call_uri, SELF_METHOD_CALL_MODULE);
+
+    let params = json!({ "textDocument": {"uri": self_call_uri} });
+    let initial_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let initial_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params.clone()))));
+    let initial_method_receipt = class_specific_receipt(&initial_receipt, "self_method_call")?;
+    let initial_identity = first_shadow_identity(initial_method_receipt)?;
+    assert!(
+        initial_identity.contains("status"),
+        "initial self method-call compiler identity should use the opened source: {initial_identity}"
+    );
+    assert_eq!(
+        initial_method_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "initial self method call should be the scoped class live pilot"
+    );
+
+    change_document(&server, self_call_uri, 2, UPDATED_SELF_METHOD_CALL_MODULE);
+
+    let updated_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let updated_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+    let updated_method_receipt = class_specific_receipt(&updated_receipt, "self_method_call")?;
+    let updated_identity = first_shadow_identity(updated_method_receipt)?;
+
+    assert_ne!(
+        updated_live, initial_live,
+        "live semantic-token output must refresh after the self method-call edit"
+    );
+    assert_ne!(
+        updated_identity, initial_identity,
+        "self method-call compiler identity must refresh after didChange"
+    );
+    assert!(
+        updated_identity.contains("status_updated"),
+        "updated self method-call compiler identity should use the edited source: {updated_identity}"
+    );
+    assert_eq!(
+        updated_method_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "post-edit self method call should remain in the scoped class live pilot"
+    );
+    assert_eq!(
+        updated_method_receipt.get("live_token_match_count").and_then(Value::as_u64),
+        Some(1),
+        "post-edit source-backed self method call must still match the live token stream"
+    );
+    assert_eq!(
+        updated_method_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "edit-freshness proof must remain output-neutral"
     );
 
     Ok(())

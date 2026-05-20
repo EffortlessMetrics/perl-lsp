@@ -133,7 +133,7 @@ pub fn extract_pod(source: &str) -> PodDoc {
         if let Some(heading) = line.strip_prefix("=head2") {
             flush_section(&mut doc, &current_section, &body, false);
             body.clear();
-            let heading = heading.trim().to_string();
+            let heading = strip_pod_formatting(heading.trim());
             current_section = Some(Section::Method(heading));
             continue;
         }
@@ -249,30 +249,53 @@ fn strip_pod_formatting(text: &str) -> String {
     let mut i = 0;
 
     while i < len {
-        // Check for formatting code: X<...> where X is a letter
+        // Check for formatting code: X<...> or X<< ... >> where X is a POD code.
         if i + 2 < len
             && chars[i].is_ascii_alphabetic()
             && chars[i + 1] == '<'
             && is_pod_format_code(chars[i])
         {
             let code_char = chars[i];
-            i += 2; // skip X<
+            let delimiter_width = opening_delimiter_width(&chars, i + 1);
+            i += 1 + delimiter_width; // skip X and the opening angle delimiter
 
-            // Find matching > accounting for nested <>
-            let mut depth = 1;
             let start = i;
-            while i < len && depth > 0 {
-                if chars[i] == '<' {
-                    depth += 1;
-                } else if chars[i] == '>' {
-                    depth -= 1;
+            let end = if delimiter_width == 1 {
+                // Find matching > accounting for nested <> in classic X<...> codes.
+                let mut depth = 1;
+                while i < len && depth > 0 {
+                    if chars[i] == '<' {
+                        depth += 1;
+                    } else if chars[i] == '>' {
+                        depth -= 1;
+                    }
+                    if depth > 0 {
+                        i += 1;
+                    }
                 }
-                if depth > 0 {
+                let end = i;
+                if i < len {
+                    i += 1; // skip >
+                }
+                end
+            } else {
+                // POD permits doubled (or wider) delimiters so content can contain raw
+                // angle brackets, for example C<< $obj->method >>.
+                while i < len && !has_closing_delimiter(&chars, i, delimiter_width) {
                     i += 1;
                 }
+                let end = i;
+                if i < len {
+                    i += delimiter_width;
+                }
+                end
+            };
+
+            let inner = &chars[start..end];
+            let mut inner_str: String = inner.iter().collect();
+            if delimiter_width > 1 {
+                inner_str = trim_multidelimiter_padding(&inner_str).to_string();
             }
-            let inner = &chars[start..i];
-            let inner_str: String = inner.iter().collect();
 
             let display = match code_char {
                 'L' => extract_link_display(&inner_str),
@@ -281,9 +304,6 @@ fn strip_pod_formatting(text: &str) -> String {
             };
 
             result.push_str(&display);
-            if i < len {
-                i += 1; // skip >
-            }
         } else {
             result.push(chars[i]);
             i += 1;
@@ -291,6 +311,20 @@ fn strip_pod_formatting(text: &str) -> String {
     }
 
     result
+}
+
+fn opening_delimiter_width(chars: &[char], start: usize) -> usize {
+    chars[start..].iter().take_while(|ch| **ch == '<').count()
+}
+
+fn has_closing_delimiter(chars: &[char], start: usize, delimiter_width: usize) -> bool {
+    chars
+        .get(start..start + delimiter_width)
+        .is_some_and(|candidate| candidate.iter().all(|ch| *ch == '>'))
+}
+
+fn trim_multidelimiter_padding(text: &str) -> &str {
+    text.trim_matches(|ch: char| ch.is_ascii_whitespace())
 }
 
 /// Percent-encode characters that are invalid in a markdown link URL.
@@ -362,6 +396,10 @@ fn extract_link_display(link: &str) -> String {
 /// - `E<quot>` → `"`
 /// - `E<apos>` → `'`
 ///
+/// - `E<sol>` -> `/`
+/// - `E<verbar>` -> `|`
+/// - `E<number>`, `E<0xhex>`, and `E<0octal>` numeric codepoints
+///
 /// Unknown entities are returned as-is.
 fn decode_pod_entity(entity: &str) -> String {
     match entity {
@@ -370,8 +408,27 @@ fn decode_pod_entity(entity: &str) -> String {
         "amp" => "&".to_string(),
         "quot" => "\"".to_string(),
         "apos" => "'".to_string(),
-        _ => entity.to_string(),
+        "sol" => "/".to_string(),
+        "verbar" => "|".to_string(),
+        _ => decode_numeric_pod_entity(entity).unwrap_or_else(|| entity.to_string()),
     }
+}
+
+fn decode_numeric_pod_entity(entity: &str) -> Option<String> {
+    if entity.is_empty() {
+        return None;
+    }
+
+    let codepoint =
+        if let Some(hex) = entity.strip_prefix("0x").or_else(|| entity.strip_prefix("0X")) {
+            u32::from_str_radix(hex, 16).ok()?
+        } else if entity.starts_with('0') && entity.len() > 1 {
+            u32::from_str_radix(entity, 8).ok()?
+        } else {
+            entity.parse::<u32>().ok()?
+        };
+
+    char::from_u32(codepoint).map(|ch| ch.to_string())
 }
 
 fn is_pod_format_code(c: char) -> bool {
@@ -382,6 +439,20 @@ fn is_pod_format_code(c: char) -> bool {
 mod tests {
     use super::*;
 
+    #[test]
+    fn first_paragraph_stops_at_first_blank_line() {
+        let text = "first line\nsecond line\n\nthird line";
+
+        assert_eq!(first_paragraph(text), "first line\nsecond line");
+    }
+
+    #[test]
+    fn first_paragraph_skips_leading_blank_before_text() {
+        let text = "\nfirst paragraph\n\nsecond paragraph";
+
+        assert_eq!(first_paragraph(text), "first paragraph");
+    }
+
     // ── decode_pod_entity ────────────────────────────────────────────────────
 
     #[test]
@@ -389,6 +460,7 @@ mod tests {
         // Unknown entity names fall through to the `_` branch and are returned as-is.
         assert_eq!(decode_pod_entity("nbsp"), "nbsp");
         assert_eq!(decode_pod_entity("unknown"), "unknown");
+        assert_eq!(decode_pod_entity("copy"), "copy");
     }
 
     #[test]
@@ -398,12 +470,21 @@ mod tests {
     }
 
     #[test]
-    fn decode_entity_numeric_looking_returns_unchanged() {
-        // Numeric-looking names like "32" or "0x20" are not handled as HTML numeric refs;
-        // they fall through to the unknown branch and are returned as-is.
-        // TODO: POD spec §8 supports E<number> (Unicode code point) — currently unimplemented.
-        assert_eq!(decode_pod_entity("32"), "32");
-        assert_eq!(decode_pod_entity("0x20"), "0x20");
+    fn decode_entity_numeric_codepoints() {
+        assert_eq!(decode_pod_entity("32"), " ");
+        assert_eq!(decode_pod_entity("0x20"), " ");
+        assert_eq!(decode_pod_entity("0X3BB"), "λ");
+        assert_eq!(decode_pod_entity("181"), "µ");
+        assert_eq!(decode_pod_entity("0x201E"), "„");
+        assert_eq!(decode_pod_entity("075"), "=");
+    }
+
+    #[test]
+    fn decode_entity_invalid_numeric_returns_unchanged() {
+        assert_eq!(decode_pod_entity("0x"), "0x");
+        assert_eq!(decode_pod_entity("09"), "09");
+        assert_eq!(decode_pod_entity("1114112"), "1114112");
+        assert_eq!(decode_pod_entity("0x110000"), "0x110000");
     }
 
     #[test]
@@ -413,6 +494,35 @@ mod tests {
         assert_eq!(decode_pod_entity("amp"), "&");
         assert_eq!(decode_pod_entity("quot"), "\"");
         assert_eq!(decode_pod_entity("apos"), "'");
+        assert_eq!(decode_pod_entity("sol"), "/");
+        assert_eq!(decode_pod_entity("verbar"), "|");
+    }
+
+    // ── multi-angle POD formatting delimiters ────────────────────────────────
+
+    #[test]
+    fn strips_double_angle_code_formatting() {
+        assert_eq!(strip_pod_formatting("C<< $obj->method >>"), "$obj->method");
+    }
+
+    #[test]
+    fn double_angle_formatting_allows_single_angle_content() {
+        assert_eq!(strip_pod_formatting("Use C<< <=> >> for comparison"), "Use <=> for comparison");
+    }
+
+    #[test]
+    fn double_angle_link_renders_markdown() {
+        assert_eq!(
+            strip_pod_formatting("L<< display text|File::Find/The wanted function >>"),
+            "[display text](perl-module://File::Find/The%20wanted%20function)"
+        );
+    }
+
+    #[test]
+    fn strip_pod_formatting_handles_nested_text_and_entities() {
+        let text = "Use B<I<strict>> and C<$value E<lt> 10>";
+
+        assert_eq!(strip_pod_formatting(text), "Use strict and $value < 10");
     }
 
     // ── encode_pod_link_target ───────────────────────────────────────────────
@@ -429,6 +539,18 @@ mod tests {
         assert_eq!(
             encode_pod_link_target("A::Module/section-name_v1.0~"),
             "A::Module/section-name_v1.0~"
+        );
+        assert_eq!(
+            encode_pod_link_target("Module::Name/path-._~/Section"),
+            "Module::Name/path-._~/Section"
+        );
+    }
+
+    #[test]
+    fn encode_link_percent_encodes_markdown_breakers() {
+        assert_eq!(
+            encode_pod_link_target("Module Name/[section](x)"),
+            "Module%20Name/%5Bsection%5D%28x%29"
         );
     }
 
@@ -460,5 +582,12 @@ mod tests {
         assert_eq!(encode_pod_link_target("\t"), "%09");
         assert_eq!(encode_pod_link_target("\n"), "%0A");
         assert_eq!(encode_pod_link_target("a\tb"), "a%09b");
+    }
+
+    #[test]
+    fn markdown_link_text_escapes_only_link_delimiters() {
+        let text = r"back\slash [label] (target)";
+
+        assert_eq!(escape_markdown_link_text(text), r"back\\slash \[label\] (target)");
     }
 }

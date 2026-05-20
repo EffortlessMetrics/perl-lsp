@@ -33,6 +33,7 @@ pub(crate) const ALLOWED_COMMANDS: &[&str] = &[
     "perl.previewSafeDelete",
     "perl.safeDeleteSymbol",
     "perl.previewPackageRename",
+    "perl.explainMissingModuleLookup",
 ];
 
 /// Suspicious patterns rejected in generic payloads.

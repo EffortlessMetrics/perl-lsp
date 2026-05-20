@@ -13,8 +13,9 @@ use perl_semantic_facts::{
     ExportSet, ExportTag, FileId, GeneratedMember, GeneratedMemberKind, ImportKind, ImportSpec,
     ImportSymbols, OccurrenceFact, OccurrenceId, OccurrenceKind, PackageEdge, PackageEdgeKind,
     PackageKind, PackageNode, PlanBlocker, PlanBlockerReason, PlanWarning, PlannedEdit,
-    PlannedEditCategory, Provenance, RenamePlan, SafeDeletePlan, ScopeId, ValueShape,
-    VisibleSymbol, VisibleSymbolContext, VisibleSymbolSource,
+    PlannedEditCategory, Provenance, ProviderFactFreshness, ProviderFactSourceKind,
+    ProviderFactTrace, ProviderFallbackState, ProviderSurface, RenamePlan, SafeDeletePlan, ScopeId,
+    ValueShape, VisibleSymbol, VisibleSymbolContext, VisibleSymbolSource,
 };
 use proptest::prelude::*;
 
@@ -59,6 +60,7 @@ fn arb_provenance() -> impl Strategy<Value = Provenance> {
         Just(Provenance::NameHeuristic),
         Just(Provenance::SearchFallback),
         Just(Provenance::DynamicBoundary),
+        Just(Provenance::LiteralRequireImport),
     ]
 }
 
@@ -532,6 +534,94 @@ fn arb_visible_symbol() -> impl Strategy<Value = VisibleSymbol> {
         })
 }
 
+// ── Strategies: provider fact tracing ─────────────────────────────────────
+
+fn arb_provider_surface() -> impl Strategy<Value = ProviderSurface> {
+    prop_oneof![
+        Just(ProviderSurface::Diagnostics),
+        Just(ProviderSurface::Completion),
+        Just(ProviderSurface::Hover),
+        Just(ProviderSurface::Definition),
+        Just(ProviderSurface::References),
+        Just(ProviderSurface::Rename),
+        Just(ProviderSurface::SafeDelete),
+        Just(ProviderSurface::WorkspaceSymbols),
+        Just(ProviderSurface::DocumentSymbols),
+        Just(ProviderSurface::SemanticTokens),
+    ]
+}
+
+fn arb_provider_fact_source_kind() -> impl Strategy<Value = ProviderFactSourceKind> {
+    prop_oneof![
+        Just(ProviderFactSourceKind::ParserSyntax),
+        Just(ProviderFactSourceKind::LegacyWorkspace),
+        Just(ProviderFactSourceKind::SemanticFact),
+        Just(ProviderFactSourceKind::CompilerFact),
+        Just(ProviderFactSourceKind::FrameworkAdapter),
+        Just(ProviderFactSourceKind::DynamicBoundary),
+        Just(ProviderFactSourceKind::Fallback),
+        Just(ProviderFactSourceKind::Unknown),
+    ]
+}
+
+fn arb_provider_fact_freshness() -> impl Strategy<Value = ProviderFactFreshness> {
+    prop_oneof![
+        Just(ProviderFactFreshness::Fresh),
+        Just(ProviderFactFreshness::Stale),
+        Just(ProviderFactFreshness::Unknown),
+        Just(ProviderFactFreshness::NotApplicable),
+    ]
+}
+
+fn arb_provider_fallback_state() -> impl Strategy<Value = ProviderFallbackState> {
+    prop_oneof![
+        Just(ProviderFallbackState::Primary),
+        Just(ProviderFallbackState::Shadow),
+        Just(ProviderFallbackState::Fallback),
+        Just(ProviderFallbackState::Unavailable),
+        Just(ProviderFallbackState::Blocked),
+    ]
+}
+
+fn arb_provider_fact_trace() -> impl Strategy<Value = ProviderFactTrace> {
+    (
+        arb_provider_surface(),
+        arb_provider_fact_source_kind(),
+        arb_provenance(),
+        arb_confidence(),
+        arb_provider_fact_freshness(),
+        arb_provider_fallback_state(),
+        prop::option::of("[A-Fa-f0-9]{8,40}".prop_map(String::from)),
+        arb_opt_anchor_id(),
+        prop::option::of(any::<u32>()),
+    )
+        .prop_map(
+            |(
+                surface,
+                source,
+                provenance,
+                confidence,
+                freshness,
+                fallback_state,
+                source_hash,
+                anchor_id,
+                model_version,
+            )| {
+                ProviderFactTrace::new(
+                    surface,
+                    source,
+                    provenance,
+                    confidence,
+                    freshness,
+                    fallback_state,
+                    source_hash,
+                    anchor_id,
+                    model_version,
+                )
+            },
+        )
+}
+
 // ── Strategies: rename and safe-delete plans ──────────────────────────────
 
 fn arb_plan_blocker_reason() -> impl Strategy<Value = PlanBlockerReason> {
@@ -842,6 +932,43 @@ proptest! {
         let json = serde_json::to_string(&symbol).map_err(|e| TestCaseError::fail(e.to_string()))?;
         let decoded: VisibleSymbol = serde_json::from_str(&json).map_err(|e| TestCaseError::fail(e.to_string()))?;
         prop_assert_eq!(&decoded, &symbol);
+    }
+
+    // ── Provider fact tracing ───────────────────────────────────────────────
+
+    #[test]
+    fn provider_surface_json_roundtrip(surface in arb_provider_surface()) {
+        let json = serde_json::to_string(&surface).map_err(|e| TestCaseError::fail(e.to_string()))?;
+        let decoded: ProviderSurface = serde_json::from_str(&json).map_err(|e| TestCaseError::fail(e.to_string()))?;
+        prop_assert_eq!(decoded, surface);
+    }
+
+    #[test]
+    fn provider_fact_source_kind_json_roundtrip(source in arb_provider_fact_source_kind()) {
+        let json = serde_json::to_string(&source).map_err(|e| TestCaseError::fail(e.to_string()))?;
+        let decoded: ProviderFactSourceKind = serde_json::from_str(&json).map_err(|e| TestCaseError::fail(e.to_string()))?;
+        prop_assert_eq!(decoded, source);
+    }
+
+    #[test]
+    fn provider_fact_freshness_json_roundtrip(freshness in arb_provider_fact_freshness()) {
+        let json = serde_json::to_string(&freshness).map_err(|e| TestCaseError::fail(e.to_string()))?;
+        let decoded: ProviderFactFreshness = serde_json::from_str(&json).map_err(|e| TestCaseError::fail(e.to_string()))?;
+        prop_assert_eq!(decoded, freshness);
+    }
+
+    #[test]
+    fn provider_fallback_state_json_roundtrip(fallback_state in arb_provider_fallback_state()) {
+        let json = serde_json::to_string(&fallback_state).map_err(|e| TestCaseError::fail(e.to_string()))?;
+        let decoded: ProviderFallbackState = serde_json::from_str(&json).map_err(|e| TestCaseError::fail(e.to_string()))?;
+        prop_assert_eq!(decoded, fallback_state);
+    }
+
+    #[test]
+    fn provider_fact_trace_json_roundtrip(trace in arb_provider_fact_trace()) {
+        let json = serde_json::to_string(&trace).map_err(|e| TestCaseError::fail(e.to_string()))?;
+        let decoded: ProviderFactTrace = serde_json::from_str(&json).map_err(|e| TestCaseError::fail(e.to_string()))?;
+        prop_assert_eq!(&decoded, &trace);
     }
 
     // ── Rename and safe-delete plans ────────────────────────────────────────

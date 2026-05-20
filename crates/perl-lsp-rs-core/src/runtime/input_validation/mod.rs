@@ -280,6 +280,22 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_execute_command_allows_explain_missing_module_lookup() {
+        let method = "workspace/executeCommand";
+        let params = serde_json::json!({
+            "command": "perl.explainMissingModuleLookup",
+            "arguments": [{
+                "module": "Missing::Payload",
+                "textDocument": {"uri": "file:///workspace/script.pl"},
+                "position": {"line": 0, "character": 4}
+            }]
+        });
+
+        let result = validate_lsp_request(method, &params);
+        assert!(result.is_ok());
+    }
+
+    #[test]
     fn test_validate_execute_command_blocked() {
         let method = "workspace/executeCommand";
         let params = serde_json::json!({

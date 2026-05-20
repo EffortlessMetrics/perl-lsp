@@ -25,6 +25,7 @@ mod hierarchy;
 mod hover;
 mod mason;
 mod misc;
+mod missing_module_lookup;
 mod moniker;
 mod navigation;
 mod references;

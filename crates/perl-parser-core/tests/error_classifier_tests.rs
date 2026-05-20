@@ -128,3 +128,22 @@ fn explanation_some_for_common_kinds() -> Result<(), Box<dyn std::error::Error>>
     assert!(c.get_explanation(&ParseErrorKind::InvalidSyntax).is_none());
     Ok(())
 }
+
+#[test]
+fn classify_empty_source_does_not_panic() -> Result<(), Box<dyn std::error::Error>> {
+    // Regression: source.len() - 1 underflows when source is empty (usize wraps in release,
+    // panics in debug). Should return UnexpectedEof, not crash.
+    let classifier = ErrorClassifier::new();
+    let node = V1Node::new(
+        V1NodeKind::Error {
+            message: "err".to_string(),
+            expected: vec![],
+            found: None,
+            partial: None,
+        },
+        SourceLocation::new(0, 0),
+    );
+    let kind = classifier.classify(&node, "");
+    assert_eq!(kind, ParseErrorKind::UnexpectedEof);
+    Ok(())
+}

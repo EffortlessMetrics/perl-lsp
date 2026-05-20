@@ -217,6 +217,10 @@ impl ExecuteCommandProvider {
                 Err("perl.previewPackageRename requires the live LSP runtime workspace index"
                     .to_string())
             }
+            "perl.explainMissingModuleLookup" => {
+                Err("perl.explainMissingModuleLookup requires the live LSP runtime module-resolution state"
+                    .to_string())
+            }
             "perl.explainProviderDecision" => self.explain_provider_decision(&arguments),
             _ => Err(format!("Unknown command: {}", command)),
         }
@@ -1311,6 +1315,7 @@ pub fn get_supported_commands() -> Vec<String> {
         "perl.previewSafeDelete".to_string(),
         "perl.safeDeleteSymbol".to_string(),
         "perl.previewPackageRename".to_string(),
+        "perl.explainMissingModuleLookup".to_string(),
     ]
 }
 

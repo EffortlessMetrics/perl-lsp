@@ -9,13 +9,14 @@
 //! - query latency and repeated-request candidate-count delta
 //! - useful source-backed hits versus unrelated/noisy hits for representative queries
 //! - generated/framework candidate names plus explicitly labeled generated pilot symbols
+//! - generated/no-source candidate names kept out of live exact workspace-symbol output
 //! - role/delegation/modifier boundary shapes observed separately from exact symbols
 //! - stale/fresh query behavior after editing an open document
 
 use anyhow::{Context, Result};
-use perl_lsp_ux_tests::{
-    ScenarioConfig, UxCiTier, UxComponent, UxHarness, UxScenarioSkip, run_ux_scenario,
-};
+use perl_lsp_ux_tests::binary_available;
+use perl_lsp_ux_tests::missing_binary_skip;
+use perl_lsp_ux_tests::{ScenarioConfig, UxCiTier, UxComponent, UxHarness, run_ux_scenario};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -40,6 +41,7 @@ struct WorkspaceSymbolProbe {
     query: &'static str,
     useful_substrings: &'static [&'static str],
     generated_candidate_names: &'static [&'static str],
+    generated_no_source_candidate_names: &'static [&'static str],
     boundary_source_shapes: &'static [&'static str],
 }
 
@@ -61,6 +63,8 @@ struct WorkspaceSymbolProbeReport {
     unrelated_hit_count: usize,
     generated_candidate_count: usize,
     generated_candidate_live_hits: Vec<String>,
+    generated_no_source_candidate_count: usize,
+    generated_no_source_live_hits: Vec<String>,
     generated_label_hits: Vec<String>,
     first_useful_source_rank: Option<usize>,
     first_generated_label_rank: Option<usize>,
@@ -88,14 +92,6 @@ struct FreshnessReport {
 struct TimedSymbols {
     symbols: Vec<Value>,
     latency_ms: u128,
-}
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
-
-fn missing_binary_skip() -> UxScenarioSkip {
-    UxScenarioSkip::infra("PERL_LSP_BIN not set and target/debug/perl-lsp not found")
 }
 
 fn workspace_root() -> Result<PathBuf> {
@@ -311,6 +307,11 @@ fn run_probe(
         probe.generated_candidate_names,
         probe.useful_substrings,
     );
+    let generated_no_source_live_hits = exact_unproven_generated_name_hits(
+        &first.symbols,
+        probe.generated_no_source_candidate_names,
+        probe.useful_substrings,
+    );
     let generated_label_hits = matching_symbol_names(
         &first.symbols,
         &["generated", "framework", "virtual", "FrameworkAdapter"],
@@ -360,6 +361,8 @@ fn run_probe(
         ),
         generated_candidate_count: probe.generated_candidate_names.len(),
         generated_candidate_live_hits,
+        generated_no_source_candidate_count: probe.generated_no_source_candidate_names.len(),
+        generated_no_source_live_hits,
         generated_label_hits,
         first_useful_source_rank,
         first_generated_label_rank,
@@ -420,6 +423,10 @@ fn workspace_symbol_probes() -> Vec<WorkspaceSymbolProbe> {
                 "clear_email",
                 "has_email",
             ],
+            generated_no_source_candidate_names: &[
+                "MooseExample::User::meta_generated_accessor",
+                "MooseExample::User::runtime_role_method",
+            ],
             boundary_source_shapes: &[
                 "before 'set_email'",
                 "after 'set_email'",
@@ -432,6 +439,10 @@ fn workspace_symbol_probes() -> Vec<WorkspaceSymbolProbe> {
             query: "role",
             useful_substrings: &["has_admin_role", "RoleExample", "roles"],
             generated_candidate_names: &["add_role", "has_role", "role_count", "all_roles"],
+            generated_no_source_candidate_names: &[
+                "RoleExample::Generated::role_runtime_handle",
+                "RoleExample::Generated::autoloaded_role_method",
+            ],
             boundary_source_shapes: &["handles  => {", "add_role     =>", "role_count   =>"],
         },
         WorkspaceSymbolProbe {
@@ -447,6 +458,10 @@ fn workspace_symbol_probes() -> Vec<WorkspaceSymbolProbe> {
                 "categories",
                 "attributes",
             ],
+            generated_no_source_candidate_names: &[
+                "MooExample::Product::price_runtime_coercion",
+                "MooExample::Product::generated_price_writer",
+            ],
             boundary_source_shapes: &["die \"Price must be numeric\"", "$self->price($price)"],
         },
         WorkspaceSymbolProbe {
@@ -460,6 +475,10 @@ fn workspace_symbol_probes() -> Vec<WorkspaceSymbolProbe> {
                 "load_config",
             ],
             generated_candidate_names: &["config", "log_level", "name"],
+            generated_no_source_candidate_names: &[
+                "RoleExample::Configurable::config_runtime_accessor",
+                "RoleExample::Configurable::generated_config_loader",
+            ],
             boundary_source_shapes: &[
                 "with 'RoleExample::Loggable'",
                 "requires 'load_config'",
@@ -502,7 +521,7 @@ fn scenario_43_modern_oo_workspace_symbol_noise_receipt() {
                     recorder.mark_first_useful_result(probe.name);
                 }
                 eprintln!(
-                    "workspace_symbol_probe={} query={} count={} useful_hits={:?} top_noise={} unrelated={} generated_live_hits={:?} generated_labels={:?}",
+                    "workspace_symbol_probe={} query={} count={} useful_hits={:?} top_noise={} unrelated={} generated_live_hits={:?} generated_no_source_live_hits={:?} generated_labels={:?}",
                     report.name,
                     report.query,
                     report.first_count,
@@ -510,6 +529,7 @@ fn scenario_43_modern_oo_workspace_symbol_noise_receipt() {
                     report.top_n_noise_count,
                     report.unrelated_hit_count,
                     report.generated_candidate_live_hits,
+                    report.generated_no_source_live_hits,
                     report.generated_label_hits
                 );
                 reports.push(report);
@@ -544,6 +564,10 @@ fn scenario_43_modern_oo_workspace_symbol_noise_receipt() {
                 reports.iter().map(|report| report.generated_candidate_count).sum();
             let generated_live_symbol_total: usize =
                 reports.iter().map(|report| report.generated_candidate_live_hits.len()).sum();
+            let generated_no_source_candidate_total: usize =
+                reports.iter().map(|report| report.generated_no_source_candidate_count).sum();
+            let generated_no_source_live_symbol_total: usize =
+                reports.iter().map(|report| report.generated_no_source_live_hits.len()).sum();
             let generated_label_total: usize =
                 reports.iter().map(|report| report.generated_label_hits.len()).sum();
             let generated_label_names_are_labeled = reports.iter().all(|report| {
@@ -576,6 +600,18 @@ fn scenario_43_modern_oo_workspace_symbol_noise_receipt() {
                 &fixture.content,
                 probes.iter().flat_map(|probe| probe.generated_candidate_names.iter().copied()),
             );
+            let generated_no_source_source_hits = source_shape_hits(
+                &fixture.content,
+                probes
+                    .iter()
+                    .flat_map(|probe| probe.generated_no_source_candidate_names.iter().copied()),
+            );
+            let generated_no_source_source_missing = missing_source_shapes(
+                &fixture.content,
+                probes
+                    .iter()
+                    .flat_map(|probe| probe.generated_no_source_candidate_names.iter().copied()),
+            );
             let stale_or_fallback_label_total: usize =
                 reports.iter().map(|report| report.stale_or_fallback_label_hits.len()).sum();
             let max_latency_ms = reports
@@ -600,6 +636,10 @@ fn scenario_43_modern_oo_workspace_symbol_noise_receipt() {
                 "invalid_shape_total": invalid_shape_total,
                 "generated_candidate_total": generated_candidate_total,
                 "generated_live_symbol_total": generated_live_symbol_total,
+                "generated_no_source_candidate_total": generated_no_source_candidate_total,
+                "generated_no_source_live_symbol_total": generated_no_source_live_symbol_total,
+                "generated_no_source_source_hits": generated_no_source_source_hits,
+                "generated_no_source_source_missing": generated_no_source_source_missing,
                 "generated_label_total": generated_label_total,
                 "generated_label_rank_proof_count": generated_label_rank_proof_count,
                 "generated_label_before_useful_source_total": generated_label_before_useful_source_total,
@@ -649,6 +689,11 @@ fn scenario_43_modern_oo_workspace_symbol_noise_receipt() {
                 generated_candidate_total > 0 && generated_live_symbol_total == 0,
             )?;
             recorder.check(
+                "receipt recorded generated/no-source candidates without live exact promotion",
+                generated_no_source_candidate_total > 0
+                    && generated_no_source_live_symbol_total == 0,
+            )?;
+            recorder.check(
                 "generated-label pilot surfaced explicitly labeled Modern OO symbols",
                 generated_label_total > 0 && generated_label_names_are_labeled,
             )?;
@@ -660,6 +705,11 @@ fn scenario_43_modern_oo_workspace_symbol_noise_receipt() {
             recorder.check(
                 "configured generated candidates are backed by Modern OO source",
                 !generated_source_hits.is_empty() && generated_source_missing.is_empty(),
+            )?;
+            recorder.check(
+                "configured generated/no-source candidates have no Modern OO source anchor",
+                generated_no_source_source_hits.is_empty()
+                    && !generated_no_source_source_missing.is_empty(),
             )?;
             recorder.check(
                 "receipt covered role/delegation/modifier boundary shapes",

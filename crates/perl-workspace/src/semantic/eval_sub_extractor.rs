@@ -448,6 +448,91 @@ mod tests {
     }
 
     #[test]
+    fn whitespace_variants_between_keyword_and_name_are_accepted()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let file_id = FileId(10);
+        let triples = {
+            let mut out = Vec::new();
+            extract_from_eval_string(
+                "sub\twith_tab { 1 } sub\nwith_newline; sub\r\nwith_crlf () { 1 }",
+                4,
+                67,
+                file_id,
+                &mut out,
+            );
+            out
+        };
+
+        let names: Vec<&str> =
+            triples.iter().map(|(entity, _, _)| entity.canonical_name.as_str()).collect();
+        assert_eq!(names, vec!["with_tab", "with_newline", "with_crlf"]);
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_candidate_does_not_stop_later_valid_declaration()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let file_id = FileId(11);
+        let triples = {
+            let mut out = Vec::new();
+            extract_from_eval_string(
+                "sub 123_not_a_name { 1 } sub $dynamic { 2 } sub valid_after_invalid { 3 }",
+                0,
+                73,
+                file_id,
+                &mut out,
+            );
+            out
+        };
+
+        assert_eq!(triples.len(), 1, "only the later static declaration should match");
+        assert_eq!(triples[0].0.canonical_name, "valid_after_invalid");
+        Ok(())
+    }
+
+    #[test]
+    fn keyword_boundaries_reject_identifier_fragments() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(find_sub_keyword("gsub name { 1 }"), None);
+        assert_eq!(find_sub_keyword("prefix_sub name { 1 }"), None);
+        assert_eq!(find_sub_keyword("subroutine name { 1 }"), None);
+        assert_eq!(find_sub_keyword("sub:name { 1 }"), None);
+        Ok(())
+    }
+
+    #[test]
+    fn unsupported_declaration_shapes_are_ignored() -> Result<(), Box<dyn std::error::Error>> {
+        let file_id = FileId(12);
+        let triples = {
+            let mut out = Vec::new();
+            extract_from_eval_string(
+                "sub bare_name sub namespaced::method { 1 } sub hyphen-name { 2 } sub _ok { 3 }",
+                0,
+                78,
+                file_id,
+                &mut out,
+            );
+            out
+        };
+
+        assert_eq!(triples.len(), 1, "only the simple identifier declaration is supported");
+        assert_eq!(triples[0].0.canonical_name, "_ok");
+        Ok(())
+    }
+
+    #[test]
+    fn emit_triple_normalizes_empty_or_reversed_spans() -> Result<(), Box<dyn std::error::Error>> {
+        let mut out = Vec::new();
+        emit_triple("span_edge", 99, 42, FileId(13), &mut out);
+
+        assert_eq!(out.len(), 1);
+        let (_entity, anchor, occurrence) = &out[0];
+        assert_eq!(anchor.span_start_byte, 99);
+        assert_eq!(anchor.span_end_byte, 100);
+        assert_eq!(occurrence.anchor_id, anchor.id);
+        Ok(())
+    }
+
+    #[test]
     fn stable_id_is_deterministic() -> Result<(), Box<dyn std::error::Error>> {
         let id1 = stable_id(1, 42, "foo");
         let id2 = stable_id(1, 42, "foo");

@@ -786,6 +786,12 @@
         "icon": "$(shield)"
       },
       {
+        "command": "perl-lsp.previewPackageRename",
+        "title": "Preview Package Rename",
+        "category": "Perl LSP",
+        "icon": "$(symbol-method)"
+      },
+      {
         "command": "perl-lsp.copyProviderDecisionReceipt",
         "title": "Copy Provider Decision Receipt",
         "category": "Perl LSP",
@@ -796,6 +802,18 @@
         "title": "Show Workspace Trust Report",
         "category": "Perl LSP",
         "icon": "$(checklist)"
+      },
+      {
+        "command": "perl-lsp.explainMissingModuleLookup",
+        "title": "Explain Missing Module Lookup",
+        "category": "Perl LSP",
+        "icon": "$(search)"
+      },
+      {
+        "command": "perl-lsp.explainDiagnostic",
+        "title": "Explain This Diagnostic",
+        "category": "Perl LSP",
+        "icon": "$(comment-discussion)"
       },
       {
         "command": "perl-lsp.reportIssue",
@@ -907,12 +925,24 @@
           "when": "editorLangId == perl"
         },
         {
+          "command": "perl-lsp.previewPackageRename",
+          "when": "editorLangId == perl"
+        },
+        {
           "command": "perl-lsp.copyProviderDecisionReceipt",
           "when": "editorLangId == perl"
         },
         {
           "command": "perl-lsp.showWorkspaceTrustReport",
           "when": "workspaceFolderCount >= 1"
+        },
+        {
+          "command": "perl-lsp.explainMissingModuleLookup",
+          "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.explainDiagnostic",
+          "when": "editorLangId == perl"
         },
         {
           "command": "perl-lsp.reportIssue"
@@ -1126,12 +1156,12 @@
     "@types/mocha": "^10.0.10",
     "@types/node": "^25.x",
     "@types/tar": "^7.0.87",
-    "@types/vscode": "^1.118.0",
-    "@typescript-eslint/eslint-plugin": "^8.59.3",
-    "@typescript-eslint/parser": "^8.58.0",
+    "@types/vscode": "^1.120.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.4",
+    "@typescript-eslint/parser": "^8.59.4",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.9.1",
-    "eslint": "^10.3.0",
+    "eslint": "^10.4.0",
     "jest": "^30.4.2",
     "mocha": "^11.7.5",
     "ts-jest": "^29.4.9",

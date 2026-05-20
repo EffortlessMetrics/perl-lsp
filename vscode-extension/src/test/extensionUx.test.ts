@@ -19,7 +19,10 @@ jest.mock('vscode-languageclient/node', () => ({
 }));
 import {
   copyProviderDecisionReceiptCommand,
+  explainDiagnosticCommand,
+  explainMissingModuleLookupCommand,
   explainProviderDecisionCommand,
+  previewPackageRenameCommand,
   previewSafeDeleteCommand,
   showWorkspaceTrustReportCommand,
   validateIncludePaths,
@@ -27,6 +30,7 @@ import {
   setPerlCriticSeverity,
   syncPerlCriticConfiguration,
   warnAboutPerlExtensionConflicts,
+  workspaceTrustClientRuntimeState,
 } from '../extension';
 
 function makeContext(version = '0.12.3'): any {
@@ -544,6 +548,52 @@ describe('extension UX warnings', () => {
     );
   });
 
+  test('explains a diagnostic through the provider decision command', async () => {
+    const requestReceipt = {
+      provider: 'diagnostics',
+      decision: 'acted',
+      diagnostic_explanation: {
+        schema_version: 'diagnostic_explanation.v1',
+        diagnostic_explanations: [
+          {
+            code: 'PL701',
+            trust_boundary: 'module_resolution',
+          },
+        ],
+      },
+    };
+    const sendRequest = jest.fn(async () => ({
+      provider: 'diagnostics',
+      decision: 'acted',
+      user_message: 'Diagnostic explanation is available.',
+    }));
+
+    await explainDiagnosticCommand(
+      { sendRequest } as any,
+      {
+        provider: 'diagnostics',
+        request_receipt: requestReceipt,
+      }
+    );
+
+    expect(sendRequest).toHaveBeenCalledWith(
+      'workspace/executeCommand',
+      {
+        command: 'perl.explainProviderDecision',
+        arguments: [
+          {
+            provider: 'diagnostics',
+            request_receipt: requestReceipt,
+          },
+        ],
+      }
+    );
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      'Diagnostic explanation is available.',
+      'Show Output'
+    );
+  });
+
   test('previews safe-delete through the no-edit LSP command', async () => {
     const sendRequest = jest.fn(async () => ({
       provider: 'safe_delete',
@@ -576,6 +626,53 @@ describe('extension UX warnings', () => {
     );
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
       'Safe delete refused. No edits were applied.',
+      'Show Output'
+    );
+  });
+
+  test('previews package rename through the no-edit LSP command', async () => {
+    const sendRequest = jest.fn(async () => ({
+      provider: 'rename',
+      decision: 'allowed',
+      user_message: 'Package rename preview is available. No edits were applied.',
+    }));
+    (vscode.window.showInputBox as jest.Mock).mockResolvedValue('renamed_shared');
+    (vscode.window as any).activeTextEditor = {
+      document: {
+        languageId: 'perl',
+        uri: vscode.Uri.file('/workspace/lib/Foo.pm'),
+        getText: jest.fn(() => 'shared'),
+        getWordRangeAtPosition: jest.fn(() => ({ start: { line: 12, character: 4 }, end: { line: 12, character: 10 } })),
+      },
+      selection: {
+        active: { line: 12, character: 4 },
+        isEmpty: true,
+      },
+    };
+
+    await previewPackageRenameCommand({ sendRequest } as any);
+
+    expect(vscode.window.showInputBox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        value: 'shared',
+        placeHolder: 'renamed_symbol',
+      })
+    );
+    expect(sendRequest).toHaveBeenCalledWith(
+      'workspace/executeCommand',
+      {
+        command: 'perl.previewPackageRename',
+        arguments: [
+          {
+            textDocument: { uri: 'file:///workspace/lib/Foo.pm' },
+            position: { line: 12, character: 4 },
+            newName: 'renamed_shared',
+          },
+        ],
+      }
+    );
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      'Package rename preview is available. No edits were applied.',
       'Show Output'
     );
   });
@@ -615,6 +712,79 @@ describe('extension UX warnings', () => {
     );
   });
 
+  test('summarizes launch configuration module paths without copying raw paths', () => {
+    const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-launch-config-'));
+    fs.mkdirSync(path.join(workspaceDir, '.vscode'), { recursive: true });
+    fs.writeFileSync(path.join(workspaceDir, '.vscode', 'launch.json'), '{}');
+
+    (vscode.workspace as any).workspaceFolders = [
+      {
+        name: 'workspace',
+        uri: vscode.Uri.file(workspaceDir),
+      },
+    ];
+
+    (vscode.workspace.getConfiguration as jest.Mock).mockImplementation((section?: string) => {
+      if (section === 'launch') {
+        return {
+          get: jest.fn((key: string, defaultValue?: unknown) => {
+            if (key !== 'configurations') {
+              return defaultValue;
+            }
+            return [
+              {
+                type: 'perl',
+                request: 'launch',
+                name: 'Perl launch',
+                program: '${workspaceFolder}/script/app.pl',
+                cwd: 'script',
+                perlPath: '/opt/perl/bin/perl',
+                includePaths: ['${workspaceFolder}/lib', 'local/lib/perl5', 42],
+              },
+              {
+                type: 'perl',
+                request: 'attach',
+                name: 'Perl attach',
+                includePaths: ['t/lib'],
+              },
+              {
+                type: 'node',
+                request: 'launch',
+                name: 'Ignored non-Perl launch',
+                includePaths: ['node_modules'],
+              },
+            ];
+          }),
+        };
+      }
+      return {
+        get: jest.fn((_key: string, defaultValue?: unknown) => defaultValue),
+        has: jest.fn(() => false),
+        inspect: jest.fn(),
+        update: jest.fn(),
+      };
+    });
+
+    const state = workspaceTrustClientRuntimeState();
+    const dap = state.dap as Record<string, unknown>;
+    const launchConfiguration = dap.launch_configuration as Record<string, unknown>;
+    const includePathCounts = launchConfiguration.include_path_kind_counts as Record<string, number>;
+
+    expect(dap.launch_json_workspace_count).toBe(1);
+    expect(launchConfiguration.status).toBe('client_launch_config_reported');
+    expect(launchConfiguration.configuration_count).toBe(3);
+    expect(launchConfiguration.perl_configuration_count).toBe(2);
+    expect(launchConfiguration.launch_request_count).toBe(1);
+    expect(launchConfiguration.attach_request_count).toBe(1);
+    expect(launchConfiguration.include_paths_configured_count).toBe(2);
+    expect(launchConfiguration.include_path_entry_count).toBe(3);
+    expect(launchConfiguration.non_string_include_path_count).toBe(1);
+    expect(includePathCounts.workspace_variable).toBe(1);
+    expect(includePathCounts.relative).toBe(2);
+    expect(JSON.stringify(state)).not.toContain('/opt/perl/bin/perl');
+    expect(JSON.stringify(state)).not.toContain('local/lib/perl5');
+  });
+
   test('shows the workspace trust report in the trust output channel', async () => {
     const outputChannel = {
       appendLine: jest.fn(),
@@ -639,6 +809,49 @@ describe('extension UX warnings', () => {
           perl_path: '/usr/bin/perl',
         },
       },
+      setup_hints: {
+        status: 'advisory',
+        hint_count: 1,
+        hints: [
+          {
+            severity: 'info',
+            message: 'PERL5LIB is not inherited by workspace module resolution.',
+            action: 'Configure `perl.workspace.includePaths` for paths the editor should search.',
+          },
+        ],
+        perl_binary: {
+          resolution_status: 'configured_not_probed_by_report',
+          version_status: 'not_probed_by_report',
+        },
+        perldoc: {
+          status: 'oracle_contract_reported_not_run',
+        },
+        dap: {
+          status: 'not_probed_by_lsp_workspace_report',
+        },
+        claim_boundary: 'Setup hints are derived from current configuration only.',
+      },
+      client_runtime_state: {
+        source: 'vscode-extension',
+        perldoc: {
+          status: 'client_surface_registered',
+        },
+        dap: {
+          status: 'client_state_reported',
+          managed_adapter_exists: true,
+          active_perl_debug_session: false,
+          launch_json_workspace_count: 1,
+          launch_configuration: {
+            status: 'client_launch_config_reported',
+            configuration_count: 2,
+            perl_configuration_count: 1,
+            include_paths_configured_count: 1,
+            include_path_entry_count: 2,
+            perl_path_configured_count: 1,
+            claim_boundary: 'Launch configuration state reports counts and path classes only.',
+          },
+        },
+      },
       index: {
         state: 'ready',
         availability: 'full',
@@ -658,21 +871,154 @@ describe('extension UX warnings', () => {
       claim_boundary: 'Aggregates current runtime state only.',
     }));
 
-    await showWorkspaceTrustReportCommand({ sendRequest } as any);
+    await showWorkspaceTrustReportCommand({ sendRequest } as any, () => ({
+      schema_version: 'workspace_trust_client_runtime.v1',
+      source: 'vscode-extension',
+      perldoc: {
+        status: 'client_surface_registered',
+      },
+      dap: {
+        status: 'client_state_reported',
+        managed_adapter_exists: true,
+        active_perl_debug_session: false,
+        launch_json_workspace_count: 1,
+        launch_configuration: {
+          status: 'client_launch_config_reported',
+          configuration_count: 2,
+          perl_configuration_count: 1,
+          include_paths_configured_count: 1,
+          include_path_entry_count: 2,
+          perl_path_configured_count: 1,
+          claim_boundary: 'Launch configuration state reports counts and path classes only.',
+        },
+      },
+    }));
 
     expect(sendRequest).toHaveBeenCalledWith(
       'workspace/executeCommand',
       {
         command: 'perl.workspaceTrustReport',
-        arguments: [],
+        arguments: [{
+          client_runtime_state: {
+            schema_version: 'workspace_trust_client_runtime.v1',
+            source: 'vscode-extension',
+            perldoc: {
+              status: 'client_surface_registered',
+            },
+            dap: {
+              status: 'client_state_reported',
+              managed_adapter_exists: true,
+              active_perl_debug_session: false,
+              launch_json_workspace_count: 1,
+              launch_configuration: {
+                status: 'client_launch_config_reported',
+                configuration_count: 2,
+                perl_configuration_count: 1,
+                include_paths_configured_count: 1,
+                include_path_entry_count: 2,
+                perl_path_configured_count: 1,
+                claim_boundary: 'Launch configuration state reports counts and path classes only.',
+              },
+            },
+          },
+        }],
       }
     );
     const rendered = outputChannel.appendLine.mock.calls
       .map((call: unknown[]) => call[0])
       .join('\n');
     expect(rendered).toContain('Perl LSP Trust Report');
+    expect(rendered).toContain('Setup hints');
+    expect(rendered).toContain('Perl binary: configured_not_probed_by_report');
+    expect(rendered).toContain('perldoc: oracle_contract_reported_not_run');
+    expect(rendered).toContain('DAP Perl: not_probed_by_lsp_workspace_report');
+    expect(rendered).toContain('Client runtime state');
+    expect(rendered).toContain('perldoc surface: client_surface_registered');
+    expect(rendered).toContain('DAP adapter: client_state_reported');
+    expect(rendered).toContain('DAP managed adapter exists: true');
+    expect(rendered).toContain('DAP launch configs: 2');
+    expect(rendered).toContain('DAP Perl configs: 1');
+    expect(rendered).toContain('DAP includePaths entries: 2');
+    expect(rendered).toContain('launch config boundary: Launch configuration state reports counts and path classes only.');
+    expect(rendered).toContain('PERL5LIB is not inherited by workspace module resolution.');
+    expect(rendered).toContain('Setup hints are derived from current configuration only.');
     expect(rendered).toContain('completion: partial-live-with-fallback');
     expect(rendered).toContain('Aggregates current runtime state only.');
     expect(outputChannel.show).toHaveBeenCalled();
+  });
+
+  test('explains a missing-module lookup through the LSP execute command', async () => {
+    const outputChannel = {
+      appendLine: jest.fn(),
+      show: jest.fn(),
+      dispose: jest.fn(),
+    };
+    (vscode.window.createOutputChannel as jest.Mock).mockReturnValueOnce(outputChannel);
+    const sendRequest = jest.fn(async () => ({
+      schema_version: 'missing_module_lookup_explanation.v1',
+      requested_module: 'Missing::Payload',
+      expected_relative_path: 'Missing/Payload.pm',
+      module_resolution: {
+        result: {
+          status: 'not_found',
+          why: 'No searched @INC candidate matched.',
+        },
+        effective_include_paths: [
+          {
+            path: 'lib',
+            source: 'workspace includePaths',
+            kind: 'workspace_relative',
+            candidate_paths: [
+              {
+                path: '/workspace/lib/Missing/Payload.pm',
+                exists: false,
+              },
+            ],
+          },
+        ],
+        perl5lib_policy: 'enabled_but_environment_empty',
+        use_system_inc: false,
+      },
+      user_message: 'Module Missing::Payload was not found in the current effective @INC state.',
+      claim_boundary: 'explains one missing-module lookup only',
+    }));
+    (vscode.window as any).activeTextEditor = {
+      document: {
+        languageId: 'perl',
+        uri: vscode.Uri.file('/workspace/script.pl'),
+        getText: jest.fn(() => ''),
+        lineAt: jest.fn(() => ({ text: 'use Missing::Payload;' })),
+      },
+      selection: {
+        active: { line: 0, character: 8 },
+      },
+    };
+
+    await explainMissingModuleLookupCommand({ sendRequest } as any);
+
+    expect(sendRequest).toHaveBeenCalledWith(
+      'workspace/executeCommand',
+      {
+        command: 'perl.explainMissingModuleLookup',
+        arguments: [
+          {
+            module: 'Missing::Payload',
+            textDocument: { uri: 'file:///workspace/script.pl' },
+            position: { line: 0, character: 8 },
+          },
+        ],
+      }
+    );
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+      'Module Missing::Payload was not found in the current effective @INC state.',
+      'Show Output'
+    );
+    const rendered = outputChannel.appendLine.mock.calls
+      .map((call: unknown[]) => String(call[0]))
+      .join('\n');
+    expect(rendered).toContain('Perl LSP Missing Module Lookup');
+    expect(rendered).toContain('Missing::Payload');
+    expect(rendered).toContain('workspace includePaths');
+    expect(rendered).toContain('Raw lookup JSON');
   });
 });

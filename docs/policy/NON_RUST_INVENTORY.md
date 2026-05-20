@@ -1948,9 +1948,6 @@
 | `tests/perl-corpus/recovery/missing_delimiter.meta.toml` | `toml` |
 | `tests/perl-corpus/spans/utf16_crlf_positions.meta.toml` | `toml` |
 | `tokmd.toml` | `toml` |
-| `tools/add_metadata.py` | `py` |
-| `tools/corpus_index.py` | `py` |
-| `tools/corpus_lint.py` | `py` |
 | `tree-sitter-perl/.clang-format` | `` |
 | `tree-sitter-perl/.editorconfig` | `` |
 | `tree-sitter-perl/.eslintrc.cjs` | `cjs` |
@@ -4721,7 +4718,6 @@
 | `scripts/update-homebrew.sh` | tooling | `non-rust-ci-scripts-tree` | release/ci |
 | `scripts/update-parser-matrix.py` | tooling | `non-rust-ci-scripts-tree` | release/ci |
 | `scripts/validate-workspace-exclusions.sh` | tooling | `non-rust-ci-scripts-tree` | release/ci |
-| `scripts/validate_swarm_agent_roster.py` | tooling | `non-rust-ci-scripts-tree` | release/ci |
 | `scripts/validate_swarm_findings.py` | tooling | `non-rust-ci-scripts-tree` | release/ci |
 | `scripts/verify-docs-rs.sh` | tooling | `non-rust-ci-scripts-tree` | release/ci |
 | `scripts/verify-publication-facts.sh` | tooling | `non-rust-ci-scripts-tree` | release/ci |

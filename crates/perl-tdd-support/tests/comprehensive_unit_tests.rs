@@ -742,7 +742,7 @@ fn make_test_metadata() -> IgnoredTestMetadata {
         priority: 2,
         ignore_reason: "Requires feature flag, see issue #123".to_string(),
         complexity: ComplexityLevel::Medium,
-        target_timeline: Duration::from_secs(7 * 24 * 3600),
+        target_timeline: Duration::from_hours(168),
         dependencies: vec!["dep_1".to_string()],
         success_criteria: vec!["passes locally".to_string(), "passes CI".to_string()],
         workflow_integration: LspWorkflowStage::Parse,
@@ -854,7 +854,7 @@ fn guardian_warns_on_low_complexity_long_timeline() -> Result<(), Box<dyn std::e
     let guardian = IgnoredTestGuardian::new(gov);
     let mut meta = make_test_metadata();
     meta.complexity = ComplexityLevel::Low;
-    meta.target_timeline = Duration::from_secs(30 * 24 * 3600); // 30 days
+    meta.target_timeline = Duration::from_hours(720); // 30 days
     let result = guardian.validate_new_ignored_test(&meta);
     assert!(result.warnings.iter().any(|w| w.contains("shorter timeline")));
     Ok(())
@@ -960,11 +960,8 @@ fn guardian_trend_report_with_data() -> Result<(), Box<dyn std::error::Error>> {
     let mut guardian = IgnoredTestGuardian::new(gov);
     let now = SystemTime::now();
 
-    let data = vec![
-        (now - Duration::from_secs(3600), 10),
-        (now - Duration::from_secs(1800), 12),
-        (now, 15),
-    ];
+    let data =
+        vec![(now - Duration::from_hours(1), 10), (now - Duration::from_mins(30), 12), (now, 15)];
     guardian.set_historical_data(data);
 
     let report = guardian.generate_trend_report();
@@ -1118,6 +1115,31 @@ fn full_tdd_workflow_get_status() -> Result<(), Box<dyn std::error::Error>> {
     let wf = TddWorkflow::new(TddConfig::default());
     let status = wf.get_status();
     assert_eq!(status.state, WorkflowState::Idle);
+    Ok(())
+}
+
+#[test]
+fn full_tdd_workflow_green_then_refactor_cycle() -> Result<(), Box<dyn std::error::Error>> {
+    use std::path::PathBuf;
+
+    use perl_tdd_support::tdd_workflow::{TddAction, TddConfig, TddWorkflow, WorkflowState};
+
+    let mut wf = TddWorkflow::new(TddConfig::default());
+    wf.start_cycle("my_feature");
+
+    let green = wf.run_tests(&[PathBuf::from("t/my_feature.t")]);
+    assert_eq!(green.phase, "Green");
+    assert!(green.actions.iter().any(|action| matches!(action, TddAction::SuggestRefactorings)));
+    assert_eq!(wf.get_status().state, WorkflowState::Green);
+
+    let refactor = wf.start_refactor();
+    assert_eq!(refactor.phase, "Refactor");
+    assert_eq!(wf.get_status().state, WorkflowState::Refactor);
+
+    let idle = wf.complete_cycle();
+    assert_eq!(idle.phase, "Idle");
+    assert_eq!(wf.get_status().state, WorkflowState::Idle);
+
     Ok(())
 }
 

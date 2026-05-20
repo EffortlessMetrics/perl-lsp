@@ -105,6 +105,7 @@ pub fn get_supported_commands() -> Vec<String> {
         "perl.previewSafeDelete".to_string(),
         "perl.safeDeleteSymbol".to_string(),
         "perl.previewPackageRename".to_string(),
+        "perl.explainMissingModuleLookup".to_string(),
     ]
 }
 
@@ -264,6 +265,16 @@ mod tests {
         assert!(
             cmds.iter().any(|c| c == "perl.previewPackageRename"),
             "perl.previewPackageRename must be in get_supported_commands"
+        );
+    }
+
+    /// Verify that `perl.explainMissingModuleLookup` is included in the supported commands list.
+    #[test]
+    fn explain_missing_module_lookup_command_id_is_registered() {
+        let cmds = get_supported_commands();
+        assert!(
+            cmds.iter().any(|c| c == "perl.explainMissingModuleLookup"),
+            "perl.explainMissingModuleLookup must be in get_supported_commands"
         );
     }
 
