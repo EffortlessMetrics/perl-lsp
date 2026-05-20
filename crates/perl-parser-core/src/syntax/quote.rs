@@ -127,7 +127,7 @@ pub fn extract_substitution_parts_strict(
     } else {
         // Paired pattern delimiters still allow either paired or non-paired delimiters
         // for the replacement side (e.g. s{foo}/bar/ and s[foo]{bar}).
-        let trimmed = skip_paired_substitution_replacement_gap(rest1);
+        let trimmed = skip_paired_replacement_gap(rest1);
         if let Some(rd) = trimmed.chars().next() {
             let repl_closing = get_closing_delimiter(rd);
             extract_delimited_content_strict(trimmed, rd, repl_closing)
@@ -154,7 +154,7 @@ pub fn extract_substitution_parts_strict(
     Ok((pattern, replacement, modifiers))
 }
 
-fn skip_paired_substitution_replacement_gap(mut text: &str) -> &str {
+fn skip_paired_replacement_gap(mut text: &str) -> &str {
     let mut comment_eligible = false;
     loop {
         let trimmed = text.trim_start_matches(char::is_whitespace);
@@ -461,7 +461,7 @@ pub fn extract_transliteration_parts_strict(
         let (body, rest, found_closing) = extract_unpaired_body_skip_strings(rest1, closing);
         (body, rest, found_closing)
     } else {
-        let trimmed = rest1.trim_start();
+        let trimmed = skip_paired_replacement_gap(rest1);
         if let Some(repl_delimiter) = trimmed.chars().next() {
             // After a paired search delimiter (e.g. `{...}`), the replacement must
             // also start with a valid non-alphanumeric, non-whitespace delimiter.
@@ -597,8 +597,19 @@ fn scan_inner_string(
     quote: char,
     delimiter: char,
 ) -> Option<(usize, bool)> {
+    if is_word_apostrophe(text, pos, quote) {
+        return None;
+    }
+    // Adjacent quotes are literal replacement text (for example s/"/""/g),
+    // not a string literal to skip while hunting for the replacement delimiter.
+    if text.get(..pos).and_then(|prefix| prefix.chars().next_back()) == Some(quote) {
+        return None;
+    }
     let start = pos + quote.len_utf8();
     let rest = text.get(start..)?;
+    if rest.starts_with(quote) {
+        return None;
+    }
     let mut escaped = false;
     let mut contains_delim = false;
     let mut end_of_string = None;
@@ -628,6 +639,14 @@ fn scan_inner_string(
         local_pos += ch.len_utf8();
     }
     end_of_string.map(|end| (end, contains_delim))
+}
+
+fn is_word_apostrophe(text: &str, pos: usize, quote: char) -> bool {
+    quote == '\''
+        && text
+            .get(..pos)
+            .and_then(|prefix| prefix.chars().next_back())
+            .is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == '_')
 }
 
 /// Like `extract_unpaired_body` but skips over string literals (`"..."` / `'...'`)

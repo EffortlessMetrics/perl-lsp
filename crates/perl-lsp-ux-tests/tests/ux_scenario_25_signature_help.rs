@@ -8,6 +8,7 @@
 use std::time::Duration;
 
 use anyhow::Result;
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 use serde_json::{Value, json};
 
@@ -20,10 +21,6 @@ my @arr = (3, 1, 2);
 push(@arr, 4);
 my $str = join(", ", @arr);
 "#;
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 fn builtin_harness() -> Result<UxHarness> {
     let harness =

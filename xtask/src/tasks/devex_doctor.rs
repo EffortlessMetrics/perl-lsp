@@ -3,18 +3,21 @@
 
 use color_eyre::eyre::{Context, Result, bail};
 use std::{
-    env, fs,
-    path::Path,
+    env,
+    ffi::OsString,
+    fs,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
 };
 
 pub fn run() -> Result<()> {
-    let root = env::current_dir().context("failed to determine current directory")?;
-    let root = root.to_string_lossy();
+    let root = repository_root()?;
+    env::set_current_dir(&root)
+        .with_context(|| format!("failed to switch to repository root: {}", root.display()))?;
 
     let mut missing_required = false;
 
-    println!("Repository: {root}");
+    println!("Repository: {}", root.display());
     println!();
     println!("== Required ==");
 
@@ -59,6 +62,10 @@ pub fn run() -> Result<()> {
     check_pre_commit_hook();
 
     println!();
+    println!("== Build storage ==");
+    check_build_storage(&root);
+
+    println!();
     if Path::new("rust-toolchain.toml").exists() {
         let status = Command::new("bash")
             .arg("scripts/check-rust-toolchain.sh")
@@ -91,6 +98,42 @@ pub fn run() -> Result<()> {
     pass("Doctor completed: required tooling is available");
 
     Ok(())
+}
+
+fn repository_root() -> Result<PathBuf> {
+    if let Some(root) = git_output(&["rev-parse", "--show-toplevel"]) {
+        return Ok(PathBuf::from(root));
+    }
+
+    env::current_dir().context("failed to determine current directory")
+}
+
+fn check_build_storage(repo_root: &Path) {
+    match resolved_cargo_target_dir(env::var_os("CARGO_TARGET_DIR"), repo_root) {
+        Some(target_dir) if target_dir.starts_with(repo_root) => warn(&format!(
+            "CARGO_TARGET_DIR is repo-local: {} (run via ./scripts/cargo-safe or just devex)",
+            target_dir.display()
+        )),
+        Some(target_dir) => {
+            pass(&format!("CARGO_TARGET_DIR is outside the worktree: {}", target_dir.display()))
+        }
+        None => warn("CARGO_TARGET_DIR is not set (run via ./scripts/cargo-safe or just devex)"),
+    }
+
+    let repo_target = repo_root.join("target");
+    if repo_target.exists() {
+        warn(&format!(
+            "repo-local target directory exists: {} (inspect with just storage-doctor)",
+            repo_target.display()
+        ));
+    } else {
+        pass("no top-level repo-local target directory detected");
+    }
+}
+
+fn resolved_cargo_target_dir(value: Option<OsString>, repo_root: &Path) -> Option<PathBuf> {
+    let path = PathBuf::from(value?);
+    if path.is_absolute() { Some(path) } else { Some(repo_root.join(path)) }
 }
 
 fn check_command(program: &str, label: &str, missing_required: &mut bool) {
@@ -353,8 +396,8 @@ fn fail(message: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{find_command_path, normalize_hook_text};
-    use std::fs;
+    use super::{find_command_path, normalize_hook_text, resolved_cargo_target_dir};
+    use std::{ffi::OsString, fs, path::Path};
 
     #[cfg(unix)]
     fn set_executable(path: &std::path::Path) {
@@ -379,6 +422,31 @@ mod tests {
         let input = "line1\n\nline3\n";
         let normalized = normalize_hook_text(input);
         assert_eq!(normalized, "line1\n\nline3");
+    }
+
+    #[test]
+    fn resolved_cargo_target_dir_expands_relative_paths() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let temp_dir = tempfile::tempdir()?;
+        let resolved =
+            resolved_cargo_target_dir(Some(OsString::from("target-agent")), temp_dir.path());
+
+        assert_eq!(resolved, Some(temp_dir.path().join("target-agent")));
+        Ok(())
+    }
+
+    #[test]
+    fn resolved_cargo_target_dir_preserves_absolute_paths() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let temp_dir = tempfile::tempdir()?;
+        let target = temp_dir.path().join("outside-target");
+        let resolved = resolved_cargo_target_dir(
+            Some(target.as_os_str().to_os_string()),
+            Path::new("/unused"),
+        );
+
+        assert_eq!(resolved, Some(target));
+        Ok(())
     }
 
     #[test]

@@ -327,16 +327,17 @@ impl TestGenerator {
     fn generate_undef_test(&self, sub: &SubroutineInfo) -> TestCase {
         let test_name = format!("test_{}_undef", sub.name);
         let description = format!("Test {} with undef parameters", sub.name);
+        let args = self.generate_edge_case_args(sub, "undef");
 
         let code = match self.framework {
             TestFramework::TestMore => {
                 format!(
                     "use Test::More;\n\n\
                      subtest '{} with undef' => sub {{\n    \
-                     eval {{ {}(undef) }};\n    \
+                     eval {{ {}({}) }};\n    \
                      ok(!$@, 'Handles undef gracefully');\n\
                      }};\n",
-                    sub.name, sub.name
+                    sub.name, sub.name, args
                 )
             }
             _ => String::new(), // Simplified for other frameworks
@@ -348,16 +349,17 @@ impl TestGenerator {
     fn generate_empty_test(&self, sub: &SubroutineInfo) -> TestCase {
         let test_name = format!("test_{}_empty", sub.name);
         let description = format!("Test {} with empty parameters", sub.name);
+        let args = self.generate_edge_case_args(sub, "''");
 
         let code = match self.framework {
             TestFramework::TestMore => {
                 format!(
                     "use Test::More;\n\n\
                      subtest '{} with empty params' => sub {{\n    \
-                     eval {{ {}('', [], {{}}) }};\n    \
+                     eval {{ {}({}) }};\n    \
                      ok(!$@, 'Handles empty values');\n\
                      }};\n",
-                    sub.name, sub.name
+                    sub.name, sub.name, args
                 )
             }
             _ => String::new(),
@@ -369,6 +371,10 @@ impl TestGenerator {
     fn generate_type_test(&self, sub: &SubroutineInfo) -> TestCase {
         let test_name = format!("test_{}_types", sub.name);
         let description = format!("Test {} with different types", sub.name);
+        let numeric_args = self.generate_edge_case_args(sub, "123");
+        let string_args = self.generate_edge_case_args(sub, "'string'");
+        let array_args = self.generate_edge_case_args(sub, "[1,2,3]");
+        let hash_args = self.generate_edge_case_args(sub, "{a=>1}");
 
         let code = match self.framework {
             TestFramework::TestMore => {
@@ -376,13 +382,21 @@ impl TestGenerator {
                     "use Test::More;\n\n\
                      subtest '{} type checking' => sub {{\n    \
                      # Test with different types\n    \
-                     eval {{ {}(123) }};\n    \
-                     eval {{ {}('string') }};\n    \
-                     eval {{ {}([1,2,3]) }};\n    \
-                     eval {{ {}({{a=>1}}) }};\n    \
+                     eval {{ {}({}) }};\n    \
+                     eval {{ {}({}) }};\n    \
+                     eval {{ {}({}) }};\n    \
+                     eval {{ {}({}) }};\n    \
                      pass('Handles different types');\n\
                      }};\n",
-                    sub.name, sub.name, sub.name, sub.name, sub.name
+                    sub.name,
+                    sub.name,
+                    numeric_args,
+                    sub.name,
+                    string_args,
+                    sub.name,
+                    array_args,
+                    sub.name,
+                    hash_args
                 )
             }
             _ => String::new(),
@@ -599,6 +613,11 @@ impl TestGenerator {
     fn generate_sample_args(&self, count: usize) -> String {
         let args: Vec<String> = (0..count).map(|i| format!("'arg{}'", i + 1)).collect();
         args.join(", ")
+    }
+
+    fn generate_edge_case_args(&self, sub: &SubroutineInfo, value: &str) -> String {
+        let count = sub.params.as_ref().map_or(0, Vec::len);
+        vec![value; count].join(", ")
     }
 
     /// Extract parameters from a subroutine signature
@@ -1134,6 +1153,35 @@ mod tests {
         assert!(!tests.is_empty());
         assert!(tests[0].code.contains("Test::More"));
         assert!(tests[0].code.contains("add"));
+    }
+
+    #[test]
+    fn test_edge_case_tests_preserve_signature_arity() -> Result<(), Box<dyn std::error::Error>> {
+        let generator = TestGenerator::new(TestFramework::TestMore);
+        let sub = SubroutineInfo {
+            name: "add".to_string(),
+            params: Some(vec!["$left".to_string(), "$right".to_string()]),
+            node: Node::new(
+                NodeKind::Block { statements: vec![] },
+                crate::ast::SourceLocation { start: 0, end: 0 },
+            ),
+            is_private: false,
+        };
+
+        let undef_test = generator.generate_undef_test(&sub);
+        assert!(undef_test.code.contains("eval { add(undef, undef) };"));
+
+        let empty_test = generator.generate_empty_test(&sub);
+        assert!(empty_test.code.contains("eval { add('', '') };"));
+        assert!(!empty_test.code.contains("eval { add('', [], {}) };"));
+
+        let type_test = generator.generate_type_test(&sub);
+        assert!(type_test.code.contains("eval { add(123, 123) };"));
+        assert!(type_test.code.contains("eval { add('string', 'string') };"));
+        assert!(type_test.code.contains("eval { add([1,2,3], [1,2,3]) };"));
+        assert!(type_test.code.contains("eval { add({a=>1}, {a=>1}) };"));
+
+        Ok(())
     }
 
     #[test]

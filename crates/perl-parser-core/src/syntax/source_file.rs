@@ -3,6 +3,7 @@
 //! These helpers provide one canonical definition for what constitutes a Perl
 //! source file across workspace discovery and runtime file operations.
 
+use std::borrow::Cow;
 use std::path::Path;
 
 /// Number of bytes to inspect for binary content detection.
@@ -58,12 +59,53 @@ pub fn is_perl_source_path(path: &Path) -> bool {
 /// Supports:
 /// - Plain filesystem paths
 /// - `file://` URIs
+/// - Percent-encoded URI path segments
 /// - Optional query/fragment suffixes
 #[must_use]
 pub fn is_perl_source_uri(uri: &str) -> bool {
-    let without_fragment = uri.split('#').next().unwrap_or(uri);
-    let without_query = without_fragment.split('?').next().unwrap_or(without_fragment);
-    is_perl_source_path(Path::new(without_query))
+    let path_part = uri.split_once(['?', '#']).map_or(uri, |(path_prefix, _)| path_prefix);
+    let decoded_path = percent_decode_uri_path(path_part);
+    is_perl_source_path(Path::new(decoded_path.as_ref()))
+}
+
+fn percent_decode_uri_path(path: &str) -> Cow<'_, str> {
+    if !path.as_bytes().contains(&b'%') {
+        return Cow::Borrowed(path);
+    }
+
+    let bytes = path.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    let mut changed = false;
+
+    while index < bytes.len() {
+        if bytes[index] == b'%'
+            && let (Some(high), Some(low)) = (bytes.get(index + 1), bytes.get(index + 2))
+            && let (Some(high), Some(low)) = (hex_value(*high), hex_value(*low))
+        {
+            decoded.push((high << 4) | low);
+            index += 3;
+            changed = true;
+        } else {
+            decoded.push(bytes[index]);
+            index += 1;
+        }
+    }
+
+    if !changed {
+        return Cow::Borrowed(path);
+    }
+
+    String::from_utf8(decoded).map_or(Cow::Borrowed(path), Cow::Owned)
+}
+
+fn hex_value(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -113,6 +155,20 @@ mod tests {
         assert!(is_perl_source_uri("file:///var/www/cgi-bin/form.cgi"));
         assert!(is_perl_source_uri("file:///var/www/cgi-bin/search.cgi?q=perl#results"));
         assert!(!is_perl_source_uri("file:///workspace/README.md"));
+    }
+
+    #[test]
+    fn classifies_percent_encoded_uri_path_extensions() {
+        assert!(is_perl_source_uri("file:///workspace/script%2Epl"));
+        assert!(is_perl_source_uri("file:///workspace/lib/Foo%2FBar.%70%6D"));
+        assert!(is_perl_source_uri("file:///workspace/templates/index%2Ehtml%2Eep?rev=1#L4"));
+        assert!(!is_perl_source_uri("file:///workspace/README%2Emd"));
+    }
+
+    #[test]
+    fn invalid_percent_escapes_remain_literal() {
+        assert!(is_perl_source_uri("file:///workspace/script%ZZ.pl"));
+        assert!(!is_perl_source_uri("file:///workspace/script.%ZZ"));
     }
 
     #[test]

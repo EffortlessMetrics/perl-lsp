@@ -10,6 +10,7 @@
 //!   `targetRange` for links, or `uri` + `range` for locations).
 
 use anyhow::Result;
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 
 const DECLARATION_FIXTURE: &str = r#"use strict;
@@ -25,10 +26,6 @@ sub inc {
 my $result = inc($value);
 print "$result\n";
 "#;
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 #[test]
 fn scenario_18_declaration_request_does_not_error() -> Result<()> {

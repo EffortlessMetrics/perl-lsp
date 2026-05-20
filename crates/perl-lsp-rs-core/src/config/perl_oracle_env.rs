@@ -594,7 +594,7 @@ mod tests {
         PerlOracleEnv {
             perl_binary: PathBuf::from("perl"),
             cwd: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-            timeout: Duration::from_millis(1000),
+            timeout: Duration::from_secs(1),
             allow_perl5lib,
             allow_perl5opt,
             allow_local_lib,

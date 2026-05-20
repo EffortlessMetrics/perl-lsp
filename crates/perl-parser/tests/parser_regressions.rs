@@ -410,3 +410,56 @@ $emitter->on(accept => sub { 1 });
 "#;
     assert_parses(code);
 }
+
+#[test]
+fn common_module_bootstrap_patterns_parse_cleanly() {
+    let cases = [
+        "package My::Exporter; use parent 'Exporter'; our @EXPORT_OK = qw(foo bar);",
+        "BEGIN { require Exporter; our @ISA = qw(Exporter); }",
+        "use lib 'lib'; require My::Plugin; My::Plugin->import(qw(run));",
+        "no strict 'refs'; *{\"My::Package::generated\"} = sub { return 1; };",
+    ];
+    for case in cases {
+        assert_parses_without_recovery_errors(case);
+    }
+}
+
+#[test]
+fn real_world_argument_unpacking_patterns_parse_cleanly() {
+    let cases = [
+        "sub sum { my ($first, @rest) = @_; return $first + scalar @rest; }",
+        "sub configure { my ($self, %opts) = @_; $self->{timeout} = $opts{timeout} // 30; }",
+        "sub callback { my ($code, @args) = @_; return $code->(@args); }",
+        "sub named { my ($class, $name, $value) = @_; return bless { name => $name, value => $value }, $class; }",
+    ];
+    for case in cases {
+        assert_parses_without_recovery_errors(case);
+    }
+}
+
+#[test]
+fn nested_reference_and_slice_patterns_parse_cleanly() {
+    let cases = [
+        "my $value = $config->{database}{hosts}[0]{name};",
+        "my @subset = @{$rows}[0, 2, 4];",
+        "my %copy = %{$object->{metadata} || {}};",
+        "my ($first, $last) = @{$names}[0, -1];",
+    ];
+    for case in cases {
+        assert_parses_without_recovery_errors(case);
+    }
+}
+
+#[test]
+fn loop_control_with_labels_parse_cleanly() {
+    let code = r#"
+OUTER: for my $row (@rows) {
+    INNER: for my $cell (@$row) {
+        next INNER if !defined $cell;
+        redo INNER if $cell eq 'retry';
+        last OUTER if $cell eq 'stop';
+    }
+}
+"#;
+    assert_parses_without_recovery_errors(code);
+}

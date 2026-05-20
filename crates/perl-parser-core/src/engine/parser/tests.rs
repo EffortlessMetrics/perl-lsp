@@ -158,6 +158,21 @@ fn test_qw_delimiters() {
     assert!(result.is_ok());
     let ast = must(result);
     assert_eq!(ast.to_sexp(), r#"(source_file (array (string "hello") (string "world")))"#);
+
+    // Test whitespace between quote-like operator and delimiter.
+    let mut parser = Parser::new("qw (spaced delimiter)");
+    let result = parser.parse();
+    assert!(result.is_ok());
+    let ast = must(result);
+    assert_eq!(ast.to_sexp(), r#"(source_file (array (string "spaced") (string "delimiter")))"#);
+}
+
+#[test]
+fn test_spaced_quote_operator_delimiter_does_not_report_unclosed() {
+    let mut parser = Parser::new("q (hello)");
+    let result = parser.parse();
+    assert!(result.is_ok());
+    assert!(parser.errors().is_empty(), "unexpected parser errors: {:?}", parser.errors());
 }
 
 #[test]

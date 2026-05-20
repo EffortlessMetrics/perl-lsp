@@ -124,6 +124,13 @@ fn test_block_sexp() {
 }
 
 #[test]
+fn test_block_sexp_empty() {
+    let mut id_gen = NodeIdGenerator::new();
+    let node = make_node(&mut id_gen, NodeKind::Block { statements: vec![] });
+    assert_eq!(node.to_sexp(), "(block )");
+}
+
+#[test]
 fn test_binary_sexp() {
     let mut id_gen = NodeIdGenerator::new();
     let left = make_node(&mut id_gen, NodeKind::Number { value: "1".into() });
@@ -146,4 +153,96 @@ fn test_node_equality() {
     assert_ne!(a.id, b.id);
     // Full node equality considers id — nodes with different ids are not equal
     assert_ne!(a, b);
+}
+
+// ---- Fallback `_` arm in to_sexp (Unary, If, VariableDeclaration, etc.) ---
+//
+// Variants without an explicit to_sexp arm use the wildcard:
+//   `_ => format!("({:?})", self)`
+// These tests exercise that path and verify it produces a non-empty string
+// that starts with `(` (the Debug representation wrapped in parens).
+
+#[test]
+fn test_unary_sexp_fallback() {
+    let mut id_gen = NodeIdGenerator::new();
+    let operand = make_node(&mut id_gen, NodeKind::Number { value: "1".into() });
+    let node =
+        make_node(&mut id_gen, NodeKind::Unary { op: "-".into(), operand: Box::new(operand) });
+    let sexp = node.to_sexp();
+    // The wildcard arm produces ({:?}) — it must start with '(' and contain Unary
+    assert!(sexp.starts_with('('), "to_sexp fallback must start with '(', got: {sexp}");
+    assert!(sexp.contains("Unary"), "to_sexp fallback must contain variant name, got: {sexp}");
+}
+
+#[test]
+fn test_identifier_sexp_fallback() {
+    let mut id_gen = NodeIdGenerator::new();
+    let node = make_node(&mut id_gen, NodeKind::Identifier { name: "foo".into() });
+    let sexp = node.to_sexp();
+    assert!(sexp.starts_with('('), "to_sexp fallback must start with '(', got: {sexp}");
+    assert!(sexp.contains("Identifier"), "to_sexp fallback must contain variant name, got: {sexp}");
+    assert!(sexp.contains("foo"), "to_sexp fallback must include identifier name, got: {sexp}");
+}
+
+#[test]
+fn test_variable_declaration_sexp_fallback() {
+    let mut id_gen = NodeIdGenerator::new();
+    let var = make_node(&mut id_gen, NodeKind::Variable { sigil: "$".into(), name: "x".into() });
+    let node = make_node(
+        &mut id_gen,
+        NodeKind::VariableDeclaration {
+            declarator: "my".into(),
+            variable: Box::new(var),
+            attributes: vec![],
+            initializer: None,
+        },
+    );
+    let sexp = node.to_sexp();
+    assert!(sexp.starts_with('('), "to_sexp fallback must start with '(', got: {sexp}");
+    assert!(
+        sexp.contains("VariableDeclaration"),
+        "to_sexp fallback must contain variant name, got: {sexp}"
+    );
+}
+
+#[test]
+fn test_variable_list_declaration_sexp_fallback() {
+    let mut id_gen = NodeIdGenerator::new();
+    let var_a = make_node(&mut id_gen, NodeKind::Variable { sigil: "$".into(), name: "a".into() });
+    let var_b = make_node(&mut id_gen, NodeKind::Variable { sigil: "$".into(), name: "b".into() });
+    let node = make_node(
+        &mut id_gen,
+        NodeKind::VariableListDeclaration {
+            declarator: "my".into(),
+            variables: vec![var_a, var_b],
+            attributes: vec![],
+            initializer: None,
+        },
+    );
+    let sexp = node.to_sexp();
+    assert!(sexp.starts_with('('), "to_sexp fallback must start with '(', got: {sexp}");
+    assert!(
+        sexp.contains("VariableListDeclaration"),
+        "to_sexp fallback must contain variant name, got: {sexp}"
+    );
+}
+
+#[test]
+fn test_if_sexp_fallback() {
+    let mut id_gen = NodeIdGenerator::new();
+    let condition =
+        make_node(&mut id_gen, NodeKind::Variable { sigil: "$".into(), name: "ok".into() });
+    let then_branch = make_node(&mut id_gen, NodeKind::Block { statements: vec![] });
+    let node = make_node(
+        &mut id_gen,
+        NodeKind::If {
+            condition: Box::new(condition),
+            then_branch: Box::new(then_branch),
+            elsif_branches: vec![],
+            else_branch: None,
+        },
+    );
+    let sexp = node.to_sexp();
+    assert!(sexp.starts_with('('), "to_sexp fallback must start with '(', got: {sexp}");
+    assert!(sexp.contains("If"), "to_sexp fallback must contain variant name, got: {sexp}");
 }

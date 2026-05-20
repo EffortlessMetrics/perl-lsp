@@ -930,6 +930,31 @@ fn import_optimizer_edits_have_correct_byte_ranges() -> Result<(), Box<dyn std::
 }
 
 #[test]
+fn import_optimizer_edits_cover_crlf_import_block() -> Result<(), Box<dyn std::error::Error>> {
+    let optimizer = ImportOptimizer::new();
+    let content = "use strict;\r\nuse warnings;\r\nuse JSON qw(encode_json decode_json);\r\n\r\nmy $json = encode_json({ ok => 1 });\r\n";
+
+    let analysis = optimizer.analyze_content(content)?;
+    let edits = optimizer.generate_edits(content, &analysis);
+
+    assert_eq!(edits.len(), 1, "Should produce one import-block replacement edit");
+    let edit = &edits[0];
+    let expected_end =
+        content.find("\r\n\r\n").ok_or("blank line after import block not found")? + "\r\n".len();
+
+    assert_eq!(edit.range, (0, expected_end), "CRLF ranges should cover full import lines");
+
+    let mut rewritten = content.to_string();
+    rewritten.replace_range(edit.range.0..edit.range.1, &edit.new_text);
+    assert!(
+        rewritten
+            .starts_with("use JSON qw(encode_json);\nuse strict;\nuse warnings;\n\r\nmy $json"),
+        "replacement should not leave stray carriage returns before the preserved body: {rewritten:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn import_optimizer_no_edits_for_clean_file() -> Result<(), Box<dyn std::error::Error>> {
     let optimizer = ImportOptimizer::new();
     let content = "use strict;\nuse warnings;\n\nprint \"hello\";\n";
