@@ -55,7 +55,8 @@ proptest! {
     ) {
         for (line, line_text) in s.split_inclusive('\n').enumerate() {
             let line = line as u32;
-            let utf16_len = line_text.trim_end_matches('\n').encode_utf16().count() as u32;
+            let line_content = line_text.trim_end_matches('\n').trim_end_matches('\r');
+            let utf16_len = line_content.encode_utf16().count() as u32;
             // Test col = 0, midpoint, and end
             for col in [0, utf16_len / 2, utf16_len, utf16_len + 1] {
                 let offset = utf16_line_col_to_offset(&s, line, col);
@@ -71,7 +72,7 @@ proptest! {
 
         for (line, line_text) in s.split_inclusive('\n').enumerate() {
             let line = line as u32;
-            let line_content = line_text.trim_end_matches('\n');
+            let line_content = line_text.trim_end_matches('\n').trim_end_matches('\r');
             let utf16_len = line_content.encode_utf16().count() as u32;
             let line_end = line_start + line_content.len();
 

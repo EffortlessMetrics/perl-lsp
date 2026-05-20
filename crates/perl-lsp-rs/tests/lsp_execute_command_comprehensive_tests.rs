@@ -144,7 +144,7 @@ fn create_execute_command_server() -> Result<(LspHarness, TempWorkspace), Box<dy
     harness.did_save(&workspace.uri("good_practices.pl")).ok();
     harness.did_save(&workspace.uri("syntax_error.pl")).ok();
 
-    harness.wait_for_idle(Duration::from_millis(1000));
+    harness.wait_for_idle(Duration::from_secs(1));
 
     Ok((harness, workspace))
 }
@@ -1147,7 +1147,7 @@ fn test_resource_exhaustion_resilience() -> TestResult {
 
     harness.open_document(&workspace.uri("large_resource_test.pl"), &large_content)?;
 
-    harness.wait_for_idle(Duration::from_millis(1000));
+    harness.wait_for_idle(Duration::from_secs(1));
 
     let start_time = std::time::Instant::now();
 

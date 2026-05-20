@@ -121,6 +121,37 @@ fn test_extract_mixed_named_capture_syntaxes() -> Result<(), Box<dyn std::error:
 }
 
 #[test]
+fn test_extract_python_style_named_capture() -> Result<(), Box<dyn std::error::Error>> {
+    let captures = RegexAnalyzer::extract_named_captures("(?P<word>\\w+)");
+    assert_eq!(captures.len(), 1);
+    assert_eq!(captures[0].name, "word");
+    assert_eq!(captures[0].index, 1);
+    assert_eq!(captures[0].pattern, "\\w+");
+    Ok(())
+}
+
+#[test]
+fn test_extract_python_style_named_capture_counts_prior_groups()
+-> Result<(), Box<dyn std::error::Error>> {
+    let captures = RegexAnalyzer::extract_named_captures("(prefix)(?P<id>\\d+)(?<suffix>\\w+)");
+    assert_eq!(captures.len(), 2);
+    assert_eq!(captures[0].name, "id");
+    assert_eq!(captures[0].index, 2);
+    assert_eq!(captures[1].name, "suffix");
+    assert_eq!(captures[1].index, 3);
+    Ok(())
+}
+
+#[test]
+fn test_python_style_named_backreference_is_not_capture() -> Result<(), Box<dyn std::error::Error>>
+{
+    let captures = RegexAnalyzer::extract_named_captures("(?<word>\\w+)(?P=word)");
+    assert_eq!(captures.len(), 1);
+    assert_eq!(captures[0].name, "word");
+    Ok(())
+}
+
+#[test]
 fn test_capture_group_has_pattern_field() -> Result<(), Box<dyn std::error::Error>> {
     let captures = RegexAnalyzer::extract_named_captures("(?<id>\\d+)");
     assert_eq!(captures[0].pattern, "\\d+");

@@ -4,6 +4,7 @@ use perl_parser::{
     Parser,
     ast::{Node, NodeKind},
 };
+use perl_test_generators::simple_program;
 use proptest::prelude::*;
 use proptest::test_runner::{Config as ProptestConfig, FileFailurePersistence};
 use std::collections::HashSet;
@@ -225,6 +226,40 @@ proptest! {
         let mut parser = Parser::new(&input);
         // Parser should either succeed or return an error, never panic
         let _ = parser.parse();
+    }
+
+    #[test]
+    fn generated_simple_programs_parse_with_bounded_shape(input in simple_program()) {
+        let mut parser = Parser::new(&input);
+        let ast = parser.parse();
+
+        let root = match ast {
+            Ok(root) => root,
+            Err(err) => {
+                prop_assert!(false, "generated program failed to parse: {err:?}\n{input}");
+                return Ok(());
+            }
+        };
+
+        let cycle_check = check_no_cycles(&root);
+        prop_assert!(
+            cycle_check.is_ok(),
+            "cycle detected in generated program: {cycle_check:?}\n{input}",
+        );
+
+        let depth_check = check_depth(&root, 0, 100);
+        prop_assert!(
+            depth_check.is_ok(),
+            "depth exceeded in generated program: {depth_check:?}\n{input}",
+        );
+
+        let count = count_nodes(&root);
+        let max_nodes = input.len().saturating_mul(4).saturating_add(32);
+        prop_assert!(
+            count <= max_nodes,
+            "too many nodes ({count}) for generated program of {} bytes (limit {max_nodes})\n{input}",
+            input.len(),
+        );
     }
 
     #[test]

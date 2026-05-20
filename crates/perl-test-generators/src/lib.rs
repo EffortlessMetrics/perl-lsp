@@ -26,10 +26,15 @@
 //! }
 //! ```
 
+mod code;
 mod module;
 mod unicode;
 mod variable;
 
+pub use code::{
+    integer_literal, perl_identifier, scalar_variable, simple_expression, simple_program,
+    simple_statement, single_quoted_string_literal,
+};
 pub use module::{module_path, module_path_segments};
 pub use unicode::{non_empty_unicode_string, unicode_string};
 pub use variable::variable;

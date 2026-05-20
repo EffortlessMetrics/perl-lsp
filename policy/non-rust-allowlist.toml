@@ -78,13 +78,14 @@ review_after = "2026-08-07"
 
 [[allow]]
 id = "non-rust-license-files"
-glob = "LICENSE-*"
+glob = "**/LICENSE-*"
 kind = "license"
 language = "text"
 surface = "release"
 classification = "documentation"
 owner = "release/legal"
-reason = "Apache-2.0 and MIT license texts required by the dual-licensed Rust ecosystem."
+reason = "Apache-2.0 and MIT license texts required by the dual-licensed Rust ecosystem; per-crate copies are required by cargo publish."
+broad_glob_reason = "License files are intentionally repeated across publishable crates; cargo publish and release/legal review own this surface."
 covered_by = [
   "cargo xtask check-file-policy",
 ]

@@ -379,7 +379,7 @@ fn test_inline_sub_with_signature_parens() {
 
 #[test]
 fn test_inline_call_with_paren_in_string_argument() {
-    // The second argument is a string that contains ')' — the call-site parser
+    // The first argument is a string that contains ')' — the call-site parser
     // must correctly identify the real closing paren, not the one inside the string.
     let source = r#"sub greet {
     my ($prefix, $name) = @_;
@@ -387,12 +387,60 @@ fn test_inline_call_with_paren_in_string_argument() {
 }
 "#;
     let inliner = SubInliner::new(source);
-    // Second argument "hello)" contains ')' — naive paren-matching would split here
+    // First argument "Hi)" contains ')' — naive paren-matching would split here
     let result = inliner.inline_call("greet", r#"greet("Hi)", "World")"#);
+    let inlined = must(result);
     assert!(
-        result.is_ok(),
-        "call with ')' inside a string argument must not fail; got: {:?}",
-        result
+        inlined.contains(r#""Hi)" . "World""#),
+        "call with ')' inside a string argument must preserve both arguments; got: {inlined}"
+    );
+}
+
+#[test]
+fn test_sub_body_with_brace_in_string_literal_inlines_full_body() {
+    // A closing brace inside a string literal is not the end of the sub body.
+    // The body parser must continue to the real brace so the return statement
+    // remains available for inlining.
+    let source = r#"sub describe_brace {
+    my ($value) = @_;
+    my $template = "literal } brace";
+    return $template . $value;
+}
+"#;
+    let inliner = SubInliner::new(source);
+    let result = inliner.inline_call("describe_brace", r#"describe_brace("tail")"#);
+    let inlined = must(result);
+    assert!(
+        inlined.contains(r#"$template . "tail""#),
+        "brace inside a string literal must not truncate the parsed sub body; got: {inlined}"
+    );
+}
+
+#[test]
+fn test_sub_body_with_brace_in_line_comment_inlines_full_body() {
+    let source = r#"sub describe_commented_brace {
+    # A closing brace in a comment: }
+    return "ok";
+}
+"#;
+    let inliner = SubInliner::new(source);
+    let result = inliner.inline_call("describe_commented_brace", "describe_commented_brace()");
+    let inlined = must(result);
+    assert!(
+        inlined.contains(r#""ok""#),
+        "brace inside a line comment must not truncate the parsed sub body; got: {inlined}"
+    );
+}
+
+#[test]
+fn test_sub_body_with_hash_in_regex_on_one_line_inlines_full_body() {
+    let source = r#"sub hash_regex { return qr/#/; }"#;
+    let inliner = SubInliner::new(source);
+    let result = inliner.inline_call("hash_regex", "hash_regex()");
+    let inlined = must(result);
+    assert!(
+        inlined.contains("qr/#/"),
+        "hash inside a regex literal must not be mistaken for a line comment; got: {inlined}"
     );
 }
 
@@ -496,6 +544,34 @@ fn test_call_expression_unmatched_paren_returns_parse_failed() {
         matches!(result, Err(InlineError::CallSiteParseFailed { .. })),
         "unmatched paren should return CallSiteParseFailed; got: {:?}",
         result
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Edge case: reference dereferences must not be corrupted
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_inlining_does_not_corrupt_scalar_deref() {
+    let source = r#"sub first_elem {
+    my ($ref) = @_;
+    return $$ref;
+}
+"#;
+    let inliner = SubInliner::new(source);
+    let result = inliner.inline_call("first_elem", "first_elem($value_ref)");
+    let inlined = must(result);
+    assert!(
+        inlined.contains("${$value_ref}"),
+        "dereference parameter should be braced during substitution; got: {inlined}"
+    );
+    assert!(
+        !inlined.contains("$$value_ref"),
+        "replacing $ref in $$ref must not produce unbraced $$value_ref; got: {inlined}"
+    );
+    assert!(
+        !inlined.contains("$$ref"),
+        "inlined output must not leave the original parameter reference behind; got: {inlined}"
     );
 }
 

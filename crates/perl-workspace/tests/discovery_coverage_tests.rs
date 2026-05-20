@@ -5,6 +5,7 @@
 //! not exercised by the existing test suites.
 
 use perl_workspace::discovery::{DiscoveryMethod, discover_perl_files};
+use perl_workspace::ignore::path_contains_skipped_component;
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
@@ -578,11 +579,12 @@ fn hidden_perl_files_at_root_are_discovered() -> TestResult {
 }
 
 #[test]
-fn all_six_skipped_directories_are_excluded_from_walk() -> TestResult {
+fn all_canonical_skipped_directories_are_excluded_from_walk() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
-    let skipped = [".git", ".hg", ".svn", "target", "node_modules", ".cache"];
+    let skipped =
+        [".git", ".hg", ".svn", "target", "node_modules", ".cache", "blib", "local", "vendor"];
     for dir in skipped {
         create_file(root, &format!("{dir}/nested/Module.pm"))?;
     }
@@ -593,15 +595,17 @@ fn all_six_skipped_directories_are_excluded_from_walk() -> TestResult {
     assert_eq!(result.files.len(), 1);
     assert!(result.files.iter().any(|p| p.ends_with("Kept.pm")));
 
-    // Verify none of the skipped dirs leaked through
+    // Verify none of the skipped dirs leaked through.  The assertion must only
+    // inspect paths relative to the temporary workspace root, because the
+    // tempdir itself may live under a skipped-looking directory such as
+    // `/root/.cache/...` in agent environments.
     for path in &result.files {
-        let path_str = path.to_string_lossy();
-        for dir in &skipped {
-            assert!(
-                !path_str.contains(&format!("/{dir}/")),
-                "skipped dir {dir} leaked into results: {path_str}"
-            );
-        }
+        let relative = path.strip_prefix(root)?;
+        assert!(
+            !path_contains_skipped_component(relative),
+            "skipped directory leaked into discovered workspace-relative path: {}",
+            relative.display()
+        );
     }
 
     Ok(())

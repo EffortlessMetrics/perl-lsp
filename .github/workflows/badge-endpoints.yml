@@ -34,7 +34,7 @@ jobs:
         run: cargo xtask badges
 
       - name: Open badge refresh PR
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           branch: automation/badge-endpoints
           title: "chore(badges): refresh public endpoints (#8820)"

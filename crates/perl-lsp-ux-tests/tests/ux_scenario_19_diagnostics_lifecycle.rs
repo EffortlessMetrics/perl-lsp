@@ -32,12 +32,9 @@
 //!                        from an analysis that was already running when the
 //!                        fix arrived. Only then enter the clean-window check.
 
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{LspEvent, ScenarioConfig, UxHarness};
 use std::time::Duration;
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 const BROKEN_SOURCE: &str = "use strict;\nuse warnings;\nmy $x = ;\n";
 const FIXED_SOURCE: &str = "use strict;\nuse warnings;\nmy $x = 1;\nprint $x;\n";
