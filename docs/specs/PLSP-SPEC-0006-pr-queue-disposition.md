@@ -1,12 +1,30 @@
 # PLSP-SPEC-0006: PR queue disposition
 
-Status: proposed
+Status: accepted
 Owner: perl-lsp maintainers
 Linked proposal: [PLSP-PROP-0001](../proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
 Linked ADRs: none yet
 Linked plan: [0.14.0 Readiness Queue](../releases/0.14.0-readiness.md)
 Status impact: PR review comments, duplicate-cluster cleanup, merge and close
 recommendations
+
+## Current implementation status
+
+This spec is accepted as the queue-disposition contract for maintainer and
+agent work. The current implementation path is manual: reviewers use the
+classification, disposition, and comment-template fields below when reviewing,
+merging, or closing PRs and duplicate clusters.
+
+The intended enforcement surface is an `xtask pr-disposition` command family:
+
+```bash
+cargo xtask pr-disposition template
+cargo xtask pr-disposition check --pr-body <file>
+```
+
+Until that checker exists, PR comments and close rationales must still follow
+this spec manually. A future implementation PR may add the checker without
+changing this contract.
 
 ## Contract
 
@@ -142,6 +160,19 @@ follow-up:
 
 Use `none` only when the field is truly not applicable. For duplicate clusters,
 `overlap checked` should name the PR numbers or files compared.
+
+## Automation Hooks
+
+`cargo xtask pr-disposition template` must print the comment-template fields in
+this spec without adding PR-specific values.
+
+`cargo xtask pr-disposition check --pr-body <file>` must fail when a queue
+disposition body omits required fields, uses an invalid closure reason as the
+only rationale, or closes a PR without one of the valid dispositions above.
+
+The checker must not decide whether a PR is correct, mergeable, or valuable.
+Its job is structural: make sure the maintainer left the classification,
+overlap, proof, and rationale evidence that this spec requires.
 
 ## Proof Commands
 
