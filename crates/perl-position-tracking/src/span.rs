@@ -272,4 +272,120 @@ mod tests {
         let span = ByteSpan::new(5, 10);
         assert_eq!(format!("{}", span), "5..10");
     }
+
+    // --- Additional intersection / union edge cases ---
+
+    #[test]
+    fn test_intersection_non_overlapping_returns_none() {
+        let a = ByteSpan::new(0, 5);
+        let b = ByteSpan::new(10, 20);
+        assert_eq!(a.intersection(b), None, "disjoint spans must have no intersection");
+        assert_eq!(b.intersection(a), None, "disjoint spans must have no intersection (reversed)");
+    }
+
+    #[test]
+    fn test_intersection_identical_returns_same() {
+        let a = ByteSpan::new(3, 9);
+        assert_eq!(a.intersection(a), Some(a), "identical spans intersect as themselves");
+    }
+
+    #[test]
+    fn test_union_identical_returns_same() {
+        let a = ByteSpan::new(3, 9);
+        assert_eq!(a.union(a), a, "union of identical span is itself");
+    }
+
+    #[test]
+    fn test_intersection_nested_equals_inner() {
+        let outer = ByteSpan::new(0, 20);
+        let inner = ByteSpan::new(5, 15);
+        assert_eq!(
+            outer.intersection(inner),
+            Some(inner),
+            "intersection of outer with inner must equal inner"
+        );
+        assert_eq!(inner.intersection(outer), Some(inner), "intersection is commutative");
+    }
+
+    #[test]
+    fn test_union_nested_equals_outer() {
+        let outer = ByteSpan::new(0, 20);
+        let inner = ByteSpan::new(5, 15);
+        assert_eq!(outer.union(inner), outer, "union of nested spans must equal outer");
+        assert_eq!(inner.union(outer), outer, "union is commutative");
+    }
+
+    #[test]
+    fn test_intersection_adjacent_returns_none() {
+        // Adjacent spans share a boundary point but do not overlap —
+        // intersection requires start < end, so adjacent returns None.
+        let a = ByteSpan::new(0, 5);
+        let b = ByteSpan::new(5, 10);
+        assert_eq!(a.intersection(b), None, "adjacent spans have no overlap: intersection is None");
+    }
+
+    #[test]
+    fn test_union_adjacent_spans_is_minimal_cover() {
+        let a = ByteSpan::new(0, 5);
+        let b = ByteSpan::new(5, 10);
+        assert_eq!(
+            a.union(b),
+            ByteSpan::new(0, 10),
+            "union of adjacent spans covers both without gap"
+        );
+    }
+
+    #[test]
+    fn test_intersection_empty_span_returns_none() {
+        // An empty span (start == end) has no interior, so it cannot overlap
+        // with any span in a meaningful way.  The implementation requires
+        // start < end for Some, so all these must be None.
+        let empty = ByteSpan::empty(5);
+        let full = ByteSpan::new(3, 10);
+
+        // empty vs non-empty enclosing span
+        assert_eq!(
+            empty.intersection(full),
+            None,
+            "zero-length span has no bytes, intersection must be None"
+        );
+        assert_eq!(
+            full.intersection(empty),
+            None,
+            "zero-length span has no bytes, intersection must be None (reversed)"
+        );
+
+        // empty vs empty
+        assert_eq!(
+            empty.intersection(empty),
+            None,
+            "two zero-length spans at the same point have no intersection"
+        );
+    }
+
+    #[test]
+    fn test_union_empty_span_equals_non_empty() {
+        let empty = ByteSpan::empty(5);
+        let full = ByteSpan::new(3, 10);
+        // union of a zero-length span with a real span should just be the real span
+        assert_eq!(
+            empty.union(full),
+            ByteSpan::new(3, 10),
+            "union with empty span at interior point covers at least the full span"
+        );
+    }
+
+    #[test]
+    fn test_union_non_overlapping_is_minimal_cover() {
+        // Two disjoint spans — union must span from the min start to the max end,
+        // covering the gap between them.
+        let a = ByteSpan::new(0, 5);
+        let b = ByteSpan::new(10, 20);
+        assert_eq!(
+            a.union(b),
+            ByteSpan::new(0, 20),
+            "union of non-overlapping spans spans the full range"
+        );
+        assert_eq!(b.union(a), ByteSpan::new(0, 20), "union is commutative");
+    }
 }

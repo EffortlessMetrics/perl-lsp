@@ -189,7 +189,7 @@ fn create_comprehensive_workspace_with_init()
     harness.did_save(&workspace.uri("test_script.pl")).ok();
 
     // Wait for comprehensive indexing and analysis
-    harness.wait_for_idle(Duration::from_millis(2000));
+    harness.wait_for_idle(Duration::from_secs(2));
 
     Ok((harness, workspace, init_result))
 }

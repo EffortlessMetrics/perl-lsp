@@ -1,0 +1,189 @@
+# Advisory semantic-token class promotion registry.
+#
+# This policy records reviewed compiler-token classes. It does not broaden live
+# token output or replace semantic-token receipts.
+
+schema_version = 1
+policy = "semantic-token-classes"
+owner = "perl-lsp maintainers"
+status = "advisory"
+updated = "2026-05-20"
+spec = "docs/specs/PLSP-SPEC-0019-semantic-token-class-promotion-contract.md"
+support_tiers = "docs/project/status/SUPPORT_TIERS.md"
+provider_promotion_ledger = "policy/provider-promotion-ledger.toml"
+
+default_state = "blocked_unlisted"
+default_fallback = "parser_hir_semantic_tokens"
+
+required_promotion_conditions = [
+  "source_backed_compiler_span",
+  "span_matches_exactly_one_existing_live_token",
+  "emits_no_unscoped_new_output",
+  "did_change_freshness_proven",
+  "generated_no_source_blocked",
+  "stale_dynamic_low_confidence_fallback_unmatched_blocked",
+  "support_review_blocks_broad_promotion",
+]
+
+default_blockers = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "fallback_policy",
+  "unsupported_fact_class",
+  "unmatched_span",
+]
+
+receipt_sources = [
+  "docs/project/status/semantic_shadow_compare.md",
+  "docs/project/status/semantic_scorecard.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+
+[[class]]
+name = "subroutine_declaration"
+state = "partial_live_trace"
+live_token_kind = "function"
+compiler_identity_prefix = "token:function:"
+emits_new_output = false
+requires_exact_live_token_match = true
+requires_edit_freshness = true
+blocks = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "fallback_policy",
+  "unsupported_fact_class",
+  "unmatched_span",
+]
+claim_boundary = "Only source-backed compiler subroutine-declaration spans that exactly match existing live parser/HIR function tokens participate."
+
+[[class]]
+name = "method_declaration"
+state = "partial_live_trace"
+live_token_kind = "method"
+compiler_identity_prefix = "token:method_declaration:"
+emits_new_output = false
+requires_exact_live_token_match = true
+requires_edit_freshness = true
+blocks = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "unsupported_fact_class",
+  "unmatched_span",
+]
+claim_boundary = "Only source-backed compiler method-declaration spans that exactly match existing live parser/HIR method tokens participate."
+
+[[class]]
+name = "package_declaration"
+state = "partial_live_trace"
+live_token_kind = "namespace"
+compiler_identity_prefix = "token:package_declaration:"
+emits_new_output = false
+requires_exact_live_token_match = true
+requires_edit_freshness = true
+blocks = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "fallback_policy",
+  "unsupported_fact_class",
+  "unmatched_span",
+]
+claim_boundary = "Only source-backed compiler package-declaration spans that exactly match existing live parser/HIR namespace tokens participate."
+
+[[class]]
+name = "field_declaration"
+state = "partial_live_trace"
+live_token_kind = "variable"
+compiler_identity_prefix = "token:field_declaration:"
+emits_new_output = false
+requires_exact_live_token_match = true
+requires_edit_freshness = true
+blocks = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "unsupported_fact_class",
+  "unmatched_span",
+]
+claim_boundary = "Only source-backed compiler field-declaration spans that exactly match existing live parser/HIR variable tokens participate."
+
+[[class]]
+name = "method_call"
+state = "partial_live_trace"
+live_token_kind = "method"
+compiler_identity_prefix = "token:method_call:"
+emits_new_output = false
+requires_exact_live_token_match = true
+requires_edit_freshness = true
+blocks = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "unsupported_fact_class",
+  "unmatched_span",
+]
+claim_boundary = "Only source-backed compiler method-call spans that exactly match existing live parser/HIR method tokens participate."
+
+[[class]]
+name = "self_method_call"
+state = "partial_live_trace"
+live_token_kind = "method"
+compiler_identity_prefix = "token:self_method_call:"
+emits_new_output = false
+requires_exact_live_token_match = true
+requires_edit_freshness = true
+blocks = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "ambiguous_identity",
+  "unsupported_fact_class",
+  "unmatched_span",
+]
+claim_boundary = "Only source-backed compiler $self method-call spans that exactly match existing live parser/HIR method tokens participate."
+
+[[class]]
+name = "lexical_variable_declaration"
+state = "partial_live_trace"
+live_token_kind = "variable"
+compiler_identity_prefix = "token:lexical_variable_declaration:"
+emits_new_output = false
+requires_exact_live_token_match = true
+requires_edit_freshness = true
+blocks = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "unsupported_fact_class",
+  "unmatched_span",
+]
+claim_boundary = "Only source-backed compiler lexical-variable declaration spans that exactly match existing live parser/HIR variable tokens participate."
+
+[[class]]
+name = "lexical_variable_use"
+state = "partial_live_trace"
+live_token_kind = "variable"
+compiler_identity_prefix = "token:lexical_variable_use:"
+emits_new_output = false
+requires_exact_live_token_match = true
+requires_edit_freshness = true
+blocks = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "unsupported_fact_class",
+  "unmatched_span",
+]
+claim_boundary = "Only source-backed compiler lexical-variable use spans that exactly match existing live parser/HIR variable tokens participate."

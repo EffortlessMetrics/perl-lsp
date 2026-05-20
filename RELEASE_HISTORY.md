@@ -14,7 +14,7 @@ Tag commit timestamps may differ from release dates.
 
 | Version | Tag | GitHub Release | Released | Tag commit | Compare | Assets | crates.io | VS Code Marketplace | Notes file |
 |---------|-----|----------------|----------|------------|---------|--------|-----------|---------------------|------------|
-| [0.14.0] | `v0.14.0` | pending | pending | `pending` | [v0.13.4...v0.14.0] | pending | pending | pending | [v0.14.0][n-0.14.0] |
+| [0.14.0] | `v0.14.0` | [yes][gh-0.14.0] | 2026-05-12 | `82e64200` | [v0.13.4...v0.14.0] | 1 VSIX | 0.14.0 primary packages visible; full receipt pending | pending | [v0.14.0][n-0.14.0] |
 | [0.13.4] | `v0.13.4` | pending | pending | `pending` | [v0.13.3...v0.13.4] | 10 (7 binaries, VSIX, SHA256SUMS, SBOM) | pending | pending | [v0.13.4][n-0.13.4] |
 | [0.13.3] | `v0.13.3` | [yes][gh-0.13.3] | 2026-05-03 | `06fc1443` | [v0.13.2...v0.13.3] | 10 (7 binaries, VSIX, SHA256SUMS, SBOM) | 0.13.3 (31 crates) | [perl-lsp-rs][vsce] | [v0.13.3][n-0.13.3] |
 | [0.13.2] | `v0.13.2` | [yes][gh-0.13.2] | 2026-05-02 | `0e9c5d78` | [v0.13.1...v0.13.2] | 10 (7 binaries, VSIX, SHA256SUMS, SBOM) | 0.13.2 (31 crates) | [perl-lsp-rs][vsce] | [v0.13.2][n-0.13.2] |

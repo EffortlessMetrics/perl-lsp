@@ -114,9 +114,172 @@ fn split_sigil(name: &str) -> (&str, &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_tdd_support::must_some;
 
     fn diagnostic_for(range: (usize, usize), message: &str) -> QuickFixDiagnostic {
         QuickFixDiagnostic { range, message: message.to_string(), code: None }
+    }
+
+    #[test]
+    fn fix_duplicate_hash_keys_rename_bareword_key() {
+        let source = "my %h = (\n    foo => 1,\n    foo => 2,\n);\n";
+        let key_start = must_some(source.rfind("foo"));
+        let key_end = key_start + "foo".len();
+        let diagnostic = diagnostic_for(
+            (key_start, key_end),
+            "Duplicate hash key 'foo' -- only the last value will be used",
+        );
+
+        let actions = fix_duplicate_hash_keys(source, &diagnostic);
+
+        let rename = must_some(actions.iter().find(|a| a.title.contains("Rename")));
+        assert_eq!(rename.edit.changes[0].new_text, "foo_2");
+        assert_eq!(rename.edit.changes[0].location.start, key_start);
+        assert_eq!(rename.edit.changes[0].location.end, key_end);
+    }
+
+    #[test]
+    fn fix_duplicate_hash_keys_delete_removes_correct_line() {
+        let source = "my %h = (\n    foo => 1,\n    foo => 2,\n);\n";
+        let key_start = must_some(source.rfind("foo"));
+        let key_end = key_start + "foo".len();
+        let diagnostic = diagnostic_for(
+            (key_start, key_end),
+            "Duplicate hash key 'foo' -- only the last value will be used",
+        );
+
+        let actions = fix_duplicate_hash_keys(source, &diagnostic);
+
+        let delete = must_some(actions.iter().find(|a| a.title.contains("Remove")));
+        assert!(delete.is_preferred);
+        assert_eq!(delete.edit.changes[0].new_text, "");
+
+        // Applying the delete should remove only the duplicate line.
+        let edit = &delete.edit.changes[0];
+        let remaining =
+            format!("{}{}", &source[..edit.location.start], &source[edit.location.end..]);
+        assert_eq!(remaining, "my %h = (\n    foo => 1,\n);\n");
+    }
+
+    #[test]
+    fn fix_duplicate_hash_keys_no_delete_for_inline_hash() {
+        // All pairs on one line: delete action is suppressed to avoid corrupting inline hash.
+        let source = "my %h = (foo => 1, foo => 2);\n";
+        let key_start = must_some(source.rfind("foo"));
+        let key_end = key_start + "foo".len();
+        let diagnostic = diagnostic_for(
+            (key_start, key_end),
+            "Duplicate hash key 'foo' -- only the last value will be used",
+        );
+
+        let actions = fix_duplicate_hash_keys(source, &diagnostic);
+
+        assert!(
+            !actions.iter().any(|a| a.title.contains("Remove")),
+            "should not offer delete for inline hash"
+        );
+        assert!(actions.iter().any(|a| a.title.contains("Rename")));
+    }
+
+    #[test]
+    fn fix_duplicate_hash_keys_preserves_single_quote_style() {
+        let source = "my %h = (\n    'foo' => 1,\n    'foo' => 2,\n);\n";
+        let key_start = must_some(source.rfind("'foo'"));
+        let key_end = key_start + "'foo'".len();
+        let diagnostic = diagnostic_for(
+            (key_start, key_end),
+            "Duplicate hash key 'foo' -- only the last value will be used",
+        );
+
+        let actions = fix_duplicate_hash_keys(source, &diagnostic);
+
+        let rename = must_some(actions.iter().find(|a| a.title.contains("Rename")));
+        assert_eq!(rename.edit.changes[0].new_text, "'foo_2'");
+    }
+
+    #[test]
+    fn fix_duplicate_hash_keys_preserves_double_quote_style() {
+        let source = "my %h = (\n    \"foo\" => 1,\n    \"foo\" => 2,\n);\n";
+        let key_start = must_some(source.rfind("\"foo\""));
+        let key_end = key_start + "\"foo\"".len();
+        let diagnostic = diagnostic_for(
+            (key_start, key_end),
+            "Duplicate hash key 'foo' -- only the last value will be used",
+        );
+
+        let actions = fix_duplicate_hash_keys(source, &diagnostic);
+
+        let rename = must_some(actions.iter().find(|a| a.title.contains("Rename")));
+        assert_eq!(rename.edit.changes[0].new_text, "\"foo_2\"");
+    }
+
+    #[test]
+    fn fix_duplicate_hash_keys_empty_on_unparseable_message() {
+        let source = "my %h = (foo => 1, foo => 2);\n";
+        let diagnostic = diagnostic_for((19, 22), "No key name here");
+
+        let actions = fix_duplicate_hash_keys(source, &diagnostic);
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn fix_duplicate_hash_keys_empty_on_invalid_range() {
+        let source = "my %h = (foo => 1, foo => 2);\n";
+        let diagnostic = diagnostic_for(
+            (source.len() + 1, source.len() + 4),
+            "Duplicate hash key 'foo' -- only the last value will be used",
+        );
+
+        let actions = fix_duplicate_hash_keys(source, &diagnostic);
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn fix_duplicate_hash_keys_empty_on_non_char_boundary_range() {
+        let source = "my %h = (\"\u{e9}\" => 1, \"\u{e9}\" => 2);\n";
+        let char_start = must_some(source.find('\u{e9}'));
+        let diagnostic = diagnostic_for(
+            (char_start + 1, char_start + 2),
+            "Duplicate hash key 'e' -- only the last value will be used",
+        );
+
+        let actions = fix_duplicate_hash_keys(source, &diagnostic);
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn fix_duplicate_hash_keys_no_delete_for_multiline_value() {
+        let source = "my %h = (\n    foo => 1,\n    foo => {\n        nested => 1,\n    },\n);\n";
+        let key_start = must_some(source.rfind("foo => {"));
+        let key_end = key_start + "foo".len();
+        let diagnostic = diagnostic_for(
+            (key_start, key_end),
+            "Duplicate hash key 'foo' -- only the last value will be used",
+        );
+
+        let actions = fix_duplicate_hash_keys(source, &diagnostic);
+
+        assert!(
+            !actions.iter().any(|a| a.title.contains("Remove")),
+            "should not offer line delete for multiline duplicate values"
+        );
+        assert!(actions.iter().any(|a| a.title.contains("Rename")));
+    }
+
+    #[test]
+    fn fix_duplicate_hash_keys_quotes_numeric_rename_candidate() {
+        let source = "my %h = (\n    42 => 1,\n    42 => 2,\n);\n";
+        let key_start = must_some(source.rfind("42"));
+        let key_end = key_start + "42".len();
+        let diagnostic = diagnostic_for(
+            (key_start, key_end),
+            "Duplicate hash key '42' -- only the last value will be used",
+        );
+
+        let actions = fix_duplicate_hash_keys(source, &diagnostic);
+
+        let rename = must_some(actions.iter().find(|a| a.title.contains("Rename")));
+        assert_eq!(rename.edit.changes[0].new_text, "'42_2'");
     }
 
     #[test]
@@ -1067,6 +1230,134 @@ pub fn fix_duplicate_subroutine(diagnostic: &QuickFixDiagnostic) -> Vec<CodeActi
     });
 
     actions
+}
+
+/// Fix duplicate hash key by renaming or removing the duplicate entry (PL408).
+///
+/// Offers two actions when the same static key appears more than once in a hash literal:
+///
+/// 1. **Remove duplicate entry** - deletes the entire line containing the duplicate key,
+///    keeping the *first* value. Offered only for simple one-line entries
+///    so we don't corrupt inline hashes or multiline values.
+/// 2. **Rename duplicate key** - appends `_2` to the key name so both entries are kept
+///    under distinct names. The original quote style (single-quoted, double-quoted, or
+///    bareword) is preserved.
+///
+/// The diagnostic range covers the duplicate key token (second occurrence).
+/// The first occurrence location is available in `related_information` on the full
+/// `Diagnostic`, but is not needed here - we fix the duplicate in-place.
+pub fn fix_duplicate_hash_keys(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
+    let Some(key_name) = duplicate_hash_key_name(&diagnostic.message) else {
+        return Vec::new();
+    };
+
+    let mut actions = Vec::new();
+
+    // Determine the key's source representation to preserve quote style.
+    let Some(key_source) = source.get(diagnostic.range.0..diagnostic.range.1) else {
+        return Vec::new();
+    };
+    let new_key = duplicate_hash_key_rename_text(key_source, key_name);
+
+    // Offer line deletion only when the duplicate pair occupies its own line.
+    if let Some((line_start, delete_end)) = duplicate_hash_key_delete_range(source, diagnostic) {
+        actions.push(CodeAction {
+            title: format!("Remove duplicate entry '{key_name}' (keep first value)"),
+            kind: CodeActionKind::QuickFix,
+            diagnostics: vec![DiagnosticCode::DuplicateHashKey.as_str().to_string()],
+            edit: CodeActionEdit {
+                changes: vec![TextEdit {
+                    location: SourceLocation { start: line_start, end: delete_end },
+                    new_text: String::new(),
+                }],
+            },
+            is_preferred: true,
+        });
+    }
+
+    // Rename action keeps the duplicate entry and edits only the key token.
+    actions.push(CodeAction {
+        title: format!("Rename duplicate key to '{new_key}'"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::DuplicateHashKey.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
+                new_text: new_key,
+            }],
+        },
+        is_preferred: false,
+    });
+
+    actions
+}
+
+fn duplicate_hash_key_name(message: &str) -> Option<&str> {
+    const PREFIX: &str = "Duplicate hash key '";
+    const SUFFIX: &str = "' -- only the last value will be used";
+
+    message.strip_prefix(PREFIX)?.strip_suffix(SUFFIX)
+}
+
+fn duplicate_hash_key_rename_text(key_source: &str, key_name: &str) -> String {
+    if is_quoted_with(key_source, '\'') || is_quoted_with(key_source, '"') {
+        let insert_at = key_source.len().saturating_sub(1);
+        let mut renamed = String::with_capacity(key_source.len() + 2);
+        renamed.push_str(&key_source[..insert_at]);
+        renamed.push_str("_2");
+        renamed.push_str(&key_source[insert_at..]);
+        return renamed;
+    }
+
+    if is_bareword_hash_key(key_source) {
+        format!("{key_source}_2")
+    } else {
+        format!("'{}_2'", escape_single_quoted_perl(key_name))
+    }
+}
+
+fn is_quoted_with(value: &str, quote: char) -> bool {
+    value.len() >= 2 && value.starts_with(quote) && value.ends_with(quote)
+}
+
+fn is_bareword_hash_key(value: &str) -> bool {
+    let mut chars = value.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+
+    (first == '_' || first.is_ascii_alphabetic())
+        && chars.all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
+}
+
+fn escape_single_quoted_perl(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('\'', "\\'")
+}
+
+fn duplicate_hash_key_delete_range(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Option<(usize, usize)> {
+    let before_key = source.get(..diagnostic.range.0)?;
+    let after_key = source.get(diagnostic.range.1..)?;
+    let line_start = before_key.rfind('\n').map(|p| p + 1).unwrap_or(0);
+    let line_end = after_key.find('\n').map(|p| diagnostic.range.1 + p).unwrap_or(source.len());
+    let delete_end = if line_end < source.len() { line_end + 1 } else { line_end };
+    let line_content = source.get(line_start..line_end)?;
+
+    if is_simple_duplicate_hash_entry_line(line_content) {
+        Some((line_start, delete_end))
+    } else {
+        None
+    }
+}
+
+fn is_simple_duplicate_hash_entry_line(line_content: &str) -> bool {
+    let trimmed = line_content.trim_end();
+
+    line_content.matches("=>").count() == 1
+        && trimmed.ends_with(',')
+        && !line_content.contains(['(', ')', '[', ']', '{', '}'])
 }
 
 /// Fix missing return statement by adding an explicit `return` before the closing brace

@@ -38,6 +38,10 @@ const FORBIDDEN_SUPPORT_CLAIM_PHRASES: &[&str] = &[
     "all CPAN support",
     "all-CPAN support",
     "fully supports CPAN",
+    "complete static analysis",
+    "safe refactor everywhere",
+    "generated symbols fully supported",
+    "compiler-backed tokens broadly live",
     "full dynamic Perl inference",
 ];
 
@@ -63,6 +67,8 @@ const REQUIRED_SUPPORT_SURFACES: &[&str] = &[
     "References",
     "Hover",
     "Diagnostics",
+    "Provider decision explanations",
+    "Workspace trust report",
     "Rename",
     "Safe delete",
     "Workspace symbols",
@@ -71,6 +77,43 @@ const REQUIRED_SUPPORT_SURFACES: &[&str] = &[
     "DAP module paths / Perl subprocess seams",
     "Real-workspace editor baseline",
 ];
+
+const PARTIAL_LIVE_BOUNDARY_REQUIRED_SURFACES: &[&str] = &[
+    "Completion",
+    "Goto definition",
+    "References",
+    "Hover",
+    "Diagnostics",
+    "Provider decision explanations",
+    "Rename",
+    "Safe delete",
+    "Workspace symbols",
+    "Document symbols",
+    "Semantic tokens",
+];
+
+const EDIT_PRODUCING_SUPPORT_SURFACES: &[&str] = &["Rename", "Safe delete"];
+
+const SUPPORT_BOUNDARY_TERMS: &[&str] = &[
+    "fallback",
+    "fall back",
+    "block",
+    "gated",
+    "deferred",
+    "legacy",
+    "no edit",
+    "no-edit",
+    "zero edits",
+    "refuse",
+    "refused",
+];
+
+const EDIT_ROLLBACK_TERMS: &[&str] = &["rollback", "roll back"];
+
+const EDIT_NO_EDIT_TERMS: &[&str] =
+    &["no edit", "no-edit", "zero edits", "return no edits", "returns no edits"];
+
+const EDIT_BLOCKER_TERMS: &[&str] = &["block", "blocked", "blocker", "refuse", "refused"];
 
 #[derive(Debug)]
 struct MarkdownTable {
@@ -262,12 +305,60 @@ fn validate_support_rows(doc: &str, table: &MarkdownTable, violations: &mut Vec<
         }
         reject_forbidden_support_claims(doc, row, violations);
         reject_shadow_live_cutover_claim(doc, row, violations);
+        require_partial_live_boundary(doc, row, violations);
+        require_edit_producing_safety_terms(doc, row, violations);
     }
 
     for required in REQUIRED_SUPPORT_SURFACES {
         if !seen.contains(*required) {
             violations.push(format!("{doc}: missing support tier row for {required:?}"));
         }
+    }
+}
+
+fn require_partial_live_boundary(doc: &str, row: &TableRow, violations: &mut Vec<String>) {
+    let tier = normalize_inline_code(&row.cells[1]);
+    if tier != "partial-live-with-fallback"
+        || !PARTIAL_LIVE_BOUNDARY_REQUIRED_SURFACES.contains(&row.cells[0].as_str())
+    {
+        return;
+    }
+
+    let claim_boundary = support_claim_boundary_text(row);
+    if !contains_any_ascii_case_insensitive(&claim_boundary, SUPPORT_BOUNDARY_TERMS) {
+        violations.push(format!(
+            "{doc}:{}: partial-live support row {:?} must name fallback, blocker, gated, deferred, legacy, refused, or no-edit behavior",
+            row.line_number, row.cells[0]
+        ));
+    }
+}
+
+fn require_edit_producing_safety_terms(doc: &str, row: &TableRow, violations: &mut Vec<String>) {
+    let tier = normalize_inline_code(&row.cells[1]);
+    if tier != "partial-live-with-fallback"
+        || !EDIT_PRODUCING_SUPPORT_SURFACES.contains(&row.cells[0].as_str())
+    {
+        return;
+    }
+
+    let claim_boundary = support_claim_boundary_text(row);
+    if !contains_any_ascii_case_insensitive(&claim_boundary, EDIT_ROLLBACK_TERMS) {
+        violations.push(format!(
+            "{doc}:{}: edit-producing support row {:?} must name rollback behavior",
+            row.line_number, row.cells[0]
+        ));
+    }
+    if !contains_any_ascii_case_insensitive(&claim_boundary, EDIT_NO_EDIT_TERMS) {
+        violations.push(format!(
+            "{doc}:{}: edit-producing support row {:?} must name no-edit behavior",
+            row.line_number, row.cells[0]
+        ));
+    }
+    if !contains_any_ascii_case_insensitive(&claim_boundary, EDIT_BLOCKER_TERMS) {
+        violations.push(format!(
+            "{doc}:{}: edit-producing support row {:?} must name blocker or refusal behavior",
+            row.line_number, row.cells[0]
+        ));
     }
 }
 
@@ -314,6 +405,15 @@ fn normalize_inline_code(value: &str) -> String {
 
 fn contains_ascii_case_insensitive(haystack: &str, needle: &str) -> bool {
     haystack.to_ascii_lowercase().contains(&needle.to_ascii_lowercase())
+}
+
+fn contains_any_ascii_case_insensitive(haystack: &str, needles: &[&str]) -> bool {
+    needles.iter().any(|needle| contains_ascii_case_insensitive(haystack, needle))
+}
+
+fn support_claim_boundary_text(row: &TableRow) -> String {
+    [row.cells[2].as_str(), row.cells[4].as_str(), row.cells[5].as_str(), row.cells[6].as_str()]
+        .join(" ")
 }
 
 fn contains_live_cutover_language(value: &str) -> bool {
@@ -618,6 +718,116 @@ after";
     }
 
     #[test]
+    fn support_claim_map_rejects_missing_required_support_rows() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path();
+        let status_dir = root.join("docs").join("project").join("status");
+        fs::create_dir_all(&status_dir)?;
+        fs::write(status_dir.join("provider_confidence_matrix.md"), provider_fixture())?;
+        fs::write(
+            status_dir.join("SUPPORT_TIERS.md"),
+            support_fixture_for(&REQUIRED_SUPPORT_SURFACES[1..], "provider_confidence_matrix.md"),
+        )?;
+
+        let result = validate_support_claim_doc(root, "docs/project/status/SUPPORT_TIERS.md");
+        assert!(result.is_err(), "missing support rows must fail validation");
+        Ok(())
+    }
+
+    #[test]
+    fn support_claim_map_rejects_partial_live_without_boundary_language() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path();
+        let status_dir = root.join("docs").join("project").join("status");
+        fs::create_dir_all(&status_dir)?;
+        fs::write(status_dir.join("provider_confidence_matrix.md"), provider_fixture())?;
+        fs::write(
+            status_dir.join("SUPPORT_TIERS.md"),
+            support_fixture_for_row(
+                "Completion",
+                "`partial-live-with-fallback`",
+                "High-confidence facts can answer live.",
+                "Current proof exists.",
+                "More proof.",
+            ),
+        )?;
+
+        let result = validate_support_claim_doc(root, "docs/project/status/SUPPORT_TIERS.md");
+        assert!(result.is_err(), "partial-live claims must name bounded behavior");
+        Ok(())
+    }
+
+    #[test]
+    fn support_claim_map_allows_partial_live_with_boundary_language() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path();
+        let status_dir = root.join("docs").join("project").join("status");
+        fs::create_dir_all(&status_dir)?;
+        fs::write(status_dir.join("provider_confidence_matrix.md"), provider_fixture())?;
+        fs::write(
+            status_dir.join("SUPPORT_TIERS.md"),
+            support_fixture_for_row(
+                "Completion",
+                "`partial-live-with-fallback`",
+                "High-confidence facts can answer live with fallback.",
+                "Generated and dynamic candidates remain gated.",
+                "More fallback proof.",
+            ),
+        )?;
+
+        validate_support_claim_doc(root, "docs/project/status/SUPPORT_TIERS.md")?;
+        Ok(())
+    }
+
+    #[test]
+    fn support_claim_map_rejects_edit_producing_claim_without_rollback_and_no_edit() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path();
+        let status_dir = root.join("docs").join("project").join("status");
+        fs::create_dir_all(&status_dir)?;
+        fs::write(status_dir.join("provider_confidence_matrix.md"), provider_fixture())?;
+        fs::write(
+            status_dir.join("SUPPORT_TIERS.md"),
+            support_fixture_for_row(
+                "Safe delete",
+                "`partial-live-with-fallback`",
+                "Source-backed symbols can return WorkspaceEdits when proof is high-confidence.",
+                "Unsafe cases are blocked.",
+                "More blocker proof.",
+            ),
+        )?;
+
+        let result = validate_support_claim_doc(root, "docs/project/status/SUPPORT_TIERS.md");
+        assert!(
+            result.is_err(),
+            "edit-producing support claims must name rollback and no-edit behavior"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn support_claim_map_allows_edit_producing_claim_with_safety_language() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path();
+        let status_dir = root.join("docs").join("project").join("status");
+        fs::create_dir_all(&status_dir)?;
+        fs::write(status_dir.join("provider_confidence_matrix.md"), provider_fixture())?;
+        fs::write(
+            status_dir.join("SUPPORT_TIERS.md"),
+            support_fixture_for_row(
+                "Safe delete",
+                "`partial-live-with-fallback`",
+                "Source-backed symbols can return WorkspaceEdits only with rollback proof; unsafe cases return no edit.",
+                "Generated and dynamic requests are blocked.",
+                "More no-edit blocker proof.",
+            ),
+        )?;
+
+        validate_support_claim_doc(root, "docs/project/status/SUPPORT_TIERS.md")?;
+        Ok(())
+    }
+
+    #[test]
     fn support_claim_map_rejects_shadowed_live_cutover_claim() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let root = temp.path();
@@ -738,6 +948,44 @@ after";
         claim_surface: &str,
         claim_text: &str,
     ) -> String {
+        support_fixture_for_row_with_surfaces(
+            surfaces,
+            status_link,
+            claim_surface,
+            "`shadowed`",
+            claim_text,
+            "limitation",
+            "next proof",
+        )
+    }
+
+    fn support_fixture_for_row(
+        claim_surface: &str,
+        tier: &str,
+        claim_text: &str,
+        limitation: &str,
+        next_proof: &str,
+    ) -> String {
+        support_fixture_for_row_with_surfaces(
+            REQUIRED_SUPPORT_SURFACES,
+            "provider_confidence_matrix.md",
+            claim_surface,
+            tier,
+            claim_text,
+            limitation,
+            next_proof,
+        )
+    }
+
+    fn support_fixture_for_row_with_surfaces(
+        surfaces: &[&str],
+        status_link: &str,
+        claim_surface: &str,
+        tier: &str,
+        claim_text: &str,
+        limitation: &str,
+        next_proof: &str,
+    ) -> String {
         let mut text = String::from("| ");
         text.push_str(&SUPPORT_HEADER.join(" | "));
         text.push_str(" |\n| ");
@@ -745,8 +993,11 @@ after";
         text.push_str(" |\n");
         for surface in surfaces {
             let claim = if *surface == claim_surface { claim_text } else { "claim" };
+            let row_tier = if *surface == claim_surface { tier } else { "`shadowed`" };
+            let row_limitation = if *surface == claim_surface { limitation } else { "limitation" };
+            let row_next_proof = if *surface == claim_surface { next_proof } else { "next proof" };
             text.push_str(&format!(
-                "| {surface} | `shadowed` | {claim} | `cargo xtask semantic-shadow-compare --check` | [matrix]({status_link}) | limitation | next proof |\n"
+                "| {surface} | {row_tier} | {claim} | `cargo xtask semantic-shadow-compare --check` | [matrix]({status_link}) | {row_limitation} | {row_next_proof} |\n"
             ));
         }
         text

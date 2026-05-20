@@ -1315,7 +1315,7 @@ impl LspHarness {
 
         // Wait for server thread to complete with timeout
         if let Some(handle) = self.handle.take() {
-            let join_timeout = Duration::from_millis(1000);
+            let join_timeout = Duration::from_secs(1);
             let start = Instant::now();
 
             // Use a simple timeout mechanism since we can't use thread::join with timeout in std

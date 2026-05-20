@@ -100,7 +100,7 @@ cargo mutants --workspace -j 2 --timeout 60
 
 ## Fuzz Testing: Finding What You Didn't Think to Test
 
-The project maintains **7 fuzz targets** powered by libFuzzer via `cargo-fuzz`, each targeting a specific attack surface:
+The project maintains fuzz targets powered by libFuzzer via `cargo-fuzz`; `fuzz/Cargo.toml` is the source of truth for the active target list. Representative targets cover these attack surfaces:
 
 | Target | Purpose |
 |--------|---------|
@@ -111,6 +111,7 @@ The project maintains **7 fuzz targets** powered by libFuzzer via `cargo-fuzz`, 
 | `unicode_positions` | UTF-16 position mapping with multi-byte characters |
 | `lsp_cancellation_registry` | Cancellation token handling under adversarial conditions |
 | `fuzz_target_1` | General parser fuzzing |
+| `module_surface` | Module naming, import/reference extraction, token replacement, and rename helpers |
 
 Each fuzz target is designed to exercise a specific bug class. For example, the heredoc fuzzer specifically targets the off-by-one boundary fix in commit `cd7a2442`, generating patterns like unterminated heredoc quotes (`<<"` without closing), empty delimiters (`<<""`), and single-character edge cases. The unicode positions fuzzer exercises UTF-16 boundary handling with emoji identifiers and multi-byte characters.
 

@@ -196,6 +196,26 @@ fn y_alias_for_tr_is_transliteration_token() -> TestResult {
 }
 
 #[test]
+fn percent_y_hash_name_is_not_transliteration() -> TestResult {
+    let input = "my %y = %$y;";
+    let mut lexer = PerlLexer::new(input);
+
+    while let Some(token) = next_non_trivia(&mut lexer) {
+        if token.token_type == TokenType::EOF {
+            break;
+        }
+        assert!(
+            !matches!(token.token_type, TokenType::Transliteration | TokenType::Error(_)),
+            "`%y` hash variable must not trigger y/// transliteration; got {:?} from {:?}",
+            token.token_type,
+            token.text
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
 fn qr_with_modifier_flag_is_quote_regex_token() -> TestResult {
     // `qr//i` — regex with ignore-case flag; modifier must be part of the token.
     let input = "qr/hello world/i";
