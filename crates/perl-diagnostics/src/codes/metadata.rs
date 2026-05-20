@@ -6,6 +6,8 @@ fn is_undefined_variable_message(msg_lower: &str) -> bool {
         || (contains_diagnostic_phrase(msg_lower, "undefined")
             && (contains_diagnostic_phrase(msg_lower, "variable")
                 || contains_diagnostic_phrase(msg_lower, "global symbol")))
+        // Real Perl: "Global symbol "$x" requires explicit package name at file.pl line N."
+        || contains_diagnostic_phrase(msg_lower, "requires explicit package name")
 }
 
 fn contains_diagnostic_phrase(haystack: &str, needle: &str) -> bool {
@@ -520,8 +522,15 @@ impl DiagnosticCode {
             || contains_diagnostic_phrase(&msg_lower, "2-arg")
         {
             Some(Self::TwoArgOpen)
+        // Real Perl: "Subroutine foo redefined at file.pl line N."
+        } else if contains_diagnostic_phrase(&msg_lower, "subroutine")
+            && contains_diagnostic_phrase(&msg_lower, "redefined")
+        {
+            Some(Self::DuplicateSubroutine)
         } else if contains_diagnostic_phrase(&msg_lower, "invalid prototype character")
             || contains_diagnostic_phrase(&msg_lower, "illegal character in prototype")
+            // Real Perl: "Prototype mismatch: sub foo ($$) vs sub foo ($) at file.pl line N."
+            || contains_diagnostic_phrase(&msg_lower, "prototype mismatch")
         {
             Some(Self::InvalidPrototype)
         } else if contains_diagnostic_phrase(&msg_lower, "parse error")
