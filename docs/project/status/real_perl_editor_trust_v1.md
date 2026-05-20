@@ -20,9 +20,14 @@ of current evidence.
 | --- | --- |
 | Normative v1 boundary and promotion discipline | [PLSP-SPEC-0015](../../specs/PLSP-SPEC-0015-real-perl-editor-trust-v1-boundary.md) |
 | Provider decision receipt schema and explanation payload contract | [PLSP-SPEC-0016](../../specs/PLSP-SPEC-0016-provider-decision-receipt-v1.md), [provider_decision.v1.schema.json](../../../schemas/provider_decision.v1.schema.json) |
+| Shared fact provenance and source-backing semantics | [PLSP-SPEC-0017](../../specs/PLSP-SPEC-0017-fact-provenance-and-source-backing.md) |
+| Shared edit authorization states for rename and safe delete | [PLSP-SPEC-0018](../../specs/PLSP-SPEC-0018-edit-authorization-contract.md) |
+| Semantic token class promotion rules | [PLSP-SPEC-0019](../../specs/PLSP-SPEC-0019-semantic-token-class-promotion-contract.md), [semantic-token-classes.toml](../../../policy/semantic-token-classes.toml) |
+| Workspace symbol generated-label rules | [PLSP-SPEC-0020](../../specs/PLSP-SPEC-0020-workspace-symbol-generated-label-contract.md), [workspace-symbol-classes.toml](../../../policy/workspace-symbol-classes.toml) |
+| Module path authority and ambient-input boundaries | [PLSP-SPEC-0022](../../specs/PLSP-SPEC-0022-module-path-authority.md), [PLSP-SPEC-0023](../../specs/PLSP-SPEC-0023-ambient-inputs.md) |
 | User-facing support claims and known limitations | [SUPPORT_TIERS.md](SUPPORT_TIERS.md) |
 | Provider fact source, confidence, freshness, fallback, and next proof | [provider_confidence_matrix.md](provider_confidence_matrix.md) |
-| Provider promotion, fallback, blocker, and defer decisions by fact class | [provider_promotion_ledger.md](provider_promotion_ledger.md) |
+| Provider promotion, fallback, blocker, and defer decisions by fact class | [provider_promotion_ledger.md](provider_promotion_ledger.md), [provider-promotion-ledger.toml](../../../policy/provider-promotion-ledger.toml) |
 | Provider live/shadow state and cutover rules | [provider_cutover.md](provider_cutover.md) |
 | Compiler-backed provider receipts | [semantic_shadow_compare.md](semantic_shadow_compare.md), [semantic_scorecard.md](semantic_scorecard.md) |
 | UX/provider capability context | [ux_capability_dashboard.md](ux_capability_dashboard.md) |

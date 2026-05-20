@@ -10,6 +10,12 @@ Linked specs:
 - [PLSP-SPEC-0010](PLSP-SPEC-0010-support-claim-map.md)
 - [PLSP-SPEC-0012](PLSP-SPEC-0012-user-facing-trust-surfaces.md)
 - [PLSP-SPEC-0014](PLSP-SPEC-0014-refactor-acceptance.md)
+- [PLSP-SPEC-0017](PLSP-SPEC-0017-fact-provenance-and-source-backing.md)
+- [PLSP-SPEC-0018](PLSP-SPEC-0018-edit-authorization-contract.md)
+- [PLSP-SPEC-0019](PLSP-SPEC-0019-semantic-token-class-promotion-contract.md)
+- [PLSP-SPEC-0020](PLSP-SPEC-0020-workspace-symbol-generated-label-contract.md)
+- [PLSP-SPEC-0022](PLSP-SPEC-0022-module-path-authority.md)
+- [PLSP-SPEC-0023](PLSP-SPEC-0023-ambient-inputs.md)
 Linked ADRs:
 - [PLSP-ADR-0002](../adr/PLSP-ADR-0002-confidence-before-cutover.md)
 - [PLSP-ADR-0003](../adr/PLSP-ADR-0003-preview-before-edit.md)

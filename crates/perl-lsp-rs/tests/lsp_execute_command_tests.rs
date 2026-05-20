@@ -57,6 +57,63 @@ fn expected_keys(keys: &[&str]) -> Vec<String> {
     expected
 }
 
+fn workspace_trust_report_schema() -> Result<Value, Box<dyn std::error::Error>> {
+    let schema_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("schemas")
+        .join("workspace_trust_report.v1.schema.json");
+    let schema_text = std::fs::read_to_string(&schema_path).map_err(|error| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("failed to read {}: {error}", schema_path.display()),
+        )
+    })?;
+    Ok(serde_json::from_str(&schema_text)?)
+}
+
+fn schema_required_fields(
+    schema: &Value,
+    pointer: &str,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let fields = schema.pointer(pointer).and_then(Value::as_array).ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("schema missing required array at {pointer}"),
+        )
+    })?;
+    let mut required = Vec::with_capacity(fields.len());
+    for field in fields {
+        let Some(name) = field.as_str() else {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("schema required array at {pointer} contains non-string item: {field}"),
+            )
+            .into());
+        };
+        required.push(name.to_string());
+    }
+    Ok(required)
+}
+
+fn assert_schema_required_fields_present(
+    value: &Value,
+    schema: &Value,
+    required_pointer: &str,
+    context: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for field in schema_required_fields(schema, required_pointer)? {
+        if value.get(&field).is_none() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("{context} missing schema-required field {field}: {value}"),
+            )
+            .into());
+        }
+    }
+    Ok(())
+}
+
 #[test]
 fn test_execute_command_run_file() -> Result<(), Box<dyn std::error::Error>> {
     let temp_dir = TempDir::new()?;
@@ -512,6 +569,97 @@ fn test_execute_command_workspace_trust_report_schema_snapshot()
         .handle_request(execute_request)
         .ok_or("No response from workspace-trust-report command")?;
     let result = response.result.ok_or("No result in workspace-trust-report response")?;
+    let schema = workspace_trust_report_schema()?;
+
+    assert_schema_required_fields_present(&result, &schema, "/required", "workspace trust report")?;
+    assert_schema_required_fields_present(
+        result.get("workspace").ok_or("missing workspace report")?,
+        &schema,
+        "/$defs/workspace/required",
+        "workspace report",
+    )?;
+    assert_schema_required_fields_present(
+        result.get("module_resolution").ok_or("missing module_resolution report")?,
+        &schema,
+        "/$defs/module_resolution/required",
+        "module-resolution report",
+    )?;
+    assert_schema_required_fields_present(
+        result
+            .pointer("/module_resolution/global_workspace_config")
+            .ok_or("missing global_workspace_config")?,
+        &schema,
+        "/$defs/workspace_config/required",
+        "global workspace config report",
+    )?;
+    assert_schema_required_fields_present(
+        result.get("setup_hints").ok_or("missing setup_hints report")?,
+        &schema,
+        "/$defs/setup_hints/required",
+        "setup hints report",
+    )?;
+    assert_schema_required_fields_present(
+        result.pointer("/setup_hints/perl_binary").ok_or("missing setup_hints perl_binary")?,
+        &schema,
+        "/$defs/setup_hints_perl_binary/required",
+        "setup hints perl binary report",
+    )?;
+    assert_schema_required_fields_present(
+        result.pointer("/setup_hints/perldoc").ok_or("missing setup_hints perldoc")?,
+        &schema,
+        "/$defs/setup_hints_perldoc/required",
+        "setup hints perldoc report",
+    )?;
+    assert_schema_required_fields_present(
+        result.pointer("/setup_hints/dap").ok_or("missing setup_hints dap")?,
+        &schema,
+        "/$defs/setup_hints_dap/required",
+        "setup hints DAP report",
+    )?;
+    assert_schema_required_fields_present(
+        result.get("client_runtime_state").ok_or("missing client_runtime_state")?,
+        &schema,
+        "/$defs/client_runtime_state/required",
+        "client runtime state report",
+    )?;
+    assert_schema_required_fields_present(
+        result.pointer("/client_runtime_state/dap").ok_or("missing client runtime DAP")?,
+        &schema,
+        "/$defs/client_runtime_dap/required",
+        "client runtime DAP report",
+    )?;
+    assert_schema_required_fields_present(
+        result
+            .pointer("/client_runtime_state/dap/launch_configuration")
+            .ok_or("missing launch configuration report")?,
+        &schema,
+        "/$defs/launch_configuration/required",
+        "launch configuration report",
+    )?;
+    assert_schema_required_fields_present(
+        result.get("index").ok_or("missing index report")?,
+        &schema,
+        "/$defs/index/required",
+        "index report",
+    )?;
+    assert_schema_required_fields_present(
+        result.get("providers").ok_or("missing providers report")?,
+        &schema,
+        "/$defs/providers/required",
+        "providers report",
+    )?;
+    assert_schema_required_fields_present(
+        result.get("dynamic_boundaries").ok_or("missing dynamic_boundaries report")?,
+        &schema,
+        "/$defs/dynamic_boundaries/required",
+        "dynamic boundaries report",
+    )?;
+    assert_schema_required_fields_present(
+        result.get("copyable_payload").ok_or("missing copyable_payload")?,
+        &schema,
+        "/$defs/copyable_payload/required",
+        "copyable workspace trust payload",
+    )?;
 
     assert_eq!(
         sorted_object_keys_at(&result, "")?,

@@ -58,19 +58,46 @@ const PRAGMA_SKIP_LIST: &[&str] = &[
     "if",
     "less",
     "POSIX",
+    // Namespace management — operate entirely via side effects on the stash.
+    "namespace::autoclean",
+    "namespace::clean",
+    // MRO algorithm compatibility — no exported symbols.
+    "MRO::Compat",
+    // Syntax restriction pragmas (typically used as `no indirect`, etc.).
+    "indirect",
+    "multidimensional",
+    "bareword::filehandles",
+    // Perl built-in sub exports (Perl 5.36+).
+    "builtin",
 ];
 
 /// Modules that implicitly export symbols into the caller's namespace.
 const IMPLICIT_EXPORT_SKIP_LIST: &[&str] = &[
+    // --- OOP frameworks (export DSL keywords with bare `use`) ---
     "Moose",
     "Moose::Role",
     "Moose::Util::TypeConstraints",
     "MooseX::StrictConstructor",
     "MooseX::Types",
+    "MooseX::ClassAttribute",
+    "MooseX::Singleton",
+    "MooseX::NonMoose",
     "Moo",
     "Moo::Role",
     "Mouse",
     "Mouse::Role",
+    // Object::Pad exports `class`, `field`, `method`, `ADJUST`, `BUILD`, etc.
+    "Object::Pad",
+    // Role systems
+    "Role::Tiny",
+    "Role::Tiny::With",
+    "Class::Method::Modifiers",
+    // --- Modern syntax extensions (export keywords) ---
+    // Syntax::Keyword::Try exports `try`, `catch`, `finally`.
+    "Syntax::Keyword::Try",
+    // Feature::Compat::Try is a compat shim that exports the same keywords.
+    "Feature::Compat::Try",
+    // --- Web / application frameworks ---
     "Modern::Perl",
     "Dancer",
     "Dancer2",
@@ -78,6 +105,7 @@ const IMPLICIT_EXPORT_SKIP_LIST: &[&str] = &[
     "Mojolicious",
     "Mojolicious::Lite",
     "Mojo::Base",
+    // --- Test frameworks ---
     "Test::More",
     "Test::Most",
     "Test::Simple",
@@ -93,6 +121,7 @@ const IMPLICIT_EXPORT_SKIP_LIST: &[&str] = &[
     "Test::Builder",
     "Test2::V0",
     "Test2::Bundle::More",
+    // --- Utility modules commonly used for side effects ---
     "Carp",
     "Carp::Always",
     "Scalar::Util",
@@ -105,6 +134,10 @@ const IMPLICIT_EXPORT_SKIP_LIST: &[&str] = &[
     "FindBin",
     "Fcntl",
     "UNIVERSAL",
+    // --- DBIx::Class ORM (exports table(), columns(), relationships, etc.) ---
+    "DBIx::Class",
+    "DBIx::Class::Core",
+    "DBIx::Class::Schema",
 ];
 
 /// Check for unused import statements.
@@ -357,6 +390,198 @@ mod tests {
         assert!(
             diag.tags.contains(&DiagnosticTag::Unnecessary),
             "unused-import should carry the Unnecessary tag"
+        );
+    }
+
+    // --- namespace management pragmas ---
+
+    #[test]
+    fn namespace_autoclean_not_flagged() {
+        let source = "use namespace::autoclean;\nhas 'x' => (is => 'ro');\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            !has_unused_import(&diags),
+            "namespace::autoclean operates via side effects and should never be flagged: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn namespace_clean_not_flagged() {
+        let source = "use namespace::clean;\nmy $x = 1;\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            !has_unused_import(&diags),
+            "namespace::clean operates via side effects and should never be flagged: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn mro_compat_not_flagged() {
+        let source = "use MRO::Compat;\n__PACKAGE__->mro::set_mro('c3');\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            !has_unused_import(&diags),
+            "MRO::Compat is a pragma and should never be flagged: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn indirect_pragma_not_flagged() {
+        let source = "no indirect;\nmy $obj = Foo->new;\n";
+        let diags = unused_import_diags(source);
+        assert!(!has_unused_import(&diags), "indirect pragma should never be flagged: {diags:?}");
+    }
+
+    #[test]
+    fn multidimensional_pragma_not_flagged() {
+        let source = "no multidimensional;\nmy %h = (a => 1);\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            !has_unused_import(&diags),
+            "multidimensional pragma should never be flagged: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn bareword_filehandles_pragma_not_flagged() {
+        let source = "no bareword::filehandles;\nopen my $fh, '<', $path;\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            !has_unused_import(&diags),
+            "bareword::filehandles pragma should never be flagged: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn builtin_pragma_not_flagged() {
+        let source = "use builtin 'weaken';\nweaken($ref);\n";
+        let diags = unused_import_diags(source);
+        assert!(!has_unused_import(&diags), "use builtin should never be flagged: {diags:?}");
+    }
+
+    // --- modern OOP systems ---
+
+    #[test]
+    fn object_pad_not_flagged() {
+        let source = "use Object::Pad;\nclass Point {\n    field $x :param;\n}\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            !has_unused_import(&diags),
+            "Object::Pad exports class/field/method keywords and should not be flagged: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn role_tiny_not_flagged() {
+        let source = "use Role::Tiny;\nrequires 'do_thing';\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            !has_unused_import(&diags),
+            "Role::Tiny exports requires/with and should not be flagged: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn role_tiny_with_not_flagged() {
+        let source = "use Role::Tiny::With;\nwith 'Some::Role';\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            !has_unused_import(&diags),
+            "Role::Tiny::With exports with and should not be flagged: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn class_method_modifiers_not_flagged() {
+        let source = "use Class::Method::Modifiers;\nbefore 'foo' => sub { ... };\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            !has_unused_import(&diags),
+            "Class::Method::Modifiers exports before/after/around and should not be flagged: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn moosex_class_attribute_not_flagged() {
+        let source = "use MooseX::ClassAttribute;\nclass_has 'instances' => (is => 'ro');\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            !has_unused_import(&diags),
+            "MooseX::ClassAttribute exports class_has and should not be flagged: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn moosex_singleton_not_flagged() {
+        let source = "use MooseX::Singleton;\nhas 'config' => (is => 'ro');\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            !has_unused_import(&diags),
+            "MooseX::Singleton operates through Moose metaclass side effects and should not be flagged: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn moosex_non_moose_not_flagged() {
+        let source = "use MooseX::NonMoose;\nextends 'HTTP::Message';\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            !has_unused_import(&diags),
+            "MooseX::NonMoose operates through Moose metaclass side effects and should not be flagged: {diags:?}"
+        );
+    }
+
+    // --- modern syntax extensions ---
+
+    #[test]
+    fn syntax_keyword_try_not_flagged() {
+        let source = "use Syntax::Keyword::Try;\ntry { foo() } catch ($e) { warn $e }\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            !has_unused_import(&diags),
+            "Syntax::Keyword::Try exports try/catch/finally and should not be flagged: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn feature_compat_try_not_flagged() {
+        let source = "use Feature::Compat::Try;\ntry { foo() } catch ($e) { warn $e }\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            !has_unused_import(&diags),
+            "Feature::Compat::Try is a compat shim and should not be flagged: {diags:?}"
+        );
+    }
+
+    // --- DBIx::Class ORM ---
+
+    #[test]
+    fn dbix_class_not_flagged() {
+        let source = "use DBIx::Class;\n__PACKAGE__->table('users');\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            !has_unused_import(&diags),
+            "DBIx::Class exports ORM DSL and should not be flagged: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn dbix_class_core_not_flagged() {
+        let source = "use DBIx::Class::Core;\n__PACKAGE__->table('items');\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            !has_unused_import(&diags),
+            "DBIx::Class::Core exports ORM DSL and should not be flagged: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn dbix_class_schema_not_flagged() {
+        let source = "use DBIx::Class::Schema;\n__PACKAGE__->load_namespaces;\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            !has_unused_import(&diags),
+            "DBIx::Class::Schema exports schema DSL and should not be flagged: {diags:?}"
         );
     }
 }

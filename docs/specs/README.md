@@ -36,6 +36,13 @@ generated sections.
 - [PLSP-SPEC-0014: Refactor acceptance](PLSP-SPEC-0014-refactor-acceptance.md)
 - [PLSP-SPEC-0015: Real Perl Editor Trust v1 boundary](PLSP-SPEC-0015-real-perl-editor-trust-v1-boundary.md)
 - [PLSP-SPEC-0016: Provider decision receipt v1](PLSP-SPEC-0016-provider-decision-receipt-v1.md)
+- [PLSP-SPEC-0017: Fact provenance and source backing](PLSP-SPEC-0017-fact-provenance-and-source-backing.md)
+- [PLSP-SPEC-0018: Edit authorization contract](PLSP-SPEC-0018-edit-authorization-contract.md)
+- [PLSP-SPEC-0019: Semantic token class promotion contract](PLSP-SPEC-0019-semantic-token-class-promotion-contract.md)
+- [PLSP-SPEC-0020: Workspace symbol generated-label contract](PLSP-SPEC-0020-workspace-symbol-generated-label-contract.md)
+- [PLSP-SPEC-0021: Diagnostic explanation v1](PLSP-SPEC-0021-diagnostic-explanation-v1.md)
+- [PLSP-SPEC-0022: Module path authority](PLSP-SPEC-0022-module-path-authority.md)
+- [PLSP-SPEC-0023: Ambient inputs](PLSP-SPEC-0023-ambient-inputs.md)
 
 ## Acceptance and Proof
 
