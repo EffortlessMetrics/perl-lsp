@@ -1,6 +1,6 @@
 # Receiver Facts Implementation Plan
 
-Status: partial substrate plus constructor/plain-hash expression facts landed; completion cutover blocked
+Status: partial semantic substrate plus narrow source-backed completion pilot landed; broader cutover blocked
 Owner: perl-lsp maintainers
 Spec: [PLSP-SPEC-0005: Receiver expression facts](../specs/PLSP-SPEC-0005-receiver-expression-facts.md)
 Related proposal: [PLSP-PROP-0001: Real Perl editor trust](../proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
@@ -30,17 +30,26 @@ facts-only semantic substrate. It adds the rich fact model, a parallel
 type-environment fact map, and a receiver-fact extractor over existing
 `TypeFact` and `ShapeFact` evidence.
 
-That foundation has started source-level expression inference for constructor
-calls, plain hash literals, plain hash slot assignments, static plain hash slot
-reads, and dynamic plain hash keys. It still does not change completion
-candidates. Current detailed status lives in [receiver_facts.md](status/receiver_facts.md).
-The active claim boundary remains:
+Since that foundation landed, source-level expression inference has expanded to
+constructor calls, plain hash and hashref literals, hash and hashref slot
+assignments, static slot reads, dynamic key boundaries, static bless fields,
+framework accessor returns, and direct static constructor method returns. A
+narrow source-backed completion pilot now consumes fresh high-confidence facts,
+while unknown, dynamic, generated/no-source, stale, low-confidence, and
+medium-confidence receiver shapes remain fallback, shadowed, or blocked.
+
+Current detailed status lives in [receiver_facts.md](status/receiver_facts.md).
+Facts-only PRs must keep this claim boundary:
 
 ```text
 semantic substrate only
 no completion candidate behavior change
 no support-tier promotion
 ```
+
+Provider cutover PRs must instead cite the provider receipt that authorizes the
+specific receiver class under
+[PLSP-SPEC-0007](../specs/PLSP-SPEC-0007-receiver-fact-completion.md).
 
 ## Design Choice Locked for the First Wave
 
@@ -145,6 +154,11 @@ plain hash keys. Provider output is unchanged.
 
 ### PR 3 — Hashref slots and object-field scaffolding
 
+**Status:** partially landed for hashref literals, hashref slot assignments,
+static hashref slot reads, and dynamic hashref key boundaries. Object-field
+scaffolding has a static bless-field slice; broader object-model sources remain
+separate work.
+
 **Primary files**
 
 | Path | Change |
@@ -197,6 +211,11 @@ plain hash keys. Provider output is unchanged.
 
 ### PR 5 — Completion handoff without deleting fallback
 
+**Status:** landed as a narrow source-backed pilot only. Fresh high-confidence
+source-backed receiver facts can authorize exact completion; generated,
+dynamic, stale, low-confidence, and medium-confidence facts keep legacy fallback
+or remain shadowed until separate provider receipts promote them.
+
 **Primary files**
 
 | Path | Change |
@@ -227,6 +246,10 @@ plain hash keys. Provider output is unchanged.
 8. Preserve unknown fallback behavior, but label dynamic/unknown as non-exact.
 
 ### PR 6 — Bless object fields
+
+**Status:** partially landed for static bless field facts. Dynamic bless class
+names fail closed, and this remains semantic substrate unless a provider PR
+cites separate cutover proof.
 
 **Primary files**
 
@@ -259,6 +282,10 @@ plain hash keys. Provider output is unchanged.
 
 ### PR 7 — Framework accessor returns
 
+**Status:** partially landed for package-like Moo/Moose `isa` accessor-return
+facts as medium-confidence substrate. These facts preserve erased `PerlType`
+compatibility and do not authorize exact completion by themselves.
+
 **Primary files**
 
 | Path | Change |
@@ -284,6 +311,10 @@ plain hash keys. Provider output is unchanged.
 5. Add tests for positive accessor returns and dynamic/unknown accessors.
 
 ### PR 8 — Shared method-return rules
+
+**Status:** partially landed for direct static constructor method returns as
+medium-confidence substrate. Shared DBI and broader chained method-return rules
+remain pending.
 
 **Primary files**
 
