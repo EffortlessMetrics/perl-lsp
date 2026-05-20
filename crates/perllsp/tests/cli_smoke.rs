@@ -81,6 +81,7 @@ fn zsh_completion_uses_facade_command_and_function() -> Result<(), Box<dyn std::
 #[test]
 fn fish_completion_uses_facade_command() -> Result<(), Box<dyn std::error::Error>> {
     let stdout = successful_stdout(run_perllsp(&["--completion", "fish"])?)?;
+    assert!(!stdout.trim().is_empty(), "fish completion should render at least one command");
     assert!(
         stdout.lines().all(|line| line.contains("-c perllsp")),
         "every fish completion line should target the facade binary: {stdout}"
