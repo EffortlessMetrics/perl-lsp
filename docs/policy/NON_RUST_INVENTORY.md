@@ -4718,7 +4718,6 @@
 | `scripts/update-homebrew.sh` | tooling | `non-rust-ci-scripts-tree` | release/ci |
 | `scripts/update-parser-matrix.py` | tooling | `non-rust-ci-scripts-tree` | release/ci |
 | `scripts/validate-workspace-exclusions.sh` | tooling | `non-rust-ci-scripts-tree` | release/ci |
-| `scripts/validate_swarm_agent_roster.py` | tooling | `non-rust-ci-scripts-tree` | release/ci |
 | `scripts/validate_swarm_findings.py` | tooling | `non-rust-ci-scripts-tree` | release/ci |
 | `scripts/verify-docs-rs.sh` | tooling | `non-rust-ci-scripts-tree` | release/ci |
 | `scripts/verify-publication-facts.sh` | tooling | `non-rust-ci-scripts-tree` | release/ci |
