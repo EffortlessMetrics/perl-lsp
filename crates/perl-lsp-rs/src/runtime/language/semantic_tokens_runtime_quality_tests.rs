@@ -225,6 +225,29 @@ $total_count++;
 1;
 "#;
 
+/// Lexical-variable fixture used for a scoped compiler-token use receipt.
+/// The candidate must match an existing live parser/HIR `variable` token and
+/// remain output-neutral.
+const LEXICAL_VARIABLE_USE_MODULE: &str = r#"use strict;
+use warnings;
+
+for my $count (1) {
+    $count++;
+}
+
+1;
+"#;
+
+const UPDATED_LEXICAL_VARIABLE_USE_MODULE: &str = r#"use strict;
+use warnings;
+
+for my $total_count (1) {
+    $total_count++;
+}
+
+1;
+"#;
+
 /// Empty Perl file — no declarations at all.
 const SELF_METHOD_CALL_MODULE: &str = r#"package TokenSelfCall;
 use strict;
@@ -527,6 +550,29 @@ fn lexical_variable_declaration_name_span(
     let length = u32::try_from(source[name_start..name_end].encode_utf16().count())?;
 
     Ok((name_start, name_end, line, start, length))
+}
+
+fn lexical_variable_use_name_span(
+    source: &str,
+    variable: &str,
+) -> Result<(usize, usize, u32, u32, u32), Box<dyn Error>> {
+    let declaration_marker = format!("my {variable}");
+    let declaration_start = source
+        .find(&declaration_marker)
+        .ok_or("expected lexical variable declaration in fixture")?;
+    let use_start = source[declaration_start + declaration_marker.len()..]
+        .find(variable)
+        .map(|offset| declaration_start + declaration_marker.len() + offset)
+        .ok_or("expected lexical variable use in fixture")?;
+    let use_end = use_start + variable.len();
+
+    let prefix = &source[..use_start];
+    let line = u32::try_from(prefix.bytes().filter(|byte| *byte == b'\n').count())?;
+    let line_start = prefix.rfind('\n').map_or(0, |offset| offset + 1);
+    let start = u32::try_from(source[line_start..use_start].encode_utf16().count())?;
+    let length = u32::try_from(source[use_start..use_end].encode_utf16().count())?;
+
+    Ok((use_start, use_end, line, start, length))
 }
 
 fn assert_semantic_token_live_output_parity(uri: &str, source: &str) -> Result<(), Box<dyn Error>> {
@@ -1299,6 +1345,144 @@ fn semantic_tokens_runtime_quality_receipt_proves_source_backed_lexical_variable
         claim_boundary.contains("lexical variable declarations")
             && claim_boundary.contains("no new token output is emitted"),
         "lexical-variable receipt must preserve the output-neutral cutover boundary; got: {claim_boundary}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_proves_source_backed_lexical_variable_use_compiler_token_parity()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    let lexical_uri = "file:///workspace/lib/TokenLexicalUse.pm";
+    open_document(&server, lexical_uri, LEXICAL_VARIABLE_USE_MODULE);
+
+    let params = json!({ "textDocument": {"uri": lexical_uri} });
+    let live_result =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+
+    assert_eq!(
+        receipt.get("live_provider_result"),
+        Some(&live_result),
+        "runtime receipt must compare lexical variable uses against the exact live token output"
+    );
+    assert_eq!(
+        receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "lexical-variable use receipt must not emit additional semantic tokens"
+    );
+
+    let lexical_receipt = class_specific_receipt(&receipt, "lexical_variable_use")?;
+
+    assert_eq!(lexical_receipt.get("source").and_then(Value::as_str), Some("CompilerFact"));
+    assert_eq!(lexical_receipt.get("provenance").and_then(Value::as_str), Some("SemanticAnalyzer"));
+    assert_eq!(lexical_receipt.get("freshness").and_then(Value::as_str), Some("Fresh"));
+    assert_eq!(lexical_receipt.get("fallback_state").and_then(Value::as_str), Some("Primary"));
+    assert_eq!(
+        lexical_receipt.get("approved_for_live_cutover").and_then(Value::as_bool),
+        Some(true),
+        "lexical variable uses are now the scoped class under cutover proof"
+    );
+    assert_eq!(
+        lexical_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "lexical variable uses may join the scoped compiler-token live pilot only with parity proof"
+    );
+    assert_eq!(
+        lexical_receipt.get("live_output_parity").and_then(Value::as_bool),
+        Some(true),
+        "source-backed lexical use compiler span must match existing live variable token output"
+    );
+    assert_eq!(
+        lexical_receipt.get("parity_state").and_then(Value::as_str),
+        Some("matched_existing_live_variable_token")
+    );
+    assert_eq!(lexical_receipt.get("live_token_type").and_then(Value::as_str), Some("variable"));
+    assert_eq!(lexical_receipt.get("live_token_match_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(lexical_receipt.get("candidate_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        lexical_receipt.get("source_backed_span_count").and_then(Value::as_u64),
+        Some(1),
+        "lexical variable use candidate must be source-backed"
+    );
+    assert_eq!(lexical_receipt.get("missing_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(lexical_receipt.get("invalid_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(
+        lexical_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true)
+    );
+
+    let (variable_start, variable_end, expected_line, expected_start, expected_length) =
+        lexical_variable_use_name_span(LEXICAL_VARIABLE_USE_MODULE, "$count")?;
+    let variable_span = crate::semantic_tokens::SemanticTokenShadowSpan::from_byte_offsets(
+        LEXICAL_VARIABLE_USE_MODULE,
+        variable_start,
+        variable_end,
+    )
+    .ok_or("expected source-backed lexical variable use compiler span")?;
+    assert_eq!(variable_span.range.start.line, expected_line);
+    assert_eq!(variable_span.range.start.character, expected_start);
+    assert_eq!(variable_span.single_line_lsp_length(), Some(expected_length));
+
+    let variable_candidate =
+        crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
+            "token:lexical_variable_use:$count:compiler",
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+            variable_span,
+        );
+    let span_report = crate::semantic_tokens::semantic_token_span_invariant_report(
+        std::slice::from_ref(&variable_candidate),
+    );
+    assert_eq!(span_report.candidate_count, 1);
+    assert_eq!(span_report.source_backed_span_count, 1);
+    assert_eq!(span_report.missing_source_span_count, 0);
+    assert_eq!(span_report.invalid_source_span_count, 0);
+
+    let shadow = crate::semantic_tokens::semantic_token_source_shadow(
+        Vec::new(),
+        vec![variable_candidate],
+        "lexical_variable_use",
+    );
+    assert_eq!(
+        shadow.receipt.verdict,
+        ShadowCompareVerdict::Improved,
+        "lexical variable use compiler candidates may count only through the scoped class identity"
+    );
+    assert_eq!(
+        shadow.receipt.new_result.match_count, 1,
+        "lexical variable use compiler candidates must count only after class-specific proof"
+    );
+    assert_eq!(
+        shadow.receipt.new_result.identities,
+        vec!["token:lexical_variable_use:$count:compiler".to_string()]
+    );
+
+    let variable_token_type =
+        *crate::semantic_tokens::legend().map.get("variable").ok_or("missing variable token")?;
+    let live_match_count = decode_semantic_tokens(&live_result)?
+        .iter()
+        .filter(|token| {
+            token.line == expected_line
+                && token.start == expected_start
+                && token.length == expected_length
+                && token.token_type == variable_token_type
+        })
+        .count();
+    assert_eq!(
+        live_match_count, 1,
+        "source-backed lexical variable use compiler span must match exactly one existing live variable token"
+    );
+
+    let claim_boundary = must_some(lexical_receipt.get("claim_boundary").and_then(Value::as_str));
+    assert!(
+        claim_boundary.contains("lexical variable uses")
+            && claim_boundary.contains("no new token output is emitted"),
+        "lexical-variable use receipt must preserve the output-neutral cutover boundary; got: {claim_boundary}"
     );
 
     Ok(())
@@ -2263,6 +2447,72 @@ fn semantic_tokens_runtime_quality_receipt_refreshes_lexical_variable_declaratio
         updated_variable_receipt.get("live_token_match_count").and_then(Value::as_u64),
         Some(1),
         "post-edit source-backed lexical variable must still match the live token stream"
+    );
+    assert_eq!(
+        updated_variable_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "edit-freshness proof must remain output-neutral"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_refreshes_lexical_variable_use_live_pilot_after_edit()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    let lexical_uri = "file:///workspace/lib/TokenLexicalUse.pm";
+    open_document(&server, lexical_uri, LEXICAL_VARIABLE_USE_MODULE);
+
+    let params = json!({ "textDocument": {"uri": lexical_uri} });
+    let initial_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let initial_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params.clone()))));
+    let initial_variable_receipt =
+        class_specific_receipt(&initial_receipt, "lexical_variable_use")?;
+    let initial_identity = first_shadow_identity(initial_variable_receipt)?;
+    assert!(
+        initial_identity.contains("$count"),
+        "initial lexical-variable use compiler identity should use the opened source: {initial_identity}"
+    );
+    assert_eq!(
+        initial_variable_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "initial lexical variable use should be the scoped class live pilot"
+    );
+
+    change_document(&server, lexical_uri, 2, UPDATED_LEXICAL_VARIABLE_USE_MODULE);
+
+    let updated_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let updated_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+    let updated_variable_receipt =
+        class_specific_receipt(&updated_receipt, "lexical_variable_use")?;
+    let updated_identity = first_shadow_identity(updated_variable_receipt)?;
+
+    assert_ne!(
+        updated_live, initial_live,
+        "live semantic-token output must refresh after the lexical variable use edit"
+    );
+    assert_ne!(
+        updated_identity, initial_identity,
+        "lexical-variable use compiler identity must refresh after didChange"
+    );
+    assert!(
+        updated_identity.contains("$total_count"),
+        "updated lexical-variable use compiler identity should use the edited source: {updated_identity}"
+    );
+    assert_eq!(
+        updated_variable_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "post-edit lexical variable use should remain in the scoped class live pilot"
+    );
+    assert_eq!(
+        updated_variable_receipt.get("live_token_match_count").and_then(Value::as_u64),
+        Some(1),
+        "post-edit source-backed lexical variable use must still match the live token stream"
     );
     assert_eq!(
         updated_variable_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
