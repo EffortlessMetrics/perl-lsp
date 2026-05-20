@@ -76,6 +76,8 @@ pub fn is_perl_identifier_continue(ch: char) -> bool {
             ch as u32,
             // Unicode join controls used in emoji and script shaping.
             0x200C | 0x200D |
+            // Combining enclosing keycap used by keycap emoji sequences.
+            0x20E3 |
             // Standard variation selectors (e.g. U+FE0F) used to keep emoji presentation.
             0xFE00..=0xFE0F |
             // Supplementary variation selectors.
@@ -145,6 +147,7 @@ mod tests {
         assert!(is_perl_identifier_continue('\''));
         assert!(is_perl_identifier_continue('\u{200C}'));
         assert!(is_perl_identifier_continue('\u{200D}'));
+        assert!(is_perl_identifier_continue('\u{20E3}'));
         assert!(is_perl_identifier_continue('\u{FE0F}'));
         assert!(is_perl_identifier_continue('\u{E0100}'));
         assert!(is_perl_identifier_continue('\u{1F3FB}'));
