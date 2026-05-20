@@ -1069,6 +1069,62 @@ fn from_message_unrelated_text_returns_none() {
     assert!(DiagnosticCode::from_message("refactor this method").is_none());
 }
 
+// --- Real Perl compiler message patterns ---
+
+/// Real Perl output: `Global symbol "$x" requires explicit package name at file.pl line 3.`
+/// This is the message emitted when `use strict` is active and a variable is used without `my`.
+#[test]
+fn from_message_real_perl_requires_explicit_package_name() {
+    assert_eq!(
+        DiagnosticCode::from_message(
+            r#"Global symbol "$x" requires explicit package name at script.pl line 3."#
+        ),
+        Some(DiagnosticCode::UndefinedVariable),
+    );
+    // Embedded in longer output (multi-line perl -c stderr)
+    assert_eq!(
+        DiagnosticCode::from_message("requires explicit package name"),
+        Some(DiagnosticCode::UndefinedVariable),
+    );
+    // Case-insensitive
+    assert_eq!(
+        DiagnosticCode::from_message("REQUIRES EXPLICIT PACKAGE NAME at file.pl line 5."),
+        Some(DiagnosticCode::UndefinedVariable),
+    );
+}
+
+/// Real Perl output: `Subroutine foo redefined at file.pl line 8.`
+#[test]
+fn from_message_real_perl_subroutine_redefined() {
+    assert_eq!(
+        DiagnosticCode::from_message("Subroutine foo redefined at script.pl line 8."),
+        Some(DiagnosticCode::DuplicateSubroutine),
+    );
+    assert_eq!(
+        DiagnosticCode::from_message(
+            "Subroutine My::Module::bar redefined at /lib/Foo.pm line 22."
+        ),
+        Some(DiagnosticCode::DuplicateSubroutine),
+    );
+    // Must require both "subroutine" and "redefined"; "redefined" alone is not sufficient.
+    assert_eq!(DiagnosticCode::from_message("value redefined at line 5"), None);
+}
+
+/// Real Perl output: `Prototype mismatch: sub foo ($$) vs sub foo ($) at file.pl line N.`
+#[test]
+fn from_message_real_perl_prototype_mismatch() {
+    assert_eq!(
+        DiagnosticCode::from_message(
+            "Prototype mismatch: sub foo ($$) vs sub foo ($) at x.pl line 4."
+        ),
+        Some(DiagnosticCode::InvalidPrototype),
+    );
+    assert_eq!(
+        DiagnosticCode::from_message("prototype mismatch detected for sub bar"),
+        Some(DiagnosticCode::InvalidPrototype),
+    );
+}
+
 // --- DiagnosticCode: documentation_url coverage ---
 
 #[test]
