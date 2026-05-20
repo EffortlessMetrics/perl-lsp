@@ -42,6 +42,7 @@
 //!     --test ux_scenario_20_real_workspace_providers -- --nocapture --test-threads=1
 //! ```
 
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{LspEvent, ScenarioConfig, UxHarness};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -131,10 +132,6 @@ fn fixture_root() -> PathBuf {
 }
 
 // ── Harness factory ──────────────────────────────────────────────────────────
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 fn create_harness() -> anyhow::Result<UxHarness> {
     UxHarness::new(

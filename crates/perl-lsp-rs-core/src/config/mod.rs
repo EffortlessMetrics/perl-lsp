@@ -804,7 +804,7 @@ impl WorkspaceConfig {
 /// 1000 ms is short enough that a stalled probe does not noticeably block
 /// the LSP and long enough that healthy probes succeed reliably.
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) const SYSTEM_INC_PROBE_TIMEOUT: Duration = Duration::from_millis(1000);
+pub(crate) const SYSTEM_INC_PROBE_TIMEOUT: Duration = Duration::from_secs(1);
 
 /// Run `command` with a wall-clock timeout, killing the child if it exceeds
 /// `timeout`. Returns `io::Error` with kind `TimedOut` on timeout. Used by

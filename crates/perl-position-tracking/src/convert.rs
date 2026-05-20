@@ -4,19 +4,35 @@
 //! where lines and columns are zero-based and columns are measured in UTF-16
 //! code units.
 
+fn line_content_end(line: &str) -> usize {
+    let without_lf = line.strip_suffix('\n').unwrap_or(line);
+    without_lf.strip_suffix('\r').unwrap_or(without_lf).len()
+}
+
+fn text_end_utf16_line_col(text: &str) -> (u32, u32) {
+    if text.is_empty() {
+        return (0, 0);
+    }
+    if text.ends_with('\n') {
+        return (text.split_inclusive('\n').count() as u32, 0);
+    }
+
+    let mut last_line = 0u32;
+    let mut last_col = 0u32;
+    for (idx, line) in text.split_inclusive('\n').enumerate() {
+        last_line = idx as u32;
+        last_col = line[..line_content_end(line)].encode_utf16().count() as u32;
+    }
+    (last_line, last_col)
+}
+
 /// Converts a byte offset into `(line, column_utf16)` coordinates.
 ///
 /// Offsets beyond the end of the document are clamped to the last valid
 /// position.
 pub fn offset_to_utf16_line_col(text: &str, offset: usize) -> (u32, u32) {
-    if offset > text.len() {
-        let lines: Vec<&str> = text.lines().collect();
-        let last_line = lines.len().saturating_sub(1) as u32;
-        let last_col = lines.last().map(|l| l.encode_utf16().count()).unwrap_or(0) as u32;
-        return (last_line, last_col);
-    }
-    if offset == text.len() && (text.ends_with('\n') || text.ends_with("\r\n")) {
-        return (text.split_inclusive('\n').count() as u32, 0);
+    if offset >= text.len() {
+        return text_end_utf16_line_col(text);
     }
     let mut acc = 0usize;
     for (line_idx, line) in text.split_inclusive('\n').enumerate() {
@@ -26,8 +42,10 @@ pub fn offset_to_utf16_line_col(text: &str, offset: usize) -> (u32, u32) {
             if rel == 0 {
                 return (line_idx as u32, 0);
             }
-            if rel >= line.len() {
-                return (line_idx as u32, line.encode_utf16().count() as u32);
+
+            let content_end = line_content_end(line);
+            if rel >= content_end {
+                return (line_idx as u32, line[..content_end].encode_utf16().count() as u32);
             }
             if line.is_char_boundary(rel) {
                 return (line_idx as u32, line[..rel].encode_utf16().count() as u32);
@@ -42,8 +60,7 @@ pub fn offset_to_utf16_line_col(text: &str, offset: usize) -> (u32, u32) {
         }
         acc = next;
     }
-    let last_line = text.lines().count().saturating_sub(1) as u32;
-    (last_line, text.lines().last().map(|l| l.encode_utf16().count()).unwrap_or(0) as u32)
+    text_end_utf16_line_col(text)
 }
 
 /// Converts `(line, column_utf16)` coordinates into a byte offset.
@@ -57,8 +74,10 @@ pub fn utf16_line_col_to_offset(text: &str, line: u32, col: u32) -> usize {
             if col == 0 {
                 return offset;
             }
+            let line_end = line_content_end(lt);
+            let line_content = &lt[..line_end];
             let mut up = 0u32;
-            for (bi, ch) in lt.char_indices() {
+            for (bi, ch) in line_content.char_indices() {
                 if up == col {
                     return offset + bi;
                 }
@@ -70,8 +89,7 @@ pub fn utf16_line_col_to_offset(text: &str, line: u32, col: u32) -> usize {
                     return offset + bi;
                 }
             }
-            let lcl = if lt.ends_with('\n') { lt.len() - 1 } else { lt.len() };
-            return offset + lcl.min(text.len() - offset);
+            return offset + line_end.min(text.len() - offset);
         }
         offset += lt.len();
     }
@@ -114,6 +132,11 @@ mod tests {
     fn offset_to_utf16_reports_new_empty_line_for_terminal_newline() {
         let text = "one\ntwo\n";
         assert_eq!(offset_to_utf16_line_col(text, text.len()), (2, 0));
+        assert_eq!(offset_to_utf16_line_col(text, text.len() + 25), (2, 0));
+
+        let crlf_text = "one\r\ntwo\r\n";
+        assert_eq!(offset_to_utf16_line_col(crlf_text, crlf_text.len()), (2, 0));
+        assert_eq!(offset_to_utf16_line_col(crlf_text, crlf_text.len() + 25), (2, 0));
     }
 
     #[test]
@@ -139,7 +162,21 @@ mod tests {
 
         assert_eq!(offset_to_utf16_line_col(text, 3), (1, 0));
         assert_eq!(offset_to_utf16_line_col(text, 8), (1, 3));
+        assert_eq!(offset_to_utf16_line_col(text, 9), (1, 4));
+        assert_eq!(offset_to_utf16_line_col(text, 10), (1, 4));
         assert_eq!(utf16_line_col_to_offset(text, 1, 2), 4);
         assert_eq!(utf16_line_col_to_offset(text, 1, 3), 8);
+        assert_eq!(utf16_line_col_to_offset(text, 1, 4), 9);
+        assert_eq!(utf16_line_col_to_offset(text, 1, 99), 9);
+    }
+
+    #[test]
+    fn utf16_helpers_exclude_crlf_from_line_columns() {
+        let text = "ab\r\ncd";
+
+        assert_eq!(offset_to_utf16_line_col(text, 2), (0, 2));
+        assert_eq!(offset_to_utf16_line_col(text, 3), (0, 2));
+        assert_eq!(utf16_line_col_to_offset(text, 0, 2), 2);
+        assert_eq!(utf16_line_col_to_offset(text, 0, 99), 2);
     }
 }

@@ -70,6 +70,7 @@
       "perl.goToTest",
       "perl.goToImplementation",
       "perl.explainProviderDecision",
+      "perl.workspaceTrustReport",
       "perl.previewSafeDelete",
       "perl.safeDeleteSymbol",
       "perl.previewPackageRename"

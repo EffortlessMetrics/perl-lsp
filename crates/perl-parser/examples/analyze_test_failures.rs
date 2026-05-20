@@ -198,7 +198,7 @@ fn main() {
     }
 
     let mut sorted_constructs: Vec<_> = construct_failures.into_iter().collect();
-    sorted_constructs.sort_by(|a, b| b.1.cmp(&a.1));
+    sorted_constructs.sort_by_key(|(_, count)| std::cmp::Reverse(*count));
 
     for (construct, count) in sorted_constructs.iter().take(10) {
         println!("{:<30} {} failures", construct, count);

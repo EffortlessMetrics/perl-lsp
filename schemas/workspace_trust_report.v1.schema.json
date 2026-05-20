@@ -1,0 +1,797 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/perl-lsp/schemas/workspace_trust_report.v1.schema.json",
+  "title": "Workspace trust report v1",
+  "description": "Additive schema for the read-only perl-lsp workspace trust report payload.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "command",
+    "user_message",
+    "claim_boundary",
+    "workspace",
+    "module_resolution",
+    "setup_hints",
+    "client_runtime_state",
+    "index",
+    "providers",
+    "dynamic_boundaries",
+    "copyable_payload"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "workspace_trust_report.v1"
+    },
+    "command": {
+      "const": "perl.workspaceTrustReport"
+    },
+    "user_message": {
+      "type": "string"
+    },
+    "claim_boundary": {
+      "type": "string"
+    },
+    "workspace": {
+      "$ref": "#/$defs/workspace"
+    },
+    "module_resolution": {
+      "$ref": "#/$defs/module_resolution"
+    },
+    "setup_hints": {
+      "$ref": "#/$defs/setup_hints"
+    },
+    "client_runtime_state": {
+      "$ref": "#/$defs/client_runtime_state"
+    },
+    "index": {
+      "$ref": "#/$defs/index"
+    },
+    "providers": {
+      "$ref": "#/$defs/providers"
+    },
+    "dynamic_boundaries": {
+      "$ref": "#/$defs/dynamic_boundaries"
+    },
+    "copyable_payload": {
+      "$ref": "#/$defs/copyable_payload"
+    }
+  },
+  "$defs": {
+    "string_or_null": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "nonnegative_integer_or_null": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "workspace": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "root_path",
+        "workspace_folder_count",
+        "open_document_count",
+        "folders"
+      ],
+      "properties": {
+        "root_path": {
+          "$ref": "#/$defs/string_or_null"
+        },
+        "workspace_folder_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "open_document_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "folders": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/workspace_folder"
+          }
+        }
+      }
+    },
+    "workspace_folder": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "uri",
+        "name",
+        "path",
+        "project_config_present",
+        "effective_workspace_config"
+      ],
+      "properties": {
+        "uri": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "$ref": "#/$defs/string_or_null"
+        },
+        "project_config_present": {
+          "type": "boolean"
+        },
+        "effective_workspace_config": {
+          "$ref": "#/$defs/workspace_config"
+        }
+      }
+    },
+    "module_resolution": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "global_workspace_config",
+        "policy"
+      ],
+      "properties": {
+        "global_workspace_config": {
+          "$ref": "#/$defs/workspace_config"
+        },
+        "policy": {
+          "type": "string"
+        }
+      }
+    },
+    "workspace_config": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "include_paths",
+        "effective_include_paths",
+        "use_system_inc",
+        "system_inc_status",
+        "use_perl5lib",
+        "perl5lib_entry_count",
+        "perl5lib_precedence",
+        "perl_path",
+        "perl_args_count",
+        "resolution_timeout_ms"
+      ],
+      "properties": {
+        "include_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "effective_include_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "use_system_inc": {
+          "type": "boolean"
+        },
+        "system_inc_status": {
+          "type": "string",
+          "enum": [
+            "configured_not_probed_by_report",
+            "disabled"
+          ]
+        },
+        "use_perl5lib": {
+          "type": "boolean"
+        },
+        "perl5lib_entry_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "perl5lib_precedence": {
+          "type": "string",
+          "enum": [
+            "prepend",
+            "append"
+          ]
+        },
+        "perl_path": {
+          "$ref": "#/$defs/string_or_null"
+        },
+        "perl_args_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "resolution_timeout_ms": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "setup_hints": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "hint_count",
+        "hints",
+        "perl_binary",
+        "perldoc",
+        "dap",
+        "claim_boundary"
+      ],
+      "properties": {
+        "status": {
+          "const": "advisory"
+        },
+        "hint_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "hints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/setup_hint"
+          }
+        },
+        "perl_binary": {
+          "$ref": "#/$defs/setup_hints_perl_binary"
+        },
+        "perldoc": {
+          "$ref": "#/$defs/setup_hints_perldoc"
+        },
+        "dap": {
+          "$ref": "#/$defs/setup_hints_dap"
+        },
+        "claim_boundary": {
+          "type": "string"
+        }
+      }
+    },
+    "setup_hint": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "code",
+        "severity",
+        "message",
+        "action"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "info",
+            "warning",
+            "error"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string"
+        }
+      }
+    },
+    "setup_hints_perl_binary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "configured_path",
+        "resolution_status",
+        "version_status",
+        "args_count"
+      ],
+      "properties": {
+        "configured_path": {
+          "$ref": "#/$defs/string_or_null"
+        },
+        "resolution_status": {
+          "type": "string"
+        },
+        "version_status": {
+          "const": "not_probed_by_report"
+        },
+        "args_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "setup_hints_perldoc": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "run_status",
+        "binary_source",
+        "timeout_ms",
+        "allow_perl5lib",
+        "allow_perl5opt",
+        "allow_local_lib",
+        "lc_all",
+        "argv_policy",
+        "policy"
+      ],
+      "properties": {
+        "status": {
+          "const": "oracle_contract_reported_not_run"
+        },
+        "run_status": {
+          "const": "not_run_by_report"
+        },
+        "binary_source": {
+          "type": "string"
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "allow_perl5lib": {
+          "type": "boolean"
+        },
+        "allow_perl5opt": {
+          "type": "boolean"
+        },
+        "allow_local_lib": {
+          "type": "boolean"
+        },
+        "lc_all": {
+          "type": "string"
+        },
+        "argv_policy": {
+          "type": "string"
+        },
+        "policy": {
+          "type": "string"
+        }
+      }
+    },
+    "setup_hints_dap": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "policy"
+      ],
+      "properties": {
+        "status": {
+          "const": "not_probed_by_lsp_workspace_report"
+        },
+        "policy": {
+          "type": "string"
+        }
+      }
+    },
+    "client_runtime_state": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "schema_version",
+        "source",
+        "perldoc",
+        "dap",
+        "claim_boundary"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "workspace_trust_client_runtime.v1"
+        },
+        "source": {
+          "type": "string"
+        },
+        "perldoc": {
+          "$ref": "#/$defs/client_runtime_perldoc"
+        },
+        "dap": {
+          "$ref": "#/$defs/client_runtime_dap"
+        },
+        "claim_boundary": {
+          "type": "string"
+        }
+      }
+    },
+    "client_runtime_perldoc": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "uri_scheme",
+        "client_surface"
+      ],
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "uri_scheme": {
+          "$ref": "#/$defs/string_or_null"
+        },
+        "client_surface": {
+          "$ref": "#/$defs/string_or_null"
+        }
+      }
+    },
+    "client_runtime_dap": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "adapter_registered",
+        "active_perl_debug_session",
+        "managed_adapter_exists",
+        "launch_json_workspace_count",
+        "workspace_folder_count",
+        "launch_configuration"
+      ],
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "adapter_registered": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "active_perl_debug_session": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "managed_adapter_exists": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "launch_json_workspace_count": {
+          "$ref": "#/$defs/nonnegative_integer_or_null"
+        },
+        "workspace_folder_count": {
+          "$ref": "#/$defs/nonnegative_integer_or_null"
+        },
+        "launch_configuration": {
+          "$ref": "#/$defs/launch_configuration"
+        }
+      }
+    },
+    "launch_configuration": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "configuration_count",
+        "perl_configuration_count",
+        "launch_request_count",
+        "attach_request_count",
+        "perl_path_configured_count",
+        "include_paths_configured_count",
+        "include_path_entry_count",
+        "non_string_include_path_count",
+        "program_configured_count",
+        "cwd_configured_count",
+        "include_path_kind_counts",
+        "perl_path_kind_counts",
+        "program_path_kind_counts",
+        "cwd_path_kind_counts",
+        "claim_boundary"
+      ],
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "configuration_count": {
+          "$ref": "#/$defs/nonnegative_integer_or_null"
+        },
+        "perl_configuration_count": {
+          "$ref": "#/$defs/nonnegative_integer_or_null"
+        },
+        "launch_request_count": {
+          "$ref": "#/$defs/nonnegative_integer_or_null"
+        },
+        "attach_request_count": {
+          "$ref": "#/$defs/nonnegative_integer_or_null"
+        },
+        "perl_path_configured_count": {
+          "$ref": "#/$defs/nonnegative_integer_or_null"
+        },
+        "include_paths_configured_count": {
+          "$ref": "#/$defs/nonnegative_integer_or_null"
+        },
+        "include_path_entry_count": {
+          "$ref": "#/$defs/nonnegative_integer_or_null"
+        },
+        "non_string_include_path_count": {
+          "$ref": "#/$defs/nonnegative_integer_or_null"
+        },
+        "program_configured_count": {
+          "$ref": "#/$defs/nonnegative_integer_or_null"
+        },
+        "cwd_configured_count": {
+          "$ref": "#/$defs/nonnegative_integer_or_null"
+        },
+        "include_path_kind_counts": {
+          "$ref": "#/$defs/path_class_counts"
+        },
+        "perl_path_kind_counts": {
+          "$ref": "#/$defs/path_class_counts"
+        },
+        "program_path_kind_counts": {
+          "$ref": "#/$defs/path_class_counts"
+        },
+        "cwd_path_kind_counts": {
+          "$ref": "#/$defs/path_class_counts"
+        },
+        "claim_boundary": {
+          "type": "string"
+        }
+      }
+    },
+    "path_class_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "absolute": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "relative": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "workspace_variable": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "file_variable": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "other_variable": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "home_relative": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "command": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "empty": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unknown": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "index": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "availability",
+        "state",
+        "reason",
+        "file_count",
+        "symbol_count",
+        "indexed_file_count",
+        "indexed_symbol_count",
+        "pending_index_tasks",
+        "indexing_in_progress"
+      ],
+      "properties": {
+        "availability": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "file_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "symbol_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "indexed_file_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "indexed_symbol_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pending_index_tasks": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "indexing_in_progress": {
+          "type": "boolean"
+        }
+      }
+    },
+    "providers": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "support_tiers",
+        "decision_trace_count",
+        "decision_trace_keys"
+      ],
+      "properties": {
+        "support_tiers": {
+          "$ref": "#/$defs/support_tiers"
+        },
+        "decision_trace_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "decision_trace_keys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "support_tiers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "dynamic_boundaries": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "policy"
+      ],
+      "properties": {
+        "policy": {
+          "type": "string"
+        }
+      }
+    },
+    "copyable_payload": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "schema_version",
+        "perl_lsp_version",
+        "provider",
+        "command",
+        "workspace_root_class",
+        "workspace_root_hash",
+        "workspace_folder_count",
+        "open_document_count",
+        "configured_include_path_count",
+        "effective_include_path_count",
+        "use_system_inc",
+        "system_inc_status",
+        "use_perl5lib",
+        "perl5lib_entry_count",
+        "perl5lib_precedence",
+        "perl_binary_resolution_status",
+        "perldoc_status",
+        "perldoc_run_status",
+        "dap_status",
+        "client_runtime_schema_version",
+        "client_runtime_source",
+        "launch_configuration_status",
+        "provider_support_tiers",
+        "decision_trace_count",
+        "dynamic_boundary_policy",
+        "support_tier_link",
+        "claim_boundary"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "workspace_trust_report_copyable.v1"
+        },
+        "perl_lsp_version": {
+          "type": "string"
+        },
+        "provider": {
+          "const": "workspace_trust_report"
+        },
+        "command": {
+          "const": "perl.workspaceTrustReport"
+        },
+        "workspace_root_class": {
+          "type": "string",
+          "enum": [
+            "none",
+            "single_root",
+            "multi_root"
+          ]
+        },
+        "workspace_root_hash": {
+          "$ref": "#/$defs/string_or_null"
+        },
+        "workspace_folder_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "open_document_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "configured_include_path_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "effective_include_path_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "use_system_inc": {
+          "type": "boolean"
+        },
+        "system_inc_status": {
+          "type": "string"
+        },
+        "use_perl5lib": {
+          "type": "boolean"
+        },
+        "perl5lib_entry_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "perl5lib_precedence": {
+          "type": "string"
+        },
+        "perl_binary_resolution_status": {
+          "$ref": "#/$defs/string_or_null"
+        },
+        "perldoc_status": {
+          "$ref": "#/$defs/string_or_null"
+        },
+        "perldoc_run_status": {
+          "$ref": "#/$defs/string_or_null"
+        },
+        "dap_status": {
+          "$ref": "#/$defs/string_or_null"
+        },
+        "client_runtime_schema_version": {
+          "$ref": "#/$defs/string_or_null"
+        },
+        "client_runtime_source": {
+          "$ref": "#/$defs/string_or_null"
+        },
+        "launch_configuration_status": {
+          "$ref": "#/$defs/string_or_null"
+        },
+        "provider_support_tiers": {
+          "$ref": "#/$defs/support_tiers"
+        },
+        "decision_trace_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "dynamic_boundary_policy": {
+          "type": "string"
+        },
+        "support_tier_link": {
+          "type": "string"
+        },
+        "claim_boundary": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

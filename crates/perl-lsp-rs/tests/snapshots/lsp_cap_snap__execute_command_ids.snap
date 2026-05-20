@@ -14,6 +14,8 @@ expression: "&commands"
 - perl.goToTest
 - perl.goToImplementation
 - perl.explainProviderDecision
+- perl.workspaceTrustReport
 - perl.previewSafeDelete
 - perl.safeDeleteSymbol
 - perl.previewPackageRename
+- perl.explainMissingModuleLookup

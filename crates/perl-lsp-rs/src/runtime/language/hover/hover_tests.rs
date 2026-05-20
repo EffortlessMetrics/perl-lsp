@@ -83,3 +83,50 @@ fn pod_hover_cache_prunes_at_cap_and_evicts_active_document_path()
 
     Ok(())
 }
+
+#[test]
+fn missing_module_hover_gives_actionable_next_steps() {
+    let server = LspServer::with_io(Box::new(std::io::empty()), Box::new(Vec::<u8>::new()));
+    {
+        let mut config = server.workspace_config.lock();
+        config.include_paths = vec!["lib".to_string(), "t/lib".to_string()];
+        config.use_perl5lib = false;
+        config.use_system_inc = false;
+    }
+
+    let hover = server.build_module_hover(
+        "Definitely::Missing::Module",
+        "use Definitely::Missing::Module;\n",
+        "file:///tmp/missing.pl",
+        Some(4),
+    );
+    let value = must_some(hover["contents"]["value"].as_str());
+
+    assert!(
+        value.contains("Not found in workspace or configured include paths"),
+        "missing module hover should explain the failure scope: {value}"
+    );
+    let test_lib_display = std::path::Path::new("t").join("lib").display().to_string();
+    let test_lib_line = format!("- `{test_lib_display}`");
+    assert!(value.contains("- `lib`"), "missing module hover should list lib: {value}");
+    assert!(value.contains(&test_lib_line), "missing module hover should list t/lib: {value}");
+    assert!(
+        value.contains("cpanm Definitely::Missing::Module"),
+        "missing module hover should suggest an install command: {value}"
+    );
+    assert!(
+        value.contains(".perl-lsp.toml` `include_paths`"),
+        "missing module hover should point to include_paths configuration: {value}"
+    );
+    assert!(
+        value.contains("https://metacpan.org/pod/Definitely::Missing::Module"),
+        "missing module hover should keep the MetaCPAN link: {value}"
+    );
+}
+
+#[test]
+fn missing_module_search_paths_reports_empty_configuration() {
+    let paths = LspServer::format_missing_module_search_paths(&[]);
+
+    assert_eq!(paths, "- No include paths configured");
+}

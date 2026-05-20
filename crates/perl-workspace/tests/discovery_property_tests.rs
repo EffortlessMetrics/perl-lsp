@@ -1,11 +1,11 @@
 //! Property tests for workspace discovery invariants.
 
 use perl_workspace::discovery::{discover_perl_files, is_perl_discovery_path};
+use perl_workspace::ignore::path_contains_skipped_component;
 use proptest::prelude::*;
 use proptest::test_runner::Config as ProptestConfig;
 use std::collections::HashSet;
 use std::fs;
-use std::path::Path;
 
 fn extension_strategy() -> impl Strategy<Value = String> {
     prop_oneof![
@@ -57,10 +57,6 @@ fn randomize_case(input: &str, uppercase: &[bool]) -> String {
             },
         )
         .collect()
-}
-
-fn has_path_component(path: &Path, component: &str) -> bool {
-    path.components().any(|part| part.as_os_str() == component)
 }
 
 proptest! {
@@ -123,7 +119,17 @@ proptest! {
         };
         let root = tmp.path();
 
-        let skipped_dirs = [".git", ".hg", ".svn", "target", "node_modules", ".cache"];
+        let skipped_dirs = [
+            ".git",
+            ".hg",
+            ".svn",
+            "target",
+            "node_modules",
+            ".cache",
+            "blib",
+            "local",
+            "vendor",
+        ];
 
         for directory in skipped_dirs {
             let path = root.join(directory).join(format!("{stem}.pm"));
@@ -142,9 +148,14 @@ proptest! {
         let result = discover_perl_files(root);
 
         for path in &result.files {
-            for skipped_dir in skipped_dirs {
-                prop_assert!(!has_path_component(path, skipped_dir));
-            }
+            let relative = match path.strip_prefix(root) {
+                Ok(relative) => relative,
+                Err(_) => {
+                    prop_assert!(false, "discovered path is outside workspace root: {:?}", path);
+                    return Ok(());
+                }
+            };
+            prop_assert!(!path_contains_skipped_component(relative));
         }
 
         prop_assert!(result.files.iter().any(|path| path.ends_with(&visible)));

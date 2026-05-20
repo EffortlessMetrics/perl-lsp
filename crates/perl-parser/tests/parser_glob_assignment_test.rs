@@ -124,10 +124,7 @@ fn parser_glob_sub_reference_assignment() {
     // AC2: Parser handles typeglob assignments with code references
     let code = "*func = \\&other_func;";
     let mut parser = Parser::new(code);
-    let result = parser.parse();
-    assert!(result.is_ok(), "Failed to parse: {:?}", result.err());
-
-    let ast = result.unwrap();
+    let ast = must(parser.parse());
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1, "Expected 1 statement");
         let stmt = &statements[0];
@@ -208,10 +205,7 @@ fn parser_glob_dereference_scalar() {
     // Note: Parser treats ${*foo} as Binary { ${}, *foo } (acceptable)
     let code = "${*foo};";
     let mut parser = Parser::new(code);
-    let result = parser.parse();
-    assert!(result.is_ok(), "Failed to parse: {:?}", result.err());
-
-    let ast = result.unwrap();
+    let ast = must(parser.parse());
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1, "Expected 1 statement");
         let stmt = &statements[0];
@@ -237,10 +231,7 @@ fn parser_glob_dereference_array() {
     // Note: Parser treats @{*bar} similarly to ${*foo} above
     let code = "@{*bar};";
     let mut parser = Parser::new(code);
-    let result = parser.parse();
-    assert!(result.is_ok(), "Failed to parse: {:?}", result.err());
-
-    let ast = result.unwrap();
+    let ast = must(parser.parse());
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1, "Expected 1 statement");
         let stmt = &statements[0];
@@ -265,10 +256,7 @@ fn parser_glob_multiple_assignments() {
     // Test multiple typeglob assignments in sequence
     let code = "*foo = *bar; *baz = *qux;";
     let mut parser = Parser::new(code);
-    let result = parser.parse();
-    assert!(result.is_ok(), "Failed to parse: {:?}", result.err());
-
-    let ast = result.unwrap();
+    let ast = must(parser.parse());
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 2, "Expected 2 statements");
 
@@ -293,10 +281,7 @@ fn parser_glob_vs_multiplication() {
     // AC1: Parser distinguishes *foo (typeglob) from * (multiplication)
     let code = "my $x = 2 * 3;";
     let mut parser = Parser::new(code);
-    let result = parser.parse();
-    assert!(result.is_ok(), "Failed to parse: {:?}", result.err());
-
-    let ast = result.unwrap();
+    let ast = must(parser.parse());
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1, "Expected 1 statement");
         let stmt = &statements[0];
@@ -317,10 +302,7 @@ fn parser_glob_in_context() {
     // Test typeglob in complex expressions
     let code = "my $ref = \\*STDOUT;";
     let mut parser = Parser::new(code);
-    let result = parser.parse();
-    assert!(result.is_ok(), "Failed to parse: {:?}", result.err());
-
-    let ast = result.unwrap();
+    let ast = must(parser.parse());
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1, "Expected 1 statement");
         let stmt = &statements[0];

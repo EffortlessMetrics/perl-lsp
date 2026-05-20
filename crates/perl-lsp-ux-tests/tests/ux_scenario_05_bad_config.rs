@@ -10,11 +10,8 @@
 //! - Error messages MUST NOT contain raw Rust panic traces.
 //! - Server MUST remain responsive after the config error.
 
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 fn config_with_bad_tool_paths() -> ScenarioConfig {
     ScenarioConfig::default()

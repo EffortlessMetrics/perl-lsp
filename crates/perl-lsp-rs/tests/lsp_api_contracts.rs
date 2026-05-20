@@ -477,7 +477,7 @@ fn test_large_file_responsiveness() -> TestResult {
     )?;
 
     assert!(
-        duration < Duration::from_millis(1000),
+        duration < Duration::from_secs(1),
         "Large file processing took too long: {:?}",
         duration
     );

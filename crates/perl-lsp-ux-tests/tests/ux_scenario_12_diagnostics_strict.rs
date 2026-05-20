@@ -15,12 +15,9 @@
 //!   `range` and `message` fields.
 //! - A clean file MAY produce zero diagnostics — that is acceptable.
 
+use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{LspEvent, ScenarioConfig, UxHarness};
 use std::time::Duration;
-
-fn binary_available() -> bool {
-    perl_lsp_ux_tests::resolve_binary().is_ok()
-}
 
 /// Source that is syntactically valid Perl — should produce no parse errors.
 const CLEAN_SOURCE: &str = "\

@@ -237,6 +237,18 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_execute_command_allows_workspace_trust_report() {
+        let method = "workspace/executeCommand";
+        let params = serde_json::json!({
+            "command": "perl.workspaceTrustReport",
+            "arguments": []
+        });
+
+        let result = validate_lsp_request(method, &params);
+        assert!(result.is_ok());
+    }
+
+    #[test]
     fn test_validate_execute_command_allows_safe_delete_symbol() {
         let method = "workspace/executeCommand";
         let params = serde_json::json!({
@@ -260,6 +272,22 @@ mod tests {
                 "textDocument": {"uri": "file:///workspace/lib/My.pm"},
                 "position": {"line": 0, "character": 0},
                 "newName": "Renamed::Package"
+            }]
+        });
+
+        let result = validate_lsp_request(method, &params);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_execute_command_allows_explain_missing_module_lookup() {
+        let method = "workspace/executeCommand";
+        let params = serde_json::json!({
+            "command": "perl.explainMissingModuleLookup",
+            "arguments": [{
+                "module": "Missing::Payload",
+                "textDocument": {"uri": "file:///workspace/script.pl"},
+                "position": {"line": 0, "character": 4}
             }]
         });
 
