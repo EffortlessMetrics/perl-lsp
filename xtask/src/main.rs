@@ -3319,3 +3319,49 @@ fn convert_gate_receipts_format(format: GateReceiptsFormat) -> gate_receipts::Ou
         GateReceiptsFormat::Json => gate_receipts::OutputFormat::Json,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type TestResult<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+    fn parse_devex_command(args: &[&str]) -> TestResult<DevexCommand> {
+        match Cli::try_parse_from(args)?.command {
+            Commands::Devex { command } => Ok(command),
+            _ => Err(std::io::Error::other("expected devex command").into()),
+        }
+    }
+
+    #[test]
+    fn devex_commands_default_to_auto_base() -> TestResult {
+        let cases = [
+            (["xtask", "devex", "plan"].as_slice(), "plan"),
+            (["xtask", "devex", "receipt"].as_slice(), "receipt"),
+            (["xtask", "devex", "cockpit"].as_slice(), "cockpit"),
+            (["xtask", "devex", "pr-body"].as_slice(), "pr-body"),
+        ];
+
+        for (args, name) in cases {
+            let base = match parse_devex_command(args)? {
+                DevexCommand::Plan { base }
+                | DevexCommand::Receipt { base, .. }
+                | DevexCommand::Cockpit { base, .. }
+                | DevexCommand::PrBody { base, .. } => base,
+            };
+            assert_eq!(base, "auto", "{name} should auto-detect the diff base by default");
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn devex_plan_respects_explicit_base() -> TestResult {
+        match parse_devex_command(&["xtask", "devex", "plan", "--base", "HEAD~1"])? {
+            DevexCommand::Plan { base } => assert_eq!(base, "HEAD~1"),
+            _ => return Err(std::io::Error::other("expected devex plan command").into()),
+        }
+
+        Ok(())
+    }
+}
