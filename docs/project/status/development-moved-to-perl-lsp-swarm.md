@@ -4,7 +4,7 @@ Active development has moved to
 [`EffortlessMetrics/perl-lsp-swarm`](https://github.com/EffortlessMetrics/perl-lsp-swarm).
 
 `perl-lsp` remains the release, history, and canonical package-lineage repo until
-curated sync or release PRs promote swarm work back here.
+curated sync or release PRs promote swarm work back there.
 
 New feature work should target `perl-lsp-swarm`.
 
