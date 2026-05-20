@@ -13,7 +13,7 @@ fn compute_adaptive_timeout() -> std::time::Duration {
         .unwrap_or(usize::MAX);
 
     if rust_test_threads <= 2 {
-        Duration::from_secs(60) // High contention
+        Duration::from_mins(1) // High contention
     } else if rust_test_threads <= 4 {
         Duration::from_secs(45) // Medium contention
     } else {
@@ -966,8 +966,8 @@ fn test_adaptive_timeout_calculation() -> Result<(), Box<dyn std::error::Error>>
 
     // Simulate different thread constraints
     let test_cases = vec![
-        (Some("1"), Duration::from_secs(60)), // High contention
-        (Some("2"), Duration::from_secs(60)), // High contention
+        (Some("1"), Duration::from_mins(1)),  // High contention
+        (Some("2"), Duration::from_mins(1)),  // High contention
         (Some("3"), Duration::from_secs(45)), // Medium contention
         (Some("4"), Duration::from_secs(45)), // Medium contention
         (Some("5"), Duration::from_secs(30)), // Low contention

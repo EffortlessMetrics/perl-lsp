@@ -10,6 +10,8 @@ pub struct CheckpointDiff {
     pub delimiter_stack_changed: bool,
     /// Whether any prototype-tracking state differs.
     pub prototype_state_changed: bool,
+    /// Whether EOF emission state differs.
+    pub eof_state_changed: bool,
     /// Whether the [`crate::checkpoint::CheckpointContext`] variant changed.
     pub context_changed: bool,
 }
@@ -20,6 +22,7 @@ impl CheckpointDiff {
         self.mode_changed
             || self.delimiter_stack_changed
             || self.prototype_state_changed
+            || self.eof_state_changed
             || self.context_changed
     }
 }
@@ -35,6 +38,7 @@ mod tests {
             mode_changed: false,
             delimiter_stack_changed: false,
             prototype_state_changed: false,
+            eof_state_changed: false,
             context_changed: false,
         };
 
@@ -48,6 +52,7 @@ mod tests {
             mode_changed: true,
             delimiter_stack_changed: false,
             prototype_state_changed: false,
+            eof_state_changed: false,
             context_changed: false,
         };
 
@@ -62,6 +67,7 @@ mod tests {
                 mode_changed: false,
                 delimiter_stack_changed: true,
                 prototype_state_changed: false,
+                eof_state_changed: false,
                 context_changed: false,
             },
             CheckpointDiff {
@@ -69,6 +75,7 @@ mod tests {
                 mode_changed: false,
                 delimiter_stack_changed: false,
                 prototype_state_changed: true,
+                eof_state_changed: false,
                 context_changed: false,
             },
             CheckpointDiff {
@@ -76,6 +83,15 @@ mod tests {
                 mode_changed: false,
                 delimiter_stack_changed: false,
                 prototype_state_changed: false,
+                eof_state_changed: true,
+                context_changed: false,
+            },
+            CheckpointDiff {
+                position_delta: 0,
+                mode_changed: false,
+                delimiter_stack_changed: false,
+                prototype_state_changed: false,
+                eof_state_changed: false,
                 context_changed: true,
             },
         ] {

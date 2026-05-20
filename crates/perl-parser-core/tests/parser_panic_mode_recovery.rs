@@ -84,11 +84,17 @@ fn parser_ac3_prevent_recursive_recovery() -> ParseResult<()> {
     // AC:AC3
     let code = "my $x = { { { my $y = ; } } }";
     let mut parser = Parser::new(code);
-    let _ast = parser.parse()?;
+    let ast = parser.parse()?;
 
-    // Should have recorded errors but not entered infinite loop
+    // Should have recorded errors but not entered infinite loop or silently
+    // discarded the malformed declaration inside nested brace expressions.
     let errors = parser.errors();
     assert!(!errors.is_empty(), "Should have error records");
+    let sexp = ast.to_sexp();
+    assert!(
+        sexp.contains("missing_expression"),
+        "Nested declaration recovery should preserve the missing initializer: {sexp}"
+    );
     Ok(())
 }
 

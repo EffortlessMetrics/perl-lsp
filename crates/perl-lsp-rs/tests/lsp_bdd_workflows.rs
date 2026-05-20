@@ -1893,7 +1893,7 @@ Foo::do_foo();
                 "textDocument": { "uri": main_uri },
                 "position": { "line": line, "character": col + 4 } // offset for "use "
             }),
-            std::time::Duration::from_millis(1000),
+            std::time::Duration::from_secs(1),
         )
         .unwrap_or(serde_json::Value::Null);
 
@@ -1945,7 +1945,7 @@ sub main_func {}
             json!({
                 "textDocument": { "uri": uri }
             }),
-            std::time::Duration::from_millis(1000),
+            std::time::Duration::from_secs(1),
         )
         .unwrap_or(serde_json::Value::Null);
 
@@ -3448,6 +3448,141 @@ print $x;
     scenario.then("response has non-empty data array");
     let data = semantic_token_data(&tokens);
     assert!(!data.is_empty(), "semantic tokens for valid Perl should not be empty; got {tokens:?}");
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_hover_returns_doc_for_default_variable() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Hover over $_ returns default-variable documentation");
+
+    // Use $_ outside any foreach/while-that-declares-it so the server has no local
+    // declaration to shadow the special-variable docs.
+    let code = r#"use strict;
+use warnings;
+
+$_ = "hello world";
+print length $_;
+"#;
+
+    scenario.given("a file that assigns to $_ directly without a loop that re-declares it");
+    let (mut harness, workspace) = setup_workspace(&[("main.pl", code)])?;
+    let uri = workspace.uri("main.pl");
+    harness.open(&uri, code)?;
+    harness.barrier();
+
+    scenario.when("requesting hover at the $_ in the length call");
+    let (line, character) = find_position(code, "length $_");
+    // +8 = '_'; get_token_at_position_static needs the alphanumeric part, not '$'
+    let hover = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character + 8 }
+        }),
+    )?;
+
+    scenario.then("hover returns documentation describing $_ as the default variable");
+    assert!(
+        !hover.is_null(),
+        "hover over '$_' should return non-null documentation; got {hover:?}"
+    );
+    let text = hover_text(&hover);
+    assert!(!text.is_empty(), "hover text for '$_' should not be empty; got {hover:?}");
+    assert!(
+        text.to_lowercase().contains("default"),
+        "hover for '$_' should mention 'default'; got: {text}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_hover_returns_doc_for_errno_special_variable() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Hover over $! returns errno/OS-error documentation");
+
+    let code = r#"use strict;
+use warnings;
+
+open my $fh, '<', 'nonexistent.txt'
+    or die "Cannot open: $!";
+"#;
+
+    scenario.given("a file that uses $! in an error-handling context after open");
+    let (mut harness, workspace) = setup_workspace(&[("main.pl", code)])?;
+    let uri = workspace.uri("main.pl");
+    harness.open(&uri, code)?;
+    harness.barrier();
+
+    scenario.when("requesting hover at the $! position in the die string");
+    let (line, character) = find_position(code, "$!");
+    let hover = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character }
+        }),
+    )?;
+
+    scenario.then("hover returns documentation describing $! as the OS error variable");
+    assert!(
+        !hover.is_null(),
+        "hover over '$!' should return non-null documentation; got {hover:?}"
+    );
+    let text = hover_text(&hover);
+    assert!(!text.is_empty(), "hover text for '$!' should not be empty; got {hover:?}");
+    assert!(
+        text.to_lowercase().contains("error") || text.to_lowercase().contains("errno"),
+        "hover for '$!' should mention 'error' or 'errno'; got: {text}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_hover_returns_doc_for_file_test_operator() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario =
+        BddScenario::new("Hover over -e file-test operator returns existence documentation");
+
+    let code = r#"use strict;
+use warnings;
+
+my $path = "/tmp/test";
+if (-e $path) {
+    print "exists\n";
+}
+"#;
+
+    scenario.given("a file that uses the -e file-test operator in a conditional");
+    let (mut harness, workspace) = setup_workspace(&[("main.pl", code)])?;
+    let uri = workspace.uri("main.pl");
+    harness.open(&uri, code)?;
+    harness.barrier();
+
+    scenario.when("requesting hover at the -e operator position");
+    let (line, character) = find_position(code, "-e $path");
+    let hover = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character }
+        }),
+    )?;
+
+    scenario.then("hover returns documentation describing -e as a file-existence test");
+    assert!(
+        !hover.is_null(),
+        "hover over '-e' should return non-null documentation; got {hover:?}"
+    );
+    let text = hover_text(&hover);
+    assert!(!text.is_empty(), "hover text for '-e' should not be empty; got {hover:?}");
+    assert!(
+        text.to_lowercase().contains("exist") || text.to_lowercase().contains("file"),
+        "hover for '-e' should mention 'exist' or 'file'; got: {text}"
+    );
 
     Ok(())
 }

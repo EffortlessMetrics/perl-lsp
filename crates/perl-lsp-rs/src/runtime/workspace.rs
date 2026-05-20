@@ -84,6 +84,17 @@ fn is_permission_denied_error(e: &std::io::Error) -> bool {
 #[cfg(feature = "workspace")]
 use text_decode::read_text_with_encoding_fallback;
 
+#[cfg(feature = "workspace")]
+fn read_watched_file_content(uri: &str, purpose: &str) -> Option<String> {
+    uri_to_fs_path(uri).and_then(|path| match read_text_with_encoding_fallback(&path) {
+        Ok(content) => Some(content),
+        Err(e) => {
+            tracing::debug!("Failed to read file for {} ({}): {}", purpose, path.display(), e);
+            None
+        }
+    })
+}
+
 /// RAII guard that clears the `indexing_in_progress` flag on drop.
 ///
 /// Ensures the flag is always cleared, even if the indexing thread panics.
@@ -219,8 +230,12 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        let query =
-            params.as_ref().and_then(|p| p.get("query")).and_then(|q| q.as_str()).unwrap_or("");
+        let query = params
+            .as_ref()
+            .and_then(|p| p.get("query"))
+            .and_then(|q| q.as_str())
+            .unwrap_or("")
+            .trim();
         let cap = workspace_symbol_cap();
 
         tracing::debug!(query, cap, "Workspace symbol search v2");
@@ -406,6 +421,7 @@ impl LspServer {
             .and_then(|p| p.get("query"))
             .and_then(Value::as_str)
             .unwrap_or("")
+            .trim()
             .to_string();
 
         let live_provider_result = self.handle_workspace_symbols_v2(params)?;
@@ -485,7 +501,14 @@ impl LspServer {
 fn workspace_symbols_generated_dynamic_noise_receipt(query: &str) -> (Value, usize) {
     let candidates = vec![
         perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolShadowCandidate::shadow(
-            "generated:no-source:workspace-symbol:framework_accessor:virtual",
+            "generated:source-anchor:workspace-symbol:framework_accessor:virtual",
+            ProviderFactSourceKind::FrameworkAdapter,
+            Provenance::FrameworkSynthesis,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+        ),
+        perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolShadowCandidate::blocked(
+            "generated:no-source:workspace-symbol:runtime_installed_method:unanchored",
             ProviderFactSourceKind::FrameworkAdapter,
             Provenance::FrameworkSynthesis,
             Confidence::Medium,
@@ -517,7 +540,18 @@ fn workspace_symbols_generated_dynamic_noise_receipt(query: &str) -> (Value, usi
 
     let generated_candidate_count = candidates
         .iter()
-        .filter(|candidate| candidate.source == ProviderFactSourceKind::FrameworkAdapter)
+        .filter(|candidate| {
+            candidate.source == ProviderFactSourceKind::FrameworkAdapter
+                && candidate.fallback_state != ProviderFallbackState::Blocked
+        })
+        .count();
+    let generated_no_source_blocker_count = candidates
+        .iter()
+        .filter(|candidate| {
+            candidate.source == ProviderFactSourceKind::FrameworkAdapter
+                && candidate.fallback_state == ProviderFallbackState::Blocked
+                && candidate.identity.contains(":no-source:")
+        })
         .count();
     let dynamic_boundary_blocker_count = candidates
         .iter()
@@ -553,11 +587,17 @@ fn workspace_symbols_generated_dynamic_noise_receipt(query: &str) -> (Value, usi
             "schema_version": 1,
             "receipt_kind": "generated_dynamic_noise_expansion",
             "generated_candidate_count": generated_candidate_count,
+            "generated_false_exact_candidate_count": generated_candidate_count,
+            "generated_no_source_candidate_count": generated_no_source_blocker_count,
+            "generated_no_source_blocker_count": generated_no_source_blocker_count,
+            "generated_location_semantics": "source_anchor_not_exact_generated_body",
             "dynamic_boundary_blocker_count": dynamic_boundary_blocker_count,
+            "dynamic_false_exact_blocker_count": dynamic_boundary_blocker_count,
             "stale_fact_blocker_count": stale_fact_blocker_count,
             "fallback_noise_candidate_count": fallback_noise_candidate_count,
             "no_live_behavior_change": true,
-            "claim_boundary": "workspace-symbol generated/dynamic/noise expansion receipt only; generated/no-source, dynamic, stale, and fallback/noise candidates remain gated outside the labeled source-backed generated pilot",
+            "edit_freshness_policy": "labeled generated workspace-symbol queries must recompute from fresh document state after didChange; stale compiler-fact shadow candidates remain blocked by the gated-expansion receipt",
+            "claim_boundary": "workspace-symbol generated/dynamic/noise expansion receipt only; generated/no-source false-exact candidates, dynamic-boundary candidates, stale compiler-fact shadow candidates, and fallback/noise candidates remain gated outside the labeled source-backed generated pilot",
             "shadow_receipt": shadow.receipt,
         }),
         candidate_count,
@@ -603,8 +643,12 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        let query =
-            params.as_ref().and_then(|p| p.get("query")).and_then(|q| q.as_str()).unwrap_or("");
+        let query = params
+            .as_ref()
+            .and_then(|p| p.get("query"))
+            .and_then(|q| q.as_str())
+            .unwrap_or("")
+            .trim();
 
         tracing::debug!(query, "Workspace symbol search");
 
@@ -1110,57 +1154,52 @@ impl LspServer {
             coordinator.notify_change(uri);
         }
 
-        // Re-index the file if it is a Perl source file
+        let mut loaded_content: Option<String> = None;
+
+        // Re-index the file if it is a Perl source file.
         #[cfg(feature = "workspace")]
         if let Some(coordinator) = self.coordinator() {
-            let workspace_index = coordinator.index();
             if is_perl_source_uri(uri) {
-                if let Some(path) = uri_to_fs_path(uri) {
-                    match read_text_with_encoding_fallback(&path) {
-                        Ok(content) => {
-                            if let Ok(url) = url::Url::parse(uri) {
-                                // Clear old index data before re-indexing
-                                workspace_index.clear_file(uri);
-                                match workspace_index.index_file(url, content.clone()) {
-                                    Ok(()) => tracing::debug!("Re-indexed file: {}", uri),
-                                    Err(e) => {
-                                        tracing::warn!("Failed to re-index file {}: {}", uri, e);
-                                    }
-                                }
+                if loaded_content.is_none() {
+                    loaded_content = read_watched_file_content(uri, "re-indexing");
+                }
+
+                let workspace_index = coordinator.index();
+                if let Ok(url) = url::Url::parse(uri) {
+                    if let Some(content) = loaded_content.as_ref() {
+                        // Clear old index data before re-indexing
+                        workspace_index.clear_file(uri);
+                        match workspace_index.index_file(url, content.clone()) {
+                            Ok(()) => tracing::debug!("Re-indexed file: {}", uri),
+                            Err(e) => {
+                                tracing::warn!("Failed to re-index file {}: {}", uri, e);
                             }
-                        }
-                        Err(e) => {
-                            tracing::debug!(
-                                "Failed to read file for re-indexing ({}): {}",
-                                path.display(),
-                                e
-                            );
                         }
                     }
                 }
             }
         }
 
-        // Also update our internal document store if the document is open
+        // Also update our internal document store if the document is open.
         #[cfg(feature = "workspace")]
         {
-            let mut documents = self.documents.lock();
-            if let Some(doc) = self.get_document_mut(&mut documents, uri) {
-                if let Some(path) = uri_to_fs_path(uri) {
-                    match read_text_with_encoding_fallback(&path) {
-                        Ok(content) => {
-                            doc.text = content;
-                            doc.version += 1;
-                            // Clear cached AST so it is regenerated on next access
-                            doc.ast = None;
-                        }
-                        Err(e) => {
-                            tracing::debug!(
-                                "Failed to read file for document store update ({}): {}",
-                                path.display(),
-                                e
-                            );
-                        }
+            let document_is_open = {
+                let documents = self.documents.lock();
+                self.get_document(&documents, uri).is_some()
+            };
+
+            if document_is_open {
+                if loaded_content.is_none() {
+                    loaded_content = read_watched_file_content(uri, "document store update");
+                }
+
+                if let Some(content) = loaded_content {
+                    let mut documents = self.documents.lock();
+                    if let Some(doc) = self.get_document_mut(&mut documents, uri) {
+                        doc.text = content;
+                        doc.version += 1;
+                        // Clear cached AST so it is regenerated on next access.
+                        doc.ast = None;
                     }
                 }
             }

@@ -115,3 +115,39 @@ fn test_regular_hash_key_still_works() {
 fn test_not_as_operator_still_works() {
     assert_clean_parse(r#"my $x = not $y;"#);
 }
+
+// Real-world parser-corpus patterns: keyword-like builtins and modern keywords
+// are valid unquoted hash keys when a hash subscript delimiter follows them.
+#[test]
+fn test_bare_hash_key_tie() {
+    assert_clean_parse(r#"@{$bits{tie}}{3,2,1,0} = ($bf[4], $bf[4], $bf[4], $bf[4]);"#);
+}
+
+#[test]
+fn test_bare_hash_key_untie() {
+    assert_clean_parse(r#"$bits{untie}{0} = $bf[0];"#);
+}
+
+#[test]
+fn test_arrow_hash_key_defer_assign() {
+    assert_clean_parse(r#"$self->{defer} = 1;"#);
+}
+
+#[test]
+fn test_arrow_hash_key_defer_condition() {
+    assert_clean_parse(r#"if ($self->{autodeferring} && $self->{defer}) { $self->{defer} = 0; }"#);
+}
+
+#[test]
+fn test_hash_slice_keyword_keys() {
+    assert_clean_parse(r#"my @vals = @h{defer, try, eval, tie, untie};"#);
+}
+
+#[test]
+fn test_arrow_hash_key_local_in_grep_block() {
+    assert_clean_parse(
+        r#"return grep {
+    $_->{defined} && $_->{dynamic} && !$_->{local}
+} values %{$self->{dynsyms}};"#,
+    );
+}
