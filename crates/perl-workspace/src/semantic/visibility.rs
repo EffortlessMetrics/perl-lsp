@@ -321,9 +321,14 @@ fn collect_generated_members(result: &mut Vec<VisibleSymbol>, shard: &FileFactSh
 ///
 /// `"Foo::Bar::baz"` → `"baz"`, `"baz"` → `"baz"`.
 fn bare_name(qualified: &str) -> String {
-    match qualified.rsplit_once("::") {
+    let normalized = qualified.trim_end_matches("::");
+    if normalized.is_empty() {
+        return qualified.to_string();
+    }
+
+    match normalized.rsplit_once("::") {
         Some((_, bare)) => bare.to_string(),
-        None => qualified.to_string(),
+        None => normalized.to_string(),
     }
 }
 
@@ -1133,6 +1138,9 @@ mod tests {
         assert_eq!(bare_name("Foo::Bar::baz"), "baz");
         assert_eq!(bare_name("baz"), "baz");
         assert_eq!(bare_name("A::B"), "B");
+        assert_eq!(bare_name("Foo::"), "Foo");
+        assert_eq!(bare_name("Foo::Bar::"), "Bar");
+        assert_eq!(bare_name("::"), "::");
         Ok(())
     }
 
