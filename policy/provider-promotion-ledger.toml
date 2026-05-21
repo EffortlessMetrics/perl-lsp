@@ -267,6 +267,60 @@ required_receipts = [
 ]
 
 [[provider_class]]
+surface = "Semantic tokens"
+fact_class = "Lexical variable declaration token"
+current_state = "partial live trace slice"
+decision = "promote"
+next_proof = "Another scoped compiler-token class proof before broader compiler-token promotion"
+promotion_conditions = [
+  "fresh_source_backed_lexical_variable_declaration_span",
+  "span_matches_exactly_one_existing_live_variable_token",
+  "did_change_freshness_proven",
+  "emits_no_new_token_output",
+]
+fallback_conditions = [
+  "unproven_variable_declaration_token_shape",
+]
+blocker_conditions = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "unsupported_fact_class",
+]
+required_receipts = [
+  "docs/project/status/semantic_scorecard.md",
+  "docs/project/status/semantic_shadow_compare.md",
+]
+
+[[provider_class]]
+surface = "Semantic tokens"
+fact_class = "Lexical variable use token"
+current_state = "partial live trace slice"
+decision = "promote"
+next_proof = "Another scoped compiler-token class proof before broader compiler-token promotion"
+promotion_conditions = [
+  "fresh_source_backed_lexical_variable_use_span",
+  "span_matches_exactly_one_existing_live_variable_token",
+  "did_change_freshness_proven",
+  "emits_no_new_token_output",
+]
+fallback_conditions = [
+  "unproven_variable_use_token_shape",
+]
+blocker_conditions = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "unsupported_fact_class",
+]
+required_receipts = [
+  "docs/project/status/semantic_scorecard.md",
+  "docs/project/status/semantic_shadow_compare.md",
+]
+
+[[provider_class]]
 surface = "Workspace symbols"
 fact_class = "Source-backed exact symbol"
 current_state = "partial live"

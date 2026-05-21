@@ -195,7 +195,9 @@ phase-block declaration, field-declaration, method-call, self-method-call,
 lexical-variable declaration, and lexical-variable use proofs stay scoped,
 output-neutral, and
 fallback-preserving. They do not authorize a broad compiler-backed
-semantic-token cutover. The next
+semantic-token cutover. The provider promotion ledger now records lexical-variable
+declaration and lexical-variable use rows so the class registry, human ledger,
+and machine policy share the same fallback and blocker boundary. The next
 semantic-token work must either expose another reviewed scoped class through the
 user-facing provider-decision trace or add another class with the same
 promotion, fallback, blocker, and span-invariant rules.
