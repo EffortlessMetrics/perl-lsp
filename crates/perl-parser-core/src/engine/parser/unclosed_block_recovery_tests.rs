@@ -6,6 +6,14 @@
 use super::*;
 use perl_tdd_support::must;
 
+fn program_statements(ast: &Node) -> &[Node] {
+    if let NodeKind::Program { statements } = &ast.kind {
+        statements
+    } else {
+        panic!("Expected Program node, got {}", ast.kind.kind_name());
+    }
+}
+
 /// Unclosed sub block at EOF should produce a partial Subroutine node
 /// with the statements parsed so far.
 #[test]
@@ -18,23 +26,20 @@ fn test_unclosed_sub_block_at_eof() {
     assert!(result.is_ok(), "Parser should recover from unclosed sub block");
     let ast = must(result);
 
-    if let NodeKind::Program { statements } = &ast.kind {
-        // We should have at least one statement: the (partial) subroutine
-        assert!(!statements.is_empty(), "Program should have at least one statement");
+    let statements = program_statements(&ast);
+    // We should have at least one statement: the (partial) subroutine
+    assert!(!statements.is_empty(), "Program should have at least one statement");
 
-        // The first statement should be a Subroutine (possibly wrapped in Error with partial)
-        let has_sub = statements.iter().any(|s| {
-            matches!(&s.kind, NodeKind::Subroutine { name, .. } if name.as_deref() == Some("foo"))
-                || matches!(&s.kind, NodeKind::Error { partial: Some(p), .. } if matches!(&p.kind, NodeKind::Subroutine { name, .. } if name.as_deref() == Some("foo")))
-        });
-        assert!(
-            has_sub,
-            "Should have a (possibly partial) subroutine node for 'foo'. Got: {:?}",
-            statements.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
-        );
-    } else {
-        panic!("Expected Program node");
-    }
+    // The first statement should be a Subroutine (possibly wrapped in Error with partial)
+    let has_sub = statements.iter().any(|s| {
+        matches!(&s.kind, NodeKind::Subroutine { name, .. } if name.as_deref() == Some("foo"))
+            || matches!(&s.kind, NodeKind::Error { partial: Some(p), .. } if matches!(&p.kind, NodeKind::Subroutine { name, .. } if name.as_deref() == Some("foo")))
+    });
+    assert!(
+        has_sub,
+        "Should have a (possibly partial) subroutine node for 'foo'. Got: {:?}",
+        statements.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
+    );
 
     // Should have recorded errors about the unclosed block
     assert!(!parser.errors().is_empty(), "Should have errors about unclosed block");
@@ -50,22 +55,19 @@ fn test_unclosed_else_block_parses_if_branch() {
     assert!(result.is_ok(), "Parser should recover from unclosed else block");
     let ast = must(result);
 
-    if let NodeKind::Program { statements } = &ast.kind {
-        assert!(!statements.is_empty(), "Program should have at least one statement");
+    let statements = program_statements(&ast);
+    assert!(!statements.is_empty(), "Program should have at least one statement");
 
-        // Look for an If node (possibly wrapped in Error with partial)
-        let has_if = statements.iter().any(|s| {
-            matches!(&s.kind, NodeKind::If { .. })
-                || matches!(&s.kind, NodeKind::Error { partial: Some(p), .. } if matches!(&p.kind, NodeKind::If { .. }))
-        });
-        assert!(
-            has_if,
-            "Should have an if statement node. Got: {:?}",
-            statements.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
-        );
-    } else {
-        panic!("Expected Program node");
-    }
+    // Look for an If node (possibly wrapped in Error with partial)
+    let has_if = statements.iter().any(|s| {
+        matches!(&s.kind, NodeKind::If { .. })
+            || matches!(&s.kind, NodeKind::Error { partial: Some(p), .. } if matches!(&p.kind, NodeKind::If { .. }))
+    });
+    assert!(
+        has_if,
+        "Should have an if statement node. Got: {:?}",
+        statements.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
+    );
 
     assert!(!parser.errors().is_empty(), "Should have errors about unclosed else block");
 }
