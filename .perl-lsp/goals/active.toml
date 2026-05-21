@@ -124,12 +124,12 @@ items = [
 
 [substrate.next]
 items = [
-  "differential_oracle_contract",
+  "differential-oracle-contract-after-queue-cleanup",
 ]
 
 [reliability.next]
 items = [
-  "cleanup_train_queue_review",
+  "cleanup-train-queue-review",
   "policy_cleanup",
   "published_api_hygiene",
   "devex_storage_safe_validation",
@@ -369,7 +369,7 @@ commands = [
 
 [[work_item]]
 id = "differential-oracle-contract"
-status = "active"
+status = "deferred"
 lane = "substrate"
 claim_boundary = "Differential oracle contract planning only; no real-Perl runtime dependency, workspace probing, provider behavior, release-lineage sync, support-tier promotion, or corpus/parser bucket movement claim."
 files = [
@@ -385,6 +385,24 @@ commands = [
   "rtk cargo xtask check-active-goal-manifest",
   "rtk cargo xtask ci-hygiene check-doc-paths docs/specs",
   "rtk cargo xtask ci-hygiene check-doc-paths docs/project/status",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "cleanup-train-queue-review"
+status = "active"
+lane = "reliability"
+claim_boundary = "Publishing-repo queue triage and swarm routing only; no source-repo development merge, provider behavior, support-tier promotion, release/publish/signing change, or differential-oracle spec work."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+]
+commands = [
+  "rtk gh issue view 88 --repo EffortlessMetrics/perl-lsp-swarm --json number,title,state,url",
+  "rtk gh pr list --repo EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,labels,headRefName,updatedAt,url",
+  "rtk cargo xtask check-active-goal-manifest",
   "rtk cargo xtask check-support-claims",
   "rtk cargo xtask check-provider-confidence-matrix",
   "rtk git diff --check",

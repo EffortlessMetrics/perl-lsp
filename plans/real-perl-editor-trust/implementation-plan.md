@@ -709,21 +709,34 @@ Recent routing
 
 Current executable slice
 
-- `differential-oracle-contract` is active in the substrate lane.
+- `cleanup-train-queue-review` is active in the reliability lane.
+- The queue is tracked in
+  [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
 Claim boundary
 
-- Differential oracle contract work is spec/planning proof only.
-- Do not add real-Perl runtime dependency, workspace probing, provider behavior,
-  release-lineage sync, support-tier promotion, corpus/parser bucket movement,
-  or determinism claims from this substrate slice.
+- Publishing-repo queue cleanup is routing/triage work only.
+- Do not merge development PRs in `EffortlessMetrics/perl-lsp`.
+- Do not close a publishing-repo PR before confirming imported content or
+  opening a swarm replacement.
+- Do not batch unrelated ports.
+- Do not use queue cleanup to broaden provider behavior, promote support tiers,
+  change release/publish/signing, or resume differential-oracle spec work.
+
+Deferred substrate slice
+
+- `differential-oracle-contract` is deferred until the open queue is stable and
+  the controlled spec-lock lane reopens it.
+- When it resumes, it remains spec/planning proof only: no real-Perl runtime
+  dependency, workspace probing, provider behavior, release-lineage sync,
+  support-tier promotion, corpus/parser bucket movement, or determinism claim.
 
 Proof commands
 
 ```bash
+rtk gh issue view 88 --repo EffortlessMetrics/perl-lsp-swarm --json number,title,state,url
+rtk gh pr list --repo EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,labels,headRefName,updatedAt,url
 rtk cargo xtask check-active-goal-manifest
-rtk cargo xtask ci-hygiene check-doc-paths docs/specs
-rtk cargo xtask ci-hygiene check-doc-paths docs/project/status
 rtk cargo xtask check-support-claims
 rtk cargo xtask check-provider-confidence-matrix
 rtk git diff --check
