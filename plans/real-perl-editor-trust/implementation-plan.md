@@ -701,19 +701,22 @@ Recent routing
   roles for parsed identifier barewords without changing PL109 suppression,
   provider behavior, parser bucket claims, support tiers, PIR state, or
   determinism claims.
+- `determinism-receipt-v1-spec` is completed. `PLSP-SPEC-0026` now defines the
+  determinism receipt v1 contract, input classes, valid/invalid PR shapes,
+  acceptance, proof commands, non-goals, and claim boundaries without adding a
+  receipt generator, PIR implementation, runtime probe, provider behavior,
+  support-tier promotion, release-lineage sync, or determinism claim.
 
 Current executable slice
 
-- `determinism-receipt-v1-spec` is active in the substrate lane.
-- The slice defines `PLSP-SPEC-0026` as the determinism receipt v1 contract and
-  links it from the existing fact-provenance, module-path, ambient-input, PIR,
-  dashboard, and active-goal surfaces.
+- `differential-oracle-contract` is active in the substrate lane.
 
 Claim boundary
 
-- Determinism receipt v1 work is spec/planning proof only.
-- Do not add PIR implementation, runtime probing, provider behavior,
-  release-lineage sync, or determinism claims from this substrate slice.
+- Differential oracle contract work is spec/planning proof only.
+- Do not add real-Perl runtime dependency, workspace probing, provider behavior,
+  release-lineage sync, support-tier promotion, corpus/parser bucket movement,
+  or determinism claims from this substrate slice.
 
 Proof commands
 
@@ -728,6 +731,6 @@ rtk git diff --check
 
 Rollback
 
-Revert the manifest/plan routing PR. If determinism receipt v1 spec work is not
-ready, mark `determinism-receipt-v1-spec` planned or deferred in the active
+Revert the manifest/plan routing PR. If differential oracle contract work is not
+ready, mark `differential-oracle-contract` planned or deferred in the active
 manifest and select the next ready item without changing provider behavior.

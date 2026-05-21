@@ -124,7 +124,6 @@ items = [
 
 [substrate.next]
 items = [
-  "determinism_receipt_v1_spec",
   "differential_oracle_contract",
 ]
 
@@ -347,7 +346,7 @@ commands = [
 
 [[work_item]]
 id = "determinism-receipt-v1-spec"
-status = "active"
+status = "completed"
 lane = "substrate"
 claim_boundary = "Determinism receipt v1 spec/planning only; no PIR implementation, runtime probing, provider behavior, release-lineage sync, or determinism claim."
 files = [
@@ -357,6 +356,29 @@ files = [
   "docs/specs/PLSP-SPEC-0023-ambient-inputs.md",
   "docs/specs/PLSP-SPEC-0025-pir-v0.md",
   "docs/specs/PLSP-SPEC-0026-determinism-receipt-v1.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+commands = [
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask ci-hygiene check-doc-paths docs/specs",
+  "rtk cargo xtask ci-hygiene check-doc-paths docs/project/status",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "differential-oracle-contract"
+status = "active"
+lane = "substrate"
+claim_boundary = "Differential oracle contract planning only; no real-Perl runtime dependency, workspace probing, provider behavior, release-lineage sync, support-tier promotion, or corpus/parser bucket movement claim."
+files = [
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/specs/PLSP-SPEC-0017-fact-provenance-and-source-backing.md",
+  "docs/specs/PLSP-SPEC-0022-module-path-authority.md",
+  "docs/specs/PLSP-SPEC-0023-ambient-inputs.md",
+  "docs/specs/PLSP-SPEC-0026-determinism-receipt-v1.md",
+  "docs/project/status/compiler_facts.md",
   "docs/project/status/real_perl_editor_trust_v1.md",
 ]
 commands = [
