@@ -7,17 +7,17 @@
 //! This addresses the documentation gap where "safe eval" could be misinterpreted
 //! as providing strong security isolation when it only performs syntactic validation.
 
+use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;
 
 /// Get the repository root (parent of CARGO_MANIFEST_DIR since we're in a crate)
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent() // crates/<crate>
-        .unwrap()
-        .parent() // repo root
-        .unwrap()
-        .to_path_buf()
+fn repo_root() -> Result<PathBuf> {
+    let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let crates_dir = crate_dir.parent().context("CARGO_MANIFEST_DIR should have a parent")?;
+    let repo_root =
+        crates_dir.parent().context("crate directory should be nested under crates/")?;
+    Ok(repo_root.to_path_buf())
 }
 
 /// Documentation files that should contain the safe eval clarification.
@@ -31,8 +31,8 @@ const DOCUMENTATION_FILES: &[&str] = &[
 
 /// Test that all relevant documentation files exist.
 #[test]
-fn test_documentation_files_exist() {
-    let root = repo_root();
+fn test_documentation_files_exist() -> Result<()> {
+    let root = repo_root()?;
     for file_path in DOCUMENTATION_FILES {
         let full_path = root.join(file_path);
         assert!(
@@ -42,16 +42,17 @@ fn test_documentation_files_exist() {
             full_path.display()
         );
     }
+    Ok(())
 }
 
 /// Test that safe eval documentation contains clarification about syntactic validation only.
 /// This is the key documentation gap that this work item addresses.
 #[test]
-fn test_safe_eval_contains_syntactic_validation_clarification() {
-    let root = repo_root();
+fn test_safe_eval_contains_syntactic_validation_clarification() -> Result<()> {
+    let root = repo_root()?;
     let file_path = root.join("crates/perl-dap/src/debug_adapter/safe_eval.rs");
 
-    let content = fs::read_to_string(&file_path).expect("Failed to read safe_eval.rs");
+    let content = fs::read_to_string(&file_path).context("Failed to read safe_eval.rs")?;
 
     // The code comments should already contain the clarification
     assert!(
@@ -63,16 +64,17 @@ fn test_safe_eval_contains_syntactic_validation_clarification() {
             || content.contains("does not provide interpreter isolation"),
         "safe_eval.rs should clarify it provides only syntactic validation, not interpreter isolation"
     );
+    Ok(())
 }
 
 /// Test that DAP_SECURITY_SPECIFICATION.md explicitly clarifies safe eval limitations.
 #[test]
-fn test_security_spec_clarifies_safe_eval_is_not_sandbox() {
-    let root = repo_root();
+fn test_security_spec_clarifies_safe_eval_is_not_sandbox() -> Result<()> {
+    let root = repo_root()?;
     let file_path = root.join("docs/DAP_SECURITY_SPECIFICATION.md");
 
     let content =
-        fs::read_to_string(&file_path).expect("Failed to read DAP_SECURITY_SPECIFICATION.md");
+        fs::read_to_string(&file_path).context("Failed to read DAP_SECURITY_SPECIFICATION.md")?;
 
     // The internal security spec should already have this clarification
     // Note: The text may be split across lines, so we check for both key phrases
@@ -86,15 +88,16 @@ fn test_security_spec_clarifies_safe_eval_is_not_sandbox() {
         has_not_sandboxed,
         has_interpreter_boundary
     );
+    Ok(())
 }
 
 /// Test that ADR-0028 (Safe Eval Timeout) mentions the limitation.
 #[test]
-fn test_adr_0028_mentions_safe_eval_limitation() {
-    let root = repo_root();
+fn test_adr_0028_mentions_safe_eval_limitation() -> Result<()> {
+    let root = repo_root()?;
     let file_path = root.join("docs/adr/0028-safe-eval-timeout.md");
 
-    let content = fs::read_to_string(&file_path).expect("Failed to read ADR-0028");
+    let content = fs::read_to_string(&file_path).context("Failed to read ADR-0028")?;
 
     // ADR should mention that safe eval is about policy validation + timeout
     // and does not replace a sandbox
@@ -112,16 +115,17 @@ fn test_adr_0028_mentions_safe_eval_limitation() {
              - Timeout enforcement is the other key protection"
         );
     }
+    Ok(())
 }
 
 /// Test that user-facing DAP_USER_GUIDE.md doesn't make misleading claims about safe eval.
 /// The guide mentions "safe mode" but should clarify it's syntactic validation only.
 #[test]
-fn test_dap_user_guide_safe_eval_context() {
-    let root = repo_root();
+fn test_dap_user_guide_safe_eval_context() -> Result<()> {
+    let root = repo_root()?;
     let file_path = root.join("docs/tutorials/DAP_USER_GUIDE.md");
 
-    let content = fs::read_to_string(&file_path).expect("Failed to read DAP_USER_GUIDE.md");
+    let content = fs::read_to_string(&file_path).context("Failed to read DAP_USER_GUIDE.md")?;
 
     // The user guide mentions "safe mode" and "safe eval"
     // It should either:
@@ -152,15 +156,16 @@ fn test_dap_user_guide_safe_eval_context() {
             );
         }
     }
+    Ok(())
 }
 
 /// Test that ADR-0019 (Security-First DAP) includes context about safe eval limitations.
 #[test]
-fn test_adr_0019_safe_eval_limitation_context() {
-    let root = repo_root();
+fn test_adr_0019_safe_eval_limitation_context() -> Result<()> {
+    let root = repo_root()?;
     let file_path = root.join("docs/adr/0019-security-first-dap.md");
 
-    let content = fs::read_to_string(&file_path).expect("Failed to read ADR-0019");
+    let content = fs::read_to_string(&file_path).context("Failed to read ADR-0019")?;
 
     // ADR-0019 should clarify that "safe evaluation defaults" is about
     // syntactic validation + timeout, not sandboxing
@@ -184,13 +189,14 @@ fn test_adr_0019_safe_eval_limitation_context() {
             );
         }
     }
+    Ok(())
 }
 
 /// Integration test: Verify all key documentation together provide complete picture.
 /// This ensures the documentation gap is addressed across all relevant docs.
 #[test]
-fn test_documentation_gap_closure_for_safe_eval() {
-    let root = repo_root();
+fn test_documentation_gap_closure_for_safe_eval() -> Result<()> {
+    let root = repo_root()?;
 
     // Read all documentation files
     let docs: Vec<(String, String)> = DOCUMENTATION_FILES
@@ -247,4 +253,5 @@ fn test_documentation_gap_closure_for_safe_eval() {
             missing
         );
     }
+    Ok(())
 }
