@@ -929,7 +929,23 @@ impl LspServer {
 
         Ok(Some(json!([])))
     }
+}
 
+/// Extract the perl-specific settings object from a `workspace/didChangeConfiguration` payload.
+///
+/// Accepts both the standard wrapped form `{"perl": {...}}` and the unwrapped form `{...}` used
+/// by clients such as Sublime Text's LSP package that omit the outer `"perl"` key.
+fn extract_perl_settings(settings: &Value) -> Option<&Value> {
+    if let Some(perl) = settings.get("perl") {
+        if perl.is_object() {
+            return Some(perl);
+        }
+    }
+    // Unwrapped: the settings object itself contains perl config keys directly.
+    if settings.is_object() { Some(settings) } else { None }
+}
+
+impl LspServer {
     /// Handle workspace/didChangeConfiguration notification
     ///
     /// Updates both ServerConfig and WorkspaceConfig when the client
@@ -939,8 +955,12 @@ impl LspServer {
             if let Some(settings) = params.get("settings") {
                 tracing::debug!("Configuration changed, updating server settings");
 
-                // Read perl settings once and update both configs
-                if let Some(perl) = settings.get("perl") {
+                // Read perl settings once and update both configs.
+                // Some clients (e.g. Sublime Text's LSP package) send settings without
+                // wrapping them under a top-level "perl" key. Accept both shapes:
+                //   - Wrapped:   {"perl": { "workspace": { "includePaths": [...] } }}
+                //   - Unwrapped: { "workspace": { "includePaths": [...] } }
+                if let Some(perl) = extract_perl_settings(settings) {
                     // Check whether any perlcritic-related setting is changing before
                     // updating config so we can decide whether to reset the shared
                     // CriticAnalyzer.  The analyzer is config-bound (severity, profile)

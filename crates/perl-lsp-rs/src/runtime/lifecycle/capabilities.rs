@@ -15,6 +15,18 @@ fn is_opencode_client(params: &Value) -> bool {
         .unwrap_or(false)
 }
 
+fn is_jetbrains_client(params: &Value) -> bool {
+    params
+        .get("clientInfo")
+        .and_then(|info| info.get("name"))
+        .and_then(|name| name.as_str())
+        .map(|name| {
+            let lower = name.to_ascii_lowercase();
+            lower.contains("jetbrains") || lower.contains("intellij") || lower.contains("idea")
+        })
+        .unwrap_or(false)
+}
+
 impl LspServer {
     /// Handle initialize request
     pub(crate) fn handle_initialize(
@@ -80,6 +92,14 @@ impl LspServer {
                     .and_then(|d| d.get("dynamicRegistration"))
                     .and_then(|b| b.as_bool())
                     .unwrap_or(false);
+
+                // JetBrains-family IDEs (IntelliJ IDEA, etc.) advertise dynamic watcher
+                // registration but their registration flow is unreliable and can degrade LSP
+                // startup behavior. Force-disable for these clients regardless of what the
+                // capabilities object claims.
+                if is_jetbrains_client(params) {
+                    caps.dynamic_registration_support = false;
+                }
 
                 caps.workspace_configuration_support = params
                     .get("capabilities")
@@ -572,7 +592,7 @@ mod init_options_tests {
 
 #[cfg(test)]
 mod tests {
-    use super::{apply_disabled_feature_id, is_opencode_client};
+    use super::{apply_disabled_feature_id, is_jetbrains_client, is_opencode_client};
     use crate::LspServer;
     use crate::protocol::capabilities::BuildFlags;
     use perl_workspace::folder::root_path_to_file_uri;
@@ -825,6 +845,66 @@ mod tests {
             }
         });
         assert!(is_opencode_client(&params));
+    }
+
+    #[test]
+    fn jetbrains_client_detection_matches_jetbrains_intellij_idea_names() {
+        for name in &["JetBrains", "IntelliJ IDEA", "idea", "JetBrains Client"] {
+            let params = json!({ "clientInfo": { "name": name } });
+            assert!(is_jetbrains_client(&params), "should detect JetBrains client: {name}");
+        }
+        let non_jetbrains = json!({ "clientInfo": { "name": "vscode" } });
+        assert!(!is_jetbrains_client(&non_jetbrains));
+        assert!(!is_jetbrains_client(&json!({})));
+    }
+
+    #[test]
+    fn initialize_disables_dynamic_registration_for_jetbrains_clients() {
+        let server = LspServer::new();
+        let params = json!({
+            "clientInfo": {
+                "name": "JetBrains"
+            },
+            "capabilities": {
+                "workspace": {
+                    "didChangeWatchedFiles": {
+                        "dynamicRegistration": true
+                    }
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        assert!(
+            !server.client_capabilities.lock().dynamic_registration_support,
+            "JetBrains clients must have dynamic_registration_support forced to false \
+             even when the capabilities object claims support"
+        );
+    }
+
+    #[test]
+    fn initialize_preserves_dynamic_registration_for_non_jetbrains_clients() {
+        let server = LspServer::new();
+        let params = json!({
+            "clientInfo": {
+                "name": "vscode"
+            },
+            "capabilities": {
+                "workspace": {
+                    "didChangeWatchedFiles": {
+                        "dynamicRegistration": true
+                    }
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        assert!(
+            server.client_capabilities.lock().dynamic_registration_support,
+            "non-JetBrains clients that advertise dynamic registration must have it enabled"
+        );
     }
 
     #[test]
