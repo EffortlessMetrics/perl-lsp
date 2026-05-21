@@ -150,17 +150,17 @@ fn command_exists(
     just_recipes: &BTreeSet<String>,
     xtask_subcommands: &BTreeSet<String>,
 ) -> std::result::Result<(), String> {
-    let parts = command.split_whitespace().collect::<Vec<_>>();
+    let parts = command.split_whitespace().map(normalize_doc_token).collect::<Vec<_>>();
     match parts.as_slice() {
-        ["just", recipe, ..] => {
-            if just_recipes.contains(*recipe) {
+        [cmd, recipe, ..] if cmd == "just" => {
+            if just_recipes.contains(recipe.as_str()) {
                 Ok(())
             } else {
                 Err(format!("`{command}` references missing just recipe `{recipe}`"))
             }
         }
-        ["cargo", "xtask", subcommand, ..] => {
-            if xtask_subcommands.contains(*subcommand) {
+        [cargo, xtask, subcommand, ..] if cargo == "cargo" && xtask == "xtask" => {
+            if xtask_subcommands.contains(subcommand.as_str()) {
                 Ok(())
             } else {
                 Err(format!("`{command}` references missing cargo xtask subcommand `{subcommand}`"))
@@ -168,6 +168,10 @@ fn command_exists(
         }
         _ => Ok(()),
     }
+}
+
+fn normalize_doc_token(token: &str) -> String {
+    token.trim_end_matches([',', '.', ';', ':']).to_string()
 }
 
 #[cfg(test)]
@@ -210,5 +214,14 @@ status-update subsystem="":
         assert!(command_exists("cargo xtask fmt", &just_recipes, &xtask_subcommands).is_ok());
         assert!(command_exists("just pr-fats", &just_recipes, &xtask_subcommands).is_err());
         assert!(command_exists("cargo xtask fmtt", &just_recipes, &xtask_subcommands).is_err());
+    }
+
+    #[test]
+    fn command_exists_allows_trailing_punctuation_in_docs() {
+        let just_recipes = BTreeSet::from(["pr-fast".to_string()]);
+        let xtask_subcommands = BTreeSet::from(["fmt".to_string()]);
+
+        assert!(command_exists("just pr-fast,", &just_recipes, &xtask_subcommands).is_ok());
+        assert!(command_exists("cargo xtask fmt.", &just_recipes, &xtask_subcommands).is_ok());
     }
 }
