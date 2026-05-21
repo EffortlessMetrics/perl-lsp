@@ -68,6 +68,12 @@ claim unless the live state and next-proof columns say so explicitly.
   `didChange`; the live path uses fresh workspace-index fallback when current
   source adds a same-file reference.
 
+- Rename note, 2026-05-21: the fallback/edit-freshness refresh proves the
+  RealBaseline and Dancer2 post-`didChange` rename receipts are also mirrored
+  into `copyable_payload.request_receipt` by explain-provider-decision, so bug
+  reports preserve the same fallback reason and edit count without promoting
+  broader package/compiler-backed rename.
+
 - Rename note, 2026-05-17: `refactor_runtime_blocker_ux_package_local_live_pilot_catalyst_false_allow_blocks`
   records a Catalyst `get_action` false-allow boundary for the package-local
   live pilot. It proves compiler-allowed source-backed definition evidence is

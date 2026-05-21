@@ -277,8 +277,7 @@ refusal surfaces without broadening provider behavior, promoting support tiers,
 or moving release lineage.
 
 1. `test(workspace-symbols): add additional generated/no-source project variant only if broader generated-symbol expansion is being considered`
-2. `test(rename): keep package/compiler-backed fallback and edit-freshness receipts current before broader promotion`
-3. `test(dap): add DAP includePaths cutover proof only if native DAP module-path behavior is being promoted`
+2. `test(dap): add DAP includePaths cutover proof only if native DAP module-path behavior is being promoted`
 
 Provider decision explanations are already partial-live through
 `perl.explainProviderDecision`; callers can attach a request-local
@@ -353,6 +352,9 @@ The Dancer2 edit-freshness receipt adds the same current-source freshness proof
 for `to_psgi`: the preview remains rollback-safe and no-edit, while the live
 path uses fresh workspace-index fallback after `didChange` adds a same-file
 reference.
+The copyable receipt refresh now proves the RealBaseline and Dancer2
+post-`didChange` rename explanations preserve the same fallback/edit-freshness
+request receipt inside `copyable_payload.request_receipt` for bug reports.
 This is a narrow
 `partial-live-with-fallback` pilot, not a broad compiler-backed rename
 authorization.

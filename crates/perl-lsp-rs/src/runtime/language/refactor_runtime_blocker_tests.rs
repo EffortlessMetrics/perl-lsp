@@ -333,6 +333,12 @@ fn request_receipt<'a>(explanation: &'a Value) -> Result<&'a Value, Box<dyn std:
     explanation.get("request_receipt").ok_or_else(|| "missing persisted request_receipt".into())
 }
 
+fn copyable_request_receipt(explanation: &Value) -> Result<&Value, Box<dyn std::error::Error>> {
+    explanation
+        .pointer("/copyable_payload/request_receipt")
+        .ok_or_else(|| "missing copyable request_receipt".into())
+}
+
 fn workspace_edit_texts_for_uri<'a>(
     edit: &'a Value,
     uri: &str,
@@ -1414,6 +1420,19 @@ fn refactor_runtime_blocker_ux_package_local_live_pilot_dancer2_edit_freshness_f
         request_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
         u64::try_from(edit_count).ok()
     );
+    let copyable_receipt = copyable_request_receipt(&explanation)?;
+    assert_eq!(
+        copyable_receipt.get("reason").and_then(Value::as_str),
+        Some("full_index_workspace_edit")
+    );
+    assert_eq!(
+        copyable_receipt.get("fallback_state").and_then(Value::as_str),
+        Some("workspace_index")
+    );
+    assert_eq!(
+        copyable_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
+        u64::try_from(edit_count).ok()
+    );
 
     Ok(())
 }
@@ -1713,6 +1732,16 @@ fn refactor_runtime_blocker_ux_package_local_live_pilot_real_workspace_false_all
     assert_eq!(fresh_receipt.get("fallback_state").and_then(Value::as_str), Some("none"));
     assert_eq!(
         fresh_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
+        u64::try_from(fresh_edit_count).ok()
+    );
+    let fresh_copyable_receipt = copyable_request_receipt(&fresh_explanation)?;
+    assert_eq!(
+        fresh_copyable_receipt.get("reason").and_then(Value::as_str),
+        Some("same_file_semantic")
+    );
+    assert_eq!(fresh_copyable_receipt.get("fallback_state").and_then(Value::as_str), Some("none"));
+    assert_eq!(
+        fresh_copyable_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
         u64::try_from(fresh_edit_count).ok()
     );
 
@@ -2820,6 +2849,16 @@ sub run {
     assert_eq!(request_receipt.get("symbol").and_then(Value::as_str), Some("$value"));
     assert_eq!(
         request_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
+        u64::try_from(edit_count).ok()
+    );
+    let copyable_receipt = copyable_request_receipt(&explanation)?;
+    assert_eq!(copyable_receipt.get("reason").and_then(Value::as_str), Some(reason));
+    assert_eq!(
+        copyable_receipt.get("fallback_state").and_then(Value::as_str),
+        request_receipt.get("fallback_state").and_then(Value::as_str)
+    );
+    assert_eq!(
+        copyable_receipt.get("live_provider_edit_count").and_then(Value::as_u64),
         u64::try_from(edit_count).ok()
     );
 

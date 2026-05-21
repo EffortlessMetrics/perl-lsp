@@ -117,7 +117,6 @@ rule = "Merge clean leaf work; escalate trust-adjacent surfaces instead of treat
 
 [trust.next]
 items = [
-  "rename_fallback_edit_freshness_receipt",
   "workspace_symbol_generated_no_source_proof",
   "semantic_token_scoped_class_proof",
 ]
@@ -217,7 +216,7 @@ commands = [
 
 [[work_item]]
 id = "rename-fallback-edit-freshness-receipt"
-status = "active"
+status = "completed"
 lane = "trust"
 claim_boundary = "Rename fallback/edit-freshness receipt only; no broader package/compiler-backed rename promotion."
 files = [
@@ -227,6 +226,24 @@ files = [
 ]
 commands = [
   "rtk cargo test -p perl-lsp-rs --lib refactor_runtime_blocker --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "workspace-symbol-generated-no-source-proof"
+status = "active"
+lane = "trust"
+claim_boundary = "Workspace-symbol generated/no-source proof only; no broader generated workspace-symbol promotion or exact generated method-body locations."
+files = [
+  "crates/perl-lsp-rs/src/runtime/language/symbols_runtime_quality_tests.rs",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/provider_confidence_matrix.md",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-rs --lib workspace_symbols_runtime_quality_receipt_blocks_generated_no_source_candidate --profile agent --locked -- --nocapture",
   "rtk cargo xtask check-active-goal-manifest",
   "rtk cargo xtask check-support-claims",
   "rtk cargo xtask check-provider-confidence-matrix",
