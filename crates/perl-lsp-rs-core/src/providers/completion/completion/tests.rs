@@ -3564,6 +3564,24 @@ fn test_is_in_regex_flags_s_operator() {
 }
 
 #[test]
+fn test_is_in_regex_flags_m_brace_delimiter() {
+    let code = "m{foo}i";
+    assert!(
+        CompletionProvider::is_in_regex_flags(code, code.len()),
+        "m{{}} with trailing flag should be in regex-flags context"
+    );
+}
+
+#[test]
+fn test_is_in_regex_flags_qr_bang_delimiter() {
+    let code = "qr!foo!m";
+    assert!(
+        CompletionProvider::is_in_regex_flags(code, code.len()),
+        "qr!! with trailing flag should be in regex-flags context"
+    );
+}
+
+#[test]
 fn test_is_not_in_regex_flags_division() {
     // Plain division — must not be treated as regex flags.
     let code = "my $x = $a / $b /";
