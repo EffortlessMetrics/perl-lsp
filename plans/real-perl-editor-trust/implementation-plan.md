@@ -705,6 +705,9 @@ Recent routing
 Current executable slice
 
 - `determinism-receipt-v1-spec` is active in the substrate lane.
+- The slice defines `PLSP-SPEC-0026` as the determinism receipt v1 contract and
+  links it from the existing fact-provenance, module-path, ambient-input, PIR,
+  dashboard, and active-goal surfaces.
 
 Claim boundary
 
@@ -716,6 +719,8 @@ Proof commands
 
 ```bash
 rtk cargo xtask check-active-goal-manifest
+rtk cargo xtask ci-hygiene check-doc-paths docs/specs
+rtk cargo xtask ci-hygiene check-doc-paths docs/project/status
 rtk cargo xtask check-support-claims
 rtk cargo xtask check-provider-confidence-matrix
 rtk git diff --check

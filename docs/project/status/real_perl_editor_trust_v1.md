@@ -25,6 +25,7 @@ of current evidence.
 | Semantic token class promotion rules | [PLSP-SPEC-0019](../../specs/PLSP-SPEC-0019-semantic-token-class-promotion-contract.md), [semantic-token-classes.toml](../../../policy/semantic-token-classes.toml) |
 | Workspace symbol generated-label rules | [PLSP-SPEC-0020](../../specs/PLSP-SPEC-0020-workspace-symbol-generated-label-contract.md), [workspace-symbol-classes.toml](../../../policy/workspace-symbol-classes.toml) |
 | Module path authority and ambient-input boundaries | [PLSP-SPEC-0022](../../specs/PLSP-SPEC-0022-module-path-authority.md), [PLSP-SPEC-0023](../../specs/PLSP-SPEC-0023-ambient-inputs.md) |
+| Determinism receipt v1 planning boundary | [PLSP-SPEC-0026](../../specs/PLSP-SPEC-0026-determinism-receipt-v1.md) |
 | User-facing support claims and known limitations | [SUPPORT_TIERS.md](SUPPORT_TIERS.md) |
 | Provider fact source, confidence, freshness, fallback, and next proof | [provider_confidence_matrix.md](provider_confidence_matrix.md) |
 | Provider promotion, fallback, blocker, and defer decisions by fact class | [provider_promotion_ledger.md](provider_promotion_ledger.md), [provider-promotion-ledger.toml](../../../policy/provider-promotion-ledger.toml) |
@@ -122,6 +123,13 @@ source-backed syntactic roles for parsed identifier barewords such as static
 and unresolved expression-position barewords. That proof does not change PL109
 suppression, diagnostic behavior, provider behavior, parser bucket state,
 support tiers, PIR, or determinism claims.
+
+Determinism receipt v1 is now defined as a planning contract. It requires future
+receipts to name source snapshots, module-path authority, ambient inputs,
+generated/dynamic/stale boundaries, cache/index state, fallback, blockers, and
+unknowns before claiming repeatability. The spec does not add a receipt
+generator, runtime probe, PIR implementation, provider behavior, support-tier
+promotion, release-lineage sync, or determinism claim.
 
 ## Current Dashboard
 
@@ -405,8 +413,9 @@ broader symbol deletion, generated/dynamic deletion, fallback/no-source
 deletion, or server-applied edits.
 
 Parser raw-bucket work, Linux corpus refresh, security alert classification,
-Rust 1.95 rollout, native formatter, native critic, PIR, and determinism remain
-separate lanes with their own proof commands and claim boundaries.
+Rust 1.95 rollout, native formatter, native critic, PIR implementation,
+determinism receipt implementation, and determinism proof remain separate lanes
+with their own proof commands and claim boundaries.
 
 Workspace-symbol support has been reviewed after the source-backed ready-index
 pilot and labeled generated/framework pilot. The row remains

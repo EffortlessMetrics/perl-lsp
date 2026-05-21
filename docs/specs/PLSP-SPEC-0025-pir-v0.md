@@ -9,6 +9,7 @@ Linked specs:
 - [PLSP-SPEC-0022](PLSP-SPEC-0022-module-path-authority.md)
 - [PLSP-SPEC-0023](PLSP-SPEC-0023-ambient-inputs.md)
 - [PLSP-SPEC-0024](PLSP-SPEC-0024-framework-fact-adapters.md)
+- [PLSP-SPEC-0026](PLSP-SPEC-0026-determinism-receipt-v1.md)
 Linked ADRs:
 - [PLSP-ADR-0002](../adr/PLSP-ADR-0002-confidence-before-cutover.md)
 Linked roadmap: [Compiler-backed LSP roadmap](../project/COMPILER_BACKED_LSP_ROADMAP.md)

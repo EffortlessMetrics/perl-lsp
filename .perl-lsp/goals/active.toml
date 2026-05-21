@@ -58,6 +58,7 @@ specs = [
   "docs/specs/PLSP-SPEC-0023-ambient-inputs.md",
   "docs/specs/PLSP-SPEC-0024-framework-fact-adapters.md",
   "docs/specs/PLSP-SPEC-0025-pir-v0.md",
+  "docs/specs/PLSP-SPEC-0026-determinism-receipt-v1.md",
 ]
 
 [current]
@@ -355,10 +356,13 @@ files = [
   "docs/specs/PLSP-SPEC-0022-module-path-authority.md",
   "docs/specs/PLSP-SPEC-0023-ambient-inputs.md",
   "docs/specs/PLSP-SPEC-0025-pir-v0.md",
+  "docs/specs/PLSP-SPEC-0026-determinism-receipt-v1.md",
   "docs/project/status/real_perl_editor_trust_v1.md",
 ]
 commands = [
   "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask ci-hygiene check-doc-paths docs/specs",
+  "rtk cargo xtask ci-hygiene check-doc-paths docs/project/status",
   "rtk cargo xtask check-support-claims",
   "rtk cargo xtask check-provider-confidence-matrix",
   "rtk git diff --check",
