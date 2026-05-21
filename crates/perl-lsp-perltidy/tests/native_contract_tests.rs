@@ -1,7 +1,10 @@
 use perl_lsp_perltidy::{
-    BracePlacement, ElsePlacement, FinalNewline, FormatConfig, FormatDiagnosticSeverity,
-    FormatResult, FormatterMode, KeywordSpacing, TextPosition, TextRange, TrailingComma,
+    BracePlacement, ElsePlacement, FinalNewline, FormatConfig, FormatDiagnostic,
+    FormatDiagnosticSeverity, FormatResult, FormatterMode, KeywordSpacing, TextEdit, TextPosition,
+    TextRange, TrailingComma,
 };
+
+type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 fn native_format_config_defaults_to_native_safe_profile() {
@@ -30,6 +33,57 @@ fn whole_document_range_uses_utf16_positions() {
 
     assert_eq!(range.start, TextPosition::new(0, 0));
     assert_eq!(range.end, TextPosition::new(0, 16));
+}
+
+#[test]
+fn whole_document_range_tracks_final_line_after_newline() -> TestResult {
+    let range = TextRange::whole_document(
+        r#"my $x = 1;
+my $face = "😀";"#,
+    );
+
+    assert_eq!(range.start, TextPosition::new(0, 0));
+    assert_eq!(range.end, TextPosition::new(1, 16));
+
+    Ok(())
+}
+
+#[test]
+fn text_edit_constructor_preserves_range_and_replacement() -> TestResult {
+    let range = TextRange::new(TextPosition::new(2, 4), TextPosition::new(2, 10));
+    let edit = TextEdit::new(range, "my $value = 42;");
+
+    assert_eq!(edit.range, range);
+    assert_eq!(edit.new_text, "my $value = 42;");
+
+    Ok(())
+}
+
+#[test]
+fn diagnostic_constructor_preserves_severity_range_and_message() -> TestResult {
+    let range = TextRange::new(TextPosition::new(3, 0), TextPosition::new(3, 7));
+    let diagnostic = FormatDiagnostic::new(
+        "native.format.test",
+        FormatDiagnosticSeverity::Error,
+        Some(range),
+        "test diagnostic",
+    );
+
+    assert_eq!(diagnostic.code, "native.format.test");
+    assert_eq!(diagnostic.severity, FormatDiagnosticSeverity::Error);
+    assert_eq!(diagnostic.range, Some(range));
+    assert_eq!(diagnostic.message, "test diagnostic");
+
+    Ok(())
+}
+
+#[test]
+fn diagnostic_severity_serializes_as_kebab_case() -> TestResult {
+    assert_eq!(serde_json::to_string(&FormatDiagnosticSeverity::Info)?, "\"info\"");
+    assert_eq!(serde_json::to_string(&FormatDiagnosticSeverity::Warning)?, "\"warning\"");
+    assert_eq!(serde_json::to_string(&FormatDiagnosticSeverity::Error)?, "\"error\"");
+
+    Ok(())
 }
 
 #[test]
@@ -62,7 +116,7 @@ fn unsafe_to_format_result_returns_diagnostic_and_no_edits() {
 }
 
 #[test]
-fn native_result_serializes_agent_friendly_shape() -> Result<(), Box<dyn std::error::Error>> {
+fn native_result_serializes_agent_friendly_shape() -> TestResult {
     let result = FormatResult::replace_document("my $x=1;\n", "my $x = 1;\n");
     let value = serde_json::to_value(result)?;
 
