@@ -1170,6 +1170,18 @@ fn hover_text_unknown_modifier_deduplicates_unknown_chars() -> Result<(), Box<dy
 }
 
 #[test]
+fn hover_text_ignores_whitespace_between_modifiers() -> Result<(), Box<dyn std::error::Error>> {
+    let text = RegexAnalyzer::hover_text_for_regex("x", "i x\n");
+    assert!(text.contains("case-insensitive"));
+    assert!(text.contains("extended mode"));
+    assert!(
+        !text.contains("Unknown modifiers"),
+        "whitespace should not become unknown modifiers: {text}"
+    );
+    Ok(())
+}
+
+#[test]
 fn hover_text_mixed_known_and_unknown_modifiers() -> Result<(), Box<dyn std::error::Error>> {
     let text = RegexAnalyzer::hover_text_for_regex("x", "iz");
     // Known modifier description present
