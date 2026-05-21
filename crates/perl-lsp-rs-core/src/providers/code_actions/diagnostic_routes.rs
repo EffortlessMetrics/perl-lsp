@@ -184,6 +184,18 @@ fn quick_fixes_for_diagnostic(source: &str, diagnostic: &Diagnostic) -> Vec<Code
         c if c == DiagnosticCode::DuplicateHashKey.as_str() => {
             actions.extend(quick_fixes::fix_duplicate_hash_keys(source, &qf_diag));
         }
+        // PL700: Unused import
+        c if c == DiagnosticCode::UnusedImport.as_str() => {
+            actions.extend(quick_fixes::fix_unused_import(source, &qf_diag));
+        }
+        // PL501: Deprecated $[ array base variable
+        c if c == DiagnosticCode::DeprecatedArrayBase.as_str() => {
+            actions.extend(quick_fixes::fix_deprecated_array_base(source, &qf_diag));
+        }
+        // PL602: Global signal handler assignment
+        c if c == DiagnosticCode::SecuritySignalHandler.as_str() => {
+            actions.extend(quick_fixes::fix_security_signal_handler(source, &qf_diag));
+        }
         _ => {}
     }
 

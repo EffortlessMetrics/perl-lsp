@@ -1641,3 +1641,94 @@ fn split_two_top_level_args(input: &str) -> Option<(&str, &str)> {
 
     Some((first, second))
 }
+
+/// Remove an unused `use Module;` import statement (PL700).
+///
+/// When a module is imported but never referenced in the file, this fix
+/// deletes the entire `use Module;` line so no blank line is left behind.
+/// The module name is extracted from the diagnostic message
+/// (`"Module 'Foo::Bar' appears to be unused"`).
+pub fn fix_unused_import(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
+    let start = diagnostic.range.0.min(source.len());
+    let end = diagnostic.range.1.min(source.len());
+
+    let line_start = source[..start].rfind('\n').map(|p| p + 1).unwrap_or(0);
+    let line_end = source[end..].find('\n').map(|p| end + p + 1).unwrap_or(source.len());
+
+    let module_name = diagnostic.message.split('\'').nth(1).unwrap_or("module");
+
+    vec![CodeAction {
+        title: format!("Remove unused 'use {};'", module_name),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::UnusedImport.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: line_start, end: line_end },
+                new_text: String::new(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
+/// Remove a deprecated `$[` array-base variable assignment (PL501).
+///
+/// `$[` was a Perl variable that changed the starting index for arrays and
+/// string operations. It has been deprecated since Perl 5.12. This fix removes
+/// the whole line containing the `$[` reference. Removing `$[ = 0;` is always
+/// safe (0 is the permanent default in modern Perl). Removing `$[ = N;` for
+/// N ≠ 0 may require renumbering array subscripts elsewhere in the file.
+pub fn fix_deprecated_array_base(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
+    let start = diagnostic.range.0.min(source.len());
+    let end = diagnostic.range.1.min(source.len());
+
+    let line_start = source[..start].rfind('\n').map(|p| p + 1).unwrap_or(0);
+    let line_end = source[end..].find('\n').map(|p| end + p + 1).unwrap_or(source.len());
+
+    vec![CodeAction {
+        title: "Remove deprecated '$[' array base assignment".to_string(),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::DeprecatedArrayBase.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: line_start, end: line_end },
+                new_text: String::new(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
+/// Scope a global signal handler assignment with `local` (PL603).
+///
+/// A bare `$SIG{__DIE__} = ...` or `$SIG{__WARN__} = ...` at file scope
+/// changes signal handling for the whole process. Prepending `local` limits
+/// the effect to the enclosing block so the original handler is restored on
+/// scope exit, preventing the hook from leaking into unrelated call stacks.
+pub fn fix_security_signal_handler(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let insert_pos = diagnostic.range.0.min(source.len());
+
+    let at_pos = source.get(insert_pos..).unwrap_or("");
+    if !at_pos.starts_with("$SIG")
+        && !at_pos.starts_with("$main::SIG")
+        && !at_pos.starts_with("$::SIG")
+    {
+        return Vec::new();
+    }
+
+    vec![CodeAction {
+        title: "Add 'local' to scope signal handler to the current block".to_string(),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::SecuritySignalHandler.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: insert_pos, end: insert_pos },
+                new_text: "local ".to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
