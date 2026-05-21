@@ -104,6 +104,24 @@ impl std::fmt::Display for TokenSpanError {
 
 impl std::error::Error for TokenSpanError {}
 
+#[inline]
+const fn allows_empty_span(kind: TokenKind) -> bool {
+    matches!(kind, TokenKind::Eof | TokenKind::Unknown)
+}
+
+#[inline]
+fn validate_non_empty_span(
+    kind: TokenKind,
+    start: usize,
+    is_empty: bool,
+) -> Result<(), TokenSpanError> {
+    if is_empty && !allows_empty_span(kind) {
+        return Err(TokenSpanError::EmptySpanNotAllowed { kind, at: start });
+    }
+
+    Ok(())
+}
+
 /// Borrowed view over token data for allocation-sensitive paths.
 ///
 /// Unlike [`Token`], this type borrows source text and does not allocate.
@@ -151,9 +169,7 @@ impl<'src> TokenRef<'src> {
         end: usize,
     ) -> Result<Self, TokenSpanError> {
         let token = Self::try_new(kind, text, start, end)?;
-        if token.is_empty() && !matches!(token.kind, TokenKind::Eof | TokenKind::Unknown) {
-            return Err(TokenSpanError::EmptySpanNotAllowed { kind: token.kind, at: token.start });
-        }
+        validate_non_empty_span(token.kind, token.start, token.is_empty())?;
 
         Ok(token)
     }
@@ -241,9 +257,7 @@ impl Token {
         end: usize,
     ) -> Result<Self, TokenSpanError> {
         let token = Self::try_new(kind, text, start, end)?;
-        if token.is_empty() && !matches!(token.kind, TokenKind::Eof | TokenKind::Unknown) {
-            return Err(TokenSpanError::EmptySpanNotAllowed { kind: token.kind, at: token.start });
-        }
+        validate_non_empty_span(token.kind, token.start, token.is_empty())?;
 
         Ok(token)
     }
