@@ -24,7 +24,7 @@ pub use model::{
     ModuleResolutionCandidate, ModuleResolutionCandidatePathState, ModuleResolutionCandidateRoot,
     ModuleResolutionCandidateStatus, ModuleResolutionRoot, ModuleResolutionStatus, PackageDecl,
     PackageInheritanceEdge, PackageStash, PragmaArgumentKind, PragmaEffect, PragmaStateFact,
-    RecoveryConfidence, RequireDecl, ScopeFrame, ScopeGraph, ScopeKind, StashConfidence,
-    StashDynamicBoundary, StashDynamicBoundaryKind, StashGraph, StashProvenance, StorageClass,
-    SubDecl, UseDecl, VariableBinding, VariableDecl,
+    PrototypeFact, PrototypeTable, RecoveryConfidence, RequireDecl, ScopeFrame, ScopeGraph,
+    ScopeKind, StashConfidence, StashDynamicBoundary, StashDynamicBoundaryKind, StashGraph,
+    StashProvenance, StorageClass, SubDecl, UseDecl, VariableBinding, VariableDecl,
 };

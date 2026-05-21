@@ -1200,24 +1200,53 @@ fn hir_compile_environment_records_directives_without_provider_cutover()
 #[test]
 fn hir_compile_effect_log_links_source_mutations_facts_and_boundaries()
 -> Result<(), Box<dyn std::error::Error>> {
-    let file = lower_source(
-        "package Effect::Demo;\n\
-         use strict;\n\
-         use lib 'lib';\n\
-         use parent 'Base::Class';\n\
-         use constant ANSWER => 42;\n\
-         require Foo::Bar;\n\
-         require $dynamic;\n\
-         sub proto ($) { 1; }\n\
-         sub literal () { 1; }\n\
-         method run { 1; }\n\
-         our @ISA = qw(Local::Base);\n\
-         *alias = \\&proto;\n\
-         *dynamic = $target;\n\
-         BEGIN { require Runtime::Thing; }\n",
-    );
+    let source = "package Effect::Demo;\n\
+                  use strict;\n\
+                  use lib 'lib';\n\
+                  use parent 'Base::Class';\n\
+                  use constant ANSWER => 42;\n\
+                  require Foo::Bar;\n\
+                  require $dynamic;\n\
+                  sub proto ($) { 1; }\n\
+                  sub literal () { 1; }\n\
+                  method run { 1; }\n\
+                  our @ISA = qw(Local::Base);\n\
+                  *alias = \\&proto;\n\
+                  *dynamic = $target;\n\
+                  BEGIN { require Runtime::Thing; }\n";
+    let file = lower_source(source);
 
     let effects = file.compile_effects_with_source_hash(Some("fixture-source-sha".to_string()));
+    assert_eq!(file.prototype_table.facts.len(), 2, "named sub prototypes should be table-backed");
+    let proto_fact = file
+        .prototype_table
+        .facts
+        .iter()
+        .find(|fact| fact.sub_name == "proto")
+        .ok_or("expected source-backed proto prototype fact")?;
+    assert_eq!(proto_fact.package_context.as_deref(), Some("Effect::Demo"));
+    assert_eq!(proto_fact.content, "$");
+    assert_eq!(&source[proto_fact.range.start..proto_fact.range.end], "($)");
+    assert_eq!(
+        proto_fact.declaration_range,
+        file.items
+            .iter()
+            .find(|item| item.id == proto_fact.declaration_item)
+            .ok_or("expected prototype declaration item")?
+            .range
+    );
+    assert_eq!(proto_fact.scope_id.map(|scope| scope.index()), Some(2));
+    assert_eq!(proto_fact.anchor_id, AnchorId(proto_fact.range.start as u64));
+    assert_eq!(proto_fact.provenance, CompileProvenance::ExactAst);
+    assert_eq!(proto_fact.confidence, CompileConfidence::High);
+    let literal_fact = file
+        .prototype_table
+        .facts
+        .iter()
+        .find(|fact| fact.sub_name == "literal")
+        .ok_or("expected source-backed empty prototype fact")?;
+    assert_eq!(literal_fact.content, "");
+    assert_eq!(&source[literal_fact.range.start..literal_fact.range.end], "()");
     assert!(
         effects.iter().all(|effect| {
             effect.model_version == COMPILE_EFFECT_MODEL_VERSION
@@ -1302,6 +1331,16 @@ fn hir_compile_effect_log_links_source_mutations_facts_and_boundaries()
         CompileEffectFactKind::Prototype,
         "proto"
     ));
+    let proto_effect = effects
+        .iter()
+        .find(|effect| {
+            effect.kind == CompileEffectKind::RegisterPrototype
+                && effect.fact_name.as_deref() == Some("proto")
+        })
+        .ok_or("expected prototype compile effect")?;
+    assert_eq!(proto_effect.range, proto_fact.range);
+    assert_eq!(proto_effect.source_item, Some(proto_fact.declaration_item));
+    assert_eq!(proto_effect.fact_anchor_id, Some(proto_fact.anchor_id));
     assert!(has_effect(
         CompileEffectKind::AssignGlobAlias,
         CompileEffectSourceKind::TypeglobAssignment,

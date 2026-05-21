@@ -287,6 +287,11 @@ quoted scalar, hash, quoted-hash, and plus-hash extraction plus a completion
 shadow receipt that traces constants as fresh `CompilerFact` /
 `SemanticAnalyzer` evidence. It does not change live completion behavior,
 provider cutover state, support tiers, or broad constant inference claims.
+The prototype-table substrate proof records named subroutine prototype content
+and precise source ranges as HIR-side facts, and `RegisterPrototype` compile
+effects now derive from that table. It does not change provider behavior,
+diagnostic suppression, parser bucket status, support tiers, PIR status, or
+determinism claims.
 
 1. `docs(status): review semantic-token scoped class support without broad compiler-token promotion`
 2. `test(dap): add DAP includePaths cutover proof only if native DAP module-path behavior is being promoted`

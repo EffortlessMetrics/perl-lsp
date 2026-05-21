@@ -13,9 +13,10 @@ use super::model::{
     HirItem, HirKind, HirScopeId, IncRootAction, IncRootFact, IncRootKind, IndirectCallExpr,
     InheritanceSource, LiteralExpr, LiteralKind, MethodCallExpr, MethodDecl, ModuleRequest,
     ModuleRequestKind, ModuleResolutionStatus, PackageDecl, PackageInheritanceEdge, PackageStash,
-    PragmaArgumentKind, PragmaEffect, PragmaStateFact, RecoveryConfidence, RequireDecl, ScopeFrame,
-    ScopeGraph, ScopeKind, StashConfidence, StashDynamicBoundary, StashDynamicBoundaryKind,
-    StashGraph, StashProvenance, StorageClass, SubDecl, UseDecl, VariableBinding, VariableDecl,
+    PragmaArgumentKind, PragmaEffect, PragmaStateFact, PrototypeFact, PrototypeTable,
+    RecoveryConfidence, RequireDecl, ScopeFrame, ScopeGraph, ScopeKind, StashConfidence,
+    StashDynamicBoundary, StashDynamicBoundaryKind, StashGraph, StashProvenance, StorageClass,
+    SubDecl, UseDecl, VariableBinding, VariableDecl,
 };
 
 /// Lower a parser AST into first-slice HIR items.
@@ -39,6 +40,7 @@ struct Lowerer {
     scope_graph: ScopeGraph,
     stash_graph: StashGraph,
     compile_environment: CompileEnvironment,
+    prototype_table: PrototypeTable,
     pragma_environment: CompileTimePragmaEnvironment,
     scope_stack: Vec<HirScopeId>,
 }
@@ -62,6 +64,7 @@ impl Lowerer {
             scope_graph,
             stash_graph: StashGraph::default(),
             compile_environment: CompileEnvironment::default(),
+            prototype_table: PrototypeTable::default(),
             pragma_environment,
             scope_stack: vec![file_scope],
         }
@@ -73,6 +76,7 @@ impl Lowerer {
             scope_graph: self.scope_graph,
             stash_graph: self.stash_graph,
             compile_environment: self.compile_environment,
+            prototype_table: self.prototype_table,
         }
     }
 
@@ -146,6 +150,22 @@ impl Lowerer {
                     Some(sub_scope),
                 );
                 if let Some(name) = name {
+                    if let Some(prototype) = prototype {
+                        if let NodeKind::Prototype { content } = &prototype.kind {
+                            self.prototype_table.facts.push(PrototypeFact {
+                                sub_name: name.clone(),
+                                package_context: self.package_context.clone(),
+                                content: content.clone(),
+                                range: prototype.location,
+                                declaration_range: node.location,
+                                declaration_item: item_id,
+                                scope_id: Some(sub_scope),
+                                anchor_id: AnchorId(prototype.location.start as u64),
+                                provenance: CompileProvenance::ExactAst,
+                                confidence: CompileConfidence::High,
+                            });
+                        }
+                    }
                     let source = if has_empty_prototype(prototype.as_deref()) {
                         GlobSlotSource::ConstantDeclaration
                     } else {
