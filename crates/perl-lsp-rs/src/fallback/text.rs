@@ -321,11 +321,11 @@ fn line_looks_like_string(line: &str) -> bool {
 }
 
 fn line_starts_pod(line: &str) -> bool {
-    line.starts_with("=pod") || line.starts_with("=head")
+    line.starts_with("=pod") || line.starts_with("=head") || line.starts_with("=begin")
 }
 
 fn line_ends_pod(line: &str) -> bool {
-    line.starts_with("=cut")
+    line.starts_with("=cut") || line.starts_with("=end")
 }
 
 #[cfg(test)]
@@ -438,6 +438,26 @@ sub foo {
     }
 
     #[test]
+    fn test_folding_begin_end_pod_sections() {
+        let src = r#"=begin comment
+Generated docs
+=end comment
+
+sub foo {
+    my $x = 1;
+}
+"#;
+        let ranges = folding_ranges_from_text(src, 100);
+        assert_eq!(ranges.len(), 2, "Expected 2 folding ranges (POD + sub), got {:?}", ranges);
+        assert_eq!(ranges[0]["kind"], "comment");
+        assert_eq!(ranges[0]["startLine"], 0);
+        assert_eq!(ranges[0]["endLine"], 2);
+        assert_eq!(ranges[1]["kind"], "region");
+        assert_eq!(ranges[1]["startLine"], 4);
+        assert_eq!(ranges[1]["endLine"], 6);
+    }
+
+    #[test]
     fn test_folding_braces_in_strings_ignored() {
         let src = r#"sub foo {
     my $x = "a { string } with braces";
@@ -480,9 +500,11 @@ sub foo {
 
         assert!(line_starts_pod("=pod"));
         assert!(line_starts_pod("=head1 NAME"));
+        assert!(line_starts_pod("=begin comment"));
         assert!(!line_starts_pod("=cut"));
 
         assert!(line_ends_pod("=cut"));
+        assert!(line_ends_pod("=end comment"));
         assert!(!line_ends_pod("=pod"));
     }
 }
