@@ -260,4 +260,171 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn checked_empty_string_origin_is_addressable() -> Result<(), Box<dyn std::error::Error>> {
+        let idx = LineIndex::new("");
+        assert_eq!(idx.position_to_byte_checked(0, 0), Some(0));
+        Ok(())
+    }
+
+    #[test]
+    fn checked_empty_string_col_one_out_of_range() -> Result<(), Box<dyn std::error::Error>> {
+        let idx = LineIndex::new("");
+        assert_eq!(idx.position_to_byte_checked(0, 1), None);
+        Ok(())
+    }
+
+    #[test]
+    fn checked_empty_string_line_one_out_of_range() -> Result<(), Box<dyn std::error::Error>> {
+        let idx = LineIndex::new("");
+        assert_eq!(idx.position_to_byte_checked(1, 0), None);
+        Ok(())
+    }
+
+    #[test]
+    fn checked_single_line_all_columns_in_range() -> Result<(), Box<dyn std::error::Error>> {
+        let idx = LineIndex::new("hello");
+        assert_eq!(idx.position_to_byte_checked(0, 0), Some(0));
+        assert_eq!(idx.position_to_byte_checked(0, 4), Some(4));
+        assert_eq!(idx.position_to_byte_checked(0, 5), Some(5));
+        Ok(())
+    }
+
+    #[test]
+    fn checked_single_line_col_beyond_text_len_is_none() -> Result<(), Box<dyn std::error::Error>> {
+        let idx = LineIndex::new("hello");
+        assert_eq!(idx.position_to_byte_checked(0, 6), None);
+        Ok(())
+    }
+
+    #[test]
+    fn checked_newline_byte_is_last_addressable_on_its_line()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let idx = LineIndex::new("abc\ndef");
+        assert_eq!(idx.position_to_byte_checked(0, 3), Some(3));
+        Ok(())
+    }
+
+    #[test]
+    fn checked_next_line_start_is_not_addressable_on_current_line()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let idx = LineIndex::new("abc\ndef");
+        assert_eq!(idx.position_to_byte_checked(0, 4), None);
+        assert_eq!(idx.position_to_byte_checked(0, 100), None);
+        Ok(())
+    }
+
+    #[test]
+    fn checked_trailing_newline_empty_final_line_origin() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let idx = LineIndex::new("foo\n");
+        assert_eq!(idx.position_to_byte_checked(1, 0), Some(4));
+        Ok(())
+    }
+
+    #[test]
+    fn checked_trailing_newline_empty_final_line_col_one_is_none()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let idx = LineIndex::new("foo\n");
+        assert_eq!(idx.position_to_byte_checked(1, 1), None);
+        Ok(())
+    }
+
+    #[test]
+    fn checked_crlf_cr_byte_addressable_on_its_line() -> Result<(), Box<dyn std::error::Error>> {
+        let idx = LineIndex::new("ab\r\ncd");
+        assert_eq!(idx.position_to_byte_checked(0, 2), Some(2));
+        assert_eq!(idx.position_to_byte_checked(0, 3), Some(3));
+        assert_eq!(idx.position_to_byte_checked(0, 4), None);
+        Ok(())
+    }
+
+    #[test]
+    fn checked_crlf_second_line() -> Result<(), Box<dyn std::error::Error>> {
+        let idx = LineIndex::new("ab\r\ncd");
+        assert_eq!(idx.position_to_byte_checked(1, 0), Some(4));
+        assert_eq!(idx.position_to_byte_checked(1, 1), Some(5));
+        assert_eq!(idx.position_to_byte_checked(1, 2), Some(6));
+        assert_eq!(idx.position_to_byte_checked(1, 3), None);
+        Ok(())
+    }
+
+    #[test]
+    fn checked_unicode_two_byte_char_boundary() -> Result<(), Box<dyn std::error::Error>> {
+        let idx = LineIndex::new("caf\u{00e9}");
+        assert_eq!(idx.position_to_byte_checked(0, 3), Some(3));
+        assert_eq!(idx.position_to_byte_checked(0, 4), Some(4));
+        assert_eq!(idx.position_to_byte_checked(0, 5), Some(5));
+        assert_eq!(idx.position_to_byte_checked(0, 6), None);
+        Ok(())
+    }
+
+    #[test]
+    fn checked_unicode_multiline_second_line_boundary() -> Result<(), Box<dyn std::error::Error>> {
+        let idx = LineIndex::new("a\u{00e9}\nb");
+        assert_eq!(idx.position_to_byte_checked(0, 3), Some(3));
+        assert_eq!(idx.position_to_byte_checked(0, 4), None);
+        assert_eq!(idx.position_to_byte_checked(1, 0), Some(4));
+        assert_eq!(idx.position_to_byte_checked(1, 1), Some(5));
+        assert_eq!(idx.position_to_byte_checked(1, 2), None);
+        Ok(())
+    }
+
+    #[test]
+    fn checked_and_unchecked_agree_on_final_line() -> Result<(), Box<dyn std::error::Error>> {
+        let idx = LineIndex::new("abc\nxyz");
+        for col in 0..=5 {
+            assert_eq!(
+                idx.position_to_byte(1, col),
+                idx.position_to_byte_checked(1, col),
+                "methods diverged at col {col} on final line"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn byte_to_position_at_text_len_single_line() -> Result<(), Box<dyn std::error::Error>> {
+        let idx = LineIndex::new("hi");
+        assert_eq!(idx.byte_to_position(2), (0, 2));
+        Ok(())
+    }
+
+    #[test]
+    fn byte_to_position_at_text_len_multiline() -> Result<(), Box<dyn std::error::Error>> {
+        let idx = LineIndex::new("a\nb");
+        assert_eq!(idx.byte_to_position(3), (1, 1));
+        Ok(())
+    }
+
+    #[test]
+    fn clone_preserves_index_state() -> Result<(), Box<dyn std::error::Error>> {
+        let idx = LineIndex::new("foo\nbar");
+        let cloned = idx.clone();
+        assert_eq!(idx.byte_to_position(4), cloned.byte_to_position(4));
+        assert_eq!(idx.position_to_byte(1, 0), cloned.position_to_byte(1, 0));
+        Ok(())
+    }
+
+    #[test]
+    fn debug_format_is_non_empty() -> Result<(), Box<dyn std::error::Error>> {
+        let idx = LineIndex::new("test\ndata");
+        let debug_str = format!("{idx:?}");
+        assert!(!debug_str.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn consecutive_newlines_produce_empty_lines() -> Result<(), Box<dyn std::error::Error>> {
+        let idx = LineIndex::new("\n\n");
+        assert_eq!(idx.byte_to_position(0), (0, 0));
+        assert_eq!(idx.byte_to_position(1), (1, 0));
+        assert_eq!(idx.byte_to_position(2), (2, 0));
+        assert_eq!(idx.position_to_byte(0, 0), Some(0));
+        assert_eq!(idx.position_to_byte(1, 0), Some(1));
+        assert_eq!(idx.position_to_byte(2, 0), Some(2));
+        assert_eq!(idx.position_to_byte(3, 0), None);
+        Ok(())
+    }
 }
