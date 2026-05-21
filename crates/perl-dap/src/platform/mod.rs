@@ -64,7 +64,7 @@ fn perl_discovery_cache_key(configured_path: Option<&str>) -> String {
 
     format!(
         "cfg={};path={path_env};perlbrew_perl={perlbrew_perl};perlbrew_root={perlbrew_root};plenv_root={plenv_root};plenv_version={plenv_version};home={home};userprofile={userprofile};prefix={prefix}",
-        configured_path.unwrap_or_default()
+        configured_path.map(str::trim).unwrap_or_default()
     )
 }
 
@@ -172,7 +172,7 @@ fn fallback_perl_paths() -> Vec<(PathBuf, &'static str)> {
 /// 5. If still not found, return [`PerlInterpreterResult::NotFound`] with searched paths.
 pub fn find_perl_interpreter(configured_path: Option<&str>) -> PerlInterpreterResult {
     // 1. Honour explicit config path — validate it exists, never silently fall back.
-    if let Some(cfg) = configured_path.filter(|s| !s.is_empty()) {
+    if let Some(cfg) = configured_path.map(str::trim).filter(|s| !s.is_empty()) {
         let p = PathBuf::from(cfg);
         if p.exists() && p.is_file() {
             return PerlInterpreterResult::ConfiguredPath(p);
@@ -495,6 +495,15 @@ mod tests {
         assert!(
             !matches!(result, PerlInterpreterResult::ConfiguredPath(_)),
             "empty config should fall back to path detection"
+        );
+    }
+
+    #[test]
+    fn find_perl_interpreter_whitespace_config_falls_back_to_path_detection() {
+        let result = find_perl_interpreter(Some("   	  "));
+        assert!(
+            !matches!(result, PerlInterpreterResult::ConfiguredPath(_)),
+            "whitespace-only config should fall back to path detection"
         );
     }
 
