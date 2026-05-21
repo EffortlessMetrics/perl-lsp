@@ -51,4 +51,26 @@ mod tests {
         let sorted = [10, 20, 30];
         assert_eq!(nearest_rank_percentile(&sorted, 1000), 30);
     }
+
+    #[test]
+    fn nearest_rank_returns_first_value_for_zero_percentile() {
+        let sorted = [10, 20, 30];
+
+        assert_eq!(nearest_rank_percentile(&sorted, 0), 10);
+    }
+
+    #[test]
+    fn nearest_rank_rounds_up_fractional_ranks() {
+        let sorted = [5, 10, 15, 20];
+
+        assert_eq!(nearest_rank_percentile(&sorted, 26), 10);
+    }
+
+    #[test]
+    fn nearest_rank_handles_duplicate_sample_values() {
+        let sorted = [3, 3, 3, 7, 7, 9];
+
+        assert_eq!(nearest_rank_percentile(&sorted, 50), 3);
+        assert_eq!(nearest_rank_percentile(&sorted, 67), 7);
+    }
 }
