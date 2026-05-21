@@ -697,22 +697,24 @@ Recent routing
   `RegisterPrototype` compile effects derive from that table without changing
   provider behavior, diagnostics, parser bucket claims, support tiers, PIR
   state, or determinism claims.
+- `bareword-classifier` is completed. HIR now records source-backed syntactic
+  roles for parsed identifier barewords without changing PL109 suppression,
+  provider behavior, parser bucket claims, support tiers, PIR state, or
+  determinism claims.
 
 Current executable slice
 
-- `bareword-classifier` is active in the substrate lane.
+- `determinism-receipt-v1-spec` is active in the substrate lane.
 
 Claim boundary
 
-- Bareword-classifier work is substrate proof only.
-- Do not change provider behavior, diagnostic suppression, parser bucket claims,
-  support tiers, PIR implementation state, or determinism claims from this
-  substrate slice.
+- Determinism receipt v1 work is spec/planning proof only.
+- Do not add PIR implementation, runtime probing, provider behavior,
+  release-lineage sync, or determinism claims from this substrate slice.
 
 Proof commands
 
 ```bash
-rtk cargo test -p perl-parser-core --test hir_tests bareword --profile agent --locked -- --nocapture
 rtk cargo xtask check-active-goal-manifest
 rtk cargo xtask check-support-claims
 rtk cargo xtask check-provider-confidence-matrix
@@ -721,6 +723,6 @@ rtk git diff --check
 
 Rollback
 
-Revert the manifest/plan routing PR. If bareword-classifier work is not ready,
-mark `bareword-classifier` planned or deferred in the active manifest and select
-the next ready item without changing provider behavior.
+Revert the manifest/plan routing PR. If determinism receipt v1 spec work is not
+ready, mark `determinism-receipt-v1-spec` planned or deferred in the active
+manifest and select the next ready item without changing provider behavior.

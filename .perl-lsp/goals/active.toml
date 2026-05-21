@@ -123,7 +123,6 @@ items = [
 
 [substrate.next]
 items = [
-  "bareword_classifier",
   "determinism_receipt_v1_spec",
   "differential_oracle_contract",
 ]
@@ -327,7 +326,7 @@ commands = [
 
 [[work_item]]
 id = "bareword-classifier"
-status = "active"
+status = "completed"
 lane = "substrate"
 claim_boundary = "Bareword-classifier substrate proof only; no provider behavior, diagnostic suppression, parser bucket movement, support-tier promotion, or PIR/determinism claim."
 files = [
@@ -339,6 +338,26 @@ files = [
 ]
 commands = [
   "rtk cargo test -p perl-parser-core --test hir_tests bareword --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "determinism-receipt-v1-spec"
+status = "active"
+lane = "substrate"
+claim_boundary = "Determinism receipt v1 spec/planning only; no PIR implementation, runtime probing, provider behavior, release-lineage sync, or determinism claim."
+files = [
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/specs/PLSP-SPEC-0017-fact-provenance-and-source-backing.md",
+  "docs/specs/PLSP-SPEC-0022-module-path-authority.md",
+  "docs/specs/PLSP-SPEC-0023-ambient-inputs.md",
+  "docs/specs/PLSP-SPEC-0025-pir-v0.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+commands = [
   "rtk cargo xtask check-active-goal-manifest",
   "rtk cargo xtask check-support-claims",
   "rtk cargo xtask check-provider-confidence-matrix",
