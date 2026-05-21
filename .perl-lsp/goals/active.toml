@@ -123,7 +123,6 @@ items = [
 
 [substrate.next]
 items = [
-  "prototype_table",
   "bareword_classifier",
   "determinism_receipt_v1_spec",
   "differential_oracle_contract",
@@ -309,7 +308,7 @@ commands = [
 
 [[work_item]]
 id = "prototype-table"
-status = "active"
+status = "completed"
 lane = "substrate"
 claim_boundary = "Prototype-table substrate proof only; no provider behavior, diagnostic suppression, parser bucket movement, support-tier promotion, or PIR/determinism claim."
 files = [
@@ -320,6 +319,26 @@ files = [
 ]
 commands = [
   "rtk cargo test -p perl-parser-core --test hir_tests hir_compile_effect_log_links_source_mutations_facts_and_boundaries --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "bareword-classifier"
+status = "active"
+lane = "substrate"
+claim_boundary = "Bareword-classifier substrate proof only; no provider behavior, diagnostic suppression, parser bucket movement, support-tier promotion, or PIR/determinism claim."
+files = [
+  "crates/perl-parser-core/src/hir/model.rs",
+  "crates/perl-parser-core/src/hir/lower.rs",
+  "crates/perl-parser-core/tests/hir_tests.rs",
+  "docs/project/status/compiler_facts.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+commands = [
+  "rtk cargo test -p perl-parser-core --test hir_tests bareword --profile agent --locked -- --nocapture",
   "rtk cargo xtask check-active-goal-manifest",
   "rtk cargo xtask check-support-claims",
   "rtk cargo xtask check-provider-confidence-matrix",
