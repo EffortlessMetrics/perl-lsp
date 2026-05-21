@@ -117,9 +117,6 @@ rule = "Merge clean leaf work; escalate trust-adjacent surfaces instead of treat
 
 [trust.next]
 items = [
-  "swarm_pr_template_and_review_rules",
-  "old_repo_release_lineage_marker",
-  "swarm_sync_protocol",
   "real_perl_editor_trust_smoke_receipt",
   "workspace_symbol_generated_no_source_proof",
   "semantic_token_scoped_class_proof",
@@ -146,7 +143,7 @@ items = [
 
 [[work_item]]
 id = "swarm-operating-manifest"
-status = "active"
+status = "completed"
 lane = "trust"
 claim_boundary = "Control-plane docs only; no code behavior, provider output, CI workflow, or release-lineage sync change."
 files = [
@@ -154,29 +151,35 @@ files = [
   "docs/swarm/operating-model.md",
 ]
 commands = [
-  "python -c \"import pathlib, tomllib; tomllib.loads(pathlib.Path('.perl-lsp/goals/active.toml').read_text())\"",
-  "cargo xtask ci-hygiene check-doc-paths docs",
-  "cargo xtask check-provider-confidence-matrix",
-  "cargo xtask check-support-claims",
-  "cargo xtask check-provider-promotion-ledger",
-  "git diff --check",
+  "rtk python -c \"import pathlib, tomllib; tomllib.loads(pathlib.Path('.perl-lsp/goals/active.toml').read_text())\"",
+  "rtk cargo xtask ci-hygiene check-doc-paths docs",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk git diff --check",
 ]
 
 [[work_item]]
 id = "swarm-pr-template-review-rules"
-status = "planned"
+status = "completed"
 lane = "trust"
 claim_boundary = "GitHub template and review-rule docs only; no label mutation in this PR unless the orchestrator explicitly assigns it."
 
 [[work_item]]
 id = "old-repo-release-lineage-marker"
-status = "planned"
+status = "completed"
 lane = "trust"
 repo = "perl-lsp"
 claim_boundary = "Old repo marker only; no swarm source sync or release claim."
 
 [[work_item]]
 id = "swarm-sync-protocol"
-status = "planned"
+status = "completed"
 lane = "trust"
 claim_boundary = "Sync policy docs only; no branch protection, mirror, or release automation change."
+
+[[work_item]]
+id = "real-perl-editor-trust-smoke-receipt"
+status = "active"
+lane = "trust"
+claim_boundary = "Product-level provider smoke receipt only; no provider behavior broadening, support-tier promotion, or release claim."
