@@ -246,3 +246,24 @@ fn test_exponent_sign_no_digits_minus() -> TestResult {
     );
     Ok(())
 }
+
+#[test]
+fn test_exponent_marker_without_digits_uppercase() -> TestResult {
+    let mut lexer = PerlLexer::new("42E+foo");
+
+    let tok1 = lexer.next_token().ok_or("expected first token")?;
+    assert!(
+        matches!(&tok1.token_type, TokenType::Number(n) if n.as_ref() == "42"),
+        "expected Number(\"42\") but got {:?}",
+        tok1.token_type
+    );
+
+    let tok2 = lexer.next_token().ok_or("expected second token")?;
+    assert!(
+        matches!(&tok2.token_type, TokenType::Identifier(id) if id.as_ref() == "E"),
+        "expected Identifier(\"E\") but got {:?}",
+        tok2.token_type
+    );
+
+    Ok(())
+}
