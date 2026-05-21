@@ -44,7 +44,7 @@ toml = "1.1.2"
 bindgen = "0.72.1"
 notify = "8.2.0"
 flate2 = "1.1.5"
-tar = "0.4.44"
+tar = "0.4.46"
 tempfile.workspace = true
 glob = "0.3.3"
 
