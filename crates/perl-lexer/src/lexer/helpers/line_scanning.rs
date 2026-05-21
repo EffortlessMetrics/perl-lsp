@@ -3,8 +3,12 @@ use crate::PerlLexer;
 impl PerlLexer<'_> {
     #[inline]
     pub(crate) fn trailing_ws_only(bytes: &[u8], mut p: usize) -> bool {
-        while p < bytes.len() && bytes[p] != b'\n' && bytes[p] != b'\r' {
-            match bytes[p] {
+        while let Some(&byte) = bytes.get(p) {
+            if byte == b'\n' || byte == b'\r' {
+                return true;
+            }
+
+            match byte {
                 b' ' | b'\t' => p += 1,
                 _ => return false,
             }
@@ -35,10 +39,40 @@ impl PerlLexer<'_> {
 
     #[inline]
     pub(crate) fn find_line_end(bytes: &[u8], start: usize) -> (usize, usize) {
-        let mut end = start;
-        while end < bytes.len() && bytes[end] != b'\n' && bytes[end] != b'\r' {
-            end += 1;
+        if start >= bytes.len() {
+            return (start, start);
         }
+
+        let end = bytes[start..]
+            .iter()
+            .position(|&byte| byte == b'\n' || byte == b'\r')
+            .map_or(bytes.len(), |offset| start + offset);
         (end, end)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn trailing_ws_only_stops_at_newline() {
+        let bytes = b"\t  \nnot checked";
+        assert!(PerlLexer::trailing_ws_only(bytes, 0));
+    }
+
+    #[test]
+    fn trailing_ws_only_rejects_non_whitespace_before_newline() {
+        let bytes = b"\t x\n";
+        assert!(!PerlLexer::trailing_ws_only(bytes, 0));
+    }
+
+    #[test]
+    fn find_line_end_handles_crlf_and_bounds() {
+        let bytes = b"first\r\nsecond";
+        assert_eq!(PerlLexer::find_line_end(bytes, 0), (5, 5));
+        assert_eq!(PerlLexer::find_line_end(bytes, 7), (13, 13));
+        assert_eq!(PerlLexer::find_line_end(bytes, bytes.len()), (13, 13));
+        assert_eq!(PerlLexer::find_line_end(bytes, bytes.len() + 1), (14, 14));
     }
 }
