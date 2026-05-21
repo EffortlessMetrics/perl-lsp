@@ -6,7 +6,7 @@ fn document_links_and_selection() -> Result<(), Box<dyn std::error::Error>> {
     let srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({"capabilities":{}})),
     };
@@ -41,7 +41,7 @@ fn document_links_and_selection() -> Result<(), Box<dyn std::error::Error>> {
     // Test document links
     let links_req = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "textDocument/documentLink".into(),
         params: Some(json!({"textDocument": {"uri": uri}})),
     };
@@ -56,7 +56,7 @@ fn document_links_and_selection() -> Result<(), Box<dyn std::error::Error>> {
     // Test selection ranges
     let sel_req = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(3)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((3) as i64)),
         method: "textDocument/selectionRange".into(),
         params: Some(json!({
             "textDocument": {"uri": uri},

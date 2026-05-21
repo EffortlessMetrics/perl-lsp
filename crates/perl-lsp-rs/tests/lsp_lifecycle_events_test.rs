@@ -14,7 +14,7 @@ fn setup_server_with_document() -> (LspServer, String) {
     // 1. Send initialize request with JsonRpcRequest
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "processId": null,
@@ -160,7 +160,7 @@ fn test_will_save_wait_until_returns_valid_edits() -> Result<(), Box<dyn std::er
     // Send willSaveWaitUntil request (this is a request, not notification)
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(10)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((10) as i64)),
         method: "textDocument/willSaveWaitUntil".to_string(),
         params: Some(json!({
             "textDocument": {
@@ -220,7 +220,7 @@ fn test_will_save_wait_until_with_formatting() -> Result<(), Box<dyn std::error:
     // Send willSaveWaitUntil request
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(11)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((11) as i64)),
         method: "textDocument/willSaveWaitUntil".to_string(),
         params: Some(json!({
             "textDocument": {
@@ -307,7 +307,7 @@ fn test_save_events_sequence() {
     // 2. willSaveWaitUntil request
     let will_save_wait_until = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(20)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((20) as i64)),
         method: "textDocument/willSaveWaitUntil".to_string(),
         params: Some(json!({
             "textDocument": { "uri": uri.clone() },

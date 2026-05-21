@@ -18,7 +18,7 @@ fn create_test_server() -> LspServer {
 fn send_request(server: &LspServer, method: &str, params: Option<Value>) -> Option<Value> {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: method.to_string(),
         params,
     };

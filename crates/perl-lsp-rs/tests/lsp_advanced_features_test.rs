@@ -120,7 +120,7 @@ impl AdvancedTestContext {
 
         let init_request = JsonRpcRequest {
             _jsonrpc: "2.0".to_string(),
-            id: Some(json!(1)),
+            id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
             method: "initialize".to_string(),
             params: Some(init_params),
         };
@@ -144,7 +144,7 @@ impl AdvancedTestContext {
         self.initialize_or_reuse();
         let request = JsonRpcRequest {
             _jsonrpc: "2.0".to_string(),
-            id: Some(json!(1)),
+            id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
             method: "workspace/executeCommand".to_string(),
             params: Some(json!({
                 "command": command,

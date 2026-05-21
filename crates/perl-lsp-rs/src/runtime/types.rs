@@ -2,6 +2,25 @@ use super::workspace_folder::WorkspaceFolderState;
 use std::path::PathBuf;
 use std::time::Instant;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct ServerRequestId(i32);
+
+impl ServerRequestId {
+    pub(crate) fn new(value: i32) -> Option<Self> {
+        (value >= 1).then_some(Self(value))
+    }
+
+    pub(crate) fn as_i32(self) -> i32 {
+        self.0
+    }
+
+    /// Build a request id for unit tests that use fixed positive constants.
+    #[cfg(test)]
+    pub(crate) const fn for_test(value: i32) -> Self {
+        Self(value)
+    }
+}
+
 pub(super) fn source_path_from_uri(uri: &str) -> Option<PathBuf> {
     perl_uri::source_path_from_uri_or_path(uri)
 }

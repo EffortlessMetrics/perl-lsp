@@ -10,7 +10,7 @@ fn test_type_hierarchy_prepare() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize server
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({
             "processId": 1,
@@ -63,7 +63,7 @@ sub new {
     // Request type hierarchy at "Base" position (line 0, char 8)
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "textDocument/prepareTypeHierarchy".into(),
         params: Some(json!({
             "textDocument": { "uri": uri },
@@ -96,7 +96,7 @@ fn test_type_hierarchy_supertypes() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize server
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({
             "processId": 1,
@@ -143,7 +143,7 @@ package Parent2;
     // First prepare type hierarchy on Child
     let prepare_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "textDocument/prepareTypeHierarchy".into(),
         params: Some(json!({
             "textDocument": { "uri": uri },
@@ -162,7 +162,7 @@ package Parent2;
     // Request supertypes
     let supertypes_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(3)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((3) as i64)),
         method: "typeHierarchy/supertypes".into(),
         params: Some(json!({
             "item": {
@@ -204,7 +204,7 @@ fn test_type_hierarchy_subtypes() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize server
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({
             "processId": 1,
@@ -252,7 +252,7 @@ our @ISA = ('Base');
     // First prepare type hierarchy on Base
     let prepare_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "textDocument/prepareTypeHierarchy".into(),
         params: Some(json!({
             "textDocument": { "uri": uri },
@@ -271,7 +271,7 @@ our @ISA = ('Base');
     // Request subtypes
     let subtypes_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(3)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((3) as i64)),
         method: "typeHierarchy/subtypes".into(),
         params: Some(json!({
             "item": {
@@ -312,7 +312,7 @@ fn test_type_hierarchy_capability_advertised() -> Result<(), Box<dyn std::error:
 
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({
             "processId": 1,
@@ -344,7 +344,7 @@ fn test_type_hierarchy_with_namespace_packages() -> Result<(), Box<dyn std::erro
     // Initialize server
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({
             "processId": 1,
@@ -390,7 +390,7 @@ package Foo::Bar::Baz;
     // Request type hierarchy at "Foo::Bar"
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "textDocument/prepareTypeHierarchy".into(),
         params: Some(json!({
             "textDocument": { "uri": uri },

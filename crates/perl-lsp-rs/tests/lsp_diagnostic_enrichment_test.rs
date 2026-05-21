@@ -12,7 +12,7 @@ fn open_document(uri: &str, content: &str) -> LspServer {
 
     let _ = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({
             "processId": 1,
@@ -52,7 +52,7 @@ fn get_diagnostics(
     let response = server
         .handle_request(JsonRpcRequest {
             _jsonrpc: "2.0".into(),
-            id: Some(json!(99)),
+            id: Some(perl_lsp::protocol::JsonRpcId::Integer((99) as i64)),
             method: "textDocument/diagnostic".into(),
             params: Some(json!({
                 "textDocument": { "uri": uri }
@@ -182,7 +182,7 @@ fn test_workspace_diagnostic_data_populated() -> Result<(), Box<dyn std::error::
     let response = server
         .handle_request(JsonRpcRequest {
             _jsonrpc: "2.0".into(),
-            id: Some(json!(99)),
+            id: Some(perl_lsp::protocol::JsonRpcId::Integer((99) as i64)),
             method: "workspace/diagnostic".into(),
             params: Some(json!({})),
         })
@@ -231,7 +231,7 @@ fn test_markup_message_support_populates_message_markup() -> Result<(), Box<dyn 
     let server = LspServer::new();
     let _ = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({
             "processId": 1,

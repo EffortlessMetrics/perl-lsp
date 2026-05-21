@@ -12,7 +12,7 @@ fn test_ga_capabilities_contract() -> Result<(), Box<dyn std::error::Error>> {
     // Send initialize request through public API
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "processId": null,
@@ -126,7 +126,7 @@ fn test_unsupported_methods_return_error() -> Result<(), Box<dyn std::error::Err
     // Initialize first through public API
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(0)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((0) as i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "processId": null,
@@ -154,7 +154,7 @@ fn test_unsupported_methods_return_error() -> Result<(), Box<dyn std::error::Err
     for method in &unsupported_methods {
         let request = perl_lsp::JsonRpcRequest {
             _jsonrpc: "2.0".to_string(),
-            id: Some(json!(1)),
+            id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
             method: method.to_string(),
             params: Some(json!({})),
         };

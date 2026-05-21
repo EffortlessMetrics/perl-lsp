@@ -13,7 +13,7 @@ fn test_pragma_code_actions() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize server
     let init_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "capabilities": {}
@@ -52,7 +52,7 @@ fn test_pragma_code_actions() -> Result<(), Box<dyn std::error::Error>> {
     // Request code actions
     let actions_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "textDocument/codeAction".to_string(),
         params: Some(json!({
             "textDocument": {"uri": uri},
@@ -88,7 +88,7 @@ fn test_formatting_provider_capability() -> Result<(), Box<dyn std::error::Error
 
     let init_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "capabilities": {}

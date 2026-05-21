@@ -16,7 +16,7 @@ fn send_request(
 ) -> Result<serde_json::Value, String> {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: method.to_string(),
         params: Some(params),
     };

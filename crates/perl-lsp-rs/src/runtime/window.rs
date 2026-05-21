@@ -331,8 +331,7 @@ impl LspServer {
     /// Internal helper to send JSON-RPC requests. Uses the existing send_request
     /// infrastructure which auto-generates request IDs.
     fn send_request_internal(&self, method: &str, params: Value) -> io::Result<()> {
-        let request_id = self.next_request_id.fetch_add(1, Ordering::SeqCst);
-        self.outbound.send_request(request_id, method, params)
+        self.send_request(method, params).map(|_| ())
     }
 }
 

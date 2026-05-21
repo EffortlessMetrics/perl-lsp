@@ -22,7 +22,7 @@ fn test_complete_workflow_from_messy_to_clean() -> Result<(), Box<dyn std::error
     // Step 1: Initialize the LSP server
     let init_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "capabilities": {
@@ -77,7 +77,7 @@ my$result=calculate(5,3);
     // Step 4: Get diagnostics - should show missing pragmas and other issues
     let diag_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "textDocument/diagnostic".to_string(),
         params: Some(json!({
             "textDocument": {"uri": uri}
@@ -94,7 +94,7 @@ my$result=calculate(5,3);
     // Step 5: Request code actions to fix issues
     let actions_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(3)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((3) as i64)),
         method: "textDocument/codeAction".to_string(),
         params: Some(json!({
             "textDocument": {"uri": uri},
@@ -124,7 +124,7 @@ my$result=calculate(5,3);
     // Step 6: Request native-default formatting.
     let format_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(4)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((4) as i64)),
         method: "textDocument/formatting".to_string(),
         params: Some(json!({
             "textDocument": {"uri": uri},
@@ -161,7 +161,7 @@ my$result=calculate(5,3);
     // Step 7: Verify server state remains healthy
     let final_diag_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(5)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((5) as i64)),
         method: "textDocument/diagnostic".to_string(),
         params: Some(json!({
             "textDocument": {"uri": uri}
@@ -180,7 +180,7 @@ fn test_batteries_included_features_summary() -> Result<(), Box<dyn std::error::
 
     let init_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "capabilities": {},

@@ -15,7 +15,7 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 fn send_request(server: &LspServer, method: &str, params: Value) -> Result<Value, String> {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: method.to_string(),
         params: Some(params),
     };

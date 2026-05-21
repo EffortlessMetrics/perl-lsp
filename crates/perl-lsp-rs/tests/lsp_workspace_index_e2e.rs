@@ -109,7 +109,7 @@ fn test_lsp_workspace_symbols_with_index() -> Result<(), Box<dyn std::error::Err
     // Initialize server
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "processId": null,
@@ -162,7 +162,7 @@ fn test_lsp_workspace_symbols_with_index() -> Result<(), Box<dyn std::error::Err
     // Search for workspace symbols
     let search_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "workspace/symbol".to_string(),
         params: Some(json!({
             "query": "ba"
@@ -203,7 +203,7 @@ fn test_cross_file_definition() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "processId": null,
@@ -257,7 +257,7 @@ fn test_cross_file_definition() -> Result<(), Box<dyn std::error::Error>> {
     // Request definition from usage site
     let def_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "textDocument/definition".to_string(),
         params: Some(json!({
             "textDocument": {

@@ -114,7 +114,7 @@ fn lsp_window_show_message_request_format() -> Result<(), Box<dyn std::error::Er
 
     let _ = server.handle_request(perl_lsp::JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(init_params),
     });
@@ -185,7 +185,7 @@ fn lsp_window_show_document_with_capability() {
 
     let _ = server.handle_request(perl_lsp::JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(init_params),
     });
@@ -232,7 +232,7 @@ fn lsp_window_progress_lifecycle() {
 
     let _ = server.handle_request(perl_lsp::JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(init_params),
     });
@@ -310,7 +310,7 @@ fn lsp_window_progress_duplicate_token_fails() -> Result<(), Box<dyn std::error:
 
     let _ = server.handle_request(perl_lsp::JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(init_params),
     });
@@ -346,7 +346,7 @@ fn lsp_window_progress_cancel_handler() {
 
     let _ = server.handle_request(perl_lsp::JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(init_params),
     });
@@ -385,7 +385,7 @@ fn lsp_window_telemetry_respects_config() {
     // Initialize server first
     let _ = server.handle_request(perl_lsp::JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(json!({})),
     });
@@ -509,7 +509,7 @@ fn lsp_window_show_document_external_flag() {
 
     let _ = server.handle_request(perl_lsp::JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(init_params),
     });

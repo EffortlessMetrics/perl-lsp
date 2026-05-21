@@ -3,6 +3,8 @@
 #[cfg(feature = "workspace")]
 use super::outbound::OutboundSender;
 #[cfg(feature = "workspace")]
+use super::types::ServerRequestId;
+#[cfg(feature = "workspace")]
 use serde_json::json;
 
 #[cfg(feature = "workspace")]
@@ -16,7 +18,7 @@ pub(super) fn send_index_ready_notification(outbound: &OutboundSender, ready: bo
 }
 
 #[cfg(feature = "workspace")]
-pub(super) fn send_progress_create(outbound: &OutboundSender, request_id: i64) {
+pub(super) fn send_progress_create(outbound: &OutboundSender, request_id: ServerRequestId) {
     if let Err(e) = outbound.send_request(
         request_id,
         "window/workDoneProgress/create",

@@ -118,7 +118,7 @@ fn create_server() -> LspServer {
 fn initialize_server(server: &LspServer) -> Result<Value, Box<dyn std::error::Error>> {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "processId": null,
@@ -183,7 +183,7 @@ fn open_document(server: &LspServer, uri: &str, content: &str) {
 fn send_request(server: &LspServer, id: i32, method: &str, params: Value) -> Option<Value> {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(id)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((id) as i64)),
         method: method.to_string(),
         params: Some(params),
     };
@@ -199,7 +199,7 @@ fn send_request(server: &LspServer, id: i32, method: &str, params: Value) -> Opt
 fn shutdown_server(server: &LspServer) {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(999)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((999) as i64)),
         method: "shutdown".to_string(),
         params: None,
     };
@@ -267,7 +267,7 @@ fn smoke_double_initialization_rejected() -> Result<(), Box<dyn std::error::Erro
     // Try to initialize again
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "processId": null,
@@ -785,7 +785,7 @@ fn smoke_graceful_shutdown() -> Result<(), Box<dyn std::error::Error>> {
     // Shutdown
     let shutdown_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(101)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((101) as i64)),
         method: "shutdown".to_string(),
         params: None,
     };

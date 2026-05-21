@@ -2,7 +2,7 @@
 //!
 //! Standard JSON-RPC 2.0 error codes plus LSP-specific extensions.
 
-use super::jsonrpc::{JsonRpcError, JsonRpcResponse};
+use super::jsonrpc::{JsonRpcError, JsonRpcId, JsonRpcResponse};
 use serde_json::{Value, json};
 
 /// Typed error code enum for LSP/JSON-RPC error codes.
@@ -127,7 +127,7 @@ pub const SERVER_NOT_INITIALIZED: i32 = -32002;
 pub fn cancelled_response(id: &Value) -> JsonRpcResponse {
     JsonRpcResponse {
         jsonrpc: "2.0".to_string(),
-        id: Some(id.clone()),
+        id: JsonRpcId::from_value(id),
         result: None,
         error: Some(JsonRpcError {
             code: REQUEST_CANCELLED,
@@ -157,7 +157,7 @@ pub fn cancelled_response_with_method(id: &Value, method: &str) -> JsonRpcRespon
 
     JsonRpcResponse {
         jsonrpc: "2.0".to_string(),
-        id: Some(id.clone()),
+        id: JsonRpcId::from_value(id),
         result: None,
         error: Some(JsonRpcError { code: REQUEST_CANCELLED, message, data: Some(data) }),
     }

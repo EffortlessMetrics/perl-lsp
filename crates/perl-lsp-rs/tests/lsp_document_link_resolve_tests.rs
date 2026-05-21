@@ -20,7 +20,7 @@ fn test_document_link_resolve_module() -> TestResult {
     });
     let _ = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(init_params),
     });
@@ -49,7 +49,7 @@ fn test_document_link_resolve_module() -> TestResult {
     // Resolve the link
     let response = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "documentLink/resolve".to_string(),
         params: Some(link),
     });
@@ -85,7 +85,7 @@ fn test_document_link_resolve_file() -> TestResult {
     });
     let _ = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(init_params),
     });
@@ -114,7 +114,7 @@ fn test_document_link_resolve_file() -> TestResult {
     // Resolve the link
     let response = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "documentLink/resolve".to_string(),
         params: Some(link),
     });
@@ -148,7 +148,7 @@ fn test_document_link_resolve_already_resolved() -> TestResult {
     });
     let _ = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(init_params),
     });
@@ -173,7 +173,7 @@ fn test_document_link_resolve_already_resolved() -> TestResult {
     // Resolve should return unchanged
     let response = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "documentLink/resolve".to_string(),
         params: Some(link.clone()),
     });
@@ -202,7 +202,7 @@ fn test_document_link_resolve_invalid_data() -> TestResult {
     });
     let _ = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(init_params),
     });
@@ -228,7 +228,7 @@ fn test_document_link_resolve_invalid_data() -> TestResult {
     // Should return error
     let response = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "documentLink/resolve".to_string(),
         params: Some(link),
     });
@@ -256,7 +256,7 @@ fn test_document_link_resolve_missing_params() -> TestResult {
     });
     let _ = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(init_params),
     });
@@ -271,7 +271,7 @@ fn test_document_link_resolve_missing_params() -> TestResult {
     // No params
     let response = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "documentLink/resolve".to_string(),
         params: None,
     });
@@ -299,7 +299,7 @@ fn test_document_link_resolve_preserves_data() -> TestResult {
     });
     let _ = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(init_params),
     });
@@ -328,7 +328,7 @@ fn test_document_link_resolve_preserves_data() -> TestResult {
     // Resolve the link
     let response = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "documentLink/resolve".to_string(),
         params: Some(link.clone()),
     });
@@ -361,7 +361,7 @@ fn test_document_link_resolve_url_type() -> TestResult {
     });
     let _ = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(init_params),
     });
@@ -388,7 +388,7 @@ fn test_document_link_resolve_url_type() -> TestResult {
     // Resolve should set target from data.url
     let response = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "documentLink/resolve".to_string(),
         params: Some(link),
     });
@@ -417,7 +417,7 @@ fn test_document_link_integration() -> TestResult {
     });
     let _ = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(init_params),
     });
@@ -453,7 +453,7 @@ require Foo::Bar;
     // Get document links
     let link_response = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "textDocument/documentLink".to_string(),
         params: Some(json!({
             "textDocument": {
@@ -480,7 +480,7 @@ require Foo::Bar;
         // Resolve each link
         let resolve_response = server.handle_request(JsonRpcRequest {
             _jsonrpc: "2.0".to_string(),
-            id: Some(json!(3)),
+            id: Some(perl_lsp::protocol::JsonRpcId::Integer((3) as i64)),
             method: "documentLink/resolve".to_string(),
             params: Some(link.clone()),
         });
