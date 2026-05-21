@@ -69,6 +69,11 @@ impl LexerMode {
     pub fn is_expect_operator(&self) -> bool {
         matches!(self, LexerMode::ExpectOperator)
     }
+
+    /// Check if we're expecting a quote-like delimiter
+    pub fn is_expect_delimiter(&self) -> bool {
+        matches!(self, LexerMode::ExpectDelimiter)
+    }
 }
 
 #[cfg(test)]
@@ -136,6 +141,38 @@ mod tests {
     #[test]
     fn lexer_mode_in_data_section_is_not_operator() -> Result<(), Box<dyn std::error::Error>> {
         assert!(!LexerMode::InDataSection.is_expect_operator());
+        Ok(())
+    }
+
+    // --- is_expect_delimiter ---
+
+    #[test]
+    fn lexer_mode_expect_delimiter_is_delimiter() -> Result<(), Box<dyn std::error::Error>> {
+        assert!(LexerMode::ExpectDelimiter.is_expect_delimiter());
+        Ok(())
+    }
+
+    #[test]
+    fn lexer_mode_expect_term_is_not_delimiter() -> Result<(), Box<dyn std::error::Error>> {
+        assert!(!LexerMode::ExpectTerm.is_expect_delimiter());
+        Ok(())
+    }
+
+    #[test]
+    fn lexer_mode_expect_operator_is_not_delimiter() -> Result<(), Box<dyn std::error::Error>> {
+        assert!(!LexerMode::ExpectOperator.is_expect_delimiter());
+        Ok(())
+    }
+
+    #[test]
+    fn lexer_mode_in_format_body_is_not_delimiter() -> Result<(), Box<dyn std::error::Error>> {
+        assert!(!LexerMode::InFormatBody.is_expect_delimiter());
+        Ok(())
+    }
+
+    #[test]
+    fn lexer_mode_in_data_section_is_not_delimiter() -> Result<(), Box<dyn std::error::Error>> {
+        assert!(!LexerMode::InDataSection.is_expect_delimiter());
         Ok(())
     }
 
