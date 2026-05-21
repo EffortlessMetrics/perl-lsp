@@ -284,7 +284,7 @@ commands = [
 
 [[work_item]]
 id = "semantic-token-support-review"
-status = "ready"
+status = "active"
 lane = "trust"
 claim_boundary = "Semantic-token support review only; no broad compiler-backed token output, support-tier promotion, or new token emission without class-policy proof."
 files = [
@@ -308,7 +308,7 @@ commands = [
 
 [[work_item]]
 id = "constant-provider-proof"
-status = "active"
+status = "completed"
 lane = "substrate"
 claim_boundary = "Constant-provider substrate proof only; no completion/provider cutover, support-tier promotion, or broad constant inference claim."
 files = [

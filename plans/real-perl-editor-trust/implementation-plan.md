@@ -683,23 +683,27 @@ Recent routing
   proof added the scoped `token:phase_block_declaration:` class only when its
   source-backed span matches an existing live `macro` token, refreshes after
   `didChange`, and emits no new token output.
+- `constant-provider-proof` is completed. The substrate proof hardened static
+  `use constant` extraction for scalar, quoted scalar, hash, quoted-hash,
+  plus-hash, and nested-value hash forms and recorded a completion shadow trace
+  for constants as fresh `CompilerFact` / `SemanticAnalyzer` evidence without
+  changing live completion behavior.
 
 Current executable slice
 
-- `constant-provider-proof` is active in the substrate lane.
+- `semantic-token-support-review` is active in the trust lane.
 
 Claim boundary
 
-- Constant-provider work is substrate proof only unless a separate trust-lane PR
-  promotes provider behavior.
-- Do not change completion behavior, support tiers, or provider cutover claims
-  from constant extraction tests alone.
+- Semantic-token support review is status/control-plane work only.
+- Do not broaden compiler-backed token output, promote support tiers, or emit new
+  token classes without a separate class-policy proof.
 
 Proof commands
 
 ```bash
-rtk cargo test -p perl-semantic-analyzer use_constant --profile agent --locked -- --nocapture
-rtk cargo test -p perl-lsp-rs-core --lib completion_shadow --profile agent --locked -- --nocapture
+rtk cargo xtask check-semantic-token-classes
+rtk cargo xtask check-provider-promotion-ledger
 rtk cargo xtask check-active-goal-manifest
 rtk cargo xtask check-support-claims
 rtk cargo xtask check-provider-confidence-matrix
@@ -708,6 +712,6 @@ rtk git diff --check
 
 Rollback
 
-Revert the manifest/plan routing PR. If constant-provider proof is not ready,
-mark `constant-provider-proof` blocked or planned in the active manifest and
-select the next ready substrate item without changing provider behavior.
+Revert the manifest/plan routing PR. If semantic-token support review is not
+ready, mark `semantic-token-support-review` ready or planned in the active
+manifest and select the next ready item without changing provider behavior.
