@@ -150,11 +150,11 @@ generated/framework pilot to the live response, source-anchor receipt, and gated
 false-exact/dynamic/stale boundary. The Moo predicate generated-symbol receipt
 adds one more generated-member class proof while preserving the same virtual,
 labeled, source-anchor claim boundary. The generated/no-source runtime receipt
-adds an explicit blocked unanchored framework/runtime candidate. The
-generated-symbol support review is now recorded. Any broader generated-symbol
-expansion still needs additional generated/no-source project variants and
-explicit-label rank/noise proof. This review does not promote workspace symbols
-beyond the existing source-backed ready-index slice plus generated-label pilot.
+now records blocked runtime-installed and role-composed no-source variants with
+zero live exact promotion. The generated-symbol support review is now recorded.
+Any broader generated-symbol expansion still needs explicit-label rank/noise
+proof. This review does not promote workspace symbols beyond the existing
+source-backed ready-index slice plus generated-label pilot.
 
 ## Semantic Token Support Review
 
@@ -276,7 +276,7 @@ receipt-only smoke: it records acted, fallback, setup-report, and no-edit
 refusal surfaces without broadening provider behavior, promoting support tiers,
 or moving release lineage.
 
-1. `test(workspace-symbols): add additional generated/no-source project variant only if broader generated-symbol expansion is being considered`
+1. `test(semantic-tokens): add another scoped compiler-token class only with output-neutral proof`
 2. `test(dap): add DAP includePaths cutover proof only if native DAP module-path behavior is being promoted`
 
 Provider decision explanations are already partial-live through
@@ -392,8 +392,10 @@ anchored to framework declarations rather than exact generated method bodies.
 Empty-query, partial-index, open-document fallback, generated/no-source, stale,
 dynamic, ambiguous, and fallback/noise candidates remain fallback or gated.
 The scoped generated-symbol cutover receipt and Moo predicate generated-symbol
-class receipt are now recorded; the next workspace-symbol decision is support
-review before any broader generated workspace-symbol expansion.
+class receipt are now recorded, and the generated/no-source variant receipt
+records runtime-installed and role-composed blocked candidates. The next
+workspace-symbol decision is support review before any broader generated
+workspace-symbol expansion.
 
 ## Promotion Rules
 

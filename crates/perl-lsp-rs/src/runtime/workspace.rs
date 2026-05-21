@@ -515,6 +515,13 @@ fn workspace_symbols_generated_dynamic_noise_receipt(query: &str) -> (Value, usi
             ProviderFactFreshness::Fresh,
         ),
         perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolShadowCandidate::blocked(
+            "generated:no-source:workspace-symbol:role_composed_method:unanchored",
+            ProviderFactSourceKind::FrameworkAdapter,
+            Provenance::FrameworkSynthesis,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+        ),
+        perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolShadowCandidate::blocked(
             "blocker:workspace-symbol:dynamic_symbolic_reference",
             ProviderFactSourceKind::DynamicBoundary,
             Provenance::DynamicBoundary,
@@ -553,6 +560,15 @@ fn workspace_symbols_generated_dynamic_noise_receipt(query: &str) -> (Value, usi
                 && candidate.identity.contains(":no-source:")
         })
         .count();
+    let generated_no_source_candidate_identities = candidates
+        .iter()
+        .filter(|candidate| {
+            candidate.source == ProviderFactSourceKind::FrameworkAdapter
+                && candidate.fallback_state == ProviderFallbackState::Blocked
+                && candidate.identity.contains(":no-source:")
+        })
+        .map(|candidate| candidate.identity.clone())
+        .collect::<Vec<_>>();
     let dynamic_boundary_blocker_count = candidates
         .iter()
         .filter(|candidate| {
@@ -590,6 +606,7 @@ fn workspace_symbols_generated_dynamic_noise_receipt(query: &str) -> (Value, usi
             "generated_false_exact_candidate_count": generated_candidate_count,
             "generated_no_source_candidate_count": generated_no_source_blocker_count,
             "generated_no_source_blocker_count": generated_no_source_blocker_count,
+            "generated_no_source_candidate_identities": generated_no_source_candidate_identities,
             "generated_location_semantics": "source_anchor_not_exact_generated_body",
             "dynamic_boundary_blocker_count": dynamic_boundary_blocker_count,
             "dynamic_false_exact_blocker_count": dynamic_boundary_blocker_count,
