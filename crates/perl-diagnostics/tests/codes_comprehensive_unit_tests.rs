@@ -1125,6 +1125,119 @@ fn from_message_real_perl_prototype_mismatch() {
     );
 }
 
+/// Real Perl output: `Use of uninitialized value $x in string at script.pl line 5.`
+/// Also: `Use of uninitialized value in concatenation (.) or string at script.pl line 5.`
+#[test]
+fn from_message_real_perl_uninitialized_value() {
+    assert_eq!(
+        DiagnosticCode::from_message(
+            r#"Use of uninitialized value $x in string at script.pl line 5."#
+        ),
+        Some(DiagnosticCode::UninitializedVariable),
+    );
+    // Named variable omitted (common for array elements, hash values)
+    assert_eq!(
+        DiagnosticCode::from_message(
+            "Use of uninitialized value in concatenation (.) or string at script.pl line 5."
+        ),
+        Some(DiagnosticCode::UninitializedVariable),
+    );
+    // Case-insensitive
+    assert_eq!(
+        DiagnosticCode::from_message("USE OF UNINITIALIZED VALUE in numeric comparison"),
+        Some(DiagnosticCode::UninitializedVariable),
+    );
+    // Must not match messages that only say "uninitialized" without "value"
+    assert_eq!(DiagnosticCode::from_message("uninitialized pointer dereference"), None);
+}
+
+/// Real Perl output: `Can't locate Foo/Bar.pm in @INC (...) at script.pl line 3.`
+#[test]
+fn from_message_real_perl_cant_locate_module() {
+    assert_eq!(
+        DiagnosticCode::from_message(
+            "Can't locate Foo/Bar.pm in @INC (you may need to install the Foo::Bar module) (@INC contains: /usr/lib/perl5) at script.pl line 3."
+        ),
+        Some(DiagnosticCode::ModuleNotFound),
+    );
+    // Shorter form
+    assert_eq!(
+        DiagnosticCode::from_message("Can't locate Scalar/Util.pm in @INC"),
+        Some(DiagnosticCode::ModuleNotFound),
+    );
+    // Case-insensitive
+    assert_eq!(
+        DiagnosticCode::from_message("can't locate My/Module.pm in @inc"),
+        Some(DiagnosticCode::ModuleNotFound),
+    );
+    // Must not match "can't locate" without a .pm path (file I/O error, not module-not-found)
+    assert_eq!(DiagnosticCode::from_message("can't locate the configuration entry"), None,);
+}
+
+/// Real Perl output: `Bareword "foo" not allowed while 'strict subs' in use at script.pl line 7.`
+/// Also: `Unquoted string "foo" may clash with future reserved word at script.pl line 7.`
+#[test]
+fn from_message_real_perl_bareword_not_allowed() {
+    // Real Perl message has bareword name interpolated: `Bareword "foo" not allowed while 'strict subs'...`
+    // Matched via "strict subs" which is unique to this warning.
+    assert_eq!(
+        DiagnosticCode::from_message(
+            r#"Bareword "foo" not allowed while 'strict subs' in use at script.pl line 7."#
+        ),
+        Some(DiagnosticCode::UnquotedBareword),
+    );
+    // Case-insensitive: the phrase "strict subs" anchors this regardless of surrounding text
+    assert_eq!(
+        DiagnosticCode::from_message("BAREWORD NOT ALLOWED WHILE STRICT SUBS IN USE"),
+        Some(DiagnosticCode::UnquotedBareword),
+    );
+    // Compact form without surrounding context (also matched by "bareword not allowed" fallback)
+    assert_eq!(
+        DiagnosticCode::from_message("bareword not allowed"),
+        Some(DiagnosticCode::UnquotedBareword),
+    );
+    // "Unquoted string" variant
+    assert_eq!(
+        DiagnosticCode::from_message(
+            r#"Unquoted string "foo" may clash with future reserved word at script.pl line 7."#
+        ),
+        Some(DiagnosticCode::UnquotedBareword),
+    );
+    // Must not collide with BarewordFilehandle (already handled earlier in the chain)
+    assert_eq!(
+        DiagnosticCode::from_message("Bareword filehandle FOO detected"),
+        Some(DiagnosticCode::BarewordFilehandle),
+    );
+}
+
+/// Real Perl output: `defined(@array) is deprecated (it's always defined) at script.pl line 4.`
+/// Also: `defined(%hash) is deprecated (it's always defined) at script.pl line 4.`
+#[test]
+fn from_message_real_perl_defined_deprecated() {
+    assert_eq!(
+        DiagnosticCode::from_message(
+            "defined(@array) is deprecated (it's always defined) at script.pl line 4."
+        ),
+        Some(DiagnosticCode::DeprecatedDefined),
+    );
+    assert_eq!(
+        DiagnosticCode::from_message(
+            "defined(%hash) is deprecated (it's always defined) at script.pl line 4."
+        ),
+        Some(DiagnosticCode::DeprecatedDefined),
+    );
+    // Case-insensitive
+    assert_eq!(
+        DiagnosticCode::from_message("DEFINED(@ARRAY) IS DEPRECATED"),
+        Some(DiagnosticCode::DeprecatedDefined),
+    );
+    // "deprecated" alone without "defined(" must not match
+    assert_eq!(
+        DiagnosticCode::from_message("This feature is deprecated at script.pl line 4."),
+        None,
+    );
+}
+
 // --- DiagnosticCode: documentation_url coverage ---
 
 #[test]
