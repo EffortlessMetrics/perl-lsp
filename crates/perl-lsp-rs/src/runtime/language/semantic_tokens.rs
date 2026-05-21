@@ -269,6 +269,18 @@ impl LspServer {
                 "scoped compiler method-declaration class cutover proof only; method declarations may count as compiler-token identities only when their source-backed span already matches existing live parser/HIR method tokens, and no new token output is emitted",
             ));
         }
+        if let Some(candidate) = semantic_token_phase_block_declaration_candidate(&doc.text) {
+            receipts.push(Self::semantic_tokens_class_specific_expansion_receipt(
+                live_provider_result,
+                candidate,
+                "phase_block_declaration",
+                "macro",
+                "matched_existing_live_macro_token",
+                "unmatched_existing_live_macro_token",
+                true,
+                "scoped compiler phase-block declaration class cutover proof only; phase-block declarations may count as compiler-token identities only when their source-backed span already matches existing live parser/HIR macro tokens, and no new token output is emitted",
+            ));
+        }
         if let Some(candidate) = semantic_token_method_call_candidate(&doc.text) {
             receipts.push(Self::semantic_tokens_class_specific_expansion_receipt(
                 live_provider_result,
@@ -541,6 +553,49 @@ fn semantic_token_method_declaration_candidate(
     ))
 }
 
+fn semantic_token_phase_block_declaration_candidate(
+    source: &str,
+) -> Option<crate::semantic_tokens::SemanticTokenShadowCandidate> {
+    const PHASES: [&str; 5] = ["BEGIN", "UNITCHECK", "CHECK", "INIT", "END"];
+
+    for phase in PHASES {
+        let Some((phase_start, phase_end)) = phase_block_keyword_span(source, phase) else {
+            continue;
+        };
+        let span = crate::semantic_tokens::SemanticTokenShadowSpan::from_byte_offsets(
+            source,
+            phase_start,
+            phase_end,
+        )?;
+
+        return Some(crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
+            format!("token:phase_block_declaration:{phase}:compiler"),
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+            span,
+        ));
+    }
+
+    None
+}
+
+fn phase_block_keyword_span(source: &str, phase: &str) -> Option<(usize, usize)> {
+    source.match_indices(phase).find_map(|(start, matched)| {
+        let end = start + matched.len();
+        let before = source[..start].chars().next_back();
+        let after = source[end..].chars().next();
+        if before.is_none_or(|ch| !is_subroutine_name_char(ch))
+            && after.is_none_or(|ch| !is_subroutine_name_char(ch))
+        {
+            Some((start, end))
+        } else {
+            None
+        }
+    })
+}
+
 fn semantic_token_method_call_candidate(
     source: &str,
 ) -> Option<crate::semantic_tokens::SemanticTokenShadowCandidate> {
@@ -786,6 +841,25 @@ fn semantic_tokens_live_slice_provider_trace(
             source_backed_state: "source_backed_method_declaration_live_token_match",
             user_message: "Semantic tokens exposed the source-backed compiler method-declaration live trace because it matched the existing parser/HIR method token. No new semantic tokens were emitted.",
             claim_boundary: "only source-backed compiler method-declaration spans that exactly match existing live parser/HIR method tokens participate; generated/no-source, stale, dynamic-boundary, low-confidence, fallback, broader method classes, and unmatched compiler candidates remain blocked, fallback-only, or shadowed",
+        },
+    ) {
+        return trace;
+    }
+
+    let phase_block_declaration_candidate =
+        semantic_token_phase_block_declaration_candidate(source);
+    saw_compiler_token_candidate |= phase_block_declaration_candidate.is_some();
+    if let Some(trace) = semantic_tokens_live_slice_provider_trace_for_candidate(
+        phase_block_declaration_candidate,
+        Some(live_provider_result),
+        live_token_count,
+        provider_action,
+        SemanticTokenLiveSliceTraceSpec {
+            live_token_type: "macro",
+            compiler_token_class: "phase_block_declaration",
+            source_backed_state: "source_backed_phase_block_declaration_live_token_match",
+            user_message: "Semantic tokens exposed the source-backed compiler phase-block declaration live trace because it matched the existing parser/HIR macro token. No new semantic tokens were emitted.",
+            claim_boundary: "only source-backed compiler phase-block declaration spans that exactly match existing live parser/HIR macro tokens participate; generated/no-source, stale, dynamic-boundary, low-confidence, fallback, broader macro classes, and unmatched compiler candidates remain blocked, fallback-only, or shadowed",
         },
     ) {
         return trace;

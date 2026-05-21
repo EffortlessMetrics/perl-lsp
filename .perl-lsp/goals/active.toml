@@ -256,12 +256,27 @@ status = "active"
 lane = "trust"
 claim_boundary = "Semantic-token scoped class proof only; no broad compiler-backed token output or new token emission without output-neutral proof."
 files = [
+  "crates/perl-lsp-rs-core/src/providers/semantic_tokens/semantic_tokens_shadow.rs",
+  "crates/perl-lsp-rs/src/runtime/language/semantic_tokens.rs",
   "crates/perl-lsp-rs/src/runtime/language/semantic_tokens_runtime_quality_tests.rs",
+  "docs/project/status/provider_cutover.md",
   "docs/project/status/real_perl_editor_trust_v1.md",
   "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/provider_promotion_ledger.md",
+  "docs/project/status/SUPPORT_TIERS.md",
+  "docs/project/status/ux_capability_dashboard.md",
+  "docs/specs/PLSP-SPEC-0019-semantic-token-class-promotion-contract.md",
+  "policy/provider-promotion-ledger.toml",
+  "policy/semantic-token-classes.toml",
+  "xtask/src/tasks/semantic_token_classes.rs",
 ]
 commands = [
+  "rtk cargo test -p perl-lsp-rs-core --lib semantic_token_shadow_allows_scoped_phase_block_declaration_class --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-lsp-rs --lib semantic_tokens_runtime_quality_receipt_proves_source_backed_phase_block_declaration_compiler_token_parity --profile agent --locked -- --nocapture --test-threads=1",
+  "rtk cargo test -p perl-lsp-rs --lib semantic_tokens_runtime_quality_receipt_refreshes_phase_block_declaration_live_pilot_after_edit --profile agent --locked -- --nocapture --test-threads=1",
   "rtk cargo test -p perl-lsp-rs --lib semantic_tokens_runtime_quality_receipt --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-semantic-token-classes",
+  "rtk cargo xtask check-provider-promotion-ledger",
   "rtk cargo xtask check-active-goal-manifest",
   "rtk cargo xtask check-support-claims",
   "rtk cargo xtask check-provider-confidence-matrix",
