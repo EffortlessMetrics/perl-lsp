@@ -287,4 +287,58 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn test_analyze_nodekind_coverage_classifies_allowlisted_vs_actionable_never_seen() {
+        let parse_results: HashMap<PathBuf, super::super::timeout_detection::ParseOutcome> =
+            HashMap::new();
+
+        let stats = analyze_nodekind_coverage(&parse_results);
+        assert_eq!(stats.covered_count, 0, "empty corpus should cover zero NodeKinds");
+        assert_eq!(
+            stats.never_seen.len(),
+            stats.total_count,
+            "empty corpus should mark all NodeKinds as never seen"
+        );
+
+        let allowlisted_names: HashSet<&str> =
+            stats.allowlisted_never_seen.iter().map(|entry| entry.name.as_str()).collect();
+        let actionable_names: HashSet<&str> =
+            stats.actionable_never_seen.iter().map(std::string::String::as_str).collect();
+
+        for &kind in perl_parser::ast::NodeKind::RECOVERY_KIND_NAMES {
+            assert!(allowlisted_names.contains(kind), "recovery kind '{kind}' must be allowlisted");
+            assert!(
+                !actionable_names.contains(kind),
+                "recovery kind '{kind}' must not be actionable"
+            );
+        }
+    }
+
+    #[test]
+    fn test_analyze_nodekind_coverage_marks_low_frequency_as_at_risk()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::io::Write;
+
+        let mut tmp = tempfile::NamedTempFile::new()?;
+        writeln!(tmp, "my $x = 1;")?;
+
+        let mut parse_results: HashMap<PathBuf, super::super::timeout_detection::ParseOutcome> =
+            HashMap::new();
+        parse_results.insert(
+            PathBuf::from(tmp.path()),
+            super::super::timeout_detection::ParseOutcome::Ok { duration_ms: 1 },
+        );
+
+        let stats = analyze_nodekind_coverage(&parse_results);
+        assert!(
+            !stats.at_risk.is_empty(),
+            "single-file corpus should have at-risk NodeKinds (<5 occurrences)"
+        );
+        assert!(
+            stats.at_risk.iter().any(|entry| entry.risk_level == RiskLevel::High),
+            "single occurrence NodeKinds should be marked as High risk"
+        );
+        Ok(())
+    }
 }
