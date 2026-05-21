@@ -246,13 +246,15 @@ fn detect_ansi_colors(text: &str) -> Vec<ColorInformation> {
 /// - 256-color: 38;5;N, 48;5;N
 /// - 24-bit: 38;2;R;G;B, 48;2;R;G;B
 fn parse_ansi_color(code: &str) -> Option<Color> {
-    // 24-bit true color: 38;2;R;G;B / 48;2;R;G;B
-    if let Some(rest) = code.strip_prefix("38;2;").or_else(|| code.strip_prefix("48;2;")) {
-        let parts: Vec<&str> = rest.splitn(3, ';').collect();
-        if parts.len() == 3 {
-            let r: u8 = parts[0].parse().ok()?;
-            let g: u8 = parts[1].parse().ok()?;
-            let b: u8 = parts[2].parse().ok()?;
+    let parts: Vec<&str> = code.split(';').collect();
+
+    // 24-bit true color: 38;2;R;G;B / 48;2;R;G;B.
+    // Allow leading reset/style codes, e.g. 0;38;2;...
+    for window in parts.windows(5) {
+        if (window[0] == "38" || window[0] == "48") && window[1] == "2" {
+            let r: u8 = window[2].parse().ok()?;
+            let g: u8 = window[3].parse().ok()?;
+            let b: u8 = window[4].parse().ok()?;
             return Some(Color {
                 red: r as f64 / 255.0,
                 green: g as f64 / 255.0,
@@ -260,13 +262,15 @@ fn parse_ansi_color(code: &str) -> Option<Color> {
                 alpha: 1.0,
             });
         }
-        return None;
     }
 
-    // 256-color: 38;5;N / 48;5;N
-    if let Some(rest) = code.strip_prefix("38;5;").or_else(|| code.strip_prefix("48;5;")) {
-        let n: u8 = rest.parse().ok()?;
-        return Some(color_from_256(n));
+    // 256-color: 38;5;N / 48;5;N.
+    // Allow leading reset/style codes, e.g. 0;38;5;...
+    for window in parts.windows(3) {
+        if (window[0] == "38" || window[0] == "48") && window[1] == "5" {
+            let n: u8 = window[2].parse().ok()?;
+            return Some(color_from_256(n));
+        }
     }
 
     // Basic ANSI color codes.
@@ -722,9 +726,29 @@ mod tests {
     }
 
     #[test]
+    fn test_detect_256_color_ansi_with_leading_style() {
+        let text = r"\e[0;1;38;5;17m";
+        let colors = detect_ansi_colors(text);
+        assert_eq!(colors.len(), 1);
+        assert!((colors[0].color.red - 0.0).abs() < 0.01);
+        assert!((colors[0].color.green - 0.0).abs() < 0.01);
+        assert!((colors[0].color.blue - 95.0 / 255.0).abs() < 0.01);
+    }
+
+    #[test]
     fn test_detect_24bit_color_ansi() {
         // 24-bit true color: \e[38;2;255;0;128m
         let text = r"\e[38;2;255;0;128m";
+        let colors = detect_ansi_colors(text);
+        assert_eq!(colors.len(), 1);
+        assert!((colors[0].color.red - 1.0).abs() < 0.01);
+        assert!((colors[0].color.green - 0.0).abs() < 0.01);
+        assert!((colors[0].color.blue - 128.0 / 255.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_detect_24bit_color_ansi_with_leading_reset() {
+        let text = r"\e[0;38;2;255;0;128m";
         let colors = detect_ansi_colors(text);
         assert_eq!(colors.len(), 1);
         assert!((colors[0].color.red - 1.0).abs() < 0.01);
