@@ -8,10 +8,15 @@
 /// Find the byte offset of a __DATA__ or __END__ marker in the source text.
 /// Uses the lexer to avoid false positives in heredocs/POD.
 /// Returns the byte offset of the start of the marker, or None if not found.
+const DATA_SECTION_MARKERS: [&str; 2] = ["__DATA__", "__END__"];
+
+fn may_contain_data_marker(text: &str) -> bool {
+    DATA_SECTION_MARKERS.iter().any(|marker| text.contains(marker))
+}
+
 pub fn find_data_marker_byte_lexed(s: &str) -> Option<usize> {
     // Cheap prefilter: avoid constructing the lexer when marker substrings are absent.
-    const MARKERS: [&str; 2] = ["__DATA__", "__END__"];
-    if !MARKERS.iter().any(|marker| s.contains(marker)) {
+    if !may_contain_data_marker(s) {
         return None;
     }
 
@@ -54,6 +59,19 @@ pub fn find_data_marker_byte(s: &str) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_may_contain_data_marker_prefilter() {
+        assert!(!may_contain_data_marker("print 'hello';\n"));
+        assert!(may_contain_data_marker("__DATA__"));
+        assert!(may_contain_data_marker("prefix __END__ suffix"));
+    }
+
+    #[test]
+    fn test_split_code_and_data_handles_crlf_line_endings() {
+        let src = "print 'ok';\r\n__DATA__\r\nvalue";
+        assert_eq!(split_code_and_data(src), ("print 'ok';\r\n", Some("__DATA__\r\nvalue")));
+    }
 
     #[test]
     fn test_find_data_marker_lexed() {
