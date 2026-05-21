@@ -449,9 +449,8 @@ impl CoverageTracker {
             }
         }
 
-        if total_lines > 0 {
-            self.total_coverage = (covered_lines as f64 / total_lines as f64) * 100.0;
-        }
+        self.total_coverage =
+            if total_lines > 0 { (covered_lines as f64 / total_lines as f64) * 100.0 } else { 0.0 };
     }
 }
 
@@ -683,6 +682,25 @@ mod tests {
         let annotations = workflow.get_inline_coverage(&PathBuf::from("test.pl"));
         assert_eq!(annotations.len(), 1); // One uncovered line
         assert_eq!(annotations[0].line, 2);
+    }
+
+    #[test]
+    fn test_coverage_resets_to_zero_when_all_inputs_empty() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let config = TddConfig::default();
+        let mut workflow = TddWorkflow::new(config);
+
+        workflow.update_coverage(
+            PathBuf::from("a.pl"),
+            vec![LineCoverage { line: 1, hits: 1, covered: true }],
+        );
+        assert!(workflow.check_coverage_threshold());
+
+        workflow.update_coverage(PathBuf::from("a.pl"), vec![]);
+
+        assert!(!workflow.check_coverage_threshold());
+        assert_eq!(workflow.get_status().coverage, 0.0);
+        Ok(())
     }
 
     #[test]
