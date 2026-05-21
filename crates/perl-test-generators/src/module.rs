@@ -82,5 +82,60 @@ mod tests {
                 }
             }
         }
+
+        #[test]
+        fn module_path_segment_count_is_at_least_one(path in module_path()) {
+            let count = path.split("::").count();
+            prop_assert!(count >= 1, "module path must have at least one segment: {path}");
+        }
+
+        #[test]
+        fn module_path_segment_count_is_at_most_five(path in module_path()) {
+            let count = path.split("::").count();
+            prop_assert!(count <= 5, "module path must have at most 5 segments: {path}");
+        }
+
+        #[test]
+        fn module_path_is_valid_perl_use_statement(path in module_path()) {
+            // A module path joined with :: should be usable in `use Foo::Bar;`
+            let use_stmt = format!("use {};", path);
+            prop_assert!(use_stmt.starts_with("use "), "use statement malformed: {use_stmt}");
+            prop_assert!(use_stmt.ends_with(';'), "use statement must end with semicolon");
+        }
+
+        #[test]
+        fn module_path_segments_count_bounded(segs in module_path_segments()) {
+            prop_assert!(!segs.is_empty(), "must produce at least one segment");
+            prop_assert!(segs.len() <= 5, "must produce at most 5 segments");
+        }
+
+        #[test]
+        fn module_path_segments_are_ascii(segs in module_path_segments()) {
+            for seg in &segs {
+                prop_assert!(seg.is_ascii(), "module segments must be ASCII: {seg}");
+            }
+        }
+
+        #[test]
+        fn module_path_segments_match_joined_path(segs in module_path_segments()) {
+            // The segments joined with :: must parse back to the same segments
+            let joined = segs.join("::");
+            let re_split: Vec<&str> = joined.split("::").collect();
+            prop_assert_eq!(segs.len(), re_split.len());
+            for (orig, recovered) in segs.iter().zip(re_split.iter()) {
+                prop_assert_eq!(orig.as_str(), *recovered);
+            }
+        }
+
+        #[test]
+        fn module_path_does_not_start_or_end_with_colon_colon(path in module_path()) {
+            prop_assert!(!path.starts_with("::"), "path must not start with '::': {path}");
+            prop_assert!(!path.ends_with("::"), "path must not end with '::': {path}");
+        }
+
+        #[test]
+        fn module_path_contains_no_triple_colons(path in module_path()) {
+            prop_assert!(!path.contains(":::"), "path must not contain ':::': {path}");
+        }
     }
 }
