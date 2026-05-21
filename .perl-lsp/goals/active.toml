@@ -117,12 +117,11 @@ rule = "Merge clean leaf work; escalate trust-adjacent surfaces instead of treat
 
 [trust.next]
 items = [
-  "semantic_token_scoped_class_proof",
+  "semantic_token_support_review",
 ]
 
 [substrate.next]
 items = [
-  "constant_provider_proof",
   "prototype_table",
   "bareword_classifier",
   "determinism_receipt_v1_spec",
@@ -252,7 +251,7 @@ commands = [
 
 [[work_item]]
 id = "semantic-token-scoped-class-proof"
-status = "active"
+status = "completed"
 lane = "trust"
 claim_boundary = "Semantic-token scoped class proof only; no broad compiler-backed token output or new token emission without output-neutral proof."
 files = [
@@ -277,6 +276,50 @@ commands = [
   "rtk cargo test -p perl-lsp-rs --lib semantic_tokens_runtime_quality_receipt --profile agent --locked -- --nocapture",
   "rtk cargo xtask check-semantic-token-classes",
   "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "semantic-token-support-review"
+status = "ready"
+lane = "trust"
+claim_boundary = "Semantic-token support review only; no broad compiler-backed token output, support-tier promotion, or new token emission without class-policy proof."
+files = [
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/provider_cutover.md",
+  "docs/project/status/provider_promotion_ledger.md",
+  "docs/project/status/SUPPORT_TIERS.md",
+  "docs/project/status/ux_capability_dashboard.md",
+  "policy/provider-promotion-ledger.toml",
+  "policy/semantic-token-classes.toml",
+]
+commands = [
+  "rtk cargo xtask check-semantic-token-classes",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "constant-provider-proof"
+status = "active"
+lane = "substrate"
+claim_boundary = "Constant-provider substrate proof only; no completion/provider cutover, support-tier promotion, or broad constant inference claim."
+files = [
+  "crates/perl-semantic-analyzer/src/analysis/import_extractor.rs",
+  "crates/perl-lsp-rs-core/src/providers/completion/completion_shadow.rs",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/provider_confidence_matrix.md",
+]
+commands = [
+  "rtk cargo test -p perl-semantic-analyzer use_constant --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-lsp-rs-core --lib completion_shadow --profile agent --locked -- --nocapture",
   "rtk cargo xtask check-active-goal-manifest",
   "rtk cargo xtask check-support-claims",
   "rtk cargo xtask check-provider-confidence-matrix",

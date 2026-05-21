@@ -668,3 +668,46 @@ Rollback
 
 Reopen the lane by changing the manifest status back to active and adding a
 specific ready work item with proof commands and claim boundaries.
+
+## Swarm Execution Follow-Up Queue
+
+Status: active through [active.toml](../../.perl-lsp/goals/active.toml)
+
+This section records the current swarm handoff after the original closeout. The
+active goal manifest is the machine-readable source of truth; this plan only
+states the PR order and claim boundary.
+
+Recent routing
+
+- `semantic-token-scoped-class-proof` is completed. The phase-block declaration
+  proof added the scoped `token:phase_block_declaration:` class only when its
+  source-backed span matches an existing live `macro` token, refreshes after
+  `didChange`, and emits no new token output.
+
+Current executable slice
+
+- `constant-provider-proof` is active in the substrate lane.
+
+Claim boundary
+
+- Constant-provider work is substrate proof only unless a separate trust-lane PR
+  promotes provider behavior.
+- Do not change completion behavior, support tiers, or provider cutover claims
+  from constant extraction tests alone.
+
+Proof commands
+
+```bash
+rtk cargo test -p perl-semantic-analyzer use_constant --profile agent --locked -- --nocapture
+rtk cargo test -p perl-lsp-rs-core --lib completion_shadow --profile agent --locked -- --nocapture
+rtk cargo xtask check-active-goal-manifest
+rtk cargo xtask check-support-claims
+rtk cargo xtask check-provider-confidence-matrix
+rtk git diff --check
+```
+
+Rollback
+
+Revert the manifest/plan routing PR. If constant-provider proof is not ready,
+mark `constant-provider-proof` blocked or planned in the active manifest and
+select the next ready substrate item without changing provider behavior.
