@@ -17,7 +17,7 @@ mod tests {
     fn assert_no_errors(code: &str) {
         let ast = parse_program(code);
         let sexp = ast.to_sexp();
-        assert!(!sexp.contains("ERROR"), "Parse of `{code}` produced ERROR nodes: {sexp}",);
+        assert!(!sexp.contains("ERROR"), "Parse of `{code}` produced ERROR nodes: {sexp}");
     }
 
     /// Helper: parse code and return the first statement node.
@@ -42,7 +42,7 @@ mod tests {
         let stmt = first_stmt(code);
         let sexp = stmt.to_sexp();
         // Sexp format uses `my_declaration` for VariableDeclaration with declarator "my"
-        assert!(sexp.contains("my_declaration"), "Expected my_declaration in sexp, got: {sexp}",);
+        assert!(sexp.contains("my_declaration"), "Expected my_declaration in sexp, got: {sexp}");
     }
 
     // ---------------------------------------------------------------
@@ -55,7 +55,7 @@ mod tests {
 
         let stmt = first_stmt(code);
         let sexp = stmt.to_sexp();
-        assert!(sexp.contains("my_declaration"), "Expected my_declaration in sexp, got: {sexp}",);
+        assert!(sexp.contains("my_declaration"), "Expected my_declaration in sexp, got: {sexp}");
     }
 
     // ---------------------------------------------------------------
@@ -68,7 +68,7 @@ mod tests {
 
         let stmt = first_stmt(code);
         let sexp = stmt.to_sexp();
-        assert!(sexp.contains("my_declaration"), "Expected my_declaration in sexp, got: {sexp}",);
+        assert!(sexp.contains("my_declaration"), "Expected my_declaration in sexp, got: {sexp}");
         // Verify that 1, 2, 3 are separate args, not consumed into the declaration
         assert!(
             sexp.contains("1") && sexp.contains("2") && sexp.contains("3"),
@@ -86,7 +86,7 @@ mod tests {
 
         let stmt = first_stmt(code);
         let sexp = stmt.to_sexp();
-        assert!(sexp.contains("our_declaration"), "Expected our_declaration in sexp, got: {sexp}",);
+        assert!(sexp.contains("our_declaration"), "Expected our_declaration in sexp, got: {sexp}");
     }
 
     // ---------------------------------------------------------------
@@ -132,7 +132,7 @@ mod tests {
             sexp.contains("local_declaration"),
             "Expected local_declaration in sexp, got: {sexp}",
         );
-        assert!(sexp.contains("PATH"), "Expected localized hash element key in sexp, got: {sexp}",);
+        assert!(sexp.contains("PATH"), "Expected localized hash element key in sexp, got: {sexp}");
         assert!(
             sexp.contains("(variable $ next)"),
             "Expected trailing argument to stay separate, got: {sexp}",
@@ -150,7 +150,7 @@ mod tests {
 
         let stmt = first_stmt(code);
         let sexp = stmt.to_sexp();
-        assert!(sexp.contains("my_declaration"), "Expected my_declaration in sexp, got: {sexp}",);
+        assert!(sexp.contains("my_declaration"), "Expected my_declaration in sexp, got: {sexp}");
         // $y must be a separate argument, not part of the declaration initializer
         // The sexp should contain both the declaration and a separate variable for $y
         assert!(
@@ -170,9 +170,9 @@ mod tests {
         let stmt = first_stmt(code);
         let sexp = stmt.to_sexp();
         // VariableListDeclaration sexp format should contain the declarator
-        assert!(sexp.contains("my"), "Expected 'my' in sexp, got: {sexp}",);
-        assert!(sexp.contains("(variable $ a)"), "Expected variable $a in sexp, got: {sexp}",);
-        assert!(sexp.contains("(variable $ b)"), "Expected variable $b in sexp, got: {sexp}",);
+        assert!(sexp.contains("my"), "Expected 'my' in sexp, got: {sexp}");
+        assert!(sexp.contains("(variable $ a)"), "Expected variable $a in sexp, got: {sexp}");
+        assert!(sexp.contains("(variable $ b)"), "Expected variable $b in sexp, got: {sexp}");
     }
 
     // ---------------------------------------------------------------
@@ -187,8 +187,8 @@ mod tests {
         let stmt = first_stmt(code);
         let sexp = stmt.to_sexp();
         // Both $x and $y must appear in the local declaration
-        assert!(sexp.contains("(variable $ x)"), "Expected localized $x in sexp, got: {sexp}",);
-        assert!(sexp.contains("(variable $ y)"), "Expected localized $y in sexp, got: {sexp}",);
+        assert!(sexp.contains("(variable $ x)"), "Expected localized $x in sexp, got: {sexp}");
+        assert!(sexp.contains("(variable $ y)"), "Expected localized $y in sexp, got: {sexp}");
         // $z must be a separate argument, not inside the local()
         assert!(
             sexp.contains("(variable $ z)"),

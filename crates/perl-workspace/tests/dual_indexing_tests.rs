@@ -300,7 +300,7 @@ sub _private { return 3; }
 
     // Dependency on Exporter should be tracked
     let deps = index.file_dependencies(&uri_str);
-    assert!(deps.contains("Exporter"), "MyExporter should depend on Exporter, deps: {:?}", deps,);
+    assert!(deps.contains("Exporter"), "MyExporter should depend on Exporter, deps: {:?}", deps);
 
     // All subs should be indexed
     assert!(index.find_definition("MyExporter::export_func_a").is_some());

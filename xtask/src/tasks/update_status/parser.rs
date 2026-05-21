@@ -327,7 +327,7 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
             .map_or_else(|| "?".to_string(), |r| r.files_unreadable.to_string());
         let proj_detail = metrics.project_corpus.as_ref().map_or_else(
             || "Project: UNVERIFIED".to_string(),
-            |s| format!("Project: {} timeout, {} panic, 0 unread", s.timeout_files, s.panic_files,),
+            |s| format!("Project: {} timeout, {} panic, 0 unread", s.timeout_files, s.panic_files),
         );
         format!(
             "| **Reliability** | Ubuntu: {} unread / CPAN: {} unread / {} | -- | `.ci/*-baseline.json` |",

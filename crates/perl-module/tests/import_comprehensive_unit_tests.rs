@@ -462,7 +462,7 @@ fn token_slice_equals_token_field() -> Result<(), String> {
             parse_module_import_head(line).ok_or_else(|| format!("expected Some for: {line:?}"))?;
         let slice = &line[head.token_start..head.token_end];
         if slice != head.token {
-            return Err(format!("slice {slice:?} != token {:?} for {line:?}", head.token,));
+            return Err(format!("slice {slice:?} != token {:?} for {line:?}", head.token));
         }
     }
     Ok(())

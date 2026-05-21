@@ -740,7 +740,7 @@ fn all_code_strings_are_unique() -> Result<(), Box<dyn std::error::Error>> {
     let mut seen = HashSet::new();
     for code in ALL_CODES {
         let s = code.as_str();
-        assert!(seen.insert(s), "Duplicate code string: {} (variant {:?})", s, code,);
+        assert!(seen.insert(s), "Duplicate code string: {} (variant {:?})", s, code);
     }
     Ok(())
 }
@@ -787,7 +787,7 @@ fn parse_code_as_str_bijection() -> Result<(), Box<dyn std::error::Error>> {
     for s in &code_strings {
         let parsed = DiagnosticCode::parse_code(s);
         assert!(parsed.is_some(), "parse_code should accept {}", s);
-        assert_eq!(parsed.ok_or("missing")?.as_str(), *s, "round-trip mismatch for {}", s,);
+        assert_eq!(parsed.ok_or("missing")?.as_str(), *s, "round-trip mismatch for {}", s);
     }
     Ok(())
 }

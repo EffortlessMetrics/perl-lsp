@@ -257,7 +257,7 @@ fn test_tdd_workflow_refactor_message() -> Result<(), Box<dyn std::error::Error>
     wf.start_cycle("foo");
     wf.run_tests(true);
     let result = wf.start_refactor();
-    assert!(result.message.contains("Refactor") || result.message.contains("refactor"),);
+    assert!(result.message.contains("Refactor") || result.message.contains("refactor"));
     assert_eq!(result.state, TddState::Refactor);
     Ok(())
 }

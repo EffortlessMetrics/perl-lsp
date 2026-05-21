@@ -168,7 +168,7 @@ fn test_orphaned_else_does_not_crash() {
     let ast = parse("else { fallback(); }");
     let sexp = ast.to_sexp();
     // Should produce an If node wrapping the else block
-    assert!(sexp.contains("if"), "orphaned else should produce an if node, got: {}", sexp,);
+    assert!(sexp.contains("if"), "orphaned else should produce an if node, got: {}", sexp);
 }
 
 #[test]
@@ -177,7 +177,7 @@ fn test_orphaned_elsif_does_not_crash() {
     let ast = parse("elsif ($x) { foo(); }");
     let sexp = ast.to_sexp();
     // Should produce an If node wrapping the elsif
-    assert!(sexp.contains("if"), "orphaned elsif should produce an if node, got: {}", sexp,);
+    assert!(sexp.contains("if"), "orphaned elsif should produce an if node, got: {}", sexp);
 }
 
 #[test]
@@ -185,7 +185,7 @@ fn test_orphaned_elsif_with_else_chain() {
     // An orphaned elsif followed by else should still parse the chain
     let ast = parse("elsif ($x) { foo(); } else { bar(); }");
     let sexp = ast.to_sexp();
-    assert!(sexp.contains("if"), "orphaned elsif chain should produce an if node, got: {}", sexp,);
+    assert!(sexp.contains("if"), "orphaned elsif chain should produce an if node, got: {}", sexp);
 }
 
 #[test]
@@ -194,7 +194,7 @@ fn test_orphaned_else_followed_by_valid_code() {
     let ast = parse("else { bad(); }\nmy $x = 1;");
     let sexp = ast.to_sexp();
     // Should have both the recovered If and the variable declaration
-    assert!(sexp.contains("if"), "should contain recovered if node, got: {}", sexp,);
+    assert!(sexp.contains("if"), "should contain recovered if node, got: {}", sexp);
 }
 
 // =============================================================================

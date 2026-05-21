@@ -285,7 +285,7 @@ fn delete_function_bounded_reparse() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn delete_function_via_incremental_document() -> Result<(), Box<dyn std::error::Error>> {
-    let source = concat!("my $before = 1;\n", "sub helper { return 42; }\n", "my $after = 2;\n",);
+    let source = concat!("my $before = 1;\n", "sub helper { return 42; }\n", "my $after = 2;\n");
 
     let mut doc = IncrementalDocument::new(source.to_string())?;
 

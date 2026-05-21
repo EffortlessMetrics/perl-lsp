@@ -26,7 +26,7 @@ use perl_parser_comparison::{Verdict, parse_v1, parse_v2, parse_v3};
 
 /// Print a comparison row for --nocapture diagnostic output.
 fn print_row(category: &str, label: &str, v1: &Verdict, v2: &Verdict, v3: &Verdict) {
-    println!("  [{category:>2}] {label:<50} | v1={v1:<20} | v2={v2:<20} | v3={v3}",);
+    println!("  [{category:>2}] {label:<50} | v1={v1:<20} | v2={v2:<20} | v3={v3}");
 }
 
 /// Assert expected verdict with a descriptive failure message.

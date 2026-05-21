@@ -437,7 +437,7 @@ impl fmt::Display for LaunchParseError {
             }
             Self::InvalidFeatureProfile { raw_profile } => {
                 let supported = feature_profile_supported_tokens().join(", ");
-                write!(f, "Invalid feature profile: {raw_profile}. Supported: {supported}",)
+                write!(f, "Invalid feature profile: {raw_profile}. Supported: {supported}")
             }
             Self::InvalidPort { raw_port, reason } => {
                 write!(f, "Invalid port value: {raw_port}. {reason}")
