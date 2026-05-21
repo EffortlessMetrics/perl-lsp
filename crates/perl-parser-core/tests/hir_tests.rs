@@ -1,10 +1,10 @@
 use perl_parser_core::hir::{
-    COMPILE_EFFECT_MODEL_VERSION, CompileConfidence, CompileEffectFactKind, CompileEffectKind,
-    CompileEffectSourceKind, CompileEnvironment, CompileEnvironmentBoundaryKind, CompileProvenance,
-    DynamicBoundaryKind, FrameworkAdapterKind, FrameworkAdapterRegistry,
-    FrameworkExportedSymbolKind, GlobSlotSource, HirFile, HirKind, IncRootKind,
-    ModuleResolutionRoot, PragmaArgumentKind, RecoveryConfidence, ScopeGraph, StashConfidence,
-    StashGraph, StashProvenance, lower_ast,
+    BarewordFact, BarewordRole, COMPILE_EFFECT_MODEL_VERSION, CompileConfidence,
+    CompileEffectFactKind, CompileEffectKind, CompileEffectSourceKind, CompileEnvironment,
+    CompileEnvironmentBoundaryKind, CompileProvenance, DynamicBoundaryKind, FrameworkAdapterKind,
+    FrameworkAdapterRegistry, FrameworkExportedSymbolKind, GlobSlotSource, HirFile, HirKind,
+    IncRootKind, ModuleResolutionRoot, PragmaArgumentKind, RecoveryConfidence, ScopeGraph,
+    StashConfidence, StashGraph, StashProvenance, lower_ast,
 };
 use perl_parser_core::{Node, NodeKind, Parser, SourceLocation};
 use perl_semantic_facts::{
@@ -489,6 +489,37 @@ fn find_export_set<'a>(
         .ok_or_else(|| format!("expected ExportSet for {module}").into())
 }
 
+fn assert_bareword_fact<'a>(
+    file: &'a HirFile,
+    source: &str,
+    name: &str,
+    role: BarewordRole,
+) -> Result<&'a BarewordFact, Box<dyn std::error::Error>> {
+    let fact = file
+        .bareword_table
+        .facts
+        .iter()
+        .find(|fact| fact.name == name && fact.role == role)
+        .ok_or_else(|| format!("expected bareword fact for {name} as {role:?}"))?;
+
+    assert_eq!(fact.package_context.as_deref(), Some("Bareword::Demo"));
+    assert_eq!(&source[fact.range.start..fact.range.end], name);
+    assert_eq!(fact.anchor_id, AnchorId(fact.range.start as u64));
+    assert_eq!(fact.provenance, CompileProvenance::ExactAst);
+    assert_eq!(fact.confidence, CompileConfidence::High);
+    let item = file
+        .items
+        .iter()
+        .find(|item| item.id == fact.source_item)
+        .ok_or_else(|| format!("expected source item for bareword fact {name}"))?;
+    assert!(
+        matches!(&item.kind, HirKind::BarewordExpr(expr) if expr.name == name),
+        "bareword facts should point at their source-backed HIR item"
+    );
+
+    Ok(fact)
+}
+
 #[test]
 fn hir_lowers_first_slice_constructs_with_stable_metadata() -> Result<(), Box<dyn std::error::Error>>
 {
@@ -648,6 +679,43 @@ fn hir_lowers_expression_shells_without_provider_cutover() -> Result<(), Box<dyn
          @items scope=1 target=<unresolved>\n\
          $source scope=1 target=<unresolved>\n\
          $file scope=1 target=<unresolved>"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn hir_bareword_classifier_records_source_backed_roles() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "package Bareword::Demo;\n\
+                  require Foo::Bar;\n\
+                  Foo::Bar->new($arg);\n\
+                  new Widget 1;\n\
+                  my $package = Foo::Baz;\n\
+                  my $value = ambiguous;\n";
+    let file = lower_source(source);
+
+    assert_eq!(
+        file.bareword_table.facts.len(),
+        5,
+        "classifier should record parsed identifier barewords only"
+    );
+    assert_bareword_fact(&file, source, "Foo::Bar", BarewordRole::ModuleRequest)?;
+    assert_bareword_fact(&file, source, "Foo::Bar", BarewordRole::MethodReceiver)?;
+    assert_bareword_fact(&file, source, "Widget", BarewordRole::IndirectObject)?;
+    assert_bareword_fact(&file, source, "Foo::Baz", BarewordRole::QualifiedName)?;
+    assert_bareword_fact(&file, source, "ambiguous", BarewordRole::Expression)?;
+    assert!(
+        file.bareword_table
+            .facts
+            .iter()
+            .all(|fact| fact.scope_id.map(|scope| scope.index()) == Some(1)),
+        "top-level bareword facts should retain the package scope"
+    );
+    assert!(
+        !file.items.iter().any(
+            |item| matches!(&item.kind, HirKind::CallExpr(expr) if expr.name == "provider_cutover")
+        ),
+        "bareword-classifier substrate must not imply live provider cutover"
     );
 
     Ok(())

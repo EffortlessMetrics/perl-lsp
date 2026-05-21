@@ -116,6 +116,13 @@ class through the ledger. Receiver-expression facts now have one narrow
 source-backed completion pilot; every other receiver class remains substrate,
 fallback, or blocked until its own receipt promotes it.
 
+Bareword-classifier facts are compiler substrate only. HIR now records
+source-backed syntactic roles for parsed identifier barewords such as static
+`require` targets, class receivers, indirect-object targets, qualified names,
+and unresolved expression-position barewords. That proof does not change PL109
+suppression, diagnostic behavior, provider behavior, parser bucket state,
+support tiers, PIR, or determinism claims.
+
 ## Current Dashboard
 
 | Surface | Current state | Real-workspace receipt state | Fallback / blocker coverage | Next proof |

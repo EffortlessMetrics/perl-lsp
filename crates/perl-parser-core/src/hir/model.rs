@@ -110,6 +110,8 @@ pub struct HirFile {
     pub compile_environment: CompileEnvironment,
     /// Source-backed subroutine prototype facts lowered beside HIR items.
     pub prototype_table: PrototypeTable,
+    /// Source-backed bareword classification facts lowered beside HIR items.
+    pub bareword_table: BarewordTable,
 }
 
 impl HirFile {
@@ -184,6 +186,56 @@ pub struct PrototypeFact {
     pub provenance: CompileProvenance,
     /// Confidence for the lowered prototype fact.
     pub confidence: CompileConfidence,
+}
+
+/// Source-backed bareword facts lowered from parsed identifiers.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub struct BarewordTable {
+    /// Bareword facts in stable source order.
+    pub facts: Vec<BarewordFact>,
+}
+
+/// One source-backed syntactic bareword classification.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct BarewordFact {
+    /// Bareword text as parsed.
+    pub name: String,
+    /// Syntactic role observed by HIR lowering.
+    pub role: BarewordRole,
+    /// Package context active at the bareword.
+    pub package_context: Option<String>,
+    /// Precise source range for the bareword node.
+    pub range: SourceLocation,
+    /// HIR item that exposed the bareword expression.
+    pub source_item: HirId,
+    /// Scope owning the bareword expression.
+    pub scope_id: Option<HirScopeId>,
+    /// Source anchor for this bareword fact.
+    pub anchor_id: AnchorId,
+    /// Provenance for the lowered bareword fact.
+    pub provenance: CompileProvenance,
+    /// Confidence for the lowered bareword fact.
+    pub confidence: CompileConfidence,
+}
+
+/// Syntactic roles for parsed barewords.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum BarewordRole {
+    /// Plain expression-position bareword with unresolved meaning.
+    Expression,
+    /// Qualified name such as `Foo::Bar` outside a more specific context.
+    QualifiedName,
+    /// Bareword used as a static `require` module target.
+    ModuleRequest,
+    /// Bareword used as a class/object receiver for `->`.
+    MethodReceiver,
+    /// Bareword used as the object in an indirect-object call.
+    IndirectObject,
+    /// Bareword used as an autoquoted hash key.
+    HashKey,
 }
 
 /// One lowered HIR item with common metadata required by compiler layers.

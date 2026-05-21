@@ -5,18 +5,19 @@ use perl_pragma::{CompileTimePragmaEnvironment, PragmaSnapshot};
 use perl_semantic_facts::AnchorId;
 
 use super::model::{
-    AstAnchor, BarewordExpr, Binding, BindingReference, BlockShell, CallExpr, CallForm,
-    CompileConfidence, CompileDirective, CompileDirectiveAction, CompileDirectiveKind,
-    CompileEnvironment, CompileEnvironmentBoundary, CompileEnvironmentBoundaryKind, CompilePhase,
-    CompilePhaseBlock, CompileProvenance, DynamicBoundary, DynamicBoundaryKind, ExportDeclaration,
-    ExportDeclarationKind, GlobSlot, GlobSlotKind, GlobSlotSource, HirBindingId, HirFile, HirId,
-    HirItem, HirKind, HirScopeId, IncRootAction, IncRootFact, IncRootKind, IndirectCallExpr,
-    InheritanceSource, LiteralExpr, LiteralKind, MethodCallExpr, MethodDecl, ModuleRequest,
-    ModuleRequestKind, ModuleResolutionStatus, PackageDecl, PackageInheritanceEdge, PackageStash,
-    PragmaArgumentKind, PragmaEffect, PragmaStateFact, PrototypeFact, PrototypeTable,
-    RecoveryConfidence, RequireDecl, ScopeFrame, ScopeGraph, ScopeKind, StashConfidence,
-    StashDynamicBoundary, StashDynamicBoundaryKind, StashGraph, StashProvenance, StorageClass,
-    SubDecl, UseDecl, VariableBinding, VariableDecl,
+    AstAnchor, BarewordExpr, BarewordFact, BarewordRole, BarewordTable, Binding, BindingReference,
+    BlockShell, CallExpr, CallForm, CompileConfidence, CompileDirective, CompileDirectiveAction,
+    CompileDirectiveKind, CompileEnvironment, CompileEnvironmentBoundary,
+    CompileEnvironmentBoundaryKind, CompilePhase, CompilePhaseBlock, CompileProvenance,
+    DynamicBoundary, DynamicBoundaryKind, ExportDeclaration, ExportDeclarationKind, GlobSlot,
+    GlobSlotKind, GlobSlotSource, HirBindingId, HirFile, HirId, HirItem, HirKind, HirScopeId,
+    IncRootAction, IncRootFact, IncRootKind, IndirectCallExpr, InheritanceSource, LiteralExpr,
+    LiteralKind, MethodCallExpr, MethodDecl, ModuleRequest, ModuleRequestKind,
+    ModuleResolutionStatus, PackageDecl, PackageInheritanceEdge, PackageStash, PragmaArgumentKind,
+    PragmaEffect, PragmaStateFact, PrototypeFact, PrototypeTable, RecoveryConfidence, RequireDecl,
+    ScopeFrame, ScopeGraph, ScopeKind, StashConfidence, StashDynamicBoundary,
+    StashDynamicBoundaryKind, StashGraph, StashProvenance, StorageClass, SubDecl, UseDecl,
+    VariableBinding, VariableDecl,
 };
 
 /// Lower a parser AST into first-slice HIR items.
@@ -41,8 +42,19 @@ struct Lowerer {
     stash_graph: StashGraph,
     compile_environment: CompileEnvironment,
     prototype_table: PrototypeTable,
+    bareword_table: BarewordTable,
+    bareword_context: BarewordContext,
     pragma_environment: CompileTimePragmaEnvironment,
     scope_stack: Vec<HirScopeId>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BarewordContext {
+    Expression,
+    ModuleRequest,
+    MethodReceiver,
+    IndirectObject,
+    HashKey,
 }
 
 impl Lowerer {
@@ -65,6 +77,8 @@ impl Lowerer {
             stash_graph: StashGraph::default(),
             compile_environment: CompileEnvironment::default(),
             prototype_table: PrototypeTable::default(),
+            bareword_table: BarewordTable::default(),
+            bareword_context: BarewordContext::Expression,
             pragma_environment,
             scope_stack: vec![file_scope],
         }
@@ -77,6 +91,7 @@ impl Lowerer {
             stash_graph: self.stash_graph,
             compile_environment: self.compile_environment,
             prototype_table: self.prototype_table,
+            bareword_table: self.bareword_table,
         }
     }
 
@@ -329,7 +344,7 @@ impl Lowerer {
                     },
                 );
                 self.record_require_compile_effect(target, node.location, Some(item_id));
-                self.visit_children(node, confidence);
+                self.visit_require_args(args, confidence);
             }
             NodeKind::FunctionCall { name, args } => {
                 let form = if name == "->()" { CallForm::Coderef } else { CallForm::NamedFunction };
@@ -374,7 +389,14 @@ impl Lowerer {
                     self.package_context.clone(),
                     Some(self.current_scope()),
                 );
-                self.visit_children(node, confidence);
+                self.visit_identifier_with_bareword_context(
+                    object,
+                    confidence,
+                    BarewordContext::MethodReceiver,
+                );
+                for arg in args {
+                    self.visit(arg, confidence);
+                }
             }
             NodeKind::IndirectCall { method, object, args } => {
                 self.push_item(
@@ -389,10 +411,17 @@ impl Lowerer {
                     self.package_context.clone(),
                     Some(self.current_scope()),
                 );
-                self.visit_children(node, confidence);
+                self.visit_identifier_with_bareword_context(
+                    object,
+                    confidence,
+                    BarewordContext::IndirectObject,
+                );
+                for arg in args {
+                    self.visit(arg, confidence);
+                }
             }
             NodeKind::Identifier { name } => {
-                self.push_item(
+                let item_id = self.push_item(
                     node,
                     Some(node.location),
                     confidence,
@@ -400,6 +429,17 @@ impl Lowerer {
                     self.package_context.clone(),
                     Some(self.current_scope()),
                 );
+                self.bareword_table.facts.push(BarewordFact {
+                    name: name.clone(),
+                    role: self.classify_bareword(name),
+                    package_context: self.package_context.clone(),
+                    range: node.location,
+                    source_item: item_id,
+                    scope_id: Some(self.current_scope()),
+                    anchor_id: AnchorId(node.location.start as u64),
+                    provenance: CompileProvenance::ExactAst,
+                    confidence: CompileConfidence::High,
+                });
             }
             NodeKind::Number { value } => {
                 self.push_item(
@@ -464,7 +504,9 @@ impl Lowerer {
                     self.package_context.clone(),
                     Some(self.current_scope()),
                 );
-                self.visit_children(node, confidence);
+                for element in elements {
+                    self.visit(element, confidence);
+                }
             }
             NodeKind::HashLiteral { pairs } => {
                 self.push_item(
@@ -481,7 +523,14 @@ impl Lowerer {
                     self.package_context.clone(),
                     Some(self.current_scope()),
                 );
-                self.visit_children(node, confidence);
+                for (key, value) in pairs {
+                    self.visit_identifier_with_bareword_context(
+                        key,
+                        confidence,
+                        BarewordContext::HashKey,
+                    );
+                    self.visit(value, confidence);
+                }
             }
             NodeKind::Assignment { lhs, rhs, op } => {
                 if op == "=" {
@@ -653,6 +702,49 @@ impl Lowerer {
 
     fn current_scope(&self) -> HirScopeId {
         self.scope_stack.last().copied().unwrap_or_else(|| HirScopeId::from_index(0))
+    }
+
+    fn visit_identifier_with_bareword_context(
+        &mut self,
+        node: &Node,
+        confidence: RecoveryConfidence,
+        context: BarewordContext,
+    ) {
+        if !matches!(node.kind, NodeKind::Identifier { .. }) {
+            self.visit(node, confidence);
+            return;
+        }
+
+        let previous = self.bareword_context;
+        self.bareword_context = context;
+        self.visit(node, confidence);
+        self.bareword_context = previous;
+    }
+
+    fn visit_require_args(&mut self, args: &[Node], confidence: RecoveryConfidence) {
+        let Some((first, rest)) = args.split_first() else {
+            return;
+        };
+
+        self.visit_identifier_with_bareword_context(
+            first,
+            confidence,
+            BarewordContext::ModuleRequest,
+        );
+        for arg in rest {
+            self.visit(arg, confidence);
+        }
+    }
+
+    fn classify_bareword(&self, name: &str) -> BarewordRole {
+        match self.bareword_context {
+            BarewordContext::ModuleRequest => BarewordRole::ModuleRequest,
+            BarewordContext::MethodReceiver => BarewordRole::MethodReceiver,
+            BarewordContext::IndirectObject => BarewordRole::IndirectObject,
+            BarewordContext::HashKey => BarewordRole::HashKey,
+            BarewordContext::Expression if name.contains("::") => BarewordRole::QualifiedName,
+            BarewordContext::Expression => BarewordRole::Expression,
+        }
     }
 
     fn enter_scope(
