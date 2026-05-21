@@ -282,8 +282,9 @@ pub fn run(base: String, mode: CheckMode) -> Result<()> {
 ///
 /// Used by the `resolve-package-name` CLI subcommand and the pre-push hook.
 pub fn resolve_single_package_name(project_root: &Path, crate_dir: &str) -> Result<String> {
+    let normalized = crate_dir.replace('\\', "/");
     let mut dirs = BTreeSet::new();
-    dirs.insert(crate_dir.trim_end_matches('/').to_string());
+    dirs.insert(normalized.trim_end_matches('/').to_string());
     let names = resolve_package_names(project_root, &dirs)?;
     names
         .into_iter()

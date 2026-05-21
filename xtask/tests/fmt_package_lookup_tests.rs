@@ -258,6 +258,23 @@ fn resolve_trailing_slash_normalized() -> Result<()> {
 // ---------------------------------------------------------------------------
 
 #[test]
+fn resolve_windows_style_trailing_backslash_normalized() -> Result<()> {
+    let ws = make_mismatched_workspace()?;
+    let output = Command::cargo_bin("xtask")?
+        .current_dir(ws.path())
+        .args(["resolve-package-name", r"crates\my-dir\"])
+        .output()?;
+    assert!(
+        output.status.success(),
+        "windows-style trailing backslash should resolve correctly; stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout)?;
+    assert_eq!(stdout.trim(), "my-package");
+    Ok(())
+}
+
+#[test]
 fn resolve_multiple_trailing_slashes_normalized() -> Result<()> {
     let ws = make_mismatched_workspace()?;
     let output = Command::cargo_bin("xtask")?
