@@ -4,7 +4,7 @@
 > It does not generate metrics, broaden live provider behavior, or replace the
 > provider-specific proof surfaces.
 
-Last reviewed: 2026-05-19.
+Last reviewed: 2026-05-21.
 
 This page answers:
 
@@ -370,9 +370,13 @@ with zero returned edits; Catalyst `get_action` proves compiler-allowed
 source-backed definition evidence plus rollback proof still returns no edits
 when the workspace identity guard finds ambiguous project-shaped identity; the
 package-variable and package-declaration receipt proves the source guard blocks
-non-subroutine and package-wide requests with empty edits. These receipts do not
-justify broader symbol deletion, generated/dynamic deletion,
-fallback/no-source deletion, or server-applied edits.
+non-subroutine and package-wide requests with empty edits. The
+RealBaseline live UX receipt now records the same referenced-source blocker
+through `perl.safeDeleteSymbol`: referenced `helper` returns `blocked` with
+`references_exist`, zero returned edits, no server-applied edits, and a
+copyable explain-provider-decision payload. These receipts do not justify
+broader symbol deletion, generated/dynamic deletion, fallback/no-source
+deletion, or server-applied edits.
 
 Parser raw-bucket work, Linux corpus refresh, security alert classification,
 Rust 1.95 rollout, native formatter, native critic, PIR, and determinism remain

@@ -117,11 +117,9 @@ rule = "Merge clean leaf work; escalate trust-adjacent surfaces instead of treat
 
 [trust.next]
 items = [
-  "real_perl_editor_trust_smoke_receipt",
+  "rename_fallback_edit_freshness_receipt",
   "workspace_symbol_generated_no_source_proof",
   "semantic_token_scoped_class_proof",
-  "safe_delete_referenced_source_blockers",
-  "rename_fallback_edit_freshness_receipt",
 ]
 
 [substrate.next]
@@ -180,7 +178,7 @@ claim_boundary = "Sync policy docs only; no branch protection, mirror, or releas
 
 [[work_item]]
 id = "real-perl-editor-trust-smoke-receipt"
-status = "active"
+status = "completed"
 lane = "trust"
 claim_boundary = "Product-level provider smoke receipt only; no provider behavior broadening, support-tier promotion, or release claim."
 files = [
@@ -191,6 +189,44 @@ files = [
 commands = [
   "rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_44_real_editor_trust_smoke_receipt --profile agent --locked -- --nocapture --test-threads=1",
   "rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "safe-delete-referenced-source-blockers"
+status = "completed"
+lane = "trust"
+claim_boundary = "Safe-delete referenced-source blocker receipt only; no provider behavior broadening, support-tier promotion, or server-applied edits."
+files = [
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_45_safe_delete_referenced_source_blocker.rs",
+  "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/provider_confidence_matrix.md",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_45_safe_delete_referenced_source_blocker --profile agent --locked -- --nocapture --test-threads=1",
+  "rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "rename-fallback-edit-freshness-receipt"
+status = "active"
+lane = "trust"
+claim_boundary = "Rename fallback/edit-freshness receipt only; no broader package/compiler-backed rename promotion."
+files = [
+  "crates/perl-lsp-rs/src/runtime/language/refactor_runtime_blocker_tests.rs",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/provider_confidence_matrix.md",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-rs --lib refactor_runtime_blocker --profile agent --locked -- --nocapture",
   "rtk cargo xtask check-active-goal-manifest",
   "rtk cargo xtask check-support-claims",
   "rtk cargo xtask check-provider-confidence-matrix",

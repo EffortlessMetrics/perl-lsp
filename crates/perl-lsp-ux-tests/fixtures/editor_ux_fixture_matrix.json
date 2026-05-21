@@ -1280,6 +1280,33 @@
       ]
     },
     {
+      "id": "safe_delete_referenced_source_blocker",
+      "scenario_file": "ux_scenario_45_safe_delete_referenced_source_blocker.rs",
+      "subsystem_owner": "editor_trust",
+      "ci_tier": "pr",
+      "component": "safe_delete",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "request live safe-delete on a source-backed helper that is still referenced by another file",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "perl.safeDeleteSymbol returns a blocked decision for the referenced helper",
+        "the blocked result returns zero workspace edits and does not apply edits",
+        "explain-provider-decision replays the references_exist blocker with a copyable payload"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "real_workspace_providers",
       "scenario_file": "ux_scenario_20_real_workspace_providers.rs",
       "subsystem_owner": "editor_intelligence",
