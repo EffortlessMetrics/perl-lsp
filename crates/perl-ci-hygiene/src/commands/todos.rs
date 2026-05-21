@@ -316,6 +316,9 @@ pub(crate) fn has_unlinked_todo_in_perl_line(line: &str, token_re: &Regex) -> bo
 #[derive(Clone, Copy)]
 struct PerlQuoteLikeState {
     close_delimiter: char,
+    nested_delimiter: Option<char>,
+    nested_depth: u16,
+    expecting_next_part: bool,
     remaining_closures: u8,
     escaped: bool,
 }
@@ -341,11 +344,36 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
                 perl_quote_like = Some(quote_like);
                 continue;
             }
+            if let Some(open_delimiter) = quote_like.nested_delimiter {
+                if quote_like.expecting_next_part {
+                    if ch.is_whitespace() {
+                        perl_quote_like = Some(quote_like);
+                        continue;
+                    }
+                    if ch == open_delimiter {
+                        quote_like.expecting_next_part = false;
+                        perl_quote_like = Some(quote_like);
+                        continue;
+                    }
+                    quote_like.expecting_next_part = false;
+                }
+                if ch == open_delimiter {
+                    quote_like.nested_depth = quote_like.nested_depth.saturating_add(1);
+                    perl_quote_like = Some(quote_like);
+                    continue;
+                }
+                if ch == quote_like.close_delimiter && quote_like.nested_depth > 0 {
+                    quote_like.nested_depth = quote_like.nested_depth.saturating_sub(1);
+                    perl_quote_like = Some(quote_like);
+                    continue;
+                }
+            }
             if ch == quote_like.close_delimiter {
                 quote_like.remaining_closures = quote_like.remaining_closures.saturating_sub(1);
                 if quote_like.remaining_closures == 0 {
                     perl_quote_like = None;
                 } else {
+                    quote_like.expecting_next_part = quote_like.nested_delimiter.is_some();
                     perl_quote_like = Some(quote_like);
                 }
             } else {
@@ -491,8 +519,19 @@ fn perl_quote_like_state_at_delimiter(
         '<' => '>',
         other => other,
     };
+    let nested_delimiter = match delimiter {
+        '(' | '{' | '[' | '<' => Some(delimiter),
+        _ => None,
+    };
     if matches!(op, "m" | "q" | "qq" | "qw" | "qx" | "qr" | "s" | "tr" | "y") {
-        Some(PerlQuoteLikeState { close_delimiter, remaining_closures, escaped: false })
+        Some(PerlQuoteLikeState {
+            close_delimiter,
+            nested_delimiter,
+            nested_depth: 0,
+            expecting_next_part: false,
+            remaining_closures,
+            escaped: false,
+        })
     } else {
         None
     }
