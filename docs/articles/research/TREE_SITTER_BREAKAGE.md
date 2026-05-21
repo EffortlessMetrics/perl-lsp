@@ -1,16 +1,22 @@
-# Why Tree-Sitter Failed for Perl
+# Tree-sitter Perl Differentials (Historical Vendored Snapshot)
 
-*Seven concrete patterns that defeated tree-sitter's GLR parser generator, and why a stateless grammar formalism cannot express Perl's context-sensitive syntax.*
+*Seven concrete patterns from perl-lsp's historical vendored tree-sitter snapshot and why that snapshot did not meet perl-lsp requirements at measurement time.*
 
 *Updated 2026-05-16: empirical findings from PR #9170 are summarized in the "Measured Behavior" section below.*
 
 ---
 
+## Claim Boundary
+
+The v1 results in this document describe the vendored `tree-sitter-perl-c` target used by perl-lsp at the time of measurement. They do **not** assert that current upstream Tree-sitter Perl targets have the same behavior.
+
+Current upstream behavior claims require fresh `perl-parser-comparison` receipts for the target being discussed.
+
 ## Background
 
 The perl-lsp project began as a tree-sitter grammar for Perl. Tree-sitter is the dominant parser generator for IDE use cases — it powers syntax highlighting, code folding, and structural navigation in Neovim, Helix, Zed, and GitHub's code view. It works brilliantly for Python, JavaScript, TypeScript, Rust, Go, C, and dozens of other languages.
 
-It does not work for Perl.
+Our old vendored `tree-sitter-perl` snapshot did not meet perl-lsp's accuracy, recovery, and latency requirements.
 
 The v1 tree-sitter parser lives in `tree-sitter-perl/` and is kept only for benchmark comparison. The grammar file (`grammar.js`) and the scanner (`scanner.c`) together tell the story of why Perl defeated the formalism.
 
@@ -29,14 +35,14 @@ if (/error/) { die; }       # / starts a regex after keyword
 $x /= 2;                    # /= is division-assign
 ```
 
-### Why Tree-Sitter Fails
+### Why the Historical Vendored Target Missed perl-lsp Requirements
 
 Tree-sitter grammars are context-free. The lexer (external scanner in `scanner.c`) runs independently of the parser — it does not know what the parser just finished parsing. But the meaning of `/` depends entirely on what came before:
 
 - After a term (`$variable`, number, `)`, `]`, `}`): `/` is division
 - After an operator, keyword, `(`, `[`, `{`, `=~`: `/` starts a regex
 
-This is **lexer-parser coupling** — the lexer needs parser state to produce correct tokens. Tree-sitter's architecture explicitly prohibits this. The external scanner can maintain internal state, but it cannot query the parse stack.
+This is **lexer-parser coupling** — the lexer needs parser state to produce correct tokens. Tree-sitter can encode substantial syntactic context through grammar state, GLR conflicts, precedence, external tokens, `valid_symbols`, and serialized external-scanner state, but the external scanner still cannot directly query parse-stack internals.
 
 ### Attempted Workarounds in scanner.c
 
@@ -71,7 +77,7 @@ Second heredoc body
 B
 ```
 
-### Why Tree-Sitter Fails
+### Why the Historical Vendored Target Missed perl-lsp Requirements
 
 Tree-sitter parsers are incremental — they process input left-to-right, token-by-token. When the parser sees `<<END`, it expects the heredoc body to follow. But the body starts on the *next* line. The rest of the current line (after `<<END;`) is still valid code.
 
@@ -115,7 +121,7 @@ map { $_ * 2 } @list;             # block (builtin argument)
 +{ key => 'value' }               # hash ref (disambiguated by +)
 ```
 
-### Why Tree-Sitter Fails
+### Why the Historical Vendored Target Missed perl-lsp Requirements
 
 Tree-sitter uses GLR (Generalized LR) parsing, which handles ambiguity by maintaining multiple parse stacks in parallel. When the parser sees `{`, it forks: one stack treats it as a hash constructor, another as a block start. When one stack encounters an error, it is discarded.
 
@@ -127,7 +133,7 @@ For Perl's `{}` ambiguity, GLR works in simple cases. But it fails on:
 
 GLR's parallel stacks multiply memory usage and parsing time. Each ambiguous `{` doubles the number of active stacks. Nested ambiguities (`{ { { ... } } }`) create exponential growth.
 
-### Impact on Tree-Sitter Performance
+### Impact Observed in Historical Vendored Target Performance
 
 In the tree-sitter grammar, `{}` disambiguation caused:
 - Conflict count in the grammar: 15+ (tree-sitter reports these during generation)
@@ -149,7 +155,7 @@ s|old|new|g         # substitution with | | delimiters
 tr{a-z}{A-Z}        # transliteration with paired { } delimiters
 ```
 
-### Why Tree-Sitter Fails
+### Why the Historical Vendored Target Missed perl-lsp Requirements
 
 Perl's quote-like operators (`q`, `qq`, `qw`, `qr`, `s`, `tr`, `y`, `m`) accept **arbitrary delimiter pairs**. Any non-whitespace character can be a delimiter, and paired delimiters (`()`, `[]`, `{}`, `<>`) nest correctly.
 
@@ -191,7 +197,7 @@ $^W = 1;               # warnings flag ($^ + W)
 ${^MATCH}              # named capture group
 ```
 
-### Why Tree-Sitter Fails
+### Why the Historical Vendored Target Missed perl-lsp Requirements
 
 Perl has dozens of special variables that look like syntax errors to a naive lexer:
 - `$/` looks like a variable `$` followed by the division operator
@@ -224,7 +230,7 @@ print STDERR "error";  # STDERR is filehandle, not argument
 close $fh;             # $fh->close() in some contexts
 ```
 
-### Why Tree-Sitter Fails
+### Why the Historical Vendored Target Missed perl-lsp Requirements
 
 `new Foo()` is syntactically identical to calling a function `new` with argument `Foo()`. The tree-sitter parser cannot distinguish between:
 - `new Foo()` — indirect object syntax (method call)
@@ -257,7 +263,7 @@ $address
 .
 ```
 
-### Why Tree-Sitter Fails
+### Why the Historical Vendored Target Missed perl-lsp Requirements
 
 A `format` declaration contains a completely different mini-language. The body between `=` and the terminating `.` uses format-specific syntax (`@<<<`, `@>>>`, `@|||`) that is not valid Perl. The parser must:
 
@@ -310,7 +316,7 @@ This state had to be serialized and deserialized for tree-sitter's incremental p
 
 ## The Key Insight: Mode-Based Lexer
 
-The fundamental problem with tree-sitter for Perl is the **separation of lexer and parser**. Tree-sitter's architecture requires the lexer (external scanner) to produce tokens independently of the parser's state. Perl requires the lexer to know what the parser is doing.
+For perl-lsp, the historical vendored target was insufficient because many high-value IDE decisions require richer lexer/parser mode coordination, deferred constructs, semantic facts, runtime prototypes, BEGIN-time effects, source-filter output, or compile-time symbol-table changes in addition to syntactic context.
 
 The v3 parser's key insight is the `LexerMode` state machine:
 
