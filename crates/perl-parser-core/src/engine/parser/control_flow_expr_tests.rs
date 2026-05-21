@@ -114,6 +114,35 @@ mod tests {
     }
 
     #[test]
+    fn test_redo_with_label_in_ternary_then_branch() {
+        let input = "$cond ? redo OUTER : $x;";
+        let ast = parse_code(input);
+        assert!(ast.is_some(), "Failed to parse: {}", input);
+        assert_no_errors(input, ast.as_ref().unwrap_or_else(|| unreachable!()));
+
+        if let Some(ref node) = ast
+            && let NodeKind::Program { ref statements } = node.kind
+        {
+            let stmt = &statements[0];
+            let expr = match &stmt.kind {
+                NodeKind::ExpressionStatement { expression } => expression.as_ref(),
+                other => unreachable!("Expected ExpressionStatement, got {:?}", other),
+            };
+            if let NodeKind::Ternary { then_expr, .. } = &expr.kind {
+                match &then_expr.kind {
+                    NodeKind::LoopControl { op, label } => {
+                        assert_eq!(op, "redo");
+                        assert_eq!(label.as_deref(), Some("OUTER"));
+                    }
+                    other => unreachable!("Expected LoopControl in then branch, got {:?}", other),
+                }
+            } else {
+                unreachable!("Expected Ternary, got {:?}", expr.kind);
+            }
+        }
+    }
+
+    #[test]
     fn test_last_in_ternary_else_branch() {
         // $cond ? $x : last
         let input = "$cond ? $x : last;";
