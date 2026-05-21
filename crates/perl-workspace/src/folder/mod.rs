@@ -241,6 +241,12 @@ mod tests {
     }
 
     #[test]
+    fn parses_percent_encoded_file_uri_path_segment() {
+        let parsed = workspace_folder_to_path("file:///tmp/my%20project");
+        assert_eq!(parsed, PathBuf::from("/tmp/my project"));
+    }
+
+    #[test]
     fn extracts_workspace_uris() {
         let entries = vec![
             json!({"uri": "file:///one"}),
