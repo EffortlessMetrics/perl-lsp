@@ -28,6 +28,8 @@ pub struct WorkspaceFolderChange {
 /// are preserved as raw input instead of being converted into filesystem paths.
 #[must_use]
 pub fn workspace_folder_to_path(workspace_folder: &str) -> PathBuf {
+    let workspace_folder = workspace_folder.trim();
+
     if has_file_uri_scheme(workspace_folder) {
         // A URI with a non-local host (e.g. `file://evil.example.com/path`)
         // must not be passed to platform URI conversion first: on Windows that
@@ -53,10 +55,6 @@ pub fn workspace_folder_to_path(workspace_folder: &str) -> PathBuf {
 
 fn has_file_uri_scheme(value: &str) -> bool {
     value.get(..5).is_some_and(|prefix| prefix.eq_ignore_ascii_case("file:"))
-}
-
-fn has_file_uri_prefix(value: &str) -> bool {
-    value.get(..7).is_some_and(|prefix| prefix.eq_ignore_ascii_case("file://"))
 }
 
 fn trim_file_uri_prefix(value: &str) -> &str {
@@ -151,7 +149,7 @@ pub fn extract_workspace_folder_change(event: &Value) -> WorkspaceFolderChange {
 /// This keeps behavior deterministic across absolute POSIX and Windows-style paths.
 #[must_use]
 pub fn root_path_to_file_uri(root_path: &str) -> String {
-    if has_file_uri_prefix(root_path) {
+    if has_file_uri_scheme(root_path) {
         return root_path.to_string();
     }
 
@@ -185,6 +183,11 @@ mod tests {
     #[test]
     fn parses_plain_folder_path() {
         assert_eq!(workspace_folder_to_path("/tmp/project"), PathBuf::from("/tmp/project"));
+    }
+
+    #[test]
+    fn trims_surrounding_whitespace_for_plain_paths() {
+        assert_eq!(workspace_folder_to_path("  /tmp/project  "), PathBuf::from("/tmp/project"));
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -224,6 +227,17 @@ mod tests {
         assert!(path.contains("tmp"));
         assert!(path.contains("project"));
         assert!(!path.contains("localhost/tmp"));
+    }
+
+    #[test]
+    fn root_path_preserves_single_slash_file_uri() {
+        assert_eq!(root_path_to_file_uri("file:/tmp/project"), "file:/tmp/project");
+    }
+
+    #[test]
+    fn trims_surrounding_whitespace_for_file_uri_inputs() {
+        let parsed = workspace_folder_to_path("  file:///tmp/project  ");
+        assert_eq!(parsed, PathBuf::from("/tmp/project"));
     }
 
     #[test]
