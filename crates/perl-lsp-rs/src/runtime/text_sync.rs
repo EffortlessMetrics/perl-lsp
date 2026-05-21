@@ -333,7 +333,8 @@ impl LspServer {
                         }
                         // Skip the synchronous notify_parse_complete below — it was
                         // moved into the background task (or run inline on fallback).
-                        self.publish_diagnostics(uri);
+                        self.publish_parse_errors_fast(uri);
+                        self.publish_diagnostics_debounced(uri);
                         return Ok(());
                     }
                 }
@@ -349,7 +350,8 @@ impl LspServer {
             }
 
             // Send diagnostics (use original URI for client notification)
-            self.publish_diagnostics(uri);
+            self.publish_parse_errors_fast(uri);
+            self.publish_diagnostics_debounced(uri);
         }
 
         Ok(())
