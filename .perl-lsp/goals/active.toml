@@ -183,3 +183,16 @@ id = "real-perl-editor-trust-smoke-receipt"
 status = "active"
 lane = "trust"
 claim_boundary = "Product-level provider smoke receipt only; no provider behavior broadening, support-tier promotion, or release claim."
+files = [
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_44_real_editor_trust_smoke_receipt.rs",
+  "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_44_real_editor_trust_smoke_receipt --profile agent --locked -- --nocapture --test-threads=1",
+  "rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]

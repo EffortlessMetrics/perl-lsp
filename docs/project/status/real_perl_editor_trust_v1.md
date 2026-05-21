@@ -269,6 +269,12 @@ fallback and do not become exact receiver evidence. Completion remains
 `partial-live-with-fallback`; broader generated, dynamic, unknown,
 low-confidence, stale, and workspace-wide method completion still need separate
 proof.
+The product-level Real Perl Editor Trust smoke receipt now records one
+CPAN-style workspace pass across completion, definition, diagnostics, workspace
+trust report, safe-delete preview, and explain-provider-decision. It is a
+receipt-only smoke: it records acted, fallback, setup-report, and no-edit
+refusal surfaces without broadening provider behavior, promoting support tiers,
+or moving release lineage.
 
 1. `test(workspace-symbols): add additional generated/no-source project variant only if broader generated-symbol expansion is being considered`
 2. `test(rename): keep package/compiler-backed fallback and edit-freshness receipts current before broader promotion`
