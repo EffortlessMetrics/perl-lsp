@@ -30,7 +30,7 @@ pub enum StackParseError {
 /// - `main::(script.pl):42:`
 static CONTEXT_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
     Regex::new(
-        r"^(?:(?P<func>[A-Za-z_][\w:]*+?)::(?:\((?P<file>[^:)]+):(?P<line>\d+)\):?|__ANON__)|main::(?:\((?P<file2_paren>[^)]+)\)|(?P<file2>[^:)\s]+)):(?P<line2>\d+):?)",
+        r"^(?:(?P<func>[A-Za-z_][\w:]*+?)::(?:\((?P<file>[^:)]+):(?P<line>\d+)\):?|__ANON__)|main::(?:\((?P<file2_paren>[^)]+)\)|(?P<file2>[^:]+)):(?P<line2>\d+):?)",
     )
 });
 
@@ -426,6 +426,17 @@ mod tests {
         use perl_tdd_support::must_some;
         let mut parser = PerlStackParser::new();
         let line = "main::(script with space.pl):42:";
+        let frame = must_some(parser.parse_frame(line, 0));
+        assert_eq!(frame.name, "main");
+        assert_eq!(frame.line, 42);
+        assert_eq!(frame.file_path(), Some("script with space.pl"));
+    }
+
+    #[test]
+    fn test_parse_context_main_without_parentheses_allows_spaces_in_file() {
+        use perl_tdd_support::must_some;
+        let mut parser = PerlStackParser::new();
+        let line = "main::script with space.pl:42:";
         let frame = must_some(parser.parse_frame(line, 0));
         assert_eq!(frame.name, "main");
         assert_eq!(frame.line, 42);
