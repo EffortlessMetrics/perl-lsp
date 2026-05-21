@@ -50,6 +50,14 @@ claim unless the live state and next-proof columns say so explicitly.
 
 ## Operating Rules
 
+- Completion note, 2026-05-21: the constant-provider substrate proof records
+  static `use constant` scalar, quoted scalar, hash, quoted-hash, and plus-hash
+  extraction plus
+  `completion_compiler_shadow_records_constant_provider_fact_trace`. Constants
+  are traced as fresh `CompilerFact` / `SemanticAnalyzer` completion evidence in
+  shadow mode only for this receipt. This does not promote completion behavior,
+  support tiers, provider cutover state, or broad constant inference.
+
 - Rename note, 2026-05-17: `refactor_runtime_blocker_ux_package_local_live_pilot_blocks_real_workspace_imported_symbol_false_allow`
   records the RealBaseline imported-symbol false-allow boundary for the
   package-local live pilot. It proves the live path returns no edits and a

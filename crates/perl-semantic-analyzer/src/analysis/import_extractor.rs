@@ -578,19 +578,38 @@ impl ImportExtractor {
 
         // Hash-ref form: `use constant { FOO => 1, BAR => 2 }`
         // Args look like: ["{", "FOO", "=>", "1", "BAR", "=>", "2", "}"]
-        if args.first().map(|a| a.as_str()) == Some("{") {
-            let mut i = 1; // skip opening brace
+        let starts_hash_form = args.first().map(|a| a.as_str()) == Some("{")
+            || args.first().map(|a| a.as_str()) == Some("+{")
+            || (args.first().map(|a| a.as_str()) == Some("+")
+                && args.get(1).map(|a| a.as_str()) == Some("{"));
+        if starts_hash_form {
+            let mut i = 0;
             while i < args.len() {
                 let token = args[i].trim();
-                if token == "}" || token == "=>" || token == "," {
+                if Self::is_constant_hash_punctuation(token) {
                     i += 1;
                     continue;
                 }
-                // After a name, skip the => and value
-                if i + 1 < args.len() && args[i + 1].trim() == "=>" {
-                    constant_names.push(token.to_string());
-                    // Skip => and value
-                    i += 3;
+                if i + 1 < args.len()
+                    && args[i + 1].trim() == "=>"
+                    && let Some(name) = Self::constant_name_candidate(token)
+                {
+                    constant_names.push(name);
+                    i += 2;
+                    let mut nesting = 0usize;
+                    while i < args.len() {
+                        let value_token = args[i].trim();
+                        if nesting == 0 && (value_token == "," || value_token == "}") {
+                            break;
+                        }
+                        match value_token {
+                            "{" | "[" | "(" => nesting += 1,
+                            "}" | "]" | ")" if nesting > 0 => nesting -= 1,
+                            "}" if nesting == 0 => break,
+                            _ => {}
+                        }
+                        i += 1;
+                    }
                 } else {
                     i += 1;
                 }
@@ -605,8 +624,8 @@ impl ImportExtractor {
         // Args look like: ["PI", "3.14"] or ["PI", "=>", "3.14"]
         else if let Some(name) = args.first() {
             let trimmed = name.trim();
-            if Self::looks_like_constant_name(trimmed) {
-                constant_names.push(trimmed.to_string());
+            if let Some(name) = Self::constant_name_candidate(trimmed) {
+                constant_names.push(name);
             }
         }
 
@@ -709,6 +728,15 @@ impl ImportExtractor {
             return false;
         }
         s.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+    }
+
+    fn constant_name_candidate(s: &str) -> Option<String> {
+        let name = Self::unquote(s.trim());
+        Self::looks_like_constant_name(name).then(|| name.to_string())
+    }
+
+    fn is_constant_hash_punctuation(s: &str) -> bool {
+        matches!(s, "+" | "+{" | "{" | "}" | "=>" | ",")
     }
 }
 
@@ -867,6 +895,68 @@ mod tests {
         if let ImportSymbols::Explicit(names) = &spec.symbols {
             assert!(names.contains(&"FOO".to_string()), "missing 'FOO' in {names:?}");
             assert!(names.contains(&"BAR".to_string()), "missing 'BAR' in {names:?}");
+        } else {
+            return Err(format!("expected Explicit, got {:?}", spec.symbols));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_constant_quoted_scalar() -> Result<(), String> {
+        let specs = parse_and_extract("use constant 'HTTP_OK' => 200;");
+        let spec = specs.first().ok_or("expected at least one ImportSpec")?;
+
+        assert_eq!(spec.module, "constant");
+        assert_eq!(spec.kind, ImportKind::UseConstant);
+        if let ImportSymbols::Explicit(names) = &spec.symbols {
+            assert!(names.contains(&"HTTP_OK".to_string()), "missing 'HTTP_OK' in {names:?}");
+        } else {
+            return Err(format!("expected Explicit, got {:?}", spec.symbols));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_constant_quoted_hash_ref() -> Result<(), String> {
+        let specs = parse_and_extract(r#"use constant { 'FOO' => 1, "BAR" => 2 };"#);
+        let spec = specs.first().ok_or("expected at least one ImportSpec")?;
+
+        assert_eq!(spec.module, "constant");
+        assert_eq!(spec.kind, ImportKind::UseConstant);
+        if let ImportSymbols::Explicit(names) = &spec.symbols {
+            assert!(names.contains(&"FOO".to_string()), "missing 'FOO' in {names:?}");
+            assert!(names.contains(&"BAR".to_string()), "missing 'BAR' in {names:?}");
+        } else {
+            return Err(format!("expected Explicit, got {:?}", spec.symbols));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_constant_plus_hash_ref() -> Result<(), String> {
+        let specs = parse_and_extract("use constant +{ FOO => 1, BAR => 2 };");
+        let spec = specs.first().ok_or("expected at least one ImportSpec")?;
+
+        assert_eq!(spec.module, "constant");
+        assert_eq!(spec.kind, ImportKind::UseConstant);
+        if let ImportSymbols::Explicit(names) = &spec.symbols {
+            assert!(names.contains(&"FOO".to_string()), "missing 'FOO' in {names:?}");
+            assert!(names.contains(&"BAR".to_string()), "missing 'BAR' in {names:?}");
+        } else {
+            return Err(format!("expected Explicit, got {:?}", spec.symbols));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_constant_hash_ref_ignores_nested_fat_comma_values() -> Result<(), String> {
+        let specs = parse_and_extract("use constant { FOO => { nested => 1 }, BAR => 2 };");
+        let spec = specs.first().ok_or("expected at least one ImportSpec")?;
+
+        assert_eq!(spec.module, "constant");
+        assert_eq!(spec.kind, ImportKind::UseConstant);
+        if let ImportSymbols::Explicit(names) = &spec.symbols {
+            assert_eq!(names, &vec!["FOO".to_string(), "BAR".to_string()]);
         } else {
             return Err(format!("expected Explicit, got {:?}", spec.symbols));
         }

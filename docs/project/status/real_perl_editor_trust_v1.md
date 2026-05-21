@@ -280,8 +280,13 @@ trust report, safe-delete preview, and explain-provider-decision. It is a
 receipt-only smoke: it records acted, fallback, setup-report, and no-edit
 refusal surfaces without broadening provider behavior, promoting support tiers,
 or moving release lineage.
+The constant-provider substrate proof records static `use constant` scalar,
+quoted scalar, hash, quoted-hash, and plus-hash extraction plus a completion
+shadow receipt that traces constants as fresh `CompilerFact` /
+`SemanticAnalyzer` evidence. It does not change live completion behavior,
+provider cutover state, support tiers, or broad constant inference claims.
 
-1. `test(semantic-tokens): add another scoped compiler-token class only with output-neutral proof`
+1. `docs(status): review semantic-token scoped class support without broad compiler-token promotion`
 2. `test(dap): add DAP includePaths cutover proof only if native DAP module-path behavior is being promoted`
 
 Provider decision explanations are already partial-live through
