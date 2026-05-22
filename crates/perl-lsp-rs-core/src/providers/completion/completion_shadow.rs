@@ -973,6 +973,55 @@ mod tests {
     }
 
     #[test]
+    fn completion_compiler_shadow_records_constant_provider_fact_trace()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let queries = StubSemanticQueries {
+            visible_result: vec![make_visible(
+                "HTTP_OK",
+                VisibleSymbolSource::Constant,
+                Confidence::High,
+            )],
+        };
+
+        let result = completion_visibility_shadow(
+            vec!["legacy_http_ok".to_string()],
+            &queries,
+            FileId(1),
+            42,
+            None,
+            "use constant HTTP_OK",
+        );
+
+        assert_eq!(result.legacy_symbols, vec!["legacy_http_ok".to_string()]);
+        assert_eq!(result.receipt.new_result.match_count, 1);
+        assert!(
+            result
+                .receipt
+                .new_result
+                .identities
+                .iter()
+                .any(|identity| identity == "HTTP_OK:Constant"),
+            "constant fact should be present in completion shadow receipt"
+        );
+        assert!(result.receipt.notes.iter().any(|note| note == "compiler_fact_candidates=1"));
+
+        let trace = result
+            .receipt
+            .fact_source_traces
+            .iter()
+            .find(|trace| {
+                trace.surface == ProviderSurface::Completion
+                    && trace.source == ProviderFactSourceKind::CompilerFact
+                    && trace.provenance == Provenance::SemanticAnalyzer
+            })
+            .ok_or("missing constant completion fact trace")?;
+        assert_eq!(trace.confidence, Confidence::High);
+        assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Shadow);
+        Ok(())
+    }
+
+    #[test]
     fn completion_compiler_shadow_labels_dynamic_boundary_blockers()
     -> Result<(), Box<dyn std::error::Error>> {
         let syms = vec![make_visible(

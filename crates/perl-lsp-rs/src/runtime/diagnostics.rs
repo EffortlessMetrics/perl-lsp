@@ -434,6 +434,10 @@ impl LspServer {
     /// Only publishes if client doesn't support pull diagnostics to avoid
     /// double-flow for modern LSP 3.17+ clients.
     pub(crate) fn publish_diagnostics(&self, uri: &str) {
+        if self.client_supports_pull_diags.load(Ordering::Relaxed) {
+            return;
+        }
+
         let normalized_uri = self.normalize_uri_key(uri);
 
         // Snapshot all fields needed from DocumentState while holding the lock briefly,
@@ -661,21 +665,17 @@ impl LspServer {
             "Publishing diagnostics"
         );
 
-        // Only publish if client doesn't support pull diagnostics
-        // This avoids double-flow for modern clients
-        if !self.client_supports_pull_diags.load(Ordering::Relaxed) {
-            // Send diagnostics notification with version
-            // This ensures diagnostics are cleared when all errors are fixed
-            if let Err(e) = self.notify(
-                "textDocument/publishDiagnostics",
-                json!({
-                    "uri": uri,
-                    "version": version,
-                    "diagnostics": lsp_diagnostics
-                }),
-            ) {
-                tracing::error!(uri, error = %e, "Failed to publish diagnostics");
-            }
+        // Send diagnostics notification with version.
+        // This ensures diagnostics are cleared when all errors are fixed.
+        if let Err(e) = self.notify(
+            "textDocument/publishDiagnostics",
+            json!({
+                "uri": uri,
+                "version": version,
+                "diagnostics": lsp_diagnostics
+            }),
+        ) {
+            tracing::error!(uri, error = %e, "Failed to publish diagnostics");
         }
     }
 
@@ -2495,6 +2495,41 @@ mod tests {
              buffer grew by {} bytes",
             len_after.saturating_sub(len_before)
         );
+    }
+
+    /// Guard: the full diagnostic path must also stay silent for pull clients.
+    /// This prevents didOpen from doing slow push-diagnostic work for clients
+    /// that will request diagnostics on demand.
+    #[test]
+    fn slow_path_silent_for_pull_diagnostic_clients() -> Result<(), Box<dyn std::error::Error>> {
+        let (server, buf) = make_server_with_capture();
+        let uri = "file:///slow_path_pull_diags_test.pl";
+        server.client_supports_pull_diags.store(true, Ordering::Relaxed);
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "sub { SYNTAX ERROR }\n"
+            }
+        })))?;
+
+        assert_eq!(
+            0,
+            buf.lock().len(),
+            "didOpen must not emit push diagnostics for pull-diagnostic clients"
+        );
+
+        server.publish_diagnostics(uri);
+        drop(server);
+        let bytes = buf.lock().clone();
+        let text = String::from_utf8(bytes)?;
+        assert!(
+            !text.contains("publishDiagnostics"),
+            "slow path must not emit push diagnostics for pull-diagnostic clients; got: {text:?}"
+        );
+
+        Ok(())
     }
 
     #[test]

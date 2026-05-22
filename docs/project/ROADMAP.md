@@ -8,7 +8,7 @@
 
 ## Current Framing
 
-- Workspace version line: `v0.14.0`
+- Workspace version line: `v0.15.0`
 - Current release train: `v0.14.0` public-alpha channel closeout, with remaining channel receipts still being reconciled
 - Published crate surface target: 31 crates from `[workspace.metadata.publish.allow]`
 - Active work: reconcile live release state, keep install-surface receipts wired into the runbook, and keep release language public-alpha rather than stable/GA

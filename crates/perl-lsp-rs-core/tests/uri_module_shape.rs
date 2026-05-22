@@ -119,3 +119,23 @@ fn uri_module_parse_uri_handles_supplementary_plane_codepoints() {
         "parse_uri must encode 4-byte UTF-8 codepoints intact"
     );
 }
+
+#[test]
+fn uri_module_parse_uri_ignores_ascii_whitespace_around_uri() {
+    let uri = parse_uri("  file:///tmp/trimmed.pm\n");
+    assert_eq!(
+        uri.as_str(),
+        "file:///tmp/trimmed.pm",
+        "parse_uri should trim surrounding ASCII whitespace before parsing"
+    );
+}
+
+#[test]
+fn uri_module_parse_uri_ignores_leading_bom_before_whitespace() {
+    let uri = parse_uri("\u{feff}  file:///tmp/trimmed.pm\n");
+    assert_eq!(
+        uri.as_str(),
+        "file:///tmp/trimmed.pm",
+        "parse_uri should strip a leading BOM before trimming whitespace"
+    );
+}

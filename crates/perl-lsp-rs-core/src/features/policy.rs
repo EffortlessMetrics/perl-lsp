@@ -172,12 +172,12 @@ mod tests {
 
     #[test]
     fn from_kind_preserves_all_variants() {
-        assert_eq!(FeatureProfile::from_kind(FeatureProfileKind::GaLock), FeatureProfile::GaLock,);
+        assert_eq!(FeatureProfile::from_kind(FeatureProfileKind::GaLock), FeatureProfile::GaLock);
         assert_eq!(
             FeatureProfile::from_kind(FeatureProfileKind::Production),
             FeatureProfile::Production,
         );
-        assert_eq!(FeatureProfile::from_kind(FeatureProfileKind::All), FeatureProfile::All,);
+        assert_eq!(FeatureProfile::from_kind(FeatureProfileKind::All), FeatureProfile::All);
     }
 
     // ── from_ga_lock_enabled ────────────────────────────────────────

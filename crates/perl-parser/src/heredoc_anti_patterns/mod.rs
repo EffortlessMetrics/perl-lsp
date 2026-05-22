@@ -3,10 +3,10 @@
 //! This module provides detection and analysis of problematic Perl patterns
 //! that make static parsing difficult or impossible, particularly around heredocs.
 //!
-//! The [`AntiPatternDetector`] scans Perl source for seven categories of
-//! heredoc-related anti-patterns and produces [`Diagnostic`]s describing each
-//! finding, with severity, explanation, suggested fix, and documentation
-//! references.
+//! The [`crate::heredoc_anti_patterns::AntiPatternDetector`] scans Perl source
+//! for seven categories of heredoc-related anti-patterns and produces
+//! [`crate::heredoc_anti_patterns::Diagnostic`]s describing each finding, with
+//! severity, explanation, suggested fix, and documentation references.
 
 mod detectors;
 mod model;

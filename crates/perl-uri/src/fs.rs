@@ -61,12 +61,13 @@ pub fn uri_to_fs_path(uri: &str) -> Option<PathBuf> {
 ///
 /// It returns `None` for non-file schemes, invalid inputs, and relative paths.
 pub fn source_path_from_uri_or_path(input: &str) -> Option<PathBuf> {
-    let path = Path::new(input);
+    let trimmed = input.trim();
+    let path = Path::new(trimmed);
     if path.is_absolute() {
         return Some(path.to_path_buf());
     }
 
-    uri_to_fs_path(input)
+    uri_to_fs_path(trimmed)
 }
 
 /// Convert a filesystem path to a `file://` URI.

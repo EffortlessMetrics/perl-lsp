@@ -7,9 +7,26 @@ use super::*;
 #[allow(dead_code)]
 impl LspServer {
     /// Send a server-to-client request with no parameters (for refresh requests)
-    pub(crate) fn send_request(&self, method: &str, params: Value) -> io::Result<()> {
-        let request_id = self.next_request_id.fetch_add(1, Ordering::SeqCst);
-        self.outbound.send_request(request_id, method, params)
+    pub(crate) fn send_request(&self, method: &str, params: Value) -> io::Result<ServerRequestId> {
+        let id = self.next_server_request_id();
+        self.outbound.send_request(id, method, params)?;
+        Ok(id)
+    }
+
+    pub(crate) fn next_server_request_id(&self) -> ServerRequestId {
+        loop {
+            let current = self.next_request_id.load(Ordering::Relaxed);
+            let next = if current == i32::MAX { 1 } else { current + 1 };
+            if self
+                .next_request_id
+                .compare_exchange(current, next, Ordering::SeqCst, Ordering::Relaxed)
+                .is_ok()
+            {
+                if let Some(id) = ServerRequestId::new(current.max(1)) {
+                    return id;
+                }
+            }
+        }
     }
 
     /// Request client to refresh code lenses (workspace/codeLens/refresh)

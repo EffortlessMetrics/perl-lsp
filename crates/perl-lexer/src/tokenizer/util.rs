@@ -5,13 +5,23 @@
 //! from trailing payload without matching markers embedded in strings,
 //! heredocs, or POD content.
 
+const DATA_SECTION_MARKERS: [&str; 2] = ["__DATA__", "__END__"];
+
+fn may_contain_data_section_marker(text: &str) -> bool {
+    DATA_SECTION_MARKERS.iter().any(|marker| text.contains(marker))
+}
+
+fn marker_is_unindented_line_start(source: &str, marker_start: usize) -> bool {
+    let line_start = source[..marker_start].rfind(['\n', '\r']).map_or(0, |idx| idx + 1);
+    source[line_start..marker_start].is_empty()
+}
+
 /// Find the byte offset of a __DATA__ or __END__ marker in the source text.
 /// Uses the lexer to avoid false positives in heredocs/POD.
 /// Returns the byte offset of the start of the marker, or None if not found.
 pub fn find_data_marker_byte_lexed(s: &str) -> Option<usize> {
     // Cheap prefilter: avoid constructing the lexer when marker substrings are absent.
-    const MARKERS: [&str; 2] = ["__DATA__", "__END__"];
-    if !MARKERS.iter().any(|marker| s.contains(marker)) {
+    if !may_contain_data_section_marker(s) {
         return None;
     }
 
@@ -19,7 +29,9 @@ pub fn find_data_marker_byte_lexed(s: &str) -> Option<usize> {
     let mut lx = PerlLexer::new(s);
     while let Some(tok) = lx.next_token() {
         match tok.token_type {
-            TokenType::DataMarker(_) => return Some(tok.start),
+            TokenType::DataMarker(_) if marker_is_unindented_line_start(s, tok.start) => {
+                return Some(tok.start);
+            }
             TokenType::EOF => break,
             _ => {}
         }
@@ -37,6 +49,10 @@ pub fn code_slice(text: &str) -> &str {
 /// The data section starts at a lexed `__DATA__` or `__END__` marker and includes
 /// the marker line itself.
 pub fn split_code_and_data(text: &str) -> (&str, Option<&str>) {
+    if !may_contain_data_section_marker(text) {
+        return (text, None);
+    }
+
     if let Some(marker_start) = find_data_marker_byte_lexed(text) {
         (&text[..marker_start], Some(&text[marker_start..]))
     } else {
@@ -71,6 +87,41 @@ mod tests {
         // Marker not at line start (should not match)
         let src3 = "print '__DATA__';\n";
         assert_eq!(find_data_marker_byte_lexed(src3), None);
+    }
+
+    #[test]
+    fn test_may_contain_data_section_marker_prefilter() {
+        assert!(!may_contain_data_section_marker("print 'hello';\n"));
+        assert!(may_contain_data_section_marker("__DATA__"));
+        assert!(may_contain_data_section_marker("prefix __END__ suffix"));
+    }
+
+    #[test]
+    fn test_find_data_marker_handles_crlf_and_leading_whitespace() {
+        let crlf_src = "print 'hello';\r\n__DATA__\r\nvalue";
+        assert_eq!(find_data_marker_byte_lexed(crlf_src), Some(16));
+
+        let indented_marker = "print 'hello';\n  __DATA__\nvalue";
+        assert_eq!(find_data_marker_byte_lexed(indented_marker), None);
+    }
+
+    #[test]
+    fn test_split_code_and_data_handles_crlf_line_endings() {
+        let src = "print 'ok';\r\n__DATA__\r\nvalue";
+        assert_eq!(split_code_and_data(src), ("print 'ok';\r\n", Some("__DATA__\r\nvalue")));
+    }
+
+    #[test]
+    fn test_find_data_marker_ignores_marker_inside_regex_literal() {
+        let regex = "my $re = qr/__DATA__/;\nprint 'ok';\n";
+        assert_eq!(find_data_marker_byte_lexed(regex), None);
+    }
+
+    #[test]
+    fn test_find_data_marker_with_cr_only_line_endings() {
+        let src = "print 'hello';\r__DATA__\rpayload";
+        assert_eq!(find_data_marker_byte_lexed(src), Some(15));
+        assert_eq!(split_code_and_data(src), ("print 'hello';\r", Some("__DATA__\rpayload")));
     }
 
     #[test]
@@ -130,6 +181,13 @@ mod tests {
             split_code_and_data(src),
             ("print 'prelude';\n", Some("__DATA__\nchunk\n__END__\nignored"))
         );
+    }
+
+    #[test]
+    fn test_find_data_marker_uses_byte_offsets_with_unicode_prefix() {
+        let src = "say '\u{1F600}';\n__DATA__\npayload";
+        assert_eq!(find_data_marker_byte_lexed(src), Some(12));
+        assert_eq!(split_code_and_data(src), ("say '\u{1F600}';\n", Some("__DATA__\npayload")));
     }
 
     #[test]

@@ -176,10 +176,14 @@ impl TypeDefinitionProvider {
             // Package identifier or Package::method
             NodeKind::Identifier { name } => {
                 if name.contains("::") {
-                    // Qualified name like Package::method
                     let parts: Vec<&str> = name.split("::").collect();
                     if parts.len() >= 2 {
-                        // Get the package name (everything except the last part)
+                        let last = parts[parts.len() - 1];
+                        if last.chars().next().is_some_and(|c| c.is_uppercase()) {
+                            // Qualified package name, like Package::Name.
+                            return Some(name.clone());
+                        }
+                        // Qualified function or method, like Package::method.
                         return Some(parts[..parts.len() - 1].join("::"));
                     }
                 }
@@ -413,21 +417,19 @@ impl TypeDefinitionProvider {
     #[cfg(feature = "lsp-compat")]
     fn infer_object_type(&self, object: &Node) -> Option<String> {
         match &object.kind {
-            NodeKind::Variable { name, .. } => {
-                // Would need to track variable types through analysis
-                // For now, try common patterns like $self
-                if name == "$self" || name == "$this" {
-                    // Would need to find the enclosing package
-                    None
+            NodeKind::Identifier { name } => {
+                if name.contains("::") || name.chars().next().is_some_and(|c| c.is_uppercase()) {
+                    Some(name.clone())
                 } else {
                     None
                 }
             }
-            // Direct constructor call
-            NodeKind::FunctionCall { name, .. } if name == "new" => {
-                // The package should be in the parent context
-                None
-            }
+            // Variables and chained method-call results need data-flow or return facts.
+            // A single-node structural walk cannot prove them safely.
+            NodeKind::Variable { .. }
+            | NodeKind::FunctionCall { .. }
+            | NodeKind::MethodCall { .. }
+            | NodeKind::Binary { .. } => None,
             _ => None,
         }
     }
@@ -739,15 +741,72 @@ $obj->method();
     }
 
     #[test]
-    fn test_extract_type_from_constructor() {
+    fn test_extract_type_from_constructor_cursor_on_method() {
         let code = "my $obj = Package::Name->new();";
         let mut parser = Parser::new(code);
-        let _ast = must(parser.parse());
+        let ast = must(parser.parse());
+        let provider = TypeDefinitionProvider::new();
 
-        let _provider = TypeDefinitionProvider::new();
+        let node_at_new = must_some(provider.find_node_at_offset(&ast, 25));
+        let type_name = provider.extract_type_name(&node_at_new);
 
-        // Would need to traverse to find the right node
-        // This is a simplified test
+        assert_eq!(type_name, Some("Package::Name".to_string()));
+    }
+
+    #[test]
+    fn test_extract_type_from_constructor_cursor_on_package() {
+        let code = "my $obj = Package::Name->new();";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = TypeDefinitionProvider::new();
+
+        let node_at_package = must_some(provider.find_node_at_offset(&ast, 10));
+        let type_name = provider.extract_type_name(&node_at_package);
+
+        assert_eq!(type_name, Some("Package::Name".to_string()));
+    }
+
+    #[test]
+    fn test_extract_type_simple_var_returns_none() {
+        let code = "$obj->method();";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = TypeDefinitionProvider::new();
+
+        let node_at_method = must_some(provider.find_node_at_offset(&ast, 6));
+        let type_name = provider.extract_type_name(&node_at_method);
+
+        assert_eq!(type_name, None);
+    }
+
+    #[test]
+    fn test_extract_type_chained_method_result_stays_unknown() {
+        let code = "Package::Name->new()->method();";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = TypeDefinitionProvider::new();
+
+        let node_at_method = must_some(provider.find_node_at_offset(&ast, 22));
+        let type_name = provider.extract_type_name(&node_at_method);
+
+        assert_eq!(type_name, None);
+    }
+
+    #[test]
+    fn test_full_type_definition_constructor_method_name() {
+        let code = "package Package::Name;\nsub new { bless {}, shift }\npackage main;\nmy $obj = Package::Name->new();\n";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = TypeDefinitionProvider::new();
+        let uri = "file:///test.pl";
+        let mut documents = std::collections::HashMap::new();
+        documents.insert(uri.to_string(), code.to_string());
+
+        let locations = provider.find_type_definition(&ast, 3, 25, uri, &documents);
+
+        assert!(locations.is_some(), "constructor method name should resolve package type");
+        let locs = must_some(locations);
+        assert_eq!(locs.len(), 1);
     }
 
     #[test]

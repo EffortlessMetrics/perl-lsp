@@ -9,7 +9,7 @@ fn setup_server() -> LspServer {
     let server = LspServer::new();
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "processId": null,
@@ -42,7 +42,7 @@ fn open_doc(server: &LspServer, uri: &str, text: &str) {
 fn get_diagnostics(server: &LspServer, uri: &str) -> Option<Value> {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "textDocument/diagnostic".to_string(),
         params: Some(json!({
             "textDocument": {"uri": uri}
@@ -63,7 +63,7 @@ fn test_empty_file_handling() {
     // Should not crash and should handle gracefully
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "textDocument/documentSymbol".to_string(),
         params: Some(json!({
             "textDocument": {"uri": "file:///empty.pl"}
@@ -117,7 +117,7 @@ my $emoji = "🦀";
     // Test that Unicode symbols work in navigation
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "textDocument/documentSymbol".to_string(),
         params: Some(json!({
             "textDocument": {"uri": "file:///unicode.pl"}
@@ -194,7 +194,7 @@ sub bar { A::foo(); }
     // Find references should not infinite loop
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "textDocument/references".to_string(),
         params: Some(json!({
             "textDocument": {"uri": "file:///circular.pl"},
@@ -239,7 +239,7 @@ $. = 0;
     // These should be recognized but not cause issues
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "textDocument/documentSymbol".to_string(),
         params: Some(json!({
             "textDocument": {"uri": "file:///special.pl"}
@@ -356,7 +356,7 @@ fn test_boundary_positions() {
     // Test position at start of file
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "textDocument/hover".to_string(),
         params: Some(json!({
             "textDocument": {"uri": "file:///boundary.pl"},
@@ -368,7 +368,7 @@ fn test_boundary_positions() {
     // Test position at end of file
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "textDocument/hover".to_string(),
         params: Some(json!({
             "textDocument": {"uri": "file:///boundary.pl"},
@@ -380,7 +380,7 @@ fn test_boundary_positions() {
     // Test position beyond end of line (should handle gracefully)
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "textDocument/hover".to_string(),
         params: Some(json!({
             "textDocument": {"uri": "file:///boundary.pl"},
@@ -392,7 +392,7 @@ fn test_boundary_positions() {
     // Test position on non-existent line
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "textDocument/hover".to_string(),
         params: Some(json!({
             "textDocument": {"uri": "file:///boundary.pl"},
@@ -419,7 +419,7 @@ fn test_concurrent_file_operations() {
         let uri = format!("file:///file{}.pl", i);
         let request = JsonRpcRequest {
             _jsonrpc: "2.0".to_string(),
-            id: Some(json!(i)),
+            id: Some(perl_lsp::protocol::JsonRpcId::Integer((i) as i64)),
             method: "textDocument/documentSymbol".to_string(),
             params: Some(json!({
                 "textDocument": {"uri": uri}

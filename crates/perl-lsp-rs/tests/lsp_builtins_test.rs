@@ -14,7 +14,7 @@ fn setup_server() -> LspServer {
     // Send initialize request
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "processId": null,
@@ -58,7 +58,7 @@ fn open_doc(server: &LspServer, uri: &str, text: &str) {
 fn get_signature_help(server: &LspServer, uri: &str, line: u32, character: u32) -> Option<Value> {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "textDocument/signatureHelp".to_string(),
         params: Some(json!({
             "textDocument": {"uri": uri},

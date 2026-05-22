@@ -197,6 +197,18 @@ mod tests {
             assert!(path.ends_with("localhost.pl"));
         }
 
+        #[test]
+        fn test_source_path_from_uri_or_path_trims_surrounding_whitespace() {
+            let from_uri =
+                must_some(source_path_from_uri_or_path(" \nfile:///tmp/trimmed-uri.pl\t"));
+            assert!(from_uri.ends_with("trimmed-uri.pl"));
+
+            let absolute_path = std::env::temp_dir().join("trimmed-path.pl");
+            let input = format!("  {}  ", absolute_path.display());
+            let from_path = must_some(source_path_from_uri_or_path(&input));
+            assert!(from_path.ends_with("trimmed-path.pl"));
+        }
+
         #[cfg(windows)]
         #[test]
         fn test_source_path_from_uri_or_path_accepts_windows_drive_path() {

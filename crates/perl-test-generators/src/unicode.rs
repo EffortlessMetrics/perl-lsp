@@ -82,5 +82,71 @@ mod tests {
         fn non_empty_unicode_string_never_empty(s in non_empty_unicode_string()) {
             prop_assert!(!s.is_empty(), "non-empty strategy produced an empty string");
         }
+
+        #[test]
+        fn unicode_string_char_count_bounded(s in unicode_string()) {
+            // Each arm produces at most 100 chars
+            let count = s.chars().count();
+            prop_assert!(count <= 100, "string has more chars than expected: {count}");
+        }
+
+        #[test]
+        fn unicode_string_chars_are_not_surrogates(s in unicode_string()) {
+            // Rust chars are guaranteed to not be surrogate code points;
+            // this test documents and enforces that invariant explicitly.
+            for ch in s.chars() {
+                let cp = ch as u32;
+                prop_assert!(
+                    !(0xD800..=0xDFFF).contains(&cp),
+                    "surrogate code point U+{cp:04X} found in generated string"
+                );
+            }
+        }
+
+        #[test]
+        fn non_empty_unicode_string_has_positive_byte_length(s in non_empty_unicode_string()) {
+            prop_assert!(!s.is_empty(), "non-empty string must have at least one byte");
+        }
+
+        #[test]
+        fn unicode_string_utf8_byte_len_is_at_least_char_count(s in unicode_string()) {
+            // Every char encodes to at least 1 byte in UTF-8.
+            let char_count = s.chars().count();
+            let byte_len = s.len();
+            prop_assert!(
+                byte_len >= char_count,
+                "byte length {byte_len} < char count {char_count}"
+            );
+        }
+
+        #[test]
+        fn non_empty_unicode_string_first_char_is_valid(s in non_empty_unicode_string()) {
+            let first = s.chars().next();
+            prop_assert!(first.is_some(), "non-empty string must have a first char");
+        }
+
+        #[test]
+        fn unicode_string_all_chars_are_valid_scalar_values(s in unicode_string()) {
+            // Every char produced by the strategy must be a valid Unicode scalar value.
+            for ch in s.chars() {
+                let cp = ch as u32;
+                prop_assert!(
+                    cp <= 0x10_FFFF,
+                    "code point U+{cp:X} exceeds Unicode maximum"
+                );
+            }
+        }
+
+        #[test]
+        fn unicode_string_is_not_null_terminated(s in unicode_string()) {
+            // The string must not contain embedded NUL bytes (which would break
+            // null-terminated C-string assumptions in FFI-adjacent code).
+            // Note: Rust Strings *can* contain NUL chars legally, but none of our
+            // generation arms produce them, so this is a documentation test.
+            // The generator only uses char::range arms that exclude '\0'.
+            for ch in s.chars() {
+                prop_assert!(ch != '\0', "unexpected NUL char in generated string");
+            }
+        }
     }
 }

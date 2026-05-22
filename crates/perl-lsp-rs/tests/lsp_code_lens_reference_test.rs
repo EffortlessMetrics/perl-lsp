@@ -18,7 +18,7 @@ fn setup_server() -> Result<LspServer, Box<dyn std::error::Error>> {
             "rootUri": null,
             "capabilities": {}
         })),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
     };
 
     server.handle_request(init_request).ok_or("Failed to handle init request")?;
@@ -85,7 +85,7 @@ sub unused_function {
                 "uri": uri
             }
         })),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
     };
 
     let response =
@@ -108,7 +108,7 @@ sub unused_function {
         _jsonrpc: "2.0".to_string(),
         method: "codeLens/resolve".to_string(),
         params: Some(greet_lens.clone()),
-        id: Some(json!(3)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((3) as i64)),
     };
 
     let resolved =
@@ -140,7 +140,7 @@ sub unused_function {
         _jsonrpc: "2.0".to_string(),
         method: "codeLens/resolve".to_string(),
         params: Some(unused_lens.clone()),
-        id: Some(json!(4)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((4) as i64)),
     };
 
     let resolved_unused =
@@ -211,7 +211,7 @@ MyModule::some_method();
                 "uri": uri
             }
         })),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
     };
 
     let response =
@@ -235,7 +235,7 @@ MyModule::some_method();
         _jsonrpc: "2.0".to_string(),
         method: "codeLens/resolve".to_string(),
         params: Some(package_lens.clone()),
-        id: Some(json!(3)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((3) as i64)),
     };
 
     let resolved =

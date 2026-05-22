@@ -784,6 +784,8 @@ fn workspace_symbols_runtime_quality_receipt_blocks_generated_no_source_candidat
         live_symbols.iter().all(|symbol| {
             symbol_name(symbol) != Some("runtime_only")
                 && symbol_name(symbol) != Some("runtime_only [generated/framework]")
+                && symbol_name(symbol) != Some("role_composed_method")
+                && symbol_name(symbol) != Some("role_composed_method [generated/framework]")
         }),
         "generated/no-source method must not appear as exact or labeled workspace symbol: {live_symbols:?}"
     );
@@ -792,13 +794,31 @@ fn workspace_symbols_runtime_quality_receipt_blocks_generated_no_source_candidat
         receipt.get("gated_expansion_receipt").ok_or("missing gated expansion receipt")?;
     assert_eq!(
         expansion_receipt.get("generated_no_source_candidate_count").and_then(Value::as_u64),
-        Some(1),
-        "receipt must measure the generated/no-source candidate separately"
+        Some(2),
+        "receipt must measure generated/no-source candidates separately"
     );
     assert_eq!(
         expansion_receipt.get("generated_no_source_blocker_count").and_then(Value::as_u64),
-        Some(1),
-        "generated/no-source candidate must stay blocked"
+        Some(2),
+        "generated/no-source candidates must stay blocked"
+    );
+    let generated_no_source_identities = expansion_receipt
+        .get("generated_no_source_candidate_identities")
+        .and_then(Value::as_array)
+        .ok_or("missing generated/no-source identities")?;
+    assert!(
+        generated_no_source_identities
+            .iter()
+            .filter_map(Value::as_str)
+            .any(|identity| identity.contains("runtime_installed_method")),
+        "receipt must keep the runtime-installed generated/no-source variant visible: {generated_no_source_identities:?}"
+    );
+    assert!(
+        generated_no_source_identities
+            .iter()
+            .filter_map(Value::as_str)
+            .any(|identity| identity.contains("role_composed_method")),
+        "receipt must keep the role-composed generated/no-source variant visible: {generated_no_source_identities:?}"
     );
     assert_eq!(
         expansion_receipt.get("no_live_behavior_change").and_then(Value::as_bool),
@@ -823,6 +843,18 @@ fn workspace_symbols_runtime_quality_receipt_blocks_generated_no_source_candidat
     assert!(
         trace_with_fields(traces, "FrameworkAdapter", "FrameworkSynthesis", "Blocked"),
         "generated/no-source framework candidate must stay blocked: {traces:?}"
+    );
+    let blocked_generated_no_source_trace_count = traces
+        .iter()
+        .filter(|trace| {
+            trace.get("source").and_then(Value::as_str) == Some("FrameworkAdapter")
+                && trace.get("provenance").and_then(Value::as_str) == Some("FrameworkSynthesis")
+                && trace.get("fallback_state").and_then(Value::as_str) == Some("Blocked")
+        })
+        .count();
+    assert!(
+        blocked_generated_no_source_trace_count >= 2,
+        "both generated/no-source variants must remain blocked in fact-source traces: {traces:?}"
     );
 
     Ok(())

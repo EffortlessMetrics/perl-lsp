@@ -57,18 +57,8 @@ impl LspServer {
             }
         };
 
-        // Send the registration request without waiting for a response
-        // Use a random ID since we're not tracking the response
-        let request_id = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64;
-
-        // Send using the outbound channel
-        if let Err(e) =
-            self.outbound.send_request(request_id as i64, "client/registerCapability", params_value)
-        {
-            tracing::error!(error = %e, "Failed to send file watcher request");
+        if let Err(error) = self.send_request("client/registerCapability", params_value) {
+            tracing::error!(%error, "Failed to send file watcher registration request");
         }
     }
 }

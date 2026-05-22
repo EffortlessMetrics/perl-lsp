@@ -41,6 +41,7 @@ impl LspServer {
     /// Request client to refresh virtual document content
     pub fn request_text_document_content_refresh(&self, uri: &str) -> io::Result<()> {
         self.send_request("workspace/textDocumentContent/refresh", json!({ "uri": uri }))
+            .map(|_| ())
     }
 }
 

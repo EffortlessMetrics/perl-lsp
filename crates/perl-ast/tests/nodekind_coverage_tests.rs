@@ -549,6 +549,18 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
 }
 
 #[test]
+fn nodekind_cases_match_all_kind_names_set() {
+    let mut case_names =
+        build_cases().into_iter().map(|(_, expected_name, _)| expected_name).collect::<Vec<_>>();
+    case_names.sort_unstable();
+
+    let mut canonical = NodeKind::ALL_KIND_NAMES.to_vec();
+    canonical.sort_unstable();
+
+    assert_eq!(case_names, canonical);
+}
+
+#[test]
 fn nodekind_cases_cover_kind_names_and_child_shapes() -> Result<(), Box<dyn std::error::Error>> {
     let cases = build_cases();
     assert_eq!(cases.len(), NodeKind::ALL_KIND_NAMES.len());

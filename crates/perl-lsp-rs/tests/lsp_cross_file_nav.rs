@@ -7,7 +7,7 @@ fn init_server() -> LspServer {
     // Initialize the server
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "capabilities": {}
@@ -77,7 +77,7 @@ print "Result: $result\n";
     // Let's try workspace symbols first to ensure indexing is working
     let symbols_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(99)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((99) as i64)),
         method: "workspace/symbol".to_string(),
         params: Some(json!({"query": "bar"})),
     };
@@ -88,7 +88,7 @@ print "Result: $result\n";
     // Test go-to-definition from callsite to definition
     let def_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "textDocument/definition".to_string(),
         params: Some(json!({
             "textDocument": {"uri": "file:///app.pl"},
@@ -169,7 +169,7 @@ for (1..10) {
     // Find all references to process_data
     let refs_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(3)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((3) as i64)),
         method: "textDocument/references".to_string(),
         params: Some(json!({
             "textDocument": {"uri": "file:///lib/Utils.pm"},
@@ -234,7 +234,7 @@ sub reverse_str { reverse $_[0] }
     // Search for all symbols first
     let all_symbols_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(98)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((98) as i64)),
         method: "workspace/symbol".to_string(),
         params: Some(json!({"query": ""})),
     };
@@ -245,7 +245,7 @@ sub reverse_str { reverse $_[0] }
     // Search for symbols containing "str"
     let symbols_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(4)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((4) as i64)),
         method: "workspace/symbol".to_string(),
         params: Some(json!({"query": "str"})),
     };

@@ -27,6 +27,7 @@ use perl_lsp::cancellation::{
     CancellableProvider, CancellationError, CancellationRegistry, PerlLspCancellationToken,
     ProviderCleanupContext,
 };
+use perl_lsp_rs_core::protocol::JsonRpcId;
 
 /// Test fixture for cancellation scenarios
 struct CancellationTestFixture {
@@ -411,7 +412,7 @@ fn test_atomic_cancellation_token_operations_ac2() -> Result<(), Box<dyn std::er
     use std::sync::atomic::{AtomicBool, Ordering};
 
     let token = Arc::new(PerlLspCancellationToken::new(
-        json!("atomic_operations_test"),
+        JsonRpcId::String("atomic_operations_test".into()),
         "test_provider".to_string(),
     ));
 
@@ -519,7 +520,8 @@ fn test_cancellation_registry_concurrent_operations_ac2() -> Result<(), Box<dyn 
 
                 // Each thread registers multiple tokens
                 for token_id in 0..20 {
-                    let request_id = json!(format!("thread_{}_{}", thread_id, token_id));
+                    let request_id =
+                        JsonRpcId::String(format!("thread_{}_{}", thread_id, token_id));
 
                     // Create and register token
                     let start = Instant::now();
@@ -559,7 +561,7 @@ fn test_cancellation_registry_concurrent_operations_ac2() -> Result<(), Box<dyn 
             thread::sleep(adaptive_sleep_ms(20));
             let start = Instant::now();
             // Remove a known request id pattern to exercise concurrent removal
-            let req_id = json!(format!("thread_0_{}", cleanup_cycle));
+            let req_id = JsonRpcId::String(format!("thread_0_{}", cleanup_cycle));
             cleanup_registry.remove_request(&req_id);
             let duration = start.elapsed();
             cleanup_results.push((cleanup_cycle, duration));
@@ -623,7 +625,7 @@ fn test_provider_cleanup_thread_safety_ac2() -> Result<(), Box<dyn std::error::E
     // Register tokens with cleanup contexts for different providers
     let provider_types = ["completion", "hover", "references"];
     for (i, provider_type) in provider_types.iter().enumerate() {
-        let request_id = json!(format!("cleanup_test_{}", i));
+        let request_id = JsonRpcId::String(format!("cleanup_test_{}", i));
         let token = PerlLspCancellationToken::new(request_id.clone(), provider_type.to_string());
         registry.register_token(token)?;
 
@@ -641,7 +643,7 @@ fn test_provider_cleanup_thread_safety_ac2() -> Result<(), Box<dyn std::error::E
         .map(|i| {
             let registry_clone = Arc::clone(&registry);
             thread::spawn(move || {
-                let request_id = json!(format!("cleanup_test_{}", i));
+                let request_id = JsonRpcId::String(format!("cleanup_test_{}", i));
                 let start = Instant::now();
                 let result = registry_clone.cancel_request(&request_id);
                 let duration = start.elapsed();

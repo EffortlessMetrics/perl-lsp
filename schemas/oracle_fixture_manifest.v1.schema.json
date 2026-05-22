@@ -1,0 +1,229 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/perl-lsp/schemas/oracle_fixture_manifest.v1.schema.json",
+  "title": "Differential real-Perl oracle fixture manifest v1",
+  "description": "Declaration-only manifest for differential real-Perl oracle fixtures. It does not define an oracle runner or editor-runtime Perl dependency.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "manifest",
+    "owner",
+    "status",
+    "updated",
+    "spec",
+    "runner",
+    "editor_runtime_dependency",
+    "comparison_classes",
+    "result_classes",
+    "required_environment_denials",
+    "default_claim_boundary",
+    "fixtures"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "oracle_fixture_manifest.v1"
+    },
+    "manifest": {
+      "const": "differential-real-perl-oracle-fixtures"
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "const": "declaration-only"
+    },
+    "updated": {
+      "type": "string",
+      "minLength": 1
+    },
+    "spec": {
+      "type": "string",
+      "const": "docs/specs/PLSP-SPEC-0027-differential-real-perl-oracle.md"
+    },
+    "runner": {
+      "const": "none"
+    },
+    "editor_runtime_dependency": {
+      "const": false
+    },
+    "comparison_classes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/comparison_class"
+      },
+      "minItems": 6,
+      "uniqueItems": true
+    },
+    "result_classes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/result_class"
+      },
+      "minItems": 10,
+      "uniqueItems": true
+    },
+    "required_environment_denials": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/environment_input"
+      },
+      "minItems": 3,
+      "uniqueItems": true
+    },
+    "default_claim_boundary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "fixtures": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/fixture"
+      },
+      "minItems": 1
+    }
+  },
+  "$defs": {
+    "comparison_class": {
+      "type": "string",
+      "enum": [
+        "PackageSubTable",
+        "ImportExport",
+        "IsaComposition",
+        "ConstantPrototype",
+        "FrameworkGeneratedMember",
+        "CompileEffect"
+      ]
+    },
+    "result_class": {
+      "type": "string",
+      "enum": [
+        "oracle_agrees",
+        "compiler_missing",
+        "compiler_extra",
+        "range_mismatch",
+        "provenance_mismatch",
+        "confidence_or_freshness_mismatch",
+        "dynamic_or_unsupported",
+        "oracle_ambient_unbounded",
+        "stale_or_partial",
+        "unknown"
+      ]
+    },
+    "environment_input": {
+      "type": "string",
+      "enum": [
+        "PERL5LIB",
+        "PERL5OPT",
+        "local::lib"
+      ]
+    },
+    "path_class": {
+      "type": "string",
+      "enum": [
+        "public_test_fixture",
+        "redacted_private_fixture"
+      ]
+    },
+    "include_path_authority": {
+      "type": "string",
+      "enum": [
+        "declared_fixture_root",
+        "declared_module_roots",
+        "ambient_reported"
+      ]
+    },
+    "fixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "source",
+        "path_class",
+        "perl_version_constraint",
+        "include_path_authority",
+        "module_roots",
+        "environment_denials",
+        "comparison_classes",
+        "dynamic_boundaries",
+        "unsupported_effects",
+        "framework_adapters",
+        "claim_boundary"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path_class": {
+          "$ref": "#/$defs/path_class"
+        },
+        "perl_version_constraint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "include_path_authority": {
+          "$ref": "#/$defs/include_path_authority"
+        },
+        "module_roots": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "environment_denials": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/environment_input"
+          },
+          "minItems": 3,
+          "uniqueItems": true
+        },
+        "comparison_classes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/comparison_class"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "dynamic_boundaries": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "unsupported_effects": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "framework_adapters": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "claim_boundary": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

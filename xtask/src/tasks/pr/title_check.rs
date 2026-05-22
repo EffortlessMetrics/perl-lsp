@@ -326,7 +326,7 @@ fn validate_title(title: &str, no_gh: bool) -> Result<TitleCheckReceipt> {
     // ------------------------------------------------------------------
     let closed_exempt =
         commit_type.as_deref().map(|t| matches!(t, "docs" | "status")).unwrap_or(false)
-            || subject.as_deref().map(|s| s.contains("supersede")).unwrap_or(false);
+            || subject.as_deref().map(subject_contains_supersede).unwrap_or(false);
 
     if let (Some(num), Some(true), Some(open)) = (issue_ref, issue_exists, issue_open) {
         if !open && !closed_exempt {
@@ -379,6 +379,11 @@ fn strip_issue_ref(s: &str) -> String {
             if s2 != s { Some(s2.into_owned()) } else { None }
         })
         .unwrap_or_else(|| s.to_string())
+}
+
+/// Return true when a subject requests superseding prior work.
+fn subject_contains_supersede(subject: &str) -> bool {
+    subject.to_ascii_lowercase().contains("supersede")
 }
 
 /// Compute overall status from a list of check results.
@@ -457,4 +462,23 @@ fn print_human(receipt: &TitleCheckReceipt) {
     }
     println!();
     println!("Overall: {}", receipt.overall);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn subject_supersede_detection_is_case_insensitive() {
+        assert!(subject_contains_supersede("supersede previous approach"));
+        assert!(subject_contains_supersede("Supersede previous approach"));
+        assert!(subject_contains_supersede("SUPERSEDED by follow-up"));
+        assert!(!subject_contains_supersede("follow-up implementation"));
+    }
+
+    #[test]
+    fn strips_trailing_issue_reference() {
+        assert_eq!(strip_issue_ref("clean up validation flow (#1234)"), "clean up validation flow");
+        assert_eq!(strip_issue_ref("clean up validation flow(#1234)"), "clean up validation flow");
+    }
 }

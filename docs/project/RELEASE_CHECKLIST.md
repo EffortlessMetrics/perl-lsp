@@ -61,6 +61,8 @@ for crate_name in allow:
 
 ## Post-Release Verification
 
+Use [`docs/releases/RELEASE_CLOSEOUT_AUDIT.md`](../releases/RELEASE_CLOSEOUT_AUDIT.md) as the canonical re-runnable checklist. The items below are the minimum subset; the audit doc covers each channel in detail (including dispatch-only workflows that don't fire on `release:published` and require manual `gh workflow run`).
+
 - [ ] `gh release view vNEW_VERSION` shows the expected release notes and assets.
 - [ ] `cargo search perl-lsp-rs --limit 1` resolves `perl-lsp-rs = "NEW_VERSION"`.
 - [ ] `cargo search perllsp --limit 1` resolves `perllsp = "NEW_VERSION"`.
@@ -70,6 +72,7 @@ for crate_name in allow:
 - [ ] `cargo install perllsp` installs the new release and `perllsp --version` prints `NEW_VERSION`.
 - [ ] The smoke tests in [RELEASE.md](../../RELEASE.md) pass for the current release artifacts.
 - [ ] Any evidence-backed status docs are updated with `just status-update` and validated with `just status-check`.
+- [ ] **Closeout audit:** run the per-channel verification block in [`RELEASE_CLOSEOUT_AUDIT.md`](../releases/RELEASE_CLOSEOUT_AUDIT.md) and write the populated instance to `docs/releases/NEW_VERSION-closeout-audit.md`. Flip `notes_status` in `docs/releases/vNEW_VERSION.md` from `pending` to `closed` only when every channel resolves.
 
 ## Repo-Native Cleanup Notes
 

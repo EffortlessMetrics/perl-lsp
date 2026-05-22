@@ -98,6 +98,24 @@ blocks = [
 claim_boundary = "Only source-backed compiler package-declaration spans that exactly match existing live parser/HIR namespace tokens participate."
 
 [[class]]
+name = "phase_block_declaration"
+state = "partial_live_trace"
+live_token_kind = "macro"
+compiler_identity_prefix = "token:phase_block_declaration:"
+emits_new_output = false
+requires_exact_live_token_match = true
+requires_edit_freshness = true
+blocks = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "unsupported_fact_class",
+  "unmatched_span",
+]
+claim_boundary = "Only source-backed compiler phase-block declaration spans that exactly match existing live parser/HIR macro tokens participate."
+
+[[class]]
 name = "field_declaration"
 state = "partial_live_trace"
 live_token_kind = "variable"

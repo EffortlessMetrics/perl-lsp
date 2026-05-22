@@ -6,6 +6,7 @@
 //! `register_progress_request` maps progress tokens to request IDs.
 
 use super::*;
+use crate::protocol::JsonRpcId;
 
 #[allow(dead_code)]
 impl LspServer {
@@ -115,19 +116,19 @@ impl LspServer {
     }
 
     /// Mark a request as cancelled
-    pub(crate) fn cancel_mark(&self, id: &Value) {
+    pub(crate) fn cancel_mark(&self, id: &JsonRpcId) {
         let mut c = self.cancelled.lock();
         c.insert(id.clone());
     }
 
     /// Clear a cancelled request
-    pub(crate) fn cancel_clear(&self, id: &Value) {
+    pub(crate) fn cancel_clear(&self, id: &JsonRpcId) {
         let mut c = self.cancelled.lock();
         c.remove(id);
     }
 
     /// Check if a request has been cancelled
-    pub(crate) fn is_cancelled(&self, id: &Value) -> bool {
+    pub(crate) fn is_cancelled(&self, id: &JsonRpcId) -> bool {
         let set = self.cancelled.lock();
         set.contains(id)
     }
@@ -137,7 +138,7 @@ impl LspServer {
     /// When the client sends `window/workDoneProgress/cancel` for this token,
     /// the server will look up the request ID and signal cancellation via the
     /// global cancellation registry.
-    pub(crate) fn register_progress_request(&self, token: &str, request_id: Value) {
+    pub(crate) fn register_progress_request(&self, token: &str, request_id: JsonRpcId) {
         self.progress_token_to_request.lock().insert(token.to_string(), request_id);
     }
 }

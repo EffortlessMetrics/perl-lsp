@@ -224,7 +224,7 @@ mod tests {
 
     #[test]
     fn from_ga_lock_enabled_false_yields_production() {
-        assert_eq!(FeatureProfileKind::from_ga_lock_enabled(false), FeatureProfileKind::Production,);
+        assert_eq!(FeatureProfileKind::from_ga_lock_enabled(false), FeatureProfileKind::Production);
     }
 
     #[test]

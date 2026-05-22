@@ -982,7 +982,7 @@ mod tests {
 
         let rendered = renderer.render("$obj", &value);
 
-        assert_eq!(rendered.type_name, Some("Very::Deep::Nested::Package::Name".to_string()),);
+        assert_eq!(rendered.type_name, Some("Very::Deep::Nested::Package::Name".to_string()));
         assert!(rendered.value.contains("Very::Deep::Nested::Package::Name"));
         assert_eq!(rendered.named_variables, Some(0));
     }

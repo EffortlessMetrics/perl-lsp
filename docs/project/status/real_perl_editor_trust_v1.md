@@ -4,7 +4,7 @@
 > It does not generate metrics, broaden live provider behavior, or replace the
 > provider-specific proof surfaces.
 
-Last reviewed: 2026-05-19.
+Last reviewed: 2026-05-22.
 
 This page answers:
 
@@ -25,6 +25,8 @@ of current evidence.
 | Semantic token class promotion rules | [PLSP-SPEC-0019](../../specs/PLSP-SPEC-0019-semantic-token-class-promotion-contract.md), [semantic-token-classes.toml](../../../policy/semantic-token-classes.toml) |
 | Workspace symbol generated-label rules | [PLSP-SPEC-0020](../../specs/PLSP-SPEC-0020-workspace-symbol-generated-label-contract.md), [workspace-symbol-classes.toml](../../../policy/workspace-symbol-classes.toml) |
 | Module path authority and ambient-input boundaries | [PLSP-SPEC-0022](../../specs/PLSP-SPEC-0022-module-path-authority.md), [PLSP-SPEC-0023](../../specs/PLSP-SPEC-0023-ambient-inputs.md) |
+| Determinism receipt v1 planning boundary | [PLSP-SPEC-0026](../../specs/PLSP-SPEC-0026-determinism-receipt-v1.md) |
+| Differential real-Perl oracle planning boundary | [PLSP-SPEC-0027](../../specs/PLSP-SPEC-0027-differential-real-perl-oracle.md), [oracle_fixture_manifest.v1.schema.json](../../../schemas/oracle_fixture_manifest.v1.schema.json), [oracle fixture manifest](../../../crates/perl-corpus/fixtures/differential_oracle/manifest.json), [oracle_receipt.v1.schema.json](../../../schemas/oracle_receipt.v1.schema.json) |
 | User-facing support claims and known limitations | [SUPPORT_TIERS.md](SUPPORT_TIERS.md) |
 | Provider fact source, confidence, freshness, fallback, and next proof | [provider_confidence_matrix.md](provider_confidence_matrix.md) |
 | Provider promotion, fallback, blocker, and defer decisions by fact class | [provider_promotion_ledger.md](provider_promotion_ledger.md), [provider-promotion-ledger.toml](../../../policy/provider-promotion-ledger.toml) |
@@ -116,6 +118,33 @@ class through the ledger. Receiver-expression facts now have one narrow
 source-backed completion pilot; every other receiver class remains substrate,
 fallback, or blocked until its own receipt promotes it.
 
+Bareword-classifier facts are compiler substrate only. HIR now records
+source-backed syntactic roles for parsed identifier barewords such as static
+`require` targets, class receivers, indirect-object targets, qualified names,
+and unresolved expression-position barewords. That proof does not change PL109
+suppression, diagnostic behavior, provider behavior, parser bucket state,
+support tiers, PIR, or determinism claims.
+
+Determinism receipt v1 is now defined as a planning contract. It requires future
+receipts to name source snapshots, module-path authority, ambient inputs,
+generated/dynamic/stale boundaries, cache/index state, fallback, blockers, and
+unknowns before claiming repeatability. The spec does not add a receipt
+generator, runtime probe, PIR implementation, provider behavior, support-tier
+promotion, release-lineage sync, or determinism claim.
+
+The differential real-Perl oracle contract is now defined as a planning
+boundary, its first fixture manifest is declaration-only, and the receipt schema
+now locks the future oracle receipt shape. The manifest names fixture
+identities, source snapshots, path classes, module roots, environment denials,
+dynamic/unsupported boundaries, framework adapters, and comparison classes.
+The schema records comparison class, source snapshot, Rust extractor, Perl
+oracle, module-path authority, ambient/generated/dynamic/stale/unsupported
+inputs, normalized facts, comparison result classes, promotion effect, redaction,
+provider-behavior-change flag, and editor-runtime dependency denial. Neither the
+manifest nor schema adds an oracle runner, executes Perl, probes workspaces,
+changes provider behavior, moves parser/corpus buckets, promotes support tiers,
+syncs release lineage, or claims conformance.
+
 ## Current Dashboard
 
 | Surface | Current state | Real-workspace receipt state | Fallback / blocker coverage | Next proof |
@@ -127,7 +156,7 @@ fallback, or blocked until its own receipt promotes it.
 | Diagnostics | `partial live` | Mojolicious baseline explicitly defers broad diagnostic correctness; scenario 31 covers workspace-present imports, a mixed present/missing import boundary, dynamic route-method conservatism, and true missing-module PL701; Dancer2 scenario 40 adds second-project workspace-present import, mixed present/missing import, typeglob-boundary, and true missing-module PL701 proof while scope diagnostics label low-confidence, ambiguous, and dynamic-boundary-shaped visible-symbol evidence when conservative PL109 diagnostics remain; live diagnostic requests now attach an additive `diagnostic_explanation.v1` provider receipt payload with PL701 module-resolution summaries, reported `@INC` path context, trust-boundary labels, and a copyable/user-readable explanation boundary; PL701/PL109 diagnostics expose explain-diagnostic code actions, and `perl.explainMissingModuleLookup` exposes the current missing-module `@INC` lookup as a user-facing receipt | Conservative diagnostics remain when semantic evidence is absent, ambiguous, stale, or dynamic; weak evidence is labeled instead of silently suppressing true unknowns; diagnostic explanation payloads, code actions, and missing-module lookup receipts do not change suppression, severity, resolver behavior, workspace scanning, or support-tier claims | Generated/dynamic diagnostic-label receipts plus broader project-shape false-positive/false-negative proof before wider diagnostic correctness claims; setup-hint/reporting polish before broader diagnostic UX promotion |
 | Document symbols | `partial live source-backed` | Runtime quality receipts record source-backed parser-syntax symbol counts and fact traces; Mojolicious scenario 32 records source-backed explicit symbols, generated `has` candidate counts, dynamic-boundary-shaped names, and edit freshness | Astless, stale, dynamic, virtual generated/no-source, low-confidence, and ambiguous candidates keep fallback/gated behavior | Generated-label proof and additional project-shape document-symbol receipts before generated, dynamic, or broader symbol cutover |
 | Workspace symbols | `partial live source-backed + generated-label pilot` | Shadow compare records quality candidates; Mojolicious scenario 33 records live-provider query latency, useful/noisy hits, generated candidate gating, dynamic-boundary-shaped names, and edit freshness; Dancer2 scenario 39 adds second-project workspace-symbol noise, generated/dynamic candidate boundary, and edit-freshness proof; Catalyst scenario 41 adds third-project generated/framework candidate, dynamic-boundary-shaped, noise, and edit-freshness proof; Modern OO scenario 43 adds Moose/Moo accessor, delegated-handle, role-composition, method-modifier rank/noise proof with edit freshness and generated/no-source candidate names with zero live exact promotion; runtime requests now record ready-index source-backed compiler-symbol traces plus a labeled source-backed generated/framework pilot receipt for non-empty queries, with separate generated/no-source, dynamic, stale, and fallback/noise gating, the mixed `name` runtime receipt proves source-backed exact symbols rank ahead of generated/framework noise while preserving labels and gated expansion accounting, the false-exact/edit-freshness runtime receipt proves generated pilot symbols stay labeled/source-anchored and refresh after `didChange` while dynamic and stale shadow candidates remain gated, the scoped generated-symbol cutover receipt proves the live response, receipt, source-anchor semantics, and gated expansion boundary agree for the generated/framework member, the Moo predicate generated-member receipt proves another generated-symbol class remains labeled, virtual, source-anchored, and gated against broader generated/dynamic expansion, and the generated/no-source runtime blocker receipt records an unanchored framework/runtime candidate as blocked | Ready workspace-index symbols can answer live with high-confidence/source-backed traces; source-backed generated/framework members may appear only with an explicit generated label anchored to the framework declaration, not as exact generated method bodies; empty-query, partial-index, open-document fallback, stale, dynamic, generated/no-source, and ambiguous compiler candidates stay gated | Additional generated/no-source project variants and explicit-label rank/noise proof before broader generated workspace-symbol expansion |
-| Semantic tokens | `partial live source-backed token slice + scoped method/package/field/method-call/self-method-call/lexical-variable declaration/use traces` | Mojolicious scenario 34 records live token counts, LSP 5-tuple/span validity, source-backed token hits, dynamic-boundary string non-promotion, and edit freshness; Dancer2 scenario 38 adds second-project package, DSL, app, typeglob-boundary, and edit-freshness token proof; Catalyst scenario 42 adds project-shaped false-exact proof for generated/dynamic-looking token shapes plus edit-freshness proof; runtime quality receipts record synthetic, Catalyst-shaped, and RealBaseline source-backed compiler-fact subroutine-declaration classes whose spans match the existing live parser/HIR `function` token output, live requests persist acted provider-decision traces for matched source-backed subroutine-declaration, method-declaration, and package-declaration compiler-token slices without adding tokens, the edit-freshness runtime receipt proves `didChange` refreshes live token output and compiler-token identity before recording a fresh post-edit receipt, the live span-invariant proof records decoded token count parity, positive single-line lengths, in-range spans, monotonic ordering, and no overlap, the combined unsafe-boundary shadow receipt proves generated/no-source, dynamic-boundary, stale, and fallback token candidates produce no token identities, the broader compiler-token false-exact receipt proves source-backed `token:method:` compiler spans do not become token identities without class-specific proof, the scoped method-declaration cutover proof allows only source-backed `token:method_declaration:` identities whose span already matches exactly one existing live `method` token and proves `didChange` freshness without output changes, the scoped package-declaration cutover proof allows only source-backed `token:package_declaration:` identities whose span already matches exactly one existing live `namespace` token and proves `didChange` freshness without output changes, the scoped field-declaration cutover proof allows only source-backed `token:field_declaration:` identities whose span already matches exactly one existing live `variable` token and proves `didChange` freshness without output changes, the scoped method-call cutover proof allows only source-backed `token:method_call:` identities whose span already matches exactly one existing live `method` token and proves `didChange` freshness without output changes, the scoped self-method-call cutover proof allows only source-backed `token:self_method_call:` identities whose span already matches exactly one existing live `method` token and proves `didChange` freshness without output changes, the scoped lexical-variable declaration proof allows only source-backed `token:lexical_variable_declaration:` identities whose span already matches exactly one existing live `variable` token and proves `didChange` freshness without output changes, and the scoped lexical-variable use proof allows only source-backed `token:lexical_variable_use:` identities whose span already matches exactly one existing live `variable` token and proves `didChange` freshness without output changes | Existing parser/token provider remains live; generated/no-source, stale, dynamic-boundary, low-confidence, fallback, broader compiler-token classes, and unmatched compiler classifications stay blocked, fallback-only, receipt-only, or shadowed; the source-backed compiler-token live slices emit no new token output and do not authorize broader compiler-backed token classes | Another scoped compiler-token class proof before broader compiler-token promotion |
+| Semantic tokens | `partial live source-backed token slice + scoped subroutine/method/package/phase-block/field/method-call/self-method-call/lexical-variable declaration/use traces` | Mojolicious scenario 34 records live token counts, LSP 5-tuple/span validity, source-backed token hits, dynamic-boundary string non-promotion, and edit freshness; Dancer2 scenario 38 adds second-project package, DSL, app, typeglob-boundary, and edit-freshness token proof; Catalyst scenario 42 adds project-shaped false-exact proof for generated/dynamic-looking token shapes plus edit-freshness proof; runtime quality receipts record synthetic, Catalyst-shaped, and RealBaseline source-backed compiler-fact subroutine-declaration classes whose spans match the existing live parser/HIR `function` token output, live requests persist acted provider-decision traces for matched source-backed subroutine-declaration, method-declaration, package-declaration, and phase-block declaration compiler-token slices without adding tokens, the edit-freshness runtime receipt proves `didChange` refreshes live token output and compiler-token identity before recording a fresh post-edit receipt, the live span-invariant proof records decoded token count parity, positive single-line lengths, in-range spans, monotonic ordering, and no overlap, the combined unsafe-boundary shadow receipt proves generated/no-source, dynamic-boundary, stale, and fallback token candidates produce no token identities, the broader compiler-token false-exact receipt proves source-backed `token:method:` compiler spans do not become token identities without class-specific proof, the scoped subroutine-declaration cutover proof allows only source-backed `token:function:` identities whose span already matches exactly one existing live `function` token and proves output-neutral class-specific receipt shape, the scoped method-declaration cutover proof allows only source-backed `token:method_declaration:` identities whose span already matches exactly one existing live `method` token and proves `didChange` freshness without output changes, the scoped package-declaration cutover proof allows only source-backed `token:package_declaration:` identities whose span already matches exactly one existing live `namespace` token and proves `didChange` freshness without output changes, the scoped phase-block declaration cutover proof allows only source-backed `token:phase_block_declaration:` identities whose span already matches exactly one existing live `macro` token and proves `didChange` freshness without output changes, the scoped field-declaration cutover proof allows only source-backed `token:field_declaration:` identities whose span already matches exactly one existing live `variable` token and proves `didChange` freshness without output changes, the scoped method-call cutover proof allows only source-backed `token:method_call:` identities whose span already matches exactly one existing live `method` token and proves `didChange` freshness without output changes, the scoped self-method-call cutover proof allows only source-backed `token:self_method_call:` identities whose span already matches exactly one existing live `method` token and proves `didChange` freshness without output changes, the scoped lexical-variable declaration proof allows only source-backed `token:lexical_variable_declaration:` identities whose span already matches exactly one existing live `variable` token and proves `didChange` freshness without output changes, and the scoped lexical-variable use proof allows only source-backed `token:lexical_variable_use:` identities whose span already matches exactly one existing live `variable` token and proves `didChange` freshness without output changes | Existing parser/token provider remains live; generated/no-source, stale, dynamic-boundary, low-confidence, fallback, broader compiler-token classes, and unmatched compiler classifications stay blocked, fallback-only, receipt-only, or shadowed; the source-backed compiler-token live slices emit no new token output and do not authorize broader compiler-backed token classes | Another scoped compiler-token class proof before broader compiler-token promotion |
 | Rename | `partial live lexical + package-local pilot / boundary-shadowed broader compiler facts` | Mojolicious scenario 35 records exact local lexical edits, generated-accessor no-edit boundary, dynamic typeglob-string no-edit boundary, and open-document freshness; Dancer2 scenario 37 adds a second real-workspace unsafe-edit receipt covering exact lexical edits, generated `has` accessor no-edit behavior, dynamic typeglob no-edit behavior, and freshness; #8915 proves a narrow same-file scoped lexical live slice; `lsp_rename_tests::test_workspace_rename_workspace_edit_rolls_back_cleanly` proves scoped qualified multi-file WorkspaceEdits can be inverted exactly; the RealBaseline `helper -> renamed_helper` runtime receipt records live-provider ambiguity plus an imported-symbol compiler blocker and `compiler_blocked` fallback/noise without promotion, and the request-local explain-provider-decision receipt preserves that fallback/noise object for bug-report context; the imported `alias -> renamed_alias` call receipt records live-provider edit noise and `compiler_missing` fallback/noise without promotion; the core package/compiler-backed pilot proof classifies source-backed definition/reference plans, the runtime package-pilot receipt closes the real-workspace empty-plan boundary with a source-backed definition edit, `perl.previewPackageRename` exposes scoped no-edit planned-edit/blocker/fallback UX with explicit rollback/no-edit receipts for imported-symbol blockers, imported-call edit-noise, compiler-allowed source-backed definition/reference pilot previews, and the Dancer2 `to_psgi` source-backed definition preview receipt, the package-local live-pilot guardrail receipt proves generated, dynamic, stale, and low-confidence blockers still return no edits while preserving source-backed definition/reference planned-edit evidence, the RealBaseline imported-symbol false-allow receipt proves the live package-local path returns no edits and records `package_local_live_pilot_blocked` for `helper`, the live package-local pilot applies only materialized source-backed semantic edit sets that exactly match the workspace source/ambiguity guard, the RealBaseline edit-freshness receipt proves a compiler-allowed source-backed definition plan falls back to broader current-source edits, preserves no-edit preview rollback, and refreshes after `didChange`, the Dancer2 edit-freshness receipt proves the source-backed `to_psgi` preview remains rollback-safe and a post-`didChange` same-file reference routes live rename through fresh workspace-index fallback instead of stale compiler-only evidence, and the Catalyst false-allow receipt proves compiler-allowed package-local evidence hard-refuses ambiguous project-shaped identity with zero edits | Same-file scoped live rename requires exactly one source-backed `my` or `state` declaration edit; package-local live rename requires fresh source-backed semantic edits that exactly match source/ambiguity guard coverage; stale, low-confidence, generated, dynamic, package-wide, missing compiler proof, ambiguous, imported/exported, and broader compiler-backed facts cannot authorize edits | Broader package/compiler-backed rename remains deferred; keep project-shaped unsafe-edit and edit-freshness receipts fresh when rename facts change |
 | Safe delete | `partial live source-backed pilot / boundary-shadowed broader facts` | Mojolicious scenario 36 records file-delete warning UX for a dependent module delete; Dancer2 runtime receipts record symbol-level `_compile`, `routes`, and `plugin_keywords` request shapes where stale, generated, dynamic-boundary, and low-confidence fixtures block deletion with zero live edits; CPAN-style RealBaseline runtime receipts record `RealBaseline::Util::helper` blocked by fresh compiler facts because it is imported by another file and `RealBaseline::Base::reset` allowed by fresh high-confidence semantic facts; requested RealBaseline `reset` edit rollback proof records a source-backed delete WorkspaceEdit plus inverse rollback edit that restores the original text; Dancer2 `to_psgi` adds a second project-shaped source-backed live-pilot receipt with delete edit and rollback proof; Dancer2 `header` and post-`didChange` `to_psgi` receipts prove project-shaped referenced source-backed methods are refused with zero returned edits; the cross-file `used_target` receipt proves workspace-index references block returned edits; Catalyst `get_action` adds an ambiguous-identity false-allow receipt where compiler-allowed source-backed definition evidence still returns no edits; the non-subroutine/package-wide source-guard receipt proves package variables and package declarations return no edits with `not_source_backed_exact_subroutine_definition`; the generated/dynamic live-command blocker receipt proves `routes` and `plugin_keywords` return no edits with persisted explain-provider receipts; `perl.safeDeleteSymbol` returns delete WorkspaceEdits only when the compiler plan is allowed, the exact source-backed subroutine guard passes, current source and the workspace index have zero references, the workspace identity guard accepts the request, and rollback proof is safe; covered safe-delete receipt paths persist provider decisions that `perl.explainProviderDecision` can replay; `perl.previewSafeDelete` still exposes blocked/allowed scoped no-edit UX | Stale, low-confidence, generated, imported/exported, fallback, ambiguous, non-source-backed, non-subroutine, package-wide, current-source/workspace-index referenced, and dynamic facts cannot authorize symbol deletion; the live pilot is limited to unreferenced source-backed subroutine delete edits with rollback proof and accepted workspace identity; broader safe-delete remains blocked or unsupported | Keep generated/no-source and dynamic blocker receipts fresh; broader symbol-delete remains blocked or deferred |
 
@@ -150,23 +179,28 @@ generated/framework pilot to the live response, source-anchor receipt, and gated
 false-exact/dynamic/stale boundary. The Moo predicate generated-symbol receipt
 adds one more generated-member class proof while preserving the same virtual,
 labeled, source-anchor claim boundary. The generated/no-source runtime receipt
-adds an explicit blocked unanchored framework/runtime candidate. The
-generated-symbol support review is now recorded. Any broader generated-symbol
-expansion still needs additional generated/no-source project variants and
-explicit-label rank/noise proof. This review does not promote workspace symbols
-beyond the existing source-backed ready-index slice plus generated-label pilot.
+now records blocked runtime-installed and role-composed no-source variants with
+zero live exact promotion. The generated-symbol support review is now recorded.
+Any broader generated-symbol expansion still needs explicit-label rank/noise
+proof. This review does not promote workspace symbols beyond the existing
+source-backed ready-index slice plus generated-label pilot.
 
 ## Semantic Token Support Review
 
 The scoped token-class receipts do not justify a broader compiler-backed
-semantic-token cutover. The
+semantic-token cutover. The subroutine-declaration proof authorizes only the
+scoped `token:function:` identity class when its source-backed span already
+matches an existing live parser/HIR `function` token. The
 method-declaration proof authorizes only the scoped
 `token:method_declaration:` identity class when its source-backed span already
 matches an existing live parser/HIR `method` token and `didChange` freshness is
 proven. The package-declaration proof now authorizes only the scoped
 `token:package_declaration:` identity class when its source-backed span already
 matches an existing live parser/HIR `namespace` token and `didChange` freshness
-is proven. The field-declaration proof now authorizes only the scoped
+is proven. The phase-block declaration proof now authorizes only the scoped
+`token:phase_block_declaration:` identity class when its source-backed span
+already matches an existing live parser/HIR `macro` token and `didChange`
+freshness is proven. The field-declaration proof now authorizes only the scoped
 `token:field_declaration:` identity class when its source-backed span already
 matches an existing live parser/HIR `variable` token and `didChange` freshness
 is proven. The method-call proof now authorizes only the scoped
@@ -184,13 +218,18 @@ live `variable` token and `didChange` freshness boundary.
 Semantic tokens remain
 `partial-live-with-fallback` only for existing parser/HIR output plus the narrow
 source-backed subroutine-declaration, method-declaration, package-declaration,
-field-declaration, method-call, self-method-call, lexical-variable declaration,
-and lexical-variable use trace slices that emit no new token output.
-The support review is now recorded: method-declaration, package-declaration,
-field-declaration, method-call, self-method-call, lexical-variable declaration,
-and lexical-variable use proofs stay scoped, output-neutral, and
+phase-block declaration, field-declaration, method-call, self-method-call,
+lexical-variable declaration, and lexical-variable use trace slices that emit no
+new token output.
+The support review is now recorded: subroutine-declaration,
+method-declaration, package-declaration, phase-block declaration,
+field-declaration, method-call, self-method-call,
+lexical-variable declaration, and lexical-variable use proofs stay scoped,
+output-neutral, and
 fallback-preserving. They do not authorize a broad compiler-backed
-semantic-token cutover. The next
+semantic-token cutover. The provider promotion ledger now records lexical-variable
+declaration and lexical-variable use rows so the class registry, human ledger,
+and machine policy share the same fallback and blocker boundary. The next
 semantic-token work must either expose another reviewed scoped class through the
 user-facing provider-decision trace or add another class with the same
 promotion, fallback, blocker, and span-invariant rules.
@@ -229,10 +268,10 @@ workspace-symbol receipt, generated/no-source blocker receipt, generated-symbol
 support review, and scoped generated-symbol cutover receipt close the immediate
 workspace-symbol rank/noise, generated/no-source, review, and cutover routing
 items. The semantic-token class receipt support review closes the immediate
-semantic-token review routing item. The rename support review closes the
-immediate refactor review routing item without broadening live rename behavior.
-The package-declaration, field/method-call, self-method-call, and
-lexical-variable declaration/use live-trace expansions close the current semantic-token
+  semantic-token review routing item. The rename support review closes the
+  immediate refactor review routing item without broadening live rename behavior.
+  The package-declaration, phase-block, field/method-call, self-method-call, and
+  lexical-variable declaration/use live-trace expansions close the current semantic-token
 trace-class routing items without emitting new token output.
 The non-subroutine/package-wide safe-delete source-guard receipt and the
 generated/no-source plus dynamic live-command blocker receipt close the current
@@ -269,9 +308,33 @@ fallback and do not become exact receiver evidence. Completion remains
 `partial-live-with-fallback`; broader generated, dynamic, unknown,
 low-confidence, stale, and workspace-wide method completion still need separate
 proof.
+The direct class type-definition safe subset is now recorded in the provider
+promotion ledger: direct package/class identifiers and constructor method
+receivers may resolve to source-backed open-document package definitions, while
+variables, chained method results, function-call results, missing packages,
+dynamic boundaries, generated/no-source receivers, stale facts, low-confidence
+facts, ambiguous identities, and unsupported receiver shapes stay fallback or
+blocked. This records the existing safe subset and does not broaden type
+definition into data-flow or return-value inference.
+The product-level Real Perl Editor Trust smoke receipt now records one
+CPAN-style workspace pass across completion, definition, diagnostics, workspace
+trust report, safe-delete preview, and explain-provider-decision. It is a
+receipt-only smoke: it records acted, fallback, setup-report, and no-edit
+refusal surfaces without broadening provider behavior, promoting support tiers,
+or moving release lineage.
+The constant-provider substrate proof records static `use constant` scalar,
+quoted scalar, hash, quoted-hash, and plus-hash extraction plus a completion
+shadow receipt that traces constants as fresh `CompilerFact` /
+`SemanticAnalyzer` evidence. It does not change live completion behavior,
+provider cutover state, support tiers, or broad constant inference claims.
+The prototype-table substrate proof records named subroutine prototype content
+and precise source ranges as HIR-side facts, and `RegisterPrototype` compile
+effects now derive from that table. It does not change provider behavior,
+diagnostic suppression, parser bucket status, support tiers, PIR status, or
+determinism claims.
 
-1. `test(workspace-symbols): add additional generated/no-source project variant only if broader generated-symbol expansion is being considered`
-2. `test(rename): keep package/compiler-backed fallback and edit-freshness receipts current before broader promotion`
+1. `docs(status): maintain provider promotion ledger parity when fact classes or receipts change`
+2. `test(semantic-tokens): add another scoped compiler-token class receipt only when a new class is ready`
 3. `test(dap): add DAP includePaths cutover proof only if native DAP module-path behavior is being promoted`
 
 Provider decision explanations are already partial-live through
@@ -347,6 +410,9 @@ The Dancer2 edit-freshness receipt adds the same current-source freshness proof
 for `to_psgi`: the preview remains rollback-safe and no-edit, while the live
 path uses fresh workspace-index fallback after `didChange` adds a same-file
 reference.
+The copyable receipt refresh now proves the RealBaseline and Dancer2
+post-`didChange` rename explanations preserve the same fallback/edit-freshness
+request receipt inside `copyable_payload.request_receipt` for bug reports.
 This is a narrow
 `partial-live-with-fallback` pilot, not a broad compiler-backed rename
 authorization.
@@ -364,13 +430,18 @@ with zero returned edits; Catalyst `get_action` proves compiler-allowed
 source-backed definition evidence plus rollback proof still returns no edits
 when the workspace identity guard finds ambiguous project-shaped identity; the
 package-variable and package-declaration receipt proves the source guard blocks
-non-subroutine and package-wide requests with empty edits. These receipts do not
-justify broader symbol deletion, generated/dynamic deletion,
-fallback/no-source deletion, or server-applied edits.
+non-subroutine and package-wide requests with empty edits. The
+RealBaseline live UX receipt now records the same referenced-source blocker
+through `perl.safeDeleteSymbol`: referenced `helper` returns `blocked` with
+`references_exist`, zero returned edits, no server-applied edits, and a
+copyable explain-provider-decision payload. These receipts do not justify
+broader symbol deletion, generated/dynamic deletion, fallback/no-source
+deletion, or server-applied edits.
 
 Parser raw-bucket work, Linux corpus refresh, security alert classification,
-Rust 1.95 rollout, native formatter, native critic, PIR, and determinism remain
-separate lanes with their own proof commands and claim boundaries.
+Rust 1.95 rollout, native formatter, native critic, PIR implementation,
+determinism receipt implementation, and determinism proof remain separate lanes
+with their own proof commands and claim boundaries.
 
 Workspace-symbol support has been reviewed after the source-backed ready-index
 pilot and labeled generated/framework pilot. The row remains
@@ -380,8 +451,11 @@ anchored to framework declarations rather than exact generated method bodies.
 Empty-query, partial-index, open-document fallback, generated/no-source, stale,
 dynamic, ambiguous, and fallback/noise candidates remain fallback or gated.
 The scoped generated-symbol cutover receipt and Moo predicate generated-symbol
-class receipt are now recorded; the next workspace-symbol decision is support
-review before any broader generated workspace-symbol expansion.
+class receipt are now recorded, and the generated/no-source variant receipt
+records runtime-installed and role-composed blocked candidates. The next
+workspace-symbol work is not another support review; any broader generated
+workspace-symbol expansion still needs a new explicit-label rank/noise receipt
+and a promotion-ledger row.
 
 ## Promotion Rules
 

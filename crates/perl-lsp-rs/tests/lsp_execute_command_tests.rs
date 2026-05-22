@@ -17,7 +17,7 @@ fn setup_server(root_path: Option<String>) -> LspServer {
             "rootPath": root_path,
             "capabilities": {}
         })),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
     };
 
     let _response = server.handle_request(init_request);
@@ -158,7 +158,7 @@ print "Hello, World!\n";
             "command": "perl.runFile",
             "arguments": [file_path_str]
         })),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
     };
 
     let response =
@@ -220,7 +220,7 @@ is(1 + 1, 2, "Math works");
             "command": "perl.runTests",
             "arguments": [file_path_str]
         })),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
     };
 
     let response =
@@ -258,7 +258,7 @@ fn test_execute_command_unknown() -> Result<(), Box<dyn std::error::Error>> {
             "command": "perl.unknownCommand",
             "arguments": []
         })),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
     };
 
     let response = server.handle_request(execute_request);
@@ -284,7 +284,7 @@ fn test_execute_command_capabilities() -> Result<(), Box<dyn std::error::Error>>
             "rootPath": "/test",
             "capabilities": {}
         })),
-        id: Some(json!(10)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((10) as i64)),
     };
 
     let response = server.handle_request(init_request).ok_or("No response from initialize")?;
@@ -376,7 +376,7 @@ fn test_execute_command_workspace_trust_report() -> Result<(), Box<dyn std::erro
                 }
             }]
         })),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
     };
 
     let response = server
@@ -562,7 +562,7 @@ fn test_execute_command_workspace_trust_report_schema_snapshot()
                 }
             }]
         })),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
     };
 
     let response = server
@@ -985,7 +985,7 @@ fn test_execute_command_explain_missing_module_lookup() -> Result<(), Box<dyn st
                 "position": {"line": 0, "character": 4}
             }]
         })),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
     };
 
     let response = server
@@ -1092,7 +1092,7 @@ fn test_execute_command_explain_provider_decision() -> Result<(), Box<dyn std::e
                 }
             }]
         })),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
     };
 
     let response = server

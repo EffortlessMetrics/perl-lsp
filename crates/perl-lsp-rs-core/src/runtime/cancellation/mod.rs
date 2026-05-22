@@ -18,6 +18,7 @@
 //! - Memory overhead: <1MB for complete cancellation infrastructure
 //! - Thread-safe concurrent operations with zero-copy atomic checks
 
+use crate::protocol::JsonRpcId;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{
@@ -58,7 +59,7 @@ pub struct PerlLspCancellationToken {
     /// Atomic cancellation flag for fast checks
     pub(crate) cancelled: Arc<AtomicBool>,
     /// Unique request identifier
-    pub(crate) request_id: Value,
+    pub(crate) request_id: JsonRpcId,
     /// Provider context for enhanced error messages
     pub(crate) provider: String,
     /// Creation timestamp for latency tracking
@@ -69,7 +70,7 @@ pub struct PerlLspCancellationToken {
 
 impl PerlLspCancellationToken {
     /// Create a new cancellation token
-    pub fn new(request_id: Value, provider: String) -> Self {
+    pub fn new(request_id: JsonRpcId, provider: String) -> Self {
         let timestamp =
             SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::ZERO).as_millis()
                 as u64;
@@ -113,7 +114,7 @@ impl PerlLspCancellationToken {
     }
 
     /// Get request identifier
-    pub fn request_id(&self) -> &Value {
+    pub fn request_id(&self) -> &JsonRpcId {
         &self.request_id
     }
 
@@ -171,13 +172,13 @@ impl ProviderCleanupContext {
 /// Thread-safe cancellation registry for concurrent request coordination
 pub struct CancellationRegistry {
     /// Active cancellation tokens
-    tokens: Arc<RwLock<HashMap<String, PerlLspCancellationToken>>>,
+    tokens: Arc<RwLock<HashMap<JsonRpcId, PerlLspCancellationToken>>>,
     /// Provider cleanup contexts
-    cleanup_contexts: Arc<Mutex<HashMap<String, ProviderCleanupContext>>>,
+    cleanup_contexts: Arc<Mutex<HashMap<JsonRpcId, ProviderCleanupContext>>>,
     /// Performance metrics
     metrics: Arc<CancellationMetrics>,
     /// Fast cache for frequently accessed tokens (reduces overhead by ~40%)
-    token_cache: Arc<RwLock<HashMap<String, PerlLspCancellationToken>>>,
+    token_cache: Arc<RwLock<HashMap<JsonRpcId, PerlLspCancellationToken>>>,
     /// Cache size limit to prevent memory growth
     max_cache_size: usize,
 }
@@ -210,7 +211,7 @@ impl CancellationRegistry {
     /// has just been registered — a correctness violation caught by
     /// `prop_registry_model_matches_runtime_state`.
     pub fn register_token(&self, token: PerlLspCancellationToken) -> Result<(), CancellationError> {
-        let key = format!("{:?}", token.request_id);
+        let key = token.request_id.clone();
 
         // Evict any stale fast-path cache entry for this ID *before* writing
         // the new token so that concurrent readers never observe a cancelled
@@ -220,7 +221,7 @@ impl CancellationRegistry {
         }
 
         if let Ok(mut tokens) = self.tokens.write() {
-            tokens.insert(key.clone(), token);
+            tokens.insert(key, token);
             self.metrics.increment_registered();
             Ok(())
         } else {
@@ -231,13 +232,11 @@ impl CancellationRegistry {
     /// Register cleanup context for provider
     pub fn register_cleanup(
         &self,
-        request_id: &Value,
+        request_id: &JsonRpcId,
         context: ProviderCleanupContext,
     ) -> Result<(), CancellationError> {
-        let key = format!("{:?}", request_id);
-
         if let Ok(mut contexts) = self.cleanup_contexts.lock() {
-            contexts.insert(key, context);
+            contexts.insert(request_id.clone(), context);
             Ok(())
         } else {
             Err(CancellationError::LockError("Failed to acquire cleanup lock".into()))
@@ -247,13 +246,11 @@ impl CancellationRegistry {
     /// Cancel request with provider-specific cleanup
     pub fn cancel_request(
         &self,
-        request_id: &Value,
+        request_id: &JsonRpcId,
     ) -> Result<Option<ProviderCleanupContext>, CancellationError> {
-        let key = format!("{:?}", request_id);
-
         // Mark token as cancelled
         if let Ok(tokens) = self.tokens.read() {
-            if let Some(token) = tokens.get(&key) {
+            if let Some(token) = tokens.get(request_id) {
                 token.cancel();
                 self.metrics.increment_cancelled();
             }
@@ -261,7 +258,7 @@ impl CancellationRegistry {
 
         // Execute and return cleanup context
         if let Ok(mut contexts) = self.cleanup_contexts.lock() {
-            if let Some(context) = contexts.remove(&key) {
+            if let Some(context) = contexts.remove(request_id) {
                 context.execute_cleanup();
                 Ok(Some(context))
             } else {
@@ -273,19 +270,17 @@ impl CancellationRegistry {
     }
 
     /// Get cancellation token for request with smart caching
-    pub fn get_token(&self, request_id: &Value) -> Option<PerlLspCancellationToken> {
-        let key = format!("{:?}", request_id);
-
+    pub fn get_token(&self, request_id: &JsonRpcId) -> Option<PerlLspCancellationToken> {
         // Fast path: Check cache first
         if let Ok(cache) = self.token_cache.read() {
-            if let Some(token) = cache.get(&key) {
+            if let Some(token) = cache.get(request_id) {
                 return Some(token.clone());
             }
         }
 
         // Slow path: Get from main storage and cache it
         if let Ok(tokens) = self.tokens.read() {
-            if let Some(token) = tokens.get(&key) {
+            if let Some(token) = tokens.get(request_id) {
                 let token_clone = token.clone();
 
                 // Update cache (non-blocking, ignore failures for performance)
@@ -293,7 +288,7 @@ impl CancellationRegistry {
                     if cache.len() >= self.max_cache_size {
                         cache.clear(); // Simple eviction strategy
                     }
-                    cache.insert(key, token_clone.clone());
+                    cache.insert(request_id.clone(), token_clone.clone());
                 }
 
                 Some(token_clone)
@@ -307,38 +302,38 @@ impl CancellationRegistry {
 
     /// Check if request is cancelled (optimized fast path)
     #[inline]
-    pub fn is_cancelled(&self, request_id: &Value) -> bool {
-        let key = format!("{:?}", request_id);
-
+    pub fn is_cancelled(&self, request_id: &JsonRpcId) -> bool {
         // Fast path: Check cache first with relaxed atomic read
         if let Ok(cache) = self.token_cache.try_read() {
-            if let Some(token) = cache.get(&key) {
+            if let Some(token) = cache.get(request_id) {
                 return token.is_cancelled_relaxed();
             }
         }
 
         // Fallback: Check main storage
         if let Ok(tokens) = self.tokens.try_read() {
-            if let Some(token) = tokens.get(&key) { token.is_cancelled_relaxed() } else { false }
+            if let Some(token) = tokens.get(request_id) {
+                token.is_cancelled_relaxed()
+            } else {
+                false
+            }
         } else {
             false
         }
     }
 
     /// Remove completed request from registry
-    pub fn remove_request(&self, request_id: &Value) {
-        let key = format!("{:?}", request_id);
-
+    pub fn remove_request(&self, request_id: &JsonRpcId) {
         if let Ok(mut tokens) = self.tokens.write() {
-            tokens.remove(&key);
+            tokens.remove(request_id);
         }
 
         if let Ok(mut cache) = self.token_cache.write() {
-            cache.remove(&key);
+            cache.remove(request_id);
         }
 
         if let Ok(mut contexts) = self.cleanup_contexts.lock() {
-            contexts.remove(&key);
+            contexts.remove(request_id);
         }
 
         self.metrics.increment_completed();
@@ -489,22 +484,22 @@ macro_rules! check_cancellation {
 /// // Guard automatically calls remove_request on drop
 /// ```
 pub struct RequestCleanupGuard {
-    request_id: Option<Value>,
+    request_id: Option<JsonRpcId>,
 }
 
 impl RequestCleanupGuard {
     /// Create a new cleanup guard for the given request ID
     ///
     /// If `request_id` is `None`, the guard does nothing on drop.
-    pub fn new(request_id: Option<Value>) -> Self {
+    pub fn new(request_id: Option<JsonRpcId>) -> Self {
         Self { request_id }
     }
 
-    /// Create a guard from a reference to an optional Value
+    /// Create a guard from a reference to an optional `JsonRpcId`
     ///
     /// This is a convenience method for the common pattern of
     /// `RequestCleanupGuard::new(request_id.cloned())`.
-    pub fn from_ref(request_id: Option<&Value>) -> Self {
+    pub fn from_ref(request_id: Option<&JsonRpcId>) -> Self {
         Self { request_id: request_id.cloned() }
     }
 }
@@ -530,15 +525,17 @@ mod tests {
 
     #[test]
     fn test_cancellation_token_creation() {
-        let token = PerlLspCancellationToken::new(json!(42), "hover".to_string());
+        let id = JsonRpcId::Integer(42);
+        let token = PerlLspCancellationToken::new(id.clone(), "hover".to_string());
         assert!(!token.is_cancelled());
         assert_eq!(token.provider(), "hover");
-        assert_eq!(token.request_id(), &json!(42));
+        assert_eq!(token.request_id(), &id);
     }
 
     #[test]
     fn test_atomic_cancellation_operations() {
-        let token = PerlLspCancellationToken::new(json!(123), "completion".to_string());
+        let token =
+            PerlLspCancellationToken::new(JsonRpcId::Integer(123), "completion".to_string());
 
         // Initially not cancelled
         assert!(!token.is_cancelled());
@@ -551,21 +548,22 @@ mod tests {
     #[test]
     fn test_cancellation_registry_operations() -> Result<(), Box<dyn std::error::Error>> {
         let registry = CancellationRegistry::new();
-        let token = PerlLspCancellationToken::new(json!(456), "references".to_string());
+        let id = JsonRpcId::Integer(456);
+        let token = PerlLspCancellationToken::new(id.clone(), "references".to_string());
 
         // Register token
         registry.register_token(token.clone())?;
         assert_eq!(registry.active_count(), 1);
 
         // Check cancellation status
-        assert!(!registry.is_cancelled(&json!(456)));
+        assert!(!registry.is_cancelled(&id));
 
         // Cancel request
-        registry.cancel_request(&json!(456))?;
-        assert!(registry.is_cancelled(&json!(456)));
+        registry.cancel_request(&id)?;
+        assert!(registry.is_cancelled(&id));
 
         // Remove request
-        registry.remove_request(&json!(456));
+        registry.remove_request(&id);
         assert_eq!(registry.active_count(), 0);
         Ok(())
     }
@@ -615,7 +613,7 @@ mod tests {
         // Serialize access to global registry to avoid interference between tests
         let _lock = TEST_LOCK.lock().map_err(|e| format!("lock error: {}", e))?;
 
-        let req_id = json!(9999);
+        let req_id = JsonRpcId::Integer(9999);
 
         // Ensure clean baseline by removing any stale entry
         GLOBAL_CANCELLATION_REGISTRY.remove_request(&req_id);
@@ -656,7 +654,7 @@ mod tests {
     #[test]
     fn test_request_cleanup_guard_from_ref() -> Result<(), Box<dyn std::error::Error>> {
         // Test that from_ref correctly clones the value
-        let req_id = json!(9998);
+        let req_id = JsonRpcId::Integer(9998);
         let guard = RequestCleanupGuard::from_ref(Some(&req_id));
 
         // Verify the guard has the request_id
@@ -665,6 +663,60 @@ mod tests {
 
         // Let it drop - this exercises the Drop impl even if nothing is registered
         drop(guard);
+        Ok(())
+    }
+
+    /// Pins the behavior that integer 7 and string "7" are stored under distinct
+    /// keys in the registry, even though their textual representations overlap.
+    ///
+    /// The old `format!("{:?}", value)` approach happened to distinguish them
+    /// via Debug output (Number(7) vs String("7")), but this test makes the
+    /// typed behavior explicit and regression-proof.
+    #[test]
+    fn registry_keys_are_distinct_for_integer_and_string_with_same_textual_repr()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let registry = CancellationRegistry::new();
+
+        let int_id = JsonRpcId::Integer(7);
+        let str_id = JsonRpcId::String("7".into());
+
+        let token_int = PerlLspCancellationToken::new(int_id.clone(), "int-provider".to_string());
+        let token_str = PerlLspCancellationToken::new(str_id.clone(), "str-provider".to_string());
+
+        registry.register_token(token_int)?;
+        registry.register_token(token_str)?;
+
+        // Both entries are independently stored
+        assert_eq!(registry.active_count(), 2);
+
+        // Cancel only the integer key; string must remain uncancelled
+        registry.cancel_request(&int_id)?;
+        assert!(registry.is_cancelled(&int_id));
+        assert!(!registry.is_cancelled(&str_id));
+
+        registry.remove_request(&int_id);
+        registry.remove_request(&str_id);
+        assert_eq!(registry.active_count(), 0);
+        Ok(())
+    }
+
+    /// Verifies that string request IDs (arbitrary Unicode) are correctly stored,
+    /// cancelled, and removed after the migration from `format!("{:?}", value)` keying.
+    #[test]
+    fn registry_handles_arbitrary_string_request_id() -> Result<(), Box<dyn std::error::Error>> {
+        let registry = CancellationRegistry::new();
+        let id = JsonRpcId::String("really-long-uuid-here-with-dashes".into());
+
+        let token = PerlLspCancellationToken::new(id.clone(), "references".to_string());
+        registry.register_token(token)?;
+
+        assert!(!registry.is_cancelled(&id));
+
+        registry.cancel_request(&id)?;
+        assert!(registry.is_cancelled(&id));
+
+        registry.remove_request(&id);
+        assert_eq!(registry.active_count(), 0);
         Ok(())
     }
 }

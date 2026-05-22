@@ -91,6 +91,7 @@ perl-dap --stdio  # Standard DAP transport
 | Retained owner added | `cargo xtask check-memory-retained-owner-drift --base origin/master` | Checks whether long-lived storage/task additions need retained-state inventory coverage. |
 | Parser-accuracy metrics touched | `just ci-metrics-ratchet-check parser_accuracy` | Verifies parser-accuracy scorecard floors do not regress. |
 | Generated status docs touched | `just status-update` then `just status-check` | Regenerates and verifies `docs/project/status/` outputs. |
+| Active goal manifest touched | `rtk cargo xtask check-active-goal-manifest` | Verifies the swarm active manifest, lane caps, linked docs, work items, and proof command shape. |
 | Release/version surfaces touched | `just version-check` then `just release-check` | Verifies version sync and the release-prep gate before tagging/publishing. |
 | Native tooling defaults touched | `cargo xtask native-tooling check-defaults` | Verifies native formatter and native critic default paths do not silently shell out. |
 | Native tooling cutover status touched | `cargo xtask native-tooling readiness --markdown docs/project/status/native_tooling_readiness.md` | Renders explicit native formatter/critic default-readiness criteria from existing receipts. |

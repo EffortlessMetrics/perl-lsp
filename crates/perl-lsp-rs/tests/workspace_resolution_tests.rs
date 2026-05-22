@@ -10,7 +10,7 @@
 
 use parking_lot::Mutex;
 use perl_lsp::state::WorkspaceConfig;
-use perl_lsp::{JsonRpcRequest, LspServer};
+use perl_lsp::{JsonRpcId, JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
 use std::io::Write;
 use std::sync::Arc;
@@ -50,7 +50,7 @@ fn create_test_server() -> (LspServer, Arc<Mutex<Vec<u8>>>) {
 fn send_request(
     server: &LspServer,
     method: &str,
-    id: Option<Value>,
+    id: Option<JsonRpcId>,
     params: Value,
 ) -> Option<Value> {
     let req =
@@ -64,7 +64,7 @@ fn initialize_server(server: &LspServer) {
     send_request(
         server,
         "initialize",
-        Some(json!(1)),
+        Some(JsonRpcId::Integer(1)),
         json!({
             "rootUri": "file:///workspace",
             "capabilities": {}
@@ -153,7 +153,7 @@ fn initialize_with_workspace_folders() -> Result<(), Box<dyn std::error::Error>>
     let result = send_request(
         &server,
         "initialize",
-        Some(json!(1)),
+        Some(JsonRpcId::Integer(1)),
         json!({
             "workspaceFolders": [
                 { "uri": "file:///primary", "name": "primary" },
@@ -176,7 +176,7 @@ fn initialize_with_root_uri_fallback() -> Result<(), Box<dyn std::error::Error>>
     let result = send_request(
         &server,
         "initialize",
-        Some(json!(1)),
+        Some(JsonRpcId::Integer(1)),
         json!({
             "rootUri": "file:///workspace",
             "capabilities": {}
@@ -196,7 +196,7 @@ fn initialize_with_legacy_root_path_fallback() -> Result<(), Box<dyn std::error:
     let result = send_request(
         &server,
         "initialize",
-        Some(json!(1)),
+        Some(JsonRpcId::Integer(1)),
         json!({
             "rootPath": "/legacy/workspace",
             "capabilities": {}
@@ -216,7 +216,7 @@ fn initialize_with_legacy_root_path_sets_workspace_folder_path()
     let result = send_request(
         &server,
         "initialize",
-        Some(json!(1)),
+        Some(JsonRpcId::Integer(1)),
         json!({
             "rootPath": "/legacy/workspace",
             "capabilities": {}
@@ -244,7 +244,7 @@ fn initialize_windows_root_path_conversion() -> Result<(), Box<dyn std::error::E
     let result = send_request(
         &server,
         "initialize",
-        Some(json!(1)),
+        Some(JsonRpcId::Integer(1)),
         json!({
             "rootPath": "C:\\Users\\dev\\project",
             "capabilities": {}
@@ -263,7 +263,7 @@ fn initialize_rejects_double_initialize() -> Result<(), Box<dyn std::error::Erro
     let result1 = send_request(
         &server,
         "initialize",
-        Some(json!(1)),
+        Some(JsonRpcId::Integer(1)),
         json!({
             "rootUri": "file:///workspace",
             "capabilities": {}
@@ -283,7 +283,7 @@ fn initialize_rejects_double_initialize() -> Result<(), Box<dyn std::error::Erro
     // Second initialize should fail
     let req = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "initialize".into(),
         params: Some(json!({
             "rootUri": "file:///workspace2",
@@ -314,7 +314,7 @@ fn configuration_returns_workspace_include_paths() -> Result<(), Box<dyn std::er
     let result = send_request(
         &server,
         "workspace/configuration",
-        Some(json!(2)),
+        Some(JsonRpcId::Integer(2)),
         json!({
             "items": [
                 { "section": "perl.workspace.includePaths" }
@@ -345,7 +345,7 @@ fn configuration_returns_system_inc_disabled() -> Result<(), Box<dyn std::error:
     let result = send_request(
         &server,
         "workspace/configuration",
-        Some(json!(2)),
+        Some(JsonRpcId::Integer(2)),
         json!({
             "items": [
                 { "section": "perl.workspace.useSystemInc" }
@@ -368,7 +368,7 @@ fn configuration_returns_perl5lib_defaults() -> Result<(), Box<dyn std::error::E
     let result = send_request(
         &server,
         "workspace/configuration",
-        Some(json!(2)),
+        Some(JsonRpcId::Integer(2)),
         json!({
             "items": [
                 { "section": "perl.workspace.usePerl5lib" },
@@ -396,7 +396,7 @@ fn configuration_returns_resolution_timeout() -> Result<(), Box<dyn std::error::
     let result = send_request(
         &server,
         "workspace/configuration",
-        Some(json!(2)),
+        Some(JsonRpcId::Integer(2)),
         json!({
             "items": [
                 { "section": "perl.workspace.resolutionTimeout" }
@@ -446,7 +446,7 @@ fn did_change_configuration_updates_workspace_settings() -> Result<(), Box<dyn s
     let result = send_request(
         &server,
         "workspace/configuration",
-        Some(json!(2)),
+        Some(JsonRpcId::Integer(2)),
         json!({
             "items": [
                 { "section": "perl.workspace.includePaths" }
@@ -491,7 +491,7 @@ fn did_change_configuration_updates_perl5lib_workspace_settings()
     let result = send_request(
         &server,
         "workspace/configuration",
-        Some(json!(3)),
+        Some(JsonRpcId::Integer(3)),
         json!({
             "items": [
                 { "section": "perl.workspace.usePerl5lib" },

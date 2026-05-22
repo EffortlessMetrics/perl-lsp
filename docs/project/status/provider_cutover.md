@@ -185,6 +185,11 @@ For class-level promote, fallback, block, and defer decisions, see
   `token:package_declaration:` identity class, refreshes after `didChange`, and
   emits no new semantic-token output. It does not authorize broader namespace or
   compiler-token cutover.
+- The phase-block declaration scoped cutover proof proves a source-backed
+  `BEGIN`/`UNITCHECK` compiler span matches exactly one existing live `macro`
+  token, authorizes only the `token:phase_block_declaration:` identity class,
+  refreshes after `didChange`, and emits no new semantic-token output. It does
+  not authorize broader macro or compiler-token cutover.
 - The Catalyst method-call compiler-token scoped proof proves a source-backed
   `$c->stash` compiler span matches exactly one existing live `method` token,
   allows only the `token:method_call:` compiler identity class, refreshes after
@@ -196,13 +201,20 @@ For class-level promote, fallback, block, and defer decisions, see
   refreshes after `didChange`, and emits no new semantic-token output. It does
   not approve broader `token:method:` candidates or other compiler-token
   classes.
+- The subroutine-declaration scoped cutover proof proves a source-backed
+  `sub process` compiler span matches exactly one existing live `function`
+  token, allows only the `token:function:` compiler identity class, and emits
+  no new semantic-token output. It does not approve broader generated,
+  dynamic, stale, low-confidence, fallback, or unmatched compiler-token
+  classes.
 - The field-declaration scoped cutover proof proves a source-backed
   `field $name` compiler span matches exactly one existing live `variable`
   token, allows only the `token:field_declaration:` compiler identity class,
   refreshes after `didChange`, and emits no new semantic-token output. It does
   not approve broader `token:variable:` candidates or other compiler-token
-  classes. The method-declaration, package-declaration, field-declaration, and
-  method-call scoped proofs close four class cutover steps while keeping broader
+  classes. The subroutine-declaration, method-declaration,
+  package-declaration, phase-block declaration, field-declaration, and
+  method-call scoped proofs close scoped class cutover steps while keeping broader
   compiler-token promotion gated by no-token-output-change, false-exact,
   fallback, and edit-freshness coverage.
 - The Mojolicious scenario 34 semantic-token receipt records live token counts,
@@ -268,7 +280,7 @@ the relevant receipt command.
 | Safe delete | `partial live source-backed pilot / boundary-shadowed broader facts` | `perl.safeDeleteSymbol` can return a source-backed symbol-delete WorkspaceEdit only when the compiler safe-delete plan is allowed, the live source guard resolves an exact high-confidence subroutine definition, current source and the workspace index still have zero references, the workspace identity guard accepts the request, and rollback proof restores the original text. Safe-delete receipts still trace dynamic-boundary blockers, framework-generated blockers, stale compiler facts, runtime blocker UX notes, Mojolicious scenario 36 file-delete warning UX, Dancer2 and RealBaseline symbol-level blocker/allowed request shapes, requested RealBaseline `reset` and Dancer2 `to_psgi` delete edits plus inverse rollback proof, Dancer2 `header` referenced-method refusal, cross-file workspace-reference refusal, post-`didChange` `to_psgi` current-source reference refusal, the Catalyst `get_action` ambiguous-identity false-allow blocker, the non-subroutine/package-wide source-guard blocker, and `perl.previewSafeDelete` scoped no-edit UX | Reviewed generated/no-source and dynamic blocker receipts; broader symbol-delete migration remains deferred |
 | Workspace symbols | `partial live source-backed + generated-label pilot` | Existing workspace index remains the live provider source; non-empty ready-index results can answer live with source-backed/high-confidence traces; source-backed generated/framework members may answer live only as explicitly labeled virtual symbols anchored to framework declarations, not exact generated method bodies; semantic-shadow fixtures still trace fresh compiler, generated, dynamic-boundary, stale fact, and real-workspace quality candidates; runtime quality receipts capture source-backed ready-index counts/results, labeled generated-pilot counts, mixed source-backed/generated rank proof, generated/dynamic false-exact shadow proof plus generated-pilot edit-freshness proof, scoped generated-symbol cutover proof, scoped Moo predicate generated-symbol proof, generated/no-source blocker proof, and generated/no-source/dynamic/stale/fallback-noise gating; Mojolicious scenario 33 records live-provider noise, generated candidate gating, dynamic-boundary-shaped names, and edit freshness; Dancer2 scenario 39, Catalyst scenario 41, and Modern OO scenario 43 add project-shaped generated/dynamic/noise receipts; scenario 43 now also proves generated/no-source candidate names have zero live exact promotion; support review keeps generated-label behavior bounded to virtual source anchors | Additional generated/no-source project variants and explicit-label rank/noise proof before any broader generated-symbol expansion |
 | Document symbols | `partial live source-backed` | Fresh, high-confidence, source-backed parser-syntax `ExactAst` symbols can drive live `textDocument/documentSymbol` results with fallback retained for astless documents and gated generated/no-source, dynamic-boundary, stale, low-confidence, and ambiguous candidates. Semantic-shadow fixtures still trace explicit syntax, generated, dynamic-boundary, and stale fact candidates; runtime quality receipts capture live provider counts/results plus source-backed compiler traces; Mojolicious scenario 32 records real-workspace symbol quality, generated candidate counts, and edit freshness. | Generated-label proof plus additional real-workspace document-symbol receipts before generated, dynamic, or broader symbol cutover |
-| Semantic tokens | `partial live source-backed token slice + scoped method/package/field/method-call/self-method-call traces` | Existing parser/token provider remains the broad live source; semantic-shadow fixtures trace parser/HIR, compiler-backed, generated/no-source, dynamic-boundary, stale, and fallback candidates, including a combined unsafe-boundary receipt that produces no semantic-token identities and a broader `token:method:` false-exact receipt; runtime quality receipts capture live token count, shadow state, no-token-output-change proof, live span invariants, synthetic, Catalyst-shaped, and RealBaseline source-backed compiler-fact subroutine-declaration classes matched to existing live `function` token output, live-output parity, edit freshness after `didChange`, the scoped method-declaration proof that allows only source-backed `token:method_declaration:` identities already matching existing live `method` tokens and refreshing after `didChange`, the scoped package-declaration proof that allows only source-backed `token:package_declaration:` identities already matching existing live `namespace` tokens and refreshing after `didChange`, the scoped field-declaration proof that allows only source-backed `token:field_declaration:` identities already matching existing live `variable` tokens and refreshing after `didChange`, the scoped method-call proof that allows only source-backed `token:method_call:` identities already matching existing live `method` tokens and refreshing after `didChange`, the scoped self-method-call proof that allows only source-backed `token:self_method_call:` identities already matching existing live `method` tokens and refreshing after `didChange`, and live-request provider-decision traces now include matched subroutine-declaration, method-declaration, package-declaration, method-call, field-declaration, and self-method-call compiler-token slices only; Mojolicious scenario 34 and Dancer2 scenario 38 record project-shaped token/span validity and edit freshness; Catalyst scenario 42 records project-shaped false-exact generated/dynamic-looking token boundaries and edit freshness; support review keeps the scoped classes output-neutral and fallback-preserving | Another scoped compiler-token class proof before broader compiler-token promotion |
+| Semantic tokens | `partial live source-backed token slice + scoped subroutine/method/package/phase-block/field/method-call/self-method-call/lexical-variable declaration/use traces` | Existing parser/token provider remains the broad live source; semantic-shadow fixtures trace parser/HIR, compiler-backed, generated/no-source, dynamic-boundary, stale, and fallback candidates, including a combined unsafe-boundary receipt that produces no semantic-token identities and a broader `token:method:` false-exact receipt; runtime quality receipts capture live token count, shadow state, no-token-output-change proof, live span invariants, synthetic, Catalyst-shaped, and RealBaseline source-backed compiler-fact subroutine-declaration classes matched to existing live `function` token output, live-output parity, edit freshness after `didChange`, the scoped subroutine-declaration proof that allows only source-backed `token:function:` identities already matching existing live `function` tokens without emitting new output, the scoped method-declaration proof that allows only source-backed `token:method_declaration:` identities already matching existing live `method` tokens and refreshing after `didChange`, the scoped package-declaration proof that allows only source-backed `token:package_declaration:` identities already matching existing live `namespace` tokens and refreshing after `didChange`, the scoped phase-block declaration proof that allows only source-backed `token:phase_block_declaration:` identities already matching existing live `macro` tokens and refreshing after `didChange`, the scoped field-declaration proof that allows only source-backed `token:field_declaration:` identities already matching existing live `variable` tokens and refreshing after `didChange`, the scoped method-call proof that allows only source-backed `token:method_call:` identities already matching existing live `method` tokens and refreshing after `didChange`, the scoped self-method-call proof that allows only source-backed `token:self_method_call:` identities already matching existing live `method` tokens and refreshing after `didChange`, and live-request provider-decision traces now include matched subroutine-declaration, method-declaration, package-declaration, phase-block declaration, method-call, field-declaration, self-method-call, lexical-variable declaration, and lexical-variable use compiler-token slices only; Mojolicious scenario 34 and Dancer2 scenario 38 record project-shaped token/span validity and edit freshness; Catalyst scenario 42 records project-shaped false-exact generated/dynamic-looking token boundaries and edit freshness; support review keeps the scoped classes output-neutral and fallback-preserving | Another scoped compiler-token class proof before broader compiler-token promotion |
 
 ## Cutover Rules
 
@@ -322,11 +334,14 @@ the relevant receipt command.
   not authorize exact receiver completion; imported-package fallback remains
   tiered and labeled until a separate provider receipt promotes one class.
 
-- Semantic-token note, 2026-05-18: method-declaration, package-declaration,
-  field-declaration, method-call, and self-method-call parity have moved to scoped
-  output-neutral provider traces/proofs for `token:method_declaration:`,
-  `token:package_declaration:`, `token:field_declaration:`, and
-  `token:method_call:` only. These receipts do not move class-specific
+- Semantic-token note, 2026-05-18: subroutine-declaration,
+  method-declaration, package-declaration, phase-block declaration,
+  field-declaration, method-call, and self-method-call
+  parity have moved to scoped
+  output-neutral provider traces/proofs for `token:function:`,
+  `token:method_declaration:`, `token:package_declaration:`,
+  `token:phase_block_declaration:`,
+  `token:field_declaration:`, and `token:method_call:` only. These receipts do not move class-specific
   compiler facts into live token output. Broader compiler-backed semantic
   tokens still require class-specific cutover proof.
 

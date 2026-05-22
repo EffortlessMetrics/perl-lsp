@@ -227,7 +227,7 @@ pub fn run_cost_monitor(days: u64, json_output: bool) -> Result<()> {
 
     if total_runs == 0 {
         if json_output {
-            println!("{{\"error\": \"No workflow runs found\", \"period_days\": {days}}}",);
+            println!("{{\"error\": \"No workflow runs found\", \"period_days\": {days}}}");
         } else {
             println!("No workflow runs found in the last {days} days");
         }

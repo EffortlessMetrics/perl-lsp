@@ -38,12 +38,13 @@ fn build_response(
     should_respond: bool,
     result: Result<Option<Value>, JsonRpcError>,
 ) -> Option<JsonRpcResponse> {
+    let id = id.as_ref().and_then(JsonRpcId::from_value);
     match result {
         Ok(Some(result)) if should_respond => {
             tracing::trace!(method = %method, "Sending successful response");
             Some(JsonRpcResponse {
                 jsonrpc: "2.0".to_string(),
-                id,
+                id: id.clone(),
                 result: Some(result),
                 error: None,
             })

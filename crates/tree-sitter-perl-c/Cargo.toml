@@ -7,7 +7,7 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Tree-sitter Perl grammar binding (C FFI). Conventional C/tree-sitter reference implementation, kept alongside the native v3 parser for compatibility and comparison."
+description = "Tree-sitter Perl C FFI snapshot for testing, experimentation, accuracy comparison, and baseline benchmarking."
 readme = "README.md"
 documentation = "https://docs.rs/tree-sitter-perl-c"
 keywords = ["perl", "parser", "tree-sitter", "grammar", "ffi"]
@@ -24,7 +24,7 @@ include = [
 ]
 
 [dependencies]
-tree-sitter = "0.26.6"
+tree-sitter = "0.26.9"
 tree-sitter-language = "0.1.7"
 
 [package.metadata.docs.rs]

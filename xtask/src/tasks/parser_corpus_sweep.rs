@@ -1579,7 +1579,7 @@ mod tests {
         ];
 
         for (input, expected) in cases {
-            assert_eq!(normalize_error_bucket(input), expected, "Failed for input: {input}",);
+            assert_eq!(normalize_error_bucket(input), expected, "Failed for input: {input}");
         }
     }
 

@@ -668,3 +668,121 @@ Rollback
 
 Reopen the lane by changing the manifest status back to active and adding a
 specific ready work item with proof commands and claim boundaries.
+
+## Swarm Execution Follow-Up Queue
+
+Status: active through [active.toml](../../.perl-lsp/goals/active.toml)
+
+This section records the current swarm handoff after the original closeout. The
+active goal manifest is the machine-readable source of truth; this plan only
+states the PR order and claim boundary.
+
+Recent routing
+
+- `semantic-token-scoped-class-proof` is completed. The phase-block declaration
+  proof added the scoped `token:phase_block_declaration:` class only when its
+  source-backed span matches an existing live `macro` token, refreshes after
+  `didChange`, and emits no new token output.
+- `constant-provider-proof` is completed. The substrate proof hardened static
+  `use constant` extraction for scalar, quoted scalar, hash, quoted-hash,
+  plus-hash, and nested-value hash forms and recorded a completion shadow trace
+  for constants as fresh `CompilerFact` / `SemanticAnalyzer` evidence without
+  changing live completion behavior.
+- `semantic-token-support-review` is completed. The class registry, human
+  provider-promotion ledger, and machine ledger now agree on the scoped
+  lexical-variable declaration/use rows, while semantic tokens remain
+  output-neutral and `partial-live-with-fallback`.
+- `prototype-table` is completed. HIR now records named subroutine prototype
+  content and precise source ranges in a prototype table, and
+  `RegisterPrototype` compile effects derive from that table without changing
+  provider behavior, diagnostics, parser bucket claims, support tiers, PIR
+  state, or determinism claims.
+- `bareword-classifier` is completed. HIR now records source-backed syntactic
+  roles for parsed identifier barewords without changing PL109 suppression,
+  provider behavior, parser bucket claims, support tiers, PIR state, or
+  determinism claims.
+- `determinism-receipt-v1-spec` is completed. `PLSP-SPEC-0026` now defines the
+  determinism receipt v1 contract, input classes, valid/invalid PR shapes,
+  acceptance, proof commands, non-goals, and claim boundaries without adding a
+  receipt generator, PIR implementation, runtime probe, provider behavior,
+  support-tier promotion, release-lineage sync, or determinism claim.
+- `cleanup-train-queue-review` is completed. The swarm queue was drained back
+  to a controlled state before resuming spec-lock work.
+- `differential-oracle-contract` is completed. `PLSP-SPEC-0027` now defines the
+  differential real-Perl oracle contract, comparison classes, fixture and
+  environment authority, disagreement classes, valid/invalid PR shapes,
+  acceptance, proof commands, non-goals, and claim boundaries without adding an
+  oracle runner, executing Perl, probing workspaces, changing provider
+  behavior, promoting support tiers, moving parser/corpus buckets, syncing
+  release lineage, or claiming conformance.
+- `provider-promotion-ledger-maintenance` is completed. The direct class
+  type-definition safe subset is recorded in the human ledger, machine ledger,
+  dashboard, and plan without broadening provider behavior or support tiers.
+- `oracle-receipt-schema-after-manifest` is completed. The checked-in receipt
+  schema and validator now lock the future differential oracle receipt shape
+  without adding an oracle runner, executing Perl, probing workspaces, changing
+  provider behavior, moving parser/corpus buckets, promoting support tiers,
+  syncing release lineage, or claiming conformance.
+- `post-oracle-schema-routing-review` is completed. The active manifest no
+  longer points at the completed receipt-schema slice, and the next substrate
+  items remain assignment-gated until a separate PR explicitly starts an oracle
+  runner or PIR contract lane.
+
+Current executable slice
+
+- `oracle-fixture-manifest-after-contract` is completed. The checked-in
+  differential oracle fixture manifest and schema now declare fixture
+  identities, source snapshots, path classes, Perl constraints, module roots,
+  environment denials, dynamic/unsupported boundaries, and comparison classes.
+- `oracle-receipt-schema-after-manifest` is completed. The receipt schema names
+  comparison class, source snapshot, Rust extractor, Perl oracle, module-path
+  authority, ambient/generated/dynamic/stale/unsupported inputs, normalized
+  facts, comparison result classes, promotion effect, redaction,
+  provider-behavior-change flag, and editor-runtime dependency denial.
+- `devex-storage-safe-validation` is active in the reliability lane. It is a
+  control-plane routing item for storage-safe local validation and queue health;
+  it does not change `cargo-safe`, build behavior, provider behavior, support
+  tiers, parser/corpus buckets, release-lineage sync, or source-repo development
+  routing.
+  The 2026-05-22 local validation pass confirms the manifest and gate policy
+  checks pass and `cargo xtask devex-doctor` completes with required tooling
+  available. The same pass records storage hygiene as not clean on this
+  Windows/WSL worktree: `storage-doctor` reports a repo-local `target/` above
+  the 1G threshold. That is a local storage receipt only, not a `cargo-safe`,
+  build-system, provider, parser, support-tier, or release-lineage change.
+- The recent queue cleanup was tracked in
+  [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
+
+Claim boundary
+
+- Oracle fixture manifest and receipt-schema work may align schemas, the
+  checked-in manifest, active-goal routing, and planning docs. It must not add
+  an oracle runner, execute Perl, probe workspaces, broaden provider behavior,
+  promote support tiers, move parser/corpus buckets, sync release lineage, or
+  use oracle agreement as provider promotion proof.
+- Post-schema routing review may update only the active goal manifest and this
+  plan. It must not select a parser bucket from stale status, start PIR, start
+  determinism implementation, or promote provider behavior.
+- DevEx storage-safe validation may update only active-goal routing and planning
+  docs until a separate implementation PR names a concrete storage or validation
+  contract. It must not change `cargo-safe`, build defaults, provider behavior,
+  parser/corpus buckets, support tiers, or release-lineage sync.
+
+Proof commands
+
+```bash
+rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft
+rtk cargo xtask check-active-goal-manifest
+rtk cargo xtask devex-doctor
+rtk cargo xtask gate-policy check
+rtk bash -lc './scripts/storage-doctor'
+rtk git diff --check
+```
+
+Rollback
+
+Revert this routing PR. If the receipt schema needs more work, mark
+`oracle-receipt-schema-after-manifest` active again and select no feature lane
+until the schema validator passes. If the DevEx storage-safe lane is not ready,
+mark it planned and select another reliability item with no provider/runtime
+behavior impact.

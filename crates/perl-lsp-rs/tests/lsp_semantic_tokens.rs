@@ -7,7 +7,7 @@ fn semantic_tokens_emit_data() -> Result<(), Box<dyn std::error::Error>> {
     let srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({"capabilities":{}})),
     };
@@ -41,7 +41,7 @@ fn semantic_tokens_emit_data() -> Result<(), Box<dyn std::error::Error>> {
 
     let req = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "textDocument/semanticTokens/full".into(),
         params: Some(json!({"textDocument": {"uri": uri}})),
     };
@@ -65,7 +65,7 @@ fn semantic_tokens_modification_modifier_on_assignment() -> Result<(), Box<dyn s
 
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({"capabilities": {}})),
     };
@@ -102,7 +102,7 @@ fn semantic_tokens_modification_modifier_on_assignment() -> Result<(), Box<dyn s
 
     let req = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "textDocument/semanticTokens/full".into(),
         params: Some(json!({"textDocument": {"uri": uri}})),
     };

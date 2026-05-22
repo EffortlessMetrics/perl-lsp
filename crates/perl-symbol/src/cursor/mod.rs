@@ -181,7 +181,10 @@ pub fn is_word_boundary(text: &[u8], pos: usize, word_len: usize) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{byte_offset_utf16, is_word_boundary, token_under_cursor};
+    use super::{
+        CursorSymbolKind, byte_offset_utf16, extract_symbol_from_source,
+        get_symbol_range_at_position, is_modchar, is_word_boundary, token_under_cursor,
+    };
 
     #[test]
     fn token_under_cursor_extracts_perl_module_token() {
@@ -215,6 +218,30 @@ mod tests {
     }
 
     #[test]
+    fn token_under_cursor_returns_none_for_out_of_range_line()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let text = "my $value = 1;\n";
+        assert_eq!(token_under_cursor(text, 99, 0), None);
+        Ok(())
+    }
+
+    #[test]
+    fn token_under_cursor_returns_none_for_empty_line() -> Result<(), Box<dyn std::error::Error>> {
+        let text = "\n";
+        assert_eq!(token_under_cursor(text, 0, 0), None);
+        Ok(())
+    }
+
+    #[test]
+    fn token_under_cursor_handles_array_and_hash_sigils() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let text = "push @items, %opts;\n";
+        assert_eq!(token_under_cursor(text, 0, 5), Some("@items".to_string()));
+        assert_eq!(token_under_cursor(text, 0, 13), Some("%opts".to_string()));
+        Ok(())
+    }
+
+    #[test]
     fn utf16_col_to_byte_offset_handles_surrogate_pairs() {
         let line = "A😀B";
         assert_eq!(byte_offset_utf16(line, 0), 0);
@@ -225,9 +252,235 @@ mod tests {
     }
 
     #[test]
+    fn byte_offset_utf16_past_end_returns_len() -> Result<(), Box<dyn std::error::Error>> {
+        let line = "abc";
+        assert_eq!(byte_offset_utf16(line, 100), 3);
+        Ok(())
+    }
+
+    #[test]
+    fn byte_offset_utf16_empty_string_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(byte_offset_utf16("", 0), 0);
+        assert_eq!(byte_offset_utf16("", 5), 0);
+        Ok(())
+    }
+
+    #[test]
     fn word_boundary_detects_embedded_word() {
         let text = b"fooDemo::Workerbar";
         assert!(!is_word_boundary(text, 3, "Demo::Worker".len()));
         assert!(is_word_boundary(b" Demo::Worker ", 1, "Demo::Worker".len()));
+    }
+
+    #[test]
+    fn word_boundary_at_start_and_end_of_text() -> Result<(), Box<dyn std::error::Error>> {
+        // Match at position 0 — no preceding character, boundary is at start.
+        assert!(is_word_boundary(b"foo bar", 0, 3));
+        // Match at very end — end position equals text length.
+        assert!(is_word_boundary(b"hello foo", 6, 3));
+        Ok(())
+    }
+
+    #[test]
+    fn word_boundary_false_when_trailing_modchar() -> Result<(), Box<dyn std::error::Error>> {
+        // "foo" at pos 0 in "foobar" is not a boundary because 'b' follows.
+        assert!(!is_word_boundary(b"foobar", 0, 3));
+        Ok(())
+    }
+
+    // ── is_modchar ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn is_modchar_accepts_alphanumeric_and_colon_and_underscore()
+    -> Result<(), Box<dyn std::error::Error>> {
+        assert!(is_modchar(b'a'));
+        assert!(is_modchar(b'Z'));
+        assert!(is_modchar(b'0'));
+        assert!(is_modchar(b'9'));
+        assert!(is_modchar(b'_'));
+        assert!(is_modchar(b':'));
+        Ok(())
+    }
+
+    #[test]
+    fn is_modchar_rejects_sigils_spaces_and_punctuation() -> Result<(), Box<dyn std::error::Error>>
+    {
+        assert!(!is_modchar(b'$'));
+        assert!(!is_modchar(b'@'));
+        assert!(!is_modchar(b'%'));
+        assert!(!is_modchar(b'&'));
+        assert!(!is_modchar(b' '));
+        assert!(!is_modchar(b'\n'));
+        assert!(!is_modchar(b'-'));
+        assert!(!is_modchar(b'.'));
+        assert!(!is_modchar(b'('));
+        assert!(!is_modchar(b')'));
+        Ok(())
+    }
+
+    // ── extract_symbol_from_source ────────────────────────────────────────────
+
+    #[test]
+    fn extract_symbol_recognizes_scalar_sigil_before_name() -> Result<(), Box<dyn std::error::Error>>
+    {
+        // Cursor on 'v' of "$value" — sigil is the preceding char.
+        let source = "$value";
+        let result = extract_symbol_from_source(1, source);
+        assert_eq!(result, Some(("value".to_string(), CursorSymbolKind::Scalar)));
+        Ok(())
+    }
+
+    #[test]
+    fn extract_symbol_recognizes_array_sigil_before_name() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let source = "@items";
+        let result = extract_symbol_from_source(1, source);
+        assert_eq!(result, Some(("items".to_string(), CursorSymbolKind::Array)));
+        Ok(())
+    }
+
+    #[test]
+    fn extract_symbol_recognizes_hash_sigil_before_name() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let source = "%opts";
+        let result = extract_symbol_from_source(1, source);
+        assert_eq!(result, Some(("opts".to_string(), CursorSymbolKind::Hash)));
+        Ok(())
+    }
+
+    #[test]
+    fn extract_symbol_recognizes_subroutine_sigil_before_name()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = "&callback";
+        let result = extract_symbol_from_source(1, source);
+        assert_eq!(result, Some(("callback".to_string(), CursorSymbolKind::Subroutine)));
+        Ok(())
+    }
+
+    #[test]
+    fn extract_symbol_cursor_on_sigil_itself() -> Result<(), Box<dyn std::error::Error>> {
+        // Cursor at position 0, which is the '$' sigil character.
+        let source = "$foo";
+        let result = extract_symbol_from_source(0, source);
+        assert_eq!(result, Some(("foo".to_string(), CursorSymbolKind::Scalar)));
+        Ok(())
+    }
+
+    #[test]
+    fn extract_symbol_cursor_past_end_returns_none() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "$foo";
+        assert_eq!(extract_symbol_from_source(10, source), None);
+        Ok(())
+    }
+
+    #[test]
+    fn extract_symbol_on_non_name_character_returns_none() -> Result<(), Box<dyn std::error::Error>>
+    {
+        // Space at position 2 — not alphanumeric/underscore, no sigil context.
+        let source = "my $x";
+        // Position 2 is ' ', no sigil before it and not alphanumeric.
+        assert_eq!(extract_symbol_from_source(2, source), None);
+        Ok(())
+    }
+
+    #[test]
+    fn extract_symbol_no_sigil_defaults_to_subroutine() -> Result<(), Box<dyn std::error::Error>> {
+        // A bare identifier with no sigil context defaults to Subroutine kind.
+        let source = "greet";
+        let result = extract_symbol_from_source(0, source);
+        assert_eq!(result, Some(("greet".to_string(), CursorSymbolKind::Subroutine)));
+        Ok(())
+    }
+
+    #[test]
+    fn extract_symbol_handles_underscore_and_digits_in_name()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = "$my_var2";
+        let result = extract_symbol_from_source(1, source);
+        assert_eq!(result, Some(("my_var2".to_string(), CursorSymbolKind::Scalar)));
+        Ok(())
+    }
+
+    // ── get_symbol_range_at_position ──────────────────────────────────────────
+
+    #[test]
+    fn symbol_range_past_end_returns_none() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(get_symbol_range_at_position(100, "foo"), None);
+        Ok(())
+    }
+
+    #[test]
+    fn symbol_range_includes_preceding_sigil() -> Result<(), Box<dyn std::error::Error>> {
+        // Position 1 is 'f' in "$foo"; the range should include the '$' at 0.
+        let source = "$foo";
+        let range = get_symbol_range_at_position(1, source);
+        assert!(range.is_some());
+        let (start, end) = range.unwrap_or((0, 0));
+        assert_eq!(start, 0, "range must include the leading sigil");
+        assert_eq!(end, 4);
+        Ok(())
+    }
+
+    #[test]
+    fn symbol_range_on_bare_identifier_no_sigil() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "greet";
+        let range = get_symbol_range_at_position(0, source);
+        assert!(range.is_some());
+        let (start, end) = range.unwrap_or((0, 0));
+        assert_eq!(end, 5);
+        // start ≤ 0 (could be 0 when no sigil precedes)
+        assert!(start <= 1);
+        Ok(())
+    }
+
+    // ── CursorSymbolKind derive traits ────────────────────────────────────────
+
+    #[test]
+    fn cursor_symbol_kind_derives_debug() -> Result<(), Box<dyn std::error::Error>> {
+        let formatted = format!("{:?}", CursorSymbolKind::Scalar);
+        assert_eq!(formatted, "Scalar");
+        Ok(())
+    }
+
+    #[test]
+    fn cursor_symbol_kind_derives_clone_and_copy() -> Result<(), Box<dyn std::error::Error>> {
+        fn assert_clone<T: Clone>() {}
+        fn assert_copy<T: Copy>() {}
+
+        assert_clone::<CursorSymbolKind>();
+        assert_copy::<CursorSymbolKind>();
+
+        let original = CursorSymbolKind::Array;
+        let copied: CursorSymbolKind = original;
+        assert_eq!(copied, CursorSymbolKind::Array);
+        Ok(())
+    }
+
+    #[test]
+    fn cursor_symbol_kind_derives_partial_eq() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(CursorSymbolKind::Scalar, CursorSymbolKind::Scalar);
+        assert_ne!(CursorSymbolKind::Scalar, CursorSymbolKind::Array);
+        assert_ne!(CursorSymbolKind::Hash, CursorSymbolKind::Subroutine);
+        Ok(())
+    }
+
+    #[test]
+    fn cursor_symbol_kind_all_variants_are_distinct() -> Result<(), Box<dyn std::error::Error>> {
+        let variants = [
+            CursorSymbolKind::Scalar,
+            CursorSymbolKind::Array,
+            CursorSymbolKind::Hash,
+            CursorSymbolKind::Subroutine,
+        ];
+        for (i, a) in variants.iter().enumerate() {
+            for (j, b) in variants.iter().enumerate() {
+                if i == j {
+                    assert_eq!(a, b);
+                } else {
+                    assert_ne!(a, b);
+                }
+            }
+        }
+        Ok(())
     }
 }

@@ -193,6 +193,15 @@ fn test_pod_skipped_with_cr_only_line_endings() -> TestResult {
 }
 
 #[test]
+fn test_find_line_end_stops_at_crlf_and_cr() -> TestResult {
+    let bytes = b"abc\r\ndef\rghi\n";
+    assert_eq!(PerlLexer::find_line_end(bytes, 0), 3);
+    assert_eq!(PerlLexer::find_line_end(bytes, 5), 8);
+    assert_eq!(PerlLexer::find_line_end(bytes, 9), 12);
+    Ok(())
+}
+
+#[test]
 fn test_exponent_sign_no_digits_plus() -> TestResult {
     // .5e+x — 'e' is not a valid exponent (no digits follow), so the number
     // token must be ".5" only.  The 'e' becomes a separate identifier token.
@@ -235,5 +244,26 @@ fn test_exponent_sign_no_digits_minus() -> TestResult {
         "number token must not include 'e'; second token should not be a Number, got {:?}",
         tok2.token_type
     );
+    Ok(())
+}
+
+#[test]
+fn test_exponent_marker_without_digits_uppercase() -> TestResult {
+    let mut lexer = PerlLexer::new("42E+foo");
+
+    let tok1 = lexer.next_token().ok_or("expected first token")?;
+    assert!(
+        matches!(&tok1.token_type, TokenType::Number(n) if n.as_ref() == "42"),
+        "expected Number(\"42\") but got {:?}",
+        tok1.token_type
+    );
+
+    let tok2 = lexer.next_token().ok_or("expected second token")?;
+    assert!(
+        matches!(&tok2.token_type, TokenType::Identifier(id) if id.as_ref() == "E"),
+        "expected Identifier(\"E\") but got {:?}",
+        tok2.token_type
+    );
+
     Ok(())
 }

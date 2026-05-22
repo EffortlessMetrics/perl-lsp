@@ -34,12 +34,14 @@ impl LspServer {
         // Total time: 20 * 50ms = 1 second
         for i in 0..20 {
             std::thread::sleep(Duration::from_millis(50));
-            if let Some(id) = id {
-                if self.is_cancelled(id) {
+            if let Some(id_value) = id
+                && let Some(typed_id) = JsonRpcId::from_value(id_value)
+            {
+                if self.is_cancelled(&typed_id) {
                     tracing::debug!(iteration = i, "Operation cancelled");
                     return Ok(Some(json!({
                         "jsonrpc": "2.0",
-                        "id": id,
+                        "id": id_value,
                         "result": null,
                         "error": request_cancelled_error()
                     })));

@@ -12,7 +12,7 @@
 pub use super::runtime::LspServer;
 
 // Re-export protocol types for convenience
-pub use super::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
+pub use super::protocol::{JsonRpcError, JsonRpcId, JsonRpcRequest, JsonRpcResponse};
 
 // Re-export window types for public API
 pub use super::runtime::{MessageType, ShowDocumentOptions};

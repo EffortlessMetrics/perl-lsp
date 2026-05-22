@@ -208,22 +208,26 @@ impl TddWorkflow {
         )
     }
 
-    fn generate_edge_case_test(&self, name: &str, _params: &[String]) -> String {
+    fn generate_edge_case_test(&self, name: &str, params: &[String]) -> String {
+        let undef_args = repeated_edge_case_args(params, "undef");
+        let empty_args = repeated_edge_case_args(params, "''");
+        let special_args = repeated_edge_case_args(params, "\"\\n\\t\\0\"");
+
         format!(
             "use Test::More;\n\n\
              subtest '{} edge cases' => sub {{\n    \
              # Test with undef\n    \
-             eval {{ {}(undef) }};\n    \
+             eval {{ {}({}) }};\n    \
              ok(!$@, 'Handles undef');\n    \n    \
              # Test with empty values\n    \
-             eval {{ {}('') }};\n    \
+             eval {{ {}({}) }};\n    \
              ok(!$@, 'Handles empty string');\n    \n    \
              # Test with special characters\n    \
-             eval {{ {}(\"\\n\\t\\0\") }};\n    \
+             eval {{ {}({}) }};\n    \
              ok(!$@, 'Handles special characters');\n\
              }};\n\n\
              done_testing();\n",
-            name, name, name, name
+            name, name, undef_args, name, empty_args, name, special_args
         )
     }
 
@@ -420,6 +424,13 @@ impl TddWorkflow {
     }
 }
 
+fn repeated_edge_case_args(params: &[String], edge_case: &str) -> String {
+    match params.len() {
+        0 => String::new(),
+        len => std::iter::repeat_n(edge_case, len).collect::<Vec<_>>().join(", "),
+    }
+}
+
 impl CoverageTracker {
     fn new() -> Self {
         Self { line_coverage: HashMap::new(), branch_coverage: HashMap::new(), total_coverage: 0.0 }
@@ -438,9 +449,8 @@ impl CoverageTracker {
             }
         }
 
-        if total_lines > 0 {
-            self.total_coverage = (covered_lines as f64 / total_lines as f64) * 100.0;
-        }
+        self.total_coverage =
+            if total_lines > 0 { (covered_lines as f64 / total_lines as f64) * 100.0 } else { 0.0 };
     }
 }
 
@@ -675,6 +685,25 @@ mod tests {
     }
 
     #[test]
+    fn test_coverage_resets_to_zero_when_all_inputs_empty() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let config = TddConfig::default();
+        let mut workflow = TddWorkflow::new(config);
+
+        workflow.update_coverage(
+            PathBuf::from("a.pl"),
+            vec![LineCoverage { line: 1, hits: 1, covered: true }],
+        );
+        assert!(workflow.check_coverage_threshold());
+
+        workflow.update_coverage(PathBuf::from("a.pl"), vec![]);
+
+        assert!(!workflow.check_coverage_threshold());
+        assert_eq!(workflow.get_status().coverage, 0.0);
+        Ok(())
+    }
+
+    #[test]
     fn test_refactoring_suggestions() {
         let config = TddConfig::default();
         let mut workflow = TddWorkflow::new(config);
@@ -739,5 +768,20 @@ mod tests {
         assert!(test.code.contains("edge cases"));
         assert!(test.code.contains("undef"));
         assert!(test.code.contains("empty"));
+    }
+
+    #[test]
+    fn test_edge_case_generation_preserves_signature_arity() {
+        let config = TddConfig::default();
+        let workflow = TddWorkflow::new(config);
+
+        let test = workflow.generate_test_for_function(
+            "validate_contact",
+            &["$name".to_string(), "$email".to_string()],
+            TestType::EdgeCase,
+        );
+
+        assert!(test.code.contains("validate_contact(undef, undef)"));
+        assert!(test.code.contains("validate_contact('', '')"));
     }
 }

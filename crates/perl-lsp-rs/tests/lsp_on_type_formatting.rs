@@ -7,7 +7,7 @@ fn on_type_braces_indent() -> Result<(), Box<dyn std::error::Error>> {
     let srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({"capabilities":{}})),
     };
@@ -42,7 +42,7 @@ fn on_type_braces_indent() -> Result<(), Box<dyn std::error::Error>> {
     // Simulate typing '{' at line 0 end
     let req = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "textDocument/onTypeFormatting".into(),
         params: Some(json!({
             "textDocument": {"uri": uri},
@@ -72,7 +72,7 @@ fn on_type_closing_brace_dedent() -> Result<(), Box<dyn std::error::Error>> {
     let srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({"capabilities":{}})),
     };
@@ -107,7 +107,7 @@ fn on_type_closing_brace_dedent() -> Result<(), Box<dyn std::error::Error>> {
     // Simulate typing '}' at line 2 position 5
     let req = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "textDocument/onTypeFormatting".into(),
         params: Some(json!({
             "textDocument": {"uri": uri},
@@ -132,7 +132,7 @@ fn on_type_newline_after_open_brace_indents() -> Result<(), Box<dyn std::error::
     let srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({"capabilities":{}})),
     };
@@ -167,7 +167,7 @@ fn on_type_newline_after_open_brace_indents() -> Result<(), Box<dyn std::error::
     // Simulate pressing Enter after "sub foo {" — cursor is now at line 1, col 0
     let req = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "textDocument/onTypeFormatting".into(),
         params: Some(json!({
             "textDocument": {"uri": uri},
@@ -197,7 +197,7 @@ fn on_type_tab_size_4_produces_four_space_indent() -> Result<(), Box<dyn std::er
     let srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({"capabilities":{}})),
     };
@@ -230,7 +230,7 @@ fn on_type_tab_size_4_produces_four_space_indent() -> Result<(), Box<dyn std::er
 
     let req = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "textDocument/onTypeFormatting".into(),
         params: Some(json!({
             "textDocument": {"uri": uri},
