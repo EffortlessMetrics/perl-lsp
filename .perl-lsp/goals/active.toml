@@ -484,9 +484,15 @@ files = [
 commands = [
   "rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft",
   "rtk cargo xtask check-active-goal-manifest",
-  "rtk cargo xtask devex-doctor",
-  "rtk cargo xtask gate-policy check",
-  "rtk bash -lc './scripts/storage-doctor'",
+  "rtk cargo xtask check-oracle-receipt-schema",
+  "rtk cargo xtask check-oracle-fixture-manifest",
+  "rtk cargo xtask ci-hygiene check-doc-paths docs/specs",
+  "rtk cargo xtask ci-hygiene check-doc-paths docs/project/status",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
   "rtk git diff --check",
 ]
 
@@ -502,13 +508,9 @@ files = [
 commands = [
   "rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft",
   "rtk cargo xtask check-active-goal-manifest",
-  "rtk cargo xtask check-oracle-receipt-schema",
-  "rtk cargo xtask check-oracle-fixture-manifest",
-  "rtk cargo xtask check-support-claims",
-  "rtk cargo xtask check-provider-confidence-matrix",
-  "rtk cargo xtask check-provider-promotion-ledger",
-  "rtk cargo xtask metrics parser-accuracy --check",
-  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk cargo xtask devex-doctor",
+  "rtk cargo xtask gate-policy check",
+  "rtk bash -lc './scripts/storage-doctor'",
   "rtk git diff --check",
 ]
 
