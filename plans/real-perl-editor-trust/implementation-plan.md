@@ -761,12 +761,19 @@ Current executable slice
   not broaden policy enforcement, provider behavior, support tiers,
   parser/corpus buckets, release-lineage sync, or source-repo development
   routing.
-- `published-api-hygiene` is active in the reliability lane. The current slice
-  keeps public API checks storage-safe by routing the `just public-api-*`
-  recipes through `scripts/cargo-safe` and refreshes the committed public API
-  baselines to the current code surface. It must not change Rust API surface,
-  broaden provider behavior, promote support tiers, move parser/corpus buckets,
-  sync release lineage, or continue source-repo development.
+- `published-api-hygiene` is completed in the reliability lane. The slice kept
+  public API checks storage-safe by routing the `just public-api-*` recipes
+  through `scripts/cargo-safe` and refreshed the committed public API baselines
+  to the current code surface. It did not change Rust API surface, broaden
+  provider behavior, promote support tiers, move parser/corpus buckets, sync
+  release lineage, or continue source-repo development.
+- `provider-promotion-ledger-parity-review` is active in the trust lane. The
+  current slice is a control-plane parity review after the queue burn-down and
+  public API hygiene closeout. It may verify that the human and TOML provider
+  promotion ledgers remain aligned with the dashboard's next proof order, but
+  it must not add or promote fact classes, broaden provider behavior, promote
+  support tiers, move parser/corpus buckets, sync release lineage, or continue
+  source-repo development.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
@@ -788,25 +795,29 @@ Claim boundary
   and committed public API baseline artifacts to match the current code surface.
   It must not claim semver compatibility, change Rust API surface, or promote
   provider/support/parser status.
+- Provider promotion ledger parity review may update only active-goal routing,
+  this plan, and ledger parity notes produced by existing checks. It must not
+  change the ledger's promotion decision set, promote a fact class, or alter
+  provider/support/parser status.
 
 Proof commands
 
 ```bash
 rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft
 rtk bash -lc './scripts/cargo-safe xtask check-active-goal-manifest'
-rtk bash -lc './scripts/cargo-safe xtask gate-policy check'
+rtk bash -lc './scripts/cargo-safe xtask check-provider-promotion-ledger'
 rtk bash -lc './scripts/cargo-safe xtask check-support-claims'
 rtk bash -lc './scripts/cargo-safe xtask check-provider-confidence-matrix'
-rtk bash -lc 'just public-api-update'
-rtk bash -lc 'just public-api-check'
+rtk bash -lc './scripts/cargo-safe xtask metrics parser-accuracy --check'
+rtk bash -lc './scripts/cargo-safe xtask metrics ratchet-check parser_accuracy'
 rtk bash -lc './scripts/storage-doctor'
 rtk git diff --check
 ```
 
 Rollback
 
-Revert this routing PR. If the receipt schema needs more work, mark
-`oracle-receipt-schema-after-manifest` active again and select no feature lane
-until the schema validator passes. If the DevEx storage-safe lane is not ready,
-mark it planned and select another reliability item with no provider/runtime
-behavior impact.
+Revert this routing PR. If public API hygiene needs more work, mark
+`published-api-hygiene` active again and select no feature lane until
+`just public-api-check` passes. If the provider ledger parity review is not
+ready, mark it planned and select another trust routing item with no
+provider/runtime behavior impact.

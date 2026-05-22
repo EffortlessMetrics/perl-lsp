@@ -119,6 +119,7 @@ rule = "Merge clean leaf work; escalate trust-adjacent surfaces instead of treat
 
 [trust.next]
 items = [
+  "provider_promotion_ledger_parity_review",
   "semantic_token_class_receipts_as_needed",
 ]
 
@@ -130,7 +131,7 @@ items = [
 
 [reliability.next]
 items = [
-  "published_api_hygiene",
+  "queue_health_review_when_assigned",
 ]
 
 [[work_item]]
@@ -532,7 +533,7 @@ commands = [
 
 [[work_item]]
 id = "published-api-hygiene"
-status = "active"
+status = "completed"
 lane = "reliability"
 claim_boundary = "Published API baseline and storage-safe tooling hygiene only; no Rust API surface code change, provider behavior, support-tier promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
 files = [
@@ -549,6 +550,30 @@ commands = [
   "rtk bash -lc './scripts/cargo-safe xtask check-provider-confidence-matrix'",
   "rtk bash -lc 'just public-api-update'",
   "rtk bash -lc 'just public-api-check'",
+  "rtk bash -lc './scripts/storage-doctor'",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "provider-promotion-ledger-parity-review"
+status = "active"
+lane = "trust"
+claim_boundary = "Provider promotion ledger parity routing only; no fact-class promotion, provider behavior, support-tier movement, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/provider_promotion_ledger.md",
+  "policy/provider-promotion-ledger.toml",
+]
+commands = [
+  "rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft",
+  "rtk bash -lc './scripts/cargo-safe xtask check-active-goal-manifest'",
+  "rtk bash -lc './scripts/cargo-safe xtask check-provider-promotion-ledger'",
+  "rtk bash -lc './scripts/cargo-safe xtask check-support-claims'",
+  "rtk bash -lc './scripts/cargo-safe xtask check-provider-confidence-matrix'",
+  "rtk bash -lc './scripts/cargo-safe xtask metrics parser-accuracy --check'",
+  "rtk bash -lc './scripts/cargo-safe xtask metrics ratchet-check parser_accuracy'",
   "rtk bash -lc './scripts/storage-doctor'",
   "rtk git diff --check",
 ]
