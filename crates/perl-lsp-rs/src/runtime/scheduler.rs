@@ -20,15 +20,26 @@
 //!
 //! # Stale Request Cancellation
 //!
-//! For position-sensitive requests (hover, completion, definition), if a newer
-//! request arrives for the same `(method, uri, line, character)` position before
-//! the older one starts executing, the older request is cancelled with a
-//! `RequestCancelled` error response. This prevents thrashing on rapid edits.
+//! Position-sensitive reads are cancelled before execution in two ways:
+//!
+//! 1. **Position dedupe**: if a newer request arrives for the same
+//!    `(method, uri, line, character)` key, the older request is cancelled.
+//!    Useful for the "same cursor position, repeated query" case.
+//!
+//! 2. **Generation freshness** (PR 4 of the 0.15.1 Neovim latency lane):
+//!    at ingress every position-sensitive read captures the document's
+//!    current generation. Before execution, the dispatcher compares that
+//!    snapshot to the document's current generation; if the document has
+//!    moved on (i.e. a `didChange` bumped the generation between ingress
+//!    and dispatch), the read is cancelled. This is the case that pure
+//!    position dedupe misses — normal typing moves the cursor and changes
+//!    the position key on every keystroke, so the dedup map sees only
+//!    unique entries.
 //!
 //! The [`Scheduler`] struct manages dedicated worker queues so the ingress loop
 //! never performs heavy work — it only classifies and enqueues.
 
-use crate::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse, REQUEST_CANCELLED};
+use crate::protocol::{JsonRpcError, JsonRpcId, JsonRpcRequest, JsonRpcResponse, REQUEST_CANCELLED};
 use crate::transport::log_response;
 use std::cmp::Ordering as CmpOrdering;
 use std::collections::{BinaryHeap, HashMap};
@@ -129,6 +140,84 @@ pub(crate) fn extract_dedup_key(
 }
 
 // =========================================================================
+// Generation-aware freshness for stale-read cancellation
+// =========================================================================
+
+/// Document freshness snapshot captured at request ingress.
+///
+/// Used by the scheduler to cancel position-sensitive reads whose
+/// document has moved on between ingress and dispatch. Without this,
+/// every keystroke during a typing storm produces a unique
+/// `(uri, line, character)` dedup key, so position dedupe alone cannot
+/// collapse the storm into "latest request wins."
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ReadFreshness {
+    /// Document URI captured from the request.
+    pub uri: String,
+    /// Generation counter as observed at ingress. `None` when the
+    /// document was not yet open at ingress (e.g. a hover arriving before
+    /// the matching `didOpen`); in that case freshness is not enforced.
+    pub document_generation: Option<u32>,
+    /// LSP document version as observed at ingress. Retained for
+    /// diagnostics / future use; the cancellation decision uses
+    /// `document_generation`.
+    #[allow(dead_code)]
+    pub document_version: Option<i32>,
+}
+
+/// Extract a freshness snapshot for a position-sensitive request, querying
+/// the live document map.
+///
+/// Mirrors the gating of [`extract_dedup_key`] — non-position requests get
+/// `None`. The returned `document_generation` / `document_version` are
+/// taken from the live document state at the moment of the call; the
+/// dispatcher later compares those snapshots against the then-current
+/// document generation to decide if the read is stale.
+pub(crate) fn extract_freshness(
+    server: &super::LspServer,
+    method: &str,
+    params: Option<&serde_json::Value>,
+    priority: RequestPriority,
+) -> Option<ReadFreshness> {
+    let _ = method;
+    if priority == RequestPriority::Other {
+        return None;
+    }
+    let params = params?;
+    let uri = params.get("textDocument")?.get("uri")?.as_str()?.to_string();
+    let document_generation = server.document_generation(&uri);
+    let document_version = server.document_version(&uri);
+    Some(ReadFreshness { uri, document_generation, document_version })
+}
+
+/// Decide whether a queued read is stale given the document's current
+/// generation. Returns `Some((captured, current))` when the read should
+/// be cancelled.
+///
+/// Stale rule: a freshness snapshot is stale when both
+///
+/// - the document was open at ingress (snapshot generation is `Some`), and
+/// - the document is still open (current generation is `Some`), and
+/// - the current generation is strictly greater than the snapshot.
+///
+/// Notes:
+///
+/// - A document that was closed between ingress and dispatch is *not*
+///   reported as stale here; the provider will surface the missing-document
+///   error itself.
+/// - A snapshot whose `document_generation` is `None` is treated as a
+///   non-tracked read (e.g. hover sent before `didOpen`) and is allowed to
+///   run.
+pub(crate) fn is_read_stale(
+    freshness: &ReadFreshness,
+    current_generation: Option<u32>,
+) -> Option<(u32, u32)> {
+    let captured = freshness.document_generation?;
+    let current = current_generation?;
+    if current > captured { Some((captured, current)) } else { None }
+}
+
+// =========================================================================
 // Scheduling class
 // =========================================================================
 
@@ -221,6 +310,10 @@ pub(crate) struct Scheduler {
     mutation_seq_done: Arc<AtomicU64>,
     /// Wakes read workers waiting for earlier mutations to finish.
     mutation_notify: Arc<Notify>,
+    /// Server reference retained at the scheduler level so ingress paths
+    /// (`send_read`) can snapshot document generation without waiting for a
+    /// worker. Workers receive their own `Arc` clones via the spawn closures.
+    server: Arc<LspServer>,
 }
 
 /// Bounded channel capacity for both mutation and read queues.
@@ -251,6 +344,11 @@ struct QueuedRead {
     arrival_seq: u64,
     /// Dedup key for stale-request cancellation (None for non-position requests).
     dedup_key: Option<RequestDedupKey>,
+    /// Document freshness snapshot for generation-based stale cancellation.
+    /// `None` for non-position requests; otherwise carries the document
+    /// generation observed at ingress so the dispatcher can detect that
+    /// the document moved on before this read had a chance to run.
+    freshness: Option<ReadFreshness>,
 }
 
 impl PartialEq for QueuedRead {
@@ -280,6 +378,14 @@ impl Ord for QueuedRead {
 
 /// Global read arrival counter; incremented at ingress for each read request.
 static READ_ARRIVAL_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// Reason a stale read was cancelled before execution.
+enum StaleReason {
+    /// A newer request with the same `(method, uri, line, character)` arrived.
+    PositionSuperseded,
+    /// The document generation moved on between ingress and dispatch.
+    DocumentGenerationAdvanced { captured: u32, current: u32 },
+}
 
 impl Scheduler {
     /// Create a new scheduler and spawn worker tasks.
@@ -333,6 +439,7 @@ impl Scheduler {
             mutation_seq_next,
             mutation_seq_done,
             mutation_notify,
+            server,
         }
     }
 
@@ -357,9 +464,18 @@ impl Scheduler {
         let wait_for_seq = self.mutation_seq_next.load(Ordering::SeqCst);
         let priority = request_priority(&request.method);
         let dedup_key = extract_dedup_key(&request.method, request.params.as_ref(), priority);
+        let freshness =
+            extract_freshness(&self.server, &request.method, request.params.as_ref(), priority);
         let arrival_seq = READ_ARRIVAL_SEQ.fetch_add(1, Ordering::Relaxed);
         self.read_tx
-            .send(QueuedRead { request, wait_for_seq, priority, arrival_seq, dedup_key })
+            .send(QueuedRead {
+                request,
+                wait_for_seq,
+                priority,
+                arrival_seq,
+                dedup_key,
+                freshness,
+            })
             .await
             .map_err(|_| ())
     }
@@ -519,6 +635,31 @@ impl Scheduler {
         }
     }
 
+    /// Why a stale read was cancelled. Used only for log/error messages.
+    fn send_cancellation(
+        server: &Arc<LspServer>,
+        id: Option<JsonRpcId>,
+        method: &str,
+        reason: StaleReason,
+    ) {
+        let message = match reason {
+            StaleReason::PositionSuperseded => {
+                format!("Request superseded by newer {method} request")
+            }
+            StaleReason::DocumentGenerationAdvanced { captured, current } => format!(
+                "Request superseded: document moved from generation {captured} to {current} while {method} was queued"
+            ),
+        };
+        let cancelled_response = JsonRpcResponse {
+            jsonrpc: "2.0".to_string(),
+            id,
+            result: None,
+            error: Some(JsonRpcError { code: REQUEST_CANCELLED, message, data: None }),
+        };
+        log_response(&cancelled_response);
+        let _ = server.outbound.send_response(cancelled_response);
+    }
+
     /// Dispatch a single read request — either cancel it (stale) or execute it.
     async fn dispatch_one(
         queued: QueuedRead,
@@ -529,29 +670,34 @@ impl Scheduler {
         mutation_seq_done: &Arc<AtomicU64>,
         mutation_notify: &Arc<Notify>,
     ) {
-        // Stale check: if a newer request with the same dedup key exists,
-        // cancel this one immediately without consuming a worker slot.
+        // Stale check 1: position dedupe — newer same-position request supersedes.
         if let Some(ref key) = queued.dedup_key {
             if let Some(&latest) = latest_seq.get(key) {
                 if queued.arrival_seq < latest {
-                    // This request is superseded; send a cancellation response.
-                    let cancelled_response = JsonRpcResponse {
-                        jsonrpc: "2.0".to_string(),
-                        id: queued.request.id,
-                        result: None,
-                        error: Some(JsonRpcError {
-                            code: REQUEST_CANCELLED,
-                            message: format!(
-                                "Request superseded by newer {} request",
-                                queued.request.method
-                            ),
-                            data: None,
-                        }),
-                    };
-                    log_response(&cancelled_response);
-                    let _ = server.outbound.send_response(cancelled_response);
+                    Self::send_cancellation(
+                        server,
+                        queued.request.id,
+                        &queued.request.method,
+                        StaleReason::PositionSuperseded,
+                    );
                     return;
                 }
+            }
+        }
+
+        // Stale check 2: generation freshness — document moved on between
+        // ingress and dispatch. This catches the typing-storm case where
+        // every keystroke produces a unique position dedup key.
+        if let Some(ref freshness) = queued.freshness {
+            let current = server.document_generation(&freshness.uri);
+            if let Some((captured, current)) = is_read_stale(freshness, current) {
+                Self::send_cancellation(
+                    server,
+                    queued.request.id,
+                    &queued.request.method,
+                    StaleReason::DocumentGenerationAdvanced { captured, current },
+                );
+                return;
             }
         }
 
@@ -918,6 +1064,242 @@ mod tests {
             priority,
             arrival_seq,
             dedup_key: None,
+            freshness: None,
         }
+    }
+
+    // =====================================================================
+    // Generation-aware freshness tests (PR 4 of 0.15.1 Neovim latency lane)
+    // =====================================================================
+
+    fn position_params(uri: &str) -> serde_json::Value {
+        serde_json::json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 4, "character": 7 }
+        })
+    }
+
+    fn make_freshness(uri: &str, generation: Option<u32>, version: Option<i32>) -> ReadFreshness {
+        ReadFreshness {
+            uri: uri.to_string(),
+            document_generation: generation,
+            document_version: version,
+        }
+    }
+
+    #[test]
+    fn extract_freshness_captures_generation_for_open_document_hover() {
+        let server = crate::LspServer::new();
+        server.test_apply_did_open("file:///x.pl", "my $a;\n", 1);
+        let params = position_params("file:///x.pl");
+        let freshness = extract_freshness(
+            &server,
+            "textDocument/hover",
+            Some(&params),
+            RequestPriority::Hover,
+        );
+        let f = freshness.expect("hover for open doc must produce freshness");
+        assert_eq!(f.uri, "file:///x.pl");
+        assert_eq!(f.document_generation, Some(0));
+        assert_eq!(f.document_version, Some(1));
+    }
+
+    #[test]
+    fn extract_freshness_captures_generation_for_completion() {
+        let server = crate::LspServer::new();
+        server.test_apply_did_open("file:///c.pl", "my $a;\n", 1);
+        let params = position_params("file:///c.pl");
+        let freshness = extract_freshness(
+            &server,
+            "textDocument/completion",
+            Some(&params),
+            RequestPriority::Completion,
+        );
+        assert!(freshness.is_some(), "completion must capture freshness");
+    }
+
+    #[test]
+    fn extract_freshness_captures_generation_for_definition() {
+        let server = crate::LspServer::new();
+        server.test_apply_did_open("file:///d.pl", "sub f {}\n", 1);
+        let params = position_params("file:///d.pl");
+        let freshness = extract_freshness(
+            &server,
+            "textDocument/definition",
+            Some(&params),
+            RequestPriority::References,
+        );
+        assert!(freshness.is_some(), "definition must capture freshness");
+    }
+
+    #[test]
+    fn extract_freshness_none_for_unopened_document_returns_none_generation() {
+        let server = crate::LspServer::new();
+        let params = position_params("file:///not-open.pl");
+        let freshness = extract_freshness(
+            &server,
+            "textDocument/hover",
+            Some(&params),
+            RequestPriority::Hover,
+        );
+        let f = freshness.expect("hover params must still produce a freshness shell");
+        assert_eq!(f.document_generation, None, "no open doc => no generation");
+        assert_eq!(f.document_version, None);
+    }
+
+    #[test]
+    fn extract_freshness_none_for_other_priority() {
+        let server = crate::LspServer::new();
+        let params = position_params("file:///x.pl");
+        let freshness = extract_freshness(
+            &server,
+            "workspace/symbol",
+            Some(&params),
+            RequestPriority::Other,
+        );
+        assert!(freshness.is_none(), "non-position requests must not capture freshness");
+    }
+
+    #[test]
+    fn is_read_stale_returns_some_when_generation_advanced() {
+        let f = make_freshness("file:///a.pl", Some(3), Some(1));
+        let staleness = is_read_stale(&f, Some(5));
+        assert_eq!(staleness, Some((3, 5)));
+    }
+
+    #[test]
+    fn is_read_stale_returns_none_when_generation_unchanged() {
+        let f = make_freshness("file:///a.pl", Some(3), Some(1));
+        let staleness = is_read_stale(&f, Some(3));
+        assert!(staleness.is_none());
+    }
+
+    #[test]
+    fn is_read_stale_returns_none_when_freshness_has_no_generation() {
+        let f = make_freshness("file:///a.pl", None, None);
+        assert!(is_read_stale(&f, Some(7)).is_none());
+    }
+
+    #[test]
+    fn is_read_stale_returns_none_when_document_closed() {
+        let f = make_freshness("file:///a.pl", Some(3), Some(1));
+        // Document closed between ingress and dispatch — provider should
+        // surface the missing-doc error itself; the freshness gate is silent.
+        assert!(is_read_stale(&f, None).is_none());
+    }
+
+    #[test]
+    fn stale_hover_cancelled_after_newer_generation() {
+        // End-to-end at the freshness level: capture for hover, bump gen,
+        // observe staleness.
+        let server = crate::LspServer::new();
+        server.test_apply_did_open("file:///h.pl", "my $a;\n", 1);
+        let params = position_params("file:///h.pl");
+        let freshness = extract_freshness(
+            &server,
+            "textDocument/hover",
+            Some(&params),
+            RequestPriority::Hover,
+        )
+        .expect("must capture");
+        server.test_apply_did_change("file:///h.pl", "my $aa;\n", 2);
+        let current = server.document_generation(&freshness.uri);
+        let staleness = is_read_stale(&freshness, current);
+        assert!(staleness.is_some(), "hover queued at gen=0 with doc now at gen=1 must be stale");
+    }
+
+    #[test]
+    fn stale_completion_cancelled_after_newer_generation() {
+        let server = crate::LspServer::new();
+        server.test_apply_did_open("file:///comp.pl", "my $a;\n", 1);
+        let params = position_params("file:///comp.pl");
+        let freshness = extract_freshness(
+            &server,
+            "textDocument/completion",
+            Some(&params),
+            RequestPriority::Completion,
+        )
+        .expect("must capture");
+        server.test_apply_did_change("file:///comp.pl", "my $ab;\n", 2);
+        let current = server.document_generation(&freshness.uri);
+        assert!(is_read_stale(&freshness, current).is_some());
+    }
+
+    #[test]
+    fn stale_definition_cancelled_after_newer_generation() {
+        let server = crate::LspServer::new();
+        server.test_apply_did_open("file:///def.pl", "sub f {}\n", 1);
+        let params = position_params("file:///def.pl");
+        let freshness = extract_freshness(
+            &server,
+            "textDocument/definition",
+            Some(&params),
+            RequestPriority::References,
+        )
+        .expect("must capture");
+        server.test_apply_did_change("file:///def.pl", "sub f { 1 }\n", 2);
+        let current = server.document_generation(&freshness.uri);
+        assert!(is_read_stale(&freshness, current).is_some());
+    }
+
+    #[test]
+    fn newest_request_for_generation_runs() {
+        // The dispatcher must not cancel a request whose snapshot equals the
+        // current generation. (The dedup map still cancels earlier requests at
+        // the same position — that's a separate axis.)
+        let server = crate::LspServer::new();
+        server.test_apply_did_open("file:///fresh.pl", "my $a;\n", 1);
+        server.test_apply_did_change("file:///fresh.pl", "my $ab;\n", 2);
+        let params = position_params("file:///fresh.pl");
+        let freshness = extract_freshness(
+            &server,
+            "textDocument/hover",
+            Some(&params),
+            RequestPriority::Hover,
+        )
+        .expect("must capture");
+        // Snapshot is current; no further mutation; staleness must be None.
+        let current = server.document_generation(&freshness.uri);
+        assert!(
+            is_read_stale(&freshness, current).is_none(),
+            "snapshot matching current gen must NOT be stale"
+        );
+    }
+
+    #[test]
+    fn generation_cancellation_independent_of_cursor_position() {
+        // The plan emphasises: "Do not require cursor position to match."
+        // Two requests at different positions on the same document should
+        // both see staleness once gen advances.
+        let server = crate::LspServer::new();
+        server.test_apply_did_open("file:///z.pl", "my $aa;\nmy $bb;\n", 1);
+        let params_a = serde_json::json!({
+            "textDocument": { "uri": "file:///z.pl" },
+            "position": { "line": 0, "character": 3 }
+        });
+        let params_b = serde_json::json!({
+            "textDocument": { "uri": "file:///z.pl" },
+            "position": { "line": 1, "character": 5 }
+        });
+        let fa = extract_freshness(
+            &server,
+            "textDocument/hover",
+            Some(&params_a),
+            RequestPriority::Hover,
+        )
+        .expect("a");
+        let fb = extract_freshness(
+            &server,
+            "textDocument/hover",
+            Some(&params_b),
+            RequestPriority::Hover,
+        )
+        .expect("b");
+        // Bump generation once; both snapshots became stale even though
+        // their (line, character) keys differ.
+        server.test_apply_did_change("file:///z.pl", "my $aaa;\nmy $bb;\n", 2);
+        let current = server.document_generation("file:///z.pl");
+        assert!(is_read_stale(&fa, current).is_some(), "a is stale");
+        assert!(is_read_stale(&fb, current).is_some(), "b is stale");
     }
 }

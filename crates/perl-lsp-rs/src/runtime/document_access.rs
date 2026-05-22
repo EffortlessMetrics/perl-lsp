@@ -153,6 +153,24 @@ impl LspServer {
         docs.get(uri).map(|d| d.text.clone())
     }
 
+    /// Current document generation counter for `uri`, if the document is open.
+    ///
+    /// The generation atomic is bumped on every `update_content` call (see
+    /// [`DocumentState::update_content`]). It is the canonical "the buffer
+    /// has changed" signal used to detect stale read requests in the
+    /// scheduler — distinct from the LSP-supplied `version`, which is
+    /// client-controlled.
+    pub(crate) fn document_generation(&self, uri: &str) -> Option<u32> {
+        let docs = self.documents.lock();
+        docs.get(uri).map(|d| d.generation.load(std::sync::atomic::Ordering::SeqCst))
+    }
+
+    /// Current LSP document version for `uri`, if the document is open.
+    pub(crate) fn document_version(&self, uri: &str) -> Option<i32> {
+        let docs = self.documents.lock();
+        docs.get(uri).map(|d| d.version)
+    }
+
     /// Iterate over all open buffers (for reference search)
     pub(crate) fn iter_open_buffers(&self) -> Vec<(String, String)> {
         let docs = self.documents.lock();
