@@ -242,6 +242,15 @@ fn location_start_line(response: &Value) -> Option<u64> {
     }
 }
 
+fn location_start_lines(response: &Value) -> BTreeSet<u64> {
+    response
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|item| item.pointer("/range/start/line").and_then(Value::as_u64))
+        .collect()
+}
+
 fn completion_labels(response: &Value) -> BTreeSet<String> {
     let mut labels = BTreeSet::new();
     let items = response.get("items").and_then(Value::as_array).or_else(|| response.as_array());
@@ -2418,6 +2427,13 @@ $total += 2;
         with_decl_items.len() >= 3,
         "expected declaration + 2 usages when includeDeclaration=true; got {with_decl_items:?}"
     );
+    let with_decl_lines = location_start_lines(&with_declaration);
+    assert!(
+        with_decl_lines.contains(&3)
+            && with_decl_lines.contains(&4)
+            && with_decl_lines.contains(&5),
+        "includeDeclaration=true should include declaration line 3 and usage lines 4/5; got {with_decl_lines:?}"
+    );
 
     scenario.when("requesting references with includeDeclaration=false");
     let without_declaration = harness.request(
@@ -2435,11 +2451,14 @@ $total += 2;
         !without_decl_items.is_empty(),
         "reference lookup with includeDeclaration=false should still return locations"
     );
+    let without_decl_lines = location_start_lines(&without_declaration);
     assert!(
-        without_decl_items.len() >= with_decl_items.len().saturating_sub(1),
-        "includeDeclaration=false should not catastrophically reduce references (with={}, without={})",
-        with_decl_items.len(),
-        without_decl_items.len()
+        without_decl_lines.contains(&4) && without_decl_lines.contains(&5),
+        "includeDeclaration=false should preserve usage lines 4/5; got {without_decl_lines:?}"
+    );
+    assert!(
+        !without_decl_lines.contains(&3),
+        "includeDeclaration=false should omit declaration line 3; got {without_decl_lines:?}"
     );
     assert!(
         without_decl_items.iter().all(|item| item.get("uri").is_some() && has_lsp_range(item)),
