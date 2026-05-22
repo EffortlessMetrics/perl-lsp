@@ -176,10 +176,16 @@ impl TypeDefinitionProvider {
             // Package identifier or Package::method
             NodeKind::Identifier { name } => {
                 if name.contains("::") {
-                    // Qualified name like Package::method
                     let parts: Vec<&str> = name.split("::").collect();
                     if parts.len() >= 2 {
-                        // Get the package name (everything except the last part)
+                        let last = parts[parts.len() - 1];
+                        if last.chars().next().is_some_and(|c| c.is_uppercase()) {
+                            // Last component starts uppercase → the whole name is a
+                            // class/package (e.g., `Foo::Bar`). Return the full name.
+                            return Some(name.clone());
+                        }
+                        // Last component starts lowercase → qualified method/function
+                        // (e.g., `Foo::bar`). Return only the package part.
                         return Some(parts[..parts.len() - 1].join("::"));
                     }
                 }
@@ -409,25 +415,48 @@ impl TypeDefinitionProvider {
         if name.is_empty() { None } else { Some(name) }
     }
 
-    /// Try to infer the type of an object from its declaration or assignment
+    /// Try to infer the type of an object from its node shape.
+    ///
+    /// Handles three cases without requiring enclosing-context data flow:
+    ///
+    /// 1. `Identifier` that looks like a package name — `Foo->method()`, cursor on
+    ///    "method": the object node is `Identifier("Foo")`, which carries the type.
+    /// 2. `MethodCall` (chained call) — `Foo->new->bar()`, cursor on "bar": the
+    ///    outer object is the inner `MethodCall { object: Identifier("Foo") }`.
+    ///    Recurse to peel back the chain until a package-like identifier is found.
+    /// 3. `Binary { op: "->" }` in a nested context — `(Foo->new)->bar()`: the
+    ///    left side is the package identifier.
+    ///
+    /// Variables (`$self`, `$this`, `$obj`) always return `None` here because
+    /// resolving them requires data-flow analysis of the enclosing
+    /// package/method context, which is beyond a single-node structural walk.
     #[cfg(feature = "lsp-compat")]
     fn infer_object_type(&self, object: &Node) -> Option<String> {
         match &object.kind {
-            NodeKind::Variable { name, .. } => {
-                // Would need to track variable types through analysis
-                // For now, try common patterns like $self
-                if name == "$self" || name == "$this" {
-                    // Would need to find the enclosing package
-                    None
+            // Package or class identifier: Foo->method() or Foo::Bar->new().
+            // An uppercase initial or "::" separator identifies a package name.
+            NodeKind::Identifier { name } => {
+                if name.contains("::") || name.chars().next().is_some_and(|c| c.is_uppercase()) {
+                    Some(name.clone())
                 } else {
                     None
                 }
             }
-            // Direct constructor call
-            NodeKind::FunctionCall { name, .. } if name == "new" => {
-                // The package should be in the parent context
+            // Chained method call: Foo->new->bar() — outer object is the inner
+            // MethodCall. Recurse to extract the package from the base of the chain.
+            NodeKind::MethodCall { object: inner, .. } => self.infer_object_type(inner),
+            // Binary `->` node in a nested context: (Foo->new)->bar().
+            NodeKind::Binary { op, left, .. } if op == "->" => {
+                if let NodeKind::Identifier { name: pkg } = &left.kind {
+                    if pkg.contains("::") || pkg.chars().next().is_some_and(|c| c.is_uppercase()) {
+                        return Some(pkg.clone());
+                    }
+                }
                 None
             }
+            // Variable ($self, $this, $obj, …) — type cannot be determined
+            // without data-flow / scope analysis.
+            NodeKind::Variable { .. } | NodeKind::FunctionCall { .. } => None,
             _ => None,
         }
     }
@@ -739,15 +768,146 @@ $obj->method();
     }
 
     #[test]
-    fn test_extract_type_from_constructor() {
+    fn test_extract_type_from_constructor_cursor_on_method() {
+        // When the cursor is on the method name "new" the most specific AST node
+        // is the MethodCall itself (the method name is a String field, not a child
+        // Node). extract_type_name must reach through the MethodCall's object
+        // (Identifier "Package::Name") via infer_object_type and return the package.
         let code = "my $obj = Package::Name->new();";
+        //          0123456789012345678901234567890
+        //                    1111111111222222222233
+        // "Package::Name" starts at byte 10; "new" starts at byte 25.
         let mut parser = Parser::new(code);
-        let _ast = must(parser.parse());
+        let ast = must(parser.parse());
+        let provider = TypeDefinitionProvider::new();
 
-        let _provider = TypeDefinitionProvider::new();
+        // Cursor at byte 25 ("n" of "new") → MethodCall node.
+        let node_at_new = must_some(provider.find_node_at_offset(&ast, 25));
+        let type_name = provider.extract_type_name(&node_at_new);
+        assert_eq!(
+            type_name,
+            Some("Package::Name".to_string()),
+            "cursor on constructor method 'new' should extract package from MethodCall object"
+        );
+    }
 
-        // Would need to traverse to find the right node
-        // This is a simplified test
+    #[test]
+    fn test_extract_type_from_constructor_cursor_on_package() {
+        // When the cursor is directly on the package name identifier the node is
+        // the Identifier itself — the Identifier arm of extract_type_name handles it.
+        let code = "my $obj = Package::Name->new();";
+        //                    ^10 (start of Package::Name)
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = TypeDefinitionProvider::new();
+
+        // Cursor at byte 10 ("P" of "Package::Name") → Identifier node.
+        let node_at_pkg = must_some(provider.find_node_at_offset(&ast, 10));
+        let type_name = provider.extract_type_name(&node_at_pkg);
+        assert_eq!(
+            type_name,
+            Some("Package::Name".to_string()),
+            "cursor on package-name identifier should return the identifier as the type"
+        );
+    }
+
+    #[test]
+    fn test_extract_type_chained_method_call() {
+        // Chained call: Package::Name->new()->method()
+        // When the cursor is on "method" the node is the outer MethodCall whose
+        // object is the inner MethodCall { method: "new", object: Identifier("Package::Name") }.
+        // infer_object_type must recurse through the chain to find "Package::Name".
+        let code = "Package::Name->new()->method();";
+        //          0         1         2         3
+        //          0123456789012345678901234567890
+        // "Package::Name" = bytes 0-12 (13 chars)
+        // "->" = bytes 13-14
+        // "new" = bytes 15-17
+        // "()" = bytes 18-19
+        // "->" = bytes 20-21
+        // "method" = bytes 22-27
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = TypeDefinitionProvider::new();
+
+        // Cursor at byte 22 ("m" of "method") → outer MethodCall node.
+        let node = must_some(provider.find_node_at_offset(&ast, 22));
+        let type_name = provider.extract_type_name(&node);
+        assert_eq!(
+            type_name,
+            Some("Package::Name".to_string()),
+            "cursor on chained method call should recurse through inner MethodCall to extract package"
+        );
+    }
+
+    #[test]
+    fn test_infer_object_type_identifier() {
+        // Direct identifier check: infer_object_type("Foo") → Some("Foo").
+        // This path is exercised when cursor lands on the method name of Foo->bar().
+        let code = "Foo->bar();";
+        //          01234567890
+        // "Foo" = bytes 0-2; "->" = 3-4; "bar" = 5-7
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = TypeDefinitionProvider::new();
+
+        // Cursor at byte 5 ("b" of "bar") → MethodCall node.
+        let node = must_some(provider.find_node_at_offset(&ast, 5));
+        let type_name = provider.extract_type_name(&node);
+        assert_eq!(
+            type_name,
+            Some("Foo".to_string()),
+            "single-component uppercase package name should be extracted via infer_object_type"
+        );
+    }
+
+    #[test]
+    fn test_extract_type_simple_var_returns_none() {
+        // Variables cannot be resolved to a type without data-flow analysis.
+        // Verify that the method call path returns None for $obj->method().
+        let code = "$obj->method();";
+        //          01234567890
+        // "$obj" = 0-3; "->" = 4-5; "method" = 6-11
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = TypeDefinitionProvider::new();
+
+        // Cursor at byte 6 ("m" of "method") → MethodCall node.
+        let node = must_some(provider.find_node_at_offset(&ast, 6));
+        let type_name = provider.extract_type_name(&node);
+        assert_eq!(
+            type_name, None,
+            "$obj->method() cannot be resolved without data-flow; expect None"
+        );
+    }
+
+    #[test]
+    fn test_full_type_definition_chained_constructor() {
+        // End-to-end: package definition is found via chained constructor call.
+        let code = r#"package MyFactory;
+sub create { bless {}, shift }
+
+package main;
+MyFactory->create()->do_work();
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = TypeDefinitionProvider::new();
+        let uri = "file:///test.pl";
+        let mut documents = std::collections::HashMap::new();
+        documents.insert(uri.to_string(), code.to_string());
+
+        // Line 4 (0-indexed) is "MyFactory->create()->do_work();"
+        // Character 12 is approximately at "create" — the inner MethodCall.
+        // The outer MethodCall object is the inner one, which has Identifier("MyFactory").
+        // So find_type_definition should locate "package MyFactory".
+        let locations = provider.find_type_definition(&ast, 4, 12, uri, &documents);
+        assert!(
+            locations.is_some(),
+            "chained constructor->method call should resolve package definition"
+        );
+        let locs = must_some(locations);
+        assert!(!locs.is_empty(), "at least one location should be returned");
     }
 
     #[test]
