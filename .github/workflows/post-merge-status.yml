@@ -27,7 +27,10 @@ jobs:
   regenerate-status:
     name: Regenerate status subsystem files
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # Large source/sync cutovers can spend the former 10 minute budget compiling
+    # xtask before update-status runs. Keep this below broad CI budgets but above
+    # the observed cutover compile time.
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v6
