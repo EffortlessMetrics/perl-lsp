@@ -25,7 +25,19 @@ Each agent sees its own step. Nobody has checked that:
 
 1. **Diff vs spec alignment** — does the total diff implement what the issue asked for?
    ```bash
-   gh pr diff <number> --stat
+   # ALWAYS use the GitHub API for the authoritative PR file list.
+   # NEVER use `gh pr diff`: it shows branch-vs-current-base, not PR-authored
+   # changes, and can produce false cross-PR contamination claims on stale PRs.
+   # See #6876 for the incident where this caused 5 false-positive audit verdicts.
+   REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+   gh api repos/$REPO/pulls/<number>/files --jq '.[].filename'
+   gh api repos/$REPO/pulls/<number>/files --jq '.[] | {filename, patch: (.patch // "(binary)")}'
+
+   # For the authored diff only, compare against the PR base merge point.
+   BASE=$(gh pr view <number> --json baseRefName -q .baseRefName)
+   git fetch origin "$BASE"
+   git diff "$(git merge-base "origin/$BASE" HEAD)"..HEAD
+
    cat .spec/*/acceptance.md 2>/dev/null
    ```
    Every acceptance criterion should be addressable from the diff.
@@ -37,12 +49,14 @@ Each agent sees its own step. Nobody has checked that:
 
 3. **Leftover artifacts** — search for things agents sometimes leave behind:
    ```bash
-   git diff origin/master..HEAD | grep -E "TODO|FIXME|HACK|XXX|dbg!|println!|eprintln!" 
+   BASE=$(gh pr view <number> --json baseRefName -q .baseRefName)
+   git diff "$(git merge-base "origin/$BASE" HEAD)"..HEAD | grep -E "TODO|FIXME|HACK|XXX|dbg!|println!|eprintln!"
    ```
 
 4. **Commit coherence** — do the commits tell a story?
    ```bash
-   git log origin/master..HEAD --oneline
+   BASE=$(gh pr view <number> --json baseRefName -q .baseRefName)
+   git log "$(git merge-base "origin/$BASE" HEAD)"..HEAD --oneline
    ```
    Expected: plan commit, red tests, implementation, green tests, review fixes, refactoring.
    Red flag: random interleaved commits, "wip", "fix fix fix" chains.
@@ -65,7 +79,7 @@ Each agent sees its own step. Nobody has checked that:
 
 These aren't "next-step" operations — they're background context to carry as you audit. Keep them in mind for every PR.
 
-**Stale-base disambiguation first.** Before crying SCOPE DRIFT on a 500+ deletion diff, check the base. PRs branched before recent master fire-fix cascades will show mass "deletions" against current master — those are pre-cascade state, not scope drift. If the PR is >3 days old and shows 500+ deletions with no author edits in those files, call `/refresh-stale-prs` instead of flagging. Use three-dot diff (`git diff $(git merge-base origin/master HEAD)..HEAD`) not two-dot. See `docs/articles/FIRE_FIX_CASCADE_METHODOLOGY.md`.
+**Stale-base disambiguation first.** Before crying SCOPE DRIFT on a 500+ deletion diff, check the base. PRs branched before recent base fire-fix cascades will show mass "deletions" against the current base branch - those are pre-cascade state, not scope drift. If the PR is >3 days old and shows 500+ deletions with no author edits in those files, call `/refresh-stale-prs` instead of flagging. Compare against the PR base merge point (`BASE=$(gh pr view <number> --json baseRefName -q .baseRefName); git diff "$(git merge-base "origin/$BASE" HEAD)"..HEAD`) instead of using a two-dot base branch diff. See `docs/articles/FIRE_FIX_CASCADE_METHODOLOGY.md`.
 
 **Agent audit-trail additions are KEEP, not ARTIFACTS.** `.hermes/` / `.spec/` / `.jules/` / `.run/` / `.codex/` content from the PR's OWN agent for its OWN issue is the agent's audit trail — equivalent to our `.spec/` dirs — and must stay. Only flag as drift if: (a) the directory is for a DIFFERENT PR's issue, or (b) pre-existing agent-trail dirs in the repo were modified by this PR. Before flagging, check the dir name vs the PR's issue ref and whether the dir was new or pre-existing. See `memory/feedback_agent_audit_trail_directories.md`.
 
@@ -82,7 +96,8 @@ Detection heuristic — for every file in the diff, ask: "does this file's path/
 - If the diff adds tests for crate X but the PR title is about crate Y (and those tests aren't named in the spec): flag as CONTAMINATION
 - If the diff adds ADRs whose work-id doesn't match this PR's branch work-id: flag as CONTAMINATION
 - Tell-tale: PR title claims a small change but `--stat` shows >100 lines outside the named scope. Diff bulk shouldn't be unrelated to the title.
-- Mechanical check: `gh pr diff <num> --stat` then for each crate path, ask whether the PR title/body mentions it; orphan-crate paths are contamination candidates.
+- Mechanical check: use the GitHub API file list, not `gh pr diff`: `REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner) && gh api repos/$REPO/pulls/<num>/files --jq '.[].filename'`. For each crate path, ask whether the PR title/body mentions it; orphan-crate paths are contamination candidates.
+- Self-check: before flagging any file as cross-PR contamination, confirm it appears in `pulls/N/files` as PR-authored. If it only appears in a branch-vs-base diff, it is inherited base state, not drift. This check is mandatory.
 
 When found, route to `needs-diff-fix` with a `git rm` list. Don't let a 22-of-2063-line legitimate change ride a 2043-line contaminated diff into master.
 
