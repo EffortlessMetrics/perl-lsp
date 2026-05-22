@@ -1088,26 +1088,27 @@ mod tests {
     }
 
     #[test]
-    fn extract_freshness_captures_generation_for_open_document_hover() {
+    fn extract_freshness_captures_generation_for_open_document_hover()
+    -> Result<(), JsonRpcError> {
         let server = crate::LspServer::new();
-        server.test_apply_did_open("file:///x.pl", "my $a;\n", 1);
+        server.test_apply_did_open("file:///x.pl", "my $a;\n", 1)?;
         let params = position_params("file:///x.pl");
-        let freshness = extract_freshness(
+        let f = must_some(extract_freshness(
             &server,
             "textDocument/hover",
             Some(&params),
             RequestPriority::Hover,
-        );
-        let f = freshness.expect("hover for open doc must produce freshness");
+        ));
         assert_eq!(f.uri, "file:///x.pl");
         assert_eq!(f.document_generation, Some(0));
         assert_eq!(f.document_version, Some(1));
+        Ok(())
     }
 
     #[test]
-    fn extract_freshness_captures_generation_for_completion() {
+    fn extract_freshness_captures_generation_for_completion() -> Result<(), JsonRpcError> {
         let server = crate::LspServer::new();
-        server.test_apply_did_open("file:///c.pl", "my $a;\n", 1);
+        server.test_apply_did_open("file:///c.pl", "my $a;\n", 1)?;
         let params = position_params("file:///c.pl");
         let freshness = extract_freshness(
             &server,
@@ -1116,12 +1117,13 @@ mod tests {
             RequestPriority::Completion,
         );
         assert!(freshness.is_some(), "completion must capture freshness");
+        Ok(())
     }
 
     #[test]
-    fn extract_freshness_captures_generation_for_definition() {
+    fn extract_freshness_captures_generation_for_definition() -> Result<(), JsonRpcError> {
         let server = crate::LspServer::new();
-        server.test_apply_did_open("file:///d.pl", "sub f {}\n", 1);
+        server.test_apply_did_open("file:///d.pl", "sub f {}\n", 1)?;
         let params = position_params("file:///d.pl");
         let freshness = extract_freshness(
             &server,
@@ -1130,19 +1132,19 @@ mod tests {
             RequestPriority::References,
         );
         assert!(freshness.is_some(), "definition must capture freshness");
+        Ok(())
     }
 
     #[test]
     fn extract_freshness_none_for_unopened_document_returns_none_generation() {
         let server = crate::LspServer::new();
         let params = position_params("file:///not-open.pl");
-        let freshness = extract_freshness(
+        let f = must_some(extract_freshness(
             &server,
             "textDocument/hover",
             Some(&params),
             RequestPriority::Hover,
-        );
-        let f = freshness.expect("hover params must still produce a freshness shell");
+        ));
         assert_eq!(f.document_generation, None, "no open doc => no generation");
         assert_eq!(f.document_version, None);
     }
@@ -1189,90 +1191,90 @@ mod tests {
     }
 
     #[test]
-    fn stale_hover_cancelled_after_newer_generation() {
+    fn stale_hover_cancelled_after_newer_generation() -> Result<(), JsonRpcError> {
         // End-to-end at the freshness level: capture for hover, bump gen,
         // observe staleness.
         let server = crate::LspServer::new();
-        server.test_apply_did_open("file:///h.pl", "my $a;\n", 1);
+        server.test_apply_did_open("file:///h.pl", "my $a;\n", 1)?;
         let params = position_params("file:///h.pl");
-        let freshness = extract_freshness(
+        let freshness = must_some(extract_freshness(
             &server,
             "textDocument/hover",
             Some(&params),
             RequestPriority::Hover,
-        )
-        .expect("must capture");
-        server.test_apply_did_change("file:///h.pl", "my $aa;\n", 2);
+        ));
+        server.test_apply_did_change("file:///h.pl", "my $aa;\n", 2)?;
         let current = server.document_generation(&freshness.uri);
         let staleness = is_read_stale(&freshness, current);
         assert!(staleness.is_some(), "hover queued at gen=0 with doc now at gen=1 must be stale");
+        Ok(())
     }
 
     #[test]
-    fn stale_completion_cancelled_after_newer_generation() {
+    fn stale_completion_cancelled_after_newer_generation() -> Result<(), JsonRpcError> {
         let server = crate::LspServer::new();
-        server.test_apply_did_open("file:///comp.pl", "my $a;\n", 1);
+        server.test_apply_did_open("file:///comp.pl", "my $a;\n", 1)?;
         let params = position_params("file:///comp.pl");
-        let freshness = extract_freshness(
+        let freshness = must_some(extract_freshness(
             &server,
             "textDocument/completion",
             Some(&params),
             RequestPriority::Completion,
-        )
-        .expect("must capture");
-        server.test_apply_did_change("file:///comp.pl", "my $ab;\n", 2);
+        ));
+        server.test_apply_did_change("file:///comp.pl", "my $ab;\n", 2)?;
         let current = server.document_generation(&freshness.uri);
         assert!(is_read_stale(&freshness, current).is_some());
+        Ok(())
     }
 
     #[test]
-    fn stale_definition_cancelled_after_newer_generation() {
+    fn stale_definition_cancelled_after_newer_generation() -> Result<(), JsonRpcError> {
         let server = crate::LspServer::new();
-        server.test_apply_did_open("file:///def.pl", "sub f {}\n", 1);
+        server.test_apply_did_open("file:///def.pl", "sub f {}\n", 1)?;
         let params = position_params("file:///def.pl");
-        let freshness = extract_freshness(
+        let freshness = must_some(extract_freshness(
             &server,
             "textDocument/definition",
             Some(&params),
             RequestPriority::References,
-        )
-        .expect("must capture");
-        server.test_apply_did_change("file:///def.pl", "sub f { 1 }\n", 2);
+        ));
+        server.test_apply_did_change("file:///def.pl", "sub f { 1 }\n", 2)?;
         let current = server.document_generation(&freshness.uri);
         assert!(is_read_stale(&freshness, current).is_some());
+        Ok(())
     }
 
     #[test]
-    fn newest_request_for_generation_runs() {
+    fn newest_request_for_generation_runs() -> Result<(), JsonRpcError> {
         // The dispatcher must not cancel a request whose snapshot equals the
         // current generation. (The dedup map still cancels earlier requests at
         // the same position — that's a separate axis.)
         let server = crate::LspServer::new();
-        server.test_apply_did_open("file:///fresh.pl", "my $a;\n", 1);
-        server.test_apply_did_change("file:///fresh.pl", "my $ab;\n", 2);
+        server.test_apply_did_open("file:///fresh.pl", "my $a;\n", 1)?;
+        server.test_apply_did_change("file:///fresh.pl", "my $ab;\n", 2)?;
         let params = position_params("file:///fresh.pl");
-        let freshness = extract_freshness(
+        let freshness = must_some(extract_freshness(
             &server,
             "textDocument/hover",
             Some(&params),
             RequestPriority::Hover,
-        )
-        .expect("must capture");
+        ));
         // Snapshot is current; no further mutation; staleness must be None.
         let current = server.document_generation(&freshness.uri);
         assert!(
             is_read_stale(&freshness, current).is_none(),
             "snapshot matching current gen must NOT be stale"
         );
+        Ok(())
     }
 
     #[test]
-    fn generation_cancellation_independent_of_cursor_position() {
+    fn generation_cancellation_independent_of_cursor_position() -> Result<(), JsonRpcError> {
         // The plan emphasises: "Do not require cursor position to match."
         // Two requests at different positions on the same document should
         // both see staleness once gen advances.
         let server = crate::LspServer::new();
-        server.test_apply_did_open("file:///z.pl", "my $aa;\nmy $bb;\n", 1);
+        server.test_apply_did_open("file:///z.pl", "my $aa;\nmy $bb;\n", 1)?;
         let params_a = serde_json::json!({
             "textDocument": { "uri": "file:///z.pl" },
             "position": { "line": 0, "character": 3 }
@@ -1281,25 +1283,24 @@ mod tests {
             "textDocument": { "uri": "file:///z.pl" },
             "position": { "line": 1, "character": 5 }
         });
-        let fa = extract_freshness(
+        let fa = must_some(extract_freshness(
             &server,
             "textDocument/hover",
             Some(&params_a),
             RequestPriority::Hover,
-        )
-        .expect("a");
-        let fb = extract_freshness(
+        ));
+        let fb = must_some(extract_freshness(
             &server,
             "textDocument/hover",
             Some(&params_b),
             RequestPriority::Hover,
-        )
-        .expect("b");
+        ));
         // Bump generation once; both snapshots became stale even though
         // their (line, character) keys differ.
-        server.test_apply_did_change("file:///z.pl", "my $aaa;\nmy $bb;\n", 2);
+        server.test_apply_did_change("file:///z.pl", "my $aaa;\nmy $bb;\n", 2)?;
         let current = server.document_generation("file:///z.pl");
         assert!(is_read_stale(&fa, current).is_some(), "a is stale");
         assert!(is_read_stale(&fb, current).is_some(), "b is stale");
+        Ok(())
     }
 }
