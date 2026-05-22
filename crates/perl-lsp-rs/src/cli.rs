@@ -474,8 +474,10 @@ fn run_server(command_name: &str, launch_config: LaunchConfig) {
 
             rt.block_on(async {
                 startup_timer.checkpoint("runtime_setup");
-                let server =
-                    Arc::new(LspServer::new_with_feature_profile(launch_config.feature_profile));
+                let server = Arc::new(LspServer::new_with_feature_profile_and_tuning(
+                    launch_config.feature_profile,
+                    launch_config.runtime_tuning,
+                ));
                 startup_timer.checkpoint("server_construction");
 
                 let (tx, rx) = tokio::sync::mpsc::channel(64);
@@ -498,6 +500,7 @@ fn run_server(command_name: &str, launch_config: LaunchConfig) {
         TransportMode::Socket { port } => {
             let addr = format!("127.0.0.1:{port}");
             let feature_profile = launch_config.feature_profile;
+            let runtime_tuning = launch_config.runtime_tuning;
             let rt = match Runtime::new() {
                 Ok(rt) => rt,
                 Err(e) => {
@@ -584,9 +587,12 @@ fn run_server(command_name: &str, launch_config: LaunchConfig) {
                                 ));
 
                                 let mut conn_timer = StartupTimer::new();
-                                let server = Arc::new(LspServer::with_output_and_feature_profile(
-                                    output, profile,
-                                ));
+                                let server =
+                                    Arc::new(LspServer::with_output_feature_profile_and_tuning(
+                                        output,
+                                        profile,
+                                        runtime_tuning,
+                                    ));
                                 conn_timer.checkpoint("server_construction");
 
                                 let (tx, rx) = tokio::sync::mpsc::channel(64);
