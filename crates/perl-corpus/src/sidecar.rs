@@ -215,7 +215,33 @@ fn collect_concept_ids(value: &toml::Value, concept_ids: &mut HashSet<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use std::path::Path;
+
+    // helpers
+
+    fn minimal_sidecar_toml(id: &str, mode: &str) -> String {
+        format!(
+            r#"
+[concept]
+id = "{id}"
+tier = "pr"
+
+[expect]
+panic = false
+timeout = false
+mode = "{mode}"
+"#
+        )
+    }
+
+    fn write_temp_file(dir: &std::path::Path, name: &str, contents: &str) -> Result<PathBuf> {
+        let path = dir.join(name);
+        fs::write(&path, contents)?;
+        Ok(path)
+    }
+
+    // ExpectationMode deserialization
 
     #[test]
     fn expectation_mode_rejects_unknown_value() {
@@ -235,6 +261,70 @@ mode = "mystery"
     }
 
     #[test]
+    fn expectation_mode_parse_clean_roundtrips() -> Result<()> {
+        let raw = minimal_sidecar_toml("some.concept", "parse_clean");
+        let sidecar: FixtureExpectationSidecar = toml::from_str(&raw)?;
+        assert_eq!(sidecar.expect.mode, ExpectationMode::ParseClean);
+        Ok(())
+    }
+
+    #[test]
+    fn expectation_mode_recover_without_panic_roundtrips() -> Result<()> {
+        let raw = minimal_sidecar_toml("some.concept", "recover_without_panic");
+        let sidecar: FixtureExpectationSidecar = toml::from_str(&raw)?;
+        assert_eq!(sidecar.expect.mode, ExpectationMode::RecoverWithoutPanic);
+        Ok(())
+    }
+
+    #[test]
+    fn expectation_mode_expected_error_roundtrips() -> Result<()> {
+        let raw = minimal_sidecar_toml("some.concept", "expected_error");
+        let sidecar: FixtureExpectationSidecar = toml::from_str(&raw)?;
+        assert_eq!(sidecar.expect.mode, ExpectationMode::ExpectedError);
+        Ok(())
+    }
+
+    #[test]
+    fn expectation_mode_token_only_roundtrips() -> Result<()> {
+        let raw = minimal_sidecar_toml("some.concept", "token_only");
+        let sidecar: FixtureExpectationSidecar = toml::from_str(&raw)?;
+        assert_eq!(sidecar.expect.mode, ExpectationMode::TokenOnly);
+        Ok(())
+    }
+
+    #[test]
+    fn expectation_mode_span_only_roundtrips() -> Result<()> {
+        let raw = minimal_sidecar_toml("some.concept", "span_only");
+        let sidecar: FixtureExpectationSidecar = toml::from_str(&raw)?;
+        assert_eq!(sidecar.expect.mode, ExpectationMode::SpanOnly);
+        Ok(())
+    }
+
+    // SidecarValidation::is_ok
+
+    #[test]
+    fn sidecar_validation_is_ok_when_no_errors() {
+        let v = SidecarValidation::default();
+        assert!(v.is_ok());
+    }
+
+    #[test]
+    fn sidecar_validation_is_not_ok_when_errors_present() {
+        let mut v = SidecarValidation::default();
+        v.errors.push("something went wrong".to_string());
+        assert!(!v.is_ok());
+    }
+
+    #[test]
+    fn sidecar_validation_ok_with_warnings_but_no_errors() {
+        let mut v = SidecarValidation::default();
+        v.warnings.push("just a warning".to_string());
+        assert!(v.is_ok(), "warnings alone do not make validation fail");
+    }
+
+    // expected_fixture_path
+
+    #[test]
     fn expected_fixture_path_rejects_empty_fixture_stem() {
         let result = expected_fixture_path(Path::new(".meta.toml"));
         assert!(result.is_err(), "empty fixture stem should be rejected");
@@ -248,5 +338,454 @@ mode = "mystery"
         assert!(result.is_ok(), "valid sidecar name should resolve to fixture path");
         let path = result.ok().unwrap_or_default();
         assert_eq!(path, Path::new("quote_like/delimiter.pl"));
+    }
+
+    #[test]
+    fn expected_fixture_path_rejects_wrong_extension() {
+        let result = expected_fixture_path(Path::new("foo/bar.toml"));
+        assert!(result.is_err(), "wrong extension should be rejected");
+        let msg = result.err().map(|e| e.to_string()).unwrap_or_default();
+        assert!(msg.contains("must end with .meta.toml"));
+    }
+
+    #[test]
+    fn expected_fixture_path_root_level_sidecar() -> Result<()> {
+        let result = expected_fixture_path(Path::new("basic.meta.toml"))?;
+        assert_eq!(result, Path::new("basic.pl"));
+        Ok(())
+    }
+
+    #[test]
+    fn expected_fixture_path_deep_nested() -> Result<()> {
+        let result = expected_fixture_path(Path::new("a/b/c/foo.meta.toml"))?;
+        assert_eq!(result, Path::new("a/b/c/foo.pl"));
+        Ok(())
+    }
+
+    // parse_sidecar
+
+    #[test]
+    fn parse_sidecar_reads_valid_file() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let sidecar_path = write_temp_file(
+            dir.path(),
+            "foo.meta.toml",
+            &minimal_sidecar_toml("my.concept", "parse_clean"),
+        )?;
+        let sidecar = parse_sidecar(&sidecar_path)?;
+        assert_eq!(sidecar.concept.id, "my.concept");
+        assert_eq!(sidecar.concept.tier, "pr");
+        assert!(!sidecar.expect.panic);
+        assert!(!sidecar.expect.timeout);
+        assert_eq!(sidecar.expect.mode, ExpectationMode::ParseClean);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_sidecar_fails_on_missing_file() {
+        let result = parse_sidecar(Path::new("/nonexistent/path/test.meta.toml"));
+        assert!(result.is_err());
+        let msg = result.err().map(|e| e.to_string()).unwrap_or_default();
+        assert!(msg.contains("reading sidecar"));
+    }
+
+    #[test]
+    fn parse_sidecar_fails_on_invalid_toml() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let path = write_temp_file(dir.path(), "bad.meta.toml", "not valid toml }{{{")?;
+        let result = parse_sidecar(&path);
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn parse_sidecar_fails_on_wrong_schema() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        // Valid TOML but missing required fields
+        let path = write_temp_file(dir.path(), "schema.meta.toml", "[concept]\nid = \"x\"\n")?;
+        let result = parse_sidecar(&path);
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn parse_sidecar_handles_optional_metrics_and_snapshots() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let full_toml = r#"
+[concept]
+id = "full.case"
+tier = "tier1"
+
+[expect]
+panic = false
+timeout = true
+mode = "parse_clean"
+
+[metrics]
+max_error_nodes = 5
+must_emit_node_kinds = ["foo", "bar"]
+
+[snapshots]
+tokens = true
+ast = false
+spans = true
+"#;
+        let path = write_temp_file(dir.path(), "full.meta.toml", full_toml)?;
+        let sidecar = parse_sidecar(&path)?;
+        assert!(sidecar.expect.timeout);
+        let metrics = sidecar.metrics.as_ref().ok_or_else(|| anyhow::anyhow!("missing metrics"))?;
+        assert_eq!(metrics.max_error_nodes, Some(5));
+        let kinds = metrics
+            .must_emit_node_kinds
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("missing node kinds"))?;
+        assert_eq!(kinds, &["foo", "bar"]);
+        let snaps =
+            sidecar.snapshots.as_ref().ok_or_else(|| anyhow::anyhow!("missing snapshots"))?;
+        assert!(snaps.tokens);
+        assert!(!snaps.ast);
+        assert!(snaps.spans);
+        Ok(())
+    }
+
+    // validate_sidecar
+
+    fn make_sidecar(id: &str) -> FixtureExpectationSidecar {
+        FixtureExpectationSidecar {
+            concept: SidecarConcept { id: id.to_string(), tier: "pr".to_string() },
+            expect: SidecarExpect {
+                panic: false,
+                timeout: false,
+                mode: ExpectationMode::ParseClean,
+            },
+            metrics: None,
+            snapshots: None,
+        }
+    }
+
+    #[test]
+    fn validate_sidecar_empty_concept_id_produces_error() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        // create the .pl fixture so the path check passes
+        write_temp_file(dir.path(), "empty.pl", "# perl")?;
+        let sidecar_path = dir.path().join("empty.meta.toml");
+        let sidecar = make_sidecar("   "); // whitespace-only id
+        let v = validate_sidecar(&sidecar_path, &sidecar, None);
+        assert!(!v.is_ok());
+        assert!(v.errors.iter().any(|e| e.contains("concept.id must not be empty")));
+        Ok(())
+    }
+
+    #[test]
+    fn validate_sidecar_missing_fixture_produces_error() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        // do NOT create the .pl file
+        let sidecar_path = dir.path().join("missing.meta.toml");
+        let sidecar = make_sidecar("some.id");
+        let v = validate_sidecar(&sidecar_path, &sidecar, None);
+        assert!(!v.is_ok());
+        assert!(v.errors.iter().any(|e| e.contains("fixture file does not exist")));
+        Ok(())
+    }
+
+    #[test]
+    fn validate_sidecar_no_registry_emits_warning() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        write_temp_file(dir.path(), "warn.pl", "# perl")?;
+        let sidecar_path = dir.path().join("warn.meta.toml");
+        let sidecar = make_sidecar("concept.pending");
+        let v = validate_sidecar(&sidecar_path, &sidecar, None);
+        assert!(v.is_ok(), "should have no errors");
+        assert!(v.warnings.iter().any(|w| w.contains("concept registry unavailable")));
+        assert!(v.warnings.iter().any(|w| w.contains("concept.pending")));
+        Ok(())
+    }
+
+    #[test]
+    fn validate_sidecar_known_concept_is_clean() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        write_temp_file(dir.path(), "ok.pl", "# perl")?;
+        let sidecar_path = dir.path().join("ok.meta.toml");
+        let sidecar = make_sidecar("known.concept");
+
+        // Build a registry with the concept present
+        let registry_toml = r#"
+[[concepts]]
+id = "known.concept"
+"#;
+        let reg_path = write_temp_file(dir.path(), "concepts.toml", registry_toml)?;
+        let registry = ConceptRegistry::load(&reg_path)?;
+
+        let v = validate_sidecar(&sidecar_path, &sidecar, Some(&registry));
+        assert!(v.is_ok(), "known concept with fixture should be clean: {:?}", v.errors);
+        assert!(v.warnings.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn validate_sidecar_unknown_concept_in_registry_produces_error() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        write_temp_file(dir.path(), "unknown.pl", "# perl")?;
+        let sidecar_path = dir.path().join("unknown.meta.toml");
+        let sidecar = make_sidecar("not.in.registry");
+
+        let registry_toml = r#"
+[[concepts]]
+id = "known.concept"
+"#;
+        let reg_path = write_temp_file(dir.path(), "concepts.toml", registry_toml)?;
+        let registry = ConceptRegistry::load(&reg_path)?;
+
+        let v = validate_sidecar(&sidecar_path, &sidecar, Some(&registry));
+        assert!(!v.is_ok());
+        assert!(v.errors.iter().any(|e| e.contains("not.in.registry")));
+        assert!(v.errors.iter().any(|e| e.contains("not present in the loaded concept registry")));
+        Ok(())
+    }
+
+    #[test]
+    fn validate_sidecar_invalid_sidecar_path_extension_produces_error() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        // path has wrong extension, so expected_fixture_path will fail
+        let sidecar_path = dir.path().join("foo.toml"); // not .meta.toml
+        let sidecar = make_sidecar("some.id");
+        let v = validate_sidecar(&sidecar_path, &sidecar, None);
+        assert!(!v.is_ok());
+        assert!(v.errors.iter().any(|e| e.contains("must end with .meta.toml")));
+        Ok(())
+    }
+
+    // load_and_validate_sidecar
+
+    #[test]
+    fn load_and_validate_sidecar_succeeds_for_valid_file() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        write_temp_file(dir.path(), "good.pl", "# perl")?;
+        let sidecar_path = write_temp_file(
+            dir.path(),
+            "good.meta.toml",
+            &minimal_sidecar_toml("good.concept", "parse_clean"),
+        )?;
+        let v = load_and_validate_sidecar(&sidecar_path, None)?;
+        // Fixture exists, concept id is not empty, and no registry yields a warning.
+        assert!(v.is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn load_and_validate_sidecar_fails_on_missing_file() {
+        let result = load_and_validate_sidecar(Path::new("/nonexistent/ghost.meta.toml"), None);
+        assert!(result.is_err());
+    }
+
+    // discover_sidecars
+
+    #[test]
+    fn discover_sidecars_returns_empty_for_nonexistent_root() -> Result<()> {
+        let sidecars = discover_sidecars(Path::new("/this/does/not/exist"))?;
+        assert!(sidecars.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn discover_sidecars_finds_meta_toml_files() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        write_temp_file(dir.path(), "a.meta.toml", "# meta")?;
+        write_temp_file(dir.path(), "b.meta.toml", "# meta")?;
+        write_temp_file(dir.path(), "not_a_sidecar.txt", "ignored")?;
+        write_temp_file(dir.path(), "also_ignored.toml", "ignored")?;
+
+        let sidecars = discover_sidecars(dir.path())?;
+        assert_eq!(sidecars.len(), 2);
+        assert!(sidecars.iter().any(|p| p.ends_with("a.meta.toml")));
+        assert!(sidecars.iter().any(|p| p.ends_with("b.meta.toml")));
+        Ok(())
+    }
+
+    #[test]
+    fn discover_sidecars_recurses_into_subdirectories() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let subdir = dir.path().join("sub");
+        fs::create_dir(&subdir)?;
+        write_temp_file(dir.path(), "root.meta.toml", "# meta")?;
+        write_temp_file(&subdir, "nested.meta.toml", "# meta")?;
+
+        let sidecars = discover_sidecars(dir.path())?;
+        assert_eq!(sidecars.len(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn discover_sidecars_returns_sorted_paths() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        write_temp_file(dir.path(), "zzz.meta.toml", "# meta")?;
+        write_temp_file(dir.path(), "aaa.meta.toml", "# meta")?;
+        write_temp_file(dir.path(), "mmm.meta.toml", "# meta")?;
+
+        let sidecars = discover_sidecars(dir.path())?;
+        assert_eq!(sidecars.len(), 3);
+        // Verify sorted
+        let names: Vec<_> =
+            sidecars.iter().filter_map(|p| p.file_name().and_then(|n| n.to_str())).collect();
+        let mut sorted = names.clone();
+        sorted.sort();
+        assert_eq!(names, sorted, "sidecars should be returned in sorted order");
+        Ok(())
+    }
+
+    #[test]
+    fn discover_sidecars_ignores_non_meta_toml_files() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        write_temp_file(dir.path(), "only_a.meta.toml", "# meta")?;
+        write_temp_file(dir.path(), "ignore.json", "{}")?;
+        write_temp_file(dir.path(), "ignore.toml", "[t]")?;
+        write_temp_file(dir.path(), "ignore.pl", "1;")?;
+
+        let sidecars = discover_sidecars(dir.path())?;
+        assert_eq!(sidecars.len(), 1);
+        Ok(())
+    }
+
+    // ConceptRegistry
+
+    #[test]
+    fn concept_registry_load_fails_on_missing_file() {
+        let result = ConceptRegistry::load(Path::new("/no/such/file.toml"));
+        assert!(result.is_err());
+        let msg = result.err().map(|e| e.to_string()).unwrap_or_default();
+        assert!(msg.contains("reading concept registry"));
+    }
+
+    #[test]
+    fn concept_registry_load_fails_on_invalid_toml() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let path = write_temp_file(dir.path(), "bad.toml", "{{not valid")?;
+        let result = ConceptRegistry::load(&path);
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn concept_registry_contains_returns_true_for_known_id() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let toml = r#"
+[[concepts]]
+id = "parser.basic"
+
+[[concepts]]
+id = "regex.quantifier"
+"#;
+        let path = write_temp_file(dir.path(), "concepts.toml", toml)?;
+        let registry = ConceptRegistry::load(&path)?;
+        assert!(registry.contains("parser.basic"));
+        assert!(registry.contains("regex.quantifier"));
+        Ok(())
+    }
+
+    #[test]
+    fn concept_registry_contains_returns_false_for_unknown_id() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let toml = r#"
+[[concepts]]
+id = "parser.basic"
+"#;
+        let path = write_temp_file(dir.path(), "concepts.toml", toml)?;
+        let registry = ConceptRegistry::load(&path)?;
+        assert!(!registry.contains("not.there"));
+        Ok(())
+    }
+
+    #[test]
+    fn concept_registry_ignores_empty_ids() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let toml = r#"
+[[concepts]]
+id = ""
+
+[[concepts]]
+id = "   "
+
+[[concepts]]
+id = "real.concept"
+"#;
+        let path = write_temp_file(dir.path(), "concepts.toml", toml)?;
+        let registry = ConceptRegistry::load(&path)?;
+        assert!(!registry.contains(""));
+        assert!(!registry.contains("   "));
+        assert!(registry.contains("real.concept"));
+        Ok(())
+    }
+
+    #[test]
+    fn concept_registry_handles_nested_toml_tables() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        // Nested table structure should be traversed by collect_concept_ids.
+        let toml = r#"
+[outer]
+id = "outer.concept"
+
+[outer.inner]
+id = "inner.concept"
+"#;
+        let path = write_temp_file(dir.path(), "nested.toml", toml)?;
+        let registry = ConceptRegistry::load(&path)?;
+        assert!(registry.contains("outer.concept"));
+        assert!(registry.contains("inner.concept"));
+        Ok(())
+    }
+
+    #[test]
+    fn concept_registry_handles_array_of_tables() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let toml = r#"
+concepts = [
+    { id = "array.one" },
+    { id = "array.two" },
+]
+"#;
+        let path = write_temp_file(dir.path(), "array.toml", toml)?;
+        let registry = ConceptRegistry::load(&path)?;
+        assert!(registry.contains("array.one"));
+        assert!(registry.contains("array.two"));
+        Ok(())
+    }
+
+    // SidecarExpect/SidecarConcept equality
+
+    #[test]
+    fn sidecar_types_support_equality() {
+        let c1 = SidecarConcept { id: "x".to_string(), tier: "t".to_string() };
+        let c2 = SidecarConcept { id: "x".to_string(), tier: "t".to_string() };
+        let c3 = SidecarConcept { id: "y".to_string(), tier: "t".to_string() };
+        assert_eq!(c1, c2);
+        assert_ne!(c1, c3);
+
+        let e1 = SidecarExpect { panic: true, timeout: false, mode: ExpectationMode::ParseClean };
+        let e2 = SidecarExpect { panic: true, timeout: false, mode: ExpectationMode::ParseClean };
+        let e3 = SidecarExpect { panic: false, timeout: false, mode: ExpectationMode::ParseClean };
+        assert_eq!(e1, e2);
+        assert_ne!(e1, e3);
+    }
+
+    #[test]
+    fn sidecar_metrics_supports_equality() {
+        let m1 = SidecarMetrics {
+            max_error_nodes: Some(3),
+            must_emit_node_kinds: Some(vec!["a".to_string()]),
+        };
+        let m2 = SidecarMetrics {
+            max_error_nodes: Some(3),
+            must_emit_node_kinds: Some(vec!["a".to_string()]),
+        };
+        assert_eq!(m1, m2);
+    }
+
+    #[test]
+    fn sidecar_snapshots_supports_equality() {
+        let s1 = SidecarSnapshots { tokens: true, ast: false, spans: true };
+        let s2 = SidecarSnapshots { tokens: true, ast: false, spans: true };
+        let s3 = SidecarSnapshots { tokens: false, ast: false, spans: true };
+        assert_eq!(s1, s2);
+        assert_ne!(s1, s3);
     }
 }

@@ -108,6 +108,10 @@ pub struct HirFile {
     pub stash_graph: StashGraph,
     /// Compile-environment facts lowered beside HIR items.
     pub compile_environment: CompileEnvironment,
+    /// Source-backed subroutine prototype facts lowered beside HIR items.
+    pub prototype_table: PrototypeTable,
+    /// Source-backed bareword classification facts lowered beside HIR items.
+    pub bareword_table: BarewordTable,
 }
 
 impl HirFile {
@@ -148,6 +152,90 @@ impl HirFile {
     pub fn framework_facts(&self) -> FrameworkFactGraph {
         FrameworkAdapterRegistry::default().project_file(self)
     }
+}
+
+/// Source-backed subroutine prototype facts lowered from parsed declarations.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub struct PrototypeTable {
+    /// Prototype facts in stable source order.
+    pub facts: Vec<PrototypeFact>,
+}
+
+/// One source-backed prototype fact for a named subroutine declaration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct PrototypeFact {
+    /// Subroutine name as written in the declaration.
+    pub sub_name: String,
+    /// Package context active at the declaration.
+    pub package_context: Option<String>,
+    /// Prototype content without the surrounding parentheses.
+    pub content: String,
+    /// Precise source range for the prototype node.
+    pub range: SourceLocation,
+    /// Full declaration source range.
+    pub declaration_range: SourceLocation,
+    /// HIR item that declared the subroutine.
+    pub declaration_item: HirId,
+    /// Scope owning the subroutine declaration.
+    pub scope_id: Option<HirScopeId>,
+    /// Source anchor for this prototype fact.
+    pub anchor_id: AnchorId,
+    /// Provenance for the lowered prototype fact.
+    pub provenance: CompileProvenance,
+    /// Confidence for the lowered prototype fact.
+    pub confidence: CompileConfidence,
+}
+
+/// Source-backed bareword facts lowered from parsed identifiers.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub struct BarewordTable {
+    /// Bareword facts in stable source order.
+    pub facts: Vec<BarewordFact>,
+}
+
+/// One source-backed syntactic bareword classification.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct BarewordFact {
+    /// Bareword text as parsed.
+    pub name: String,
+    /// Syntactic role observed by HIR lowering.
+    pub role: BarewordRole,
+    /// Package context active at the bareword.
+    pub package_context: Option<String>,
+    /// Precise source range for the bareword node.
+    pub range: SourceLocation,
+    /// HIR item that exposed the bareword expression.
+    pub source_item: HirId,
+    /// Scope owning the bareword expression.
+    pub scope_id: Option<HirScopeId>,
+    /// Source anchor for this bareword fact.
+    pub anchor_id: AnchorId,
+    /// Provenance for the lowered bareword fact.
+    pub provenance: CompileProvenance,
+    /// Confidence for the lowered bareword fact.
+    pub confidence: CompileConfidence,
+}
+
+/// Syntactic roles for parsed barewords.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum BarewordRole {
+    /// Plain expression-position bareword with unresolved meaning.
+    Expression,
+    /// Qualified name such as `Foo::Bar` outside a more specific context.
+    QualifiedName,
+    /// Bareword used as a static `require` module target.
+    ModuleRequest,
+    /// Bareword used as a class/object receiver for `->`.
+    MethodReceiver,
+    /// Bareword used as the object in an indirect-object call.
+    IndirectObject,
+    /// Bareword used as an autoquoted hash key.
+    HashKey,
 }
 
 /// One lowered HIR item with common metadata required by compiler layers.
@@ -325,6 +413,27 @@ fn compile_effects_from_file(file: &HirFile, source_hash: Option<String>) -> Vec
 
     for item in &file.items {
         push_item_effects(item, &source_hash, &mut entries, &mut next_order);
+    }
+    for fact in &file.prototype_table.facts {
+        push_compile_effect(
+            &mut entries,
+            &mut next_order,
+            CompileEffectSeed {
+                kind: CompileEffectKind::RegisterPrototype,
+                source_kind: CompileEffectSourceKind::SubDecl,
+                fact_kind: CompileEffectFactKind::Prototype,
+                fact_name: Some(fact.sub_name.clone()),
+                range: fact.range,
+                source_item: Some(fact.declaration_item),
+                scope_id: fact.scope_id,
+                package_context: fact.package_context.clone(),
+                fact_anchor_id: Some(fact.anchor_id),
+                dynamic_reason: None,
+                source_hash: source_hash.clone(),
+                provenance: fact.provenance,
+                confidence: fact.confidence,
+            },
+        );
     }
     for binding in &file.scope_graph.bindings {
         push_compile_effect(
@@ -572,27 +681,6 @@ fn push_item_effects(
                     confidence: CompileConfidence::High,
                 },
             );
-            if decl.has_prototype {
-                push_compile_effect(
-                    entries,
-                    next_order,
-                    CompileEffectSeed {
-                        kind: CompileEffectKind::RegisterPrototype,
-                        source_kind: CompileEffectSourceKind::SubDecl,
-                        fact_kind: CompileEffectFactKind::Prototype,
-                        fact_name: Some(name.clone()),
-                        range: item.range,
-                        source_item: Some(item.id),
-                        scope_id: item.scope_context,
-                        package_context: item.package_context.clone(),
-                        fact_anchor_id: Some(AnchorId(item.range.start as u64)),
-                        dynamic_reason: None,
-                        source_hash: source_hash.clone(),
-                        provenance: CompileProvenance::ExactAst,
-                        confidence: CompileConfidence::High,
-                    },
-                );
-            }
         }
         HirKind::MethodDecl(decl) => {
             push_compile_effect(

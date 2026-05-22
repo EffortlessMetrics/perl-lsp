@@ -285,10 +285,13 @@ gates:
     description: "Scope-aware library tests for ci-scope selected crates"
     required: true
     command: cargo test --locked --lib {package_args}
-    timeout_seconds: 300
+    # Large source/sync cutovers can select most library crates and spend
+    # the former 300s budget compiling before tests begin. Keep the gate
+    # required, but give the shared runner enough headroom to finish.
+    timeout_seconds: 600
     retry_count: 1
     budgets:
-      max_duration_ms: 240000
+      max_duration_ms: 540000
     quarantine: false
     tags:
       - test

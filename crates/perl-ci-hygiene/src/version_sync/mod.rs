@@ -478,6 +478,10 @@ static ROADMAP_WORKSPACE_RE: LazyLock<Regex> =
 static ROADMAP_PUBLISHED_RE: LazyLock<Regex> = LazyLock::new(|| {
     compile_regex(&format!(r"Latest published release:\s*`v({VERSION_FRAGMENT})`"))
 });
+/// Matches Nix `version = "X.Y.Z";` lines. The trailing semicolon is Nix-syntax-specific
+/// and distinguishes this pattern from TOML `version = "X.Y.Z"` lines.
+static FLAKE_NIX_VERSION_RE: LazyLock<Regex> =
+    LazyLock::new(|| compile_regex(&format!(r#"^\s*version\s*=\s*"({VERSION_FRAGMENT})"\s*;"#)));
 
 fn compile_regex(pattern: &str) -> Regex {
     match Regex::new(pattern) {
@@ -773,6 +777,17 @@ fn collect_doc_sites(repo_root: &Path, sites: &mut Vec<VersionSite>) -> Result<(
         "docs/project/ROADMAP.md",
         "ROADMAP latest published release",
         &ROADMAP_PUBLISHED_RE,
+        sites,
+    )?;
+
+    // flake.nix: `version = "X.Y.Z";` in the perl-lsp package derivation.
+    // Nix syntax uses a trailing semicolon, so FLAKE_NIX_VERSION_RE is used
+    // instead of the TOML-oriented BARE_VERSION_RE. See issue #4357.
+    collect_single_line_doc_site(
+        repo_root,
+        "flake.nix",
+        "flake.nix perl-lsp package version",
+        &FLAKE_NIX_VERSION_RE,
         sites,
     )?;
 
@@ -1234,5 +1249,96 @@ perl-token = { path = "../perl-token", version = "0.42.0" }
         assert!((2025..=2100).contains(&year), "year {year} out of expected range");
         assert!((1..=12).contains(&month), "month {month} invalid");
         assert!((1..=31).contains(&day), "day {day} invalid");
+    }
+
+    // -----------------------------------------------------------------------
+    // flake.nix version collector tests (issue #4357)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn flake_nix_re_matches_nix_version_line() -> Result<()> {
+        // Exact format from flake.nix: leading spaces, Nix assignment, trailing semicolon.
+        let line = r#"            version = "0.14.0";  # Synced manually"#;
+        let caps = FLAKE_NIX_VERSION_RE
+            .captures(line)
+            .ok_or_else(|| eyre!("FLAKE_NIX_VERSION_RE must match Nix version lines"))?;
+        assert_eq!(&caps[1], "0.14.0");
+        Ok(())
+    }
+
+    #[test]
+    fn flake_nix_re_matches_pre_release_version() -> Result<()> {
+        let line = r#"            version = "0.14.0-rc1";"#;
+        let caps = FLAKE_NIX_VERSION_RE.captures(line).ok_or_else(|| {
+            eyre!("FLAKE_NIX_VERSION_RE must match pre-release Nix version lines")
+        })?;
+        assert_eq!(&caps[1], "0.14.0-rc1");
+        Ok(())
+    }
+
+    #[test]
+    fn flake_nix_re_does_not_match_toml_version_line() {
+        // TOML lines do not have a trailing semicolon — must not be captured by
+        // FLAKE_NIX_VERSION_RE (BARE_VERSION_RE handles those).
+        let line = r#"version = "0.14.0""#;
+        assert!(
+            FLAKE_NIX_VERSION_RE.captures(line).is_none(),
+            "FLAKE_NIX_VERSION_RE must not match TOML-style version lines (no semicolon)"
+        );
+    }
+
+    #[test]
+    fn collect_doc_sites_discovers_flake_nix_version() -> Result<()> {
+        let repo_root = unique_temp_repo_dir("flake-nix-collect")?;
+
+        // Minimal flake.nix with the perl-lsp package version line.
+        let flake_content = r#"
+{
+  outputs = { self, nixpkgs }: let
+    system = "x86_64-linux";
+    pkgs = nixpkgs.legacyPackages.${system};
+  in {
+    packages.${system}.perl-lsp = pkgs.rustPlatform.buildRustPackage {
+      pname = "perl-lsp";
+      version = "0.42.7";
+    };
+  };
+}
+"#;
+        fs::write(repo_root.join("flake.nix"), flake_content)
+            .map_err(|e| eyre!("writing flake.nix: {e}"))?;
+
+        let mut sites = Vec::new();
+        collect_doc_sites(&repo_root, &mut sites)?;
+
+        let flake_site = sites
+            .iter()
+            .find(|s| s.description.contains("flake.nix"))
+            .ok_or_else(|| eyre!("flake.nix version site should be collected"))?;
+
+        assert_eq!(flake_site.found, "0.42.7", "collector should capture the flake.nix version");
+        assert!(
+            !flake_site.channel_split,
+            "flake.nix version must not be channel-split (it must match workspace version exactly)"
+        );
+
+        fs::remove_dir_all(&repo_root).ok();
+        Ok(())
+    }
+
+    #[test]
+    fn collect_doc_sites_skips_missing_flake_nix() -> Result<()> {
+        let repo_root = unique_temp_repo_dir("flake-nix-missing")?;
+        // Do not create flake.nix — collector must silently skip.
+        let mut sites = Vec::new();
+        collect_doc_sites(&repo_root, &mut sites)?;
+
+        assert!(
+            !sites.iter().any(|s| s.description.contains("flake.nix")),
+            "missing flake.nix must be silently skipped (some forks may not use Nix)"
+        );
+
+        fs::remove_dir_all(&repo_root).ok();
+        Ok(())
     }
 }

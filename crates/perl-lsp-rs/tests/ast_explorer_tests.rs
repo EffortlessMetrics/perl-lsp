@@ -23,7 +23,7 @@ fn create_and_init_server() -> LspServer {
     let server = LspServer::new();
     server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "processId": null,
@@ -59,7 +59,7 @@ fn open_document(server: &LspServer, uri: &str, text: &str) {
 fn show_ast(server: &LspServer, uri: &str) -> Option<serde_json::Value> {
     let response = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(42)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((42) as i64)),
         method: "perl/showAst".to_string(),
         params: Some(json!({ "uri": uri })),
     })?;
@@ -72,7 +72,7 @@ fn show_ast_error(
 ) -> Option<perl_lsp::JsonRpcError> {
     let response = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(42)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((42) as i64)),
         method: "perl/showAst".to_string(),
         params,
     })?;

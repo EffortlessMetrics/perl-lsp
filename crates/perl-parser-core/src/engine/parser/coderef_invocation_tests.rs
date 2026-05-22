@@ -28,7 +28,7 @@ mod tests {
     fn assert_no_errors(code: &str) {
         let ast = parse_program(code);
         let sexp = ast.to_sexp();
-        assert!(!sexp.contains("ERROR"), "Parse of `{}` produced ERROR nodes: {}", code, sexp,);
+        assert!(!sexp.contains("ERROR"), "Parse of `{}` produced ERROR nodes: {}", code, sexp);
     }
 
     /// Helper: extract expression from an ExpressionStatement.
@@ -56,7 +56,7 @@ mod tests {
             NodeKind::FunctionCall { name, args } => {
                 assert_eq!(name, "->()", "Expected ->() coderef call, got name={}", name);
                 // First arg is the callee ($code)
-                assert!(!args.is_empty(), "Expected at least 1 arg (the callee expression)",);
+                assert!(!args.is_empty(), "Expected at least 1 arg (the callee expression)");
                 assert_eq!(
                     args[0].kind.kind_name(),
                     "Variable",

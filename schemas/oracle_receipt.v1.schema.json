@@ -1,0 +1,571 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/perl-lsp/schemas/oracle_receipt.v1.schema.json",
+  "title": "Differential real-Perl oracle receipt v1",
+  "description": "Receipt schema for comparing declared Rust compiler facts against declared real-Perl oracle observations. This schema does not define an oracle runner or make Perl an editor-runtime dependency.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "receipt_id",
+    "comparison_class",
+    "fixture_id",
+    "source_snapshot",
+    "rust_extractor",
+    "perl_oracle",
+    "module_path_authority",
+    "environment",
+    "ambient_inputs",
+    "generated_inputs",
+    "dynamic_boundaries",
+    "stale_facts",
+    "unsupported_effects",
+    "normalized_facts",
+    "comparisons",
+    "provider_behavior_changed",
+    "editor_runtime_dependency",
+    "redaction",
+    "claim_boundary"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "oracle_receipt.v1"
+    },
+    "receipt_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "comparison_class": {
+      "$ref": "#/$defs/comparison_class"
+    },
+    "fixture_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_snapshot": {
+      "$ref": "#/$defs/source_snapshot"
+    },
+    "rust_extractor": {
+      "$ref": "#/$defs/rust_extractor"
+    },
+    "perl_oracle": {
+      "$ref": "#/$defs/perl_oracle"
+    },
+    "module_path_authority": {
+      "$ref": "#/$defs/module_path_authority"
+    },
+    "environment": {
+      "$ref": "#/$defs/environment"
+    },
+    "ambient_inputs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ambient_input"
+      }
+    },
+    "generated_inputs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/generated_input"
+      }
+    },
+    "dynamic_boundaries": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/dynamic_boundary"
+      }
+    },
+    "stale_facts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/stale_fact"
+      }
+    },
+    "unsupported_effects": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/unsupported_effect"
+      }
+    },
+    "normalized_facts": {
+      "$ref": "#/$defs/normalized_facts"
+    },
+    "comparisons": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/comparison_result"
+      },
+      "minItems": 1
+    },
+    "provider_behavior_changed": {
+      "type": "boolean"
+    },
+    "editor_runtime_dependency": {
+      "const": false
+    },
+    "redaction": {
+      "$ref": "#/$defs/redaction"
+    },
+    "claim_boundary": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "$defs": {
+    "comparison_class": {
+      "type": "string",
+      "enum": [
+        "PackageSubTable",
+        "ImportExport",
+        "IsaComposition",
+        "ConstantPrototype",
+        "FrameworkGeneratedMember",
+        "CompileEffect"
+      ]
+    },
+    "result_class": {
+      "type": "string",
+      "enum": [
+        "oracle_agrees",
+        "compiler_missing",
+        "compiler_extra",
+        "range_mismatch",
+        "provenance_mismatch",
+        "confidence_or_freshness_mismatch",
+        "dynamic_or_unsupported",
+        "oracle_ambient_unbounded",
+        "stale_or_partial",
+        "unknown"
+      ]
+    },
+    "promotion_effect": {
+      "type": "string",
+      "enum": [
+        "supports_promotion",
+        "blocks_promotion",
+        "known_limitation",
+        "unknown"
+      ]
+    },
+    "fact_provenance": {
+      "type": "string",
+      "enum": [
+        "ExplicitSource",
+        "SourceBackedGenerated",
+        "GeneratedNoSource",
+        "DynamicBoundary",
+        "AmbientInput",
+        "Unknown"
+      ]
+    },
+    "confidence": {
+      "type": "string",
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "freshness": {
+      "type": "string",
+      "enum": [
+        "fresh",
+        "stale",
+        "unknown",
+        "not_applicable"
+      ]
+    },
+    "fallback_state": {
+      "type": "string",
+      "enum": [
+        "none",
+        "legacy_provider",
+        "no_result",
+        "no_edit",
+        "require_confirmation",
+        "refresh_workspace_facts",
+        "shadow_receipt_only"
+      ]
+    },
+    "source_range": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "path_class",
+        "start_line",
+        "start_character",
+        "end_line",
+        "end_character"
+      ],
+      "properties": {
+        "path_class": {
+          "type": "string",
+          "enum": [
+            "public_test_fixture",
+            "redacted_private_fixture"
+          ]
+        },
+        "start_line": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "start_character": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end_line": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end_character": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "source_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path_class",
+        "fixture_source",
+        "content_hash"
+      ],
+      "properties": {
+        "path_class": {
+          "type": "string",
+          "enum": [
+            "public_test_fixture",
+            "redacted_private_fixture"
+          ]
+        },
+        "fixture_source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "content_hash": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "rust_extractor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "fact_model"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fact_model": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "perl_oracle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "interpreter",
+        "version",
+        "invocation_mode"
+      ],
+      "properties": {
+        "interpreter": {
+          "type": "string",
+          "enum": [
+            "declared_fixture_perl",
+            "system_perl",
+            "unknown"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "invocation_mode": {
+          "type": "string",
+          "enum": [
+            "declared_fixture_command",
+            "shadow_test_command",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "module_path_authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authority",
+        "declared_roots",
+        "ambient_roots_reported"
+      ],
+      "properties": {
+        "authority": {
+          "type": "string",
+          "enum": [
+            "declared_fixture_root",
+            "declared_module_roots",
+            "ambient_reported"
+          ]
+        },
+        "declared_roots": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ambient_roots_reported": {
+          "type": "boolean"
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "denied",
+        "declared",
+        "redacted_values"
+      ],
+      "properties": {
+        "denied": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "PERL5LIB",
+              "PERL5OPT",
+              "local::lib"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "declared": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "redacted_values": {
+          "type": "boolean"
+        }
+      }
+    },
+    "ambient_input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "authority"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authority": {
+          "type": "string",
+          "enum": [
+            "reported_only",
+            "declared_input",
+            "unbounded"
+          ]
+        }
+      }
+    },
+    "generated_input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "framework",
+        "provenance",
+        "source_range"
+      ],
+      "properties": {
+        "framework": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provenance": {
+          "$ref": "#/$defs/fact_provenance"
+        },
+        "source_range": {
+          "$ref": "#/$defs/source_range"
+        }
+      }
+    },
+    "dynamic_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "source_range"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_range": {
+          "$ref": "#/$defs/source_range"
+        }
+      }
+    },
+    "stale_fact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fact_id",
+        "freshness"
+      ],
+      "properties": {
+        "fact_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "freshness": {
+          "$ref": "#/$defs/freshness"
+        }
+      }
+    },
+    "unsupported_effect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "source_range"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_range": {
+          "$ref": "#/$defs/source_range"
+        }
+      }
+    },
+    "normalized_fact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fact_id",
+        "name",
+        "provenance",
+        "confidence",
+        "freshness",
+        "fallback",
+        "source_range"
+      ],
+      "properties": {
+        "fact_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provenance": {
+          "$ref": "#/$defs/fact_provenance"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidence"
+        },
+        "freshness": {
+          "$ref": "#/$defs/freshness"
+        },
+        "fallback": {
+          "$ref": "#/$defs/fallback_state"
+        },
+        "source_range": {
+          "$ref": "#/$defs/source_range"
+        }
+      }
+    },
+    "normalized_facts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rust",
+        "oracle"
+      ],
+      "properties": {
+        "rust": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/normalized_fact"
+          }
+        },
+        "oracle": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/normalized_fact"
+          }
+        }
+      }
+    },
+    "comparison_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result_class",
+        "fact_id",
+        "promotion_effect",
+        "message"
+      ],
+      "properties": {
+        "result_class": {
+          "$ref": "#/$defs/result_class"
+        },
+        "fact_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "promotion_effect": {
+          "$ref": "#/$defs/promotion_effect"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "private_paths_redacted",
+        "environment_values_redacted",
+        "raw_launch_payloads_redacted"
+      ],
+      "properties": {
+        "private_paths_redacted": {
+          "type": "boolean"
+        },
+        "environment_values_redacted": {
+          "type": "boolean"
+        },
+        "raw_launch_payloads_redacted": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

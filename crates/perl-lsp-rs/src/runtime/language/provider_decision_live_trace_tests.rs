@@ -1,4 +1,4 @@
-use crate::protocol::{JsonRpcRequest, JsonRpcResponse};
+use crate::protocol::{JsonRpcId, JsonRpcRequest, JsonRpcResponse};
 use crate::runtime::LspServer;
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -131,7 +131,7 @@ fn create_server() -> LspServer {
 fn request(id: i64, method: &str, params: Option<Value>) -> JsonRpcRequest {
     JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(id)),
+        id: Some(JsonRpcId::Integer(id)),
         method: method.to_string(),
         params,
     }

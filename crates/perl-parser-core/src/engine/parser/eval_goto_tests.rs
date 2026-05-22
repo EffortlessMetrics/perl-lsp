@@ -69,7 +69,7 @@ mod tests {
     #[test]
     fn test_eval_block_produces_eval_node() {
         let sexp = parse_sexp("eval { 1 };");
-        assert!(sexp.contains("eval"), "Expected eval node in AST: {}", sexp,);
+        assert!(sexp.contains("eval"), "Expected eval node in AST: {}", sexp);
     }
 
     // ===== goto statement tests =====
@@ -89,13 +89,13 @@ mod tests {
     #[test]
     fn test_goto_produces_goto_node() {
         let sexp = parse_sexp("goto LABEL;");
-        assert!(sexp.contains("goto"), "Expected goto node in AST: {}", sexp,);
+        assert!(sexp.contains("goto"), "Expected goto node in AST: {}", sexp);
     }
 
     #[test]
     fn test_goto_sub_reference_produces_goto_node() {
         let sexp = parse_sexp("goto &other_sub;");
-        assert!(sexp.contains("goto"), "Expected goto node in AST: {}", sexp,);
+        assert!(sexp.contains("goto"), "Expected goto node in AST: {}", sexp);
     }
 
     #[test]

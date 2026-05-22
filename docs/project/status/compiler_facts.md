@@ -19,8 +19,10 @@ fixture-backed before any live LSP feature consumes it.
 | ImportSpec / ExportSet / visible symbols | `fixture-backed` | [#8244](https://github.com/EffortlessMetrics/perl-lsp/issues/8244), [#8252](https://github.com/EffortlessMetrics/perl-lsp/issues/8252), [#8253](https://github.com/EffortlessMetrics/perl-lsp/issues/8253), [#8264](https://github.com/EffortlessMetrics/perl-lsp/issues/8264) | `crates/perl-parser-core/tests/hir_tests.rs`, [#8256](https://github.com/EffortlessMetrics/perl-lsp/pull/8256), [#8260](https://github.com/EffortlessMetrics/perl-lsp/pull/8260), [#8262](https://github.com/EffortlessMetrics/perl-lsp/pull/8262), [#8267](https://github.com/EffortlessMetrics/perl-lsp/pull/8267), [Semantic scorecard](semantic_scorecard.md), and [semantic shadow compare](semantic_shadow_compare.md) | Feed provider fact-source tracing and cutover gates in [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197) |
 | Generated-member facts | `fixture-backed` | [#8195](https://github.com/EffortlessMetrics/perl-lsp/issues/8195), [#8245](https://github.com/EffortlessMetrics/perl-lsp/issues/8245) | [Semantic scorecard](semantic_scorecard.md) generated-member fixture family; [#8287](https://github.com/EffortlessMetrics/perl-lsp/pull/8287) | Broader Moo/Moose/Class::Tiny/Object::Pad adapters remain issue-owned and parked |
 | Compile-time effects | `fixture-backed` | [#8207](https://github.com/EffortlessMetrics/perl-lsp/issues/8207), [#3394](https://github.com/EffortlessMetrics/perl-lsp/issues/3394), [#8293](https://github.com/EffortlessMetrics/perl-lsp/issues/8293), [#8294](https://github.com/EffortlessMetrics/perl-lsp/issues/8294) | `crates/perl-parser-core/tests/hir_tests.rs`, [#8291](https://github.com/EffortlessMetrics/perl-lsp/pull/8291), [#8297](https://github.com/EffortlessMetrics/perl-lsp/pull/8297), [#8300](https://github.com/EffortlessMetrics/perl-lsp/pull/8300) | Keep effect records available for downstream tooling IR and provider proof; provider use remains gated by [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197) |
+| Prototype table facts | `fixture-backed` | [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197) | `crates/perl-parser-core/tests/hir_tests.rs` | Keep named subroutine prototype content and source ranges available as compiler substrate; no provider, diagnostic, parser-bucket, PIR, or support-tier promotion follows from this row |
+| Bareword classifier facts | `fixture-backed` | [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197) | `crates/perl-parser-core/tests/hir_tests.rs` | Keep source-backed syntactic bareword roles available for downstream diagnostic/provider proof; no PL109 suppression, provider behavior, parser-bucket, PIR, determinism, or support-tier promotion follows from this row |
 | Tooling PIR | `planned` | [#8196](https://github.com/EffortlessMetrics/perl-lsp/issues/8196) | Roadmap only | Context-aware PIR lowering fixtures |
-| Differential real-Perl oracle | `planned` | [#8199](https://github.com/EffortlessMetrics/perl-lsp/issues/8199), [#8294](https://github.com/EffortlessMetrics/perl-lsp/issues/8294) | Selected compile-effect oracle proof in [#8300](https://github.com/EffortlessMetrics/perl-lsp/pull/8300) | Broader conformance receipts remain planned; real Perl stays a comparison oracle, not an editor-runtime dependency |
+| Differential real-Perl oracle | `planned / manifest-declared / receipt-schema-declared` | [#8199](https://github.com/EffortlessMetrics/perl-lsp/issues/8199), [#8294](https://github.com/EffortlessMetrics/perl-lsp/issues/8294) | [PLSP-SPEC-0027](../../specs/PLSP-SPEC-0027-differential-real-perl-oracle.md); [oracle fixture manifest](../../../crates/perl-corpus/fixtures/differential_oracle/manifest.json); [oracle receipt schema](../../../schemas/oracle_receipt.v1.schema.json); selected compile-effect oracle proof in [#8300](https://github.com/EffortlessMetrics/perl-lsp/pull/8300) | Broader conformance receipts remain planned; real Perl stays a comparison oracle, not an editor-runtime dependency |
 
 ## Boundaries
 
@@ -39,6 +41,12 @@ fixture-backed before any live LSP feature consumes it.
 - Real Perl is useful for differential proof, but the durable fact substrate is
   the Rust-native compiler path that feeds editor, formatter, linter,
   refactoring, and determinism workflows.
+- The differential oracle contract is manifest-declared and receipt-schema
+  declared planning only. The checked-in manifest declares fixture identities
+  and environment boundaries, and the receipt schema locks the future receipt
+  shape, but neither adds an oracle runner, executes Perl, probes workspaces,
+  moves parser/corpus buckets, promotes support tiers, or changes provider
+  behavior.
 
 ## Verification
 

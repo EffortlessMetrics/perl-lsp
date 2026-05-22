@@ -55,29 +55,46 @@ impl CodeActionsProvider {
             return Vec::new();
         }
 
+        let code = diagnostic.code.as_deref();
         match diagnostic.code.as_deref() {
-            Some(c)
-                if c == DiagnosticCode::UndefinedVariable.as_str()
-                    || c == "undefined-variable"
-                    || c == "undeclared-variable" =>
+            _ if has_any_code(
+                code,
+                &[
+                    DiagnosticCode::UndefinedVariable.as_str(),
+                    "undefined-variable",
+                    "undeclared-variable",
+                ],
+            ) =>
             {
                 fixes::fix_undefined_variable(self, diagnostic)
             }
-            Some(c) if c == DiagnosticCode::UnusedVariable.as_str() || c == "unused-variable" => {
+            _ if has_any_code(
+                code,
+                &[DiagnosticCode::UnusedVariable.as_str(), "unused-variable"],
+            ) =>
+            {
                 fixes::fix_unused_variable(self, diagnostic)
             }
             Some("native.variables.unused_lexical") => fixes::fix_unused_variable(self, diagnostic),
-            Some(c)
-                if c == DiagnosticCode::AssignmentInCondition.as_str()
-                    || c == "assignment-in-condition"
-                    || c == "native.common.assignment_in_condition" =>
+            _ if has_any_code(
+                code,
+                &[
+                    DiagnosticCode::AssignmentInCondition.as_str(),
+                    "assignment-in-condition",
+                    "native.common.assignment_in_condition",
+                ],
+            ) =>
             {
                 fixes::fix_assignment_in_condition(self, diagnostic)
             }
-            Some(c)
-                if c == DiagnosticCode::DeprecatedDefined.as_str()
-                    || c == "deprecated-defined"
-                    || c == "native.common.deprecated_defined" =>
+            _ if has_any_code(
+                code,
+                &[
+                    DiagnosticCode::DeprecatedDefined.as_str(),
+                    "deprecated-defined",
+                    "native.common.deprecated_defined",
+                ],
+            ) =>
             {
                 fixes::fix_deprecated_defined(self, diagnostic)
             }
@@ -86,57 +103,83 @@ impl CodeActionsProvider {
             }
             Some("native.testing.require_use_strict") => fixes::add_use_strict(diagnostic),
             Some("native.testing.require_use_warnings") => fixes::add_use_warnings(diagnostic),
-            Some(c)
-                if c == DiagnosticCode::VariableShadowing.as_str()
-                    || c == "variable-shadowing"
-                    || c == "native.variables.shadowed_lexical" =>
+            _ if has_any_code(
+                code,
+                &[
+                    DiagnosticCode::VariableShadowing.as_str(),
+                    "variable-shadowing",
+                    "native.variables.shadowed_lexical",
+                ],
+            ) =>
             {
                 fixes::fix_variable_shadowing(diagnostic)
             }
-            Some(c)
-                if c == DiagnosticCode::VariableRedeclaration.as_str()
-                    || c == "variable-redeclaration"
-                    || c == "native.variables.duplicate_lexical" =>
+            _ if has_any_code(
+                code,
+                &[
+                    DiagnosticCode::VariableRedeclaration.as_str(),
+                    "variable-redeclaration",
+                    "native.variables.duplicate_lexical",
+                ],
+            ) =>
             {
                 fixes::fix_variable_redeclaration(self, diagnostic)
             }
-            Some(c)
-                if c == DiagnosticCode::DuplicateParameter.as_str()
-                    || c == "duplicate-parameter"
-                    || c == "native.variables.duplicate_parameter" =>
+            _ if has_any_code(
+                code,
+                &[
+                    DiagnosticCode::DuplicateParameter.as_str(),
+                    "duplicate-parameter",
+                    "native.variables.duplicate_parameter",
+                ],
+            ) =>
             {
                 fixes::fix_duplicate_parameter(diagnostic)
             }
-            Some(c)
-                if c == DiagnosticCode::ParameterShadowsGlobal.as_str()
-                    || c == "parameter-shadows-global"
-                    || c == "native.variables.parameter_shadows_global" =>
+            _ if has_any_code(
+                code,
+                &[
+                    DiagnosticCode::ParameterShadowsGlobal.as_str(),
+                    "parameter-shadows-global",
+                    "native.variables.parameter_shadows_global",
+                ],
+            ) =>
             {
                 fixes::fix_parameter_shadowing(diagnostic)
             }
-            Some(c)
-                if c == DiagnosticCode::UnusedParameter.as_str()
-                    || c == "unused-parameter"
-                    || c == "native.variables.unused_parameter" =>
+            _ if has_any_code(
+                code,
+                &[
+                    DiagnosticCode::UnusedParameter.as_str(),
+                    "unused-parameter",
+                    "native.variables.unused_parameter",
+                ],
+            ) =>
             {
                 fixes::fix_unused_parameter(diagnostic)
             }
-            Some(c)
-                if c == DiagnosticCode::UnquotedBareword.as_str() || c == "unquoted-bareword" =>
+            _ if has_any_code(
+                code,
+                &[DiagnosticCode::UnquotedBareword.as_str(), "unquoted-bareword"],
+            ) =>
             {
                 fixes::fix_unquoted_bareword(self, diagnostic)
             }
-            Some(c)
-                if c == DiagnosticCode::BarewordFilehandle.as_str()
-                    || c == "bareword-filehandle"
-                    || c == "native.io.bareword_filehandle" =>
+            _ if has_any_code(
+                code,
+                &[
+                    DiagnosticCode::BarewordFilehandle.as_str(),
+                    "bareword-filehandle",
+                    "native.io.bareword_filehandle",
+                ],
+            ) =>
             {
                 fixes::fix_bareword_filehandle(diagnostic)
             }
-            Some(c)
-                if c == DiagnosticCode::TwoArgOpen.as_str()
-                    || c == "two-arg-open"
-                    || c == "native.io.two_arg_open" =>
+            _ if has_any_code(
+                code,
+                &[DiagnosticCode::TwoArgOpen.as_str(), "two-arg-open", "native.io.two_arg_open"],
+            ) =>
             {
                 fixes::fix_two_arg_open(self, diagnostic)
             }
@@ -156,6 +199,10 @@ impl CodeActionsProvider {
     pub(super) fn source(&self) -> &str {
         &self.source
     }
+}
+
+fn has_any_code(code: Option<&str>, aliases: &[&str]) -> bool {
+    code.is_some_and(|candidate| aliases.contains(&candidate))
 }
 
 #[cfg(test)]

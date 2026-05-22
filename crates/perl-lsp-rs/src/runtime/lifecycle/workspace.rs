@@ -331,7 +331,7 @@ include_paths = ["other_lib"]
         );
 
         server.pending_workspace_configuration_requests.lock().insert(
-            11,
+            ServerRequestId::for_test(11),
             crate::runtime::PendingWorkspaceConfigurationRequest {
                 folder_uris: vec![uri1.clone(), uri2.clone()],
                 includes_global_item: true,
@@ -363,6 +363,52 @@ include_paths = ["other_lib"]
     }
 
     #[test]
+    fn handle_client_response_accepts_numeric_string_id() -> anyhow::Result<()> {
+        let server = LspServer::new();
+        let temp = tempfile::tempdir()?;
+        let folder = temp.path().join("folder");
+        std::fs::create_dir_all(&folder)?;
+        let uri = url::Url::from_directory_path(&folder)
+            .map_err(|()| anyhow::anyhow!("failed to create folder URI"))?
+            .to_string();
+
+        server.workspace_folders.lock().push(
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(uri.clone())
+                .with_path(folder.clone()),
+        );
+        server.pending_workspace_configuration_requests.lock().insert(
+            ServerRequestId::for_test(77),
+            crate::runtime::PendingWorkspaceConfigurationRequest {
+                folder_uris: vec![uri.clone()],
+                includes_global_item: true,
+                created_at: std::time::Instant::now(),
+            },
+        );
+
+        server.handle_client_response(Some(serde_json::json!({
+            "id": "77",
+            "result": [
+                {"workspace": {"useSystemInc": true}},
+                {"workspace": {"includePaths": ["string_id_lib"]}}
+            ]
+        })));
+
+        let folders = server.workspace_folders.lock();
+        let folder_state = folders
+            .iter()
+            .find(|f| f.uri == uri)
+            .ok_or_else(|| anyhow::anyhow!("missing folder"))?;
+        assert!(
+            folder_state
+                .effective_workspace_config
+                .include_paths
+                .contains(&"string_id_lib".to_string())
+        );
+        assert!(folder_state.effective_workspace_config.use_system_inc);
+        Ok(())
+    }
+
+    #[test]
     fn handle_client_response_ignores_non_array_result() {
         let server = LspServer::new();
         let temp = tempfile::tempdir().expect("failed to create temp dir");
@@ -375,7 +421,7 @@ include_paths = ["other_lib"]
                 .with_path(folder.clone()),
         );
         server.pending_workspace_configuration_requests.lock().insert(
-            99,
+            ServerRequestId::for_test(99),
             crate::runtime::PendingWorkspaceConfigurationRequest {
                 folder_uris: vec![uri.clone()],
                 includes_global_item: true,
@@ -461,7 +507,7 @@ include_paths = ["other_lib"]
         let expected_uri = server.workspace_folders.lock()[0].uri.clone();
 
         server.pending_workspace_configuration_requests.lock().insert(
-            1,
+            ServerRequestId::for_test(1),
             crate::runtime::PendingWorkspaceConfigurationRequest {
                 folder_uris: vec!["file:///stale".to_string()],
                 includes_global_item: true,
@@ -490,7 +536,7 @@ include_paths = ["other_lib"]
             .to_string();
 
         server.pending_workspace_configuration_requests.lock().insert(
-            700,
+            ServerRequestId::for_test(700),
             crate::runtime::PendingWorkspaceConfigurationRequest {
                 folder_uris: vec![uri.clone()],
                 includes_global_item: true,
@@ -510,5 +556,59 @@ include_paths = ["other_lib"]
             "workspace folder changes should invalidate stale scoped configuration requests",
         );
         Ok(())
+    }
+
+    #[test]
+    fn did_change_configuration_accepts_unwrapped_perl_settings() {
+        // Sublime Text's LSP package sends settings without the outer "perl" wrapper:
+        //   {"settings": {"workspace": {"includePaths": [...], "useSystemInc": false}}}
+        // rather than the standard:
+        //   {"settings": {"perl": {"workspace": {"includePaths": [...], "useSystemInc": false}}}}
+        // Both forms must be accepted and applied.
+        let server = LspServer::new();
+
+        server.handle_did_change_configuration(Some(serde_json::json!({
+            "settings": {
+                "workspace": {
+                    "includePaths": ["vendor/lib"],
+                    "useSystemInc": false
+                }
+            }
+        })));
+
+        let workspace_config = server.workspace_config.lock();
+        assert!(
+            workspace_config.include_paths.contains(&"vendor/lib".to_string()),
+            "unwrapped Sublime-style settings must apply includePaths; got: {:?}",
+            workspace_config.include_paths
+        );
+        assert!(
+            !workspace_config.use_system_inc,
+            "unwrapped Sublime-style settings must apply useSystemInc=false"
+        );
+    }
+
+    #[test]
+    fn did_change_configuration_wrapped_form_still_works() {
+        // Ensure the standard wrapped form continues to work after the Sublime fix.
+        let server = LspServer::new();
+
+        server.handle_did_change_configuration(Some(serde_json::json!({
+            "settings": {
+                "perl": {
+                    "workspace": {
+                        "includePaths": ["lib/wrapped"],
+                        "useSystemInc": false
+                    }
+                }
+            }
+        })));
+
+        let workspace_config = server.workspace_config.lock();
+        assert!(
+            workspace_config.include_paths.contains(&"lib/wrapped".to_string()),
+            "standard wrapped settings must still apply includePaths; got: {:?}",
+            workspace_config.include_paths
+        );
     }
 }

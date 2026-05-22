@@ -29,10 +29,11 @@ use perl_tdd_support::{must, must_some};
 #[test]
 fn test_runtime_cancellation_module_exists() -> Result<(), Box<dyn std::error::Error>> {
     // This import will fail at master (module doesn't exist) and pass after G2.
+    use perl_lsp_rs_core::protocol::JsonRpcId;
     use perl_lsp_rs_core::runtime::cancellation;
     // Verify the token type is reachable.
     let _token = cancellation::PerlLspCancellationToken::new(
-        serde_json::json!({"id": 1}),
+        JsonRpcId::Integer(1),
         "test_provider".to_string(),
     );
     Ok(())
@@ -41,9 +42,9 @@ fn test_runtime_cancellation_module_exists() -> Result<(), Box<dyn std::error::E
 /// Test that PerlLspCancellationToken methods are accessible.
 #[test]
 fn test_runtime_cancellation_token_methods() -> Result<(), Box<dyn std::error::Error>> {
+    use perl_lsp_rs_core::protocol::JsonRpcId;
     use perl_lsp_rs_core::runtime::cancellation::PerlLspCancellationToken;
-    let token =
-        PerlLspCancellationToken::new(serde_json::json!({"id": 1}), "test_provider".to_string());
+    let token = PerlLspCancellationToken::new(JsonRpcId::Integer(1), "test_provider".to_string());
     // Verify key methods exist and are callable.
     let _is_cancelled = token.is_cancelled();
     let _is_cancelled_relaxed = token.is_cancelled_relaxed();

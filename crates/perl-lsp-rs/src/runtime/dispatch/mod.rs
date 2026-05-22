@@ -82,7 +82,7 @@ mod tests {
     fn request(id: i64, method: &str, params: Option<Value>) -> JsonRpcRequest {
         JsonRpcRequest {
             _jsonrpc: "2.0".to_string(),
-            id: Some(json!(id)),
+            id: Some(JsonRpcId::Integer(id)),
             method: method.to_string(),
             params,
         }

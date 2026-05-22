@@ -346,7 +346,7 @@ pub mod util;
 
 // Re-exports for key types
 pub use cli::run_cli;
-pub use protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
+pub use protocol::{JsonRpcError, JsonRpcId, JsonRpcRequest, JsonRpcResponse};
 pub use server::LspServer;
 
 /// DAP bridge adapter re-export

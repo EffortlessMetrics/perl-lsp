@@ -4,7 +4,7 @@
 //! shape so bug-report payload changes stay intentional.
 
 use insta::assert_yaml_snapshot;
-use perl_lsp::{JsonRpcRequest, LspServer};
+use perl_lsp::{JsonRpcId, JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
 
 fn setup_server() -> LspServer {
@@ -18,14 +18,14 @@ fn setup_server() -> LspServer {
             "rootPath": null,
             "capabilities": {}
         })),
-        Some(json!(1)),
+        Some(JsonRpcId::Integer(1)),
     );
     notify(&server, "initialized", Some(json!({})), None);
 
     server
 }
 
-fn notify(server: &LspServer, method: &str, params: Option<Value>, id: Option<Value>) {
+fn notify(server: &LspServer, method: &str, params: Option<Value>, id: Option<JsonRpcId>) {
     let request =
         JsonRpcRequest { _jsonrpc: "2.0".to_string(), method: method.to_string(), params, id };
     let _ = server.handle_request(request);
@@ -41,7 +41,7 @@ fn request(
         _jsonrpc: "2.0".to_string(),
         method: method.to_string(),
         params: Some(params),
-        id: Some(json!(id)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((id) as i64)),
     };
     let response =
         server.handle_request(request).ok_or("expected JSON-RPC response from server")?;

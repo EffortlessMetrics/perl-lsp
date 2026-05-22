@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use super::{capture::extract_named_captures, modifiers::describe_modifier};
 
 pub(crate) fn hover_text_for_regex(pattern: &str, modifiers: &str) -> String {
@@ -12,14 +14,16 @@ pub(crate) fn hover_text_for_regex(pattern: &str, modifiers: &str) -> String {
             parts.push(format!("  ${{{}}} (capture {}): `{}`", cap.name, cap.index, cap.pattern));
         }
     }
-    let mut seen = Vec::new();
+    let mut seen = HashSet::new();
     let mut notes = Vec::new();
     let mut unknown = Vec::new();
     for m in modifiers.chars() {
-        if seen.contains(&m) {
+        if m.is_whitespace() {
             continue;
         }
-        seen.push(m);
+        if !seen.insert(m) {
+            continue;
+        }
         if let Some(d) = describe_modifier(m) {
             notes.push(d);
         } else {

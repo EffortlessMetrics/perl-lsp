@@ -10,7 +10,9 @@ fn list_commands_emits_sorted_top_level_names() -> Result<()> {
     let stdout = String::from_utf8(output.stdout)?;
     let lines = stdout.lines().collect::<Vec<_>>();
 
+    assert!(lines.contains(&"check-active-goal-manifest"));
     assert!(lines.contains(&"ci"));
+    assert!(lines.contains(&"check-active-goal-manifest"));
     assert!(lines.contains(&"check-only"));
     assert!(lines.contains(&"check-test-wiring"));
     assert!(lines.contains(&"layer-check"));

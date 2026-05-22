@@ -1,8 +1,8 @@
+use perl_lsp_rs_core::protocol::JsonRpcId;
 use perl_lsp_rs_core::runtime::cancellation::{
     CancellationRegistry, GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken,
     RequestCleanupGuard,
 };
-use serde_json::json;
 use std::sync::Mutex;
 
 static TEST_LOCK: Mutex<()> = Mutex::new(());
@@ -11,7 +11,7 @@ static TEST_LOCK: Mutex<()> = Mutex::new(());
 fn given_an_active_request_when_cancelled_then_global_registry_cleans_and_marks_cancelled()
 -> Result<(), Box<dyn std::error::Error>> {
     let _lock = TEST_LOCK.lock().map_err(|e| format!("lock error: {e}"))?;
-    let request_id = json!(9001);
+    let request_id = JsonRpcId::Integer(9001);
     let token = PerlLspCancellationToken::new(request_id.clone(), "given/request".to_string());
 
     GLOBAL_CANCELLATION_REGISTRY.remove_request(&request_id);
@@ -39,7 +39,7 @@ fn given_an_active_request_when_cancelled_then_global_registry_cleans_and_marks_
 fn given_cleanup_guard_when_dropped_then_request_is_removed()
 -> Result<(), Box<dyn std::error::Error>> {
     let _lock = TEST_LOCK.lock().map_err(|e| format!("lock error: {e}"))?;
-    let request_id = json!(9002);
+    let request_id = JsonRpcId::Integer(9002);
     let token = PerlLspCancellationToken::new(request_id.clone(), "guard-scope".to_string());
 
     GLOBAL_CANCELLATION_REGISTRY.remove_request(&request_id);
@@ -60,16 +60,19 @@ fn when_multiple_requests_registered_then_counts_match_active_registry_size() {
     let registry = CancellationRegistry::new();
 
     for i in 0..32u64 {
-        let token =
-            PerlLspCancellationToken::new(json!(format!("id-{i}")), format!("provider-{i}"));
+        let token = PerlLspCancellationToken::new(
+            JsonRpcId::String(format!("id-{i}")),
+            format!("provider-{i}"),
+        );
         let _ = registry.register_token(token);
     }
 
     assert_eq!(registry.active_count(), 32);
 
     for i in 0..32u64 {
-        let _ = registry.cancel_request(&json!(format!("id-{i}")));
-        registry.remove_request(&json!(format!("id-{i}")));
+        let id = JsonRpcId::String(format!("id-{i}"));
+        let _ = registry.cancel_request(&id);
+        registry.remove_request(&id);
     }
 
     assert_eq!(registry.active_count(), 0);

@@ -4,7 +4,10 @@
 //! an unbounded channel to a dedicated writer thread. This eliminates the writer
 //! lock as a contention point and enables concurrent handler execution.
 
+#[cfg(test)]
+use crate::protocol::JsonRpcId;
 use crate::protocol::JsonRpcResponse;
+use crate::runtime::types::ServerRequestId;
 use crate::transport::frame;
 use serde_json::{Value, json};
 use std::io::{self, Write};
@@ -17,7 +20,7 @@ pub(crate) enum OutboundMessage {
     /// JSON-RPC notification (no id, no response expected).
     Notification { method: String, params: Value },
     /// JSON-RPC request from server to client (has id, expects response).
-    Request { id: i64, method: String, params: Value },
+    Request { id: ServerRequestId, method: String, params: Value },
 }
 
 /// Cloneable handle for sending outbound messages.
@@ -45,7 +48,12 @@ impl OutboundSender {
     }
 
     /// Send a server→client JSON-RPC request.
-    pub fn send_request(&self, id: i64, method: &str, params: Value) -> io::Result<()> {
+    pub(crate) fn send_request(
+        &self,
+        id: ServerRequestId,
+        method: &str,
+        params: Value,
+    ) -> io::Result<()> {
         self.tx
             .send(OutboundMessage::Request { id, method: method.to_string(), params })
             .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "outbound channel closed"))
@@ -175,12 +183,12 @@ fn serialize_message(msg: &OutboundMessage) -> Vec<u8> {
         OutboundMessage::Request { id, method, params } => {
             let val = json!({
                 "jsonrpc": "2.0",
-                "id": id,
+                "id": id.as_i32(),
                 "method": method,
                 "params": params,
             });
             serde_json::to_vec(&val).unwrap_or_else(|e| {
-                tracing::error!(id = %id, method = %method, "Failed to serialize outbound request: {e}");
+                tracing::error!(id = id.as_i32(), method = %method, "Failed to serialize outbound request: {e}");
                 Vec::new()
             })
         }
@@ -254,12 +262,13 @@ mod tests {
     }
 
     #[test]
-    fn closed_sender_returns_broken_pipe_for_all_message_types() {
+    fn closed_sender_returns_broken_pipe_for_all_message_types() -> Result<(), Box<dyn Error>> {
         let sender = closed_sender();
         let response_result =
-            sender.send_response(JsonRpcResponse::success(Some(json!(1)), json!({})));
+            sender.send_response(JsonRpcResponse::success(Some(JsonRpcId::Integer(1)), json!({})));
         let notification_result = sender.send_notification("window/logMessage", json!({"x": 1}));
-        let request_result = sender.send_request(7, "workspace/configuration", json!({}));
+        let request_id = ServerRequestId::new(7).ok_or("valid id")?;
+        let request_result = sender.send_request(request_id, "workspace/configuration", json!({}));
 
         for result in [response_result, notification_result, request_result] {
             assert!(
@@ -267,6 +276,7 @@ mod tests {
                 "closed outbound channel should return BrokenPipe"
             );
         }
+        Ok(())
     }
 
     #[test]
@@ -274,9 +284,13 @@ mod tests {
         let buffer = SharedBuffer::new();
         let (sender, handle) = spawn_writer(Box::new(buffer.clone()));
 
-        sender.send_response(JsonRpcResponse::success(Some(json!(11)), json!({"ok": true})))?;
+        sender.send_response(JsonRpcResponse::success(
+            Some(JsonRpcId::Integer(11)),
+            json!({"ok": true}),
+        ))?;
         sender.send_notification("window/logMessage", json!({"type": 3, "message": "hello"}))?;
-        sender.send_request(42, "workspace/configuration", json!({"items": []}))?;
+        let request_id = ServerRequestId::new(42).ok_or("valid id")?;
+        sender.send_request(request_id, "workspace/configuration", json!({"items": []}))?;
 
         drop(sender);
         handle.join().map_err(|_| "writer thread panicked")?;
@@ -300,7 +314,12 @@ mod tests {
 
         let (sender, handle) = spawn_writer_shared(Arc::clone(&shared));
         sender.send_notification("telemetry/event", json!({"name": "batch"}))?;
-        sender.send_request(9, "client/registerCapability", json!({"registrations": []}))?;
+        let request_id = ServerRequestId::new(9).ok_or("valid id")?;
+        sender.send_request(
+            request_id,
+            "client/registerCapability",
+            json!({"registrations": []}),
+        )?;
 
         drop(sender);
         handle.join().map_err(|_| "writer thread panicked")?;

@@ -295,7 +295,7 @@ fn parse_package_name(cargo_toml: &Path) -> Option<String> {
 /// Keywords that suggest a source line is a wiring TODO/FIXME comment.
 /// More specific variants (e.g. "TODO: wire this") are subsets of "TODO: wire"
 /// and are therefore not listed separately.
-const WIRING_KEYWORDS: &[&str] = &["TODO: wire", "TODO: connect", "FIXME: not called"];
+const WIRING_KEYWORDS: &[&str] = &["todo: wire", "todo: connect", "fixme: not called"];
 
 /// Scan `src_dir` recursively for TODO/FIXME wiring comments in `.rs` files.
 /// Returns one `WiringComment` per matching line. `workspace_root` is used to
@@ -312,8 +312,9 @@ pub fn scan_wiring_comments(src_dir: &Path, workspace_root: &Path) -> Vec<Wiring
             && let Ok(content) = fs::read_to_string(&path)
         {
             for line in content.lines() {
+                let line_lower = line.to_ascii_lowercase();
                 for kw in WIRING_KEYWORDS {
-                    if line.contains(kw) {
+                    if line_lower.contains(kw) {
                         let rel = path
                             .strip_prefix(workspace_root)
                             .map(|p| p.display().to_string())
@@ -464,6 +465,17 @@ mod tests {
             .unwrap();
         let hits = scan_wiring_comments(&src, dir.path());
         assert_eq!(hits.len(), 1);
+    }
+
+    #[test]
+    fn test_scan_wiring_comments_lowercase_todo_wire() -> Result<()> {
+        let dir = TempDir::new()?;
+        let src = dir.path().join("src");
+        fs::create_dir_all(&src)?;
+        fs::write(src.join("lib.rs"), "// todo: wire this into diagnostics\npub fn f() {}\n")?;
+        let hits = scan_wiring_comments(&src, dir.path());
+        assert_eq!(hits.len(), 1);
+        Ok(())
     }
 
     #[test]

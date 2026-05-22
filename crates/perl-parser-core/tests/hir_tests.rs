@@ -1,10 +1,10 @@
 use perl_parser_core::hir::{
-    COMPILE_EFFECT_MODEL_VERSION, CompileConfidence, CompileEffectFactKind, CompileEffectKind,
-    CompileEffectSourceKind, CompileEnvironment, CompileEnvironmentBoundaryKind, CompileProvenance,
-    DynamicBoundaryKind, FrameworkAdapterKind, FrameworkAdapterRegistry,
-    FrameworkExportedSymbolKind, GlobSlotSource, HirFile, HirKind, IncRootKind,
-    ModuleResolutionRoot, PragmaArgumentKind, RecoveryConfidence, ScopeGraph, StashConfidence,
-    StashGraph, StashProvenance, lower_ast,
+    BarewordFact, BarewordRole, COMPILE_EFFECT_MODEL_VERSION, CompileConfidence,
+    CompileEffectFactKind, CompileEffectKind, CompileEffectSourceKind, CompileEnvironment,
+    CompileEnvironmentBoundaryKind, CompileProvenance, DynamicBoundaryKind, FrameworkAdapterKind,
+    FrameworkAdapterRegistry, FrameworkExportedSymbolKind, GlobSlotSource, HirFile, HirKind,
+    IncRootKind, ModuleResolutionRoot, PragmaArgumentKind, RecoveryConfidence, ScopeGraph,
+    StashConfidence, StashGraph, StashProvenance, lower_ast,
 };
 use perl_parser_core::{Node, NodeKind, Parser, SourceLocation};
 use perl_semantic_facts::{
@@ -489,6 +489,37 @@ fn find_export_set<'a>(
         .ok_or_else(|| format!("expected ExportSet for {module}").into())
 }
 
+fn assert_bareword_fact<'a>(
+    file: &'a HirFile,
+    source: &str,
+    name: &str,
+    role: BarewordRole,
+) -> Result<&'a BarewordFact, Box<dyn std::error::Error>> {
+    let fact = file
+        .bareword_table
+        .facts
+        .iter()
+        .find(|fact| fact.name == name && fact.role == role)
+        .ok_or_else(|| format!("expected bareword fact for {name} as {role:?}"))?;
+
+    assert_eq!(fact.package_context.as_deref(), Some("Bareword::Demo"));
+    assert_eq!(&source[fact.range.start..fact.range.end], name);
+    assert_eq!(fact.anchor_id, AnchorId(fact.range.start as u64));
+    assert_eq!(fact.provenance, CompileProvenance::ExactAst);
+    assert_eq!(fact.confidence, CompileConfidence::High);
+    let item = file
+        .items
+        .iter()
+        .find(|item| item.id == fact.source_item)
+        .ok_or_else(|| format!("expected source item for bareword fact {name}"))?;
+    assert!(
+        matches!(&item.kind, HirKind::BarewordExpr(expr) if expr.name == name),
+        "bareword facts should point at their source-backed HIR item"
+    );
+
+    Ok(fact)
+}
+
 #[test]
 fn hir_lowers_first_slice_constructs_with_stable_metadata() -> Result<(), Box<dyn std::error::Error>>
 {
@@ -648,6 +679,43 @@ fn hir_lowers_expression_shells_without_provider_cutover() -> Result<(), Box<dyn
          @items scope=1 target=<unresolved>\n\
          $source scope=1 target=<unresolved>\n\
          $file scope=1 target=<unresolved>"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn hir_bareword_classifier_records_source_backed_roles() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "package Bareword::Demo;\n\
+                  require Foo::Bar;\n\
+                  Foo::Bar->new($arg);\n\
+                  new Widget 1;\n\
+                  my $package = Foo::Baz;\n\
+                  my $value = ambiguous;\n";
+    let file = lower_source(source);
+
+    assert_eq!(
+        file.bareword_table.facts.len(),
+        5,
+        "classifier should record parsed identifier barewords only"
+    );
+    assert_bareword_fact(&file, source, "Foo::Bar", BarewordRole::ModuleRequest)?;
+    assert_bareword_fact(&file, source, "Foo::Bar", BarewordRole::MethodReceiver)?;
+    assert_bareword_fact(&file, source, "Widget", BarewordRole::IndirectObject)?;
+    assert_bareword_fact(&file, source, "Foo::Baz", BarewordRole::QualifiedName)?;
+    assert_bareword_fact(&file, source, "ambiguous", BarewordRole::Expression)?;
+    assert!(
+        file.bareword_table
+            .facts
+            .iter()
+            .all(|fact| fact.scope_id.map(|scope| scope.index()) == Some(1)),
+        "top-level bareword facts should retain the package scope"
+    );
+    assert!(
+        !file.items.iter().any(
+            |item| matches!(&item.kind, HirKind::CallExpr(expr) if expr.name == "provider_cutover")
+        ),
+        "bareword-classifier substrate must not imply live provider cutover"
     );
 
     Ok(())
@@ -1200,24 +1268,53 @@ fn hir_compile_environment_records_directives_without_provider_cutover()
 #[test]
 fn hir_compile_effect_log_links_source_mutations_facts_and_boundaries()
 -> Result<(), Box<dyn std::error::Error>> {
-    let file = lower_source(
-        "package Effect::Demo;\n\
-         use strict;\n\
-         use lib 'lib';\n\
-         use parent 'Base::Class';\n\
-         use constant ANSWER => 42;\n\
-         require Foo::Bar;\n\
-         require $dynamic;\n\
-         sub proto ($) { 1; }\n\
-         sub literal () { 1; }\n\
-         method run { 1; }\n\
-         our @ISA = qw(Local::Base);\n\
-         *alias = \\&proto;\n\
-         *dynamic = $target;\n\
-         BEGIN { require Runtime::Thing; }\n",
-    );
+    let source = "package Effect::Demo;\n\
+                  use strict;\n\
+                  use lib 'lib';\n\
+                  use parent 'Base::Class';\n\
+                  use constant ANSWER => 42;\n\
+                  require Foo::Bar;\n\
+                  require $dynamic;\n\
+                  sub proto ($) { 1; }\n\
+                  sub literal () { 1; }\n\
+                  method run { 1; }\n\
+                  our @ISA = qw(Local::Base);\n\
+                  *alias = \\&proto;\n\
+                  *dynamic = $target;\n\
+                  BEGIN { require Runtime::Thing; }\n";
+    let file = lower_source(source);
 
     let effects = file.compile_effects_with_source_hash(Some("fixture-source-sha".to_string()));
+    assert_eq!(file.prototype_table.facts.len(), 2, "named sub prototypes should be table-backed");
+    let proto_fact = file
+        .prototype_table
+        .facts
+        .iter()
+        .find(|fact| fact.sub_name == "proto")
+        .ok_or("expected source-backed proto prototype fact")?;
+    assert_eq!(proto_fact.package_context.as_deref(), Some("Effect::Demo"));
+    assert_eq!(proto_fact.content, "$");
+    assert_eq!(&source[proto_fact.range.start..proto_fact.range.end], "($)");
+    assert_eq!(
+        proto_fact.declaration_range,
+        file.items
+            .iter()
+            .find(|item| item.id == proto_fact.declaration_item)
+            .ok_or("expected prototype declaration item")?
+            .range
+    );
+    assert_eq!(proto_fact.scope_id.map(|scope| scope.index()), Some(2));
+    assert_eq!(proto_fact.anchor_id, AnchorId(proto_fact.range.start as u64));
+    assert_eq!(proto_fact.provenance, CompileProvenance::ExactAst);
+    assert_eq!(proto_fact.confidence, CompileConfidence::High);
+    let literal_fact = file
+        .prototype_table
+        .facts
+        .iter()
+        .find(|fact| fact.sub_name == "literal")
+        .ok_or("expected source-backed empty prototype fact")?;
+    assert_eq!(literal_fact.content, "");
+    assert_eq!(&source[literal_fact.range.start..literal_fact.range.end], "()");
     assert!(
         effects.iter().all(|effect| {
             effect.model_version == COMPILE_EFFECT_MODEL_VERSION
@@ -1302,6 +1399,16 @@ fn hir_compile_effect_log_links_source_mutations_facts_and_boundaries()
         CompileEffectFactKind::Prototype,
         "proto"
     ));
+    let proto_effect = effects
+        .iter()
+        .find(|effect| {
+            effect.kind == CompileEffectKind::RegisterPrototype
+                && effect.fact_name.as_deref() == Some("proto")
+        })
+        .ok_or("expected prototype compile effect")?;
+    assert_eq!(proto_effect.range, proto_fact.range);
+    assert_eq!(proto_effect.source_item, Some(proto_fact.declaration_item));
+    assert_eq!(proto_effect.fact_anchor_id, Some(proto_fact.anchor_id));
     assert!(has_effect(
         CompileEffectKind::AssignGlobAlias,
         CompileEffectSourceKind::TypeglobAssignment,

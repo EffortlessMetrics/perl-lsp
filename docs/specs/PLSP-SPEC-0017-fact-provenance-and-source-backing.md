@@ -12,6 +12,7 @@ Linked specs:
 - [PLSP-SPEC-0020](PLSP-SPEC-0020-workspace-symbol-generated-label-contract.md)
 - [PLSP-SPEC-0022](PLSP-SPEC-0022-module-path-authority.md)
 - [PLSP-SPEC-0023](PLSP-SPEC-0023-ambient-inputs.md)
+- [PLSP-SPEC-0026](PLSP-SPEC-0026-determinism-receipt-v1.md)
 Linked ADRs:
 - [PLSP-ADR-0002](../adr/PLSP-ADR-0002-confidence-before-cutover.md)
 Linked plan: [Real Perl Editor Trust implementation plan](../../plans/real-perl-editor-trust/implementation-plan.md)

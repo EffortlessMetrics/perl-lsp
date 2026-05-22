@@ -6,6 +6,11 @@
 
 Conventional tree-sitter Perl grammar binding (C FFI), maintained for compatibility and comparison against the native v3 parser.
 
+> [!NOTE]
+> `tree-sitter-perl-c` is maintained for testing, experimentation, and
+> in-house accuracy comparisons. For a production traditional tree-sitter
+> Perl grammar, use [`ts-parser-perl`](https://crates.io/crates/ts-parser-perl).
+
 ## Overview
 
 This crate compiles a vendored snapshot of the upstream [tree-sitter-perl] C
@@ -17,24 +22,30 @@ The crate is self-contained: the C sources live under `c-src/` and are shipped
 in the published package. There is no `bindgen` or `libclang` dependency — the
 single symbol we need (`tree_sitter_perl`) is declared by hand in `src/lib.rs`.
 
-## This crate vs. `tree-sitter-perl-rs`
+## Which crate should I use?
 
-| | `tree-sitter-perl-c` (this crate) | `tree-sitter-perl-rs` |
-|---|---|---|
-| **Backend** | Upstream C grammar (FFI) | Facade over native v3 Rust parser |
-| **Best for** | Compatibility testing, non-Rust tooling, baseline benchmarking | New Rust projects, embedded use, no C toolchain |
-| **Build dep** | C compiler required | Pure Rust |
-| **Grammar source** | Upstream tree-sitter-perl | Native v3 recursive-descent |
+| Need | Recommended crate |
+|---|---|
+| Production traditional tree-sitter Perl grammar | [`ts-parser-perl`](https://crates.io/crates/ts-parser-perl) |
+| C FFI snapshot for testing, experimentation, in-house accuracy checks, or baseline benchmarking | `tree-sitter-perl-c` |
+| Native v3 Rust parser facade, no C toolchain | [`tree-sitter-perl-rs`] |
+
+`tree-sitter-perl-c` vendors a snapshot of the upstream C grammar so this
+repository can compare parser behavior, run compatibility checks, and keep a
+stable baseline for experiments. It is not intended to be the primary production
+Cargo package for the traditional tree-sitter Perl grammar.
 
 Choose `tree-sitter-perl-c` when you need:
 
-- **Compatibility testing** — compare parse output against the C reference grammar
-- **Non-Rust tree-sitter tooling** — the C grammar snapshot can be consumed by
-  language bindings in Python, Node.js, etc.
-- **Baseline benchmarking** — measure parse throughput of the C grammar vs. the
-  native v3 parser
+- **Compatibility testing** — compare parse output against a vendored C grammar snapshot
+- **Experimentation** — inspect or modify the C FFI path without depending on it as the primary production package
+- **In-house accuracy checks** — compare behavior against the native v3 parser
+- **Baseline benchmarking** — measure parse throughput of the C grammar vs. the native v3 parser
 
-Choose [`tree-sitter-perl-rs`] for new Rust projects.
+Choose [`ts-parser-perl`](https://crates.io/crates/ts-parser-perl) when you want
+the production traditional tree-sitter Perl grammar.
+
+Choose [`tree-sitter-perl-rs`] when you want the native v3 Rust parser facade.
 
 ## Quick Start
 
@@ -195,11 +206,11 @@ xcode-select --install
 
 ## Links
 
-- [tree-sitter-perl upstream grammar][tree-sitter-perl]
+- [`ts-parser-perl`](https://crates.io/crates/ts-parser-perl) — recommended Cargo package for the production traditional tree-sitter Perl grammar
+- [`tree-sitter-perl`](https://github.com/tree-sitter-perl/tree-sitter-perl) — upstream grammar
 - [`tree-sitter-perl-rs`] — sibling crate, facade over the native v3 Rust parser
 - [perl-parser] — the native v3 recursive-descent Perl parser
 
-[tree-sitter-perl]: https://github.com/tree-sitter-perl/tree-sitter-perl
 [`tree-sitter-perl-rs`]: https://crates.io/crates/tree-sitter-perl-rs
 [perl-parser]: https://docs.rs/perl-parser
 

@@ -17,7 +17,7 @@ mod tests {
     fn assert_no_errors(code: &str) {
         let ast = parse_program(code);
         let sexp = ast.to_sexp();
-        assert!(!sexp.contains("ERROR"), "Parse of `{}` produced ERROR nodes: {}", code, sexp,);
+        assert!(!sexp.contains("ERROR"), "Parse of `{}` produced ERROR nodes: {}", code, sexp);
     }
 
     /// Helper: parse code and return the first statement's expression node.

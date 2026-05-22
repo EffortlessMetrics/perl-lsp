@@ -27,6 +27,7 @@ The current reviewed trace classes are:
 subroutine_declaration
 method_declaration
 package_declaration
+phase_block_declaration
 field_declaration
 method_call
 self_method_call

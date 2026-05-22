@@ -59,6 +59,26 @@ END
 }
 
 #[test]
+fn test_begin_heredoc_ignores_braces_in_comments() {
+    let detector = AntiPatternDetector::new();
+    let code = r###"
+BEGIN {
+    # comment with } brace
+    $config = <<'END';
+    server = localhost
+END
+}
+"###;
+
+    let diagnostics = detector.detect_all(code);
+    let begin_count = diagnostics
+        .iter()
+        .filter(|diag| matches!(diag.pattern, AntiPattern::BeginTimeHeredoc { .. }))
+        .count();
+    assert_eq!(begin_count, 1);
+}
+
+#[test]
 fn test_dynamic_delimiter_detection() {
     let detector = AntiPatternDetector::new();
     let code = r###"

@@ -38,3 +38,47 @@ pub(super) fn apply_workspace_configuration_results(
         folder.effective_workspace_config = effective_config;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::apply_workspace_configuration_results;
+    use crate::runtime::workspace_folder::WorkspaceFolderState;
+    use serde_json::json;
+
+    #[test]
+    fn applies_global_and_folder_specific_configuration() {
+        let mut folders = vec![
+            WorkspaceFolderState::new("file:///workspace-a".to_string()),
+            WorkspaceFolderState::new("file:///workspace-b".to_string()),
+        ];
+        let folder_uris =
+            vec!["file:///workspace-a".to_string(), "file:///workspace-b".to_string()];
+        let results = vec![
+            json!({"workspace": {"useSystemInc": true}}),
+            json!({"workspace": {"resolutionTimeout": 150}}),
+            json!({"workspace": {"resolutionTimeout": 250}}),
+        ];
+
+        apply_workspace_configuration_results(&mut folders, &folder_uris, true, &results, 42);
+
+        assert!(folders[0].effective_workspace_config.use_system_inc);
+        assert_eq!(folders[0].effective_workspace_config.resolution_timeout_ms, 150);
+        assert!(folders[1].effective_workspace_config.use_system_inc);
+        assert_eq!(folders[1].effective_workspace_config.resolution_timeout_ms, 250);
+    }
+
+    #[test]
+    fn leaves_unmatched_folder_untouched() {
+        let mut folders = vec![
+            WorkspaceFolderState::new("file:///workspace-a".to_string()),
+            WorkspaceFolderState::new("file:///workspace-b".to_string()),
+        ];
+        let folder_uris = vec!["file:///workspace-a".to_string()];
+        let results = vec![json!({"workspace": {"resolutionTimeout": 200}})];
+
+        apply_workspace_configuration_results(&mut folders, &folder_uris, false, &results, 43);
+
+        assert_eq!(folders[0].effective_workspace_config.resolution_timeout_ms, 200);
+        assert_eq!(folders[1].effective_workspace_config.resolution_timeout_ms, 50);
+    }
+}

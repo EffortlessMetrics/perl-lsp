@@ -1641,3 +1641,141 @@ fn split_two_top_level_args(input: &str) -> Option<(&str, &str)> {
 
     Some((first, second))
 }
+
+/// Remove an unused `use Module;` import statement (PL700).
+///
+/// When a module is imported but never referenced in the file, this fix
+/// deletes the entire `use Module;` line so no blank line is left behind.
+/// The module name is extracted from the diagnostic message
+/// (`"Module 'Foo::Bar' appears to be unused"`).
+pub fn fix_unused_import(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
+    let Some((line_start, line_end)) = diagnostic_line_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let Some(line_text) = source.get(line_start..line_end) else {
+        return Vec::new();
+    };
+    if !line_text.trim_start().starts_with("use ") {
+        return Vec::new();
+    }
+
+    let title = diagnostic.message.split('\'').nth(1).map_or_else(
+        || "Remove unused import".to_string(),
+        |module| format!("Remove unused 'use {module};'"),
+    );
+
+    vec![CodeAction {
+        title,
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::UnusedImport.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: line_start, end: line_end },
+                new_text: String::new(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
+/// Remove a deprecated `$[ = 0;` array-base variable assignment (PL501).
+///
+/// `$[` was a Perl variable that changed the starting index for arrays and
+/// string operations. It has been deprecated since Perl 5.12. This fix removes
+/// only a standalone `$[ = 0;` line. Non-zero assignments are intentionally not
+/// auto-fixed because removing them can require renumbering array subscripts.
+pub fn fix_deprecated_array_base(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
+    let Some((line_start, line_end)) = diagnostic_line_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let Some(line_text) = source.get(line_start..line_end) else {
+        return Vec::new();
+    };
+    if !is_zero_array_base_assignment(line_text) {
+        return Vec::new();
+    }
+
+    vec![CodeAction {
+        title: "Remove deprecated '$[' array base assignment".to_string(),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::DeprecatedArrayBase.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: line_start, end: line_end },
+                new_text: String::new(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
+fn is_zero_array_base_assignment(line_text: &str) -> bool {
+    let Some(rest) = line_text.trim_start().strip_prefix("$[") else {
+        return false;
+    };
+    let Some(rest) = rest.trim_start().strip_prefix('=') else {
+        return false;
+    };
+    let Some(rest) = rest.trim_start().strip_prefix('0') else {
+        return false;
+    };
+
+    rest.trim_start().starts_with(';')
+}
+
+/// Scope a global signal handler assignment with `local` (PL602).
+///
+/// A bare `$SIG{__DIE__} = ...` or `$SIG{__WARN__} = ...` at file scope
+/// changes signal handling for the whole process. Prepending `local` limits
+/// the effect to the enclosing block so the original handler is restored on
+/// scope exit, preventing the hook from leaking into unrelated call stacks.
+pub fn fix_security_signal_handler(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((insert_pos, _)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let Some(at_pos) = source.get(insert_pos..) else {
+        return Vec::new();
+    };
+    if !at_pos.starts_with("$SIG")
+        && !at_pos.starts_with("$main::SIG")
+        && !at_pos.starts_with("$::SIG")
+    {
+        return Vec::new();
+    }
+
+    vec![CodeAction {
+        title: "Add 'local' to scope signal handler to the current block".to_string(),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::SecuritySignalHandler.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: insert_pos, end: insert_pos },
+                new_text: "local ".to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
+fn diagnostic_line_range(source: &str, range: (usize, usize)) -> Option<(usize, usize)> {
+    let (start, end) = valid_diagnostic_range(source, range)?;
+    let line_start = source[..start].rfind('\n').map_or(0, |idx| idx + 1);
+    let newline_offset = source[end..].find('\n');
+    let line_end = newline_offset.map_or(source.len(), |offset| end + offset + 1);
+    Some((line_start, line_end))
+}
+
+fn valid_diagnostic_range(source: &str, range: (usize, usize)) -> Option<(usize, usize)> {
+    let (start, end) = range;
+    if start > end
+        || end > source.len()
+        || !source.is_char_boundary(start)
+        || !source.is_char_boundary(end)
+    {
+        return None;
+    }
+    Some((start, end))
+}

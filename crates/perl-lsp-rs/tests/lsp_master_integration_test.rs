@@ -14,7 +14,7 @@ fn test_complete_lsp_integration() {
     // Step 1: Initialize
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "processId": 1234,
@@ -71,7 +71,7 @@ fn test_complete_lsp_integration() {
     // 3b. Completion
     let completion_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "textDocument/completion".to_string(),
         params: Some(json!({
             "textDocument": { "uri": "file:///workspace/main.pl" },
@@ -84,7 +84,7 @@ fn test_complete_lsp_integration() {
     // 3c. Go to Definition
     let definition_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(3)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((3) as i64)),
         method: "textDocument/definition".to_string(),
         params: Some(json!({
             "textDocument": { "uri": "file:///workspace/main.pl" },
@@ -97,7 +97,7 @@ fn test_complete_lsp_integration() {
     // 3d. Find References
     let references_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(4)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((4) as i64)),
         method: "textDocument/references".to_string(),
         params: Some(json!({
             "textDocument": { "uri": "file:///workspace/main.pl" },
@@ -111,7 +111,7 @@ fn test_complete_lsp_integration() {
     // 3e. Document Symbols
     let symbols_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(5)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((5) as i64)),
         method: "textDocument/documentSymbol".to_string(),
         params: Some(json!({
             "textDocument": { "uri": "file:///workspace/lib/Module.pm" }
@@ -123,7 +123,7 @@ fn test_complete_lsp_integration() {
     // 3f. Workspace Symbol Search
     let workspace_symbol_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(6)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((6) as i64)),
         method: "workspace/symbol".to_string(),
         params: Some(json!({
             "query": "test"
@@ -156,7 +156,7 @@ fn test_complete_lsp_integration() {
     // Step 5: Shutdown sequence
     let shutdown_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(99)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((99) as i64)),
         method: "shutdown".to_string(),
         params: None,
     };
@@ -205,7 +205,7 @@ fn test_complete_workflow_performance() {
     // Initialize
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".to_string(),
         params: Some(json!({
             "processId": 1234,
@@ -240,7 +240,7 @@ fn test_complete_workflow_performance() {
     for i in 0..10 {
         let request = JsonRpcRequest {
             _jsonrpc: "2.0".to_string(),
-            id: Some(json!(i + 10)),
+            id: Some(perl_lsp::protocol::JsonRpcId::Integer((i + 10) as i64)),
             method: "textDocument/documentSymbol".to_string(),
             params: Some(json!({
                 "textDocument": {

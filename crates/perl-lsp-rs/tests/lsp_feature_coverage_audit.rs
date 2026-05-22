@@ -34,7 +34,7 @@ fn setup_server() -> LspServer {
                 }
             }
         })),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
     };
     server.handle_request(init);
 
@@ -75,7 +75,7 @@ fn send_request(
 ) -> Result<serde_json::Value, String> {
     let req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(id)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((id) as i64)),
         method: method.to_string(),
         params: Some(params),
     };
@@ -920,7 +920,7 @@ fn diagnostics_syntax_error_does_not_crash_server() -> TestResult {
     // Also verify hover still works
     let hover_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(71)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((71) as i64)),
         method: "textDocument/hover".to_string(),
         params: Some(json!({
             "textDocument": {"uri": "file:///broken.pl"},
@@ -954,7 +954,7 @@ sub new {
 
     let req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(80)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((80) as i64)),
         method: "textDocument/hover".to_string(),
         params: Some(json!({
             "textDocument": {"uri": "file:///pkg_hover.pm"},
@@ -976,7 +976,7 @@ fn hover_on_use_statement_module() -> TestResult {
 
     let req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(81)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((81) as i64)),
         method: "textDocument/hover".to_string(),
         params: Some(json!({
             "textDocument": {"uri": "file:///use_hover.pl"},
@@ -1001,7 +1001,7 @@ fn code_actions_empty_range() -> TestResult {
 
     let req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
-        id: Some(json!(90)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((90) as i64)),
         method: "textDocument/codeAction".to_string(),
         params: Some(json!({
             "textDocument": {"uri": "file:///actions.pl"},

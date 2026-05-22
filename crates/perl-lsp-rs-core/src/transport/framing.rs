@@ -468,7 +468,7 @@ mod tests {
     use super::{
         ContentLengthMessageReader, log_response, read_message, write_message, write_notification,
     };
-    use crate::protocol::{JsonRpcError, JsonRpcResponse};
+    use crate::protocol::{JsonRpcError, JsonRpcId, JsonRpcResponse};
     use std::io::{self, BufReader, Cursor};
 
     fn framed_request(id: u64, method: &str) -> Vec<u8> {
@@ -522,7 +522,7 @@ mod tests {
         let req = read_message(&mut reader)?
             .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
         assert_eq!(req.method, "textDocument/hover");
-        assert_eq!(req.id, Some(serde_json::json!(42)));
+        assert_eq!(req.id, Some(JsonRpcId::Integer(42)));
         Ok(())
     }
 
@@ -666,7 +666,7 @@ mod tests {
 
         let req = read_message(&mut reader)?
             .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
-        assert_eq!(req.id, Some(serde_json::json!("abc-123")));
+        assert_eq!(req.id, Some(JsonRpcId::String("abc-123".to_string())));
         Ok(())
     }
 
@@ -728,7 +728,7 @@ mod tests {
             .read_next(&mut cursor)?
             .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
         assert_eq!(req.method, "shutdown");
-        assert_eq!(req.id, Some(serde_json::json!(99)));
+        assert_eq!(req.id, Some(JsonRpcId::Integer(99)));
         Ok(())
     }
 
@@ -844,7 +844,7 @@ mod tests {
 
     #[test]
     fn write_message_produces_valid_framed_output() -> io::Result<()> {
-        let response = JsonRpcResponse::null(Some(serde_json::json!(1)));
+        let response = JsonRpcResponse::null(Some(JsonRpcId::Integer(1)));
         let mut buf = Vec::new();
         write_message(&mut buf, &response)?;
 
@@ -869,7 +869,7 @@ mod tests {
     #[test]
     fn write_message_success_response() -> io::Result<()> {
         let response = JsonRpcResponse::success(
-            Some(serde_json::json!(5)),
+            Some(JsonRpcId::Integer(5)),
             serde_json::json!({"capabilities": {}}),
         );
         let mut buf = Vec::new();
@@ -892,7 +892,7 @@ mod tests {
     #[test]
     fn write_message_error_response() -> io::Result<()> {
         let err = JsonRpcError::new(-32600, "Invalid Request");
-        let response = JsonRpcResponse::error(Some(serde_json::json!(3)), err);
+        let response = JsonRpcResponse::error(Some(JsonRpcId::Integer(3)), err);
         let mut buf = Vec::new();
         write_message(&mut buf, &response)?;
 
@@ -913,7 +913,7 @@ mod tests {
     #[test]
     fn write_message_content_length_matches_body() -> io::Result<()> {
         let response =
-            JsonRpcResponse::success(Some(serde_json::json!(1)), serde_json::json!("hello"));
+            JsonRpcResponse::success(Some(JsonRpcId::Integer(1)), serde_json::json!("hello"));
         let mut buf = Vec::new();
         write_message(&mut buf, &response)?;
 
@@ -1004,14 +1004,14 @@ mod tests {
 
     #[test]
     fn log_response_does_not_panic_on_null_response() {
-        let response = JsonRpcResponse::null(Some(serde_json::json!(1)));
+        let response = JsonRpcResponse::null(Some(JsonRpcId::Integer(1)));
         log_response(&response);
     }
 
     #[test]
     fn log_response_does_not_panic_on_success_response() {
         let response = JsonRpcResponse::success(
-            Some(serde_json::json!(10)),
+            Some(JsonRpcId::Integer(10)),
             serde_json::json!({"data": true}),
         );
         log_response(&response);
@@ -1020,7 +1020,7 @@ mod tests {
     #[test]
     fn log_response_does_not_panic_on_error_response() {
         let err = JsonRpcError::new(-32601, "Method not found");
-        let response = JsonRpcResponse::error(Some(serde_json::json!(7)), err);
+        let response = JsonRpcResponse::error(Some(JsonRpcId::Integer(7)), err);
         log_response(&response);
     }
 
@@ -1035,7 +1035,7 @@ mod tests {
     #[test]
     fn write_then_read_roundtrip() -> io::Result<()> {
         let response = JsonRpcResponse::success(
-            Some(serde_json::json!(1)),
+            Some(JsonRpcId::Integer(1)),
             serde_json::json!({"key": "value"}),
         );
         let mut wire = Vec::new();
@@ -1073,7 +1073,7 @@ mod tests {
             .read_next(&mut cursor)?
             .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
         assert_eq!(req.method, "textDocument/completion");
-        assert_eq!(req.id, Some(serde_json::json!(50)));
+        assert_eq!(req.id, Some(JsonRpcId::Integer(50)));
         Ok(())
     }
 
@@ -1155,7 +1155,7 @@ mod tests {
             "Invalid params",
             serde_json::json!({"detail": "missing field"}),
         );
-        let response = JsonRpcResponse::error(Some(serde_json::json!(8)), err);
+        let response = JsonRpcResponse::error(Some(JsonRpcId::Integer(8)), err);
         let mut buf = Vec::new();
         write_message(&mut buf, &response)?;
 
@@ -1347,9 +1347,7 @@ mod tests {
         frame.extend_from_slice(body.as_bytes());
         let mut reader = BufReader::new(Cursor::new(frame));
 
-        let req = read_message(&mut reader)?
-            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
-        assert_eq!(req.id, Some(serde_json::json!(1.5)));
+        assert!(read_message(&mut reader)?.is_none());
         Ok(())
     }
 
@@ -1360,11 +1358,7 @@ mod tests {
         frame.extend_from_slice(body.as_bytes());
         let mut reader = BufReader::new(Cursor::new(frame));
 
-        let req = read_message(&mut reader)?
-            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
-        assert_eq!(req.method, "test");
-        // serde_json deserializes `"id": null` as None for Option<Value>
-        assert!(req.id.is_none());
+        assert!(read_message(&mut reader)?.is_none());
         Ok(())
     }
 
@@ -1395,7 +1389,7 @@ mod tests {
             .read_next(&mut source)?
             .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
         assert_eq!(req.method, "incremental");
-        assert_eq!(req.id, Some(serde_json::json!(1)));
+        assert_eq!(req.id, Some(JsonRpcId::Integer(1)));
         Ok(())
     }
 
@@ -1447,7 +1441,7 @@ mod tests {
     #[test]
     fn write_message_unicode_in_result() -> io::Result<()> {
         let response = JsonRpcResponse::success(
-            Some(serde_json::json!(1)),
+            Some(JsonRpcId::Integer(1)),
             serde_json::json!({"text": "cafe\u{0301} \u{1f980}"}),
         );
         let mut buf = Vec::new();
@@ -1481,7 +1475,7 @@ mod tests {
         for _ in 0..50 {
             value = serde_json::json!({"nested": value});
         }
-        let response = JsonRpcResponse::success(Some(serde_json::json!(1)), value);
+        let response = JsonRpcResponse::success(Some(JsonRpcId::Integer(1)), value);
         let mut buf = Vec::new();
         write_message(&mut buf, &response)?;
 
@@ -1589,7 +1583,7 @@ mod tests {
         let codes = [-32700, -32600, -32601, -32602, -32603, -32800, -32802];
         for code in codes {
             let err = JsonRpcError::new(code, "test error");
-            let response = JsonRpcResponse::error(Some(serde_json::json!(1)), err);
+            let response = JsonRpcResponse::error(Some(JsonRpcId::Integer(1)), err);
             log_response(&response);
         }
     }
@@ -1597,7 +1591,7 @@ mod tests {
     #[test]
     fn log_response_with_large_result() {
         let big_data = serde_json::json!({"data": "x".repeat(10_000)});
-        let response = JsonRpcResponse::success(Some(serde_json::json!(1)), big_data);
+        let response = JsonRpcResponse::success(Some(JsonRpcId::Integer(1)), big_data);
         log_response(&response);
     }
 }

@@ -12,7 +12,7 @@ fn init_server() -> Result<LspServer, Box<dyn std::error::Error>> {
 
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({
             "processId": 1,
@@ -54,7 +54,7 @@ fn get_diagnostics_for_code(code: &str) -> Result<serde_json::Value, Box<dyn std
 
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "textDocument/diagnostic".into(),
         params: Some(json!({
             "textDocument": { "uri": uri }

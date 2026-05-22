@@ -569,47 +569,7 @@ impl LspServer {
             let mut pragma_actions =
                 crate::code_actions_pragmas::missing_pragmas_actions(uri, &doc.text);
             for action in &mut pragma_actions {
-                let data_info = (
-                    action
-                        .get("data")
-                        .and_then(|d| d.get("uri"))
-                        .and_then(|s| s.as_str())
-                        .map(|s| s.to_string()),
-                    action.get("data").and_then(|d| d.get("insertAt")).and_then(|n| n.as_u64()),
-                    action
-                        .get("data")
-                        .and_then(|d| d.get("text"))
-                        .and_then(|s| s.as_str())
-                        .map(|s| s.to_string()),
-                );
-
-                if let (Some(u), Some(off), Some(txt)) = data_info {
-                    if let Some(obj) = action.as_object_mut() {
-                        let edit_range = if off as usize >= doc.text.len() {
-                            let end = self.get_document_end_position(&doc.text);
-                            json!({"start": end.clone(), "end": end })
-                        } else {
-                            let (line, col) = self.offset_to_pos16(doc, off as usize);
-                            json!({
-                                "start": {"line": line, "character": col},
-                                "end": {"line": line, "character": col}
-                            })
-                        };
-
-                        obj.insert(
-                            "edit".into(),
-                            json!({
-                                "changes": {
-                                    u: [{
-                                        "range": edit_range,
-                                        "newText": txt
-                                    }]
-                                }
-                            }),
-                        );
-                        obj.remove("data");
-                    }
-                }
+                self.fill_pragma_action_edit(action, doc);
             }
             code_actions.extend(pragma_actions);
 
@@ -710,46 +670,8 @@ impl LspServer {
                         crate::code_actions_pragmas::missing_pragmas_actions(uri, &doc.text);
 
                     // Fill in edits with proper ranges
-                    for a in &mut actions {
-                        let data_info = (
-                            a.get("data")
-                                .and_then(|d| d.get("uri"))
-                                .and_then(|s| s.as_str())
-                                .map(|s| s.to_string()),
-                            a.get("data").and_then(|d| d.get("insertAt")).and_then(|n| n.as_u64()),
-                            a.get("data")
-                                .and_then(|d| d.get("text"))
-                                .and_then(|s| s.as_str())
-                                .map(|s| s.to_string()),
-                        );
-
-                        if let (Some(u), Some(off), Some(txt)) = data_info {
-                            if let Some(obj) = a.as_object_mut() {
-                                let edit_range = if off as usize >= doc.text.len() {
-                                    let end = self.get_document_end_position(&doc.text);
-                                    json!({"start": end.clone(), "end": end })
-                                } else {
-                                    let (line, col) = self.offset_to_pos16(doc, off as usize);
-                                    json!({
-                                        "start": {"line": line, "character": col},
-                                        "end": {"line": line, "character": col}
-                                    })
-                                };
-
-                                obj.insert(
-                                    "edit".into(),
-                                    json!({
-                                        "changes": {
-                                            u: [{
-                                                "range": edit_range,
-                                                "newText": txt
-                                            }]
-                                        }
-                                    }),
-                                );
-                                obj.remove("data");
-                            }
-                        }
+                    for action in &mut actions {
+                        self.fill_pragma_action_edit(action, doc);
                     }
                     return Ok(Some(json!(actions)));
                 }
@@ -807,6 +729,50 @@ impl LspServer {
 }
 
 impl LspServer {
+    fn fill_pragma_action_edit(&self, action: &mut Value, doc: &crate::runtime::DocumentState) {
+        let data_info = (
+            action
+                .get("data")
+                .and_then(|d| d.get("uri"))
+                .and_then(|s| s.as_str())
+                .map(std::borrow::ToOwned::to_owned),
+            action.get("data").and_then(|d| d.get("insertAt")).and_then(|n| n.as_u64()),
+            action
+                .get("data")
+                .and_then(|d| d.get("text"))
+                .and_then(|s| s.as_str())
+                .map(std::borrow::ToOwned::to_owned),
+        );
+
+        if let (Some(uri), Some(offset), Some(text)) = data_info {
+            if let Some(obj) = action.as_object_mut() {
+                let edit_range = if offset as usize >= doc.text.len() {
+                    let end = self.get_document_end_position(&doc.text);
+                    json!({"start": end.clone(), "end": end })
+                } else {
+                    let (line, col) = self.offset_to_pos16(doc, offset as usize);
+                    json!({
+                        "start": {"line": line, "character": col},
+                        "end": {"line": line, "character": col}
+                    })
+                };
+
+                obj.insert(
+                    "edit".into(),
+                    json!({
+                        "changes": {
+                            uri: [{
+                                "range": edit_range,
+                                "newText": text
+                            }]
+                        }
+                    }),
+                );
+                obj.remove("data");
+            }
+        }
+    }
+
     fn add_explain_diagnostic_code_actions(
         &self,
         code_actions: &mut Vec<Value>,

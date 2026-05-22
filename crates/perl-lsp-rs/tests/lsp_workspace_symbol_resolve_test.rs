@@ -21,7 +21,7 @@ fn setup_server() -> LspServer {
     // Initialize request
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({
             "processId": 1,
@@ -92,7 +92,7 @@ our $VERSION = '1.0';
     // Request symbol resolution
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "workspace/symbol/resolve".into(),
         params: Some(basic_symbol.clone()),
     };
@@ -164,7 +164,7 @@ sub another_method {
     // Request symbol resolution
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "workspace/symbol/resolve".into(),
         params: Some(basic_symbol),
     };
@@ -193,7 +193,7 @@ fn test_workspace_symbol_resolve_capability() -> Result<(), Box<dyn std::error::
 
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({
             "processId": 1,
@@ -235,7 +235,7 @@ fn test_workspace_symbol_resolve_unknown_symbol() -> Result<(), Box<dyn std::err
 
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "workspace/symbol/resolve".into(),
         params: Some(unknown_symbol.clone()),
     };
@@ -266,7 +266,7 @@ sub hello {
 
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "workspace/symbol/resolve".into(),
         params: Some(json!({
             "name": "hello",
@@ -296,7 +296,7 @@ fn test_workspace_symbol_resolve_no_documentation_without_comment()
 
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(3)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((3) as i64)),
         method: "workspace/symbol/resolve".into(),
         params: Some(json!({
             "name": "bare_function",
@@ -325,7 +325,7 @@ fn test_workspace_symbol_resolve_container_name_from_qualified()
 
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(4)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((4) as i64)),
         method: "workspace/symbol/resolve".into(),
         params: Some(json!({
             "name": "bark",
@@ -355,7 +355,7 @@ our $counter = 0;
 
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(5)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((5) as i64)),
         method: "workspace/symbol/resolve".into(),
         params: Some(json!({
             "name": "counter",

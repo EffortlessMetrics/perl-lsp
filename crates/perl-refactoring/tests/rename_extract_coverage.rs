@@ -308,7 +308,7 @@ fn rename_subroutine_does_not_rename_substring_matches() -> Result<(), Box<dyn s
 
 #[test]
 fn rename_package_name_in_declaration() -> Result<(), Box<dyn std::error::Error>> {
-    let code = concat!("package MyApp::Utils;\n", "use strict;\n", "sub helper { 1 }\n", "1;\n",);
+    let code = concat!("package MyApp::Utils;\n", "use strict;\n", "sub helper { 1 }\n", "1;\n");
     let (_f, path) = temp_perl(code)?;
     let mut engine = engine_no_safe();
     engine.index_file(&path, code)?;
@@ -336,7 +336,7 @@ fn rename_package_used_in_qualified_call() -> Result<(), Box<dyn std::error::Err
     // its indexer; qualified calls (MyModule->new, MyModule::run) may
     // require deeper semantic analysis. This test validates that at least
     // the indexed occurrence is renamed and the replacement is correct.
-    let code = concat!("use MyModule;\n", "my $obj = MyModule->new();\n", "MyModule::run();\n",);
+    let code = concat!("use MyModule;\n", "my $obj = MyModule->new();\n", "MyModule::run();\n");
     let (_f, path) = temp_perl(code)?;
     let mut engine = engine_no_safe();
     engine.index_file(&path, code)?;
@@ -892,7 +892,7 @@ fn multiple_operations_accumulate_in_history() -> Result<(), Box<dyn std::error:
 
 #[test]
 fn rename_qualified_subroutine_name() -> Result<(), Box<dyn std::error::Error>> {
-    let code = concat!("package Foo::Bar;\n", "sub Foo::Bar::baz { 1 }\n", "Foo::Bar::baz();\n",);
+    let code = concat!("package Foo::Bar;\n", "sub Foo::Bar::baz { 1 }\n", "Foo::Bar::baz();\n");
     let (_f, path) = temp_perl(code)?;
     let mut engine = engine_no_safe();
     engine.index_file(&path, code)?;

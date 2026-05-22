@@ -162,6 +162,25 @@ __PACKAGE__->meta->make_immutable;
 1;
 "#;
 
+/// Phase-block fixture used for a scoped compiler-token receipt.
+/// The phase keyword must match an existing live parser/HIR `macro` token and
+/// remain output-neutral.
+const PHASE_BLOCK_MODULE: &str = r#"use strict;
+use warnings;
+
+BEGIN { require TokenPhase::Bootstrap; }
+
+1;
+"#;
+
+const UPDATED_PHASE_BLOCK_MODULE: &str = r#"use strict;
+use warnings;
+
+UNITCHECK { require TokenPhase::Bootstrap; }
+
+1;
+"#;
+
 /// Class-syntax fixture used for scoped compiler-token expansion receipts.
 /// Class-specific compiler candidates must stay output-neutral until each
 /// source-backed span matches an existing live parser/HIR token class.
@@ -435,7 +454,9 @@ fn source_line_lsp_lengths(source: &str) -> Result<Vec<u32>, Box<dyn std::error:
     source.lines().map(|line| Ok(u32::try_from(line.encode_utf16().count())?)).collect()
 }
 
-fn first_subroutine_name_lsp_span(source: &str) -> Result<(u32, u32, u32), Box<dyn Error>> {
+fn first_subroutine_name_span(
+    source: &str,
+) -> Result<(usize, usize, u32, u32, u32), Box<dyn Error>> {
     let marker_start = source.find("sub ").ok_or("expected a subroutine declaration")?;
     let name_start = marker_start + "sub ".len();
     let mut name_end = name_start;
@@ -458,6 +479,11 @@ fn first_subroutine_name_lsp_span(source: &str) -> Result<(u32, u32, u32), Box<d
     let start = u32::try_from(source[line_start..name_start].encode_utf16().count())?;
     let length = u32::try_from(source[name_start..name_end].encode_utf16().count())?;
 
+    Ok((name_start, name_end, line, start, length))
+}
+
+fn first_subroutine_name_lsp_span(source: &str) -> Result<(u32, u32, u32), Box<dyn Error>> {
+    let (_, _, line, start, length) = first_subroutine_name_span(source)?;
     Ok((line, start, length))
 }
 
@@ -513,6 +539,22 @@ fn method_declaration_name_span(
     let length = u32::try_from(source[name_start..name_end].encode_utf16().count())?;
 
     Ok((name_start, name_end, line, start, length))
+}
+
+fn phase_block_keyword_span(
+    source: &str,
+    phase: &str,
+) -> Result<(usize, usize, u32, u32, u32), Box<dyn Error>> {
+    let phase_start = source.find(phase).ok_or("expected phase block in fixture")?;
+    let phase_end = phase_start + phase.len();
+
+    let prefix = &source[..phase_start];
+    let line = u32::try_from(prefix.bytes().filter(|byte| *byte == b'\n').count())?;
+    let line_start = prefix.rfind('\n').map_or(0, |offset| offset + 1);
+    let start = u32::try_from(source[line_start..phase_start].encode_utf16().count())?;
+    let length = u32::try_from(source[phase_start..phase_end].encode_utf16().count())?;
+
+    Ok((phase_start, phase_end, line, start, length))
 }
 
 fn field_declaration_name_span(
@@ -672,6 +714,156 @@ fn assert_semantic_token_live_output_parity(uri: &str, source: &str) -> Result<(
         compiler_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
         Some(true),
         "compiler receipt must remain output-neutral for {uri}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_proves_source_backed_subroutine_declaration_class_specific_parity()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    open_document(&server, DOC_URI, PERL_MODULE);
+
+    let params = json!({ "textDocument": {"uri": DOC_URI} });
+    let live_result =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+
+    assert_eq!(
+        receipt.get("live_provider_result"),
+        Some(&live_result),
+        "subroutine-declaration class proof must compare against the exact live token output"
+    );
+    assert_eq!(
+        receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(true),
+        "subroutine-declaration class receipt must not change live semantic-token behavior"
+    );
+    assert_eq!(
+        receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "subroutine-declaration class receipt must not emit additional semantic tokens"
+    );
+
+    let function_receipt = class_specific_receipt(&receipt, "subroutine_declaration")?;
+    assert_eq!(function_receipt.get("source").and_then(Value::as_str), Some("CompilerFact"));
+    assert_eq!(
+        function_receipt.get("provenance").and_then(Value::as_str),
+        Some("SemanticAnalyzer")
+    );
+    assert_eq!(function_receipt.get("freshness").and_then(Value::as_str), Some("Fresh"));
+    assert_eq!(function_receipt.get("fallback_state").and_then(Value::as_str), Some("Primary"));
+    assert_eq!(
+        function_receipt.get("approved_for_live_cutover").and_then(Value::as_bool),
+        Some(true),
+        "subroutine declarations are the scoped class under cutover proof"
+    );
+    assert_eq!(
+        function_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "subroutine declarations may join the scoped compiler-token live pilot only with parity proof"
+    );
+    assert_eq!(
+        function_receipt.get("live_output_parity").and_then(Value::as_bool),
+        Some(true),
+        "source-backed subroutine compiler span must match existing live function token output"
+    );
+    assert_eq!(
+        function_receipt.get("parity_state").and_then(Value::as_str),
+        Some("matched_existing_live_function_token")
+    );
+    assert_eq!(function_receipt.get("live_token_type").and_then(Value::as_str), Some("function"));
+    assert_eq!(function_receipt.get("live_token_match_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(function_receipt.get("candidate_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        function_receipt.get("source_backed_span_count").and_then(Value::as_u64),
+        Some(1),
+        "subroutine declaration candidate must be source-backed"
+    );
+    assert_eq!(function_receipt.get("missing_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(function_receipt.get("invalid_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(
+        function_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true)
+    );
+
+    let (function_start, function_end, expected_line, expected_start, expected_length) =
+        first_subroutine_name_span(PERL_MODULE)?;
+    let function_span = crate::semantic_tokens::SemanticTokenShadowSpan::from_byte_offsets(
+        PERL_MODULE,
+        function_start,
+        function_end,
+    )
+    .ok_or("expected source-backed subroutine compiler span")?;
+    assert_eq!(function_span.range.start.line, expected_line);
+    assert_eq!(function_span.range.start.character, expected_start);
+    assert_eq!(function_span.single_line_lsp_length(), Some(expected_length));
+
+    let function_candidate =
+        crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
+            "token:function:process:compiler",
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+            function_span,
+        );
+    let span_report = crate::semantic_tokens::semantic_token_span_invariant_report(
+        std::slice::from_ref(&function_candidate),
+    );
+    assert_eq!(span_report.candidate_count, 1);
+    assert_eq!(span_report.source_backed_span_count, 1);
+    assert_eq!(span_report.missing_source_span_count, 0);
+    assert_eq!(span_report.invalid_source_span_count, 0);
+
+    let shadow = crate::semantic_tokens::semantic_token_source_shadow(
+        Vec::new(),
+        vec![function_candidate],
+        "subroutine_declaration",
+    );
+    assert_eq!(
+        shadow.receipt.verdict,
+        ShadowCompareVerdict::Improved,
+        "subroutine compiler candidates may count only through the scoped class identity"
+    );
+    assert_eq!(
+        shadow.receipt.new_result.match_count, 1,
+        "subroutine compiler candidates must count only after class-specific proof"
+    );
+    assert_eq!(
+        shadow.receipt.new_result.identities,
+        vec!["token:function:process:compiler".to_string()]
+    );
+
+    let function_token_type =
+        *crate::semantic_tokens::legend().map.get("function").ok_or("missing function token")?;
+    let live_match_count = decode_semantic_tokens(&live_result)?
+        .iter()
+        .filter(|token| {
+            token.line == expected_line
+                && token.start == expected_start
+                && token.length == expected_length
+                && token.token_type == function_token_type
+        })
+        .count();
+    assert_eq!(
+        live_match_count, 1,
+        "source-backed subroutine compiler span must match exactly one existing live function token"
+    );
+
+    let claim_boundary = must_some(function_receipt.get("claim_boundary").and_then(Value::as_str));
+    assert!(
+        claim_boundary.contains("subroutine declarations")
+            && claim_boundary.contains("no new token output is emitted"),
+        "subroutine receipt must preserve the output-neutral cutover boundary; got: {claim_boundary}"
+    );
+
+    assert_eq!(
+        first_shadow_identity(function_receipt)?,
+        "token:function:process:compiler",
+        "class-specific receipt must authorize only the scoped function identity"
     );
 
     Ok(())
@@ -939,6 +1131,148 @@ fn semantic_tokens_runtime_quality_receipt_proves_source_backed_method_call_comp
             .filter_map(Value::as_str)
             .any(|identity| identity == "token:method_call:stash:compiler"),
         "class-specific receipt must authorize only the method-call identity; got: {identities:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_proves_source_backed_phase_block_declaration_compiler_token_parity()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    let phase_uri = "file:///workspace/lib/TokenPhase.pm";
+    open_document(&server, phase_uri, PHASE_BLOCK_MODULE);
+
+    let params = json!({ "textDocument": {"uri": phase_uri} });
+    let live_result =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+
+    assert_eq!(
+        receipt.get("live_provider_result"),
+        Some(&live_result),
+        "phase-block class proof must compare against the exact live token output"
+    );
+    assert_eq!(
+        receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(true),
+        "phase-block class receipt must not change live semantic-token behavior"
+    );
+    assert_eq!(
+        receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "phase-block class receipt must not emit additional semantic tokens"
+    );
+
+    let (phase_start, phase_end, expected_line, expected_start, expected_length) =
+        phase_block_keyword_span(PHASE_BLOCK_MODULE, "BEGIN")?;
+    let phase_span = crate::semantic_tokens::SemanticTokenShadowSpan::from_byte_offsets(
+        PHASE_BLOCK_MODULE,
+        phase_start,
+        phase_end,
+    )
+    .ok_or("expected source-backed phase-block compiler span")?;
+    assert_eq!(phase_span.range.start.line, expected_line);
+    assert_eq!(phase_span.range.start.character, expected_start);
+    assert_eq!(phase_span.single_line_lsp_length(), Some(expected_length));
+
+    let phase_receipt = class_specific_receipt(&receipt, "phase_block_declaration")?;
+    assert_eq!(phase_receipt.get("source").and_then(Value::as_str), Some("CompilerFact"));
+    assert_eq!(phase_receipt.get("provenance").and_then(Value::as_str), Some("SemanticAnalyzer"));
+    assert_eq!(phase_receipt.get("freshness").and_then(Value::as_str), Some("Fresh"));
+    assert_eq!(phase_receipt.get("fallback_state").and_then(Value::as_str), Some("Primary"));
+    assert_eq!(
+        phase_receipt.get("approved_for_live_cutover").and_then(Value::as_bool),
+        Some(true),
+        "phase-block declarations are the scoped class under cutover proof"
+    );
+    assert_eq!(
+        phase_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "phase-block receipt may join the scoped compiler-token live pilot only with parity proof"
+    );
+    assert_eq!(
+        phase_receipt.get("live_output_parity").and_then(Value::as_bool),
+        Some(true),
+        "source-backed phase-block compiler span must match existing live macro token output"
+    );
+    assert_eq!(
+        phase_receipt.get("parity_state").and_then(Value::as_str),
+        Some("matched_existing_live_macro_token")
+    );
+    assert_eq!(phase_receipt.get("live_token_type").and_then(Value::as_str), Some("macro"));
+    assert_eq!(phase_receipt.get("live_token_match_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(phase_receipt.get("candidate_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        phase_receipt.get("source_backed_span_count").and_then(Value::as_u64),
+        Some(1),
+        "phase-block candidate must be source-backed"
+    );
+    assert_eq!(phase_receipt.get("missing_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(phase_receipt.get("invalid_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(
+        phase_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true)
+    );
+
+    let phase_candidate =
+        crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
+            "token:phase_block_declaration:BEGIN:compiler",
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+            phase_span,
+        );
+    let span_report = crate::semantic_tokens::semantic_token_span_invariant_report(
+        std::slice::from_ref(&phase_candidate),
+    );
+    assert_eq!(span_report.candidate_count, 1);
+    assert_eq!(span_report.source_backed_span_count, 1);
+    assert_eq!(span_report.missing_source_span_count, 0);
+    assert_eq!(span_report.invalid_source_span_count, 0);
+
+    let shadow = crate::semantic_tokens::semantic_token_source_shadow(
+        Vec::new(),
+        vec![phase_candidate],
+        "phase_block_declaration",
+    );
+    assert_eq!(
+        shadow.receipt.verdict,
+        ShadowCompareVerdict::Improved,
+        "phase-block compiler candidates may count only through the scoped class identity"
+    );
+    assert_eq!(
+        shadow.receipt.new_result.match_count, 1,
+        "phase-block compiler candidates must count only after class-specific proof"
+    );
+    assert_eq!(
+        shadow.receipt.new_result.identities,
+        vec!["token:phase_block_declaration:BEGIN:compiler".to_string()]
+    );
+
+    let macro_token_type =
+        *crate::semantic_tokens::legend().map.get("macro").ok_or("missing macro token")?;
+    let live_match_count = decode_semantic_tokens(&live_result)?
+        .iter()
+        .filter(|token| {
+            token.line == expected_line
+                && token.start == expected_start
+                && token.length == expected_length
+                && token.token_type == macro_token_type
+        })
+        .count();
+    assert_eq!(
+        live_match_count, 1,
+        "source-backed phase-block compiler span must match exactly one existing live macro token"
+    );
+
+    let claim_boundary = must_some(phase_receipt.get("claim_boundary").and_then(Value::as_str));
+    assert!(
+        claim_boundary.contains("phase-block declarations")
+            && claim_boundary.contains("no new token output is emitted"),
+        "phase-block receipt must preserve the output-neutral boundary; got: {claim_boundary}"
     );
 
     Ok(())
@@ -2328,6 +2662,72 @@ fn semantic_tokens_runtime_quality_receipt_refreshes_method_declaration_live_pil
 }
 
 #[test]
+fn semantic_tokens_runtime_quality_receipt_refreshes_phase_block_declaration_live_pilot_after_edit()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    let phase_uri = "file:///workspace/lib/TokenPhase.pm";
+    open_document(&server, phase_uri, PHASE_BLOCK_MODULE);
+
+    let params = json!({ "textDocument": {"uri": phase_uri} });
+    let initial_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let initial_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params.clone()))));
+    let initial_phase_receipt =
+        class_specific_receipt(&initial_receipt, "phase_block_declaration")?;
+    let initial_identity = first_shadow_identity(initial_phase_receipt)?;
+    assert!(
+        initial_identity.contains("BEGIN"),
+        "initial phase-block compiler identity should use the opened source: {initial_identity}"
+    );
+    assert_eq!(
+        initial_phase_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "initial phase block should be the scoped class live pilot"
+    );
+
+    change_document(&server, phase_uri, 2, UPDATED_PHASE_BLOCK_MODULE);
+
+    let updated_live =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let updated_receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+    let updated_phase_receipt =
+        class_specific_receipt(&updated_receipt, "phase_block_declaration")?;
+    let updated_identity = first_shadow_identity(updated_phase_receipt)?;
+
+    assert_ne!(
+        updated_live, initial_live,
+        "live semantic-token output must refresh after the phase-block edit"
+    );
+    assert_ne!(
+        updated_identity, initial_identity,
+        "phase-block compiler identity must refresh after didChange"
+    );
+    assert!(
+        updated_identity.contains("UNITCHECK"),
+        "updated phase-block compiler identity should use the edited source: {updated_identity}"
+    );
+    assert_eq!(
+        updated_phase_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "post-edit phase block should remain in the scoped class live pilot"
+    );
+    assert_eq!(
+        updated_phase_receipt.get("live_token_match_count").and_then(Value::as_u64),
+        Some(1),
+        "post-edit source-backed phase block must still match the live token stream"
+    );
+    assert_eq!(
+        updated_phase_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "edit-freshness proof must remain output-neutral"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn semantic_tokens_runtime_quality_receipt_refreshes_field_declaration_live_pilot_after_edit()
 -> Result<(), Box<dyn Error>> {
     let server = create_server();
@@ -2834,8 +3234,8 @@ fn semantic_tokens_runtime_quality_receipt_handles_empty_document() {
             "textDocument": {"uri": empty_uri}
         })))));
 
-    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("semantic_tokens"),);
-    assert_eq!(receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true),);
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("semantic_tokens"));
+    assert_eq!(receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
     // An effectively empty file may produce zero tokens — that is valid.
     let count = receipt.get("live_provider_count").and_then(Value::as_u64).unwrap_or(u64::MAX);
     assert!(
@@ -2855,8 +3255,8 @@ fn semantic_tokens_runtime_quality_receipt_handles_minimal_document() {
             "textDocument": {"uri": minimal_uri}
         })))));
 
-    assert_eq!(receipt.get("shadow_state").and_then(Value::as_str), Some("shadowed"),);
-    assert_eq!(receipt.get("live_pilot_state").and_then(Value::as_str), Some("shadowed"),);
+    assert_eq!(receipt.get("shadow_state").and_then(Value::as_str), Some("shadowed"));
+    assert_eq!(receipt.get("live_pilot_state").and_then(Value::as_str), Some("shadowed"));
     assert!(
         receipt.get("compiler_receipt").map(Value::is_null).unwrap_or(false),
         "compiler_receipt must remain null for minimal document"

@@ -7,7 +7,7 @@ fn lsp_inlay_hint_resolve_adds_tooltip() -> Result<(), Box<dyn std::error::Error
     let srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({
             "capabilities": {
@@ -47,7 +47,7 @@ fn lsp_inlay_hint_resolve_adds_tooltip() -> Result<(), Box<dyn std::error::Error
 
     let req = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "inlayHint/resolve".into(),
         params: Some(hint.clone()),
     };
@@ -72,7 +72,7 @@ fn lsp_inlay_hint_resolve_preserves_data() -> Result<(), Box<dyn std::error::Err
     let srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({"capabilities":{}})),
     };
@@ -101,7 +101,7 @@ fn lsp_inlay_hint_resolve_preserves_data() -> Result<(), Box<dyn std::error::Err
 
     let req = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "inlayHint/resolve".into(),
         params: Some(hint.clone()),
     };
@@ -122,7 +122,7 @@ fn lsp_inlay_hint_resolve_no_op_when_complete() -> Result<(), Box<dyn std::error
     let srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({"capabilities":{}})),
     };
@@ -149,7 +149,7 @@ fn lsp_inlay_hint_resolve_no_op_when_complete() -> Result<(), Box<dyn std::error
 
     let req = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "inlayHint/resolve".into(),
         params: Some(hint.clone()),
     };
@@ -176,7 +176,7 @@ fn lsp_inlay_hint_resolve_adds_label_location() -> Result<(), Box<dyn std::error
     // Initialize with both tooltip and label.location in resolveSupport
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({
             "capabilities": {
@@ -234,7 +234,7 @@ fn lsp_inlay_hint_resolve_adds_label_location() -> Result<(), Box<dyn std::error
 
     let req = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "inlayHint/resolve".into(),
         params: Some(hint),
     };
@@ -265,7 +265,7 @@ fn lsp_inlay_hint_resolve_handles_invalid_params() -> Result<(), Box<dyn std::er
     let srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({"capabilities":{}})),
     };
@@ -281,7 +281,7 @@ fn lsp_inlay_hint_resolve_handles_invalid_params() -> Result<(), Box<dyn std::er
 
     let req = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "inlayHint/resolve".into(),
         params: None,
     };

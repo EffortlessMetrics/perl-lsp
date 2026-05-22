@@ -65,15 +65,8 @@ pub(crate) fn is_in_regex_flags(source: &str, position: usize) -> bool {
     let before = &source[..position];
     let flag_chars: &[char] = &['g', 'i', 'm', 's', 'x', 'e', 'r', 'a', 'd', 'u', 'p', 'l', 'c'];
     let without_flags = before.trim_end_matches(|c: char| flag_chars.contains(&c));
-    if !without_flags.ends_with('/') {
-        return false;
-    }
     let close_pos = without_flags.len();
-    if close_pos < 2 {
-        return false;
-    }
-
-    if is_in_regex(source, close_pos - 1) {
+    if close_pos >= 2 && without_flags.ends_with('/') && is_in_regex(source, close_pos - 1) {
         return true;
     }
 
@@ -87,6 +80,8 @@ fn is_multi_delim_regex_at_close(text: &str) -> bool {
         (op, 3usize)
     } else if text.starts_with("s/") {
         (1, 3usize)
+    } else if text.starts_with("m") || text.starts_with("qr") {
+        return is_m_or_qr_closed(text);
     } else {
         let stripped = text
             .find("=~")
@@ -100,6 +95,30 @@ fn is_multi_delim_regex_at_close(text: &str) -> bool {
     let body_after_op = &text[op_len..];
     let slash_count = count_unescaped_slashes(body_after_op);
     slash_count == required_slashes
+}
+
+fn is_m_or_qr_closed(text: &str) -> bool {
+    let (op_len, delim_pos) =
+        if text.starts_with("qr") { (2usize, 2usize) } else { (1usize, 1usize) };
+    let Some(delim) = text[delim_pos..].chars().next() else {
+        return false;
+    };
+    if delim.is_ascii_alphanumeric() || delim.is_ascii_whitespace() {
+        return false;
+    }
+    let close_delim = matching_close_delimiter(delim);
+    let body = &text[(op_len + delim.len_utf8())..];
+    body.ends_with(close_delim)
+}
+
+fn matching_close_delimiter(open: char) -> char {
+    match open {
+        '(' => ')',
+        '{' => '}',
+        '[' => ']',
+        '<' => '>',
+        _ => open,
+    }
 }
 
 fn count_unescaped_slashes(s: &str) -> usize {

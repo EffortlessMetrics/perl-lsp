@@ -12,9 +12,9 @@ use std::time::{Duration, Instant};
 ///
 /// Returns `Ok(Output)` if the command finishes within the timeout, or
 /// `Err(String)` with a human-readable message if it times out or fails
-/// to spawn.
+/// to spawn. A `timeout_secs` value of `0` disables timeout enforcement.
 pub fn run_command_with_timeout(mut cmd: Command, timeout_secs: u64) -> Result<Output, String> {
-    let timeout = Duration::from_secs(timeout_secs);
+    let timeout = (timeout_secs > 0).then(|| Duration::from_secs(timeout_secs));
     let start = Instant::now();
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
@@ -31,7 +31,7 @@ pub fn run_command_with_timeout(mut cmd: Command, timeout_secs: u64) -> Result<O
                 .map_err(|error| format!("failed collecting command output: {error}"));
         }
 
-        if start.elapsed() >= timeout {
+        if timeout.is_some_and(|timeout| start.elapsed() >= timeout) {
             let _ = child.kill();
             let _ = child.wait();
             return Err(format!("command timed out after {} seconds", timeout_secs));
@@ -113,6 +113,13 @@ mod tests {
         if let Ok(output) = result {
             assert!(output.status.success());
         }
+    }
+
+    #[test]
+    fn unit_zero_timeout_disables_deadline() {
+        let result = run_command_with_timeout(fast_command(), 0);
+
+        assert!(result.is_ok(), "expected zero-timeout command to run to completion");
     }
 
     #[test]

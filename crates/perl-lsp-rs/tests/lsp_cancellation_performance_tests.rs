@@ -29,6 +29,7 @@ use perl_lsp::cancellation::{
     CancellationError, CancellationMetrics, CancellationRegistry, PerlLspCancellationToken,
     ProviderCleanupContext,
 };
+use perl_lsp_rs_core::protocol::JsonRpcId;
 
 /// Performance test fixture with comprehensive metrics collection
 struct PerformanceTestFixture {
@@ -388,7 +389,7 @@ fn estimate_memory_usage() -> usize {
 fn test_cancellation_check_latency_performance_ac12() -> Result<(), Box<dyn std::error::Error>> {
     // AC:12 - Cancellation check latency validation with statistical analysis
     let token = Arc::new(PerlLspCancellationToken::new(
-        json!("latency_performance_test"),
+        JsonRpcId::String("latency_performance_test".into()),
         "latency_performance_test".to_string(),
     ));
 
@@ -484,7 +485,7 @@ fn test_cancellation_check_threading_performance_ac12() -> Result<(), Box<dyn st
         let iterations_per_thread = 10_000;
 
         let token = Arc::new(PerlLspCancellationToken::new(
-            json!(format!("threading_perf_{}", thread_count)),
+            JsonRpcId::String(format!("threading_perf_{}", thread_count)),
             "threading_perf".to_string(),
         ));
 
@@ -806,12 +807,13 @@ fn test_memory_overhead_validation_ac12() -> Result<(), Box<dyn std::error::Erro
             ("generic", None)
         };
 
-        let token = PerlLspCancellationToken::new(json!(i), provider_type.to_string());
+        let token =
+            PerlLspCancellationToken::new(JsonRpcId::Integer(i as i64), provider_type.to_string());
         registry.register_token(token.clone())?;
 
         if let Some(p) = params {
             let context = ProviderCleanupContext::new(provider_type.to_string(), Some(p));
-            registry.register_cleanup(&json!(i), context)?;
+            registry.register_cleanup(&JsonRpcId::Integer(i as i64), context)?;
         }
 
         tokens.push(token);
@@ -842,7 +844,7 @@ fn test_memory_overhead_validation_ac12() -> Result<(), Box<dyn std::error::Erro
     // Test memory cleanup effectiveness
     for (i, _) in tokens.iter().enumerate() {
         if i % 2 == 0 {
-            let _ = registry.cancel_request(&json!(i));
+            let _ = registry.cancel_request(&JsonRpcId::Integer(i as i64));
         }
     }
 
@@ -854,7 +856,7 @@ fn test_memory_overhead_validation_ac12() -> Result<(), Box<dyn std::error::Erro
 
     // So let's iterate and remove all requests to simulate cleanup
     for i in 0..token_count {
-        registry.remove_request(&json!(i));
+        registry.remove_request(&JsonRpcId::Integer(i as i64));
     }
 
     force_garbage_collection();

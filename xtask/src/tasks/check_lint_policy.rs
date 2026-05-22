@@ -30,7 +30,6 @@ const REQUIRED_PLANNED: &[&str] = &[
     "clippy::manual_checked_ops",
     "clippy::manual_take",
     "clippy::manual_pop_if",
-    "clippy::unnecessary_trailing_comma",
 ];
 
 #[derive(Debug, Deserialize)]

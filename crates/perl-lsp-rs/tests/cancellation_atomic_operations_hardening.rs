@@ -18,8 +18,8 @@ use perl_lsp::cancellation::{
     CancellationMetrics, CancellationRegistry, GLOBAL_CANCELLATION_REGISTRY,
     PerlLspCancellationToken,
 };
+use perl_lsp_rs_core::protocol::JsonRpcId;
 use proptest::prelude::*;
-use serde_json::json;
 use std::sync::{Arc, Barrier};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -56,7 +56,7 @@ mod atomic_state_transition_tests {
     /// Test atomic boolean state transitions through public API
     #[test]
     fn test_atomic_cancelled_flag_state_transitions() {
-        let token = PerlLspCancellationToken::new(json!(1), "test".to_string());
+        let token = PerlLspCancellationToken::new(JsonRpcId::Integer(1), "test".to_string());
 
         // Test initial state - targets AtomicBool::new(false) mutations
         assert!(!token.is_cancelled(), "Initial state must be not cancelled");
@@ -88,7 +88,7 @@ mod atomic_state_transition_tests {
     /// Test is_cancelled() method consistency across multiple calls
     #[test]
     fn test_is_cancelled_consistency_mutations() {
-        let token = PerlLspCancellationToken::new(json!(2), "test".to_string());
+        let token = PerlLspCancellationToken::new(JsonRpcId::Integer(2), "test".to_string());
 
         // Test consistent false state - targets load operation stability
         for _ in 0..1000 {
@@ -115,7 +115,7 @@ mod atomic_state_transition_tests {
     /// Test cancel() method atomic store operations
     #[test]
     fn test_cancel_method_atomic_store_mutations() {
-        let token = PerlLspCancellationToken::new(json!(3), "test".to_string());
+        let token = PerlLspCancellationToken::new(JsonRpcId::Integer(3), "test".to_string());
 
         // Verify initial state
         assert!(!token.is_cancelled(), "Initial state must be not cancelled");
@@ -138,7 +138,7 @@ mod atomic_state_transition_tests {
     /// Test is_cancelled_relaxed() performance optimization mutations
     #[test]
     fn test_is_cancelled_relaxed_optimization_mutations() {
-        let token = PerlLspCancellationToken::new(json!(4), "test".to_string());
+        let token = PerlLspCancellationToken::new(JsonRpcId::Integer(4), "test".to_string());
 
         // Test initial state with relaxed check - targets likely() optimization
         assert!(
@@ -164,7 +164,7 @@ mod atomic_state_transition_tests {
     /// Test is_cancelled_hot_path() ultra-fast optimization mutations
     #[test]
     fn test_is_cancelled_hot_path_optimization_mutations() {
-        let token = PerlLspCancellationToken::new(json!(5), "test".to_string());
+        let token = PerlLspCancellationToken::new(JsonRpcId::Integer(5), "test".to_string());
 
         // Test hot path initial state
         assert!(
@@ -195,7 +195,10 @@ mod atomic_state_transition_tests {
     /// Test atomic ordering mutations under concurrent access
     #[test]
     fn test_atomic_ordering_mutations_concurrent() -> TestResult {
-        let token = Arc::new(PerlLspCancellationToken::new(json!(6), "concurrent".to_string()));
+        let token = Arc::new(PerlLspCancellationToken::new(
+            JsonRpcId::Integer(6),
+            "concurrent".to_string(),
+        ));
         let num_threads = 10;
         let iterations = 100;
         let start_barrier = Arc::new(Barrier::new(num_threads));
@@ -274,7 +277,8 @@ mod registry_coordination_hardening_tests {
     #[test]
     fn test_register_token_rwlock_mutations() {
         let registry = CancellationRegistry::new();
-        let token = PerlLspCancellationToken::new(json!(100), "register_test".to_string());
+        let token =
+            PerlLspCancellationToken::new(JsonRpcId::Integer(100), "register_test".to_string());
 
         // Test successful registration - targets RwLock::write() success path
         let result = registry.register_token(token.clone());
@@ -285,7 +289,7 @@ mod registry_coordination_hardening_tests {
 
         // Test duplicate registration - targets HashMap key handling
         let duplicate_token =
-            PerlLspCancellationToken::new(json!(100), "duplicate_test".to_string());
+            PerlLspCancellationToken::new(JsonRpcId::Integer(100), "duplicate_test".to_string());
         let result2 = registry.register_token(duplicate_token);
         assert!(result2.is_ok(), "Duplicate registration should overwrite");
         assert_eq!(registry.active_count(), 1, "Active count should still be 1 after duplicate");
@@ -295,7 +299,7 @@ mod registry_coordination_hardening_tests {
     #[test]
     fn test_get_token_rwlock_mutations() -> TestResult {
         let registry = CancellationRegistry::new();
-        let request_id = json!(101);
+        let request_id = JsonRpcId::Integer(101);
         let token = PerlLspCancellationToken::new(request_id.clone(), "get_test".to_string());
 
         // Test get on empty registry - targets RwLock::read() empty case
@@ -317,7 +321,7 @@ mod registry_coordination_hardening_tests {
     #[test]
     fn test_is_cancelled_registry_lookup_mutations() -> TestResult {
         let registry = CancellationRegistry::new();
-        let request_id = json!(102);
+        let request_id = JsonRpcId::Integer(102);
         let token = PerlLspCancellationToken::new(request_id.clone(), "lookup_test".to_string());
 
         // Test lookup on empty registry - targets try_read() empty case
@@ -346,7 +350,7 @@ mod registry_coordination_hardening_tests {
     #[test]
     fn test_cancel_request_coordination_mutations() -> TestResult {
         let registry = CancellationRegistry::new();
-        let request_id = json!(103);
+        let request_id = JsonRpcId::Integer(103);
         let token = PerlLspCancellationToken::new(request_id.clone(), "cancel_test".to_string());
 
         // Register token
@@ -361,7 +365,7 @@ mod registry_coordination_hardening_tests {
         assert!(registry.is_cancelled(&request_id), "Registry must report token as cancelled");
 
         // Test cancel non-existent request - targets error handling path
-        let non_existent_id = json!(999999);
+        let non_existent_id = JsonRpcId::Integer(999999);
         let result = registry.cancel_request(&non_existent_id);
         assert!(result.is_ok(), "cancel_request must succeed even for non-existent token");
         Ok(())
@@ -371,7 +375,7 @@ mod registry_coordination_hardening_tests {
     #[test]
     fn test_remove_request_cleanup_mutations() -> TestResult {
         let registry = CancellationRegistry::new();
-        let request_id = json!(104);
+        let request_id = JsonRpcId::Integer(104);
         let token = PerlLspCancellationToken::new(request_id.clone(), "remove_test".to_string());
 
         // Register and verify presence
@@ -396,7 +400,7 @@ mod registry_coordination_hardening_tests {
     #[test]
     fn test_registry_cache_mutations() -> TestResult {
         let registry = CancellationRegistry::new();
-        let request_id = json!(105);
+        let request_id = JsonRpcId::Integer(105);
         let token = PerlLspCancellationToken::new(request_id.clone(), "cache_test".to_string());
 
         // Register token
@@ -438,7 +442,7 @@ mod registry_coordination_hardening_tests {
             let registry_clone = Arc::clone(&registry);
             let handle = thread::spawn(move || {
                 for i in 0..ops_per_thread {
-                    let request_id = json!(base_id + thread_id * 100 + i);
+                    let request_id = JsonRpcId::Integer((base_id + thread_id * 100 + i) as i64);
                     let token = PerlLspCancellationToken::new(
                         request_id.clone(),
                         format!("thread_{}", thread_id),
@@ -497,7 +501,8 @@ mod performance_optimization_hardening_tests {
     /// Test likely() branch prediction hint mutations
     #[test]
     fn test_branch_prediction_likely_mutations() {
-        let token = PerlLspCancellationToken::new(json!(300), "branch_test".to_string());
+        let token =
+            PerlLspCancellationToken::new(JsonRpcId::Integer(300), "branch_test".to_string());
 
         // Test the common case (not cancelled) - should be optimized with likely()
         for _ in 0..1000 {
@@ -520,7 +525,7 @@ mod performance_optimization_hardening_tests {
     /// Test performance difference between check methods
     #[test]
     fn test_performance_method_variations() {
-        let token = PerlLspCancellationToken::new(json!(301), "perf_test".to_string());
+        let token = PerlLspCancellationToken::new(JsonRpcId::Integer(301), "perf_test".to_string());
         let iterations = 10000;
 
         // Benchmark regular is_cancelled()
@@ -572,7 +577,7 @@ mod performance_optimization_hardening_tests {
     #[test]
     fn test_registry_fast_slow_path_mutations() -> TestResult {
         let registry = CancellationRegistry::new();
-        let request_id = json!(302);
+        let request_id = JsonRpcId::Integer(302);
         let token = PerlLspCancellationToken::new(request_id.clone(), "path_test".to_string());
 
         // Register token
@@ -611,7 +616,7 @@ mod performance_optimization_hardening_tests {
 
         // Fill cache beyond limit
         for i in 0..cache_size_limit + 20 {
-            let request_id = json!(400 + i);
+            let request_id = JsonRpcId::Integer(400 + i as i64);
             let token =
                 PerlLspCancellationToken::new(request_id.clone(), "eviction_test".to_string());
             registry.register_token(token)?;
@@ -624,7 +629,7 @@ mod performance_optimization_hardening_tests {
         // We can't directly test the cache size, but we can verify operations still work
 
         // Test that operations still work after cache eviction
-        let test_id = json!(400 + cache_size_limit + 50);
+        let test_id = JsonRpcId::Integer(400 + cache_size_limit as i64 + 50);
         let test_token =
             PerlLspCancellationToken::new(test_id.clone(), "post_eviction".to_string());
         registry.register_token(test_token)?;
@@ -808,7 +813,8 @@ mod metrics_atomic_counter_hardening_tests {
         assert_eq!(initial_metrics.completed_count(), 0, "Initial completed count must be 0");
 
         // Register a token - should increment registered counter
-        let token = PerlLspCancellationToken::new(json!(500), "metrics_test".to_string());
+        let token =
+            PerlLspCancellationToken::new(JsonRpcId::Integer(500), "metrics_test".to_string());
         registry.register_token(token.clone())?;
 
         assert_eq!(
@@ -818,7 +824,7 @@ mod metrics_atomic_counter_hardening_tests {
         );
 
         // Cancel request - should increment cancelled counter
-        registry.cancel_request(&json!(500))?;
+        registry.cancel_request(&JsonRpcId::Integer(500))?;
         assert_eq!(
             initial_metrics.cancelled_count(),
             1,
@@ -826,7 +832,7 @@ mod metrics_atomic_counter_hardening_tests {
         );
 
         // Remove request - should increment completed counter
-        registry.remove_request(&json!(500));
+        registry.remove_request(&JsonRpcId::Integer(500));
         assert_eq!(
             initial_metrics.completed_count(),
             1,
@@ -894,16 +900,17 @@ mod global_registry_hardening_tests {
         );
 
         // Test that global registry operations work
-        let test_token = PerlLspCancellationToken::new(json!(600), "global_test".to_string());
+        let test_token =
+            PerlLspCancellationToken::new(JsonRpcId::Integer(600), "global_test".to_string());
         let register_result = GLOBAL_CANCELLATION_REGISTRY.register_token(test_token.clone());
         assert!(register_result.is_ok(), "Global registry registration must succeed");
 
         // Verify the token is accessible
-        let retrieved = GLOBAL_CANCELLATION_REGISTRY.get_token(&json!(600));
+        let retrieved = GLOBAL_CANCELLATION_REGISTRY.get_token(&JsonRpcId::Integer(600));
         assert!(retrieved.is_some(), "Global registry must provide registered tokens");
 
         // Clean up
-        GLOBAL_CANCELLATION_REGISTRY.remove_request(&json!(600));
+        GLOBAL_CANCELLATION_REGISTRY.remove_request(&JsonRpcId::Integer(600));
     }
 
     /// Test global registry thread safety mutations
@@ -917,7 +924,7 @@ mod global_registry_hardening_tests {
         for thread_id in 0..num_threads {
             let handle = thread::spawn(move || {
                 for i in 0..ops_per_thread {
-                    let request_id = json!(700 + thread_id * 100 + i);
+                    let request_id = JsonRpcId::Integer((700 + thread_id * 100 + i) as i64);
                     let token = PerlLspCancellationToken::new(
                         request_id.clone(),
                         format!("global_thread_{}", thread_id),
@@ -968,7 +975,7 @@ mod cancellation_property_hardening_tests {
             request_id in prop::num::i64::ANY,
             provider in "[a-zA-Z0-9_]{1,20}"
         ) {
-            let token = PerlLspCancellationToken::new(json!(request_id), provider);
+            let token = PerlLspCancellationToken::new(JsonRpcId::Integer(request_id), provider);
 
             // Initially not cancelled
             prop_assert!(!token.is_cancelled());
@@ -992,16 +999,16 @@ mod cancellation_property_hardening_tests {
 
             // Register all tokens
             for &id in &request_ids {
-                let token = PerlLspCancellationToken::new(json!(id), "prop_test".to_string());
+                let token = PerlLspCancellationToken::new(JsonRpcId::Integer(id), "prop_test".to_string());
                 let _ = registry.register_token(token.clone());
                 tokens.push(token);
             }
 
             // Verify all tokens are retrievable
             for &id in &request_ids {
-                let retrieved = registry.get_token(&json!(id));
+                let retrieved = registry.get_token(&JsonRpcId::Integer(id));
                 prop_assert!(retrieved.is_some(), "Token {} must be retrievable", id);
-                prop_assert!(!registry.is_cancelled(&json!(id)), "Token {} must not be cancelled initially", id);
+                prop_assert!(!registry.is_cancelled(&JsonRpcId::Integer(id)), "Token {} must not be cancelled initially", id);
             }
 
             // Cancel half the tokens
@@ -1014,7 +1021,7 @@ mod cancellation_property_hardening_tests {
             // Verify cancellation state is preserved
             for (i, &id) in request_ids.iter().enumerate() {
                 let should_be_cancelled = i % 2 == 0;
-                let is_cancelled = registry.is_cancelled(&json!(id));
+                let is_cancelled = registry.is_cancelled(&JsonRpcId::Integer(id));
                 prop_assert_eq!(is_cancelled, should_be_cancelled,
                               "Token {} cancellation state mismatch", id);
             }
@@ -1033,7 +1040,7 @@ mod cancellation_property_hardening_tests {
             let mut expected_completed = 0u64;
 
             for (i, &op) in operations.iter().enumerate() {
-                let request_id = json!(i);
+                let request_id = JsonRpcId::Integer(i as i64);
                 let token = PerlLspCancellationToken::new(request_id.clone(), "prop_metrics".to_string());
 
                 match op % 4 {

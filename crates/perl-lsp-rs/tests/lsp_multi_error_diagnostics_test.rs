@@ -15,7 +15,7 @@ fn test_451_lsp_reports_multiple_parse_errors() -> Result<(), Box<dyn std::error
     // Initialize server with diagnostic support
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({
             "processId": 1,
@@ -69,7 +69,7 @@ my $c = ;       # Error 3: missing expression
     // Request pull diagnostics to get all errors
     let diagnostic_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "textDocument/diagnostic".into(),
         params: Some(json!({
             "textDocument": { "uri": uri }
@@ -118,7 +118,7 @@ fn test_451_lsp_reports_errors_in_nested_blocks() -> Result<(), Box<dyn std::err
 
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({
             "processId": 1,
@@ -171,7 +171,7 @@ while (1) {
 
     let diagnostic_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "textDocument/diagnostic".into(),
         params: Some(json!({
             "textDocument": { "uri": uri }
@@ -202,7 +202,7 @@ fn test_451_lsp_respects_error_limit() -> Result<(), Box<dyn std::error::Error>>
 
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({
             "processId": 1,
@@ -243,7 +243,7 @@ fn test_451_lsp_respects_error_limit() -> Result<(), Box<dyn std::error::Error>>
 
     let diagnostic_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "textDocument/diagnostic".into(),
         params: Some(json!({
             "textDocument": { "uri": uri }

@@ -111,6 +111,13 @@ mod tests {
     }
 
     #[test]
+    fn token_len_saturates_for_inverted_span() {
+        let tok = Token::new(TokenKind::Identifier, "x", 9, 4);
+        assert_eq!(tok.len(), 0);
+        assert!(tok.is_empty());
+    }
+
+    #[test]
     fn token_len_and_is_empty() {
         let tok = Token::new(TokenKind::Identifier, "foo", 10, 13);
         assert_eq!(tok.len(), 3);
@@ -236,6 +243,13 @@ mod tests {
     }
 
     // --- TokenRef ---
+
+    #[test]
+    fn token_ref_len_saturates_for_inverted_span() {
+        let r = TokenRef::new(TokenKind::Identifier, "x", 9, 4);
+        assert_eq!(r.len(), 0);
+        assert!(r.is_empty());
+    }
 
     #[test]
     fn token_ref_accessors() {

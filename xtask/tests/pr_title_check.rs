@@ -3,8 +3,6 @@
 //! Each test invokes the xtask binary and asserts on exit codes and output.
 //! Tests that require a git repo use `tempfile` + a minimal init sequence.
 
-#![allow(clippy::expect_used, clippy::unwrap_used)]
-
 use anyhow::Result;
 use assert_cmd::cargo::cargo_bin_cmd;
 use serde_json::Value;
@@ -149,7 +147,8 @@ fn json_checks_include_required_names() -> Result<()> {
         .clone();
 
     let v = parse_json(&stdout)?;
-    let checks = v["checks"].as_array().expect("checks array");
+    let checks =
+        v["checks"].as_array().ok_or_else(|| anyhow::anyhow!("checks should be an array"))?;
     let names: Vec<&str> = checks.iter().filter_map(|c| c["name"].as_str()).collect();
 
     assert!(names.contains(&"issue-ref-present"), "missing issue-ref-present check");
@@ -171,7 +170,8 @@ fn no_gh_skips_issue_check() -> Result<()> {
         .clone();
 
     let v = parse_json(&stdout)?;
-    let checks = v["checks"].as_array().expect("checks array");
+    let checks =
+        v["checks"].as_array().ok_or_else(|| anyhow::anyhow!("checks should be an array"))?;
     let issue_exists = checks.iter().find(|c| c["name"] == "issue-exists");
 
     if let Some(check) = issue_exists {

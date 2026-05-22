@@ -11,7 +11,7 @@ schema_version = 1
 policy = "provider-promotion-ledger"
 owner = "perl-lsp maintainers"
 status = "advisory"
-updated = "2026-05-20"
+updated = "2026-05-22"
 spec = "docs/specs/PLSP-SPEC-0015-real-perl-editor-trust-v1-boundary.md"
 human_ledger = "docs/project/status/provider_promotion_ledger.md"
 
@@ -71,6 +71,38 @@ blocker_conditions = [
 ]
 required_receipts = [
   "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+
+[[provider_class]]
+surface = "Type definition"
+fact_class = "Direct source-backed class receiver"
+current_state = "safe subset"
+decision = "promote"
+next_proof = "Provider-decision receipt plus project-shaped receiver/data-flow blockers before broader type-definition expansion"
+promotion_conditions = [
+  "cursor_target_is_direct_package_or_class_identifier",
+  "constructor_method_receiver_is_source_backed_class",
+  "class_receiver_resolves_to_open_document_package_definition",
+]
+fallback_conditions = [
+  "variable_receiver_requires_data_flow",
+  "chained_method_result_requires_return_facts",
+  "function_call_result_requires_return_facts",
+  "missing_package_definition",
+  "unsupported_receiver_shape",
+]
+blocker_conditions = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "ambiguous_identity",
+  "missing_fact",
+  "unsupported_fact_class",
+]
+required_receipts = [
+  "crates/perl-lsp-rs-core/src/providers/navigation/type_definition.rs",
   "docs/project/status/real_perl_editor_trust_v1.md",
 ]
 
@@ -150,6 +182,33 @@ blocker_conditions = [
   "stale_fact",
   "low_confidence",
   "fallback_policy",
+  "unsupported_fact_class",
+]
+required_receipts = [
+  "docs/project/status/semantic_scorecard.md",
+  "docs/project/status/semantic_shadow_compare.md",
+]
+
+[[provider_class]]
+surface = "Semantic tokens"
+fact_class = "Phase-block declaration token"
+current_state = "partial live trace slice"
+decision = "promote"
+next_proof = "Another scoped compiler-token class proof before broader compiler-token promotion"
+promotion_conditions = [
+  "fresh_source_backed_phase_block_declaration_span",
+  "span_matches_exactly_one_existing_live_macro_token",
+  "did_change_freshness_proven",
+  "emits_no_new_token_output",
+]
+fallback_conditions = [
+  "unproven_macro_token_shape",
+]
+blocker_conditions = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
   "unsupported_fact_class",
 ]
 required_receipts = [
@@ -240,6 +299,60 @@ required_receipts = [
 ]
 
 [[provider_class]]
+surface = "Semantic tokens"
+fact_class = "Lexical variable declaration token"
+current_state = "partial live trace slice"
+decision = "promote"
+next_proof = "Another scoped compiler-token class proof before broader compiler-token promotion"
+promotion_conditions = [
+  "fresh_source_backed_lexical_variable_declaration_span",
+  "span_matches_exactly_one_existing_live_variable_token",
+  "did_change_freshness_proven",
+  "emits_no_new_token_output",
+]
+fallback_conditions = [
+  "unproven_variable_declaration_token_shape",
+]
+blocker_conditions = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "unsupported_fact_class",
+]
+required_receipts = [
+  "docs/project/status/semantic_scorecard.md",
+  "docs/project/status/semantic_shadow_compare.md",
+]
+
+[[provider_class]]
+surface = "Semantic tokens"
+fact_class = "Lexical variable use token"
+current_state = "partial live trace slice"
+decision = "promote"
+next_proof = "Another scoped compiler-token class proof before broader compiler-token promotion"
+promotion_conditions = [
+  "fresh_source_backed_lexical_variable_use_span",
+  "span_matches_exactly_one_existing_live_variable_token",
+  "did_change_freshness_proven",
+  "emits_no_new_token_output",
+]
+fallback_conditions = [
+  "unproven_variable_use_token_shape",
+]
+blocker_conditions = [
+  "generated_no_source",
+  "dynamic_boundary",
+  "stale_fact",
+  "low_confidence",
+  "unsupported_fact_class",
+]
+required_receipts = [
+  "docs/project/status/semantic_scorecard.md",
+  "docs/project/status/semantic_shadow_compare.md",
+]
+
+[[provider_class]]
 surface = "Workspace symbols"
 fact_class = "Source-backed exact symbol"
 current_state = "partial live"
@@ -273,7 +386,7 @@ surface = "Workspace symbols"
 fact_class = "Source-backed generated/framework symbol"
 current_state = "generated-label pilot"
 decision = "promote"
-next_proof = "Additional generated/no-source project variants and explicit-label rank/noise proof before broader generated-symbol expansion"
+next_proof = "New explicit-label rank/noise receipt plus a promotion-ledger row before broader generated-symbol expansion"
 promotion_conditions = [
   "fresh_source_backed_generated_framework_member",
   "explicit_generated_label",

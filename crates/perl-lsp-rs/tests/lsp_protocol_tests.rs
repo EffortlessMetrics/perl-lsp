@@ -1,5 +1,5 @@
 use parking_lot::Mutex;
-use perl_lsp::{JsonRpcRequest, LspServer};
+use perl_lsp::{JsonRpcId, JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Cursor, Read, Write};
 use std::sync::Arc;
@@ -80,7 +80,7 @@ fn test_diagnostics_clear_protocol_framing() -> Result<(), Box<dyn std::error::E
     let server = LspServer::with_output(output);
 
     // Helper to send requests/notifications
-    let send = |method: &str, id: Option<Value>, params: Value| {
+    let send = |method: &str, id: Option<JsonRpcId>, params: Value| {
         let req = JsonRpcRequest {
             _jsonrpc: "2.0".into(),
             id,
@@ -93,7 +93,7 @@ fn test_diagnostics_clear_protocol_framing() -> Result<(), Box<dyn std::error::E
     // Initialize server
     send(
         "initialize",
-        Some(json!(1)),
+        Some(JsonRpcId::Integer(1)),
         json!({
             "rootUri": "file:///test",
             "capabilities": {}
@@ -268,7 +268,7 @@ fn test_double_initialize_is_rejected_per_lsp_spec() {
 
     let first = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({
             "capabilities": {},
@@ -278,7 +278,7 @@ fn test_double_initialize_is_rejected_per_lsp_spec() {
 
     let second = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "initialize".into(),
         params: Some(json!({
             "capabilities": {},

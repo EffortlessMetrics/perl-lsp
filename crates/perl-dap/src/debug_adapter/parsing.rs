@@ -1,5 +1,7 @@
 //! Debugger output parsing: normalize, infer types, parse stack frames, parse variables.
 
+mod scope_variables;
+
 use super::*;
 
 impl DebugAdapter {
@@ -119,61 +121,20 @@ impl DebugAdapter {
         start: usize,
         count: usize,
     ) -> (Vec<Variable>, HashMap<i32, Vec<Variable>>) {
-        let parser = VariableParser::new();
-        let renderer = PerlVariableRenderer::new();
         let scope_type = variables_ref % 10;
-        let mut seen = HashSet::new();
-        let mut parsed = Vec::new();
+        let parsed = scope_variables::parse_assignments(lines, scope_type);
+        let page = scope_variables::sort_and_paginate(parsed, start, count);
 
-        for line in lines.iter().rev() {
-            let normalized = Self::normalize_debugger_output_line(line);
-            let text = normalized.trim();
-            if text.is_empty() {
-                continue;
-            }
-            if let Ok((name, value)) = parser.parse_assignment(text) {
-                if !Self::scope_allows_variable_name(scope_type, &name) {
-                    continue;
-                }
-                if seen.insert(name.clone()) {
-                    parsed.push((name, value));
-                }
-                if parsed.len() >= 256 {
-                    break;
-                }
-            }
-        }
-
-        parsed.reverse();
-        parsed.sort_unstable_by(|(left, _), (right, _)| left.cmp(right));
-
-        let mut top_level = Vec::new();
+        let mut top_level = Vec::with_capacity(page.len());
         let mut child_cache = HashMap::new();
-        for (idx, (name, value)) in parsed.into_iter().skip(start).take(count).enumerate() {
-            let absolute_index = start.saturating_add(idx).saturating_add(1);
-            let child_ref =
-                variables_ref.saturating_mul(1000).saturating_add(Self::i64_to_i32_saturating(
-                    i64::try_from(absolute_index).unwrap_or(i64::from(i32::MAX)),
-                ));
-            let rendered = if value.is_expandable() {
-                renderer.render_with_reference(&name, &value, i64::from(child_ref))
-            } else {
-                renderer.render(&name, &value)
-            };
-            top_level.push(Self::rendered_to_variable(rendered));
-
-            if value.is_expandable() {
-                let children = renderer
-                    .render_children(&value, 0, 256)
-                    .into_iter()
-                    .map(Self::rendered_to_variable)
-                    .collect::<Vec<_>>();
-                if !children.is_empty() {
-                    child_cache.insert(child_ref, children);
-                }
+        for (idx, (name, value)) in page.into_iter().enumerate() {
+            let child_ref = scope_variables::compute_child_reference(variables_ref, start, idx);
+            let (top, cache_entry) = scope_variables::render_paged_variable(name, value, child_ref);
+            top_level.push(top);
+            if let Some((k, v)) = cache_entry {
+                child_cache.insert(k, v);
             }
         }
-
         (top_level, child_cache)
     }
 

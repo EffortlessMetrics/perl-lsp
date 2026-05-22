@@ -161,8 +161,8 @@ pub fn analyze_sub_for_inlining(
 
 /// Text-based Perl subroutine inliner.
 ///
-/// Create one instance per source file and call [`inline_call`] (or its
-/// variants) to produce the inlined expression text.
+/// Create one instance per source file and call [`SubInliner::inline_call`]
+/// (or its variants) to produce the inlined expression text.
 pub struct SubInliner {
     source: String,
 }
@@ -184,7 +184,7 @@ impl SubInliner {
         Ok(inlined)
     }
 
-    /// Like [`inline_call`] but also returns any warnings (e.g. side effects).
+    /// Like [`Self::inline_call`] but also returns any warnings (e.g. side effects).
     pub fn inline_call_with_warnings(
         &self,
         sub_name: &str,
@@ -193,7 +193,7 @@ impl SubInliner {
         self.inline_call_inner(sub_name, call_expr, &[])
     }
 
-    /// Like [`inline_call`] but accepts a list of variable names that already
+    /// Like [`Self::inline_call`] but accepts a list of variable names that already
     /// exist in the outer scope, so collisions can be detected and renamed.
     pub fn inline_call_with_outer_vars(
         &self,
@@ -692,4 +692,199 @@ fn extract_return_expr(body: &str) -> String {
         }
     }
     body.trim().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_source() -> &'static str {
+        r#"
+sub add {
+    my ($left, $right) = @_;
+    return $left + $right;
+}
+
+sub greet {
+    my ($name) = @_;
+    say "hello $name";
+    return $name;
+}
+"#
+    }
+
+    #[test]
+    fn analyze_extracts_params_body_and_side_effects() -> Result<(), Box<dyn std::error::Error>> {
+        let InlineAbility::Ok { params, body, has_side_effects } =
+            analyze_sub_for_inlining(sample_source(), "greet")?;
+
+        assert_eq!(params, vec!["name"]);
+        assert!(!body.contains("@_"));
+        assert!(body.contains("return $name;"));
+        assert!(has_side_effects);
+        Ok(())
+    }
+
+    #[test]
+    fn analyze_reports_sub_not_found() {
+        let err = analyze_sub_for_inlining(sample_source(), "missing");
+        assert!(matches!(err, Err(InlineError::SubNotFound { name }) if name == "missing"));
+    }
+
+    #[test]
+    fn analyze_rejects_recursive_body_but_ignores_quoted_mentions()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let quoted = r#"
+sub fib {
+    my ($n) = @_;
+    my $message = "fib(1) is a sample call";
+    return $n;
+}
+"#;
+        assert!(analyze_sub_for_inlining(quoted, "fib").is_ok());
+
+        let recursive = r#"
+sub fib {
+    my ($n) = @_;
+    return fib($n - 1);
+}
+"#;
+        let err = analyze_sub_for_inlining(recursive, "fib");
+        assert!(matches!(err, Err(InlineError::Recursive { name }) if name == "fib"));
+        Ok(())
+    }
+
+    #[test]
+    fn analyze_rejects_large_bodies() {
+        let body = (0..=MAX_BODY_LINES)
+            .map(|i| format!("    my $v{} = {};", i, i))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let source = format!("sub huge {{\n{}\n}}", body);
+
+        let err = analyze_sub_for_inlining(&source, "huge");
+        assert!(matches!(
+            err,
+            Err(InlineError::TooLarge { name, line_count })
+                if name == "huge" && line_count > MAX_BODY_LINES
+        ));
+    }
+
+    #[test]
+    fn analyze_rejects_multiple_returns_but_ignores_return_inside_strings() {
+        let source = r#"
+sub choose {
+    my ($flag) = @_;
+    my $text = "return is not control flow";
+    return 1 if $flag;
+    return 0;
+}
+"#;
+        let err = analyze_sub_for_inlining(source, "choose");
+        assert!(matches!(
+            err,
+            Err(InlineError::MultipleReturns { name, count }) if name == "choose" && count == 2
+        ));
+    }
+
+    #[test]
+    fn inline_call_substitutes_arguments_and_wraps_return_expression()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let inliner = SubInliner::new(sample_source());
+
+        let replacement = inliner.inline_call("add", "add($x, 4)")?;
+
+        assert_eq!(replacement, "($x + 4)");
+        Ok(())
+    }
+
+    #[test]
+    fn inline_call_with_warnings_reports_side_effects() -> Result<(), Box<dyn std::error::Error>> {
+        let inliner = SubInliner::new(sample_source());
+
+        let (replacement, warnings) = inliner.inline_call_with_warnings("greet", "greet($user)")?;
+
+        assert_eq!(replacement, "($user)");
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("side effects"));
+        Ok(())
+    }
+
+    #[test]
+    fn inline_call_with_outer_vars_renames_colliding_locals()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = r#"
+sub bump {
+    my ($value) = @_;
+    my $tmp = $value + 1;
+    return $tmp;
+}
+"#;
+        let inliner = SubInliner::new(source);
+
+        let replacement =
+            inliner.inline_call_with_outer_vars("bump", "bump($tmp)", &["$tmp".to_string()])?;
+
+        assert_eq!(replacement, "($tmp_inlined)");
+        Ok(())
+    }
+
+    #[test]
+    fn inline_call_handles_bare_calls_and_empty_argument_lists()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = r#"
+sub answer {
+    return 42;
+}
+"#;
+        let inliner = SubInliner::new(source);
+
+        assert_eq!(inliner.inline_call("answer", "answer")?, "(42)");
+        assert_eq!(inliner.inline_call("answer", "answer()")?, "(42)");
+        Ok(())
+    }
+
+    #[test]
+    fn inline_call_reports_call_site_parse_errors() {
+        let inliner = SubInliner::new(sample_source());
+
+        let missing_name = inliner.inline_call("add", "sum(1, 2)");
+        assert!(
+            matches!(missing_name, Err(InlineError::CallSiteParseFailed { message }) if message.contains("add"))
+        );
+
+        let unmatched = inliner.inline_call("add", "add(1, (2 + 3)");
+        assert!(
+            matches!(unmatched, Err(InlineError::CallSiteParseFailed { message }) if message.contains("unmatched"))
+        );
+    }
+
+    #[test]
+    fn split_args_respects_nested_delimiters_quotes_and_escapes() {
+        let args = split_args(r#"$x, foo(1, 2), "a,b", 'c,\'d', { key => [1, 2] }"#);
+
+        assert_eq!(args, vec!["$x", "foo(1, 2)", "\"a,b\"", "'c,\\'d'", "{ key => [1, 2] }"]);
+    }
+
+    #[test]
+    fn param_and_variable_replacement_preserve_longer_names() {
+        let params = HashMap::from([("x".to_string(), "1".to_string())]);
+
+        assert_eq!(substitute_params("return $x + $x_count;", &params), "return 1 + $x_count;");
+        assert_eq!(replace_whole_var("$x $x_count $x2", "$x", "$y"), "$y $x_count $x2");
+    }
+
+    #[test]
+    fn parsing_helpers_handle_malformed_shapes() {
+        assert!(parse_sub_definition("sub add { return 1;", "add").is_none());
+        assert!(find_matching_paren("not a call", 0).is_none());
+        assert!(parse_param_names("my $x = @_;").is_empty());
+        assert!(parse_param_names("my ($x = @_;").is_empty());
+        assert!(parse_param_names("my )$x( = @_;").is_empty());
+    }
+
+    #[test]
+    fn extract_return_expr_falls_back_to_trimmed_body_without_return() {
+        assert_eq!(extract_return_expr("\n    $value + 1;\n"), "$value + 1;");
+    }
 }

@@ -10,7 +10,7 @@ fn full_capabilities_match_contract() -> Result<(), Box<dyn std::error::Error>> 
     let srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({"capabilities":{}})),
     };

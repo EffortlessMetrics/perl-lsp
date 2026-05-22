@@ -13,7 +13,7 @@ pub(super) struct RequestContext {
 
 impl RequestContext {
     pub(super) fn from_request(request: &JsonRpcRequest) -> Self {
-        let id = request.id.clone().and_then(|id| if id.is_null() { None } else { Some(id) });
+        let id = request.id.as_ref().map(JsonRpcId::to_value);
         let should_respond = id.is_some();
 
         Self { id, should_respond }

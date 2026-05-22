@@ -21,7 +21,7 @@ const REQUIRED_PROMOTION_CONDITIONS: &[&str] = &[
 ];
 
 const ALLOWED_STATES: &[&str] = &["partial_live_trace", "shadow_proof", "blocked", "deferred"];
-const ALLOWED_TOKEN_KINDS: &[&str] = &["function", "method", "namespace", "variable"];
+const ALLOWED_TOKEN_KINDS: &[&str] = &["function", "macro", "method", "namespace", "variable"];
 
 const REQUIRED_TRACE_BLOCKERS: &[&str] =
     &["generated_no_source", "dynamic_boundary", "stale_fact", "low_confidence", "unmatched_span"];

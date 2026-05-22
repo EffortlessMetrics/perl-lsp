@@ -19,7 +19,7 @@ pub fn enhanced_cancelled_response(
 
     let mut data = json!({
         "provider": provider_name,
-        "request_id": token.request_id(),
+        "request_id": token.request_id().to_value(),
         "timestamp": token.timestamp()
     });
 

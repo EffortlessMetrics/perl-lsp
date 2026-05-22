@@ -5,8 +5,8 @@
 
 use crate::runtime::diagnostics::PullDiagnosticsOrchestrator;
 use crate::runtime::types::{
-    DocumentScanView, PendingWorkspaceConfigurationRequest, best_workspace_folder_for_doc,
-    source_path_from_uri, workspace_folder_path,
+    DocumentScanView, PendingWorkspaceConfigurationRequest, ServerRequestId,
+    best_workspace_folder_for_doc, source_path_from_uri, workspace_folder_path,
 };
 use crate::runtime::workspace_folder::WorkspaceFolderState;
 
@@ -43,7 +43,7 @@ mod workspace_progress;
 
 // Re-export protocol types for backward compatibility
 // Tests and external code import these from perl_lsp::
-pub use crate::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
+pub use crate::protocol::{JsonRpcError, JsonRpcId, JsonRpcRequest, JsonRpcResponse};
 
 // Re-export window types for public API
 pub use window::{MessageType, ShowDocumentOptions};
@@ -112,7 +112,7 @@ use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, AtomicI64, AtomicU32, Ordering},
+    atomic::{AtomicBool, AtomicI32, AtomicU32, Ordering},
 };
 use url::Url;
 
@@ -164,7 +164,7 @@ pub struct LspServer {
     /// Client capabilities (behind mutex for interior mutability — written once during initialize)
     client_capabilities: Mutex<ClientCapabilities>,
     /// Cancelled request IDs
-    cancelled: Arc<Mutex<HashSet<Value>>>,
+    cancelled: Arc<Mutex<HashSet<JsonRpcId>>>,
     /// Workspace folders with full state representation
     ///
     /// This replaces the previous `Vec<String>` approach to support multi-root
@@ -180,14 +180,14 @@ pub struct LspServer {
     /// Workspace configuration for module resolution
     workspace_config: Arc<Mutex<WorkspaceConfig>>,
     /// Atomic counter for generating unique request IDs
-    next_request_id: Arc<AtomicI64>,
+    next_request_id: Arc<AtomicI32>,
     /// Pending workspace/configuration reverse requests keyed by request ID.
     pending_workspace_configuration_requests:
-        Arc<Mutex<HashMap<i64, PendingWorkspaceConfigurationRequest>>>,
+        Arc<Mutex<HashMap<ServerRequestId, PendingWorkspaceConfigurationRequest>>>,
     /// Active progress tokens for work done progress tracking
     progress_tokens: Arc<Mutex<HashSet<String>>>,
     /// Maps progress tokens to their originating request IDs for cancellation routing
-    progress_token_to_request: Arc<Mutex<HashMap<String, Value>>>,
+    progress_token_to_request: Arc<Mutex<HashMap<String, JsonRpcId>>>,
     /// Refresh controller for debounced client refresh requests
     refresh_controller: refresh::RefreshController,
     /// Diagnostic publication debouncer (installed after Arc wrapping in Scheduler::new)
@@ -1179,7 +1179,7 @@ mod tests {
     }
 
     #[test]
-    fn runtime_pressure_snapshot_reports_async_queues() {
+    fn runtime_pressure_snapshot_reports_async_queues() -> Result<(), Box<dyn std::error::Error>> {
         use std::time::{Duration, Instant};
 
         let server = LspServer::new();
@@ -1203,8 +1203,9 @@ mod tests {
             line: 0,
             character: 0,
         });
+        let request_id = ServerRequestId::new(1).ok_or("valid request id")?;
         server.pending_workspace_configuration_requests.lock().insert(
-            1,
+            request_id,
             PendingWorkspaceConfigurationRequest {
                 folder_uris: vec!["file:///".to_string()],
                 includes_global_item: true,
@@ -1231,6 +1232,7 @@ mod tests {
         assert_eq!(snapshot.file_watcher_pending_uris, 1);
         assert_eq!(snapshot.pending_workspace_configuration_requests, 1);
         assert_eq!(snapshot.active_stream_sessions, 1);
+        Ok(())
     }
 
     #[test]

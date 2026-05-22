@@ -108,6 +108,14 @@ impl Drop for IndexingGuard {
     }
 }
 
+fn parse_configuration_response_id(value: &Value) -> Option<ServerRequestId> {
+    if let Some(id) = value.as_i64() {
+        return i32::try_from(id).ok().and_then(ServerRequestId::new);
+    }
+
+    value.as_str().and_then(|raw| raw.parse::<i32>().ok()).and_then(ServerRequestId::new)
+}
+
 impl LspServer {
     /// Request `workspace/configuration` for each workspace folder (if supported).
     pub(crate) fn request_workspace_configuration_for_folders(&self) {
@@ -126,16 +134,14 @@ impl LspServer {
 
         let mut items: Vec<Value> = vec![json!({ "section": "perl" })];
         items.extend(folder_uris.iter().map(|uri| json!({ "scopeUri": uri, "section": "perl" })));
-        let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
-
-        if let Err(error) = self.outbound.send_request(
-            request_id,
-            "workspace/configuration",
-            json!({ "items": items }),
-        ) {
-            tracing::warn!(%error, "Failed to send workspace/configuration request");
-            return;
-        }
+        let request_id =
+            match self.send_request("workspace/configuration", json!({ "items": items })) {
+                Ok(request_id) => request_id,
+                Err(error) => {
+                    tracing::warn!(%error, "Failed to send workspace/configuration request");
+                    return;
+                }
+            };
 
         let mut pending = self.pending_workspace_configuration_requests.lock();
 
@@ -148,7 +154,7 @@ impl LspServer {
             entries.sort_by_key(|(_, created_at)| *created_at);
             for (id, _) in entries.iter().take(to_remove) {
                 tracing::debug!(
-                    request_id = *id,
+                    request_id = id.as_i32(),
                     "Dropping excess workspace/configuration request (count cap)"
                 );
                 pending.remove(id);
@@ -177,7 +183,7 @@ impl LspServer {
         let Some(params) = params else {
             return;
         };
-        let Some(id) = params.get("id").and_then(|value| value.as_i64()) else {
+        let Some(id) = params.get("id").and_then(parse_configuration_response_id) else {
             return;
         };
 
@@ -188,7 +194,7 @@ impl LspServer {
         let response_age = std::time::Instant::now().saturating_duration_since(pending.created_at);
         if response_age > WORKSPACE_CONFIGURATION_REQUEST_TIMEOUT {
             tracing::warn!(
-                request_id = id,
+                request_id = id.as_i32(),
                 age_ms = response_age.as_millis(),
                 "Ignoring stale workspace/configuration response"
             );
@@ -197,7 +203,7 @@ impl LspServer {
 
         if params.get("error").is_some() {
             tracing::debug!(
-                request_id = id,
+                request_id = id.as_i32(),
                 "workspace/configuration request failed; keeping TOML/default config"
             );
             return;
@@ -205,7 +211,7 @@ impl LspServer {
 
         let Some(results) = params.get("result").and_then(Value::as_array) else {
             tracing::warn!(
-                request_id = id,
+                request_id = id.as_i32(),
                 "workspace/configuration response was not an array; keeping TOML/default config"
             );
             return;
@@ -216,7 +222,7 @@ impl LspServer {
             &pending.folder_uris,
             pending.includes_global_item,
             results,
-            id,
+            i64::from(id.as_i32()),
         );
     }
 
@@ -515,6 +521,13 @@ fn workspace_symbols_generated_dynamic_noise_receipt(query: &str) -> (Value, usi
             ProviderFactFreshness::Fresh,
         ),
         perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolShadowCandidate::blocked(
+            "generated:no-source:workspace-symbol:role_composed_method:unanchored",
+            ProviderFactSourceKind::FrameworkAdapter,
+            Provenance::FrameworkSynthesis,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+        ),
+        perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolShadowCandidate::blocked(
             "blocker:workspace-symbol:dynamic_symbolic_reference",
             ProviderFactSourceKind::DynamicBoundary,
             Provenance::DynamicBoundary,
@@ -553,6 +566,15 @@ fn workspace_symbols_generated_dynamic_noise_receipt(query: &str) -> (Value, usi
                 && candidate.identity.contains(":no-source:")
         })
         .count();
+    let generated_no_source_candidate_identities = candidates
+        .iter()
+        .filter(|candidate| {
+            candidate.source == ProviderFactSourceKind::FrameworkAdapter
+                && candidate.fallback_state == ProviderFallbackState::Blocked
+                && candidate.identity.contains(":no-source:")
+        })
+        .map(|candidate| candidate.identity.clone())
+        .collect::<Vec<_>>();
     let dynamic_boundary_blocker_count = candidates
         .iter()
         .filter(|candidate| {
@@ -590,6 +612,7 @@ fn workspace_symbols_generated_dynamic_noise_receipt(query: &str) -> (Value, usi
             "generated_false_exact_candidate_count": generated_candidate_count,
             "generated_no_source_candidate_count": generated_no_source_blocker_count,
             "generated_no_source_blocker_count": generated_no_source_blocker_count,
+            "generated_no_source_candidate_identities": generated_no_source_candidate_identities,
             "generated_location_semantics": "source_anchor_not_exact_generated_body",
             "dynamic_boundary_blocker_count": dynamic_boundary_blocker_count,
             "dynamic_false_exact_blocker_count": dynamic_boundary_blocker_count,
@@ -929,7 +952,23 @@ impl LspServer {
 
         Ok(Some(json!([])))
     }
+}
 
+/// Extract the perl-specific settings object from a `workspace/didChangeConfiguration` payload.
+///
+/// Accepts both the standard wrapped form `{"perl": {...}}` and the unwrapped form `{...}` used
+/// by clients such as Sublime Text's LSP package that omit the outer `"perl"` key.
+fn extract_perl_settings(settings: &Value) -> Option<&Value> {
+    if let Some(perl) = settings.get("perl") {
+        if perl.is_object() {
+            return Some(perl);
+        }
+    }
+    // Unwrapped: the settings object itself contains perl config keys directly.
+    if settings.is_object() { Some(settings) } else { None }
+}
+
+impl LspServer {
     /// Handle workspace/didChangeConfiguration notification
     ///
     /// Updates both ServerConfig and WorkspaceConfig when the client
@@ -939,8 +978,12 @@ impl LspServer {
             if let Some(settings) = params.get("settings") {
                 tracing::debug!("Configuration changed, updating server settings");
 
-                // Read perl settings once and update both configs
-                if let Some(perl) = settings.get("perl") {
+                // Read perl settings once and update both configs.
+                // Some clients (e.g. Sublime Text's LSP package) send settings without
+                // wrapping them under a top-level "perl" key. Accept both shapes:
+                //   - Wrapped:   {"perl": { "workspace": { "includePaths": [...] } }}
+                //   - Unwrapped: { "workspace": { "includePaths": [...] } }
+                if let Some(perl) = extract_perl_settings(settings) {
                     // Check whether any perlcritic-related setting is changing before
                     // updating config so we can decide whether to reset the shared
                     // CriticAnalyzer.  The analyzer is config-bound (severity, profile)
@@ -1786,7 +1829,7 @@ impl LspServer {
         let work_done_progress = self.client_capabilities.lock().work_done_progress_support;
         // Generate a request ID for the workDoneProgress/create call. Atomically
         // increment so it doesn't collide with IDs from other server-to-client requests.
-        let progress_create_id = self.next_request_id.fetch_add(1, Ordering::SeqCst);
+        let progress_create_id = self.next_server_request_id();
         let permission_denied_shown = Arc::clone(&self.permission_denied_shown);
 
         std::thread::spawn(move || {
@@ -2513,10 +2556,13 @@ mod tests {
     }
 
     #[test]
-    fn did_change_workspace_folders_clears_pending_workspace_configuration_requests() {
+    fn did_change_workspace_folders_clears_pending_workspace_configuration_requests()
+    -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
+        let request_id =
+            crate::runtime::types::ServerRequestId::new(7).ok_or("valid request id")?;
         server.pending_workspace_configuration_requests.lock().insert(
-            7,
+            request_id,
             crate::runtime::PendingWorkspaceConfigurationRequest {
                 folder_uris: vec!["file:///tmp/folder-a".to_string()],
                 includes_global_item: true,
@@ -2535,6 +2581,7 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(server.pending_workspace_configuration_requests.lock().is_empty());
+        Ok(())
     }
 
     #[cfg(feature = "workspace")]

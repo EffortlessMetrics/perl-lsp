@@ -345,7 +345,7 @@ fn print_table(m: &ReleaseHealthMetrics) {
 
     println!("Debt ledger");
     println!("{}", "-".repeat(56));
-    println!("  {:<32} {:>5}   utilization", "Bucket", "Count",);
+    println!("  {:<32} {:>5}   utilization", "Bucket", "Count");
     print_debt_row(
         "Flaky tests (quarantined)",
         m.quarantined_test_count,

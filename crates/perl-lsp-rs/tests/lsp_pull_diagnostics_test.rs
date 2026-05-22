@@ -9,7 +9,7 @@ fn test_document_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize server
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({
             "processId": 1,
@@ -56,7 +56,7 @@ print $y;  # Undefined variable
     // Request diagnostics
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "textDocument/diagnostic".into(),
         params: Some(json!({
             "textDocument": { "uri": uri }
@@ -89,7 +89,7 @@ fn test_document_diagnostic_unchanged() -> Result<(), Box<dyn std::error::Error>
     // Initialize server
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({
             "processId": 1,
@@ -131,7 +131,7 @@ print "Hello, World!\n";
     // First request - get full diagnostics
     let request1 = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "textDocument/diagnostic".into(),
         params: Some(json!({
             "textDocument": { "uri": uri }
@@ -147,7 +147,7 @@ print "Hello, World!\n";
     // Second request with previous result ID - should be unchanged
     let request2 = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(3)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((3) as i64)),
         method: "textDocument/diagnostic".into(),
         params: Some(json!({
             "textDocument": { "uri": uri },
@@ -173,7 +173,7 @@ fn test_workspace_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize server
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({
             "processId": 1,
@@ -238,7 +238,7 @@ print "OK\n";
     // Request workspace diagnostics
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "workspace/diagnostic".into(),
         params: Some(json!({})),
     };
@@ -269,7 +269,7 @@ fn test_diagnostic_provider_capability() -> Result<(), Box<dyn std::error::Error
 
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({
             "processId": 1,
@@ -300,7 +300,7 @@ fn test_workspace_diagnostic_with_previous_ids() -> Result<(), Box<dyn std::erro
     // Initialize server
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
         method: "initialize".into(),
         params: Some(json!({
             "processId": 1,
@@ -340,7 +340,7 @@ fn test_workspace_diagnostic_with_previous_ids() -> Result<(), Box<dyn std::erro
     // First workspace diagnostic request
     let request1 = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(2)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
         method: "workspace/diagnostic".into(),
         params: Some(json!({})),
     };
@@ -367,7 +367,7 @@ fn test_workspace_diagnostic_with_previous_ids() -> Result<(), Box<dyn std::erro
     // Second request with previous IDs
     let request2 = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
-        id: Some(json!(3)),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((3) as i64)),
         method: "workspace/diagnostic".into(),
         params: Some(json!({
             "previousResultIds": previous_ids

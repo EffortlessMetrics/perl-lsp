@@ -626,7 +626,7 @@ fn legacy_location_to_summary(location: Option<&Location>) -> ShadowResultSummar
     match location {
         Some(loc) => {
             let identity =
-                format!("{}:{}:{}", loc.uri, loc.range.start.line, loc.range.start.column,);
+                format!("{}:{}:{}", loc.uri, loc.range.start.line, loc.range.start.column);
             summarize_identities(Some(vec![identity]))
         }
         None => summarize_identities(None),

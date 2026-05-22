@@ -349,6 +349,73 @@ mod tests {
     }
 
     #[test]
+    fn test_tie_with_fat_arrow_separator() -> Result<(), String> {
+        let source = "tie %hash => 'Tie::Hash' => 'k' => 'v';";
+        let ast = parse_without_error(source);
+        let NodeKind::Program { statements } = &ast.kind else {
+            return Err(format!("Expected Program root, got {:?}", ast.kind));
+        };
+        let statement = statements.first().ok_or_else(|| "Expected first statement".to_string())?;
+        let NodeKind::ExpressionStatement { expression } = &statement.kind else {
+            return Err(format!("Expected ExpressionStatement, got {:?}", statement.kind));
+        };
+        let NodeKind::Tie { variable, package, args } = &expression.kind else {
+            return Err(format!("Expected Tie node, got {:?}", expression.kind));
+        };
+        let NodeKind::Variable { sigil, name } = &variable.kind else {
+            return Err(format!("Expected Variable node, got {:?}", variable.kind));
+        };
+        assert_eq!(sigil, "%");
+        assert_eq!(name, "hash");
+        let NodeKind::String { value, .. } = &package.kind else {
+            return Err(format!("Expected String package, got {:?}", package.kind));
+        };
+        assert!(value.contains("Tie::Hash"));
+        assert_eq!(args.len(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn test_tie_with_parens_and_trailing_comma() -> Result<(), String> {
+        let source = "tie(@arr, 'Tie::Array',);";
+        let ast = parse_without_error(source);
+        let NodeKind::Program { statements } = &ast.kind else {
+            return Err(format!("Expected Program root, got {:?}", ast.kind));
+        };
+        let statement = statements.first().ok_or_else(|| "Expected first statement".to_string())?;
+        let NodeKind::ExpressionStatement { expression } = &statement.kind else {
+            return Err(format!("Expected ExpressionStatement, got {:?}", statement.kind));
+        };
+        let NodeKind::Tie { args, .. } = &expression.kind else {
+            return Err(format!("Expected Tie node, got {:?}", expression.kind));
+        };
+        assert!(args.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_untie_with_parens() -> Result<(), String> {
+        let source = "untie(%hash);";
+        let ast = parse_without_error(source);
+        let NodeKind::Program { statements } = &ast.kind else {
+            return Err(format!("Expected Program root, got {:?}", ast.kind));
+        };
+        let statement = statements.first().ok_or_else(|| "Expected first statement".to_string())?;
+        let NodeKind::ExpressionStatement { expression } = &statement.kind else {
+            return Err(format!("Expected ExpressionStatement, got {:?}", statement.kind));
+        };
+        let NodeKind::Untie { variable } = &expression.kind else {
+            return Err(format!("Expected Untie node, got {:?}", expression.kind));
+        };
+        let NodeKind::Variable { sigil, name } = &variable.kind else {
+            return Err(format!("Expected Variable node, got {:?}", variable.kind));
+        };
+        assert_eq!(sigil, "%");
+        assert_eq!(name, "hash");
+        Ok(())
+    }
+
+    #[test]
     fn test_tie_without_parens_regression() {
         parse_without_error("tie @arr, 'Tie::Array';");
     }

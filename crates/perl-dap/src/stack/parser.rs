@@ -30,7 +30,7 @@ pub enum StackParseError {
 /// - `main::(script.pl):42:`
 static CONTEXT_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
     Regex::new(
-        r"^(?:(?P<func>[A-Za-z_][\w:]*+?)::(?:\((?P<file>[^:)]+):(?P<line>\d+)\):?|__ANON__)|main::(?:\((?P<file2_paren>[^)]+)\)|(?P<file2>[^:)\s]+)):(?P<line2>\d+):?)",
+        r"^(?:(?P<func>[A-Za-z_][\w:]*+?)::(?:\((?P<file>[^:)]+):(?P<line>\d+)\):?|__ANON__)|main::(?:\((?P<file2_paren>[^)]+)\)|(?P<file2>[^:]+)):(?P<line2>\d+):?)",
     )
 });
 
@@ -349,16 +349,17 @@ impl PerlStackParser {
     #[must_use]
     pub fn looks_like_frame(line: &str) -> bool {
         let line = line.trim();
-        let hash_frame_like = line
-            .strip_prefix('#')
-            .is_some_and(|rest| rest.chars().next().is_some_and(|c| c.is_ascii_digit()));
+        let sigil_assignment_like = |sigil| line.starts_with(sigil) && line.contains(" = ");
+        let hash_frame_like = line.strip_prefix('#').is_some_and(|rest| {
+            rest.trim_start().chars().next().is_some_and(|c| c.is_ascii_digit())
+        });
 
         // Check for common patterns
         line.contains(" at ") && line.contains(" line ")
             || line.contains(" called from ")
-            || line.starts_with('$') && line.contains(" = ")
-            || line.starts_with('@') && line.contains(" = ")
-            || line.starts_with('.') && line.contains(" = ")
+            || sigil_assignment_like('$')
+            || sigil_assignment_like('@')
+            || sigil_assignment_like('.')
             || hash_frame_like
     }
 }
@@ -433,6 +434,17 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_context_main_without_parentheses_allows_spaces_in_file() {
+        use perl_tdd_support::must_some;
+        let mut parser = PerlStackParser::new();
+        let line = "main::script with space.pl:42:";
+        let frame = must_some(parser.parse_frame(line, 0));
+        assert_eq!(frame.name, "main");
+        assert_eq!(frame.line, 42);
+        assert_eq!(frame.file_path(), Some("script with space.pl"));
+    }
+
+    #[test]
     fn test_parse_eval_context() {
         use perl_tdd_support::must_some;
         let mut parser = PerlStackParser::new();
@@ -493,6 +505,7 @@ $ = main::run() called from file `script.pl' line 5
     #[test]
     fn test_looks_like_frame() {
         assert!(PerlStackParser::looks_like_frame("  #0  main::foo at script.pl line 10"));
+        assert!(PerlStackParser::looks_like_frame("# 0  main::foo at script.pl line 10"));
         assert!(PerlStackParser::looks_like_frame("$ = foo() called from file 'x' line 1"));
         assert!(!PerlStackParser::looks_like_frame("some random text"));
         assert!(!PerlStackParser::looks_like_frame(""));

@@ -531,7 +531,7 @@ fn legacy_locations_to_summary(locations: &[Location]) -> ShadowResultSummary {
 
     let identities: Vec<String> = locations
         .iter()
-        .map(|loc| format!("{}:{}:{}", loc.uri, loc.range.start.line, loc.range.start.column,))
+        .map(|loc| format!("{}:{}:{}", loc.uri, loc.range.start.line, loc.range.start.column))
         .collect();
 
     summarize_identities(Some(identities))

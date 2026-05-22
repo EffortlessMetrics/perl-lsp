@@ -40,7 +40,7 @@ mod tests {
     fn assert_no_errors(code: &str) {
         let ast = parse_program(code);
         let sexp = ast.to_sexp();
-        assert!(!sexp.contains("ERROR"), "Parse of `{}` produced ERROR nodes:\n{}", code, sexp,);
+        assert!(!sexp.contains("ERROR"), "Parse of `{}` produced ERROR nodes:\n{}", code, sexp);
     }
 
     /// Helper: extract expression from an ExpressionStatement.
