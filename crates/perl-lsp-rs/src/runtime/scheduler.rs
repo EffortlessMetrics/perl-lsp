@@ -39,7 +39,9 @@
 //! The [`Scheduler`] struct manages dedicated worker queues so the ingress loop
 //! never performs heavy work — it only classifies and enqueues.
 
-use crate::protocol::{JsonRpcError, JsonRpcId, JsonRpcRequest, JsonRpcResponse, REQUEST_CANCELLED};
+use crate::protocol::{
+    JsonRpcError, JsonRpcId, JsonRpcRequest, JsonRpcResponse, REQUEST_CANCELLED,
+};
 use crate::transport::log_response;
 use std::cmp::Ordering as CmpOrdering;
 use std::collections::{BinaryHeap, HashMap};
@@ -468,14 +470,7 @@ impl Scheduler {
             extract_freshness(&self.server, &request.method, request.params.as_ref(), priority);
         let arrival_seq = READ_ARRIVAL_SEQ.fetch_add(1, Ordering::Relaxed);
         self.read_tx
-            .send(QueuedRead {
-                request,
-                wait_for_seq,
-                priority,
-                arrival_seq,
-                dedup_key,
-                freshness,
-            })
+            .send(QueuedRead { request, wait_for_seq, priority, arrival_seq, dedup_key, freshness })
             .await
             .map_err(|_| ())
     }
@@ -1088,8 +1083,7 @@ mod tests {
     }
 
     #[test]
-    fn extract_freshness_captures_generation_for_open_document_hover()
-    -> Result<(), JsonRpcError> {
+    fn extract_freshness_captures_generation_for_open_document_hover() -> Result<(), JsonRpcError> {
         let server = crate::LspServer::new();
         server.test_apply_did_open("file:///x.pl", "my $a;\n", 1)?;
         let params = position_params("file:///x.pl");
@@ -1153,12 +1147,8 @@ mod tests {
     fn extract_freshness_none_for_other_priority() {
         let server = crate::LspServer::new();
         let params = position_params("file:///x.pl");
-        let freshness = extract_freshness(
-            &server,
-            "workspace/symbol",
-            Some(&params),
-            RequestPriority::Other,
-        );
+        let freshness =
+            extract_freshness(&server, "workspace/symbol", Some(&params), RequestPriority::Other);
         assert!(freshness.is_none(), "non-position requests must not capture freshness");
     }
 
