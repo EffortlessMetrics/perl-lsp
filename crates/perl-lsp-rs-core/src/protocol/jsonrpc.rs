@@ -25,11 +25,25 @@ impl JsonRpcId {
         }
     }
 
+    /// Alias for `from_value` retained for migration ergonomics.
+    pub fn try_from_value(value: &Value) -> Option<Self> {
+        Self::from_value(value)
+    }
+
     /// Convert this id back into a JSON value for legacy internals.
     pub fn to_value(&self) -> Value {
         match self {
             Self::Integer(value) => Value::Number((*value).into()),
             Self::String(value) => Value::String(value.clone()),
+        }
+    }
+}
+
+impl std::fmt::Display for JsonRpcId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Integer(raw) => write!(f, "{raw}"),
+            Self::String(raw) => write!(f, "{raw}"),
         }
     }
 }

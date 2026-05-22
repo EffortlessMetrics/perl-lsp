@@ -3,13 +3,14 @@
 //! These tests complement the existing BDD and property tests by covering
 //! edge cases, concurrency, error formatting, caching, and macro behavior.
 
+use perl_lsp_rs_core::protocol::JsonRpcId;
 use perl_lsp_rs_core::runtime::cancellation::{
     CancellableProvider, CancellationError, CancellationRegistry, PerlLspCancellationToken,
     ProviderCleanupContext, RequestCleanupGuard,
 };
 // NOTE(G2-API-fix): check_cancellation! is #[macro_export] so lives at crate root after absorption.
 use perl_lsp_rs_core::check_cancellation;
-use serde_json::{Value, json};
+use serde_json::json;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
@@ -20,7 +21,7 @@ use std::time::Duration;
 
 #[test]
 fn token_new_is_not_cancelled() {
-    let token = PerlLspCancellationToken::new(json!(1), "hover".into());
+    let token = PerlLspCancellationToken::new(JsonRpcId::Integer(1), "hover".into());
     assert!(!token.is_cancelled());
     assert!(!token.is_cancelled_relaxed());
     assert!(!token.is_cancelled_hot_path());
@@ -28,7 +29,7 @@ fn token_new_is_not_cancelled() {
 
 #[test]
 fn token_cancel_sets_all_check_variants() {
-    let token = PerlLspCancellationToken::new(json!("abc"), "completion".into());
+    let token = PerlLspCancellationToken::new(JsonRpcId::String("abc".into()), "completion".into());
     token.cancel();
     assert!(token.is_cancelled());
     assert!(token.is_cancelled_relaxed());
@@ -37,15 +38,16 @@ fn token_cancel_sets_all_check_variants() {
 
 #[test]
 fn token_accessors_return_construction_values() {
-    let token = PerlLspCancellationToken::new(json!(99), "references".into());
-    assert_eq!(token.request_id(), &json!(99));
+    let id = JsonRpcId::Integer(99);
+    let token = PerlLspCancellationToken::new(id.clone(), "references".into());
+    assert_eq!(token.request_id(), &id);
     assert_eq!(token.provider(), "references");
     assert!(token.timestamp() > 0);
 }
 
 #[test]
 fn token_elapsed_increases_over_time() {
-    let token = PerlLspCancellationToken::new(json!(1), "test".into());
+    let token = PerlLspCancellationToken::new(JsonRpcId::Integer(1), "test".into());
     let first = token.elapsed();
     // Spin briefly to ensure monotonic clock advances
     std::thread::sleep(Duration::from_millis(1));
@@ -55,7 +57,7 @@ fn token_elapsed_increases_over_time() {
 
 #[test]
 fn token_clone_shares_cancellation_state() {
-    let original = PerlLspCancellationToken::new(json!(10), "hover".into());
+    let original = PerlLspCancellationToken::new(JsonRpcId::Integer(10), "hover".into());
     let cloned = original.clone();
 
     assert!(!cloned.is_cancelled());
@@ -66,7 +68,7 @@ fn token_clone_shares_cancellation_state() {
 
 #[test]
 fn token_debug_format_is_nonempty() {
-    let token = PerlLspCancellationToken::new(json!(1), "test".into());
+    let token = PerlLspCancellationToken::new(JsonRpcId::Integer(1), "test".into());
     let debug = format!("{:?}", token);
     assert!(!debug.is_empty());
 }
@@ -141,7 +143,7 @@ fn registry_default_has_zero_active() {
 #[test]
 fn registry_register_and_count() -> Result<(), Box<dyn std::error::Error>> {
     let registry = CancellationRegistry::new();
-    let token = PerlLspCancellationToken::new(json!(1), "test".into());
+    let token = PerlLspCancellationToken::new(JsonRpcId::Integer(1), "test".into());
     registry.register_token(token)?;
     assert_eq!(registry.active_count(), 1);
     Ok(())
@@ -151,8 +153,8 @@ fn registry_register_and_count() -> Result<(), Box<dyn std::error::Error>> {
 fn registry_duplicate_id_overwrites() -> Result<(), Box<dyn std::error::Error>> {
     let registry = CancellationRegistry::new();
 
-    let t1 = PerlLspCancellationToken::new(json!(1), "first".into());
-    let t2 = PerlLspCancellationToken::new(json!(1), "second".into());
+    let t1 = PerlLspCancellationToken::new(JsonRpcId::Integer(1), "first".into());
+    let t2 = PerlLspCancellationToken::new(JsonRpcId::Integer(1), "second".into());
 
     registry.register_token(t1)?;
     registry.register_token(t2)?;
@@ -161,8 +163,8 @@ fn registry_duplicate_id_overwrites() -> Result<(), Box<dyn std::error::Error>> 
     assert_eq!(registry.active_count(), 1);
 
     // The token should be the second one
-    let retrieved =
-        registry.get_token(&json!(1)).ok_or("token should be retrievable after overwrite")?;
+    let id = JsonRpcId::Integer(1);
+    let retrieved = registry.get_token(&id).ok_or("token should be retrievable after overwrite")?;
     assert_eq!(retrieved.provider(), "second");
     Ok(())
 }
@@ -170,7 +172,7 @@ fn registry_duplicate_id_overwrites() -> Result<(), Box<dyn std::error::Error>> 
 #[test]
 fn registry_cancel_nonexistent_returns_none() -> Result<(), Box<dyn std::error::Error>> {
     let registry = CancellationRegistry::new();
-    let result = registry.cancel_request(&json!("nonexistent"))?;
+    let result = registry.cancel_request(&JsonRpcId::String("nonexistent".into()))?;
     assert!(result.is_none());
     Ok(())
 }
@@ -179,20 +181,20 @@ fn registry_cancel_nonexistent_returns_none() -> Result<(), Box<dyn std::error::
 fn registry_remove_nonexistent_is_safe() {
     let registry = CancellationRegistry::new();
     // Should not panic
-    registry.remove_request(&json!("nonexistent"));
+    registry.remove_request(&JsonRpcId::String("nonexistent".into()));
     assert_eq!(registry.active_count(), 0);
 }
 
 #[test]
 fn registry_is_cancelled_for_missing_token_returns_false() {
     let registry = CancellationRegistry::new();
-    assert!(!registry.is_cancelled(&json!("missing")));
+    assert!(!registry.is_cancelled(&JsonRpcId::String("missing".into())));
 }
 
 #[test]
 fn registry_get_token_for_missing_returns_none() {
     let registry = CancellationRegistry::new();
-    assert!(registry.get_token(&json!("missing")).is_none());
+    assert!(registry.get_token(&JsonRpcId::String("missing".into())).is_none());
 }
 
 // ---------------------------------------------------------------------------
@@ -202,7 +204,7 @@ fn registry_get_token_for_missing_returns_none() {
 #[test]
 fn registry_cancel_with_cleanup_executes_callback() -> Result<(), Box<dyn std::error::Error>> {
     let registry = CancellationRegistry::new();
-    let req_id = json!(42);
+    let req_id = JsonRpcId::Integer(42);
 
     let token = PerlLspCancellationToken::new(req_id.clone(), "hover".into());
     registry.register_token(token)?;
@@ -224,7 +226,7 @@ fn registry_cancel_with_cleanup_executes_callback() -> Result<(), Box<dyn std::e
 #[test]
 fn registry_cancel_removes_cleanup_context() -> Result<(), Box<dyn std::error::Error>> {
     let registry = CancellationRegistry::new();
-    let req_id = json!(50);
+    let req_id = JsonRpcId::Integer(50);
 
     let token = PerlLspCancellationToken::new(req_id.clone(), "test".into());
     registry.register_token(token)?;
@@ -249,7 +251,7 @@ fn registry_cancel_removes_cleanup_context() -> Result<(), Box<dyn std::error::E
 #[test]
 fn registry_get_token_caches_on_second_access() -> Result<(), Box<dyn std::error::Error>> {
     let registry = CancellationRegistry::new();
-    let req_id = json!(100);
+    let req_id = JsonRpcId::Integer(100);
     let token = PerlLspCancellationToken::new(req_id.clone(), "cache-test".into());
     registry.register_token(token)?;
 
@@ -268,16 +270,18 @@ fn registry_cache_eviction_on_overflow() -> Result<(), Box<dyn std::error::Error
     let registry = CancellationRegistry::new();
 
     // Register 150 tokens to exceed the max_cache_size of 100
-    for i in 0..150u64 {
-        let token = PerlLspCancellationToken::new(json!(i), format!("provider-{i}"));
+    for i in 0..150i64 {
+        let id = JsonRpcId::Integer(i);
+        let token = PerlLspCancellationToken::new(id.clone(), format!("provider-{i}"));
         registry.register_token(token)?;
         // Access to populate cache
-        let _ = registry.get_token(&json!(i));
+        let _ = registry.get_token(&id);
     }
 
     // All tokens should still be retrievable (cache or main storage)
-    for i in 0..150u64 {
-        assert!(registry.get_token(&json!(i)).is_some(), "token {i} should be retrievable");
+    for i in 0..150i64 {
+        let id = JsonRpcId::Integer(i);
+        assert!(registry.get_token(&id).is_some(), "token {i} should be retrievable");
     }
     Ok(())
 }
@@ -289,15 +293,16 @@ fn registry_cache_eviction_on_overflow() -> Result<(), Box<dyn std::error::Error
 #[test]
 fn registry_metrics_track_operations() -> Result<(), Box<dyn std::error::Error>> {
     let registry = CancellationRegistry::new();
+    let id = JsonRpcId::Integer(1);
 
-    let token = PerlLspCancellationToken::new(json!(1), "test".into());
+    let token = PerlLspCancellationToken::new(id.clone(), "test".into());
     registry.register_token(token)?;
     assert_eq!(registry.metrics().registered_count(), 1);
 
-    registry.cancel_request(&json!(1))?;
+    registry.cancel_request(&id)?;
     assert_eq!(registry.metrics().cancelled_count(), 1);
 
-    registry.remove_request(&json!(1));
+    registry.remove_request(&id);
     assert_eq!(registry.metrics().completed_count(), 1);
     Ok(())
 }
@@ -409,7 +414,7 @@ fn run_with_cancellation_check(
 
 #[test]
 fn macro_passes_when_not_cancelled() -> Result<(), Box<dyn std::error::Error>> {
-    let token = PerlLspCancellationToken::new(json!(1), "test".into());
+    let token = PerlLspCancellationToken::new(JsonRpcId::Integer(1), "test".into());
     let result = run_with_cancellation_check(&token)?;
     assert_eq!(result, "completed");
     Ok(())
@@ -417,7 +422,7 @@ fn macro_passes_when_not_cancelled() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn macro_returns_error_when_cancelled() {
-    let token = PerlLspCancellationToken::new(json!(1), "test".into());
+    let token = PerlLspCancellationToken::new(JsonRpcId::Integer(1), "test".into());
     token.cancel();
     let result = run_with_cancellation_check(&token);
     assert!(result.is_err());
@@ -455,7 +460,7 @@ impl CancellableProvider for TestProvider {
 #[test]
 fn cancellable_provider_check_passes_when_active() -> Result<(), Box<dyn std::error::Error>> {
     let provider = TestProvider { name: "hover", cleanup_called: Arc::new(AtomicBool::new(false)) };
-    let token = PerlLspCancellationToken::new(json!(1), "hover".into());
+    let token = PerlLspCancellationToken::new(JsonRpcId::Integer(1), "hover".into());
     provider.check_cancellation(&token)?;
     Ok(())
 }
@@ -463,7 +468,7 @@ fn cancellable_provider_check_passes_when_active() -> Result<(), Box<dyn std::er
 #[test]
 fn cancellable_provider_check_fails_when_cancelled() {
     let provider = TestProvider { name: "hover", cleanup_called: Arc::new(AtomicBool::new(false)) };
-    let token = PerlLspCancellationToken::new(json!(1), "hover".into());
+    let token = PerlLspCancellationToken::new(JsonRpcId::Integer(1), "hover".into());
     token.cancel();
     assert!(provider.check_cancellation(&token).is_err());
 }
@@ -500,7 +505,7 @@ fn guard_from_ref_none_does_not_panic_on_drop() {
 
 #[test]
 fn guard_from_ref_some_clones_value() -> Result<(), Box<dyn std::error::Error>> {
-    let id = json!(777);
+    let id = JsonRpcId::Integer(777);
     let guard = RequestCleanupGuard::from_ref(Some(&id));
     // Guard holds a cloned copy — just verify it doesn't panic on drop
     drop(guard);
@@ -517,10 +522,10 @@ fn concurrent_register_and_cancel() -> Result<(), Box<dyn std::error::Error>> {
     let mut handles = Vec::new();
 
     // Spawn threads that register tokens
-    for i in 0..20u64 {
+    for i in 0..20i64 {
         let reg = registry.clone();
         handles.push(std::thread::spawn(move || {
-            let token = PerlLspCancellationToken::new(json!(i), format!("thread-{i}"));
+            let token = PerlLspCancellationToken::new(JsonRpcId::Integer(i), format!("thread-{i}"));
             let _ = reg.register_token(token);
         }));
     }
@@ -533,10 +538,10 @@ fn concurrent_register_and_cancel() -> Result<(), Box<dyn std::error::Error>> {
 
     // Spawn threads that cancel tokens
     let mut cancel_handles = Vec::new();
-    for i in 0..20u64 {
+    for i in 0..20i64 {
         let reg = registry.clone();
         cancel_handles.push(std::thread::spawn(move || {
-            let _ = reg.cancel_request(&json!(i));
+            let _ = reg.cancel_request(&JsonRpcId::Integer(i));
         }));
     }
 
@@ -545,15 +550,15 @@ fn concurrent_register_and_cancel() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // All should be cancelled
-    for i in 0..20u64 {
-        assert!(registry.is_cancelled(&json!(i)), "token {i} should be cancelled");
+    for i in 0..20i64 {
+        assert!(registry.is_cancelled(&JsonRpcId::Integer(i)), "token {i} should be cancelled");
     }
     Ok(())
 }
 
 #[test]
 fn concurrent_token_cancellation_visibility() -> Result<(), Box<dyn std::error::Error>> {
-    let token = PerlLspCancellationToken::new(json!(1), "shared".into());
+    let token = PerlLspCancellationToken::new(JsonRpcId::Integer(1), "shared".into());
     let token_clone = token.clone();
 
     let handle = std::thread::spawn(move || {
@@ -570,8 +575,8 @@ fn concurrent_registry_reads_while_writing() -> Result<(), Box<dyn std::error::E
     let registry = Arc::new(CancellationRegistry::new());
 
     // Pre-populate
-    for i in 0..10u64 {
-        let token = PerlLspCancellationToken::new(json!(i), "pre".into());
+    for i in 0..10i64 {
+        let token = PerlLspCancellationToken::new(JsonRpcId::Integer(i), "pre".into());
         registry.register_token(token)?;
     }
 
@@ -581,9 +586,10 @@ fn concurrent_registry_reads_while_writing() -> Result<(), Box<dyn std::error::E
     for _ in 0..5 {
         let reg = registry.clone();
         handles.push(std::thread::spawn(move || {
-            for i in 0..10u64 {
-                let _ = reg.is_cancelled(&json!(i));
-                let _ = reg.get_token(&json!(i));
+            for i in 0..10i64 {
+                let id = JsonRpcId::Integer(i);
+                let _ = reg.is_cancelled(&id);
+                let _ = reg.get_token(&id);
             }
         }));
     }
@@ -592,8 +598,8 @@ fn concurrent_registry_reads_while_writing() -> Result<(), Box<dyn std::error::E
     {
         let reg = registry.clone();
         handles.push(std::thread::spawn(move || {
-            for i in 10..20u64 {
-                let token = PerlLspCancellationToken::new(json!(i), "writer".into());
+            for i in 10..20i64 {
+                let token = PerlLspCancellationToken::new(JsonRpcId::Integer(i), "writer".into());
                 let _ = reg.register_token(token);
             }
         }));
@@ -609,13 +615,13 @@ fn concurrent_registry_reads_while_writing() -> Result<(), Box<dyn std::error::E
 }
 
 // ---------------------------------------------------------------------------
-// Various Value types as request IDs
+// Various JsonRpcId variants as request IDs
 // ---------------------------------------------------------------------------
 
 #[test]
 fn registry_supports_string_request_ids() -> Result<(), Box<dyn std::error::Error>> {
     let registry = CancellationRegistry::new();
-    let req_id = json!("request-abc");
+    let req_id = JsonRpcId::String("request-abc".into());
     let token = PerlLspCancellationToken::new(req_id.clone(), "test".into());
     registry.register_token(token)?;
     assert!(!registry.is_cancelled(&req_id));
@@ -628,20 +634,7 @@ fn registry_supports_string_request_ids() -> Result<(), Box<dyn std::error::Erro
 #[test]
 fn registry_supports_integer_request_ids() -> Result<(), Box<dyn std::error::Error>> {
     let registry = CancellationRegistry::new();
-    let req_id = json!(12345);
-    let token = PerlLspCancellationToken::new(req_id.clone(), "test".into());
-    registry.register_token(token)?;
-    assert!(!registry.is_cancelled(&req_id));
-
-    registry.cancel_request(&req_id)?;
-    assert!(registry.is_cancelled(&req_id));
-    Ok(())
-}
-
-#[test]
-fn registry_supports_null_request_id() -> Result<(), Box<dyn std::error::Error>> {
-    let registry = CancellationRegistry::new();
-    let req_id = Value::Null;
+    let req_id = JsonRpcId::Integer(12345);
     let token = PerlLspCancellationToken::new(req_id.clone(), "test".into());
     registry.register_token(token)?;
     assert!(!registry.is_cancelled(&req_id));
@@ -658,7 +651,7 @@ fn registry_supports_null_request_id() -> Result<(), Box<dyn std::error::Error>>
 #[test]
 fn full_lifecycle_register_cancel_cleanup_remove() -> Result<(), Box<dyn std::error::Error>> {
     let registry = CancellationRegistry::new();
-    let req_id = json!(999);
+    let req_id = JsonRpcId::Integer(999);
 
     // 1. Register token
     let token = PerlLspCancellationToken::new(req_id.clone(), "lifecycle".into());
@@ -699,26 +692,29 @@ fn full_lifecycle_register_cancel_cleanup_remove() -> Result<(), Box<dyn std::er
 fn register_cancel_remove_many_sequential() -> Result<(), Box<dyn std::error::Error>> {
     let registry = CancellationRegistry::new();
 
-    for i in 0..50u64 {
-        let token = PerlLspCancellationToken::new(json!(i), format!("seq-{i}"));
+    for i in 0..50i64 {
+        let token = PerlLspCancellationToken::new(JsonRpcId::Integer(i), format!("seq-{i}"));
         registry.register_token(token)?;
     }
     assert_eq!(registry.active_count(), 50);
 
-    for i in 0..25u64 {
-        registry.cancel_request(&json!(i))?;
+    for i in 0..25i64 {
+        registry.cancel_request(&JsonRpcId::Integer(i))?;
     }
 
     // First 25 cancelled, rest active
-    for i in 0..25u64 {
-        assert!(registry.is_cancelled(&json!(i)), "token {i} should be cancelled");
+    for i in 0..25i64 {
+        assert!(registry.is_cancelled(&JsonRpcId::Integer(i)), "token {i} should be cancelled");
     }
-    for i in 25..50u64 {
-        assert!(!registry.is_cancelled(&json!(i)), "token {i} should not be cancelled");
+    for i in 25..50i64 {
+        assert!(
+            !registry.is_cancelled(&JsonRpcId::Integer(i)),
+            "token {i} should not be cancelled"
+        );
     }
 
-    for i in 0..50u64 {
-        registry.remove_request(&json!(i));
+    for i in 0..50i64 {
+        registry.remove_request(&JsonRpcId::Integer(i));
     }
     assert_eq!(registry.active_count(), 0);
 

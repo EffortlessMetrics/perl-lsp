@@ -1446,34 +1446,31 @@ Not found in workspace or configured include paths.
         params: Option<Value>,
         request_id: Option<&Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
+        // Convert raw Value ID to typed ID at the boundary.
+        let typed_id = request_id.and_then(JsonRpcId::try_from_value);
         // RAII guard ensures cleanup on all exit paths (early returns, errors, panics)
-        let _cleanup_guard = RequestCleanupGuard::from_ref(request_id);
+        let _cleanup_guard = RequestCleanupGuard::from_ref(typed_id.as_ref());
 
         if let Some(params) = params {
             // Create or get cancellation token for this request
-            let token = if let Some(req_id) = request_id {
-                GLOBAL_CANCELLATION_REGISTRY.get_token(req_id).unwrap_or_else(|| {
+            if let Some(ref tid) = typed_id {
+                let token = GLOBAL_CANCELLATION_REGISTRY.get_token(tid).unwrap_or_else(|| {
                     let token = PerlLspCancellationToken::new(
-                        req_id.clone(),
+                        tid.clone(),
                         "textDocument/hover".to_string(),
                     );
                     let _ = GLOBAL_CANCELLATION_REGISTRY.register_token(token.clone());
                     token
-                })
-            } else {
-                PerlLspCancellationToken::new(
-                    serde_json::Value::Null,
-                    "textDocument/hover".to_string(),
-                )
-            };
-
-            // Early cancellation check with relaxed read
-            if token.is_cancelled_relaxed() {
-                return Err(JsonRpcError {
-                    code: REQUEST_CANCELLED,
-                    message: "Request cancelled - hover provider".to_string(),
-                    data: None,
                 });
+
+                // Early cancellation check with relaxed read
+                if token.is_cancelled_relaxed() {
+                    return Err(JsonRpcError {
+                        code: REQUEST_CANCELLED,
+                        message: "Request cancelled - hover provider".to_string(),
+                        data: None,
+                    });
+                }
             }
 
             // Delegate to original handler

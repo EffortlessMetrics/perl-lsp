@@ -219,9 +219,10 @@ impl LspServer {
         F: FnOnce(Option<&Value>) -> Result<Option<Value>, JsonRpcError>,
     {
         if let Some(request_id) = id.as_ref()
-            && self.is_cancelled(request_id)
+            && let Some(typed_id) = JsonRpcId::from_value(request_id)
+            && self.is_cancelled(&typed_id)
         {
-            self.cancel_clear(request_id);
+            self.cancel_clear(&typed_id);
             return RoutedResponse::Immediate(cancelled_response_with_method(request_id, &method));
         }
 

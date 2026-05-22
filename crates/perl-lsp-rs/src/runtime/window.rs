@@ -347,7 +347,7 @@ mod tests {
 
         // Set up: register a progress token and associate it with a request ID
         let token_str = "test-progress-token-1";
-        let request_id = json!(42);
+        let request_id = JsonRpcId::Integer(42);
 
         server.progress_tokens.lock().insert(token_str.to_string());
         server.register_progress_request(token_str, request_id.clone());

@@ -14,7 +14,7 @@ use crate::completion::{
     CompletionItemKind, CompletionProvider, add_xs_api_completions_for_prefix,
 };
 use crate::{
-    protocol::{JsonRpcError, REQUEST_CANCELLED, req_position, req_uri},
+    protocol::{JsonRpcError, JsonRpcId, REQUEST_CANCELLED, req_position, req_uri},
     runtime::routing::{IndexAccessMode, route_index_access},
     state::{completion_cap, completion_deadline},
 };
@@ -29,6 +29,15 @@ use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
 use super::super::LspServer;
+
+/// Sentinel request ID used for the notification-path token in
+/// [`Self::handle_completion_cancellable`]. Real client request IDs are
+/// always positive integers (per LSP convention) or strings; this negative
+/// integer cannot collide with any client- or server-generated ID. The
+/// token created with this ID is intentionally **not** registered in the
+/// global cancellation registry — it exists only as a local handle that the
+/// provider's cancel-check closure can read.
+const UNCANCELLABLE_LOCAL_TOKEN_ID: JsonRpcId = JsonRpcId::Integer(-1);
 
 static SNIPPET_PLACEHOLDER_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static SNIPPET_SIMPLE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
@@ -872,23 +881,31 @@ impl LspServer {
         params: Option<Value>,
         request_id: Option<&Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
+        // Convert raw Value ID to typed ID at the boundary.
+        let typed_id = request_id.and_then(JsonRpcId::try_from_value);
         // RAII guard ensures cleanup on all exit paths (early returns, errors, panics)
-        let _cleanup_guard = RequestCleanupGuard::from_ref(request_id);
+        let _cleanup_guard = RequestCleanupGuard::from_ref(typed_id.as_ref());
 
         if let Some(params) = params {
             // Create or get cancellation token for this request
-            let token = if let Some(req_id) = request_id {
-                GLOBAL_CANCELLATION_REGISTRY.get_token(req_id).unwrap_or_else(|| {
+            let token = if let Some(ref tid) = typed_id {
+                GLOBAL_CANCELLATION_REGISTRY.get_token(tid).unwrap_or_else(|| {
                     let token = PerlLspCancellationToken::new(
-                        req_id.clone(),
+                        tid.clone(),
                         "textDocument/completion".to_string(),
                     );
                     let _ = GLOBAL_CANCELLATION_REGISTRY.register_token(token.clone());
                     token
                 })
             } else {
+                // Notification path: no client-visible id to cancel against. Use a
+                // synthetic sentinel id that won't collide with any real client or
+                // server ID (which are always positive integers). The token is
+                // created but never registered in the global registry, so external
+                // cancellation cannot reach it; it exists only for the
+                // cancel-check closure that the provider calls during its work.
                 PerlLspCancellationToken::new(
-                    serde_json::Value::Null,
+                    UNCANCELLABLE_LOCAL_TOKEN_ID,
                     "textDocument/completion".to_string(),
                 )
             };

@@ -19,7 +19,7 @@ pub fn enhanced_cancelled_response(
 
     let mut data = json!({
         "provider": provider_name,
-        "request_id": token.request_id(),
+        "request_id": token.request_id().to_value(),
         "timestamp": token.timestamp()
     });
 
@@ -45,7 +45,7 @@ pub fn enhanced_cancelled_response(
 
     JsonRpcResponse {
         jsonrpc: "2.0".to_string(),
-        id: JsonRpcId::from_value(token.request_id()),
+        id: Some(token.request_id().clone()),
         result: None,
         error: Some(JsonRpcError { code: REQUEST_CANCELLED, message, data: Some(data) }),
     }
