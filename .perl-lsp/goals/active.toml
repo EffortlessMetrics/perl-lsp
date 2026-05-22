@@ -130,7 +130,6 @@ items = [
 
 [reliability.next]
 items = [
-  "policy_cleanup",
   "published_api_hygiene",
 ]
 
@@ -514,7 +513,7 @@ commands = [
 
 [[work_item]]
 id = "policy-cleanup-routing-review"
-status = "active"
+status = "completed"
 lane = "reliability"
 claim_boundary = "Policy cleanup routing review only; no policy enforcement broadening, provider behavior, support-tier promotion, release-lineage sync, parser/corpus bucket movement, or source-repo development continuation."
 files = [
@@ -527,6 +526,29 @@ commands = [
   "rtk cargo xtask gate-policy check",
   "rtk cargo xtask check-support-claims",
   "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk bash -lc './scripts/storage-doctor'",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "published-api-hygiene"
+status = "active"
+lane = "reliability"
+claim_boundary = "Published API baseline and storage-safe tooling hygiene only; no Rust API surface code change, provider behavior, support-tier promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "justfile",
+  ".ci/public-api-baselines",
+]
+commands = [
+  "rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft",
+  "rtk bash -lc './scripts/cargo-safe xtask check-active-goal-manifest'",
+  "rtk bash -lc './scripts/cargo-safe xtask gate-policy check'",
+  "rtk bash -lc './scripts/cargo-safe xtask check-support-claims'",
+  "rtk bash -lc './scripts/cargo-safe xtask check-provider-confidence-matrix'",
+  "rtk bash -lc 'just public-api-update'",
+  "rtk bash -lc 'just public-api-check'",
   "rtk bash -lc './scripts/storage-doctor'",
   "rtk git diff --check",
 ]

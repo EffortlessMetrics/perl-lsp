@@ -1,10 +1,11 @@
 pub mod perl_lsp
 pub use perl_lsp::JsonRpcError
+pub use perl_lsp::JsonRpcId
 pub use perl_lsp::JsonRpcRequest
 pub use perl_lsp::JsonRpcResponse
 pub use perl_lsp::capability_map
 pub mod perl_lsp::cancellation
-pub use perl_lsp::cancellation::<<perl_lsp_cancellation::*>>
+pub use perl_lsp::cancellation::<<perl_lsp_rs_core::runtime::cancellation::*>>
 pub mod perl_lsp::cli
 pub fn perl_lsp::cli::run_cli<I>(args: I) -> i32 where I: core::iter::traits::collect::IntoIterator, <I as core::iter::traits::collect::IntoIterator>::Item: core::convert::Into<std::ffi::os_str::OsString> + core::clone::Clone
 pub mod perl_lsp::convert
@@ -30,7 +31,7 @@ pub fn perl_lsp::execute_command::PerlCommand::fmt(&self, f: &mut core::fmt::For
 pub fn perl_lsp::execute_command::PerlCommand::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 pub fn perl_lsp::execute_command::PerlCommand::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 pub struct perl_lsp::execute_command::CommandExecutor
-pub fn perl_lsp::execute_command::CommandExecutor::execute(&self, command: &str, arguments: core::option::Option<&alloc::vec::Vec<serde_json::value::Value>>) -> core::result::Result<core::option::Option<serde_json::value::Value>, perl_lsp_protocol::jsonrpc::JsonRpcError>
+pub fn perl_lsp::execute_command::CommandExecutor::execute(&self, command: &str, arguments: core::option::Option<&alloc::vec::Vec<serde_json::value::Value>>) -> core::result::Result<core::option::Option<serde_json::value::Value>, perl_lsp_rs_core::protocol::jsonrpc::JsonRpcError>
 pub fn perl_lsp::execute_command::CommandExecutor::new() -> Self
 pub fn perl_lsp::execute_command::CommandExecutor::with_workspace_roots(workspace_roots: alloc::vec::Vec<std::path::PathBuf>) -> Self
 pub fn perl_lsp::execute_command::CommandExecutor::default() -> Self
@@ -45,13 +46,14 @@ pub fn perl_lsp::execute_command::ExecuteCommandProvider::execute_command(&self,
 pub fn perl_lsp::execute_command::ExecuteCommandProvider::module_to_test_stem(&self, module_name: &str) -> alloc::string::String
 pub fn perl_lsp::execute_command::ExecuteCommandProvider::new() -> Self
 pub fn perl_lsp::execute_command::ExecuteCommandProvider::resolve_debug_file_path(&self, file_path: &str) -> core::result::Result<std::path::PathBuf, alloc::string::String>
+pub fn perl_lsp::execute_command::ExecuteCommandProvider::with_workspace_config(self, config: perl_lsp_rs_core::config::WorkspaceConfig) -> Self
 pub fn perl_lsp::execute_command::ExecuteCommandProvider::with_workspace_roots(workspace_roots: alloc::vec::Vec<std::path::PathBuf>) -> Self
 pub fn perl_lsp::execute_command::ExecuteCommandProvider::default() -> Self
 pub fn perl_lsp::execute_command::command_exists(command: &str) -> bool
 pub fn perl_lsp::execute_command::get_supported_commands() -> alloc::vec::Vec<alloc::string::String>
 pub mod perl_lsp::fallback
 pub mod perl_lsp::fallback::text
-pub fn perl_lsp::fallback::text::extract_text_based_code_lenses(text: &str, _uri: &str) -> alloc::vec::Vec<perl_lsp_code_lens::CodeLens>
+pub fn perl_lsp::fallback::text::extract_text_based_code_lenses(text: &str, _uri: &str) -> alloc::vec::Vec<perl_lsp_rs_core::providers::code_lens::CodeLens>
 pub fn perl_lsp::fallback::text::extract_text_based_symbols(text: &str, uri: &str, query: &str) -> alloc::vec::Vec<perl_workspace::workspace::workspace_index::LspWorkspaceSymbol>
 pub fn perl_lsp::fallback::text::folding_ranges_from_text(src: &str, limit: usize) -> alloc::vec::Vec<serde_json::value::Value>
 pub mod perl_lsp::features
@@ -76,7 +78,7 @@ pub use perl_lsp::features::to_json_for_all_profiles
 pub use perl_lsp::features::to_json_for_profile
 pub use perl_lsp::features::trackable_feature_count_for_grid
 pub mod perl_lsp::features::code_actions
-pub use perl_lsp::features::code_actions::<<perl_lsp_code_actions::*>>
+pub use perl_lsp::features::code_actions::<<perl_lsp_rs_core::providers::code_actions::*>>
 pub mod perl_lsp::features::code_actions_enhanced
 pub use perl_lsp::features::code_actions_enhanced::EnhancedCodeActionsProvider
 pub mod perl_lsp::features::code_actions_pragmas
@@ -101,7 +103,7 @@ pub perl_lsp::features::code_actions_provider::CodeAction::title: alloc::string:
 pub fn perl_lsp::features::code_actions_provider::CodeAction::clone(&self) -> perl_lsp::features::code_actions_provider::CodeAction
 pub fn perl_lsp::features::code_actions_provider::CodeAction::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub struct perl_lsp::features::code_actions_provider::CodeActionsProvider
-pub fn perl_lsp::features::code_actions_provider::CodeActionsProvider::get_code_actions(&self, range: (usize, usize), diagnostics: &[perl_lsp_diagnostics::internal_types::Diagnostic]) -> alloc::vec::Vec<perl_lsp::features::code_actions_provider::CodeAction>
+pub fn perl_lsp::features::code_actions_provider::CodeActionsProvider::get_code_actions(&self, range: (usize, usize), diagnostics: &[perl_lsp_rs_core::providers::diagnostics::internal_types::Diagnostic]) -> alloc::vec::Vec<perl_lsp::features::code_actions_provider::CodeAction>
 pub fn perl_lsp::features::code_actions_provider::CodeActionsProvider::new(source: alloc::string::String) -> Self
 pub struct perl_lsp::features::code_actions_provider::TextEdit
 pub perl_lsp::features::code_actions_provider::TextEdit::new_text: alloc::string::String
@@ -109,9 +111,9 @@ pub perl_lsp::features::code_actions_provider::TextEdit::range: (usize, usize)
 pub fn perl_lsp::features::code_actions_provider::TextEdit::clone(&self) -> perl_lsp::features::code_actions_provider::TextEdit
 pub fn perl_lsp::features::code_actions_provider::TextEdit::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub mod perl_lsp::features::code_lens_provider
-pub use perl_lsp::features::code_lens_provider::<<perl_lsp_code_lens::*>>
+pub use perl_lsp::features::code_lens_provider::<<perl_lsp_rs_core::providers::code_lens::*>>
 pub mod perl_lsp::features::completion
-pub use perl_lsp::features::completion::<<perl_lsp_completion::*>>
+pub use perl_lsp::features::completion::<<perl_lsp_rs_core::providers::completion::*>>
 pub mod perl_lsp::features::diagnostics
 pub use perl_lsp::features::diagnostics::Diagnostic
 pub use perl_lsp::features::diagnostics::DiagnosticSeverity
@@ -129,8 +131,12 @@ pub fn perl_lsp::features::diagnostics::pull::DiagnosticData::fmt(&self, f: &mut
 pub fn perl_lsp::features::diagnostics::pull::DiagnosticData::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 pub fn perl_lsp::features::diagnostics::pull::DiagnosticData::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 pub struct perl_lsp::features::diagnostics::pull::PullDiagnosticsContext
+pub perl_lsp::features::diagnostics::pull::PullDiagnosticsContext::critic_engine: perl_lsp_rs_core::config::CriticEngine
 pub perl_lsp::features::diagnostics::pull::PullDiagnosticsContext::include_paths: alloc::vec::Vec<alloc::string::String>
 pub perl_lsp::features::diagnostics::pull::PullDiagnosticsContext::markup_message_support: bool
+pub perl_lsp::features::diagnostics::pull::PullDiagnosticsContext::native_critic_exclude: alloc::vec::Vec<alloc::string::String>
+pub perl_lsp::features::diagnostics::pull::PullDiagnosticsContext::native_critic_include: alloc::vec::Vec<alloc::string::String>
+pub perl_lsp::features::diagnostics::pull::PullDiagnosticsContext::native_critic_profile: alloc::string::String
 pub perl_lsp::features::diagnostics::pull::PullDiagnosticsContext::perlcritic_enabled: bool
 pub perl_lsp::features::diagnostics::pull::PullDiagnosticsContext::perlcritic_profile: core::option::Option<alloc::string::String>
 pub perl_lsp::features::diagnostics::pull::PullDiagnosticsContext::perlcritic_severity: i32
@@ -140,15 +146,19 @@ pub fn perl_lsp::features::diagnostics::pull::PullDiagnosticsContext::new() -> S
 pub fn perl_lsp::features::diagnostics::pull::PullDiagnosticsContext::clone(&self) -> perl_lsp::features::diagnostics::pull::PullDiagnosticsContext
 pub fn perl_lsp::features::diagnostics::pull::PullDiagnosticsContext::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub struct perl_lsp::features::diagnostics::pull::PullDiagnosticsProvider
-pub fn perl_lsp::features::diagnostics::pull::PullDiagnosticsProvider::get_document_diagnostics(&self, uri: &lsp_types::uri::Uri, content: &str, previous_result_id: core::option::Option<alloc::string::String>) -> lsp_types::document_diagnostic::DocumentDiagnosticReport
+pub fn perl_lsp::features::diagnostics::pull::PullDiagnosticsProvider::get_document_diagnostics(&self, uri: &lsp_types::uri::Uri, content: &str, previous_result_id: core::option::Option<alloc::string::String>, include_paths: core::option::Option<alloc::vec::Vec<alloc::string::String>>) -> lsp_types::document_diagnostic::DocumentDiagnosticReport
 pub fn perl_lsp::features::diagnostics::pull::PullDiagnosticsProvider::get_document_diagnostics_with_context(&self, uri: &lsp_types::uri::Uri, content: &str, previous_result_id: core::option::Option<alloc::string::String>, context: &perl_lsp::features::diagnostics::pull::PullDiagnosticsContext, doc_state: core::option::Option<&perl_lsp::state::DocumentState>) -> lsp_types::document_diagnostic::DocumentDiagnosticReport
 pub fn perl_lsp::features::diagnostics::pull::PullDiagnosticsProvider::get_workspace_diagnostics(&self, documents: &std::collections::hash::map::HashMap<alloc::string::String, perl_lsp::state::DocumentState>, previous_result_ids: alloc::vec::Vec<(lsp_types::uri::Uri, alloc::string::String)>) -> lsp_types::workspace_diagnostic::WorkspaceDiagnosticReport
 pub fn perl_lsp::features::diagnostics::pull::PullDiagnosticsProvider::get_workspace_diagnostics_partial_with_context(&self, documents: &[(alloc::string::String, alloc::string::String)], batch_size: usize, context: &perl_lsp::features::diagnostics::pull::PullDiagnosticsContext) -> alloc::vec::Vec<lsp_types::workspace_diagnostic::WorkspaceDiagnosticReportPartialResult>
 pub fn perl_lsp::features::diagnostics::pull::PullDiagnosticsProvider::get_workspace_diagnostics_with_context(&self, documents: &std::collections::hash::map::HashMap<alloc::string::String, perl_lsp::state::DocumentState>, previous_result_ids: alloc::vec::Vec<(lsp_types::uri::Uri, alloc::string::String)>, context: &perl_lsp::features::diagnostics::pull::PullDiagnosticsContext) -> lsp_types::workspace_diagnostic::WorkspaceDiagnosticReport
 pub fn perl_lsp::features::diagnostics::pull::PullDiagnosticsProvider::new() -> Self
 pub struct perl_lsp::features::diagnostics::PullDiagnosticsContext
+pub perl_lsp::features::diagnostics::PullDiagnosticsContext::critic_engine: perl_lsp_rs_core::config::CriticEngine
 pub perl_lsp::features::diagnostics::PullDiagnosticsContext::include_paths: alloc::vec::Vec<alloc::string::String>
 pub perl_lsp::features::diagnostics::PullDiagnosticsContext::markup_message_support: bool
+pub perl_lsp::features::diagnostics::PullDiagnosticsContext::native_critic_exclude: alloc::vec::Vec<alloc::string::String>
+pub perl_lsp::features::diagnostics::PullDiagnosticsContext::native_critic_include: alloc::vec::Vec<alloc::string::String>
+pub perl_lsp::features::diagnostics::PullDiagnosticsContext::native_critic_profile: alloc::string::String
 pub perl_lsp::features::diagnostics::PullDiagnosticsContext::perlcritic_enabled: bool
 pub perl_lsp::features::diagnostics::PullDiagnosticsContext::perlcritic_profile: core::option::Option<alloc::string::String>
 pub perl_lsp::features::diagnostics::PullDiagnosticsContext::perlcritic_severity: i32
@@ -158,7 +168,7 @@ pub fn perl_lsp::features::diagnostics::pull::PullDiagnosticsContext::new() -> S
 pub fn perl_lsp::features::diagnostics::pull::PullDiagnosticsContext::clone(&self) -> perl_lsp::features::diagnostics::pull::PullDiagnosticsContext
 pub fn perl_lsp::features::diagnostics::pull::PullDiagnosticsContext::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub struct perl_lsp::features::diagnostics::PullDiagnosticsProvider
-pub fn perl_lsp::features::diagnostics::pull::PullDiagnosticsProvider::get_document_diagnostics(&self, uri: &lsp_types::uri::Uri, content: &str, previous_result_id: core::option::Option<alloc::string::String>) -> lsp_types::document_diagnostic::DocumentDiagnosticReport
+pub fn perl_lsp::features::diagnostics::pull::PullDiagnosticsProvider::get_document_diagnostics(&self, uri: &lsp_types::uri::Uri, content: &str, previous_result_id: core::option::Option<alloc::string::String>, include_paths: core::option::Option<alloc::vec::Vec<alloc::string::String>>) -> lsp_types::document_diagnostic::DocumentDiagnosticReport
 pub fn perl_lsp::features::diagnostics::pull::PullDiagnosticsProvider::get_document_diagnostics_with_context(&self, uri: &lsp_types::uri::Uri, content: &str, previous_result_id: core::option::Option<alloc::string::String>, context: &perl_lsp::features::diagnostics::pull::PullDiagnosticsContext, doc_state: core::option::Option<&perl_lsp::state::DocumentState>) -> lsp_types::document_diagnostic::DocumentDiagnosticReport
 pub fn perl_lsp::features::diagnostics::pull::PullDiagnosticsProvider::get_workspace_diagnostics(&self, documents: &std::collections::hash::map::HashMap<alloc::string::String, perl_lsp::state::DocumentState>, previous_result_ids: alloc::vec::Vec<(lsp_types::uri::Uri, alloc::string::String)>) -> lsp_types::workspace_diagnostic::WorkspaceDiagnosticReport
 pub fn perl_lsp::features::diagnostics::pull::PullDiagnosticsProvider::get_workspace_diagnostics_partial_with_context(&self, documents: &[(alloc::string::String, alloc::string::String)], batch_size: usize, context: &perl_lsp::features::diagnostics::pull::PullDiagnosticsContext) -> alloc::vec::Vec<lsp_types::workspace_diagnostic::WorkspaceDiagnosticReportPartialResult>
@@ -169,7 +179,7 @@ pub use perl_lsp::features::document_highlight::DocumentHighlight
 pub use perl_lsp::features::document_highlight::DocumentHighlightKind
 pub use perl_lsp::features::document_highlight::DocumentHighlightProvider
 pub mod perl_lsp::features::document_links
-pub use perl_lsp::features::document_links::<<perl_lsp_navigation::*>>
+pub use perl_lsp::features::document_links::<<perl_lsp_rs_core::providers::navigation::*>>
 pub mod perl_lsp::features::feature_catalog
 pub use perl_lsp::features::feature_catalog::BddFeatureRow
 pub use perl_lsp::features::feature_catalog::Feature
@@ -191,7 +201,7 @@ pub use perl_lsp::features::feature_catalog::to_json_for_all_profiles
 pub use perl_lsp::features::feature_catalog::to_json_for_profile
 pub use perl_lsp::features::feature_catalog::trackable_feature_count_for_grid
 pub mod perl_lsp::features::folding
-pub use perl_lsp::features::folding::<<perl_lsp_providers::ide::lsp_compat::folding::*>>
+pub use perl_lsp::features::folding::<<perl_lsp_rs_core::providers::lsp_compat::folding::*>>
 pub mod perl_lsp::features::formatting
 pub use perl_lsp::features::formatting::FormatPosition
 pub use perl_lsp::features::formatting::FormatRange
@@ -202,17 +212,18 @@ pub use perl_lsp::features::formatting::FormattingOptions
 pub use perl_lsp::features::formatting::FormattingProvider
 pub use perl_lsp::features::formatting::PerlTidyConfig
 pub struct perl_lsp::features::formatting::CodeFormatter
-pub fn perl_lsp::features::formatting::CodeFormatter::format_document(&self, content: &str, options: &perl_lsp_formatting_types::FormattingOptions) -> core::result::Result<alloc::vec::Vec<perl_lsp_formatting_types::FormatTextEdit>, perl_lsp_formatting::formatting::FormattingError>
-pub fn perl_lsp::features::formatting::CodeFormatter::format_range(&self, content: &str, range: &perl_position_tracking::wire::WireRange, options: &perl_lsp_formatting_types::FormattingOptions) -> core::result::Result<alloc::vec::Vec<perl_lsp_formatting_types::FormatTextEdit>, perl_lsp_formatting::formatting::FormattingError>
+pub fn perl_lsp::features::formatting::CodeFormatter::format_document(&self, content: &str, options: &perl_lsp_rs_core::providers::formatting_types::FormattingOptions) -> core::result::Result<alloc::vec::Vec<perl_lsp_rs_core::providers::formatting_types::FormatTextEdit>, perl_lsp_rs_core::providers::formatting::formatting::FormattingError>
+pub fn perl_lsp::features::formatting::CodeFormatter::format_range(&self, content: &str, range: &perl_position_tracking::wire::WireRange, options: &perl_lsp_rs_core::providers::formatting_types::FormattingOptions) -> core::result::Result<alloc::vec::Vec<perl_lsp_rs_core::providers::formatting_types::FormatTextEdit>, perl_lsp_rs_core::providers::formatting::formatting::FormattingError>
 pub fn perl_lsp::features::formatting::CodeFormatter::new() -> Self
 pub fn perl_lsp::features::formatting::CodeFormatter::with_config(config: perl_lsp_perltidy::PerlTidyConfig) -> Self
+pub fn perl_lsp::features::formatting::CodeFormatter::with_config_and_mode(config: perl_lsp_perltidy::PerlTidyConfig, mode: perl_lsp_perltidy::native::config::FormatterMode) -> Self
 pub fn perl_lsp::features::formatting::CodeFormatter::default() -> Self
 pub mod perl_lsp::features::implementation_provider
 pub struct perl_lsp::features::implementation_provider::ImplementationProvider
 pub fn perl_lsp::features::implementation_provider::ImplementationProvider::find_implementations(&self, ast: &perl_ast::ast::Node, line: u32, character: u32, uri: &str, documents: &std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>) -> alloc::vec::Vec<lsp_types::LocationLink>
 pub fn perl_lsp::features::implementation_provider::ImplementationProvider::new(workspace_index: core::option::Option<alloc::sync::Arc<perl_workspace::workspace::workspace_index::WorkspaceIndex>>) -> Self
 pub mod perl_lsp::features::inlay_hints
-pub use perl_lsp::features::inlay_hints::<<perl_lsp_inlay_hints::*>>
+pub use perl_lsp::features::inlay_hints::<<perl_lsp_rs_core::providers::inlay_hints::*>>
 pub mod perl_lsp::features::inlay_hints_provider
 pub enum perl_lsp::features::inlay_hints_provider::InlayHintKind
 pub perl_lsp::features::inlay_hints_provider::InlayHintKind::Parameter = 2
@@ -249,26 +260,26 @@ pub use perl_lsp::features::inline_completions::InlineCompletionItem
 pub use perl_lsp::features::inline_completions::InlineCompletionList
 pub use perl_lsp::features::inline_completions::InlineCompletionProvider
 pub mod perl_lsp::features::linked_editing
-pub use perl_lsp::features::linked_editing::<<perl_lsp_providers::ide::lsp_compat::linked_editing::*>>
+pub use perl_lsp::features::linked_editing::<<perl_lsp_rs_core::providers::lsp_compat::linked_editing::*>>
 pub mod perl_lsp::features::lsp_document_link
 pub fn perl_lsp::features::lsp_document_link::collect_document_links(text: &str, uri: &url::Url) -> core::result::Result<alloc::vec::Vec<lsp_types::document_link::DocumentLink>, alloc::string::String>
 pub mod perl_lsp::features::lsp_on_type_formatting
 pub fn perl_lsp::features::lsp_on_type_formatting::format_on_type(text: &str, _uri: lsp_types::uri::Uri, ch: alloc::string::String, position: lsp_types::Position, tab_size: usize, insert_spaces: bool) -> alloc::vec::Vec<lsp_types::TextEdit>
 pub mod perl_lsp::features::lsp_selection_range
-pub use perl_lsp::features::lsp_selection_range::<<perl_lsp_selection_range::*>>
+pub use perl_lsp::features::lsp_selection_range::<<perl_lsp_rs_core::providers::selection_range::*>>
 pub mod perl_lsp::features::map
 pub use perl_lsp::features::map::caps_from_feature_ids
 pub use perl_lsp::features::map::feature_ids_from_caps
 pub mod perl_lsp::features::on_type_formatting
-pub use perl_lsp::features::on_type_formatting::<<perl_lsp_providers::ide::lsp_compat::on_type_formatting::*>>
+pub use perl_lsp::features::on_type_formatting::<<perl_lsp_rs_core::providers::lsp_compat::on_type_formatting::*>>
 pub mod perl_lsp::features::references
-pub use perl_lsp::features::references::<<perl_lsp_navigation::*>>
+pub use perl_lsp::features::references::<<perl_lsp_rs_core::providers::navigation::*>>
 pub mod perl_lsp::features::rename
-pub use perl_lsp::features::rename::<<perl_lsp_rename::*>>
+pub use perl_lsp::features::rename::<<perl_lsp_rs_core::providers::rename::*>>
 pub mod perl_lsp::features::selection_range
-pub use perl_lsp::features::selection_range::<<perl_lsp_providers::ide::lsp_compat::selection_range::*>>
+pub use perl_lsp::features::selection_range::<<perl_lsp_rs_core::providers::lsp_compat::selection_range::*>>
 pub mod perl_lsp::features::semantic_tokens
-pub use perl_lsp::features::semantic_tokens::<<perl_lsp_semantic_tokens::*>>
+pub use perl_lsp::features::semantic_tokens::<<perl_lsp_rs_core::providers::semantic_tokens::*>>
 pub mod perl_lsp::features::semantic_tokens_provider
 pub enum perl_lsp::features::semantic_tokens_provider::SemanticTokenModifier
 pub perl_lsp::features::semantic_tokens_provider::SemanticTokenModifier::Async
@@ -320,12 +331,18 @@ pub fn perl_lsp::features::semantic_tokens_provider::SemanticTokensProvider::ext
 pub fn perl_lsp::features::semantic_tokens_provider::SemanticTokensProvider::new(source: alloc::string::String) -> Self
 pub fn perl_lsp::features::semantic_tokens_provider::encode_semantic_tokens(tokens: &[perl_lsp::features::semantic_tokens_provider::SemanticToken]) -> alloc::vec::Vec<u32>
 pub mod perl_lsp::features::signature_help
-pub use perl_lsp::features::signature_help::<<perl_lsp_providers::ide::lsp_compat::signature_help::*>>
+pub use perl_lsp::features::signature_help::<<perl_lsp_rs_core::providers::lsp_compat::signature_help::*>>
 pub mod perl_lsp::features::type_definition
-pub use perl_lsp::features::type_definition::<<perl_lsp_navigation::*>>
+pub use perl_lsp::features::type_definition::<<perl_lsp_rs_core::providers::navigation::*>>
 pub mod perl_lsp::features::type_hierarchy
-pub use perl_lsp::features::type_hierarchy::<<perl_lsp_type_hierarchy::*>>
+pub use perl_lsp::features::type_hierarchy::<<perl_lsp_rs_core::providers::type_hierarchy::*>>
 pub mod perl_lsp::features::workspace_rename
+pub enum perl_lsp::features::workspace_rename::RenameRefusal
+pub perl_lsp::features::workspace_rename::RenameRefusal::AmbiguousIdentity(alloc::string::String)
+pub fn perl_lsp::features::workspace_rename::RenameRefusal::clone(&self) -> perl_lsp::features::workspace_rename::RenameRefusal
+pub fn perl_lsp::features::workspace_rename::RenameRefusal::eq(&self, other: &perl_lsp::features::workspace_rename::RenameRefusal) -> bool
+pub fn perl_lsp::features::workspace_rename::RenameRefusal::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn perl_lsp::features::workspace_rename::RenameRefusal::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub struct perl_lsp::features::workspace_rename::RenameEdit
 pub perl_lsp::features::workspace_rename::RenameEdit::edits: alloc::vec::Vec<perl_lsp::features::workspace_rename::TextEdit>
 pub perl_lsp::features::workspace_rename::RenameEdit::uri: alloc::string::String
@@ -337,16 +354,17 @@ pub perl_lsp::features::workspace_rename::TextEdit::new_text: alloc::string::Str
 pub perl_lsp::features::workspace_rename::TextEdit::start: (u32, u32)
 pub fn perl_lsp::features::workspace_rename::TextEdit::clone(&self) -> perl_lsp::features::workspace_rename::TextEdit
 pub fn perl_lsp::features::workspace_rename::TextEdit::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-pub fn perl_lsp::features::workspace_rename::build_rename_edit(idx: &perl_workspace::workspace::workspace_index::WorkspaceIndex, key: &perl_workspace::workspace::workspace_index::SymbolKey, new_name_bare: &str) -> alloc::vec::Vec<perl_lsp::features::workspace_rename::RenameEdit>
+pub fn perl_lsp::features::workspace_rename::build_rename_edit(idx: &perl_workspace::workspace::workspace_index::WorkspaceIndex, key: &perl_workspace::workspace::workspace_index::SymbolKey, new_name_bare: &str) -> core::result::Result<alloc::vec::Vec<perl_lsp::features::workspace_rename::RenameEdit>, perl_lsp::features::workspace_rename::RenameRefusal>
 pub fn perl_lsp::features::workspace_rename::to_workspace_edit(edits: alloc::vec::Vec<perl_lsp::features::workspace_rename::RenameEdit>) -> serde_json::value::Value
 pub fn perl_lsp::features::workspace_rename::validate_rename(_key: &perl_workspace::workspace::workspace_index::SymbolKey, new_name: &str) -> core::result::Result<(), alloc::string::String>
 pub mod perl_lsp::features::workspace_symbols
-pub use perl_lsp::features::workspace_symbols::<<perl_lsp_navigation::*>>
+pub use perl_lsp::features::workspace_symbols::<<perl_lsp_rs_core::providers::navigation::*>>
 pub mod perl_lsp::handlers
 pub mod perl_lsp::protocol
-pub use perl_lsp::protocol::<<perl_lsp_protocol::*>>
+pub use perl_lsp::protocol::<<perl_lsp_rs_core::protocol::*>>
 pub mod perl_lsp::runtime
 pub use perl_lsp::runtime::JsonRpcError
+pub use perl_lsp::runtime::JsonRpcId
 pub use perl_lsp::runtime::JsonRpcRequest
 pub use perl_lsp::runtime::JsonRpcResponse
 pub mod perl_lsp::runtime::file_discovery
@@ -356,6 +374,7 @@ pub use perl_lsp::runtime::file_discovery::discover_perl_files
 pub mod perl_lsp::runtime::file_watcher_debounce
 pub struct perl_lsp::runtime::file_watcher_debounce::FileWatcherDebouncer
 pub fn perl_lsp::runtime::file_watcher_debounce::FileWatcherDebouncer::new<F>(publish_fn: F) -> Self where F: core::ops::function::Fn(alloc::vec::Vec<alloc::string::String>) + core::marker::Send + 'static
+pub fn perl_lsp::runtime::file_watcher_debounce::FileWatcherDebouncer::pending_uris(&self) -> usize
 pub fn perl_lsp::runtime::file_watcher_debounce::FileWatcherDebouncer::schedule(&self, uri: &str)
 pub fn perl_lsp::runtime::file_watcher_debounce::FileWatcherDebouncer::with_interval<F>(interval: core::time::Duration, publish_fn: F) -> Self where F: core::ops::function::Fn(alloc::vec::Vec<alloc::string::String>) + core::marker::Send + 'static
 pub fn perl_lsp::runtime::file_watcher_debounce::FileWatcherDebouncer::drop(&mut self)
@@ -379,14 +398,14 @@ pub fn perl_lsp::runtime::MessageType::fmt(&self, f: &mut core::fmt::Formatter<'
 pub struct perl_lsp::runtime::LspServer
 pub fn perl_lsp::runtime::LspServer::all_workspace_folders(&self) -> alloc::vec::Vec<perl_lsp::runtime::workspace_folder::WorkspaceFolderState>
 pub fn perl_lsp::runtime::LspServer::build_resolution_context(&self, doc_uri: core::option::Option<&str>) -> perl_lsp::runtime::lifecycle::module_resolution::ResolutionContext
-pub fn perl_lsp::runtime::LspServer::config_for_doc(&self, doc_uri: &str) -> core::option::Option<perl_lsp_config::WorkspaceConfig>
+pub fn perl_lsp::runtime::LspServer::config_for_doc(&self, doc_uri: &str) -> core::option::Option<perl_lsp_rs_core::config::WorkspaceConfig>
 pub fn perl_lsp::runtime::LspServer::folder_for_doc_uri(&self, doc_uri: &str) -> core::option::Option<perl_lsp::runtime::workspace_folder::WorkspaceFolderState>
 pub fn perl_lsp::runtime::LspServer::include_paths_for_doc(&self, doc_uri: &str) -> alloc::vec::Vec<std::path::PathBuf>
 pub fn perl_lsp::runtime::LspServer::install_file_watcher_debouncer(&self, debouncer: perl_lsp::runtime::file_watcher_debounce::FileWatcherDebouncer)
 pub fn perl_lsp::runtime::LspServer::pending_index_tasks(&self) -> usize
 pub fn perl_lsp::runtime::LspServer::schedule_file_watcher_uri(&self, uri: &str) -> bool
 pub fn perl_lsp::runtime::LspServer::search_scopes_for_doc(&self, doc_uri: &str) -> alloc::vec::Vec<perl_lsp::runtime::workspace_folder::WorkspaceFolderState>
-pub fn perl_lsp::runtime::LspServer::subprocess_runtime(&self) -> perl_subprocess_runtime::OsSubprocessRuntime
+pub fn perl_lsp::runtime::LspServer::subprocess_runtime(&self) -> perl_subprocess_runtime::os_runtime::OsSubprocessRuntime
 pub fn perl_lsp::runtime::LspServer::workspace_folder_count(&self) -> usize
 pub fn perl_lsp::runtime::LspServer::workspace_folder_uris(&self) -> alloc::vec::Vec<alloc::string::String>
 pub fn perl_lsp::runtime::LspServer::create_work_done_progress(&self, token: &str) -> std::io::error::Result<()>
@@ -398,15 +417,15 @@ pub fn perl_lsp::runtime::LspServer::send_telemetry(&self, event: serde_json::va
 pub fn perl_lsp::runtime::LspServer::show_document(&self, uri: &str, options: perl_lsp::runtime::ShowDocumentOptions) -> std::io::error::Result<()>
 pub fn perl_lsp::runtime::LspServer::show_message(&self, typ: perl_lsp::runtime::MessageType, message: &str) -> std::io::error::Result<()>
 pub fn perl_lsp::runtime::LspServer::show_message_request(&self, message_type: perl_lsp::runtime::MessageType, message: &str, actions: alloc::vec::Vec<&str>) -> std::io::error::Result<()>
-pub fn perl_lsp::runtime::LspServer::did_open(&self, params: serde_json::value::Value) -> core::result::Result<(), perl_lsp_protocol::jsonrpc::JsonRpcError>
-pub fn perl_lsp::runtime::LspServer::handle_did_change_with_cancellation(&self, params: core::option::Option<serde_json::value::Value>, cancellation_token: core::option::Option<alloc::sync::Arc<core::sync::atomic::AtomicBool>>) -> core::result::Result<(), perl_lsp_protocol::jsonrpc::JsonRpcError>
-pub fn perl_lsp::runtime::LspServer::handle_did_open_with_cancellation(&self, params: core::option::Option<serde_json::value::Value>, cancellation_token: core::option::Option<alloc::sync::Arc<core::sync::atomic::AtomicBool>>) -> core::result::Result<(), perl_lsp_protocol::jsonrpc::JsonRpcError>
+pub fn perl_lsp::runtime::LspServer::did_open(&self, params: serde_json::value::Value) -> core::result::Result<(), perl_lsp_rs_core::protocol::jsonrpc::JsonRpcError>
+pub fn perl_lsp::runtime::LspServer::handle_did_change_with_cancellation(&self, params: core::option::Option<serde_json::value::Value>, cancellation_token: core::option::Option<alloc::sync::Arc<core::sync::atomic::AtomicBool>>) -> core::result::Result<(), perl_lsp_rs_core::protocol::jsonrpc::JsonRpcError>
+pub fn perl_lsp::runtime::LspServer::handle_did_open_with_cancellation(&self, params: core::option::Option<serde_json::value::Value>, cancellation_token: core::option::Option<alloc::sync::Arc<core::sync::atomic::AtomicBool>>) -> core::result::Result<(), perl_lsp_rs_core::protocol::jsonrpc::JsonRpcError>
 pub fn perl_lsp::runtime::LspServer::handle_message<R: std::io::Read>(&self, reader: &mut R) -> std::io::error::Result<()>
 pub fn perl_lsp::runtime::LspServer::is_initialized(&self) -> bool
 pub fn perl_lsp::runtime::LspServer::run(&self) -> std::io::error::Result<()>
 pub fn perl_lsp::runtime::LspServer::serve(&self, reader: &mut dyn std::io::BufRead) -> std::io::error::Result<()>
-pub async fn perl_lsp::runtime::LspServer::serve_async(self: alloc::sync::Arc<Self>, rx: tokio::sync::mpsc::bounded::Receiver<perl_lsp_protocol::jsonrpc::JsonRpcRequest>)
-pub fn perl_lsp::runtime::LspServer::handle_request(&self, request: perl_lsp_protocol::jsonrpc::JsonRpcRequest) -> core::option::Option<perl_lsp_protocol::jsonrpc::JsonRpcResponse>
+pub async fn perl_lsp::runtime::LspServer::serve_async(self: alloc::sync::Arc<Self>, rx: tokio::sync::mpsc::bounded::Receiver<perl_lsp_rs_core::protocol::jsonrpc::JsonRpcRequest>)
+pub fn perl_lsp::runtime::LspServer::handle_request(&self, request: perl_lsp_rs_core::protocol::jsonrpc::JsonRpcRequest) -> core::option::Option<perl_lsp_rs_core::protocol::jsonrpc::JsonRpcResponse>
 pub fn perl_lsp::runtime::LspServer::new() -> Self
 pub fn perl_lsp::runtime::LspServer::new_with_feature_profile(feature_profile: perl_lsp_rs_core::features::policy::FeatureProfile) -> Self
 pub fn perl_lsp::runtime::LspServer::with_io<R, W>(reader: alloc::boxed::Box<R>, writer: alloc::boxed::Box<W>) -> Self where R: std::io::Read + core::marker::Send + 'static, W: std::io::Write + core::marker::Send + 'static
@@ -542,6 +561,7 @@ pub fn perl_lsp::security::SecurityContext::violation_count(&self) -> usize
 pub fn perl_lsp::security::SecurityContext::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub mod perl_lsp::server
 pub use perl_lsp::server::JsonRpcError
+pub use perl_lsp::server::JsonRpcId
 pub use perl_lsp::server::JsonRpcRequest
 pub use perl_lsp::server::JsonRpcResponse
 pub enum perl_lsp::server::MessageType
@@ -554,14 +574,14 @@ pub fn perl_lsp::runtime::MessageType::fmt(&self, f: &mut core::fmt::Formatter<'
 pub struct perl_lsp::server::LspServer
 pub fn perl_lsp::runtime::LspServer::all_workspace_folders(&self) -> alloc::vec::Vec<perl_lsp::runtime::workspace_folder::WorkspaceFolderState>
 pub fn perl_lsp::runtime::LspServer::build_resolution_context(&self, doc_uri: core::option::Option<&str>) -> perl_lsp::runtime::lifecycle::module_resolution::ResolutionContext
-pub fn perl_lsp::runtime::LspServer::config_for_doc(&self, doc_uri: &str) -> core::option::Option<perl_lsp_config::WorkspaceConfig>
+pub fn perl_lsp::runtime::LspServer::config_for_doc(&self, doc_uri: &str) -> core::option::Option<perl_lsp_rs_core::config::WorkspaceConfig>
 pub fn perl_lsp::runtime::LspServer::folder_for_doc_uri(&self, doc_uri: &str) -> core::option::Option<perl_lsp::runtime::workspace_folder::WorkspaceFolderState>
 pub fn perl_lsp::runtime::LspServer::include_paths_for_doc(&self, doc_uri: &str) -> alloc::vec::Vec<std::path::PathBuf>
 pub fn perl_lsp::runtime::LspServer::install_file_watcher_debouncer(&self, debouncer: perl_lsp::runtime::file_watcher_debounce::FileWatcherDebouncer)
 pub fn perl_lsp::runtime::LspServer::pending_index_tasks(&self) -> usize
 pub fn perl_lsp::runtime::LspServer::schedule_file_watcher_uri(&self, uri: &str) -> bool
 pub fn perl_lsp::runtime::LspServer::search_scopes_for_doc(&self, doc_uri: &str) -> alloc::vec::Vec<perl_lsp::runtime::workspace_folder::WorkspaceFolderState>
-pub fn perl_lsp::runtime::LspServer::subprocess_runtime(&self) -> perl_subprocess_runtime::OsSubprocessRuntime
+pub fn perl_lsp::runtime::LspServer::subprocess_runtime(&self) -> perl_subprocess_runtime::os_runtime::OsSubprocessRuntime
 pub fn perl_lsp::runtime::LspServer::workspace_folder_count(&self) -> usize
 pub fn perl_lsp::runtime::LspServer::workspace_folder_uris(&self) -> alloc::vec::Vec<alloc::string::String>
 pub fn perl_lsp::runtime::LspServer::create_work_done_progress(&self, token: &str) -> std::io::error::Result<()>
@@ -573,15 +593,15 @@ pub fn perl_lsp::runtime::LspServer::send_telemetry(&self, event: serde_json::va
 pub fn perl_lsp::runtime::LspServer::show_document(&self, uri: &str, options: perl_lsp::runtime::ShowDocumentOptions) -> std::io::error::Result<()>
 pub fn perl_lsp::runtime::LspServer::show_message(&self, typ: perl_lsp::runtime::MessageType, message: &str) -> std::io::error::Result<()>
 pub fn perl_lsp::runtime::LspServer::show_message_request(&self, message_type: perl_lsp::runtime::MessageType, message: &str, actions: alloc::vec::Vec<&str>) -> std::io::error::Result<()>
-pub fn perl_lsp::runtime::LspServer::did_open(&self, params: serde_json::value::Value) -> core::result::Result<(), perl_lsp_protocol::jsonrpc::JsonRpcError>
-pub fn perl_lsp::runtime::LspServer::handle_did_change_with_cancellation(&self, params: core::option::Option<serde_json::value::Value>, cancellation_token: core::option::Option<alloc::sync::Arc<core::sync::atomic::AtomicBool>>) -> core::result::Result<(), perl_lsp_protocol::jsonrpc::JsonRpcError>
-pub fn perl_lsp::runtime::LspServer::handle_did_open_with_cancellation(&self, params: core::option::Option<serde_json::value::Value>, cancellation_token: core::option::Option<alloc::sync::Arc<core::sync::atomic::AtomicBool>>) -> core::result::Result<(), perl_lsp_protocol::jsonrpc::JsonRpcError>
+pub fn perl_lsp::runtime::LspServer::did_open(&self, params: serde_json::value::Value) -> core::result::Result<(), perl_lsp_rs_core::protocol::jsonrpc::JsonRpcError>
+pub fn perl_lsp::runtime::LspServer::handle_did_change_with_cancellation(&self, params: core::option::Option<serde_json::value::Value>, cancellation_token: core::option::Option<alloc::sync::Arc<core::sync::atomic::AtomicBool>>) -> core::result::Result<(), perl_lsp_rs_core::protocol::jsonrpc::JsonRpcError>
+pub fn perl_lsp::runtime::LspServer::handle_did_open_with_cancellation(&self, params: core::option::Option<serde_json::value::Value>, cancellation_token: core::option::Option<alloc::sync::Arc<core::sync::atomic::AtomicBool>>) -> core::result::Result<(), perl_lsp_rs_core::protocol::jsonrpc::JsonRpcError>
 pub fn perl_lsp::runtime::LspServer::handle_message<R: std::io::Read>(&self, reader: &mut R) -> std::io::error::Result<()>
 pub fn perl_lsp::runtime::LspServer::is_initialized(&self) -> bool
 pub fn perl_lsp::runtime::LspServer::run(&self) -> std::io::error::Result<()>
 pub fn perl_lsp::runtime::LspServer::serve(&self, reader: &mut dyn std::io::BufRead) -> std::io::error::Result<()>
-pub async fn perl_lsp::runtime::LspServer::serve_async(self: alloc::sync::Arc<Self>, rx: tokio::sync::mpsc::bounded::Receiver<perl_lsp_protocol::jsonrpc::JsonRpcRequest>)
-pub fn perl_lsp::runtime::LspServer::handle_request(&self, request: perl_lsp_protocol::jsonrpc::JsonRpcRequest) -> core::option::Option<perl_lsp_protocol::jsonrpc::JsonRpcResponse>
+pub async fn perl_lsp::runtime::LspServer::serve_async(self: alloc::sync::Arc<Self>, rx: tokio::sync::mpsc::bounded::Receiver<perl_lsp_rs_core::protocol::jsonrpc::JsonRpcRequest>)
+pub fn perl_lsp::runtime::LspServer::handle_request(&self, request: perl_lsp_rs_core::protocol::jsonrpc::JsonRpcRequest) -> core::option::Option<perl_lsp_rs_core::protocol::jsonrpc::JsonRpcResponse>
 pub fn perl_lsp::runtime::LspServer::new() -> Self
 pub fn perl_lsp::runtime::LspServer::new_with_feature_profile(feature_profile: perl_lsp_rs_core::features::policy::FeatureProfile) -> Self
 pub fn perl_lsp::runtime::LspServer::with_io<R, W>(reader: alloc::boxed::Box<R>, writer: alloc::boxed::Box<W>) -> Self where R: std::io::Read + core::marker::Send + 'static, W: std::io::Write + core::marker::Send + 'static
@@ -607,8 +627,8 @@ pub fn perl_lsp::runtime::ShowDocumentOptions::clone(&self) -> perl_lsp::runtime
 pub fn perl_lsp::runtime::ShowDocumentOptions::default() -> perl_lsp::runtime::ShowDocumentOptions
 pub fn perl_lsp::runtime::ShowDocumentOptions::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub mod perl_lsp::state
-pub use perl_lsp::state::<<perl_lsp_config::*>>
-pub use perl_lsp::state::<<perl_lsp_limits::*>>
+pub use perl_lsp::state::<<perl_lsp_rs_core::config::*>>
+pub use perl_lsp::state::<<perl_lsp_rs_core::runtime::limits::*>>
 pub enum perl_lsp::state::DegradationTier
 pub perl_lsp::state::DegradationTier::Full
 pub perl_lsp::state::DegradationTier::Minimal
@@ -626,6 +646,7 @@ pub fn perl_lsp::state::DegradationTier::fmt(&self, f: &mut core::fmt::Formatter
 pub fn perl_lsp::state::DegradationTier::hash<__H: core::hash::Hasher>(&self, state: &mut __H)
 pub struct perl_lsp::state::ClientCapabilities
 pub perl_lsp::state::ClientCapabilities::code_lens_refresh_support: bool
+pub perl_lsp::state::ClientCapabilities::completion_commit_characters_support: bool
 pub perl_lsp::state::ClientCapabilities::declaration_link_support: bool
 pub perl_lsp::state::ClientCapabilities::definition_link_support: bool
 pub perl_lsp::state::ClientCapabilities::diagnostic_refresh_support: bool
@@ -636,6 +657,7 @@ pub perl_lsp::state::ClientCapabilities::inlay_hint_refresh_support: bool
 pub perl_lsp::state::ClientCapabilities::inlay_hint_resolve_support: core::option::Option<std::collections::hash::set::HashSet<alloc::string::String>>
 pub perl_lsp::state::ClientCapabilities::inlay_hint_support: bool
 pub perl_lsp::state::ClientCapabilities::inline_value_refresh_support: bool
+pub perl_lsp::state::ClientCapabilities::label_details_support: bool
 pub perl_lsp::state::ClientCapabilities::markup_message_support: bool
 pub perl_lsp::state::ClientCapabilities::semantic_tokens_refresh_support: bool
 pub perl_lsp::state::ClientCapabilities::show_document_support: bool
@@ -643,6 +665,7 @@ pub perl_lsp::state::ClientCapabilities::snippet_support: bool
 pub perl_lsp::state::ClientCapabilities::type_definition_link_support: bool
 pub perl_lsp::state::ClientCapabilities::work_done_progress_support: bool
 pub perl_lsp::state::ClientCapabilities::workspace_configuration_support: bool
+pub perl_lsp::state::ClientCapabilities::workspace_folders_support: bool
 pub fn perl_lsp::state::ClientCapabilities::clone(&self) -> perl_lsp::state::ClientCapabilities
 pub fn perl_lsp::state::ClientCapabilities::default() -> perl_lsp::state::ClientCapabilities
 pub fn perl_lsp::state::ClientCapabilities::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -650,8 +673,8 @@ pub struct perl_lsp::state::DocumentState
 pub perl_lsp::state::DocumentState::ast: core::option::Option<alloc::sync::Arc<perl_ast::ast::Node>>
 pub perl_lsp::state::DocumentState::degradation_tier: perl_lsp::state::DegradationTier
 pub perl_lsp::state::DocumentState::generation: alloc::sync::Arc<core::sync::atomic::AtomicU32>
-pub perl_lsp::state::DocumentState::incremental_doc: core::option::Option<perl_incremental_parsing::incremental::incremental_document::IncrementalDocument>
-pub perl_lsp::state::DocumentState::incremental_state: core::option::Option<perl_incremental_parsing::incremental::IncrementalState>
+pub perl_lsp::state::DocumentState::incremental_doc: core::option::Option<perl_parser::incremental::incremental_document::IncrementalDocument>
+pub perl_lsp::state::DocumentState::incremental_state: core::option::Option<perl_parser::incremental::state::IncrementalState>
 pub perl_lsp::state::DocumentState::line_starts: perl_position_tracking::line_index::LineStartsCache
 pub perl_lsp::state::DocumentState::parent_map: perl_semantic_analyzer::analysis::declaration::ParentMap
 pub perl_lsp::state::DocumentState::parse_errors: alloc::vec::Vec<perl_parser_core::syntax::error::ParseError>
@@ -673,14 +696,23 @@ pub struct perl_lsp::textdoc::Doc
 pub perl_lsp::textdoc::Doc::rope: ropey::rope::Rope
 pub perl_lsp::textdoc::Doc::version: i32
 pub fn perl_lsp::textdoc::Doc::clone(&self) -> perl_lsp::textdoc::Doc
+pub struct perl_lsp::textdoc::SafeRangeMapping
+pub perl_lsp::textdoc::SafeRangeMapping::end_byte: usize
+pub perl_lsp::textdoc::SafeRangeMapping::end_char: usize
+pub perl_lsp::textdoc::SafeRangeMapping::start_byte: usize
+pub perl_lsp::textdoc::SafeRangeMapping::start_char: usize
+pub fn perl_lsp::textdoc::SafeRangeMapping::clone(&self) -> perl_lsp::textdoc::SafeRangeMapping
+pub fn perl_lsp::textdoc::SafeRangeMapping::eq(&self, other: &perl_lsp::textdoc::SafeRangeMapping) -> bool
+pub fn perl_lsp::textdoc::SafeRangeMapping::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn perl_lsp::textdoc::apply_changes(doc: &mut perl_lsp::textdoc::Doc, changes: &[lsp_types::TextDocumentContentChangeEvent], enc: perl_lsp::textdoc::PosEnc)
 pub fn perl_lsp::textdoc::byte_to_lsp_pos(rope: &ropey::rope::Rope, byte: usize, enc: perl_lsp::textdoc::PosEnc) -> lsp_types::Position
 pub fn perl_lsp::textdoc::lsp_pos_to_byte(rope: &ropey::rope::Rope, pos: lsp_types::Position, enc: perl_lsp::textdoc::PosEnc) -> usize
 pub fn perl_lsp::textdoc::lsp_pos_to_char(rope: &ropey::rope::Rope, pos: lsp_types::Position, enc: perl_lsp::textdoc::PosEnc) -> usize
 pub fn perl_lsp::textdoc::range_to_bytes(rope: &ropey::rope::Rope, range: &lsp_types::Range, enc: perl_lsp::textdoc::PosEnc) -> (usize, usize)
 pub fn perl_lsp::textdoc::range_to_chars(rope: &ropey::rope::Rope, range: &lsp_types::Range, enc: perl_lsp::textdoc::PosEnc) -> (usize, usize)
+pub fn perl_lsp::textdoc::safe_range_mapping(rope: &ropey::rope::Rope, range: &lsp_types::Range, enc: perl_lsp::textdoc::PosEnc) -> core::option::Option<perl_lsp::textdoc::SafeRangeMapping>
 pub mod perl_lsp::transport
-pub use perl_lsp::transport::<<perl_lsp_transport::*>>
+pub use perl_lsp::transport::<<perl_lsp_rs_core::transport::*>>
 pub mod perl_lsp::util
 pub use perl_lsp::util::byte_offset_utf16
 pub use perl_lsp::util::code_slice
@@ -697,6 +729,7 @@ pub fn perl_lsp::util::arg_starts_in_call_body(body: &str) -> alloc::vec::Vec<us
 pub fn perl_lsp::util::arg_starts_top_level(src: &str) -> alloc::vec::Vec<usize>
 pub fn perl_lsp::util::byte_to_line_col(source: &str, offset: usize) -> (u32, u32)
 pub fn perl_lsp::util::byte_to_utf16_col(line_text: &str, byte_pos: usize) -> usize
+pub fn perl_lsp::util::decode_text_bytes(bytes: &[u8]) -> alloc::string::String
 pub fn perl_lsp::util::extract_module_reference(text: &str, cursor_pos: usize) -> core::option::Option<alloc::string::String>
 pub fn perl_lsp::util::extract_module_reference_extended(text: &str, cursor_pos: usize) -> core::option::Option<alloc::string::String>
 pub fn perl_lsp::util::find_matching_paren(s: &str, open_at: usize) -> core::option::Option<usize>
@@ -709,6 +742,7 @@ pub fn perl_lsp::util::nth_char_is<F: core::ops::function::FnOnce(char) -> bool>
 pub fn perl_lsp::util::offset_to_position(content: &str, offset: usize) -> lsp_types::Position
 pub fn perl_lsp::util::pos_to_offset_bytes(text: &str, line: u32, ch: u32) -> usize
 pub fn perl_lsp::util::position_to_offset(content: &str, line: u32, character: u32) -> core::option::Option<usize>
+pub fn perl_lsp::util::read_text_file_with_encoding(path: &std::path::Path) -> std::io::error::Result<alloc::string::String>
 pub fn perl_lsp::util::run_command_with_timeout(cmd: std::process::Command, timeout_secs: u64) -> core::result::Result<std::process::Output, alloc::string::String>
 pub fn perl_lsp::util::slice_in_range(text: &str, start: (u32, u32), end: (u32, u32)) -> (usize, usize, &str)
 pub fn perl_lsp::util::slice_until_stmt_end(src: &str, from: usize) -> usize
@@ -716,14 +750,14 @@ pub fn perl_lsp::util::smart_arg_anchor(body: &str, rel: usize) -> usize
 pub struct perl_lsp::LspServer
 pub fn perl_lsp::runtime::LspServer::all_workspace_folders(&self) -> alloc::vec::Vec<perl_lsp::runtime::workspace_folder::WorkspaceFolderState>
 pub fn perl_lsp::runtime::LspServer::build_resolution_context(&self, doc_uri: core::option::Option<&str>) -> perl_lsp::runtime::lifecycle::module_resolution::ResolutionContext
-pub fn perl_lsp::runtime::LspServer::config_for_doc(&self, doc_uri: &str) -> core::option::Option<perl_lsp_config::WorkspaceConfig>
+pub fn perl_lsp::runtime::LspServer::config_for_doc(&self, doc_uri: &str) -> core::option::Option<perl_lsp_rs_core::config::WorkspaceConfig>
 pub fn perl_lsp::runtime::LspServer::folder_for_doc_uri(&self, doc_uri: &str) -> core::option::Option<perl_lsp::runtime::workspace_folder::WorkspaceFolderState>
 pub fn perl_lsp::runtime::LspServer::include_paths_for_doc(&self, doc_uri: &str) -> alloc::vec::Vec<std::path::PathBuf>
 pub fn perl_lsp::runtime::LspServer::install_file_watcher_debouncer(&self, debouncer: perl_lsp::runtime::file_watcher_debounce::FileWatcherDebouncer)
 pub fn perl_lsp::runtime::LspServer::pending_index_tasks(&self) -> usize
 pub fn perl_lsp::runtime::LspServer::schedule_file_watcher_uri(&self, uri: &str) -> bool
 pub fn perl_lsp::runtime::LspServer::search_scopes_for_doc(&self, doc_uri: &str) -> alloc::vec::Vec<perl_lsp::runtime::workspace_folder::WorkspaceFolderState>
-pub fn perl_lsp::runtime::LspServer::subprocess_runtime(&self) -> perl_subprocess_runtime::OsSubprocessRuntime
+pub fn perl_lsp::runtime::LspServer::subprocess_runtime(&self) -> perl_subprocess_runtime::os_runtime::OsSubprocessRuntime
 pub fn perl_lsp::runtime::LspServer::workspace_folder_count(&self) -> usize
 pub fn perl_lsp::runtime::LspServer::workspace_folder_uris(&self) -> alloc::vec::Vec<alloc::string::String>
 pub fn perl_lsp::runtime::LspServer::create_work_done_progress(&self, token: &str) -> std::io::error::Result<()>
@@ -735,15 +769,15 @@ pub fn perl_lsp::runtime::LspServer::send_telemetry(&self, event: serde_json::va
 pub fn perl_lsp::runtime::LspServer::show_document(&self, uri: &str, options: perl_lsp::runtime::ShowDocumentOptions) -> std::io::error::Result<()>
 pub fn perl_lsp::runtime::LspServer::show_message(&self, typ: perl_lsp::runtime::MessageType, message: &str) -> std::io::error::Result<()>
 pub fn perl_lsp::runtime::LspServer::show_message_request(&self, message_type: perl_lsp::runtime::MessageType, message: &str, actions: alloc::vec::Vec<&str>) -> std::io::error::Result<()>
-pub fn perl_lsp::runtime::LspServer::did_open(&self, params: serde_json::value::Value) -> core::result::Result<(), perl_lsp_protocol::jsonrpc::JsonRpcError>
-pub fn perl_lsp::runtime::LspServer::handle_did_change_with_cancellation(&self, params: core::option::Option<serde_json::value::Value>, cancellation_token: core::option::Option<alloc::sync::Arc<core::sync::atomic::AtomicBool>>) -> core::result::Result<(), perl_lsp_protocol::jsonrpc::JsonRpcError>
-pub fn perl_lsp::runtime::LspServer::handle_did_open_with_cancellation(&self, params: core::option::Option<serde_json::value::Value>, cancellation_token: core::option::Option<alloc::sync::Arc<core::sync::atomic::AtomicBool>>) -> core::result::Result<(), perl_lsp_protocol::jsonrpc::JsonRpcError>
+pub fn perl_lsp::runtime::LspServer::did_open(&self, params: serde_json::value::Value) -> core::result::Result<(), perl_lsp_rs_core::protocol::jsonrpc::JsonRpcError>
+pub fn perl_lsp::runtime::LspServer::handle_did_change_with_cancellation(&self, params: core::option::Option<serde_json::value::Value>, cancellation_token: core::option::Option<alloc::sync::Arc<core::sync::atomic::AtomicBool>>) -> core::result::Result<(), perl_lsp_rs_core::protocol::jsonrpc::JsonRpcError>
+pub fn perl_lsp::runtime::LspServer::handle_did_open_with_cancellation(&self, params: core::option::Option<serde_json::value::Value>, cancellation_token: core::option::Option<alloc::sync::Arc<core::sync::atomic::AtomicBool>>) -> core::result::Result<(), perl_lsp_rs_core::protocol::jsonrpc::JsonRpcError>
 pub fn perl_lsp::runtime::LspServer::handle_message<R: std::io::Read>(&self, reader: &mut R) -> std::io::error::Result<()>
 pub fn perl_lsp::runtime::LspServer::is_initialized(&self) -> bool
 pub fn perl_lsp::runtime::LspServer::run(&self) -> std::io::error::Result<()>
 pub fn perl_lsp::runtime::LspServer::serve(&self, reader: &mut dyn std::io::BufRead) -> std::io::error::Result<()>
-pub async fn perl_lsp::runtime::LspServer::serve_async(self: alloc::sync::Arc<Self>, rx: tokio::sync::mpsc::bounded::Receiver<perl_lsp_protocol::jsonrpc::JsonRpcRequest>)
-pub fn perl_lsp::runtime::LspServer::handle_request(&self, request: perl_lsp_protocol::jsonrpc::JsonRpcRequest) -> core::option::Option<perl_lsp_protocol::jsonrpc::JsonRpcResponse>
+pub async fn perl_lsp::runtime::LspServer::serve_async(self: alloc::sync::Arc<Self>, rx: tokio::sync::mpsc::bounded::Receiver<perl_lsp_rs_core::protocol::jsonrpc::JsonRpcRequest>)
+pub fn perl_lsp::runtime::LspServer::handle_request(&self, request: perl_lsp_rs_core::protocol::jsonrpc::JsonRpcRequest) -> core::option::Option<perl_lsp_rs_core::protocol::jsonrpc::JsonRpcResponse>
 pub fn perl_lsp::runtime::LspServer::new() -> Self
 pub fn perl_lsp::runtime::LspServer::new_with_feature_profile(feature_profile: perl_lsp_rs_core::features::policy::FeatureProfile) -> Self
 pub fn perl_lsp::runtime::LspServer::with_io<R, W>(reader: alloc::boxed::Box<R>, writer: alloc::boxed::Box<W>) -> Self where R: std::io::Read + core::marker::Send + 'static, W: std::io::Write + core::marker::Send + 'static

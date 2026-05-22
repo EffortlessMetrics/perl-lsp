@@ -1,5 +1,9 @@
 pub mod perl_dap
 pub mod perl_dap::api
+pub use perl_dap::api::detect_perlbrew_perl
+pub use perl_dap::api::detect_plenv_perl
+pub use perl_dap::api::resolve_perl_path
+pub use perl_dap::api::resolve_perl_path_with_toolchain
 pub enum perl_dap::api::BreakpointError
 pub perl_dap::api::BreakpointError::LineOutOfRange(i64, usize)
 pub perl_dap::api::BreakpointError::ParseError(alloc::string::String)
@@ -297,8 +301,6 @@ pub fn perl_dap::api::PerlVariableRenderer::render_children(&self, value: &perl_
 pub fn perl_dap::api::PerlVariableRenderer::render_with_reference(&self, name: &str, value: &perl_dap::value::PerlValue, reference_id: i64) -> perl_dap::api::RenderedVariable
 pub fn perl_dap::api::create_attach_json_snippet() -> alloc::string::String
 pub fn perl_dap::api::create_launch_json_snippet() -> alloc::string::String
-pub fn perl_dap::api::detect_perlbrew_perl() -> core::option::Option<std::path::PathBuf>
-pub fn perl_dap::api::detect_plenv_perl() -> core::option::Option<std::path::PathBuf>
 pub fn perl_dap::api::filter_user_visible_frames(frames: alloc::vec::Vec<perl_dap::stack::StackFrame>) -> alloc::vec::Vec<perl_dap::stack::StackFrame>
 pub fn perl_dap::api::find_nearest_valid_line(validator: &perl_dap::api::AstBreakpointValidator, line: i64, direction: perl_dap::api::SearchDirection, max_distance: core::option::Option<usize>) -> core::option::Option<i64>
 pub fn perl_dap::api::find_perl_interpreter(configured_path: core::option::Option<&str>) -> perl_dap::platform::PerlInterpreterResult
@@ -306,8 +308,6 @@ pub fn perl_dap::api::format_command_args(args: &[alloc::string::String]) -> all
 pub fn perl_dap::api::is_internal_frame(frame: &perl_dap::stack::StackFrame) -> bool
 pub fn perl_dap::api::is_internal_frame_name_and_path(name: &str, path: core::option::Option<&str>) -> bool
 pub fn perl_dap::api::normalize_path(path: &std::path::Path) -> std::path::PathBuf
-pub fn perl_dap::api::resolve_perl_path() -> anyhow::Result<std::path::PathBuf>
-pub fn perl_dap::api::resolve_perl_path_with_toolchain() -> anyhow::Result<std::path::PathBuf>
 pub fn perl_dap::api::setup_environment(include_paths: &[std::path::PathBuf]) -> std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>
 pub fn perl_dap::api::validate_condition(condition: &str) -> core::result::Result<(), perl_dap::security::SecurityError>
 pub fn perl_dap::api::validate_expression(expression: &str) -> core::result::Result<(), perl_dap::security::SecurityError>
@@ -407,8 +407,16 @@ pub fn perl_dap::bridge_adapter::BridgeAdapter::new() -> Self
 pub async fn perl_dap::bridge_adapter::BridgeAdapter::proxy_messages(&mut self) -> anyhow::Result<()>
 pub async fn perl_dap::bridge_adapter::BridgeAdapter::shutdown(&mut self) -> anyhow::Result<()>
 pub async fn perl_dap::bridge_adapter::BridgeAdapter::spawn_pls_dap(&mut self) -> anyhow::Result<()>
+pub fn perl_dap::bridge_adapter::BridgeAdapter::with_env_config(env_config: perl_dap::bridge_adapter::DapBridgeEnvConfig) -> Self
 pub fn perl_dap::bridge_adapter::BridgeAdapter::default() -> Self
 pub fn perl_dap::bridge_adapter::BridgeAdapter::drop(&mut self)
+pub perl_dap::bridge_adapter::DapBridgeEnvConfig::perl5lib_passthrough: bool
+pub perl_dap::bridge_adapter::DapBridgeEnvConfig::perl5opt_passthrough: bool
+pub const fn perl_dap::bridge_adapter::DapBridgeEnvConfig::new(perl5lib_passthrough: bool, perl5opt_passthrough: bool) -> Self
+pub fn perl_dap::bridge_adapter::DapBridgeEnvConfig::clone(&self) -> perl_dap::bridge_adapter::DapBridgeEnvConfig
+pub fn perl_dap::bridge_adapter::DapBridgeEnvConfig::eq(&self, other: &perl_dap::bridge_adapter::DapBridgeEnvConfig) -> bool
+pub fn perl_dap::bridge_adapter::DapBridgeEnvConfig::default() -> perl_dap::bridge_adapter::DapBridgeEnvConfig
+pub fn perl_dap::bridge_adapter::DapBridgeEnvConfig::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub mod perl_dap::command_args
 pub fn perl_dap::command_args::format_command_args(args: &[alloc::string::String]) -> alloc::vec::Vec<alloc::string::String>
 pub mod perl_dap::config
@@ -534,6 +542,10 @@ pub fn perl_dap::inline_values::collect_inline_values_with_runtime(source: &str,
 pub fn perl_dap::inline_values::extract_variable_names(source: &str, start_line: i64, end_line: i64) -> alloc::vec::Vec<alloc::string::String>
 pub fn perl_dap::inline_values::format_inline_value(name: &str, raw_value: &str) -> alloc::string::String
 pub mod perl_dap::platform
+pub use perl_dap::platform::detect_perlbrew_perl
+pub use perl_dap::platform::detect_plenv_perl
+pub use perl_dap::platform::resolve_perl_path
+pub use perl_dap::platform::resolve_perl_path_with_toolchain
 pub enum perl_dap::platform::PerlInterpreterResult
 pub perl_dap::platform::PerlInterpreterResult::ConfiguredPath(std::path::PathBuf)
 pub perl_dap::platform::PerlInterpreterResult::FoundOnPath(std::path::PathBuf)
@@ -545,13 +557,10 @@ pub perl_dap::platform::PerlInterpreterResult::NotFound::searched: alloc::vec::V
 pub fn perl_dap::platform::PerlInterpreterResult::clone(&self) -> perl_dap::platform::PerlInterpreterResult
 pub fn perl_dap::platform::PerlInterpreterResult::eq(&self, other: &perl_dap::platform::PerlInterpreterResult) -> bool
 pub fn perl_dap::platform::PerlInterpreterResult::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-pub fn perl_dap::platform::detect_perlbrew_perl() -> core::option::Option<std::path::PathBuf>
-pub fn perl_dap::platform::detect_plenv_perl() -> core::option::Option<std::path::PathBuf>
 pub fn perl_dap::platform::find_perl_interpreter(configured_path: core::option::Option<&str>) -> perl_dap::platform::PerlInterpreterResult
+pub fn perl_dap::platform::find_perl_interpreter_cached(configured_path: core::option::Option<&str>) -> perl_dap::platform::PerlInterpreterResult
 pub fn perl_dap::platform::format_command_args(args: &[alloc::string::String]) -> alloc::vec::Vec<alloc::string::String>
 pub fn perl_dap::platform::normalize_path(path: &std::path::Path) -> std::path::PathBuf
-pub fn perl_dap::platform::resolve_perl_path() -> anyhow::Result<std::path::PathBuf>
-pub fn perl_dap::platform::resolve_perl_path_with_toolchain() -> anyhow::Result<std::path::PathBuf>
 pub fn perl_dap::platform::setup_environment(include_paths: &[std::path::PathBuf]) -> std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>
 pub mod perl_dap::protocol
 pub struct perl_dap::protocol::AttachRequestArguments
@@ -1168,6 +1177,23 @@ pub fn perl_dap::security::validate_condition(condition: &str) -> core::result::
 pub fn perl_dap::security::validate_expression(expression: &str) -> core::result::Result<(), perl_dap::security::SecurityError>
 pub fn perl_dap::security::validate_path(path: &std::path::Path, workspace_root: &std::path::Path) -> core::result::Result<std::path::PathBuf, perl_dap::security::SecurityError>
 pub fn perl_dap::security::validate_timeout(timeout_ms: u32) -> core::result::Result<u32, perl_dap::security::SecurityError>
+pub mod perl_dap::server
+pub enum perl_dap::server::DapMode
+pub perl_dap::server::DapMode::Bridge
+pub perl_dap::server::DapMode::Native
+pub fn perl_dap::DapMode::clone(&self) -> perl_dap::DapMode
+pub fn perl_dap::DapMode::eq(&self, other: &perl_dap::DapMode) -> bool
+pub fn perl_dap::DapMode::default() -> perl_dap::DapMode
+pub fn perl_dap::DapMode::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct perl_dap::server::DapConfig
+pub perl_dap::server::DapConfig::log_level: alloc::string::String
+pub perl_dap::server::DapConfig::mode: perl_dap::DapMode
+pub perl_dap::server::DapConfig::workspace_root: core::option::Option<std::path::PathBuf>
+pub struct perl_dap::server::DapServer
+pub perl_dap::server::DapServer::config: perl_dap::DapConfig
+pub fn perl_dap::DapServer::new(config: perl_dap::DapConfig) -> anyhow::Result<Self>
+pub fn perl_dap::DapServer::run(&mut self) -> anyhow::Result<()>
+pub fn perl_dap::DapServer::run_socket(&mut self, port: u16) -> anyhow::Result<()>
 pub mod perl_dap::shell
 pub fn perl_dap::shell::format_command_args(args: &[alloc::string::String]) -> alloc::vec::Vec<alloc::string::String>
 pub fn perl_dap::shell::setup_environment(include_paths: &[std::path::PathBuf]) -> std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>
@@ -1608,6 +1634,7 @@ pub fn perl_dap::bridge_adapter::BridgeAdapter::new() -> Self
 pub async fn perl_dap::bridge_adapter::BridgeAdapter::proxy_messages(&mut self) -> anyhow::Result<()>
 pub async fn perl_dap::bridge_adapter::BridgeAdapter::shutdown(&mut self) -> anyhow::Result<()>
 pub async fn perl_dap::bridge_adapter::BridgeAdapter::spawn_pls_dap(&mut self) -> anyhow::Result<()>
+pub fn perl_dap::bridge_adapter::BridgeAdapter::with_env_config(env_config: perl_dap::bridge_adapter::DapBridgeEnvConfig) -> Self
 pub fn perl_dap::bridge_adapter::BridgeAdapter::default() -> Self
 pub fn perl_dap::bridge_adapter::BridgeAdapter::drop(&mut self)
 pub struct perl_dap::CancelArguments
@@ -1677,6 +1704,13 @@ pub fn perl_dap::protocol::ContinueResponseBody::clone(&self) -> perl_dap::proto
 pub fn perl_dap::protocol::ContinueResponseBody::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn perl_dap::protocol::ContinueResponseBody::serialize<__S>(&self, __serializer: __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 pub fn perl_dap::protocol::ContinueResponseBody::deserialize<__D>(__deserializer: __D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub perl_dap::DapBridgeEnvConfig::perl5lib_passthrough: bool
+pub perl_dap::DapBridgeEnvConfig::perl5opt_passthrough: bool
+pub const fn perl_dap::bridge_adapter::DapBridgeEnvConfig::new(perl5lib_passthrough: bool, perl5opt_passthrough: bool) -> Self
+pub fn perl_dap::bridge_adapter::DapBridgeEnvConfig::clone(&self) -> perl_dap::bridge_adapter::DapBridgeEnvConfig
+pub fn perl_dap::bridge_adapter::DapBridgeEnvConfig::eq(&self, other: &perl_dap::bridge_adapter::DapBridgeEnvConfig) -> bool
+pub fn perl_dap::bridge_adapter::DapBridgeEnvConfig::default() -> perl_dap::bridge_adapter::DapBridgeEnvConfig
+pub fn perl_dap::bridge_adapter::DapBridgeEnvConfig::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub struct perl_dap::DapConfig
 pub perl_dap::DapConfig::log_level: alloc::string::String
 pub perl_dap::DapConfig::mode: perl_dap::DapMode

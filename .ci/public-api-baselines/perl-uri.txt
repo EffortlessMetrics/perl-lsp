@@ -8,6 +8,7 @@ pub fn perl_uri::fs_path_to_uri<P: core::convert::AsRef<std::path::Path>>(path: 
 pub fn perl_uri::is_file_uri(uri: &str) -> bool
 pub fn perl_uri::is_special_scheme(uri: &str) -> bool
 pub fn perl_uri::normalize_uri(uri: &str) -> alloc::string::String
+pub fn perl_uri::source_path_from_uri_or_path(input: &str) -> core::option::Option<std::path::PathBuf>
 pub fn perl_uri::uri_extension(uri: &str) -> core::option::Option<&str>
 pub fn perl_uri::uri_key(uri: &str) -> alloc::string::String
 pub fn perl_uri::uri_to_fs_path(uri: &str) -> core::option::Option<std::path::PathBuf>

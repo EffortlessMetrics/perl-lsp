@@ -753,10 +753,20 @@ Current executable slice
   presence of a repo-local `target/` directory that storage-doctor measures as
   empty. That is a local storage receipt only, not a `cargo-safe`, build-system,
   provider, parser, support-tier, or release-lineage change.
-- `policy-cleanup-routing-review` is active in the reliability lane. It is a
-  docs/manifest-only routing item for the next policy cleanup pass; it must not
-  broaden policy enforcement, provider behavior, support tiers, parser/corpus
-  buckets, release-lineage sync, or source-repo development routing.
+- `policy-cleanup-routing-review` is completed in the reliability lane. It was
+  a control-plane routing pass after the ancestry sync and queue burn-down: the
+  swarm queue is empty, source-lineage ancestry is attached, the manifest and
+  gate-policy checks pass, support/provider claim checks pass, and
+  `storage-doctor` is green after removing stale repo-local build output. It did
+  not broaden policy enforcement, provider behavior, support tiers,
+  parser/corpus buckets, release-lineage sync, or source-repo development
+  routing.
+- `published-api-hygiene` is active in the reliability lane. The current slice
+  keeps public API checks storage-safe by routing the `just public-api-*`
+  recipes through `scripts/cargo-safe` and refreshes the committed public API
+  baselines to the current code surface. It must not change Rust API surface,
+  broaden provider behavior, promote support tiers, move parser/corpus buckets,
+  sync release lineage, or continue source-repo development.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
@@ -774,14 +784,21 @@ Claim boundary
   docs until a separate implementation PR names a concrete storage or validation
   contract. It must not change `cargo-safe`, build defaults, provider behavior,
   parser/corpus buckets, support tiers, or release-lineage sync.
+- Published API hygiene may update the public API check recipes, routing docs,
+  and committed public API baseline artifacts to match the current code surface.
+  It must not claim semver compatibility, change Rust API surface, or promote
+  provider/support/parser status.
 
 Proof commands
 
 ```bash
 rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft
-rtk cargo xtask check-active-goal-manifest
-rtk cargo xtask devex-doctor
-rtk cargo xtask gate-policy check
+rtk bash -lc './scripts/cargo-safe xtask check-active-goal-manifest'
+rtk bash -lc './scripts/cargo-safe xtask gate-policy check'
+rtk bash -lc './scripts/cargo-safe xtask check-support-claims'
+rtk bash -lc './scripts/cargo-safe xtask check-provider-confidence-matrix'
+rtk bash -lc 'just public-api-update'
+rtk bash -lc 'just public-api-check'
 rtk bash -lc './scripts/storage-doctor'
 rtk git diff --check
 ```
