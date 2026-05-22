@@ -59,6 +59,7 @@ specs = [
   "docs/specs/PLSP-SPEC-0024-framework-fact-adapters.md",
   "docs/specs/PLSP-SPEC-0025-pir-v0.md",
   "docs/specs/PLSP-SPEC-0026-determinism-receipt-v1.md",
+  "docs/specs/PLSP-SPEC-0027-differential-real-perl-oracle.md",
 ]
 
 [current]
@@ -369,15 +370,17 @@ commands = [
 
 [[work_item]]
 id = "differential-oracle-contract"
-status = "deferred"
+status = "active"
 lane = "substrate"
 claim_boundary = "Differential oracle contract planning only; no real-Perl runtime dependency, workspace probing, provider behavior, release-lineage sync, support-tier promotion, or corpus/parser bucket movement claim."
 files = [
   "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/specs/README.md",
   "docs/specs/PLSP-SPEC-0017-fact-provenance-and-source-backing.md",
   "docs/specs/PLSP-SPEC-0022-module-path-authority.md",
   "docs/specs/PLSP-SPEC-0023-ambient-inputs.md",
   "docs/specs/PLSP-SPEC-0026-determinism-receipt-v1.md",
+  "docs/specs/PLSP-SPEC-0027-differential-real-perl-oracle.md",
   "docs/project/status/compiler_facts.md",
   "docs/project/status/real_perl_editor_trust_v1.md",
 ]
@@ -392,7 +395,7 @@ commands = [
 
 [[work_item]]
 id = "cleanup-train-queue-review"
-status = "active"
+status = "completed"
 lane = "reliability"
 claim_boundary = "Publishing-repo queue triage and swarm routing only; no source-repo development merge, provider behavior, support-tier promotion, release/publish/signing change, or differential-oracle spec work."
 files = [

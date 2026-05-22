@@ -22,7 +22,7 @@ fixture-backed before any live LSP feature consumes it.
 | Prototype table facts | `fixture-backed` | [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197) | `crates/perl-parser-core/tests/hir_tests.rs` | Keep named subroutine prototype content and source ranges available as compiler substrate; no provider, diagnostic, parser-bucket, PIR, or support-tier promotion follows from this row |
 | Bareword classifier facts | `fixture-backed` | [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197) | `crates/perl-parser-core/tests/hir_tests.rs` | Keep source-backed syntactic bareword roles available for downstream diagnostic/provider proof; no PL109 suppression, provider behavior, parser-bucket, PIR, determinism, or support-tier promotion follows from this row |
 | Tooling PIR | `planned` | [#8196](https://github.com/EffortlessMetrics/perl-lsp/issues/8196) | Roadmap only | Context-aware PIR lowering fixtures |
-| Differential real-Perl oracle | `planned` | [#8199](https://github.com/EffortlessMetrics/perl-lsp/issues/8199), [#8294](https://github.com/EffortlessMetrics/perl-lsp/issues/8294) | Selected compile-effect oracle proof in [#8300](https://github.com/EffortlessMetrics/perl-lsp/pull/8300) | Broader conformance receipts remain planned; real Perl stays a comparison oracle, not an editor-runtime dependency |
+| Differential real-Perl oracle | `planned / spec-backed` | [#8199](https://github.com/EffortlessMetrics/perl-lsp/issues/8199), [#8294](https://github.com/EffortlessMetrics/perl-lsp/issues/8294) | [PLSP-SPEC-0027](../../specs/PLSP-SPEC-0027-differential-real-perl-oracle.md); selected compile-effect oracle proof in [#8300](https://github.com/EffortlessMetrics/perl-lsp/pull/8300) | Broader conformance receipts remain planned; real Perl stays a comparison oracle, not an editor-runtime dependency |
 
 ## Boundaries
 
@@ -41,6 +41,9 @@ fixture-backed before any live LSP feature consumes it.
 - Real Perl is useful for differential proof, but the durable fact substrate is
   the Rust-native compiler path that feeds editor, formatter, linter,
   refactoring, and determinism workflows.
+- The differential oracle contract is spec-backed planning only. It does not
+  add an oracle runner, execute Perl, probe workspaces, move parser/corpus
+  buckets, promote support tiers, or change provider behavior.
 
 ## Verification
 

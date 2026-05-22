@@ -26,6 +26,7 @@ of current evidence.
 | Workspace symbol generated-label rules | [PLSP-SPEC-0020](../../specs/PLSP-SPEC-0020-workspace-symbol-generated-label-contract.md), [workspace-symbol-classes.toml](../../../policy/workspace-symbol-classes.toml) |
 | Module path authority and ambient-input boundaries | [PLSP-SPEC-0022](../../specs/PLSP-SPEC-0022-module-path-authority.md), [PLSP-SPEC-0023](../../specs/PLSP-SPEC-0023-ambient-inputs.md) |
 | Determinism receipt v1 planning boundary | [PLSP-SPEC-0026](../../specs/PLSP-SPEC-0026-determinism-receipt-v1.md) |
+| Differential real-Perl oracle planning boundary | [PLSP-SPEC-0027](../../specs/PLSP-SPEC-0027-differential-real-perl-oracle.md) |
 | User-facing support claims and known limitations | [SUPPORT_TIERS.md](SUPPORT_TIERS.md) |
 | Provider fact source, confidence, freshness, fallback, and next proof | [provider_confidence_matrix.md](provider_confidence_matrix.md) |
 | Provider promotion, fallback, blocker, and defer decisions by fact class | [provider_promotion_ledger.md](provider_promotion_ledger.md), [provider-promotion-ledger.toml](../../../policy/provider-promotion-ledger.toml) |
@@ -130,6 +131,14 @@ generated/dynamic/stale boundaries, cache/index state, fallback, blockers, and
 unknowns before claiming repeatability. The spec does not add a receipt
 generator, runtime probe, PIR implementation, provider behavior, support-tier
 promotion, release-lineage sync, or determinism claim.
+
+The differential real-Perl oracle contract is now defined as a planning
+boundary. It requires future oracle receipts to compare declared Rust compiler
+facts against declared real-Perl fixture observations with explicit fixture,
+environment, module-path, ambient-input, disagreement, fallback, and blocker
+classification. The spec does not add an oracle runner, execute Perl, probe
+workspaces, change provider behavior, move parser/corpus buckets, promote
+support tiers, sync release lineage, or claim conformance.
 
 ## Current Dashboard
 
