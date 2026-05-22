@@ -26,8 +26,7 @@ use serde_json::json;
 
 fn syntax_only_server() -> LspServer {
     let mut tuning = RuntimeTuning::normal_defaults();
-    tuning.diagnostic_mode =
-        perl_lsp_rs_core::runtime::tuning::DiagnosticMode::SyntaxOnly;
+    tuning.diagnostic_mode = perl_lsp_rs_core::runtime::tuning::DiagnosticMode::SyntaxOnly;
     LspServer::new_with_tuning(tuning)
 }
 
@@ -61,7 +60,10 @@ fn syntax_only_reports_parse_errors() {
     assert!(!items.is_empty(), "syntax-only mode must report parse errors; got {items:?}");
     for item in &items {
         let source = item.get("source").and_then(|v| v.as_str()).unwrap_or("");
-        assert_eq!(source, "perl-parser", "syntax-only must only emit parse errors; saw source={source}");
+        assert_eq!(
+            source, "perl-parser",
+            "syntax-only must only emit parse errors; saw source={source}"
+        );
         let code = item.get("code").and_then(|v| v.as_str()).unwrap_or("");
         assert!(
             code.starts_with("PL") || code == "parse-error",
