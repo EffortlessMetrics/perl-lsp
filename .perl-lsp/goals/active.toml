@@ -130,11 +130,10 @@ items = [
 
 [reliability.next]
 items = [
-  "post-oracle-schema-routing-review",
+  "devex-storage-safe-validation",
   "cleanup-train-queue-review",
   "policy_cleanup",
   "published_api_hygiene",
-  "devex_storage_safe_validation",
 ]
 
 [[work_item]]
@@ -475,9 +474,27 @@ commands = [
 
 [[work_item]]
 id = "post-oracle-schema-routing-review"
-status = "active"
+status = "completed"
 lane = "reliability"
 claim_boundary = "Control-plane routing review only; no oracle runner, Perl execution, workspace probing, provider behavior, support-tier promotion, provider-row promotion, release-lineage sync, or parser/corpus bucket movement."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+]
+commands = [
+  "rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask devex-doctor",
+  "rtk cargo xtask gate-policy check",
+  "rtk bash -lc './scripts/storage-doctor'",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "devex-storage-safe-validation"
+status = "active"
+lane = "reliability"
+claim_boundary = "DevEx storage validation routing only; no cargo-safe behavior change, build-system change, provider behavior, support-tier promotion, release-lineage sync, parser/corpus bucket movement, or source-repo development continuation."
 files = [
   ".perl-lsp/goals/active.toml",
   "plans/real-perl-editor-trust/implementation-plan.md",

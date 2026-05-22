@@ -723,6 +723,10 @@ Recent routing
   without adding an oracle runner, executing Perl, probing workspaces, changing
   provider behavior, moving parser/corpus buckets, promoting support tiers,
   syncing release lineage, or claiming conformance.
+- `post-oracle-schema-routing-review` is completed. The active manifest no
+  longer points at the completed receipt-schema slice, and the next substrate
+  items remain assignment-gated until a separate PR explicitly starts an oracle
+  runner or PIR contract lane.
 
 Current executable slice
 
@@ -735,14 +739,11 @@ Current executable slice
   authority, ambient/generated/dynamic/stale/unsupported inputs, normalized
   facts, comparison result classes, promotion effect, redaction,
   provider-behavior-change flag, and editor-runtime dependency denial.
-- `post-oracle-schema-routing-review` is active in the reliability lane. It is
-  a control-plane routing review: the manifest must stop pointing at the
-  completed receipt-schema slice, and the next substrate items stay
-  assignment-gated until a separate PR explicitly starts an oracle runner or PIR
-  contract lane.
-- This active review does not add an oracle runner, execute Perl, probe
-  workspaces, change provider behavior, promote support tiers, move
-  parser/corpus buckets, sync release lineage, or claim conformance.
+- `devex-storage-safe-validation` is active in the reliability lane. It is a
+  control-plane routing item for storage-safe local validation and queue health;
+  it does not change `cargo-safe`, build behavior, provider behavior, support
+  tiers, parser/corpus buckets, release-lineage sync, or source-repo development
+  routing.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
@@ -756,21 +757,19 @@ Claim boundary
 - Post-schema routing review may update only the active goal manifest and this
   plan. It must not select a parser bucket from stale status, start PIR, start
   determinism implementation, or promote provider behavior.
+- DevEx storage-safe validation may update only active-goal routing and planning
+  docs until a separate implementation PR names a concrete storage or validation
+  contract. It must not change `cargo-safe`, build defaults, provider behavior,
+  parser/corpus buckets, support tiers, or release-lineage sync.
 
 Proof commands
 
 ```bash
 rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft
-rtk cargo xtask check-oracle-receipt-schema
-rtk cargo xtask check-oracle-fixture-manifest
 rtk cargo xtask check-active-goal-manifest
-rtk cargo xtask ci-hygiene check-doc-paths docs/specs
-rtk cargo xtask ci-hygiene check-doc-paths docs/project/status
-rtk cargo xtask check-support-claims
-rtk cargo xtask check-provider-confidence-matrix
-rtk cargo xtask check-provider-promotion-ledger
-rtk cargo xtask metrics parser-accuracy --check
-rtk cargo xtask metrics ratchet-check parser_accuracy
+rtk cargo xtask devex-doctor
+rtk cargo xtask gate-policy check
+rtk bash -lc './scripts/storage-doctor'
 rtk git diff --check
 ```
 
@@ -778,4 +777,6 @@ Rollback
 
 Revert this routing PR. If the receipt schema needs more work, mark
 `oracle-receipt-schema-after-manifest` active again and select no feature lane
-until the schema validator passes.
+until the schema validator passes. If the DevEx storage-safe lane is not ready,
+mark it planned and select another reliability item with no provider/runtime
+behavior impact.
