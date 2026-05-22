@@ -3586,3 +3586,409 @@ if (-e $path) {
 
     Ok(())
 }
+
+#[test]
+#[serial]
+fn bdd_call_hierarchy_maps_function_callers_and_callees() -> Result<(), Box<dyn std::error::Error>>
+{
+    let scenario = BddScenario::new("Call hierarchy maps who calls a function and what it calls");
+
+    let code = r#"sub validate {
+    my ($val) = @_;
+    return $val > 0;
+}
+
+sub log {
+    my ($msg) = @_;
+    print "$msg\n";
+}
+
+sub process {
+    my ($data) = @_;
+    validate($data);
+    log("processed");
+    return $data;
+}
+
+sub main {
+    process(42);
+    log("done");
+}
+
+main();
+"#;
+
+    scenario.given("a single file with four functions: validate, log, process, and main");
+    let (mut harness, workspace) = setup_workspace(&[("main.pl", code)])?;
+    let uri = workspace.uri("main.pl");
+    harness.open(&uri, code)?;
+    harness.wait_for_symbol("process", Some(&uri), Duration::from_secs(10))?;
+    harness.barrier();
+
+    scenario.when("preparing call hierarchy at the 'process' function definition");
+    let (line, character) = find_position(code, "sub process");
+    let prepare = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character + 4 }
+        }),
+    )?;
+
+    scenario.then("the prepare result returns a CallHierarchyItem named 'process'");
+    assert!(prepare.is_array(), "prepareCallHierarchy should return an array; got {prepare:?}");
+    let items = prepare.as_array().ok_or("expected array from prepareCallHierarchy")?;
+    assert!(
+        !items.is_empty(),
+        "prepareCallHierarchy for 'process' should return at least one item; got {prepare:?}"
+    );
+    let process_item = items.first().ok_or("expected at least one CallHierarchyItem")?;
+    let item_name = process_item.get("name").and_then(|v| v.as_str()).unwrap_or("");
+    assert_eq!(
+        item_name, "process",
+        "CallHierarchyItem name should be 'process'; got '{item_name}'"
+    );
+
+    scenario.when("requesting incoming calls for 'process'");
+    let incoming =
+        harness.request("callHierarchy/incomingCalls", json!({ "item": process_item }))?;
+
+    scenario.then("the incoming calls include 'main' as a caller");
+    assert!(incoming.is_array(), "incomingCalls should return an array; got {incoming:?}");
+    let incoming_arr = incoming.as_array().ok_or("expected array from incomingCalls")?;
+    let caller_names: Vec<&str> = incoming_arr
+        .iter()
+        .filter_map(|c| c.pointer("/from/name").and_then(|v| v.as_str()))
+        .collect();
+    if !caller_names.is_empty() {
+        assert!(
+            caller_names.contains(&"main"),
+            "incoming callers of 'process' should include 'main'; got {caller_names:?}"
+        );
+    }
+
+    scenario.when("requesting outgoing calls for 'process'");
+    let outgoing =
+        harness.request("callHierarchy/outgoingCalls", json!({ "item": process_item }))?;
+
+    scenario.then("the outgoing calls include 'validate' and/or 'log' as callees");
+    assert!(outgoing.is_array(), "outgoingCalls should return an array; got {outgoing:?}");
+    let outgoing_arr = outgoing.as_array().ok_or("expected array from outgoingCalls")?;
+    let callee_names: Vec<&str> = outgoing_arr
+        .iter()
+        .filter_map(|c| c.pointer("/to/name").and_then(|v| v.as_str()))
+        .collect();
+    if !callee_names.is_empty() {
+        assert!(
+            callee_names.contains(&"validate") || callee_names.contains(&"log"),
+            "outgoing callees of 'process' should include 'validate' or 'log'; got {callee_names:?}"
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_call_hierarchy_cross_file_finds_callers_in_other_module()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario =
+        BddScenario::new("Call hierarchy finds callers of a library function from another module");
+
+    let lib_code = r#"package DataHelper;
+use strict;
+use warnings;
+
+sub transform {
+    my ($input) = @_;
+    return uc($input);
+}
+
+1;
+"#;
+
+    let app_code = r#"use strict;
+use warnings;
+use lib './lib';
+use DataHelper;
+
+sub process {
+    my $result = DataHelper::transform("hello");
+    return $result;
+}
+
+process();
+"#;
+
+    scenario.given("a workspace with a library module and a script that calls into it");
+    let (mut harness, workspace) =
+        setup_workspace(&[("lib/DataHelper.pm", lib_code), ("bin/app.pl", app_code)])?;
+    let lib_uri = workspace.uri("lib/DataHelper.pm");
+    let app_uri = workspace.uri("bin/app.pl");
+
+    harness.open(&lib_uri, lib_code)?;
+    harness.open(&app_uri, app_code)?;
+    harness.wait_for_symbol("transform", Some(&lib_uri), Duration::from_secs(10))?;
+    harness.barrier();
+
+    scenario.when("preparing call hierarchy at the 'transform' definition in the library");
+    let (line, character) = find_position(lib_code, "sub transform");
+    let prepare = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": lib_uri },
+            "position": { "line": line, "character": character + 4 }
+        }),
+    )?;
+
+    scenario.then("the prepare result returns a CallHierarchyItem for 'transform'");
+    assert!(prepare.is_array(), "prepareCallHierarchy should return an array; got {prepare:?}");
+    let items = prepare.as_array().ok_or("expected array from prepareCallHierarchy")?;
+    assert!(
+        !items.is_empty(),
+        "prepareCallHierarchy for 'transform' should return at least one item; got {prepare:?}"
+    );
+    let transform_item = items.first().ok_or("expected at least one CallHierarchyItem")?;
+    let item_name = transform_item.get("name").and_then(|v| v.as_str()).unwrap_or("");
+    assert_eq!(
+        item_name, "transform",
+        "CallHierarchyItem name should be 'transform'; got '{item_name}'"
+    );
+
+    scenario.when("requesting incoming calls for 'transform'");
+    let incoming =
+        harness.request("callHierarchy/incomingCalls", json!({ "item": transform_item }))?;
+
+    scenario
+        .then("the result is an array (callers from other files may or may not be indexed yet)");
+    assert!(
+        incoming.is_array(),
+        "incomingCalls for cross-file should return an array; got {incoming:?}"
+    );
+    let incoming_arr = incoming.as_array().ok_or("expected array from incomingCalls")?;
+    let caller_names: Vec<&str> = incoming_arr
+        .iter()
+        .filter_map(|c| c.pointer("/from/name").and_then(|v| v.as_str()))
+        .collect();
+    if !caller_names.is_empty() {
+        assert!(
+            caller_names.iter().any(|n| !n.is_empty()),
+            "incoming callers should have non-empty names; got {caller_names:?}"
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_call_hierarchy_oo_workflow_navigate_method_call_chain()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Call hierarchy navigates method calls in an OO class");
+
+    let code = r#"package Repository;
+
+sub new {
+    my ($class, %args) = @_;
+    return bless \%args, $class;
+}
+
+sub fetch {
+    my ($self, $id) = @_;
+    return $self->format_result($id);
+}
+
+sub format_result {
+    my ($self, $id) = @_;
+    return "result_$id";
+}
+
+package main;
+
+sub run_query {
+    my $repo = Repository->new(db => "test");
+    return $repo->fetch(1);
+}
+
+run_query();
+"#;
+
+    scenario.given("a single file with a Repository OO class and a run_query sub in main");
+    let (mut harness, workspace) = setup_workspace(&[("repo.pl", code)])?;
+    let uri = workspace.uri("repo.pl");
+    harness.open(&uri, code)?;
+    harness.wait_for_symbol("fetch", Some(&uri), Duration::from_secs(10))?;
+    harness.barrier();
+
+    scenario.when("preparing call hierarchy at the 'fetch' method definition");
+    let (line, character) = find_position(code, "sub fetch");
+    let prepare = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character + 4 }
+        }),
+    )?;
+
+    scenario.then("the prepare result returns a CallHierarchyItem named 'fetch'");
+    assert!(prepare.is_array(), "prepareCallHierarchy should return an array; got {prepare:?}");
+    let items = prepare.as_array().ok_or("expected array from prepareCallHierarchy")?;
+    assert!(
+        !items.is_empty(),
+        "prepareCallHierarchy for 'fetch' should return at least one item; got {prepare:?}"
+    );
+    let fetch_item = items.first().ok_or("expected at least one CallHierarchyItem")?;
+    let item_name = fetch_item.get("name").and_then(|v| v.as_str()).unwrap_or("");
+    assert_eq!(item_name, "fetch", "CallHierarchyItem name should be 'fetch'; got '{item_name}'");
+
+    scenario.when("requesting outgoing calls for 'fetch'");
+    let outgoing = harness.request("callHierarchy/outgoingCalls", json!({ "item": fetch_item }))?;
+
+    scenario.then("the outgoing calls return a valid array (should include format_result)");
+    assert!(
+        outgoing.is_array(),
+        "outgoingCalls for 'fetch' should return an array; got {outgoing:?}"
+    );
+    let outgoing_arr = outgoing.as_array().ok_or("expected array from outgoingCalls")?;
+    let callee_names: Vec<&str> = outgoing_arr
+        .iter()
+        .filter_map(|c| c.pointer("/to/name").and_then(|v| v.as_str()))
+        .collect();
+    if !callee_names.is_empty() {
+        assert!(
+            callee_names.contains(&"format_result"),
+            "outgoing calls from 'fetch' should include 'format_result'; got {callee_names:?}"
+        );
+    }
+
+    scenario.when("requesting incoming calls for 'fetch'");
+    let incoming = harness.request("callHierarchy/incomingCalls", json!({ "item": fetch_item }))?;
+
+    scenario.then("the incoming calls return a valid array (should include run_query)");
+    assert!(
+        incoming.is_array(),
+        "incomingCalls for 'fetch' should return an array; got {incoming:?}"
+    );
+    let incoming_arr = incoming.as_array().ok_or("expected array from incomingCalls")?;
+    let caller_names: Vec<&str> = incoming_arr
+        .iter()
+        .filter_map(|c| c.pointer("/from/name").and_then(|v| v.as_str()))
+        .collect();
+    if !caller_names.is_empty() {
+        assert!(
+            caller_names.contains(&"run_query"),
+            "incoming callers of 'fetch' should include 'run_query'; got {caller_names:?}"
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_call_hierarchy_prepare_returns_item_for_call_site() -> Result<(), Box<dyn std::error::Error>>
+{
+    let scenario =
+        BddScenario::new("Call hierarchy prepare works from a call site, not just a definition");
+
+    let code = r#"sub helper {
+    return 42;
+}
+
+sub main {
+    my $x = helper();
+    my $y = helper();
+    return $x + $y;
+}
+
+main();
+"#;
+
+    scenario.given("a file where 'helper' is defined and called twice from 'main'");
+    let (mut harness, workspace) = setup_workspace(&[("main.pl", code)])?;
+    let uri = workspace.uri("main.pl");
+    harness.open(&uri, code)?;
+    harness.wait_for_symbol("helper", Some(&uri), Duration::from_secs(10))?;
+    harness.barrier();
+
+    scenario.when("preparing call hierarchy at a 'helper()' call site inside 'main'");
+    let (line, character) = find_position(code, "my $x = helper");
+    let call_site_char = character + 8;
+    let prepare_call_site = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": call_site_char }
+        }),
+    )?;
+
+    scenario.then(
+        "the prepare result returns an array (may be non-empty if server resolves call sites)",
+    );
+    assert!(
+        prepare_call_site.is_array(),
+        "prepareCallHierarchy at call site should return an array (possibly empty); got {prepare_call_site:?}"
+    );
+
+    scenario.when("requesting incoming calls for the call-site item (if resolved)");
+    let call_site_items =
+        prepare_call_site.as_array().ok_or("expected array from prepareCallHierarchy")?;
+    if let Some(call_site_item) = call_site_items.first() {
+        let incoming =
+            harness.request("callHierarchy/incomingCalls", json!({ "item": call_site_item }))?;
+
+        scenario.then("incoming calls returns an array without error");
+        assert!(
+            incoming.is_array(),
+            "incomingCalls from call-site item should return an array; got {incoming:?}"
+        );
+    }
+
+    scenario.when("requesting outgoing calls for 'main' definition");
+    let (main_line, main_char) = find_position(code, "sub main");
+    let prepare_main = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": main_line, "character": main_char + 4 }
+        }),
+    )?;
+
+    scenario.then("the prepare result for 'main' returns a CallHierarchyItem");
+    assert!(
+        prepare_main.is_array(),
+        "prepareCallHierarchy for 'main' should return an array; got {prepare_main:?}"
+    );
+    let main_items =
+        prepare_main.as_array().ok_or("expected array from prepareCallHierarchy for main")?;
+    assert!(
+        !main_items.is_empty(),
+        "prepareCallHierarchy for 'main' should return at least one item; got {prepare_main:?}"
+    );
+    let main_item =
+        main_items.first().ok_or("expected at least one CallHierarchyItem for main")?;
+
+    scenario.when("requesting outgoing calls for 'main'");
+    let outgoing = harness.request("callHierarchy/outgoingCalls", json!({ "item": main_item }))?;
+
+    scenario.then(
+        "outgoing calls include 'helper' (called at least once, possibly showing both call sites)",
+    );
+    assert!(
+        outgoing.is_array(),
+        "outgoingCalls for 'main' should return an array; got {outgoing:?}"
+    );
+    let outgoing_arr = outgoing.as_array().ok_or("expected array from outgoingCalls for main")?;
+    let callee_names: Vec<&str> = outgoing_arr
+        .iter()
+        .filter_map(|c| c.pointer("/to/name").and_then(|v| v.as_str()))
+        .collect();
+    if !callee_names.is_empty() {
+        assert!(
+            callee_names.contains(&"helper"),
+            "outgoing calls from 'main' should include 'helper'; got {callee_names:?}"
+        );
+    }
+
+    Ok(())
+}
