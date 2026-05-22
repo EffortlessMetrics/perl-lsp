@@ -744,8 +744,9 @@ Current executable slice
   health; it did not change `cargo-safe`, build behavior, provider behavior,
   support tiers, parser/corpus buckets, release-lineage sync, or source-repo
   development routing.
-  The 2026-05-22 post-burndown validation pass confirms both swarm and source
-  queues report zero open PRs, `pr-fast` passes on `92f4a1b`, the manifest and
+  The 2026-05-22 post-burndown validation pass captured a clean queue-health
+  checkpoint before the release/readiness follow-up PRs reopened the swarm
+  queue. The same pass confirms `pr-fast` passes on `92f4a1b`, the manifest and
   gate policy checks pass, `cargo xtask devex-doctor` completes with required
   tooling available, and `storage-doctor` reports repo-local `target/` at
   `0.0G`. The only devex-doctor warnings are local hook advisories and the
