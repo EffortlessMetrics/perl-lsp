@@ -418,6 +418,9 @@ fn require_contains_all(
             violations.push(format!("{doc}: {field} missing required entry {missing:?}"));
         }
     }
+    for unexpected in actual_set.difference(&expected.iter().copied().collect::<BTreeSet<_>>()) {
+        violations.push(format!("{doc}: {field} contains unsupported entry {unexpected:?}"));
+    }
     validate_string_list(doc, field, actual, violations);
 }
 
@@ -459,6 +462,28 @@ mod tests {
         )?;
 
         let err = validate(tempdir.path()).expect_err("missing local::lib denial should fail");
+
+        assert!(
+            err.to_string().contains("oracle fixture manifest check failed"),
+            "unexpected error: {err:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_unsupported_environment_denial() -> TestResult {
+        let tempdir = valid_manifest_workspace()?;
+        let manifest_path = tempdir.path().join(MANIFEST_PATH);
+        let text = fs::read_to_string(&manifest_path)?;
+        fs::write(
+            &manifest_path,
+            text.replace(
+                r#""environment_denials": ["PERL5LIB", "PERL5OPT", "local::lib"]"#,
+                r#""environment_denials": ["PERL5LIB", "PERL5OPT", "local::lib", "PATH"]"#,
+            ),
+        )?;
+
+        let err = validate(tempdir.path()).expect_err("unsupported PATH denial should fail");
 
         assert!(
             err.to_string().contains("oracle fixture manifest check failed"),
