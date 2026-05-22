@@ -692,6 +692,19 @@ fn make_test_metadata_with_reason(reason: &str) -> IgnoredTestMetadata {
     }
 }
 
+fn governance_history(counts: &[usize]) -> Vec<(SystemTime, usize)> {
+    let now = SystemTime::now();
+    let count = counts.len();
+    counts
+        .iter()
+        .enumerate()
+        .map(|(index, ignored_count)| {
+            let hours_ago = (count - index) as u64;
+            (now - Duration::from_hours(hours_ago), *ignored_count)
+        })
+        .collect()
+}
+
 #[test]
 fn test_quality_score_high_for_well_documented() -> Result<(), Box<dyn std::error::Error>> {
     let governance = make_minimal_governance();
@@ -752,6 +765,56 @@ fn test_quality_score_penalty_for_empty_success_criteria() -> Result<(), Box<dyn
         result.quality_score <= 75.0,
         "Expected lower score for empty success criteria, got {}",
         result.quality_score,
+    );
+    Ok(())
+}
+
+#[test]
+fn test_quality_score_penalty_for_missing_dependencies_non_low_complexity()
+-> Result<(), Box<dyn std::error::Error>> {
+    let governance = make_minimal_governance();
+    let guardian = IgnoredTestGuardian::new(governance);
+
+    let mut with_dependencies = make_test_metadata_with_reason(
+        "This is a sufficiently long ignore reason for testing purposes",
+    );
+    with_dependencies.complexity = ComplexityLevel::Medium;
+    with_dependencies.dependencies = vec!["parser-feature".to_string()];
+
+    let mut without_dependencies = with_dependencies.clone();
+    without_dependencies.dependencies.clear();
+
+    let with_score = guardian.validate_new_ignored_test(&with_dependencies).quality_score;
+    let without_score = guardian.validate_new_ignored_test(&without_dependencies).quality_score;
+
+    assert!(
+        with_score > without_score,
+        "missing dependencies for non-low complexity should reduce score: with={with_score}, without={without_score}",
+    );
+    Ok(())
+}
+
+#[test]
+fn test_quality_score_does_not_penalize_missing_dependencies_for_low_complexity()
+-> Result<(), Box<dyn std::error::Error>> {
+    let governance = make_minimal_governance();
+    let guardian = IgnoredTestGuardian::new(governance);
+
+    let mut low_with_dependencies = make_test_metadata_with_reason(
+        "This is a sufficiently long ignore reason for testing purposes",
+    );
+    low_with_dependencies.complexity = ComplexityLevel::Low;
+    low_with_dependencies.dependencies = vec!["nice-to-have".to_string()];
+
+    let mut low_without_dependencies = low_with_dependencies.clone();
+    low_without_dependencies.dependencies.clear();
+
+    let with_score = guardian.validate_new_ignored_test(&low_with_dependencies).quality_score;
+    let without_score = guardian.validate_new_ignored_test(&low_without_dependencies).quality_score;
+
+    assert_eq!(
+        with_score, without_score,
+        "low complexity ignores should not receive the missing-dependency penalty",
     );
     Ok(())
 }
@@ -915,6 +978,57 @@ fn test_trend_report_stable_trend() -> Result<(), Box<dyn std::error::Error>> {
 // ===========================================================================
 
 #[test]
+fn test_trend_report_average_and_data_points_use_recent_history()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut governance = make_minimal_governance();
+    governance.reporting.monthly_summaries = true;
+    let mut guardian = IgnoredTestGuardian::new(governance);
+
+    guardian.set_historical_data(governance_history(&[4, 6, 8]));
+    let report = guardian.generate_trend_report();
+
+    assert_eq!(report.data_points.len(), 3);
+    assert!((report.average_count - 6.0).abs() < f64::EPSILON);
+    assert_eq!(report.trend_direction, TrendDirection::Increasing);
+    Ok(())
+}
+
+#[test]
+fn test_trend_report_high_variance_adds_recommendation() -> Result<(), Box<dyn std::error::Error>> {
+    let mut governance = make_minimal_governance();
+    governance.reporting.monthly_summaries = true;
+    let mut guardian = IgnoredTestGuardian::new(governance);
+
+    guardian.set_historical_data(governance_history(&[0, 100, 0, 100, 0, 100, 0, 100, 0, 100, 0]));
+    let report = guardian.generate_trend_report();
+
+    assert!(
+        report.recommendations.iter().any(|item| item.contains("High variance")),
+        "high variance recommendation should be present: {:?}",
+        report.recommendations,
+    );
+    Ok(())
+}
+
+#[test]
+fn test_trend_report_low_variance_omits_variance_recommendation()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut governance = make_minimal_governance();
+    governance.reporting.monthly_summaries = true;
+    let mut guardian = IgnoredTestGuardian::new(governance);
+
+    guardian.set_historical_data(governance_history(&[10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]));
+    let report = guardian.generate_trend_report();
+
+    assert!(
+        !report.recommendations.iter().any(|item| item.contains("High variance")),
+        "low variance history should not add variance recommendation: {:?}",
+        report.recommendations,
+    );
+    Ok(())
+}
+
+#[test]
 fn test_validation_requires_issue_reference_with_hash() -> Result<(), Box<dyn std::error::Error>> {
     let mut governance = make_minimal_governance();
     governance.quality_gates.pre_commit.documentation_requirements.require_issue_reference = true;
@@ -1018,6 +1132,21 @@ fn test_lsp_workflow_stage_equality() -> Result<(), Box<dyn std::error::Error>> 
 // ===========================================================================
 // TestStatus — comprehensive variant testing
 // ===========================================================================
+
+#[test]
+fn test_performance_requirements_without_throughput_round_trips()
+-> Result<(), Box<dyn std::error::Error>> {
+    let requirements =
+        PerformanceRequirements { max_latency_ms: 250, max_memory_mb: 128, min_throughput: None };
+
+    let json = serde_json::to_string(&requirements)?;
+    let parsed: PerformanceRequirements = serde_json::from_str(&json)?;
+
+    assert_eq!(parsed.max_latency_ms, 250);
+    assert_eq!(parsed.max_memory_mb, 128);
+    assert!(parsed.min_throughput.is_none());
+    Ok(())
+}
 
 #[test]
 fn test_test_status_debug() -> Result<(), Box<dyn std::error::Error>> {
