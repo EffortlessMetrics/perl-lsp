@@ -406,6 +406,7 @@ files = [
   "docs/project/status/real_perl_editor_trust_v1.md",
 ]
 commands = [
+  "rtk cargo test -p perl-lsp-rs-core --features lsp-compat --profile agent --locked type_definition -- --nocapture",
   "rtk cargo xtask check-provider-promotion-ledger",
   "rtk cargo xtask check-active-goal-manifest",
   "rtk cargo xtask check-support-claims",

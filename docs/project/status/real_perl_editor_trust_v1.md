@@ -4,7 +4,7 @@
 > It does not generate metrics, broaden live provider behavior, or replace the
 > provider-specific proof surfaces.
 
-Last reviewed: 2026-05-21.
+Last reviewed: 2026-05-22.
 
 This page answers:
 
@@ -303,6 +303,14 @@ fallback and do not become exact receiver evidence. Completion remains
 `partial-live-with-fallback`; broader generated, dynamic, unknown,
 low-confidence, stale, and workspace-wide method completion still need separate
 proof.
+The direct class type-definition safe subset is now recorded in the provider
+promotion ledger: direct package/class identifiers and constructor method
+receivers may resolve to source-backed open-document package definitions, while
+variables, chained method results, function-call results, missing packages,
+dynamic boundaries, generated/no-source receivers, stale facts, low-confidence
+facts, ambiguous identities, and unsupported receiver shapes stay fallback or
+blocked. This records the existing safe subset and does not broaden type
+definition into data-flow or return-value inference.
 The product-level Real Perl Editor Trust smoke receipt now records one
 CPAN-style workspace pass across completion, definition, diagnostics, workspace
 trust report, safe-delete preview, and explain-provider-decision. It is a

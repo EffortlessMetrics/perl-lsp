@@ -719,6 +719,12 @@ Recent routing
 Current executable slice
 
 - `provider-promotion-ledger-maintenance` is active in the trust lane.
+- The direct class type-definition safe subset is now a ledgered fact class:
+  direct package/class receivers and constructor method receivers may resolve to
+  source-backed open-document package definitions, while variables, chained
+  method results, function-call results, missing packages, dynamic boundaries,
+  generated/no-source receivers, stale facts, low-confidence facts, ambiguous
+  identities, and unsupported receiver shapes remain fallback or blocked.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
@@ -732,6 +738,7 @@ Claim boundary
 Proof commands
 
 ```bash
+rtk cargo test -p perl-lsp-rs-core --features lsp-compat --profile agent --locked type_definition -- --nocapture
 rtk cargo xtask check-provider-promotion-ledger
 rtk cargo xtask check-active-goal-manifest
 rtk cargo xtask check-support-claims
