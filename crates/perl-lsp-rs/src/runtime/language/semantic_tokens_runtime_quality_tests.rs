@@ -454,7 +454,9 @@ fn source_line_lsp_lengths(source: &str) -> Result<Vec<u32>, Box<dyn std::error:
     source.lines().map(|line| Ok(u32::try_from(line.encode_utf16().count())?)).collect()
 }
 
-fn first_subroutine_name_lsp_span(source: &str) -> Result<(u32, u32, u32), Box<dyn Error>> {
+fn first_subroutine_name_span(
+    source: &str,
+) -> Result<(usize, usize, u32, u32, u32), Box<dyn Error>> {
     let marker_start = source.find("sub ").ok_or("expected a subroutine declaration")?;
     let name_start = marker_start + "sub ".len();
     let mut name_end = name_start;
@@ -477,6 +479,11 @@ fn first_subroutine_name_lsp_span(source: &str) -> Result<(u32, u32, u32), Box<d
     let start = u32::try_from(source[line_start..name_start].encode_utf16().count())?;
     let length = u32::try_from(source[name_start..name_end].encode_utf16().count())?;
 
+    Ok((name_start, name_end, line, start, length))
+}
+
+fn first_subroutine_name_lsp_span(source: &str) -> Result<(u32, u32, u32), Box<dyn Error>> {
+    let (_, _, line, start, length) = first_subroutine_name_span(source)?;
     Ok((line, start, length))
 }
 
@@ -707,6 +714,156 @@ fn assert_semantic_token_live_output_parity(uri: &str, source: &str) -> Result<(
         compiler_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
         Some(true),
         "compiler receipt must remain output-neutral for {uri}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_tokens_runtime_quality_receipt_proves_source_backed_subroutine_declaration_class_specific_parity()
+-> Result<(), Box<dyn Error>> {
+    let server = create_server();
+    open_document(&server, DOC_URI, PERL_MODULE);
+
+    let params = json!({ "textDocument": {"uri": DOC_URI} });
+    let live_result =
+        must(server.test_handle_semantic_tokens(Some(params.clone()))).ok_or("expected tokens")?;
+    let receipt =
+        must_some(must(server.test_semantic_tokens_runtime_quality_receipt(Some(params))));
+
+    assert_eq!(
+        receipt.get("live_provider_result"),
+        Some(&live_result),
+        "subroutine-declaration class proof must compare against the exact live token output"
+    );
+    assert_eq!(
+        receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(true),
+        "subroutine-declaration class receipt must not change live semantic-token behavior"
+    );
+    assert_eq!(
+        receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true),
+        "subroutine-declaration class receipt must not emit additional semantic tokens"
+    );
+
+    let function_receipt = class_specific_receipt(&receipt, "subroutine_declaration")?;
+    assert_eq!(function_receipt.get("source").and_then(Value::as_str), Some("CompilerFact"));
+    assert_eq!(
+        function_receipt.get("provenance").and_then(Value::as_str),
+        Some("SemanticAnalyzer")
+    );
+    assert_eq!(function_receipt.get("freshness").and_then(Value::as_str), Some("Fresh"));
+    assert_eq!(function_receipt.get("fallback_state").and_then(Value::as_str), Some("Primary"));
+    assert_eq!(
+        function_receipt.get("approved_for_live_cutover").and_then(Value::as_bool),
+        Some(true),
+        "subroutine declarations are the scoped class under cutover proof"
+    );
+    assert_eq!(
+        function_receipt.get("live_pilot").and_then(Value::as_bool),
+        Some(true),
+        "subroutine declarations may join the scoped compiler-token live pilot only with parity proof"
+    );
+    assert_eq!(
+        function_receipt.get("live_output_parity").and_then(Value::as_bool),
+        Some(true),
+        "source-backed subroutine compiler span must match existing live function token output"
+    );
+    assert_eq!(
+        function_receipt.get("parity_state").and_then(Value::as_str),
+        Some("matched_existing_live_function_token")
+    );
+    assert_eq!(function_receipt.get("live_token_type").and_then(Value::as_str), Some("function"));
+    assert_eq!(function_receipt.get("live_token_match_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(function_receipt.get("candidate_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(
+        function_receipt.get("source_backed_span_count").and_then(Value::as_u64),
+        Some(1),
+        "subroutine declaration candidate must be source-backed"
+    );
+    assert_eq!(function_receipt.get("missing_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(function_receipt.get("invalid_source_span_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(
+        function_receipt.get("no_live_token_output_change").and_then(Value::as_bool),
+        Some(true)
+    );
+
+    let (function_start, function_end, expected_line, expected_start, expected_length) =
+        first_subroutine_name_span(PERL_MODULE)?;
+    let function_span = crate::semantic_tokens::SemanticTokenShadowSpan::from_byte_offsets(
+        PERL_MODULE,
+        function_start,
+        function_end,
+    )
+    .ok_or("expected source-backed subroutine compiler span")?;
+    assert_eq!(function_span.range.start.line, expected_line);
+    assert_eq!(function_span.range.start.character, expected_start);
+    assert_eq!(function_span.single_line_lsp_length(), Some(expected_length));
+
+    let function_candidate =
+        crate::semantic_tokens::SemanticTokenShadowCandidate::source_backed_shadow(
+            "token:function:process:compiler",
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+            function_span,
+        );
+    let span_report = crate::semantic_tokens::semantic_token_span_invariant_report(
+        std::slice::from_ref(&function_candidate),
+    );
+    assert_eq!(span_report.candidate_count, 1);
+    assert_eq!(span_report.source_backed_span_count, 1);
+    assert_eq!(span_report.missing_source_span_count, 0);
+    assert_eq!(span_report.invalid_source_span_count, 0);
+
+    let shadow = crate::semantic_tokens::semantic_token_source_shadow(
+        Vec::new(),
+        vec![function_candidate],
+        "subroutine_declaration",
+    );
+    assert_eq!(
+        shadow.receipt.verdict,
+        ShadowCompareVerdict::Improved,
+        "subroutine compiler candidates may count only through the scoped class identity"
+    );
+    assert_eq!(
+        shadow.receipt.new_result.match_count, 1,
+        "subroutine compiler candidates must count only after class-specific proof"
+    );
+    assert_eq!(
+        shadow.receipt.new_result.identities,
+        vec!["token:function:process:compiler".to_string()]
+    );
+
+    let function_token_type =
+        *crate::semantic_tokens::legend().map.get("function").ok_or("missing function token")?;
+    let live_match_count = decode_semantic_tokens(&live_result)?
+        .iter()
+        .filter(|token| {
+            token.line == expected_line
+                && token.start == expected_start
+                && token.length == expected_length
+                && token.token_type == function_token_type
+        })
+        .count();
+    assert_eq!(
+        live_match_count, 1,
+        "source-backed subroutine compiler span must match exactly one existing live function token"
+    );
+
+    let claim_boundary = must_some(function_receipt.get("claim_boundary").and_then(Value::as_str));
+    assert!(
+        claim_boundary.contains("subroutine declarations")
+            && claim_boundary.contains("no new token output is emitted"),
+        "subroutine receipt must preserve the output-neutral cutover boundary; got: {claim_boundary}"
+    );
+
+    assert_eq!(
+        first_shadow_identity(function_receipt)?,
+        "token:function:process:compiler",
+        "class-specific receipt must authorize only the scoped function identity"
     );
 
     Ok(())

@@ -245,6 +245,18 @@ impl LspServer {
             return Vec::new();
         };
         let mut receipts = Vec::new();
+        if let Some(candidate) = semantic_token_subroutine_declaration_candidate(&doc.text) {
+            receipts.push(Self::semantic_tokens_class_specific_expansion_receipt(
+                live_provider_result,
+                candidate,
+                "subroutine_declaration",
+                "function",
+                "matched_existing_live_function_token",
+                "unmatched_existing_live_function_token",
+                true,
+                "scoped compiler subroutine-declaration class cutover proof only; subroutine declarations may count as compiler-token identities only when their source-backed span already matches existing live parser/HIR function tokens, and no new token output is emitted",
+            ));
+        }
         if let Some(candidate) = semantic_token_package_declaration_candidate(&doc.text) {
             receipts.push(Self::semantic_tokens_class_specific_expansion_receipt(
                 live_provider_result,

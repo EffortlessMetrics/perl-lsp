@@ -88,17 +88,18 @@ and [provider_cutover.md](provider_cutover.md).
   predicate generated-symbol receipt adds one scoped generated-member class
   without promoting generated/no-source or dynamic symbols.
 
-- Semantic-token note, 2026-05-19: method-declaration, package-declaration,
-  phase-block declaration, field-declaration, method-call, self-method-call,
+- Semantic-token note, 2026-05-19: subroutine-declaration,
+  method-declaration, package-declaration, phase-block declaration,
+  field-declaration, method-call, self-method-call,
   lexical-variable declaration, and lexical-variable use parity now have scoped output-neutral
   proofs through
-  `token:method_declaration:`, `token:package_declaration:`,
+  `token:function:`, `token:method_declaration:`, `token:package_declaration:`,
   `token:phase_block_declaration:`, `token:field_declaration:`,
   `token:method_call:`, `token:self_method_call:`,
   `token:lexical_variable_declaration:`, and `token:lexical_variable_use:`
-  identities. They prove span alignment against existing live `method`,
-  `namespace`, `macro`, or `variable` tokens, not a broader compiler-backed token
-  cutover.
+  identities. They prove span alignment against existing live `function`,
+  `method`, `namespace`, `macro`, or `variable` tokens, not a broader
+  compiler-backed token cutover.
 
 - Promote a claim only when the row's proof command and status docs cover the
   claim being made.
