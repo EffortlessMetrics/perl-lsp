@@ -121,7 +121,9 @@ fn ux_latency_open_then_hover() -> Result<()> {
 #[test]
 fn ux_latency_edit_publishes_parse_error_diagnostic() -> Result<()> {
     if !binary_available() {
-        eprintln!("SKIP ux_latency_edit_publishes_parse_error_diagnostic: perl-lsp binary not found");
+        eprintln!(
+            "SKIP ux_latency_edit_publishes_parse_error_diagnostic: perl-lsp binary not found"
+        );
         return Ok(());
     }
 
@@ -137,9 +139,8 @@ fn ux_latency_edit_publishes_parse_error_diagnostic() -> Result<()> {
 
     // The diagnostic must be parser-sourced — syntax-only mode strips
     // critic / dead-code / module-resolution noise.
-    let saw_parser = diags.iter().any(|d| {
-        d.get("source").and_then(|v| v.as_str()) == Some("perl-parser")
-    });
+    let saw_parser =
+        diags.iter().any(|d| d.get("source").and_then(|v| v.as_str()) == Some("perl-parser"));
     assert!(
         saw_parser,
         "expected at least one perl-parser diagnostic under syntax-only mode; got {diags:?}"
@@ -152,7 +153,9 @@ fn ux_latency_edit_publishes_parse_error_diagnostic() -> Result<()> {
 #[test]
 fn ux_latency_edit_clears_diagnostics_when_parse_recovers() -> Result<()> {
     if !binary_available() {
-        eprintln!("SKIP ux_latency_edit_clears_diagnostics_when_parse_recovers: perl-lsp binary not found");
+        eprintln!(
+            "SKIP ux_latency_edit_clears_diagnostics_when_parse_recovers: perl-lsp binary not found"
+        );
         return Ok(());
     }
 
@@ -190,9 +193,8 @@ fn ux_latency_rapid_typing_latest_request_returns() -> Result<()> {
     // PR 4's generation-aware cancellation hooks onto.
     let burst = ["$va", "$val", "$valu", "$value"];
     for (i, partial) in burst.iter().enumerate() {
-        let updated = format!(
-            "use strict;\nuse warnings;\n\nmy $value = 42;\nmy $other = {partial}\n"
-        );
+        let updated =
+            format!("use strict;\nuse warnings;\n\nmy $value = 42;\nmy $other = {partial}\n");
         harness.change_file_full("typing.pl", &updated)?;
         // Throttle each edit just enough to give the scheduler real bursts
         // to deduplicate; on a wedged server this loop would time out.
