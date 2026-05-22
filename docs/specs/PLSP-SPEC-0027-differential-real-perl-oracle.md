@@ -26,9 +26,10 @@ and determinism receipt contracts that define the fact classes an oracle may
 compare.
 
 This spec defines the oracle contract. The repo now has a declaration-only
-fixture manifest and schema, but no oracle runner, subprocess seam, real-Perl
-execution path, workspace probe, provider behavior, release-lineage sync,
-support-tier promotion, corpus/parser bucket movement, or conformance claim.
+fixture manifest and schema plus a receipt schema and schema-shape validator,
+but no oracle runner, subprocess seam, real-Perl execution path, workspace
+probe, provider behavior, release-lineage sync, support-tier promotion,
+corpus/parser bucket movement, or conformance claim.
 
 Current evidence remains in:
 
@@ -40,6 +41,7 @@ Current evidence remains in:
 - [determinism receipt v1](PLSP-SPEC-0026-determinism-receipt-v1.md)
 - [oracle fixture manifest schema](../../schemas/oracle_fixture_manifest.v1.schema.json)
 - [oracle fixture manifest](../../crates/perl-corpus/fixtures/differential_oracle/manifest.json)
+- [oracle receipt schema](../../schemas/oracle_receipt.v1.schema.json)
 - [active goal manifest](../../.perl-lsp/goals/active.toml)
 
 Current next work is not stored here; see the routing dashboard and active goal.
@@ -248,6 +250,14 @@ rtk git diff --check
 Schema, fixture-manifest, runner, subprocess, provider, parser/corpus,
 determinism, or support-claim PRs must also run the focused checks for the
 changed surface.
+
+Receipt-schema PRs should also use:
+
+```bash
+rtk cargo test -p xtask --profile agent --locked oracle_receipt_schema -- --nocapture
+rtk cargo xtask check-oracle-receipt-schema
+rtk powershell -NoProfile -Command 'Get-Content schemas/oracle_receipt.v1.schema.json -Raw | ConvertFrom-Json | Out-Null'
+```
 
 Declaration-only fixture-manifest PRs should also use:
 

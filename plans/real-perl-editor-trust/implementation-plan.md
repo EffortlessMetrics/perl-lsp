@@ -721,11 +721,18 @@ Recent routing
 
 Current executable slice
 
-- `oracle-fixture-manifest-after-contract` is active in the substrate lane.
-- The next PR declares a checked-in differential oracle fixture manifest and
-  schema after the oracle contract. The manifest may name fixture identities,
-  source snapshots, path classes, Perl constraints, module roots, environment
-  denials, dynamic/unsupported boundaries, and comparison classes.
+- `oracle-fixture-manifest-after-contract` is completed. The checked-in
+  differential oracle fixture manifest and schema now declare fixture
+  identities, source snapshots, path classes, Perl constraints, module roots,
+  environment denials, dynamic/unsupported boundaries, and comparison classes.
+- `oracle-receipt-schema-after-manifest` is active in the substrate lane.
+- The active receipt-schema slice locks the differential oracle receipt shape with
+  `schemas/oracle_receipt.v1.schema.json` and
+  `cargo xtask check-oracle-receipt-schema`. The receipt schema names
+  comparison class, source snapshot, Rust extractor, Perl oracle,
+  module-path authority, ambient/generated/dynamic/stale/unsupported inputs,
+  normalized facts, comparison result classes, promotion effect, redaction,
+  provider-behavior-change flag, and editor-runtime dependency denial.
 - This slice does not add an oracle runner, execute Perl, probe workspaces,
   change provider behavior, promote support tiers, move parser/corpus buckets,
   sync release lineage, or claim conformance.
@@ -734,15 +741,17 @@ Current executable slice
 
 Claim boundary
 
-- Oracle fixture manifest work may align the schema, checked-in manifest,
-  active-goal routing, and planning docs. It must not add an oracle runner,
-  execute Perl, probe workspaces, broaden provider behavior, promote support
-  tiers, move parser/corpus buckets, sync release lineage, or use oracle
-  agreement as provider promotion proof.
+- Oracle fixture manifest and receipt-schema work may align schemas, the
+  checked-in manifest, active-goal routing, and planning docs. It must not add
+  an oracle runner, execute Perl, probe workspaces, broaden provider behavior,
+  promote support tiers, move parser/corpus buckets, sync release lineage, or
+  use oracle agreement as provider promotion proof.
 
 Proof commands
 
 ```bash
+rtk cargo test -p xtask --profile agent --locked oracle_receipt_schema -- --nocapture
+rtk cargo xtask check-oracle-receipt-schema
 rtk cargo test -p xtask --profile agent --locked oracle_fixture_manifest -- --nocapture
 rtk cargo xtask check-oracle-fixture-manifest
 rtk cargo xtask check-active-goal-manifest
@@ -750,13 +759,13 @@ rtk cargo xtask ci-hygiene check-doc-paths docs/specs
 rtk cargo xtask ci-hygiene check-doc-paths docs/project/status
 rtk cargo xtask check-support-claims
 rtk cargo xtask check-provider-confidence-matrix
-rtk powershell -NoProfile -Command 'Get-Content schemas/oracle_fixture_manifest.v1.schema.json -Raw | ConvertFrom-Json | Out-Null; Get-Content crates/perl-corpus/fixtures/differential_oracle/manifest.json -Raw | ConvertFrom-Json | Out-Null'
+rtk powershell -NoProfile -Command 'Get-Content schemas/oracle_receipt.v1.schema.json -Raw | ConvertFrom-Json | Out-Null; Get-Content schemas/oracle_fixture_manifest.v1.schema.json -Raw | ConvertFrom-Json | Out-Null; Get-Content crates/perl-corpus/fixtures/differential_oracle/manifest.json -Raw | ConvertFrom-Json | Out-Null'
 rtk git diff --check
 ```
 
 Rollback
 
-Revert the manifest/schema/routing PR. If oracle fixture declarations are not
-ready, mark `oracle-fixture-manifest-after-contract` planned or deferred in the
-active manifest and select the next ready item without changing provider
+Revert the manifest/schema/routing PR. If oracle receipt schema declarations are
+not ready, mark `oracle-receipt-schema-after-manifest` planned or deferred in
+the active manifest and select the next ready item without changing provider
 behavior.

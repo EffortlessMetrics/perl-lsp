@@ -26,7 +26,7 @@ of current evidence.
 | Workspace symbol generated-label rules | [PLSP-SPEC-0020](../../specs/PLSP-SPEC-0020-workspace-symbol-generated-label-contract.md), [workspace-symbol-classes.toml](../../../policy/workspace-symbol-classes.toml) |
 | Module path authority and ambient-input boundaries | [PLSP-SPEC-0022](../../specs/PLSP-SPEC-0022-module-path-authority.md), [PLSP-SPEC-0023](../../specs/PLSP-SPEC-0023-ambient-inputs.md) |
 | Determinism receipt v1 planning boundary | [PLSP-SPEC-0026](../../specs/PLSP-SPEC-0026-determinism-receipt-v1.md) |
-| Differential real-Perl oracle planning boundary | [PLSP-SPEC-0027](../../specs/PLSP-SPEC-0027-differential-real-perl-oracle.md), [oracle_fixture_manifest.v1.schema.json](../../../schemas/oracle_fixture_manifest.v1.schema.json), [oracle fixture manifest](../../../crates/perl-corpus/fixtures/differential_oracle/manifest.json) |
+| Differential real-Perl oracle planning boundary | [PLSP-SPEC-0027](../../specs/PLSP-SPEC-0027-differential-real-perl-oracle.md), [oracle_fixture_manifest.v1.schema.json](../../../schemas/oracle_fixture_manifest.v1.schema.json), [oracle fixture manifest](../../../crates/perl-corpus/fixtures/differential_oracle/manifest.json), [oracle_receipt.v1.schema.json](../../../schemas/oracle_receipt.v1.schema.json) |
 | User-facing support claims and known limitations | [SUPPORT_TIERS.md](SUPPORT_TIERS.md) |
 | Provider fact source, confidence, freshness, fallback, and next proof | [provider_confidence_matrix.md](provider_confidence_matrix.md) |
 | Provider promotion, fallback, blocker, and defer decisions by fact class | [provider_promotion_ledger.md](provider_promotion_ledger.md), [provider-promotion-ledger.toml](../../../policy/provider-promotion-ledger.toml) |
@@ -133,12 +133,17 @@ generator, runtime probe, PIR implementation, provider behavior, support-tier
 promotion, release-lineage sync, or determinism claim.
 
 The differential real-Perl oracle contract is now defined as a planning
-boundary, and its first fixture manifest is declaration-only. It names fixture
+boundary, its first fixture manifest is declaration-only, and the receipt schema
+now locks the future oracle receipt shape. The manifest names fixture
 identities, source snapshots, path classes, module roots, environment denials,
 dynamic/unsupported boundaries, framework adapters, and comparison classes.
-The manifest does not add an oracle runner, execute Perl, probe workspaces,
-change provider behavior, move parser/corpus buckets, promote support tiers,
-sync release lineage, or claim conformance.
+The schema records comparison class, source snapshot, Rust extractor, Perl
+oracle, module-path authority, ambient/generated/dynamic/stale/unsupported
+inputs, normalized facts, comparison result classes, promotion effect, redaction,
+provider-behavior-change flag, and editor-runtime dependency denial. Neither the
+manifest nor schema adds an oracle runner, executes Perl, probes workspaces,
+changes provider behavior, moves parser/corpus buckets, promotes support tiers,
+syncs release lineage, or claims conformance.
 
 ## Current Dashboard
 

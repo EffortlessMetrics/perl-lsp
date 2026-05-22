@@ -83,6 +83,9 @@ enum Commands {
     /// Validate declared differential real-Perl oracle fixtures.
     CheckOracleFixtureManifest,
 
+    /// Validate differential real-Perl oracle receipt schema.
+    CheckOracleReceiptSchema,
+
     /// Validate semantic-token class promotion registry.
     CheckSemanticTokenClasses,
 
@@ -2561,6 +2564,7 @@ fn main() -> Result<()> {
         Commands::CheckActiveGoalManifest => active_goal_manifest::run(),
         Commands::CheckProviderPromotionLedger => provider_promotion_ledger::run(),
         Commands::CheckOracleFixtureManifest => oracle_fixture_manifest::run(),
+        Commands::CheckOracleReceiptSchema => oracle_receipt_schema::run(),
         Commands::CheckSemanticTokenClasses => semantic_token_classes::run(),
         Commands::CheckWorkspaceSymbolClasses => workspace_symbol_classes::run(),
         Commands::Queue { command } => match command {

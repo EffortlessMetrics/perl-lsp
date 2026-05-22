@@ -124,7 +124,7 @@ items = [
 
 [substrate.next]
 items = [
-  "oracle-fixture-manifest-after-contract",
+  "oracle-receipt-schema-after-manifest",
 ]
 
 [reliability.next]
@@ -415,7 +415,7 @@ commands = [
 
 [[work_item]]
 id = "oracle-fixture-manifest-after-contract"
-status = "active"
+status = "completed"
 lane = "substrate"
 claim_boundary = "Differential oracle fixture manifest declaration only; no oracle runner, Perl execution, provider behavior, support-tier promotion, release-lineage sync, or parser/corpus bucket movement."
 files = [
@@ -439,6 +439,35 @@ commands = [
   "rtk cargo xtask check-support-claims",
   "rtk cargo xtask check-provider-confidence-matrix",
   "rtk powershell -NoProfile -Command 'Get-Content schemas/oracle_fixture_manifest.v1.schema.json -Raw | ConvertFrom-Json | Out-Null; Get-Content crates/perl-corpus/fixtures/differential_oracle/manifest.json -Raw | ConvertFrom-Json | Out-Null'",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "oracle-receipt-schema-after-manifest"
+status = "active"
+lane = "substrate"
+claim_boundary = "Differential oracle receipt schema validation only; no oracle runner, Perl execution, workspace probing, provider behavior, support-tier promotion, release-lineage sync, or parser/corpus bucket movement."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/specs/PLSP-SPEC-0027-differential-real-perl-oracle.md",
+  "schemas/oracle_receipt.v1.schema.json",
+  "docs/project/status/compiler_facts.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "xtask/src/main.rs",
+  "xtask/src/tasks/mod.rs",
+  "xtask/src/tasks/oracle_receipt_schema.rs",
+]
+commands = [
+  "rtk cargo test -p xtask --profile agent --locked oracle_receipt_schema -- --nocapture",
+  "rtk cargo xtask check-oracle-receipt-schema",
+  "rtk cargo xtask check-oracle-fixture-manifest",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask ci-hygiene check-doc-paths docs/specs",
+  "rtk cargo xtask ci-hygiene check-doc-paths docs/project/status",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk powershell -NoProfile -Command 'Get-Content schemas/oracle_receipt.v1.schema.json -Raw | ConvertFrom-Json | Out-Null'",
   "rtk git diff --check",
 ]
 
