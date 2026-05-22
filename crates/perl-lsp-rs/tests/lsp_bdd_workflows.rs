@@ -433,6 +433,81 @@ fn setup_workspace(files: &[(&str, &str)]) -> Result<(LspHarness, TempWorkspace)
     Ok((harness, workspace))
 }
 
+fn prepare_call_hierarchy_item(
+    harness: &mut LspHarness,
+    uri: &str,
+    line: u32,
+    character: u32,
+    name: &str,
+) -> Result<Value, String> {
+    let response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character }
+        }),
+    )?;
+
+    let items = response.as_array().ok_or_else(|| {
+        format!("prepareCallHierarchy for {name} returned non-array response: {response:?}")
+    })?;
+
+    items
+        .iter()
+        .find(|item| item.get("name").and_then(Value::as_str) == Some(name))
+        .cloned()
+        .ok_or_else(|| {
+            let names: Vec<&str> =
+                items.iter().filter_map(|item| item.get("name").and_then(Value::as_str)).collect();
+            format!("prepareCallHierarchy did not return item named {name}; names: {names:?}")
+        })
+}
+
+fn call_hierarchy_edge_names(response: &Value, edge_name_pointer: &str) -> BTreeSet<String> {
+    response
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|call| call.pointer(edge_name_pointer).and_then(Value::as_str))
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+fn wait_for_call_hierarchy_edge_names(
+    harness: &mut LspHarness,
+    method: &str,
+    item: &Value,
+    edge_name_pointer: &str,
+    want_names: &[&str],
+    budget: Duration,
+) -> Result<Value, String> {
+    let start = Instant::now();
+    let mut last_response = None;
+    let mut last_error = None;
+
+    while start.elapsed() < budget {
+        match harness.request_with_timeout(method, json!({ "item": item }), Duration::from_secs(2))
+        {
+            Ok(response) => {
+                let names = call_hierarchy_edge_names(&response, edge_name_pointer);
+                if want_names.iter().all(|want| names.contains(*want)) {
+                    return Ok(response);
+                }
+                last_response = Some(response);
+            }
+            Err(error) => last_error = Some(error),
+        }
+
+        harness.barrier();
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    Err(format!(
+        "{method} did not include {:?} within {:?}; last response: {:?}; last error: {:?}",
+        want_names, budget, last_response, last_error
+    ))
+}
+
 #[test]
 #[serial]
 fn bdd_definition_and_references_across_files() -> Result<(), Box<dyn std::error::Error>> {
@@ -3582,6 +3657,233 @@ if (-e $path) {
     assert!(
         text.to_lowercase().contains("exist") || text.to_lowercase().contains("file"),
         "hover for '-e' should mention 'exist' or 'file'; got: {text}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_call_hierarchy_round_trip_maps_callers_and_callees() -> Result<(), Box<dyn std::error::Error>>
+{
+    let scenario = BddScenario::new("Call hierarchy round trip maps callers and callees");
+
+    let code = r#"sub validate {
+    my ($value) = @_;
+    return $value > 0;
+}
+
+sub log_event {
+    my ($message) = @_;
+    print "$message\n";
+}
+
+sub process {
+    my ($data) = @_;
+    validate($data);
+    log_event("processed");
+    return $data;
+}
+
+sub main {
+    process(42);
+    log_event("done");
+}
+
+main();
+"#;
+
+    scenario.given("a file where main calls process and process calls two helpers");
+    let (mut harness, workspace) = setup_workspace(&[("main.pl", code)])?;
+    let uri = workspace.uri("main.pl");
+
+    harness.open(&uri, code)?;
+    harness.wait_for_symbol("process", Some(&uri), Duration::from_secs(10))?;
+    harness.wait_for_symbol("main", Some(&uri), Duration::from_secs(10))?;
+    harness.barrier();
+
+    scenario.when("the editor prepares call hierarchy at process");
+    let (line, character) = find_position(code, "sub process");
+    let process_item =
+        prepare_call_hierarchy_item(&mut harness, &uri, line, character + 4, "process")?;
+
+    scenario.then("incoming calls identify main as the caller");
+    let incoming = wait_for_call_hierarchy_edge_names(
+        &mut harness,
+        "callHierarchy/incomingCalls",
+        &process_item,
+        "/from/name",
+        &["main"],
+        Duration::from_secs(5),
+    )?;
+    let incoming_names = call_hierarchy_edge_names(&incoming, "/from/name");
+    assert!(
+        incoming_names.contains("main"),
+        "incoming callers of process should include main; got {incoming_names:?}"
+    );
+
+    scenario.then("outgoing calls identify both helper callees");
+    let outgoing = wait_for_call_hierarchy_edge_names(
+        &mut harness,
+        "callHierarchy/outgoingCalls",
+        &process_item,
+        "/to/name",
+        &["validate", "log_event"],
+        Duration::from_secs(5),
+    )?;
+    let outgoing_names = call_hierarchy_edge_names(&outgoing, "/to/name");
+    assert!(
+        outgoing_names.contains("validate") && outgoing_names.contains("log_event"),
+        "outgoing callees of process should include validate and log_event; got {outgoing_names:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_call_hierarchy_cross_file_incoming_finds_script_caller()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Call hierarchy incoming calls cross file boundaries");
+
+    let lib_code = r#"package Utils;
+use strict;
+use warnings;
+
+sub format_string {
+    my ($input) = @_;
+    return uc($input);
+}
+
+1;
+"#;
+
+    let app_code = r#"use strict;
+use warnings;
+use lib './lib';
+use Utils;
+
+sub process {
+    my $result = Utils::format_string("hello");
+    return $result;
+}
+
+process();
+"#;
+
+    scenario.given("a library module and a script that calls a package-qualified sub");
+    let (mut harness, workspace) =
+        setup_workspace(&[("lib/Utils.pm", lib_code), ("bin/app.pl", app_code)])?;
+    let lib_uri = workspace.uri("lib/Utils.pm");
+    let app_uri = workspace.uri("bin/app.pl");
+
+    harness.open(&lib_uri, lib_code)?;
+    harness.open(&app_uri, app_code)?;
+    harness.wait_for_symbol("format_string", Some(&lib_uri), Duration::from_secs(10))?;
+    harness.wait_for_symbol("process", Some(&app_uri), Duration::from_secs(10))?;
+    harness.barrier();
+
+    scenario.when("the editor prepares call hierarchy at the library sub definition");
+    let (line, character) = find_position(lib_code, "sub format_string");
+    let format_item =
+        prepare_call_hierarchy_item(&mut harness, &lib_uri, line, character + 4, "format_string")?;
+
+    scenario.then("incoming calls include the caller from the script");
+    let incoming = wait_for_call_hierarchy_edge_names(
+        &mut harness,
+        "callHierarchy/incomingCalls",
+        &format_item,
+        "/from/name",
+        &["process"],
+        Duration::from_secs(5),
+    )?;
+    let calls = incoming.as_array().ok_or("incomingCalls returned non-array")?;
+    let process_call = calls
+        .iter()
+        .find(|call| call.pointer("/from/name").and_then(Value::as_str) == Some("process"))
+        .ok_or_else(|| format!("expected process caller in incomingCalls; got {incoming:?}"))?;
+    let caller_uri = process_call.pointer("/from/uri").and_then(Value::as_str).unwrap_or("");
+    assert!(
+        uri_matches(&app_uri, caller_uri),
+        "incoming caller URI should be {app_uri}; got {caller_uri}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_call_hierarchy_cross_file_outgoing_points_to_target_module()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Call hierarchy outgoing calls preserve target URI");
+
+    let lib_code = r#"package Utils;
+use strict;
+use warnings;
+
+sub format_string {
+    my ($input) = @_;
+    return uc($input);
+}
+
+1;
+"#;
+
+    let app_code = r#"use strict;
+use warnings;
+use lib './lib';
+use Utils;
+
+sub process {
+    my $result = Utils::format_string("hello");
+    return $result;
+}
+
+process();
+"#;
+
+    scenario.given("a script whose function calls into a library module");
+    let (mut harness, workspace) =
+        setup_workspace(&[("lib/Utils.pm", lib_code), ("bin/app.pl", app_code)])?;
+    let lib_uri = workspace.uri("lib/Utils.pm");
+    let app_uri = workspace.uri("bin/app.pl");
+
+    harness.open(&lib_uri, lib_code)?;
+    harness.open(&app_uri, app_code)?;
+    harness.wait_for_symbol("format_string", Some(&lib_uri), Duration::from_secs(10))?;
+    harness.wait_for_symbol("process", Some(&app_uri), Duration::from_secs(10))?;
+    harness.barrier();
+
+    scenario.when("the editor prepares call hierarchy at the script function");
+    let (line, character) = find_position(app_code, "sub process");
+    let process_item =
+        prepare_call_hierarchy_item(&mut harness, &app_uri, line, character + 4, "process")?;
+
+    scenario.then("outgoing calls include format_string in the module, not the script");
+    let outgoing = wait_for_call_hierarchy_edge_names(
+        &mut harness,
+        "callHierarchy/outgoingCalls",
+        &process_item,
+        "/to/name",
+        &["format_string"],
+        Duration::from_secs(5),
+    )?;
+    let calls = outgoing.as_array().ok_or("outgoingCalls returned non-array")?;
+    let format_call = calls
+        .iter()
+        .find(|call| {
+            call.pointer("/to/name")
+                .and_then(Value::as_str)
+                .map(|name| name == "format_string" || name.ends_with("::format_string"))
+                .unwrap_or(false)
+        })
+        .ok_or_else(|| {
+            format!("expected format_string callee in outgoingCalls; got {outgoing:?}")
+        })?;
+    let target_uri = format_call.pointer("/to/uri").and_then(Value::as_str).unwrap_or("");
+    assert!(
+        uri_matches(&lib_uri, target_uri),
+        "outgoing target URI should be {lib_uri}; got {target_uri}"
     );
 
     Ok(())
