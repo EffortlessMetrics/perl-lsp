@@ -9,11 +9,22 @@ Review the cumulative diff from all agents.
 
 ## Steps
 
-1. Get the full diff stat and diff:
+1. Get the PR file list and diff using the GitHub API (NEVER use `gh pr diff` — it shows
+   branch-vs-current-master and produces false contamination claims on stale-base PRs):
    ```bash
-   gh pr diff <number> --stat
-   gh pr diff <number>
+   # Authoritative PR file list (PR-authored only):
+   REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+   gh api repos/$REPO/pulls/<number>/files --jq '.[].filename'
+   gh api repos/$REPO/pulls/<number>/files --jq '.[] | {filename, patch: (.patch // "(binary)")}'
+
+   # Full authored diff (three-dot — only what the PR added, not inherited state):
+   git diff $(git merge-base origin/master HEAD)..HEAD --stat
+   git diff $(git merge-base origin/master HEAD)..HEAD
    ```
+   Before flagging any file as cross-PR contamination: confirm it appears in the `pulls/N/files`
+   API response (PR-authored). If it only appears in a `gh pr diff` (branch-vs-master snapshot)
+   it is inherited base state — NOT scope drift. This self-check is mandatory before any
+   SCOPE DRIFT or CONTAMINATION verdict.
 
 2. Read the spec:
    ```bash

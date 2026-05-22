@@ -25,7 +25,17 @@ Each agent sees its own step. Nobody has checked that:
 
 1. **Diff vs spec alignment** — does the total diff implement what the issue asked for?
    ```bash
-   gh pr diff <number> --stat
+   # ALWAYS use the GitHub API for the authoritative PR file list.
+   # NEVER use `gh pr diff` — it shows branch-vs-current-master, not PR-authored changes,
+   # and produces false cross-PR contamination claims on PRs older than 2-3 days.
+   # See #6876 for the incident where this caused 5 false-positive audit verdicts.
+   REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+   gh api repos/$REPO/pulls/<number>/files --jq '.[].filename'
+   gh api repos/$REPO/pulls/<number>/files --jq '.[] | {filename, patch: (.patch // "(binary)")}'
+
+   # For the authored diff (three-dot base — only what the PR added, not inherited state):
+   git diff $(git merge-base origin/master HEAD)..HEAD
+
    cat .spec/*/acceptance.md 2>/dev/null
    ```
    Every acceptance criterion should be addressable from the diff.
@@ -82,7 +92,8 @@ Detection heuristic — for every file in the diff, ask: "does this file's path/
 - If the diff adds tests for crate X but the PR title is about crate Y (and those tests aren't named in the spec): flag as CONTAMINATION
 - If the diff adds ADRs whose work-id doesn't match this PR's branch work-id: flag as CONTAMINATION
 - Tell-tale: PR title claims a small change but `--stat` shows >100 lines outside the named scope. Diff bulk shouldn't be unrelated to the title.
-- Mechanical check: `gh pr diff <num> --stat` then for each crate path, ask whether the PR title/body mentions it; orphan-crate paths are contamination candidates.
+- Mechanical check: use the GitHub API file list (NOT `gh pr diff` — it shows branch-vs-current-master, creating false contamination claims): `REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner) && gh api repos/$REPO/pulls/<num>/files --jq '.[].filename'` — then for each crate path, ask whether the PR title/body mentions it; orphan-crate paths are contamination candidates.
+- Self-check: before flagging any file as cross-PR contamination, confirm it appears in `pulls/N/files` (PR-authored). If it only appears in `gh pr diff` (branch-vs-master), it is inherited base state — NOT drift. This check is mandatory.
 
 When found, route to `needs-diff-fix` with a `git rm` list. Don't let a 22-of-2063-line legitimate change ride a 2043-line contaminated diff into master.
 
