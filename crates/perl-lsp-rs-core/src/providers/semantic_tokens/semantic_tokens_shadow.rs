@@ -713,6 +713,44 @@ mod tests {
     }
 
     #[test]
+    fn semantic_token_shadow_blocks_unpromoted_class_declaration_class()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let candidate = shadow_candidate(
+            "token:class_declaration:Widget:compiler",
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::High,
+            ProviderFactFreshness::Fresh,
+            Some(valid_span(0, 6, 6)),
+            ProviderFallbackState::Primary,
+        );
+        let report = semantic_token_span_invariant_report(std::slice::from_ref(&candidate));
+        let result = semantic_token_source_shadow(Vec::new(), vec![candidate], "class_declaration");
+
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Same);
+        assert_eq!(result.receipt.old_result.match_count, 0);
+        assert_eq!(result.receipt.new_result.match_count, 0);
+        assert!(
+            result.receipt.new_result.identities.is_empty(),
+            "class-declaration compiler tokens must stay blocked until class-specific proof promotes them"
+        );
+
+        assert_eq!(report.candidate_count, 1);
+        assert_eq!(report.blocked_candidate_count, 0);
+        assert_eq!(report.source_backed_span_count, 1);
+        assert_eq!(report.missing_source_span_count, 0);
+        assert_eq!(report.invalid_source_span_count, 0);
+
+        let trace = first_trace(&result)?;
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.provenance, Provenance::SemanticAnalyzer);
+        assert_eq!(trace.confidence, Confidence::High);
+        assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Primary);
+        Ok(())
+    }
+
+    #[test]
     fn semantic_token_shadow_allows_scoped_method_declaration_class()
     -> Result<(), Box<dyn std::error::Error>> {
         let candidate = shadow_candidate(

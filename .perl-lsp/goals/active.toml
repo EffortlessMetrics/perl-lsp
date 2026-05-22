@@ -592,6 +592,7 @@ files = [
 ]
 commands = [
   "rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft",
+  "rtk bash -lc './scripts/cargo-safe test -p perl-lsp-rs-core --lib semantic_token_shadow_blocks_unpromoted_class_declaration_class --profile agent --locked -- --nocapture'",
   "rtk bash -lc './scripts/cargo-safe xtask check-active-goal-manifest'",
   "rtk bash -lc './scripts/cargo-safe xtask check-provider-promotion-ledger'",
   "rtk bash -lc './scripts/cargo-safe xtask check-semantic-token-classes'",
