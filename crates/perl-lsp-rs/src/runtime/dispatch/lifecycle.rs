@@ -34,9 +34,19 @@ impl LspServer {
             self.register_file_watchers_async();
         }
 
-        // Start workspace indexing in the background (if workspace folders exist)
+        // Start workspace indexing in the background (if workspace folders
+        // exist and the eager-indexing gate allows it). The gate defaults to
+        // true for normal editor sessions; e2e harness mode flips it off so
+        // latency tests do not pay for indexing they will not consult.
         #[cfg(feature = "workspace")]
-        self.start_workspace_indexing();
+        if self.should_start_workspace_indexing() {
+            self.start_workspace_indexing();
+        } else {
+            tracing::debug!(
+                runtime_mode = ?self.runtime_tuning().runtime_mode,
+                "Skipping eager workspace indexing on `initialized` (gate disabled)"
+            );
+        }
 
         // Send index-ready notification
         if let Err(e) = self.send_index_ready_notification() {
@@ -142,7 +152,7 @@ impl LspServer {
     }
 
     /// Handle initialized notification
-    pub(super) fn handle_initialized_dispatch(&self) -> Result<Option<Value>, JsonRpcError> {
+    pub(crate) fn handle_initialized_dispatch(&self) -> Result<Option<Value>, JsonRpcError> {
         if !self.initialize_requested.load(Ordering::Acquire) {
             return Err(JsonRpcError {
                 code: -32002, // ServerNotInitialized per LSP spec

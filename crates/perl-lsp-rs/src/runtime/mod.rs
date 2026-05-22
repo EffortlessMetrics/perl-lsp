@@ -208,6 +208,11 @@ pub struct LspServer {
     /// Resolved at construction by layering env vars and CLI args on top of the
     /// compiled defaults. The server treats this as read-only after construction.
     pub(crate) runtime_tuning: RuntimeTuning,
+    /// Monotonic counter bumped every time `start_workspace_indexing` is
+    /// called (before any internal guards). Lets tests observe whether
+    /// the `initialized` gate fired, without needing to set up a real
+    /// workspace on disk.
+    pub(crate) workspace_indexing_invocation_count: Arc<std::sync::atomic::AtomicUsize>,
     /// Cache of extracted POD documentation keyed by resolved file path.
     pod_cache: Arc<Mutex<HashMap<PathBuf, perl_pod::PodDoc>>>,
     /// Cache of SemanticAnalyzer results keyed by (normalized_uri, content_hash).
@@ -411,6 +416,25 @@ impl LspServer {
     /// Active runtime tuning for this server instance.
     pub const fn runtime_tuning(&self) -> RuntimeTuning {
         self.runtime_tuning
+    }
+
+    /// Whether `initialized` should trigger an eager workspace-wide
+    /// indexing scan. The default for normal editor sessions is `true`;
+    /// e2e harness mode defaults to `false` so latency tests do not pay
+    /// for indexing they will not consult. The user can override either
+    /// way via `--eager-workspace-indexing` /
+    /// `PERL_LSP_EAGER_WORKSPACE_INDEXING`.
+    pub fn should_start_workspace_indexing(&self) -> bool {
+        self.runtime_tuning.eager_workspace_indexing
+    }
+
+    /// Count of times `start_workspace_indexing` was invoked. Used by
+    /// tests to assert the e2e startup gate fires (or doesn't). Never
+    /// reset; monotonic for the lifetime of the server.
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub fn workspace_indexing_invocation_count(&self) -> usize {
+        self.workspace_indexing_invocation_count
+            .load(std::sync::atomic::Ordering::SeqCst)
     }
 
     /// Get the registered AI inline-completion backend, if any.
