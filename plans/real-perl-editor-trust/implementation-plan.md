@@ -718,6 +718,11 @@ Recent routing
 - `provider-promotion-ledger-maintenance` is completed. The direct class
   type-definition safe subset is recorded in the human ledger, machine ledger,
   dashboard, and plan without broadening provider behavior or support tiers.
+- `oracle-receipt-schema-after-manifest` is completed. The checked-in receipt
+  schema and validator now lock the future differential oracle receipt shape
+  without adding an oracle runner, executing Perl, probing workspaces, changing
+  provider behavior, moving parser/corpus buckets, promoting support tiers,
+  syncing release lineage, or claiming conformance.
 
 Current executable slice
 
@@ -725,17 +730,19 @@ Current executable slice
   differential oracle fixture manifest and schema now declare fixture
   identities, source snapshots, path classes, Perl constraints, module roots,
   environment denials, dynamic/unsupported boundaries, and comparison classes.
-- `oracle-receipt-schema-after-manifest` is active in the substrate lane.
-- The active receipt-schema slice locks the differential oracle receipt shape with
-  `schemas/oracle_receipt.v1.schema.json` and
-  `cargo xtask check-oracle-receipt-schema`. The receipt schema names
-  comparison class, source snapshot, Rust extractor, Perl oracle,
-  module-path authority, ambient/generated/dynamic/stale/unsupported inputs,
-  normalized facts, comparison result classes, promotion effect, redaction,
+- `oracle-receipt-schema-after-manifest` is completed. The receipt schema names
+  comparison class, source snapshot, Rust extractor, Perl oracle, module-path
+  authority, ambient/generated/dynamic/stale/unsupported inputs, normalized
+  facts, comparison result classes, promotion effect, redaction,
   provider-behavior-change flag, and editor-runtime dependency denial.
-- This slice does not add an oracle runner, execute Perl, probe workspaces,
-  change provider behavior, promote support tiers, move parser/corpus buckets,
-  sync release lineage, or claim conformance.
+- `post-oracle-schema-routing-review` is active in the reliability lane. It is
+  a control-plane routing review: the manifest must stop pointing at the
+  completed receipt-schema slice, and the next substrate items stay
+  assignment-gated until a separate PR explicitly starts an oracle runner or PIR
+  contract lane.
+- This active review does not add an oracle runner, execute Perl, probe
+  workspaces, change provider behavior, promote support tiers, move
+  parser/corpus buckets, sync release lineage, or claim conformance.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
@@ -746,26 +753,29 @@ Claim boundary
   an oracle runner, execute Perl, probe workspaces, broaden provider behavior,
   promote support tiers, move parser/corpus buckets, sync release lineage, or
   use oracle agreement as provider promotion proof.
+- Post-schema routing review may update only the active goal manifest and this
+  plan. It must not select a parser bucket from stale status, start PIR, start
+  determinism implementation, or promote provider behavior.
 
 Proof commands
 
 ```bash
-rtk cargo test -p xtask --profile agent --locked oracle_receipt_schema -- --nocapture
+rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft
 rtk cargo xtask check-oracle-receipt-schema
-rtk cargo test -p xtask --profile agent --locked oracle_fixture_manifest -- --nocapture
 rtk cargo xtask check-oracle-fixture-manifest
 rtk cargo xtask check-active-goal-manifest
 rtk cargo xtask ci-hygiene check-doc-paths docs/specs
 rtk cargo xtask ci-hygiene check-doc-paths docs/project/status
 rtk cargo xtask check-support-claims
 rtk cargo xtask check-provider-confidence-matrix
-rtk powershell -NoProfile -Command 'Get-Content schemas/oracle_receipt.v1.schema.json -Raw | ConvertFrom-Json | Out-Null; Get-Content schemas/oracle_fixture_manifest.v1.schema.json -Raw | ConvertFrom-Json | Out-Null; Get-Content crates/perl-corpus/fixtures/differential_oracle/manifest.json -Raw | ConvertFrom-Json | Out-Null'
+rtk cargo xtask check-provider-promotion-ledger
+rtk cargo xtask metrics parser-accuracy --check
+rtk cargo xtask metrics ratchet-check parser_accuracy
 rtk git diff --check
 ```
 
 Rollback
 
-Revert the manifest/schema/routing PR. If oracle receipt schema declarations are
-not ready, mark `oracle-receipt-schema-after-manifest` planned or deferred in
-the active manifest and select the next ready item without changing provider
-behavior.
+Revert this routing PR. If the receipt schema needs more work, mark
+`oracle-receipt-schema-after-manifest` active again and select no feature lane
+until the schema validator passes.

@@ -124,11 +124,13 @@ items = [
 
 [substrate.next]
 items = [
-  "oracle-receipt-schema-after-manifest",
+  "oracle-runner-explicit-command-when-assigned",
+  "pir-v0-contract-when-assigned",
 ]
 
 [reliability.next]
 items = [
+  "post-oracle-schema-routing-review",
   "cleanup-train-queue-review",
   "policy_cleanup",
   "published_api_hygiene",
@@ -444,7 +446,7 @@ commands = [
 
 [[work_item]]
 id = "oracle-receipt-schema-after-manifest"
-status = "active"
+status = "completed"
 lane = "substrate"
 claim_boundary = "Differential oracle receipt schema validation only; no oracle runner, Perl execution, workspace probing, provider behavior, support-tier promotion, release-lineage sync, or parser/corpus bucket movement."
 files = [
@@ -468,6 +470,28 @@ commands = [
   "rtk cargo xtask check-support-claims",
   "rtk cargo xtask check-provider-confidence-matrix",
   "rtk powershell -NoProfile -Command 'Get-Content schemas/oracle_receipt.v1.schema.json -Raw | ConvertFrom-Json | Out-Null'",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "post-oracle-schema-routing-review"
+status = "active"
+lane = "reliability"
+claim_boundary = "Control-plane routing review only; no oracle runner, Perl execution, workspace probing, provider behavior, support-tier promotion, provider-row promotion, release-lineage sync, or parser/corpus bucket movement."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+]
+commands = [
+  "rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-oracle-receipt-schema",
+  "rtk cargo xtask check-oracle-fixture-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
   "rtk git diff --check",
 ]
 
