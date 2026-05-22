@@ -581,7 +581,7 @@ commands = [
 id = "semantic-token-class-receipts-as-needed"
 status = "active"
 lane = "trust"
-claim_boundary = "Semantic-token receipt routing only until a new scoped compiler-token class is ready; no broad compiler-backed token output, provider behavior broadening, support-tier movement, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+claim_boundary = "Semantic-token receipt routing only until a new scoped compiler-token class is ready; class-declaration is currently deferred until live-output parity is proven; no broad compiler-backed token output, provider behavior broadening, support-tier movement, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
 files = [
   ".perl-lsp/goals/active.toml",
   "plans/real-perl-editor-trust/implementation-plan.md",
@@ -601,6 +601,17 @@ commands = [
   "rtk bash -lc './scripts/cargo-safe xtask metrics ratchet-check parser_accuracy'",
   "rtk bash -lc './scripts/storage-doctor'",
   "rtk git diff --check",
+]
+
+[[work_item]]
+id = "semantic-token-class-declaration-readiness-review"
+status = "completed"
+lane = "trust"
+claim_boundary = "Semantic-token readiness review only; class-declaration remains deferred because the runtime receipt does not prove exact live-output parity, so no policy row, provider-promotion row, live trace class, support-tier movement, or token output change is authorized."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
 ]
 
 [[work_item]]

@@ -234,6 +234,13 @@ semantic-token work must either expose another reviewed scoped class through the
 user-facing provider-decision trace or add another class with the same
 promotion, fallback, blocker, and span-invariant rules.
 
+`class_declaration` has been reviewed as a possible next scoped token class and
+is deferred. The source-backed candidate can be described, but the runtime
+receipt does not currently prove exact parity with one existing live `class`
+token, so its fallback state remains shadowed. That means there is no
+`class_declaration` policy row, no provider-promotion ledger row, no support-tier
+movement, no live-trace class promotion, and no semantic-token output change.
+
 ## Refactor Support Review
 
 Post-cutover review does not justify a broad refactor tier promotion. Rename
@@ -273,6 +280,8 @@ items. The semantic-token class receipt support review closes the immediate
   The package-declaration, phase-block, field/method-call, self-method-call, and
   lexical-variable declaration/use live-trace expansions close the current semantic-token
 trace-class routing items without emitting new token output.
+The class-declaration readiness review keeps `class_declaration` deferred
+because exact live-output parity is not proven.
 The non-subroutine/package-wide safe-delete source-guard receipt and the
 generated/no-source plus dynamic live-command blocker receipt close the current
 safe-delete blocker routing items without broadening deletion. The diagnostic

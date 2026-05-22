@@ -779,6 +779,11 @@ Current executable slice
   ready to prove the same promotion, fallback, blocker, didChange freshness, and
   output-neutral span-invariant rules. Until then, it is a routing marker only,
   not a broad compiler-backed token cutover.
+- `semantic-token-class-declaration-readiness-review` is completed in the trust
+  lane. `class_declaration` remains deferred because the runtime receipt does
+  not prove exact live-output parity against an existing live `class` token; the
+  reviewed class therefore receives no semantic-token class policy row, provider
+  promotion row, support-tier movement, or provider behavior change.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
