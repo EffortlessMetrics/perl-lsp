@@ -119,7 +119,6 @@ rule = "Merge clean leaf work; escalate trust-adjacent surfaces instead of treat
 
 [trust.next]
 items = [
-  "provider_promotion_ledger_parity_review",
   "semantic_token_class_receipts_as_needed",
 ]
 
@@ -556,7 +555,7 @@ commands = [
 
 [[work_item]]
 id = "provider-promotion-ledger-parity-review"
-status = "active"
+status = "completed"
 lane = "trust"
 claim_boundary = "Provider promotion ledger parity routing only; no fact-class promotion, provider behavior, support-tier movement, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
 files = [
@@ -570,6 +569,32 @@ commands = [
   "rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft",
   "rtk bash -lc './scripts/cargo-safe xtask check-active-goal-manifest'",
   "rtk bash -lc './scripts/cargo-safe xtask check-provider-promotion-ledger'",
+  "rtk bash -lc './scripts/cargo-safe xtask check-support-claims'",
+  "rtk bash -lc './scripts/cargo-safe xtask check-provider-confidence-matrix'",
+  "rtk bash -lc './scripts/cargo-safe xtask metrics parser-accuracy --check'",
+  "rtk bash -lc './scripts/cargo-safe xtask metrics ratchet-check parser_accuracy'",
+  "rtk bash -lc './scripts/storage-doctor'",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "semantic-token-class-receipts-as-needed"
+status = "active"
+lane = "trust"
+claim_boundary = "Semantic-token receipt routing only until a new scoped compiler-token class is ready; no broad compiler-backed token output, provider behavior broadening, support-tier movement, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/provider_promotion_ledger.md",
+  "policy/provider-promotion-ledger.toml",
+  "policy/semantic-token-classes.toml",
+]
+commands = [
+  "rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft",
+  "rtk bash -lc './scripts/cargo-safe xtask check-active-goal-manifest'",
+  "rtk bash -lc './scripts/cargo-safe xtask check-provider-promotion-ledger'",
+  "rtk bash -lc './scripts/cargo-safe xtask check-semantic-token-classes'",
   "rtk bash -lc './scripts/cargo-safe xtask check-support-claims'",
   "rtk bash -lc './scripts/cargo-safe xtask check-provider-confidence-matrix'",
   "rtk bash -lc './scripts/cargo-safe xtask metrics parser-accuracy --check'",

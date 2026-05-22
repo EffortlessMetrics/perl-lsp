@@ -767,13 +767,18 @@ Current executable slice
   to the current code surface. It did not change Rust API surface, broaden
   provider behavior, promote support tiers, move parser/corpus buckets, sync
   release lineage, or continue source-repo development.
-- `provider-promotion-ledger-parity-review` is active in the trust lane. The
-  current slice is a control-plane parity review after the queue burn-down and
-  public API hygiene closeout. It may verify that the human and TOML provider
-  promotion ledgers remain aligned with the dashboard's next proof order, but
-  it must not add or promote fact classes, broaden provider behavior, promote
-  support tiers, move parser/corpus buckets, sync release lineage, or continue
-  source-repo development.
+- `provider-promotion-ledger-parity-review` is completed in the trust lane. The
+  parity check now records 17 machine policy rows, 17 human ledger rows, and 18
+  blocker registry entries. This was a control-plane parity review after the
+  queue burn-down and public API hygiene closeout; it did not add or promote
+  fact classes, broaden provider behavior, promote support tiers, move
+  parser/corpus buckets, sync release lineage, or continue source-repo
+  development.
+- `semantic-token-class-receipts-as-needed` is active in the trust lane. The
+  next semantic-token PR may start only when a new scoped compiler-token class is
+  ready to prove the same promotion, fallback, blocker, didChange freshness, and
+  output-neutral span-invariant rules. Until then, it is a routing marker only,
+  not a broad compiler-backed token cutover.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 

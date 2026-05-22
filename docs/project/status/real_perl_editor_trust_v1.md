@@ -333,9 +333,15 @@ effects now derive from that table. It does not change provider behavior,
 diagnostic suppression, parser bucket status, support tiers, PIR status, or
 determinism claims.
 
-1. `docs(status): maintain provider promotion ledger parity when fact classes or receipts change`
-2. `test(semantic-tokens): add another scoped compiler-token class receipt only when a new class is ready`
-3. `test(dap): add DAP includePaths cutover proof only if native DAP module-path behavior is being promoted`
+The provider promotion ledger parity review is complete: the machine policy and
+human ledger currently agree on 17 provider fact-class rows, and the blocker
+registry contains 18 normalized blocker entries. That review did not add or
+promote fact classes, broaden provider behavior, promote support tiers, move
+parser/corpus buckets, sync release lineage, or continue source-repo
+development.
+
+1. `test(semantic-tokens): add another scoped compiler-token class receipt only when a new class is ready`
+2. `test(dap): add DAP includePaths cutover proof only if native DAP module-path behavior is being promoted`
 
 Provider decision explanations are already partial-live through
 `perl.explainProviderDecision`; callers can attach a request-local
