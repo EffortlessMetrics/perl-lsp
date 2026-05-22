@@ -10,6 +10,7 @@
 //! - `LabeledStatement` and `StatementModifier` AST traversal
 //! - `PragmaSnapshot`/`PragmaState` conversions (`From` impls)
 //! - `PragmaMap::state_at`, `PragmaStateQuery` methods, `PragmaSnapshot` methods
+//! - `PragmaQueryCursor` explicit-map and legacy-map clamp/backward-seek branches
 //! - `features_enabled_by_version` documented bundle boundaries
 //! - `parse_perl_version` major-only without 'v' prefix
 //! - `normalize_snapshot` propagation of `signatures_strict`
@@ -20,8 +21,8 @@
 use perl_ast::SourceLocation;
 use perl_ast::ast::{Node, NodeKind};
 use perl_pragma::{
-    CompileTimePragmaEnvironment, PerlVersion, PragmaSnapshot, PragmaState, PragmaTracker,
-    features_enabled_by_version, parse_perl_version, version_implies_strict,
+    CompileTimePragmaEnvironment, PerlVersion, PragmaQueryCursor, PragmaSnapshot, PragmaState,
+    PragmaTracker, features_enabled_by_version, parse_perl_version, version_implies_strict,
     version_implies_warnings,
 };
 
@@ -53,6 +54,10 @@ fn no_node(module: &str, args: &[&str], start: usize, end: usize) -> Node {
         },
         location: loc(start, end),
     }
+}
+
+fn block(stmts: Vec<Node>, start: usize, end: usize) -> Node {
+    Node { kind: NodeKind::Block { statements: stmts }, location: loc(start, end) }
 }
 
 fn program(stmts: Vec<Node>) -> Node {
@@ -703,6 +708,123 @@ fn compile_time_environment_as_map_returns_tuples() -> Result<(), Box<dyn std::e
     let tuples = environment.as_map();
     assert_eq!(tuples.len(), 1, "as_map must return one entry for a single pragma");
     assert!(tuples[0].1.state().utf8, "as_map snapshot must reflect utf8=true");
+    Ok(())
+}
+
+// ===========================================================================
+// `PragmaQueryCursor` explicit-map and legacy-map branches
+// ===========================================================================
+
+#[test]
+fn pragma_map_snapshot_at_before_first_entry_returns_default()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("strict", &[], 50, 62)]);
+    let environment = CompileTimePragmaEnvironment::build(&ast);
+    let pragma_map = environment.map();
+
+    let snapshot = pragma_map.snapshot_at(10);
+    assert!(
+        !snapshot.state().strict_vars,
+        "snapshot before the first pragma must not have strict_vars"
+    );
+    assert!(
+        !snapshot.state().strict_subs,
+        "snapshot before the first pragma must not have strict_subs"
+    );
+    Ok(())
+}
+
+#[test]
+fn cursor_entry_for_offset_backward_seek_explicit_map() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        block(vec![no_node("strict", &["refs"], 20, 36)], 18, 40),
+        use_node("warnings", &[], 42, 57),
+    ]);
+    let environment = CompileTimePragmaEnvironment::build(&ast);
+    let pragma_map = environment.map();
+    let mut cursor = pragma_map.cursor();
+
+    let late = cursor.snapshot_at(pragma_map, 50);
+    assert!(late.state().warnings, "late offset must see warnings");
+
+    let early = cursor.snapshot_at(pragma_map, 8);
+    assert!(early.state().strict_vars, "early offset must see strict after backward seek");
+    assert!(!early.state().warnings, "early offset must not see warnings");
+    assert_eq!(early, environment.snapshot_at(8), "cursor result must match direct snapshot_at");
+    Ok(())
+}
+
+#[test]
+fn cursor_entry_for_offset_empty_map_returns_default() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![]);
+    let environment = CompileTimePragmaEnvironment::build(&ast);
+    let pragma_map = environment.map();
+    let mut cursor = pragma_map.cursor();
+
+    let snapshot = cursor.snapshot_at(pragma_map, 999);
+    assert!(!snapshot.state().strict_vars, "empty map must return default snapshot");
+    assert!(!snapshot.state().warnings, "empty map must return default snapshot");
+    Ok(())
+}
+
+#[test]
+fn cursor_entry_for_offset_index_clamped_when_past_end() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("strict", &[], 0, 12), use_node("warnings", &[], 13, 28)]);
+    let environment = CompileTimePragmaEnvironment::build(&ast);
+    let pragma_map = environment.map();
+    let mut cursor = pragma_map.cursor();
+
+    let _ = cursor.snapshot_at(pragma_map, 9999);
+
+    let snapshot = cursor.snapshot_at(pragma_map, 20);
+    assert!(snapshot.state().warnings, "warnings must be visible after index clamp");
+    Ok(())
+}
+
+#[test]
+fn cursor_reused_with_smaller_map_clamps_index() -> Result<(), Box<dyn std::error::Error>> {
+    let big_ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        use_node("warnings", &[], 13, 28),
+        use_node("utf8", &[], 29, 38),
+        use_node("feature", &["'say'"], 39, 57),
+    ]);
+    let big_environment = CompileTimePragmaEnvironment::build(&big_ast);
+    let big_map = big_environment.map();
+    let big_len = big_map.entries().len();
+    let mut cursor = big_map.cursor();
+    let _ = cursor.snapshot_at(big_map, 9999);
+
+    let small_ast = program(vec![use_node("warnings", &[], 0, 15)]);
+    let small_environment = CompileTimePragmaEnvironment::build(&small_ast);
+    let small_map = small_environment.map();
+
+    assert!(big_len > small_map.entries().len(), "precondition: big map is larger");
+    let snapshot = cursor.snapshot_at(small_map, 10);
+    assert!(snapshot.state().warnings, "small map must report warnings after index clamp");
+    Ok(())
+}
+
+#[test]
+fn cursor_legacy_api_reused_with_smaller_map_clamps_index() -> Result<(), Box<dyn std::error::Error>>
+{
+    let big_ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        use_node("warnings", &[], 13, 28),
+        use_node("utf8", &[], 29, 38),
+        use_node("feature", &["'say'"], 39, 57),
+    ]);
+    let big_map = PragmaTracker::build(&big_ast);
+    let mut cursor = PragmaQueryCursor::new();
+    let _ = cursor.state_for_offset(&big_map, 9999);
+
+    let small_ast = program(vec![use_node("warnings", &[], 0, 15)]);
+    let small_map = PragmaTracker::build(&small_ast);
+
+    assert!(big_map.len() > small_map.len(), "precondition: big map is larger");
+    let state = cursor.state_for_offset(&small_map, 10);
+    assert!(state.warnings, "small map must report warnings after index clamp");
     Ok(())
 }
 
