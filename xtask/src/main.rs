@@ -80,6 +80,9 @@ enum Commands {
     /// Validate machine-readable Real Perl Editor Trust provider promotion ledger.
     CheckProviderPromotionLedger,
 
+    /// Validate declared differential real-Perl oracle fixtures.
+    CheckOracleFixtureManifest,
+
     /// Validate semantic-token class promotion registry.
     CheckSemanticTokenClasses,
 
@@ -2557,6 +2560,7 @@ fn main() -> Result<()> {
         Commands::CheckSupportClaims => provider_confidence_matrix::run_support_claims(),
         Commands::CheckActiveGoalManifest => active_goal_manifest::run(),
         Commands::CheckProviderPromotionLedger => provider_promotion_ledger::run(),
+        Commands::CheckOracleFixtureManifest => oracle_fixture_manifest::run(),
         Commands::CheckSemanticTokenClasses => semantic_token_classes::run(),
         Commands::CheckWorkspaceSymbolClasses => workspace_symbol_classes::run(),
         Commands::Queue { command } => match command {

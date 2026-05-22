@@ -715,40 +715,48 @@ Recent routing
   oracle runner, executing Perl, probing workspaces, changing provider
   behavior, promoting support tiers, moving parser/corpus buckets, syncing
   release lineage, or claiming conformance.
+- `provider-promotion-ledger-maintenance` is completed. The direct class
+  type-definition safe subset is recorded in the human ledger, machine ledger,
+  dashboard, and plan without broadening provider behavior or support tiers.
 
 Current executable slice
 
-- `provider-promotion-ledger-maintenance` is active in the trust lane.
-- The direct class type-definition safe subset is now a ledgered fact class:
-  direct package/class receivers and constructor method receivers may resolve to
-  source-backed open-document package definitions, while variables, chained
-  method results, function-call results, missing packages, dynamic boundaries,
-  generated/no-source receivers, stale facts, low-confidence facts, ambiguous
-  identities, and unsupported receiver shapes remain fallback or blocked.
+- `oracle-fixture-manifest-after-contract` is active in the substrate lane.
+- The next PR declares a checked-in differential oracle fixture manifest and
+  schema after the oracle contract. The manifest may name fixture identities,
+  source snapshots, path classes, Perl constraints, module roots, environment
+  denials, dynamic/unsupported boundaries, and comparison classes.
+- This slice does not add an oracle runner, execute Perl, probe workspaces,
+  change provider behavior, promote support tiers, move parser/corpus buckets,
+  sync release lineage, or claim conformance.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
 Claim boundary
 
-- Provider promotion ledger maintenance may align human and machine policy,
-  next-proof wording, and active-goal routing. It must not broaden provider
-  behavior, promote support tiers, move parser buckets, change edit
-  authorization, sync release lineage, or use stale receipts as promotion proof.
+- Oracle fixture manifest work may align the schema, checked-in manifest,
+  active-goal routing, and planning docs. It must not add an oracle runner,
+  execute Perl, probe workspaces, broaden provider behavior, promote support
+  tiers, move parser/corpus buckets, sync release lineage, or use oracle
+  agreement as provider promotion proof.
 
 Proof commands
 
 ```bash
-rtk cargo test -p perl-lsp-rs-core --features lsp-compat --profile agent --locked type_definition -- --nocapture
-rtk cargo xtask check-provider-promotion-ledger
+rtk cargo test -p xtask --profile agent --locked oracle_fixture_manifest -- --nocapture
+rtk cargo xtask check-oracle-fixture-manifest
 rtk cargo xtask check-active-goal-manifest
+rtk cargo xtask ci-hygiene check-doc-paths docs/specs
+rtk cargo xtask ci-hygiene check-doc-paths docs/project/status
 rtk cargo xtask check-support-claims
 rtk cargo xtask check-provider-confidence-matrix
+rtk powershell -NoProfile -Command 'Get-Content schemas/oracle_fixture_manifest.v1.schema.json -Raw | ConvertFrom-Json | Out-Null; Get-Content crates/perl-corpus/fixtures/differential_oracle/manifest.json -Raw | ConvertFrom-Json | Out-Null'
 rtk git diff --check
 ```
 
 Rollback
 
-Revert the manifest/plan routing PR. If provider ledger maintenance is not
-ready, mark `provider-promotion-ledger-maintenance` planned or deferred in the
+Revert the manifest/schema/routing PR. If oracle fixture declarations are not
+ready, mark `oracle-fixture-manifest-after-contract` planned or deferred in the
 active manifest and select the next ready item without changing provider
 behavior.

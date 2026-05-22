@@ -25,10 +25,10 @@ source-backing, module-path authority, ambient-input, provider-decision, PIR,
 and determinism receipt contracts that define the fact classes an oracle may
 compare.
 
-This spec defines the oracle contract. It does not add an oracle runner, fixture
-manifest, subprocess seam, real-Perl execution path, workspace probe, provider
-behavior, release-lineage sync, support-tier promotion, corpus/parser bucket
-movement, or conformance claim.
+This spec defines the oracle contract. The repo now has a declaration-only
+fixture manifest and schema, but no oracle runner, subprocess seam, real-Perl
+execution path, workspace probe, provider behavior, release-lineage sync,
+support-tier promotion, corpus/parser bucket movement, or conformance claim.
 
 Current evidence remains in:
 
@@ -38,6 +38,8 @@ Current evidence remains in:
 - [provider confidence matrix](../project/status/provider_confidence_matrix.md)
 - [support tiers](../project/status/SUPPORT_TIERS.md)
 - [determinism receipt v1](PLSP-SPEC-0026-determinism-receipt-v1.md)
+- [oracle fixture manifest schema](../../schemas/oracle_fixture_manifest.v1.schema.json)
+- [oracle fixture manifest](../../crates/perl-corpus/fixtures/differential_oracle/manifest.json)
 - [active goal manifest](../../.perl-lsp/goals/active.toml)
 
 Current next work is not stored here; see the routing dashboard and active goal.
@@ -247,10 +249,18 @@ Schema, fixture-manifest, runner, subprocess, provider, parser/corpus,
 determinism, or support-claim PRs must also run the focused checks for the
 changed surface.
 
+Declaration-only fixture-manifest PRs should also use:
+
+```bash
+rtk cargo test -p xtask --profile agent --locked oracle_fixture_manifest -- --nocapture
+rtk cargo xtask check-oracle-fixture-manifest
+rtk powershell -NoProfile -Command 'Get-Content schemas/oracle_fixture_manifest.v1.schema.json -Raw | ConvertFrom-Json | Out-Null; Get-Content crates/perl-corpus/fixtures/differential_oracle/manifest.json -Raw | ConvertFrom-Json | Out-Null'
+```
+
 ## Non-goals
 
 - No oracle runner from this spec alone.
-- No fixture manifest from this spec alone.
+- No oracle runner from the fixture manifest.
 - No Perl execution.
 - No workspace probing.
 - No editor-runtime dependency on Perl.

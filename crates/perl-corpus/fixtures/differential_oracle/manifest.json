@@ -1,0 +1,177 @@
+{
+  "$schema": "../../../../schemas/oracle_fixture_manifest.v1.schema.json",
+  "schema_version": "oracle_fixture_manifest.v1",
+  "manifest": "differential-real-perl-oracle-fixtures",
+  "owner": "perl-lsp maintainers",
+  "status": "declaration-only",
+  "updated": "2026-05-22",
+  "spec": "docs/specs/PLSP-SPEC-0027-differential-real-perl-oracle.md",
+  "runner": "none",
+  "editor_runtime_dependency": false,
+  "comparison_classes": [
+    "PackageSubTable",
+    "ImportExport",
+    "IsaComposition",
+    "ConstantPrototype",
+    "FrameworkGeneratedMember",
+    "CompileEffect"
+  ],
+  "result_classes": [
+    "oracle_agrees",
+    "compiler_missing",
+    "compiler_extra",
+    "range_mismatch",
+    "provenance_mismatch",
+    "confidence_or_freshness_mismatch",
+    "dynamic_or_unsupported",
+    "oracle_ambient_unbounded",
+    "stale_or_partial",
+    "unknown"
+  ],
+  "required_environment_denials": [
+    "PERL5LIB",
+    "PERL5OPT",
+    "local::lib"
+  ],
+  "default_claim_boundary": "Fixture declaration only; no oracle runner, Perl execution, provider behavior, support-tier promotion, release-lineage sync, or parser/corpus bucket movement.",
+  "fixtures": [
+    {
+      "id": "package_basic",
+      "source": "crates/perl-corpus/fixtures/parser_accuracy/package_basic.pl",
+      "path_class": "public_test_fixture",
+      "perl_version_constraint": "any-supported-real-perl",
+      "include_path_authority": "declared_fixture_root",
+      "module_roots": [
+        "crates/perl-corpus/fixtures/parser_accuracy"
+      ],
+      "environment_denials": [
+        "PERL5LIB",
+        "PERL5OPT",
+        "local::lib"
+      ],
+      "comparison_classes": [
+        "PackageSubTable"
+      ],
+      "dynamic_boundaries": [],
+      "unsupported_effects": [],
+      "framework_adapters": [],
+      "claim_boundary": "Package/sub-table fixture declaration only; no oracle runner, Perl execution, provider behavior, support-tier promotion, release-lineage sync, or parser/corpus bucket movement."
+    },
+    {
+      "id": "imports_exports",
+      "source": "crates/perl-corpus/fixtures/parser_accuracy/imports_exports.pl",
+      "path_class": "public_test_fixture",
+      "perl_version_constraint": "any-supported-real-perl",
+      "include_path_authority": "declared_fixture_root",
+      "module_roots": [
+        "crates/perl-corpus/fixtures/parser_accuracy"
+      ],
+      "environment_denials": [
+        "PERL5LIB",
+        "PERL5OPT",
+        "local::lib"
+      ],
+      "comparison_classes": [
+        "ImportExport"
+      ],
+      "dynamic_boundaries": [],
+      "unsupported_effects": [],
+      "framework_adapters": [],
+      "claim_boundary": "Import/export fixture declaration only; no oracle runner, Perl execution, provider behavior, support-tier promotion, release-lineage sync, or parser/corpus bucket movement."
+    },
+    {
+      "id": "inherited_method",
+      "source": "crates/perl-corpus/fixtures/parser_accuracy/inherited_method.pl",
+      "path_class": "public_test_fixture",
+      "perl_version_constraint": "any-supported-real-perl",
+      "include_path_authority": "declared_fixture_root",
+      "module_roots": [
+        "crates/perl-corpus/fixtures/parser_accuracy"
+      ],
+      "environment_denials": [
+        "PERL5LIB",
+        "PERL5OPT",
+        "local::lib"
+      ],
+      "comparison_classes": [
+        "IsaComposition"
+      ],
+      "dynamic_boundaries": [],
+      "unsupported_effects": [],
+      "framework_adapters": [],
+      "claim_boundary": "Inheritance fixture declaration only; no oracle runner, Perl execution, provider behavior, support-tier promotion, release-lineage sync, or parser/corpus bucket movement."
+    },
+    {
+      "id": "generated_accessor",
+      "source": "crates/perl-corpus/fixtures/parser_accuracy/generated_accessor.pl",
+      "path_class": "public_test_fixture",
+      "perl_version_constraint": "any-supported-real-perl",
+      "include_path_authority": "declared_fixture_root",
+      "module_roots": [
+        "crates/perl-corpus/fixtures/parser_accuracy"
+      ],
+      "environment_denials": [
+        "PERL5LIB",
+        "PERL5OPT",
+        "local::lib"
+      ],
+      "comparison_classes": [
+        "FrameworkGeneratedMember"
+      ],
+      "dynamic_boundaries": [],
+      "unsupported_effects": [],
+      "framework_adapters": [
+        "Moo"
+      ],
+      "claim_boundary": "Moo generated-member fixture declaration only; no oracle runner, Perl execution, provider behavior, support-tier promotion, release-lineage sync, or parser/corpus bucket movement."
+    },
+    {
+      "id": "dynamic_require_boundary",
+      "source": "crates/perl-corpus/fixtures/parser_accuracy/dynamic_require.pl",
+      "path_class": "public_test_fixture",
+      "perl_version_constraint": "any-supported-real-perl",
+      "include_path_authority": "declared_fixture_root",
+      "module_roots": [
+        "crates/perl-corpus/fixtures/parser_accuracy"
+      ],
+      "environment_denials": [
+        "PERL5LIB",
+        "PERL5OPT",
+        "local::lib"
+      ],
+      "comparison_classes": [
+        "CompileEffect"
+      ],
+      "dynamic_boundaries": [
+        "dynamic_require"
+      ],
+      "unsupported_effects": [],
+      "framework_adapters": [],
+      "claim_boundary": "Dynamic require boundary fixture declaration only; no oracle runner, Perl execution, provider behavior, support-tier promotion, release-lineage sync, or parser/corpus bucket movement."
+    },
+    {
+      "id": "autoload_boundary",
+      "source": "crates/perl-corpus/fixtures/parser_accuracy/autoload_boundary.pl",
+      "path_class": "public_test_fixture",
+      "perl_version_constraint": "any-supported-real-perl",
+      "include_path_authority": "declared_fixture_root",
+      "module_roots": [
+        "crates/perl-corpus/fixtures/parser_accuracy"
+      ],
+      "environment_denials": [
+        "PERL5LIB",
+        "PERL5OPT",
+        "local::lib"
+      ],
+      "comparison_classes": [
+        "CompileEffect"
+      ],
+      "dynamic_boundaries": [
+        "autoload"
+      ],
+      "unsupported_effects": [],
+      "framework_adapters": [],
+      "claim_boundary": "AUTOLOAD boundary fixture declaration only; no oracle runner, Perl execution, provider behavior, support-tier promotion, release-lineage sync, or parser/corpus bucket movement."
+    }
+  ]
+}

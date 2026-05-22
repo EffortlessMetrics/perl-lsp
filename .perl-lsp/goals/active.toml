@@ -120,7 +120,6 @@ rule = "Merge clean leaf work; escalate trust-adjacent surfaces instead of treat
 [trust.next]
 items = [
   "semantic_token_class_receipts_as_needed",
-  "provider_promotion_ledger_maintenance",
 ]
 
 [substrate.next]
@@ -395,7 +394,7 @@ commands = [
 
 [[work_item]]
 id = "provider-promotion-ledger-maintenance"
-status = "active"
+status = "completed"
 lane = "trust"
 claim_boundary = "Provider promotion ledger maintenance only; no provider behavior broadening, support-tier promotion, parser bucket movement, release-lineage sync, or edit authorization change."
 files = [
@@ -411,6 +410,35 @@ commands = [
   "rtk cargo xtask check-active-goal-manifest",
   "rtk cargo xtask check-support-claims",
   "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "oracle-fixture-manifest-after-contract"
+status = "active"
+lane = "substrate"
+claim_boundary = "Differential oracle fixture manifest declaration only; no oracle runner, Perl execution, provider behavior, support-tier promotion, release-lineage sync, or parser/corpus bucket movement."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/specs/PLSP-SPEC-0027-differential-real-perl-oracle.md",
+  "schemas/oracle_fixture_manifest.v1.schema.json",
+  "crates/perl-corpus/fixtures/differential_oracle/manifest.json",
+  "docs/project/status/compiler_facts.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "xtask/src/main.rs",
+  "xtask/src/tasks/mod.rs",
+  "xtask/src/tasks/oracle_fixture_manifest.rs",
+]
+commands = [
+  "rtk cargo test -p xtask --profile agent --locked oracle_fixture_manifest -- --nocapture",
+  "rtk cargo xtask check-oracle-fixture-manifest",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask ci-hygiene check-doc-paths docs/specs",
+  "rtk cargo xtask ci-hygiene check-doc-paths docs/project/status",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk powershell -NoProfile -Command 'Get-Content schemas/oracle_fixture_manifest.v1.schema.json -Raw | ConvertFrom-Json | Out-Null; Get-Content crates/perl-corpus/fixtures/differential_oracle/manifest.json -Raw | ConvertFrom-Json | Out-Null'",
   "rtk git diff --check",
 ]
 
