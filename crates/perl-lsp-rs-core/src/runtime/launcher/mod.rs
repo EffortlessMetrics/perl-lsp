@@ -747,6 +747,10 @@ pub fn help_text() -> String {
     out.push_str("                       Override diagnostic scope (normal, syntax-only)\n");
     out.push_str("  PERL_LSP_DIAGNOSTIC_DEBOUNCE_MS=<ms>\n");
     out.push_str("                       Override diagnostic debounce window\n");
+    out.push_str("  PERL_LSP_EAGER_WORKSPACE_INDEXING=<bool>\n");
+    out.push_str("                       Override eager workspace indexing on `initialized`\n");
+    out.push_str("  PERL_LSP_FILE_WATCHERS=<bool>\n");
+    out.push_str("                       Override file watcher registration with the client\n");
     out.push_str("  RUST_LOG=<filter>    Set tracing filter (e.g. perl_lsp=debug)\n");
     out.push_str("  NO_COLOR=1           Disable colored output\n");
     out
@@ -1667,21 +1671,25 @@ mod tests {
     }
 
     #[test]
-    fn parse_invalid_runtime_mode_errors() {
+    fn parse_invalid_runtime_mode_errors() -> Result<(), String> {
         let _guards = scrub_runtime_tuning_env();
         let err = parse_args(["perl-lsp", "--runtime-mode", "warp"])
-            .expect_err("invalid runtime mode must be rejected");
+            .err()
+            .ok_or("invalid runtime mode must be rejected".to_string())?;
         let msg = format!("{err}");
         assert!(msg.contains("Invalid runtime mode"), "saw: {msg}");
+        Ok(())
     }
 
     #[test]
-    fn parse_invalid_diagnostic_mode_errors() {
+    fn parse_invalid_diagnostic_mode_errors() -> Result<(), String> {
         let _guards = scrub_runtime_tuning_env();
         let err = parse_args(["perl-lsp", "--diagnostic-mode", "loud"])
-            .expect_err("invalid diagnostic mode must be rejected");
+            .err()
+            .ok_or("invalid diagnostic mode must be rejected".to_string())?;
         let msg = format!("{err}");
         assert!(msg.contains("Invalid diagnostic mode"), "saw: {msg}");
+        Ok(())
     }
 
     #[test]

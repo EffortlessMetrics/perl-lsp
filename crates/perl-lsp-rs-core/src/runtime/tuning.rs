@@ -273,6 +273,7 @@ fn env_truthy(value: &Option<String>) -> Option<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_tdd_support::must_some;
 
     #[test]
     fn runtime_mode_normal_defaults_unchanged() {
@@ -313,7 +314,7 @@ mod tests {
     #[test]
     fn runtime_mode_parse_round_trips() {
         for mode in [RuntimeMode::Normal, RuntimeMode::E2e] {
-            let parsed = RuntimeMode::parse(mode.as_str()).expect("token round-trips");
+            let parsed = must_some(RuntimeMode::parse(mode.as_str()));
             assert_eq!(parsed, mode);
         }
         assert!(RuntimeMode::parse("E2E").is_some());
@@ -324,7 +325,7 @@ mod tests {
     #[test]
     fn diagnostic_mode_parse_round_trips() {
         for mode in [DiagnosticMode::Normal, DiagnosticMode::SyntaxOnly] {
-            let parsed = DiagnosticMode::parse(mode.as_str()).expect("token round-trips");
+            let parsed = must_some(DiagnosticMode::parse(mode.as_str()));
             assert_eq!(parsed, mode);
         }
         assert_eq!(DiagnosticMode::parse("Syntax_Only"), Some(DiagnosticMode::SyntaxOnly));
