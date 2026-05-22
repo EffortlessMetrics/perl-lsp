@@ -52,7 +52,7 @@ jobs:
     name: Build builder image (${{ matrix.platform }})
     runs-on: ubuntu-24.04
     needs: init
-    timeout-minutes: 90
+    timeout-minutes: 150
     strategy:
       fail-fast: false
       matrix:
@@ -162,7 +162,7 @@ jobs:
     name: Publish to Docker Hub
     runs-on: ubuntu-24.04
     needs: init
-    timeout-minutes: 90
+    timeout-minutes: 150
     if: github.event.inputs.push != 'false'
 
     steps:
