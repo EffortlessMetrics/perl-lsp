@@ -744,6 +744,12 @@ Current executable slice
   it does not change `cargo-safe`, build behavior, provider behavior, support
   tiers, parser/corpus buckets, release-lineage sync, or source-repo development
   routing.
+  The 2026-05-22 local validation pass confirms the manifest and gate policy
+  checks pass and `cargo xtask devex-doctor` completes with required tooling
+  available. The same pass records storage hygiene as not clean on this
+  Windows/WSL worktree: `storage-doctor` reports a repo-local `target/` above
+  the 1G threshold. That is a local storage receipt only, not a `cargo-safe`,
+  build-system, provider, parser, support-tier, or release-lineage change.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
