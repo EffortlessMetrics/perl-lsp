@@ -1610,11 +1610,16 @@ mod tests {
     /// parse_args tests below see compiled defaults, not whatever the
     /// runner happened to export.
     fn scrub_runtime_tuning_env() -> Vec<EnvGuard> {
-        ["PERL_LSP_E2E", "PERL_LSP_DIAGNOSTIC_MODE", "PERL_LSP_DIAGNOSTIC_DEBOUNCE_MS",
-         "PERL_LSP_EAGER_WORKSPACE_INDEXING", "PERL_LSP_FILE_WATCHERS"]
-            .iter()
-            .map(|key| EnvGuard::remove(key))
-            .collect()
+        [
+            "PERL_LSP_E2E",
+            "PERL_LSP_DIAGNOSTIC_MODE",
+            "PERL_LSP_DIAGNOSTIC_DEBOUNCE_MS",
+            "PERL_LSP_EAGER_WORKSPACE_INDEXING",
+            "PERL_LSP_FILE_WATCHERS",
+        ]
+        .iter()
+        .map(|key| EnvGuard::remove(key))
+        .collect()
     }
 
     #[test]

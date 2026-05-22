@@ -149,7 +149,12 @@ impl LspServer {
         R: Read + Send + 'static,
         W: Write + Send + 'static,
     {
-        Self::with_io_feature_profile_and_tuning(reader, writer, feature_profile, RuntimeTuning::from_env())
+        Self::with_io_feature_profile_and_tuning(
+            reader,
+            writer,
+            feature_profile,
+            RuntimeTuning::from_env(),
+        )
     }
 
     /// Create a new LSP server with custom I/O, explicit feature profile, and
@@ -244,7 +249,11 @@ impl LspServer {
         output: Arc<Mutex<Box<dyn Write + Send>>>,
         feature_profile: FeatureProfile,
     ) -> Self {
-        Self::with_output_feature_profile_and_tuning(output, feature_profile, RuntimeTuning::from_env())
+        Self::with_output_feature_profile_and_tuning(
+            output,
+            feature_profile,
+            RuntimeTuning::from_env(),
+        )
     }
 
     /// Create a new LSP server with custom output, explicit feature profile,

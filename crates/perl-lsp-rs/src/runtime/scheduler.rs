@@ -317,10 +317,12 @@ impl Scheduler {
         // user-tuned values from the CLI/env take effect.
         let debounce_server = Arc::clone(&server);
         let debounce_interval = server.runtime_tuning().diagnostic_debounce();
-        let debouncer =
-            super::diagnostic_debounce::DiagnosticDebouncer::with_interval(debounce_interval, move |uri| {
+        let debouncer = super::diagnostic_debounce::DiagnosticDebouncer::with_interval(
+            debounce_interval,
+            move |uri| {
                 debounce_server.publish_diagnostics(uri);
-            });
+            },
+        );
         server.install_diagnostic_debouncer(debouncer);
 
         // Install file watcher debouncer now that server is wrapped in Arc.
