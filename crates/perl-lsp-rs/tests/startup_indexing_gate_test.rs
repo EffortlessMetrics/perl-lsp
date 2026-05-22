@@ -31,12 +31,8 @@ fn initialize_with_workspace(server: &LspServer, root_uri: &str) {
         }],
         "capabilities": {},
     });
-    server
-        .test_handle_initialize_dispatch(Some(params))
-        .expect("initialize must succeed");
-    server
-        .test_handle_initialized_dispatch()
-        .expect("initialized must succeed");
+    server.test_handle_initialize_dispatch(Some(params)).expect("initialize must succeed");
+    server.test_handle_initialized_dispatch().expect("initialized must succeed");
 }
 
 #[test]

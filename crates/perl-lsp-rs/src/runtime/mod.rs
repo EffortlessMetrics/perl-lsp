@@ -433,8 +433,7 @@ impl LspServer {
     /// reset; monotonic for the lifetime of the server.
     #[cfg(any(test, feature = "expose_lsp_test_api"))]
     pub fn workspace_indexing_invocation_count(&self) -> usize {
-        self.workspace_indexing_invocation_count
-            .load(std::sync::atomic::Ordering::SeqCst)
+        self.workspace_indexing_invocation_count.load(std::sync::atomic::Ordering::SeqCst)
     }
 
     /// Get the registered AI inline-completion backend, if any.

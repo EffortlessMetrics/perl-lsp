@@ -1801,8 +1801,7 @@ impl LspServer {
         // Bump the invocation counter before any guards so tests can observe
         // the call regardless of whether the body short-circuits (e2e gate,
         // already-indexing, empty workspace folders, etc.).
-        self.workspace_indexing_invocation_count
-            .fetch_add(1, Ordering::SeqCst);
+        self.workspace_indexing_invocation_count.fetch_add(1, Ordering::SeqCst);
 
         // Guard: if already indexing, skip.  compare_exchange ensures only one
         // thread wins the race.
