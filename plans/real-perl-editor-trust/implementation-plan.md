@@ -708,26 +708,32 @@ Recent routing
   support-tier promotion, release-lineage sync, or determinism claim.
 - `cleanup-train-queue-review` is completed. The swarm queue was drained back
   to a controlled state before resuming spec-lock work.
+- `differential-oracle-contract` is completed. `PLSP-SPEC-0027` now defines the
+  differential real-Perl oracle contract, comparison classes, fixture and
+  environment authority, disagreement classes, valid/invalid PR shapes,
+  acceptance, proof commands, non-goals, and claim boundaries without adding an
+  oracle runner, executing Perl, probing workspaces, changing provider
+  behavior, promoting support tiers, moving parser/corpus buckets, syncing
+  release lineage, or claiming conformance.
 
 Current executable slice
 
-- `differential-oracle-contract` is active in the substrate lane.
+- `provider-promotion-ledger-maintenance` is active in the trust lane.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
 Claim boundary
 
-- Differential oracle work remains spec/planning proof only: no real-Perl
-  runtime dependency, workspace probing, provider behavior, release-lineage
-  sync, support-tier promotion, corpus/parser bucket movement, or determinism
-  claim.
+- Provider promotion ledger maintenance may align human and machine policy,
+  next-proof wording, and active-goal routing. It must not broaden provider
+  behavior, promote support tiers, move parser buckets, change edit
+  authorization, sync release lineage, or use stale receipts as promotion proof.
 
 Proof commands
 
 ```bash
+rtk cargo xtask check-provider-promotion-ledger
 rtk cargo xtask check-active-goal-manifest
-rtk cargo xtask ci-hygiene check-doc-paths docs/specs
-rtk cargo xtask ci-hygiene check-doc-paths docs/project/status
 rtk cargo xtask check-support-claims
 rtk cargo xtask check-provider-confidence-matrix
 rtk git diff --check
@@ -735,7 +741,7 @@ rtk git diff --check
 
 Rollback
 
-Revert the manifest/plan routing PR. If differential oracle contract work is not
-ready, mark `differential-oracle-contract` planned or deferred in the active
-manifest, restore the cleanup item only if queue work is still active, and select
-the next ready item without changing provider behavior.
+Revert the manifest/plan routing PR. If provider ledger maintenance is not
+ready, mark `provider-promotion-ledger-maintenance` planned or deferred in the
+active manifest and select the next ready item without changing provider
+behavior.

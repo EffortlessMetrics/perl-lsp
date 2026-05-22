@@ -125,7 +125,7 @@ items = [
 
 [substrate.next]
 items = [
-  "differential-oracle-contract-after-queue-cleanup",
+  "oracle-fixture-manifest-after-contract",
 ]
 
 [reliability.next]
@@ -370,7 +370,7 @@ commands = [
 
 [[work_item]]
 id = "differential-oracle-contract"
-status = "active"
+status = "completed"
 lane = "substrate"
 claim_boundary = "Differential oracle contract planning only; no real-Perl runtime dependency, workspace probing, provider behavior, release-lineage sync, support-tier promotion, or corpus/parser bucket movement claim."
 files = [
@@ -388,6 +388,26 @@ commands = [
   "rtk cargo xtask check-active-goal-manifest",
   "rtk cargo xtask ci-hygiene check-doc-paths docs/specs",
   "rtk cargo xtask ci-hygiene check-doc-paths docs/project/status",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "provider-promotion-ledger-maintenance"
+status = "active"
+lane = "trust"
+claim_boundary = "Provider promotion ledger maintenance only; no provider behavior broadening, support-tier promotion, parser bucket movement, release-lineage sync, or edit authorization change."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/project/status/provider_promotion_ledger.md",
+  "policy/provider-promotion-ledger.toml",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+commands = [
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask check-active-goal-manifest",
   "rtk cargo xtask check-support-claims",
   "rtk cargo xtask check-provider-confidence-matrix",
   "rtk git diff --check",

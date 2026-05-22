@@ -320,8 +320,9 @@ effects now derive from that table. It does not change provider behavior,
 diagnostic suppression, parser bucket status, support tiers, PIR status, or
 determinism claims.
 
-1. `docs(status): review semantic-token scoped class support without broad compiler-token promotion`
-2. `test(dap): add DAP includePaths cutover proof only if native DAP module-path behavior is being promoted`
+1. `docs(status): maintain provider promotion ledger parity when fact classes or receipts change`
+2. `test(semantic-tokens): add another scoped compiler-token class receipt only when a new class is ready`
+3. `test(dap): add DAP includePaths cutover proof only if native DAP module-path behavior is being promoted`
 
 Provider decision explanations are already partial-live through
 `perl.explainProviderDecision`; callers can attach a request-local
@@ -439,8 +440,9 @@ dynamic, ambiguous, and fallback/noise candidates remain fallback or gated.
 The scoped generated-symbol cutover receipt and Moo predicate generated-symbol
 class receipt are now recorded, and the generated/no-source variant receipt
 records runtime-installed and role-composed blocked candidates. The next
-workspace-symbol decision is support review before any broader generated
-workspace-symbol expansion.
+workspace-symbol work is not another support review; any broader generated
+workspace-symbol expansion still needs a new explicit-label rank/noise receipt
+and a promotion-ledger row.
 
 ## Promotion Rules
 
