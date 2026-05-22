@@ -739,17 +739,24 @@ Current executable slice
   authority, ambient/generated/dynamic/stale/unsupported inputs, normalized
   facts, comparison result classes, promotion effect, redaction,
   provider-behavior-change flag, and editor-runtime dependency denial.
-- `devex-storage-safe-validation` is active in the reliability lane. It is a
-  control-plane routing item for storage-safe local validation and queue health;
-  it does not change `cargo-safe`, build behavior, provider behavior, support
-  tiers, parser/corpus buckets, release-lineage sync, or source-repo development
-  routing.
-  The 2026-05-22 local validation pass confirms the manifest and gate policy
-  checks pass and `cargo xtask devex-doctor` completes with required tooling
-  available. The same pass records storage hygiene as not clean on this
-  Windows/WSL worktree: `storage-doctor` reports a repo-local `target/` above
-  the 1G threshold. That is a local storage receipt only, not a `cargo-safe`,
-  build-system, provider, parser, support-tier, or release-lineage change.
+- `devex-storage-safe-validation` is completed in the reliability lane. It was
+  a control-plane routing item for storage-safe local validation and queue
+  health; it did not change `cargo-safe`, build behavior, provider behavior,
+  support tiers, parser/corpus buckets, release-lineage sync, or source-repo
+  development routing.
+  The 2026-05-22 post-burndown validation pass captured a clean queue-health
+  checkpoint before the release/readiness follow-up PRs reopened the swarm
+  queue. The same pass confirms `pr-fast` passes on `92f4a1b`, the manifest and
+  gate policy checks pass, `cargo xtask devex-doctor` completes with required
+  tooling available, and `storage-doctor` reports repo-local `target/` at
+  `0.0G`. The only devex-doctor warnings are local hook advisories and the
+  presence of a repo-local `target/` directory that storage-doctor measures as
+  empty. That is a local storage receipt only, not a `cargo-safe`, build-system,
+  provider, parser, support-tier, or release-lineage change.
+- `policy-cleanup-routing-review` is active in the reliability lane. It is a
+  docs/manifest-only routing item for the next policy cleanup pass; it must not
+  broaden policy enforcement, provider behavior, support tiers, parser/corpus
+  buckets, release-lineage sync, or source-repo development routing.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
