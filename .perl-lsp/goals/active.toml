@@ -130,8 +130,6 @@ items = [
 
 [reliability.next]
 items = [
-  "devex-storage-safe-validation",
-  "cleanup-train-queue-review",
   "policy_cleanup",
   "published_api_hygiene",
 ]
@@ -498,7 +496,7 @@ commands = [
 
 [[work_item]]
 id = "devex-storage-safe-validation"
-status = "active"
+status = "completed"
 lane = "reliability"
 claim_boundary = "DevEx storage validation routing only; no cargo-safe behavior change, build-system change, provider behavior, support-tier promotion, release-lineage sync, parser/corpus bucket movement, or source-repo development continuation."
 files = [
@@ -510,6 +508,25 @@ commands = [
   "rtk cargo xtask check-active-goal-manifest",
   "rtk cargo xtask devex-doctor",
   "rtk cargo xtask gate-policy check",
+  "rtk bash -lc './scripts/storage-doctor'",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "policy-cleanup-routing-review"
+status = "active"
+lane = "reliability"
+claim_boundary = "Policy cleanup routing review only; no policy enforcement broadening, provider behavior, support-tier promotion, release-lineage sync, parser/corpus bucket movement, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+]
+commands = [
+  "rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask gate-policy check",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
   "rtk bash -lc './scripts/storage-doctor'",
   "rtk git diff --check",
 ]
