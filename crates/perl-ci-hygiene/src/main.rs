@@ -3329,6 +3329,30 @@ mod tests {
     }
 
     #[test]
+    fn rust_todo_detection_ignores_backtick_quoted_marker_names() -> Result<()> {
+        let todo_re = Regex::new(r"(?i)\b(?:todo|fixme)\b")?;
+
+        assert!(!has_unlinked_todo_in_rust_line(
+            "//! marker flag `todo` counts toward corpus markers",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "/* literal token `FIXME` is documented */",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_rust_line(
+            "// marker flag todo still looks like prose debt",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_rust_line(
+            "// `todo` marker plus TODO: actual work",
+            &todo_re
+        ));
+
+        Ok(())
+    }
+
+    #[test]
     fn rust_todo_detection_ignores_raw_string_comment_markers() -> Result<()> {
         let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
 

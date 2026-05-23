@@ -315,7 +315,7 @@ mod inventory {
             make_section("c.case", IdSource::Explicit, Some("c.case"), &[], &[]),
         ];
         let inv = inventory_from_sections(1, &sections);
-        // wip and todo both count toward the wip marker
+        // `wip` and `todo` both count toward the `wip` marker.
         assert_eq!(inv.markers.wip, 2);
     }
 
