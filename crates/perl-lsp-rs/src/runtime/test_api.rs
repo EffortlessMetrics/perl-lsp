@@ -84,6 +84,19 @@ impl LspServer {
         self.handle_did_change(Some(params))
     }
 
+    /// Test-only entrypoint for LSP `initialize`.
+    pub fn test_handle_initialize_dispatch(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_initialize(params)
+    }
+
+    /// Test-only entrypoint for the LSP `initialized` notification.
+    pub fn test_handle_initialized_dispatch(&self) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_initialized_dispatch()
+    }
+
     /// Test-only entrypoint for LSP `textDocument/definition`.
     ///
     /// Exercises go-to-definition functionality in tests. Returns the
