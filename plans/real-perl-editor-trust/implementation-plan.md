@@ -810,8 +810,10 @@ Current executable slice
 - `receiver-self-framework-accessor-fact-fixture` is completed in the trust lane.
   It adds a facts-only semantic analyzer fixture proving source-derived
   `$self = MyApp::Service->new` evidence plus framework accessor-return facts.
-  This keeps the receiver fact substrate current without changing completion
-  provider output, support tiers, parser/corpus status, or release lineage.
+  It also locks fallback when the source-derived `$self` package does not match
+  the framework declaration. This keeps the receiver fact substrate current
+  without changing completion provider output, support tiers, parser/corpus
+  status, or release lineage.
 - `receiver-method-return-accessor-chain-fact-fixture` is completed in the trust
   lane. It extends method-return expression facts for a static constructor
   followed by a source-backed framework accessor, while preserving dynamic
@@ -870,10 +872,10 @@ Claim boundary
   sync, or source-repo development routing.
 - Receiver self/framework accessor fact work may add facts-only semantic
   analyzer fixtures and status links for current source-derived `$self`
-  constructor assignment plus framework accessor-return evidence. It must not
-  change completion provider logic, support tiers, parser/corpus buckets,
-  generated/dynamic behavior, release-lineage sync, or source-repo development
-  routing.
+  constructor assignment plus framework accessor-return evidence and
+  mismatched-package fallback. It must not change completion provider logic,
+  support tiers, parser/corpus buckets, generated/dynamic behavior,
+  release-lineage sync, or source-repo development routing.
 - Receiver method-return accessor-chain fact work may add facts-only semantic
   analyzer fixtures and status links for current static constructor-to-framework
   accessor method-return evidence. It must not change completion provider

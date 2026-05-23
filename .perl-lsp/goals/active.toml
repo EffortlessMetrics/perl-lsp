@@ -713,7 +713,7 @@ commands = [
 id = "receiver-self-framework-accessor-fact-fixture"
 status = "completed"
 lane = "trust"
-claim_boundary = "Facts-only receiver fixture for source-derived self constructor assignment plus framework accessor return evidence; no completion behavior change, provider cutover, support-tier promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+claim_boundary = "Facts-only receiver fixture for source-derived self constructor assignment plus framework accessor return evidence and mismatched-package fallback; no completion behavior change, provider cutover, support-tier promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
 files = [
   ".perl-lsp/goals/active.toml",
   "plans/real-perl-editor-trust/implementation-plan.md",
@@ -722,6 +722,7 @@ files = [
 ]
 commands = [
   "rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts self_constructor_framework_accessor_records_medium_confidence_object_shape --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts self_framework_accessor_requires_matching_constructor_package --profile agent --locked -- --nocapture",
   "rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts --profile agent --locked -- --nocapture",
   "rtk cargo xtask check-active-goal-manifest",
   "rtk cargo xtask check-support-claims",

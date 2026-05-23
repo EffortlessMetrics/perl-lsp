@@ -293,6 +293,28 @@ fn self_constructor_framework_accessor_records_medium_confidence_object_shape() 
 }
 
 #[test]
+fn self_framework_accessor_requires_matching_constructor_package() -> Result<(), String> {
+    let code = "package MyApp::Service; use Moo; has db => (is => 'ro', isa => 'MyApp::DB'); my $self = MyApp::Other->new; $self->db->connect;";
+    let ast = parse_ast(code)?;
+    let mut engine = TypeInferenceEngine::new();
+
+    engine.infer(&ast).map_err(|err| format!("inference failed: {err:?}"))?;
+
+    let self_fact = engine.get_fact_at("self").ok_or_else(|| "missing self fact".to_string())?;
+    assert_eq!(self_fact.ty, PerlType::Object("MyApp::Other".to_string()));
+    assert_eq!(self_fact.confidence, Confidence::High);
+
+    let receiver = method_receiver(&ast, "connect")?;
+    let fact = engine.infer_expr_fact(receiver);
+
+    assert_eq!(fact.ty, PerlType::Any);
+    assert_eq!(fact.confidence, Confidence::Low);
+    assert!(fact.shape.is_none());
+    assert!(fact.evidence.is_empty());
+    Ok(())
+}
+
+#[test]
 fn dynamic_moo_accessor_isa_stays_non_exact() -> Result<(), String> {
     let code = "package MyApp::Service; use Moo; my $type = 'MyApp::DB'; has db => (is => 'ro', isa => $type); my $service = MyApp::Service->new; $service->db->connect;";
     let ast = parse_ast(code)?;
