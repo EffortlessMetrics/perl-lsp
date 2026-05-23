@@ -85,3 +85,37 @@ impl PerlLexer<'_> {
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn consume_balanced_segment_handles_nested_segments_and_escapes() {
+        let mut lexer = PerlLexer::new("(a(\\)b)c)");
+
+        let end = lexer.consume_balanced_segment('(', ')');
+
+        assert_eq!(end, Some(9));
+        assert_eq!(lexer.position, 9);
+    }
+
+    #[test]
+    fn consume_balanced_segment_returns_none_for_unbalanced_segment() {
+        let mut lexer = PerlLexer::new("(a(b)");
+
+        let end = lexer.consume_balanced_segment('(', ')');
+
+        assert_eq!(end, None);
+    }
+
+    #[test]
+    fn consume_balanced_segment_in_string_stops_at_terminator_for_recovery() {
+        let mut lexer = PerlLexer::new("(${foo\"tail");
+
+        let end = lexer.consume_balanced_segment_in_string('(', ')', '"');
+
+        assert_eq!(end, None);
+        assert_eq!(lexer.current_char(), Some('"'));
+    }
+}
