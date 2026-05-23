@@ -178,7 +178,7 @@ fn complete_symbol_namespace_context(
         return true;
     }
 
-    if context.trigger_character == Some(':') && context.prefix.ends_with("::") {
+    if context.prefix.contains("::") {
         packages::add_package_completions(
             completions,
             context,

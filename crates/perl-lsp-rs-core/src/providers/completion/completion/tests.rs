@@ -352,6 +352,59 @@ my $sq = MathUtils::"#;
 }
 
 #[test]
+fn test_current_document_package_member_completion_keeps_typed_prefix() {
+    let code = r#"package MathUtils;
+sub square {
+    my ($n) = @_;
+    return $n * $n;
+}
+sub cube {
+    my ($n) = @_;
+    return $n * $n * $n;
+}
+package main;
+my $sq = MathUtils::s"#;
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|completion| completion.label == "square"),
+        "same-file package member completion should keep working after a typed member prefix; got {:?}",
+        completions.iter().map(|completion| &completion.label).collect::<Vec<_>>()
+    );
+    assert!(
+        completions.iter().all(|completion| completion.label != "cube"),
+        "member prefix `s` should filter out nonmatching package members; got {:?}",
+        completions.iter().map(|completion| &completion.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_current_document_package_member_completion_skips_generated_framework_accessors() {
+    let code = r#"package Example::User;
+use Moo;
+
+has 'name' => (is => 'ro', isa => 'Str');
+
+package main;
+my $name = Example::User::n"#;
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().all(|completion| completion.label != "name"),
+        "same-file package member completion must not promote generated accessors; got {:?}",
+        completions.iter().map(|completion| &completion.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
 fn test_moo_accessor_method_completion() {
     let code = r#"
 package Example::User;

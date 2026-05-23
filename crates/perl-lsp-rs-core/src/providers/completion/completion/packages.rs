@@ -217,51 +217,103 @@ fn local_symbol_kind(symbol: &LocalSymbol) -> Option<CompletionItemKind> {
     }
 }
 
+fn local_symbol_sigil(symbol: &LocalSymbol) -> Option<char> {
+    match symbol.kind {
+        LocalSymbolKind::Variable(_) => split_sigil(&symbol.name).0,
+        _ => None,
+    }
+}
+
+fn is_source_backed_local_package_member(symbol: &LocalSymbol) -> bool {
+    let generated_declaration = matches!(
+        symbol.declaration.as_deref(),
+        Some(
+            "has"
+                | "requires"
+                | "before"
+                | "after"
+                | "around"
+                | "override"
+                | "augment"
+                | "mk_accessors"
+                | "mk_ro_accessors"
+                | "mk_rw_accessors"
+                | "mk_wo_accessors"
+        )
+    );
+    let generated_attribute = symbol.attributes.iter().any(|attribute| {
+        attribute.starts_with("framework=")
+            || attribute.starts_with("modifier=")
+            || attribute == "requires=true"
+    });
+    if generated_declaration || generated_attribute {
+        return false;
+    }
+
+    match symbol.kind {
+        LocalSymbolKind::Subroutine | LocalSymbolKind::Method => symbol.declaration.is_none(),
+        LocalSymbolKind::Variable(_) => symbol.declaration.as_deref() == Some("our"),
+        LocalSymbolKind::Constant => {
+            matches!(symbol.declaration.as_deref(), Some("constant" | "const" | "readonly"))
+        }
+        _ => false,
+    }
+}
+
 fn add_local_package_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
     symbol_table: &SymbolTable,
     package_name: &str,
     member_prefix: &str,
+    requested_sigil: Option<char>,
 ) -> usize {
     let mut seen_labels: HashSet<String> =
         completions.iter().map(|item| item.label.clone()).collect();
     let qualified_prefix = format!("{package_name}::");
     let mut added = 0;
 
-    for symbols in symbol_table.symbols.values() {
-        for symbol in symbols {
-            let Some(item_kind) = local_symbol_kind(symbol) else {
-                continue;
-            };
-            let Some(member_name) = symbol.qualified_name.strip_prefix(&qualified_prefix) else {
-                continue;
-            };
-            if member_name.contains("::")
-                || !member_name.starts_with(member_prefix)
-                || !seen_labels.insert(symbol.name.clone())
-            {
-                continue;
-            }
+    let mut symbols: Vec<&LocalSymbol> =
+        symbol_table.symbols.values().flat_map(|items| items.iter()).collect();
+    symbols.sort_by_key(|symbol| symbol.location.start);
 
-            completions.push(CompletionItem {
-                label: symbol.name.clone(),
-                kind: item_kind,
-                detail: Some(package_name.to_string()),
-                documentation: Some(format!(
-                    "Source-backed package member `{}` from current document.",
-                    symbol.qualified_name
-                )),
-                insert_text: Some(symbol.qualified_name.clone()),
-                sort_text: Some(format!("0_{}", symbol.name)),
-                filter_text: Some(symbol.name.clone()),
-                additional_edits: vec![],
-                text_edit_range: Some((context.prefix_start, context.position)),
-                commit_characters: None,
-                label_details: None,
-            });
-            added += 1;
+    for symbol in symbols {
+        let Some(item_kind) = local_symbol_kind(symbol) else {
+            continue;
+        };
+        if !is_source_backed_local_package_member(symbol) {
+            continue;
         }
+        if requested_sigil.is_some() && local_symbol_sigil(symbol) != requested_sigil {
+            continue;
+        }
+        let Some(member_name) = symbol.qualified_name.strip_prefix(&qualified_prefix) else {
+            continue;
+        };
+        if member_name.contains("::")
+            || !member_name.starts_with(member_prefix)
+            || !seen_labels.insert(symbol.name.clone())
+        {
+            continue;
+        }
+
+        completions.push(CompletionItem {
+            label: symbol.name.clone(),
+            kind: item_kind,
+            detail: Some(package_name.to_string()),
+            documentation: Some(format!(
+                "Source-backed package member `{}` from current document.",
+                symbol.qualified_name
+            )),
+            insert_text: Some(symbol.qualified_name.clone()),
+            sort_text: Some(format!("0_{}", symbol.name)),
+            filter_text: Some(symbol.name.clone()),
+            additional_edits: vec![],
+            text_edit_range: Some((context.prefix_start, context.position)),
+            commit_characters: None,
+            label_details: None,
+        });
+        added += 1;
     }
 
     added
@@ -289,6 +341,7 @@ pub fn add_package_completions(
         symbol_table,
         &package_name,
         member_prefix,
+        requested_sigil,
     );
 
     // Query workspace index for members of the package (if available)
