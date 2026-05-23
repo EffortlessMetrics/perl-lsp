@@ -48,6 +48,42 @@ impl LspServer {
         self.handle_did_change(params)
     }
 
+    /// Convenience helper: apply a `didOpen` for plain Perl text.
+    ///
+    /// Returns the underlying handler error if synchronisation fails so
+    /// callers can `?` it from `Result<()>`-returning tests (per the
+    /// AGENTS.md test convention).
+    pub fn test_apply_did_open(
+        &self,
+        uri: &str,
+        text: &str,
+        version: i32,
+    ) -> Result<(), JsonRpcError> {
+        let params = serde_json::json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": version,
+                "text": text,
+            }
+        });
+        self.handle_did_open(Some(params))
+    }
+
+    /// Convenience helper: apply a full-text `didChange` for plain Perl text.
+    pub fn test_apply_did_change(
+        &self,
+        uri: &str,
+        new_text: &str,
+        version: i32,
+    ) -> Result<(), JsonRpcError> {
+        let params = serde_json::json!({
+            "textDocument": { "uri": uri, "version": version },
+            "contentChanges": [ { "text": new_text } ],
+        });
+        self.handle_did_change(Some(params))
+    }
+
     /// Test-only entrypoint for LSP `textDocument/definition`.
     ///
     /// Exercises go-to-definition functionality in tests. Returns the
