@@ -1852,45 +1852,63 @@ fn cmd_check_local(repo_root: &Path) -> Result<i32> {
     println!("{}=== Running Local Quality Checks ==={}", YELLOW, NC);
     println!();
 
+    if run_format_check(repo_root).is_err()
+        || run_first_party_clippy(repo_root).is_err()
+        || run_vendor_clippy_smoke(repo_root).is_err()
+        || run_docs_check(repo_root).is_err()
+        || run_workspace_tests(repo_root).is_err()
+        || run_ignored_baseline_check(repo_root).is_err()
+        || run_dependency_security_check(repo_root).is_err()
+    {
+        return Ok(1);
+    }
+
+    println!("{}=== All Local Checks Passed ==={}", GREEN, NC);
+    println!();
+    println!("You can now safely commit/push your changes.");
+    println!("Pro tip: Install as git pre-push hook: cp ci/check_local.sh .git/hooks/pre-push");
+    Ok(0)
+}
+
+fn run_format_check(repo_root: &Path) -> Result<()> {
     println!("{}1. Format check...{}", YELLOW, NC);
     if command_status_strict(repo_root, "cargo", &["xtask", "fmt", "--check"], &[]).is_err() {
         println!("{}✗ Format check failed - run 'cargo xtask fmt' to fix{}", RED, NC);
-        return Ok(1);
+        return Err(color_eyre::eyre::eyre!("format check failed"));
     }
     println!();
+    Ok(())
+}
 
+fn run_first_party_clippy(repo_root: &Path) -> Result<()> {
     println!("{}2. Clippy (strict on first-party)...{}", YELLOW, NC);
     let mut clippy_failed = false;
-    if command_status(
-        repo_root,
-        "cargo",
-        &["clippy", "-p", "perl-parser", "--all-targets", "--all-features", "--", "-D", "warnings"],
-        &[],
-    )
-    .unwrap_or(1)
-        != 0
-    {
-        println!("{}✗ Clippy found issues in perl-parser{}", RED, NC);
-        clippy_failed = true;
-    }
-    if command_status(
-        repo_root,
-        "cargo",
-        &["clippy", "-p", "perl-lexer", "--all-targets", "--all-features", "--", "-D", "warnings"],
-        &[],
-    )
-    .unwrap_or(1)
-        != 0
-    {
-        println!("{}✗ Clippy found issues in perl-lexer{}", RED, NC);
-        clippy_failed = true;
-    }
+    clippy_failed |= first_party_clippy_failed(repo_root, "perl-parser");
+    clippy_failed |= first_party_clippy_failed(repo_root, "perl-lexer");
     if clippy_failed {
-        return Ok(1);
+        return Err(color_eyre::eyre::eyre!("first-party clippy checks failed"));
     }
     println!("{}✓ Clippy check passed for first-party crates{}", GREEN, NC);
     println!();
+    Ok(())
+}
 
+fn first_party_clippy_failed(repo_root: &Path, crate_name: &str) -> bool {
+    let status = command_status(
+        repo_root,
+        "cargo",
+        &["clippy", "-p", crate_name, "--all-targets", "--all-features", "--", "-D", "warnings"],
+        &[],
+    )
+    .unwrap_or(1);
+    if status != 0 {
+        println!("{}✗ Clippy found issues in {}{}", RED, crate_name, NC);
+        return true;
+    }
+    false
+}
+
+fn run_vendor_clippy_smoke(repo_root: &Path) -> Result<()> {
     println!("  Running clippy smoke check on vendor crates...");
     let smoke_output = command_with_output_allow_failure(
         repo_root,
@@ -1911,7 +1929,10 @@ fn cmd_check_local(repo_root: &Path) -> Result<i32> {
         println!("{line}");
     }
     println!();
+    Ok(())
+}
 
+fn run_docs_check(repo_root: &Path) -> Result<()> {
     println!("{}3. Documentation build...{}", YELLOW, NC);
     if command_status_strict(
         repo_root,
@@ -1922,11 +1943,14 @@ fn cmd_check_local(repo_root: &Path) -> Result<i32> {
     .is_err()
     {
         println!("{}✗ Documentation build failed{}", RED, NC);
-        return Ok(1);
+        return Err(color_eyre::eyre::eyre!("documentation build failed"));
     }
     println!("{}✓ Documentation builds cleanly{}", GREEN, NC);
     println!();
+    Ok(())
+}
 
+fn run_workspace_tests(repo_root: &Path) -> Result<()> {
     println!("{}4. Running tests...{}", YELLOW, NC);
     if command_status_strict(
         repo_root,
@@ -1937,21 +1961,26 @@ fn cmd_check_local(repo_root: &Path) -> Result<i32> {
     .is_err()
     {
         println!("{}✗ Tests failed{}", RED, NC);
-        return Ok(1);
+        return Err(color_eyre::eyre::eyre!("workspace tests failed"));
     }
     println!("{}✓ All tests passed{}", GREEN, NC);
     println!();
+    Ok(())
+}
 
+fn run_ignored_baseline_check(repo_root: &Path) -> Result<()> {
     println!("{}5. Ignored tests baseline...{}", YELLOW, NC);
     let ignored_exit = cmd_check_ignored(repo_root)?;
     if ignored_exit == 0 {
         println!("{}✓ Ignored tests baseline correct{}", GREEN, NC);
-    } else {
-        println!("{}✗ Ignored tests baseline mismatch{}", RED, NC);
-        return Ok(1);
+        println!();
+        return Ok(());
     }
-    println!();
+    println!("{}✗ Ignored tests baseline mismatch{}", RED, NC);
+    Err(color_eyre::eyre::eyre!("ignored tests baseline mismatch"))
+}
 
+fn run_dependency_security_check(repo_root: &Path) -> Result<()> {
     println!("{}6. Dependency security check...{}", YELLOW, NC);
     if command_exists("cargo-deny") {
         let output =
@@ -1959,19 +1988,14 @@ fn cmd_check_local(repo_root: &Path) -> Result<i32> {
         if output.contains("error:") {
             println!("{}✗ Dependency issues found{}", RED, NC);
             println!("{output}");
-            return Ok(1);
+            return Err(color_eyre::eyre::eyre!("dependency security check failed"));
         }
         println!("{}✓ Dependencies are secure{}", GREEN, NC);
     } else {
         println!("{}⚠ cargo-deny not installed (run: cargo install cargo-deny){}", YELLOW, NC);
     }
     println!();
-
-    println!("{}=== All Local Checks Passed ==={}", GREEN, NC);
-    println!();
-    println!("You can now safely commit/push your changes.");
-    println!("Pro tip: Install as git pre-push hook: cp ci/check_local.sh .git/hooks/pre-push");
-    Ok(0)
+    Ok(())
 }
 
 fn cmd_check_missing_docs(repo_root: &Path) -> Result<i32> {
