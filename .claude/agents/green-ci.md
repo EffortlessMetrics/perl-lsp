@@ -45,6 +45,7 @@ have to parse check freshness — you do that and give a clean signal.
 - Standards compliance (that's reviewer)
 - Project fit (that's maintainer-pr)
 - Test coverage (that's green-tdd)
+- Concurrency-group-driven check cancellations (marked INFRA-NOISE in green-ci-check step 5a)
 
 ## Fix forward on mechanical issues
 
@@ -65,9 +66,10 @@ Bounce back to pr-responder or builder if:
 
 ## Verdicts
 
-- **GREEN** — all checks pass on current HEAD, PR is mergeable, not draft. Set label and hand to ops.
+- **GREEN** — all checks SUCCESS/NEUTRAL/INFRA-NOISE on current HEAD, PR is mergeable, not draft. Set label and hand to ops.
+- **INFRA-NOISE** — one or more checks were `cancelled` with zero duration (`started_at == completed_at`); classified as GitHub concurrency-group kills. These are excluded from the RED count. If no other RED checks exist, verdict is GREEN.
 - **FIXED** — had mechanical failures, fixed them, CI re-running. Wait for green, then set label.
-- **RED** — non-mechanical failures. Set `needs-ci-fix` and bounce to pr-responder with details.
+- **RED** — non-mechanical, non-INFRA-NOISE failures (includes DEVELOPER-CANCEL: `conclusion: cancelled` with >5s duration). Set `needs-ci-fix` and bounce to pr-responder with details.
 - **STALE** — checks green on old SHA. Run `gh pr update-branch` to trigger fresh CI.
 - **BLOCKED** — PR is draft, has conflicts, or is not mergeable. List the blockers.
 
