@@ -814,7 +814,12 @@ impl TypeInferenceEngine {
 
     fn refresh_method_return_facts(&mut self, ast: &Node) {
         self.method_return_facts.clear();
-        collect_method_return_facts(ast, None, &mut self.method_return_facts);
+        collect_method_return_facts(
+            ast,
+            None,
+            &self.accessor_return_facts,
+            &mut self.method_return_facts,
+        );
     }
 
     fn method_call_expr_fact(
@@ -1264,32 +1269,38 @@ fn method_return_fact(method: &str, package: &str) -> TypeFact {
 fn collect_method_return_facts(
     node: &Node,
     package: Option<&str>,
+    accessor_return_facts: &HashMap<(String, String), TypeFact>,
     out: &mut HashMap<(String, String), TypeFact>,
 ) {
     match &node.kind {
         NodeKind::Program { statements } | NodeKind::Block { statements } => {
-            collect_method_return_facts_from_statements(statements, package, out);
+            collect_method_return_facts_from_statements(
+                statements,
+                package,
+                accessor_return_facts,
+                out,
+            );
         }
         NodeKind::Package { name, block: Some(block), .. } => {
-            collect_method_return_facts(block, Some(name.as_str()), out);
+            collect_method_return_facts(block, Some(name.as_str()), accessor_return_facts, out);
         }
         NodeKind::Subroutine { name: Some(method), body, .. } => {
             if let (Some(package), Some(fact)) =
-                (package, static_method_body_return_fact(method, body))
+                (package, static_method_body_return_fact(method, body, accessor_return_facts))
             {
                 out.insert((package.to_string(), method.clone()), fact);
             }
         }
         NodeKind::Method { name, body, .. } => {
             if let (Some(package), Some(fact)) =
-                (package, static_method_body_return_fact(name, body))
+                (package, static_method_body_return_fact(name, body, accessor_return_facts))
             {
                 out.insert((package.to_string(), name.clone()), fact);
             }
         }
         _ => {
             for child in node.children() {
-                collect_method_return_facts(child, package, out);
+                collect_method_return_facts(child, package, accessor_return_facts, out);
             }
         }
     }
@@ -1298,6 +1309,7 @@ fn collect_method_return_facts(
 fn collect_method_return_facts_from_statements(
     statements: &[Node],
     package: Option<&str>,
+    accessor_return_facts: &HashMap<(String, String), TypeFact>,
     out: &mut HashMap<(String, String), TypeFact>,
 ) {
     let mut current_package = package.map(ToOwned::to_owned);
@@ -1307,33 +1319,85 @@ fn collect_method_return_facts_from_statements(
                 current_package = Some(name.clone());
             }
             NodeKind::Package { name, block: Some(block), .. } => {
-                collect_method_return_facts(block, Some(name.as_str()), out);
+                collect_method_return_facts(block, Some(name.as_str()), accessor_return_facts, out);
             }
             _ => {
-                collect_method_return_facts(statement, current_package.as_deref(), out);
+                collect_method_return_facts(
+                    statement,
+                    current_package.as_deref(),
+                    accessor_return_facts,
+                    out,
+                );
             }
         }
     }
 }
 
-fn static_method_body_return_fact(method: &str, body: &Node) -> Option<TypeFact> {
+fn static_method_body_return_fact(
+    method: &str,
+    body: &Node,
+    accessor_return_facts: &HashMap<(String, String), TypeFact>,
+) -> Option<TypeFact> {
     let NodeKind::Block { statements } = &body.kind else {
         return None;
     };
     if let [statement] = statements.as_slice() {
-        return static_method_return_expr_fact(method, statement);
+        return static_method_return_expr_fact(method, statement, accessor_return_facts);
     }
     static_method_local_return_fact(method, statements)
 }
 
-fn static_method_return_expr_fact(method: &str, node: &Node) -> Option<TypeFact> {
+fn static_method_return_expr_fact(
+    method: &str,
+    node: &Node,
+    accessor_return_facts: &HashMap<(String, String), TypeFact>,
+) -> Option<TypeFact> {
     match &node.kind {
         NodeKind::ExpressionStatement { expression } => {
-            static_method_return_expr_fact(method, expression)
+            static_method_return_expr_fact(method, expression, accessor_return_facts)
         }
-        NodeKind::Return { value: Some(value) } => static_method_return_expr_fact(method, value),
-        _ => static_constructor_package(node).map(|package| method_return_fact(method, &package)),
+        NodeKind::Return { value: Some(value) } => {
+            static_method_return_expr_fact(method, value, accessor_return_facts)
+        }
+        _ => static_constructor_package(node)
+            .map(|package| method_return_fact(method, &package))
+            .or_else(|| accessor_chain_method_return_fact(method, node, accessor_return_facts)),
     }
+}
+
+fn accessor_chain_method_return_fact(
+    method: &str,
+    node: &Node,
+    accessor_return_facts: &HashMap<(String, String), TypeFact>,
+) -> Option<TypeFact> {
+    let (package, evidence) = accessor_chain_return_package(node, accessor_return_facts)?;
+    let mut fact = fact_with_evidence(
+        PerlType::Any,
+        Confidence::Medium,
+        TypeEvidence::MethodReturn { method: method.to_string(), package: package.clone() },
+    );
+    fact.evidence.extend(evidence);
+    fact.shape = Some(ShapeFact::Object(ObjectShape::new(package, BTreeMap::new())));
+    Some(fact)
+}
+
+fn accessor_chain_return_package(
+    node: &Node,
+    accessor_return_facts: &HashMap<(String, String), TypeFact>,
+) -> Option<(String, Vec<TypeEvidence>)> {
+    let NodeKind::MethodCall { object, method, .. } = &node.kind else {
+        return None;
+    };
+    if method == "new" {
+        return None;
+    }
+
+    let package = static_constructor_package(object)?;
+    let mut fact = accessor_return_facts.get(&(package.clone(), method.clone()))?.clone();
+    let returned_package = object_package_from_fact(&fact)?;
+    let mut evidence = vec![TypeEvidence::ConstructorCall { package }];
+    evidence.append(&mut fact.evidence);
+    Some((returned_package, evidence))
 }
 
 fn static_method_local_return_fact(method: &str, statements: &[Node]) -> Option<TypeFact> {
