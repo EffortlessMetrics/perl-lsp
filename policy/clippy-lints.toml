@@ -725,10 +725,11 @@ level = "deny"
 activate_when_msrv = "1.94"
 reason = "Catch raw-parts reconstruction mistakes."
 
-[[planned]]
+[[lint]]
 name = "clippy::manual_ilog2"
 level = "warn"
-activate_when_msrv = "1.94"
+status = "active"
+class = "numeric"
 reason = "Prefer the standard integer log helper."
 
 [[lint]]
