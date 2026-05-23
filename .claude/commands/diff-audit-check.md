@@ -9,10 +9,18 @@ Review the cumulative diff from all agents.
 
 ## Steps
 
-1. Get the full diff stat and diff:
+1. Get the canonical PR file list and authored diff:
    ```bash
-   gh pr diff <number> --stat
-   gh pr diff <number>
+   # Authoritative file list — only files the PR author actually changed
+   # (gh pr diff shows branch-vs-current-master and includes inherited base state)
+   REPO="effortlessmetrics/perl-lsp"
+   gh api "repos/$REPO/pulls/<number>/files" --paginate --jq '.[].filename'
+
+   # Authored diff stat — three-dot excludes inherited base content
+   git diff "$(git merge-base origin/master HEAD)"..HEAD --stat
+
+   # Full authored diff for detailed inspection
+   git diff "$(git merge-base origin/master HEAD)"..HEAD
    ```
 
 2. Read the spec:

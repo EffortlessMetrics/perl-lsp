@@ -25,7 +25,15 @@ Each agent sees its own step. Nobody has checked that:
 
 1. **Diff vs spec alignment** — does the total diff implement what the issue asked for?
    ```bash
-   gh pr diff <number> --stat
+   # Canonical PR file list — only what the PR author actually changed
+   # NEVER use gh pr diff here: it shows branch-vs-current-master and includes
+   # inherited base state from master commits after the PR branched, producing
+   # false-positive contamination claims on PRs that are >2 days old.
+   REPO="effortlessmetrics/perl-lsp"
+   gh api "repos/$REPO/pulls/<number>/files" --paginate --jq '.[].filename'
+
+   # Authored diff stat (three-dot — excludes inherited base state)
+   git diff "$(git merge-base origin/master HEAD)"..HEAD --stat
    cat .spec/*/acceptance.md 2>/dev/null
    ```
    Every acceptance criterion should be addressable from the diff.
@@ -82,7 +90,8 @@ Detection heuristic — for every file in the diff, ask: "does this file's path/
 - If the diff adds tests for crate X but the PR title is about crate Y (and those tests aren't named in the spec): flag as CONTAMINATION
 - If the diff adds ADRs whose work-id doesn't match this PR's branch work-id: flag as CONTAMINATION
 - Tell-tale: PR title claims a small change but `--stat` shows >100 lines outside the named scope. Diff bulk shouldn't be unrelated to the title.
-- Mechanical check: `gh pr diff <num> --stat` then for each crate path, ask whether the PR title/body mentions it; orphan-crate paths are contamination candidates.
+- Mechanical check: `gh api "repos/effortlessmetrics/perl-lsp/pulls/<num>/files" --paginate --jq '.[].filename'` then for each crate path, ask whether the PR title/body mentions it; orphan-crate paths are contamination candidates.
+- **Self-check before flagging**: Before writing CONTAMINATION for any file, confirm it appears in `pulls/<num>/files` (PR-authored). Files that only appear in `git diff origin/master..HEAD` (two-dot) but NOT in the API response are **inherited base state, not drift** — the PR did not author them.
 
 When found, route to `needs-diff-fix` with a `git rm` list. Don't let a 22-of-2063-line legitimate change ride a 2043-line contaminated diff into master.
 
