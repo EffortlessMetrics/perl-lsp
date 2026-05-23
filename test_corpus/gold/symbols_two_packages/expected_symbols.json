@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "fixture": "symbols_two_packages",
+  "assertions": [
+    {
+      "kind": "symbol_non_empty",
+      "rationale": "document symbols must not be empty for a file with two packages and four subs"
+    },
+    {
+      "kind": "symbol_present",
+      "name": "Foo",
+      "rationale": "package Foo must appear as a symbol"
+    },
+    {
+      "kind": "symbol_present",
+      "name": "Bar",
+      "rationale": "package Bar must appear as a symbol"
+    },
+    {
+      "kind": "symbol_present",
+      "name": "foo_method",
+      "rationale": "sub foo_method must appear as a symbol"
+    },
+    {
+      "kind": "symbol_present",
+      "name": "bar_method",
+      "rationale": "sub bar_method must appear as a symbol"
+    },
+    {
+      "kind": "symbol_absent",
+      "name": "baz_method",
+      "rationale": "baz_method is not defined and must not appear in the symbol list"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "fixture": "completion_builtin",
+  "assertions": [
+    {
+      "kind": "completion_non_empty",
+      "line": 6,
+      "character": 2,
+      "rationale": "completion at char 2 within 'print' (prefix 'pr') must return builtin candidates"
+    },
+    {
+      "kind": "completion_present",
+      "line": 6,
+      "character": 2,
+      "expected_label": "print",
+      "rationale": "builtin 'print' must appear in completion list for 'pr' prefix"
+    },
+    {
+      "kind": "completion_present",
+      "line": 6,
+      "character": 2,
+      "expected_label": "printf",
+      "rationale": "builtin 'printf' must appear in completion list for 'pr' prefix"
+    }
+  ]
+}
