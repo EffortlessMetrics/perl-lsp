@@ -324,3 +324,27 @@ END
         diagnostics.iter().any(|diag| matches!(diag.pattern, AntiPattern::FormatHeredoc { .. }))
     );
 }
+
+#[test]
+fn test_find_matching_brace_skips_braces_inside_quoted_strings() {
+    let code = r#"BEGIN { my $text = "not a } brace"; { 1 } }"#;
+    let Some(opening) = code.find('{') else {
+        unreachable!("opening brace exists");
+    };
+
+    let closing = super::find_matching_brace(code, opening);
+
+    assert_eq!(closing, code.rfind('}'));
+}
+
+#[test]
+fn test_find_matching_brace_returns_none_for_unclosed_block() {
+    let code = "BEGIN { my $text = '{ still open';";
+    let Some(opening) = code.find('{') else {
+        unreachable!("opening brace exists");
+    };
+
+    let closing = super::find_matching_brace(code, opening);
+
+    assert!(closing.is_none());
+}
