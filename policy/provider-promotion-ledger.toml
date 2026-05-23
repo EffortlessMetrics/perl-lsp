@@ -79,17 +79,18 @@ surface = "Type definition"
 fact_class = "Direct source-backed class receiver"
 current_state = "safe subset"
 decision = "promote"
-next_proof = "Provider-decision receipt plus project-shaped receiver/data-flow blockers before broader type-definition expansion"
+next_proof = "Generated/no-source, dynamic, stale, and low-confidence blockers before broader type-definition expansion"
 promotion_conditions = [
   "cursor_target_is_direct_package_or_class_identifier",
   "constructor_method_receiver_is_source_backed_class",
-  "class_receiver_resolves_to_open_document_package_definition",
+  "class_receiver_resolves_to_exactly_one_open_document_package_definition",
 ]
 fallback_conditions = [
   "variable_receiver_requires_data_flow",
   "chained_method_result_requires_return_facts",
   "function_call_result_requires_return_facts",
   "missing_package_definition",
+  "ambiguous_package_identity",
   "unsupported_receiver_shape",
 ]
 blocker_conditions = [

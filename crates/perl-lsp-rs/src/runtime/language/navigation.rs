@@ -1527,11 +1527,19 @@ impl LspServer {
             if let Some(locations) =
                 provider.find_type_definition(ast.as_ref(), line, character, uri, &doc_map)
             {
-                self.record_type_definition_provider_decision_trace(
+                if locations.len() == 1 {
+                    self.record_type_definition_provider_decision_trace(
+                        &trace_context,
+                        locations.len(),
+                    );
+                    return Ok(Some(json!(locations)));
+                }
+
+                self.record_type_definition_ambiguous_identity_trace(
                     &trace_context,
                     locations.len(),
                 );
-                return Ok(Some(json!(locations)));
+                return Ok(Some(json!([])));
             }
             self.record_type_definition_provider_decision_trace(&trace_context, 0);
         }
@@ -1574,6 +1582,39 @@ impl LspServer {
         if !acted && let Some(object) = receipt.as_object_mut() {
             object.insert("blocker".to_string(), json!("missing_fact"));
         }
+
+        self.record_provider_decision_trace(context.provider, &receipt);
+    }
+
+    fn record_type_definition_ambiguous_identity_trace(
+        &self,
+        context: &NavigationDecisionTraceContext,
+        candidate_count: usize,
+    ) {
+        let candidate_count = u64::try_from(candidate_count).unwrap_or(u64::MAX);
+        let receipt = json!({
+            "provider": context.provider,
+            "provider_action": context.provider_action,
+            "decision": "fallback",
+            "reason": "ambiguous_low_confidence_candidates",
+            "blocker": "ambiguous_identity",
+            "uri": context.uri,
+            "line": context.line,
+            "character": context.character,
+            "result_count": 0,
+            "live_provider_result_count": 0,
+            "ambiguous_candidate_count": candidate_count,
+            "fact_source": "parser_syntax",
+            "confidence": "low",
+            "freshness": "fresh",
+            "source_backed": false,
+            "source_backed_state": "ambiguous_type_definition_identity",
+            "fallback": "no_result",
+            "fallback_state": "no_result",
+            "dynamic_boundary": false,
+            "trace_only_no_live_behavior_change": false,
+            "claim_boundary": "blocks ambiguous type-definition identities; direct package/class identifiers and constructor receivers may resolve only when they identify one open-document package definition, while duplicate package declarations, variable receivers, chained method results, function-call results, missing package definitions, generated/no-source facts, dynamic boundaries, stale facts, low-confidence facts, and unsupported identities remain fallback or blocked"
+        });
 
         self.record_provider_decision_trace(context.provider, &receipt);
     }

@@ -76,6 +76,26 @@ Trace::ProjectTypeTarget->new->child->run;
 
 1;
 "#;
+const TYPE_DEFINITION_AMBIGUOUS_LIB_A_URI: &str = "file:///workspace/lib/Trace/AmbiguousTypeA.pm";
+const TYPE_DEFINITION_AMBIGUOUS_LIB_B_URI: &str = "file:///workspace/lib/Trace/AmbiguousTypeB.pm";
+const TYPE_DEFINITION_AMBIGUOUS_LIB_DOC: &str = r#"package Trace::AmbiguousType;
+use strict;
+use warnings;
+
+sub new { bless {}, shift }
+
+1;
+"#;
+const TYPE_DEFINITION_AMBIGUOUS_MAIN_URI: &str =
+    "file:///workspace/script/type-definition-ambiguous.pl";
+const TYPE_DEFINITION_AMBIGUOUS_MAIN_DOC: &str = r#"use strict;
+use warnings;
+use Trace::AmbiguousType;
+
+my $object = Trace::AmbiguousType->new;
+
+1;
+"#;
 const MISSING_MODULE_DIAGNOSTIC_DOC: &str = "use Missing::Payload;\n";
 
 const WORKSPACE_SYMBOL_URI: &str = "file:///workspace/lib/Trace/Symbols.pm";
@@ -276,6 +296,30 @@ fn open_type_definition_project_documents(
         "textDocument": {
             "uri": TYPE_DEFINITION_PROJECT_MAIN_URI,
             "text": TYPE_DEFINITION_PROJECT_MAIN_DOC,
+            "languageId": "perl",
+            "version": 1
+        }
+    })))?;
+    Ok(())
+}
+
+fn open_type_definition_ambiguous_documents(
+    server: &LspServer,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for uri in [TYPE_DEFINITION_AMBIGUOUS_LIB_A_URI, TYPE_DEFINITION_AMBIGUOUS_LIB_B_URI] {
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "text": TYPE_DEFINITION_AMBIGUOUS_LIB_DOC,
+                "languageId": "perl",
+                "version": 1
+            }
+        })))?;
+    }
+    server.test_handle_did_open(Some(json!({
+        "textDocument": {
+            "uri": TYPE_DEFINITION_AMBIGUOUS_MAIN_URI,
+            "text": TYPE_DEFINITION_AMBIGUOUS_MAIN_DOC,
             "languageId": "perl",
             "version": 1
         }
@@ -1079,6 +1123,65 @@ fn live_type_definition_request_exposes_project_receiver_data_flow_blockers()
         );
     }
 
+    Ok(())
+}
+
+#[test]
+fn live_type_definition_request_blocks_ambiguous_package_identity()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    initialize(&server)?;
+    open_type_definition_ambiguous_documents(&server)?;
+    let (line, character) =
+        position_on_in(TYPE_DEFINITION_AMBIGUOUS_MAIN_DOC, "Trace::AmbiguousType->new")?;
+
+    let result = response_result(
+        server.handle_request(request(
+            6,
+            "textDocument/typeDefinition",
+            Some(json!({
+                "textDocument": {"uri": TYPE_DEFINITION_AMBIGUOUS_MAIN_URI, "version": 1},
+                "position": {"line": line, "character": character}
+            })),
+        )),
+        "type definition ambiguous package fallback",
+    )?;
+    let locations = result.as_array().ok_or("ambiguous package fallback should return an array")?;
+    assert!(
+        locations.is_empty(),
+        "ambiguous package identity must not return exact type-definition locations: {result}"
+    );
+
+    let explanation = explain_provider_decision(&server, "type_definition")?;
+    let receipt = request_receipt(&explanation, "type_definition")?;
+    assert_eq!(receipt.get("schema_version").and_then(Value::as_str), Some("provider_decision.v1"));
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("type_definition"));
+    assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("fallback"));
+    assert_eq!(
+        receipt.get("reason").and_then(Value::as_str),
+        Some("ambiguous_low_confidence_candidates")
+    );
+    assert_eq!(receipt.get("blocker").and_then(Value::as_str), Some("ambiguous_identity"));
+    assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("parser_syntax"));
+    assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("low"));
+    assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        receipt.get("source_backed_state").and_then(Value::as_str),
+        Some("ambiguous_type_definition_identity")
+    );
+    assert_eq!(receipt.get("fallback_state").and_then(Value::as_str), Some("no_result"));
+    assert_eq!(receipt.get("result_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(receipt.get("ambiguous_candidate_count").and_then(Value::as_u64), Some(2));
+
+    let boundary =
+        receipt.get("claim_boundary").and_then(Value::as_str).ok_or("missing boundary")?;
+    assert!(
+        boundary.contains("ambiguous type-definition identities")
+            && boundary.contains("one open-document package definition")
+            && boundary.contains("generated/no-source")
+            && boundary.contains("dynamic boundaries"),
+        "ambiguous package receipt must preserve exactness blockers: {boundary}"
+    );
     Ok(())
 }
 

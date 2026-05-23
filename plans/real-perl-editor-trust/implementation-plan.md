@@ -912,8 +912,19 @@ Current executable slice
   fallback with `type_definition_not_proven` instead of resolving through
   unproven data-flow inference.
 - `provider-proof-assignment-gate-after-type-definition-project-blockers` is
+  completed in the reliability lane. It kept future work assignment-gated until
+  the type-definition ambiguous-identity blocker receipt was selected from the
+  provider dashboard and live provider behavior.
+- `type-definition-ambiguous-identity-blocker-receipt` is completed in the
+  trust lane. It hardens type-definition so duplicate open-document package
+  declarations are low-confidence fallback with an `ambiguous_identity`
+  provider-decision blocker instead of exact type-definition locations. This
+  narrows the existing safe subset; it does not add data-flow inference,
+  generated/dynamic promotion, support-tier movement, parser/corpus bucket
+  movement, release-lineage sync, or source-repo development.
+- `provider-proof-assignment-gate-after-type-definition-ambiguous-identity` is
   active in the reliability lane. It keeps future work assignment-gated after
-  the project-shaped type-definition blocker receipt.
+  the type-definition ambiguous-identity blocker receipt.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
@@ -1058,6 +1069,17 @@ Claim boundary
   buckets, broaden generated/dynamic behavior, sync release lineage, or
   continue source-repo development routing.
 - Provider proof assignment-gate after type-definition project blockers may
+  update only active-goal routing and this plan until a specific scoped provider
+  class, parser gap, DAP module-path behavior change, or active PR is explicitly
+  assigned. It must not create a semantic-token, DAP, parser, support-tier,
+  release-lineage, or source-repo development claim on its own.
+- Type-definition ambiguous-identity blocker work may harden the live
+  type-definition request path and add a runtime receipt so duplicate
+  open-document package definitions return no exact locations with an
+  `ambiguous_identity` blocker. It must not add data-flow inference, generated
+  or dynamic receiver promotion, support-tier movement, parser/corpus bucket
+  movement, release-lineage sync, or source-repo development routing.
+- Provider proof assignment-gate after type-definition ambiguous identity may
   update only active-goal routing and this plan until a specific scoped provider
   class, parser gap, DAP module-path behavior change, or active PR is explicitly
   assigned. It must not create a semantic-token, DAP, parser, support-tier,
