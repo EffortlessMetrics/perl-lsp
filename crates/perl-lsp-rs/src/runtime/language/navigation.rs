@@ -1561,7 +1561,7 @@ impl LspServer {
             "freshness": "fresh",
             "source_backed": acted,
             "source_backed_state": if acted {
-                "open_document_package_definition"
+                "open_document_type_definition"
             } else {
                 "type_definition_not_proven"
             },

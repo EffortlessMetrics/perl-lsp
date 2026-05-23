@@ -880,7 +880,7 @@ fn live_type_definition_request_exposes_source_backed_provider_trace()
     assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(true));
     assert_eq!(
         receipt.get("source_backed_state").and_then(Value::as_str),
-        Some("open_document_package_definition")
+        Some("open_document_type_definition")
     );
     assert_eq!(receipt.get("fallback").and_then(Value::as_str), Some("none"));
     assert_eq!(receipt.get("dynamic_boundary").and_then(Value::as_bool), Some(false));
