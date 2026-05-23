@@ -9,11 +9,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- 0.15.1 Neovim latency lane:
+  - `--runtime-mode e2e` / `PERL_LSP_E2E=1` for latency-focused editor
+    harnesses. Defaults: zero diagnostic debounce, syntax-only
+    diagnostics, no eager workspace indexing, no file watchers.
+  - `--diagnostic-mode syntax-only` /
+    `PERL_LSP_DIAGNOSTIC_MODE=syntax-only` restricts diagnostics to
+    parse errors only; skips semantic / native critic / external
+    perlcritic / module-resolution / workspace dead-code passes. Both
+    push and pull diagnostic paths honour the gate.
+  - `--diagnostic-debounce-ms <ms>` /
+    `PERL_LSP_DIAGNOSTIC_DEBOUNCE_MS=<ms>` configurable diagnostic
+    publish debounce window. `0` bypasses the debouncer entirely.
+  - E2E startup gate: `initialized` no longer kicks off eager workspace
+    indexing under e2e mode (override with `--eager-workspace-indexing
+    true`).
+  - Generation-aware stale read cancellation in the scheduler. Hover,
+    completion, definition, declaration, typeDefinition, implementation,
+    and references are cancelled with `RequestCancelled` when the
+    document generation advances between ingress and dispatch. Turns
+    typing storms into "latest request wins" instead of "every cursor
+    position gets its own work item."
+  - Raw-RPC latency receipts in `perl-lsp-ux-tests::ux_latency_raw_rpc`
+    and a Neovim lean smoke script at
+    `scripts/ux/neovim_lean_smoke.sh`.
 - Added the conservative `perl.explainProviderDecision` LSP execute-command
   surface. It returns the structured provider decision explanation payload and
   reports a low-confidence `missing_fact` / `no_result` fallback when no
   provider-specific receipt is attached, avoiding false certainty while the
   live provider receipt wiring lands.
+
+### Notes (0.15.1)
+
+- This release does not implement true incremental AST reuse. The live
+  LSP path still full-parses after text changes; latency improvements
+  come from skipping avoidable background work and cancelling stale
+  reads earlier.
+- For latency testing, use a release binary with
+  `--runtime-mode e2e --diagnostic-mode syntax-only
+  --diagnostic-debounce-ms 0`, disable file watchers, and disable
+  semantic tokens at the client unless you are explicitly testing
+  semantic highlighting.
 
 ### Planned
 
