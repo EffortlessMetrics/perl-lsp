@@ -119,7 +119,6 @@ rule = "Merge clean leaf work; escalate trust-adjacent surfaces instead of treat
 
 [trust.next]
 items = [
-  "receiver-self-this-ux-receipt",
   "semantic-token-class-receipts-when-new-class-ready",
 ]
 
@@ -131,7 +130,7 @@ items = [
 
 [reliability.next]
 items = [
-  "queue_health_review_when_assigned",
+  "source-lineage-drift-review",
 ]
 
 [[work_item]]
@@ -915,7 +914,7 @@ commands = [
 
 [[work_item]]
 id = "receiver-self-this-ux-receipt"
-status = "active"
+status = "completed"
 lane = "trust"
 claim_boundary = "Receipt-only receiver quality proof for $self/$this current-package method completion in the real-workspace UX harness; no completion behavior change, support-tier promotion, broader receiver promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
 files = [
@@ -936,6 +935,29 @@ commands = [
   "rtk cargo xtask check-provider-confidence-matrix",
   "rtk cargo xtask metrics parser-accuracy --check",
   "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "source-lineage-drift-review"
+status = "active"
+lane = "reliability"
+claim_boundary = "Queue/source-lineage drift review only after the post-#95 publishing-repo commits; no source-repo development merge, source-over-swarm sync, provider behavior, support-tier promotion, parser/corpus bucket movement, release/publish/signing change, or release-lineage sync."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+]
+commands = [
+  "rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 95 --json number,state,mergedAt,mergeCommit,title,url",
+  "rtk git fetch origin main",
+  "rtk git fetch source master:refs/remotes/source/master",
+  "rtk git rev-list --left-right --count origin/main...source/master",
+  "rtk git log --oneline source/master --not origin/main",
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url",
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,isDraft,headRefName,mergeStateStatus,url",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
   "rtk git diff --check",
 ]
 

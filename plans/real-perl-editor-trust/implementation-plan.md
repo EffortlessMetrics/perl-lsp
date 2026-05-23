@@ -851,12 +851,20 @@ Current executable slice
   such as `RealReceiver::DB->` are visible as exact high-confidence syntax
   evidence while the source-backed fact count remains limited to constructor
   assignment and plain hash-slot probes.
-- `receiver-self-this-ux-receipt` is active in the trust lane. It adds a
+- `receiver-self-this-ux-receipt` is completed in the trust lane. It adds a
   receipt-only RealReceiver UX fixture for `$self->` and `$this->`
   current-package receiver completion, including own-method, inherited-method,
   and nearest shadowing boundaries. It does not change completion provider
   logic, support tiers, parser/corpus buckets, generated/dynamic behavior,
   release-lineage sync, or source-repo development routing.
+- `source-lineage-drift-review` is active in the reliability lane. The #95
+  ancestry repair is merged, #9554 was ported through swarm #112, and the
+  active-goal manifest validator exists, but current `source/master` now has
+  post-#95 development commits that are not in `origin/main`. The review must
+  classify that drift and the remaining publishing-repo PRs without force-push,
+  source-over-swarm sync, source-repo development merges, provider behavior
+  changes, support-tier promotion, parser/corpus bucket movement,
+  release/publish/signing changes, or release-lineage sync.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
@@ -914,6 +922,11 @@ Claim boundary
   support tiers, broader receiver promotion, parser/corpus buckets,
   generated/dynamic behavior, release-lineage sync, or source-repo development
   routing.
+- Source-lineage drift review may update only active-goal routing and this plan
+  while recording current source/swarm queue evidence. It must not force-push,
+  reset, source-over-swarm sync, merge development work in `perl-lsp`, broaden
+  provider behavior, promote support tiers, move parser/corpus buckets, change
+  release/publish/signing, or claim release-lineage sync.
 - Receiver local accessor-chain fallback work may extend the receipt-only
   method/accessor fallback UX test and status links for current lexical-local
   accessor-chain method-return receiver behavior. It must not change completion
@@ -959,18 +972,20 @@ Proof commands
 
 ```bash
 rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft
-rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_50_receiver_self_this_quality --profile agent --locked -- --nocapture --test-threads=1
-rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture
+rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 95 --json number,state,mergedAt,mergeCommit,title,url
+rtk git fetch origin main
+rtk git fetch source master:refs/remotes/source/master
+rtk git rev-list --left-right --count origin/main...source/master
+rtk git log --oneline source/master --not origin/main
+rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url
 rtk cargo xtask check-active-goal-manifest
 rtk cargo xtask check-support-claims
 rtk cargo xtask check-provider-confidence-matrix
-rtk cargo xtask metrics parser-accuracy --check
-rtk cargo xtask metrics ratchet-check parser_accuracy
 rtk git diff --check
 ```
 
 Rollback
 
-Revert the receiver self/this UX receipt PR. If the receipt exposes an
-unintended provider-output promotion, keep provider behavior unchanged, mark
-this work item planned, and open a separate fix with a narrower claim boundary.
+Revert the source-lineage drift review PR. If drift classification shows a
+content gap, keep `perl-lsp` release-only and open separate swarm PRs for each
+semantic import or queue disposition instead of syncing source over swarm.
