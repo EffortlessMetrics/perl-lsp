@@ -340,6 +340,100 @@ mod corpus_gap_tests {
         Ok(())
     }
 
+    /// Gap coverage: postfix dereference on hashrefs with an immediately chained
+    /// slice should not produce recovery nodes when followed by `grep`.
+    #[test]
+    fn test_postderef_hash_slice_in_grep() -> Result<(), Box<dyn std::error::Error>> {
+        let input = r#"
+            my @enabled = grep { $_->{enabled} } $cfg->services->@*;
+            my @owners = map { $_ } $cfg->meta->%*{qw(owner backup)};
+        "#;
+        let mut parser = Parser::new(input);
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+
+        assert!(
+            !sexp.contains("ERROR"),
+            "expected no ERROR nodes for postfix deref in grep/map, got: {sexp}"
+        );
+        assert!(sexp.contains("enabled"), "expected enabled key in AST, got: {sexp}");
+        assert!(sexp.contains("\"owner\""), "expected owner key in AST, got: {sexp}");
+        Ok(())
+    }
+
+    /// Regression: chained substitutions with escaped delimiters and modifiers
+    /// should remain parseable as expression statements in sequence.
+    #[test]
+    fn test_chained_substitutions_with_modifiers() -> Result<(), Box<dyn std::error::Error>> {
+        let input = r#"
+            $line =~ s/\s+$//r;
+            $line =~ s{\\}{/}gr;
+        "#;
+        let mut parser = Parser::new(input);
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+
+        assert!(
+            !sexp.contains("ERROR"),
+            "expected no ERROR nodes for chained substitutions, got: {sexp}"
+        );
+        assert!(sexp.contains("line"), "expected line variable in AST, got: {sexp}");
+        Ok(())
+    }
+
+    /// Gap coverage: indirect-object style builtins (`open FH, ...`) paired with
+    /// a `continue` block historically trigger recovery in some parser modes.
+    #[test]
+    fn test_indirect_open_with_continue_block() -> Result<(), Box<dyn std::error::Error>> {
+        let input = r#"
+            while (my $line = <STDIN>) {
+                open FH, '<', $line or next;
+                my $v = <FH>;
+            } continue {
+                close FH;
+            }
+        "#;
+        let mut parser = Parser::new(input);
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+
+        assert!(
+            !sexp.contains("ERROR"),
+            "expected no ERROR nodes for indirect-open continue snippet, got: {sexp}"
+        );
+        assert!(sexp.contains("continue"), "expected continue block in AST, got: {sexp}");
+        Ok(())
+    }
+
+    /// Gap coverage: package blocks with lexical state and method signatures should
+    /// parse as nested declarations without error recovery.
+    #[test]
+    fn test_package_block_with_method_signature() -> Result<(), Box<dyn std::error::Error>> {
+        let input = r#"
+            use v5.36;
+            package App::Worker {
+                use feature 'signatures';
+                no warnings 'experimental::signatures';
+
+                sub run ($self, $job = 'default') {
+                    state $count = 0;
+                    return ++$count . q{:} . $job;
+                }
+            }
+        "#;
+        let mut parser = Parser::new(input);
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+
+        assert!(
+            !sexp.contains("ERROR"),
+            "expected no ERROR nodes for package block method signature snippet, got: {sexp}"
+        );
+        assert!(sexp.contains("App::Worker"), "expected package name in AST, got: {sexp}");
+        assert!(sexp.contains("run"), "expected method name in AST, got: {sexp}");
+        Ok(())
+    }
+
     // Property-based test for delimiters
     #[test]
     fn test_arbitrary_delimiters() {
