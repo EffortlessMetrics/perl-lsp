@@ -1613,6 +1613,25 @@ health-detail:
     @echo "📁 Largest source files (by lines):"
     @find crates/*/src -name '*.rs' -exec wc -l {} \; 2>/dev/null | sort -nr | head -10 || echo "  None found"
 
+# Show BDD test coverage statistics across crates
+bdd-stats:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "BDD Test Coverage"
+    echo "================="
+    echo ""
+    echo "Total BDD test files:           $(find crates -name '*_bdd*.rs' -type f 2>/dev/null | wc -l)"
+    echo "BddScenario/UxScenario uses:    $(grep -rhE 'BddScenario::new|UxScenario::new' crates --include='*.rs' 2>/dev/null | wc -l)"
+    echo ""
+    echo "BDD files by crate:"
+    echo "  perl-lexer:        $(find crates/perl-lexer/tests -maxdepth 1 -name '*_bdd*.rs' 2>/dev/null | wc -l)"
+    echo "  perl-lsp-rs:       $(find crates/perl-lsp-rs/tests -maxdepth 1 -name '*_bdd*.rs' 2>/dev/null | wc -l)"
+    echo "  perl-lsp-rs-core:  $(find crates/perl-lsp-rs-core/tests -maxdepth 1 -name '*_bdd*.rs' 2>/dev/null | wc -l)"
+    echo "  perl-module:       $(find crates/perl-module/tests -maxdepth 1 -name '*_bdd*.rs' 2>/dev/null | wc -l)"
+    echo "  perl-workspace:    $(find crates/perl-workspace/tests -maxdepth 1 -name '*_bdd*.rs' 2>/dev/null | wc -l)"
+    echo "  perl-parser:       $(find crates/perl-parser/tests -maxdepth 1 -name '*_bdd*.rs' 2>/dev/null | wc -l)"
+    echo "  perl-symbol:       $(find crates/perl-symbol/tests -maxdepth 1 -name '*_bdd*.rs' 2>/dev/null | wc -l)"
+
 # Show ignored test counts (categorised summary with baseline delta)
 ignored-tests:
     cargo xtask ignored-tests
