@@ -901,10 +901,19 @@ Current executable slice
   live-output parity, `class_declaration` remains deferred, and DAP
   `includePaths` cutover proof is only valid when native DAP module-path
   behavior is explicitly being promoted.
-- `provider-proof-assignment-gate-after-type-definition` is active in the
-  reliability lane. It keeps future work assignment-gated instead of
-  speculative until a current ready provider class, active PR, or explicit
-  assignment exists.
+- `provider-proof-assignment-gate-after-type-definition` is completed in the
+  reliability lane. It kept future work assignment-gated until the
+  project-shaped type-definition receiver/data-flow blocker receipt was selected
+  from the provider dashboard.
+- `type-definition-project-receiver-data-flow-blocker-receipt` is completed in
+  the trust lane. It extends the type-definition provider-decision receipt with
+  a project-shaped open-package fixture where variable receivers,
+  function-call results, and chained method results remain low-confidence
+  fallback with `type_definition_not_proven` instead of resolving through
+  unproven data-flow inference.
+- `provider-proof-assignment-gate-after-type-definition-project-blockers` is
+  active in the reliability lane. It keeps future work assignment-gated after
+  the project-shaped type-definition blocker receipt.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
@@ -1039,6 +1048,18 @@ Claim boundary
 - Provider proof assignment-gate after type-definition work may update only
   active-goal routing and this plan until a specific scoped provider class,
   parser gap, DAP module-path behavior change, or active PR is explicitly
+  assigned. It must not create a semantic-token, DAP, parser, support-tier,
+  release-lineage, or source-repo development claim on its own.
+- Type-definition project receiver/data-flow blocker receipt work may add a
+  receipt-only runtime trace test and status links for current fallback
+  behavior on project-shaped variable receivers, function-call results, and
+  chained method results. It must not change type-definition resolution
+  behavior, add data-flow inference, promote support tiers, move parser/corpus
+  buckets, broaden generated/dynamic behavior, sync release lineage, or
+  continue source-repo development routing.
+- Provider proof assignment-gate after type-definition project blockers may
+  update only active-goal routing and this plan until a specific scoped provider
+  class, parser gap, DAP module-path behavior change, or active PR is explicitly
   assigned. It must not create a semantic-token, DAP, parser, support-tier,
   release-lineage, or source-repo development claim on its own.
 

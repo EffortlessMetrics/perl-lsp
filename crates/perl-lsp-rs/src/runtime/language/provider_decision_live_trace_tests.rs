@@ -47,6 +47,35 @@ $object->method;
 
 1;
 "#;
+const TYPE_DEFINITION_PROJECT_LIB_URI: &str = "file:///workspace/lib/Trace/ProjectTypeTarget.pm";
+const TYPE_DEFINITION_PROJECT_LIB_DOC: &str = r#"package Trace::ProjectTypeTarget;
+use strict;
+use warnings;
+
+sub new { bless {}, shift }
+sub child { Trace::ProjectTypeTarget->new }
+sub run { 1 }
+
+1;
+"#;
+const TYPE_DEFINITION_PROJECT_MAIN_URI: &str =
+    "file:///workspace/script/type-definition-project.pl";
+const TYPE_DEFINITION_PROJECT_MAIN_DOC: &str = r#"use strict;
+use warnings;
+use Trace::ProjectTypeTarget;
+
+sub build_project_target {
+    return Trace::ProjectTypeTarget->new;
+}
+
+my $from_function = build_project_target();
+$from_function->run;
+
+build_project_target()->run;
+Trace::ProjectTypeTarget->new->child->run;
+
+1;
+"#;
 const MISSING_MODULE_DIAGNOSTIC_DOC: &str = "use Missing::Payload;\n";
 
 const WORKSPACE_SYMBOL_URI: &str = "file:///workspace/lib/Trace/Symbols.pm";
@@ -225,6 +254,28 @@ fn open_type_definition_fallback_document(
         "textDocument": {
             "uri": TYPE_DEFINITION_FALLBACK_URI,
             "text": TYPE_DEFINITION_FALLBACK_DOC,
+            "languageId": "perl",
+            "version": 1
+        }
+    })))?;
+    Ok(())
+}
+
+fn open_type_definition_project_documents(
+    server: &LspServer,
+) -> Result<(), Box<dyn std::error::Error>> {
+    server.test_handle_did_open(Some(json!({
+        "textDocument": {
+            "uri": TYPE_DEFINITION_PROJECT_LIB_URI,
+            "text": TYPE_DEFINITION_PROJECT_LIB_DOC,
+            "languageId": "perl",
+            "version": 1
+        }
+    })))?;
+    server.test_handle_did_open(Some(json!({
+        "textDocument": {
+            "uri": TYPE_DEFINITION_PROJECT_MAIN_URI,
+            "text": TYPE_DEFINITION_PROJECT_MAIN_DOC,
             "languageId": "perl",
             "version": 1
         }
@@ -962,6 +1013,72 @@ fn live_type_definition_request_exposes_data_flow_fallback_trace()
             && boundary.contains("function-call results"),
         "type-definition fallback receipt must preserve data-flow blockers: {boundary}"
     );
+    Ok(())
+}
+
+#[test]
+fn live_type_definition_request_exposes_project_receiver_data_flow_blockers()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    initialize(&server)?;
+    open_type_definition_project_documents(&server)?;
+
+    for (needle, boundary_fragment) in [
+        ("$from_function->run", "variable receivers"),
+        ("build_project_target()->run", "function-call results"),
+        ("child->run", "chained method results"),
+    ] {
+        let (line, character) = position_on_in(TYPE_DEFINITION_PROJECT_MAIN_DOC, needle)?;
+
+        let result = response_result(
+            server.handle_request(request(
+                6,
+                "textDocument/typeDefinition",
+                Some(json!({
+                    "textDocument": {"uri": TYPE_DEFINITION_PROJECT_MAIN_URI, "version": 1},
+                    "position": {"line": line, "character": character}
+                })),
+            )),
+            "type definition project receiver/data-flow fallback",
+        )?;
+        let locations = result
+            .as_array()
+            .ok_or("project receiver/data-flow fallback should return an array")?;
+        assert!(
+            locations.is_empty(),
+            "{needle} must not resolve to the open package without data-flow proof: {result}"
+        );
+
+        let explanation = explain_provider_decision(&server, "type_definition")?;
+        let receipt = request_receipt(&explanation, "type_definition")?;
+        assert_eq!(
+            receipt.get("schema_version").and_then(Value::as_str),
+            Some("provider_decision.v1")
+        );
+        assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("type_definition"));
+        assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("fallback"));
+        assert_eq!(receipt.get("reason").and_then(Value::as_str), Some("missing_fact"));
+        assert_eq!(receipt.get("blocker").and_then(Value::as_str), Some("missing_fact"));
+        assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("fallback"));
+        assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("low"));
+        assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(false));
+        assert_eq!(
+            receipt.get("source_backed_state").and_then(Value::as_str),
+            Some("type_definition_not_proven")
+        );
+        assert_eq!(receipt.get("fallback_state").and_then(Value::as_str), Some("no_result"));
+        assert_eq!(receipt.get("result_count").and_then(Value::as_u64), Some(0));
+
+        let boundary =
+            receipt.get("claim_boundary").and_then(Value::as_str).ok_or("missing boundary")?;
+        assert!(
+            boundary.contains(boundary_fragment)
+                && boundary.contains("generated/no-source")
+                && boundary.contains("dynamic boundaries"),
+            "{needle} receipt must preserve project-shaped data-flow blocker boundary: {boundary}"
+        );
+    }
+
     Ok(())
 }
 
