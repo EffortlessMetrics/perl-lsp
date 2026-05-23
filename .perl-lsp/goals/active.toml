@@ -620,7 +620,35 @@ files = [
   "docs/project/status/SUPPORT_TIERS.md",
 ]
 commands = [
-  "rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_46_receiver_real_workspace_quality --profile agent --locked -- --nocapture --test-threads=1",
+  "rtk powershell -Command '$root=Split-Path (Get-Location).Path -Parent; $target=Join-Path $root \".tmp\\perl-lsp-swarm-win-target\"; $temp=Join-Path $root \".tmp\\receiver-generated-nosource\"; New-Item -ItemType Directory -Force -Path $target,$temp | Out-Null; $env:CARGO_TARGET_DIR=$target; $env:CARGO_INCREMENTAL=\"0\"; $env:TEMP=$temp; $env:TMP=$temp; rtk cargo build -p perl-lsp-rs --bin perl-lsp --profile agent --locked'",
+  "rtk powershell -Command '$root=Split-Path (Get-Location).Path -Parent; $target=Join-Path $root \".tmp\\perl-lsp-swarm-win-target\"; $temp=Join-Path $root \".tmp\\receiver-generated-nosource\"; New-Item -ItemType Directory -Force -Path $target,$temp | Out-Null; $env:CARGO_TARGET_DIR=$target; $env:CARGO_INCREMENTAL=\"0\"; $env:TEMP=$temp; $env:TMP=$temp; $env:PERL_LSP_BIN=Join-Path $target \"agent\\perl-lsp.exe\"; rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_46_receiver_real_workspace_quality --profile agent --locked -- --nocapture --test-threads=1'",
+  "rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "receiver-generated-no-source-fallback-receipt"
+status = "completed"
+lane = "trust"
+claim_boundary = "Receipt-only generated/no-source framework-method receiver fallback proof in the RealReceiver completion fixture; no completion behavior change, generated/no-source framework-method receiver promotion, support-tier promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_46_receiver_real_workspace_quality.rs",
+  "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/receiver_facts.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/SUPPORT_TIERS.md",
+]
+commands = [
+  "rtk powershell -Command '$root=Split-Path (Get-Location).Path -Parent; $target=Join-Path $root \".tmp\\perl-lsp-swarm-win-target\"; $temp=Join-Path $root \".tmp\\receiver-generated-nosource\"; New-Item -ItemType Directory -Force -Path $target,$temp | Out-Null; $env:CARGO_TARGET_DIR=$target; $env:CARGO_INCREMENTAL=\"0\"; $env:TEMP=$temp; $env:TMP=$temp; rtk cargo build -p perl-lsp-rs --bin perl-lsp --profile agent --locked'",
+  "rtk powershell -Command '$root=Split-Path (Get-Location).Path -Parent; $target=Join-Path $root \".tmp\\perl-lsp-swarm-win-target\"; $temp=Join-Path $root \".tmp\\receiver-generated-nosource\"; New-Item -ItemType Directory -Force -Path $target,$temp | Out-Null; $env:CARGO_TARGET_DIR=$target; $env:CARGO_INCREMENTAL=\"0\"; $env:TEMP=$temp; $env:TMP=$temp; $env:PERL_LSP_BIN=Join-Path $target \"agent\\perl-lsp.exe\"; rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_46_receiver_real_workspace_quality --profile agent --locked -- --nocapture --test-threads=1'",
   "rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture",
   "rtk cargo xtask check-active-goal-manifest",
   "rtk cargo xtask check-support-claims",

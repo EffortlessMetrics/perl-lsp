@@ -323,10 +323,11 @@ proof.
 The RealReceiver real-workspace receiver-quality receipt now records the next
 project-shaped boundary without promotion: constructor-assignment and plain
 hash-slot receivers act with source-backed detail, static package receivers act
-with exact high-confidence syntax detail, while hashref-slot, dynamic-key, and
-unknown receiver probes preserve low-confidence fallback. That receipt measures
-the gap for broader receiver promotion; it does not change completion behavior
-or support-tier wording.
+with exact high-confidence syntax detail, while hashref-slot,
+generated/no-source framework-method, dynamic-key, and unknown receiver probes
+preserve low-confidence fallback. That receipt measures the gap for broader
+receiver promotion; it does not change completion behavior or support-tier
+wording.
 The follow-up RealReceiver method/accessor fallback receipt records
 project-shaped accessor-return, method-return, local accessor-chain method-return,
 dynamic local accessor-chain method-return, and conditional local-reassignment

@@ -81,7 +81,7 @@ receiver_fact_completion_cutover:
   completion_consumes_fact: narrow source-backed pilot
 source_backed_proven: constructor assignment plus plain hash-slot receiver pilot
 exact_syntax_proven: static package receiver plus inherited self/this workspace receiver detail
-  fallback_proven: dynamic hash key, hashref slot, method/accessor/local-accessor-chain/dynamic-local-accessor-chain/conditional-local-reassignment receiver chains, dynamic bless, and array-index receivers preserve fallback boundaries
+  fallback_proven: dynamic hash key, hashref slot, generated/no-source framework method, method/accessor/local-accessor-chain/dynamic-local-accessor-chain/conditional-local-reassignment receiver chains, dynamic bless, and array-index receivers preserve fallback boundaries
   dynamic_boundary_proven: receiver extraction plus completion-provider boundary
   support_claim_allowed: partial-live-with-fallback only
 ```
@@ -90,7 +90,7 @@ exact_syntax_proven: static package receiver plus inherited self/this workspace 
 
 1. Add more real-workspace and additional receiver-form provider confidence
    receipts for exact, fallback, and dynamic receiver cases beyond the
-RealReceiver constructor/static-package/hash-slot/hashref/dynamic/unknown,
+RealReceiver constructor/static-package/hash-slot/hashref/generated-no-source-framework-method/dynamic/unknown,
    method/accessor/local-accessor-chain/dynamic-local-accessor-chain/
    conditional-local-reassignment fallback, bless confidence, and array-index
    fallback, and self/this current-package receipts.
