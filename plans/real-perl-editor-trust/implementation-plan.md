@@ -826,11 +826,16 @@ Current executable slice
   accessor, while preserving dynamic local accessor-chain fallback. This is
   semantic substrate only and does not change completion provider output,
   support tiers, parser/corpus status, or release lineage.
-- `receiver-local-accessor-chain-fallback-receipt` is active in the trust lane.
+- `receiver-local-accessor-chain-fallback-receipt` is completed in the trust lane.
   It extends the receipt-only completion fallback fixture so lexical-local
   accessor-chain method-return receiver shapes preserve low-confidence fallback
   and do not become exact source-backed completion evidence without a later
   promotion receipt.
+- `receiver-dynamic-local-accessor-chain-fallback-receipt` is active in the
+  trust lane. It extends the same receipt-only completion fallback fixture so a
+  lexical local initialized from a dynamic accessor receiver preserves
+  low-confidence fallback and does not become exact source-backed completion
+  evidence.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
@@ -870,6 +875,13 @@ Claim boundary
   accessor-chain method-return receiver behavior. It must not change completion
   provider logic, support tiers, parser/corpus buckets, local accessor-chain
   receiver promotion, medium-confidence promotion, generated/dynamic behavior,
+  release-lineage sync, or source-repo development routing.
+- Receiver dynamic local accessor-chain fallback work may extend the
+  receipt-only method/accessor fallback UX test and status links for current
+  dynamic accessor-chain method-return receiver behavior. It must not change
+  completion provider logic, support tiers, parser/corpus buckets, local
+  accessor-chain receiver promotion, dynamic local accessor-chain receiver
+  promotion, medium-confidence promotion, generated/dynamic behavior,
   release-lineage sync, or source-repo development routing.
 - Receiver bless confidence work may add a receipt-only UX test and status links
   for current literal/dynamic `bless` receiver behavior. It must not change
@@ -915,7 +927,7 @@ rtk git diff --check
 
 Rollback
 
-Revert the receiver local accessor-chain fallback receipt PR. If the receipt
-exposes an unintended provider-output promotion, keep provider behavior
+Revert the receiver dynamic local accessor-chain fallback receipt PR. If the
+receipt exposes an unintended provider-output promotion, keep provider behavior
 unchanged, mark this work item planned, and open a separate fix with a narrower
 claim boundary.
