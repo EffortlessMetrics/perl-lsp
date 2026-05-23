@@ -376,6 +376,7 @@ collapsible_match = { level = "allow", priority = 1 }
 decimal_bitwise_operands = "warn"
 duration_suboptimal_units = "warn"
 needless_type_cast = "warn"
+manual_ilog2 = "warn"
 unnecessary_trailing_comma = "warn"
 
 [workspace.lints.rust]
