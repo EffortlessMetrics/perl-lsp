@@ -37,11 +37,17 @@ use url::Url;
 /// without filesystem operations.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn normalize_uri(uri: &str) -> String {
-    if let Some(normalized) = crate::classify::normalize_legacy_windows_uri(uri) {
+    let trimmed = uri.trim();
+
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    if let Some(normalized) = crate::classify::normalize_legacy_windows_uri(trimmed) {
         return normalized;
     }
 
-    let path = std::path::Path::new(uri);
+    let path = std::path::Path::new(trimmed);
 
     // Raw absolute filesystem paths should normalize to file:// URIs before
     // URL parsing, especially on Windows where `C:\foo` can parse as `c:`.
@@ -52,13 +58,13 @@ pub fn normalize_uri(uri: &str) -> String {
     }
 
     // Try to parse as URL first
-    if let Ok(url) = Url::parse(uri) {
+    if let Ok(url) = Url::parse(trimmed) {
         // Canonicalize local file URIs through filesystem conversion so legacy
         // forms like `file://C:/...` normalize to `file:///c:/...` on Windows
         // and `file:///tmp/...` on Unix while preserving non-local authorities.
         if url.scheme() == "file"
             && url.host_str() == Some("localhost")
-            && let Some(fs_path) = crate::uri_to_fs_path(uri)
+            && let Some(fs_path) = crate::uri_to_fs_path(trimmed)
             && let Ok(normalized) = crate::fs_path_to_uri(&fs_path)
         {
             return normalized;
@@ -76,24 +82,30 @@ pub fn normalize_uri(uri: &str) -> String {
 
     // Last resort: if it looks like a file:// URI but is malformed,
     // try to extract the path and reconstruct properly
-    if uri.starts_with("file://")
-        && let Some(fs_path) = crate::uri_to_fs_path(uri)
+    if trimmed.starts_with("file://")
+        && let Some(fs_path) = crate::uri_to_fs_path(trimmed)
         && let Ok(normalized) = crate::fs_path_to_uri(&fs_path)
     {
         return normalized;
     }
 
     // Final fallback: return as-is for special URIs like untitled:
-    uri.to_string()
+    trimmed.to_string()
 }
 
 /// Normalize a URI to a consistent form (wasm32 version - no filesystem).
 #[cfg(target_arch = "wasm32")]
 pub fn normalize_uri(uri: &str) -> String {
-    if let Some(normalized) = crate::classify::normalize_legacy_windows_uri(uri) {
+    let trimmed = uri.trim();
+
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    if let Some(normalized) = crate::classify::normalize_legacy_windows_uri(trimmed) {
         return normalized;
     }
 
     // On wasm32, just try to parse as URL or return as-is
-    if let Ok(url) = Url::parse(uri) { url.to_string() } else { uri.to_string() }
+    if let Ok(url) = Url::parse(trimmed) { url.to_string() } else { trimmed.to_string() }
 }
