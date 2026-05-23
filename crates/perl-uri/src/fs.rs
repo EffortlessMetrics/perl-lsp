@@ -39,7 +39,12 @@ use crate::mojibake::repair_path_mojibake;
 /// This function is not available on `wasm32` targets (no filesystem).
 pub fn uri_to_fs_path(uri: &str) -> Option<PathBuf> {
     // Parse the URI
-    let url = Url::parse(uri).ok()?;
+    let url = if let Ok(parsed) = Url::parse(uri) {
+        parsed
+    } else {
+        let normalized = crate::classify::normalize_legacy_windows_uri(uri)?;
+        Url::parse(&normalized).ok()?
+    };
 
     // Only handle file:// URIs
     if url.scheme() != "file" {

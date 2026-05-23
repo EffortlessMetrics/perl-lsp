@@ -253,6 +253,26 @@ mod extra_uri_to_fs_path {
         let _ = result;
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn legacy_two_slash_windows_uri_is_accepted() -> Result<(), String> {
+        let path = uri_to_fs_path(r"file://C:\Users\dev\example.pl").ok_or("expected Some")?;
+        if !path.to_string_lossy().ends_with("example.pl") {
+            return Err(format!("unexpected path: {}", path.display()));
+        }
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn bare_windows_drive_path_is_accepted() -> Result<(), String> {
+        let path = uri_to_fs_path(r"C:\Users\dev\example.pl").ok_or("expected Some")?;
+        if !path.to_string_lossy().ends_with("example.pl") {
+            return Err(format!("unexpected path: {}", path.display()));
+        }
+        Ok(())
+    }
+
     #[test]
     fn percent_encoded_directory_names() -> Result<(), String> {
         let path =
