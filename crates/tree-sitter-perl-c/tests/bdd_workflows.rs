@@ -13,8 +13,8 @@ use std::{
 
 use tree_sitter::{Query, QueryCursor, StreamingIterator};
 use tree_sitter_perl_c::{
-    ParsePerlError, create_parser, get_scanner_config, language, parse_perl_code, parse_perl_file,
-    try_create_parser, try_parse_perl_file,
+    ParsePerlError, ParsePerlFileError, create_parser, get_scanner_config, language,
+    parse_perl_code, parse_perl_file, try_create_parser, try_parse_perl_file,
 };
 
 struct Scenario {
@@ -352,4 +352,67 @@ fn bdd_scanner_configuration_is_stable() {
     scenario.given("the crate backend is queried for scanner metadata");
     scenario.then("the backend should report the C scanner");
     assert_eq!(get_scanner_config(), "c-scanner");
+}
+
+#[test]
+fn bdd_parse_perl_file_missing_path_reports_context() -> Result<(), Box<dyn Error>> {
+    let scenario = Scenario::new("parse perl file missing path reports context");
+    let missing = unique_temp_file("missing_ctx");
+
+    scenario.given("a file path that does not exist on disk");
+    scenario.when("parse_perl_file is invoked");
+    let error = match parse_perl_file(&missing) {
+        Ok(_) => return Err("missing file unexpectedly parsed successfully".into()),
+        Err(error) => error,
+    };
+    let message = error.to_string();
+
+    scenario.then("the error message should contain the file path");
+    let path_str = missing.to_string_lossy().to_string();
+    assert!(
+        message.contains(&path_str),
+        "expected error to contain path {path_str:?}, got: {message}"
+    );
+
+    let contextual =
+        error.downcast_ref::<ParsePerlFileError>().ok_or("expected ParsePerlFileError")?;
+    assert_eq!(contextual.path(), missing.as_path());
+    assert!(
+        matches!(
+            contextual.source().and_then(|source| source.downcast_ref::<ParsePerlError>()),
+            Some(ParsePerlError::Io(_))
+        ),
+        "expected ParsePerlError::Io source"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn bdd_parse_perl_file_unreadable_path_reports_context() -> Result<(), Box<dyn Error>> {
+    let scenario = Scenario::new("parse perl file unreadable path reports context");
+
+    scenario.given("a directory path (fs::read on a directory fails with EISDIR)");
+    let dir_path: PathBuf = std::env::temp_dir();
+
+    scenario.when("parse_perl_file is invoked with the directory path");
+    let error = match parse_perl_file(&dir_path) {
+        Ok(_) => return Err("directory path unexpectedly parsed successfully".into()),
+        Err(error) => error,
+    };
+    let message = error.to_string();
+
+    scenario.then("the error message should contain both the path and a failure description");
+    let path_str = dir_path.to_string_lossy().to_string();
+    assert!(
+        message.contains(&path_str),
+        "expected error to contain path {path_str:?}, got: {message}"
+    );
+    assert!(
+        message.contains("failed to parse Perl file"),
+        "expected 'failed to parse Perl file' in message, got: {message}"
+    );
+    assert!(error.downcast_ref::<ParsePerlFileError>().is_some(), "expected ParsePerlFileError");
+
+    Ok(())
 }

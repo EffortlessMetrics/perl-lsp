@@ -39,7 +39,10 @@
 //! [`perl-parser`]: https://docs.rs/perl-parser
 //! [`tree-sitter-perl-rs`]: https://docs.rs/tree-sitter-perl-rs
 
-use std::{fmt, path::Path};
+use std::{
+    fmt,
+    path::{Path, PathBuf},
+};
 use tree_sitter::{Language, Parser};
 
 /// Reusable Perl parser for hot parse loops.
@@ -94,6 +97,37 @@ impl From<tree_sitter::LanguageError> for ParsePerlError {
 impl From<std::io::Error> for ParsePerlError {
     fn from(value: std::io::Error) -> Self {
         Self::Io(value)
+    }
+}
+
+/// Contextual parse error produced by [`parse_perl_file`].
+///
+/// Wraps the original [`ParsePerlError`] and records the source path so
+/// callers surface actionable diagnostics without re-implementing path
+/// tracking themselves.
+#[non_exhaustive]
+#[derive(Debug)]
+pub struct ParsePerlFileError {
+    path: PathBuf,
+    source: ParsePerlError,
+}
+
+impl ParsePerlFileError {
+    /// Returns the path that triggered the error.
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl fmt::Display for ParsePerlFileError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "failed to parse Perl file {}: {}", self.path.display(), self.source)
+    }
+}
+
+impl std::error::Error for ParsePerlFileError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.source)
     }
 }
 
@@ -307,12 +341,21 @@ pub fn try_parse_perl_code_with_parser(
 ///
 /// # Errors
 ///
-/// Returns an error if the file cannot be read or if parsing fails (see
-/// [`parse_perl_code`]).
+/// Returns a [`ParsePerlFileError`] (boxed) if the file cannot be read or if
+/// the parser cannot be initialised or returns no tree. The error message
+/// includes the file path to aid diagnostics.
 pub fn parse_perl_file<P: AsRef<Path>>(
     path: P,
 ) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-    try_parse_perl_file(path).map_err(Into::into)
+    let path_ref = path.as_ref();
+    let code = std::fs::read(path_ref).map_err(|e| {
+        Box::new(ParsePerlFileError { path: path_ref.to_path_buf(), source: ParsePerlError::Io(e) })
+            as Box<dyn std::error::Error>
+    })?;
+    try_parse_perl_bytes(&code).map_err(|source| {
+        Box::new(ParsePerlFileError { path: path_ref.to_path_buf(), source })
+            as Box<dyn std::error::Error>
+    })
 }
 
 /// Reads a file from `path` and parses it as Perl source.
