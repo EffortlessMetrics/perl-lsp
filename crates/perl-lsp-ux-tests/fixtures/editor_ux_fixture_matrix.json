@@ -1361,6 +1361,33 @@
       ]
     },
     {
+      "id": "receiver_bless_confidence",
+      "scenario_file": "ux_scenario_48_receiver_bless_confidence.rs",
+      "subsystem_owner": "editor_trust",
+      "ci_tier": "pr",
+      "component": "completion",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "request receiver-aware method completion through literal and dynamic bless receiver forms and record confidence boundaries",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "literal and dynamic bless receiver probes complete without JSON-RPC errors",
+        "literal bless receiver evidence is labeled medium confidence rather than source-backed exact",
+        "dynamic bless receivers do not become exact source-backed receiver evidence"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "real_workspace_providers",
       "scenario_file": "ux_scenario_20_real_workspace_providers.rs",
       "subsystem_owner": "editor_intelligence",
