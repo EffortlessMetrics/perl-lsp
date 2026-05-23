@@ -119,7 +119,7 @@ rule = "Merge clean leaf work; escalate trust-adjacent surfaces instead of treat
 
 [trust.next]
 items = [
-  "receiver-bless-confidence-receipt",
+  "receiver-array-index-fallback-receipt",
   "semantic-token-class-receipts-when-new-class-ready",
 ]
 
@@ -659,7 +659,7 @@ commands = [
 
 [[work_item]]
 id = "receiver-bless-confidence-receipt"
-status = "active"
+status = "completed"
 lane = "trust"
 claim_boundary = "Receipt-only receiver confidence proof for literal and dynamic bless completion chains; no completion behavior change, support-tier promotion, dynamic-boundary promotion, medium-confidence receiver promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
 files = [
@@ -674,6 +674,32 @@ files = [
 ]
 commands = [
   "rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_48_receiver_bless_confidence --profile agent --locked -- --nocapture --test-threads=1",
+  "rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "receiver-array-index-fallback-receipt"
+status = "active"
+lane = "trust"
+claim_boundary = "Receipt-only receiver fallback proof for static and dynamic array-index completion chains; no completion behavior change, support-tier promotion, array-index receiver promotion, dynamic-boundary promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_49_receiver_array_index_fallback.rs",
+  "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/receiver_facts.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/SUPPORT_TIERS.md",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_49_receiver_array_index_fallback --profile agent --locked -- --nocapture --test-threads=1",
   "rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture",
   "rtk cargo xtask check-active-goal-manifest",
   "rtk cargo xtask check-support-claims",

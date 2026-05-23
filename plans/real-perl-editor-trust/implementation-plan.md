@@ -798,11 +798,15 @@ Current executable slice
   method-return receiver chains. These medium-confidence receiver forms preserve
   low-confidence fallback and do not become exact source-backed completion
   evidence without a later promotion receipt.
-- `receiver-bless-confidence-receipt` is active in the trust lane. It adds a
+- `receiver-bless-confidence-receipt` is completed in the trust lane. It added a
   receipt-only completion fixture for literal and dynamic `bless` receiver
-  chains. Literal `bless` evidence must stay labeled as medium confidence, and
-  dynamic `bless` receivers must not become exact source-backed receiver
-  evidence.
+  chains. Literal `bless` evidence stays labeled as medium confidence, and
+  dynamic `bless` receivers do not become exact source-backed receiver evidence.
+- `receiver-array-index-fallback-receipt` is active in the trust lane. It adds a
+  receipt-only completion fixture for static and dynamic array-index receiver
+  chains. Array-index receiver facts must preserve low-confidence fallback and
+  must not become exact source-backed completion evidence without a later
+  promotion receipt.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
@@ -842,12 +846,17 @@ Claim boundary
   completion provider logic, support tiers, parser/corpus buckets,
   dynamic-boundary behavior, medium-confidence promotion, release-lineage sync,
   or source-repo development routing.
+- Receiver array-index fallback work may add a receipt-only UX test and status
+  links for current static/dynamic array-index receiver behavior. It must not
+  change completion provider logic, support tiers, parser/corpus buckets,
+  array-index receiver promotion, dynamic-boundary behavior, release-lineage
+  sync, or source-repo development routing.
 
 Proof commands
 
 ```bash
 rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft
-rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_48_receiver_bless_confidence --profile agent --locked -- --nocapture --test-threads=1
+rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_49_receiver_array_index_fallback --profile agent --locked -- --nocapture --test-threads=1
 rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture
 rtk cargo xtask check-active-goal-manifest
 rtk cargo xtask check-support-claims
@@ -859,6 +868,6 @@ rtk git diff --check
 
 Rollback
 
-Revert the receiver bless confidence receipt PR. If the receipt exposes a
+Revert the receiver array-index fallback receipt PR. If the receipt exposes a
 provider regression, keep the provider behavior unchanged, mark this work item
 planned, and open a separate fix with a narrower claim boundary.
