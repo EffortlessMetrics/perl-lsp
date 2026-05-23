@@ -127,11 +127,7 @@ fn test_api_launch_action_enum_public() -> Result<(), Box<dyn std::error::Error>
 #[test]
 fn test_api_launch_config_public() -> Result<(), Box<dyn std::error::Error>> {
     use perl_lsp_rs_core::runtime::launcher::FeatureProfile;
-    let config = LaunchConfig {
-        transport: TransportMode::Stdio,
-        enable_logging: false,
-        feature_profile: FeatureProfile::Production,
-    };
+    let config = LaunchConfig::new(FeatureProfile::Production);
     let _ = config.transport;
     Ok(())
 }

@@ -4,6 +4,7 @@
 //! so that `mod.rs` is limited to the struct definition and core accessors.
 
 use super::*;
+use perl_lsp_rs_core::runtime::tuning::RuntimeTuning;
 
 impl LspServer {
     /// Create a new LSP server
@@ -12,7 +13,27 @@ impl LspServer {
     }
 
     /// Create a new LSP server using an explicit feature profile.
+    ///
+    /// Runtime tuning defaults to env-derived values (so `PERL_LSP_E2E=1` in
+    /// the environment is honoured even when no explicit tuning is supplied).
+    /// For deterministic test setups, prefer
+    /// [`Self::new_with_tuning`] / [`Self::new_with_feature_profile_and_tuning`].
     pub fn new_with_feature_profile(feature_profile: FeatureProfile) -> Self {
+        Self::new_with_feature_profile_and_tuning(feature_profile, RuntimeTuning::from_env())
+    }
+
+    /// Create a new LSP server with an explicit runtime tuning, using the
+    /// current feature profile.
+    pub fn new_with_tuning(runtime_tuning: RuntimeTuning) -> Self {
+        Self::new_with_feature_profile_and_tuning(FeatureProfile::current(), runtime_tuning)
+    }
+
+    /// Create a new LSP server with an explicit feature profile *and* runtime
+    /// tuning. The canonical constructor used by the launcher.
+    pub fn new_with_feature_profile_and_tuning(
+        feature_profile: FeatureProfile,
+        runtime_tuning: RuntimeTuning,
+    ) -> Self {
         // Initialize workspace indexing with coordinator lifecycle management
         #[cfg(feature = "workspace")]
         let index_coordinator = Some(Arc::new(IndexCoordinator::new()));
@@ -52,6 +73,7 @@ impl LspServer {
             trace_level: Arc::new(Mutex::new("off".to_string())),
             stream_session_manager: super::stream_session::StreamSessionManager::new(),
             feature_profile,
+            runtime_tuning,
             pod_cache: Arc::new(Mutex::new(HashMap::new())),
             pending_index_task_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             parse_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
@@ -127,6 +149,27 @@ impl LspServer {
         R: Read + Send + 'static,
         W: Write + Send + 'static,
     {
+        Self::with_io_feature_profile_and_tuning(
+            reader,
+            writer,
+            feature_profile,
+            RuntimeTuning::from_env(),
+        )
+    }
+
+    /// Create a new LSP server with custom I/O, explicit feature profile, and
+    /// explicit runtime tuning. Used by integration tests that need to exercise
+    /// e2e-mode behavior without relying on process env vars.
+    pub fn with_io_feature_profile_and_tuning<R, W>(
+        reader: Box<R>,
+        writer: Box<W>,
+        feature_profile: FeatureProfile,
+        runtime_tuning: RuntimeTuning,
+    ) -> Self
+    where
+        R: Read + Send + 'static,
+        W: Write + Send + 'static,
+    {
         // Initialize workspace indexing with coordinator lifecycle management
         #[cfg(feature = "workspace")]
         let index_coordinator = Some(Arc::new(IndexCoordinator::new()));
@@ -166,6 +209,7 @@ impl LspServer {
             trace_level: Arc::new(Mutex::new("off".to_string())),
             stream_session_manager: super::stream_session::StreamSessionManager::new(),
             feature_profile,
+            runtime_tuning,
             pod_cache: Arc::new(Mutex::new(HashMap::new())),
             pending_index_task_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             parse_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
@@ -205,6 +249,20 @@ impl LspServer {
         output: Arc<Mutex<Box<dyn Write + Send>>>,
         feature_profile: FeatureProfile,
     ) -> Self {
+        Self::with_output_feature_profile_and_tuning(
+            output,
+            feature_profile,
+            RuntimeTuning::from_env(),
+        )
+    }
+
+    /// Create a new LSP server with custom output, explicit feature profile,
+    /// and explicit runtime tuning.
+    pub fn with_output_feature_profile_and_tuning(
+        output: Arc<Mutex<Box<dyn Write + Send>>>,
+        feature_profile: FeatureProfile,
+        runtime_tuning: RuntimeTuning,
+    ) -> Self {
         // Initialize workspace indexing with coordinator lifecycle management
         #[cfg(feature = "workspace")]
         let index_coordinator = Some(Arc::new(IndexCoordinator::new()));
@@ -243,6 +301,7 @@ impl LspServer {
             trace_level: Arc::new(Mutex::new("off".to_string())),
             stream_session_manager: super::stream_session::StreamSessionManager::new(),
             feature_profile,
+            runtime_tuning,
             pod_cache: Arc::new(Mutex::new(HashMap::new())),
             pending_index_task_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             parse_cancel_flags: Arc::new(Mutex::new(HashMap::new())),

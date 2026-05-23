@@ -19,6 +19,7 @@ pub use crate::features::contracts::trackable_feature_count_for_grid;
 pub use crate::features::grid::{compliance_percent_for_profile, to_json_for_profile};
 pub use crate::features::policy::{FeatureProfile, catalog_advertised_feature_ids};
 use crate::features::profile_cli::{feature_profile_supported_tokens, parse_feature_profile_arg};
+use crate::runtime::tuning::{DiagnosticMode, RuntimeMode, RuntimeTuning};
 pub use timing::{StartupReport, StartupTimer};
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::{EnvFilter, fmt as tracing_fmt};
@@ -276,6 +277,26 @@ pub struct LspArgs {
     #[arg(long)]
     pub feature_profile: Option<String>,
 
+    /// Runtime workload mode: "normal" (default) or "e2e" (latency-focused harness).
+    #[arg(long, value_name = "MODE")]
+    pub runtime_mode: Option<String>,
+
+    /// Diagnostic publication scope: "normal" or "syntax-only".
+    #[arg(long, value_name = "MODE")]
+    pub diagnostic_mode: Option<String>,
+
+    /// Diagnostic publication debounce window in milliseconds (0 = immediate).
+    #[arg(long, value_name = "MS")]
+    pub diagnostic_debounce_ms: Option<u64>,
+
+    /// Whether `initialized` triggers eager workspace indexing.
+    #[arg(long, value_name = "BOOL")]
+    pub eager_workspace_indexing: Option<bool>,
+
+    /// Whether to register file watchers with the client.
+    #[arg(long, value_name = "BOOL")]
+    pub file_watchers: Option<bool>,
+
     /// Files to check (used with --check)
     #[arg(trailing_var_arg = true, requires = "check")]
     pub files: Vec<String>,
@@ -357,6 +378,7 @@ pub enum LaunchAction {
 
 /// Canonical launch configuration consumed by the server runtime.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct LaunchConfig {
     /// Transport used by the server.
     pub transport: TransportMode,
@@ -364,12 +386,19 @@ pub struct LaunchConfig {
     pub enable_logging: bool,
     /// Effective feature profile selected by CLI/default policy.
     pub feature_profile: FeatureProfile,
+    /// Runtime workload tuning (env + CLI layered over compiled defaults).
+    pub runtime_tuning: RuntimeTuning,
 }
 
 impl LaunchConfig {
     /// Create a default launch configuration for a given feature profile.
     pub const fn new(feature_profile: FeatureProfile) -> Self {
-        Self { transport: TransportMode::Stdio, enable_logging: false, feature_profile }
+        Self {
+            transport: TransportMode::Stdio,
+            enable_logging: false,
+            feature_profile,
+            runtime_tuning: RuntimeTuning::normal_defaults(),
+        }
     }
 
     /// JSON payload describing profile-scoped advertised feature grid entries.
@@ -424,6 +453,16 @@ pub enum LaunchParseError {
         /// Raw shell token from CLI.
         raw_shell: String,
     },
+    /// Invalid `--runtime-mode` token.
+    InvalidRuntimeMode {
+        /// Raw token from CLI.
+        raw_mode: String,
+    },
+    /// Invalid `--diagnostic-mode` token.
+    InvalidDiagnosticMode {
+        /// Raw token from CLI.
+        raw_mode: String,
+    },
 }
 
 impl fmt::Display for LaunchParseError {
@@ -447,6 +486,12 @@ impl fmt::Display for LaunchParseError {
                     f,
                     "Unknown shell: {raw_shell}. Supported: bash, zsh, fish, powershell, pwsh"
                 )
+            }
+            Self::InvalidRuntimeMode { raw_mode } => {
+                write!(f, "Invalid runtime mode: {raw_mode}. Supported: normal, e2e")
+            }
+            Self::InvalidDiagnosticMode { raw_mode } => {
+                write!(f, "Invalid diagnostic mode: {raw_mode}. Supported: normal, syntax-only")
             }
         }
     }
@@ -473,6 +518,31 @@ where
             if let Some(raw_profile) = parsed_args.feature_profile {
                 config.feature_profile = parse_feature_profile(&raw_profile)?;
             }
+
+            // Resolve runtime tuning: env layered over compiled defaults,
+            // then CLI overrides on top.
+            let cli_runtime_mode = match parsed_args.runtime_mode {
+                Some(ref raw) => Some(RuntimeMode::parse(raw).ok_or_else(|| {
+                    LaunchParseError::InvalidRuntimeMode { raw_mode: raw.clone() }
+                })?),
+                None => None,
+            };
+            let cli_diagnostic_mode = match parsed_args.diagnostic_mode {
+                Some(ref raw) => Some(DiagnosticMode::parse(raw).ok_or_else(|| {
+                    LaunchParseError::InvalidDiagnosticMode { raw_mode: raw.clone() }
+                })?),
+                None => None,
+            };
+
+            let mut runtime_tuning = RuntimeTuning::from_env();
+            runtime_tuning.apply_cli_overrides(
+                cli_runtime_mode,
+                cli_diagnostic_mode,
+                parsed_args.diagnostic_debounce_ms,
+                parsed_args.eager_workspace_indexing,
+                parsed_args.file_watchers,
+            );
+            config.runtime_tuning = runtime_tuning;
 
             let action = if parsed_args.health {
                 LaunchAction::Health
@@ -626,6 +696,20 @@ pub fn help_text() -> String {
     out.push_str("  --log                Enable logging to stderr\n");
     out.push_str("  --feature-profile <name>\n");
     out.push_str(&format!("                       Set feature profile ({supported_profiles})\n"));
+    out.push_str("  --runtime-mode <mode>\n");
+    out.push_str(
+        "                       Runtime workload tuning (normal, e2e; wired dials only)\n",
+    );
+    out.push_str("  --diagnostic-mode <mode>\n");
+    out.push_str(
+        "                       Set diagnostic scope tuning value (normal, syntax-only)\n",
+    );
+    out.push_str("  --diagnostic-debounce-ms <ms>\n");
+    out.push_str("                       Diagnostic publish debounce window (0 = immediate)\n");
+    out.push_str("  --eager-workspace-indexing <bool>\n");
+    out.push_str("                       Set eager-indexing tuning value (default: true)\n");
+    out.push_str("  --file-watchers <bool>\n");
+    out.push_str("                       Set file-watcher tuning value (default: true)\n");
     out.push('\n');
     out.push_str("Diagnostic options:\n");
     out.push_str("  --health             Quick health check (prints 'ok <version>')\n");
@@ -663,6 +747,17 @@ pub fn help_text() -> String {
     out.push_str("  PERL_LSP_LOG_FILE=<path>\n");
     out.push_str("                       Also log to a daily-rotated file (max 5 files)\n");
     out.push_str("  PERL_LSP_QUIET=1     Suppress the startup banner on stderr\n");
+    out.push_str("  PERL_LSP_E2E=1       Select e2e runtime tuning (wired dials only)\n");
+    out.push_str("  PERL_LSP_DIAGNOSTIC_MODE=<mode>\n");
+    out.push_str(
+        "                       Set diagnostic scope tuning value (normal, syntax-only)\n",
+    );
+    out.push_str("  PERL_LSP_DIAGNOSTIC_DEBOUNCE_MS=<ms>\n");
+    out.push_str("                       Override diagnostic debounce window\n");
+    out.push_str("  PERL_LSP_EAGER_WORKSPACE_INDEXING=<bool>\n");
+    out.push_str("                       Set eager-indexing tuning value\n");
+    out.push_str("  PERL_LSP_FILE_WATCHERS=<bool>\n");
+    out.push_str("                       Set file-watcher tuning value\n");
     out.push_str("  RUST_LOG=<filter>    Set tracing filter (e.g. perl_lsp=debug)\n");
     out.push_str("  NO_COLOR=1           Disable colored output\n");
     out
@@ -909,7 +1004,10 @@ fn parse_feature_profile(raw_profile: &str) -> Result<FeatureProfile, LaunchPars
 
 #[cfg(test)]
 mod tests {
-    use super::{DEFAULT_LSP_PORT, LaunchAction, TransportMode, parse_args};
+    use super::{
+        DEFAULT_LSP_PORT, DiagnosticMode, LaunchAction, RuntimeMode, RuntimeTuning, TransportMode,
+        parse_args,
+    };
     use perl_tdd_support::must;
 
     #[test]
@@ -1511,5 +1609,131 @@ mod tests {
             !stdio_banner.contains("socket"),
             "stdio banner must not show socket: {stdio_banner}"
         );
+    }
+
+    // ── runtime tuning CLI surface (PR 1) ────────────────────────────
+
+    struct RuntimeTuningEnvGuards {
+        _diagnostic_mode: EnvGuard,
+        _diagnostic_debounce_ms: EnvGuard,
+        _eager_workspace_indexing: EnvGuard,
+        _file_watchers: EnvGuard,
+        // Keep the first guard last so the shared env lock is released after
+        // the other runtime-tuning vars are restored.
+        _e2e: EnvGuard,
+    }
+
+    /// Scrub every env var consulted by `RuntimeTuning::from_env` so the
+    /// parse_args tests below see compiled defaults, not whatever the
+    /// runner happened to export.
+    fn scrub_runtime_tuning_env() -> RuntimeTuningEnvGuards {
+        let e2e = EnvGuard::remove("PERL_LSP_E2E");
+        RuntimeTuningEnvGuards {
+            _diagnostic_mode: EnvGuard::remove("PERL_LSP_DIAGNOSTIC_MODE"),
+            _diagnostic_debounce_ms: EnvGuard::remove("PERL_LSP_DIAGNOSTIC_DEBOUNCE_MS"),
+            _eager_workspace_indexing: EnvGuard::remove("PERL_LSP_EAGER_WORKSPACE_INDEXING"),
+            _file_watchers: EnvGuard::remove("PERL_LSP_FILE_WATCHERS"),
+            _e2e: e2e,
+        }
+    }
+
+    #[test]
+    fn parse_defaults_apply_normal_runtime_tuning() {
+        let _guards = scrub_runtime_tuning_env();
+        let plan = must(parse_args(["perl-lsp"]));
+        assert_eq!(plan.config.runtime_tuning, RuntimeTuning::normal_defaults());
+    }
+
+    #[test]
+    fn parse_runtime_mode_e2e_sets_e2e_defaults() {
+        let _guards = scrub_runtime_tuning_env();
+        let plan = must(parse_args(["perl-lsp", "--runtime-mode", "e2e"]));
+        assert_eq!(plan.config.runtime_tuning, RuntimeTuning::e2e_defaults());
+    }
+
+    #[test]
+    fn parse_diagnostic_debounce_zero_flag() {
+        let _guards = scrub_runtime_tuning_env();
+        let plan = must(parse_args(["perl-lsp", "--diagnostic-debounce-ms", "0"]));
+        assert_eq!(plan.config.runtime_tuning.diagnostic_debounce_ms, 0);
+        assert!(plan.config.runtime_tuning.diagnostic_debounce_is_immediate());
+    }
+
+    #[test]
+    fn parse_diagnostic_mode_syntax_only_flag() {
+        let _guards = scrub_runtime_tuning_env();
+        let plan = must(parse_args(["perl-lsp", "--diagnostic-mode", "syntax-only"]));
+        assert_eq!(plan.config.runtime_tuning.diagnostic_mode, DiagnosticMode::SyntaxOnly);
+        // Outside of --runtime-mode e2e, the other dials stay at normal defaults.
+        assert_eq!(plan.config.runtime_tuning.runtime_mode, RuntimeMode::Normal);
+        assert!(plan.config.runtime_tuning.eager_workspace_indexing);
+    }
+
+    #[test]
+    fn parse_combined_runtime_e2e_with_overrides() {
+        let _guards = scrub_runtime_tuning_env();
+        let plan = must(parse_args([
+            "perl-lsp",
+            "--runtime-mode",
+            "e2e",
+            "--diagnostic-debounce-ms",
+            "5",
+            "--diagnostic-mode",
+            "normal",
+        ]));
+        assert_eq!(plan.config.runtime_tuning.runtime_mode, RuntimeMode::E2e);
+        // CLI wins over e2e default.
+        assert_eq!(plan.config.runtime_tuning.diagnostic_mode, DiagnosticMode::Normal);
+        assert_eq!(plan.config.runtime_tuning.diagnostic_debounce_ms, 5);
+        // Other e2e defaults survive.
+        assert!(!plan.config.runtime_tuning.eager_workspace_indexing);
+        assert!(!plan.config.runtime_tuning.file_watchers);
+    }
+
+    #[test]
+    fn parse_invalid_runtime_mode_errors() -> Result<(), String> {
+        let _guards = scrub_runtime_tuning_env();
+        let err = parse_args(["perl-lsp", "--runtime-mode", "warp"])
+            .err()
+            .ok_or("invalid runtime mode must be rejected".to_string())?;
+        let msg = format!("{err}");
+        assert!(msg.contains("Invalid runtime mode"), "saw: {msg}");
+        Ok(())
+    }
+
+    #[test]
+    fn parse_invalid_diagnostic_mode_errors() -> Result<(), String> {
+        let _guards = scrub_runtime_tuning_env();
+        let err = parse_args(["perl-lsp", "--diagnostic-mode", "loud"])
+            .err()
+            .ok_or("invalid diagnostic mode must be rejected".to_string())?;
+        let msg = format!("{err}");
+        assert!(msg.contains("Invalid diagnostic mode"), "saw: {msg}");
+        Ok(())
+    }
+
+    #[test]
+    fn env_e2e_propagates_through_parse_args() {
+        let _scrub = scrub_runtime_tuning_env();
+        let _enable = EnvGuard::set("PERL_LSP_E2E", "1");
+        let plan = must(parse_args(["perl-lsp"]));
+        assert_eq!(plan.config.runtime_tuning, RuntimeTuning::e2e_defaults());
+    }
+
+    #[test]
+    fn cli_overrides_env_when_both_present() {
+        let _scrub = scrub_runtime_tuning_env();
+        let _enable = EnvGuard::set("PERL_LSP_DIAGNOSTIC_DEBOUNCE_MS", "1000");
+        let plan = must(parse_args(["perl-lsp", "--diagnostic-debounce-ms", "0"]));
+        assert_eq!(plan.config.runtime_tuning.diagnostic_debounce_ms, 0);
+    }
+
+    #[test]
+    fn help_mentions_runtime_tuning_flags() {
+        let text = super::help_text();
+        assert!(text.contains("--runtime-mode"));
+        assert!(text.contains("--diagnostic-mode"));
+        assert!(text.contains("--diagnostic-debounce-ms"));
+        assert!(text.contains("PERL_LSP_E2E"));
     }
 }
