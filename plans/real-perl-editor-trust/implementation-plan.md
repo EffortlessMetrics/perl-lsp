@@ -892,11 +892,19 @@ Current executable slice
   it does not broaden type-definition behavior, promote support tiers, move
   parser/corpus buckets, sync release lineage, or continue source-repo
   development.
-- `post-type-definition-receipt-routing-review` is active in the reliability
-  lane. It keeps the queue/pointer loop live: inspect current open PRs, follow
-  `parser_accuracy_next.md` only when it names an active measurement gap or
-  failure packet, and otherwise choose the next provider or real-workspace trust
-  lane from current dashboards without stale PR numbers.
+- `post-type-definition-receipt-routing-review` is completed in the reliability
+  lane. The queue/pointer pass confirmed `perl-lsp-swarm` has only draft
+  retrospective PR #346 open, `perl-lsp` has no open PRs, `source/master` is
+  not ahead of swarm, `parser_accuracy_next.md` has no active failure packet or
+  measurement gap, and the provider dashboard has no unconditional ready lane:
+  semantic-token class work is gated until another class proves exact
+  live-output parity, `class_declaration` remains deferred, and DAP
+  `includePaths` cutover proof is only valid when native DAP module-path
+  behavior is explicitly being promoted.
+- `provider-proof-assignment-gate-after-type-definition` is active in the
+  reliability lane. It keeps future work assignment-gated instead of
+  speculative until a current ready provider class, active PR, or explicit
+  assignment exists.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
@@ -1028,6 +1036,11 @@ Claim boundary
   type-definition resolution behavior, support tiers, parser/corpus buckets,
   generated/dynamic behavior, release-lineage sync, or source-repo development
   routing.
+- Provider proof assignment-gate after type-definition work may update only
+  active-goal routing and this plan until a specific scoped provider class,
+  parser gap, DAP module-path behavior change, or active PR is explicitly
+  assigned. It must not create a semantic-token, DAP, parser, support-tier,
+  release-lineage, or source-repo development claim on its own.
 
 Proof commands
 
