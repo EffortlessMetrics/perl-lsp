@@ -54,7 +54,11 @@ pub fn uri_to_fs_path(uri: &str) -> Option<PathBuf> {
     // Convert to filesystem path using the url crate's built-in method.
     // On Windows, accept rooted file URIs like file:///tmp/test.pl as \tmp\test.pl
     // so cross-platform tests and internal helpers stay permissive.
-    let path = url.to_file_path().ok().or_else(|| windows_rooted_file_uri_to_path(&url))?;
+    let path = url
+        .to_file_path()
+        .ok()
+        .or_else(|| local_authority_file_uri_to_path(&url))
+        .or_else(|| windows_rooted_file_uri_to_path(&url))?;
     Some(repair_path_mojibake(path))
 }
 
@@ -142,12 +146,22 @@ fn normalize_filesystem_path(path: &Path) -> PathBuf {
     path.to_path_buf()
 }
 
+fn local_authority_file_uri_to_path(url: &Url) -> Option<PathBuf> {
+    if !crate::classify::is_local_file_authority(url.host_str()) {
+        return None;
+    }
+
+    let canonical = Url::parse(&format!("file://{}", url.path())).ok()?;
+    canonical.to_file_path().ok()
+}
+
 #[cfg(windows)]
 fn windows_rooted_file_uri_to_path(url: &Url) -> Option<PathBuf> {
     use percent_encoding::percent_decode_str;
 
     match url.host_str() {
-        None | Some("localhost") => {}
+        None => {}
+        host if crate::classify::is_local_file_authority(host) => {}
         Some(_) => return None,
     }
 

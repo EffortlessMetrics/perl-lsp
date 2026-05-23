@@ -63,7 +63,7 @@ pub fn normalize_uri(uri: &str) -> String {
         // forms like `file://C:/...` normalize to `file:///c:/...` on Windows
         // and `file:///tmp/...` on Unix while preserving non-local authorities.
         if url.scheme() == "file"
-            && url.host_str() == Some("localhost")
+            && crate::classify::is_local_file_authority(url.host_str())
             && let Some(fs_path) = crate::uri_to_fs_path(trimmed)
             && let Ok(normalized) = crate::fs_path_to_uri(&fs_path)
         {

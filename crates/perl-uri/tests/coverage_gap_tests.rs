@@ -104,8 +104,12 @@ mod non_windows_stub {
     }
 
     #[test]
-    fn ipv4_file_host_returns_none() {
-        assert!(uri_to_fs_path("file://127.0.0.1/foo.pl").is_none());
+    fn ipv4_file_host_maps_to_local_path() -> Result<(), String> {
+        let path = uri_to_fs_path("file://127.0.0.1/foo.pl").ok_or("expected Some")?;
+        if !path.ends_with("foo.pl") {
+            return Err(format!("unexpected path: {}", path.display()));
+        }
+        Ok(())
     }
 
     #[test]

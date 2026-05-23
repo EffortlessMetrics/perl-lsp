@@ -161,6 +161,12 @@ mod tests {
         }
 
         #[test]
+        fn test_normalize_uri_canonicalizes_loopback_authority() {
+            assert_eq!(normalize_uri("file://127.0.0.1/tmp/test.pl"), "file:///tmp/test.pl");
+            assert_eq!(normalize_uri("file://[::1]/tmp/test.pl"), "file:///tmp/test.pl");
+        }
+
+        #[test]
         fn test_normalize_uri_special() {
             let uri = normalize_uri("untitled:Untitled-1");
             assert_eq!(uri, "untitled:Untitled-1");
@@ -208,6 +214,15 @@ mod tests {
         fn test_source_path_from_uri_or_path_localhost_file_uri() {
             let path = must_some(source_path_from_uri_or_path("file://localhost/tmp/localhost.pl"));
             assert!(path.ends_with("localhost.pl"));
+        }
+
+        #[test]
+        fn test_source_path_from_uri_or_path_loopback_file_uri() {
+            let ipv4 = must_some(source_path_from_uri_or_path("file://127.0.0.1/tmp/loopback4.pl"));
+            assert!(ipv4.ends_with("loopback4.pl"));
+
+            let ipv6 = must_some(source_path_from_uri_or_path("file://[::1]/tmp/loopback6.pl"));
+            assert!(ipv6.ends_with("loopback6.pl"));
         }
 
         #[test]
