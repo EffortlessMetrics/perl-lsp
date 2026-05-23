@@ -130,7 +130,8 @@ items = [
 
 [reliability.next]
 items = [
-  "source-lineage-drift-review",
+  "neovim-latency-swarm-restack-review",
+  "source-pr-9572-manual-review",
 ]
 
 [[work_item]]
@@ -940,7 +941,7 @@ commands = [
 
 [[work_item]]
 id = "source-lineage-drift-review"
-status = "active"
+status = "completed"
 lane = "reliability"
 claim_boundary = "Queue/source-lineage drift review only after the post-#95 publishing-repo commits; no source-repo development merge, source-over-swarm sync, provider behavior, support-tier promotion, parser/corpus bucket movement, release/publish/signing change, or release-lineage sync."
 files = [
@@ -955,6 +956,30 @@ commands = [
   "rtk git log --oneline source/master --not origin/main",
   "rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url",
   "rtk gh pr list -R EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,isDraft,headRefName,mergeStateStatus,url",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "neovim-latency-swarm-restack-review"
+status = "active"
+lane = "reliability"
+claim_boundary = "Swarm-native review/restack routing for the Neovim latency PR train only; no source-over-swarm sync, source-repo development merge, provider trust promotion, support-tier promotion, parser/corpus bucket movement, release/publish/signing change, or release-lineage sync."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+]
+commands = [
+  "rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 279 --json number,title,state,headRefName,mergeStateStatus,url",
+  "rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 280 --json number,title,state,headRefName,mergeStateStatus,url",
+  "rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 286 --json number,title,state,headRefName,mergeStateStatus,url",
+  "rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 287 --json number,title,state,headRefName,mergeStateStatus,url",
+  "rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 288 --json number,title,state,headRefName,mergeStateStatus,url",
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url",
+  "rtk git rev-list --left-right --count origin/main...source/master",
+  "rtk git log --oneline source/master --not origin/main",
   "rtk cargo xtask check-active-goal-manifest",
   "rtk cargo xtask check-support-claims",
   "rtk cargo xtask check-provider-confidence-matrix",

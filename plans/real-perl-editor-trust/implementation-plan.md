@@ -857,14 +857,21 @@ Current executable slice
   and nearest shadowing boundaries. It does not change completion provider
   logic, support tiers, parser/corpus buckets, generated/dynamic behavior,
   release-lineage sync, or source-repo development routing.
-- `source-lineage-drift-review` is active in the reliability lane. The #95
+- `source-lineage-drift-review` is completed in the reliability lane. The #95
   ancestry repair is merged, #9554 was ported through swarm #112, and the
-  active-goal manifest validator exists, but current `source/master` now has
-  post-#95 development commits that are not in `origin/main`. The review must
-  classify that drift and the remaining publishing-repo PRs without force-push,
-  source-over-swarm sync, source-repo development merges, provider behavior
-  changes, support-tier promotion, parser/corpus bucket movement,
-  release/publish/signing changes, or release-lineage sync.
+  active-goal manifest validator exists. Current `source/master` still has four
+  post-#95 development commits that are not in `origin/main`: #9567 runtime
+  tuning, #9568 read cancellation, #9569 syntax-only diagnostics, and #9570
+  startup indexing gate. These map to existing swarm PRs #279, #280, #286, and
+  #287, so they must be reviewed/restacked in swarm rather than synced from
+  source. Source PR #9571 was closed as superseded by swarm #288. Source PR
+  #9572 remains draft and needs manual review before any port.
+- `neovim-latency-swarm-restack-review` is active in the reliability lane. It
+  owns the swarm-native review/restack path for #279, #280, #286, #287, and
+  #288. It must preserve one semantic PR at a time and must not source-over-swarm
+  sync, merge development work in `perl-lsp`, broaden provider trust behavior,
+  promote support tiers, move parser/corpus buckets, change release/publish/
+  signing, or claim release-lineage sync.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
@@ -927,6 +934,11 @@ Claim boundary
   reset, source-over-swarm sync, merge development work in `perl-lsp`, broaden
   provider behavior, promote support tiers, move parser/corpus buckets, change
   release/publish/signing, or claim release-lineage sync.
+- Neovim latency swarm restack review may inspect and restack the existing swarm
+  PR train #279, #280, #286, #287, and #288. It must not import the already
+  merged source commits by source-over-swarm sync, batch unrelated PRs, treat
+  latency receipts as provider trust promotion, change release/publish/signing,
+  or continue source-repo development.
 - Receiver local accessor-chain fallback work may extend the receipt-only
   method/accessor fallback UX test and status links for current lexical-local
   accessor-chain method-return receiver behavior. It must not change completion
@@ -978,6 +990,11 @@ rtk git fetch source master:refs/remotes/source/master
 rtk git rev-list --left-right --count origin/main...source/master
 rtk git log --oneline source/master --not origin/main
 rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url
+rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 279 --json number,title,state,headRefName,mergeStateStatus,url
+rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 280 --json number,title,state,headRefName,mergeStateStatus,url
+rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 286 --json number,title,state,headRefName,mergeStateStatus,url
+rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 287 --json number,title,state,headRefName,mergeStateStatus,url
+rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 288 --json number,title,state,headRefName,mergeStateStatus,url
 rtk cargo xtask check-active-goal-manifest
 rtk cargo xtask check-support-claims
 rtk cargo xtask check-provider-confidence-matrix
@@ -986,6 +1003,6 @@ rtk git diff --check
 
 Rollback
 
-Revert the source-lineage drift review PR. If drift classification shows a
-content gap, keep `perl-lsp` release-only and open separate swarm PRs for each
-semantic import or queue disposition instead of syncing source over swarm.
+Revert the Neovim latency swarm restack routing PR. If a specific latency PR is
+unsafe or stale, close or replace that one swarm PR after preserving its branch
+history instead of importing source commits or syncing source over swarm.
