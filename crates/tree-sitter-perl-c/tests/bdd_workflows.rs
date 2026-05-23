@@ -353,3 +353,44 @@ fn bdd_scanner_configuration_is_stable() {
     scenario.then("the backend should report the C scanner");
     assert_eq!(get_scanner_config(), "c-scanner");
 }
+
+#[test]
+fn bdd_parse_perl_file_missing_path_reports_context() {
+    let scenario = Scenario::new("parse perl file missing path reports context");
+    let missing = unique_temp_file("missing_ctx");
+
+    scenario.given("a file path that does not exist on disk");
+    scenario.when("parse_perl_file is invoked");
+    let error = parse_perl_file(&missing).unwrap_err();
+    let message = error.to_string();
+
+    scenario.then("the error message should contain the file path");
+    let path_str = missing.to_string_lossy().to_string();
+    assert!(
+        message.contains(&path_str),
+        "expected error to contain path {path_str:?}, got: {message}"
+    );
+}
+
+#[test]
+fn bdd_parse_perl_file_unreadable_path_reports_context() {
+    let scenario = Scenario::new("parse perl file unreadable path reports context");
+
+    scenario.given("a directory path (fs::read on a directory fails with EISDIR)");
+    let dir_path: PathBuf = std::env::temp_dir();
+
+    scenario.when("parse_perl_file is invoked with the directory path");
+    let error = parse_perl_file(&dir_path).unwrap_err();
+    let message = error.to_string();
+
+    scenario.then("the error message should contain both the path and a failure description");
+    let path_str = dir_path.to_string_lossy().to_string();
+    assert!(
+        message.contains(&path_str),
+        "expected error to contain path {path_str:?}, got: {message}"
+    );
+    assert!(
+        message.contains("failed to parse Perl file"),
+        "expected 'failed to parse Perl file' in message, got: {message}"
+    );
+}
