@@ -2,7 +2,8 @@
 //!
 //! This receipt records project-shaped receiver forms that currently remain
 //! fallback-only for completion. Medium-confidence accessor-return and
-//! method-return facts must not authorize exact receiver-scoped completion.
+//! method-return facts, including local accessor-chain returns, must not
+//! authorize exact receiver-scoped completion.
 
 use anyhow::{Context, Result};
 use perl_lsp_ux_tests::{
@@ -15,10 +16,15 @@ use std::time::Duration;
 
 const SCENARIO_FILE: &str = "ux_scenario_47_receiver_method_accessor_fallback.rs";
 const DB_PATH: &str = "lib/RealReceiver/DB.pm";
+const CONTAINER_PATH: &str = "lib/RealReceiver/Container.pm";
 const ACCESSOR_SERVICE_PATH: &str = "lib/RealReceiver/AccessorService.pm";
 const METHOD_SERVICE_PATH: &str = "lib/RealReceiver/MethodService.pm";
+const LOCAL_CHAIN_SERVICE_PATH: &str = "lib/RealReceiver/LocalAccessorChainService.pm";
+const ASSIGNED_CHAIN_SERVICE_PATH: &str = "lib/RealReceiver/AssignedAccessorChainService.pm";
 const ACCESSOR_PROBE_PATH: &str = "script/accessor-return-receiver.pl";
 const METHOD_PROBE_PATH: &str = "script/method-return-receiver.pl";
+const LOCAL_CHAIN_PROBE_PATH: &str = "script/local-accessor-chain-receiver.pl";
+const ASSIGNED_CHAIN_PROBE_PATH: &str = "script/assigned-accessor-chain-receiver.pl";
 
 const DB_PM: &str = r#"package RealReceiver::DB;
 use strict;
@@ -56,6 +62,22 @@ sub new {
 1;
 "#;
 
+const CONTAINER_PM: &str = r#"package RealReceiver::Container;
+use strict;
+use warnings;
+use Moo;
+use RealReceiver::DB;
+
+has db => (is => 'ro', isa => 'RealReceiver::DB');
+
+sub new {
+    my ($class) = @_;
+    return bless { db => RealReceiver::DB->new }, $class;
+}
+
+1;
+"#;
+
 const METHOD_SERVICE_PM: &str = r#"package RealReceiver::MethodService;
 use strict;
 use warnings;
@@ -68,6 +90,43 @@ sub new {
 
 sub db {
     return RealReceiver::DB->new;
+}
+
+1;
+"#;
+
+const LOCAL_CHAIN_SERVICE_PM: &str = r#"package RealReceiver::LocalAccessorChainService;
+use strict;
+use warnings;
+use RealReceiver::Container;
+
+sub new {
+    my ($class) = @_;
+    return bless {}, $class;
+}
+
+sub db {
+    my $db = RealReceiver::Container->new->db;
+    return $db;
+}
+
+1;
+"#;
+
+const ASSIGNED_CHAIN_SERVICE_PM: &str = r#"package RealReceiver::AssignedAccessorChainService;
+use strict;
+use warnings;
+use RealReceiver::Container;
+
+sub new {
+    my ($class) = @_;
+    return bless {}, $class;
+}
+
+sub db {
+    my $db;
+    $db = RealReceiver::Container->new->db;
+    return $db;
 }
 
 1;
@@ -90,6 +149,26 @@ use RealReceiver::DB;
 use RealReceiver::MethodService;
 
 my $service = RealReceiver::MethodService->new;
+$service->db->
+"#;
+
+const LOCAL_CHAIN_PROBE: &str = r#"use strict;
+use warnings;
+use lib 'lib';
+use RealReceiver::DB;
+use RealReceiver::LocalAccessorChainService;
+
+my $service = RealReceiver::LocalAccessorChainService->new;
+$service->db->
+"#;
+
+const ASSIGNED_CHAIN_PROBE: &str = r#"use strict;
+use warnings;
+use lib 'lib';
+use RealReceiver::DB;
+use RealReceiver::AssignedAccessorChainService;
+
+my $service = RealReceiver::AssignedAccessorChainService->new;
 $service->db->
 "#;
 
@@ -124,10 +203,15 @@ fn create_harness() -> Result<UxHarness> {
         ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
             .env("PERL_LSP_WORKSPACE", "1")
             .with_file(DB_PATH, DB_PM)
+            .with_file(CONTAINER_PATH, CONTAINER_PM)
             .with_file(ACCESSOR_SERVICE_PATH, ACCESSOR_SERVICE_PM)
             .with_file(METHOD_SERVICE_PATH, METHOD_SERVICE_PM)
+            .with_file(LOCAL_CHAIN_SERVICE_PATH, LOCAL_CHAIN_SERVICE_PM)
+            .with_file(ASSIGNED_CHAIN_SERVICE_PATH, ASSIGNED_CHAIN_SERVICE_PM)
             .with_file(ACCESSOR_PROBE_PATH, ACCESSOR_PROBE)
-            .with_file(METHOD_PROBE_PATH, METHOD_PROBE),
+            .with_file(METHOD_PROBE_PATH, METHOD_PROBE)
+            .with_file(LOCAL_CHAIN_PROBE_PATH, LOCAL_CHAIN_PROBE)
+            .with_file(ASSIGNED_CHAIN_PROBE_PATH, ASSIGNED_CHAIN_PROBE),
     )
 }
 
@@ -291,6 +375,36 @@ fn receiver_probes() -> Vec<ReceiverFallbackProbe> {
                 "receiver: type engine",
             ],
         },
+        ReceiverFallbackProbe {
+            name: "local_accessor_chain_method_return_receiver",
+            file: LOCAL_CHAIN_PROBE_PATH,
+            source: LOCAL_CHAIN_PROBE,
+            receiver_marker: "$service->db->",
+            expected_label: "connect",
+            expected_detail: "receiver: unknown, low confidence",
+            forbidden_details: &[
+                "receiver: source-backed object",
+                "receiver: hash slot",
+                "receiver: source-backed hashref slot",
+                "receiver: literal bless",
+                "receiver: type engine",
+            ],
+        },
+        ReceiverFallbackProbe {
+            name: "assigned_accessor_chain_method_return_receiver",
+            file: ASSIGNED_CHAIN_PROBE_PATH,
+            source: ASSIGNED_CHAIN_PROBE,
+            receiver_marker: "$service->db->",
+            expected_label: "connect",
+            expected_detail: "receiver: unknown, low confidence",
+            forbidden_details: &[
+                "receiver: source-backed object",
+                "receiver: hash slot",
+                "receiver: source-backed hashref slot",
+                "receiver: literal bless",
+                "receiver: type engine",
+            ],
+        },
     ]
 }
 
@@ -310,17 +424,27 @@ fn scenario_47_receiver_method_accessor_fallback_receipt() {
             let harness = create_harness()?;
             for path in [
                 DB_PATH,
+                CONTAINER_PATH,
                 ACCESSOR_SERVICE_PATH,
                 METHOD_SERVICE_PATH,
+                LOCAL_CHAIN_SERVICE_PATH,
+                ASSIGNED_CHAIN_SERVICE_PATH,
                 ACCESSOR_PROBE_PATH,
                 METHOD_PROBE_PATH,
+                LOCAL_CHAIN_PROBE_PATH,
+                ASSIGNED_CHAIN_PROBE_PATH,
             ] {
                 let source = match path {
                     DB_PATH => DB_PM,
+                    CONTAINER_PATH => CONTAINER_PM,
                     ACCESSOR_SERVICE_PATH => ACCESSOR_SERVICE_PM,
                     METHOD_SERVICE_PATH => METHOD_SERVICE_PM,
+                    LOCAL_CHAIN_SERVICE_PATH => LOCAL_CHAIN_SERVICE_PM,
+                    ASSIGNED_CHAIN_SERVICE_PATH => ASSIGNED_CHAIN_SERVICE_PM,
                     ACCESSOR_PROBE_PATH => ACCESSOR_PROBE,
                     METHOD_PROBE_PATH => METHOD_PROBE,
+                    LOCAL_CHAIN_PROBE_PATH => LOCAL_CHAIN_PROBE,
+                    ASSIGNED_CHAIN_PROBE_PATH => ASSIGNED_CHAIN_PROBE,
                     _ => unreachable!("all paths are covered"),
                 };
                 harness.open_file(path, source)?;
@@ -344,8 +468,8 @@ fn scenario_47_receiver_method_accessor_fallback_receipt() {
             let receipt = json!({
                 "schema_version": 1,
                 "receipt": "receiver_method_accessor_fallback",
-                "workspace_fixture": "RealReceiver accessor/method receiver CPAN-style workspace",
-                "claim_boundary": "receipt-only receiver fallback proof; no completion behavior change, support-tier promotion, or medium-confidence receiver promotion",
+                "workspace_fixture": "RealReceiver accessor/method/local-accessor-chain receiver CPAN-style workspace",
+                "claim_boundary": "receipt-only receiver fallback proof; no completion behavior change, support-tier promotion, local accessor-chain receiver promotion, or medium-confidence receiver promotion",
                 "probe_count": reports.len(),
                 "exact_source_backed_count": exact_source_backed_count,
                 "fallback_count": fallback_count,
@@ -362,7 +486,12 @@ fn scenario_47_receiver_method_accessor_fallback_receipt() {
                 "accessor and method receiver probes stayed fallback-only",
                 fallback_count == probes.len() && exact_source_backed_count == 0,
             )?;
-            for fallback_probe in ["accessor_return_receiver", "method_return_receiver"] {
+            for fallback_probe in [
+                "accessor_return_receiver",
+                "method_return_receiver",
+                "local_accessor_chain_method_return_receiver",
+                "assigned_accessor_chain_method_return_receiver",
+            ] {
                 let report = report_by_name(&reports, fallback_probe)?;
                 recorder.check(
                     &format!("{fallback_probe} preserved low-confidence fallback detail"),

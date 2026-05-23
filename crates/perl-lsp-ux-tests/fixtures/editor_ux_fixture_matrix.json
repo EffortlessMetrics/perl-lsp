@@ -1344,15 +1344,15 @@
         "first_useful_result": true,
         "protocol_goldens": false
       },
-      "user_journey": "request receiver-aware method completion through accessor-return and method-return receiver chains and record fallback boundaries",
+      "user_journey": "request receiver-aware method completion through accessor-return, method-return, and local accessor-chain receiver chains and record fallback boundaries",
       "measures": [
         "workflow_pass_rate",
         "workflow_stability_rate"
       ],
       "expected_outcomes": [
-        "accessor-return and method-return receiver probes complete without JSON-RPC errors",
+        "accessor-return, method-return, and local accessor-chain receiver probes complete without JSON-RPC errors",
         "medium-confidence receiver facts preserve low-confidence fallback completion",
-        "accessor-return and method-return receivers do not become exact source-backed receiver evidence"
+        "accessor-return, method-return, and local accessor-chain receivers do not become exact source-backed receiver evidence"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",

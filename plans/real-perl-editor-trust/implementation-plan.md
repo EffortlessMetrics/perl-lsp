@@ -820,12 +820,17 @@ Current executable slice
   accessor-chain fallback. This is semantic substrate only and does not change
   completion provider output, support tiers, parser/corpus status, or release
   lineage.
-- `receiver-local-accessor-chain-fact-fixture` is active in the trust lane. It
+- `receiver-local-accessor-chain-fact-fixture` is completed in the trust lane. It
   extends method-return expression facts for lexical locals initialized or
   assigned from a static constructor followed by a source-backed framework
   accessor, while preserving dynamic local accessor-chain fallback. This is
   semantic substrate only and does not change completion provider output,
   support tiers, parser/corpus status, or release lineage.
+- `receiver-local-accessor-chain-fallback-receipt` is active in the trust lane.
+  It extends the receipt-only completion fallback fixture so lexical-local
+  accessor-chain method-return receiver shapes preserve low-confidence fallback
+  and do not become exact source-backed completion evidence without a later
+  promotion receipt.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
@@ -860,6 +865,12 @@ Claim boundary
   change completion provider logic, support tiers, parser/corpus buckets,
   generated/dynamic behavior, release-lineage sync, or source-repo development
   routing.
+- Receiver local accessor-chain fallback work may extend the receipt-only
+  method/accessor fallback UX test and status links for current lexical-local
+  accessor-chain method-return receiver behavior. It must not change completion
+  provider logic, support tiers, parser/corpus buckets, local accessor-chain
+  receiver promotion, medium-confidence promotion, generated/dynamic behavior,
+  release-lineage sync, or source-repo development routing.
 - Receiver bless confidence work may add a receipt-only UX test and status links
   for current literal/dynamic `bless` receiver behavior. It must not change
   completion provider logic, support tiers, parser/corpus buckets,
@@ -892,10 +903,8 @@ Proof commands
 
 ```bash
 rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft
-rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts method_return_local_accessor_chain_variable_records_object_shape --profile agent --locked -- --nocapture
-rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts method_return_assigned_accessor_chain_variable_records_assignment --profile agent --locked -- --nocapture
-rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts dynamic_local_accessor_chain_variable_stays_non_exact --profile agent --locked -- --nocapture
-rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts --profile agent --locked -- --nocapture
+rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_47_receiver_method_accessor_fallback --profile agent --locked -- --nocapture --test-threads=1
+rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture
 rtk cargo xtask check-active-goal-manifest
 rtk cargo xtask check-support-claims
 rtk cargo xtask check-provider-confidence-matrix
@@ -906,7 +915,7 @@ rtk git diff --check
 
 Rollback
 
-Revert the receiver local accessor-chain fact fixture PR. If the fixture
-exposes an unintended provider-output change, keep provider behavior unchanged,
-mark this work item planned, and open a separate fix with a narrower claim
-boundary.
+Revert the receiver local accessor-chain fallback receipt PR. If the receipt
+exposes an unintended provider-output promotion, keep provider behavior
+unchanged, mark this work item planned, and open a separate fix with a narrower
+claim boundary.
