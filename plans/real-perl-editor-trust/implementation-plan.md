@@ -859,19 +859,26 @@ Current executable slice
   release-lineage sync, or source-repo development routing.
 - `source-lineage-drift-review` is completed in the reliability lane. The #95
   ancestry repair is merged, #9554 was ported through swarm #112, and the
-  active-goal manifest validator exists. Current `source/master` still has four
-  post-#95 development commits that are not in `origin/main`: #9567 runtime
-  tuning, #9568 read cancellation, #9569 syntax-only diagnostics, and #9570
-  startup indexing gate. These map to existing swarm PRs #279, #280, #286, and
-  #287, so they must be reviewed/restacked in swarm rather than synced from
-  source. Source PR #9571 was closed as superseded by swarm #288. Source PR
-  #9572 remains draft and needs manual review before any port.
-- `neovim-latency-swarm-restack-review` is active in the reliability lane. It
-  owns the swarm-native review/restack path for #279, #280, #286, #287, and
-  #288. It must preserve one semantic PR at a time and must not source-over-swarm
-  sync, merge development work in `perl-lsp`, broaden provider trust behavior,
-  promote support tiers, move parser/corpus buckets, change release/publish/
-  signing, or claim release-lineage sync.
+  active-goal manifest validator exists. The post-#95 Neovim latency commits
+  from `source/master` were reviewed through the swarm-native train and
+  `source/master` ancestry is now recorded through `27e837c` by
+  [perl-lsp-swarm#340](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/340)
+  without file changes.
+- `neovim-latency-swarm-restack-review` is completed in the reliability lane.
+  The swarm-native review/restack path for #279, #280, #286, #287, and #288 is
+  landed, CI-green, and recorded without source-over-swarm content sync,
+  provider trust promotion, support-tier promotion, parser/corpus bucket
+  movement, release/publish/signing change, or release-lineage claim.
+- `source-pr-9572-manual-review` is completed in the reliability lane. The
+  release-lineage draft was ported and tightened as
+  [perl-lsp-swarm#339](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/339),
+  then the source PR was closed as superseded so new development remains in
+  swarm.
+- `parser-provider-queue-routing-review` is active in the reliability lane. It
+  keeps the queue/pointer loop live: inspect current open PRs, follow
+  `parser_accuracy_next.md` only when it names an active measurement gap or
+  failure packet, and otherwise choose the next provider or real-workspace trust
+  lane from current dashboards without stale PR numbers.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 

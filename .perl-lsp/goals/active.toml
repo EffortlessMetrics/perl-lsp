@@ -130,8 +130,7 @@ items = [
 
 [reliability.next]
 items = [
-  "neovim-latency-swarm-restack-review",
-  "source-pr-9572-manual-review",
+  "parser-provider-queue-routing-review",
 ]
 
 [[work_item]]
@@ -964,7 +963,7 @@ commands = [
 
 [[work_item]]
 id = "neovim-latency-swarm-restack-review"
-status = "active"
+status = "completed"
 lane = "reliability"
 claim_boundary = "Swarm-native review/restack routing for the Neovim latency PR train only; no source-over-swarm sync, source-repo development merge, provider trust promotion, support-tier promotion, parser/corpus bucket movement, release/publish/signing change, or release-lineage sync."
 files = [
@@ -983,6 +982,70 @@ commands = [
   "rtk cargo xtask check-active-goal-manifest",
   "rtk cargo xtask check-support-claims",
   "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "source-pr-9572-manual-review"
+status = "completed"
+lane = "reliability"
+claim_boundary = "Source PR #9572 review and swarm port only; no source-repo development merge, provider behavior, support-tier promotion, parser/corpus bucket movement, release/publish/signing change, or release-lineage sync."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+]
+commands = [
+  "rtk gh pr view -R EffortlessMetrics/perl-lsp 9572 --json number,title,state,url",
+  "rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 339 --json number,title,state,mergeCommit,url",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "source-ancestry-27e837c-sync"
+status = "completed"
+lane = "reliability"
+claim_boundary = "Source ancestry recording only; zero file changes, no source-over-swarm content sync, provider behavior, support-tier promotion, parser/corpus bucket movement, release/publish/signing change, or release-lineage claim."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+]
+commands = [
+  "rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 340 --json number,title,state,mergeCommit,url",
+  "rtk git merge-base --is-ancestor source/master origin/main",
+  "rtk git rev-list --left-right --count origin/main...source/master",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "parser-provider-queue-routing-review"
+status = "active"
+lane = "reliability"
+claim_boundary = "Queue and parser/provider pointer review only; choose the next ready lane from live PR state, parser_accuracy_next.md, and provider dashboards without changing runtime behavior, support tiers, parser/corpus buckets, or release-lineage sync."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/project/status/parser_accuracy_next.md",
+  "docs/project/status/provider_confidence_matrix.md",
+]
+commands = [
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,isDraft,headRefName,mergeStateStatus,url",
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url",
+  "rtk git rev-list --left-right --count origin/main...source/master",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
   "rtk git diff --check",
 ]
 
