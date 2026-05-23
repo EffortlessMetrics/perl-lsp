@@ -812,12 +812,18 @@ Current executable slice
   `$self = MyApp::Service->new` evidence plus framework accessor-return facts.
   This keeps the receiver fact substrate current without changing completion
   provider output, support tiers, parser/corpus status, or release lineage.
-- `receiver-method-return-accessor-chain-fact-fixture` is active in the trust
+- `receiver-method-return-accessor-chain-fact-fixture` is completed in the trust
   lane. It extends method-return expression facts for a static constructor
   followed by a source-backed framework accessor, while preserving dynamic
   accessor-chain fallback. This is semantic substrate only and does not change
   completion provider output, support tiers, parser/corpus status, or release
   lineage.
+- `receiver-local-accessor-chain-fact-fixture` is active in the trust lane. It
+  extends method-return expression facts for lexical locals initialized or
+  assigned from a static constructor followed by a source-backed framework
+  accessor, while preserving dynamic local accessor-chain fallback. This is
+  semantic substrate only and does not change completion provider output,
+  support tiers, parser/corpus status, or release lineage.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
@@ -873,13 +879,20 @@ Claim boundary
   accessor method-return evidence. It must not change completion provider
   logic, support tiers, parser/corpus buckets, generated/dynamic behavior,
   release-lineage sync, or source-repo development routing.
+- Receiver local accessor-chain fact work may add facts-only semantic analyzer
+  fixtures and status links for current lexical locals initialized or assigned
+  from static constructor-to-framework accessor chains. It must not change
+  completion provider logic, support tiers, parser/corpus buckets,
+  generated/dynamic behavior, release-lineage sync, or source-repo development
+  routing.
 
 Proof commands
 
 ```bash
 rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft
-rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts method_return_constructor_accessor_chain_records_object_shape --profile agent --locked -- --nocapture
-rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts dynamic_method_return_accessor_chain_stays_non_exact --profile agent --locked -- --nocapture
+rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts method_return_local_accessor_chain_variable_records_object_shape --profile agent --locked -- --nocapture
+rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts method_return_assigned_accessor_chain_variable_records_assignment --profile agent --locked -- --nocapture
+rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts dynamic_local_accessor_chain_variable_stays_non_exact --profile agent --locked -- --nocapture
 rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts --profile agent --locked -- --nocapture
 rtk cargo xtask check-active-goal-manifest
 rtk cargo xtask check-support-claims
@@ -891,7 +904,7 @@ rtk git diff --check
 
 Rollback
 
-Revert the receiver method-return accessor-chain fact fixture PR. If the
-fixture exposes an unintended provider-output change, keep provider behavior
-unchanged, mark this work item planned, and open a separate fix with a narrower
-claim boundary.
+Revert the receiver local accessor-chain fact fixture PR. If the fixture
+exposes an unintended provider-output change, keep provider behavior unchanged,
+mark this work item planned, and open a separate fix with a narrower claim
+boundary.

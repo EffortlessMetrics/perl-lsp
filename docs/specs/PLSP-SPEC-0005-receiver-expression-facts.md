@@ -26,10 +26,12 @@ type compatibility preserved. Direct static-constructor method-return facts are
 fixture-backed as medium-confidence substrate with erased type compatibility
 preserved, and static constructor-to-framework-accessor method-return chains are
 fixture-backed as medium-confidence substrate with erased type compatibility
-preserved. Receiver facts expose explicit fallback state so provider consumers
-can distinguish exact, fallback-preserving, and blocked receiver evidence.
-Broader local-variable chained and conditional method-return facts remain
-bounded by their own future fixtures and provider receipts.
+preserved. Lexical local returns initialized or assigned from those accessor
+chains are fixture-backed as medium-confidence substrate with erased type
+compatibility preserved. Receiver facts expose explicit fallback state so
+provider consumers can distinguish exact, fallback-preserving, and blocked
+receiver evidence. Broader conditional method-return facts remain bounded by
+their own future fixtures and provider receipts.
 
 ## Contract
 
