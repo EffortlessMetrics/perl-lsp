@@ -124,6 +124,33 @@ Each agent worktree must set `CARGO_TARGET_DIR` to a per-branch path under `/tmp
 
 CI enforces `(#NNN)` at the end of PR titles. If a PR title lacks this, the merge will fail at CI. The pre-merge guard (§1) catches this early.
 
+## §7 — Bare `unwrap()`/`expect()` in tests — PROVISIONAL, gap mechanism unknown
+
+PROVISIONAL: the workspace `[lints.clippy]` table (`Cargo.toml:366-380`, added in PR #221)
+already denies `unwrap_used` and `expect_used`. Despite that, reviewer round-trips on
+multiple 0.15.1-lane code PRs cited bare `unwrap()`/`expect()` in tests.
+
+The lesson "rule isn't enforced" is wrong as initially written — workspace lints ARE
+denied. The actual gap is one of:
+
+- (a) The PR-fast CI tier doesn't lint test targets,
+- (b) Builders pushed without running `just pr-fast`,
+- (c) Offending tests carried `#[allow(clippy::unwrap_used)]` escape hatches,
+- (d) Reviewers caught them visually before clippy ran in CI.
+
+Until the mechanism is identified, the reviewer's first-pass checklist should still spot-run
+the test-target clippy check (since at least one of the four pathways above is letting
+violations through):
+
+```bash
+cargo clippy --tests -- -D clippy::unwrap_used -D clippy::expect_used 2>&1 | grep "error\["
+```
+
+Follow-up investigation: re-read 0.15.1-lane PR review threads (#279/#280/#286/#287/#288)
+to identify which of (a)-(d) applies, then file a targeted fix.
+
+Source: 0.15.1 lane retrospective (2026-05-23), 5/5 code PRs hit this pattern.
+
 ---
 
 ## See Also

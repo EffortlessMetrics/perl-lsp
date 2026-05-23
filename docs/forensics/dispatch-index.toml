@@ -25,9 +25,9 @@
 fragments = [
   "docs/forensics/2026-04-25-failure-mode-catalog.md",
   "docs/forensics/2026-04-25-orchestration-anatomy.md",
-  "docs/forensics/2026-04-24-extended-throughput-session-retrospective.md",
+  "docs/forensics/2026-05-23-0.15.1-lane-retro.md",
 ]
-description = "When spawning green-CI verification — covers stale CI rollup artifacts, false-positive label patterns, master bit-rot detection heuristics, and status-check filtering logic."
+description = "When spawning green-CI verification — covers stale CI rollup artifacts, false-positive label patterns, master bit-rot detection heuristics, status-check filtering logic, and concurrency-group cancellation infra noise (actions/checkout@v6 advisory, CI-<N> cancellation messages)."
 
 [dispatch.builder]
 fragments = [
@@ -133,9 +133,17 @@ description = "When labels are out of sync with state — covers stale ci-green 
 fragments = [
   "docs/forensics/2026-04-25-3day-arc-economics-and-learnings.md",
   "docs/forensics/2026-04-25-failure-mode-catalog.md",
-  "docs/forensics/2026-04-26-session-priorities.md",
+  "docs/forensics/2026-05-23-0.15.1-lane-retro.md",
 ]
-description = "When investigating branch contamination — covers the fresh root rebuild pattern (cherry-pick vs rebase), REST-API authoritative diff-size checks, and merge-commit detection."
+description = "When investigating branch contamination — covers the fresh root rebuild pattern (cherry-pick vs rebase), REST-API authoritative diff-size checks, and merge-commit detection. 0.15.1-lane-retro adds the close+reopen recovery pattern for stacked PRs."
+
+[event.cross-lane-interference]
+fragments = [
+  "docs/forensics/2026-05-23-0.15.1-lane-retro.md",
+  "docs/forensics/2026-04-25-failure-mode-catalog.md",
+  "docs/forensics/2026-04-25-process-meta-learnings.md",
+]
+description = "When an agent acts on another lane's PRs — covers lane non-overlap rule, cross-lane closure pattern (Codex/lane-3 closing lane-6 PRs), pre-session lane doctrine checklist, and recovery (reopen + LANE_BOUNDARIES.md update)."
 
 [event.substrate-shift]
 fragments = [
@@ -248,6 +256,7 @@ adequate = [
   "dispatch.ensemble-curator",
   "event.fmt-cascade",
   "event.label-drift",
+  "event.cross-lane-interference",
   "policy.no-thumb-on-scale",
   "dispatch.tooling-debt-scout",
   "dispatch.memory-recalibrator",
