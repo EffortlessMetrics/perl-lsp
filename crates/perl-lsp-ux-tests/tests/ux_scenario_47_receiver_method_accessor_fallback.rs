@@ -4,7 +4,8 @@
 //! fallback-only for completion. Medium-confidence accessor-return and
 //! method-return facts, including local accessor-chain returns, must not
 //! authorize exact receiver-scoped completion. Dynamic local accessor-chain
-//! returns must also preserve fallback instead of becoming exact evidence.
+//! returns and conditional local reassignments must also preserve fallback
+//! instead of becoming exact evidence.
 
 use anyhow::{Context, Result};
 use perl_lsp_ux_tests::{
@@ -23,11 +24,13 @@ const METHOD_SERVICE_PATH: &str = "lib/RealReceiver/MethodService.pm";
 const LOCAL_CHAIN_SERVICE_PATH: &str = "lib/RealReceiver/LocalAccessorChainService.pm";
 const ASSIGNED_CHAIN_SERVICE_PATH: &str = "lib/RealReceiver/AssignedAccessorChainService.pm";
 const DYNAMIC_CHAIN_SERVICE_PATH: &str = "lib/RealReceiver/DynamicAccessorChainService.pm";
+const CONDITIONAL_CHAIN_SERVICE_PATH: &str = "lib/RealReceiver/ConditionalAccessorChainService.pm";
 const ACCESSOR_PROBE_PATH: &str = "script/accessor-return-receiver.pl";
 const METHOD_PROBE_PATH: &str = "script/method-return-receiver.pl";
 const LOCAL_CHAIN_PROBE_PATH: &str = "script/local-accessor-chain-receiver.pl";
 const ASSIGNED_CHAIN_PROBE_PATH: &str = "script/assigned-accessor-chain-receiver.pl";
 const DYNAMIC_CHAIN_PROBE_PATH: &str = "script/dynamic-accessor-chain-receiver.pl";
+const CONDITIONAL_CHAIN_PROBE_PATH: &str = "script/conditional-accessor-chain-receiver.pl";
 
 const DB_PM: &str = r#"package RealReceiver::DB;
 use strict;
@@ -153,6 +156,29 @@ sub db {
 1;
 "#;
 
+const CONDITIONAL_CHAIN_SERVICE_PM: &str = r#"package RealReceiver::ConditionalAccessorChainService;
+use strict;
+use warnings;
+use RealReceiver::Container;
+use RealReceiver::DB;
+
+sub new {
+    my ($class) = @_;
+    return bless {}, $class;
+}
+
+sub db {
+    my ($self, $flag) = @_;
+    my $db = RealReceiver::Container->new->db;
+    if ($flag) {
+        $db = RealReceiver::DB->new;
+    }
+    return $db;
+}
+
+1;
+"#;
+
 const ACCESSOR_PROBE: &str = r#"use strict;
 use warnings;
 use lib 'lib';
@@ -203,6 +229,16 @@ my $service = RealReceiver::DynamicAccessorChainService->new;
 $service->db->
 "#;
 
+const CONDITIONAL_CHAIN_PROBE: &str = r#"use strict;
+use warnings;
+use lib 'lib';
+use RealReceiver::DB;
+use RealReceiver::ConditionalAccessorChainService;
+
+my $service = RealReceiver::ConditionalAccessorChainService->new;
+$service->db->
+"#;
+
 #[derive(Debug)]
 struct ReceiverFallbackProbe {
     name: &'static str,
@@ -240,11 +276,13 @@ fn create_harness() -> Result<UxHarness> {
             .with_file(LOCAL_CHAIN_SERVICE_PATH, LOCAL_CHAIN_SERVICE_PM)
             .with_file(ASSIGNED_CHAIN_SERVICE_PATH, ASSIGNED_CHAIN_SERVICE_PM)
             .with_file(DYNAMIC_CHAIN_SERVICE_PATH, DYNAMIC_CHAIN_SERVICE_PM)
+            .with_file(CONDITIONAL_CHAIN_SERVICE_PATH, CONDITIONAL_CHAIN_SERVICE_PM)
             .with_file(ACCESSOR_PROBE_PATH, ACCESSOR_PROBE)
             .with_file(METHOD_PROBE_PATH, METHOD_PROBE)
             .with_file(LOCAL_CHAIN_PROBE_PATH, LOCAL_CHAIN_PROBE)
             .with_file(ASSIGNED_CHAIN_PROBE_PATH, ASSIGNED_CHAIN_PROBE)
-            .with_file(DYNAMIC_CHAIN_PROBE_PATH, DYNAMIC_CHAIN_PROBE),
+            .with_file(DYNAMIC_CHAIN_PROBE_PATH, DYNAMIC_CHAIN_PROBE)
+            .with_file(CONDITIONAL_CHAIN_PROBE_PATH, CONDITIONAL_CHAIN_PROBE),
     )
 }
 
@@ -453,6 +491,21 @@ fn receiver_probes() -> Vec<ReceiverFallbackProbe> {
                 "receiver: type engine",
             ],
         },
+        ReceiverFallbackProbe {
+            name: "conditional_local_reassignment_method_return_receiver",
+            file: CONDITIONAL_CHAIN_PROBE_PATH,
+            source: CONDITIONAL_CHAIN_PROBE,
+            receiver_marker: "$service->db->",
+            expected_label: "connect",
+            expected_detail: "receiver: unknown, low confidence",
+            forbidden_details: &[
+                "receiver: source-backed object",
+                "receiver: hash slot",
+                "receiver: source-backed hashref slot",
+                "receiver: literal bless",
+                "receiver: type engine",
+            ],
+        },
     ]
 }
 
@@ -478,11 +531,13 @@ fn scenario_47_receiver_method_accessor_fallback_receipt() {
                 LOCAL_CHAIN_SERVICE_PATH,
                 ASSIGNED_CHAIN_SERVICE_PATH,
                 DYNAMIC_CHAIN_SERVICE_PATH,
+                CONDITIONAL_CHAIN_SERVICE_PATH,
                 ACCESSOR_PROBE_PATH,
                 METHOD_PROBE_PATH,
                 LOCAL_CHAIN_PROBE_PATH,
                 ASSIGNED_CHAIN_PROBE_PATH,
                 DYNAMIC_CHAIN_PROBE_PATH,
+                CONDITIONAL_CHAIN_PROBE_PATH,
             ] {
                 let source = match path {
                     DB_PATH => DB_PM,
@@ -492,11 +547,13 @@ fn scenario_47_receiver_method_accessor_fallback_receipt() {
                     LOCAL_CHAIN_SERVICE_PATH => LOCAL_CHAIN_SERVICE_PM,
                     ASSIGNED_CHAIN_SERVICE_PATH => ASSIGNED_CHAIN_SERVICE_PM,
                     DYNAMIC_CHAIN_SERVICE_PATH => DYNAMIC_CHAIN_SERVICE_PM,
+                    CONDITIONAL_CHAIN_SERVICE_PATH => CONDITIONAL_CHAIN_SERVICE_PM,
                     ACCESSOR_PROBE_PATH => ACCESSOR_PROBE,
                     METHOD_PROBE_PATH => METHOD_PROBE,
                     LOCAL_CHAIN_PROBE_PATH => LOCAL_CHAIN_PROBE,
                     ASSIGNED_CHAIN_PROBE_PATH => ASSIGNED_CHAIN_PROBE,
                     DYNAMIC_CHAIN_PROBE_PATH => DYNAMIC_CHAIN_PROBE,
+                    CONDITIONAL_CHAIN_PROBE_PATH => CONDITIONAL_CHAIN_PROBE,
                     _ => unreachable!("all paths are covered"),
                 };
                 harness.open_file(path, source)?;
@@ -520,8 +577,8 @@ fn scenario_47_receiver_method_accessor_fallback_receipt() {
             let receipt = json!({
                 "schema_version": 1,
                 "receipt": "receiver_method_accessor_fallback",
-                "workspace_fixture": "RealReceiver accessor/method/local-accessor-chain/dynamic-accessor-chain receiver CPAN-style workspace",
-                "claim_boundary": "receipt-only receiver fallback proof; no completion behavior change, support-tier promotion, local accessor-chain receiver promotion, dynamic local accessor-chain receiver promotion, or medium-confidence receiver promotion",
+                "workspace_fixture": "RealReceiver accessor/method/local-accessor-chain/dynamic-accessor-chain/conditional-local-reassignment receiver CPAN-style workspace",
+                "claim_boundary": "receipt-only receiver fallback proof; no completion behavior change, support-tier promotion, local accessor-chain receiver promotion, dynamic local accessor-chain receiver promotion, conditional local reassignment receiver promotion, or medium-confidence receiver promotion",
                 "probe_count": reports.len(),
                 "exact_source_backed_count": exact_source_backed_count,
                 "fallback_count": fallback_count,
@@ -544,6 +601,7 @@ fn scenario_47_receiver_method_accessor_fallback_receipt() {
                 "local_accessor_chain_method_return_receiver",
                 "assigned_accessor_chain_method_return_receiver",
                 "dynamic_accessor_chain_method_return_receiver",
+                "conditional_local_reassignment_method_return_receiver",
             ] {
                 let report = report_by_name(&reports, fallback_probe)?;
                 recorder.check(
