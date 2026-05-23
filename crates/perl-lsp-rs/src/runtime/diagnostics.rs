@@ -438,6 +438,17 @@ impl LspServer {
             return;
         }
 
+        // Syntax-only mode: report parse errors only and skip the full
+        // semantic / critic / module-resolution / dead-code stack. Latency
+        // harnesses use this so "first useful answer" measurements don't
+        // include the background analysis cost on every keystroke.
+        if self.runtime_tuning.diagnostic_mode
+            == perl_lsp_rs_core::runtime::tuning::DiagnosticMode::SyntaxOnly
+        {
+            self.publish_syntax_only_diagnostics(uri);
+            return;
+        }
+
         let normalized_uri = self.normalize_uri_key(uri);
 
         // Snapshot all fields needed from DocumentState while holding the lock briefly,
@@ -679,6 +690,118 @@ impl LspServer {
         }
     }
 
+    /// Build LSP diagnostics from a document's `parse_errors`, without the
+    /// AST-based semantic / critic / dead-code / module-resolution passes.
+    ///
+    /// Returns an empty `Vec` when the document has no parse errors —
+    /// publishing this still produces an empty `publishDiagnostics` payload,
+    /// which is how LSP signals "the parse cleared". This is what makes the
+    /// `syntax_only_clears_when_parse_errors_clear` acceptance case work.
+    fn syntax_only_lsp_diagnostics(
+        parse_errors: &[perl_parser::error::ParseError],
+        text: &str,
+        line_starts: &perl_parser::position::LineStartsCache,
+        rope: &ropey::Rope,
+    ) -> Vec<Value> {
+        let pos16 = |offset: usize| line_starts.offset_to_position_rope(rope, offset);
+        parse_errors
+            .iter()
+            .map(|e| {
+                let (location, base_message) = match e {
+                    crate::error::ParseError::UnexpectedToken { location, expected, found } => {
+                        (*location, format!("Expected {}, found {}", expected, found))
+                    }
+                    crate::error::ParseError::SyntaxError { location, message } => {
+                        (*location, message.clone())
+                    }
+                    crate::error::ParseError::UnexpectedEof => {
+                        (text.len(), "Unexpected end of input".to_string())
+                    }
+                    crate::error::ParseError::LexerError { message } => (0, message.clone()),
+                    _ => (0, e.to_string()),
+                };
+                let message =
+                    match perl_lsp_rs_core::providers::diagnostics::build_parse_error_hint(
+                        e,
+                        &base_message,
+                    ) {
+                        Some(hint) => format!("{base_message}\nSuggestion: {hint}"),
+                        None => base_message,
+                    };
+                let (line, character) = pos16(location);
+                json!({
+                    "range": {
+                        "start": {"line": line, "character": character},
+                        "end": {"line": line, "character": character + 1},
+                    },
+                    "severity": 1, // Error
+                    "code": DiagnosticCode::ParseError.as_str(),
+                    "source": "perl-parser",
+                    "message": message,
+                })
+            })
+            .collect()
+    }
+
+    /// Push-path publication restricted to parse errors. See
+    /// [`Self::publish_diagnostics`] for the full pipeline.
+    fn publish_syntax_only_diagnostics(&self, uri: &str) {
+        let normalized_uri = self.normalize_uri_key(uri);
+
+        let snapshot = {
+            let documents = self.documents.lock();
+            documents.get(&normalized_uri).or_else(|| documents.get(uri)).map(|doc| {
+                (
+                    doc.parse_errors.clone(),
+                    doc.text.clone(),
+                    doc.version,
+                    doc.line_starts.clone(),
+                    doc.rope.clone(),
+                    Arc::clone(&doc.generation),
+                    doc.generation.load(Ordering::SeqCst),
+                )
+            })
+        };
+
+        let Some((parse_errors, text, version, line_starts, rope, generation, gen_at_snapshot)) =
+            snapshot
+        else {
+            return;
+        };
+
+        let lsp_diagnostics =
+            Self::syntax_only_lsp_diagnostics(&parse_errors, &text, &line_starts, &rope);
+
+        // Generation-aware staleness guard mirrors the full path.
+        if generation.load(Ordering::SeqCst) != gen_at_snapshot {
+            tracing::debug!(
+                uri = %normalized_uri,
+                gen_at_snapshot,
+                current_gen = generation.load(Ordering::SeqCst),
+                "Skipping stale syntax-only diagnostic publish (generation advanced)"
+            );
+            return;
+        }
+
+        tracing::debug!(
+            count = lsp_diagnostics.len(),
+            uri = %normalized_uri,
+            version,
+            "Publishing syntax-only diagnostics"
+        );
+
+        if let Err(e) = self.notify(
+            "textDocument/publishDiagnostics",
+            json!({
+                "uri": uri,
+                "version": version,
+                "diagnostics": lsp_diagnostics
+            }),
+        ) {
+            tracing::error!(uri, error = %e, "Failed to publish syntax-only diagnostics");
+        }
+    }
+
     /// Publish parse-error diagnostics immediately (fast path, ~10ms).
     ///
     /// Called on `didChange` before the full debounced diagnostic cycle so that
@@ -826,6 +949,31 @@ impl LspServer {
                     })));
                 }
             };
+
+            // Syntax-only short-circuit for pull diagnostics. Mirrors the
+            // push-path gate in `publish_diagnostics`.
+            if self.runtime_tuning.diagnostic_mode
+                == perl_lsp_rs_core::runtime::tuning::DiagnosticMode::SyntaxOnly
+            {
+                let doc_snapshot = {
+                    let documents = self.documents.lock();
+                    self.get_document(&documents, uri_str).cloned()
+                };
+                if let Some(doc) = doc_snapshot {
+                    let items = Self::syntax_only_lsp_diagnostics(
+                        &doc.parse_errors,
+                        &doc.text,
+                        &doc.line_starts,
+                        &doc.rope,
+                    );
+                    return Ok(Some(json!({
+                        "kind": "full",
+                        "items": items,
+                    })));
+                }
+                let _ = previous_result_id;
+                return Ok(Some(json!({ "kind": "full", "items": [] })));
+            }
 
             // Snapshot the document
             let doc_snapshot = {
