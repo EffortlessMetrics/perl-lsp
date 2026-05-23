@@ -32,8 +32,15 @@ impl TcpAttachConfig {
 
     /// Validate the configuration
     pub fn validate(&self) -> Result<()> {
-        if self.host.trim().is_empty() {
+        let host = self.host.trim_matches(' ');
+        if host.is_empty() {
             anyhow::bail!("Host cannot be empty");
+        }
+        if host.chars().any(char::is_whitespace) {
+            anyhow::bail!("Host cannot contain whitespace");
+        }
+        if host.chars().any(char::is_control) {
+            anyhow::bail!("Host cannot contain control characters");
         }
         if self.port == 0 {
             anyhow::bail!("Port must be in range 1-65535");
@@ -65,6 +72,15 @@ mod tests {
         assert!(config.validate().is_ok());
 
         let config = TcpAttachConfig::new("".to_string(), 13603);
+        assert!(config.validate().is_err());
+
+        let config = TcpAttachConfig::new(" localhost ".to_string(), 13603);
+        assert!(config.validate().is_ok());
+
+        let config = TcpAttachConfig::new("local host".to_string(), 13603);
+        assert!(config.validate().is_err());
+
+        let config = TcpAttachConfig::new("localhost\n".to_string(), 13603);
         assert!(config.validate().is_err());
 
         let config = TcpAttachConfig::new("localhost".to_string(), 0);
