@@ -267,3 +267,52 @@ fn test_exponent_marker_without_digits_uppercase() -> TestResult {
 
     Ok(())
 }
+
+#[test]
+fn test_exponent_marker_without_digits_end_of_input() -> TestResult {
+    let mut lexer = PerlLexer::new("42e");
+
+    let tok1 = lexer.next_token().ok_or("expected first token")?;
+    assert!(
+        matches!(&tok1.token_type, TokenType::Number(n) if n.as_ref() == "42"),
+        "expected Number(\"42\") but got {:?}",
+        tok1.token_type
+    );
+
+    let tok2 = lexer.next_token().ok_or("expected second token")?;
+    assert!(
+        matches!(&tok2.token_type, TokenType::Identifier(id) if id.as_ref() == "e"),
+        "expected Identifier(\"e\") but got {:?}",
+        tok2.token_type
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_exponent_marker_without_digits_after_sign_only() -> TestResult {
+    let mut lexer = PerlLexer::new("7E-");
+
+    let tok1 = lexer.next_token().ok_or("expected first token")?;
+    assert!(
+        matches!(&tok1.token_type, TokenType::Number(n) if n.as_ref() == "7"),
+        "expected Number(\"7\") but got {:?}",
+        tok1.token_type
+    );
+
+    let tok2 = lexer.next_token().ok_or("expected second token")?;
+    assert!(
+        matches!(&tok2.token_type, TokenType::Identifier(id) if id.as_ref() == "E"),
+        "expected Identifier(\"E\") but got {:?}",
+        tok2.token_type
+    );
+
+    let tok3 = lexer.next_token().ok_or("expected third token")?;
+    assert!(
+        matches!(&tok3.token_type, TokenType::Operator(op) if op.as_ref() == "-"),
+        "expected Operator(\"-\") but got {:?}",
+        tok3.token_type
+    );
+
+    Ok(())
+}
