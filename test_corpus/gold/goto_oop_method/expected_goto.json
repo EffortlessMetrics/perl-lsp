@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "fixture": "goto_oop_method",
+  "assertions": [
+    {
+      "kind": "goto_non_null",
+      "line": 24,
+      "character": 4,
+      "rationale": "goto-definition on $c->increment() call must return a location (char 4 = 'i' in increment)"
+    },
+    {
+      "kind": "goto_line",
+      "line": 24,
+      "character": 4,
+      "expected_line": 11,
+      "rationale": "increment() call at line 24 must goto Counter::increment definition at line 11"
+    },
+    {
+      "kind": "goto_non_null",
+      "line": 25,
+      "character": 10,
+      "rationale": "goto-definition on $c->value() call must return a location (char 10 = 'v' in value)"
+    },
+    {
+      "kind": "goto_line",
+      "line": 25,
+      "character": 10,
+      "expected_line": 16,
+      "rationale": "value() call at line 25 must goto Counter::value definition at line 16"
+    }
+  ]
+}

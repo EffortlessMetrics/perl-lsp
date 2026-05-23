@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "fixture": "completion_lexical_var",
+  "assertions": [
+    {
+      "kind": "completion_non_empty",
+      "line": 6,
+      "character": 17,
+      "rationale": "completion at char 17 within '$username' (prefix '$user') must return in-scope variable candidates"
+    },
+    {
+      "kind": "completion_present",
+      "line": 6,
+      "character": 17,
+      "expected_label": "$username",
+      "rationale": "$username must appear in completion list matching the '$user' prefix"
+    },
+    {
+      "kind": "completion_present",
+      "line": 6,
+      "character": 17,
+      "expected_label": "$user_age",
+      "rationale": "$user_age must appear in completion list matching the '$user' prefix"
+    }
+  ]
+}
