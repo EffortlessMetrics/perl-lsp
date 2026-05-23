@@ -802,11 +802,16 @@ Current executable slice
   receipt-only completion fixture for literal and dynamic `bless` receiver
   chains. Literal `bless` evidence stays labeled as medium confidence, and
   dynamic `bless` receivers do not become exact source-backed receiver evidence.
-- `receiver-array-index-fallback-receipt` is active in the trust lane. It adds a
-  receipt-only completion fixture for static and dynamic array-index receiver
+- `receiver-array-index-fallback-receipt` is completed in the trust lane. It
+  added a receipt-only completion fixture for static and dynamic array-index receiver
   chains. Array-index receiver facts must preserve low-confidence fallback and
   must not become exact source-backed completion evidence without a later
   promotion receipt.
+- `receiver-self-framework-accessor-fact-fixture` is active in the trust lane.
+  It adds a facts-only semantic analyzer fixture proving source-derived
+  `$self = MyApp::Service->new` evidence plus framework accessor-return facts.
+  This keeps the receiver fact substrate current without changing completion
+  provider output, support tiers, parser/corpus status, or release lineage.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
@@ -851,13 +856,19 @@ Claim boundary
   change completion provider logic, support tiers, parser/corpus buckets,
   array-index receiver promotion, dynamic-boundary behavior, release-lineage
   sync, or source-repo development routing.
+- Receiver self/framework accessor fact work may add facts-only semantic
+  analyzer fixtures and status links for current source-derived `$self`
+  constructor assignment plus framework accessor-return evidence. It must not
+  change completion provider logic, support tiers, parser/corpus buckets,
+  generated/dynamic behavior, release-lineage sync, or source-repo development
+  routing.
 
 Proof commands
 
 ```bash
 rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft
-rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_49_receiver_array_index_fallback --profile agent --locked -- --nocapture --test-threads=1
-rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture
+rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts self_constructor_framework_accessor_records_medium_confidence_object_shape --profile agent --locked -- --nocapture
+rtk cargo test -p perl-semantic-analyzer --test receiver_expression_facts --profile agent --locked -- --nocapture
 rtk cargo xtask check-active-goal-manifest
 rtk cargo xtask check-support-claims
 rtk cargo xtask check-provider-confidence-matrix
@@ -868,6 +879,7 @@ rtk git diff --check
 
 Rollback
 
-Revert the receiver array-index fallback receipt PR. If the receipt exposes a
-provider regression, keep the provider behavior unchanged, mark this work item
-planned, and open a separate fix with a narrower claim boundary.
+Revert the receiver self/framework accessor fact fixture PR. If the fixture
+exposes an unintended provider-output change, keep provider behavior unchanged,
+mark this work item planned, and open a separate fix with a narrower claim
+boundary.
