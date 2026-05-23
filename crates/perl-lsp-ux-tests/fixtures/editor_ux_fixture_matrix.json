@@ -1415,6 +1415,33 @@
       ]
     },
     {
+      "id": "receiver_self_this_quality",
+      "scenario_file": "ux_scenario_50_receiver_self_this_quality.rs",
+      "subsystem_owner": "editor_trust",
+      "ci_tier": "pr",
+      "component": "completion",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "request receiver-aware method completion through $self and $this current-package receiver forms and record local-method, inherited-method, and shadowing boundaries",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "$self and $this receiver probes complete without JSON-RPC errors",
+        "current-package local methods remain ordinary local method candidates while inherited workspace methods carry exact self/this receiver detail",
+        "self/this receiver evidence does not leak source-backed object, hash-slot, static-package, bless, type-engine, unknown, or fallback labels into local-method candidates"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "real_workspace_providers",
       "scenario_file": "ux_scenario_20_real_workspace_providers.rs",
       "subsystem_owner": "editor_intelligence",

@@ -846,11 +846,17 @@ Current executable slice
   plain hash-slot receiver pilot is visible in the editor UX harness as exact
   source-backed evidence, while hashref-slot, dynamic-key, and unknown receiver
   shapes remain fallback or blocked.
-- `receiver-static-package-ux-receipt` is active in the trust lane. It extends
+- `receiver-static-package-ux-receipt` is completed in the trust lane. It extends
   the same real-workspace receiver-quality receipt so static package receivers
   such as `RealReceiver::DB->` are visible as exact high-confidence syntax
   evidence while the source-backed fact count remains limited to constructor
   assignment and plain hash-slot probes.
+- `receiver-self-this-ux-receipt` is active in the trust lane. It adds a
+  receipt-only RealReceiver UX fixture for `$self->` and `$this->`
+  current-package receiver completion, including own-method, inherited-method,
+  and nearest shadowing boundaries. It does not change completion provider
+  logic, support tiers, parser/corpus buckets, generated/dynamic behavior,
+  release-lineage sync, or source-repo development routing.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
@@ -902,6 +908,12 @@ Claim boundary
   support tiers, broader receiver promotion, parser/corpus buckets,
   generated/dynamic behavior, release-lineage sync, or source-repo development
   routing.
+- Receiver self/this UX receipt work may add a receipt-only RealReceiver
+  completion fixture and status links for current-package `$self->` and
+  `$this->` receiver behavior. It must not change completion provider logic,
+  support tiers, broader receiver promotion, parser/corpus buckets,
+  generated/dynamic behavior, release-lineage sync, or source-repo development
+  routing.
 - Receiver local accessor-chain fallback work may extend the receipt-only
   method/accessor fallback UX test and status links for current lexical-local
   accessor-chain method-return receiver behavior. It must not change completion
@@ -947,7 +959,7 @@ Proof commands
 
 ```bash
 rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft
-rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_47_receiver_method_accessor_fallback --profile agent --locked -- --nocapture --test-threads=1
+rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_50_receiver_self_this_quality --profile agent --locked -- --nocapture --test-threads=1
 rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture
 rtk cargo xtask check-active-goal-manifest
 rtk cargo xtask check-support-claims
@@ -959,6 +971,6 @@ rtk git diff --check
 
 Rollback
 
-Revert the receiver static package UX receipt PR. If the receipt exposes an
+Revert the receiver self/this UX receipt PR. If the receipt exposes an
 unintended provider-output promotion, keep provider behavior unchanged, mark
 this work item planned, and open a separate fix with a narrower claim boundary.
