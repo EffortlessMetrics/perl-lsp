@@ -874,11 +874,18 @@ Current executable slice
   [perl-lsp-swarm#339](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/339),
   then the source PR was closed as superseded so new development remains in
   swarm.
-- `parser-provider-queue-routing-review` is active in the reliability lane. It
-  keeps the queue/pointer loop live: inspect current open PRs, follow
-  `parser_accuracy_next.md` only when it names an active measurement gap or
-  failure packet, and otherwise choose the next provider or real-workspace trust
-  lane from current dashboards without stale PR numbers.
+- `parser-provider-queue-routing-review` is completed in the reliability lane.
+  The current review found no open swarm PRs, no open source PRs,
+  `source/master` already contained in swarm history, and
+  `parser_accuracy_next.md` reporting no active failure packets or measurement
+  gaps. That leaves parser bucket work deferred until fresh failing evidence
+  appears.
+- `provider-proof-assignment-gate` is active in the reliability lane. It keeps
+  future work assignment-gated instead of speculative: start another scoped
+  semantic-token proof only when a new class can satisfy the promotion rules,
+  start DAP module-path behavior work only when native behavior is intentionally
+  being promoted, and otherwise keep the queue empty without broadening provider
+  behavior or support claims.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
@@ -946,6 +953,15 @@ Claim boundary
   merged source commits by source-over-swarm sync, batch unrelated PRs, treat
   latency receipts as provider trust promotion, change release/publish/signing,
   or continue source-repo development.
+- Parser/provider queue routing review may update only active-goal routing and
+  this plan while recording current queue and generated-status evidence. It must
+  not start parser bucket work from stale context, broaden provider behavior,
+  promote support tiers, move parser/corpus buckets, sync release lineage, or
+  continue source-repo development.
+- Provider proof assignment-gate work may update only active-goal routing and
+  this plan until a specific scoped provider class or DAP behavior promotion is
+  explicitly assigned. It must not create a semantic-token, DAP, parser,
+  support-tier, release-lineage, or source-repo development claim on its own.
 - Receiver local accessor-chain fallback work may extend the receipt-only
   method/accessor fallback UX test and status links for current lexical-local
   accessor-chain method-return receiver behavior. It must not change completion

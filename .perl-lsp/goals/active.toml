@@ -130,7 +130,7 @@ items = [
 
 [reliability.next]
 items = [
-  "parser-provider-queue-routing-review",
+  "provider-proof-assignment-gate",
 ]
 
 [[work_item]]
@@ -1028,7 +1028,7 @@ commands = [
 
 [[work_item]]
 id = "parser-provider-queue-routing-review"
-status = "active"
+status = "completed"
 lane = "reliability"
 claim_boundary = "Queue and parser/provider pointer review only; choose the next ready lane from live PR state, parser_accuracy_next.md, and provider dashboards without changing runtime behavior, support tiers, parser/corpus buckets, or release-lineage sync."
 files = [
@@ -1036,6 +1036,30 @@ files = [
   "plans/real-perl-editor-trust/implementation-plan.md",
   "docs/project/status/parser_accuracy_next.md",
   "docs/project/status/provider_confidence_matrix.md",
+]
+commands = [
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,isDraft,headRefName,mergeStateStatus,url",
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url",
+  "rtk git rev-list --left-right --count origin/main...source/master",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "provider-proof-assignment-gate"
+status = "active"
+lane = "reliability"
+claim_boundary = "Assignment-gated provider proof routing only; do not start semantic-token, DAP module-path, parser bucket, support-tier, provider behavior, release-lineage, or source-repo development work without a current ready class, active PR, or explicit assignment."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/parser_accuracy_next.md",
 ]
 commands = [
   "rtk gh pr list -R EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,isDraft,headRefName,mergeStateStatus,url",
