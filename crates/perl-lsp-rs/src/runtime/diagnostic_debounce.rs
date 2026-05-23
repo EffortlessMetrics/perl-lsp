@@ -1,15 +1,16 @@
 //! Diagnostic publication debouncer
 //!
 //! Coalesces rapid `didChange` diagnostic updates into a single publication
-//! after a configurable quiet period (default 250ms).
+//! after a quiet period. The interval is supplied at construction by the
+//! Scheduler, which reads it from the active [`RuntimeTuning`].
+//!
+//! [`RuntimeTuning`]: perl_lsp_rs_core::runtime::tuning::RuntimeTuning
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
-
-const DEFAULT_DEBOUNCE_MS: u64 = 250;
 
 enum DebounceMsg {
     Schedule(String),
@@ -23,13 +24,6 @@ pub(crate) struct DiagnosticDebouncer {
 }
 
 impl DiagnosticDebouncer {
-    pub(crate) fn new<F>(publish_fn: F) -> Self
-    where
-        F: Fn(&str) + Send + 'static,
-    {
-        Self::with_interval(Duration::from_millis(DEFAULT_DEBOUNCE_MS), publish_fn)
-    }
-
     pub(crate) fn with_interval<F>(interval: Duration, publish_fn: F) -> Self
     where
         F: Fn(&str) + Send + 'static,

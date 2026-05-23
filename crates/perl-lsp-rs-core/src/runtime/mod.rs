@@ -29,6 +29,7 @@ pub mod input_validation;
 pub mod launcher;
 pub mod limits;
 pub mod text_utils;
+pub mod tuning;
 
 // Re-exports for ergonomic access
 pub use cancellation::*;
@@ -36,3 +37,4 @@ pub use input_validation::*;
 pub use launcher::*;
 pub use limits::*;
 pub use text_utils::*;
+pub use tuning::{DiagnosticMode, RuntimeMode, RuntimeTuning};

@@ -63,6 +63,7 @@ use crate::call_hierarchy_provider::CallHierarchyProvider;
 use crate::cancellation::{GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken};
 // Wave G3 (#4535): perl-lsp-feature-governance absorbed into perl-lsp-rs-core::governance
 use perl_lsp_rs_core::governance::FeatureProfile;
+use perl_lsp_rs_core::runtime::tuning::RuntimeTuning;
 
 // Import LSP providers from features (these moved from perl-parser to perl-lsp)
 use crate::features::{
@@ -202,6 +203,11 @@ pub struct LspServer {
     stream_session_manager: stream_session::StreamSessionManager,
     /// Runtime feature profile selected by launch arguments or compiled default.
     feature_profile: FeatureProfile,
+    /// Runtime workload tuning (e2e mode, diagnostic scope, debounce, indexing gates).
+    ///
+    /// Resolved at construction by layering env vars and CLI args on top of the
+    /// compiled defaults. The server treats this as read-only after construction.
+    pub(crate) runtime_tuning: RuntimeTuning,
     /// Cache of extracted POD documentation keyed by resolved file path.
     pod_cache: Arc<Mutex<HashMap<PathBuf, perl_pod::PodDoc>>>,
     /// Cache of SemanticAnalyzer results keyed by (normalized_uri, content_hash).
@@ -400,6 +406,11 @@ impl LspServer {
     /// Active feature profile for this server instance.
     pub(crate) const fn feature_profile(&self) -> FeatureProfile {
         self.feature_profile
+    }
+
+    /// Active runtime tuning for this server instance.
+    pub const fn runtime_tuning(&self) -> RuntimeTuning {
+        self.runtime_tuning
     }
 
     /// Get the registered AI inline-completion backend, if any.
@@ -1008,7 +1019,16 @@ impl LspServer {
     /// is deferred until a quiet period elapses. If no debouncer is installed
     /// (unit tests that construct LspServer directly), falls through to immediate
     /// publication.
+    ///
+    /// When [`RuntimeTuning::diagnostic_debounce_is_immediate`] is true (e.g. e2e
+    /// mode), the debouncer is bypassed and diagnostics publish synchronously —
+    /// the worker thread's millisecond-granularity wakeup would otherwise mask
+    /// the latency we are trying to measure.
     pub(crate) fn publish_diagnostics_debounced(&self, uri: &str) {
+        if self.runtime_tuning.diagnostic_debounce_is_immediate() {
+            self.publish_diagnostics(uri);
+            return;
+        }
         let guard = self.diagnostic_debouncer.lock();
         if let Some(ref d) = *guard {
             d.schedule(uri);
