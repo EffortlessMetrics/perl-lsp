@@ -6,6 +6,9 @@ use super::{
     context::CompletionContext,
     items::{CompletionItem, CompletionItemKind},
 };
+use perl_semantic_analyzer::symbol::{
+    Symbol as LocalSymbol, SymbolKind as LocalSymbolKind, SymbolTable,
+};
 use perl_workspace::workspace_index::{
     SymbolKind as WsSymbolKind, WorkspaceIndex, WorkspaceSymbol,
 };
@@ -205,10 +208,70 @@ fn add_known_core_module_completions(
     }
 }
 
+fn local_symbol_kind(symbol: &LocalSymbol) -> Option<CompletionItemKind> {
+    match symbol.kind {
+        LocalSymbolKind::Subroutine | LocalSymbolKind::Method => Some(CompletionItemKind::Function),
+        LocalSymbolKind::Variable(_) => Some(CompletionItemKind::Variable),
+        LocalSymbolKind::Constant => Some(CompletionItemKind::Constant),
+        _ => None,
+    }
+}
+
+fn add_local_package_completions(
+    completions: &mut Vec<CompletionItem>,
+    context: &CompletionContext,
+    symbol_table: &SymbolTable,
+    package_name: &str,
+    member_prefix: &str,
+) -> usize {
+    let mut seen_labels: HashSet<String> =
+        completions.iter().map(|item| item.label.clone()).collect();
+    let qualified_prefix = format!("{package_name}::");
+    let mut added = 0;
+
+    for symbols in symbol_table.symbols.values() {
+        for symbol in symbols {
+            let Some(item_kind) = local_symbol_kind(symbol) else {
+                continue;
+            };
+            let Some(member_name) = symbol.qualified_name.strip_prefix(&qualified_prefix) else {
+                continue;
+            };
+            if member_name.contains("::")
+                || !member_name.starts_with(member_prefix)
+                || !seen_labels.insert(symbol.name.clone())
+            {
+                continue;
+            }
+
+            completions.push(CompletionItem {
+                label: symbol.name.clone(),
+                kind: item_kind,
+                detail: Some(package_name.to_string()),
+                documentation: Some(format!(
+                    "Source-backed package member `{}` from current document.",
+                    symbol.qualified_name
+                )),
+                insert_text: Some(symbol.qualified_name.clone()),
+                sort_text: Some(format!("0_{}", symbol.name)),
+                filter_text: Some(symbol.name.clone()),
+                additional_edits: vec![],
+                text_edit_range: Some((context.prefix_start, context.position)),
+                commit_characters: None,
+                label_details: None,
+            });
+            added += 1;
+        }
+    }
+
+    added
+}
+
 /// Add package member completions
 pub fn add_package_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
+    symbol_table: &SymbolTable,
     workspace_index: &Option<Arc<WorkspaceIndex>>,
 ) {
     // Split the prefix into package name and member prefix
@@ -219,6 +282,14 @@ pub fn add_package_completions(
     }
     let member_prefix = parts.pop().unwrap_or("");
     let package_name = parts.join("::");
+
+    let local_member_count = add_local_package_completions(
+        completions,
+        context,
+        symbol_table,
+        &package_name,
+        member_prefix,
+    );
 
     // Query workspace index for members of the package (if available)
     let mut workspace_member_count = 0;
@@ -258,7 +329,7 @@ pub fn add_package_completions(
     }
 
     // Only add core module completions if workspace didn't provide any
-    if workspace_member_count == 0 {
+    if local_member_count == 0 && workspace_member_count == 0 {
         add_known_core_module_completions(completions, context, &package_name, member_prefix);
     }
 }

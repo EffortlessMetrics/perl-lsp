@@ -318,6 +318,40 @@ sub internal_sub { }
 }
 
 #[test]
+fn test_current_document_package_member_completion() {
+    let code = r#"package MathUtils;
+
+sub square {
+    my ($n) = @_;
+    return $n * $n;
+}
+
+sub cube {
+    my ($n) = @_;
+    return $n * $n * $n;
+}
+
+package main;
+
+my $sq = MathUtils::"#;
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|completion| completion.label == "square"),
+        "same-document package completion should include MathUtils::square; got {:?}",
+        completions.iter().map(|completion| &completion.label).collect::<Vec<_>>()
+    );
+    assert!(
+        completions.iter().any(|completion| completion.label == "cube"),
+        "same-document package completion should include all local MathUtils members"
+    );
+}
+
+#[test]
 fn test_moo_accessor_method_completion() {
     let code = r#"
 package Example::User;
