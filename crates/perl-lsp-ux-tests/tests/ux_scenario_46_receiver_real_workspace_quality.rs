@@ -2,7 +2,9 @@
 //!
 //! This receipt exercises receiver-aware completion over a small multi-file
 //! CPAN-style workspace. It records which receiver facts acted, fell back, or
-//! stayed blocked without changing completion behavior.
+//! stayed blocked without changing completion behavior. The exact plain hash-slot
+//! probe covers the narrow source-backed receiver pilot; the hashref, dynamic,
+//! and unknown probes preserve fallback boundaries.
 
 use anyhow::{Context, Result};
 use perl_lsp_ux_tests::{
@@ -18,6 +20,7 @@ const APP_PATH: &str = "lib/RealReceiver/App.pm";
 const DB_PATH: &str = "lib/RealReceiver/DB.pm";
 const MAILER_PATH: &str = "lib/RealReceiver/Mailer.pm";
 const STATIC_PROBE_PATH: &str = "script/static-receiver.pl";
+const HASH_SLOT_PROBE_PATH: &str = "script/hash-slot-receiver.pl";
 const HASHREF_PROBE_PATH: &str = "script/hashref-receiver.pl";
 const DYNAMIC_PROBE_PATH: &str = "script/dynamic-receiver.pl";
 const UNKNOWN_PROBE_PATH: &str = "script/unknown-receiver.pl";
@@ -92,6 +95,15 @@ my $app = RealReceiver::App->new;
 $app->
 "#;
 
+const HASH_SLOT_PROBE: &str = r#"use strict;
+use warnings;
+use lib 'lib';
+use RealReceiver::DB;
+
+my %services = (db => RealReceiver::DB->new);
+$services{db}->
+"#;
+
 const HASHREF_PROBE: &str = r#"use strict;
 use warnings;
 use lib 'lib';
@@ -154,6 +166,7 @@ fn create_harness() -> Result<UxHarness> {
             .with_file(DB_PATH, DB_PM)
             .with_file(MAILER_PATH, MAILER_PM)
             .with_file(STATIC_PROBE_PATH, STATIC_PROBE)
+            .with_file(HASH_SLOT_PROBE_PATH, HASH_SLOT_PROBE)
             .with_file(HASHREF_PROBE_PATH, HASHREF_PROBE)
             .with_file(DYNAMIC_PROBE_PATH, DYNAMIC_PROBE)
             .with_file(UNKNOWN_PROBE_PATH, UNKNOWN_PROBE),
@@ -293,6 +306,20 @@ fn receiver_probes() -> Vec<ReceiverProbe> {
             fallback_allowed: false,
         },
         ReceiverProbe {
+            name: "source_backed_hash_slot_receiver",
+            file: HASH_SLOT_PROBE_PATH,
+            source: HASH_SLOT_PROBE,
+            receiver_marker: "$services{db}->",
+            expected_label: "connect",
+            expected_receiver_detail: Some("receiver: hash slot"),
+            forbidden_receiver_details: &[
+                "receiver: unknown, low confidence",
+                "receiver: source-backed hashref slot",
+                "receiver: literal bless",
+            ],
+            fallback_allowed: false,
+        },
+        ReceiverProbe {
             name: "hashref_slot_receiver",
             file: HASHREF_PROBE_PATH,
             source: HASHREF_PROBE,
@@ -351,6 +378,7 @@ fn scenario_46_receiver_real_workspace_quality_receipt() {
                 DB_PATH,
                 MAILER_PATH,
                 STATIC_PROBE_PATH,
+                HASH_SLOT_PROBE_PATH,
                 HASHREF_PROBE_PATH,
                 DYNAMIC_PROBE_PATH,
                 UNKNOWN_PROBE_PATH,
@@ -360,6 +388,7 @@ fn scenario_46_receiver_real_workspace_quality_receipt() {
                     DB_PATH => DB_PM,
                     MAILER_PATH => MAILER_PM,
                     STATIC_PROBE_PATH => STATIC_PROBE,
+                    HASH_SLOT_PROBE_PATH => HASH_SLOT_PROBE,
                     HASHREF_PROBE_PATH => HASHREF_PROBE,
                     DYNAMIC_PROBE_PATH => DYNAMIC_PROBE,
                     UNKNOWN_PROBE_PATH => UNKNOWN_PROBE,
@@ -395,8 +424,8 @@ fn scenario_46_receiver_real_workspace_quality_receipt() {
             let receipt = json!({
                 "schema_version": 1,
                 "receipt": "receiver_real_workspace_quality",
-                "workspace_fixture": "RealReceiver multi-file CPAN-style workspace",
-                "claim_boundary": "receipt-only receiver quality proof; no completion behavior change, support-tier promotion, or generated/dynamic promotion",
+                "workspace_fixture": "RealReceiver multi-file CPAN-style workspace with source-backed hash-slot and fallback receiver probes",
+                "claim_boundary": "receipt-only receiver quality proof; no completion behavior change, support-tier promotion, broader hashref promotion, or generated/dynamic promotion",
                 "probe_count": reports.len(),
                 "exact_source_backed_count": exact_source_backed_count,
                 "fallback_or_blocked_count": fallback_or_blocked_count,
@@ -418,6 +447,18 @@ fn scenario_46_receiver_real_workspace_quality_receipt() {
                     && !constructor_report.fallback_used
                     && constructor_report.blocked_reason.is_none(),
             )?;
+            let hash_slot_report = report_by_name(&reports, "source_backed_hash_slot_receiver")?;
+            recorder.check(
+                "source-backed hash-slot receiver acted with exact hash-slot detail",
+                hash_slot_report.expected_label_present
+                    && hash_slot_report.source_backed
+                    && !hash_slot_report.fallback_used
+                    && hash_slot_report.blocked_reason.is_none()
+                    && hash_slot_report
+                        .expected_label_detail
+                        .as_deref()
+                        .is_some_and(|detail| detail.contains("receiver: hash slot")),
+            )?;
             for fallback_probe in
                 ["hashref_slot_receiver", "dynamic_hash_key_receiver", "unknown_receiver"]
             {
@@ -431,6 +472,10 @@ fn scenario_46_receiver_real_workspace_quality_receipt() {
             recorder.check(
                 "hashref, dynamic, and unknown receivers preserved fallback or blocker state",
                 fallback_or_blocked_count >= 3,
+            )?;
+            recorder.check(
+                "exact receiver probes stayed limited to constructor assignment and hash slot",
+                exact_source_backed_count == 2,
             )?;
 
             harness.assert_no_crash();

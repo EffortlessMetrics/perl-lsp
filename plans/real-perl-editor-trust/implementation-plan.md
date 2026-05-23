@@ -836,11 +836,16 @@ Current executable slice
   lexical local initialized from a dynamic accessor receiver preserves
   low-confidence fallback and does not become exact source-backed completion
   evidence.
-- `receiver-conditional-local-reassignment-fallback-receipt` is active in the
+- `receiver-conditional-local-reassignment-fallback-receipt` is completed in the
   trust lane. It extends the same receipt-only completion fallback fixture so a
   method-return receiver with conditional local reassignment preserves
   low-confidence fallback and does not become exact source-backed completion
   evidence.
+- `receiver-source-backed-hash-slot-ux-receipt` is active in the trust lane. It
+  extends the real-workspace receiver-quality receipt so the already-promoted
+  plain hash-slot receiver pilot is visible in the editor UX harness as exact
+  source-backed evidence, while hashref-slot, dynamic-key, and unknown receiver
+  shapes remain fallback or blocked.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
@@ -880,6 +885,12 @@ Claim boundary
   It must not change completion provider logic, support tiers, parser/corpus
   buckets, generated/dynamic behavior, release-lineage sync, or source-repo
   development routing.
+- Receiver source-backed hash-slot UX receipt work may extend the existing
+  receiver real-workspace quality receipt and status links for the already
+  narrow source-backed plain hash-slot completion pilot. It must not change
+  completion provider logic, support tiers, hashref-slot behavior, broader
+  receiver promotion, parser/corpus buckets, generated/dynamic behavior,
+  release-lineage sync, or source-repo development routing.
 - Receiver local accessor-chain fallback work may extend the receipt-only
   method/accessor fallback UX test and status links for current lexical-local
   accessor-chain method-return receiver behavior. It must not change completion

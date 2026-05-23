@@ -318,11 +318,11 @@ fallback and do not become exact receiver evidence. Completion remains
 low-confidence, stale, and workspace-wide method completion still need separate
 proof.
 The RealReceiver real-workspace receiver-quality receipt now records the next
-project-shaped boundary without promotion: a constructor-assignment receiver
-acts with source-backed detail, while hashref-slot, dynamic-key, and unknown
-receiver probes preserve low-confidence fallback. That receipt measures the
-gap for broader receiver promotion; it does not change completion behavior or
-support-tier wording.
+project-shaped boundary without promotion: constructor-assignment and plain
+hash-slot receivers act with source-backed detail, while hashref-slot,
+dynamic-key, and unknown receiver probes preserve low-confidence fallback. That
+receipt measures the gap for broader receiver promotion; it does not change
+completion behavior or support-tier wording.
 The follow-up RealReceiver method/accessor fallback receipt records
 project-shaped accessor-return, method-return, local accessor-chain method-return,
 dynamic local accessor-chain method-return, and conditional local-reassignment
