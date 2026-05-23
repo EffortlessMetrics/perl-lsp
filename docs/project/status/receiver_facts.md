@@ -71,7 +71,7 @@ no support-tier promotion
 | `dynamic_key_boundary` | `landed` | `receiver_facts` module test `dynamic_hash_key_marks_dynamic_boundary`; `TypeFact::dynamic` test in `type_facts.rs`; `receiver_expression_facts` dynamic plain-hash-key test; completion provider test `dynamic_hash_key_receiver_preserves_imported_fallback` | Proven for receiver extraction, plain hash expression facts, and the first completion-provider boundary receipt. Additional provider boundary receipts remain pending for other receiver forms. |
 | `expression_inference` | `partial` | `crates/perl-semantic-analyzer/tests/receiver_expression_facts.rs`; `TypeInferenceEngine::infer_expr_fact` | Constructor calls, plain hash literals, plain hash slot assignment, hashref literals, hashref slot assignment, static plain/hashref slot reads, static bless fields, framework accessor returns, direct static constructor method returns, lexical local constructor variable method returns, dynamic plain hash keys, dynamic bless classes, dynamic/non-package accessor `isa` values, dynamic method-return constructors, dynamic method-return variable reassignments, and unscoped method-return assignments are facts-only substrate. Broader chained and conditional method-return facts remain pending. |
 | `receiver_fact_api` | `landed` | `crates/perl-semantic-analyzer/src/analysis/receiver_facts.rs`; PR [#9468](https://github.com/EffortlessMetrics/perl-lsp/pull/9468) | API extracts facts from existing AST and supplied environment facts; broader method-call chains remain unknown until explicit rules land. |
-| `completion_cutover` | `narrow-pilot` | Completion provider tests `source_backed_hash_slot_receiver_uses_exact_completion_pilot`, `dynamic_hash_key_receiver_preserves_imported_fallback`, `medium_confidence_accessor_return_receiver_preserves_imported_fallback`, and `medium_confidence_method_return_receiver_preserves_imported_fallback`; PR [#9502](https://github.com/EffortlessMetrics/perl-lsp/pull/9502) | Only fresh high-confidence source-backed receiver facts may authorize exact receiver completion. Unknown, dynamic, generated/no-source, stale, low-confidence, medium-confidence accessor-return, and medium-confidence method-return receiver shapes stay fallback, shadowed, or blocked until separate provider receipts promote one class. |
+| `completion_cutover` | `narrow-pilot` | Completion provider tests `source_backed_hash_slot_receiver_uses_exact_completion_pilot`, `dynamic_hash_key_receiver_preserves_imported_fallback`, `medium_confidence_accessor_return_receiver_preserves_imported_fallback`, and `medium_confidence_method_return_receiver_preserves_imported_fallback`; [RealReceiver real-workspace quality receipt](../../../crates/perl-lsp-ux-tests/tests/ux_scenario_46_receiver_real_workspace_quality.rs); PR [#9502](https://github.com/EffortlessMetrics/perl-lsp/pull/9502) | Only fresh high-confidence source-backed receiver facts may authorize exact receiver completion. The RealReceiver receipt records current project-shaped behavior without promotion: constructor-assignment completion acts source-backed, while hashref-slot, dynamic-key, and unknown receiver probes remain low-confidence fallback. Unknown, dynamic, generated/no-source, stale, low-confidence, medium-confidence accessor-return, and medium-confidence method-return receiver shapes stay fallback, shadowed, or blocked until separate provider receipts promote one class. |
 
 ## Provider Cutover Dashboard
 
@@ -90,8 +90,9 @@ receiver_fact_completion_cutover:
    accessor receiver facts without changing provider output.
 2. Extend method-return expression facts beyond direct and lexical local-variable
    constructor returns without changing provider output.
-3. Add real-workspace and additional receiver-form provider confidence receipts
-   for exact, fallback, and dynamic receiver cases.
+3. Add more real-workspace and additional receiver-form provider confidence
+   receipts for exact, fallback, and dynamic receiver cases beyond the
+   RealReceiver constructor/hashref/dynamic/unknown receipt.
 4. Broaden completion only after facts-only and provider fallback receipts pass
    for the new receiver class.
 

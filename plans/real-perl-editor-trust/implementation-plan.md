@@ -774,16 +774,23 @@ Current executable slice
   fact classes, broaden provider behavior, promote support tiers, move
   parser/corpus buckets, sync release lineage, or continue source-repo
   development.
-- `semantic-token-class-receipts-as-needed` is active in the trust lane. The
-  next semantic-token PR may start only when a new scoped compiler-token class is
-  ready to prove the same promotion, fallback, blocker, didChange freshness, and
-  output-neutral span-invariant rules. Until then, it is a routing marker only,
-  not a broad compiler-backed token cutover.
+- `semantic-token-class-receipts-as-needed` is completed as a routing marker.
+  The next semantic-token PR may start only when a new scoped compiler-token
+  class is ready to prove the same promotion, fallback, blocker, didChange
+  freshness, and output-neutral span-invariant rules. Until then, semantic-token
+  work remains assignment-gated and is not a broad compiler-backed token
+  cutover.
 - `semantic-token-class-declaration-readiness-review` is completed in the trust
   lane. `class_declaration` remains deferred because the runtime receipt does
   not prove exact live-output parity against an existing live `class` token; the
   reviewed class therefore receives no semantic-token class policy row, provider
   promotion row, support-tier movement, or provider behavior change.
+- `receiver-real-workspace-quality-receipt` is active in the trust lane. It adds
+  a receipt-only multi-file completion fixture that records constructor
+  assignment, hashref slot, dynamic-key, and unknown-receiver behavior. The
+  receipt may record acted, fallback, and blocked states, but it must not
+  broaden completion behavior, promote support tiers, or treat generated,
+  dynamic, stale, low-confidence, or unproven receiver facts as exact.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
@@ -809,25 +816,27 @@ Claim boundary
   this plan, and ledger parity notes produced by existing checks. It must not
   change the ledger's promotion decision set, promote a fact class, or alter
   provider/support/parser status.
+- Receiver real-workspace quality work may add a receipt-only UX test and status
+  links for current completion behavior. It must not change completion provider
+  logic, support tiers, parser/corpus buckets, generated/dynamic behavior,
+  release-lineage sync, or source-repo development routing.
 
 Proof commands
 
 ```bash
 rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft
-rtk bash -lc './scripts/cargo-safe xtask check-active-goal-manifest'
-rtk bash -lc './scripts/cargo-safe xtask check-provider-promotion-ledger'
-rtk bash -lc './scripts/cargo-safe xtask check-support-claims'
-rtk bash -lc './scripts/cargo-safe xtask check-provider-confidence-matrix'
-rtk bash -lc './scripts/cargo-safe xtask metrics parser-accuracy --check'
-rtk bash -lc './scripts/cargo-safe xtask metrics ratchet-check parser_accuracy'
-rtk bash -lc './scripts/storage-doctor'
+rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_46_receiver_real_workspace_quality --profile agent --locked -- --nocapture --test-threads=1
+rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture
+rtk cargo xtask check-active-goal-manifest
+rtk cargo xtask check-support-claims
+rtk cargo xtask check-provider-confidence-matrix
+rtk cargo xtask metrics parser-accuracy --check
+rtk cargo xtask metrics ratchet-check parser_accuracy
 rtk git diff --check
 ```
 
 Rollback
 
-Revert this routing PR. If public API hygiene needs more work, mark
-`published-api-hygiene` active again and select no feature lane until
-`just public-api-check` passes. If the provider ledger parity review is not
-ready, mark it planned and select another trust routing item with no
-provider/runtime behavior impact.
+Revert the receiver-quality receipt PR. If the receipt exposes a provider
+regression, keep the provider behavior unchanged, mark this work item planned,
+and open a separate fix with a narrower claim boundary.
