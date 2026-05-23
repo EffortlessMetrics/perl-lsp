@@ -1317,14 +1317,14 @@
         "first_useful_result": true,
         "protocol_goldens": false
       },
-      "user_journey": "request receiver-aware method completion over a multi-file CPAN-style workspace and record exact source-backed hash-slot, fallback, and dynamic receiver boundaries",
+      "user_journey": "request receiver-aware method completion over a multi-file CPAN-style workspace and record static package, exact source-backed hash-slot, fallback, and dynamic receiver boundaries",
       "measures": [
         "workflow_pass_rate",
         "workflow_stability_rate"
       ],
       "expected_outcomes": [
-        "constructor-assignment, source-backed hash-slot, hashref-slot, dynamic-key, and unknown receiver probes complete without JSON-RPC errors",
-        "receipt records source-backed hash-slot, fallback, and blocked receiver states without changing completion behavior",
+        "constructor-assignment, static-package, source-backed hash-slot, hashref-slot, dynamic-key, and unknown receiver probes complete without JSON-RPC errors",
+        "receipt records static package, source-backed hash-slot, fallback, and blocked receiver states without changing completion behavior",
         "dynamic and unknown receivers do not become exact source-backed receiver evidence"
       ],
       "confidence_signals": [

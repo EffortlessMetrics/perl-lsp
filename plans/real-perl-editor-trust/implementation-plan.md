@@ -841,11 +841,16 @@ Current executable slice
   method-return receiver with conditional local reassignment preserves
   low-confidence fallback and does not become exact source-backed completion
   evidence.
-- `receiver-source-backed-hash-slot-ux-receipt` is active in the trust lane. It
+- `receiver-source-backed-hash-slot-ux-receipt` is completed in the trust lane. It
   extends the real-workspace receiver-quality receipt so the already-promoted
   plain hash-slot receiver pilot is visible in the editor UX harness as exact
   source-backed evidence, while hashref-slot, dynamic-key, and unknown receiver
   shapes remain fallback or blocked.
+- `receiver-static-package-ux-receipt` is active in the trust lane. It extends
+  the same real-workspace receiver-quality receipt so static package receivers
+  such as `RealReceiver::DB->` are visible as exact high-confidence syntax
+  evidence while the source-backed fact count remains limited to constructor
+  assignment and plain hash-slot probes.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
@@ -891,6 +896,12 @@ Claim boundary
   completion provider logic, support tiers, hashref-slot behavior, broader
   receiver promotion, parser/corpus buckets, generated/dynamic behavior,
   release-lineage sync, or source-repo development routing.
+- Receiver static package UX receipt work may extend the existing receiver
+  real-workspace quality receipt and status links for current static package
+  receiver completion behavior. It must not change completion provider logic,
+  support tiers, broader receiver promotion, parser/corpus buckets,
+  generated/dynamic behavior, release-lineage sync, or source-repo development
+  routing.
 - Receiver local accessor-chain fallback work may extend the receipt-only
   method/accessor fallback UX test and status links for current lexical-local
   accessor-chain method-return receiver behavior. It must not change completion
@@ -948,7 +959,6 @@ rtk git diff --check
 
 Rollback
 
-Revert the receiver dynamic local accessor-chain fallback receipt PR. If the
-receipt exposes an unintended provider-output promotion, keep provider behavior
-unchanged, mark this work item planned, and open a separate fix with a narrower
-claim boundary.
+Revert the receiver static package UX receipt PR. If the receipt exposes an
+unintended provider-output promotion, keep provider behavior unchanged, mark
+this work item planned, and open a separate fix with a narrower claim boundary.
