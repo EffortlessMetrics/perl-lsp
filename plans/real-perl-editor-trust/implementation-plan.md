@@ -785,12 +785,19 @@ Current executable slice
   not prove exact live-output parity against an existing live `class` token; the
   reviewed class therefore receives no semantic-token class policy row, provider
   promotion row, support-tier movement, or provider behavior change.
-- `receiver-real-workspace-quality-receipt` is active in the trust lane. It adds
-  a receipt-only multi-file completion fixture that records constructor
-  assignment, hashref slot, dynamic-key, and unknown-receiver behavior. The
-  receipt may record acted, fallback, and blocked states, but it must not
-  broaden completion behavior, promote support tiers, or treat generated,
-  dynamic, stale, low-confidence, or unproven receiver facts as exact.
+- `receiver-real-workspace-quality-receipt` is completed in the trust lane. It
+  added a receipt-only multi-file completion fixture that records constructor
+  assignment, hashref slot, dynamic-key, and unknown-receiver behavior.
+  Constructor assignment currently acts with source-backed detail; hashref-slot,
+  dynamic-key, and unknown-receiver probes remain fallback or blocked. The
+  receipt did not broaden completion behavior, promote support tiers, or treat
+  generated, dynamic, stale, low-confidence, or unproven receiver facts as
+  exact.
+- `receiver-method-accessor-fallback-receipt` is active in the trust lane. It
+  adds a receipt-only completion fixture for project-shaped accessor-return and
+  method-return receiver chains. These medium-confidence receiver forms must
+  preserve low-confidence fallback and must not become exact source-backed
+  completion evidence without a later promotion receipt.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
@@ -820,12 +827,17 @@ Claim boundary
   links for current completion behavior. It must not change completion provider
   logic, support tiers, parser/corpus buckets, generated/dynamic behavior,
   release-lineage sync, or source-repo development routing.
+- Receiver method/accessor fallback work may add a receipt-only UX test and
+  status links for current medium-confidence receiver behavior. It must not
+  change completion provider logic, support tiers, parser/corpus buckets,
+  generated/dynamic behavior, release-lineage sync, or source-repo development
+  routing.
 
 Proof commands
 
 ```bash
 rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft
-rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_46_receiver_real_workspace_quality --profile agent --locked -- --nocapture --test-threads=1
+rtk cargo test -p perl-lsp-ux-tests --test ux_scenario_47_receiver_method_accessor_fallback --profile agent --locked -- --nocapture --test-threads=1
 rtk cargo test -p perl-lsp-ux-tests --test editor_ux_fixture_matrix --profile agent --locked -- --nocapture
 rtk cargo xtask check-active-goal-manifest
 rtk cargo xtask check-support-claims
@@ -837,6 +849,6 @@ rtk git diff --check
 
 Rollback
 
-Revert the receiver-quality receipt PR. If the receipt exposes a provider
-regression, keep the provider behavior unchanged, mark this work item planned,
-and open a separate fix with a narrower claim boundary.
+Revert the receiver method/accessor fallback receipt PR. If the receipt exposes
+a provider regression, keep the provider behavior unchanged, mark this work item
+planned, and open a separate fix with a narrower claim boundary.

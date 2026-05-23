@@ -71,7 +71,7 @@ no support-tier promotion
 | `dynamic_key_boundary` | `landed` | `receiver_facts` module test `dynamic_hash_key_marks_dynamic_boundary`; `TypeFact::dynamic` test in `type_facts.rs`; `receiver_expression_facts` dynamic plain-hash-key test; completion provider test `dynamic_hash_key_receiver_preserves_imported_fallback` | Proven for receiver extraction, plain hash expression facts, and the first completion-provider boundary receipt. Additional provider boundary receipts remain pending for other receiver forms. |
 | `expression_inference` | `partial` | `crates/perl-semantic-analyzer/tests/receiver_expression_facts.rs`; `TypeInferenceEngine::infer_expr_fact` | Constructor calls, plain hash literals, plain hash slot assignment, hashref literals, hashref slot assignment, static plain/hashref slot reads, static bless fields, framework accessor returns, direct static constructor method returns, lexical local constructor variable method returns, dynamic plain hash keys, dynamic bless classes, dynamic/non-package accessor `isa` values, dynamic method-return constructors, dynamic method-return variable reassignments, and unscoped method-return assignments are facts-only substrate. Broader chained and conditional method-return facts remain pending. |
 | `receiver_fact_api` | `landed` | `crates/perl-semantic-analyzer/src/analysis/receiver_facts.rs`; PR [#9468](https://github.com/EffortlessMetrics/perl-lsp/pull/9468) | API extracts facts from existing AST and supplied environment facts; broader method-call chains remain unknown until explicit rules land. |
-| `completion_cutover` | `narrow-pilot` | Completion provider tests `source_backed_hash_slot_receiver_uses_exact_completion_pilot`, `dynamic_hash_key_receiver_preserves_imported_fallback`, `medium_confidence_accessor_return_receiver_preserves_imported_fallback`, and `medium_confidence_method_return_receiver_preserves_imported_fallback`; [RealReceiver real-workspace quality receipt](../../../crates/perl-lsp-ux-tests/tests/ux_scenario_46_receiver_real_workspace_quality.rs); PR [#9502](https://github.com/EffortlessMetrics/perl-lsp/pull/9502) | Only fresh high-confidence source-backed receiver facts may authorize exact receiver completion. The RealReceiver receipt records current project-shaped behavior without promotion: constructor-assignment completion acts source-backed, while hashref-slot, dynamic-key, and unknown receiver probes remain low-confidence fallback. Unknown, dynamic, generated/no-source, stale, low-confidence, medium-confidence accessor-return, and medium-confidence method-return receiver shapes stay fallback, shadowed, or blocked until separate provider receipts promote one class. |
+| `completion_cutover` | `narrow-pilot` | Completion provider tests `source_backed_hash_slot_receiver_uses_exact_completion_pilot`, `dynamic_hash_key_receiver_preserves_imported_fallback`, `medium_confidence_accessor_return_receiver_preserves_imported_fallback`, and `medium_confidence_method_return_receiver_preserves_imported_fallback`; [RealReceiver real-workspace quality receipt](../../../crates/perl-lsp-ux-tests/tests/ux_scenario_46_receiver_real_workspace_quality.rs); [RealReceiver method/accessor fallback receipt](../../../crates/perl-lsp-ux-tests/tests/ux_scenario_47_receiver_method_accessor_fallback.rs); PR [#9502](https://github.com/EffortlessMetrics/perl-lsp/pull/9502) | Only fresh high-confidence source-backed receiver facts may authorize exact receiver completion. The RealReceiver quality receipt records current project-shaped behavior without promotion: constructor-assignment completion acts source-backed, while hashref-slot, dynamic-key, and unknown receiver probes remain low-confidence fallback. The method/accessor fallback receipt records accessor-return and method-return receiver chains preserving low-confidence fallback and tier-6 sorting instead of exact source-backed receiver detail. Unknown, dynamic, generated/no-source, stale, low-confidence, medium-confidence accessor-return, and medium-confidence method-return receiver shapes stay fallback, shadowed, or blocked until separate provider receipts promote one class. |
 
 ## Provider Cutover Dashboard
 
@@ -79,7 +79,7 @@ no support-tier promotion
 receiver_fact_completion_cutover:
   facts_substrate: partial
   completion_consumes_fact: narrow source-backed pilot
-  fallback_proven: dynamic hash key preserves fallback
+  fallback_proven: dynamic hash key plus method/accessor receiver chains preserve fallback
   dynamic_boundary_proven: receiver extraction plus completion-provider boundary
   support_claim_allowed: partial-live-with-fallback only
 ```
@@ -92,7 +92,8 @@ receiver_fact_completion_cutover:
    constructor returns without changing provider output.
 3. Add more real-workspace and additional receiver-form provider confidence
    receipts for exact, fallback, and dynamic receiver cases beyond the
-   RealReceiver constructor/hashref/dynamic/unknown receipt.
+   RealReceiver constructor/hashref/dynamic/unknown and method/accessor fallback
+   receipts.
 4. Broaden completion only after facts-only and provider fallback receipts pass
    for the new receiver class.
 

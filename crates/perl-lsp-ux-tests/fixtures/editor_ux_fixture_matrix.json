@@ -1334,6 +1334,33 @@
       ]
     },
     {
+      "id": "receiver_method_accessor_fallback",
+      "scenario_file": "ux_scenario_47_receiver_method_accessor_fallback.rs",
+      "subsystem_owner": "editor_trust",
+      "ci_tier": "pr",
+      "component": "completion",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "request receiver-aware method completion through accessor-return and method-return receiver chains and record fallback boundaries",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "accessor-return and method-return receiver probes complete without JSON-RPC errors",
+        "medium-confidence receiver facts preserve low-confidence fallback completion",
+        "accessor-return and method-return receivers do not become exact source-backed receiver evidence"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "real_workspace_providers",
       "scenario_file": "ux_scenario_20_real_workspace_providers.rs",
       "subsystem_owner": "editor_intelligence",
