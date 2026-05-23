@@ -70,6 +70,7 @@ The v1 receipt surface vocabulary includes:
 ```text
 completion
 goto_definition
+type_definition
 references
 hover
 diagnostics

@@ -27,6 +27,8 @@ pub enum ProviderDecisionProvider {
     Completion,
     /// Goto-definition provider.
     GotoDefinition,
+    /// Type-definition provider.
+    TypeDefinition,
     /// References provider.
     References,
     /// Hover provider.
@@ -528,6 +530,7 @@ fn provider_label(provider: ProviderDecisionProvider) -> &'static str {
     match provider {
         ProviderDecisionProvider::Completion => "Completion",
         ProviderDecisionProvider::GotoDefinition => "Goto definition",
+        ProviderDecisionProvider::TypeDefinition => "Type definition",
         ProviderDecisionProvider::References => "References",
         ProviderDecisionProvider::Hover => "Hover",
         ProviderDecisionProvider::Diagnostics => "Diagnostics",

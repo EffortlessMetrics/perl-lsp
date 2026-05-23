@@ -875,17 +875,28 @@ Current executable slice
   then the source PR was closed as superseded so new development remains in
   swarm.
 - `parser-provider-queue-routing-review` is completed in the reliability lane.
-  The current review found no open swarm PRs, no open source PRs,
-  `source/master` already contained in swarm history, and
-  `parser_accuracy_next.md` reporting no active failure packets or measurement
-  gaps. That leaves parser bucket work deferred until fresh failing evidence
-  appears.
-- `provider-proof-assignment-gate` is active in the reliability lane. It keeps
-  future work assignment-gated instead of speculative: start another scoped
-  semantic-token proof only when a new class can satisfy the promotion rules,
-  start DAP module-path behavior work only when native behavior is intentionally
-  being promoted, and otherwise keep the queue empty without broadening provider
-  behavior or support claims.
+  The queue/pointer pass confirmed the swarm queue is empty, source is not
+  ahead of swarm, `parser_accuracy_next.md` has no active failure packet or
+  measurement gap, and the provider dashboard's next ready row is the
+  type-definition provider-decision receipt.
+- `provider-proof-assignment-gate` is completed in the reliability lane. It kept
+  future work assignment-gated instead of speculative until a current ready
+  provider class, active PR, or explicit assignment existed; the
+  type-definition provider-decision receipt is the scoped proof selected from
+  that gate.
+- `type-definition-provider-decision-receipt` is completed in the trust lane.
+  Type definition is now a provider-decision surface for
+  `perl.explainProviderDecision`, with live request traces for the existing
+  source-backed direct package/class safe subset and for no-result fallback on
+  unproven variable/data-flow receivers. This is receipt/explanation work only:
+  it does not broaden type-definition behavior, promote support tiers, move
+  parser/corpus buckets, sync release lineage, or continue source-repo
+  development.
+- `post-type-definition-receipt-routing-review` is active in the reliability
+  lane. It keeps the queue/pointer loop live: inspect current open PRs, follow
+  `parser_accuracy_next.md` only when it names an active measurement gap or
+  failure packet, and otherwise choose the next provider or real-workspace trust
+  lane from current dashboards without stale PR numbers.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
@@ -943,6 +954,15 @@ Claim boundary
   support tiers, broader receiver promotion, parser/corpus buckets,
   generated/dynamic behavior, release-lineage sync, or source-repo development
   routing.
+- Parser/provider queue routing review may update only active-goal routing and
+  this plan while recording current queue and generated-status evidence. It must
+  not start parser bucket work from stale context, broaden provider behavior,
+  promote support tiers, move parser/corpus buckets, sync release lineage, or
+  continue source-repo development.
+- Provider proof assignment-gate work may update only active-goal routing and
+  this plan until a specific scoped provider class or DAP behavior promotion is
+  explicitly assigned. It must not create a semantic-token, DAP, parser,
+  support-tier, release-lineage, or source-repo development claim on its own.
 - Source-lineage drift review may update only active-goal routing and this plan
   while recording current source/swarm queue evidence. It must not force-push,
   reset, source-over-swarm sync, merge development work in `perl-lsp`, broaden
@@ -1002,6 +1022,12 @@ Claim boundary
   completion provider logic, support tiers, parser/corpus buckets,
   generated/dynamic behavior, release-lineage sync, or source-repo development
   routing.
+- Type-definition provider-decision receipt work may add provider-decision enum,
+  schema, default-explanation, live-trace, and status entries for the existing
+  type-definition safe subset and fallback boundary. It must not change
+  type-definition resolution behavior, support tiers, parser/corpus buckets,
+  generated/dynamic behavior, release-lineage sync, or source-repo development
+  routing.
 
 Proof commands
 
@@ -1013,6 +1039,11 @@ rtk git fetch source master:refs/remotes/source/master
 rtk git rev-list --left-right --count origin/main...source/master
 rtk git log --oneline source/master --not origin/main
 rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url
+rtk cargo test -p perl-lsp-rs-core --profile agent --locked provider_decision -- --nocapture
+rtk cargo test -p perl-lsp-rs --lib live_type_definition_request_exposes --profile agent --locked -- --nocapture
+rtk cargo test -p perl-lsp-rs --test lsp_execute_command_tests test_execute_command_explain_provider_decision_accepts_type_definition --profile agent --locked -- --nocapture
+rtk cargo test -p perl-lsp-rs --test lsp_type_definition_tests --profile agent --locked -- --nocapture
+rtk powershell -NoProfile -Command 'Get-Content schemas/provider_decision.v1.schema.json -Raw | ConvertFrom-Json | Out-Null'
 rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 279 --json number,title,state,headRefName,mergeStateStatus,url
 rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 280 --json number,title,state,headRefName,mergeStateStatus,url
 rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 286 --json number,title,state,headRefName,mergeStateStatus,url

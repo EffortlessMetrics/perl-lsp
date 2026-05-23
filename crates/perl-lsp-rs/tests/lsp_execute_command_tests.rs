@@ -1161,3 +1161,60 @@ fn test_execute_command_explain_provider_decision() -> Result<(), Box<dyn std::e
 
     Ok(())
 }
+
+#[test]
+fn test_execute_command_explain_provider_decision_accepts_type_definition()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = setup_server(None);
+
+    let execute_request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "workspace/executeCommand".to_string(),
+        params: Some(json!({
+            "command": "perl.explainProviderDecision",
+            "arguments": [{
+                "provider": "type_definition",
+                "request_receipt": {
+                    "provider": "type_definition",
+                    "decision": "fallback",
+                    "reason": "missing_fact",
+                    "fact_source": "fallback",
+                    "confidence": "low",
+                    "freshness": "fresh",
+                    "fallback": "no_result",
+                    "dynamic_boundary": false
+                }
+            }]
+        })),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(3)),
+    };
+
+    let response = server
+        .handle_request(execute_request)
+        .ok_or("No response from explain-provider-decision command")?;
+    let result = response.result.ok_or("No result in explain-provider-decision response")?;
+
+    assert_eq!(result.get("provider").and_then(|value| value.as_str()), Some("type_definition"));
+    assert_eq!(result.get("decision").and_then(|value| value.as_str()), Some("acted"));
+    assert_eq!(
+        result.get("reason").and_then(|value| value.as_str()),
+        Some("source_backed_high_confidence")
+    );
+    assert_eq!(result.get("fact_source").and_then(|value| value.as_str()), Some("parser_syntax"));
+    assert_eq!(result.get("confidence").and_then(|value| value.as_str()), Some("high"));
+    assert_eq!(result.get("fallback").and_then(|value| value.as_str()), Some("none"));
+    assert_eq!(
+        result.pointer("/request_receipt/provider").and_then(Value::as_str),
+        Some("type_definition")
+    );
+    assert_eq!(
+        result.pointer("/copyable_payload/provider").and_then(Value::as_str),
+        Some("type_definition")
+    );
+    assert_eq!(
+        result.pointer("/copyable_payload/request_receipt/provider").and_then(Value::as_str),
+        Some("type_definition")
+    );
+
+    Ok(())
+}

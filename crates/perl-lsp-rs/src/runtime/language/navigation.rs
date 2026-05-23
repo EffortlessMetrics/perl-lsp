@@ -1496,14 +1496,24 @@ impl LspServer {
         if let Some(params) = params {
             let uri = req_uri(&params)?;
             let (line, character) = req_position(&params)?;
+            let trace_context = NavigationDecisionTraceContext {
+                provider: "type_definition",
+                provider_action: "textDocument/typeDefinition",
+                uri: uri.to_string(),
+                line,
+                character,
+                include_declaration: None,
+            };
 
             // Acquire minimal data under lock, then drop it
             let ast = {
                 let documents = self.documents_guard();
                 let Some(doc) = self.get_document(&documents, uri) else {
+                    self.record_type_definition_provider_decision_trace(&trace_context, 0);
                     return Ok(Some(json!([])));
                 };
                 let Some(ast) = doc.ast.as_ref() else {
+                    self.record_type_definition_provider_decision_trace(&trace_context, 0);
                     return Ok(Some(json!([])));
                 };
                 ast.clone()
@@ -1517,11 +1527,55 @@ impl LspServer {
             if let Some(locations) =
                 provider.find_type_definition(ast.as_ref(), line, character, uri, &doc_map)
             {
+                self.record_type_definition_provider_decision_trace(
+                    &trace_context,
+                    locations.len(),
+                );
                 return Ok(Some(json!(locations)));
             }
+            self.record_type_definition_provider_decision_trace(&trace_context, 0);
         }
 
         Ok(Some(json!([])))
+    }
+
+    fn record_type_definition_provider_decision_trace(
+        &self,
+        context: &NavigationDecisionTraceContext,
+        result_count: usize,
+    ) {
+        let acted = result_count > 0;
+        let result_count = u64::try_from(result_count).unwrap_or(u64::MAX);
+        let mut receipt = json!({
+            "provider": context.provider,
+            "provider_action": context.provider_action,
+            "decision": if acted { "acted" } else { "fallback" },
+            "reason": if acted { "source_backed_high_confidence" } else { "missing_fact" },
+            "uri": context.uri,
+            "line": context.line,
+            "character": context.character,
+            "result_count": result_count,
+            "live_provider_result_count": result_count,
+            "fact_source": if acted { "parser_syntax" } else { "fallback" },
+            "confidence": if acted { "high" } else { "low" },
+            "freshness": "fresh",
+            "source_backed": acted,
+            "source_backed_state": if acted {
+                "open_document_package_definition"
+            } else {
+                "type_definition_not_proven"
+            },
+            "fallback": if acted { "none" } else { "no_result" },
+            "fallback_state": if acted { "none" } else { "no_result" },
+            "dynamic_boundary": false,
+            "trace_only_no_live_behavior_change": true,
+            "claim_boundary": "records existing type-definition safe subset only; direct package/class identifiers and constructor receivers may resolve to open-document package definitions while variable receivers, chained method results, function-call results, missing package definitions, generated/no-source facts, dynamic boundaries, stale facts, low-confidence facts, and ambiguous identities remain fallback or blocked"
+        });
+        if !acted && let Some(object) = receipt.as_object_mut() {
+            object.insert("blocker".to_string(), json!("missing_fact"));
+        }
+
+        self.record_provider_decision_trace(context.provider, &receipt);
     }
 
     /// Handle textDocument/implementation request

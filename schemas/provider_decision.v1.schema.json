@@ -75,6 +75,7 @@
       "enum": [
         "completion",
         "goto_definition",
+        "type_definition",
         "references",
         "hover",
         "diagnostics",
