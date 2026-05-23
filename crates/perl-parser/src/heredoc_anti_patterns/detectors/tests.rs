@@ -19,6 +19,10 @@ END
     // So diagnostics[0] should be FormatHeredoc.
     assert!(!diagnostics.is_empty());
     assert!(matches!(diagnostics[0].pattern, AntiPattern::FormatHeredoc { .. }));
+
+    if let AntiPattern::FormatHeredoc { heredoc_delimiter, .. } = &diagnostics[0].pattern {
+        assert_eq!(heredoc_delimiter, "END");
+    }
 }
 
 #[test]
