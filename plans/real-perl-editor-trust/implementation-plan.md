@@ -956,9 +956,20 @@ Current executable slice
   type-definition behavior, add data-flow inference, promote generated or
   dynamic facts, promote support tiers, move parser/corpus buckets, sync release
   lineage, or continue source-repo development.
-- `provider-proof-assignment-gate-after-type-definition-stale-fact` is active
-  in the reliability lane. It keeps future work assignment-gated after the stale
-  type-definition blocker receipt.
+- `provider-proof-assignment-gate-after-type-definition-stale-fact` is completed
+  in the reliability lane. It selected a dynamic bless package-argument blocker
+  receipt from the type-definition provider dashboard.
+- `type-definition-dynamic-bless-blocker-receipt` is completed in the trust
+  lane. It adds a receipt-only runtime trace for project-shaped
+  `bless {}, $runtime_type_name` package arguments. The request returns no exact
+  type-definition locations and records a `dynamic_boundary` blocker for
+  `perl.explainProviderDecision`. This does not broaden type-definition
+  behavior, add data-flow inference, promote generated or dynamic facts, promote
+  support tiers, move parser/corpus buckets, sync release lineage, or continue
+  source-repo development.
+- `provider-proof-assignment-gate-after-type-definition-dynamic-bless` is active
+  in the reliability lane. It keeps future work assignment-gated after the
+  dynamic bless package-argument blocker receipt.
 - `receiver-generated-no-source-fallback-receipt` is completed in the trust lane.
   RealReceiver scenario 46 now includes a generated/no-source framework-method
   receiver probe that must stay fallback or blocked and must not expose exact

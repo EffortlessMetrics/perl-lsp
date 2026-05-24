@@ -127,6 +127,7 @@ fn classify_type_definition_fallback_trace(
     if compact_from_cursor.starts_with("->$")
         || (compact_before_cursor.ends_with("->") && compact_from_cursor.starts_with('$'))
         || (compact_before_cursor.ends_with("isa=>") && compact_from_cursor.starts_with('$'))
+        || (compact_before_cursor.ends_with("bless{},") && compact_from_cursor.starts_with('$'))
     {
         return TypeDefinitionFallbackTrace {
             reason: "dynamic_boundary",

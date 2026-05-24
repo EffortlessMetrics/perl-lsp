@@ -91,6 +91,7 @@ fallback_conditions = [
   "function_call_result_requires_return_facts",
   "missing_package_definition",
   "dynamic_type_constraint_requires_runtime_value",
+  "dynamic_bless_package_requires_runtime_value",
   "stale_request_version",
   "ambiguous_package_identity",
   "unsupported_receiver_shape",

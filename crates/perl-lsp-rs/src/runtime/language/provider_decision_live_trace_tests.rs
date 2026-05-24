@@ -118,6 +118,10 @@ has runtime_installed_accessor => (is => 'ro');
 my $runtime_type_name = runtime_value();
 has dynamic_child => (is => 'ro', isa => $runtime_type_name);
 
+sub make_dynamic_bless {
+    return bless {}, $runtime_type_name;
+}
+
 my $method_name = 'run';
 my $dynamic_receiver = runtime_value();
 $dynamic_receiver->$method_name;
@@ -1395,6 +1399,65 @@ fn live_type_definition_request_exposes_dynamic_type_constraint_blocker()
     assert_eq!(receipt.get("blocker").and_then(Value::as_str), Some("missing_fact"));
     assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("fallback"));
     assert_eq!(receipt.get("dynamic_boundary").and_then(Value::as_bool), Some(false));
+    Ok(())
+}
+
+#[test]
+fn live_type_definition_request_exposes_dynamic_bless_blocker()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    initialize(&server)?;
+    open_type_definition_boundary_documents(&server)?;
+
+    let (line, character) =
+        position_on_in(TYPE_DEFINITION_BOUNDARY_MAIN_DOC, "bless {}, $runtime_type_name")?;
+    let character = character + u32::try_from("bless {}, ".len())?;
+
+    let result = response_result(
+        server.handle_request(request(
+            9,
+            "textDocument/typeDefinition",
+            Some(json!({
+                "textDocument": {"uri": TYPE_DEFINITION_BOUNDARY_MAIN_URI, "version": 1},
+                "position": {"line": line, "character": character}
+            })),
+        )),
+        "type definition dynamic bless package fallback",
+    )?;
+    let locations =
+        result.as_array().ok_or("dynamic bless package fallback should return an array")?;
+    assert!(
+        locations.is_empty(),
+        "dynamic bless package argument must not resolve to exact type-definition locations: {result}"
+    );
+
+    let explanation = explain_provider_decision(&server, "type_definition")?;
+    let receipt = request_receipt(&explanation, "type_definition")?;
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("type_definition"));
+    assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("fallback"));
+    assert_eq!(receipt.get("reason").and_then(Value::as_str), Some("dynamic_boundary"));
+    assert_eq!(receipt.get("blocker").and_then(Value::as_str), Some("dynamic_boundary"));
+    assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("dynamic_boundary"));
+    assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("low"));
+    assert_eq!(receipt.get("freshness").and_then(Value::as_str), Some("fresh"));
+    assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        receipt.get("source_backed_state").and_then(Value::as_str),
+        Some("dynamic_type_definition_boundary")
+    );
+    assert_eq!(receipt.get("fallback_state").and_then(Value::as_str), Some("no_result"));
+    assert_eq!(receipt.get("result_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(receipt.get("dynamic_boundary").and_then(Value::as_bool), Some(true));
+
+    let boundary =
+        receipt.get("claim_boundary").and_then(Value::as_str).ok_or("missing boundary")?;
+    assert!(
+        boundary.contains("dynamic boundaries")
+            && boundary.contains("generated/no-source")
+            && boundary.contains("stale facts")
+            && boundary.contains("low-confidence facts"),
+        "dynamic bless package receipt must preserve type-definition blockers: {boundary}"
+    );
     Ok(())
 }
 
