@@ -79,7 +79,7 @@ surface = "Type definition"
 fact_class = "Direct source-backed class receiver"
 current_state = "safe subset"
 decision = "promote"
-next_proof = "Stale-fact and broader project-shaped blocker receipts before broader type-definition expansion"
+next_proof = "Stale-fact and additional broader project-shaped blocker receipts before broader type-definition expansion"
 promotion_conditions = [
   "cursor_target_is_direct_package_or_class_identifier",
   "constructor_method_receiver_is_source_backed_class",
@@ -90,6 +90,7 @@ fallback_conditions = [
   "chained_method_result_requires_return_facts",
   "function_call_result_requires_return_facts",
   "missing_package_definition",
+  "dynamic_type_constraint_requires_runtime_value",
   "ambiguous_package_identity",
   "unsupported_receiver_shape",
 ]
