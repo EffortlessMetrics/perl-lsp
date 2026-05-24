@@ -34,12 +34,6 @@ path = "../crates/perl-regex"
 [dependencies.perl-pod]
 path = "../crates/perl-pod"
 
-[dependencies.perl-uri]
-path = "../crates/perl-uri"
-
-[dependencies.perl-line-index]
-path = "../crates/perl-line-index"
-
 [[bin]]
 name = "substitution_parsing"
 path = "fuzz_targets/substitution_parsing.rs"
@@ -178,20 +172,6 @@ bench = false
 [[bin]]
 name = "pod_extraction"
 path = "fuzz_targets/pod_extraction.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "uri_normalization"
-path = "fuzz_targets/uri_normalization.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "line_index_roundtrip"
-path = "fuzz_targets/line_index_roundtrip.rs"
 test = false
 doc = false
 bench = false
