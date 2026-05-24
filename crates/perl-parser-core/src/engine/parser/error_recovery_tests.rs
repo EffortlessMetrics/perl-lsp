@@ -528,6 +528,82 @@ fn test_recovery_unclosed_qq() {
 }
 
 #[test]
+fn test_recovery_missing_rhs_before_class_declaration_keyword() {
+    // `class` is a Perl 5.38+ declaration starter that can never be a valid
+    // expression RHS.  Without the fix, `is_infix_rhs_absent` did not treat
+    // `class` as a strong follower, so the parser consumed the class declaration
+    // as the assignment RHS, producing a wrong AST shape and losing the Class node.
+    // With the fix, the incomplete assignment recovers and the class declaration
+    // is preserved as a separate top-level statement.
+    let code = "my $x = class Foo { }";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+
+    assert!(result.is_ok(), "Parser should recover from missing RHS before class declaration");
+    let ast = must(result);
+    let sexp = ast.to_sexp();
+
+    if let NodeKind::Program { statements } = &ast.kind {
+        assert_eq!(
+            statements.len(),
+            2,
+            "Should recover into 2 statements (incomplete decl + class); sexp: {sexp}"
+        );
+        assert!(
+            matches!(statements[1].kind, NodeKind::Class { .. }),
+            "Second statement should be a Class node; sexp: {sexp}"
+        );
+    } else {
+        unreachable!("Expected program root");
+    }
+}
+
+#[test]
+fn test_recovery_missing_rhs_before_method_declaration_keyword() {
+    // `method` is a Perl 5.38+ declaration keyword that is never a valid
+    // expression RHS at the top level.  The parser must treat it as a strong
+    // follower so the assignment emits a missing-RHS recovery and the method
+    // declaration is not swallowed as an expression operand.
+    let code = "my $x = method foo { }";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+
+    assert!(result.is_ok(), "Parser should recover from missing RHS before method declaration");
+    let ast = must(result);
+    let sexp = ast.to_sexp();
+
+    if let NodeKind::Program { statements } = &ast.kind {
+        assert!(statements.len() >= 2, "Should recover into at least 2 statements; sexp: {sexp}");
+    } else {
+        unreachable!("Expected program root");
+    }
+}
+
+#[test]
+fn test_recovery_missing_rhs_before_format_declaration_keyword() {
+    // `format` is a declaration starter that should never be consumed as an
+    // expression RHS.  The is_infix_rhs_absent fix ensures recovery fires
+    // before the format body lexer mode is entered in the wrong context.
+    let code = "my $x = format Foo =\n.\n";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+
+    assert!(result.is_ok(), "Parser should recover from missing RHS before format declaration");
+    let ast = must(result);
+    let sexp = ast.to_sexp();
+
+    if let NodeKind::Program { statements } = &ast.kind {
+        assert!(statements.len() >= 2, "Should recover into at least 2 statements; sexp: {sexp}");
+        assert!(
+            statements.iter().any(|s| matches!(s.kind, NodeKind::Format { .. })),
+            "Should contain a Format node; sexp: {sexp}"
+        );
+    } else {
+        unreachable!("Expected program root");
+    }
+}
+
+#[test]
 fn test_recovery_nested_qw_paren_mismatch() {
     let code = "my @list = qw(one (two three) print 1;";
     let mut parser = Parser::new(code);
