@@ -289,9 +289,7 @@ my $y = 2;
         let sections = must(parse_file(&path));
         must(fs::remove_file(&path));
 
-        // Note: The parser currently finds 3 sections due to the way === delimiters work
-        // This is expected behavior with the current parsing logic
-        assert!(sections.len() >= 2);
+        assert_eq!(sections.len(), 2);
 
         // Find the sections by checking their content/ids
         let sample_section = must_some(sections.iter().find(|s| s.body.contains("my $x = 1;")));
