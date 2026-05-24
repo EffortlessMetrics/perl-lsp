@@ -204,7 +204,9 @@ jobs:
     name: CI Gate shard (${{ matrix.name }})
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    needs: [draft-pr-check, pr-smoke, conflict-markers, preflight-latest-check]
+    # No functional dependency on pr-smoke output; run in parallel after preflight
+    # + conflict guard to reduce end-to-end merge-gate wall time.
+    needs: [draft-pr-check, conflict-markers, preflight-latest-check]
     if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     strategy:
       fail-fast: false
@@ -479,7 +481,8 @@ jobs:
     name: UX Regression Tests
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    needs: [draft-pr-check, pr-smoke, preflight-latest-check]
+    # UX suite does not consume pr-smoke artifacts/results; parallelize after preflight.
+    needs: [draft-pr-check, preflight-latest-check]
     if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     # Run on every PR push — this is the regression prevention gate.
     steps:
