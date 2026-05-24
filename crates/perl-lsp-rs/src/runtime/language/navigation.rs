@@ -76,6 +76,7 @@ struct TypeDefinitionFallbackTrace {
     blocker: &'static str,
     source_backed_state: &'static str,
     fact_source: &'static str,
+    freshness: &'static str,
     dynamic_boundary: bool,
 }
 
@@ -86,8 +87,20 @@ impl Default for TypeDefinitionFallbackTrace {
             blocker: "missing_fact",
             source_backed_state: "type_definition_not_proven",
             fact_source: "fallback",
+            freshness: "fresh",
             dynamic_boundary: false,
         }
+    }
+}
+
+fn stale_type_definition_fallback_trace() -> TypeDefinitionFallbackTrace {
+    TypeDefinitionFallbackTrace {
+        reason: "stale_fact",
+        blocker: "stale_fact",
+        source_backed_state: "stale_type_definition_request",
+        fact_source: "request_version",
+        freshness: "stale",
+        dynamic_boundary: false,
     }
 }
 
@@ -120,6 +133,7 @@ fn classify_type_definition_fallback_trace(
             blocker: "dynamic_boundary",
             source_backed_state: "dynamic_type_definition_boundary",
             fact_source: "dynamic_boundary",
+            freshness: "fresh",
             dynamic_boundary: true,
         };
     }
@@ -1561,6 +1575,16 @@ impl LspServer {
                 character,
                 include_declaration: None,
             };
+            let req_version =
+                params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
+            if let Err(error) = self.ensure_latest(uri, req_version) {
+                self.record_type_definition_provider_decision_trace(
+                    &trace_context,
+                    0,
+                    stale_type_definition_fallback_trace(),
+                );
+                return Err(error);
+            }
 
             // Acquire minimal data under lock, then drop it
             let (ast, doc_text) = {
@@ -1637,7 +1661,7 @@ impl LspServer {
             "live_provider_result_count": result_count,
             "fact_source": if acted { "parser_syntax" } else { fallback_trace.fact_source },
             "confidence": if acted { "high" } else { "low" },
-            "freshness": "fresh",
+            "freshness": if acted { "fresh" } else { fallback_trace.freshness },
             "source_backed": acted,
             "source_backed_state": if acted {
                 "open_document_type_definition"

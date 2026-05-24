@@ -946,8 +946,19 @@ Current executable slice
   generated or dynamic facts, promote support tiers, move parser/corpus buckets,
   sync release lineage, or continue source-repo development.
 - `provider-proof-assignment-gate-after-type-definition-dynamic-type-constraint`
-  is active in the reliability lane. It keeps future work assignment-gated after
-  the dynamic type-constraint blocker receipt.
+  is completed in the reliability lane. It selected a stale-fact blocker receipt
+  from the type-definition provider dashboard.
+- `type-definition-stale-fact-blocker-receipt` is completed in the trust lane.
+  It adds a receipt-only runtime trace for stale `textDocument/typeDefinition`
+  request versions. Stale requests return the existing content-modified error,
+  record no exact type-definition locations, and persist a `stale_fact` blocker
+  receipt for `perl.explainProviderDecision`. This does not broaden
+  type-definition behavior, add data-flow inference, promote generated or
+  dynamic facts, promote support tiers, move parser/corpus buckets, sync release
+  lineage, or continue source-repo development.
+- `provider-proof-assignment-gate-after-type-definition-stale-fact` is active
+  in the reliability lane. It keeps future work assignment-gated after the stale
+  type-definition blocker receipt.
 - `receiver-generated-no-source-fallback-receipt` is completed in the trust lane.
   RealReceiver scenario 46 now includes a generated/no-source framework-method
   receiver probe that must stay fallback or blocked and must not expose exact
