@@ -688,6 +688,11 @@ Recent routing
   plus-hash, and nested-value hash forms and recorded a completion shadow trace
   for constants as fresh `CompilerFact` / `SemanticAnalyzer` evidence without
   changing live completion behavior.
+- `provider-proof-assignment-gate-after-constant-provider-proof` is active in
+  the reliability lane. The current parser pointer has no active failure packets
+  or measurement gaps, and the swarm/source PR queues are empty, so the next
+  provider/substrate lane remains assignment-gated until a current ready class,
+  active PR, or explicit assignment names a scoped proof.
 - `semantic-token-support-review` is completed. The class registry, human
   provider-promotion ledger, and machine ledger now agree on the scoped
   lexical-variable declaration/use rows, while semantic tokens remain
@@ -992,8 +997,9 @@ Current executable slice
   or dynamic facts, promote support tiers, move parser/corpus buckets, sync
   release lineage, or continue source-repo development.
 - `provider-proof-assignment-gate-after-type-definition-unscannable-source` is
-  active in the reliability lane. It keeps future work assignment-gated after
-  the unscannable target-source blocker receipt.
+  completed in the reliability lane. It kept future work assignment-gated after
+  the unscannable target-source blocker receipt until later receiver and
+  constant-provider proof work landed.
 - `receiver-generated-no-source-fallback-receipt` is completed in the trust lane.
   RealReceiver scenario 46 now includes a generated/no-source framework-method
   receiver probe that must stay fallback or blocked and must not expose exact
