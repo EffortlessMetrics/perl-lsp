@@ -1829,6 +1829,7 @@ version = "0.15.0"
 dependencies = [
  "criterion",
  "perl-ast",
+ "proptest",
 ]
 
 [[package]]
