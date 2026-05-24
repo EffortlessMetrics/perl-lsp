@@ -210,6 +210,5 @@ This schema will evolve:
 
 ## See Also
 
-- [`DEVLT_ESTIMATION.md`](DEVLT_ESTIMATION.md) - Decision-weighted DevLT method
 - [`FORENSICS_SCHEMA.md`](../reference/FORENSICS_SCHEMA.md) - Full dossier template
 - [`QUALITY_SURFACES.md`](QUALITY_SURFACES.md) - Quality metric definitions

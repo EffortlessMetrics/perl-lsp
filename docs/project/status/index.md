@@ -79,4 +79,4 @@ See [ROADMAP.md](../ROADMAP.md) for milestone details.
 ---
 
 *Last Updated: 2026-05-12 (narrative sections only; run `just status-update` to refresh subsystem metrics)*
-*Canonical docs: [ROADMAP.md](../ROADMAP.md), [../../features.toml](../../features.toml)*
+*Canonical docs: [ROADMAP.md](../ROADMAP.md), [features.toml](../../../features.toml)*

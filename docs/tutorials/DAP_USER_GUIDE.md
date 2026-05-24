@@ -623,7 +623,7 @@ The CLI already uses the native adapter with launch + attach + evaluation suppor
 ## Getting Help
 
 - **Documentation**: See [DAP Implementation Specification](../reference/DAP_IMPLEMENTATION_SPECIFICATION.md) for technical details
-- **Security**: See [DAP Security Specification](DAP_SECURITY_SPECIFICATION.md) for security considerations
+- **Security**: See [DAP Security Specification](../DAP_SECURITY_SPECIFICATION.md) for security considerations
 - **Architecture**: See [Crate Architecture Guide](../reference/CRATE_ARCHITECTURE_GUIDE.md) for DAP crate design
 - **Issues**: Report bugs at [GitHub Issues](https://github.com/EffortlessMetrics/perl-lsp/issues)
 

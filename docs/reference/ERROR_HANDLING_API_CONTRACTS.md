@@ -1,7 +1,7 @@
 # Error Handling API Contracts (*Diataxis: Reference*)
 
 **Issue**: #178 (GitHub #204) - Eliminate Fragile unreachable!() Macros
-**Related Specs**: [issue-178-spec.md](issue-178-spec.md), [PARSER_ERROR_HANDLING_SPEC.md](PARSER_ERROR_HANDLING_SPEC.md), [LEXER_ERROR_HANDLING_SPEC.md](LEXER_ERROR_HANDLING_SPEC.md)
+**Related**: [Error Handling Strategy](../explanation/ERROR_HANDLING_STRATEGY.md)
 **LSP Workflow**: Parse → Index → Navigate → Complete → Analyze
 **Crate Scope**: perl-parser, perl-lexer, tree-sitter-perl-rs
 
@@ -952,16 +952,11 @@ pub enum ParseError {
 
 ## 11. References
 
-**Related Specifications**:
-- [issue-178-spec.md](issue-178-spec.md) - Feature specification
-- [ISSUE_178_TECHNICAL_ANALYSIS.md](ISSUE_178_TECHNICAL_ANALYSIS.md) - Technical analysis
-- [PARSER_ERROR_HANDLING_SPEC.md](PARSER_ERROR_HANDLING_SPEC.md) - Parser error handling
-- [LEXER_ERROR_HANDLING_SPEC.md](LEXER_ERROR_HANDLING_SPEC.md) - Lexer error handling
+**Related Documentation**:
+- [Error Handling Strategy](../explanation/ERROR_HANDLING_STRATEGY.md) - Background and design rationale
 
 **Implementation References**:
-- [crates/perl-parser/src/error.rs](../crates/perl-parser/src/error.rs) - ParseError enum
-- [crates/perl-parser/src/lsp_errors.rs](../crates/perl-parser/src/lsp_errors.rs) - LSP error codes
-- [crates/perl-lexer/src/lib.rs](../crates/perl-lexer/src/lib.rs) - Lexer error tokens
+- [crates/perl-lexer/src/lib.rs](../../crates/perl-lexer/src/lib.rs) - Lexer error tokens
 
 **LSP Documentation**:
 - [LSP_ERROR_HANDLING_MONITORING_GUIDE.md](../how-to/LSP_ERROR_HANDLING_MONITORING_GUIDE.md) - Error monitoring

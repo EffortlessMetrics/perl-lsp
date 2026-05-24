@@ -2,7 +2,7 @@
 
 ## Quick Start for Contributors
 
-This guide helps you contribute to the Perl LSP following our [Development Roadmap](LSP_DEVELOPMENT_ROADMAP.md).
+This guide helps you contribute to the Perl LSP following our [project roadmap](../project/ROADMAP.md).
 
 ## Current Status (February 2024)
 - **Phase**: 1 - Foundation & Quick Wins

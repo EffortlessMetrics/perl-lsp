@@ -440,7 +440,7 @@ Example debug output:
 
 ### Contributing
 
-Contributions are welcome! See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
+Contributions are welcome! See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
 
 Key areas for contribution:
 - Additional language features
@@ -452,5 +452,5 @@ Key areas for contribution:
 
 - [Language Server Protocol Specification](https://microsoft.github.io/language-server-protocol/)
 - [LSP Tutorial](https://microsoft.github.io/language-server-protocol/overviews/lsp/overview/)
-- [Perl Parser Documentation](../crates/perl-parser/README.md)
+- [Perl Parser Documentation](../../crates/perl-parser/README.md)
 - [Project Repository](https://github.com/EffortlessMetrics/perl-lsp)

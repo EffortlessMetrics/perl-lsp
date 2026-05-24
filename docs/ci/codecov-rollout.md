@@ -187,7 +187,7 @@ Add one sentence near the badge or status section:
 
 ```markdown
 Codecov is scoped parser branch-coverage telemetry, not a release-readiness or
-semantic-correctness proof; see [Codecov](docs/ci/codecov.md).
+semantic-correctness proof; see [Codecov rollout](docs/ci/codecov-rollout.md).
 ```
 
 ## PR Cov-5 — Test Analytics table

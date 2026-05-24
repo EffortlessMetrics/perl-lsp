@@ -20,7 +20,7 @@ Created comprehensive merge checklist and validated all quality gates:
 - **Documentation**: ✅ Builds cleanly
 - **Full CI**: ✅ `just ci-local` passes
 
-**See**: [docs/ci/MERGE_CHECKLIST_214.md](MERGE_CHECKLIST_214.md)
+**See**: PR #214 merge notes (historical).
 
 ---
 
@@ -40,7 +40,6 @@ Created systematic protocol for development while Actions is unavailable:
 
 **Documentation**:
 - [Local CI Protocol](LOCAL_CI_PROTOCOL.md) - Complete protocol with examples
-- [CI Status Report](../CI_STATUS_214.md) - Why Actions is unavailable
 
 ---
 
@@ -146,11 +145,8 @@ All future work will use `just ci-gate` before merge.
 
 ## Resources
 
-- [Merge Checklist Template](MERGE_CHECKLIST_214.md)
 - [Local CI Protocol](LOCAL_CI_PROTOCOL.md)
-- [CI Status Report](../CI_STATUS_214.md)
-- [Justfile](/justfile) - CI target definitions
-- [Your Original Plan](../../.ci/tmp/original-plan.md) - Steps 2-6 still apply
+- [Justfile](../../justfile) - CI target definitions
 
 ---
 

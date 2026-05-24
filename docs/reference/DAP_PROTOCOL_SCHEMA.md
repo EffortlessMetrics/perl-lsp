@@ -1048,7 +1048,7 @@ Content-Length: 123\r\n
 - [JSON-RPC 2.0 Specification](https://www.jsonrpc.org/specification)
 - [DAP Implementation Specification](DAP_IMPLEMENTATION_SPECIFICATION.md)
 - [DAP Crate Architecture](CRATE_ARCHITECTURE_DAP.md)
-- [DAP Security Specification](DAP_SECURITY_SPECIFICATION.md)
+- [DAP Security Specification](../DAP_SECURITY_SPECIFICATION.md)
 
 ---
 

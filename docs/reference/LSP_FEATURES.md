@@ -641,7 +641,7 @@ We welcome contributions! Areas for improvement:
 4. **Type Inference**: Smarter type detection
 5. **Framework Support**: Moose, Catalyst, Dancer integration
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
 
 ## License
 

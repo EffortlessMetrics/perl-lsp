@@ -338,6 +338,6 @@ The script includes a fallback parser but full YAML support is recommended.
 
 ## Related Documentation
 
-- [Gate Policy](../.ci/gate-policy.yaml) - CI gate configuration
-- [Receipt Schema](../.ci/receipt.schema.json) - Receipt JSON structure
-- [CLAUDE.md](../CLAUDE.md) - Development workflow
+- [Gate Policy](../../.ci/gate-policy.yaml) - CI gate configuration
+- [Receipt Schema](../../.ci/receipt.schema.json) - Receipt JSON structure
+- [CLAUDE.md](../../CLAUDE.md) - Development workflow

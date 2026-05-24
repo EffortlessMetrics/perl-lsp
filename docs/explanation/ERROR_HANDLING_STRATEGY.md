@@ -1,7 +1,7 @@
 # Error Handling Strategy Guide (*Diataxis: Explanation*)
 
 **Issue**: #178 (GitHub #204) - Eliminate Fragile unreachable!() Macros
-**Related**: [issue-178-spec.md](issue-178-spec.md), [ERROR_HANDLING_API_CONTRACTS.md](../reference/ERROR_HANDLING_API_CONTRACTS.md)
+**Related**: [ERROR_HANDLING_API_CONTRACTS.md](../reference/ERROR_HANDLING_API_CONTRACTS.md)
 **LSP Workflow**: Parse → Index → Navigate → Complete → Analyze
 **Crate Scope**: perl-parser, perl-lexer, tree-sitter-perl-rs
 
@@ -766,21 +766,14 @@ See Section 8.1 for template.
 ## 12. References
 
 **Issue #178 Documentation**:
-- [issue-178-spec.md](issue-178-spec.md) - Feature specification
 - [ERROR_HANDLING_API_CONTRACTS.md](../reference/ERROR_HANDLING_API_CONTRACTS.md) - API contracts
-- [ISSUE_178_TECHNICAL_ANALYSIS.md](ISSUE_178_TECHNICAL_ANALYSIS.md) - Technical analysis
 
 **LSP Integration**:
 - [LSP_ERROR_HANDLING_MONITORING_GUIDE.md](../how-to/LSP_ERROR_HANDLING_MONITORING_GUIDE.md)
 - [LSP_IMPLEMENTATION_GUIDE.md](../reference/LSP_IMPLEMENTATION_GUIDE.md)
 
-**Parser/Lexer Error Handling**:
-- [PARSER_ERROR_HANDLING_SPEC.md](PARSER_ERROR_HANDLING_SPEC.md)
-- [LEXER_ERROR_HANDLING_SPEC.md](LEXER_ERROR_HANDLING_SPEC.md)
-
 **Testing Infrastructure**:
-- [crates/perl-lexer/tests/lexer_error_handling_tests.rs](../crates/perl-lexer/tests/lexer_error_handling_tests.rs)
-- [crates/tree-sitter-perl-rs/tests/unreachable_elimination_ac_tests.rs](../crates/tree-sitter-perl-rs/tests/unreachable_elimination_ac_tests.rs)
+- [crates/perl-lexer/tests/lexer_error_handling_tests.rs](../../crates/perl-lexer/tests/lexer_error_handling_tests.rs)
 
 ---
 

@@ -771,8 +771,8 @@ fn process_refactor_result(result: RefactorResult) {
 
 - [WORKSPACE_REFACTORING_TUTORIAL.md](../tutorials/WORKSPACE_REFACTORING_TUTORIAL.md) - Step-by-step tutorial
 - [LSP_IMPLEMENTATION_GUIDE.md](LSP_IMPLEMENTATION_GUIDE.md) - LSP integration patterns
-- [ARCHITECTURE.md](../ARCHITECTURE.md) - Overall system architecture
-- [Source code](../crates/perl-parser/src/workspace_refactor.rs) - Complete implementation
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Overall system architecture
+- [Source code](../../crates/perl-parser/src/refactor/workspace_refactor.rs) - Complete implementation
 
 ---
 

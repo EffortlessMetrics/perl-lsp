@@ -175,7 +175,6 @@ A PR with excellent quality and high DevLT is preferable to a PR with poor quali
 
 ## See Also
 
-- [`DEVLT_ESTIMATION.md`](../archive/internal/DEVLT_ESTIMATION.md) - Budget estimation
 - [`METRICS_PROVENANCE.md`](METRICS_PROVENANCE.md) - Provenance schema
 - [`FORENSICS_SCHEMA.md`](../reference/FORENSICS_SCHEMA.md) - Full dossier template
 - [`ANALYZER_FRAMEWORK.md`](ANALYZER_FRAMEWORK.md) - Specialist analyzers

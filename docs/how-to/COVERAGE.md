@@ -288,9 +288,9 @@ Do not add `@codecov/vite-plugin` until the extension adopts a supported JavaScr
 
 ## Related Documentation
 
-- [CLAUDE.md](../CLAUDE.md) - Project commands and structure
-- [CONTRIBUTING.md](../CONTRIBUTING.md) - Contribution guidelines
-- [CURRENT_STATUS.md](./CURRENT_STATUS.md) - Project metrics and health
+- [CLAUDE.md](../../CLAUDE.md) - Project commands and structure
+- [CONTRIBUTING.md](../../CONTRIBUTING.md) - Contribution guidelines
+- [CURRENT_STATUS.md](../project/CURRENT_STATUS.md) - Project metrics and health
 
 ## References
 

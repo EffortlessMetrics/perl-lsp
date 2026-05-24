@@ -144,6 +144,6 @@ flowchart TD
 
 ## See Also
 
-- [`INDEX.md`](INDEX.md) - Documentation front door
+- [`INDEX.md`](../INDEX.md) - Documentation front door
 - [`LESSONS.md`](LESSONS.md) - Wrongness log
 - [`FORENSICS_SCHEMA.md`](../reference/FORENSICS_SCHEMA.md) - PR analysis template

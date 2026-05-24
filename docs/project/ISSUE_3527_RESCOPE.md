@@ -1,5 +1,12 @@
 # Issue #3527 Re-Scope: Incremental Token Cache is Coarse-Grained and Uses Heuristic Splice Boundaries
 
+> **Historical analysis.** File paths in this document refer to the
+> `crates/perl-incremental-parsing/src/incremental/` layout that existed at the
+> time of the re-scope; that module tree has since been reorganized. See
+> [`crates/perl-parser/src/incremental/`](../../crates/perl-parser/src/incremental/)
+> and [`crates/perl-incremental-parsing/`](../../crates/perl-incremental-parsing/)
+> for the current code.
+
 **Original Issue Title:** "Incremental parsing token caching not implemented"
 
 **Re-Scope Title:** "Incremental token cache is coarse-grained and uses heuristic splice boundaries"

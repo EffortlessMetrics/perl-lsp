@@ -45,13 +45,13 @@ See [ROADMAP.md](ROADMAP.md) for milestones and exit criteria.
 1. **[Current Status](CURRENT_STATUS.md)** ⭐ **START HERE** - Computed metrics + receipts
 2. **[Roadmap](ROADMAP.md)** - Plans, exit criteria, and deferrals
 3. **[Milestones](MILESTONES.md)** - GitHub milestone mapping
-4. **[Docs Index](INDEX.md)** - Routes to the right doc fast
-5. **[TODO Backlog](TODO.md)** - Actionable tasks + missing features
+4. **[Docs Index](../INDEX.md)** - Routes to the right doc fast
+5. **[TODO Backlog](../TODO.md)** - Actionable tasks + missing features
 6. **[LSP Missing Features](../reference/LSP_MISSING_FEATURES_REPORT.md)** - Non-advertised capabilities (derived from `features.toml`)
 
 ### Development
-5. **[CLAUDE.md](../CLAUDE.md)** - Project guidance for AI assistants
-6. **[CONTRIBUTING.md](../CONTRIBUTING.md)** - How to contribute
+5. **[CLAUDE.md](../../CLAUDE.md)** - Project guidance for AI assistants
+6. **[CONTRIBUTING.md](../../CONTRIBUTING.md)** - How to contribute
 7. **[COMMANDS_REFERENCE.md](../reference/COMMANDS_REFERENCE.md)** - Build/test commands
 
 ## 🚨 What Needs Attention RIGHT NOW
@@ -120,7 +120,7 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs  # With adaptive threading
 - Check the active milestone and the `good first issue` / `help wanted` labels
 - Near-term work: benchmark publication + v0.9.x packaging/readiness (see ROADMAP)
 - Larger efforts: v0.9.x milestone and `phase:*` labels
-- See [CONTRIBUTING.md](../CONTRIBUTING.md) for workflow details
+- See [CONTRIBUTING.md](../../CONTRIBUTING.md) for workflow details
 
 ## 📊 Quality Metrics
 
@@ -155,7 +155,7 @@ Run `just status-check` for live numbers.
 4. Clone repo and run tests
 
 ### Day 2: Deep Dive
-1. Read [CLAUDE.md](../CLAUDE.md)
+1. Read [CLAUDE.md](../../CLAUDE.md)
 2. Read [ARCHITECTURE_OVERVIEW.md](../reference/ARCHITECTURE_OVERVIEW.md)
 3. Read [LSP_IMPLEMENTATION_GUIDE.md](../reference/LSP_IMPLEMENTATION_GUIDE.md)
 4. Explore codebase structure + docs index

@@ -1751,7 +1751,7 @@ cpan-upload Devel-TSPerlDAP-0.1.0.tar.gz
 
 - [DAP Implementation Specification](DAP_IMPLEMENTATION_SPECIFICATION.md): Primary technical specification
 - [DAP Protocol Schema](DAP_PROTOCOL_SCHEMA.md): JSON-RPC message schemas
-- [DAP Security Specification](DAP_SECURITY_SPECIFICATION.md): Security requirements
+- [DAP Security Specification](../DAP_SECURITY_SPECIFICATION.md): Security requirements
 - [LSP Implementation Guide](LSP_IMPLEMENTATION_GUIDE.md): LSP server architecture patterns
 - [Crate Architecture Guide](CRATE_ARCHITECTURE_GUIDE.md): Existing workspace structure
 

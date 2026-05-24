@@ -428,7 +428,6 @@ Is the limitation documented here?
 ## Related Documentation
 
 - **[KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md)**: Comprehensive feature comparison, version-specific limitations, workarounds
-- **[IGNORED_TESTS_ROADMAP.md](IGNORED_TESTS_ROADMAP.md)**: Test tracking and resolution status
 - **[Issue #188](https://github.com/EffortlessMetrics/perl-lsp/issues/188)**: Semantic Analyzer (for deeper analysis needs)
 - **[LSP_IMPLEMENTATION_GUIDE.md](LSP_IMPLEMENTATION_GUIDE.md)**: LSP feature coverage
 - **[PURE_RUST_PARSER.md](../explanation/PURE_RUST_PARSER.md)**: v2 Pest parser architecture

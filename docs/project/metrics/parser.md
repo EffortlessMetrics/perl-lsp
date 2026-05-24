@@ -86,7 +86,7 @@ cargo bench -p perl-parser --features incremental -- parse_regime
 
 The three regimes are grouped so their Criterion estimates land in sibling directories under `target/criterion/`, making cold-vs-warm and warm-vs-incremental ratios easy to read off a single run. This mirrors the pyright phase-timing lesson and the rust-analyzer / gopls cold-vs-warm separation documented in [#4099](https://github.com/perl-lsp/perl-lsp/issues/4099).
 
-The invariant that `apply_edits(&mut state, &[])` actually takes the full-reparse path is guarded by `test_apply_edits_empty_slice_full_reparses` in [`crates/perl-incremental-parsing/src/incremental/mod.rs`](../../../crates/perl-incremental-parsing/src/incremental/mod.rs) — if that test ever fails, the warm benchmark is silently no longer measuring the reparse regime.
+The invariant that `apply_edits(&mut state, &[])` actually takes the full-reparse path is guarded by the empty-slice reparse tests in [`crates/perl-parser/src/incremental/`](../../../crates/perl-parser/src/incremental/) — if those tests ever fail, the warm benchmark is silently no longer measuring the reparse regime.
 
 ## 3. How the baseline gets updated
 

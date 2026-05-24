@@ -91,6 +91,6 @@ codebase only gets easier to reason about over time.
 
 ## Related Documentation
 
-- [CLAUDE.md](../CLAUDE.md) - Project overview and commands
+- [CLAUDE.md](../../CLAUDE.md) - Project overview and commands
 - [LSP_IMPLEMENTATION_GUIDE.md](LSP_IMPLEMENTATION_GUIDE.md) - LSP server architecture
-- [features.toml](../features.toml) - LSP feature catalog
+- [features.toml](../../features.toml) - LSP feature catalog
