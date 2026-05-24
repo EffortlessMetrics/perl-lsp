@@ -35,6 +35,8 @@
 //! assert_eq!(TokenKind::Eof.display_name(), "end of input");
 //! ```
 
+#![warn(missing_docs)]
+
 mod kind;
 mod token;
 

@@ -25,6 +25,8 @@
 //! assert_eq!(col, 0);
 //! ```
 
+#![warn(missing_docs)]
+
 pub use convert::{offset_to_utf16_line_col, utf16_line_col_to_offset};
 pub use line_index::{LineIndex, LineStartsCache};
 pub use mapper::{

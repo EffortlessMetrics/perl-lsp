@@ -1,3 +1,8 @@
+//! CLI entry point for the `perl-ci-hygiene` task runner.
+//!
+//! Dispatches CI hygiene sub-commands (ignored-test scans, version sync,
+//! parser-error baselines, etc.) used by the `just` recipes and CI gates.
+
 use perl_ci_hygiene::categorize_ignore;
 use perl_ci_hygiene::version_sync;
 

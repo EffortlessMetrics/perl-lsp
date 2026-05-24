@@ -32,6 +32,8 @@
 //! # fn main() {}
 //! ```
 
+#![warn(missing_docs)]
+
 #[cfg(not(target_arch = "wasm32"))]
 mod fs;
 #[cfg(not(target_arch = "wasm32"))]
