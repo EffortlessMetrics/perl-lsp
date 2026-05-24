@@ -343,6 +343,8 @@ pub fn add_package_completions(
         member_prefix,
         requested_sigil,
     );
+    let mut seen_labels: HashSet<String> =
+        completions.iter().map(|item| item.label.clone()).collect();
 
     // Query workspace index for members of the package (if available)
     let mut workspace_member_count = 0;
@@ -362,7 +364,7 @@ pub fn add_package_completions(
             }
 
             let member_name = symbol_member_name(&symbol);
-            if member_name.starts_with(member_prefix) {
+            if member_name.starts_with(member_prefix) && seen_labels.insert(symbol.name.clone()) {
                 workspace_member_count += 1;
                 completions.push(CompletionItem {
                     label: symbol.name.clone(),

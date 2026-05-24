@@ -318,8 +318,8 @@ sub internal_sub { }
 }
 
 #[test]
-fn test_current_document_package_member_completion() {
-    let code = r#"package MathUtils;
+fn test_current_document_package_member_completion() -> Result<(), Box<dyn std::error::Error>> {
+    let math_utils = r#"package MathUtils;
 
 sub square {
     my ($n) = @_;
@@ -330,15 +330,23 @@ sub cube {
     my ($n) = @_;
     return $n * $n * $n;
 }
+"#;
 
+    let code = format!(
+        r#"{math_utils}
 package main;
 
-my $sq = MathUtils::"#;
+my $sq = MathUtils::"#
+    );
 
-    let mut parser = Parser::new(code);
+    let index = Arc::new(WorkspaceIndex::new());
+    index
+        .index_file(Url::parse("file:///workspace/MathUtils.pm")?, format!("{math_utils}\n1;\n"))?;
+
+    let mut parser = Parser::new(&code);
     let ast = must(parser.parse());
-    let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
-    let completions = provider.get_completions(code, code.len());
+    let provider = CompletionProvider::new_with_index_and_source(&ast, &code, Some(index));
+    let completions = provider.get_completions(&code, code.len());
 
     assert!(
         completions.iter().any(|completion| completion.label == "square"),
@@ -349,6 +357,17 @@ my $sq = MathUtils::"#;
         completions.iter().any(|completion| completion.label == "cube"),
         "same-document package completion should include all local MathUtils members"
     );
+    assert_eq!(
+        completions.iter().filter(|completion| completion.label == "square").count(),
+        1,
+        "local and workspace package-member evidence should deduplicate square"
+    );
+    assert_eq!(
+        completions.iter().filter(|completion| completion.label == "cube").count(),
+        1,
+        "local and workspace package-member evidence should deduplicate cube"
+    );
+    Ok(())
 }
 
 #[test]
