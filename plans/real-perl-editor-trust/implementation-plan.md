@@ -923,8 +923,21 @@ Current executable slice
   generated/dynamic promotion, support-tier movement, parser/corpus bucket
   movement, release-lineage sync, or source-repo development.
 - `provider-proof-assignment-gate-after-type-definition-ambiguous-identity` is
-  active in the reliability lane. It keeps future work assignment-gated after
-  the type-definition ambiguous-identity blocker receipt.
+  completed in the reliability lane. It kept future work assignment-gated until
+  the type-definition generated/dynamic/low-confidence blocker receipt was
+  selected from the provider dashboard and live provider behavior.
+- `type-definition-generated-dynamic-low-confidence-blocker-receipt` is
+  completed in the trust lane. It extends the type-definition provider-decision
+  receipt with project-shaped generated/no-source framework-method,
+  dynamic-method-name, and unknown-receiver probes that all return no exact
+  type-definition locations. The dynamic-method-name shape is now labeled with a
+  `dynamic_boundary` receipt and the generated/no-source and unknown receiver
+  shapes remain low-confidence fallback. This does not add data-flow inference,
+  generated/dynamic promotion, support-tier movement, parser/corpus bucket
+  movement, release-lineage sync, or source-repo development.
+- `provider-proof-assignment-gate-after-type-definition-boundary-blockers` is
+  active in the reliability lane. It keeps future work assignment-gated after the
+  type-definition generated/dynamic/low-confidence blocker receipt.
 - `receiver-generated-no-source-fallback-receipt` is completed in the trust lane.
   RealReceiver scenario 46 now includes a generated/no-source framework-method
   receiver probe that must stay fallback or blocked and must not expose exact
@@ -1098,6 +1111,18 @@ Claim boundary
   or dynamic receiver promotion, support-tier movement, parser/corpus bucket
   movement, release-lineage sync, or source-repo development routing.
 - Provider proof assignment-gate after type-definition ambiguous identity may
+  update only active-goal routing and this plan until a specific scoped provider
+  class, parser gap, DAP module-path behavior change, or active PR is explicitly
+  assigned. It must not create a semantic-token, DAP, parser, support-tier,
+  release-lineage, or source-repo development claim on its own.
+- Type-definition generated/dynamic/low-confidence blocker work may add a
+  receipt-only runtime trace test and dynamic-boundary receipt label for current
+  fallback behavior on generated/no-source framework-method, dynamic-method-name,
+  and unknown-receiver request shapes. It must not change type-definition
+  resolution behavior, add data-flow inference, promote generated or dynamic
+  facts, promote support tiers, move parser/corpus buckets, sync release lineage,
+  or continue source-repo development routing.
+- Provider proof assignment-gate after type-definition boundary blockers may
   update only active-goal routing and this plan until a specific scoped provider
   class, parser gap, DAP module-path behavior change, or active PR is explicitly
   assigned. It must not create a semantic-token, DAP, parser, support-tier,

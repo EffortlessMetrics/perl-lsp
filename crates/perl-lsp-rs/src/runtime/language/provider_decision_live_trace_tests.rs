@@ -96,6 +96,37 @@ my $object = Trace::AmbiguousType->new;
 
 1;
 "#;
+const TYPE_DEFINITION_BOUNDARY_LIB_URI: &str = "file:///workspace/lib/Trace/BoundaryTarget.pm";
+const TYPE_DEFINITION_BOUNDARY_LIB_DOC: &str = r#"package Trace::BoundaryTarget;
+use strict;
+use warnings;
+
+sub new { bless {}, shift }
+sub run { 1 }
+
+1;
+"#;
+const TYPE_DEFINITION_BOUNDARY_MAIN_URI: &str =
+    "file:///workspace/script/type-definition-boundary.pl";
+const TYPE_DEFINITION_BOUNDARY_MAIN_DOC: &str = r#"use strict;
+use warnings;
+use Moo;
+use Trace::BoundaryTarget;
+
+has runtime_installed_accessor => (is => 'ro');
+
+my $method_name = 'run';
+my $dynamic_receiver = runtime_value();
+$dynamic_receiver->$method_name;
+
+my $framework_receiver = Trace::BoundaryTarget->new;
+$framework_receiver->runtime_installed_accessor;
+
+my $unknown = runtime_value();
+$unknown->run;
+
+1;
+"#;
 const MISSING_MODULE_DIAGNOSTIC_DOC: &str = "use Missing::Payload;\n";
 
 const WORKSPACE_SYMBOL_URI: &str = "file:///workspace/lib/Trace/Symbols.pm";
@@ -320,6 +351,28 @@ fn open_type_definition_ambiguous_documents(
         "textDocument": {
             "uri": TYPE_DEFINITION_AMBIGUOUS_MAIN_URI,
             "text": TYPE_DEFINITION_AMBIGUOUS_MAIN_DOC,
+            "languageId": "perl",
+            "version": 1
+        }
+    })))?;
+    Ok(())
+}
+
+fn open_type_definition_boundary_documents(
+    server: &LspServer,
+) -> Result<(), Box<dyn std::error::Error>> {
+    server.test_handle_did_open(Some(json!({
+        "textDocument": {
+            "uri": TYPE_DEFINITION_BOUNDARY_LIB_URI,
+            "text": TYPE_DEFINITION_BOUNDARY_LIB_DOC,
+            "languageId": "perl",
+            "version": 1
+        }
+    })))?;
+    server.test_handle_did_open(Some(json!({
+        "textDocument": {
+            "uri": TYPE_DEFINITION_BOUNDARY_MAIN_URI,
+            "text": TYPE_DEFINITION_BOUNDARY_MAIN_DOC,
             "languageId": "perl",
             "version": 1
         }
@@ -1182,6 +1235,69 @@ fn live_type_definition_request_blocks_ambiguous_package_identity()
             && boundary.contains("dynamic boundaries"),
         "ambiguous package receipt must preserve exactness blockers: {boundary}"
     );
+    Ok(())
+}
+
+#[test]
+fn live_type_definition_request_exposes_generated_dynamic_low_confidence_blockers()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    initialize(&server)?;
+    open_type_definition_boundary_documents(&server)?;
+
+    for (needle, expected_reason, expected_blocker, expected_fact_source, dynamic_boundary) in [
+        ("->$method_name", "dynamic_boundary", "dynamic_boundary", "dynamic_boundary", true),
+        ("runtime_installed_accessor", "missing_fact", "missing_fact", "fallback", false),
+        ("run", "missing_fact", "missing_fact", "fallback", false),
+    ] {
+        let (line, character) = position_on_in(TYPE_DEFINITION_BOUNDARY_MAIN_DOC, needle)?;
+
+        let result = response_result(
+            server.handle_request(request(
+                6,
+                "textDocument/typeDefinition",
+                Some(json!({
+                    "textDocument": {"uri": TYPE_DEFINITION_BOUNDARY_MAIN_URI, "version": 1},
+                    "position": {"line": line, "character": character}
+                })),
+            )),
+            "type definition generated/dynamic/low-confidence fallback",
+        )?;
+        let locations =
+            result.as_array().ok_or("type-definition boundary fallback should return an array")?;
+        assert!(
+            locations.is_empty(),
+            "{needle} must not resolve to exact type-definition locations: {result}"
+        );
+
+        let explanation = explain_provider_decision(&server, "type_definition")?;
+        let receipt = request_receipt(&explanation, "type_definition")?;
+        assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("type_definition"));
+        assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("fallback"));
+        assert_eq!(receipt.get("reason").and_then(Value::as_str), Some(expected_reason));
+        assert_eq!(receipt.get("blocker").and_then(Value::as_str), Some(expected_blocker));
+        assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some(expected_fact_source));
+        assert_eq!(receipt.get("confidence").and_then(Value::as_str), Some("low"));
+        assert_eq!(receipt.get("freshness").and_then(Value::as_str), Some("fresh"));
+        assert_eq!(receipt.get("source_backed").and_then(Value::as_bool), Some(false));
+        assert_eq!(receipt.get("fallback_state").and_then(Value::as_str), Some("no_result"));
+        assert_eq!(receipt.get("result_count").and_then(Value::as_u64), Some(0));
+        assert_eq!(
+            receipt.get("dynamic_boundary").and_then(Value::as_bool),
+            Some(dynamic_boundary)
+        );
+
+        let boundary =
+            receipt.get("claim_boundary").and_then(Value::as_str).ok_or("missing boundary")?;
+        assert!(
+            boundary.contains("generated/no-source")
+                && boundary.contains("dynamic boundaries")
+                && boundary.contains("stale facts")
+                && boundary.contains("low-confidence facts"),
+            "{needle} receipt must keep generated/dynamic/stale/low-confidence blockers: {boundary}"
+        );
+    }
+
     Ok(())
 }
 

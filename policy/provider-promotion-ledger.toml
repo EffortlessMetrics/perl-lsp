@@ -79,7 +79,7 @@ surface = "Type definition"
 fact_class = "Direct source-backed class receiver"
 current_state = "safe subset"
 decision = "promote"
-next_proof = "Generated/no-source, dynamic, stale, and low-confidence blockers before broader type-definition expansion"
+next_proof = "Stale-fact and broader project-shaped blocker receipts before broader type-definition expansion"
 promotion_conditions = [
   "cursor_target_is_direct_package_or_class_identifier",
   "constructor_method_receiver_is_source_backed_class",
@@ -103,6 +103,7 @@ blocker_conditions = [
   "unsupported_fact_class",
 ]
 required_receipts = [
+  "crates/perl-lsp-rs/src/runtime/language/provider_decision_live_trace_tests.rs",
   "crates/perl-lsp-rs-core/src/providers/navigation/type_definition.rs",
   "docs/project/status/real_perl_editor_trust_v1.md",
 ]

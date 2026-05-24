@@ -70,6 +70,54 @@ struct NavigationDecisionTraceContext {
     include_declaration: Option<bool>,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct TypeDefinitionFallbackTrace {
+    reason: &'static str,
+    blocker: &'static str,
+    source_backed_state: &'static str,
+    fact_source: &'static str,
+    dynamic_boundary: bool,
+}
+
+impl Default for TypeDefinitionFallbackTrace {
+    fn default() -> Self {
+        Self {
+            reason: "missing_fact",
+            blocker: "missing_fact",
+            source_backed_state: "type_definition_not_proven",
+            fact_source: "fallback",
+            dynamic_boundary: false,
+        }
+    }
+}
+
+fn classify_type_definition_fallback_trace(
+    source_text: &str,
+    line: u32,
+    character: u32,
+) -> TypeDefinitionFallbackTrace {
+    let Some(line_text) = usize::try_from(line).ok().and_then(|line| source_text.lines().nth(line))
+    else {
+        return TypeDefinitionFallbackTrace::default();
+    };
+
+    let character = usize::try_from(character).unwrap_or_default();
+    let window_start = character.saturating_sub(64);
+    let cursor_window = line_text.chars().skip(window_start).take(128).collect::<String>();
+
+    if cursor_window.contains("->$") || cursor_window.contains("->${") {
+        return TypeDefinitionFallbackTrace {
+            reason: "dynamic_boundary",
+            blocker: "dynamic_boundary",
+            source_backed_state: "dynamic_type_definition_boundary",
+            fact_source: "dynamic_boundary",
+            dynamic_boundary: true,
+        };
+    }
+
+    TypeDefinitionFallbackTrace::default()
+}
+
 #[cfg(feature = "workspace")]
 fn get_fqn_regex() -> Result<&'static regex::Regex, JsonRpcError> {
     FQN_RE
@@ -1506,17 +1554,25 @@ impl LspServer {
             };
 
             // Acquire minimal data under lock, then drop it
-            let ast = {
+            let (ast, doc_text) = {
                 let documents = self.documents_guard();
                 let Some(doc) = self.get_document(&documents, uri) else {
-                    self.record_type_definition_provider_decision_trace(&trace_context, 0);
+                    self.record_type_definition_provider_decision_trace(
+                        &trace_context,
+                        0,
+                        TypeDefinitionFallbackTrace::default(),
+                    );
                     return Ok(Some(json!([])));
                 };
                 let Some(ast) = doc.ast.as_ref() else {
-                    self.record_type_definition_provider_decision_trace(&trace_context, 0);
+                    self.record_type_definition_provider_decision_trace(
+                        &trace_context,
+                        0,
+                        TypeDefinitionFallbackTrace::default(),
+                    );
                     return Ok(Some(json!([])));
                 };
-                ast.clone()
+                (ast.clone(), doc.text.clone())
             };
 
             // Build doc_map outside the lock using snapshot helper
@@ -1531,6 +1587,7 @@ impl LspServer {
                     self.record_type_definition_provider_decision_trace(
                         &trace_context,
                         locations.len(),
+                        TypeDefinitionFallbackTrace::default(),
                     );
                     return Ok(Some(json!(locations)));
                 }
@@ -1541,7 +1598,11 @@ impl LspServer {
                 );
                 return Ok(Some(json!([])));
             }
-            self.record_type_definition_provider_decision_trace(&trace_context, 0);
+            self.record_type_definition_provider_decision_trace(
+                &trace_context,
+                0,
+                classify_type_definition_fallback_trace(&doc_text, line, character),
+            );
         }
 
         Ok(Some(json!([])))
@@ -1551,6 +1612,7 @@ impl LspServer {
         &self,
         context: &NavigationDecisionTraceContext,
         result_count: usize,
+        fallback_trace: TypeDefinitionFallbackTrace,
     ) {
         let acted = result_count > 0;
         let result_count = u64::try_from(result_count).unwrap_or(u64::MAX);
@@ -1558,29 +1620,29 @@ impl LspServer {
             "provider": context.provider,
             "provider_action": context.provider_action,
             "decision": if acted { "acted" } else { "fallback" },
-            "reason": if acted { "source_backed_high_confidence" } else { "missing_fact" },
+            "reason": if acted { "source_backed_high_confidence" } else { fallback_trace.reason },
             "uri": context.uri,
             "line": context.line,
             "character": context.character,
             "result_count": result_count,
             "live_provider_result_count": result_count,
-            "fact_source": if acted { "parser_syntax" } else { "fallback" },
+            "fact_source": if acted { "parser_syntax" } else { fallback_trace.fact_source },
             "confidence": if acted { "high" } else { "low" },
             "freshness": "fresh",
             "source_backed": acted,
             "source_backed_state": if acted {
                 "open_document_type_definition"
             } else {
-                "type_definition_not_proven"
+                fallback_trace.source_backed_state
             },
             "fallback": if acted { "none" } else { "no_result" },
             "fallback_state": if acted { "none" } else { "no_result" },
-            "dynamic_boundary": false,
+            "dynamic_boundary": if acted { false } else { fallback_trace.dynamic_boundary },
             "trace_only_no_live_behavior_change": true,
             "claim_boundary": "records existing type-definition safe subset only; direct package/class identifiers and constructor receivers may resolve to open-document package definitions while variable receivers, chained method results, function-call results, missing package definitions, generated/no-source facts, dynamic boundaries, stale facts, low-confidence facts, and ambiguous identities remain fallback or blocked"
         });
         if !acted && let Some(object) = receipt.as_object_mut() {
-            object.insert("blocker".to_string(), json!("missing_fact"));
+            object.insert("blocker".to_string(), json!(fallback_trace.blocker));
         }
 
         self.record_provider_decision_trace(context.provider, &receipt);
