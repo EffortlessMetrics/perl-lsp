@@ -1941,6 +1941,7 @@ version = "0.15.0"
 dependencies = [
  "percent-encoding",
  "perl-tdd-support",
+ "proptest",
  "tempfile",
  "url",
 ]
