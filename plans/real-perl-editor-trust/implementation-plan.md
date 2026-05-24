@@ -968,8 +968,19 @@ Current executable slice
   support tiers, move parser/corpus buckets, sync release lineage, or continue
   source-repo development.
 - `provider-proof-assignment-gate-after-type-definition-dynamic-bless` is active
-  in the reliability lane. It keeps future work assignment-gated after the
-  dynamic bless package-argument blocker receipt.
+  in the reliability lane. It selected a stale request-version receipt detail
+  follow-up from the dirty duplicate swarm PR queue.
+- `type-definition-stale-request-version-detail-receipt` is completed in the
+  trust lane. It sharpens the stale type-definition request receipt so stale
+  request versions record `decision=blocked`, stale freshness, request/current
+  document versions, `fallback_state=refresh_workspace_facts`, and
+  `trace_only_no_live_behavior_change=false` before returning content-modified.
+  This does not broaden type-definition behavior, add data-flow inference,
+  promote generated or dynamic facts, promote support tiers, move parser/corpus
+  buckets, sync release lineage, or continue source-repo development.
+- `provider-proof-assignment-gate-after-type-definition-stale-request-version-detail`
+  is active in the reliability lane. It keeps future work assignment-gated after
+  the stale request-version receipt detail.
 - `receiver-generated-no-source-fallback-receipt` is completed in the trust lane.
   RealReceiver scenario 46 now includes a generated/no-source framework-method
   receiver probe that must stay fallback or blocked and must not expose exact

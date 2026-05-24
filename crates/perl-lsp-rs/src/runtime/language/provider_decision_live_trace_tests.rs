@@ -1500,7 +1500,7 @@ fn live_type_definition_request_exposes_stale_fact_blocker()
     let explanation = explain_provider_decision(&server, "type_definition")?;
     let receipt = request_receipt(&explanation, "type_definition")?;
     assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("type_definition"));
-    assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("fallback"));
+    assert_eq!(receipt.get("decision").and_then(Value::as_str), Some("blocked"));
     assert_eq!(receipt.get("reason").and_then(Value::as_str), Some("stale_fact"));
     assert_eq!(receipt.get("blocker").and_then(Value::as_str), Some("stale_fact"));
     assert_eq!(receipt.get("fact_source").and_then(Value::as_str), Some("request_version"));
@@ -1511,9 +1511,18 @@ fn live_type_definition_request_exposes_stale_fact_blocker()
         receipt.get("source_backed_state").and_then(Value::as_str),
         Some("stale_type_definition_request")
     );
-    assert_eq!(receipt.get("fallback_state").and_then(Value::as_str), Some("no_result"));
+    assert_eq!(
+        receipt.get("fallback_state").and_then(Value::as_str),
+        Some("refresh_workspace_facts")
+    );
     assert_eq!(receipt.get("result_count").and_then(Value::as_u64), Some(0));
     assert_eq!(receipt.get("dynamic_boundary").and_then(Value::as_bool), Some(false));
+    assert_eq!(receipt.get("request_version").and_then(Value::as_i64), Some(1));
+    assert_eq!(receipt.get("current_document_version").and_then(Value::as_i64), Some(2));
+    assert_eq!(
+        receipt.get("trace_only_no_live_behavior_change").and_then(Value::as_bool),
+        Some(false)
+    );
 
     let boundary =
         receipt.get("claim_boundary").and_then(Value::as_str).ok_or("missing boundary")?;

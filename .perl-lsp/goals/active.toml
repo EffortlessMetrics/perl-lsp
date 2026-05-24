@@ -130,7 +130,7 @@ items = [
 
 [reliability.next]
 items = [
-  "provider-proof-assignment-gate-after-type-definition-dynamic-bless",
+  "provider-proof-assignment-gate-after-type-definition-stale-request-version-detail",
 ]
 
 [[work_item]]
@@ -1473,9 +1473,63 @@ commands = [
 
 [[work_item]]
 id = "provider-proof-assignment-gate-after-type-definition-dynamic-bless"
-status = "active"
+status = "completed"
 lane = "reliability"
 claim_boundary = "Assignment-gated routing after the type-definition dynamic bless package-argument blocker receipt only; do not start semantic-token, DAP module-path, parser bucket, support-tier, provider behavior, release-lineage, or source-repo development work without a current ready class, active PR, or explicit assignment."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "docs/project/status/parser_accuracy_next.md",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+]
+commands = [
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,isDraft,headRefName,mergeStateStatus,url",
+  "rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url",
+  "rtk git rev-list --left-right --count origin/main...source/master",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "type-definition-stale-request-version-detail-receipt"
+status = "completed"
+lane = "trust"
+claim_boundary = "Type-definition stale request-version receipt detail only; no type-definition behavior broadening, data-flow inference, generated/dynamic promotion, support-tier promotion, parser/corpus bucket movement, release-lineage sync, or source-repo development continuation."
+files = [
+  ".perl-lsp/goals/active.toml",
+  "plans/real-perl-editor-trust/implementation-plan.md",
+  "crates/perl-lsp-rs/src/runtime/language/navigation.rs",
+  "crates/perl-lsp-rs/src/runtime/language/provider_decision_live_trace_tests.rs",
+  "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/provider_promotion_ledger.md",
+  "docs/project/status/real_perl_editor_trust_v1.md",
+  "policy/provider-promotion-ledger.toml",
+]
+commands = [
+  "rtk cargo test -p perl-lsp-rs --lib live_type_definition_request_exposes_stale_fact_blocker --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-lsp-rs --lib live_type_definition_request --profile agent --locked -- --nocapture",
+  "rtk cargo test -p perl-lsp-rs --test lsp_type_definition_tests --profile agent --locked -- --nocapture",
+  "rtk cargo fmt -p perl-lsp-rs -- --check",
+  "rtk cargo xtask check-active-goal-manifest",
+  "rtk cargo xtask check-support-claims",
+  "rtk cargo xtask check-provider-confidence-matrix",
+  "rtk cargo xtask check-provider-promotion-ledger",
+  "rtk cargo xtask metrics parser-accuracy --check",
+  "rtk cargo xtask metrics ratchet-check parser_accuracy",
+  "rtk git diff --check",
+]
+
+[[work_item]]
+id = "provider-proof-assignment-gate-after-type-definition-stale-request-version-detail"
+status = "active"
+lane = "reliability"
+claim_boundary = "Assignment-gated routing after the type-definition stale request-version receipt detail only; do not start semantic-token, DAP module-path, parser bucket, support-tier, provider behavior, release-lineage, or source-repo development work without a current ready class, active PR, or explicit assignment."
 files = [
   ".perl-lsp/goals/active.toml",
   "plans/real-perl-editor-trust/implementation-plan.md",

@@ -72,35 +72,53 @@ struct NavigationDecisionTraceContext {
 
 #[derive(Debug, Clone, Copy)]
 struct TypeDefinitionFallbackTrace {
+    decision: &'static str,
     reason: &'static str,
     blocker: &'static str,
     source_backed_state: &'static str,
     fact_source: &'static str,
     freshness: &'static str,
+    fallback: &'static str,
     dynamic_boundary: bool,
+    request_version: Option<i32>,
+    current_document_version: Option<i32>,
+    trace_only_no_live_behavior_change: bool,
 }
 
 impl Default for TypeDefinitionFallbackTrace {
     fn default() -> Self {
         Self {
+            decision: "fallback",
             reason: "missing_fact",
             blocker: "missing_fact",
             source_backed_state: "type_definition_not_proven",
             fact_source: "fallback",
             freshness: "fresh",
+            fallback: "no_result",
             dynamic_boundary: false,
+            request_version: None,
+            current_document_version: None,
+            trace_only_no_live_behavior_change: true,
         }
     }
 }
 
-fn stale_type_definition_fallback_trace() -> TypeDefinitionFallbackTrace {
+fn stale_type_definition_fallback_trace(
+    request_version: i32,
+    current_document_version: i32,
+) -> TypeDefinitionFallbackTrace {
     TypeDefinitionFallbackTrace {
+        decision: "blocked",
         reason: "stale_fact",
         blocker: "stale_fact",
         source_backed_state: "stale_type_definition_request",
         fact_source: "request_version",
         freshness: "stale",
+        fallback: "refresh_workspace_facts",
         dynamic_boundary: false,
+        request_version: Some(request_version),
+        current_document_version: Some(current_document_version),
+        trace_only_no_live_behavior_change: false,
     }
 }
 
@@ -130,12 +148,17 @@ fn classify_type_definition_fallback_trace(
         || (compact_before_cursor.ends_with("bless{},") && compact_from_cursor.starts_with('$'))
     {
         return TypeDefinitionFallbackTrace {
+            decision: "fallback",
             reason: "dynamic_boundary",
             blocker: "dynamic_boundary",
             source_backed_state: "dynamic_type_definition_boundary",
             fact_source: "dynamic_boundary",
             freshness: "fresh",
+            fallback: "no_result",
             dynamic_boundary: true,
+            request_version: None,
+            current_document_version: None,
+            trace_only_no_live_behavior_change: true,
         };
     }
 
@@ -1578,13 +1601,24 @@ impl LspServer {
             };
             let req_version =
                 params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
-            if let Err(error) = self.ensure_latest(uri, req_version) {
-                self.record_type_definition_provider_decision_trace(
-                    &trace_context,
-                    0,
-                    stale_type_definition_fallback_trace(),
-                );
-                return Err(error);
+            if let Some(request_version) = req_version {
+                let current_document_version = {
+                    let documents = self.documents_guard();
+                    self.get_document(&documents, uri).map(|doc| doc.version)
+                };
+                if let Some(current_document_version) = current_document_version
+                    && request_version < current_document_version
+                {
+                    self.record_type_definition_provider_decision_trace(
+                        &trace_context,
+                        0,
+                        stale_type_definition_fallback_trace(
+                            request_version,
+                            current_document_version,
+                        ),
+                    );
+                    return Err(Self::content_modified());
+                }
             }
 
             // Acquire minimal data under lock, then drop it
@@ -1653,7 +1687,7 @@ impl LspServer {
         let mut receipt = json!({
             "provider": context.provider,
             "provider_action": context.provider_action,
-            "decision": if acted { "acted" } else { "fallback" },
+            "decision": if acted { "acted" } else { fallback_trace.decision },
             "reason": if acted { "source_backed_high_confidence" } else { fallback_trace.reason },
             "uri": context.uri,
             "line": context.line,
@@ -1669,14 +1703,27 @@ impl LspServer {
             } else {
                 fallback_trace.source_backed_state
             },
-            "fallback": if acted { "none" } else { "no_result" },
-            "fallback_state": if acted { "none" } else { "no_result" },
+            "fallback": if acted { "none" } else { fallback_trace.fallback },
+            "fallback_state": if acted { "none" } else { fallback_trace.fallback },
             "dynamic_boundary": if acted { false } else { fallback_trace.dynamic_boundary },
-            "trace_only_no_live_behavior_change": true,
+            "trace_only_no_live_behavior_change": if acted {
+                true
+            } else {
+                fallback_trace.trace_only_no_live_behavior_change
+            },
             "claim_boundary": "records existing type-definition safe subset only; direct package/class identifiers and constructor receivers may resolve to open-document package definitions while variable receivers, chained method results, function-call results, missing package definitions, generated/no-source facts, dynamic boundaries, stale facts, low-confidence facts, and ambiguous identities remain fallback or blocked"
         });
         if !acted && let Some(object) = receipt.as_object_mut() {
             object.insert("blocker".to_string(), json!(fallback_trace.blocker));
+            if let Some(request_version) = fallback_trace.request_version {
+                object.insert("request_version".to_string(), json!(request_version));
+            }
+            if let Some(current_document_version) = fallback_trace.current_document_version {
+                object.insert(
+                    "current_document_version".to_string(),
+                    json!(current_document_version),
+                );
+            }
         }
 
         self.record_provider_decision_trace(context.provider, &receipt);
