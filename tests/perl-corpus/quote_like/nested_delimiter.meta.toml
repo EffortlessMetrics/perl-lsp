@@ -1,0 +1,17 @@
+[concept]
+id = "parser.quote_like.nested_delimiter"
+tier = "pr"
+
+[expect]
+panic = false
+timeout = false
+mode = "parse_clean"
+
+[metrics]
+max_error_nodes = 0
+must_emit_node_kinds = ["StringLiteral"]
+
+[snapshots]
+tokens = true
+ast = true
+spans = true
