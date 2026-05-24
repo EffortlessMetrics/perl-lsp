@@ -979,8 +979,21 @@ Current executable slice
   promote generated or dynamic facts, promote support tiers, move parser/corpus
   buckets, sync release lineage, or continue source-repo development.
 - `provider-proof-assignment-gate-after-type-definition-stale-request-version-detail`
-  is active in the reliability lane. It keeps future work assignment-gated after
-  the stale request-version receipt detail.
+  is completed in the reliability lane. It selected an unscannable target-source
+  blocker receipt from the type-definition provider dashboard.
+- `type-definition-unscannable-source-blocker-receipt` is completed in the trust
+  lane. It proves a package declaration present only in an unscannable open
+  document, such as binary-like text with an embedded NUL byte, does not
+  authorize exact type-definition locations. The provider-decision receipt
+  records `decision=blocked`, `reason=unsupported`,
+  `blocker=unsupported_fact_class`, and
+  `source_backed_state=unscannable_type_definition_source`. This does not
+  broaden type-definition behavior, add data-flow inference, promote generated
+  or dynamic facts, promote support tiers, move parser/corpus buckets, sync
+  release lineage, or continue source-repo development.
+- `provider-proof-assignment-gate-after-type-definition-unscannable-source` is
+  active in the reliability lane. It keeps future work assignment-gated after
+  the unscannable target-source blocker receipt.
 - `receiver-generated-no-source-fallback-receipt` is completed in the trust lane.
   RealReceiver scenario 46 now includes a generated/no-source framework-method
   receiver probe that must stay fallback or blocked and must not expose exact

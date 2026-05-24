@@ -7,6 +7,7 @@ use super::super::*;
 use crate::cancellation::RequestCleanupGuard;
 use crate::protocol::{req_position, req_uri};
 use crate::util::{read_text_file_with_encoding, token_under_cursor};
+use perl_parser_core::source_file::is_binary_content;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
@@ -122,6 +123,22 @@ fn stale_type_definition_fallback_trace(
     }
 }
 
+fn unsupported_type_definition_source_trace() -> TypeDefinitionFallbackTrace {
+    TypeDefinitionFallbackTrace {
+        decision: "blocked",
+        reason: "unsupported",
+        blocker: "unsupported_fact_class",
+        source_backed_state: "unscannable_type_definition_source",
+        fact_source: "fallback",
+        freshness: "fresh",
+        fallback: "no_result",
+        dynamic_boundary: false,
+        request_version: None,
+        current_document_version: None,
+        trace_only_no_live_behavior_change: true,
+    }
+}
+
 fn classify_type_definition_fallback_trace(
     source_text: &str,
     line: u32,
@@ -163,6 +180,71 @@ fn classify_type_definition_fallback_trace(
     }
 
     TypeDefinitionFallbackTrace::default()
+}
+
+fn classify_type_definition_fallback_trace_with_documents(
+    source_text: &str,
+    line: u32,
+    character: u32,
+    documents: &HashMap<String, String>,
+) -> TypeDefinitionFallbackTrace {
+    let fallback_trace = classify_type_definition_fallback_trace(source_text, line, character);
+    if fallback_trace.blocker != "missing_fact" {
+        return fallback_trace;
+    }
+
+    let Some(type_name) = type_definition_candidate_at_position(source_text, line, character)
+    else {
+        return fallback_trace;
+    };
+    if documents.values().any(|document_text| {
+        !is_scannable_type_definition_source(document_text)
+            && document_text.contains(&format!("package {type_name}"))
+    }) {
+        return unsupported_type_definition_source_trace();
+    }
+
+    fallback_trace
+}
+
+fn type_definition_candidate_at_position(
+    source_text: &str,
+    line: u32,
+    character: u32,
+) -> Option<String> {
+    let line_text = usize::try_from(line).ok().and_then(|line| source_text.lines().nth(line))?;
+    let character = usize::try_from(character).ok()?;
+    let mut token_start = None;
+    let mut token = String::new();
+
+    for (index, ch) in line_text.chars().chain(std::iter::once(' ')).enumerate() {
+        if ch.is_ascii_alphanumeric() || matches!(ch, '_' | ':') {
+            if token_start.is_none() {
+                token_start = Some(index);
+            }
+            token.push(ch);
+            continue;
+        }
+
+        if let Some(start) = token_start.take() {
+            let end = index;
+            if character >= start
+                && character <= end
+                && token.contains("::")
+                && token.chars().next().is_some_and(|ch| ch.is_ascii_uppercase())
+            {
+                return Some(token);
+            }
+        }
+        token.clear();
+    }
+
+    None
+}
+
+fn is_scannable_type_definition_source(source_text: &str) -> bool {
+    source_text.len() <= perl_lsp_rs_core::runtime::limits::max_file_size_bytes()
+        && !is_binary_content(source_text)
 }
 
 #[cfg(feature = "workspace")]
@@ -1669,7 +1751,9 @@ impl LspServer {
             self.record_type_definition_provider_decision_trace(
                 &trace_context,
                 0,
-                classify_type_definition_fallback_trace(&doc_text, line, character),
+                classify_type_definition_fallback_trace_with_documents(
+                    &doc_text, line, character, &doc_map,
+                ),
             );
         }
 
@@ -1711,7 +1795,7 @@ impl LspServer {
             } else {
                 fallback_trace.trace_only_no_live_behavior_change
             },
-            "claim_boundary": "records existing type-definition safe subset only; direct package/class identifiers and constructor receivers may resolve to open-document package definitions while variable receivers, chained method results, function-call results, missing package definitions, generated/no-source facts, dynamic boundaries, stale facts, low-confidence facts, and ambiguous identities remain fallback or blocked"
+            "claim_boundary": "records existing type-definition safe subset only; direct package/class identifiers and constructor receivers may resolve to open-document package definitions while variable receivers, chained method results, function-call results, missing package definitions, generated/no-source facts, unscannable documents, dynamic boundaries, stale facts, low-confidence facts, and ambiguous identities remain fallback or blocked"
         });
         if !acted && let Some(object) = receipt.as_object_mut() {
             object.insert("blocker".to_string(), json!(fallback_trace.blocker));

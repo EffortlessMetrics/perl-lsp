@@ -93,6 +93,7 @@ fallback_conditions = [
   "dynamic_type_constraint_requires_runtime_value",
   "dynamic_bless_package_requires_runtime_value",
   "stale_request_version",
+  "unscannable_type_definition_source",
   "ambiguous_package_identity",
   "unsupported_receiver_shape",
 ]
