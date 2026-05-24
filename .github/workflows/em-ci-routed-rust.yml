@@ -140,7 +140,7 @@ jobs:
           elif [ "${idle_cx43:-0}" -gt 0 ]; then
             emit "cx43" "cx43_idle" "false" "false"
           else
-            emit "none" "no_idle_runner" "false" "false"
+            emit "github" "no_idle_runner" "false" "true"
           fi
 
   rust-small-cx53:
