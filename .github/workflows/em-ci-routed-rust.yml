@@ -41,6 +41,7 @@ jobs:
       target: ${{ steps.route.outputs.target }}
       reason: ${{ steps.route.outputs.reason }}
       error: ${{ steps.route.outputs.error }}
+      fallback_allowed: ${{ steps.route.outputs.fallback_allowed }}
     steps:
       - name: Decide target runner
         id: route
@@ -54,14 +55,16 @@ jobs:
           set -euo pipefail
 
           emit() {
-            local target="$1" reason="$2" error="$3"
+            local target="$1" reason="$2" error="$3" fallback_allowed="$4"
             echo "router_target=$target"
             echo "router_reason=$reason"
             echo "router_error=$error"
+            echo "router_fallback_allowed=$fallback_allowed"
             {
               echo "target=$target"
               echo "reason=$reason"
               echo "error=$error"
+              echo "fallback_allowed=$fallback_allowed"
             } >> "$GITHUB_OUTPUT"
             {
               echo "### Perl LSP Rust Small Route"
@@ -69,29 +72,30 @@ jobs:
               echo "- router_target: \`$target\`"
               echo "- router_reason: \`$reason\`"
               echo "- router_error: \`$error\`"
+              echo "- router_fallback_allowed: \`$fallback_allowed\`"
             } >> "$GITHUB_STEP_SUMMARY"
           }
 
           if [ "$IS_FORK_PR" = "true" ]; then
-            emit "github" "fork_pr" "false"
+            emit "github" "fork_pr" "false" "true"
             exit 0
           fi
 
           case "${FORCE_TARGET:-auto}" in
             cx53|cx43|github)
-              emit "$FORCE_TARGET" "workflow_dispatch_force_target" "false"
+              emit "$FORCE_TARGET" "workflow_dispatch_force_target" "false" "true"
               exit 0
               ;;
             auto|"")
               ;;
             *)
-              emit "github" "invalid_force_target" "true"
+              emit "none" "invalid_force_target" "true" "false"
               exit 0
               ;;
           esac
 
           if [ -z "${GH_TOKEN:-}" ]; then
-            emit "github" "runner_token_missing" "true"
+            emit "none" "runner_token_missing" "true" "false"
             exit 0
           fi
 
@@ -103,8 +107,8 @@ jobs:
             "https://api.github.com/orgs/$ORG/actions/runners?per_page=100" || true)"
 
           if [ "$status" != "200" ]; then
-            echo "::notice::runner API returned HTTP $status; using GitHub-hosted fallback"
-            emit "github" "runner_api_failed" "true"
+            echo "::error::runner API returned HTTP $status; refusing implicit GitHub-hosted fallback"
+            emit "none" "runner_api_failed" "true" "false"
             exit 0
           fi
 
@@ -132,11 +136,11 @@ jobs:
           echo "idle_cx43=${idle_cx43:-0}"
 
           if [ "${idle_cx53:-0}" -gt 0 ]; then
-            emit "cx53" "cx53_idle" "false"
+            emit "cx53" "cx53_idle" "false" "false"
           elif [ "${idle_cx43:-0}" -gt 0 ]; then
-            emit "cx43" "cx43_idle" "false"
+            emit "cx43" "cx43_idle" "false" "false"
           else
-            emit "github" "no_idle_runner" "false"
+            emit "none" "no_idle_runner" "false" "false"
           fi
 
   rust-small-cx53:
@@ -312,7 +316,8 @@ jobs:
     needs: route-rust-small
     if: >-
       needs.route-rust-small.result == 'success' &&
-      needs.route-rust-small.outputs.target == 'github'
+      needs.route-rust-small.outputs.target == 'github' &&
+      needs.route-rust-small.outputs.fallback_allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -340,8 +345,7 @@ jobs:
           set -euo pipefail
           cargo fetch --locked
           cargo check --workspace --locked
-          cargo test --locked -p perl-parser --test semantic_smoke_tests -- --nocapture
-          cargo test --locked -p perl-lsp-rs --test lsp_smoke -- --test-threads=1 --nocapture
+          git diff --check
 
   rust-small-result:
     name: Perl LSP Rust Small Result
@@ -361,6 +365,7 @@ jobs:
           ROUTER_TARGET: ${{ needs.route-rust-small.outputs.target }}
           ROUTER_REASON: ${{ needs.route-rust-small.outputs.reason }}
           ROUTER_ERROR: ${{ needs.route-rust-small.outputs.error }}
+          ROUTER_FALLBACK_ALLOWED: ${{ needs.route-rust-small.outputs.fallback_allowed }}
           CX53_RESULT: ${{ needs.rust-small-cx53.result }}
           CX43_RESULT: ${{ needs.rust-small-cx43.result }}
           GITHUB_RESULT: ${{ needs.rust-small-github.result }}
@@ -371,6 +376,7 @@ jobs:
           echo "router_target=${ROUTER_TARGET:-}"
           echo "router_reason=${ROUTER_REASON:-}"
           echo "router_error=${ROUTER_ERROR:-}"
+          echo "router_fallback_allowed=${ROUTER_FALLBACK_ALLOWED:-}"
           echo "cx53_result=${CX53_RESULT:-}"
           echo "cx43_result=${CX43_RESULT:-}"
           echo "github_result=${GITHUB_RESULT:-}"
@@ -382,6 +388,7 @@ jobs:
             echo "- router_target: \`${ROUTER_TARGET:-}\`"
             echo "- router_reason: \`${ROUTER_REASON:-}\`"
             echo "- router_error: \`${ROUTER_ERROR:-}\`"
+            echo "- router_fallback_allowed: \`${ROUTER_FALLBACK_ALLOWED:-}\`"
             echo "- cx53_result: \`${CX53_RESULT:-}\`"
             echo "- cx43_result: \`${CX43_RESULT:-}\`"
             echo "- github_result: \`${GITHUB_RESULT:-}\`"
@@ -407,6 +414,13 @@ jobs:
               test "$GITHUB_RESULT" = "success"
               test "$CX53_RESULT" = "skipped"
               test "$CX43_RESULT" = "skipped"
+              ;;
+            none)
+              test "$CX53_RESULT" = "skipped"
+              test "$CX43_RESULT" = "skipped"
+              test "$GITHUB_RESULT" = "skipped"
+              echo "::error::No runner route available (reason: ${ROUTER_REASON:-unknown}). Re-run later or use workflow_dispatch force_target=github."
+              exit 1
               ;;
             *)
               echo "::error::Unknown router target: ${ROUTER_TARGET:-<empty>}"

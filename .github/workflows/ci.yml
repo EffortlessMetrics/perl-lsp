@@ -49,12 +49,15 @@ jobs:
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             echo "run_ci=true" >> "$GITHUB_OUTPUT"
             echo "::notice::Non-PR event detected — running full CI"
+          elif [[ ",${{ join(github.event.pull_request.labels.*.name, ',') }}," == *",full-ci,"* ]]; then
+            echo "run_ci=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::PR has full-ci label — running full CI"
           elif [ "${{ github.event.pull_request.draft }}" = "true" ]; then
             echo "run_ci=false" >> "$GITHUB_OUTPUT"
             echo "::notice::Draft PR detected — skipping CI jobs until ready for review"
           else
-            echo "run_ci=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Ready-for-review PR detected — running full CI"
+            echo "run_ci=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::PR default lane is EM routed CI; legacy CI requires full-ci label"
           fi
 
   # ── Preflight: skip superseded SHAs to save cost ─────────────────────
