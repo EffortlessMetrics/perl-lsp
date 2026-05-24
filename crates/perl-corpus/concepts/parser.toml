@@ -132,3 +132,12 @@ fixtures = { floors = ["test_corpus/try_catch.pl", "test_corpus/try_catch_produc
 expect = { panic = false, timeout = false, mode = "parse" }
 snapshots = { tokens = false, ast = true, spans = true }
 run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "parser.tie_interface"
+status = "seed"
+scope = { crates = ["perl-parser"], risk_tags = ["builtin-call", "stateful-runtime"] }
+fixtures = { floors = ["test_corpus/tie_interface.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = true, nightly = true, release = false }
