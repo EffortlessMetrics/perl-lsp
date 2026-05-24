@@ -408,6 +408,43 @@ impl DebugAdapter {
 mod tests {
     use super::*;
 
+    fn create_breakpoint_test_perl_file()
+    -> Result<(tempfile::NamedTempFile, String), Box<dyn std::error::Error>> {
+        let mut file = tempfile::NamedTempFile::with_suffix(".pl")?;
+        let perl_code = r#"#!/usr/bin/perl
+use strict;
+use warnings;
+
+my $x = 1;
+my $y = 2;
+my $z = $x + $y;
+
+if ($x > 0) {
+    print "positive\n";
+}
+
+my @arr = (1, 2, 3);
+while (my $item = shift @arr) {
+    my $doubled = $item * 2;
+    print "$doubled\n";
+}
+
+sub process {
+    my ($value) = @_;
+    my $result = $value * 2;
+    return $result;
+}
+
+print "done\n";
+my $final = process($x);
+print "result: $final\n";
+"#;
+        file.write_all(perl_code.as_bytes())?;
+        file.flush()?;
+        let path = file.path().to_string_lossy().to_string();
+        Ok((file, path))
+    }
+
     #[test]
     fn test_debug_adapter_creation() {
         let adapter = DebugAdapter::new();
@@ -446,6 +483,64 @@ mod tests {
             }
             _ => return Err("Expected response".into()),
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_set_breakpoints_replace_semantics_updates_adapter_store()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (_keep, source_path) = create_breakpoint_test_perl_file()?;
+        let mut adapter = DebugAdapter::new();
+
+        let first = adapter.handle_request(
+            1,
+            "setBreakpoints",
+            Some(json!({
+                "source": { "path": source_path },
+                "breakpoints": [{ "line": 10 }],
+            })),
+        );
+        match first {
+            DapMessage::Response { success: true, command, .. } => {
+                assert_eq!(command, "setBreakpoints");
+            }
+            other => {
+                return Err(format!("expected successful setBreakpoints, got {other:?}").into());
+            }
+        }
+
+        let first_lines: Vec<i64> =
+            adapter.breakpoints.get_breakpoints(&source_path).iter().map(|bp| bp.line).collect();
+        assert_eq!(first_lines, vec![10], "first request should seed one stored breakpoint");
+
+        let second = adapter.handle_request(
+            2,
+            "setBreakpoints",
+            Some(json!({
+                "source": { "path": source_path },
+                "breakpoints": [
+                    { "line": 20 },
+                    { "line": 26 },
+                ],
+            })),
+        );
+        match second {
+            DapMessage::Response { success: true, command, .. } => {
+                assert_eq!(command, "setBreakpoints");
+            }
+            other => {
+                return Err(format!("expected successful setBreakpoints, got {other:?}").into());
+            }
+        }
+
+        let stored_lines: Vec<i64> =
+            adapter.breakpoints.get_breakpoints(&source_path).iter().map(|bp| bp.line).collect();
+        assert_eq!(
+            stored_lines,
+            vec![20, 26],
+            "second request must replace the stored adapter breakpoints, not append to them"
+        );
+
         Ok(())
     }
 

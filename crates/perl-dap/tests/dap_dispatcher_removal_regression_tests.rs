@@ -2,14 +2,14 @@
 //!
 //! `DapDispatcher` is deprecated since 0.2.0 (workspace is now 0.15.0) and
 //! has no callers outside its own unit tests. Before its removal, these
-//! tests pin every behavior its current unit tests prove, but through the
-//! supported `DebugAdapter::handle_request` surface - the production code
-//! path used by `DapServer::run`.
+//! tests pin the supported `DebugAdapter::handle_request` analogues of its
+//! behaviors - the production code path used by `DapServer::run`.
 //!
-//! Each test below maps 1:1 to a `DapDispatcher` test in
-//! `crates/perl-dap/src/dispatcher/mod.rs` (`mod tests`). After the
-//! removal PR lands, this file is the contract that ensures no behavior
-//! silently regressed.
+//! The tests below map to `DapDispatcher` tests in
+//! `crates/perl-dap/src/dispatcher/mod.rs` (`mod tests`) where the behavior
+//! is observable through the production request surface. Internal store state
+//! coverage lives beside `DebugAdapter`, where private adapter state can be
+//! inspected without adding public test-only API.
 //!
 //! Behavior intentionally **not** reproduced (documented as a deliberate
 //! divergence in issue #353):
@@ -22,6 +22,9 @@
 //!   only deletes the unused strict check. The test
 //!   `configuration_done_before_initialize_is_permissive` codifies the
 //!   current behavior so it is not silently changed again.
+//! - `DapDispatcher` had a failed-initialize no-event test. `DebugAdapter`
+//!   accepts initialize arguments permissively and has no corresponding
+//!   initialize failure path.
 
 use perl_dap::{DapMessage, DebugAdapter};
 use perl_tdd_support::{must, must_some};
@@ -133,38 +136,6 @@ fn successful_initialize_emits_initialized_event_with_no_body() {
     }
 }
 
-/// Mirrors `dispatcher::tests::test_failed_initialize_no_event`: when
-/// `initialize` fails, no `initialized` event must be emitted. The current
-/// implementation gates the event on `response_succeeded_for_command` -
-/// this pins that gate.
-#[test]
-fn failed_initialize_does_not_emit_initialized_event() {
-    let mut adapter = DebugAdapter::new();
-    let (tx, rx) = channel();
-    adapter.set_event_sender(tx);
-
-    // Argument shape that fails to deserialize: adapterID must be a string.
-    let response = adapter.handle_request(
-        1,
-        "initialize",
-        Some(json!({
-            "adapterID": 123_i64,
-            "linesStartAt1": "not a bool",
-        })),
-    );
-
-    // Whichever way the response went, there must be no `initialized` event
-    // unless the response itself succeeded. The contract under test is the
-    // gate, not which arguments specifically fail.
-    if let DapMessage::Response { success: false, .. } = response {
-        let drained = rx.recv_timeout(Duration::from_millis(200));
-        assert!(
-            drained.is_err(),
-            "no event should be emitted after a failed initialize, got {drained:?}"
-        );
-    }
-}
-
 // --- setBreakpoints -----------------------------------------------------------
 
 /// Mirrors `dispatcher::tests::test_handle_set_breakpoints`: on a real
@@ -239,53 +210,6 @@ fn set_breakpoints_preserves_request_order_through_dispatch() {
     let lines: Vec<i64> =
         breakpoints.iter().filter_map(|bp| bp.get("line").and_then(|l| l.as_i64())).collect();
     assert_eq!(lines, vec![25, 10, 15], "response order must mirror request order");
-}
-
-/// Mirrors `dispatcher::tests::test_handle_set_breakpoints_replace_semantics`:
-/// a second `setBreakpoints` for the same source must clear the first set,
-/// not append to it.
-#[test]
-fn set_breakpoints_replace_semantics_through_dispatch() {
-    let (_keep, source_path) = create_test_perl_file();
-    let mut adapter = DebugAdapter::new();
-
-    let first = adapter.handle_request(
-        1,
-        "setBreakpoints",
-        Some(json!({
-            "source": { "path": source_path },
-            "breakpoints": [{ "line": 10 }],
-        })),
-    );
-    assert!(matches!(first, DapMessage::Response { success: true, .. }));
-
-    let second = adapter.handle_request(
-        2,
-        "setBreakpoints",
-        Some(json!({
-            "source": { "path": source_path },
-            "breakpoints": [
-                { "line": 20 },
-                { "line": 26 },
-            ],
-        })),
-    );
-
-    let body = match second {
-        DapMessage::Response { success: true, body, .. } => must_some(body),
-        other => must(Err::<serde_json::Value, _>(format!(
-            "expected successful Response, got {other:?}"
-        ))),
-    };
-
-    let breakpoints = must_some(body.get("breakpoints").and_then(|b| b.as_array()));
-    let lines: Vec<i64> =
-        breakpoints.iter().filter_map(|bp| bp.get("line").and_then(|l| l.as_i64())).collect();
-    assert_eq!(
-        lines,
-        vec![20, 26],
-        "REPLACE semantics: only the second call's breakpoints survive"
-    );
 }
 
 /// Mirrors `dispatcher::tests::test_handle_set_breakpoints_missing_arguments`:
