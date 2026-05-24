@@ -20,6 +20,7 @@ categories = ["parsing", "text-processing"]
 criterion.workspace = true
 perl-lexer = { workspace = true }
 perl-parser-core = { workspace = true }
+proptest.workspace = true
 serde = { workspace = true }
 serde_json.workspace = true
 

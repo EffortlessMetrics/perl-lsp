@@ -14,6 +14,9 @@ keywords = ["perl", "line", "index", "incremental", "lsp"]
 categories = ["text-processing", "development-tools", "parsing"]
 include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
 
+[dev-dependencies]
+proptest.workspace = true
+
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]
 
