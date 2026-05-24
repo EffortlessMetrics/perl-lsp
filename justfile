@@ -1217,6 +1217,16 @@ ci-lsp-bdd:
     @echo "🎭 Running LSP BDD workflow tests..."
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
         cargo test -p perl-lsp-rs --locked --test lsp_bdd_workflows -- --test-threads=1
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp-rs --locked --test lsp_inline_completion_stream_bdd_workflows -- --test-threads=1
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp-rs --locked --test lsp_linked_editing_bdd_ux_tests -- --test-threads=1
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp-rs --locked --test lsp_ux_navigation_bdd_tests -- --test-threads=1
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp-rs --locked --test lsp_ux_document_symbols_bdd -- --test-threads=1
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp-rs --locked --test lsp_completion_ux_bdd -- --test-threads=1
     @echo "✅ LSP BDD workflow tests passed"
 
 # LSP compatibility coverage for absorbed provider and feature governance surfaces.
