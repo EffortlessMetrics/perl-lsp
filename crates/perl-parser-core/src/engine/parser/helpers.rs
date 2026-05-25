@@ -717,6 +717,30 @@ impl<'a> Parser<'a> {
             return false;
         }
 
+        // `class` starts a declaration only when the next token is an Identifier,
+        // DoubleColon, or Colon (mirroring the guard in parse_statement).
+        // `class->new()` is a valid bareword method-call expression and must be
+        // allowed as an assignment RHS.
+        if self.peek_kind() == Some(TokenKind::Class)
+            && !matches!(
+                self.tokens.peek_second().map(|t| t.kind),
+                Ok(TokenKind::Identifier | TokenKind::DoubleColon | TokenKind::Colon)
+            )
+        {
+            return false;
+        }
+
+        // `method` starts a declaration only when the next token is an Identifier
+        // (the method name), mirroring parse_statement's disambiguation guard.
+        if self.peek_kind() == Some(TokenKind::Method)
+            && !matches!(
+                self.tokens.peek_second().map(|t| t.kind),
+                Ok(TokenKind::Identifier)
+            )
+        {
+            return false;
+        }
+
         match self.peek_kind() {
             Some(kind) if kind.is_recovery_boundary() => true,
             // Statement-starter keywords cannot serve as an expression RHS.
@@ -737,6 +761,12 @@ impl<'a> Parser<'a> {
             | Some(TokenKind::Until)
             | Some(TokenKind::For)
             | Some(TokenKind::Foreach)
+            // Perl 5.38+ declaration starters: class/method/format are declaration
+            // starters when followed by their expected tokens.  The early-return guards
+            // above pass through bareword-method-call forms such as `class->new()`.
+            | Some(TokenKind::Class)
+            | Some(TokenKind::Method)
+            | Some(TokenKind::Format)
             | None => true,
             _ => false,
         }
