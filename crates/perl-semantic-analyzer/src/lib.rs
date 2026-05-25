@@ -7,7 +7,6 @@
 
 #![deny(unsafe_code)]
 #![deny(unreachable_pub)]
-#![deny(clippy::print_stderr, clippy::print_stdout)]
 #![cfg_attr(
     test,
     allow(

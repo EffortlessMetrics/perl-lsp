@@ -1,7 +1,6 @@
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
 #![deny(unsafe_code)]
-#![deny(clippy::print_stderr, clippy::print_stdout)]
 #![cfg_attr(test, allow(clippy::print_stderr, clippy::print_stdout))]
 
 /// Helpers for translating feature catalog entries into client capability checks.

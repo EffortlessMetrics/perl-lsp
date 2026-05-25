@@ -307,9 +307,6 @@
 //! ```
 
 #![deny(unsafe_code)]
-// Lint enforcement: library modules must use tracing, not direct stderr/stdout prints.
-// cli.rs is exempt — it provides user-facing CLI output that intentionally uses stderr/stdout.
-#![deny(clippy::print_stderr, clippy::print_stdout)]
 #![cfg_attr(test, allow(clippy::print_stderr, clippy::print_stdout))]
 #![warn(missing_docs)]
 #![allow(

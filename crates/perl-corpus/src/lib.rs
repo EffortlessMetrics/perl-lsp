@@ -215,8 +215,6 @@
 //! See existing corpus files for examples and conventions.
 #![allow(clippy::pedantic)]
 // Corpus crate - focus on core clippy lints only
-// Lint enforcement: library code must use tracing, not direct stderr/stdout prints.
-#![deny(clippy::print_stderr, clippy::print_stdout)]
 #![cfg_attr(test, allow(clippy::print_stderr, clippy::print_stdout))]
 
 pub mod api;

@@ -149,6 +149,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Drain all pending heredocs after statement completion (FIFO order)
+    #[allow(clippy::print_stderr, reason = "debug-only diagnostic — conditional on debug_assertions, cannot use #[expect]")]
     fn drain_pending_heredocs(&mut self, root: &mut Node) {
         if self.pending_heredocs.is_empty() {
             self.heredoc_start_time = None;
@@ -224,6 +225,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Try to attach heredoc content at this node or its children
+    #[allow(clippy::print_stderr, reason = "debug-only diagnostic — conditional on debug_assertions, cannot use #[expect]")]
     fn try_attach_at_node(
         &self,
         node: &mut Node,

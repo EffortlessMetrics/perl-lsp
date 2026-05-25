@@ -1,3 +1,5 @@
+// Unwired scan tests — eprintln! used for diagnostic output.
+#![allow(clippy::print_stderr, clippy::print_stdout)]
 //! Tests for the unwired infrastructure scanner (issue #2667)
 //!
 //! Validates the core logic of the `cargo xtask unwired-scan` command:

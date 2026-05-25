@@ -5,6 +5,8 @@
 //! messages (`window/showMessage`, `window/logMessage`, diagnostic
 //! notifications, etc.) are captured in an event queue so scenarios can
 //! assert on user-visible messages after the fact.
+// Test harness client — eprintln! echoes spawned server stderr for debugging.
+#![allow(clippy::print_stderr)]
 
 use crate::{FakeWorkspace, ScenarioConfig};
 use anyhow::{Context, Result, anyhow};
