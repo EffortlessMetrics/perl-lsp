@@ -1,3 +1,5 @@
+// Agent config validation tests — eprintln! used for diagnostic output.
+#![allow(clippy::print_stderr, clippy::print_stdout)]
 //! Agent Configuration Validation Tests
 //!
 //! Tests for issue #156: Agent Architecture - Need automated validation for agent configuration consistency
