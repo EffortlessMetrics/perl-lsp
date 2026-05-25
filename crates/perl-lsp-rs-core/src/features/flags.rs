@@ -63,6 +63,8 @@ pub struct AdvertisedFeatures {
     pub document_highlight: bool,
     /// Go-to-declaration navigation
     pub declaration: bool,
+    /// Inline completion suggestions provider
+    pub inline_completion: bool,
 }
 
 /// Build-time feature flags for conditional LSP capability compilation
@@ -173,6 +175,7 @@ impl BuildFlags {
             signature_help: self.signature_help,
             document_highlight: self.document_highlight,
             declaration: self.declaration,
+            inline_completion: self.inline_completion,
         }
     }
 

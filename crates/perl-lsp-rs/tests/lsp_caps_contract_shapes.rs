@@ -251,16 +251,15 @@ fn test_capability_shapes_lsp_318_contract() -> Result<(), Box<dyn std::error::E
         );
     }
 
-    // Test inline completion shape (MUST be in experimental if using old lsp-types)
+    // Test inline completion shape (standard top-level capability)
     if build.inline_completion {
-        // With current lsp-types, this must be under experimental
         assert!(
-            caps_json["experimental"].is_object(),
-            "experimental must exist for inline completion"
+            caps_json["inlineCompletionProvider"].is_object(),
+            "inlineCompletionProvider must be top-level"
         );
         assert!(
-            caps_json["experimental"]["inlineCompletionProvider"].is_object(),
-            "inlineCompletionProvider must be under experimental"
+            caps_json["experimental"]["inlineCompletionProvider"].is_null(),
+            "experimental.inlineCompletionProvider must be absent"
         );
     }
 

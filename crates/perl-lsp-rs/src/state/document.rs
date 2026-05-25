@@ -282,6 +282,10 @@ pub struct ClientCapabilities {
     pub implementation_link_support: bool,
     /// Supports dynamic registration for file watching
     pub dynamic_registration_support: bool,
+    /// Client declared textDocument/inlineCompletion capability
+    pub inline_completion_support: bool,
+    /// Supports dynamic registration for textDocument/inlineCompletion
+    pub inline_completion_dynamic_registration_support: bool,
     /// Supports `workspace/configuration` reverse requests from server.
     pub workspace_configuration_support: bool,
     /// Supports `workspaceFolders` capability negotiation/events.

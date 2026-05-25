@@ -97,6 +97,10 @@ impl LspServer {
         self.handle_initialized_dispatch()
     }
 
+    pub fn test_client_capabilities(&self) -> crate::state::document::ClientCapabilities {
+        self.client_capabilities.lock().clone()
+    }
+
     /// Test-only entrypoint for LSP `textDocument/definition`.
     ///
     /// Exercises go-to-definition functionality in tests. Returns the

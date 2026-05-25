@@ -27,6 +27,16 @@ fn is_jetbrains_client(params: &Value) -> bool {
         .unwrap_or(false)
 }
 
+fn merge_experimental_capability(capabilities: &mut Value, key: &str, value: Value) {
+    if !capabilities.get("experimental").is_some_and(Value::is_object) {
+        capabilities["experimental"] = json!({});
+    }
+
+    if let Some(experimental) = capabilities["experimental"].as_object_mut() {
+        experimental.insert(key.to_string(), value);
+    }
+}
+
 impl LspServer {
     /// Handle initialize request
     pub(crate) fn handle_initialize(
@@ -91,6 +101,13 @@ impl LspServer {
                     .and_then(|w| w.get("didChangeWatchedFiles"))
                     .and_then(|d| d.get("dynamicRegistration"))
                     .and_then(|b| b.as_bool())
+                    .unwrap_or(false);
+
+                caps.inline_completion_support =
+                    params.pointer("/capabilities/textDocument/inlineCompletion").is_some();
+                caps.inline_completion_dynamic_registration_support = params
+                    .pointer("/capabilities/textDocument/inlineCompletion/dynamicRegistration")
+                    .and_then(Value::as_bool)
                     .unwrap_or(false);
 
                 // JetBrains-family IDEs (IntelliJ IDEA, etc.) advertise dynamic watcher
@@ -431,6 +448,9 @@ impl LspServer {
         if features.type_hierarchy {
             capabilities["typeHierarchyProvider"] = json!(true);
         }
+        if features.inline_completion {
+            capabilities["inlineCompletionProvider"] = json!({});
+        }
 
         // Override text document sync with more detailed options
         capabilities["textDocumentSync"] = json!({
@@ -492,9 +512,7 @@ impl LspServer {
         });
 
         // Advertise experimental custom requests
-        capabilities["experimental"] = json!({
-            "perlInlineCompletionStream": true
-        });
+        merge_experimental_capability(&mut capabilities, "perlInlineCompletionStream", json!(true));
 
         Ok(Some(json!({
             "capabilities": capabilities,
@@ -907,6 +925,24 @@ mod tests {
         );
     }
 
+    #[test]
+    fn lsp4ij_inline_completion_dynamic_registration_shape_is_parsed() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "textDocument": {
+                    "inlineCompletion": {
+                        "dynamicRegistration": true
+                    }
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+        let caps = server.client_capabilities.lock();
+        assert!(caps.inline_completion_support);
+        assert!(caps.inline_completion_dynamic_registration_support);
+    }
     #[test]
     fn initialize_keeps_push_diagnostics_for_opencode() {
         let server = LspServer::new();

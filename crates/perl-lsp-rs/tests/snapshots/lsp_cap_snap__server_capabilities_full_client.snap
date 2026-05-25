@@ -70,11 +70,13 @@ executeCommandProvider:
     - perl.explainMissingModuleLookup
 experimental:
   perlInlineCompletionStream: true
+  typeHierarchyProvider: true
 foldingRangeProvider: true
 hoverProvider: true
 implementationProvider: true
 inlayHintProvider:
   resolveProvider: true
+inlineCompletionProvider: {}
 inlineValueProvider: true
 linkedEditingRangeProvider: true
 monikerProvider: true
