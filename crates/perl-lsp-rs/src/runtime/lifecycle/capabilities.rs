@@ -15,6 +15,17 @@ fn is_opencode_client(params: &Value) -> bool {
         .unwrap_or(false)
 }
 
+fn merge_experimental_capability(capabilities: &mut Value, key: &str, value: Value) {
+    if !capabilities.get("experimental").is_some_and(Value::is_object) {
+        capabilities["experimental"] = json!({});
+    }
+
+    capabilities["experimental"]
+        .as_object_mut()
+        .expect("experimental must be object")
+        .insert(key.to_string(), value);
+}
+
 fn is_jetbrains_client(params: &Value) -> bool {
     params
         .get("clientInfo")
@@ -100,6 +111,14 @@ impl LspServer {
                 if is_jetbrains_client(params) {
                     caps.dynamic_registration_support = false;
                 }
+
+                caps.inline_completion_support =
+                    params.pointer("/capabilities/textDocument/inlineCompletion").is_some();
+
+                caps.inline_completion_dynamic_registration_support = params
+                    .pointer("/capabilities/textDocument/inlineCompletion/dynamicRegistration")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
 
                 caps.workspace_configuration_support = params
                     .get("capabilities")
@@ -431,6 +450,9 @@ impl LspServer {
         if features.type_hierarchy {
             capabilities["typeHierarchyProvider"] = json!(true);
         }
+        if features.inline_completion {
+            capabilities["inlineCompletionProvider"] = json!({});
+        }
 
         // Override text document sync with more detailed options
         capabilities["textDocumentSync"] = json!({
@@ -492,9 +514,7 @@ impl LspServer {
         });
 
         // Advertise experimental custom requests
-        capabilities["experimental"] = json!({
-            "perlInlineCompletionStream": true
-        });
+        merge_experimental_capability(&mut capabilities, "perlInlineCompletionStream", json!(true));
 
         Ok(Some(json!({
             "capabilities": capabilities,
