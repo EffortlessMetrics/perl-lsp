@@ -49,7 +49,10 @@ jobs:
           GH_TOKEN: ${{ secrets.EM_RUNNER_READ_TOKEN }}
           ORG: EffortlessMetrics
           FORCE_TARGET: ${{ github.event_name == 'workflow_dispatch' && inputs.force_target || 'auto' }}
+          IS_PULL_REQUEST: ${{ github.event_name == 'pull_request' }}
           IS_FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+          PR_AUTHOR_LOGIN: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login || '' }}
+          PR_AUTHOR_TYPE: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.type || '' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -79,6 +82,27 @@ jobs:
           if [ "$IS_FORK_PR" = "true" ]; then
             emit "github" "fork_pr" "false" "true"
             exit 0
+          fi
+
+          if [ "$IS_PULL_REQUEST" = "true" ]; then
+            pr_author_login_lc="$(printf '%s' "${PR_AUTHOR_LOGIN:-}" | tr '[:upper:]' '[:lower:]')"
+            pr_author_type_lc="$(printf '%s' "${PR_AUTHOR_TYPE:-}" | tr '[:upper:]' '[:lower:]')"
+            is_bot_pr="false"
+
+            case "$pr_author_login_lc" in
+              dependabot*|app/*|*\[bot\])
+                is_bot_pr="true"
+                ;;
+            esac
+
+            if [ "$pr_author_type_lc" = "bot" ]; then
+              is_bot_pr="true"
+            fi
+
+            if [ "$is_bot_pr" = "true" ]; then
+              emit "github" "bot_pr_github_hosted" "false" "true"
+              exit 0
+            fi
           fi
 
           case "${FORCE_TARGET:-auto}" in
