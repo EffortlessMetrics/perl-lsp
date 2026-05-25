@@ -543,6 +543,8 @@ fn test_recovery_missing_rhs_before_class_declaration_keyword() {
     let ast = must(result);
     let sexp = ast.to_sexp();
 
+    assert!(matches!(&ast.kind, NodeKind::Program { .. }), "Expected program root; sexp: {sexp}");
+
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(
             statements.len(),
@@ -553,8 +555,6 @@ fn test_recovery_missing_rhs_before_class_declaration_keyword() {
             matches!(statements[1].kind, NodeKind::Class { .. }),
             "Second statement should be a Class node; sexp: {sexp}"
         );
-    } else {
-        unreachable!("Expected program root");
     }
 }
 
@@ -572,10 +572,10 @@ fn test_recovery_missing_rhs_before_method_declaration_keyword() {
     let ast = must(result);
     let sexp = ast.to_sexp();
 
+    assert!(matches!(&ast.kind, NodeKind::Program { .. }), "Expected program root; sexp: {sexp}");
+
     if let NodeKind::Program { statements } = &ast.kind {
         assert!(statements.len() >= 2, "Should recover into at least 2 statements; sexp: {sexp}");
-    } else {
-        unreachable!("Expected program root");
     }
 }
 
@@ -592,14 +592,14 @@ fn test_recovery_missing_rhs_before_format_declaration_keyword() {
     let ast = must(result);
     let sexp = ast.to_sexp();
 
+    assert!(matches!(&ast.kind, NodeKind::Program { .. }), "Expected program root; sexp: {sexp}");
+
     if let NodeKind::Program { statements } = &ast.kind {
         assert!(statements.len() >= 2, "Should recover into at least 2 statements; sexp: {sexp}");
         assert!(
             statements.iter().any(|s| matches!(s.kind, NodeKind::Format { .. })),
             "Should contain a Format node; sexp: {sexp}"
         );
-    } else {
-        unreachable!("Expected program root");
     }
 }
 
