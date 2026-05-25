@@ -2,11 +2,6 @@ use super::BuildFlags;
 use lsp_types::ServerCapabilities;
 
 pub(super) fn apply_experimental_features(caps: &mut ServerCapabilities, build: &BuildFlags) {
-    // Inline completion via experimental until lsp-types has the field.
-    if build.inline_completion {
-        insert_experimental_capability(caps, "inlineCompletionProvider", serde_json::json!({}));
-    }
-
     // Type hierarchy via experimental: lsp-types 0.97 lacks a `type_hierarchy_provider`
     // field on `ServerCapabilities`. We advertise it via `experimental` so that
     // `capabilities_for()` users and `feature_ids_from_caps` can detect the capability.

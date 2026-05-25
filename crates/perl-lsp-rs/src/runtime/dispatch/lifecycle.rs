@@ -33,6 +33,7 @@ impl LspServer {
         if self.client_capabilities.lock().dynamic_registration_support {
             self.register_file_watchers_async();
         }
+        self.register_inline_completion_if_needed();
 
         // Start workspace indexing in the background (if workspace folders
         // exist and the eager-indexing gate allows it). The gate defaults to

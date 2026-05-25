@@ -230,3 +230,22 @@ fn test_file_watcher_glob_pattern_variants() -> TestResult {
 
     Ok(())
 }
+
+#[test]
+fn guardrail_inline_completion_registration_and_capability_wiring() {
+    let lifecycle_caps = include_str!("../src/runtime/lifecycle/capabilities.rs");
+    assert!(
+        !lifecycle_caps.contains("capabilities[\"experimental\"] = json!({\n            \"perlInlineCompletionStream\": true\n        });"),
+        "initialize must not overwrite capabilities.experimental with only perlInlineCompletionStream"
+    );
+
+    let watchers = include_str!("../src/runtime/lifecycle/watchers.rs");
+    assert!(
+        !watchers.contains("self.outbound.send_request"),
+        "inline-completion dynamic registration must use self.send_request"
+    );
+    assert!(
+        !watchers.contains("dynamic_registration_support &&"),
+        "inline-completion dynamic registration must not be gated on watcher dynamic registration"
+    );
+}

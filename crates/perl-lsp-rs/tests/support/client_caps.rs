@@ -75,6 +75,9 @@ pub fn full() -> Value {
             "inlayHint": {
                 "dynamicRegistration": false
             },
+            "inlineCompletion": {
+                "dynamicRegistration": true
+            },
             "diagnostic": {
                 "dynamicRegistration": false,
                 "relatedDocumentSupport": false

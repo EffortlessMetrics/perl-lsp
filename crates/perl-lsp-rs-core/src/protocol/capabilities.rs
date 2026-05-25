@@ -79,6 +79,11 @@ pub fn capabilities_json(build: BuildFlags) -> Value {
     if build.range_formatting {
         json["documentRangesFormattingProvider"] = serde_json::json!(true);
     }
+    // Manually add inlineCompletionProvider (LSP 3.18) because lsp-types 0.97
+    // predates this field. The handler already exists in completion.rs.
+    if build.inline_completion {
+        json["inlineCompletionProvider"] = serde_json::json!({});
+    }
 
     json
 }
@@ -136,7 +141,7 @@ mod tests {
     /// `feature_ids_from_caps()` cannot detect because lsp-types 0.97
     /// lacks the corresponding `ServerCapabilities` field.
     ///
-    /// - `inline_completion`: advertised via `experimental` JSON, no typed field
+    /// - `inline_completion`: injected in `capabilities_json()` (LSP 3.18, not in lsp-types 0.97)
     /// - `notebook_cell_execution`: sub-feature of notebook sync, no own field
     /// - `ranges_formatting`: injected in `capabilities_json()` (LSP 3.18, not in lsp-types 0.97)
     ///
@@ -205,6 +210,37 @@ mod tests {
         assert!(
             json.get("documentRangesFormattingProvider").is_none(),
             "documentRangesFormattingProvider must not be present when range_formatting is disabled"
+        );
+    }
+
+    #[test]
+    fn inline_completion_advertised_as_top_level_json_when_enabled() {
+        let flags = BuildFlags { inline_completion: true, ..BuildFlags::default() };
+        let json = capabilities_json(flags);
+        assert_eq!(
+            json.get("inlineCompletionProvider"),
+            Some(&serde_json::json!({})),
+            "inlineCompletionProvider must be advertised as an empty top-level object when enabled"
+        );
+    }
+
+    #[test]
+    fn inline_completion_absent_when_disabled() {
+        let flags = BuildFlags { inline_completion: false, ..BuildFlags::default() };
+        let json = capabilities_json(flags);
+        assert!(
+            json.get("inlineCompletionProvider").is_none(),
+            "inlineCompletionProvider must be absent when inline completion is disabled"
+        );
+    }
+
+    #[test]
+    fn inline_completion_not_advertised_under_experimental() {
+        let flags = BuildFlags { inline_completion: true, ..BuildFlags::default() };
+        let json = capabilities_json(flags);
+        assert!(
+            json.pointer("/experimental/inlineCompletionProvider").is_none(),
+            "inlineCompletionProvider must not be advertised under capabilities.experimental"
         );
     }
 
