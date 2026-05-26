@@ -363,18 +363,23 @@ fn test_platform_functions_are_public_and_callable() {
     // (the use statement above confirms this at compile time)
 }
 
-/// Test 21: REGRESSION: feature_catalog build module is correctly used by both perl-dap and perl-lsp-rs-core
-/// If the include!() pattern in perl-dap/build.rs fails, this would catch it.
+/// Test 21: REGRESSION: perl-dap build catalog logic is package-local.
+/// If perl-dap/build.rs starts depending on repo-local files again, this would catch it.
 #[test]
-fn test_dap_build_includes_rs_core_catalog() {
+fn test_dap_build_uses_package_local_catalog() {
     let root = workspace_root();
     let dap_build = root.join("crates/perl-dap/build.rs");
     let content = fs::read_to_string(&dap_build).expect("perl-dap/build.rs should be readable");
 
-    // The build.rs should include the shared catalog from rs-core, not reference perl-feature-catalog crate
+    // The build.rs should keep catalog loading package-local, not reference absorbed crates or repo paths.
     assert!(
-        content.contains("perl-lsp-rs-core/build_catalog.rs"),
-        "perl-dap/build.rs must include catalog from perl-lsp-rs-core (not standalone perl-feature-catalog)"
+        content.contains("fn load_catalog_for_build"),
+        "perl-dap/build.rs must keep package-local catalog loading"
+    );
+
+    assert!(
+        !content.contains("perl-lsp-rs-core/build_catalog.rs"),
+        "perl-dap/build.rs should not depend on repo-local perl-lsp-rs-core/build_catalog.rs"
     );
 
     assert!(
