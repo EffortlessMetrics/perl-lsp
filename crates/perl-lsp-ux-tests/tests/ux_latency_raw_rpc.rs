@@ -1,4 +1,4 @@
-//! Raw-RPC latency receipts for the 0.15.1 Neovim latency lane (PR 5/5).
+//! Raw-RPC latency receipts for the post-cutover Neovim lean-mode lane.
 //!
 //! Five scenarios that exercise the e2e runtime path against the real LSP
 //! binary. They prove that:
@@ -21,6 +21,8 @@
 //!     PERL_LSP_E2E=1 \
 //!     PERL_LSP_DIAGNOSTIC_DEBOUNCE_MS=0 \
 //!     PERL_LSP_DIAGNOSTIC_MODE=syntax-only \
+//!     PERL_LSP_EAGER_WORKSPACE_INDEXING=false \
+//!     PERL_LSP_FILE_WATCHERS=false \
 //!     cargo test -p perl-lsp-ux-tests --test ux_latency_raw_rpc \
 //!         -- --test-threads=1 --nocapture
 
@@ -49,9 +51,9 @@ sub broken {}
 "#;
 
 /// Build an e2e harness config: syntax-only diagnostics, zero debounce, no
-/// eager workspace indexing, no file watchers. Mirrors what `perllsp
-/// --runtime-mode e2e` defaults to so the receipts measure the
-/// latency-focused runtime path.
+/// eager workspace indexing, no file watchers. These values mirror
+/// `perllsp --runtime-mode e2e`, but are set explicitly so the receipt
+/// documents the exact lean runtime path it exercises.
 fn e2e_config(timeout: Duration) -> ScenarioConfig {
     ScenarioConfig {
         timeout,
@@ -61,6 +63,8 @@ fn e2e_config(timeout: Duration) -> ScenarioConfig {
             ("PERL_LSP_E2E".to_string(), Some("1".to_string())),
             ("PERL_LSP_DIAGNOSTIC_DEBOUNCE_MS".to_string(), Some("0".to_string())),
             ("PERL_LSP_DIAGNOSTIC_MODE".to_string(), Some("syntax-only".to_string())),
+            ("PERL_LSP_EAGER_WORKSPACE_INDEXING".to_string(), Some("false".to_string())),
+            ("PERL_LSP_FILE_WATCHERS".to_string(), Some("false".to_string())),
             // Quiet the startup banner so test output is uncluttered.
             ("PERL_LSP_QUIET".to_string(), Some("1".to_string())),
         ],
