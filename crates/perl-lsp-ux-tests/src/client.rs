@@ -49,6 +49,8 @@ pub struct UxClient {
     events: Arc<Mutex<VecDeque<Value>>>,
     /// Responses to requests (matched by id).
     responses: Arc<Mutex<VecDeque<Value>>>,
+    /// Stderr lines captured from the server process.
+    stderr_lines: Arc<Mutex<Vec<String>>>,
     _stdout_thread: std::thread::JoinHandle<()>,
     _stderr_thread: std::thread::JoinHandle<()>,
 }
@@ -85,6 +87,7 @@ impl UxClient {
 
         let events: Arc<Mutex<VecDeque<Value>>> = Arc::new(Mutex::new(VecDeque::new()));
         let responses: Arc<Mutex<VecDeque<Value>>> = Arc::new(Mutex::new(VecDeque::new()));
+        let stderr_lines: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
 
         // ── stdout reader thread ──────────────────────────────────────────────
         let ev_clone = events.clone();
@@ -110,14 +113,22 @@ impl UxClient {
 
         // ── stderr drain thread ───────────────────────────────────────────────
         let echo = config.echo_stderr;
+        let stderr_clone = stderr_lines.clone();
         let _stderr_thread = std::thread::Builder::new()
             .name("ux-lsp-stderr".into())
             .spawn(move || {
                 let reader = BufReader::new(stderr);
                 for line in reader.lines() {
                     match line {
-                        Ok(l) if echo => eprintln!("[perl-lsp stderr] {}", l),
-                        _ => {}
+                        Ok(l) => {
+                            if let Ok(mut guard) = stderr_clone.lock() {
+                                guard.push(l.clone());
+                            }
+                            if echo {
+                                eprintln!("[perl-lsp stderr] {}", l);
+                            }
+                        }
+                        Err(_) => {}
                     }
                 }
             })
@@ -131,6 +142,7 @@ impl UxClient {
             stdin: Mutex::new(stdin),
             events,
             responses,
+            stderr_lines,
             _stdout_thread,
             _stderr_thread,
         };
@@ -309,6 +321,11 @@ impl UxClient {
             guard.iter().cloned().collect()
         };
         raw.into_iter().map(decode_event).collect()
+    }
+
+    /// Clone all stderr lines captured from the server process.
+    pub fn peek_stderr_lines(&self) -> Vec<String> {
+        self.stderr_lines.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
     /// Wait up to `timeout` for any `window/showMessage` containing `needle`.

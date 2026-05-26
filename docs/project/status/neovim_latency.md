@@ -53,6 +53,12 @@ They exercise:
 The manual Neovim smoke lives in
 [`scripts/ux/neovim_lean_smoke.sh`](../../../scripts/ux/neovim_lean_smoke.sh).
 
+The lean startup trace receipt lives in
+[`crates/perl-lsp-ux-tests/tests/ux_neovim_lean_startup_trace.rs`](../../../crates/perl-lsp-ux-tests/tests/ux_neovim_lean_startup_trace.rs).
+It emits JSON for the observed startup path, including initialize response,
+initialized notification, workspace-indexing decision, didOpen processing,
+first diagnostic publish, and first completion response.
+
 ## What This Proves
 
 These receipts prove e2e wiring, not hard latency budgets. They show that the
@@ -70,8 +76,6 @@ waiting on full diagnostic or eager-indexing behavior.
 
 ## Next Evidence
 
-- Add a startup trace receipt covering initialize, indexing decision, didOpen,
-  first diagnostics, and first completion.
 - Add a rapid-typing stale-read pressure receipt that proves older generations
   cancel before taking worker capacity while the latest request still runs.
 - Capture benchmark hardware timing before claiming numeric latency budgets.
