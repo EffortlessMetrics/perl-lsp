@@ -48,6 +48,7 @@ documentOnTypeFormattingProvider:
     - ;
     - "\n"
 documentRangeFormattingProvider: true
+documentRangesFormattingProvider: true
 documentSymbolProvider: true
 executeCommandProvider:
   commands:
@@ -70,11 +71,13 @@ executeCommandProvider:
     - perl.explainMissingModuleLookup
 experimental:
   perlInlineCompletionStream: true
+  typeHierarchyProvider: true
 foldingRangeProvider: true
 hoverProvider: true
 implementationProvider: true
 inlayHintProvider:
   resolveProvider: true
+inlineCompletionProvider: {}
 inlineValueProvider: true
 linkedEditingRangeProvider: true
 monikerProvider: true
@@ -150,7 +153,8 @@ textDocumentSync:
   willSave: true
   willSaveWaitUntil: true
 typeDefinitionProvider: true
-typeHierarchyProvider: true
+typeHierarchyProvider:
+  workDoneProgressOptions: {}
 workspace:
   fileOperations:
     didCreate:

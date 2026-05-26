@@ -27,6 +27,16 @@ fn is_jetbrains_client(params: &Value) -> bool {
         .unwrap_or(false)
 }
 
+fn merge_experimental_capability(capabilities: &mut Value, key: &str, value: Value) {
+    if !capabilities.get("experimental").is_some_and(Value::is_object) {
+        capabilities["experimental"] = json!({});
+    }
+
+    if let Some(experimental) = capabilities["experimental"].as_object_mut() {
+        experimental.insert(key.to_string(), value);
+    }
+}
+
 impl LspServer {
     /// Handle initialize request
     pub(crate) fn handle_initialize(
@@ -190,6 +200,14 @@ impl LspServer {
                     caps.inline_value_refresh_support = cap_val
                         .pointer("/workspace/inlineValue/refreshSupport")
                         .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+
+                    caps.inline_completion_support =
+                        cap_val.pointer("/textDocument/inlineCompletion").is_some();
+
+                    caps.inline_completion_dynamic_registration_support = cap_val
+                        .pointer("/textDocument/inlineCompletion/dynamicRegistration")
+                        .and_then(Value::as_bool)
                         .unwrap_or(false);
 
                     // workspace/diagnostic/refresh
@@ -415,21 +433,13 @@ impl LspServer {
         *self.advertised_features.lock() = features.clone();
 
         // Generate capabilities from build flags
-        let server_caps = crate::protocol::capabilities::capabilities_for(build_flags);
-        let mut capabilities = serde_json::to_value(&server_caps).map_err(|e| {
-            crate::protocol::internal_error(&format!(
-                "Failed to serialize server capabilities: {}",
-                e
-            ))
-        })?;
+        let mut capabilities =
+            crate::protocol::capabilities::capabilities_json(build_flags.clone());
 
         // Add fields not yet in lsp-types 0.97
         capabilities["positionEncoding"] = json!("utf-16");
         if features.declaration {
             capabilities["declarationProvider"] = json!(true);
-        }
-        if features.type_hierarchy {
-            capabilities["typeHierarchyProvider"] = json!(true);
         }
 
         // Override text document sync with more detailed options
@@ -491,10 +501,13 @@ impl LspServer {
             }
         });
 
-        // Advertise experimental custom requests
-        capabilities["experimental"] = json!({
-            "perlInlineCompletionStream": true
-        });
+        if features.inline_completion {
+            merge_experimental_capability(
+                &mut capabilities,
+                "perlInlineCompletionStream",
+                json!(true),
+            );
+        }
 
         Ok(Some(json!({
             "capabilities": capabilities,
@@ -796,6 +809,25 @@ mod tests {
         let caps = server.client_capabilities.lock();
         assert!(caps.snippet_support);
         assert!(caps.completion_commit_characters_support);
+    }
+
+    #[test]
+    fn lsp4ij_inline_completion_dynamic_registration_shape_is_parsed() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "textDocument": {
+                    "inlineCompletion": {
+                        "dynamicRegistration": true
+                    }
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+        let caps = server.client_capabilities.lock();
+        assert!(caps.inline_completion_support);
+        assert!(caps.inline_completion_dynamic_registration_support);
     }
 
     #[test]

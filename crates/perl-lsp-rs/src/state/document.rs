@@ -290,6 +290,10 @@ pub struct ClientCapabilities {
     pub snippet_support: bool,
     /// Supports `completionItem.commitCharacters` in completion results
     pub completion_commit_characters_support: bool,
+    /// Client declared textDocument/inlineCompletion capability.
+    pub inline_completion_support: bool,
+    /// Supports dynamic registration for textDocument/inlineCompletion.
+    pub inline_completion_dynamic_registration_support: bool,
     /// Supports markdown message content in diagnostics (LSP 3.18)
     ///
     /// When true, the server can provide rich markdown formatting in diagnostic

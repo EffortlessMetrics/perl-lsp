@@ -61,4 +61,33 @@ impl LspServer {
             tracing::error!(%error, "Failed to send file watcher registration request");
         }
     }
+
+    pub(crate) fn register_inline_completion_if_needed(&self) {
+        let should_register = {
+            let caps = self.client_capabilities.lock();
+            caps.inline_completion_dynamic_registration_support
+                && self.advertised_features.lock().inline_completion
+        };
+
+        if !should_register {
+            return;
+        }
+
+        let params = serde_json::json!({
+            "registrations": [{
+                "id": "perl-inlineCompletion",
+                "method": "textDocument/inlineCompletion",
+                "registerOptions": {
+                    "documentSelector": [
+                        { "language": "perl" },
+                        { "language": "perl5" }
+                    ]
+                }
+            }]
+        });
+
+        if let Err(error) = self.send_request("client/registerCapability", params) {
+            tracing::warn!(%error, "Failed to register inline completion capability");
+        }
+    }
 }
