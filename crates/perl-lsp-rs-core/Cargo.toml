@@ -12,7 +12,14 @@ documentation = "https://docs.rs/perl-lsp-rs-core"
 readme = "README.md"
 keywords = ["perl", "lsp", "features", "contracts", "capabilities"]
 categories = ["development-tools", "development-tools::testing"]
-include = ["src/**", "build.rs", "features_sot.toml", "Cargo.toml", "README.md"]
+include = [
+    "src/**",
+    "build.rs",
+    "build_catalog.rs",
+    "features_sot.toml",
+    "Cargo.toml",
+    "README.md",
+]
 
 [lib]
 doctest = false
