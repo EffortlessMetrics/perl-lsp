@@ -467,7 +467,9 @@ impl LspServer {
                 }
             }
             (true, false) => {
-                capabilities["inlineCompletionProvider"] = json!({});
+                if let Some(capabilities) = capabilities.as_object_mut() {
+                    capabilities.insert("inlineCompletionProvider".to_string(), json!({}));
+                }
             }
             (false, _) => {
                 if let Some(capabilities) = capabilities.as_object_mut() {
