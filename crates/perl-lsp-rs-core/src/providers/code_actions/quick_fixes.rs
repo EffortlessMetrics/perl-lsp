@@ -1972,6 +1972,45 @@ fn diagnostic_line_range(source: &str, range: (usize, usize)) -> Option<(usize, 
     Some((line_start, line_end))
 }
 
+/// Fix undefined loop-control label by removing the label (PL410).
+///
+/// `next LABEL`, `last LABEL`, and `redo LABEL` where the label is not defined
+/// anywhere in the file. Dropping the label converts the statement into its
+/// unlabelled form, which targets the innermost enclosing loop at runtime —
+/// usually the correct intent when the label was a typo or stale reference.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((start, end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let Some(range_text) = source.get(start..end) else {
+        return Vec::new();
+    };
+
+    // Extract just the operator (next / last / redo) — the first whitespace-delimited token.
+    let op = range_text.split_whitespace().next().unwrap_or("next");
+
+    // Only act on the three expected loop-control operators for PL410.
+    if !matches!(op, "next" | "last" | "redo") {
+        return Vec::new();
+    }
+
+    vec![CodeAction {
+        title: format!("Remove undefined label: change to `{op}`"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start, end },
+                new_text: op.to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
 fn valid_diagnostic_range(source: &str, range: (usize, usize)) -> Option<(usize, usize)> {
     let (start, end) = range;
     if start > end
