@@ -80,7 +80,9 @@ pub fn capabilities_json(build: BuildFlags) -> Value {
         json["documentRangesFormattingProvider"] = serde_json::json!(true);
     }
     // Manually add inlineCompletionProvider (LSP 3.18) because lsp-types 0.97
-    // predates this field. The handler already exists in completion.rs.
+    // predates this field. This JSON surface has no client context and
+    // represents the static/default advertisement; runtime initialize removes
+    // it when a client opts into dynamic inline-completion registration.
     if build.inline_completion {
         json["inlineCompletionProvider"] = serde_json::json!({});
     }

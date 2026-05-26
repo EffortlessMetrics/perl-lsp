@@ -29,12 +29,20 @@ fn is_jetbrains_client(params: &Value) -> bool {
 
 fn merge_experimental_capability(capabilities: &mut Value, key: &str, value: Value) {
     if !capabilities.get("experimental").is_some_and(Value::is_object) {
-        capabilities["experimental"] = json!({});
+        let Some(capabilities_object) = capabilities.as_object_mut() else {
+            tracing::warn!("Failed to merge experimental capability into non-object capabilities");
+            return;
+        };
+        capabilities_object.insert("experimental".to_string(), json!({}));
     }
 
-    if let Some(experimental) = capabilities["experimental"].as_object_mut() {
-        experimental.insert(key.to_string(), value);
-    }
+    let Some(experimental) = capabilities.get_mut("experimental").and_then(Value::as_object_mut)
+    else {
+        tracing::warn!("Failed to merge experimental capability into non-object value");
+        return;
+    };
+
+    experimental.insert(key.to_string(), value);
 }
 
 impl LspServer {
@@ -440,8 +448,33 @@ impl LspServer {
         *self.advertised_features.lock() = features.clone();
 
         // Generate capabilities from build flags
+        //
+        // `capabilities_json()` is the static/default capability surface and
+        // has no client context. Runtime initialize may remove standard LSP
+        // fields such as inlineCompletionProvider when the client asks for
+        // dynamic registration for the same selector.
         let mut capabilities =
             crate::protocol::capabilities::capabilities_json(build_flags.clone());
+        let inline_completion_dynamic_registration_support =
+            self.client_capabilities.lock().inline_completion_dynamic_registration_support;
+
+        match (features.inline_completion, inline_completion_dynamic_registration_support) {
+            // LSP 3.18 dynamic registration is an alternate registration mode,
+            // not an addition to static registration for the same selector.
+            (true, true) => {
+                if let Some(capabilities) = capabilities.as_object_mut() {
+                    capabilities.remove("inlineCompletionProvider");
+                }
+            }
+            (true, false) => {
+                capabilities["inlineCompletionProvider"] = json!({});
+            }
+            (false, _) => {
+                if let Some(capabilities) = capabilities.as_object_mut() {
+                    capabilities.remove("inlineCompletionProvider");
+                }
+            }
+        }
 
         // Add fields not yet in lsp-types 0.97
         capabilities["positionEncoding"] = json!("utf-16");

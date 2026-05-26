@@ -95,6 +95,20 @@ The server registers for file-system change notifications via dynamic registrati
 
 In TCP mode, each server instance maintains its own watcher registration, so external changes are delivered independently to each connection.
 
+### Inline Completion Capability Registration
+
+`perl-lsp` supports the LSP 3.18 `textDocument/inlineCompletion` request. The capability is a standard LSP surface, not an experimental server capability.
+
+Registration uses exactly one mode per client:
+
+- Static mode: when the client omits `textDocument.inlineCompletion.dynamicRegistration` or sets it to `false`, the initialize response advertises top-level `inlineCompletionProvider: {}`.
+- Dynamic mode: when the client sets `textDocument.inlineCompletion.dynamicRegistration: true`, the initialize response omits `inlineCompletionProvider` and the server sends `client/registerCapability` for `textDocument/inlineCompletion` after `initialized`.
+- Disabled feature mode: when `lsp.inline_completion` is disabled, the server advertises neither the static provider nor the dynamic registration.
+
+Dynamic registration uses `InlineCompletionRegistrationOptions`: `InlineCompletionOptions` plus `TextDocumentRegistrationOptions` and `StaticRegistrationOptions`. The current registration ID is stable (`perl-inlineCompletion`) and its `documentSelector` covers `perl` and `perl5`.
+
+Do not use `experimental.inlineCompletionProvider`. The custom streaming request remains separate and is advertised as `experimental.perlInlineCompletionStream`; that field must be merged into the `experimental` object without replacing other experimental entries. Server-to-client registration requests must use the shared bounded request allocator via `LspServer::send_request`, not wall-clock-derived IDs.
+
 ## Documentation Requirements for LSP Providers (*Diataxis: How-to Guide* - Enterprise API documentation standards)
 
 ### Missing Documentation Infrastructure (SPEC-149) ✅ **IMPLEMENTED**

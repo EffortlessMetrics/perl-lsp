@@ -1,6 +1,5 @@
 ---
 source: crates/perl-lsp-rs/tests/lsp_cap_snap.rs
-assertion_line: 52
 expression: caps
 ---
 callHierarchyProvider: true
@@ -77,7 +76,6 @@ hoverProvider: true
 implementationProvider: true
 inlayHintProvider:
   resolveProvider: true
-inlineCompletionProvider: {}
 inlineValueProvider: true
 linkedEditingRangeProvider: true
 monikerProvider: true

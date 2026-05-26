@@ -73,11 +73,11 @@
       "perl.workspaceTrustReport",
       "perl.previewSafeDelete",
       "perl.safeDeleteSymbol",
-      "perl.previewPackageRename"
+      "perl.previewPackageRename",
+      "perl.explainMissingModuleLookup"
     ]
   },
   "experimental": {
-    "inlineCompletionProvider": {},
     "typeHierarchyProvider": true
   },
   "foldingRangeProvider": true,
@@ -86,6 +86,7 @@
   "inlayHintProvider": {
     "resolveProvider": true
   },
+  "inlineCompletionProvider": {},
   "linkedEditingRangeProvider": true,
   "monikerProvider": true,
   "notebookDocumentSync": {

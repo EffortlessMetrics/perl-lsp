@@ -232,10 +232,12 @@ fn test_file_watcher_glob_pattern_variants() -> TestResult {
 }
 
 #[test]
-fn guardrail_inline_completion_registration_and_capability_wiring() {
+fn guardrail_inline_completion_registration_and_capability_wiring() -> TestResult {
     let lifecycle_caps = include_str!("../src/runtime/lifecycle/capabilities.rs");
     assert!(
-        !lifecycle_caps.contains("capabilities[\"experimental\"] = json!({\n            \"perlInlineCompletionStream\": true\n        });"),
+        !lifecycle_caps.contains(
+            "capabilities[\"experimental\"] = json!({\n            \"perlInlineCompletionStream\": true\n        });"
+        ),
         "initialize must not overwrite capabilities.experimental with only perlInlineCompletionStream"
     );
 
@@ -244,8 +246,17 @@ fn guardrail_inline_completion_registration_and_capability_wiring() {
         !watchers.contains("self.outbound.send_request"),
         "inline-completion dynamic registration must use self.send_request"
     );
+    let inline_registration = watchers
+        .split("pub(crate) fn register_inline_completion_if_needed")
+        .nth(1)
+        .ok_or("inline completion registration function must exist")?;
     assert!(
-        !watchers.contains("dynamic_registration_support &&"),
+        !inline_registration.contains(".dynamic_registration_support")
+            && !inline_registration.contains("caps.dynamic_registration_support")
+            && !inline_registration
+                .contains("client_capabilities.lock().dynamic_registration_support"),
         "inline-completion dynamic registration must not be gated on watcher dynamic registration"
     );
+
+    Ok(())
 }

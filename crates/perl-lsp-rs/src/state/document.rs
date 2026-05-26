@@ -280,7 +280,11 @@ pub struct ClientCapabilities {
     pub type_definition_link_support: bool,
     /// Supports LocationLink for goto implementation
     pub implementation_link_support: bool,
-    /// Supports dynamic registration for file watching
+    /// Supports dynamic registration for file watching only.
+    ///
+    /// Other dynamically registered LSP features must use their own client
+    /// capability fields; this flag is deliberately forced off for some
+    /// clients without disabling unrelated dynamic registrations.
     pub dynamic_registration_support: bool,
     /// Client declared textDocument/inlineCompletion capability
     pub inline_completion_support: bool,

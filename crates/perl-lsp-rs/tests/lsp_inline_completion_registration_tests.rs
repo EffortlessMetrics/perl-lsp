@@ -1,23 +1,47 @@
 mod support;
 
-use serde_json::json;
+use serde_json::{Value, json};
 use support::lsp_harness::LspHarness;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
-fn initialize_advertises_standard_inline_completion_provider() -> TestResult {
+fn initialize_static_advertises_inline_completion_when_dynamic_not_supported() -> TestResult {
+    let mut harness = LspHarness::new();
+    let init = harness.initialize(Some(json!({
+        "textDocument": {}
+    })))?;
+
+    assert_eq!(init.pointer("/capabilities/inlineCompletionProvider"), Some(&json!({})));
+    assert_no_inline_completion_registration(harness.drain_server_requests(200));
+    Ok(())
+}
+
+#[test]
+fn initialize_static_advertises_inline_completion_when_dynamic_registration_false() -> TestResult {
+    let mut harness = LspHarness::new();
+    let init = harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": false } }
+    })))?;
+
+    assert_eq!(init.pointer("/capabilities/inlineCompletionProvider"), Some(&json!({})));
+    assert_no_inline_completion_registration(harness.drain_server_requests(200));
+    Ok(())
+}
+
+#[test]
+fn initialize_dynamic_client_does_not_static_advertise_inline_completion() -> TestResult {
     let mut harness = LspHarness::new();
     let init = harness.initialize(Some(json!({
         "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
     })))?;
 
-    assert_eq!(init.pointer("/capabilities/inlineCompletionProvider"), Some(&json!({})));
+    assert!(init.pointer("/capabilities/inlineCompletionProvider").is_none());
     Ok(())
 }
 
 #[test]
-fn initialize_does_not_put_inline_completion_provider_under_experimental() -> TestResult {
+fn initialize_never_puts_inline_completion_provider_under_experimental() -> TestResult {
     let mut harness = LspHarness::new();
     let init = harness.initialize(Some(json!({
         "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
@@ -48,25 +72,18 @@ fn initialized_registers_inline_completion_when_dynamic_registration_supported()
         "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
     })))?;
 
-    let requests = harness.drain_server_requests(500);
-    let request = requests
-        .into_iter()
-        .find(|request| {
-            request.get("method") == Some(&json!("client/registerCapability"))
-                && request.pointer("/params/registrations").and_then(|r| r.as_array()).is_some_and(
-                    |registrations| {
-                        registrations.iter().any(|entry| {
-                            entry.get("method") == Some(&json!("textDocument/inlineCompletion"))
-                        })
-                    },
-                )
-        })
-        .ok_or("expected inline completion client/registerCapability")?;
+    let (request, registration) =
+        find_inline_completion_registration(harness.drain_server_requests(500))
+            .ok_or("expected inline completion client/registerCapability")?;
 
-    assert_eq!(
-        request.pointer("/params/registrations/0/id"),
-        Some(&json!("perl-inlineCompletion"))
-    );
+    assert_eq!(registration.get("method"), Some(&json!("textDocument/inlineCompletion")));
+    assert_eq!(registration.get("id"), Some(&json!("perl-inlineCompletion")));
+    let selector = registration
+        .pointer("/registerOptions/documentSelector")
+        .and_then(Value::as_array)
+        .ok_or("inline completion registration must include documentSelector")?;
+    assert!(selector.contains(&json!({ "language": "perl" })));
+    assert!(selector.contains(&json!({ "language": "perl5" })));
     let id = request.get("id").and_then(|v| v.as_i64()).ok_or("request id must be integer")?;
     assert!((1..=i64::from(i32::MAX)).contains(&id));
     Ok(())
@@ -101,13 +118,53 @@ fn disabled_inline_completion_removes_static_and_experimental_capabilities() -> 
     Ok(())
 }
 
+#[cfg(feature = "expose_lsp_test_api")]
 #[test]
-fn inline_completion_guardrails() {
-    let snap = include_str!("snapshots/lsp_cap_snap__server_capabilities_full_client.snap");
+fn lsp4ij_inline_completion_dynamic_registration_shape_is_parsed() -> TestResult {
+    let server = perl_lsp::LspServer::new();
+    server.test_handle_initialize_dispatch(Some(json!({
+        "capabilities": {
+            "textDocument": {
+                "inlineCompletion": {
+                    "dynamicRegistration": true
+                }
+            }
+        }
+    })))?;
+
+    let caps = server.test_client_capabilities();
+    assert!(caps.inline_completion_support);
+    assert!(caps.inline_completion_dynamic_registration_support);
+    Ok(())
+}
+
+#[test]
+fn inline_completion_guardrails() -> TestResult {
+    let minimal_snap =
+        include_str!("snapshots/lsp_cap_snap__server_capabilities_minimal_client.snap");
+    let full_snap = include_str!("snapshots/lsp_cap_snap__server_capabilities_full_client.snap");
+    let production_json = include_str!("snapshots/production_capabilities.json");
+    let ga_lock_json = include_str!("snapshots/ga_lock_capabilities.json");
+    let all_json = include_str!("snapshots/all_capabilities.json");
+    for snapshot in [minimal_snap, full_snap] {
+        assert!(
+            !snapshot.contains("experimental:\n  inlineCompletionProvider"),
+            "snapshot must not advertise experimental.inlineCompletionProvider"
+        );
+    }
+    for snapshot in [production_json, ga_lock_json, all_json] {
+        assert!(
+            !snapshot.contains("\"experimental\": {\n    \"inlineCompletionProvider\""),
+            "capability JSON snapshot must not advertise experimental.inlineCompletionProvider"
+        );
+    }
+
+    let lifecycle_caps = include_str!("../src/runtime/lifecycle/capabilities.rs");
     assert!(
-        !snap.contains("inlineCompletionProvider:")
-            || !snap.contains("experimental:\n  inlineCompletionProvider"),
-        "snapshot must not advertise experimental.inlineCompletionProvider"
+        !lifecycle_caps.contains(
+            "capabilities[\"experimental\"] = json!({\n            \"perlInlineCompletionStream\": true\n        });"
+        ),
+        "initialize must merge experimental fields instead of overwriting them"
     );
 
     let watchers_src = include_str!("../src/runtime/lifecycle/watchers.rs");
@@ -118,5 +175,50 @@ fn inline_completion_guardrails() {
     assert!(
         !watchers_src.contains("UNIX_EPOCH") && !watchers_src.contains("as_millis"),
         "registration code must not generate request IDs from timestamps"
+    );
+    let inline_registration = watchers_src
+        .split("pub(crate) fn register_inline_completion_if_needed")
+        .nth(1)
+        .ok_or("inline completion registration function must exist")?;
+    assert!(
+        !inline_registration.contains(".dynamic_registration_support")
+            && !inline_registration.contains("caps.dynamic_registration_support")
+            && !inline_registration
+                .contains("client_capabilities.lock().dynamic_registration_support"),
+        "inline-completion dynamic registration must not be gated by file-watcher dynamic registration"
+    );
+    Ok(())
+}
+
+fn find_inline_completion_registration(
+    requests: Vec<serde_json::Value>,
+) -> Option<(serde_json::Value, serde_json::Value)> {
+    for request in requests {
+        if request.get("method") != Some(&json!("client/registerCapability")) {
+            continue;
+        }
+
+        let registration = request
+            .pointer("/params/registrations")
+            .and_then(Value::as_array)
+            .and_then(|registrations| {
+                registrations.iter().find(|entry| {
+                    entry.get("method") == Some(&json!("textDocument/inlineCompletion"))
+                })
+            })
+            .cloned();
+
+        if let Some(registration) = registration {
+            return Some((request, registration));
+        }
+    }
+
+    None
+}
+
+fn assert_no_inline_completion_registration(requests: Vec<serde_json::Value>) {
+    assert!(
+        find_inline_completion_registration(requests).is_none(),
+        "static inline completion clients must not also receive dynamic registration"
     );
 }
