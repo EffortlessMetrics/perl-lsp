@@ -167,7 +167,7 @@ Protocol notes:
 - `experimental.perlInlineCompletionStream` is a custom extension for clients
   that explicitly integrate the streaming path.
 - The registration selector includes `perl` and `perl5`.
-- The server communicates UTF-16 positions.
+- LSP wire positions use UTF-16 code units, per the LSP spec; `perllsp` converts client-provided positions to internal offsets before analysis.
 
 ## Verify It Is Running
 
