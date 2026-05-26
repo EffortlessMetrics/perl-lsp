@@ -54,6 +54,7 @@ fn trace_config(timeout: Duration) -> ScenarioConfig {
                 }
             }
         }),
+        initialization_options: Value::Null,
     }
 }
 
