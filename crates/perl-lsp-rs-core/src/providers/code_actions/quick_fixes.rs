@@ -1983,3 +1983,44 @@ fn valid_diagnostic_range(source: &str, range: (usize, usize)) -> Option<(usize,
     }
     Some((start, end))
 }
+
+/// Remove the undefined label from a `next LABEL`, `last LABEL`, or `redo LABEL` (PL410).
+///
+/// When a loop-control statement references a label that does not exist, Perl dies at
+/// runtime. The only safe automated fix is to drop the label so the statement targets the
+/// innermost enclosing loop.  Non-`next`/`last`/`redo` tokens are not touched.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((start, end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let snippet = &source[start..end];
+    let Some(op) = loop_control_operator(snippet) else {
+        return Vec::new();
+    };
+
+    vec![CodeAction {
+        title: format!("Remove undefined label (use '{op}' without label)"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start, end },
+                new_text: op.to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
+fn loop_control_operator(snippet: &str) -> Option<&'static str> {
+    let word = snippet.split_whitespace().next()?;
+    match word {
+        "next" => Some("next"),
+        "last" => Some("last"),
+        "redo" => Some("redo"),
+        _ => None,
+    }
+}
