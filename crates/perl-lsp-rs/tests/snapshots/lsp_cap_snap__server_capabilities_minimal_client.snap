@@ -93,8 +93,7 @@ renameProvider:
   prepareProvider: true
 selectionRangeProvider: true
 semanticTokensProvider:
-  full:
-    delta: true
+  full: true
   legend:
     tokenModifiers:
       - declaration
