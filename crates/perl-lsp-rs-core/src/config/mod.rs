@@ -1942,4 +1942,102 @@ profile = "recommended"
             "cache must survive when usePerl5lib value does not change",
         );
     }
+
+    /// An unrecognised `perl5libPrecedence` string must leave the current
+    /// setting unchanged.  This guards the `_ => {}` arm in `update_from_value`
+    /// so that a typo in workspace settings does not silently reset an
+    /// explicitly-configured `Append` back to the default `Prepend`.
+    #[test]
+    fn update_from_value_keeps_existing_perl5lib_precedence_on_unknown_value() {
+        let mut config = WorkspaceConfig {
+            perl5lib_precedence: Perl5LibPrecedence::Append,
+            ..WorkspaceConfig::default()
+        };
+
+        // An unrecognised value must not change the setting.
+        config.update_from_value(&serde_json::json!({
+            "workspace": { "perl5libPrecedence": "badvalue" }
+        }));
+        assert!(
+            matches!(config.perl5lib_precedence, Perl5LibPrecedence::Append),
+            "unknown perl5libPrecedence string must leave Append unchanged; got {:?}",
+            config.perl5lib_precedence,
+        );
+
+        // A recognised value must still take effect.
+        config.update_from_value(&serde_json::json!({
+            "workspace": { "perl5libPrecedence": "prepend" }
+        }));
+        assert!(
+            matches!(config.perl5lib_precedence, Perl5LibPrecedence::Prepend),
+            "recognised 'prepend' must update perl5lib_precedence",
+        );
+
+        // Round-trip back to append.
+        config.update_from_value(&serde_json::json!({
+            "workspace": { "perl5libPrecedence": "append" }
+        }));
+        assert!(
+            matches!(config.perl5lib_precedence, Perl5LibPrecedence::Append),
+            "recognised 'append' must update perl5lib_precedence",
+        );
+
+        // A second unknown value after a successful round-trip must also be a no-op.
+        config.update_from_value(&serde_json::json!({
+            "workspace": { "perl5libPrecedence": "" }
+        }));
+        assert!(
+            matches!(config.perl5lib_precedence, Perl5LibPrecedence::Append),
+            "empty string perl5libPrecedence must also leave Append unchanged",
+        );
+    }
+
+    /// Toggling `useSystemInc` must invalidate `system_inc_cache` so the next
+    /// `get_system_inc` call re-probes Perl under the new setting.  This is
+    /// symmetric with `use_perl5lib_toggle_invalidates_system_inc_cache` which
+    /// covers the `usePerl5lib` branch of the same cache-invalidation logic.
+    #[test]
+    fn update_from_value_clears_system_inc_cache_when_use_system_inc_changes() {
+        let mut config = WorkspaceConfig::default();
+        // Default is false; toggle to true so we can test both directions.
+        assert!(!config.use_system_inc, "default useSystemInc should be false");
+
+        // Pre-populate the cache; enabling useSystemInc must clear it.
+        config.system_inc_cache = Some(vec![PathBuf::from("/sentinel/cached")]);
+        config.update_from_value(&serde_json::json!({
+            "workspace": { "useSystemInc": true }
+        }));
+        assert!(config.use_system_inc);
+        assert!(
+            config.system_inc_cache.is_none(),
+            "system_inc_cache must invalidate when useSystemInc changes (false -> true); \
+             got {:?}",
+            config.system_inc_cache,
+        );
+
+        // Flip back the other direction.
+        config.system_inc_cache = Some(vec![PathBuf::from("/sentinel/cached2")]);
+        config.update_from_value(&serde_json::json!({
+            "workspace": { "useSystemInc": false }
+        }));
+        assert!(!config.use_system_inc);
+        assert!(
+            config.system_inc_cache.is_none(),
+            "system_inc_cache must invalidate when useSystemInc changes (true -> false); \
+             got {:?}",
+            config.system_inc_cache,
+        );
+
+        // No-op (same value) must NOT clear the cache.
+        let stable = vec![PathBuf::from("/sentinel/stable")];
+        config.system_inc_cache = Some(stable.clone());
+        config.update_from_value(&serde_json::json!({
+            "workspace": { "useSystemInc": false }
+        }));
+        assert_eq!(
+            config.system_inc_cache.as_deref(),
+            Some(stable.as_slice()),
+            "cache must survive when useSystemInc value does not change",
+        );
+    }
 }
