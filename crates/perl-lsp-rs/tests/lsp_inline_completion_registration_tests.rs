@@ -168,7 +168,7 @@ fn inline_completion_invoked_trigger_returns_deterministic_items() -> TestResult
 }
 
 #[test]
-fn inline_completion_selected_completion_info_context_is_tolerated() -> TestResult {
+fn inline_completion_selected_completion_info_matching_text_returns_same_range() -> TestResult {
     let mut harness = LspHarness::new();
     harness.initialize(Some(json!({
         "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
@@ -177,9 +177,51 @@ fn inline_completion_selected_completion_info_context_is_tolerated() -> TestResu
     let uri = "file:///inline_selected_completion_info.pl";
     harness.open(uri, "use ")?;
 
-    // This is a request-shape receipt. The deterministic provider does not
-    // implement selected-completion alignment here; it must at least tolerate
-    // the official context object without falling back to an empty/error result.
+    let selected_range = json!({
+        "start": { "line": 0, "character": 4 },
+        "end": { "line": 0, "character": 4 }
+    });
+    let result = request_inline_completion_with_context(
+        &mut harness,
+        uri,
+        0,
+        4,
+        json!({
+            "triggerKind": 1,
+            "selectedCompletionInfo": {
+                "range": selected_range.clone(),
+                "text": "strict"
+            }
+        }),
+    )?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+
+    let strict = items
+        .iter()
+        .find(|item| item.get("insertText") == Some(&json!("strict;")))
+        .ok_or("selectedCompletionInfo text strict must return the extending strict; item")?;
+    assert_eq!(
+        strict.get("range"),
+        Some(&selected_range),
+        "matching selectedCompletionInfo items must use the selected completion range"
+    );
+    assert_eq!(strict.pointer("/range/start/line"), strict.pointer("/range/end/line"));
+    Ok(())
+}
+
+#[test]
+fn inline_completion_selected_completion_info_text_mismatch_returns_empty() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_selected_completion_text_mismatch.pl";
+    harness.open(uri, "use ")?;
+
     let result = request_inline_completion_with_context(
         &mut harness,
         uri,
@@ -192,6 +234,41 @@ fn inline_completion_selected_completion_info_context_is_tolerated() -> TestResu
                     "start": { "line": 0, "character": 4 },
                     "end": { "line": 0, "character": 4 }
                 },
+                "text": "strictlyDifferent"
+            }
+        }),
+    )?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+
+    assert!(items.is_empty(), "non-extending selectedCompletionInfo text must return empty");
+    Ok(())
+}
+
+#[test]
+fn inline_completion_selected_completion_info_range_mismatch_returns_empty() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_selected_completion_range_mismatch.pl";
+    harness.open(uri, "use ")?;
+
+    let result = request_inline_completion_with_context(
+        &mut harness,
+        uri,
+        0,
+        4,
+        json!({
+            "triggerKind": 1,
+            "selectedCompletionInfo": {
+                "range": {
+                    "start": { "line": 0, "character": 0 },
+                    "end": { "line": 0, "character": 3 }
+                },
                 "text": "strict"
             }
         }),
@@ -201,9 +278,65 @@ fn inline_completion_selected_completion_info_context_is_tolerated() -> TestResu
         .and_then(Value::as_array)
         .ok_or("inline completion result must contain items array")?;
 
+    assert!(items.is_empty(), "selectedCompletionInfo range mismatch must return empty");
+    Ok(())
+}
+
+#[test]
+fn inline_completion_selected_completion_info_multiline_range_returns_empty() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_selected_completion_multiline_range.pl";
+    harness.open(uri, "use \n")?;
+
+    let result = request_inline_completion_with_context(
+        &mut harness,
+        uri,
+        0,
+        4,
+        json!({
+            "triggerKind": 1,
+            "selectedCompletionInfo": {
+                "range": {
+                    "start": { "line": 0, "character": 4 },
+                    "end": { "line": 1, "character": 0 }
+                },
+                "text": "strict"
+            }
+        }),
+    )?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+
+    assert!(items.is_empty(), "inline completion ranges must not span multiple lines");
+    Ok(())
+}
+
+#[test]
+fn inline_completion_items_use_string_insert_text() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_insert_text_shape.pl";
+    harness.open(uri, "use ")?;
+
+    let result = request_inline_completion(&mut harness, uri, 0, 4)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+
+    assert!(!items.is_empty(), "expected deterministic inline completion items");
     assert!(
-        items.iter().any(|item| item.get("insertText") == Some(&json!("strict;"))),
-        "selectedCompletionInfo context must be tolerated, got: {items:?}"
+        items.iter().all(|item| item.get("insertText").is_some_and(Value::is_string)),
+        "InlineCompletionItem.insertText must be a string or valid StringValue object"
     );
     Ok(())
 }

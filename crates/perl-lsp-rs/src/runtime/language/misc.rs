@@ -44,6 +44,77 @@ fn truncate_inlay_hint_label(hint: &mut Value, max_chars: usize) {
     *label = Value::String(text.chars().take(max_chars).collect());
 }
 
+#[derive(Debug, Clone)]
+struct SelectedInlineCompletionInfo {
+    range: lsp_types::Range,
+    text: String,
+}
+
+fn selected_inline_completion_info(
+    params: &Value,
+) -> Result<Option<SelectedInlineCompletionInfo>, JsonRpcError> {
+    let Some(selected) = params.pointer("/context/selectedCompletionInfo") else {
+        return Ok(None);
+    };
+
+    let text = selected
+        .get("text")
+        .and_then(Value::as_str)
+        .ok_or_else(|| invalid_params("Missing selectedCompletionInfo.text"))?
+        .to_string();
+    let range = selected
+        .get("range")
+        .ok_or_else(|| invalid_params("Missing selectedCompletionInfo.range"))
+        .and_then(|range| {
+            serde_json::from_value(range.clone())
+                .map_err(|_| invalid_params("Invalid selectedCompletionInfo.range"))
+        })?;
+
+    Ok(Some(SelectedInlineCompletionInfo { range, text }))
+}
+
+fn constrain_inline_completions_to_selected_info(
+    mut list: perl_lsp_rs_core::providers::inline_completion::InlineCompletionList,
+    selected: Option<&SelectedInlineCompletionInfo>,
+    line: u32,
+    character: u32,
+) -> perl_lsp_rs_core::providers::inline_completion::InlineCompletionList {
+    let Some(selected) = selected else {
+        return list;
+    };
+
+    if selected.range.start.line != selected.range.end.line {
+        list.items.clear();
+        return list;
+    }
+
+    let implicit_range = lsp_types::Range {
+        start: lsp_types::Position::new(line, character),
+        end: lsp_types::Position::new(line, character),
+    };
+
+    list.items = list
+        .items
+        .into_iter()
+        .filter_map(|mut item| {
+            if !item.insert_text.starts_with(&selected.text) {
+                return None;
+            }
+
+            match &item.range {
+                Some(range) if range == &selected.range => Some(item),
+                Some(_) => None,
+                None if selected.range == implicit_range => {
+                    item.range = Some(selected.range.clone());
+                    Some(item)
+                }
+                None => None,
+            }
+        })
+        .collect();
+    list
+}
+
 impl LspServer {
     pub(crate) fn record_provider_decision_trace(&self, provider: &str, receipt: &Value) {
         if receipt.is_object() {
@@ -587,6 +658,7 @@ impl LspServer {
         if let Some(params) = params {
             let uri = req_uri(&params)?;
             let (line, character) = req_position(&params)?;
+            let selected_completion = selected_inline_completion_info(&params)?;
 
             // Snapshot text under document lock, then release before any slow work
             let text = {
@@ -611,12 +683,20 @@ impl LspServer {
                             let list = perl_lsp_rs_core::providers::inline_completion::InlineCompletionList {
                                 items: items.clone(),
                             };
-                            return Ok(Some(serde_json::to_value(list).map_err(|e| {
-                                crate::protocol::internal_error(&format!(
-                                    "Failed to serialize inline completions: {}",
-                                    e
-                                ))
-                            })?));
+                            let list = constrain_inline_completions_to_selected_info(
+                                list,
+                                selected_completion.as_ref(),
+                                line,
+                                character,
+                            );
+                            if !list.items.is_empty() || !ai_config.fallback {
+                                return Ok(Some(serde_json::to_value(list).map_err(|e| {
+                                    crate::protocol::internal_error(&format!(
+                                        "Failed to serialize inline completions: {}",
+                                        e
+                                    ))
+                                })?));
+                            }
                         }
                         Err(ref e) => {
                             tracing::debug!("AI inline completion failed: {}", e);
@@ -636,7 +716,12 @@ impl LspServer {
             }
 
             // Deterministic fallback
-            let completions = provider.get_inline_completions(&text, line, character);
+            let completions = constrain_inline_completions_to_selected_info(
+                provider.get_inline_completions(&text, line, character),
+                selected_completion.as_ref(),
+                line,
+                character,
+            );
             return Ok(Some(serde_json::to_value(completions).map_err(|e| {
                 crate::protocol::internal_error(&format!(
                     "Failed to serialize inline completions: {}",
