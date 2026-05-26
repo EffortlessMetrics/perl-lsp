@@ -345,6 +345,90 @@ mod tests {
         assert!(edit.location.end <= source.len(), "edit end must not exceed source length");
         assert_eq!(edit.new_text, "");
     }
+
+    // --- fix_printf_format_arity ---
+
+    #[test]
+    fn fix_printf_format_arity_listop_one_missing() {
+        // Listop form: no parens, call node ends before the semicolon.
+        let source = r#"printf "%s %s", $name;"#;
+        // Call range covers "printf "%s %s", $name" (everything before ;)
+        let call_end = source.len() - 1;
+        let diagnostic = diagnostic_for(
+            (0, call_end),
+            r#"`printf` format string has 2 specifiers but 1 argument supplied"#,
+        );
+
+        let actions = fix_printf_format_arity(source, &diagnostic);
+
+        assert!(!actions.is_empty(), "should offer a fix for 1 missing arg");
+        assert_eq!(actions[0].title, "Add 1 missing argument as undef");
+        let edit = &actions[0].edit.changes[0];
+        assert_eq!(edit.new_text, ", undef");
+        // Insertion is at the end of the call node (before ';')
+        assert_eq!(edit.location.start, call_end);
+        assert_eq!(edit.location.end, call_end);
+    }
+
+    #[test]
+    fn fix_printf_format_arity_parens_one_missing() {
+        // Parens form: insert before the closing ')'.
+        let source = r#"printf("%s %s", $a)"#;
+        let diagnostic = diagnostic_for(
+            (0, source.len()),
+            r#"`printf` format string has 2 specifiers but 1 argument supplied"#,
+        );
+
+        let actions = fix_printf_format_arity(source, &diagnostic);
+
+        assert!(!actions.is_empty(), "should offer a fix for parens form");
+        assert_eq!(actions[0].title, "Add 1 missing argument as undef");
+        let edit = &actions[0].edit.changes[0];
+        assert_eq!(edit.new_text, ", undef");
+        // Insertion position should be at the closing ')'
+        assert_eq!(&source[edit.location.start..edit.location.start + 1], ")");
+    }
+
+    #[test]
+    fn fix_printf_format_arity_two_missing_appends_two_undefs() {
+        let source = r#"sprintf "%s %s %s", $a"#;
+        let diagnostic = diagnostic_for(
+            (0, source.len()),
+            r#"`sprintf` format string has 3 specifiers but 1 argument supplied"#,
+        );
+
+        let actions = fix_printf_format_arity(source, &diagnostic);
+
+        assert!(!actions.is_empty(), "should offer a fix for 2 missing args");
+        assert_eq!(actions[0].title, "Add 2 missing arguments as undef");
+        assert_eq!(actions[0].edit.changes[0].new_text, ", undef, undef");
+    }
+
+    #[test]
+    fn fix_printf_format_arity_too_many_args_returns_no_fix() {
+        // When args > specifiers we don't auto-remove — too destructive.
+        let source = r#"printf "%s", $a, $b"#;
+        let diagnostic = diagnostic_for(
+            (0, source.len()),
+            r#"`printf` format string has 1 specifier but 2 arguments supplied"#,
+        );
+
+        let actions = fix_printf_format_arity(source, &diagnostic);
+
+        assert!(actions.is_empty(), "should not suggest fix when args exceed specifiers");
+    }
+
+    #[test]
+    fn fix_printf_format_arity_equal_counts_returns_no_fix() {
+        let source = r#"printf "%s", $a"#;
+        let diagnostic = diagnostic_for(
+            (0, source.len()),
+            r#"`printf` format string has 1 specifier but 1 argument supplied"#,
+        );
+        // Equal counts would not normally be flagged, but the function must handle it gracefully.
+        let actions = fix_printf_format_arity(source, &diagnostic);
+        assert!(actions.is_empty());
+    }
 }
 
 /// Fix assignment in condition
@@ -1758,6 +1842,82 @@ pub fn fix_security_signal_handler(
         },
         is_preferred: true,
     }]
+}
+
+/// Add missing arguments to a `printf`/`sprintf` call (PL405 / `native.common.printf_format_arity`).
+///
+/// When the format string has more specifiers than supplied arguments, this fix
+/// appends the required number of `undef` placeholders. When arguments exceed
+/// specifiers the fix is skipped — removing arguments is too destructive to automate.
+///
+/// Handles both listop form (`printf "%s", $a`) and parenthesised form
+/// (`printf("%s", $a)`), inserting before the closing `)` or at the end of the
+/// call node respectively.
+pub fn fix_printf_format_arity(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
+    let Some((missing, call_name)) = parse_printf_format_mismatch(&diagnostic.message) else {
+        return Vec::new();
+    };
+    if missing == 0 {
+        return Vec::new();
+    }
+    let Some((range_start, range_end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let call_text = &source[range_start..range_end];
+
+    // Skip past the function name to detect whether the call uses parens.
+    let after_name_offset = call_name.len();
+    let after_name = call_text.get(after_name_offset..).unwrap_or("").trim_start();
+    let has_parens = after_name.starts_with('(');
+
+    let insert_pos = if has_parens {
+        // printf("fmt", arg1) — insert the new args before the closing ')'
+        let paren_start_offset = call_text.len() - after_name.len();
+        find_matching_parenthesis(after_name).map(|close| range_start + paren_start_offset + close)
+    } else {
+        // printf "fmt", arg1 — call node ends before the ';', so appending at
+        // range_end places the new args correctly.
+        Some(range_end)
+    };
+
+    let Some(insert_pos) = insert_pos else {
+        return Vec::new();
+    };
+
+    let undef_args = ", undef".repeat(missing);
+    let plural = if missing == 1 { "" } else { "s" };
+
+    vec![CodeAction {
+        title: format!("Add {missing} missing argument{plural} as undef"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::PrintfFormatMismatch.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: insert_pos, end: insert_pos },
+                new_text: undef_args,
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
+/// Parse a `printf`/`sprintf` format-arity message and return `(missing_count, call_name)`.
+///
+/// Returns `None` when the message cannot be parsed or when args exceed specifiers
+/// (the caller decides not to offer a fix in the "too many args" case).
+fn parse_printf_format_mismatch(message: &str) -> Option<(usize, String)> {
+    // Message form: "`printf` format string has N specifier(s) but M argument(s) supplied"
+    let backtick_start = message.find('`')? + 1;
+    let backtick_end = backtick_start + message[backtick_start..].find('`')?;
+    let call_name = message[backtick_start..backtick_end].to_string();
+
+    let after_has = message.split("has ").nth(1)?;
+    let specifiers: usize = after_has.split_whitespace().next()?.parse().ok()?;
+
+    let after_but = message.split("but ").nth(1)?;
+    let supplied: usize = after_but.split_whitespace().next()?.parse().ok()?;
+
+    specifiers.checked_sub(supplied).filter(|&n| n > 0).map(|n| (n, call_name))
 }
 
 fn diagnostic_line_range(source: &str, range: (usize, usize)) -> Option<(usize, usize)> {
