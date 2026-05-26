@@ -13,6 +13,7 @@
 
 use parking_lot::{Condvar, Mutex};
 use perl_lsp_rs_core::transport::framing::{ContentLengthFramer, frame};
+use perl_lsp_rs_core::{governance::FeatureProfile, runtime::tuning::RuntimeTuning};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::io::{Cursor, Write};
@@ -62,43 +63,22 @@ fn uri_matches(expected: &str, actual: &str) -> bool {
 }
 
 impl LspHarness {
-    fn effective_request_timeout(&self, timeout: Duration) -> Duration {
-        if timeout < Duration::from_secs(2) || std::env::var("PERL_LSP_PERFORMANCE_TEST").is_ok() {
-            return timeout;
-        }
-
-        let is_ci = std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok();
-
-        if is_ci {
-            timeout.max(Duration::from_secs(12))
-        } else if cfg!(windows) {
-            timeout.max(Duration::from_secs(10))
-        } else {
-            timeout
-        }
-    }
-
-    fn is_coverage_instrumented() -> bool {
-        std::env::var_os("LLVM_PROFILE_FILE").is_some()
-            || std::env::var_os("CARGO_LLVM_COV").is_some()
-            || std::env::var_os("CARGO_LLVM_COV_TARGET_DIR").is_some()
-    }
-
-    /// Lowest-level constructor: spawn server and wire pipes, no messages sent.
-    pub fn new_raw() -> Self {
+    fn new_raw_with_server_factory<F>(server_factory: F) -> Self
+    where
+        F: FnOnce(Arc<Mutex<Box<dyn Write + Send>>>) -> perl_lsp::LspServer,
+    {
         let output_buffer = Arc::new(Mutex::new(Vec::new()));
         let output_signal = Arc::new(Condvar::new());
         let notification_buffer = Arc::new(Mutex::new(VecDeque::new()));
         let server_requests = Arc::new(Mutex::new(VecDeque::new()));
 
-        // Create server with captured output
         let writer = Arc::new(Mutex::new(Box::new(TestWriter {
             buffer: output_buffer.clone(),
             signal: output_signal.clone(),
             notifications: notification_buffer.clone(),
             server_requests: server_requests.clone(),
         }) as Box<dyn Write + Send>));
-        let server = SendableServer(perl_lsp::LspServer::with_output(writer));
+        let server = SendableServer(server_factory(writer));
 
         let (tx, rx) = mpsc::channel::<Vec<u8>>();
         let handle = thread::spawn(move || {
@@ -123,6 +103,44 @@ impl LspHarness {
             handle: Some(handle),
             canceled_ids: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    fn effective_request_timeout(&self, timeout: Duration) -> Duration {
+        if timeout < Duration::from_secs(2) || std::env::var("PERL_LSP_PERFORMANCE_TEST").is_ok() {
+            return timeout;
+        }
+
+        let is_ci = std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok();
+
+        if is_ci {
+            timeout.max(Duration::from_secs(12))
+        } else if cfg!(windows) {
+            timeout.max(Duration::from_secs(10))
+        } else {
+            timeout
+        }
+    }
+
+    fn is_coverage_instrumented() -> bool {
+        std::env::var_os("LLVM_PROFILE_FILE").is_some()
+            || std::env::var_os("CARGO_LLVM_COV").is_some()
+            || std::env::var_os("CARGO_LLVM_COV_TARGET_DIR").is_some()
+    }
+
+    /// Lowest-level constructor: spawn server and wire pipes, no messages sent.
+    pub fn new_raw() -> Self {
+        Self::new_raw_with_server_factory(perl_lsp::LspServer::with_output)
+    }
+
+    /// Create a harness with explicit runtime tuning.
+    pub fn new_with_tuning(runtime_tuning: RuntimeTuning) -> Self {
+        Self::new_raw_with_server_factory(|writer| {
+            perl_lsp::LspServer::with_output_feature_profile_and_tuning(
+                writer,
+                FeatureProfile::current(),
+                runtime_tuning,
+            )
+        })
     }
 
     /// Create a new test harness

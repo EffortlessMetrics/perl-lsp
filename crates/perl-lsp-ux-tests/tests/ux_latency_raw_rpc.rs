@@ -9,6 +9,8 @@
 //! 4. `edit -> diagnostic clear` clears diagnostics when the parse cleans.
 //! 5. `rapid typing -> latest completion wins` - under a burst of `didChange`
 //!    notifications, the last completion request still returns successfully.
+//! 6. Dynamic `textDocument/inlineCompletion` returns deterministic items while
+//!    watcher registration stays off in the lean profile.
 //!
 //! These are intentionally "does it work end-to-end" tests, not numeric
 //! latency assertions. CI machine variance makes wallclock budgets
@@ -27,9 +29,9 @@
 //!         -- --test-threads=1 --nocapture
 
 use anyhow::Result;
-use perl_lsp_ux_tests::{ScenarioConfig, UxHarness, binary_available};
-use serde_json::Value;
-use std::time::Duration;
+use perl_lsp_ux_tests::{LspEvent, ScenarioConfig, UxHarness, binary_available};
+use serde_json::{Value, json};
+use std::time::{Duration, Instant};
 
 const SHORT_SOURCE: &str = r#"use strict;
 use warnings;
@@ -70,6 +72,18 @@ fn e2e_config(timeout: Duration) -> ScenarioConfig {
         ],
         workspace_files: Vec::new(),
         workspace_folders: Vec::new(),
+        client_capability_overrides: json!({
+            "workspace": {
+                "didChangeWatchedFiles": {
+                    "dynamicRegistration": true
+                }
+            },
+            "textDocument": {
+                "inlineCompletion": {
+                    "dynamicRegistration": true
+                }
+            }
+        }),
     }
 }
 
@@ -77,6 +91,31 @@ fn timeout() -> Duration {
     // 8s gives CI runners ample headroom while still failing fast on a
     // wedged binary. Local dev typically completes each scenario in <500ms.
     Duration::from_secs(8)
+}
+
+fn registration_seen(events: &[LspEvent], method_name: &str) -> bool {
+    events.iter().any(|event| {
+        let LspEvent::Other { method, params } = event else {
+            return false;
+        };
+        method == "client/registerCapability"
+            && params.get("registrations").and_then(Value::as_array).into_iter().flatten().any(
+                |registration| {
+                    registration.get("method").and_then(Value::as_str) == Some(method_name)
+                },
+            )
+    })
+}
+
+fn wait_for_registration(harness: &UxHarness, method_name: &str, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if registration_seen(&harness.client.peek_events(), method_name) {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    false
 }
 
 #[test]
@@ -211,6 +250,39 @@ fn ux_latency_rapid_typing_latest_request_returns() -> Result<()> {
     // cancelled; without PR 4, they may all run but the final answer is
     // what matters for the latency receipt.
     let _items: Vec<Value> = harness.completion("typing.pl", 4, 17)?;
+    harness.assert_no_crash();
+    Ok(())
+}
+
+#[test]
+fn ux_latency_inline_completion_dynamic_path_returns_deterministic_items() -> Result<()> {
+    if !binary_available() {
+        eprintln!(
+            "SKIP ux_latency_inline_completion_dynamic_path_returns_deterministic_items: perl-lsp binary not found"
+        );
+        return Ok(());
+    }
+
+    let harness = UxHarness::new(e2e_config(timeout()))?;
+    let inline_registered =
+        wait_for_registration(&harness, "textDocument/inlineCompletion", Duration::from_secs(2));
+    assert!(
+        inline_registered,
+        "lean LSP4IJ-shaped client must receive dynamic inline-completion registration"
+    );
+    assert!(
+        !registration_seen(&harness.client.peek_events(), "workspace/didChangeWatchedFiles"),
+        "lean profile must not register file watchers even when the client supports dynamic watchers"
+    );
+
+    harness.open_file("inline.pl", "use ")?;
+    let items = harness.inline_completion("inline.pl", 0, 4)?;
+    assert!(!items.is_empty(), "inline completion must return deterministic items for `use `");
+    assert!(
+        items.iter().any(|item| item.get("insertText").and_then(Value::as_str) == Some("strict;")),
+        "inline completion must include deterministic strict; suggestion, got {items:?}"
+    );
+
     harness.assert_no_crash();
     Ok(())
 }

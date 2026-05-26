@@ -29,6 +29,8 @@ impl LspServer {
 
         tracing::info!("Server initialized");
 
+        // File watcher dynamic registration is intentionally separate from
+        // feature-specific dynamic registrations such as inline completion.
         self.register_file_watchers_if_needed();
         self.register_inline_completion_if_needed();
 

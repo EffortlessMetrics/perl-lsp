@@ -1098,7 +1098,8 @@ mod tests {
         let params = position_params_at(uri, line, character);
         let priority = request_priority("textDocument/completion");
         let dedup_key = extract_dedup_key("textDocument/completion", Some(&params), priority);
-        let freshness = extract_freshness(server, "textDocument/completion", Some(&params), priority);
+        let freshness =
+            extract_freshness(server, "textDocument/completion", Some(&params), priority);
         QueuedRead {
             request: JsonRpcRequest {
                 _jsonrpc: "2.0".to_string(),
@@ -1342,8 +1343,8 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn rapid_typing_stale_reads_cancel_before_worker_permit_receipt(
-    ) -> Result<(), JsonRpcError> {
+    async fn rapid_typing_stale_reads_cancel_before_worker_permit_receipt()
+    -> Result<(), JsonRpcError> {
         let server = Arc::new(crate::LspServer::new());
         let uri = "file:///typing-pressure.pl";
         server.test_apply_did_open(uri, &rapid_typing_source(1), 1)?;
@@ -1353,15 +1354,12 @@ mod tests {
             // Capture a read at the current document generation and then
             // immediately simulate the next keystroke. The cursor position
             // changes each time, so position-key dedupe alone cannot save us.
-            stale_reads.push(queued_completion_read(
-                &server,
+            stale_reads.push(queued_completion_read(&server, uri, 4, 14 + i, i, 10_000 + i as i64));
+            server.test_apply_did_change(
                 uri,
-                4,
-                14 + i,
-                i,
-                10_000 + i as i64,
-            ));
-            server.test_apply_did_change(uri, &rapid_typing_source(i as usize + 2), i as i32 + 2)?;
+                &rapid_typing_source(i as usize + 2),
+                i as i32 + 2,
+            )?;
         }
 
         let latest = queued_completion_read(&server, uri, 4, 30, 99, 20_000);

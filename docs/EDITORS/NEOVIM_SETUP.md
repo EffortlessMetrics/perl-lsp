@@ -132,7 +132,8 @@ vim.lsp.enable('perllsp')
 
 This profile keeps parser diagnostics but bypasses the full semantic/module
 diagnostic stack and avoids eager workspace indexing and file watcher
-registration. It does not provide incremental AST reuse.
+registration. It does not provide incremental AST reuse. Semantic-token delta
+support is not advertised until the server implements the result-id/delta path.
 
 ## Optional: Define the config inline
 
