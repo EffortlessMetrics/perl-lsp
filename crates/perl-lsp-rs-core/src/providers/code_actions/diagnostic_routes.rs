@@ -196,6 +196,12 @@ fn quick_fixes_for_diagnostic(source: &str, diagnostic: &Diagnostic) -> Vec<Code
         c if c == DiagnosticCode::SecuritySignalHandler.as_str() => {
             actions.extend(quick_fixes::fix_security_signal_handler(source, &qf_diag));
         }
+        // PL405: printf/sprintf format specifier count mismatch
+        c if c == DiagnosticCode::PrintfFormatMismatch.as_str()
+            || c == "native.common.printf_format_arity" =>
+        {
+            actions.extend(quick_fixes::fix_printf_format_arity(source, &qf_diag));
+        }
         _ => {}
     }
 

@@ -1056,4 +1056,86 @@ mod tests {
         let rename = must_some(actions.iter().find(|a| a.title.contains("Rename")));
         assert_eq!(rename.edit.changes[0].new_text, "'key_2'");
     }
+
+    #[test]
+    fn test_native_printf_format_arity_listop_inserts_undef() {
+        // Route: native.common.printf_format_arity → fix_printf_format_arity
+        // Listop form: printf "fmt", $a — insert undef before the semicolon.
+        let source = "use strict;\nuse warnings;\nprintf \"%s %s\", $name;\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let call_start = must_some(source.find("printf"));
+        // Call node range ends before the ';'
+        let call_end = call_start + "printf \"%s %s\", $name".len();
+        let diagnostics = vec![make_diagnostic(
+            call_start,
+            call_end,
+            "native.common.printf_format_arity",
+            "`printf` format string has 2 specifiers but 1 argument supplied",
+        )];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        let action =
+            must_some(actions.iter().find(|a| a.title == "Add 1 missing argument as undef"));
+        let rewritten = apply_action(source, action);
+        assert!(
+            rewritten.contains("printf \"%s %s\", $name, undef;"),
+            "expected undef appended before semicolon, got: {rewritten:?}",
+        );
+    }
+
+    #[test]
+    fn test_pl405_parens_printf_inserts_multiple_undef() {
+        // Route: PL405 → fix_printf_format_arity
+        // Parens form: printf("fmt", $a) — insert undef before closing ')'.
+        let source = "use strict;\nuse warnings;\nprintf(\"%s %s %s\", $a);\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let call_start = must_some(source.find("printf("));
+        // Call node includes the closing ')'
+        let call_end = call_start + "printf(\"%s %s %s\", $a)".len();
+        let diagnostics = vec![make_diagnostic(
+            call_start,
+            call_end,
+            "PL405",
+            "`printf` format string has 3 specifiers but 1 argument supplied",
+        )];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        let action =
+            must_some(actions.iter().find(|a| a.title == "Add 2 missing arguments as undef"));
+        let rewritten = apply_action(source, action);
+        assert!(
+            rewritten.contains("printf(\"%s %s %s\", $a, undef, undef);"),
+            "expected two undef args inserted before closing paren, got: {rewritten:?}",
+        );
+    }
+
+    #[test]
+    fn test_pl405_too_many_args_no_quick_fix() {
+        // When args > specifiers the fix is skipped (removing args is too destructive).
+        let source = "use strict;\nuse warnings;\nprintf \"%s\", $a, $b;\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let call_start = must_some(source.find("printf"));
+        let call_end = call_start + "printf \"%s\", $a, $b".len();
+        let diagnostics = vec![make_diagnostic(
+            call_start,
+            call_end,
+            "native.common.printf_format_arity",
+            "`printf` format string has 1 specifier but 2 arguments supplied",
+        )];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        assert!(
+            !actions.iter().any(|a| a.title.contains("missing argument")),
+            "should not offer undef insertion when args exceed specifiers, got: {actions:?}",
+        );
+    }
 }

@@ -29,6 +29,10 @@
 // The must/must_some/must_err helpers are designed to panic in tests.
 #![allow(clippy::panic)]
 #![allow(
+    clippy::print_stderr,
+    reason = "test support crate intentionally emits narrative scenario output"
+)]
+#![allow(
     clippy::too_many_lines,
     clippy::module_name_repetitions,
     clippy::cast_possible_truncation,
