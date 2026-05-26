@@ -118,6 +118,107 @@ fn disabled_inline_completion_removes_static_and_experimental_capabilities() -> 
     Ok(())
 }
 
+#[test]
+fn lsp4ij_dynamic_inline_completion_returns_deterministic_items() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_lsp4ij.pl";
+    harness.open(uri, "use ")?;
+
+    let result = request_inline_completion(&mut harness, uri, 0, 4)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+
+    assert!(!items.is_empty(), "expected deterministic inline completion items");
+    assert!(
+        items.iter().any(|item| item.get("insertText") == Some(&json!("strict;"))),
+        "expected deterministic strict; suggestion, got: {items:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn static_inline_completion_returns_deterministic_items() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": {}
+    })))?;
+
+    let uri = "file:///inline_static.pl";
+    harness.open(uri, "use ")?;
+
+    let result = request_inline_completion(&mut harness, uri, 0, 4)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+
+    assert!(!items.is_empty(), "expected deterministic inline completion items");
+    assert!(
+        items.iter().any(|item| item.get("insertText") == Some(&json!("strict;"))),
+        "expected deterministic strict; suggestion, got: {items:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn inline_completion_unsupported_position_returns_empty_items() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_lsp4ij_neutral.pl";
+    harness.open(uri, "my $name = \"World\";")?;
+
+    let result = request_inline_completion(&mut harness, uri, 0, 11)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+
+    assert!(items.is_empty(), "unsupported position must not emit noisy suggestions");
+    Ok(())
+}
+
+#[test]
+fn disabled_inline_completion_rejects_runtime_request() -> TestResult {
+    let mut harness = LspHarness::new();
+    let init = harness.initialize_with_init_options(
+        Some(json!({
+            "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+        })),
+        json!({"disabledFeatures": ["lsp.inline_completion"]}),
+    )?;
+
+    assert!(init.pointer("/capabilities/inlineCompletionProvider").is_none());
+    assert!(init.pointer("/capabilities/experimental/perlInlineCompletionStream").is_none());
+
+    let uri = "file:///inline_disabled.pl";
+    harness.open(uri, "use ")?;
+    let response = harness.request_raw(json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "textDocument/inlineCompletion",
+        "params": {
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 4 }
+        }
+    }));
+
+    assert_eq!(response.pointer("/error/code"), Some(&json!(-32601)));
+    assert_eq!(
+        response.pointer("/error/message"),
+        Some(&json!("Method not advertised in server capabilities"))
+    );
+    Ok(())
+}
+
 #[cfg(feature = "expose_lsp_test_api")]
 #[test]
 fn lsp4ij_inline_completion_dynamic_registration_shape_is_parsed() -> TestResult {
@@ -221,4 +322,19 @@ fn assert_no_inline_completion_registration(requests: Vec<serde_json::Value>) {
         find_inline_completion_registration(requests).is_none(),
         "static inline completion clients must not also receive dynamic registration"
     );
+}
+
+fn request_inline_completion(
+    harness: &mut LspHarness,
+    uri: &str,
+    line: u32,
+    character: u32,
+) -> Result<Value, String> {
+    harness.request(
+        "textDocument/inlineCompletion",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character }
+        }),
+    )
 }
