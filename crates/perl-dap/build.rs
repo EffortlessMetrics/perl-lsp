@@ -2,6 +2,8 @@
 // Wave Final PR B: perl-feature-catalog absorbed; catalog logic is package-local
 // so crates.io archives build outside the workspace.
 #![allow(clippy::pedantic, clippy::panic)]
+// Build scripts are allowed to use eprintln!/println! for cargo directives and diagnostics.
+#![allow(clippy::print_stderr, clippy::print_stdout)]
 
 use serde::Deserialize;
 use std::env;

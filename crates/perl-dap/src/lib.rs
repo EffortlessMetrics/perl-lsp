@@ -335,8 +335,6 @@
 //! This crate follows TDD principles with acceptance criteria from Issue #207.
 //! All tests are tagged with `// AC:ID` comments for traceability to specifications.
 
-// Lint enforcement: library code must use tracing, not direct stderr/stdout prints.
-#![deny(clippy::print_stderr, clippy::print_stdout)]
 #![cfg_attr(test, allow(clippy::print_stderr, clippy::print_stdout))]
 
 // Phase 1 modules (AC1-AC4) - IMPLEMENTED

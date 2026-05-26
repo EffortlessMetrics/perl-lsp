@@ -1,3 +1,5 @@
+// Differential recovery test — println! used for diagnostic output.
+#![allow(clippy::print_stdout)]
 //! Recovery-quality differential test suite for v1/v2/v3 Perl parsers.
 //!
 //! Tests measure how each parser handles *syntactically broken input* - specifically,

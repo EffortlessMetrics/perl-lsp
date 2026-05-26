@@ -18,6 +18,8 @@
 //! ```text
 //! bench_facade <file>
 //! ```
+// Benchmark binary — println!/eprintln! are used for structured output consumed by bench harness.
+#![allow(clippy::print_stderr, clippy::print_stdout)]
 
 use std::env;
 use std::fs;

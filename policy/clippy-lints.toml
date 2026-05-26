@@ -547,6 +547,20 @@ class = "reviewability"
 reason = "Unused format specs hide formatting mistakes."
 
 [[lint]]
+name = "clippy::print_stderr"
+level = "deny"
+status = "active"
+class = "reviewability"
+reason = "Library code must use tracing, not direct stderr. One narrow exception exists: startup_banner in perl-lsp-rs-core fires before the tracing subscriber is configured."
+
+[[lint]]
+name = "clippy::print_stdout"
+level = "deny"
+status = "active"
+class = "reviewability"
+reason = "Library code must use tracing, not direct stdout. CLI output modules that intentionally print use a module-level allow with reason."
+
+[[lint]]
 name = "clippy::unnecessary_debug_formatting"
 level = "warn"
 status = "tracked"

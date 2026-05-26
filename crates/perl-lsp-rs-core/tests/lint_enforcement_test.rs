@@ -4,9 +4,9 @@
 //! across the workspace. This test verifies that the `perl-lsp-rs-core` crate
 //! (which absorbed `perl-lsp-launcher`) carries:
 //!
-//! - `#![deny(clippy::print_stderr, clippy::print_stdout)]` to ban bare print macros
+//! - workspace-level `print_stderr = "deny"` / `print_stdout = "deny"` in Cargo.toml
 //! - `#![cfg_attr(test, allow(...))]` to suppress in test code
-//! - `#[allow(clippy::print_stderr)]` on `startup_banner` (the one intentional exception)
+//! - `#[expect(clippy::print_stderr)]` on `startup_banner` (the one intentional exception)
 //!
 //! These tests read the actual source files via `CARGO_MANIFEST_DIR` so they would
 //! catch any future accidental removal of the directives.
@@ -36,13 +36,23 @@ fn find_line_number(source: &str, pattern: &str) -> Option<usize> {
 }
 
 #[test]
-fn test_lib_has_deny_print_stderr_directive() {
-    let source = read_source(&lib_rs_path());
-    let pattern = "#![deny(clippy::print_stderr, clippy::print_stdout)]";
+fn test_workspace_cargo_has_print_deny() {
+    // Navigate from manifest dir up to workspace root
+    let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let workspace_root = manifest
+        .ancestors()
+        .skip(1) // skip the crate dir
+        .find(|p| p.join("Cargo.toml").exists() && p.join("Cargo.lock").exists())
+        .expect("workspace root Cargo.toml must be readable");
+    let cargo_toml = std::fs::read_to_string(workspace_root.join("Cargo.toml"))
+        .expect("workspace Cargo.toml must be readable");
     assert!(
-        find_line_number(&source, pattern).is_some(),
-        "perl-lsp-rs-core/src/lib.rs is missing lint enforcement directive:\n  {pattern}\n\n\
-         Add this immediately after #![deny(unsafe_code)]."
+        cargo_toml.contains("print_stderr = \"deny\""),
+        "workspace Cargo.toml must contain print_stderr = \"deny\" in [workspace.lints.clippy]"
+    );
+    assert!(
+        cargo_toml.contains("print_stdout = \"deny\""),
+        "workspace Cargo.toml must contain print_stdout = \"deny\" in [workspace.lints.clippy]"
     );
 }
 
@@ -60,22 +70,32 @@ fn test_lib_has_cfg_attr_allow_in_test_mode() {
 #[test]
 fn test_startup_banner_has_allow_annotation() {
     let source = read_source(&launcher_mod_path());
-    // The allow annotation must appear before the function definition
-    let allow_line = find_line_number(&source, "#[allow(clippy::print_stderr)]");
+    // The expect annotation must appear before the function definition.
+    // rustfmt may expand the attribute to multi-line format; search for the lint name
+    // directly since it must appear in both single-line and multi-line forms.
+    let allow_line = find_line_number(&source, "clippy::print_stderr");
     let fn_line = find_line_number(&source, "pub fn startup_banner(");
 
     assert!(
         allow_line.is_some(),
         "src/runtime/launcher/mod.rs: startup_banner is missing its \
-         #[allow(clippy::print_stderr)] annotation.\n\
+         #[expect(clippy::print_stderr, reason = ...)] annotation.\n\
          The eprintln! in startup_banner fires before the tracing subscriber is configured \
-         and is the one intentional exception in this crate."
+         and is the one intentional exception in this crate. \
+         Also verify that the source contains #[expect(clippy::print_stderr ...)]."
+    );
+
+    // Also verify the file contains an #[expect(... construct (not just #[allow(...)]).
+    assert!(
+        source.contains("#[expect("),
+        "src/runtime/launcher/mod.rs: clippy::print_stderr suppression must use \
+         #[expect(...)] not #[allow(...)]. Update startup_banner annotation."
     );
 
     if let (Some(allow), Some(func)) = (allow_line, fn_line) {
         assert!(
             allow < func,
-            "The #[allow(clippy::print_stderr)] annotation (line {allow}) must appear \
+            "The clippy::print_stderr annotation (line {allow}) must appear \
              before pub fn startup_banner (line {func})."
         );
     }

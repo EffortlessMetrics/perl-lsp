@@ -1,3 +1,5 @@
+// Parse CLI binary — println!/eprintln! are intentional output for parse results and errors.
+#![allow(clippy::print_stderr, clippy::print_stdout)]
 use std::env;
 use std::fmt;
 use std::path::PathBuf;

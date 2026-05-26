@@ -1,3 +1,5 @@
+// BDD workflow tests — eprintln! used for diagnostic output in test scenarios.
+#![allow(clippy::print_stderr)]
 //! BDD-style workflow tests for the C tree-sitter Perl binding.
 //!
 //! These scenarios validate the user-visible behaviors that matter most for

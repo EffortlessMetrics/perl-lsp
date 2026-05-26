@@ -1,4 +1,6 @@
 //! Test support utilities for LSP integration tests
+// Test support module — eprintln!/println! are used for test diagnostics.
+#![allow(clippy::print_stderr, clippy::print_stdout)]
 
 pub mod bdd_diagnostics;
 pub mod client_caps;

@@ -1,3 +1,6 @@
+// CLI binary — println!/eprintln! are intentional user-facing output.
+#![allow(clippy::print_stderr, clippy::print_stdout)]
+
 use perl_ci_hygiene::categorize_ignore;
 use perl_ci_hygiene::version_sync;
 

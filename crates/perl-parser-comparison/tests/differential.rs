@@ -1,3 +1,5 @@
+// Differential test suite — println! used for diagnostic output.
+#![allow(clippy::print_stdout)]
 //! Differential parser test suite for v1/v2/v3 Perl parsers.
 //!
 //! Tests cover the seven categories of constructs that historically defeated

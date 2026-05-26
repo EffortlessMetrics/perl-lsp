@@ -2,7 +2,14 @@
 
 #![deny(clippy::option_env_unwrap)]
 // cli.rs is user-facing CLI output — eprintln!/println! are intentional here.
-#![allow(clippy::print_stderr, clippy::print_stdout)]
+#![expect(
+    clippy::print_stderr,
+    reason = "CLI output module — user-facing error messages, version info, and diagnostics intentionally use stderr"
+)]
+#![expect(
+    clippy::print_stdout,
+    reason = "CLI output module — health check, version, help text, and check results intentionally use stdout"
+)]
 
 use crate::LspServer;
 use perl_lsp_rs_core::runtime::launcher::{

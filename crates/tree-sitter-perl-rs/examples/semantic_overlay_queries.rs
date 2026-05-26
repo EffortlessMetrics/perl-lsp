@@ -1,3 +1,6 @@
+// Example binary: println!/eprintln! are intentional demonstration output.
+#![allow(clippy::print_stderr, clippy::print_stdout)]
+
 use tree_sitter_perl_rs::Parser;
 
 fn main() {

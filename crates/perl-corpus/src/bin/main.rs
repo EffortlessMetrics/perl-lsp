@@ -1,5 +1,7 @@
 #![allow(clippy::pedantic)] // Binary tool - focus on core clippy lints only
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+// CLI binary — println!/eprintln! are intentional user-facing output.
+#![allow(clippy::print_stderr, clippy::print_stdout)]
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};

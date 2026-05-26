@@ -8,6 +8,8 @@
 //! tracked by this module.
 //!
 //! Two public entry points:
+// This module is a CLI reporting layer — println!/eprintln! are intentional user-facing output.
+#![allow(clippy::print_stderr, clippy::print_stdout)]
 //! - [`check`] — used by the CI gate to fail on drift.
 //! - [`bump`]  — used by `cargo xtask bump-version` to update every site.
 //!
