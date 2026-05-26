@@ -31,7 +31,9 @@ perllsp --health
 | Editor | Fast path | Detailed guide |
 | --- | --- | --- |
 | VS Code | install the extension or point it at `perllsp --stdio` | [docs/EDITORS/VS_CODE_SETUP.md](../EDITORS/VS_CODE_SETUP.md) |
+| Cursor | install the VS Code-compatible extension and configure it with the `perl-lsp.*` settings namespace | [docs/EDITORS/CURSOR_SETUP.md](../EDITORS/CURSOR_SETUP.md) |
 | Trae (ByteDance) | install the VS Code-compatible extension or set command to `perllsp --stdio` | [docs/EDITORS/TRAE_SETUP.md](../EDITORS/TRAE_SETUP.md) |
+| IntelliJ IDEA | install the LSP4IJ plugin and register `perllsp --stdio` as a Raw Command server | [docs/EDITORS/INTELLIJ_IDEA_SETUP.md](../EDITORS/INTELLIJ_IDEA_SETUP.md) |
 | Neovim | define a custom `perllsp` config with `vim.lsp.config()` and enable via `vim.lsp.enable()` (legacy `nvim-lspconfig` supported for older Neovim) | [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) |
 | Vim | use `vim-lsp` with `perllsp --stdio` | [docs/EDITORS/VIM_SETUP.md](../EDITORS/VIM_SETUP.md) |
 | coc.nvim | configure `languageserver.perl-lsp` in `coc-settings.json` to launch `perllsp --stdio`; works in Neovim and Vim when the buffer filetype is `perl` | [docs/EDITORS/COC_NEOVIM_SETUP.md](../EDITORS/COC_NEOVIM_SETUP.md) |
@@ -52,6 +54,12 @@ perllsp --health
 The repo-maintained extension is the easiest route. If you prefer a manual
 configuration, set the command to `perllsp --stdio` and keep the workspace
 root pointed at the project root.
+
+### Cursor
+
+Cursor is based on the VS Code codebase. Install the `EffortlessMetrics.perl-lsp-rs`
+extension from Cursor's Extensions panel (or via VSIX). Workspace settings use
+the same `.vscode/settings.json` format as VS Code.
 
 ### Trae (ByteDance)
 
@@ -226,6 +234,20 @@ the full workflow, bridge config, and troubleshooting.
 Create or update `opencode.json` and register a custom LSP server with
 `"command": ["perllsp", "--stdio"]` and Perl extensions like `.pl`, `.pm`,
 and `.t`. See [docs/EDITORS/OPENCODE_SETUP.md](../EDITORS/OPENCODE_SETUP.md) for a full example.
+
+### IntelliJ IDEA
+
+Install the [LSP4IJ](https://plugins.jetbrains.com/plugin/23257-lsp4ij) plugin,
+then open **File > Settings > Languages & Frameworks > Language Servers** and add:
+
+| Field | Value |
+| --- | --- |
+| Name | `perl-lsp` |
+| Command | `perllsp --stdio` |
+| File name patterns | `*.pl`, `*.pm`, `*.t`, `*.psgi`, `*.cgi` |
+
+See [docs/EDITORS/INTELLIJ_IDEA_SETUP.md](../EDITORS/INTELLIJ_IDEA_SETUP.md) for the full workflow,
+initialization options, and troubleshooting.
 
 ## When Setup Fails
 
