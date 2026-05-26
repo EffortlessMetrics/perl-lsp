@@ -38,28 +38,15 @@ jobs:
             }
 
             const BOT_MARKER = '<!-- pr-title-check-bot -->';
-            const issueMatches = [...title.matchAll(/\B#(\d+)\b/g)];
-
-            if (issueMatches.length === 0) {
-              core.setFailed(
-                `PR title must reference an issue (e.g. "feat: add thing (#42)"). Got: "${title}"`
-              );
-
-              const commentBody = [
-                '## \u26a0\ufe0f PR Title Check Failed',
-                '',
-                BOT_MARKER,
-                '',
-                'This PR\'s title does not include an **issue reference** (`#<number>` outside of version strings).',
-                '',
-                '**Expected format:** `type: description (#1234)`',
-                '',
-                'Please update the title to reference the relevant issue. If this PR doesn\'t need one, add the `skip-title-check` label.',
-                '',
-                `Current title: \`${title}\``,
-              ].join('\n');
-
-              // Deduplicate: find and update existing bot comment instead of posting a new one
+            const issueGuidance = [
+              'For Codex or other agent-authored PRs: file the plan as a GitHub issue first, then update the PR title to reference that real issue.',
+              '',
+              'The issue should preserve the plan context: problem, scope, constraints, files or surfaces, validation, and explicit non-goals.',
+              '',
+              'Do not use `#0000` as a placeholder. Do not use `skip-title-check` to bypass a missing planning issue; that label is reserved for maintainer-owned exceptions.',
+            ].join('\n');
+            const upsertTitleCheckComment = async (commentBody) => {
+              // Deduplicate: find and update existing bot comment instead of posting a new one.
               const { data: comments } = await github.rest.issues.listComments({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -87,6 +74,30 @@ jobs:
                 });
                 core.info('Posted new bot comment.');
               }
+            };
+            const issueMatches = [...title.matchAll(/\B#(\d+)\b/g)];
+
+            if (issueMatches.length === 0) {
+              core.setFailed(
+                `PR title must reference an issue (e.g. "feat: add thing (#42)"). ` +
+                `Codex/agent PRs should file the plan as an issue first. Got: "${title}"`
+              );
+
+              const commentBody = [
+                '## \u26a0\ufe0f PR Title Check Failed',
+                '',
+                BOT_MARKER,
+                '',
+                'This PR\'s title does not include an **issue reference** (`#<number>` outside of version strings).',
+                '',
+                '**Expected format:** `type: description (#1234)`',
+                '',
+                issueGuidance,
+                '',
+                `Current title: \`${title}\``,
+              ].join('\n');
+
+              await upsertTitleCheckComment(commentBody);
               return;
             }
 
@@ -96,8 +107,23 @@ jobs:
             if (zeroIssueMatch) {
               core.setFailed(
                 `PR title contains zero-valued issue reference "${zeroIssueMatch[0]}", which is the Codex placeholder for an unknown issue. ` +
-                `Please replace it with the actual issue number, e.g. "(#1234)". Got: "${title}"`
+                `File the plan as an issue and replace it with the actual issue number, e.g. "(#1234)". Got: "${title}"`
               );
+              const commentBody = [
+                '## \u26a0\ufe0f PR Title Check Failed',
+                '',
+                BOT_MARKER,
+                '',
+                `This PR title uses the placeholder issue reference \`${zeroIssueMatch[0]}\`.`,
+                '',
+                '**Expected format:** `type: description (#1234)`',
+                '',
+                issueGuidance,
+                '',
+                `Current title: \`${title}\``,
+              ].join('\n');
+
+              await upsertTitleCheckComment(commentBody);
               return;
             }
 
