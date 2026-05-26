@@ -1,13 +1,11 @@
 use color_eyre::eyre::{Result, bail, eyre};
-use perl_lsp_ux_tests::{FakeWorkspace, ScenarioConfig, UxClient};
+use perl_lsp_ux_tests::{FakeWorkspace, LspEvent, ScenarioConfig, UxClient};
 use serde_json::{Value, json};
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub fn run(binary: PathBuf) -> Result<()> {
-    if !binary.is_file() {
-        bail!("inline-completion smoke binary does not exist: {}", binary.display());
-    }
+    let binary = resolve_binary_path(binary)?;
 
     let workspace = ux(FakeWorkspace::new())?;
     let timeout = Duration::from_secs(30);
@@ -28,6 +26,7 @@ pub fn run(binary: PathBuf) -> Result<()> {
 
     let initialize = client.initialize_result();
     ensure_dynamic_initialize_shape(&initialize)?;
+    ensure_inline_completion_dynamic_registration(&client, timeout)?;
 
     let uri = "file:///release-inline.pl";
     ux(client.did_open(uri, "use "))?;
@@ -78,6 +77,54 @@ fn ensure_dynamic_initialize_shape(initialize: &Value) -> Result<()> {
     Ok(())
 }
 
+fn ensure_inline_completion_dynamic_registration(
+    client: &UxClient,
+    timeout: Duration,
+) -> Result<()> {
+    let deadline = Instant::now() + timeout;
+
+    loop {
+        let events = client.peek_events();
+        if events.iter().any(is_inline_completion_registration) {
+            return Ok(());
+        }
+
+        if Instant::now() >= deadline {
+            bail!(
+                "inline-completion smoke did not observe dynamic client/registerCapability; events: {:?}",
+                events
+            );
+        }
+
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+fn is_inline_completion_registration(event: &LspEvent) -> bool {
+    let LspEvent::Other { method, params } = event else {
+        return false;
+    };
+    if method != "client/registerCapability" {
+        return false;
+    }
+
+    params.get("registrations").and_then(Value::as_array).is_some_and(|registrations| {
+        registrations.iter().any(is_inline_completion_registration_entry)
+    })
+}
+
+fn is_inline_completion_registration_entry(registration: &Value) -> bool {
+    registration.get("method") == Some(&json!("textDocument/inlineCompletion"))
+        && registration.get("id") == Some(&json!("perl-inlineCompletion"))
+        && registration
+            .pointer("/registerOptions/documentSelector")
+            .and_then(Value::as_array)
+            .is_some_and(|selector| {
+                selector.contains(&json!({ "language": "perl" }))
+                    && selector.contains(&json!({ "language": "perl5" }))
+            })
+}
+
 fn request_inline_completion_items(
     client: &UxClient,
     uri: &str,
@@ -117,4 +164,19 @@ fn request_inline_completion_items(
 
 fn ux<T>(result: anyhow::Result<T>) -> Result<T> {
     result.map_err(|error| eyre!("{error:#}"))
+}
+
+fn resolve_binary_path(binary: PathBuf) -> Result<PathBuf> {
+    if binary.is_file() {
+        return Ok(binary);
+    }
+
+    if cfg!(windows) && binary.extension().is_none() {
+        let exe = binary.with_extension("exe");
+        if exe.is_file() {
+            return Ok(exe);
+        }
+    }
+
+    bail!("inline-completion smoke binary does not exist: {}", binary.display());
 }

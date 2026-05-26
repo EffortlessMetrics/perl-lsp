@@ -317,6 +317,32 @@ gates:
     planning:
       role: rust_scoped
 
+  - name: inline_completion_contract
+    tier: pr_fast
+    description: "Inline-completion registration, capability, snapshot, and core provider contracts"
+    required: true
+    command: >-
+      cargo test -p perl-lsp-rs --locked --test lsp_inline_completion_registration_tests &&
+      cargo test -p perl-lsp-rs --locked --test lsp_registration_tests &&
+      cargo test -p perl-lsp-rs --locked --test lsp_cap_snap &&
+      cargo test -p perl-lsp-rs-core --locked --lib inline_completion
+    timeout_seconds: 300
+    retry_count: 0
+    budgets:
+      max_duration_ms: 240000
+    quarantine: false
+    tags:
+      - test
+      - lsp
+      - inline-completion
+      - protocol
+    planning:
+      role: rust_package_scoped
+      packages:
+        - perl-lsp-rs
+        - perl-lsp-rs-core
+        - xtask
+
   - name: clippy_core
     tier: pr_fast
     description: "Clippy lints on core library crates (not full workspace)"
@@ -963,6 +989,24 @@ gates:
       - release
       - build
 
+  - name: inline_completion_binary_smoke
+    tier: release
+    description: "Release-built perl-lsp stdio smoke for LSP 3.18 inline completion"
+    required: true
+    command: >-
+      cargo build --release -p perl-lsp-rs --bin perl-lsp --locked &&
+      cargo xtask smoke inline-completion --binary target/release/perl-lsp
+    timeout_seconds: 360
+    retry_count: 0
+    budgets:
+      max_duration_ms: 300000
+    quarantine: false
+    tags:
+      - release
+      - lsp
+      - inline-completion
+      - smoke
+
   - name: version_sync
     tier: release
     description: "All version strings agree across features.toml, Cargo.toml, package.json, build.rs"
@@ -1230,6 +1274,7 @@ workflow_integration:
     release-gate:
       gates:
         - release_build
+        - inline_completion_binary_smoke
         - version_sync
         - sbom_verify
 
