@@ -20,6 +20,7 @@ on:
       - 'Cargo.lock'
       - '.github/workflows/publish-crates.yml'
       - '.github/workflows/publish-dry-run.yml'
+      - 'scripts/ci/check_perl_lsp_rs_core_package.py'
       - 'scripts/cargo-package-workspace-dry-run.sh'
       - 'scripts/publish-topo.py'
       - 'xtask/src/tasks/publish_manifest_check.rs'
@@ -62,6 +63,9 @@ jobs:
 
       - name: Check allowlist drift (manifest check)
         run: cargo xtask publish-manifest-check
+
+      - name: Check perl-lsp-rs-core packaged build inputs
+        run: python3 scripts/ci/check_perl_lsp_rs_core_package.py
 
       - name: Compute topological publish order
         id: topo

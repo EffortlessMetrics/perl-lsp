@@ -280,6 +280,9 @@ jobs:
           print("All publishable crates match target version {}".format(target))
           '
 
+      - name: Check perl-lsp-rs-core packaged build inputs
+        run: python3 scripts/ci/check_perl_lsp_rs_core_package.py
+
       - name: Publish all crates
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
