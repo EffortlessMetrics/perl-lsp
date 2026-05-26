@@ -33,6 +33,7 @@
 | Memory plateau receipts | [memory_plateau.md](memory_plateau.md), [memory_plateau_trends.md](memory_plateau_trends.md) | Human | Memory guardrail, budget, or baseline changes |
 | Semantic capability dashboard | [semantic_capability_dashboard.md](semantic_capability_dashboard.md) | Human | Semantic release-readiness changes |
 | Semantic UX capability dashboard | [ux_capability_dashboard.md](ux_capability_dashboard.md) | Human | UX surface readiness changes |
+| Neovim lean latency profile | [neovim_latency.md](neovim_latency.md) | Human | Lean-profile receipts, smoke scripts, or benchmark evidence |
 | Native formatter/critic replacement status | [native_tooling.md](native_tooling.md) | Generator | Native formatter or critic capability changes |
 | CI hardening implementation status | [ci_hardening.md](ci_hardening.md) | Human | CI hardening state changes |
 

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Neovim lean smoke for the 0.15.1 latency lane (PR 5/5).
+# Neovim lean smoke for the post-cutover latency lane.
 #
 # What this proves:
 #   - perllsp built from this branch starts under `--runtime-mode e2e` and
 #     accepts a real Neovim client over LSP.
 #   - Opening a small Perl file, applying a short edit burst, and
-#     requesting completion or hover returns a non-error response within
-#     a small wallclock budget.
+#     requesting completion returns a non-error response. This is a wiring
+#     smoke, not a hard latency budget.
 #
 # Why this is shell-scripted (not a Rust test):
 #   The CI Neovim environment is not stable enough to make this a green
@@ -72,6 +72,8 @@ local client_id = vim.lsp.start({
     '--runtime-mode', 'e2e',
     '--diagnostic-mode', 'syntax-only',
     '--diagnostic-debounce-ms', '0',
+    '--eager-workspace-indexing=false',
+    '--file-watchers=false',
   },
   capabilities = caps,
   root_dir = '${tmpdir}',
