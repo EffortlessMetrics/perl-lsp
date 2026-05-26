@@ -741,6 +741,49 @@ impl<'a> Parser<'a> {
             return false;
         }
 
+        // Phaser blocks (BEGIN/END/CHECK/INIT/UNITCHECK) start compile-time
+        // declarations only when followed by `{`.  CPAN code occasionally uses
+        // these as bareword function calls (`CHECK()`, `INIT()`), which are valid
+        // expression RHS forms and must not trigger missing-operand recovery.
+        if matches!(
+            self.peek_kind(),
+            Some(
+                TokenKind::Begin
+                    | TokenKind::End
+                    | TokenKind::Check
+                    | TokenKind::Init
+                    | TokenKind::Unitcheck
+            )
+        ) && !matches!(
+            self.tokens.peek_second().map(|t| t.kind),
+            Ok(TokenKind::LeftBrace)
+        ) {
+            return false;
+        }
+
+        // `given` (experimental given/when) is always a compound statement
+        // when followed by `(expr)`.  Without `(`, treat it as a potential
+        // bareword identifier to avoid breaking user-defined `given()` subs.
+        if self.peek_kind() == Some(TokenKind::Given)
+            && !matches!(
+                self.tokens.peek_second().map(|t| t.kind),
+                Ok(TokenKind::LeftParen)
+            )
+        {
+            return false;
+        }
+
+        // `defer` (Perl 5.36+ experimental) is a block statement when followed
+        // by `{`.  Without `{`, it may appear as a hash key or bareword.
+        if self.peek_kind() == Some(TokenKind::Defer)
+            && !matches!(
+                self.tokens.peek_second().map(|t| t.kind),
+                Ok(TokenKind::LeftBrace)
+            )
+        {
+            return false;
+        }
+
         match self.peek_kind() {
             Some(kind) if kind.is_recovery_boundary() => true,
             // Statement-starter keywords cannot serve as an expression RHS.
@@ -767,6 +810,18 @@ impl<'a> Parser<'a> {
             | Some(TokenKind::Class)
             | Some(TokenKind::Method)
             | Some(TokenKind::Format)
+            // Compile-time phaser blocks: never a valid expression RHS in the
+            // block form; the early-return guard above passes through bareword
+            // call forms such as `CHECK()` or `INIT()`.
+            | Some(TokenKind::Begin)
+            | Some(TokenKind::End)
+            | Some(TokenKind::Check)
+            | Some(TokenKind::Init)
+            | Some(TokenKind::Unitcheck)
+            // `given` compound statement: not an expression when followed by `(`.
+            | Some(TokenKind::Given)
+            // `defer` Perl 5.36+ block: not an expression when followed by `{`.
+            | Some(TokenKind::Defer)
             | None => true,
             _ => false,
         }
