@@ -32,10 +32,9 @@ fn merge_experimental_capability(capabilities: &mut Value, key: &str, value: Val
         capabilities["experimental"] = json!({});
     }
 
-    capabilities["experimental"]
-        .as_object_mut()
-        .expect("experimental must be object")
-        .insert(key.to_string(), value);
+    if let Some(experimental) = capabilities["experimental"].as_object_mut() {
+        experimental.insert(key.to_string(), value);
+    }
 }
 
 impl LspServer {
