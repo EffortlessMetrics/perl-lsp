@@ -99,6 +99,41 @@ Restart Neovim, open a Perl file, and run:
 :checkhealth vim.lsp
 ```
 
+## Optional: lean latency profile
+
+Use this profile when responsiveness matters more than full semantic,
+module-resolution, native critic, and workspace dead-code diagnostics. Normal
+mode remains the richer default.
+
+```lua
+vim.lsp.config('perllsp', {
+  cmd = {
+    'perllsp',
+    '--stdio',
+    '--runtime-mode', 'e2e',
+    '--diagnostic-mode', 'syntax-only',
+    '--diagnostic-debounce-ms', '0',
+    '--eager-workspace-indexing=false',
+    '--file-watchers=false',
+  },
+  filetypes = { 'perl' },
+  root_markers = {
+    '.perl-lsp.toml',
+    'Makefile.PL',
+    'Build.PL',
+    'cpanfile',
+    'dist.ini',
+    '.git',
+  },
+})
+
+vim.lsp.enable('perllsp')
+```
+
+This profile keeps parser diagnostics but bypasses the full semantic/module
+diagnostic stack and avoids eager workspace indexing and file watcher
+registration. It does not provide incremental AST reuse.
+
 ## Optional: Define the config inline
 
 ```lua

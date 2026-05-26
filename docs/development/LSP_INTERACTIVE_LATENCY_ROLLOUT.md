@@ -40,14 +40,16 @@ Phases 8 and 9 stack on [#223](https://github.com/EffortlessMetrics/perl-lsp-swa
 
 - [ ] Every phase lands or is explicitly deferred with a successor.
 - [ ] Receipt command in this doc reproduces the closeout proof.
-- [ ] A Neovim harness can run `perllsp --runtime-mode e2e --diagnostic-mode syntax-only --diagnostic-debounce-ms 0` and exercise hover/completion in isolation from background work.
+- [ ] A Neovim harness can run `perllsp --runtime-mode e2e --diagnostic-mode syntax-only --diagnostic-debounce-ms 0 --eager-workspace-indexing=false --file-watchers=false` and exercise hover/completion in isolation from background work.
 - [ ] `PERL_LSP_TIMING=1` writes per-phase latency receipts to a non-stdout sink.
 - [ ] Status doc updated (`docs/project/status/lsp.md` regenerated post-merge).
-- [ ] Quantitative targets below are met or explicitly waived with a written rationale.
+- [ ] Benchmark targets below are measured on dedicated hardware or explicitly deferred with a written rationale.
 
-## Quantitative targets
+## Benchmark-only targets
 
-These are the closeout thresholds for the rail. Phase 2 (timing probes) establishes the baseline; subsequent phases ratchet against it. All targets are p95 unless noted; measured on the Neovim harness against the checked-in medium fixture selected by the Phase 2 receipt on a release build.
+These targets are not claimed by the raw-RPC CI receipts. The checked-in tests are e2e wiring receipts: they prove the lean profile starts, answers, publishes syntax-only diagnostics, and clears diagnostics. Numeric latency targets require dedicated benchmark hardware and a release build.
+
+Phase 2 (timing probes) establishes the benchmark baseline; subsequent phases ratchet against it. All targets are p95 unless noted; measured on the Neovim harness against the checked-in medium fixture selected by the Phase 2 receipt on a release build.
 
 | Surface | Phase 2 baseline (TBD) | Post-rail target | Hard cap |
 |---|---|---|---|
@@ -58,9 +60,9 @@ These are the closeout thresholds for the rail. Phase 2 (timing probes) establis
 | Parser-error diagnostic publish after `didOpen` | record on land | <= 50 ms | 150 ms |
 | Stale-request cancel latency (Phase 9) | n/a | <= 10 ms after `didChange` | 50 ms |
 
-"Baseline (TBD)" is filled in when Phase 2 lands and the timing probes write their first receipt. Phases 3-10 must not regress any baseline beyond its hard cap; they should also drive each metric toward (or past) the post-rail target.
+"Baseline (TBD)" is filled in when the timing probes write a benchmark receipt on the selected hardware. Phases 3-10 must not regress any measured benchmark baseline beyond its hard cap; they should also drive each metric toward (or past) the post-rail target.
 
-Hard caps are absolute fail conditions for closeout: if any metric exceeds its cap, the rail does not close. Soft targets are the success criterion the user-facing experience is aimed at.
+Hard caps are benchmark closeout criteria only after a hardware-bound receipt exists. CI wiring receipts must not be described as satisfying these wall-clock targets.
 
 ## Rollback
 
@@ -148,6 +150,8 @@ vim.lsp.config('perl_lsp', {
     '--runtime-mode', 'e2e',
     '--diagnostic-mode', 'syntax-only',
     '--diagnostic-debounce-ms', '0',
+    '--eager-workspace-indexing=false',
+    '--file-watchers=false',
   },
   capabilities = caps,
   on_attach = function(client, bufnr)
