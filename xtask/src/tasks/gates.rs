@@ -1600,6 +1600,20 @@ fn run_single_gate(
         });
     }
 
+    if command
+        == "cargo build --release -p perl-lsp-rs --bin perl-lsp --locked && cargo xtask smoke inline-completion --binary target/release/perl-lsp"
+    {
+        return run_internal_xtask_gate(gate, &log_path, command, start, || {
+            cmd(
+                "cargo",
+                ["build", "--release", "-p", "perl-lsp-rs", "--bin", "perl-lsp", "--locked"],
+            )
+            .run()
+            .context("Failed to build release perl-lsp binary for inline-completion smoke")?;
+            super::inline_completion_smoke::run(PathBuf::from("target/release/perl-lsp"))
+        });
+    }
+
     let execution = run_shell_command_with_timeout(command, &log_path, timeout_secs);
     let duration_ms = start.elapsed().as_millis() as u64;
 

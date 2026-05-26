@@ -266,7 +266,7 @@ runner = "ubuntu_24_04"
 base_lem = 15
 default_pr = false
 blocking = false
-labels = ["release-check", "full-ci"]
+labels = ["release-check", "ci:inline-completion", "full-ci"]
 branches = ["master"]
 duplicate_of = []
 
