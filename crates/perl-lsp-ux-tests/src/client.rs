@@ -119,17 +119,12 @@ impl UxClient {
             .name("ux-lsp-stderr".into())
             .spawn(move || {
                 let reader = BufReader::new(stderr);
-                for line in reader.lines() {
-                    match line {
-                        Ok(l) => {
-                            if let Ok(mut guard) = stderr_clone.lock() {
-                                guard.push(l.clone());
-                            }
-                            if echo {
-                                eprintln!("[perl-lsp stderr] {}", l);
-                            }
-                        }
-                        Err(_) => {}
+                for l in reader.lines().map_while(Result::ok) {
+                    if let Ok(mut guard) = stderr_clone.lock() {
+                        guard.push(l.clone());
+                    }
+                    if echo {
+                        eprintln!("[perl-lsp stderr] {}", l);
                     }
                 }
             })
