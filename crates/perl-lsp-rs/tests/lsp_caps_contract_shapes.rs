@@ -124,11 +124,23 @@ fn test_capability_shapes_lsp_318_contract() -> Result<(), Box<dyn std::error::E
         );
     }
 
-    // Test range formatting shape (boolean or object)
+    // Test range formatting shape. LSP 3.18 multi-range formatting is
+    // advertised through documentRangeFormattingProvider.rangesSupport, not a
+    // separate documentRangesFormattingProvider key.
     if build.range_formatting {
         assert!(
-            caps_json["documentRangeFormattingProvider"].is_boolean()
-                || caps_json["documentRangeFormattingProvider"].is_object()
+            caps_json["documentRangeFormattingProvider"].is_object(),
+            "documentRangeFormattingProvider must be an object when rangesSupport is advertised"
+        );
+        assert_eq!(
+            caps_json.pointer("/documentRangeFormattingProvider/rangesSupport"),
+            Some(&json!(true)),
+            "documentRangeFormattingProvider.rangesSupport must be true for LSP 3.18 \
+             rangesFormatting"
+        );
+        assert!(
+            caps_json.get("documentRangesFormattingProvider").is_none(),
+            "documentRangesFormattingProvider is not an LSP 3.18 server capability"
         );
     }
 

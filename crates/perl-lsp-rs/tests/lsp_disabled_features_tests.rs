@@ -119,6 +119,29 @@ fn test_disabled_features_declaration_suppresses_json_override() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn test_disabled_features_range_formatting_suppresses_ranges_support() -> TestResult {
+    for feature_id in ["lsp.range_formatting", "lsp.ranges_formatting"] {
+        let mut harness = LspHarness::new_raw();
+        let result = harness.initialize_with_init_options(
+            Some(json!({})),
+            json!({ "disabledFeatures": [feature_id] }),
+        )?;
+        let caps = &result["capabilities"];
+
+        assert!(
+            caps.get("documentRangeFormattingProvider").is_none()
+                || caps["documentRangeFormattingProvider"].is_null(),
+            "documentRangeFormattingProvider must be absent when {feature_id} is disabled"
+        );
+        assert!(
+            caps.get("documentRangesFormattingProvider").is_none(),
+            "non-spec documentRangesFormattingProvider must never be advertised"
+        );
+    }
+    Ok(())
+}
+
 /// When `initializationOptions` is absent entirely, capabilities must be identical to
 /// a normal initialization (no regression for non-VSCode clients).
 #[test]

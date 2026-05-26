@@ -46,8 +46,8 @@ documentOnTypeFormattingProvider:
   moreTriggerCharacter:
     - ;
     - "\n"
-documentRangeFormattingProvider: true
-documentRangesFormattingProvider: true
+documentRangeFormattingProvider:
+  rangesSupport: true
 documentSymbolProvider: true
 executeCommandProvider:
   commands:
