@@ -11,6 +11,11 @@ use lsp_types::{
 impl LspServer {
     /// Register file watchers for Perl files
     pub(crate) fn register_file_watchers_if_needed(&self) {
+        if !self.runtime_tuning().file_watchers {
+            tracing::debug!("Skipping file watcher registration; runtime tuning disabled watchers");
+            return;
+        }
+
         if !self.client_capabilities.lock().dynamic_registration_support {
             return;
         }

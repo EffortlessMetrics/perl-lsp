@@ -132,6 +132,27 @@ or in `.perl-lsp.toml`:
 inlay_hints = true
 ```
 
+## Optional: Inline Completion
+
+`perl-lsp` supports the standard LSP 3.18 `textDocument/inlineCompletion`
+request. LSP4IJ advertises dynamic inline-completion registration, so
+`perllsp` registers `textDocument/inlineCompletion` with
+`client/registerCapability` after `initialized` instead of also advertising a
+duplicate static `inlineCompletionProvider`.
+
+No LSP4IJ-specific server setting is required. If your LSP4IJ build exposes
+inline completion, a simple Perl buffer containing `use ` should receive
+deterministic suggestions such as `strict;`.
+
+Protocol notes:
+
+- Static clients receive top-level `inlineCompletionProvider: {}`.
+- Dynamic-capable clients receive dynamic registration for
+  `textDocument/inlineCompletion`.
+- `experimental.inlineCompletionProvider` is not used.
+- `experimental.perlInlineCompletionStream` is a custom extension for clients
+  that explicitly integrate the streaming path.
+
 ## Verify It Is Running
 
 1. Open a Perl file such as `lib/My/Module.pm` or `t/basic.t`.

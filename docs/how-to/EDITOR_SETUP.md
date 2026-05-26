@@ -95,6 +95,13 @@ vim.lsp.config('perllsp', {
 vim.lsp.enable('perllsp')
 ```
 
+For latency-focused editing, use the lean profile from
+[docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md). It starts
+`perllsp` with `--runtime-mode e2e`, syntax-only diagnostics, zero diagnostic
+debounce, disabled eager workspace indexing, and disabled file watchers. That
+profile favors responsiveness over full semantic/module/critic/dead-code
+diagnostics and does not provide incremental AST reuse.
+
 ### Emacs
 
 Use `lsp-mode` or `eglot` with the same `perllsp --stdio` command. The
@@ -248,6 +255,12 @@ then open **File > Settings > Languages & Frameworks > Language Servers** and ad
 
 See [docs/EDITORS/INTELLIJ_IDEA_SETUP.md](../EDITORS/INTELLIJ_IDEA_SETUP.md) for the full workflow,
 initialization options, and troubleshooting.
+
+LSP4IJ-shaped clients use standard LSP 3.18 inline completion:
+`textDocument.inlineCompletion.dynamicRegistration` selects dynamic
+registration for `textDocument/inlineCompletion`; static clients receive
+top-level `inlineCompletionProvider`. `experimental.inlineCompletionProvider`
+is not used.
 
 ## When Setup Fails
 

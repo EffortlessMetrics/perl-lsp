@@ -39,6 +39,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   provider-specific receipt is attached, avoiding false certainty while the
   live provider receipt wiring lands.
 
+### Fixed
+
+- LSP4IJ inline completion now follows the LSP 3.18 registration model:
+  static clients receive top-level `inlineCompletionProvider`, dynamic-capable
+  clients receive `client/registerCapability` for
+  `textDocument/inlineCompletion`, and `experimental.inlineCompletionProvider`
+  is never emitted.
+- `textDocument/inlineCompletion` has a runtime JSON-RPC receipt proving a
+  dynamic LSP4IJ-shaped client receives deterministic suggestions, including
+  `strict;` for a `use ` prefix. Disabling `lsp.inline_completion` suppresses
+  advertisement, registration, and execution.
+- Lean editor mode now honors `--file-watchers=false` during dynamic watcher
+  registration while leaving feature-specific dynamic registrations, such as
+  inline completion, available. Semantic tokens advertise full-only support
+  until the delta/result-id path is implemented.
+
 ### Notes (0.15.1)
 
 - This release does not implement true incremental AST reuse. The live

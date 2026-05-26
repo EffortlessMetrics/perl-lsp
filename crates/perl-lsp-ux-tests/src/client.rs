@@ -45,6 +45,7 @@ pub enum LspEvent {
 pub struct UxClient {
     child: Mutex<Child>,
     stdin: Mutex<ChildStdin>,
+    initialize_result: Value,
     /// Events buffered from the server's stdout (notifications, etc.)
     events: Arc<Mutex<VecDeque<Value>>>,
     /// Responses to requests (matched by id).
@@ -137,9 +138,10 @@ impl UxClient {
         // Allow the server a moment to start before we send initialize.
         std::thread::sleep(Duration::from_millis(50));
 
-        let client = Self {
+        let mut client = Self {
             child: Mutex::new(child),
             stdin: Mutex::new(stdin),
+            initialize_result: Value::Null,
             events,
             responses,
             stderr_lines,
@@ -148,7 +150,7 @@ impl UxClient {
         };
 
         // ── LSP handshake ─────────────────────────────────────────────────────
-        client.handshake(workspace, config, config.timeout)?;
+        client.initialize_result = client.handshake(workspace, config, config.timeout)?;
 
         Ok(client)
     }
@@ -158,7 +160,7 @@ impl UxClient {
         workspace: &FakeWorkspace,
         config: &ScenarioConfig,
         timeout: Duration,
-    ) -> Result<()> {
+    ) -> Result<Value> {
         let workspace_folders = config
             .workspace_folders
             .iter()
@@ -210,6 +212,8 @@ impl UxClient {
             params["workspaceFolders"] = Value::Array(workspace_folders);
         }
 
+        merge_json(&mut params["capabilities"], &config.client_capability_overrides);
+
         let init_resp = self.request("initialize", params, timeout)?;
 
         if let Some(err) = init_resp.get("error") {
@@ -218,7 +222,12 @@ impl UxClient {
 
         self.notify("initialized", json!({}))?;
 
-        Ok(())
+        Ok(init_resp)
+    }
+
+    /// Clone the initialize response captured during handshake.
+    pub fn initialize_result(&self) -> Value {
+        self.initialize_result.clone()
     }
 
     /// Send a JSON-RPC request and wait for the matching response.
@@ -385,6 +394,25 @@ impl UxClient {
                 ));
             }
             std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+}
+
+fn merge_json(target: &mut Value, overlay: &Value) {
+    let (Some(target_obj), Some(overlay_obj)) = (target.as_object_mut(), overlay.as_object())
+    else {
+        if !overlay.is_null() {
+            *target = overlay.clone();
+        }
+        return;
+    };
+
+    for (key, value) in overlay_obj {
+        match target_obj.get_mut(key) {
+            Some(existing) => merge_json(existing, value),
+            None => {
+                target_obj.insert(key.clone(), value.clone());
+            }
         }
     }
 }
