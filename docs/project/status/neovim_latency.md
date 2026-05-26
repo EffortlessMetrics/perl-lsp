@@ -59,6 +59,13 @@ It emits JSON for the observed startup path, including initialize response,
 initialized notification, workspace-indexing decision, didOpen processing,
 first diagnostic publish, and first completion response.
 
+The rapid-typing stale-read pressure receipt lives in
+[`crates/perl-lsp-rs/src/runtime/scheduler.rs`](../../../crates/perl-lsp-rs/src/runtime/scheduler.rs)
+as `rapid_typing_stale_reads_cancel_before_worker_permit_receipt`. It proves
+that older generation reads cancel before taking a worker permit while the
+latest generation request reaches a worker. The raw-RPC receipt above covers
+the paired editor-shaped completion response after an edit burst.
+
 ## What This Proves
 
 These receipts prove e2e wiring, not hard latency budgets. They show that the
@@ -76,6 +83,4 @@ waiting on full diagnostic or eager-indexing behavior.
 
 ## Next Evidence
 
-- Add a rapid-typing stale-read pressure receipt that proves older generations
-  cancel before taking worker capacity while the latest request still runs.
 - Capture benchmark hardware timing before claiming numeric latency budgets.

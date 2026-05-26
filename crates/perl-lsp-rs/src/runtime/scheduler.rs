@@ -1080,6 +1080,47 @@ mod tests {
         })
     }
 
+    fn position_params_at(uri: &str, line: u64, character: u64) -> serde_json::Value {
+        serde_json::json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character }
+        })
+    }
+
+    fn queued_completion_read(
+        server: &crate::LspServer,
+        uri: &str,
+        line: u64,
+        character: u64,
+        arrival_seq: u64,
+        id: i64,
+    ) -> QueuedRead {
+        let params = position_params_at(uri, line, character);
+        let priority = request_priority("textDocument/completion");
+        let dedup_key = extract_dedup_key("textDocument/completion", Some(&params), priority);
+        let freshness = extract_freshness(server, "textDocument/completion", Some(&params), priority);
+        QueuedRead {
+            request: JsonRpcRequest {
+                _jsonrpc: "2.0".to_string(),
+                id: Some(JsonRpcId::Integer(id)),
+                method: "textDocument/completion".to_string(),
+                params: Some(params),
+            },
+            wait_for_seq: 0,
+            priority,
+            arrival_seq,
+            dedup_key,
+            freshness,
+        }
+    }
+
+    fn rapid_typing_source(suffix_len: usize) -> String {
+        format!(
+            "use strict;\nuse warnings;\n\nmy $value = 42;\nmy $other = $v{}\n",
+            "a".repeat(suffix_len)
+        )
+    }
+
     fn make_freshness(uri: &str, generation: Option<u32>, version: Option<i32>) -> ReadFreshness {
         ReadFreshness {
             uri: uri.to_string(),
@@ -1297,6 +1338,96 @@ mod tests {
         let current = server.document_generation("file:///z.pl");
         assert!(is_read_stale(&fa, current).is_some(), "a is stale");
         assert!(is_read_stale(&fb, current).is_some(), "b is stale");
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn rapid_typing_stale_reads_cancel_before_worker_permit_receipt(
+    ) -> Result<(), JsonRpcError> {
+        let server = Arc::new(crate::LspServer::new());
+        let uri = "file:///typing-pressure.pl";
+        server.test_apply_did_open(uri, &rapid_typing_source(1), 1)?;
+
+        let mut stale_reads = Vec::new();
+        for i in 0..12 {
+            // Capture a read at the current document generation and then
+            // immediately simulate the next keystroke. The cursor position
+            // changes each time, so position-key dedupe alone cannot save us.
+            stale_reads.push(queued_completion_read(
+                &server,
+                uri,
+                4,
+                14 + i,
+                i,
+                10_000 + i as i64,
+            ));
+            server.test_apply_did_change(uri, &rapid_typing_source(i as usize + 2), i as i32 + 2)?;
+        }
+
+        let latest = queued_completion_read(&server, uri, 4, 30, 99, 20_000);
+        let current_generation = server.document_generation(uri);
+        assert!(
+            latest
+                .freshness
+                .as_ref()
+                .and_then(|freshness| is_read_stale(freshness, current_generation))
+                .is_none(),
+            "latest generation request must not be stale"
+        );
+
+        let zero_permits = Arc::new(Semaphore::new(0));
+        let mut in_flight = JoinSet::new();
+        let mutation_seq_done = Arc::new(AtomicU64::new(0));
+        let mutation_notify = Arc::new(Notify::new());
+        let latest_seq = HashMap::new();
+        let stale_count = stale_reads.len();
+
+        for queued in stale_reads {
+            let completed = tokio::time::timeout(
+                std::time::Duration::from_millis(100),
+                Scheduler::dispatch_one(
+                    queued,
+                    &latest_seq,
+                    &zero_permits,
+                    &mut in_flight,
+                    &server,
+                    &mutation_seq_done,
+                    &mutation_notify,
+                ),
+            )
+            .await;
+            assert!(
+                completed.is_ok(),
+                "stale reads must cancel before waiting for a worker permit"
+            );
+        }
+        assert_eq!(in_flight.len(), 0, "stale reads must not spawn worker tasks");
+
+        let one_permit = Arc::new(Semaphore::new(1));
+        Scheduler::dispatch_one(
+            latest,
+            &latest_seq,
+            &one_permit,
+            &mut in_flight,
+            &server,
+            &mutation_seq_done,
+            &mutation_notify,
+        )
+        .await;
+        assert_eq!(in_flight.len(), 1, "latest generation request must reach a worker");
+        while in_flight.join_next().await.is_some() {}
+
+        println!(
+            "{}",
+            serde_json::json!({
+                "profile": "neovim_lean",
+                "stale_reads_queued": stale_count,
+                "stale_reads_cancelled_before_worker_permit": stale_count,
+                "latest_generation_request_reached_worker": true,
+                "cursor_positions_changed": true
+            })
+        );
+
         Ok(())
     }
 }
