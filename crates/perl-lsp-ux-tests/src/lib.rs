@@ -73,6 +73,7 @@ pub use taxonomy::{
 pub use workspace::FakeWorkspace;
 
 use anyhow::{Context, Result, anyhow};
+use serde_json::map::Map;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::path::Path;
@@ -123,6 +124,8 @@ pub struct ScenarioConfig {
     /// Optional workspace folders for multi-root initialization.
     /// Each entry is `(relative_path, name)`.
     pub workspace_folders: Vec<(String, String)>,
+    /// Extra client capabilities to merge into the initialize request.
+    pub client_capability_overrides: Value,
 }
 
 impl Default for ScenarioConfig {
@@ -139,6 +142,7 @@ impl Default for ScenarioConfig {
             extra_env: Vec::new(),
             workspace_files: Vec::new(),
             workspace_folders: Vec::new(),
+            client_capability_overrides: Value::Object(Map::new()),
         }
     }
 }
@@ -320,6 +324,32 @@ impl UxHarness {
     /// Request completion at a canonical cursor position.
     pub fn completion_at(&self, cursor: &CursorPosition) -> Result<Vec<Value>> {
         self.completion(&cursor.relative_path, cursor.line, cursor.character)
+    }
+
+    /// Request inline completion at `(line, character)`.
+    pub fn inline_completion(
+        &self,
+        relative_path: &str,
+        line: u32,
+        character: u32,
+    ) -> Result<Vec<Value>> {
+        let uri = self.workspace.uri(relative_path);
+        let resp = self.client.request(
+            "textDocument/inlineCompletion",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character },
+                "context": { "triggerKind": 2 }
+            }),
+            self.config.timeout,
+        )?;
+        if resp.get("error").is_some() {
+            return Err(anyhow!("inline completion returned error: {}", resp["error"]));
+        }
+        match resp["result"]["items"].as_array() {
+            Some(items) => Ok(items.clone()),
+            None => Ok(Vec::new()),
+        }
     }
 
     /// Request completion and collect best-effort labels for UX assertions.

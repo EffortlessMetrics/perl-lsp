@@ -36,6 +36,24 @@ fn trace_config(timeout: Duration) -> ScenarioConfig {
         ],
         workspace_files: Vec::new(),
         workspace_folders: vec![("project".to_string(), "trace-project".to_string())],
+        client_capability_overrides: json!({
+            "workspace": {
+                "didChangeWatchedFiles": {
+                    "dynamicRegistration": true
+                }
+            },
+            "textDocument": {
+                "inlineCompletion": {
+                    "dynamicRegistration": true
+                },
+                "semanticTokens": {
+                    "requests": {
+                        "full": true,
+                        "range": true
+                    }
+                }
+            }
+        }),
     }
 }
 
@@ -58,6 +76,10 @@ fn wait_for_stderr_line(harness: &UxHarness, needle: &str, timeout: Duration) ->
 }
 
 fn file_watcher_registered(events: &[LspEvent]) -> bool {
+    registration_seen(events, "workspace/didChangeWatchedFiles")
+}
+
+fn registration_seen(events: &[LspEvent], method_name: &str) -> bool {
     events.iter().any(|event| {
         let LspEvent::Other { method, params } = event else {
             return false;
@@ -65,11 +87,21 @@ fn file_watcher_registered(events: &[LspEvent]) -> bool {
         method == "client/registerCapability"
             && params.get("registrations").and_then(Value::as_array).into_iter().flatten().any(
                 |registration| {
-                    registration.get("method").and_then(Value::as_str)
-                        == Some("workspace/didChangeWatchedFiles")
+                    registration.get("method").and_then(Value::as_str) == Some(method_name)
                 },
             )
     })
+}
+
+fn wait_for_registration(harness: &UxHarness, method_name: &str, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if registration_seen(&harness.client.peek_events(), method_name) {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    false
 }
 
 #[test]
@@ -86,6 +118,22 @@ fn ux_neovim_lean_startup_trace_receipt() -> Result<()> {
     let harness = UxHarness::new(trace_config(Duration::from_secs(8)))?;
     record_event(&mut events, "initialize_response_received", start);
     record_event(&mut events, "initialized_notification_sent", start);
+
+    let init = harness.client.initialize_result();
+    assert_eq!(
+        init.pointer("/result/capabilities/semanticTokensProvider/full"),
+        Some(&json!(true)),
+        "lean startup trace must not advertise semantic token delta support"
+    );
+    record_event(&mut events, "semantic_tokens_capability_checked", start);
+
+    let inline_registered =
+        wait_for_registration(&harness, "textDocument/inlineCompletion", Duration::from_secs(2));
+    assert!(
+        inline_registered,
+        "lean startup trace must dynamically register inline completion for LSP4IJ-shaped clients"
+    );
+    record_event(&mut events, "inline_completion_registration_checked", start);
 
     let indexing_skip_observed = wait_for_stderr_line(
         &harness,
@@ -119,6 +167,8 @@ fn ux_neovim_lean_startup_trace_receipt() -> Result<()> {
         "workspace_indexing_started": false,
         "workspace_indexing_decision_observed": indexing_skip_observed,
         "file_watchers_registered": watcher_registered,
+        "inline_completion_registered": inline_registered,
+        "semantic_tokens_delta_advertised": false,
         "diagnostic_mode": "syntax_only",
         "diagnostic_debounce_ms": 0,
         "events": events,
