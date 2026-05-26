@@ -155,6 +155,14 @@ enum Commands {
         command: SmokeCommand,
     },
 
+    /// Verify inline completion over stdio against a built binary.
+    #[command(name = "inline-completion-smoke")]
+    InlineCompletionSmoke {
+        /// Path to the perl-lsp binary to execute.
+        #[arg(long)]
+        binary: PathBuf,
+    },
+
     /// Regenerate public Shields endpoint JSON for README badges.
     Badges {
         /// Check committed endpoints for drift without updating badges/.
@@ -2621,6 +2629,7 @@ fn main() -> Result<()> {
         Commands::Smoke { command } => match command {
             SmokeCommand::InlineCompletion { binary } => inline_completion_smoke::run(binary),
         },
+        Commands::InlineCompletionSmoke { binary } => inline_completion_smoke::run(binary),
         Commands::Badges { check } => badges::run(check),
         Commands::RiprPr { root, base, head, check } => {
             ripr_evidence::ripr_pr(&root, &base, &head, check)

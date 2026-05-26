@@ -78,6 +78,20 @@ On Windows PowerShell:
 where perllsp
 ```
 
+Minimal descriptor/config example:
+
+```json
+{
+  "name": "Perl Language Server",
+  "languageId": "perl",
+  "fileExtensions": ["pl", "pm", "t", "psgi"],
+  "command": ["perllsp", "--stdio"]
+}
+```
+
+The same example is checked in at
+[`docs/EDITORS/lsp4ij-perl-lsp.json`](lsp4ij-perl-lsp.json).
+
 On Windows, use the full path with forward slashes or escaped backslashes:
 
 ```
@@ -152,6 +166,8 @@ Protocol notes:
 - `experimental.inlineCompletionProvider` is not used.
 - `experimental.perlInlineCompletionStream` is a custom extension for clients
   that explicitly integrate the streaming path.
+- The registration selector includes `perl` and `perl5`.
+- The server communicates UTF-16 positions.
 
 ## Verify It Is Running
 

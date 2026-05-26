@@ -45,6 +45,28 @@ fn enable_ai_streaming(harness: &mut LspHarness) {
     std::thread::sleep(Duration::from_millis(50));
 }
 
+/// Helper: enable streaming and force the no-backend path to emit progress
+/// instead of falling back to one-shot inline completions.
+fn enable_ai_streaming_progress_contract(harness: &mut LspHarness) {
+    harness.notify(
+        "workspace/didChangeConfiguration",
+        json!({
+            "settings": {
+                "perl": {
+                    "aiCompletion": {
+                        "enabled": true,
+                        "fallback": false,
+                        "streaming": {
+                            "enabled": true
+                        }
+                    }
+                }
+            }
+        }),
+    );
+    std::thread::sleep(Duration::from_millis(50));
+}
+
 /// Helper: enable AI completion but disable streaming specifically.
 fn enable_ai_disable_streaming(harness: &mut LspHarness) {
     harness.notify(
@@ -72,7 +94,7 @@ fn enable_ai_disable_streaming(harness: &mut LspHarness) {
 #[test]
 fn streaming_completion_returns_null_and_emits_progress() -> TestResult {
     let mut harness = init_harness()?;
-    enable_ai_streaming(&mut harness);
+    enable_ai_streaming_progress_contract(&mut harness);
 
     let uri = "file:///streaming_test.pl";
     harness.open(uri, "use strict;\nmy $obj = Package->")?;
@@ -131,7 +153,7 @@ fn streaming_completion_returns_null_and_emits_progress() -> TestResult {
 #[test]
 fn streaming_completion_progress_has_valid_session_and_sequence() -> TestResult {
     let mut harness = init_harness()?;
-    enable_ai_streaming(&mut harness);
+    enable_ai_streaming_progress_contract(&mut harness);
 
     let uri = "file:///session_test.pl";
     harness.open(uri, "sub foo {\n    \n}")?;
@@ -291,7 +313,7 @@ fn streaming_completion_without_partial_result_token_falls_back() -> TestResult 
 #[test]
 fn streaming_completion_second_request_cancels_first_session() -> TestResult {
     let mut harness = init_harness()?;
-    enable_ai_streaming(&mut harness);
+    enable_ai_streaming_progress_contract(&mut harness);
 
     let uri = "file:///cancel_test.pl";
     harness.open(uri, "use strict;\nmy $x = ")?;
@@ -424,7 +446,7 @@ fn streaming_completion_capability_advertised() -> TestResult {
 #[test]
 fn streaming_completion_progress_schema_validation() -> TestResult {
     let mut harness = init_harness()?;
-    enable_ai_streaming(&mut harness);
+    enable_ai_streaming_progress_contract(&mut harness);
 
     let uri = "file:///schema_test.pl";
     harness.open(uri, "#!/usr/bin/perl\nuse strict;\n")?;
