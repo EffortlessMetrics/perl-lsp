@@ -698,10 +698,8 @@ fn test_did_close_after_change_storm_drains_background_index_tasks()
             character: 0,
         });
         server.handle_did_close(Some(json!({"textDocument": {"uri": uri}})))?;
-        #[cfg(feature = "workspace")]
-        if let Some(workspace_index) = server.workspace_index() {
-            workspace_index.remove_file(uri);
-        }
+        // handle_did_close now removes virtual files (no backing file on disk)
+        // from the workspace index automatically; no manual remove_file needed.
 
         for _ in 0..100 {
             if server.pending_index_task_count.load(Ordering::SeqCst) == 0 {
@@ -955,30 +953,81 @@ fn test_did_close_removes_document_symbols_from_index() -> Result<(), Box<dyn st
     Ok(())
 }
 
+/// A virtual document (URI with no backing file on disk) must be removed from
+/// the workspace index when closed so that `workspace/symbol` does not return
+/// stale entries for editor-only buffers.
 #[cfg(feature = "workspace")]
 #[test]
-fn test_did_close_preserves_workspace_index_for_existing_file()
+fn test_did_close_removes_virtual_file_from_workspace_index()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = LspServer::new();
-    let uri = "file:///test_close_preserves_workspace_index.pl";
-    let source = "package Close::Only;\nsub still_indexed { 1 }\n1;\n";
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("virtual_only_no_disk_backing.pl");
+    let url = url::Url::from_file_path(&path).map_err(|_| "invalid file path")?;
+    let uri = url.as_str().to_string();
+    let source = "package Virtual::Only;\nsub virtual_sym { 1 }\n1;\n";
 
     server.did_open(json!({
         "textDocument": {
-            "uri": uri,
+            "uri": &uri,
             "languageId": "perl",
             "version": 1,
             "text": source
         }
     }))?;
     if let Some(coordinator) = server.coordinator() {
-        coordinator.index().index_file(url::Url::parse(uri)?, source.to_string())?;
+        coordinator.index().index_file(url.clone(), source.to_string())?;
         assert!(
-            !coordinator.index().file_symbols(uri).is_empty(),
+            !coordinator.index().file_symbols(&uri).is_empty(),
+            "workspace index must hold symbols while virtual document is open"
+        );
+    }
+
+    server.handle_did_close(Some(json!({"textDocument": {"uri": &uri}})))?;
+
+    if let Some(coordinator) = server.coordinator() {
+        assert!(
+            coordinator.index().file_symbols(&uri).is_empty(),
+            "closing a virtual document (no backing file on disk) must remove it from workspace index"
+        );
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "workspace")]
+#[test]
+fn test_did_close_preserves_workspace_index_for_existing_file()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Use a real temporary file so that `source_path_from_uri(uri).map(|p| p.exists())`
+    // returns `true`, matching the "file exists on disk" branch in handle_did_close.
+    // A virtual URI (no backing file) would be treated as editor-only and removed
+    // from the workspace index on close, the opposite of what this test validates.
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("still_indexed.pl");
+    let source = "package Close::Only;\nsub still_indexed { 1 }\n1;\n";
+    std::fs::write(&path, source)?;
+    let url = url::Url::from_file_path(&path).map_err(|_| "invalid file path")?;
+    let uri = url.as_str().to_string();
+
+    let server = LspServer::new();
+
+    server.did_open(json!({
+        "textDocument": {
+            "uri": &uri,
+            "languageId": "perl",
+            "version": 1,
+            "text": source
+        }
+    }))?;
+    if let Some(coordinator) = server.coordinator() {
+        coordinator.index().index_file(url.clone(), source.to_string())?;
+        assert!(
+            !coordinator.index().file_symbols(&uri).is_empty(),
             "workspace index setup must hold symbols before close"
         );
         assert!(
-            coordinator.index().document_store().get(uri).is_some(),
+            coordinator.index().document_store().get(&uri).is_some(),
             "workspace document store setup must hold the file before close"
         );
     }
@@ -994,11 +1043,11 @@ fn test_did_close_preserves_workspace_index_for_existing_file()
     );
     if let Some(coordinator) = server.coordinator() {
         assert!(
-            !coordinator.index().file_symbols(uri).is_empty(),
+            !coordinator.index().file_symbols(&uri).is_empty(),
             "didClose is not file deletion; workspace-backed symbols for existing files must remain"
         );
         assert!(
-            coordinator.index().document_store().get(uri).is_some(),
+            coordinator.index().document_store().get(&uri).is_some(),
             "didClose must not remove workspace-index document store entries for existing files"
         );
     }
