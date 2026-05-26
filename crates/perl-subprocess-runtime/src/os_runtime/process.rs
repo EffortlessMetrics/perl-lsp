@@ -1,4 +1,4 @@
-use super::invocation::resolve_command_invocation;
+use super::resolve_command_invocation;
 use super::validation::validate_command_input;
 use crate::{SubprocessError, SubprocessOutput};
 use std::io::Write;

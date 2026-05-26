@@ -6,13 +6,12 @@ mod validation;
 #[cfg(windows)]
 mod windows;
 
-#[cfg(windows)]
 pub(crate) use invocation::resolve_command_invocation;
 use process::run_os_command;
 
 use crate::{SubprocessError, SubprocessOutput, SubprocessRuntime};
 
-#[cfg(windows)]
+#[cfg(all(windows, test))]
 pub(crate) use windows::{windows_program_priority, windows_quote_for_cmd};
 
 /// Default implementation using `std::process::Command`.

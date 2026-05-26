@@ -105,7 +105,7 @@ fn constrain_inline_completions_to_selected_info(
                 Some(range) if range == &selected.range => Some(item),
                 Some(_) => None,
                 None if selected.range == implicit_range => {
-                    item.range = Some(selected.range.clone());
+                    item.range = Some(selected.range);
                     Some(item)
                 }
                 None => None,
