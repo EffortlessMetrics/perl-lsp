@@ -206,6 +206,9 @@ impl UxClient {
         if !workspace_folders.is_empty() {
             params["workspaceFolders"] = Value::Array(workspace_folders);
         }
+        if !config.initialization_options.is_null() {
+            params["initializationOptions"] = config.initialization_options.clone();
+        }
 
         merge_json(&mut params["capabilities"], &config.client_capability_overrides);
 
@@ -325,6 +328,15 @@ impl UxClient {
             guard.iter().cloned().collect()
         };
         raw.into_iter().map(decode_event).collect()
+    }
+
+    /// Clone raw server-initiated messages without removing them from the queue.
+    ///
+    /// This preserves server request IDs and registration payloads for protocol
+    /// smoke checks that need to assert exact JSON-RPC shapes.
+    pub fn peek_raw_events(&self) -> Vec<Value> {
+        let guard = self.events.lock().unwrap_or_else(|e| e.into_inner());
+        guard.iter().cloned().collect()
     }
 
     /// Clone all stderr lines captured from the server process.

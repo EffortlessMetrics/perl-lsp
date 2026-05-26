@@ -126,6 +126,8 @@ pub struct ScenarioConfig {
     pub workspace_folders: Vec<(String, String)>,
     /// Extra client capabilities to merge into the initialize request.
     pub client_capability_overrides: Value,
+    /// Optional `initialize` request `initializationOptions`.
+    pub initialization_options: Value,
 }
 
 impl Default for ScenarioConfig {
@@ -143,6 +145,7 @@ impl Default for ScenarioConfig {
             workspace_files: Vec::new(),
             workspace_folders: Vec::new(),
             client_capability_overrides: Value::Object(Map::new()),
+            initialization_options: Value::Null,
         }
     }
 }
