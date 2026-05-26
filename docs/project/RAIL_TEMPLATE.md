@@ -70,6 +70,19 @@ creep, premature optimization.
 Which coworker agent owns the rail's PRs. Options: codex (clippy /
 mechanical refactors), factory-droid (policy validators), orchestrator
 (rollout docs only), specific builder (named).
+
+When lane = **codex**, add explicit anti-interference directions so codex
+stays in its own lane when multiple rails are active in parallel:
+
+- Name the exact files or globs codex may touch for this rail.
+- Name adjacent files/areas that are off-limits because they belong to
+  other active rails.
+- Require codex to stop and hand back if the needed edit crosses into a
+  different lane's owned surface.
+- Require a pre-edit check (`git diff --name-only` and current rail doc)
+  to confirm no unrelated lane files are already dirty.
+- Require PR scope to one lane row/phase only; no "while I'm here"
+  cleanup from neighboring rails.
 ```
 
 ## Why this shape
@@ -94,6 +107,8 @@ mechanical refactors), factory-droid (policy validators), orchestrator
   reviewers reject mixed PRs without re-deriving the rule.
 - **Lane assignment**: codex / factory-droid / orchestrator / named
   builder. The lane is the rail's contract with the coworker agents.
+  For codex-owned rails, include explicit allowed/off-limits file
+  boundaries so parallel lanes do not collide in the same repo session.
 
 ## Filled examples
 

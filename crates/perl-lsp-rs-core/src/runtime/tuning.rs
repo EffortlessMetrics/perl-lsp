@@ -10,30 +10,35 @@
 //! 1. Compile-time defaults from [`RuntimeTuning::normal_defaults`] /
 //!    [`RuntimeTuning::e2e_defaults`].
 //! 2. Environment variables (`PERL_LSP_E2E`, `PERL_LSP_DIAGNOSTIC_DEBOUNCE_MS`,
-//!    `PERL_LSP_DIAGNOSTIC_MODE`).
+//!    `PERL_LSP_DIAGNOSTIC_MODE`, `PERL_LSP_EAGER_WORKSPACE_INDEXING`,
+//!    `PERL_LSP_FILE_WATCHERS`).
 //! 3. CLI overrides parsed by [`crate::runtime::launcher::parse_args`].
 //!
 //! CLI wins over env, env wins over compiled defaults. The shape is
 //! deliberately small — six fields — because every dial we add is a new
 //! interaction with the rest of the server.
 //!
-//! This module owns the *shape* of the config and its parsing only. The
-//! actual behavioral wiring (debouncer interval, syntax-only diagnostics,
-//! workspace-indexing gate, etc.) lives in the consuming runtime.
+//! This module owns the *shape* of the config and its parsing only. A dial is
+//! behaviorally active only after the consuming runtime has explicit wiring for
+//! it. The initial runtime-tuning substrate wires diagnostic debounce behavior;
+//! follow-up latency PRs wire diagnostic scope, workspace-indexing, and watcher
+//! behavior.
 
 use std::time::Duration;
 
 /// Coarse-grained runtime workload mode.
 ///
-/// `Normal` is the default for editor sessions. `E2e` favours fast,
-/// low-noise behavior for latency-focused harnesses: zero diagnostic
-/// debounce, syntax-only diagnostics, no eager workspace indexing, and
-/// no opt-in file watching by default.
+/// `Normal` is the default for editor sessions. `E2e` records fast,
+/// low-noise defaults for latency-focused harnesses: zero diagnostic debounce,
+/// syntax-only diagnostics, no eager workspace indexing, and no opt-in file
+/// watching by default. Only fields with consuming runtime wiring change live
+/// behavior.
 ///
 /// This is **orthogonal** to [`FeatureProfile`](crate::governance::FeatureProfile):
 /// the LSP capability advertisement is unchanged. Only the runtime workload
 /// pattern shifts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RuntimeMode {
     /// Production / normal editor behavior.
     Normal,
@@ -71,6 +76,7 @@ impl RuntimeMode {
 /// completion latency — running the full stack on every keystroke makes
 /// the "first useful answer" appear slower than the server actually is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum DiagnosticMode {
     /// Full diagnostic pipeline.
     Normal,
@@ -104,6 +110,7 @@ impl DiagnosticMode {
 /// rather than going through a trait, because each field has one or two
 /// call sites and we want them legible at a glance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct RuntimeTuning {
     /// Coarse workload pattern (drives the other defaults).
     pub runtime_mode: RuntimeMode,

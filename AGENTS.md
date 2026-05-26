@@ -214,6 +214,47 @@ nix develop -c just ci-gate
 | Bundling unrelated changes in one PR | Scope drift kills reviewability |
 | Using `git stash` | Shared across worktrees — use `git restore` or `git commit -m "wip"` |
 | Hardcoding metrics in new docs | Metrics drift; link to truth sources instead |
+| **Closing another lane's PR** | See "Lane scope" below — out-of-scope action, always |
+
+---
+
+## Lane scope: stay in your lane
+
+This repo coordinates several implementation agents running in parallel
+**lanes**. A lane owns a scoped queue of issues, PRs, and branches,
+identified by a `lane: <N>` label on those PRs. Your lane is whatever
+the orchestrator (or the maintainer) routed to you.
+
+**You may only act on PRs that belong to your lane.** "Act on" means:
+
+- close, reopen, force-push, merge, request changes;
+- apply `needs-*` routing labels;
+- open competing PRs for the same change.
+
+You may always **read** any PR, and you may **comment** on any PR with
+on-point feedback. Anything that *changes the state* of a PR — most of
+all closing it — is scoped to that PR's lane.
+
+**Your lane's burn-down does not include closing other lanes' PRs.**
+
+Cleanup, control-plane hygiene, queue management, "we want a quiet
+queue" — none of these are justifications to close another lane's
+in-flight work. Cleanup means finishing **your own** lane. If another
+lane's PR is creating risk for yours, the response is:
+
+1. Comment on the PR with the specific risk you see.
+2. Tag the maintainer for arbitration.
+3. **Wait.** The maintainer arbitrates lane priority.
+
+Closing another lane's PR is **never** the next step. A maintainer
+override ("explicitly resumed", "this is not your lane", "direct
+maintainer permission") immediately supersedes any standing lane posture
+you were operating under — back out of the action you were about to
+take.
+
+For the full lane model (how lanes are identified, override semantics,
+cross-lane communication), see
+[`docs/reference/LANE_BOUNDARIES.md`](docs/reference/LANE_BOUNDARIES.md).
 
 ---
 
@@ -232,6 +273,7 @@ nix develop -c just ci-gate
 - `CLAUDE.md` — full orchestrator model, pipeline stages, label semantics
 - `CONTRIBUTING.md` — human contributor workflow
 - `docs/project/FRICTION_LOG.md` — platform quirks and workarounds
+- `docs/reference/LANE_BOUNDARIES.md` — lane model: scope, overrides, non-overlap rule
 - `docs/reference/COMMANDS_REFERENCE.md` — all `just` and `cargo xtask` commands
 - `docs/reference/LSP_IMPLEMENTATION_GUIDE.md` — LSP provider patterns
 - `docs/reference/CRATE_ARCHITECTURE_GUIDE.md` — microcrate layering rules

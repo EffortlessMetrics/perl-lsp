@@ -140,7 +140,7 @@ enable = true
 limit-results = 30
 ```
 
-See [book.toml](../book/book.toml) for full configuration.
+See [book.toml](../../book/book.toml) for full configuration.
 
 ### Navigation Structure
 

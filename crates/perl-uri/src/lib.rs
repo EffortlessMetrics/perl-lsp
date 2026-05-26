@@ -32,6 +32,8 @@
 //! # fn main() {}
 //! ```
 
+#![warn(missing_docs)]
+
 #[cfg(not(target_arch = "wasm32"))]
 mod fs;
 #[cfg(not(target_arch = "wasm32"))]
@@ -143,8 +145,27 @@ mod tests {
         }
 
         #[test]
+        fn test_normalize_uri_trims_surrounding_whitespace() {
+            let uri = normalize_uri(" \nfile:///tmp/test.pl\t ");
+            assert_eq!(uri, "file:///tmp/test.pl");
+
+            let absolute_path = std::env::temp_dir().join("trimmed-normalize-path.pl");
+            let input = format!(" \t{}\n", absolute_path.display());
+            let expected = uri_key(&must(fs_path_to_uri(&absolute_path)));
+            assert_eq!(normalize_uri(&input), expected);
+
+            assert_eq!(normalize_uri(" \n\t "), "");
+        }
+
+        #[test]
         fn test_normalize_uri_canonicalizes_localhost_authority() {
             assert_eq!(normalize_uri("file://localhost/tmp/test.pl"), "file:///tmp/test.pl");
+        }
+
+        #[test]
+        fn test_normalize_uri_canonicalizes_loopback_authority() {
+            assert_eq!(normalize_uri("file://127.0.0.1/tmp/test.pl"), "file:///tmp/test.pl");
+            assert_eq!(normalize_uri("file://[::1]/tmp/test.pl"), "file:///tmp/test.pl");
         }
 
         #[test]
@@ -195,6 +216,15 @@ mod tests {
         fn test_source_path_from_uri_or_path_localhost_file_uri() {
             let path = must_some(source_path_from_uri_or_path("file://localhost/tmp/localhost.pl"));
             assert!(path.ends_with("localhost.pl"));
+        }
+
+        #[test]
+        fn test_source_path_from_uri_or_path_loopback_file_uri() {
+            let ipv4 = must_some(source_path_from_uri_or_path("file://127.0.0.1/tmp/loopback4.pl"));
+            assert!(ipv4.ends_with("loopback4.pl"));
+
+            let ipv6 = must_some(source_path_from_uri_or_path("file://[::1]/tmp/loopback6.pl"));
+            assert!(ipv6.ends_with("loopback6.pl"));
         }
 
         #[test]

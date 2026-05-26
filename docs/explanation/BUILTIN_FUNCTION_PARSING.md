@@ -306,9 +306,7 @@ match function_name {
 
 ## Related Documentation
 
-- **[Scanner Migration Guide](SCANNER_MIGRATION_GUIDE.md)**: Unified scanner architecture
-- **[Parser Comparison](../reference/PARSER_COMPARISON.md)**: Comparison with other parser implementations  
-- **[Edge Case Implementation](WHY_THESE_EDGE_CASES_ARE_HARD.md)**: Context for parsing complexity
+- **[Parser Comparison](../reference/PARSER_COMPARISON.md)**: Comparison with other parser implementations
 
 ## Conclusion
 

@@ -15,7 +15,17 @@
 use perl_lsp_rs_core::runtime::launcher::{
     DEFAULT_LSP_PORT, FeatureProfile, LaunchConfig, TransportMode,
 };
-use perl_lsp_rs_core::runtime::tuning::RuntimeTuning;
+
+fn launch_config(
+    transport: TransportMode,
+    enable_logging: bool,
+    feature_profile: FeatureProfile,
+) -> LaunchConfig {
+    let mut config = LaunchConfig::new(feature_profile);
+    config.transport = transport;
+    config.enable_logging = enable_logging;
+    config
+}
 
 /// Test that TransportMode enum variants are accessible.
 /// Ensures perl-dap can distinguish between transport modes.
@@ -59,12 +69,7 @@ fn test_dap_default_lsp_port_constant() -> Result<(), Box<dyn std::error::Error>
 /// Ensures perl-dap's startup configuration remains flexible.
 #[test]
 fn test_dap_launch_config_stdio() -> Result<(), Box<dyn std::error::Error>> {
-    let config = LaunchConfig {
-        transport: TransportMode::Stdio,
-        enable_logging: false,
-        feature_profile: FeatureProfile::Production,
-        runtime_tuning: RuntimeTuning::normal_defaults(),
-    };
+    let config = launch_config(TransportMode::Stdio, false, FeatureProfile::Production);
 
     match config.transport {
         TransportMode::Stdio => {}
@@ -76,12 +81,8 @@ fn test_dap_launch_config_stdio() -> Result<(), Box<dyn std::error::Error>> {
 /// Test that LaunchConfig can be instantiated with Socket transport.
 #[test]
 fn test_dap_launch_config_socket() -> Result<(), Box<dyn std::error::Error>> {
-    let config = LaunchConfig {
-        transport: TransportMode::Socket { port: 13603 },
-        enable_logging: true,
-        feature_profile: FeatureProfile::Production,
-        runtime_tuning: RuntimeTuning::normal_defaults(),
-    };
+    let config =
+        launch_config(TransportMode::Socket { port: 13603 }, true, FeatureProfile::Production);
 
     match config.transport {
         TransportMode::Socket { port } => {
@@ -95,19 +96,10 @@ fn test_dap_launch_config_socket() -> Result<(), Box<dyn std::error::Error>> {
 /// Test that LaunchConfig enables/disables logging independently.
 #[test]
 fn test_dap_launch_config_logging_flag() -> Result<(), Box<dyn std::error::Error>> {
-    let config_with_logging = LaunchConfig {
-        transport: TransportMode::Stdio,
-        enable_logging: true,
-        feature_profile: FeatureProfile::Production,
-        runtime_tuning: RuntimeTuning::normal_defaults(),
-    };
+    let config_with_logging = launch_config(TransportMode::Stdio, true, FeatureProfile::Production);
 
-    let config_without_logging = LaunchConfig {
-        transport: TransportMode::Stdio,
-        enable_logging: false,
-        feature_profile: FeatureProfile::Production,
-        runtime_tuning: RuntimeTuning::normal_defaults(),
-    };
+    let config_without_logging =
+        launch_config(TransportMode::Stdio, false, FeatureProfile::Production);
 
     assert_ne!(
         config_with_logging.enable_logging, config_without_logging.enable_logging,
@@ -119,26 +111,11 @@ fn test_dap_launch_config_logging_flag() -> Result<(), Box<dyn std::error::Error
 /// Test that FeatureProfile enum variants are accessible through LaunchConfig.
 #[test]
 fn test_dap_launch_config_feature_profiles() -> Result<(), Box<dyn std::error::Error>> {
-    let _cfg_ga_lock = LaunchConfig {
-        transport: TransportMode::Stdio,
-        enable_logging: false,
-        feature_profile: FeatureProfile::GaLock,
-        runtime_tuning: RuntimeTuning::normal_defaults(),
-    };
+    let _cfg_ga_lock = launch_config(TransportMode::Stdio, false, FeatureProfile::GaLock);
 
-    let _cfg_production = LaunchConfig {
-        transport: TransportMode::Stdio,
-        enable_logging: false,
-        feature_profile: FeatureProfile::Production,
-        runtime_tuning: RuntimeTuning::normal_defaults(),
-    };
+    let _cfg_production = launch_config(TransportMode::Stdio, false, FeatureProfile::Production);
 
-    let _cfg_all = LaunchConfig {
-        transport: TransportMode::Stdio,
-        enable_logging: false,
-        feature_profile: FeatureProfile::All,
-        runtime_tuning: RuntimeTuning::normal_defaults(),
-    };
+    let _cfg_all = launch_config(TransportMode::Stdio, false, FeatureProfile::All);
 
     Ok(())
 }
@@ -147,19 +124,9 @@ fn test_dap_launch_config_feature_profiles() -> Result<(), Box<dyn std::error::E
 /// Ensures no shared state pollution between dap server instances.
 #[test]
 fn test_dap_launch_config_independence() -> Result<(), Box<dyn std::error::Error>> {
-    let cfg1 = LaunchConfig {
-        transport: TransportMode::Stdio,
-        enable_logging: false,
-        feature_profile: FeatureProfile::GaLock,
-        runtime_tuning: RuntimeTuning::normal_defaults(),
-    };
+    let cfg1 = launch_config(TransportMode::Stdio, false, FeatureProfile::GaLock);
 
-    let cfg2 = LaunchConfig {
-        transport: TransportMode::Socket { port: 13603 },
-        enable_logging: true,
-        feature_profile: FeatureProfile::All,
-        runtime_tuning: RuntimeTuning::normal_defaults(),
-    };
+    let cfg2 = launch_config(TransportMode::Socket { port: 13603 }, true, FeatureProfile::All);
 
     assert_ne!(
         cfg1.enable_logging, cfg2.enable_logging,

@@ -18,6 +18,7 @@ perl-ast = { workspace = true }
 
 [dev-dependencies]
 criterion.workspace = true
+proptest.workspace = true
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]

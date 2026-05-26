@@ -378,6 +378,7 @@ pub enum LaunchAction {
 
 /// Canonical launch configuration consumed by the server runtime.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct LaunchConfig {
     /// Transport used by the server.
     pub transport: TransportMode,
@@ -696,15 +697,19 @@ pub fn help_text() -> String {
     out.push_str("  --feature-profile <name>\n");
     out.push_str(&format!("                       Set feature profile ({supported_profiles})\n"));
     out.push_str("  --runtime-mode <mode>\n");
-    out.push_str("                       Runtime workload mode (normal, e2e)\n");
+    out.push_str(
+        "                       Runtime workload tuning (normal, e2e; wired dials only)\n",
+    );
     out.push_str("  --diagnostic-mode <mode>\n");
-    out.push_str("                       Diagnostic scope (normal, syntax-only)\n");
+    out.push_str(
+        "                       Set diagnostic scope tuning value (normal, syntax-only)\n",
+    );
     out.push_str("  --diagnostic-debounce-ms <ms>\n");
     out.push_str("                       Diagnostic publish debounce window (0 = immediate)\n");
     out.push_str("  --eager-workspace-indexing <bool>\n");
-    out.push_str("                       Index workspace on `initialized` (default: true)\n");
+    out.push_str("                       Set eager-indexing tuning value (default: true)\n");
     out.push_str("  --file-watchers <bool>\n");
-    out.push_str("                       Register file watchers with the client (default: true)\n");
+    out.push_str("                       Set file-watcher tuning value (default: true)\n");
     out.push('\n');
     out.push_str("Diagnostic options:\n");
     out.push_str("  --health             Quick health check (prints 'ok <version>')\n");
@@ -742,15 +747,17 @@ pub fn help_text() -> String {
     out.push_str("  PERL_LSP_LOG_FILE=<path>\n");
     out.push_str("                       Also log to a daily-rotated file (max 5 files)\n");
     out.push_str("  PERL_LSP_QUIET=1     Suppress the startup banner on stderr\n");
-    out.push_str("  PERL_LSP_E2E=1       Enable e2e runtime mode (latency-focused harnesses)\n");
+    out.push_str("  PERL_LSP_E2E=1       Select e2e runtime tuning (wired dials only)\n");
     out.push_str("  PERL_LSP_DIAGNOSTIC_MODE=<mode>\n");
-    out.push_str("                       Override diagnostic scope (normal, syntax-only)\n");
+    out.push_str(
+        "                       Set diagnostic scope tuning value (normal, syntax-only)\n",
+    );
     out.push_str("  PERL_LSP_DIAGNOSTIC_DEBOUNCE_MS=<ms>\n");
     out.push_str("                       Override diagnostic debounce window\n");
     out.push_str("  PERL_LSP_EAGER_WORKSPACE_INDEXING=<bool>\n");
-    out.push_str("                       Override eager workspace indexing on `initialized`\n");
+    out.push_str("                       Set eager-indexing tuning value\n");
     out.push_str("  PERL_LSP_FILE_WATCHERS=<bool>\n");
-    out.push_str("                       Override file watcher registration with the client\n");
+    out.push_str("                       Set file-watcher tuning value\n");
     out.push_str("  RUST_LOG=<filter>    Set tracing filter (e.g. perl_lsp=debug)\n");
     out.push_str("  NO_COLOR=1           Disable colored output\n");
     out
@@ -1609,20 +1616,28 @@ mod tests {
 
     // ── runtime tuning CLI surface (PR 1) ────────────────────────────
 
+    struct RuntimeTuningEnvGuards {
+        _diagnostic_mode: EnvGuard,
+        _diagnostic_debounce_ms: EnvGuard,
+        _eager_workspace_indexing: EnvGuard,
+        _file_watchers: EnvGuard,
+        // Keep the first guard last so the shared env lock is released after
+        // the other runtime-tuning vars are restored.
+        _e2e: EnvGuard,
+    }
+
     /// Scrub every env var consulted by `RuntimeTuning::from_env` so the
     /// parse_args tests below see compiled defaults, not whatever the
     /// runner happened to export.
-    fn scrub_runtime_tuning_env() -> Vec<EnvGuard> {
-        [
-            "PERL_LSP_E2E",
-            "PERL_LSP_DIAGNOSTIC_MODE",
-            "PERL_LSP_DIAGNOSTIC_DEBOUNCE_MS",
-            "PERL_LSP_EAGER_WORKSPACE_INDEXING",
-            "PERL_LSP_FILE_WATCHERS",
-        ]
-        .iter()
-        .map(|key| EnvGuard::remove(key))
-        .collect()
+    fn scrub_runtime_tuning_env() -> RuntimeTuningEnvGuards {
+        let e2e = EnvGuard::remove("PERL_LSP_E2E");
+        RuntimeTuningEnvGuards {
+            _diagnostic_mode: EnvGuard::remove("PERL_LSP_DIAGNOSTIC_MODE"),
+            _diagnostic_debounce_ms: EnvGuard::remove("PERL_LSP_DIAGNOSTIC_DEBOUNCE_MS"),
+            _eager_workspace_indexing: EnvGuard::remove("PERL_LSP_EAGER_WORKSPACE_INDEXING"),
+            _file_watchers: EnvGuard::remove("PERL_LSP_FILE_WATCHERS"),
+            _e2e: e2e,
+        }
     }
 
     #[test]

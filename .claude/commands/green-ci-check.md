@@ -30,8 +30,18 @@ Verify CI is genuinely green on the current HEAD.
    gh pr view <number> --json isDraft,mergeable,mergeStateStatus --jq '{draft: .isDraft, mergeable: .mergeable, mergeState: .mergeStateStatus}'
    ```
 
-5. Determine verdict:
-   - All checks SUCCESS/NEUTRAL on current SHA + not draft + MERGEABLE → **GREEN**
-   - Any check FAILURE on current SHA → **RED** (list failures)
-   - Checks green but on old SHA → **STALE** 
+5a. Classify cancellations — for each check with `conclusion: cancelled`, extract
+    `started_at` and `completed_at` from the check-runs API response:
+    - If `started_at == completed_at` (zero-duration) → mark check **INFRA-NOISE**
+      (GitHub concurrency-group kill; instantaneous, no work was done).
+    - If `completed_at - started_at > 5s` → mark check **DEVELOPER-CANCEL**
+      (manual cancel via GitHub UI or API; treat as RED).
+    For each check with `conclusion: failure` → mark **RED** (ignore any cancel log
+    content; failures are always RED).
+    For each check with `conclusion: success` → no change (existing behavior).
+
+5b. Determine verdict — using classified checks from step 5a:
+   - All checks SUCCESS/NEUTRAL/INFRA-NOISE on current SHA + not draft + MERGEABLE → **GREEN**
+   - Any check RED or DEVELOPER-CANCEL on current SHA → **RED** (list RED + DEVELOPER-CANCEL only; omit INFRA-NOISE from details)
+   - Checks green but on old SHA → **STALE**
    - Draft or DIRTY or CONFLICTING → **BLOCKED**

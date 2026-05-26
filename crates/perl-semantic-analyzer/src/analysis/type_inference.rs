@@ -814,7 +814,12 @@ impl TypeInferenceEngine {
 
     fn refresh_method_return_facts(&mut self, ast: &Node) {
         self.method_return_facts.clear();
-        collect_method_return_facts(ast, None, &mut self.method_return_facts);
+        collect_method_return_facts(
+            ast,
+            None,
+            &self.accessor_return_facts,
+            &mut self.method_return_facts,
+        );
     }
 
     fn method_call_expr_fact(
@@ -1251,45 +1256,63 @@ fn accessor_return_fact(method: &str, field: &str, package: &str) -> TypeFact {
 }
 
 fn method_return_fact(method: &str, package: &str) -> TypeFact {
+    method_return_fact_with_evidence(
+        method,
+        package.to_string(),
+        vec![TypeEvidence::ConstructorCall { package: package.to_string() }],
+    )
+}
+
+fn method_return_fact_with_evidence(
+    method: &str,
+    package: String,
+    evidence: Vec<TypeEvidence>,
+) -> TypeFact {
     let mut fact = fact_with_evidence(
         PerlType::Any,
         Confidence::Medium,
-        TypeEvidence::MethodReturn { method: method.to_string(), package: package.to_string() },
+        TypeEvidence::MethodReturn { method: method.to_string(), package: package.clone() },
     );
-    fact.evidence.push(TypeEvidence::ConstructorCall { package: package.to_string() });
-    fact.shape = Some(ShapeFact::Object(ObjectShape::new(package.to_string(), BTreeMap::new())));
+    fact.evidence.extend(evidence);
+    fact.shape = Some(ShapeFact::Object(ObjectShape::new(package, BTreeMap::new())));
     fact
 }
 
 fn collect_method_return_facts(
     node: &Node,
     package: Option<&str>,
+    accessor_return_facts: &HashMap<(String, String), TypeFact>,
     out: &mut HashMap<(String, String), TypeFact>,
 ) {
     match &node.kind {
         NodeKind::Program { statements } | NodeKind::Block { statements } => {
-            collect_method_return_facts_from_statements(statements, package, out);
+            collect_method_return_facts_from_statements(
+                statements,
+                package,
+                accessor_return_facts,
+                out,
+            );
         }
         NodeKind::Package { name, block: Some(block), .. } => {
-            collect_method_return_facts(block, Some(name.as_str()), out);
+            collect_method_return_facts(block, Some(name.as_str()), accessor_return_facts, out);
         }
         NodeKind::Subroutine { name: Some(method), body, .. } => {
             if let (Some(package), Some(fact)) =
-                (package, static_method_body_return_fact(method, body))
+                (package, static_method_body_return_fact(method, body, accessor_return_facts))
             {
                 out.insert((package.to_string(), method.clone()), fact);
             }
         }
         NodeKind::Method { name, body, .. } => {
             if let (Some(package), Some(fact)) =
-                (package, static_method_body_return_fact(name, body))
+                (package, static_method_body_return_fact(name, body, accessor_return_facts))
             {
                 out.insert((package.to_string(), name.clone()), fact);
             }
         }
         _ => {
             for child in node.children() {
-                collect_method_return_facts(child, package, out);
+                collect_method_return_facts(child, package, accessor_return_facts, out);
             }
         }
     }
@@ -1298,6 +1321,7 @@ fn collect_method_return_facts(
 fn collect_method_return_facts_from_statements(
     statements: &[Node],
     package: Option<&str>,
+    accessor_return_facts: &HashMap<(String, String), TypeFact>,
     out: &mut HashMap<(String, String), TypeFact>,
 ) {
     let mut current_package = package.map(ToOwned::to_owned);
@@ -1307,42 +1331,91 @@ fn collect_method_return_facts_from_statements(
                 current_package = Some(name.clone());
             }
             NodeKind::Package { name, block: Some(block), .. } => {
-                collect_method_return_facts(block, Some(name.as_str()), out);
+                collect_method_return_facts(block, Some(name.as_str()), accessor_return_facts, out);
             }
             _ => {
-                collect_method_return_facts(statement, current_package.as_deref(), out);
+                collect_method_return_facts(
+                    statement,
+                    current_package.as_deref(),
+                    accessor_return_facts,
+                    out,
+                );
             }
         }
     }
 }
 
-fn static_method_body_return_fact(method: &str, body: &Node) -> Option<TypeFact> {
+fn static_method_body_return_fact(
+    method: &str,
+    body: &Node,
+    accessor_return_facts: &HashMap<(String, String), TypeFact>,
+) -> Option<TypeFact> {
     let NodeKind::Block { statements } = &body.kind else {
         return None;
     };
     if let [statement] = statements.as_slice() {
-        return static_method_return_expr_fact(method, statement);
+        return static_method_return_expr_fact(method, statement, accessor_return_facts);
     }
-    static_method_local_return_fact(method, statements)
+    static_method_local_return_fact(method, statements, accessor_return_facts)
 }
 
-fn static_method_return_expr_fact(method: &str, node: &Node) -> Option<TypeFact> {
+fn static_method_return_expr_fact(
+    method: &str,
+    node: &Node,
+    accessor_return_facts: &HashMap<(String, String), TypeFact>,
+) -> Option<TypeFact> {
     match &node.kind {
         NodeKind::ExpressionStatement { expression } => {
-            static_method_return_expr_fact(method, expression)
+            static_method_return_expr_fact(method, expression, accessor_return_facts)
         }
-        NodeKind::Return { value: Some(value) } => static_method_return_expr_fact(method, value),
-        _ => static_constructor_package(node).map(|package| method_return_fact(method, &package)),
+        NodeKind::Return { value: Some(value) } => {
+            static_method_return_expr_fact(method, value, accessor_return_facts)
+        }
+        _ => static_constructor_package(node)
+            .map(|package| method_return_fact(method, &package))
+            .or_else(|| accessor_chain_method_return_fact(method, node, accessor_return_facts)),
     }
 }
 
-fn static_method_local_return_fact(method: &str, statements: &[Node]) -> Option<TypeFact> {
+fn accessor_chain_method_return_fact(
+    method: &str,
+    node: &Node,
+    accessor_return_facts: &HashMap<(String, String), TypeFact>,
+) -> Option<TypeFact> {
+    let (package, evidence) = accessor_chain_return_package(node, accessor_return_facts)?;
+    Some(method_return_fact_with_evidence(method, package, evidence))
+}
+
+fn accessor_chain_return_package(
+    node: &Node,
+    accessor_return_facts: &HashMap<(String, String), TypeFact>,
+) -> Option<(String, Vec<TypeEvidence>)> {
+    let NodeKind::MethodCall { object, method, .. } = &node.kind else {
+        return None;
+    };
+    if method == "new" {
+        return None;
+    }
+
+    let package = static_constructor_package(object)?;
+    let mut fact = accessor_return_facts.get(&(package.clone(), method.clone()))?.clone();
+    let returned_package = object_package_from_fact(&fact)?;
+    let mut evidence = vec![TypeEvidence::ConstructorCall { package }];
+    evidence.append(&mut fact.evidence);
+    Some((returned_package, evidence))
+}
+
+fn static_method_local_return_fact(
+    method: &str,
+    statements: &[Node],
+    accessor_return_facts: &HashMap<(String, String), TypeFact>,
+) -> Option<TypeFact> {
     let returned_name = returned_variable_name(statements.last()?)?;
     let mut returned_local_declared = false;
     let mut returned_package = None;
 
     for statement in &statements[..statements.len().saturating_sub(1)] {
-        match local_return_declaration_package(statement, returned_name) {
+        match local_return_declaration_package(statement, returned_name, accessor_return_facts) {
             Some(LocalReturnDeclaration::Lexical(candidate)) => {
                 returned_local_declared = true;
                 returned_package = candidate.map(LocalReturnPackage::Initializer);
@@ -1354,7 +1427,7 @@ fn static_method_local_return_fact(method: &str, statements: &[Node]) -> Option<
             None => {}
         }
 
-        match local_return_assignment_package(statement, returned_name) {
+        match local_return_assignment_package(statement, returned_name, accessor_return_facts) {
             Some(Some(candidate)) if returned_local_declared => {
                 returned_package = Some(LocalReturnPackage::Assignment(candidate));
             }
@@ -1369,31 +1442,45 @@ fn static_method_local_return_fact(method: &str, statements: &[Node]) -> Option<
     }
 
     returned_package.map(|returned_package| {
-        let (package, evidence) = returned_package.into_parts(returned_name);
-        let mut fact = method_return_fact(method, &package);
-        fact.evidence.push(evidence);
-        fact
+        let returned_fact = returned_package.into_parts(returned_name);
+        method_return_fact_with_evidence(method, returned_fact.package, returned_fact.evidence)
     })
 }
 
+struct LocalReturnFact {
+    package: String,
+    evidence: Vec<TypeEvidence>,
+}
+
+impl LocalReturnFact {
+    fn new(package: String, evidence: Vec<TypeEvidence>) -> Self {
+        Self { package, evidence }
+    }
+
+    fn with_evidence(mut self, evidence: TypeEvidence) -> Self {
+        self.evidence.push(evidence);
+        self
+    }
+}
+
 enum LocalReturnDeclaration {
-    Lexical(Option<String>),
+    Lexical(Option<LocalReturnFact>),
     NonLexical,
 }
 
 enum LocalReturnPackage {
-    Initializer(String),
-    Assignment(String),
+    Initializer(LocalReturnFact),
+    Assignment(LocalReturnFact),
 }
 
 impl LocalReturnPackage {
-    fn into_parts(self, returned_name: &str) -> (String, TypeEvidence) {
+    fn into_parts(self, returned_name: &str) -> LocalReturnFact {
         match self {
-            Self::Initializer(package) => {
-                (package, TypeEvidence::VariableInitializer { name: returned_name.to_string() })
-            }
-            Self::Assignment(package) => {
-                (package, TypeEvidence::Assignment { name: returned_name.to_string() })
+            Self::Initializer(fact) => fact.with_evidence(TypeEvidence::VariableInitializer {
+                name: returned_name.to_string(),
+            }),
+            Self::Assignment(fact) => {
+                fact.with_evidence(TypeEvidence::Assignment { name: returned_name.to_string() })
             }
         }
     }
@@ -1410,17 +1497,20 @@ fn returned_variable_name(node: &Node) -> Option<&str> {
 fn local_return_declaration_package(
     node: &Node,
     returned_name: &str,
+    accessor_return_facts: &HashMap<(String, String), TypeFact>,
 ) -> Option<LocalReturnDeclaration> {
     match &node.kind {
         NodeKind::ExpressionStatement { expression } => {
-            local_return_declaration_package(expression, returned_name)
+            local_return_declaration_package(expression, returned_name, accessor_return_facts)
         }
         NodeKind::VariableDeclaration { declarator, variable, initializer, .. }
             if variable_name(variable) == Some(returned_name) =>
         {
             if is_lexical_return_declarator(declarator) {
                 Some(LocalReturnDeclaration::Lexical(
-                    initializer.as_deref().and_then(static_constructor_package),
+                    initializer.as_deref().and_then(|node| {
+                        static_local_return_source_fact(node, accessor_return_facts)
+                    }),
                 ))
             } else {
                 Some(LocalReturnDeclaration::NonLexical)
@@ -1434,22 +1524,48 @@ fn is_lexical_return_declarator(declarator: &str) -> bool {
     matches!(declarator, "my" | "state")
 }
 
-fn local_return_assignment_package(node: &Node, returned_name: &str) -> Option<Option<String>> {
+fn local_return_assignment_package(
+    node: &Node,
+    returned_name: &str,
+    accessor_return_facts: &HashMap<(String, String), TypeFact>,
+) -> Option<Option<LocalReturnFact>> {
     match &node.kind {
         NodeKind::ExpressionStatement { expression } => {
-            local_return_assignment_package(expression, returned_name)
+            local_return_assignment_package(expression, returned_name, accessor_return_facts)
         }
         NodeKind::Assignment { lhs, rhs, op }
             if op == "=" && variable_name(lhs) == Some(returned_name) =>
         {
-            Some(static_constructor_package(rhs))
+            Some(static_local_return_source_fact(rhs, accessor_return_facts))
         }
         NodeKind::Binary { left, op, right }
             if op == "=" && variable_name(left) == Some(returned_name) =>
         {
-            Some(static_constructor_package(right))
+            Some(static_local_return_source_fact(right, accessor_return_facts))
         }
         _ => None,
+    }
+}
+
+fn static_local_return_source_fact(
+    node: &Node,
+    accessor_return_facts: &HashMap<(String, String), TypeFact>,
+) -> Option<LocalReturnFact> {
+    match &node.kind {
+        NodeKind::ExpressionStatement { expression } => {
+            static_local_return_source_fact(expression, accessor_return_facts)
+        }
+        _ => static_constructor_package(node)
+            .map(|package| {
+                LocalReturnFact::new(
+                    package.clone(),
+                    vec![TypeEvidence::ConstructorCall { package }],
+                )
+            })
+            .or_else(|| {
+                accessor_chain_return_package(node, accessor_return_facts)
+                    .map(|(package, evidence)| LocalReturnFact::new(package, evidence))
+            }),
     }
 }
 

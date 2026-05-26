@@ -273,7 +273,7 @@ impl InlineCompletionProvider {
         }
 
         // Rule 2: After `use ` suggest common pragmas
-        if prefix.trim_end() == "use" || prefix.ends_with("use ") {
+        if prefix.trim_end() == "use" || ends_with_keyword(prefix, "use ") {
             // Suggest strict first as it's most common
             push_item(
                 0,
@@ -323,7 +323,7 @@ impl InlineCompletionProvider {
         }
 
         // Rule 4: After `my $` suggest common variable patterns
-        if prefix.ends_with("my $") {
+        if ends_with_keyword(prefix, "my $") {
             push_item(
                 0,
                 InlineCompletionItem {
@@ -336,7 +336,7 @@ impl InlineCompletionProvider {
         }
 
         // Rule 5: After `package ` suggest common suffix patterns
-        if prefix.ends_with("package ") {
+        if ends_with_keyword(prefix, "package ") {
             push_item(
                 0,
                 InlineCompletionItem {
@@ -349,7 +349,7 @@ impl InlineCompletionProvider {
         }
 
         // Rule 6: After `bless ` suggest common patterns
-        if prefix.ends_with("bless ") {
+        if ends_with_keyword(prefix, "bless ") {
             push_item(
                 0,
                 InlineCompletionItem {
@@ -362,7 +362,7 @@ impl InlineCompletionProvider {
         }
 
         // Rule 7: After `return ` in constructor context
-        if prefix.ends_with("return ") {
+        if ends_with_keyword(prefix, "return ") {
             if let Some(variable) = self.preferred_return_variable(context) {
                 push_item(
                     0,
@@ -387,7 +387,7 @@ impl InlineCompletionProvider {
         }
 
         // Rule 8: Complete common loops
-        if prefix.ends_with("for ") {
+        if ends_with_keyword(prefix, "for ") {
             push_item(
                 0,
                 InlineCompletionItem {
@@ -399,7 +399,7 @@ impl InlineCompletionProvider {
             );
         }
 
-        if prefix.ends_with("foreach ") {
+        if ends_with_keyword(prefix, "foreach ") {
             push_item(
                 0,
                 InlineCompletionItem {
@@ -412,7 +412,7 @@ impl InlineCompletionProvider {
         }
 
         // Rule 9: Complete common test patterns
-        if prefix.ends_with("ok(") {
+        if ends_with_keyword(prefix, "ok(") {
             push_item(
                 0,
                 InlineCompletionItem {
@@ -424,7 +424,7 @@ impl InlineCompletionProvider {
             );
         }
 
-        if prefix.ends_with("is(") {
+        if ends_with_keyword(prefix, "is(") {
             push_item(
                 0,
                 InlineCompletionItem {
@@ -455,26 +455,23 @@ impl InlineCompletionProvider {
 
     /// Check if we're after a sub declaration without body
     fn match_sub_declaration(&self, prefix: &str) -> Option<String> {
-        // Match "sub name" pattern
-        if let Some(idx) = prefix.rfind("sub ") {
-            let after_sub = &prefix[idx + 4..];
-            // Check if we have a name and no opening brace
-            if !after_sub.is_empty() && !after_sub.contains('{') && !after_sub.contains('(') {
-                // Extract just the sub name
-                let name = after_sub.trim();
-                if !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_') {
-                    return Some(name.to_string());
-                }
-            }
+        let idx = last_keyword_index(prefix, "sub ")?;
+        let after_sub = &prefix[idx + 4..];
+        if after_sub.is_empty() || after_sub.contains('{') || after_sub.contains('(') {
+            return None;
         }
-        None
+        let name = after_sub.trim();
+        if name.is_empty() || !name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+            return None;
+        }
+        Some(name.to_string())
     }
 
     /// Check if we're in a constructor context (sub new or BUILD)
     fn is_in_constructor_context(&self, current_function: Option<&str>, prefix: &str) -> bool {
         matches!(current_function, Some("new" | "BUILD"))
-            || prefix.contains("sub new")
-            || prefix.contains("sub BUILD")
+            || contains_keyword(prefix, "sub new")
+            || contains_keyword(prefix, "sub BUILD")
     }
 
     /// Generate a smart subroutine body based on naming patterns
@@ -836,6 +833,36 @@ struct LineContext<'a> {
     current_line: &'a str,
 }
 
+fn is_keyword_boundary(ch: char) -> bool {
+    ch.is_whitespace() || matches!(ch, '!' | ';' | '{' | '}' | '(' | ')' | ',')
+}
+
+fn ends_with_keyword(prefix: &str, keyword: &str) -> bool {
+    if !prefix.ends_with(keyword) {
+        return false;
+    }
+    let before = &prefix[..prefix.len() - keyword.len()];
+    before.chars().next_back().is_none_or(is_keyword_boundary)
+}
+
+fn last_keyword_index(prefix: &str, keyword: &str) -> Option<usize> {
+    let mut search_from = 0;
+    let mut last = None;
+    while let Some(rel) = prefix[search_from..].find(keyword) {
+        let idx = search_from + rel;
+        let prev = prefix[..idx].chars().next_back();
+        if prev.is_none_or(is_keyword_boundary) {
+            last = Some(idx);
+        }
+        search_from = idx + 1;
+    }
+    last
+}
+
+fn contains_keyword(text: &str, keyword: &str) -> bool {
+    last_keyword_index(text, keyword).is_some()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -985,6 +1012,106 @@ mod tests {
         assert!(!completions.items.is_empty());
         assert!(completions.items.iter().any(|item| item.insert_text == "return $result;"));
         assert!(completions.items.iter().any(|item| item.insert_text == "done_testing();"));
+    }
+
+    #[test]
+    fn use_trigger_requires_word_boundary() {
+        let provider = InlineCompletionProvider::new();
+        // "refuse " ends with "use " but "use" is not at a token boundary.
+        let completions = provider.get_inline_completions("refuse ", 0, 7);
+        assert!(
+            completions.items.iter().all(|i| i.insert_text != "strict;"),
+            "should not suggest `use strict;` inside an identifier; got {:?}",
+            completions.items.iter().map(|i| &i.insert_text).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn use_trigger_fires_after_semicolon_no_space() {
+        let provider = InlineCompletionProvider::new();
+        // `;use ` is a legitimate boundary even without an intervening space.
+        let completions = provider.get_inline_completions(";use ", 0, 5);
+        assert!(completions.items.iter().any(|i| i.insert_text == "strict;"));
+    }
+
+    #[test]
+    fn sub_trigger_requires_word_boundary() {
+        let provider = InlineCompletionProvider::new();
+        // "absub foo" contains "sub " but "sub" is not at a token boundary.
+        let completions = provider.get_inline_completions("absub foo", 0, 9);
+        assert!(
+            completions.items.iter().all(|i| !i.insert_text.contains("my $self = shift")),
+            "should not generate a body for a sub buried inside an identifier"
+        );
+    }
+
+    #[test]
+    fn my_dollar_trigger_requires_word_boundary() {
+        let provider = InlineCompletionProvider::new();
+        // "army $" ends with "my $" but "my" is not at a token boundary.
+        let completions = provider.get_inline_completions("army $", 0, 6);
+        assert!(completions.items.iter().all(|i| i.insert_text != "self = shift;"));
+    }
+
+    #[test]
+    fn package_trigger_requires_word_boundary() {
+        let provider = InlineCompletionProvider::new();
+        let completions = provider.get_inline_completions("unpackage ", 0, 10);
+        assert!(completions.items.iter().all(|i| !i.insert_text.starts_with("MyPackage;")));
+    }
+
+    #[test]
+    fn bless_trigger_requires_word_boundary() {
+        let provider = InlineCompletionProvider::new();
+        let completions = provider.get_inline_completions("unbless ", 0, 8);
+        assert!(completions.items.iter().all(|i| i.insert_text != "$self, $class;"));
+    }
+
+    #[test]
+    fn return_trigger_requires_word_boundary() {
+        let provider = InlineCompletionProvider::new();
+        // No surrounding scope; the only path to `$self;` is the return rule.
+        let completions = provider.get_inline_completions("unreturn ", 0, 9);
+        assert!(completions.items.iter().all(|i| i.insert_text != "$self;"));
+    }
+
+    #[test]
+    fn for_trigger_requires_word_boundary() {
+        let provider = InlineCompletionProvider::new();
+        let completions = provider.get_inline_completions("sufor ", 0, 6);
+        assert!(completions.items.iter().all(|i| !i.insert_text.contains("(@items)")));
+    }
+
+    #[test]
+    fn ok_paren_trigger_requires_word_boundary() {
+        let provider = InlineCompletionProvider::new();
+        let completions = provider.get_inline_completions("hook(", 0, 5);
+        assert!(completions.items.iter().all(|i| !i.insert_text.starts_with("$result,")));
+    }
+
+    #[test]
+    fn ok_paren_trigger_fires_after_negation_operator() {
+        let provider = InlineCompletionProvider::new();
+        let completions = provider.get_inline_completions("!ok(", 0, 4);
+        assert!(completions.items.iter().any(|i| i.insert_text.starts_with("$result,")));
+    }
+
+    #[test]
+    fn is_paren_trigger_requires_word_boundary() {
+        let provider = InlineCompletionProvider::new();
+        let completions = provider.get_inline_completions("basis(", 0, 6);
+        assert!(completions.items.iter().all(|i| !i.insert_text.starts_with("$got,")));
+    }
+
+    #[test]
+    fn sub_declaration_in_for_loop_parens_still_triggers() {
+        // Boundary chars like `(` should still allow keyword detection.
+        let provider = InlineCompletionProvider::new();
+        let completions = provider.get_inline_completions("for (my $", 0, 9);
+        assert!(
+            completions.items.iter().any(|i| i.insert_text == "self = shift;"),
+            "`my $` after `(` should still trigger the my-dollar rule"
+        );
     }
 
     #[test]

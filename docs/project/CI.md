@@ -2,7 +2,7 @@
 
 This repository uses two default PR jobs and a small set of opt-in workflows.
 Keep this doc aligned with the command flow in
-[CONTRIBUTING.md](../CONTRIBUTING.md) and
+[CONTRIBUTING.md](../../CONTRIBUTING.md) and
 [CI_LOCAL_VALIDATION.md](./CI_LOCAL_VALIDATION.md).
 
 ## Default PR Path

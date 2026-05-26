@@ -7,6 +7,7 @@ use super::super::*;
 use crate::cancellation::RequestCleanupGuard;
 use crate::protocol::{req_position, req_uri};
 use crate::util::{read_text_file_with_encoding, token_under_cursor};
+use perl_parser_core::source_file::is_binary_content;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
@@ -68,6 +69,182 @@ struct NavigationDecisionTraceContext {
     line: u32,
     character: u32,
     include_declaration: Option<bool>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct TypeDefinitionFallbackTrace {
+    decision: &'static str,
+    reason: &'static str,
+    blocker: &'static str,
+    source_backed_state: &'static str,
+    fact_source: &'static str,
+    freshness: &'static str,
+    fallback: &'static str,
+    dynamic_boundary: bool,
+    request_version: Option<i32>,
+    current_document_version: Option<i32>,
+    trace_only_no_live_behavior_change: bool,
+}
+
+impl Default for TypeDefinitionFallbackTrace {
+    fn default() -> Self {
+        Self {
+            decision: "fallback",
+            reason: "missing_fact",
+            blocker: "missing_fact",
+            source_backed_state: "type_definition_not_proven",
+            fact_source: "fallback",
+            freshness: "fresh",
+            fallback: "no_result",
+            dynamic_boundary: false,
+            request_version: None,
+            current_document_version: None,
+            trace_only_no_live_behavior_change: true,
+        }
+    }
+}
+
+fn stale_type_definition_fallback_trace(
+    request_version: i32,
+    current_document_version: i32,
+) -> TypeDefinitionFallbackTrace {
+    TypeDefinitionFallbackTrace {
+        decision: "blocked",
+        reason: "stale_fact",
+        blocker: "stale_fact",
+        source_backed_state: "stale_type_definition_request",
+        fact_source: "request_version",
+        freshness: "stale",
+        fallback: "refresh_workspace_facts",
+        dynamic_boundary: false,
+        request_version: Some(request_version),
+        current_document_version: Some(current_document_version),
+        trace_only_no_live_behavior_change: false,
+    }
+}
+
+fn unsupported_type_definition_source_trace() -> TypeDefinitionFallbackTrace {
+    TypeDefinitionFallbackTrace {
+        decision: "blocked",
+        reason: "unsupported",
+        blocker: "unsupported_fact_class",
+        source_backed_state: "unscannable_type_definition_source",
+        fact_source: "fallback",
+        freshness: "fresh",
+        fallback: "no_result",
+        dynamic_boundary: false,
+        request_version: None,
+        current_document_version: None,
+        trace_only_no_live_behavior_change: true,
+    }
+}
+
+fn classify_type_definition_fallback_trace(
+    source_text: &str,
+    line: u32,
+    character: u32,
+) -> TypeDefinitionFallbackTrace {
+    let Some(line_text) = usize::try_from(line).ok().and_then(|line| source_text.lines().nth(line))
+    else {
+        return TypeDefinitionFallbackTrace::default();
+    };
+
+    let character = usize::try_from(character).unwrap_or_default();
+    let compact_before_cursor =
+        line_text.chars().take(character).filter(|ch| !ch.is_whitespace()).collect::<String>();
+    let compact_from_cursor = line_text
+        .chars()
+        .skip(character)
+        .take(64)
+        .filter(|ch| !ch.is_whitespace())
+        .collect::<String>();
+
+    if compact_from_cursor.starts_with("->$")
+        || (compact_before_cursor.ends_with("->") && compact_from_cursor.starts_with('$'))
+        || (compact_before_cursor.ends_with("isa=>") && compact_from_cursor.starts_with('$'))
+        || (compact_before_cursor.ends_with("bless{},") && compact_from_cursor.starts_with('$'))
+    {
+        return TypeDefinitionFallbackTrace {
+            decision: "fallback",
+            reason: "dynamic_boundary",
+            blocker: "dynamic_boundary",
+            source_backed_state: "dynamic_type_definition_boundary",
+            fact_source: "dynamic_boundary",
+            freshness: "fresh",
+            fallback: "no_result",
+            dynamic_boundary: true,
+            request_version: None,
+            current_document_version: None,
+            trace_only_no_live_behavior_change: true,
+        };
+    }
+
+    TypeDefinitionFallbackTrace::default()
+}
+
+fn classify_type_definition_fallback_trace_with_documents(
+    source_text: &str,
+    line: u32,
+    character: u32,
+    documents: &HashMap<String, String>,
+) -> TypeDefinitionFallbackTrace {
+    let fallback_trace = classify_type_definition_fallback_trace(source_text, line, character);
+    if fallback_trace.blocker != "missing_fact" {
+        return fallback_trace;
+    }
+
+    let Some(type_name) = type_definition_candidate_at_position(source_text, line, character)
+    else {
+        return fallback_trace;
+    };
+    if documents.values().any(|document_text| {
+        !is_scannable_type_definition_source(document_text)
+            && document_text.contains(&format!("package {type_name}"))
+    }) {
+        return unsupported_type_definition_source_trace();
+    }
+
+    fallback_trace
+}
+
+fn type_definition_candidate_at_position(
+    source_text: &str,
+    line: u32,
+    character: u32,
+) -> Option<String> {
+    let line_text = usize::try_from(line).ok().and_then(|line| source_text.lines().nth(line))?;
+    let character = usize::try_from(character).ok()?;
+    let mut token_start = None;
+    let mut token = String::new();
+
+    for (index, ch) in line_text.chars().chain(std::iter::once(' ')).enumerate() {
+        if ch.is_ascii_alphanumeric() || matches!(ch, '_' | ':') {
+            if token_start.is_none() {
+                token_start = Some(index);
+            }
+            token.push(ch);
+            continue;
+        }
+
+        if let Some(start) = token_start.take() {
+            let end = index;
+            if character >= start
+                && character <= end
+                && token.contains("::")
+                && token.chars().next().is_some_and(|ch| ch.is_ascii_uppercase())
+            {
+                return Some(token);
+            }
+        }
+        token.clear();
+    }
+
+    None
+}
+
+fn is_scannable_type_definition_source(source_text: &str) -> bool {
+    source_text.len() <= perl_lsp_rs_core::runtime::limits::max_file_size_bytes()
+        && !is_binary_content(source_text)
 }
 
 #[cfg(feature = "workspace")]
@@ -1496,17 +1673,56 @@ impl LspServer {
         if let Some(params) = params {
             let uri = req_uri(&params)?;
             let (line, character) = req_position(&params)?;
+            let trace_context = NavigationDecisionTraceContext {
+                provider: "type_definition",
+                provider_action: "textDocument/typeDefinition",
+                uri: uri.to_string(),
+                line,
+                character,
+                include_declaration: None,
+            };
+            let req_version =
+                params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
+            if let Some(request_version) = req_version {
+                let current_document_version = {
+                    let documents = self.documents_guard();
+                    self.get_document(&documents, uri).map(|doc| doc.version)
+                };
+                if let Some(current_document_version) = current_document_version
+                    && request_version < current_document_version
+                {
+                    self.record_type_definition_provider_decision_trace(
+                        &trace_context,
+                        0,
+                        stale_type_definition_fallback_trace(
+                            request_version,
+                            current_document_version,
+                        ),
+                    );
+                    return Err(Self::content_modified());
+                }
+            }
 
             // Acquire minimal data under lock, then drop it
-            let ast = {
+            let (ast, doc_text) = {
                 let documents = self.documents_guard();
                 let Some(doc) = self.get_document(&documents, uri) else {
+                    self.record_type_definition_provider_decision_trace(
+                        &trace_context,
+                        0,
+                        TypeDefinitionFallbackTrace::default(),
+                    );
                     return Ok(Some(json!([])));
                 };
                 let Some(ast) = doc.ast.as_ref() else {
+                    self.record_type_definition_provider_decision_trace(
+                        &trace_context,
+                        0,
+                        TypeDefinitionFallbackTrace::default(),
+                    );
                     return Ok(Some(json!([])));
                 };
-                ast.clone()
+                (ast.clone(), doc.text.clone())
             };
 
             // Build doc_map outside the lock using snapshot helper
@@ -1517,11 +1733,117 @@ impl LspServer {
             if let Some(locations) =
                 provider.find_type_definition(ast.as_ref(), line, character, uri, &doc_map)
             {
-                return Ok(Some(json!(locations)));
+                if locations.len() == 1 {
+                    self.record_type_definition_provider_decision_trace(
+                        &trace_context,
+                        locations.len(),
+                        TypeDefinitionFallbackTrace::default(),
+                    );
+                    return Ok(Some(json!(locations)));
+                }
+
+                self.record_type_definition_ambiguous_identity_trace(
+                    &trace_context,
+                    locations.len(),
+                );
+                return Ok(Some(json!([])));
             }
+            self.record_type_definition_provider_decision_trace(
+                &trace_context,
+                0,
+                classify_type_definition_fallback_trace_with_documents(
+                    &doc_text, line, character, &doc_map,
+                ),
+            );
         }
 
         Ok(Some(json!([])))
+    }
+
+    fn record_type_definition_provider_decision_trace(
+        &self,
+        context: &NavigationDecisionTraceContext,
+        result_count: usize,
+        fallback_trace: TypeDefinitionFallbackTrace,
+    ) {
+        let acted = result_count > 0;
+        let result_count = u64::try_from(result_count).unwrap_or(u64::MAX);
+        let mut receipt = json!({
+            "provider": context.provider,
+            "provider_action": context.provider_action,
+            "decision": if acted { "acted" } else { fallback_trace.decision },
+            "reason": if acted { "source_backed_high_confidence" } else { fallback_trace.reason },
+            "uri": context.uri,
+            "line": context.line,
+            "character": context.character,
+            "result_count": result_count,
+            "live_provider_result_count": result_count,
+            "fact_source": if acted { "parser_syntax" } else { fallback_trace.fact_source },
+            "confidence": if acted { "high" } else { "low" },
+            "freshness": if acted { "fresh" } else { fallback_trace.freshness },
+            "source_backed": acted,
+            "source_backed_state": if acted {
+                "open_document_type_definition"
+            } else {
+                fallback_trace.source_backed_state
+            },
+            "fallback": if acted { "none" } else { fallback_trace.fallback },
+            "fallback_state": if acted { "none" } else { fallback_trace.fallback },
+            "dynamic_boundary": if acted { false } else { fallback_trace.dynamic_boundary },
+            "trace_only_no_live_behavior_change": if acted {
+                true
+            } else {
+                fallback_trace.trace_only_no_live_behavior_change
+            },
+            "claim_boundary": "records existing type-definition safe subset only; direct package/class identifiers and constructor receivers may resolve to open-document package definitions while variable receivers, chained method results, function-call results, missing package definitions, generated/no-source facts, unscannable documents, dynamic boundaries, stale facts, low-confidence facts, and ambiguous identities remain fallback or blocked"
+        });
+        if !acted && let Some(object) = receipt.as_object_mut() {
+            object.insert("blocker".to_string(), json!(fallback_trace.blocker));
+            if let Some(request_version) = fallback_trace.request_version {
+                object.insert("request_version".to_string(), json!(request_version));
+            }
+            if let Some(current_document_version) = fallback_trace.current_document_version {
+                object.insert(
+                    "current_document_version".to_string(),
+                    json!(current_document_version),
+                );
+            }
+        }
+
+        self.record_provider_decision_trace(context.provider, &receipt);
+    }
+
+    fn record_type_definition_ambiguous_identity_trace(
+        &self,
+        context: &NavigationDecisionTraceContext,
+        candidate_count: usize,
+    ) {
+        let candidate_count = u64::try_from(candidate_count).unwrap_or(u64::MAX);
+        let receipt = json!({
+            "provider": context.provider,
+            "provider_action": context.provider_action,
+            "decision": "fallback",
+            "reason": "ambiguous_low_confidence_candidates",
+            "blocker": "ambiguous_identity",
+            "uri": context.uri,
+            "line": context.line,
+            "character": context.character,
+            "result_count": 0,
+            "live_provider_result_count": 0,
+            "ambiguous_candidate_count": candidate_count,
+            "fact_source": "parser_syntax",
+            "confidence": "low",
+            "freshness": "fresh",
+            "source_backed": false,
+            "source_backed_state": "ambiguous_type_definition_identity",
+            "fallback": "no_result",
+            "fallback_state": "no_result",
+            "dynamic_boundary": false,
+            "trace_only_no_live_behavior_change": false,
+            "claim_boundary": "blocks ambiguous type-definition identities; direct package/class identifiers and constructor receivers may resolve only when they identify one open-document package definition, while duplicate package declarations, variable receivers, chained method results, function-call results, missing package definitions, generated/no-source facts, dynamic boundaries, stale facts, low-confidence facts, and unsupported identities remain fallback or blocked"
+        });
+
+        self.record_provider_decision_trace(context.provider, &receipt);
     }
 
     /// Handle textDocument/implementation request

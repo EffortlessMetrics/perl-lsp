@@ -4,7 +4,7 @@
 > It does not generate metrics, broaden live provider behavior, or replace the
 > provider-specific proof surfaces.
 
-Last reviewed: 2026-05-22.
+Last reviewed: 2026-05-24.
 
 This page answers:
 
@@ -71,7 +71,9 @@ and each keeps fallback behavior for unsupported or uncertain cases:
   and exported facts.
 - Hover: partial live provenance-backed compiler, framework-adapter, and
   dynamic-boundary explanations.
-- Definition and references: partial live exact/imported source-backed slices.
+- Definition, type definition, and references: partial live exact/imported
+  source-backed slices with type-definition explanation receipts for the
+  existing direct package/class safe subset.
 - Diagnostics: partial live suppressions and conservative explanations for
   selected high-confidence semantic evidence.
 - Document symbols: partial live source-backed parser-syntax symbols.
@@ -149,9 +151,10 @@ syncs release lineage, or claims conformance.
 
 | Surface | Current state | Real-workspace receipt state | Fallback / blocker coverage | Next proof |
 | --- | --- | --- | --- | --- |
-| Completion | `partial live / source-backed receiver pilot / shadowed` | Mojolicious visible-symbol ranking receipt covers candidate counts, top-N churn, useful/noisy additions, generated labels, and dynamic/fallback labels for scenario 28; receiver pilot receipts prove exact source-backed hash-slot receiver ranking, dynamic hash-key fallback preservation, and medium-confidence accessor/method-return fallback preservation | Legacy fallback; unknown, generated/no-source, stale, low-confidence, medium-confidence accessor-return, medium-confidence method-return, and dynamic-boundary receiver candidates remain fallback, shadowed, or blocked; ordinary completion requests persist provider-local decision traces for explain-provider-decision | Additional real-workspace receiver-quality receipts before broader generated, dynamic, method, or workspace-wide completion cutover |
+| Completion | `partial live / source-backed receiver pilot / shadowed` | Mojolicious visible-symbol ranking receipt covers candidate counts, top-N churn, useful/noisy additions, generated labels, and dynamic/fallback labels for scenario 28; receiver pilot receipts prove exact source-backed hash-slot receiver ranking, dynamic hash-key fallback preservation, and medium-confidence accessor/method-return fallback preservation; RealReceiver scenario 46 records constructor-assignment and plain hash-slot completion acting source-backed, static package completion acting as exact high-confidence syntax evidence, and hashref-slot, dynamic-key, and unknown receiver probes remaining low-confidence fallback; RealReceiver scenario 47 records accessor-return, method-return, local accessor-chain method-return, dynamic local accessor-chain method-return, and conditional local-reassignment method-return receiver chains preserving low-confidence fallback and tier-6 sorting instead of exact source-backed receiver detail; RealReceiver scenario 48 records literal `bless` receiver evidence as medium-confidence labeled and dynamic `bless` as legacy workspace fallback without exact receiver evidence; RealReceiver scenario 49 records static and dynamic array-index receiver chains preserving low-confidence fallback and tier-6 sorting instead of exact source-backed receiver detail; RealReceiver scenario 50 records `$self`/`$this` local methods as ordinary local method candidates and inherited workspace methods as exact high-confidence self/this receiver evidence without broader receiver promotion | Legacy fallback; unknown, generated/no-source, stale, low-confidence, medium-confidence accessor-return, medium-confidence method-return, medium-confidence local accessor-chain method-return, dynamic local accessor-chain method-return, conditional local-reassignment method-return, medium-confidence literal-bless, unpromoted hashref-slot, unpromoted array-index real-workspace shapes, and dynamic-boundary receiver candidates remain fallback, shadowed, labeled, or blocked; ordinary completion requests persist provider-local decision traces for explain-provider-decision | Additional real-workspace receiver-quality receipts before broader generated, dynamic, method, or workspace-wide completion cutover |
 | Hover | `partial live / provenance-backed` | Mojolicious scenario 29 records exact, imported, generated/framework, dynamic-shaped, module-resolution, and fallback/missing-fact hover surfaces | Legacy fallback; imported, generated, dynamic-boundary, and fallback paths are labeled in receipts | Additional project-shape hover quality receipts before broader generated/dynamic expansion |
 | Goto definition | `partial live exact/imported` | Mojolicious scenario 30 records module-resolution, exact-local, imported-symbol, and dynamic-boundary-shaped definition probes | Legacy fallback for generated/no-source, dynamic, stale, low-confidence, and ambiguous candidates; ordinary goto-definition requests persist provider-local decision traces for explain-provider-decision | Additional generated/dynamic project-shape receipts with no false-exact source-location claims |
+| Type definition | `safe subset + explanation receipt` | Live request receipts now record acted provider-decision traces for existing source-backed direct package/class and constructor receiver results, no-result fallback traces for unproven variable/data-flow receivers, a project-shaped blocker receipt where open-package variable receivers, function-call results, and chained method results stay fallback, an ambiguous package-identity blocker receipt for duplicate open-document package definitions, a generated/dynamic/low-confidence blocker receipt for generated/no-source framework-method, dynamic-method-name, and unknown-receiver request shapes, dynamic boundary blocker receipts for `isa => $type` and `bless {}, $type` shapes, a stale-fact blocker receipt for stale request versions with request/current document versions, and an unsupported blocker receipt for package declarations present only in unscannable target documents | Type-definition behavior is narrowed for ambiguous package identities and unscannable target sources; variable receivers, chained method results, function-call results, missing packages, duplicate package definitions, generated/no-source facts, unscannable documents, dynamic boundaries, stale facts, and low-confidence facts remain fallback, blocked, or unpromoted; dynamic method names, dynamic type constraints, and dynamic bless package arguments are labeled as `dynamic_boundary` in provider-decision receipts, stale request versions return the existing content-modified error after recording a blocked `stale_fact` receipt with `fallback_state=refresh_workspace_facts`, and unscannable target sources record `unsupported_fact_class` instead of exact locations | Additional broader project-shaped blocker receipts before broader type-definition expansion |
 | References | `partial live exact/imported` | Mojolicious scenario 30 records exact-local, imported-symbol, and declaration-including boundary reference probes | Legacy fallback for generated/no-source, declaration-including, coderef, typeglob, dynamic, stale, low-confidence, and ambiguous cases; ordinary references requests persist provider-local decision traces for explain-provider-decision | Precision/recall receipts for generated, coderef, typeglob, dynamic, and broader declaration-including cases |
 | Diagnostics | `partial live` | Mojolicious baseline explicitly defers broad diagnostic correctness; scenario 31 covers workspace-present imports, a mixed present/missing import boundary, dynamic route-method conservatism, and true missing-module PL701; Dancer2 scenario 40 adds second-project workspace-present import, mixed present/missing import, typeglob-boundary, and true missing-module PL701 proof while scope diagnostics label low-confidence, ambiguous, and dynamic-boundary-shaped visible-symbol evidence when conservative PL109 diagnostics remain; live diagnostic requests now attach an additive `diagnostic_explanation.v1` provider receipt payload with PL701 module-resolution summaries, reported `@INC` path context, trust-boundary labels, and a copyable/user-readable explanation boundary; PL701/PL109 diagnostics expose explain-diagnostic code actions, and `perl.explainMissingModuleLookup` exposes the current missing-module `@INC` lookup as a user-facing receipt | Conservative diagnostics remain when semantic evidence is absent, ambiguous, stale, or dynamic; weak evidence is labeled instead of silently suppressing true unknowns; diagnostic explanation payloads, code actions, and missing-module lookup receipts do not change suppression, severity, resolver behavior, workspace scanning, or support-tier claims | Generated/dynamic diagnostic-label receipts plus broader project-shape false-positive/false-negative proof before wider diagnostic correctness claims; setup-hint/reporting polish before broader diagnostic UX promotion |
 | Document symbols | `partial live source-backed` | Runtime quality receipts record source-backed parser-syntax symbol counts and fact traces; Mojolicious scenario 32 records source-backed explicit symbols, generated `has` candidate counts, dynamic-boundary-shaped names, and edit freshness | Astless, stale, dynamic, virtual generated/no-source, low-confidence, and ambiguous candidates keep fallback/gated behavior | Generated-label proof and additional project-shape document-symbol receipts before generated, dynamic, or broader symbol cutover |
@@ -234,6 +237,13 @@ semantic-token work must either expose another reviewed scoped class through the
 user-facing provider-decision trace or add another class with the same
 promotion, fallback, blocker, and span-invariant rules.
 
+`class_declaration` has been reviewed as a possible next scoped token class and
+is deferred. The source-backed candidate can be described, but the runtime
+receipt does not currently prove exact parity with one existing live `class`
+token, so its fallback state remains shadowed. That means there is no
+`class_declaration` policy row, no provider-promotion ledger row, no support-tier
+movement, no live-trace class promotion, and no semantic-token output change.
+
 ## Refactor Support Review
 
 Post-cutover review does not justify a broad refactor tier promotion. Rename
@@ -273,6 +283,8 @@ items. The semantic-token class receipt support review closes the immediate
   The package-declaration, phase-block, field/method-call, self-method-call, and
   lexical-variable declaration/use live-trace expansions close the current semantic-token
 trace-class routing items without emitting new token output.
+The class-declaration readiness review keeps `class_declaration` deferred
+because exact live-output parity is not proven.
 The non-subroutine/package-wide safe-delete source-guard receipt and the
 generated/no-source plus dynamic live-command blocker receipt close the current
 safe-delete blocker routing items without broadening deletion. The diagnostic
@@ -308,6 +320,34 @@ fallback and do not become exact receiver evidence. Completion remains
 `partial-live-with-fallback`; broader generated, dynamic, unknown,
 low-confidence, stale, and workspace-wide method completion still need separate
 proof.
+The RealReceiver real-workspace receiver-quality receipt now records the next
+project-shaped boundary without promotion: constructor-assignment and plain
+hash-slot receivers act with source-backed detail, static package receivers act
+with exact high-confidence syntax detail, while hashref-slot,
+generated/no-source framework-method, dynamic-key, and unknown receiver probes
+preserve low-confidence fallback. That receipt measures the gap for broader
+receiver promotion; it does not change completion behavior or support-tier
+wording.
+The follow-up RealReceiver method/accessor fallback receipt records
+project-shaped accessor-return, method-return, local accessor-chain method-return,
+dynamic local accessor-chain method-return, and conditional local-reassignment
+method-return receiver chains as low-confidence fallback with tier-6 sorting.
+It keeps medium-confidence, dynamic, and conditional reassignment facts from
+silently becoming exact source-backed completion evidence.
+The RealReceiver bless confidence receipt records literal `bless` receivers as
+medium-confidence labeled evidence and dynamic `bless` receivers as legacy
+workspace fallback without exact receiver evidence. It keeps literal/dynamic
+`bless` receiver behavior receipt-only and does not promote completion support.
+The RealReceiver array-index fallback receipt records static and dynamic
+array-index receiver chains as low-confidence fallback with tier-6 sorting. It
+keeps array-index receiver behavior receipt-only and does not promote completion
+support.
+The RealReceiver self/this quality receipt records current-package `$self->`
+and `$this->` receiver completion with local-method, inherited-method, and
+nearest-shadow boundaries. Local same-file methods remain ordinary local method
+candidates, while inherited workspace methods carry exact high-confidence
+self/this syntax evidence. It is receipt-only and does not broaden completion
+behavior or support-tier wording.
 The direct class type-definition safe subset is now recorded in the provider
 promotion ledger: direct package/class identifiers and constructor method
 receivers may resolve to source-backed open-document package definitions, while
@@ -316,6 +356,31 @@ dynamic boundaries, generated/no-source receivers, stale facts, low-confidence
 facts, ambiguous identities, and unsupported receiver shapes stay fallback or
 blocked. This records the existing safe subset and does not broaden type
 definition into data-flow or return-value inference.
+The project-shaped type-definition blocker receipt now proves those
+receiver/data-flow boundaries with an open target package: variable receivers,
+function-call results, and chained method results still record
+`type_definition_not_proven` fallback instead of becoming exact package
+locations. The ambiguous package-identity receipt now proves duplicate
+open-document package declarations return no exact locations and persist an
+`ambiguous_identity` provider-decision blocker instead of acting as a
+high-confidence type-definition result. The generated/dynamic/low-confidence
+blocker receipt now proves generated/no-source framework-method,
+dynamic-method-name, and unknown-receiver request shapes return no exact
+type-definition locations, with dynamic method names labeled as a
+`dynamic_boundary` provider-decision blocker. The dynamic type-constraint
+receipt adds the same no-result boundary for project-shaped `isa => $type`
+constraints and labels that fallback as `dynamic_boundary`. The stale-fact
+receipt proves stale `textDocument/typeDefinition` request versions return the
+existing content-modified error, record zero exact locations, and persist a
+blocked `stale_fact` provider-decision receipt with request/current document
+versions and `fallback_state=refresh_workspace_facts` for explanation surfaces.
+The dynamic
+bless receipt adds the same no-result boundary for project-shaped
+`bless {}, $type` package arguments and labels that fallback as
+`dynamic_boundary`. The unscannable target-source receipt proves package
+declarations present only in binary-like open documents with embedded NUL bytes
+do not authorize exact type-definition locations and instead record an
+`unsupported_fact_class` blocker.
 The product-level Real Perl Editor Trust smoke receipt now records one
 CPAN-style workspace pass across completion, definition, diagnostics, workspace
 trust report, safe-delete preview, and explain-provider-decision. It is a
@@ -333,9 +398,15 @@ effects now derive from that table. It does not change provider behavior,
 diagnostic suppression, parser bucket status, support tiers, PIR status, or
 determinism claims.
 
-1. `docs(status): maintain provider promotion ledger parity when fact classes or receipts change`
-2. `test(semantic-tokens): add another scoped compiler-token class receipt only when a new class is ready`
-3. `test(dap): add DAP includePaths cutover proof only if native DAP module-path behavior is being promoted`
+The provider promotion ledger parity review is complete: the machine policy and
+human ledger currently agree on 17 provider fact-class rows, and the blocker
+registry contains 18 normalized blocker entries. That review did not add or
+promote fact classes, broaden provider behavior, promote support tiers, move
+parser/corpus buckets, sync release lineage, or continue source-repo
+development.
+
+1. `test(semantic-tokens): add another scoped compiler-token class receipt only when a new class is ready`
+2. `test(dap): add DAP includePaths cutover proof only if native DAP module-path behavior is being promoted`
 
 Provider decision explanations are already partial-live through
 `perl.explainProviderDecision`; callers can attach a request-local

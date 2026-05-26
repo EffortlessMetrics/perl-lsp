@@ -199,11 +199,11 @@ The strategy requires minimal ongoing maintenance:
 
 ## Cross-References
 
-- **Implementation Details**: [SPEC-149.md](../SPEC-149.md) - Comprehensive specification
+- **Implementation Details**: [VALIDATION-149 acceptance criteria](../reference/VALIDATION-149-acceptance-criteria.md) - Comprehensive specification
 - **Quality Standards**: [API_DOCUMENTATION_STANDARDS.md](../reference/API_DOCUMENTATION_STANDARDS.md) - Enterprise documentation requirements
 - **Performance Context**: [THREADING_CONFIGURATION_GUIDE.md](../how-to/THREADING_CONFIGURATION_GUIDE.md) - Performance achievements
 - **Test Framework**: `/crates/perl-parser/tests/missing_docs_ac_tests.rs` - 25 comprehensive validation tests
-- **Architecture Decision**: [ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md](adr/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md) - Strategic context
+- **Architecture Decision**: [ADR-0002: API Documentation Infrastructure](../adr/0002-api-documentation-infrastructure.md) - Strategic context
 
 ## Summary
 

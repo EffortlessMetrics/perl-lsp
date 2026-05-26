@@ -84,9 +84,19 @@ const fn max_usize(left: usize, right: usize) -> usize {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenSpanError {
     /// End offset is before start offset.
-    EndBeforeStart { start: usize, end: usize },
+    EndBeforeStart {
+        /// Start byte offset that was supplied.
+        start: usize,
+        /// End byte offset that violated `end >= start`.
+        end: usize,
+    },
     /// Empty span is only valid for EOF or explicit synthetic tokens.
-    EmptySpanNotAllowed { kind: TokenKind, at: usize },
+    EmptySpanNotAllowed {
+        /// Token kind that disallows an empty span.
+        kind: TokenKind,
+        /// Byte offset where the empty span was constructed.
+        at: usize,
+    },
 }
 
 impl std::fmt::Display for TokenSpanError {

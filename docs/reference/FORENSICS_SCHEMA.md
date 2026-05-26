@@ -404,7 +404,7 @@ Every metric includes provenance. See [`METRICS_PROVENANCE.md`](../project/METRI
 | CI | Zm | measured | high | workflow run ID |
 | LLM units | ~N | estimated | med | iteration count |
 
-**DevLT estimation** uses decision-weighted method. See [`DEVLT_ESTIMATION.md`](DEVLT_ESTIMATION.md).
+**DevLT estimation** uses a decision-weighted method (decision events + friction events per exhibit).
 
 Bands for DevLT (reference):
 - **<30 min**: Quick fix, no exploration needed
@@ -796,7 +796,6 @@ Existing dossiers following the 8-section structure remain valid. The four-panel
 
 ## See Also
 
-- [`DEVLT_ESTIMATION.md`](DEVLT_ESTIMATION.md) - Decision-weighted DevLT method
 - [`METRICS_PROVENANCE.md`](../project/METRICS_PROVENANCE.md) - Provenance schema for all metrics
 - [`QUALITY_SURFACES.md`](../project/QUALITY_SURFACES.md) - The four quality surfaces
 - [`ANALYZER_FRAMEWORK.md`](../project/ANALYZER_FRAMEWORK.md) - Specialist analyzer specs

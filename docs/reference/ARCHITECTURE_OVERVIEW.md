@@ -70,7 +70,7 @@ The workspace uses a **production-focused exclusion strategy** to ensure reliabl
 
 This approach prioritizes **published crate reliability** over comprehensive internal tooling, ensuring users can depend on stable builds regardless of their platform or system configuration.
 
-See [WORKSPACE_TEST_REPORT.md](../WORKSPACE_TEST_REPORT.md) for current workspace status.
+See the [workspace status report](../project/status/workspace.md) for current workspace status.
 
 ## Key Components
 
@@ -245,8 +245,7 @@ cargo doc --no-deps --package perl-parser
 **Related Documentation**:
 - **[Missing Documentation Guide](MISSING_DOCUMENTATION_GUIDE.md)** - Systematic resolution strategy
 - **[API Documentation Standards](API_DOCUMENTATION_STANDARDS.md)** - Enterprise quality requirements
-- **[ADR-002: API Documentation Infrastructure](adr/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md)** - Implementation architecture
-- **[ADR-003: Missing Documentation Infrastructure](adr/ADR_003_MISSING_DOCUMENTATION_INFRASTRUCTURE.md)** - Implementation details
+- **[ADR-0002: API Documentation Infrastructure](../adr/0002-api-documentation-infrastructure.md)** - Implementation architecture
 - **[ADR-0034: Custom LSP Runtime](../adr/0034-custom-lsp-runtime.md)** - Why perl-lsp owns protocol, transport, and dispatch instead of using an external framework
 
 ## Context-Sensitive Features

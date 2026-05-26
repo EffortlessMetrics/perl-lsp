@@ -1,6 +1,14 @@
 # DAP Phase 5: Native Implementation
 <!-- Labels: explanation:architecture, reference:implementation, phase:phase5 -->
 
+> **Historical record (v0.9.x).** Source paths in this document refer to the
+> pre-collapse DAP crate layout (`crates/perl-dap/src/tcp_attach.rs`,
+> `debug_adapter.rs`, `benches/dap_native_benchmarks.rs`,
+> `tests/tcp_attach_tests.rs`). Those modules have been reorganized under
+> `crates/perl-dap/src/debug_adapter/` and the bench/test layout has changed.
+> See [`crates/perl-dap/`](../../crates/perl-dap/) for the current code and the
+> [DAP status page](../project/status/dap.md) for live capability coverage.
+
 **Status**: ✅ **IMPLEMENTED**
 **Version**: 0.9.x
 **Date**: 2026-02-12

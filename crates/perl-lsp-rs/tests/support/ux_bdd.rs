@@ -3,33 +3,8 @@
 use serde_json::Value;
 use std::collections::BTreeSet;
 
-#[allow(dead_code)]
-pub struct UxScenario {
-    name: &'static str,
-}
-
-impl UxScenario {
-    #[allow(dead_code)]
-    pub fn new(name: &'static str) -> Self {
-        eprintln!("Scenario: {name}");
-        Self { name }
-    }
-
-    #[allow(dead_code)]
-    pub fn given(&self, message: &str) {
-        eprintln!("[{}] Given {message}", self.name);
-    }
-
-    #[allow(dead_code)]
-    pub fn when(&self, message: &str) {
-        eprintln!("[{}] When {message}", self.name);
-    }
-
-    #[allow(dead_code)]
-    pub fn then(&self, message: &str) {
-        eprintln!("[{}] Then {message}", self.name);
-    }
-}
+#[allow(unused_imports)]
+pub use perl_tdd_support::BddScenario as UxScenario;
 
 #[allow(dead_code)]
 pub fn completion_labels(response: &Value) -> BTreeSet<String> {

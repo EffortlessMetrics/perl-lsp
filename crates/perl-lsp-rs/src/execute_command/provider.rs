@@ -1085,6 +1085,17 @@ fn default_provider_decision_explanation(
             Some("docs/project/status/provider_cutover.md#navigation-live-quality-dashboard"),
             Some("ux_scenario_30_mojolicious_navigation_quality"),
         ),
+        ProviderDecisionProvider::TypeDefinition => (
+            ProviderDecisionOutcome::Acted,
+            ProviderDecisionReason::SourceBackedHighConfidence,
+            ProviderDecisionFactSource::ParserSyntax,
+            ProviderDecisionConfidence::High,
+            ProviderDecisionFreshness::Fresh,
+            false,
+            ProviderDecisionFallback::None,
+            Some("docs/project/status/provider_confidence_matrix.md#type-definition"),
+            Some("type-definition-provider-decision-receipt"),
+        ),
         ProviderDecisionProvider::References => (
             ProviderDecisionOutcome::Acted,
             ProviderDecisionReason::SourceBackedHighConfidence,

@@ -219,7 +219,7 @@ Supply chain security features support:
 
 ### Vulnerability Disclosure
 
-See [SECURITY.md](../SECURITY.md) for vulnerability reporting procedures.
+See [SECURITY.md](../../SECURITY.md) for vulnerability reporting procedures.
 
 ### Advisory Tracking
 

@@ -970,8 +970,8 @@ fn calculate_batch_size(&self, files: &[FileEdit]) -> usize {
 
 ### Related Documentation
 - [LSP_IMPLEMENTATION_GUIDE.md](./LSP_IMPLEMENTATION_GUIDE.md): LSP protocol patterns
-- [CLAUDE.md](../CLAUDE.md): Coding standards and architecture
-- [features.toml](../features.toml): LSP capability definitions
+- [CLAUDE.md](../../CLAUDE.md): Coding standards and architecture
+- [features.toml](../../features.toml): LSP capability definitions
 
 ### External Standards
 - [LSP Specification: textDocument/rename](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_rename)

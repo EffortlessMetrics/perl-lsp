@@ -1,12 +1,11 @@
-use perl_lsp::protocol::capabilities::{BuildFlags, capabilities_for};
+use perl_lsp::protocol::capabilities::{BuildFlags, capabilities_json};
 use serde_json::json;
 
 /// Contract test ensuring all advertised capabilities have the correct shape per LSP 3.18 spec
 #[test]
 fn test_capability_shapes_lsp_318_contract() -> Result<(), Box<dyn std::error::Error>> {
     let build = BuildFlags::production();
-    let caps = capabilities_for(build.clone());
-    let caps_json = serde_json::to_value(&caps)?;
+    let caps_json = capabilities_json(build.clone());
 
     // Test text document sync shape (must be object with options)
     // Text sync is always enabled
@@ -251,16 +250,15 @@ fn test_capability_shapes_lsp_318_contract() -> Result<(), Box<dyn std::error::E
         );
     }
 
-    // Test inline completion shape (MUST be in experimental if using old lsp-types)
+    // Test inline completion shape (standard top-level capability)
     if build.inline_completion {
-        // With current lsp-types, this must be under experimental
         assert!(
-            caps_json["experimental"].is_object(),
-            "experimental must exist for inline completion"
+            caps_json["inlineCompletionProvider"].is_object(),
+            "inlineCompletionProvider must be top-level"
         );
         assert!(
-            caps_json["experimental"]["inlineCompletionProvider"].is_object(),
-            "inlineCompletionProvider must be under experimental"
+            caps_json["experimental"]["inlineCompletionProvider"].is_null(),
+            "experimental.inlineCompletionProvider must be absent"
         );
     }
 
@@ -289,8 +287,7 @@ fn test_non_advertised_features_return_method_not_found() -> Result<(), Box<dyn 
 #[test]
 fn test_capability_handler_consistency() -> Result<(), Box<dyn std::error::Error>> {
     let build = BuildFlags::all();
-    let caps = capabilities_for(build);
-    let caps_json = serde_json::to_value(&caps)?;
+    let caps_json = capabilities_json(build);
 
     // Verify rename has prepareProvider when handler exists
     if caps_json["renameProvider"].is_object() {

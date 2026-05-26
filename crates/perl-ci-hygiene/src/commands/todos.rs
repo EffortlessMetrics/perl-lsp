@@ -742,6 +742,9 @@ fn rust_raw_string_state_after_line(
 
 fn has_unlinked_token(comment: &str, token_re: &Regex) -> bool {
     for m in token_re.find_iter(comment) {
+        if is_backtick_wrapped_token(comment, m.start(), m.end()) {
+            continue;
+        }
         let suffix = &comment[m.end()..];
         if !linked_marker(suffix) {
             return true;
@@ -753,6 +756,9 @@ fn has_unlinked_token(comment: &str, token_re: &Regex) -> bool {
             if !is_ascii_word_boundary(comment, idx, idx + token.len()) {
                 continue;
             }
+            if is_backtick_wrapped_token(comment, idx, idx + token.len()) {
+                continue;
+            }
             let suffix = &comment[idx + token.len()..];
             if !linked_marker(suffix) {
                 return true;
@@ -760,6 +766,11 @@ fn has_unlinked_token(comment: &str, token_re: &Regex) -> bool {
         }
     }
     false
+}
+
+fn is_backtick_wrapped_token(s: &str, start: usize, end: usize) -> bool {
+    let bytes = s.as_bytes();
+    start > 0 && end < bytes.len() && bytes[start - 1] == b'`' && bytes[end] == b'`'
 }
 
 fn is_ascii_word_boundary(s: &str, start: usize, end: usize) -> bool {

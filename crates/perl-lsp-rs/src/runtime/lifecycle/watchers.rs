@@ -10,7 +10,11 @@ use lsp_types::{
 };
 impl LspServer {
     /// Register file watchers for Perl files
-    pub(crate) fn register_file_watchers_async(&self) {
+    pub(crate) fn register_file_watchers_if_needed(&self) {
+        if !self.client_capabilities.lock().dynamic_registration_support {
+            return;
+        }
+
         if !self.advertised_features.lock().workspace_symbol {
             return;
         }
@@ -73,7 +77,7 @@ impl LspServer {
             return;
         }
 
-        let params = serde_json::json!({
+        let params = json!({
             "registrations": [{
                 "id": "perl-inlineCompletion",
                 "method": "textDocument/inlineCompletion",

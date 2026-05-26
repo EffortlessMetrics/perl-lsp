@@ -5,6 +5,36 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+mod install {
+    pub(super) const PRE_COMMIT_HOOK: &str = r#"#!/usr/bin/env bash
+set -euo pipefail
+
+GIT_USER_NAME="$(git config user.name 2>/dev/null || true)"
+GIT_USER_EMAIL="$(git config user.email 2>/dev/null || true)"
+
+if [ "$GIT_USER_NAME" = "Codex Release Validation" ] || \
+   [ "$GIT_USER_EMAIL" = "codex-release-validation@example.invalid" ] || \
+   [ "$GIT_USER_NAME" = "xtask hook tests" ] || \
+   [ "$GIT_USER_EMAIL" = "xtask@example.invalid" ]; then
+    echo "❌ Refusing commit with placeholder git identity"
+    echo "   user.name:  $GIT_USER_NAME"
+    echo "   user.email: $GIT_USER_EMAIL"
+    echo ""
+    echo "   Fix this repo-local override first:"
+    echo "   git config --local --unset-all user.name"
+    echo "   git config --local --unset-all user.email"
+    exit 1
+fi
+"#;
+
+    pub(super) fn print_install_summary() {
+        println!("✅ Installed pre-commit and pre-push hooks");
+        println!("   The pre-commit hook blocks known placeholder git identities");
+        println!("   The pre-push hook runs 'nix develop -c just pr-fast' before each push");
+        println!("   Skip with: git commit --no-verify / git push --no-verify");
+    }
+}
+
 pub(crate) fn pre_push_hook_script() -> &'static str {
     r#"#!/usr/bin/env bash
 # ============================================================================
@@ -272,34 +302,10 @@ pub(crate) fn cmd_install_githooks(repo_root: &Path) -> Result<i32> {
     let hooks_dir = resolve_git_hooks_dir(repo_root)?;
     fs::create_dir_all(&hooks_dir)?;
 
-    let pre_commit_hook = r#"#!/usr/bin/env bash
-set -euo pipefail
-
-GIT_USER_NAME="$(git config user.name 2>/dev/null || true)"
-GIT_USER_EMAIL="$(git config user.email 2>/dev/null || true)"
-
-if [ "$GIT_USER_NAME" = "Codex Release Validation" ] || \
-   [ "$GIT_USER_EMAIL" = "codex-release-validation@example.invalid" ] || \
-   [ "$GIT_USER_NAME" = "xtask hook tests" ] || \
-   [ "$GIT_USER_EMAIL" = "xtask@example.invalid" ]; then
-    echo "❌ Refusing commit with placeholder git identity"
-    echo "   user.name:  $GIT_USER_NAME"
-    echo "   user.email: $GIT_USER_EMAIL"
-    echo ""
-    echo "   Fix this repo-local override first:"
-    echo "   git config --local --unset-all user.name"
-    echo "   git config --local --unset-all user.email"
-    exit 1
-fi
-"#;
-    write_git_hook(&hooks_dir.join("pre-commit"), pre_commit_hook)?;
-
+    write_git_hook(&hooks_dir.join("pre-commit"), install::PRE_COMMIT_HOOK)?;
     write_git_hook(&hooks_dir.join("pre-push"), pre_push_hook_script())?;
 
-    println!("✅ Installed pre-commit and pre-push hooks");
-    println!("   The pre-commit hook blocks known placeholder git identities");
-    println!("   The pre-push hook runs 'nix develop -c just pr-fast' before each push");
-    println!("   Skip with: git commit --no-verify / git push --no-verify");
+    install::print_install_summary();
     Ok(0)
 }
 

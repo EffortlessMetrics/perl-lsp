@@ -235,10 +235,10 @@ cargo test -p perl-parser --test fuzz_transliteration_crash_repro       # Transl
 - **[PERFORMANCE_PRESERVATION_GUIDE.md](../how-to/PERFORMANCE_PRESERVATION_GUIDE.md)**: Performance maintenance during quality enhancement
 - **[MUTATION_TESTING_METHODOLOGY.md](../reference/MUTATION_TESTING_METHODOLOGY.md)**: Detailed mutation testing approach
 - **[API_DOCUMENTATION_STANDARDS.md](../reference/API_DOCUMENTATION_STANDARDS.md)**: Documentation quality requirements
-- **[ADR-0002](adr/0002-api-documentation-infrastructure.md)**: Documentation infrastructure decision record
+- **[ADR-0002](../adr/0002-api-documentation-infrastructure.md)**: Documentation infrastructure decision record
 
 ### Integration with Development Workflow
-- **[CLAUDE.md](../CLAUDE.md)**: Essential commands and project overview with robustness testing integration
+- **[CLAUDE.md](../../CLAUDE.md)**: Essential commands and project overview with robustness testing integration
 - **[CONTRIBUTING_LSP.md](../how-to/CONTRIBUTING_LSP.md)**: Development guidelines with quality assurance requirements
 - **[UPGRADING.md](../how-to/UPGRADING.md)**: Upgrade guidance for current releases and robustness-adjacent adoption
 

@@ -137,7 +137,12 @@ fn complete_sigil_context(
     let (sigil, kind) = sigil_kind(context)?;
 
     if context.prefix.contains("::") {
-        packages::add_package_completions(completions, context, &provider.workspace_index);
+        packages::add_package_completions(
+            completions,
+            context,
+            &provider.symbol_table,
+            &provider.workspace_index,
+        );
         if !completions.is_empty() {
             return Some(CompletionFlow::Return(std::mem::take(completions)));
         }
@@ -173,8 +178,13 @@ fn complete_symbol_namespace_context(
         return true;
     }
 
-    if context.trigger_character == Some(':') && context.prefix.ends_with("::") {
-        packages::add_package_completions(completions, context, &provider.workspace_index);
+    if context.prefix.contains("::") {
+        packages::add_package_completions(
+            completions,
+            context,
+            &provider.symbol_table,
+            &provider.workspace_index,
+        );
         return true;
     }
 

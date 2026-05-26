@@ -28,6 +28,8 @@
 //! ```
 
 pub mod decl;
+/// Adapters that translate `surface` declarations and references into the
+/// `perl-semantic-facts` graph model (anchors, entities, occurrences, edges).
 pub mod facts;
 pub mod r#ref;
 

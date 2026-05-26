@@ -331,7 +331,7 @@ The ScopeAnalyzer API is considered production-stable as of v0.8.7. The hash key
 
 ## References
 
-- [AST Node Types](../crates/perl-parser/src/ast.rs)
-- [Pragma Tracker](../crates/perl-parser/src/pragma_tracker.rs)
+- [AST Node Types](../../crates/perl-ast/src/ast.rs)
+- [Pragma Tracker tests](../../crates/perl-parser-core/tests/pragma_tracker_tests.rs)
 - [LSP Integration](LSP_IMPLEMENTATION_GUIDE.md)
-- [Test Coverage](../crates/perl-parser/tests/scope_analyzer_tests.rs)
+- [Test Coverage](../../crates/perl-parser/tests/scope_analyzer_tests.rs)

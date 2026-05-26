@@ -1591,6 +1591,9 @@ dependencies = [
 [[package]]
 name = "perl-line-index"
 version = "0.15.0"
+dependencies = [
+ "proptest",
+]
 
 [[package]]
 name = "perl-lsp-perltidy"
@@ -1829,6 +1832,7 @@ version = "0.15.0"
 dependencies = [
  "criterion",
  "perl-ast",
+ "proptest",
 ]
 
 [[package]]
@@ -1931,6 +1935,7 @@ dependencies = [
  "criterion",
  "perl-lexer",
  "perl-parser-core",
+ "proptest",
  "serde",
  "serde_json",
 ]
@@ -1941,6 +1946,7 @@ version = "0.15.0"
 dependencies = [
  "percent-encoding",
  "perl-tdd-support",
+ "proptest",
  "tempfile",
  "url",
 ]

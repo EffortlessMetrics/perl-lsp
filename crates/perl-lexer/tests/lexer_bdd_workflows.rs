@@ -4,29 +4,7 @@
 //! outcomes using Given/When/Then structure.
 
 use perl_lexer::{PerlLexer, Token, TokenType};
-
-struct BddScenario {
-    name: &'static str,
-}
-
-impl BddScenario {
-    fn new(name: &'static str) -> Self {
-        eprintln!("Scenario: {name}");
-        Self { name }
-    }
-
-    fn given(&self, message: &str) {
-        eprintln!("[{}] Given {message}", self.name);
-    }
-
-    fn when(&self, message: &str) {
-        eprintln!("[{}] When {message}", self.name);
-    }
-
-    fn then(&self, message: &str) {
-        eprintln!("[{}] Then {message}", self.name);
-    }
-}
+use perl_tdd_support::BddScenario;
 
 fn collect_tokens(input: &str) -> Vec<Token> {
     PerlLexer::new(input).collect_tokens()

@@ -3,13 +3,19 @@
 //! This module is primarily used to enable `cargo test --lib` CI runs.
 //! The primary entry point is the binary in `main.rs`.
 
+#![warn(missing_docs)]
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
 pub mod version_sync;
 
+/// Cargo package name for this crate, used to locate its build artifacts and source tree.
 pub const PACKAGE_NAME: &str = "perl-ci-hygiene";
 
+/// Resolve the on-disk path of this crate's debug binary inside `root`'s `target/` directory.
+///
+/// Appends the platform executable extension on Windows.
 #[must_use]
 pub fn binary_path(root: &Path) -> PathBuf {
     let mut path = root.join("target").join("debug").join(PACKAGE_NAME);
@@ -19,6 +25,10 @@ pub fn binary_path(root: &Path) -> PathBuf {
     path
 }
 
+/// Collect the `Cargo.toml` plus every Rust source file shipped by this crate,
+/// sorted lexicographically.
+///
+/// `root` is the workspace root; the crate is located at `root/crates/perl-ci-hygiene`.
 #[must_use]
 pub fn source_paths(root: &Path) -> Vec<PathBuf> {
     let crate_root = root.join("crates").join(PACKAGE_NAME);

@@ -103,6 +103,13 @@ impl LspServer {
                     .and_then(|b| b.as_bool())
                     .unwrap_or(false);
 
+                caps.inline_completion_support =
+                    params.pointer("/capabilities/textDocument/inlineCompletion").is_some();
+                caps.inline_completion_dynamic_registration_support = params
+                    .pointer("/capabilities/textDocument/inlineCompletion/dynamicRegistration")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+
                 // JetBrains-family IDEs (IntelliJ IDEA, etc.) advertise dynamic watcher
                 // registration but their registration flow is unreliable and can degrade LSP
                 // startup behavior. Force-disable for these clients regardless of what the
@@ -441,7 +448,6 @@ impl LspServer {
         if features.declaration {
             capabilities["declarationProvider"] = json!(true);
         }
-
         // Override text document sync with more detailed options
         capabilities["textDocumentSync"] = json!({
             "openClose": true,
@@ -501,6 +507,7 @@ impl LspServer {
             }
         });
 
+        // Advertise experimental custom requests
         if features.inline_completion {
             merge_experimental_capability(
                 &mut capabilities,

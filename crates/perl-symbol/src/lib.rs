@@ -21,6 +21,8 @@
 //! assert_eq!(var.sigil(), Some("$"));
 //! ```
 
+#![warn(missing_docs)]
+
 pub mod cursor;
 pub mod index;
 pub mod surface;

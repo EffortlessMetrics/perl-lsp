@@ -556,6 +556,18 @@ $ = main::run() called from file `script.pl' line 5
     }
 
     #[test]
+    fn test_manual_id_assignment_for_context_and_eval_frames() {
+        use perl_tdd_support::must_some;
+        let mut parser = PerlStackParser::new().with_auto_ids(false);
+
+        let context = must_some(parser.parse_frame("main::(script.pl):42:", 77));
+        let eval = must_some(parser.parse_frame("(eval 10)[/path/to/file.pm:42]", 88));
+
+        assert_eq!(context.id, 77);
+        assert_eq!(eval.id, 88);
+    }
+
+    #[test]
     fn test_parse_unrecognized() {
         let mut parser = PerlStackParser::new();
 

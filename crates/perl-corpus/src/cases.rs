@@ -1364,12 +1364,22 @@ fn select_by_seed<T>(items: &[T], seed: u64) -> Option<&T> {
     items.get(idx)
 }
 
+fn normalize_tag(tag: &str) -> &str {
+    tag.trim()
+}
+
+fn has_tag(case: &EdgeCase, tag: &str) -> bool {
+    let normalized_tag = normalize_tag(tag);
+    !normalized_tag.is_empty()
+        && case.tags.iter().any(|candidate| candidate.eq_ignore_ascii_case(normalized_tag))
+}
+
 fn case_has_any_tag(case: &EdgeCase, tags: &[&str]) -> bool {
-    case.tags.iter().any(|tag| tags.contains(tag))
+    tags.iter().copied().any(|tag| has_tag(case, tag))
 }
 
 fn case_has_all_tags(case: &EdgeCase, tags: &[&str]) -> bool {
-    tags.iter().all(|tag| case.tags.iter().any(|candidate| candidate == tag))
+    tags.iter().copied().all(|tag| has_tag(case, tag))
 }
 
 /// Convenience helper for working with static edge cases.
@@ -1383,7 +1393,7 @@ impl EdgeCaseGenerator {
 
     /// Return edge cases with a matching tag.
     pub fn by_tag(tag: &str) -> Vec<&'static EdgeCase> {
-        edge_cases().iter().filter(|case| case.tags.contains(&tag)).collect()
+        edge_cases().iter().filter(|case| has_tag(case, tag)).collect()
     }
 
     /// Return edge cases that match any of the provided tags.
@@ -1508,6 +1518,19 @@ mod tests {
         assert!(
             EdgeCaseGenerator::by_tags_all(&["tag-does-not-exist", "still-missing"]).is_empty()
         );
+    }
+
+    #[test]
+    fn edge_cases_filter_is_case_insensitive_and_trims_whitespace() {
+        let regex_lower = EdgeCaseGenerator::by_tag("regex");
+        let regex_upper = EdgeCaseGenerator::by_tag(" REGEX ");
+        assert_eq!(regex_lower.len(), regex_upper.len());
+
+        let any_matches = EdgeCaseGenerator::by_tags_any(&["  HeReDoC  ", "missing"]);
+        assert!(any_matches.iter().any(|case| case.id.starts_with("heredoc.")));
+
+        let all_matches = EdgeCaseGenerator::by_tags_all(&[" ReGeX ", " edge-case "]);
+        assert!(all_matches.iter().any(|case| case.id == "regex.code"));
     }
 
     #[test]

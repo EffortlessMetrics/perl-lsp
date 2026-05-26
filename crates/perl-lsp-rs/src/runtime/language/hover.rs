@@ -494,6 +494,21 @@ impl LspServer {
             // Defer resolution to Phase 2 via `build_module_hover` so no workspace lock
             // is held here.
             if let Some(pkg_name) = Self::get_package_name_at_position(text, offset) {
+                // Namespaced builtins (e.g. utf8::encode, utf8::decode) must take
+                // priority over module resolution: there is no utf8/encode.pm to
+                // find, and the correct response is the builtin hover card.
+                if let Some(builtin_doc) = crate::semantic::get_builtin_documentation(&pkg_name) {
+                    return HoverExtracted::Complete(json!({
+                        "contents": {
+                            "kind": "markdown",
+                            "value": format!(
+                                "**Built-in Function**\n\n```\n{}\n```\n\n{}",
+                                builtin_doc.signature,
+                                builtin_doc.description
+                            ),
+                        },
+                    }));
+                }
                 return HoverExtracted::PossiblePackage(
                     pkg_name,
                     text.to_string(),

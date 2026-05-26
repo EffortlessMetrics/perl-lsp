@@ -2,7 +2,7 @@
 
 This checklist is the release gate for the current cut.
 The mechanics live in [RELEASE.md](../../RELEASE.md), the release-day sequence lives in
-[PUBLISHING_ROADMAP.md](../PUBLISHING_ROADMAP.md), and changelog generation lives in
+[PUBLISHING_ROADMAP.md](PUBLISHING_ROADMAP.md), and changelog generation lives in
 [CHANGELOG_WORKFLOW.md](../CHANGELOG_WORKFLOW.md).
 
 Use `NEW_VERSION` as the target semver string for the release you are preparing.

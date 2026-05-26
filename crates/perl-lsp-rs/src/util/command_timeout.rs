@@ -94,6 +94,10 @@ mod tests {
         }
     }
 
+    fn nonexistent_command() -> Command {
+        Command::new("__perl_lsp_nonexistent_command__")
+    }
+
     #[test]
     fn unit_timeout_fires_for_slow_command() {
         let start = Instant::now();
@@ -130,6 +134,16 @@ mod tests {
         if let Ok(output) = result {
             assert_eq!(output.status.code(), Some(7));
             assert!(!output.status.success());
+        }
+    }
+
+    #[test]
+    fn unit_spawn_failure_surfaces_start_error() {
+        let result = run_command_with_timeout(nonexistent_command(), 10);
+
+        assert!(result.is_err(), "expected spawn error for nonexistent command");
+        if let Err(message) = result {
+            assert!(message.contains("command failed to start"));
         }
     }
 }

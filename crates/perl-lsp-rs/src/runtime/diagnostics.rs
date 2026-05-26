@@ -718,7 +718,16 @@ impl LspServer {
                         (text.len(), "Unexpected end of input".to_string())
                     }
                     crate::error::ParseError::LexerError { message } => (0, message.clone()),
-                    _ => (0, e.to_string()),
+                    crate::error::ParseError::RecursionLimit => (0, e.to_string()),
+                    crate::error::ParseError::InvalidNumber { .. } => (0, e.to_string()),
+                    crate::error::ParseError::InvalidString => (0, e.to_string()),
+                    crate::error::ParseError::UnclosedDelimiter { .. } => (0, e.to_string()),
+                    crate::error::ParseError::InvalidRegex { .. } => (0, e.to_string()),
+                    crate::error::ParseError::NestingTooDeep { .. } => (0, e.to_string()),
+                    crate::error::ParseError::Cancelled => (0, e.to_string()),
+                    crate::error::ParseError::Recovered { location, .. } => {
+                        (*location, e.to_string())
+                    }
                 };
                 let message =
                     match perl_lsp_rs_core::providers::diagnostics::build_parse_error_hint(

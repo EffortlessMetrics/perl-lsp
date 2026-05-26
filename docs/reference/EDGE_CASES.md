@@ -226,4 +226,4 @@ Codes relevant to the edge cases above:
 | `PL111` | Warning | Misspelled pragma | No — only fires when a `use` statement exists |
 
 For the full code registry see
-[`crates/perl-diagnostics-codes/src/lib.rs`](../../crates/perl-diagnostics-codes/src/lib.rs).
+[`crates/perl-diagnostics/src/lib.rs`](../../crates/perl-diagnostics/src/lib.rs).

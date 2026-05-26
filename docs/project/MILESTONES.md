@@ -116,6 +116,5 @@ When a milestone is released:
 
 - [ROADMAP.md](ROADMAP.md) - High-level release planning
 - [CURRENT_STATUS.md](CURRENT_STATUS.md) - Computed metrics
-- [issues/corpus/gaps/](issues/corpus/gaps/) - Corpus coverage gaps
 
 <!-- Last Updated: 2026-01-27 -->

@@ -1,12 +1,25 @@
 #!/bin/bash
-# Script to close PRs that duplicate already-implemented functionality
-# Based on comprehensive evaluation completed January 2025
+# Legacy script to close a fixed list of PRs that duplicated old functionality.
+#
+# SAFETY NOTE:
+#   This script is intentionally fails-closed. It now only closes PRs that are
+#   explicitly tagged for this cleanup lane so it cannot cross-close unrelated
+#   swarm lanes by accident.
 
-set -e
+set -euo pipefail
+
+readonly REQUIRED_LABEL="${REQUIRED_LABEL:-swarm-cleanup-duplicate-pr}"
+readonly ALLOW_CLOSE="${ALLOW_CLOSE_DUPLICATE_PRS:-0}"
 
 echo "🔍 Closing duplicate/completed PRs based on evaluation..."
 echo "See PR_EVALUATION_SUMMARY.md for detailed analysis"
 echo
+
+if [[ "$ALLOW_CLOSE" != "1" ]]; then
+    echo "Refusing to mutate PR state without explicit opt-in."
+    echo "Set ALLOW_CLOSE_DUPLICATE_PRS=1 to proceed."
+    exit 1
+fi
 
 # PRs that duplicate already-implemented functionality
 DUPLICATE_PRS=(
@@ -27,19 +40,16 @@ for pr_info in "${DUPLICATE_PRS[@]}"; do
 done
 echo
 
-read -p "Continue with closing these PRs? (y/N) " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Aborted."
-    exit 0
-fi
-
 # Close each PR with appropriate comment
 for pr_info in "${DUPLICATE_PRS[@]}"; do
     pr_num=$(echo "$pr_info" | cut -d: -f1)
     description=$(echo "$pr_info" | cut -d: -f2-)
     
     echo "Closing PR #$pr_num..."
+    if ! gh pr view "$pr_num" --json labels --jq ".labels[].name" | rg -qx "$REQUIRED_LABEL"; then
+        echo "⚠️  Skipping PR #$pr_num because label '$REQUIRED_LABEL' is missing."
+        continue
+    fi
     
     gh pr close "$pr_num" --comment "Closing this PR as the functionality has already been implemented.
 

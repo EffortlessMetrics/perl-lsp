@@ -259,6 +259,62 @@ fn moo_accessor_return_records_medium_confidence_object_shape() -> Result<(), St
 }
 
 #[test]
+fn self_constructor_framework_accessor_records_medium_confidence_object_shape() -> Result<(), String>
+{
+    let code = "package MyApp::Service; use Moo; has db => (is => 'ro', isa => 'MyApp::DB'); my $self = MyApp::Service->new; $self->db->connect;";
+    let ast = parse_ast(code)?;
+    let mut engine = TypeInferenceEngine::new();
+
+    engine.infer(&ast).map_err(|err| format!("inference failed: {err:?}"))?;
+
+    let self_fact = engine.get_fact_at("self").ok_or_else(|| "missing self fact".to_string())?;
+    assert_eq!(self_fact.ty, PerlType::Object("MyApp::Service".to_string()));
+    assert_eq!(self_fact.confidence, Confidence::High);
+    assert!(self_fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::ConstructorCall { package } if package == "MyApp::Service")
+    }));
+    assert!(self_fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::VariableInitializer { name } if name == "self")
+    }));
+
+    let receiver = method_receiver(&ast, "connect")?;
+    let fact = engine.infer_expr_fact(receiver);
+
+    assert_eq!(fact.ty, PerlType::Any);
+    assert_eq!(fact.confidence, Confidence::Medium);
+    assert_eq!(object_shape_package(&fact)?, "MyApp::DB");
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::MooseIsa { attr, isa } if attr == "db" && isa == "MyApp::DB")
+    }));
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::AccessorReturn { method, field } if method == "db" && field == "db")
+    }));
+    Ok(())
+}
+
+#[test]
+fn self_framework_accessor_requires_matching_constructor_package() -> Result<(), String> {
+    let code = "package MyApp::Service; use Moo; has db => (is => 'ro', isa => 'MyApp::DB'); my $self = MyApp::Other->new; $self->db->connect;";
+    let ast = parse_ast(code)?;
+    let mut engine = TypeInferenceEngine::new();
+
+    engine.infer(&ast).map_err(|err| format!("inference failed: {err:?}"))?;
+
+    let self_fact = engine.get_fact_at("self").ok_or_else(|| "missing self fact".to_string())?;
+    assert_eq!(self_fact.ty, PerlType::Object("MyApp::Other".to_string()));
+    assert_eq!(self_fact.confidence, Confidence::High);
+
+    let receiver = method_receiver(&ast, "connect")?;
+    let fact = engine.infer_expr_fact(receiver);
+
+    assert_eq!(fact.ty, PerlType::Any);
+    assert_eq!(fact.confidence, Confidence::Low);
+    assert!(fact.shape.is_none());
+    assert!(fact.evidence.is_empty());
+    Ok(())
+}
+
+#[test]
 fn dynamic_moo_accessor_isa_stays_non_exact() -> Result<(), String> {
     let code = "package MyApp::Service; use Moo; my $type = 'MyApp::DB'; has db => (is => 'ro', isa => $type); my $service = MyApp::Service->new; $service->db->connect;";
     let ast = parse_ast(code)?;
@@ -382,6 +438,131 @@ fn method_return_lexical_assignment_records_assignment_evidence() -> Result<(), 
             matches!(evidence, TypeEvidence::Assignment { name } if name == "db")
         })
     );
+    Ok(())
+}
+
+#[test]
+fn method_return_constructor_accessor_chain_records_object_shape() -> Result<(), String> {
+    let code = "package MyApp::Container; use Moo; has db => (is => 'ro', isa => 'MyApp::DB'); package MyApp::Service; sub db { return MyApp::Container->new->db; } my $service = MyApp::Service->new; $service->db->connect;";
+    let ast = parse_ast(code)?;
+    let mut engine = TypeInferenceEngine::new();
+
+    engine.infer(&ast).map_err(|err| format!("inference failed: {err:?}"))?;
+
+    let receiver = method_receiver(&ast, "connect")?;
+    let fact = engine.infer_expr_fact(receiver);
+
+    assert_eq!(fact.ty, PerlType::Any);
+    assert_eq!(fact.confidence, Confidence::Medium);
+    assert_eq!(object_shape_package(&fact)?, "MyApp::DB");
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::MethodReturn { method, package } if method == "db" && package == "MyApp::DB")
+    }));
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::ConstructorCall { package } if package == "MyApp::Container")
+    }));
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::MooseIsa { attr, isa } if attr == "db" && isa == "MyApp::DB")
+    }));
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::AccessorReturn { method, field } if method == "db" && field == "db")
+    }));
+    Ok(())
+}
+
+#[test]
+fn method_return_local_accessor_chain_variable_records_object_shape() -> Result<(), String> {
+    let code = "package MyApp::Container; use Moo; has db => (is => 'ro', isa => 'MyApp::DB'); package MyApp::Service; sub db { my $db = MyApp::Container->new->db; return $db; } my $service = MyApp::Service->new; $service->db->connect;";
+    let ast = parse_ast(code)?;
+    let mut engine = TypeInferenceEngine::new();
+
+    engine.infer(&ast).map_err(|err| format!("inference failed: {err:?}"))?;
+
+    let receiver = method_receiver(&ast, "connect")?;
+    let fact = engine.infer_expr_fact(receiver);
+
+    assert_eq!(fact.ty, PerlType::Any);
+    assert_eq!(fact.confidence, Confidence::Medium);
+    assert_eq!(object_shape_package(&fact)?, "MyApp::DB");
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::MethodReturn { method, package } if method == "db" && package == "MyApp::DB")
+    }));
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::ConstructorCall { package } if package == "MyApp::Container")
+    }));
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::VariableInitializer { name } if name == "db")
+    }));
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::AccessorReturn { method, field } if method == "db" && field == "db")
+    }));
+    Ok(())
+}
+
+#[test]
+fn method_return_assigned_accessor_chain_variable_records_assignment() -> Result<(), String> {
+    let code = "package MyApp::Container; use Moo; has db => (is => 'ro', isa => 'MyApp::DB'); package MyApp::Service; sub db { my $db; $db = MyApp::Container->new->db; return $db; } my $service = MyApp::Service->new; $service->db->connect;";
+    let ast = parse_ast(code)?;
+    let mut engine = TypeInferenceEngine::new();
+
+    engine.infer(&ast).map_err(|err| format!("inference failed: {err:?}"))?;
+
+    let receiver = method_receiver(&ast, "connect")?;
+    let fact = engine.infer_expr_fact(receiver);
+
+    assert_eq!(fact.ty, PerlType::Any);
+    assert_eq!(fact.confidence, Confidence::Medium);
+    assert_eq!(object_shape_package(&fact)?, "MyApp::DB");
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::MethodReturn { method, package } if method == "db" && package == "MyApp::DB")
+    }));
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::ConstructorCall { package } if package == "MyApp::Container")
+    }));
+    assert!(
+        fact.evidence.iter().any(|evidence| {
+            matches!(evidence, TypeEvidence::Assignment { name } if name == "db")
+        })
+    );
+    assert!(fact.evidence.iter().any(|evidence| {
+        matches!(evidence, TypeEvidence::AccessorReturn { method, field } if method == "db" && field == "db")
+    }));
+    Ok(())
+}
+
+#[test]
+fn dynamic_local_accessor_chain_variable_stays_non_exact() -> Result<(), String> {
+    let code = "package MyApp::Container; use Moo; has db => (is => 'ro', isa => 'MyApp::DB'); package MyApp::Service; sub db { my $db = $container->db; return $db; } my $service = MyApp::Service->new; $service->db->connect;";
+    let ast = parse_ast(code)?;
+    let mut engine = TypeInferenceEngine::new();
+
+    engine.infer(&ast).map_err(|err| format!("inference failed: {err:?}"))?;
+
+    let receiver = method_receiver(&ast, "connect")?;
+    let fact = engine.infer_expr_fact(receiver);
+
+    assert_eq!(fact.ty, PerlType::Any);
+    assert_eq!(fact.confidence, Confidence::Low);
+    assert!(fact.shape.is_none());
+    assert!(fact.evidence.is_empty());
+    Ok(())
+}
+
+#[test]
+fn dynamic_method_return_accessor_chain_stays_non_exact() -> Result<(), String> {
+    let code = "package MyApp::Container; use Moo; has db => (is => 'ro', isa => 'MyApp::DB'); package MyApp::Service; sub db { return $container->db; } my $service = MyApp::Service->new; $service->db->connect;";
+    let ast = parse_ast(code)?;
+    let mut engine = TypeInferenceEngine::new();
+
+    engine.infer(&ast).map_err(|err| format!("inference failed: {err:?}"))?;
+
+    let receiver = method_receiver(&ast, "connect")?;
+    let fact = engine.infer_expr_fact(receiver);
+
+    assert_eq!(fact.ty, PerlType::Any);
+    assert_eq!(fact.confidence, Confidence::Low);
+    assert!(fact.shape.is_none());
+    assert!(fact.evidence.is_empty());
     Ok(())
 }
 

@@ -688,6 +688,11 @@ Recent routing
   plus-hash, and nested-value hash forms and recorded a completion shadow trace
   for constants as fresh `CompilerFact` / `SemanticAnalyzer` evidence without
   changing live completion behavior.
+- `provider-proof-assignment-gate-after-constant-provider-proof` is active in
+  the reliability lane. The current parser pointer has no active failure packets
+  or measurement gaps, and the swarm/source PR queues are empty, so the next
+  provider/substrate lane remains assignment-gated until a current ready class,
+  active PR, or explicit assignment names a scoped proof.
 - `semantic-token-support-review` is completed. The class registry, human
   provider-promotion ledger, and machine ledger now agree on the scoped
   lexical-variable declaration/use rows, while semantic tokens remain
@@ -753,10 +758,259 @@ Current executable slice
   presence of a repo-local `target/` directory that storage-doctor measures as
   empty. That is a local storage receipt only, not a `cargo-safe`, build-system,
   provider, parser, support-tier, or release-lineage change.
-- `policy-cleanup-routing-review` is active in the reliability lane. It is a
-  docs/manifest-only routing item for the next policy cleanup pass; it must not
-  broaden policy enforcement, provider behavior, support tiers, parser/corpus
-  buckets, release-lineage sync, or source-repo development routing.
+- `policy-cleanup-routing-review` is completed in the reliability lane. It was
+  a control-plane routing pass after the ancestry sync and queue burn-down: the
+  swarm queue is empty, source-lineage ancestry is attached, the manifest and
+  gate-policy checks pass, support/provider claim checks pass, and
+  `storage-doctor` is green after removing stale repo-local build output. It did
+  not broaden policy enforcement, provider behavior, support tiers,
+  parser/corpus buckets, release-lineage sync, or source-repo development
+  routing.
+- `published-api-hygiene` is completed in the reliability lane. The slice kept
+  public API checks storage-safe by routing the `just public-api-*` recipes
+  through `scripts/cargo-safe` and refreshed the committed public API baselines
+  to the current code surface. It did not change Rust API surface, broaden
+  provider behavior, promote support tiers, move parser/corpus buckets, sync
+  release lineage, or continue source-repo development.
+- `provider-promotion-ledger-parity-review` is completed in the trust lane. The
+  parity check now records 17 machine policy rows, 17 human ledger rows, and 18
+  blocker registry entries. This was a control-plane parity review after the
+  queue burn-down and public API hygiene closeout; it did not add or promote
+  fact classes, broaden provider behavior, promote support tiers, move
+  parser/corpus buckets, sync release lineage, or continue source-repo
+  development.
+- `semantic-token-class-receipts-as-needed` is completed as a routing marker.
+  The next semantic-token PR may start only when a new scoped compiler-token
+  class is ready to prove the same promotion, fallback, blocker, didChange
+  freshness, and output-neutral span-invariant rules. Until then, semantic-token
+  work remains assignment-gated and is not a broad compiler-backed token
+  cutover.
+- `semantic-token-class-declaration-readiness-review` is completed in the trust
+  lane. `class_declaration` remains deferred because the runtime receipt does
+  not prove exact live-output parity against an existing live `class` token; the
+  reviewed class therefore receives no semantic-token class policy row, provider
+  promotion row, support-tier movement, or provider behavior change.
+- `receiver-real-workspace-quality-receipt` is completed in the trust lane. It
+  added a receipt-only multi-file completion fixture that records constructor
+  assignment, hashref slot, dynamic-key, and unknown-receiver behavior.
+  Constructor assignment currently acts with source-backed detail; hashref-slot,
+  dynamic-key, and unknown-receiver probes remain fallback or blocked. The
+  receipt did not broaden completion behavior, promote support tiers, or treat
+  generated, dynamic, stale, low-confidence, or unproven receiver facts as
+  exact.
+- `receiver-method-accessor-fallback-receipt` is completed in the trust lane. It
+  added a receipt-only completion fixture for project-shaped accessor-return and
+  method-return receiver chains. These medium-confidence receiver forms preserve
+  low-confidence fallback and do not become exact source-backed completion
+  evidence without a later promotion receipt.
+- `receiver-bless-confidence-receipt` is completed in the trust lane. It added a
+  receipt-only completion fixture for literal and dynamic `bless` receiver
+  chains. Literal `bless` evidence stays labeled as medium confidence, and
+  dynamic `bless` receivers do not become exact source-backed receiver evidence.
+- `receiver-array-index-fallback-receipt` is completed in the trust lane. It
+  added a receipt-only completion fixture for static and dynamic array-index receiver
+  chains. Array-index receiver facts must preserve low-confidence fallback and
+  must not become exact source-backed completion evidence without a later
+  promotion receipt.
+- `receiver-self-framework-accessor-fact-fixture` is completed in the trust lane.
+  It adds a facts-only semantic analyzer fixture proving source-derived
+  `$self = MyApp::Service->new` evidence plus framework accessor-return facts.
+  It also locks fallback when the source-derived `$self` package does not match
+  the framework declaration. This keeps the receiver fact substrate current
+  without changing completion provider output, support tiers, parser/corpus
+  status, or release lineage.
+- `receiver-method-return-accessor-chain-fact-fixture` is completed in the trust
+  lane. It extends method-return expression facts for a static constructor
+  followed by a source-backed framework accessor, while preserving dynamic
+  accessor-chain fallback. This is semantic substrate only and does not change
+  completion provider output, support tiers, parser/corpus status, or release
+  lineage.
+- `receiver-local-accessor-chain-fact-fixture` is completed in the trust lane. It
+  extends method-return expression facts for lexical locals initialized or
+  assigned from a static constructor followed by a source-backed framework
+  accessor, while preserving dynamic local accessor-chain fallback. This is
+  semantic substrate only and does not change completion provider output,
+  support tiers, parser/corpus status, or release lineage.
+- `receiver-local-accessor-chain-fallback-receipt` is completed in the trust lane.
+  It extends the receipt-only completion fallback fixture so lexical-local
+  accessor-chain method-return receiver shapes preserve low-confidence fallback
+  and do not become exact source-backed completion evidence without a later
+  promotion receipt.
+- `receiver-dynamic-local-accessor-chain-fallback-receipt` is completed in the
+  trust lane. It extends the same receipt-only completion fallback fixture so a
+  lexical local initialized from a dynamic accessor receiver preserves
+  low-confidence fallback and does not become exact source-backed completion
+  evidence.
+- `receiver-conditional-local-reassignment-fallback-receipt` is completed in the
+  trust lane. It extends the same receipt-only completion fallback fixture so a
+  method-return receiver with conditional local reassignment preserves
+  low-confidence fallback and does not become exact source-backed completion
+  evidence.
+- `receiver-source-backed-hash-slot-ux-receipt` is completed in the trust lane. It
+  extends the real-workspace receiver-quality receipt so the already-promoted
+  plain hash-slot receiver pilot is visible in the editor UX harness as exact
+  source-backed evidence, while hashref-slot, dynamic-key, and unknown receiver
+  shapes remain fallback or blocked.
+- `receiver-static-package-ux-receipt` is completed in the trust lane. It extends
+  the same real-workspace receiver-quality receipt so static package receivers
+  such as `RealReceiver::DB->` are visible as exact high-confidence syntax
+  evidence while the source-backed fact count remains limited to constructor
+  assignment and plain hash-slot probes.
+- `receiver-self-this-ux-receipt` is completed in the trust lane. It adds a
+  receipt-only RealReceiver UX fixture for `$self->` and `$this->`
+  current-package receiver completion, including own-method, inherited-method,
+  and nearest shadowing boundaries. It does not change completion provider
+  logic, support tiers, parser/corpus buckets, generated/dynamic behavior,
+  release-lineage sync, or source-repo development routing.
+- `source-lineage-drift-review` is completed in the reliability lane. The #95
+  ancestry repair is merged, #9554 was ported through swarm #112, and the
+  active-goal manifest validator exists. The post-#95 Neovim latency commits
+  from `source/master` were reviewed through the swarm-native train and
+  `source/master` ancestry is now recorded through `27e837c` by
+  [perl-lsp-swarm#340](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/340)
+  without file changes.
+- `neovim-latency-swarm-restack-review` is completed in the reliability lane.
+  The swarm-native review/restack path for #279, #280, #286, #287, and #288 is
+  landed, CI-green, and recorded without source-over-swarm content sync,
+  provider trust promotion, support-tier promotion, parser/corpus bucket
+  movement, release/publish/signing change, or release-lineage claim.
+- `source-pr-9572-manual-review` is completed in the reliability lane. The
+  release-lineage draft was ported and tightened as
+  [perl-lsp-swarm#339](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/339),
+  then the source PR was closed as superseded so new development remains in
+  swarm.
+- `parser-provider-queue-routing-review` is completed in the reliability lane.
+  The queue/pointer pass confirmed the swarm queue is empty, source is not
+  ahead of swarm, `parser_accuracy_next.md` has no active failure packet or
+  measurement gap, and the provider dashboard's next ready row is the
+  type-definition provider-decision receipt.
+- `provider-proof-assignment-gate` is completed in the reliability lane. It kept
+  future work assignment-gated instead of speculative until a current ready
+  provider class, active PR, or explicit assignment existed; the
+  type-definition provider-decision receipt is the scoped proof selected from
+  that gate.
+- `type-definition-provider-decision-receipt` is completed in the trust lane.
+  Type definition is now a provider-decision surface for
+  `perl.explainProviderDecision`, with live request traces for the existing
+  source-backed direct package/class safe subset and for no-result fallback on
+  unproven variable/data-flow receivers. This is receipt/explanation work only:
+  it does not broaden type-definition behavior, promote support tiers, move
+  parser/corpus buckets, sync release lineage, or continue source-repo
+  development.
+- `post-type-definition-receipt-routing-review` is completed in the reliability
+  lane. The queue/pointer pass confirmed `perl-lsp-swarm` has only draft
+  retrospective PR #346 open, `perl-lsp` has no open PRs, `source/master` is
+  not ahead of swarm, `parser_accuracy_next.md` has no active failure packet or
+  measurement gap, and the provider dashboard has no unconditional ready lane:
+  semantic-token class work is gated until another class proves exact
+  live-output parity, `class_declaration` remains deferred, and DAP
+  `includePaths` cutover proof is only valid when native DAP module-path
+  behavior is explicitly being promoted.
+- `provider-proof-assignment-gate-after-type-definition` is completed in the
+  reliability lane. It kept future work assignment-gated until the
+  project-shaped type-definition receiver/data-flow blocker receipt was selected
+  from the provider dashboard.
+- `type-definition-project-receiver-data-flow-blocker-receipt` is completed in
+  the trust lane. It extends the type-definition provider-decision receipt with
+  a project-shaped open-package fixture where variable receivers,
+  function-call results, and chained method results remain low-confidence
+  fallback with `type_definition_not_proven` instead of resolving through
+  unproven data-flow inference.
+- `provider-proof-assignment-gate-after-type-definition-project-blockers` is
+  completed in the reliability lane. It kept future work assignment-gated until
+  the type-definition ambiguous-identity blocker receipt was selected from the
+  provider dashboard and live provider behavior.
+- `type-definition-ambiguous-identity-blocker-receipt` is completed in the
+  trust lane. It hardens type-definition so duplicate open-document package
+  declarations are low-confidence fallback with an `ambiguous_identity`
+  provider-decision blocker instead of exact type-definition locations. This
+  narrows the existing safe subset; it does not add data-flow inference,
+  generated/dynamic promotion, support-tier movement, parser/corpus bucket
+  movement, release-lineage sync, or source-repo development.
+- `provider-proof-assignment-gate-after-type-definition-ambiguous-identity` is
+  completed in the reliability lane. It kept future work assignment-gated until
+  the type-definition generated/dynamic/low-confidence blocker receipt was
+  selected from the provider dashboard and live provider behavior.
+- `type-definition-generated-dynamic-low-confidence-blocker-receipt` is
+  completed in the trust lane. It extends the type-definition provider-decision
+  receipt with project-shaped generated/no-source framework-method,
+  dynamic-method-name, and unknown-receiver probes that all return no exact
+  type-definition locations. The dynamic-method-name shape is now labeled with a
+  `dynamic_boundary` receipt and the generated/no-source and unknown receiver
+  shapes remain low-confidence fallback. This does not add data-flow inference,
+  generated/dynamic promotion, support-tier movement, parser/corpus bucket
+  movement, release-lineage sync, or source-repo development.
+- `provider-proof-assignment-gate-after-type-definition-boundary-blockers` is
+  completed in the reliability lane. It selected a dynamic type-constraint
+  blocker receipt from the type-definition provider dashboard.
+- `type-definition-dynamic-type-constraint-blocker-receipt` is completed in the
+  trust lane. It adds a receipt-only runtime trace for a project-shaped
+  `isa => $runtime_type_name` type constraint that returns no exact
+  type-definition locations and records a `dynamic_boundary` blocker. This does
+  not broaden type-definition behavior, add data-flow inference, promote
+  generated or dynamic facts, promote support tiers, move parser/corpus buckets,
+  sync release lineage, or continue source-repo development.
+- `provider-proof-assignment-gate-after-type-definition-dynamic-type-constraint`
+  is completed in the reliability lane. It selected a stale-fact blocker receipt
+  from the type-definition provider dashboard.
+- `type-definition-stale-fact-blocker-receipt` is completed in the trust lane.
+  It adds a receipt-only runtime trace for stale `textDocument/typeDefinition`
+  request versions. Stale requests return the existing content-modified error,
+  record no exact type-definition locations, and persist a `stale_fact` blocker
+  receipt for `perl.explainProviderDecision`. This does not broaden
+  type-definition behavior, add data-flow inference, promote generated or
+  dynamic facts, promote support tiers, move parser/corpus buckets, sync release
+  lineage, or continue source-repo development.
+- `provider-proof-assignment-gate-after-type-definition-stale-fact` is completed
+  in the reliability lane. It selected a dynamic bless package-argument blocker
+  receipt from the type-definition provider dashboard.
+- `type-definition-dynamic-bless-blocker-receipt` is completed in the trust
+  lane. It adds a receipt-only runtime trace for project-shaped
+  `bless {}, $runtime_type_name` package arguments. The request returns no exact
+  type-definition locations and records a `dynamic_boundary` blocker for
+  `perl.explainProviderDecision`. This does not broaden type-definition
+  behavior, add data-flow inference, promote generated or dynamic facts, promote
+  support tiers, move parser/corpus buckets, sync release lineage, or continue
+  source-repo development.
+- `provider-proof-assignment-gate-after-type-definition-dynamic-bless` is active
+  in the reliability lane. It selected a stale request-version receipt detail
+  follow-up from the dirty duplicate swarm PR queue.
+- `type-definition-stale-request-version-detail-receipt` is completed in the
+  trust lane. It sharpens the stale type-definition request receipt so stale
+  request versions record `decision=blocked`, stale freshness, request/current
+  document versions, `fallback_state=refresh_workspace_facts`, and
+  `trace_only_no_live_behavior_change=false` before returning content-modified.
+  This does not broaden type-definition behavior, add data-flow inference,
+  promote generated or dynamic facts, promote support tiers, move parser/corpus
+  buckets, sync release lineage, or continue source-repo development.
+- `provider-proof-assignment-gate-after-type-definition-stale-request-version-detail`
+  is completed in the reliability lane. It selected an unscannable target-source
+  blocker receipt from the type-definition provider dashboard.
+- `type-definition-unscannable-source-blocker-receipt` is completed in the trust
+  lane. It proves a package declaration present only in an unscannable open
+  document, such as binary-like text with an embedded NUL byte, does not
+  authorize exact type-definition locations. The provider-decision receipt
+  records `decision=blocked`, `reason=unsupported`,
+  `blocker=unsupported_fact_class`, and
+  `source_backed_state=unscannable_type_definition_source`. This does not
+  broaden type-definition behavior, add data-flow inference, promote generated
+  or dynamic facts, promote support tiers, move parser/corpus buckets, sync
+  release lineage, or continue source-repo development.
+- `provider-proof-assignment-gate-after-type-definition-unscannable-source` is
+  completed in the reliability lane. It kept future work assignment-gated after
+  the unscannable target-source blocker receipt until later receiver and
+  constant-provider proof work landed.
+- `receiver-generated-no-source-fallback-receipt` is completed in the trust lane.
+  RealReceiver scenario 46 now includes a generated/no-source framework-method
+  receiver probe that must stay fallback or blocked and must not expose exact
+  source-backed, static package, self/this, hash-slot, literal-bless, or
+  type-engine receiver details. This is a receipt-only boundary and does not
+  change completion behavior, promote generated/no-source framework-method
+  receivers, promote support tiers, move parser/corpus buckets, sync release
+  lineage, or continue source-repo development. The proof commands build
+  `perl-lsp` into an external agent target, set `PERL_LSP_BIN` to that binary,
+  and then run the focused scenario so the UX receipt cannot pass as an infra
+  skip.
 - The recent queue cleanup was tracked in
   [perl-lsp-swarm#88](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/88).
 
@@ -774,22 +1028,207 @@ Claim boundary
   docs until a separate implementation PR names a concrete storage or validation
   contract. It must not change `cargo-safe`, build defaults, provider behavior,
   parser/corpus buckets, support tiers, or release-lineage sync.
+- Published API hygiene may update the public API check recipes, routing docs,
+  and committed public API baseline artifacts to match the current code surface.
+  It must not claim semver compatibility, change Rust API surface, or promote
+  provider/support/parser status.
+- Provider promotion ledger parity review may update only active-goal routing,
+  this plan, and ledger parity notes produced by existing checks. It must not
+  change the ledger's promotion decision set, promote a fact class, or alter
+  provider/support/parser status.
+- Receiver real-workspace quality work may add a receipt-only UX test and status
+  links for current completion behavior. It must not change completion provider
+  logic, support tiers, parser/corpus buckets, generated/dynamic behavior,
+  release-lineage sync, or source-repo development routing.
+- Receiver method/accessor fallback work may add a receipt-only UX test and
+  status links for current medium-confidence receiver behavior. It must not
+  change completion provider logic, support tiers, parser/corpus buckets,
+  generated/dynamic behavior, release-lineage sync, or source-repo development
+  routing.
+- Receiver conditional local reassignment fallback work may add a receipt-only
+  UX test and status links for current method-return receiver fallback behavior.
+  It must not change completion provider logic, support tiers, parser/corpus
+  buckets, generated/dynamic behavior, release-lineage sync, or source-repo
+  development routing.
+- Receiver source-backed hash-slot UX receipt work may extend the existing
+  receiver real-workspace quality receipt and status links for the already
+  narrow source-backed plain hash-slot completion pilot. It must not change
+  completion provider logic, support tiers, hashref-slot behavior, broader
+  receiver promotion, parser/corpus buckets, generated/dynamic behavior,
+  release-lineage sync, or source-repo development routing.
+- Receiver static package UX receipt work may extend the existing receiver
+  real-workspace quality receipt and status links for current static package
+  receiver completion behavior. It must not change completion provider logic,
+  support tiers, broader receiver promotion, parser/corpus buckets,
+  generated/dynamic behavior, release-lineage sync, or source-repo development
+  routing.
+- Receiver generated/no-source fallback receipt work may extend the existing
+  receiver real-workspace quality receipt and status links for current
+  generated/no-source framework-method receiver fallback behavior. It must not
+  change completion provider logic, support tiers, generated/no-source
+  framework-method receiver promotion, broader receiver promotion,
+  parser/corpus buckets, release-lineage sync, or source-repo development
+  routing.
+- Receiver self/this UX receipt work may add a receipt-only RealReceiver
+  completion fixture and status links for current-package `$self->` and
+  `$this->` receiver behavior. It must not change completion provider logic,
+  support tiers, broader receiver promotion, parser/corpus buckets,
+  generated/dynamic behavior, release-lineage sync, or source-repo development
+  routing.
+- Parser/provider queue routing review may update only active-goal routing and
+  this plan while recording current queue and generated-status evidence. It must
+  not start parser bucket work from stale context, broaden provider behavior,
+  promote support tiers, move parser/corpus buckets, sync release lineage, or
+  continue source-repo development.
+- Provider proof assignment-gate work may update only active-goal routing and
+  this plan until a specific scoped provider class or DAP behavior promotion is
+  explicitly assigned. It must not create a semantic-token, DAP, parser,
+  support-tier, release-lineage, or source-repo development claim on its own.
+- Source-lineage drift review may update only active-goal routing and this plan
+  while recording current source/swarm queue evidence. It must not force-push,
+  reset, source-over-swarm sync, merge development work in `perl-lsp`, broaden
+  provider behavior, promote support tiers, move parser/corpus buckets, change
+  release/publish/signing, or claim release-lineage sync.
+- Neovim latency swarm restack review may inspect and restack the existing swarm
+  PR train #279, #280, #286, #287, and #288. It must not import the already
+  merged source commits by source-over-swarm sync, batch unrelated PRs, treat
+  latency receipts as provider trust promotion, change release/publish/signing,
+  or continue source-repo development.
+- Parser/provider queue routing review may update only active-goal routing and
+  this plan while recording current queue and generated-status evidence. It must
+  not start parser bucket work from stale context, broaden provider behavior,
+  promote support tiers, move parser/corpus buckets, sync release lineage, or
+  continue source-repo development.
+- Provider proof assignment-gate work may update only active-goal routing and
+  this plan until a specific scoped provider class or DAP behavior promotion is
+  explicitly assigned. It must not create a semantic-token, DAP, parser,
+  support-tier, release-lineage, or source-repo development claim on its own.
+- Receiver local accessor-chain fallback work may extend the receipt-only
+  method/accessor fallback UX test and status links for current lexical-local
+  accessor-chain method-return receiver behavior. It must not change completion
+  provider logic, support tiers, parser/corpus buckets, local accessor-chain
+  receiver promotion, medium-confidence promotion, generated/dynamic behavior,
+  release-lineage sync, or source-repo development routing.
+- Receiver dynamic local accessor-chain fallback work may extend the
+  receipt-only method/accessor fallback UX test and status links for current
+  dynamic accessor-chain method-return receiver behavior. It must not change
+  completion provider logic, support tiers, parser/corpus buckets, local
+  accessor-chain receiver promotion, dynamic local accessor-chain receiver
+  promotion, medium-confidence promotion, generated/dynamic behavior,
+  release-lineage sync, or source-repo development routing.
+- Receiver bless confidence work may add a receipt-only UX test and status links
+  for current literal/dynamic `bless` receiver behavior. It must not change
+  completion provider logic, support tiers, parser/corpus buckets,
+  dynamic-boundary behavior, medium-confidence promotion, release-lineage sync,
+  or source-repo development routing.
+- Receiver array-index fallback work may add a receipt-only UX test and status
+  links for current static/dynamic array-index receiver behavior. It must not
+  change completion provider logic, support tiers, parser/corpus buckets,
+  array-index receiver promotion, dynamic-boundary behavior, release-lineage
+  sync, or source-repo development routing.
+- Receiver self/framework accessor fact work may add facts-only semantic
+  analyzer fixtures and status links for current source-derived `$self`
+  constructor assignment plus framework accessor-return evidence and
+  mismatched-package fallback. It must not change completion provider logic,
+  support tiers, parser/corpus buckets, generated/dynamic behavior,
+  release-lineage sync, or source-repo development routing.
+- Receiver method-return accessor-chain fact work may add facts-only semantic
+  analyzer fixtures and status links for current static constructor-to-framework
+  accessor method-return evidence. It must not change completion provider
+  logic, support tiers, parser/corpus buckets, generated/dynamic behavior,
+  release-lineage sync, or source-repo development routing.
+- Receiver local accessor-chain fact work may add facts-only semantic analyzer
+  fixtures and status links for current lexical locals initialized or assigned
+  from static constructor-to-framework accessor chains. It must not change
+  completion provider logic, support tiers, parser/corpus buckets,
+  generated/dynamic behavior, release-lineage sync, or source-repo development
+  routing.
+- Type-definition provider-decision receipt work may add provider-decision enum,
+  schema, default-explanation, live-trace, and status entries for the existing
+  type-definition safe subset and fallback boundary. It must not change
+  type-definition resolution behavior, support tiers, parser/corpus buckets,
+  generated/dynamic behavior, release-lineage sync, or source-repo development
+  routing.
+- Provider proof assignment-gate after type-definition work may update only
+  active-goal routing and this plan until a specific scoped provider class,
+  parser gap, DAP module-path behavior change, or active PR is explicitly
+  assigned. It must not create a semantic-token, DAP, parser, support-tier,
+  release-lineage, or source-repo development claim on its own.
+- Type-definition project receiver/data-flow blocker receipt work may add a
+  receipt-only runtime trace test and status links for current fallback
+  behavior on project-shaped variable receivers, function-call results, and
+  chained method results. It must not change type-definition resolution
+  behavior, add data-flow inference, promote support tiers, move parser/corpus
+  buckets, broaden generated/dynamic behavior, sync release lineage, or
+  continue source-repo development routing.
+- Provider proof assignment-gate after type-definition project blockers may
+  update only active-goal routing and this plan until a specific scoped provider
+  class, parser gap, DAP module-path behavior change, or active PR is explicitly
+  assigned. It must not create a semantic-token, DAP, parser, support-tier,
+  release-lineage, or source-repo development claim on its own.
+- Type-definition ambiguous-identity blocker work may harden the live
+  type-definition request path and add a runtime receipt so duplicate
+  open-document package definitions return no exact locations with an
+  `ambiguous_identity` blocker. It must not add data-flow inference, generated
+  or dynamic receiver promotion, support-tier movement, parser/corpus bucket
+  movement, release-lineage sync, or source-repo development routing.
+- Provider proof assignment-gate after type-definition ambiguous identity may
+  update only active-goal routing and this plan until a specific scoped provider
+  class, parser gap, DAP module-path behavior change, or active PR is explicitly
+  assigned. It must not create a semantic-token, DAP, parser, support-tier,
+  release-lineage, or source-repo development claim on its own.
+- Type-definition generated/dynamic/low-confidence blocker work may add a
+  receipt-only runtime trace test and dynamic-boundary receipt label for current
+  fallback behavior on generated/no-source framework-method, dynamic-method-name,
+  and unknown-receiver request shapes. It must not change type-definition
+  resolution behavior, add data-flow inference, promote generated or dynamic
+  facts, promote support tiers, move parser/corpus buckets, sync release lineage,
+  or continue source-repo development routing.
+- Provider proof assignment-gate after type-definition boundary blockers may
+  update only active-goal routing and this plan until a specific scoped provider
+  class, parser gap, DAP module-path behavior change, or active PR is explicitly
+  assigned. It must not create a semantic-token, DAP, parser, support-tier,
+  release-lineage, or source-repo development claim on its own.
+- Type-definition dynamic type-constraint blocker work may add a receipt-only
+  runtime trace test and dynamic-boundary receipt label for current fallback
+  behavior on project-shaped `isa => $runtime_type_name` type constraints. It
+  must not change type-definition resolution behavior, add data-flow inference,
+  promote generated or dynamic facts, promote support tiers, move parser/corpus
+  buckets, sync release lineage, or continue source-repo development routing.
+- Provider proof assignment-gate after type-definition dynamic type-constraint
+  may update only active-goal routing and this plan until a specific scoped
+  provider class, parser gap, DAP module-path behavior change, or active PR is
+  explicitly assigned. It must not create a semantic-token, DAP, parser,
+  support-tier, release-lineage, or source-repo development claim on its own.
 
 Proof commands
 
 ```bash
 rtk gh pr list --repo EffortlessMetrics/perl-lsp-swarm --state open --limit 100 --json number,title,headRefName,mergeable,isDraft
+rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 95 --json number,state,mergedAt,mergeCommit,title,url
+rtk git fetch origin main
+rtk git fetch source master:refs/remotes/source/master
+rtk git rev-list --left-right --count origin/main...source/master
+rtk git log --oneline source/master --not origin/main
+rtk gh pr list -R EffortlessMetrics/perl-lsp --state open --limit 100 --json number,title,isDraft,headRefName,updatedAt,url
+rtk cargo test -p perl-lsp-rs-core --profile agent --locked provider_decision -- --nocapture
+rtk cargo test -p perl-lsp-rs --lib live_type_definition_request_exposes --profile agent --locked -- --nocapture
+rtk cargo test -p perl-lsp-rs --test lsp_execute_command_tests test_execute_command_explain_provider_decision_accepts_type_definition --profile agent --locked -- --nocapture
+rtk cargo test -p perl-lsp-rs --test lsp_type_definition_tests --profile agent --locked -- --nocapture
+rtk powershell -NoProfile -Command 'Get-Content schemas/provider_decision.v1.schema.json -Raw | ConvertFrom-Json | Out-Null'
+rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 279 --json number,title,state,headRefName,mergeStateStatus,url
+rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 280 --json number,title,state,headRefName,mergeStateStatus,url
+rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 286 --json number,title,state,headRefName,mergeStateStatus,url
+rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 287 --json number,title,state,headRefName,mergeStateStatus,url
+rtk gh pr view -R EffortlessMetrics/perl-lsp-swarm 288 --json number,title,state,headRefName,mergeStateStatus,url
 rtk cargo xtask check-active-goal-manifest
-rtk cargo xtask devex-doctor
-rtk cargo xtask gate-policy check
-rtk bash -lc './scripts/storage-doctor'
+rtk cargo xtask check-support-claims
+rtk cargo xtask check-provider-confidence-matrix
 rtk git diff --check
 ```
 
 Rollback
 
-Revert this routing PR. If the receipt schema needs more work, mark
-`oracle-receipt-schema-after-manifest` active again and select no feature lane
-until the schema validator passes. If the DevEx storage-safe lane is not ready,
-mark it planned and select another reliability item with no provider/runtime
-behavior impact.
+Revert the Neovim latency swarm restack routing PR. If a specific latency PR is
+unsafe or stale, close or replace that one swarm PR after preserving its branch
+history instead of importing source commits or syncing source over swarm.

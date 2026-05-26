@@ -977,42 +977,62 @@ impl RefactoringEngine {
         // Sort by modification time (oldest first)
         backup_dirs.sort_by_key(|d| d.modified);
 
-        let now = std::time::SystemTime::now();
-
-        // Apply age-based retention policy
-        if self.config.backup_max_age_seconds > 0 {
-            let max_age = std::time::Duration::from_secs(self.config.backup_max_age_seconds);
-
-            backup_dirs.retain(|dir| {
-                if let Ok(age) = now.duration_since(dir.modified) {
-                    if age > max_age {
-                        dirs_to_remove.push(dir.path.clone());
-                        return false;
-                    }
-                }
-                true
-            });
-        }
-
-        // Apply count-based retention policy
-        // max_backup_retention = 0 means "remove all", > 0 means "keep at most N"
-        if self.config.max_backup_retention == 0 {
-            // Remove all remaining backups
-            for dir in backup_dirs.iter() {
-                if !dirs_to_remove.contains(&dir.path) {
-                    dirs_to_remove.push(dir.path.clone());
-                }
-            }
-        } else if backup_dirs.len() > self.config.max_backup_retention {
-            let excess_count = backup_dirs.len() - self.config.max_backup_retention;
-            for dir in backup_dirs.iter().take(excess_count) {
-                if !dirs_to_remove.contains(&dir.path) {
-                    dirs_to_remove.push(dir.path.clone());
-                }
-            }
-        }
+        self.prune_backups_by_age(backup_dirs, &mut dirs_to_remove);
+        self.prune_backups_by_count(backup_dirs.as_slice(), &mut dirs_to_remove);
 
         Ok(dirs_to_remove)
+    }
+
+    fn prune_backups_by_age(
+        &self,
+        backup_dirs: &mut Vec<BackupDirMetadata>,
+        dirs_to_remove: &mut Vec<PathBuf>,
+    ) {
+        if self.config.backup_max_age_seconds == 0 {
+            return;
+        }
+
+        let now = std::time::SystemTime::now();
+        let max_age = std::time::Duration::from_secs(self.config.backup_max_age_seconds);
+
+        backup_dirs.retain(|dir| {
+            if let Ok(age) = now.duration_since(dir.modified) {
+                if age > max_age {
+                    Self::push_unique_path(dirs_to_remove, &dir.path);
+                    return false;
+                }
+            }
+            true
+        });
+    }
+
+    fn prune_backups_by_count(
+        &self,
+        backup_dirs: &[BackupDirMetadata],
+        dirs_to_remove: &mut Vec<PathBuf>,
+    ) {
+        // max_backup_retention = 0 means "remove all", > 0 means "keep at most N"
+        if self.config.max_backup_retention == 0 {
+            for dir in backup_dirs {
+                Self::push_unique_path(dirs_to_remove, &dir.path);
+            }
+            return;
+        }
+
+        if backup_dirs.len() <= self.config.max_backup_retention {
+            return;
+        }
+
+        let excess_count = backup_dirs.len() - self.config.max_backup_retention;
+        for dir in backup_dirs.iter().take(excess_count) {
+            Self::push_unique_path(dirs_to_remove, &dir.path);
+        }
+    }
+
+    fn push_unique_path(paths: &mut Vec<PathBuf>, path: &Path) {
+        if !paths.iter().any(|existing| existing == path) {
+            paths.push(path.to_path_buf());
+        }
     }
 
     fn remove_backup_directories(&self, dirs_to_remove: &[PathBuf]) -> ParseResult<(usize, u64)> {

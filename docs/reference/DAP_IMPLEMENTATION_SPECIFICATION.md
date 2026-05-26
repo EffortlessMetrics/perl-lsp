@@ -1808,7 +1808,7 @@ jobs:
 
 - [DAP Protocol Schema](DAP_PROTOCOL_SCHEMA.md): JSON-RPC message schemas
 - [DAP Crate Architecture](CRATE_ARCHITECTURE_DAP.md): Component design
-- [DAP Security Specification](DAP_SECURITY_SPECIFICATION.md): Security requirements
+- [DAP Security Specification](../DAP_SECURITY_SPECIFICATION.md): Security requirements
 
 ### 11.2 Existing Perl LSP Documentation
 

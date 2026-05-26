@@ -10,11 +10,8 @@ pub fn extract_regex_parts(text: &str) -> (String, String, String) {
     // Handle different prefixes
     let content = if let Some(stripped) = text.strip_prefix("qr") {
         stripped
-    } else if text.starts_with('m')
-        && text.len() > 1
-        && text.chars().nth(1).is_some_and(|c| !c.is_alphabetic())
-    {
-        &text[1..]
+    } else if let Some(stripped) = strip_match_prefix(text) {
+        stripped
     } else {
         text
     };
@@ -33,6 +30,12 @@ pub fn extract_regex_parts(text: &str) -> (String, String, String) {
     let pattern = format!("{}{}{}", delimiter, body, closing);
 
     (pattern, body, modifiers.to_string())
+}
+
+fn strip_match_prefix(text: &str) -> Option<&str> {
+    let stripped = text.strip_prefix('m')?;
+    let delimiter = stripped.chars().next()?;
+    (!delimiter.is_alphabetic()).then_some(stripped)
 }
 
 /// Error type for substitution operator parsing failures

@@ -2,32 +2,8 @@ use serde_json::{Value, json};
 
 use super::lsp_harness::LspHarness;
 
-// BDD diagnostic helpers are test-support fixtures retained for scenario-style
-// regression tests even when individual helpers are not used by the current set.
-#[allow(dead_code)]
-pub struct BddScenario {
-    name: &'static str,
-}
-
-#[allow(dead_code)]
-impl BddScenario {
-    pub fn new(name: &'static str) -> Self {
-        eprintln!("Scenario: {}", name);
-        Self { name }
-    }
-
-    pub fn given(&self, msg: &str) {
-        eprintln!("[{}] Given {}", self.name, msg);
-    }
-
-    pub fn when(&self, msg: &str) {
-        eprintln!("[{}] When {}", self.name, msg);
-    }
-
-    pub fn then(&self, msg: &str) {
-        eprintln!("[{}] Then {}", self.name, msg);
-    }
-}
+#[allow(unused_imports)]
+pub use perl_tdd_support::BddScenario;
 
 // Scenario-style diagnostic flow helpers are intentionally reusable across
 // future LSP diagnostic tests.

@@ -33,10 +33,15 @@ impl VersionSite {
 /// Summary returned from [`bump`].
 #[derive(Debug, Default)]
 pub struct BumpReport {
+    /// Number of discovered version sites considered during the bump.
     pub sites_total: usize,
+    /// Sites whose version string was rewritten to the new value.
     pub sites_updated: usize,
+    /// Sites that already matched the target version and required no change.
     pub sites_unchanged: usize,
+    /// Distinct files that received at least one update.
     pub files_updated: usize,
+    /// Repo-relative paths of every file that was modified, in walk order.
     pub touched_files: Vec<PathBuf>,
 }
 

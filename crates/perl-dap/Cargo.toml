@@ -360,6 +360,11 @@ name = "wave_h_external_red_tests"
 path = "tests/wave_h_external_red_tests.rs"
 # RED tests: verify external consumers can still function after collapse
 
+[[test]]
+name = "prop_dap_protocol_roundtrip"
+path = "tests/prop_dap_protocol_roundtrip.rs"
+# Property tests: DAP protocol message JSON round-trip invariants
+
 [[bench]]
 name = "dap_benchmarks"
 path = "benches/dap_benchmarks.rs"

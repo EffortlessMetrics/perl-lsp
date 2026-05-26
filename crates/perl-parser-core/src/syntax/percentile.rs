@@ -73,4 +73,26 @@ mod tests {
         assert_eq!(nearest_rank_percentile(&sorted, 50), 3);
         assert_eq!(nearest_rank_percentile(&sorted, 67), 7);
     }
+
+    #[test]
+    fn nearest_rank_handles_single_value_samples() {
+        let sorted = [42];
+
+        assert_eq!(nearest_rank_percentile(&sorted, 0), 42);
+        assert_eq!(nearest_rank_percentile(&sorted, 50), 42);
+        assert_eq!(nearest_rank_percentile(&sorted, 100), 42);
+        assert_eq!(nearest_rank_percentile(&sorted, 150), 42);
+    }
+
+    #[test]
+    fn nearest_rank_uses_expected_values_at_percentile_boundaries() {
+        let sorted = [10, 20, 30, 40, 50];
+
+        assert_eq!(nearest_rank_percentile(&sorted, 1), 10);
+        assert_eq!(nearest_rank_percentile(&sorted, 20), 10);
+        assert_eq!(nearest_rank_percentile(&sorted, 21), 20);
+        assert_eq!(nearest_rank_percentile(&sorted, 80), 40);
+        assert_eq!(nearest_rank_percentile(&sorted, 81), 50);
+        assert_eq!(nearest_rank_percentile(&sorted, 100), 50);
+    }
 }

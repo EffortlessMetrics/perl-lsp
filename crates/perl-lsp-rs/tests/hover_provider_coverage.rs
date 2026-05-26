@@ -304,6 +304,86 @@ connect_db("localhost", 5432, "admin", "secret");
         Ok(())
     }
 
+    // ── 3b. Hover on namespaced builtins (utf8:: family) ────────────────
+    //
+    // These functions are looked up by the hover handler via
+    // `get_package_name_at_position` (which captures the `::` separator),
+    // then resolved against `get_builtin_documentation` before the module
+    // resolver is consulted.  Without this fix they regress to "module not
+    // found" cards because there is no utf8/encode.pm on disk.
+
+    #[test]
+    fn test_hover_utf8_encode_shows_builtin_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "use utf8;\nmy $s = 'hello';\nutf8::encode($s);\n";
+        let resp = hover_at(code, "file:///utf8_encode.pl", "encode", 2)?;
+
+        let content = hover_content(&resp).ok_or("expected hover content for utf8::encode")?;
+        assert!(
+            content.contains("Built-in Function"),
+            "hover on utf8::encode should show Built-in Function heading, got: {content}"
+        );
+        assert!(
+            content.contains("utf8::encode"),
+            "hover on utf8::encode should include the function name, got: {content}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_hover_utf8_decode_shows_builtin_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "my $bytes = \"\\xC3\\xA9\";\nutf8::decode($bytes);\n";
+        let resp = hover_at(code, "file:///utf8_decode.pl", "decode", 1)?;
+
+        let content = hover_content(&resp).ok_or("expected hover content for utf8::decode")?;
+        assert!(
+            content.contains("Built-in Function"),
+            "hover on utf8::decode should show Built-in Function heading, got: {content}"
+        );
+        assert!(
+            content.contains("utf8::decode"),
+            "hover on utf8::decode should include the function name, got: {content}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_hover_utf8_downgrade_shows_builtin_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "my $s = 'hello';\nutf8::downgrade($s);\n";
+        let resp = hover_at(code, "file:///utf8_downgrade.pl", "downgrade", 1)?;
+
+        let content = hover_content(&resp).ok_or("expected hover content for utf8::downgrade")?;
+        assert!(
+            content.contains("Built-in Function"),
+            "hover on utf8::downgrade should show Built-in Function heading, got: {content}"
+        );
+        assert!(
+            content.contains("utf8::downgrade"),
+            "hover on utf8::downgrade should include the function name, got: {content}"
+        );
+        assert!(
+            content.contains("FAIL_OK"),
+            "utf8::downgrade hover should document the optional FAIL_OK parameter, got: {content}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_hover_utf8_is_utf8_shows_builtin_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "my $s = 'café';\nif (utf8::is_utf8($s)) { print 1; }\n";
+        let resp = hover_at(code, "file:///utf8_is_utf8.pl", "is_utf8", 1)?;
+
+        let content = hover_content(&resp).ok_or("expected hover content for utf8::is_utf8")?;
+        assert!(
+            content.contains("Built-in Function"),
+            "hover on utf8::is_utf8 should show Built-in Function heading, got: {content}"
+        );
+        assert!(
+            content.contains("utf8::is_utf8"),
+            "hover on utf8::is_utf8 should include the function name, got: {content}"
+        );
+        Ok(())
+    }
+
     // ── 4. Hover on package name: shows module info ─────────────────────
 
     #[test]

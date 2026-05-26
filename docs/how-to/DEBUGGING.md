@@ -164,7 +164,7 @@ cargo test
 cargo test -p example-crate-with-conflicts
 ```
 
-**Reference**: See [WORKSPACE_TEST_REPORT.md](../WORKSPACE_TEST_REPORT.md) for current workspace status.
+**Reference**: See the [workspace status report](../project/status/workspace.md) for current workspace status.
 
 ### Debug adapter not found
 ```bash

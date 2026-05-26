@@ -11,7 +11,6 @@ This casebook follows the **quality-first** forensics approach:
 - **Every metric** carries: value, kind, basis, coverage, confidence
 
 See the methodology docs:
-- [`DEVLT_ESTIMATION.md`](DEVLT_ESTIMATION.md) - Decision-weighted DevLT method
 - [`METRICS_PROVENANCE.md`](METRICS_PROVENANCE.md) - Provenance schema
 - [`QUALITY_SURFACES.md`](QUALITY_SURFACES.md) - The four quality surfaces
 - [`ANALYZER_FRAMEWORK.md`](ANALYZER_FRAMEWORK.md) - Specialist analyzers
@@ -71,7 +70,7 @@ Each exhibit shows:
 
 **Exhibit score:** 4.8/5 (Clarity: 5, Scope: 5, Evidence: 5, Tests: 4, Efficiency: 5)
 
-**Dossier:** [`forensics/pr-231-232-234.md`](forensics/pr-231-232-234.md)
+**Dossier:** [`forensics/pr-231-232-234.md`](../forensics/pr-231-232-234.md)
 
 ---
 
@@ -119,7 +118,7 @@ Each exhibit shows:
 
 **Exhibit score:** 5/5 (Clarity: 5, Scope: 5, Evidence: 5, Tests: 5, Efficiency: 5)
 
-**Dossier:** [`forensics/pr-260-264.md`](forensics/pr-260-264.md)
+**Dossier:** [`forensics/pr-260-264.md`](../forensics/pr-260-264.md)
 
 ---
 
@@ -167,7 +166,7 @@ Each exhibit shows:
 
 **Exhibit score:** 5/5 (Clarity: 5, Scope: 5, Evidence: 5, Tests: 5, Efficiency: 5)
 
-**Dossier:** [`forensics/pr-251-252-253.md`](forensics/pr-251-252-253.md)
+**Dossier:** [`forensics/pr-251-252-253.md`](../forensics/pr-251-252-253.md)
 
 ---
 
@@ -212,7 +211,7 @@ Each exhibit shows:
 
 **Exhibit score:** 4.8/5 (Clarity: 5, Scope: 4, Evidence: 5, Tests: 5, Efficiency: 5)
 
-**Dossier:** [`forensics/pr-259.md`](forensics/pr-259.md)
+**Dossier:** [`forensics/pr-259.md`](../forensics/pr-259.md)
 
 ---
 
@@ -256,7 +255,7 @@ Each exhibit shows:
 
 **Exhibit score:** 5/5 (Clarity: 5, Scope: 5, Evidence: 5, Tests: 5, Efficiency: 5)
 
-**Dossier:** [`forensics/pr-225-226-229.md`](forensics/pr-225-226-229.md)
+**Dossier:** [`forensics/pr-225-226-229.md`](../forensics/pr-225-226-229.md)
 
 ---
 
@@ -351,7 +350,7 @@ Each exhibit shows:
 
 **Coverage**: All estimates are `github_only` (no agent logs available for retrospective analysis).
 
-**Basis**: Decision events + friction events per exhibit, weighted per [`DEVLT_ESTIMATION.md`](DEVLT_ESTIMATION.md).
+**Basis**: Decision events + friction events per exhibit, weighted using the project's decision-weighted DevLT method.
 
 ---
 
@@ -364,14 +363,13 @@ To add an exhibit:
 4. Link to receipts (test output, gate output, benchmarks)
 5. Record any wrongness discovered → fix → prevention
 6. **Add quality deltas** using the four surfaces from [`QUALITY_SURFACES.md`](QUALITY_SURFACES.md)
-7. **Estimate budget with provenance** using [`DEVLT_ESTIMATION.md`](DEVLT_ESTIMATION.md)
-8. Create a dossier in [`forensics/`](forensics/) if one doesn't exist
+7. **Estimate budget with provenance** using the decision-weighted DevLT method
+8. Create a dossier in [`forensics/`](../forensics/) if one doesn't exist
 
-See [`forensics/INDEX.md`](forensics/INDEX.md) for the PR inventory.
+See [`forensics/INDEX.md`](../forensics/INDEX.md) for the PR inventory.
 
 ## Methodology Documentation
 
-- [`DEVLT_ESTIMATION.md`](DEVLT_ESTIMATION.md) - Decision-weighted DevLT method
 - [`METRICS_PROVENANCE.md`](METRICS_PROVENANCE.md) - Provenance schema for all metrics
 - [`QUALITY_SURFACES.md`](QUALITY_SURFACES.md) - The four quality surfaces
 - [`ANALYZER_FRAMEWORK.md`](ANALYZER_FRAMEWORK.md) - Specialist analyzer specs

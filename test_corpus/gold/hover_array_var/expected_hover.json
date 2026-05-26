@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "fixture": "hover_array_var",
+  "assertions": [
+    {
+      "kind": "hover_non_null",
+      "line": 4,
+      "character": 3,
+      "rationale": "hover on array variable declaration must return content"
+    },
+    {
+      "kind": "hover_contains",
+      "line": 4,
+      "character": 3,
+      "needle": "@colors",
+      "rationale": "hover on @colors must mention the variable name"
+    }
+  ]
+}

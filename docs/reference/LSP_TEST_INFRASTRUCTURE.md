@@ -457,8 +457,8 @@ fn test_comprehensive_lsp_feature() -> Result<(), String> {
 
 - [LSP Implementation Guide](./LSP_IMPLEMENTATION_GUIDE.md) - Server architecture
 - [Commands Reference](./COMMANDS_REFERENCE.md) - Test commands
-- [Debt Tracking](./DEBT_TRACKING.md) - Known test issues
-- [Current Status](./CURRENT_STATUS.md) - Test metrics
+- [Debt Tracking](../explanation/DEBT_TRACKING.md) - Known test issues
+- [Current Status](../project/CURRENT_STATUS.md) - Test metrics
 
 ## Contributing
 
@@ -472,4 +472,4 @@ When adding new LSP tests:
 6. Handle transient failures gracefully
 7. Provide rich error context
 
-For questions or improvements, see [CONTRIBUTING.md](../CONTRIBUTING.md).
+For questions or improvements, see [CONTRIBUTING.md](../../CONTRIBUTING.md).

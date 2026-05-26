@@ -62,3 +62,37 @@ fn parses_typeglob_aliasing_and_localization() -> Result<(), Box<dyn std::error:
 my $glob = *main::handler;"#,
     )
 }
+
+#[test]
+fn parses_continue_block_after_foreach() -> Result<(), Box<dyn std::error::Error>> {
+    assert_clean_parse(
+        r#"for my $item (@items) {
+    process_item($item);
+} continue {
+    $seen{$item}++;
+}"#,
+    )
+}
+
+#[test]
+fn parses_eval_block_and_eval_string() -> Result<(), Box<dyn std::error::Error>> {
+    assert_clean_parse(
+        r#"my $ok = eval {
+    risky_operation();
+    1;
+};
+my $result = eval '$x + 41';
+die $@ if $@;"#,
+    )
+}
+
+#[test]
+fn parses_map_and_grep_with_block_bodies() -> Result<(), Box<dyn std::error::Error>> {
+    assert_clean_parse(
+        r#"my @normalized = map {
+    lc $_;
+} grep {
+    defined $_ && $_ ne '';
+} @raw_values;"#,
+    )
+}

@@ -8,28 +8,52 @@ use perl_semantic_facts::{
 use serde::Serialize;
 use std::collections::BTreeMap;
 
+/// Declaration that the adapter could not project into an [`EntityFact`].
+///
+/// Emitted when a symbol kind has no [`EntityKind`] mapping yet, or when a
+/// declared container is missing from the input set so the `Defines` edge
+/// cannot be resolved.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct UnsupportedDeclFact {
+    /// Fully-qualified name of the declaration that was skipped.
     pub qualified_name: String,
+    /// Original [`SymbolKind`] reported by the surface extractor.
     pub kind: SymbolKind,
+    /// Human-readable reason the declaration was not projected.
     pub reason: &'static str,
 }
 
+/// Output of [`symbol_decls_to_semantic_facts`]: the semantic-facts projection
+/// of a set of [`SymbolDecl`]s for one file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SymbolDeclSemanticFacts {
+    /// Source-span anchors, one per projected declaration.
     pub anchors: Vec<AnchorFact>,
+    /// Entity records produced from supported declaration kinds.
     pub entities: Vec<EntityFact>,
+    /// `Defines` edges connecting containers to the entities they declare.
     pub defines_edges: Vec<EdgeFact>,
+    /// Declarations skipped because they could not be projected (see [`UnsupportedDeclFact`]).
     pub unsupported: Vec<UnsupportedDeclFact>,
 }
 
+/// Output of [`symbol_refs_to_semantic_facts`]: occurrences and reference edges
+/// derived from [`SymbolRef`]s for one file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SymbolRefSemanticFacts {
+    /// Source-span anchors, one per reference.
     pub anchors: Vec<AnchorFact>,
+    /// Occurrence records (read / call / method-call / etc.) for each reference.
     pub occurrences: Vec<OccurrenceFact>,
+    /// `References` edges, emitted only when the reference resolves to a known entity.
     pub reference_edges: Vec<EdgeFact>,
 }
 
+/// Convert extracted [`SymbolRef`]s into the semantic-facts graph for `file_id`.
+///
+/// `entity_ids_by_qualified_name` provides entity IDs already minted for
+/// declarations in this or other files; unresolved references produce
+/// occurrences without `entity_id` and emit no reference edge.
 pub fn symbol_refs_to_semantic_facts(
     refs: &[SymbolRef],
     file_id: FileId,
@@ -126,6 +150,11 @@ fn occurrence_confidence(kind: &SymbolRefKind) -> Confidence {
     }
 }
 
+/// Convert extracted [`SymbolDecl`]s into the semantic-facts graph for `file_id`.
+///
+/// Unsupported kinds and unresolved containers are reported via the
+/// `unsupported` field on the returned [`SymbolDeclSemanticFacts`] rather than
+/// silently dropped, so callers can diagnose missing coverage.
 pub fn symbol_decls_to_semantic_facts(
     decls: &[SymbolDecl],
     file_id: FileId,
