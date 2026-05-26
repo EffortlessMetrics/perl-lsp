@@ -66,6 +66,26 @@ deep_lanes = ["real_repo_latency", "vscode_smoke_matrix"]
 labels = ["ci:ux", "ci:real-repo-latency"]
 
 # -----------------------------------------------------------------------------
+# Inline-completion contract risk: LSP 3.18 discovery/registration and runtime
+# result paths that must keep the LSP4IJ/static-client contract locked.
+# -----------------------------------------------------------------------------
+[risk_pack.inline_completion_contract]
+description = "LSP 3.18 inline-completion discovery, dynamic registration, runtime dispatch, provider, and client-capability fixture changes."
+paths = [
+  "crates/perl-lsp-rs/src/runtime/lifecycle/**",
+  "crates/perl-lsp-rs/src/runtime/language/**",
+  "crates/perl-lsp-rs/src/runtime/dispatch/**",
+  "crates/perl-lsp-rs-core/src/protocol/**",
+  "crates/perl-lsp-rs-core/src/providers/inline_completion/**",
+  "crates/perl-lsp-rs-core/src/providers/lsp_compat/inline_completions.rs",
+  "crates/perl-lsp-rs/tests/support/client_caps.rs",
+  "xtask/src/tasks/inline_completion_smoke.rs",
+]
+lanes = ["pr_smoke", "merge_gate_shards", "ux_tests"]
+deep_lanes = ["release_check"]
+labels = ["ci:inline-completion", "ci:ux"]
+
+# -----------------------------------------------------------------------------
 # Workspace / index risk: module resolution, semantic facts, indexing.
 # -----------------------------------------------------------------------------
 [risk_pack.workspace_index]

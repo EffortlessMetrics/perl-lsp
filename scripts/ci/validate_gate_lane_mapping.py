@@ -41,6 +41,7 @@ GATE_TO_LANE_MAP: dict[str, dict[str, Any]] = {
     "clippy_scoped": {"lanes": ["pr_smoke"]},
     "unit_scoped": {"lanes": ["pr_smoke"]},
     "check_tests_scoped": {"lanes": ["pr_smoke"]},
+    "inline_completion_contract": {"lanes": ["pr_smoke"]},
 
     # core / foundation gates roll up under merge_gate_shards
     "clippy_core": {"lanes": ["merge_gate_shards"]},
@@ -73,6 +74,7 @@ GATE_TO_LANE_MAP: dict[str, dict[str, Any]] = {
     "docs_build": {"lanes": ["docs_gate"]},
     "published_crate_count": {"lanes": ["release_check"]},
     "release_build": {"lanes": ["release_check"]},
+    "inline_completion_binary_smoke": {"lanes": ["release_check"]},
     "version_sync": {"lanes": ["release_check"]},
     "sbom_verify": {"lanes": ["release_check"]},
     "determinism_check": {"lanes": ["release_check"]},
