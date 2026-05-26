@@ -109,6 +109,18 @@ Dynamic registration uses `InlineCompletionRegistrationOptions`: `InlineCompleti
 
 Do not use `experimental.inlineCompletionProvider`. The custom streaming request remains separate and is advertised as `experimental.perlInlineCompletionStream`; that field must be merged into the `experimental` object without replacing other experimental entries. Server-to-client registration requests must use the shared bounded request allocator via `LspServer::send_request`, not wall-clock-derived IDs.
 
+Runtime receipts cover both discovery and execution. The LSP4IJ-shaped path
+initializes with `textDocument.inlineCompletion.dynamicRegistration: true`, opens
+a Perl document, sends a spec-shaped `textDocument/inlineCompletion` request with
+`InlineCompletionContext.triggerKind`, and verifies deterministic items such as
+`strict;` for supported prefixes.
+
+### Semantic Token Capability Honesty
+
+`semanticTokensProvider.full` is advertised as full-only support. Do not
+advertise semantic-token delta support until the server maintains result IDs and
+implements the `textDocument/semanticTokens/full/delta` response path.
+
 ## Documentation Requirements for LSP Providers (*Diataxis: How-to Guide* - Enterprise API documentation standards)
 
 ### Missing Documentation Infrastructure (SPEC-149) ✅ **IMPLEMENTED**

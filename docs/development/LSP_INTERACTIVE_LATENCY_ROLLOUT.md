@@ -20,6 +20,11 @@ If a PR in this rail expands into incremental parsing, parser-grammar changes, o
 
 Tracking convention: all phases share the umbrella issue [#229](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/229) for high-level coordination. Per-phase tracking issues are filed when each phase's PR opens, and this table is updated with the per-PR link at that time so progress is visible without one issue per phase sitting open empty.
 
+Current closeout receipts now cover the lean watcher gate, dynamic inline
+completion registration, deterministic inline-completion execution, and
+semantic-token full-only capability advertisement. These receipts remain wiring
+proofs; benchmark latency claims still require dedicated hardware.
+
 | Phase | Tracker | Scope | Stack on |
 |---|---|---|---|
 | 1. Scope-lock doc | this PR (umbrella [#229](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/229)) | docs only | n/a - lands first |
@@ -143,9 +148,9 @@ if caps.workspace then
   caps.workspace.didChangeWatchedFiles = nil
 end
 
-vim.lsp.config('perl_lsp', {
+vim.lsp.config('perllsp', {
   cmd = {
-    '/absolute/path/to/target/release/perllsp',
+    'perllsp',
     '--stdio',
     '--runtime-mode', 'e2e',
     '--diagnostic-mode', 'syntax-only',
