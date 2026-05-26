@@ -16,7 +16,7 @@ categories = ["development-tools"]
 [dependencies]
 clap = { workspace = true }
 color-eyre = "0.6.5"
-similar = "3.1.0"
+similar = "3.1.1"
 duct = "1.1.1"
 walkdir.workspace = true
 serde = { workspace = true }
