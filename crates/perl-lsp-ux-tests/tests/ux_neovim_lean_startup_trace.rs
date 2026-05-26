@@ -63,15 +63,12 @@ fn file_watcher_registered(events: &[LspEvent]) -> bool {
             return false;
         };
         method == "client/registerCapability"
-            && params
-                .get("registrations")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .any(|registration| {
+            && params.get("registrations").and_then(Value::as_array).into_iter().flatten().any(
+                |registration| {
                     registration.get("method").and_then(Value::as_str)
                         == Some("workspace/didChangeWatchedFiles")
-                })
+                },
+            )
     })
 }
 
@@ -103,10 +100,7 @@ fn ux_neovim_lean_startup_trace_receipt() -> Result<()> {
     record_event(&mut events, "workspace_indexing_decision_observed", start);
 
     let watcher_registered = file_watcher_registered(&harness.client.peek_events());
-    assert!(
-        !watcher_registered,
-        "lean startup trace must not register workspace file watchers"
-    );
+    assert!(!watcher_registered, "lean startup trace must not register workspace file watchers");
     record_event(&mut events, "file_watcher_registration_checked", start);
 
     harness.open_file("project/trace.pl", TRACE_SOURCE)?;
