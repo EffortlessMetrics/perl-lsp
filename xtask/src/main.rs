@@ -149,6 +149,12 @@ enum Commands {
         coverage: bool,
     },
 
+    /// Run local smoke checks against explicit binaries.
+    Smoke {
+        #[command(subcommand)]
+        command: SmokeCommand,
+    },
+
     /// Regenerate public Shields endpoint JSON for README badges.
     Badges {
         /// Check committed endpoints for drift without updating badges/.
@@ -2482,6 +2488,17 @@ enum QueueCommand {
 }
 
 #[derive(Subcommand)]
+enum SmokeCommand {
+    /// Verify textDocument/inlineCompletion over stdio against a built binary.
+    #[command(name = "inline-completion")]
+    InlineCompletion {
+        /// Path to the perl-lsp binary to execute.
+        #[arg(long)]
+        binary: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
 enum AgentCommand {
     /// Lease lifecycle commands.
     Lease {
@@ -2601,6 +2618,9 @@ fn main() -> Result<()> {
         Commands::Test { release, suite, features, verbose, coverage } => {
             test::run(release, suite, features, verbose, coverage)
         }
+        Commands::Smoke { command } => match command {
+            SmokeCommand::InlineCompletion { binary } => inline_completion_smoke::run(binary),
+        },
         Commands::Badges { check } => badges::run(check),
         Commands::RiprPr { root, base, head, check } => {
             ripr_evidence::ripr_pr(&root, &base, &head, check)
