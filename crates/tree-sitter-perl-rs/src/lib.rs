@@ -40,8 +40,6 @@
 
 #![deny(unsafe_code)]
 #![deny(unreachable_pub)]
-#![deny(clippy::print_stderr)]
-#![deny(clippy::print_stdout)]
 #![warn(rust_2018_idioms)]
 #![warn(missing_docs)]
 #![allow(

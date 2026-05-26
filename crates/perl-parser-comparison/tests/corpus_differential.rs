@@ -1,3 +1,5 @@
+// Differential test — println! used for diagnostic output in comparisons.
+#![allow(clippy::print_stdout)]
 //! Corpus differential test - walks the project's real-world Perl corpora and
 //! asserts that v3 does not regress below a recorded baseline.
 //!

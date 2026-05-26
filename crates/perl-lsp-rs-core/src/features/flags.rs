@@ -63,7 +63,7 @@ pub struct AdvertisedFeatures {
     pub document_highlight: bool,
     /// Go-to-declaration navigation
     pub declaration: bool,
-    /// Inline completion suggestions provider
+    /// Inline completion provider support.
     pub inline_completion: bool,
 }
 

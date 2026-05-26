@@ -38,6 +38,7 @@
 //! [tree-sitter-perl]: https://github.com/tree-sitter-perl/tree-sitter-perl
 //! [`perl-parser`]: https://docs.rs/perl-parser
 //! [`tree-sitter-perl-rs`]: https://docs.rs/tree-sitter-perl-rs
+#![cfg_attr(test, allow(clippy::print_stderr, clippy::print_stdout))]
 
 use std::{
     fmt,

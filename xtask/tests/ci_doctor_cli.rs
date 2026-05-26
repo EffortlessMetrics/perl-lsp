@@ -1,3 +1,5 @@
+// CI doctor integration test — eprintln! used for diagnostic output.
+#![allow(clippy::print_stderr, clippy::print_stdout)]
 use assert_cmd::cargo::cargo_bin_cmd;
 
 /// Verify `cargo xtask ci doctor` exits 0 in a normal environment.

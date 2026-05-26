@@ -2,6 +2,8 @@
 //!
 //! Dispatches CI hygiene sub-commands (ignored-test scans, version sync,
 //! parser-error baselines, etc.) used by the `just` recipes and CI gates.
+// CLI binary: println!/eprintln! are intentional user-facing output.
+#![allow(clippy::print_stderr, clippy::print_stdout)]
 
 use perl_ci_hygiene::categorize_ignore;
 use perl_ci_hygiene::version_sync;

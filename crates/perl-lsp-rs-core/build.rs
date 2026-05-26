@@ -2,6 +2,8 @@
 // Wave Final PR B: pearl-feature-catalog absorbed into feature_catalog.rs.
 // Build-time catalog logic is inlined via include!().
 #![allow(clippy::pedantic, clippy::panic)]
+// Build scripts are allowed to use eprintln!/println! for cargo directives and diagnostics.
+#![allow(clippy::print_stderr, clippy::print_stdout)]
 
 use std::env;
 use std::error::Error;

@@ -11,6 +11,7 @@ fn initialize_advertises_standard_inline_completion_provider() -> TestResult {
     let init = harness.initialize(Some(json!({
         "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
     })))?;
+
     assert_eq!(init.pointer("/capabilities/inlineCompletionProvider"), Some(&json!({})));
     Ok(())
 }
@@ -21,6 +22,7 @@ fn initialize_does_not_put_inline_completion_provider_under_experimental() -> Te
     let init = harness.initialize(Some(json!({
         "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
     })))?;
+
     assert!(init.pointer("/capabilities/experimental/inlineCompletionProvider").is_none());
     Ok(())
 }
@@ -28,7 +30,10 @@ fn initialize_does_not_put_inline_completion_provider_under_experimental() -> Te
 #[test]
 fn initialize_preserves_perl_inline_completion_stream_experimental_flag() -> TestResult {
     let mut harness = LspHarness::new();
-    let init = harness.initialize(Some(json!({})))?;
+    let init = harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
     assert_eq!(
         init.pointer("/capabilities/experimental/perlInlineCompletionStream"),
         Some(&json!(true))
@@ -42,23 +47,57 @@ fn initialized_registers_inline_completion_when_dynamic_registration_supported()
     harness.initialize(Some(json!({
         "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
     })))?;
-    harness.notify("initialized", json!({}));
 
     let requests = harness.drain_server_requests(500);
-    let reg = requests.into_iter().find(|request| {
+    let request = requests
+        .into_iter()
+        .find(|request| {
+            request.get("method") == Some(&json!("client/registerCapability"))
+                && request.pointer("/params/registrations").and_then(|r| r.as_array()).is_some_and(
+                    |registrations| {
+                        registrations.iter().any(|entry| {
+                            entry.get("method") == Some(&json!("textDocument/inlineCompletion"))
+                        })
+                    },
+                )
+        })
+        .ok_or("expected inline completion client/registerCapability")?;
+
+    assert_eq!(
+        request.pointer("/params/registrations/0/id"),
+        Some(&json!("perl-inlineCompletion"))
+    );
+    let id = request.get("id").and_then(|v| v.as_i64()).ok_or("request id must be integer")?;
+    assert!((1..=i64::from(i32::MAX)).contains(&id));
+    Ok(())
+}
+
+#[test]
+fn disabled_inline_completion_removes_static_and_experimental_capabilities() -> TestResult {
+    let mut harness = LspHarness::new();
+    let init = harness.initialize_with_init_options(
+        Some(json!({
+            "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+        })),
+        json!({"disabledFeatures": ["lsp.inline_completion"]}),
+    )?;
+
+    assert!(init.pointer("/capabilities/inlineCompletionProvider").is_none());
+    assert!(init.pointer("/capabilities/experimental/perlInlineCompletionStream").is_none());
+
+    let requests = harness.drain_server_requests(500);
+    let has_inline_registration = requests.iter().any(|request| {
         request.get("method") == Some(&json!("client/registerCapability"))
             && request.pointer("/params/registrations").and_then(|r| r.as_array()).is_some_and(
-                |regs| {
-                    regs.iter().any(|entry| {
+                |registrations| {
+                    registrations.iter().any(|entry| {
                         entry.get("method") == Some(&json!("textDocument/inlineCompletion"))
                     })
                 },
             )
     });
+    assert!(!has_inline_registration);
 
-    let reg = reg.ok_or("expected inline completion client/registerCapability")?;
-    let id = reg.get("id").and_then(|v| v.as_i64()).ok_or("id must be integer")?;
-    assert!((1..=i32::MAX as i64).contains(&id));
     Ok(())
 }
 

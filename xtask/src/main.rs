@@ -3,6 +3,9 @@
 //! This binary provides custom automation tasks for building, testing,
 //! and maintaining the tree-sitter-perl project.
 
+// Task-runner binary — println!/eprintln! are intentional diagnostic output.
+#![allow(clippy::print_stderr, clippy::print_stdout)]
+
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use cli::srp::{SrpCommand, SrpMicrocratesArgs, UnwiredScanArgs};
 use color_eyre::eyre::{Result, eyre};

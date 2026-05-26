@@ -5,8 +5,8 @@
 //! - Adding a line in the middle updates line offsets correctly
 //! - Deleting a function does not re-parse the entire file
 //! - Benchmark: reparse time for small edits vs full parse
-
-#![allow(clippy::uninlined_format_args)]
+// Efficiency benchmarks — eprintln! used for diagnostic output.
+#![allow(clippy::uninlined_format_args, clippy::print_stderr)]
 
 use perl_incremental_parsing::incremental::incremental_document::IncrementalDocument;
 use perl_incremental_parsing::incremental::incremental_edit::{

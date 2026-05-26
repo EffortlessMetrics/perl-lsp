@@ -717,6 +717,73 @@ impl<'a> Parser<'a> {
             return false;
         }
 
+        // `class` starts a declaration only when the next token is an Identifier,
+        // DoubleColon, or Colon (mirroring the guard in parse_statement).
+        // `class->new()` is a valid bareword method-call expression and must be
+        // allowed as an assignment RHS.
+        if self.peek_kind() == Some(TokenKind::Class)
+            && !matches!(
+                self.tokens.peek_second().map(|t| t.kind),
+                Ok(TokenKind::Identifier | TokenKind::DoubleColon | TokenKind::Colon)
+            )
+        {
+            return false;
+        }
+
+        // `method` starts a declaration only when the next token is an Identifier
+        // (the method name), mirroring parse_statement's disambiguation guard.
+        if self.peek_kind() == Some(TokenKind::Method)
+            && !matches!(
+                self.tokens.peek_second().map(|t| t.kind),
+                Ok(TokenKind::Identifier)
+            )
+        {
+            return false;
+        }
+
+        // Phaser blocks (BEGIN/END/CHECK/INIT/UNITCHECK) start compile-time
+        // declarations only when followed by `{`.  CPAN code occasionally uses
+        // these as bareword function calls (`CHECK()`, `INIT()`), which are valid
+        // expression RHS forms and must not trigger missing-operand recovery.
+        if matches!(
+            self.peek_kind(),
+            Some(
+                TokenKind::Begin
+                    | TokenKind::End
+                    | TokenKind::Check
+                    | TokenKind::Init
+                    | TokenKind::Unitcheck
+            )
+        ) && !matches!(
+            self.tokens.peek_second().map(|t| t.kind),
+            Ok(TokenKind::LeftBrace)
+        ) {
+            return false;
+        }
+
+        // `given` (experimental given/when) is always a compound statement
+        // when followed by `(expr)`.  Without `(`, treat it as a potential
+        // bareword identifier to avoid breaking user-defined `given()` subs.
+        if self.peek_kind() == Some(TokenKind::Given)
+            && !matches!(
+                self.tokens.peek_second().map(|t| t.kind),
+                Ok(TokenKind::LeftParen)
+            )
+        {
+            return false;
+        }
+
+        // `defer` (Perl 5.36+ experimental) is a block statement when followed
+        // by `{`.  Without `{`, it may appear as a hash key or bareword.
+        if self.peek_kind() == Some(TokenKind::Defer)
+            && !matches!(
+                self.tokens.peek_second().map(|t| t.kind),
+                Ok(TokenKind::LeftBrace)
+            )
+        {
+            return false;
+        }
+
         match self.peek_kind() {
             Some(kind) if kind.is_recovery_boundary() => true,
             // Statement-starter keywords cannot serve as an expression RHS.
@@ -737,6 +804,24 @@ impl<'a> Parser<'a> {
             | Some(TokenKind::Until)
             | Some(TokenKind::For)
             | Some(TokenKind::Foreach)
+            // Perl 5.38+ declaration starters: class/method/format are declaration
+            // starters when followed by their expected tokens.  The early-return guards
+            // above pass through bareword-method-call forms such as `class->new()`.
+            | Some(TokenKind::Class)
+            | Some(TokenKind::Method)
+            | Some(TokenKind::Format)
+            // Compile-time phaser blocks: never a valid expression RHS in the
+            // block form; the early-return guard above passes through bareword
+            // call forms such as `CHECK()` or `INIT()`.
+            | Some(TokenKind::Begin)
+            | Some(TokenKind::End)
+            | Some(TokenKind::Check)
+            | Some(TokenKind::Init)
+            | Some(TokenKind::Unitcheck)
+            // `given` compound statement: not an expression when followed by `(`.
+            | Some(TokenKind::Given)
+            // `defer` Perl 5.36+ block: not an expression when followed by `{`.
+            | Some(TokenKind::Defer)
             | None => true,
             _ => false,
         }

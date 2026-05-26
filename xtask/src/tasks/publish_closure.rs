@@ -8,15 +8,15 @@
 //! ---------
 //! 1. Run `cargo metadata --format-version 1` (without `--no-deps`) so the
 //!    response includes the full `resolve` graph.
-//! 2. Read `[workspace.metadata.publish.allow]` from the root `Cargo.toml` to
-//!    get the set of crates that are published to crates.io.
+//! 2. Load `[workspace.metadata.publish.allow]` via `load_publish_allowlist()`
+//!    to get the set of crates that are published to crates.io.
 //! 3. Collect workspace members with `publish = []` (i.e. `publish = false`).
 //! 4. For every published crate (or just the one supplied via `--crate-name`),
 //!    BFS-walk the normal-dep edges in the resolve graph.  Report any visit to
 //!    a `publish = false` workspace member as a violation.
 //! 5. Exit non-zero if any violations were found.
 
-use crate::utils::{WorkspacePublishMeta, run_cargo_metadata};
+use crate::utils::{load_publish_allowlist, run_cargo_metadata};
 use color_eyre::eyre::{Result, bail, eyre};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -29,8 +29,6 @@ use std::collections::{HashMap, HashSet, VecDeque};
 struct FullMetadata {
     packages: Vec<FullPackage>,
     workspace_members: Vec<String>,
-    #[serde(rename = "metadata")]
-    workspace_metadata: Option<WorkspacePublishMeta>,
     resolve: Option<ResolveGraph>,
 }
 
@@ -80,15 +78,8 @@ struct DepKind {
 /// If `crate_filter` is `Some(name)`, only that crate is checked.  Otherwise
 /// all crates in the allowlist are checked.
 pub fn run(crate_filter: Option<String>) -> Result<()> {
+    let allowlist = load_publish_allowlist()?;
     let metadata = load_metadata()?;
-
-    // Load [workspace.metadata.publish.allow]
-    let allowlist = metadata
-        .workspace_metadata
-        .as_ref()
-        .and_then(|m| m.publish.as_ref())
-        .and_then(|p| p.allow.as_ref())
-        .ok_or_else(|| eyre!("No [workspace.metadata.publish.allow] found in Cargo.toml"))?;
 
     // Build set of workspace-member package IDs (used to restrict violations
     // to workspace-local crates only -- external registry crates are never flagged).

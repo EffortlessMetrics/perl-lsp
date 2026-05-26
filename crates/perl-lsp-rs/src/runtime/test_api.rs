@@ -97,7 +97,12 @@ impl LspServer {
         self.handle_initialized_dispatch()
     }
 
-    pub fn test_client_capabilities(&self) -> crate::state::document::ClientCapabilities {
+    /// Return the client capabilities captured during `initialize`.
+    ///
+    /// This is a test-only clone of the server's negotiated capability state so
+    /// integration tests can assert capability parsing without reaching through
+    /// private state modules.
+    pub fn test_client_capabilities(&self) -> crate::state::ClientCapabilities {
         self.client_capabilities.lock().clone()
     }
 

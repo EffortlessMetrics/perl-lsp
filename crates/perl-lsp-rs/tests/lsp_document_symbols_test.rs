@@ -1,3 +1,5 @@
+// Document symbols test — println! used for diagnostic output.
+#![allow(clippy::print_stdout)]
 //! Tests for textDocument/documentSymbol LSP feature
 //!
 //! These tests validate the document symbol provider functionality including:

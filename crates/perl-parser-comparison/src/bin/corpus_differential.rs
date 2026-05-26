@@ -6,6 +6,8 @@
 //! ```bash
 //! cargo run -p perl-parser-comparison --bin corpus_differential
 //! ```
+// CLI binary — println!/eprintln! are intentional diagnostic output.
+#![allow(clippy::print_stderr, clippy::print_stdout)]
 //!
 //! The binary resolves corpus roots relative to `CARGO_MANIFEST_DIR` (the
 //! `crates/perl-parser-comparison/` directory) by walking up to the workspace

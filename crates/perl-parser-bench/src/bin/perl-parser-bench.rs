@@ -4,6 +4,9 @@
 //! Invoked by `perl-ci-hygiene` and other tooling as a subprocess to compare
 //! parser performance.
 
+// Benchmark binary — println!/eprintln! are intentional diagnostic output.
+#![allow(clippy::print_stderr, clippy::print_stdout)]
+
 use std::env;
 use std::fs;
 use std::path::Path;

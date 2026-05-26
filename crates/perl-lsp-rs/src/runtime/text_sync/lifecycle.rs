@@ -22,6 +22,26 @@ impl LspServer {
 
             self.evict_open_document_session_state(uri);
 
+            // If the closed document has no backing file on disk it existed only in
+            // the editor buffer (e.g. a new unsaved file or a test virtual document).
+            // Remove it from the workspace index so `workspace/symbol` does not
+            // return stale entries after close.
+            //
+            // For files that do exist on disk, closing the editor buffer leaves the
+            // workspace index intact: the file is still part of the project and a
+            // workspace scan would re-discover it.
+            #[cfg(feature = "workspace")]
+            {
+                let file_on_disk = source_path_from_uri(uri).map(|p| p.exists()).unwrap_or(false);
+                if !file_on_disk {
+                    if let Some(coordinator) = self.coordinator() {
+                        for key in self.uri_key_variants(uri) {
+                            coordinator.index().remove_file(&key);
+                        }
+                    }
+                }
+            }
+
             // Notify coordinator that cleanup is complete
             #[cfg(feature = "workspace")]
             if let Some(coordinator) = self.coordinator() {

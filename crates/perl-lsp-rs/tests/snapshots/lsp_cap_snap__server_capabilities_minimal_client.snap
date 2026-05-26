@@ -48,6 +48,7 @@ documentOnTypeFormattingProvider:
     - ;
     - "\n"
 documentRangeFormattingProvider: true
+documentRangesFormattingProvider: true
 documentSymbolProvider: true
 executeCommandProvider:
   commands:
@@ -152,7 +153,8 @@ textDocumentSync:
   willSave: true
   willSaveWaitUntil: true
 typeDefinitionProvider: true
-typeHierarchyProvider: true
+typeHierarchyProvider:
+  workDoneProgressOptions: {}
 workspace:
   fileOperations:
     didCreate:

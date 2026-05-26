@@ -378,6 +378,8 @@ duration_suboptimal_units = "warn"
 needless_type_cast = "warn"
 manual_ilog2 = "warn"
 unnecessary_trailing_comma = "warn"
+print_stderr = "deny"
+print_stdout = "deny"
 
 [workspace.lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)', 'cfg(feature, values("slow_tests"))'] }
