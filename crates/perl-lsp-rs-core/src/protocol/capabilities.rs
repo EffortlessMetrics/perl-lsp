@@ -74,10 +74,13 @@ pub fn capabilities_json(build: BuildFlags) -> Value {
         });
     }
 
-    // Manually add documentRangesFormattingProvider (LSP 3.18) because lsp-types 0.97
-    // predates this field.  The handler already exists in formatting.rs.
+    // Manually add rangesSupport (LSP 3.18) because lsp-types 0.97
+    // lacks this field on DocumentRangeFormattingOptions. Multi-range formatting
+    // is advertised through the existing documentRangeFormattingProvider key.
     if build.range_formatting {
-        json["documentRangesFormattingProvider"] = serde_json::json!(true);
+        json["documentRangeFormattingProvider"] = serde_json::json!({
+            "rangesSupport": true
+        });
     }
     // Manually add inlineCompletionProvider (LSP 3.18) because lsp-types 0.97
     // predates this field. This JSON surface has no client context and
@@ -191,20 +194,25 @@ mod tests {
         assert_feature_id_alignment("all", BuildFlags::all());
     }
 
-    /// Verify that `documentRangesFormattingProvider` is present in the JSON
-    /// capabilities when `range_formatting` is enabled (LSP 3.18 gap fix).
+    /// Verify that `documentRangeFormattingProvider.rangesSupport` is present in
+    /// the JSON capabilities when `range_formatting` is enabled (LSP 3.18).
     #[test]
     fn ranges_formatting_advertised_in_json_when_enabled() {
         let flags = BuildFlags { range_formatting: true, ..BuildFlags::default() };
         let json = capabilities_json(flags);
+        assert_eq!(
+            json.pointer("/documentRangeFormattingProvider/rangesSupport"),
+            Some(&serde_json::json!(true)),
+            "documentRangeFormattingProvider.rangesSupport must be present when range_formatting \
+             is enabled"
+        );
         assert!(
-            json.get("documentRangesFormattingProvider").is_some(),
-            "documentRangesFormattingProvider must be present in capabilities JSON when \
-             range_formatting is enabled"
+            json.get("documentRangesFormattingProvider").is_none(),
+            "documentRangesFormattingProvider is not an LSP 3.18 server capability"
         );
     }
 
-    /// Verify that `documentRangesFormattingProvider` is absent when disabled.
+    /// Verify that multi-range formatting support is absent when disabled.
     #[test]
     fn ranges_formatting_absent_in_json_when_disabled() {
         let flags = BuildFlags { range_formatting: false, ..BuildFlags::default() };
@@ -212,6 +220,11 @@ mod tests {
         assert!(
             json.get("documentRangesFormattingProvider").is_none(),
             "documentRangesFormattingProvider must not be present when range_formatting is disabled"
+        );
+        assert!(
+            json.pointer("/documentRangeFormattingProvider/rangesSupport").is_none(),
+            "documentRangeFormattingProvider.rangesSupport must not be present when \
+             range_formatting is disabled"
         );
     }
 
