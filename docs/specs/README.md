@@ -47,6 +47,8 @@ generated sections.
 - [PLSP-SPEC-0025: PIR v0 contract](PLSP-SPEC-0025-pir-v0.md)
 - [PLSP-SPEC-0026: Determinism receipt v1](PLSP-SPEC-0026-determinism-receipt-v1.md)
 - [PLSP-SPEC-0027: Differential real-Perl oracle contract](PLSP-SPEC-0027-differential-real-perl-oracle.md)
+- [PLSP-SPEC-0028: lsp-stack extraction boundary](PLSP-SPEC-0028-lsp-stack-extraction.md)
+- [PLSP-SPEC-0029: LSP 3.18 conformance boundary](PLSP-SPEC-0029-lsp-318-conformance-boundary.md)
 
 ## Acceptance and Proof
 
