@@ -508,6 +508,66 @@ fn inline_completion_unsupported_position_returns_empty_items() -> TestResult {
 }
 
 #[test]
+fn inline_completion_hard_reject_zones_return_empty_items() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let trailing_comment_source = "my $value = '#'; # use ";
+    let string_source = "my $text = \"use \";";
+    let regex_source = "if ($name =~ /use /) {}";
+    let unclosed_regex_source = "if ($name =~ /use ";
+    let cases = vec![
+        ("comment", "# use ".to_string(), 0, 6),
+        (
+            "trailing_comment",
+            trailing_comment_source.to_string(),
+            0,
+            u32::try_from(trailing_comment_source.encode_utf16().count())?,
+        ),
+        (
+            "string",
+            string_source.to_string(),
+            0,
+            u32::try_from("my $text = \"use ".encode_utf16().count())?,
+        ),
+        ("heredoc", "print <<'EOF';\nuse \nEOF\n".to_string(), 1, 4),
+        ("pod", "=pod\nuse \n=cut\nuse ".to_string(), 1, 4),
+        (
+            "regex",
+            regex_source.to_string(),
+            0,
+            u32::try_from("if ($name =~ /use ".encode_utf16().count())?,
+        ),
+        (
+            "unclosed_regex",
+            unclosed_regex_source.to_string(),
+            0,
+            u32::try_from(unclosed_regex_source.encode_utf16().count())?,
+        ),
+    ];
+
+    for (name, source, line, character) in cases {
+        let uri = format!("file:///inline_hard_reject_{name}.pl");
+        harness.open(&uri, &source)?;
+        let result =
+            request_inline_completion_with_trigger_kind(&mut harness, &uri, line, character, 2)?;
+        let items = result
+            .get("items")
+            .and_then(Value::as_array)
+            .ok_or("inline completion result must contain items array")?;
+
+        assert!(
+            items.is_empty(),
+            "hard reject zone {name} must return empty inline completion items, got: {items:?}"
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
 fn inline_completion_invalid_trigger_kind_is_rejected() -> TestResult {
     let mut harness = LspHarness::new();
     harness.initialize(Some(json!({
