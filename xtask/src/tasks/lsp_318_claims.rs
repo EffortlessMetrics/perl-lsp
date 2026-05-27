@@ -10,6 +10,7 @@ const SPEC_PATH: &str = "docs/specs/PLSP-SPEC-0029-lsp-318-conformance-boundary.
 const MATRIX_PATH: &str = "docs/specs/lsp-318-conformance-matrix.md";
 const NEGATIVE_CLAIMS_TEST: &str = "crates/perl-lsp-rs/tests/lsp_318_negative_claims.rs";
 const REFRESH_METHODS_TEST: &str = "crates/perl-lsp-rs/tests/lsp_refresh_methods_tests.rs";
+const SCHEMA_VALIDATION_TEST: &str = "crates/perl-lsp-rs/tests/lsp_schema_validation.rs";
 const CLIENT_REQUESTS: &str = "crates/perl-lsp-rs/src/runtime/client_requests.rs";
 const LIFECYCLE_CAPABILITIES: &str = "crates/perl-lsp-rs/src/runtime/lifecycle/capabilities.rs";
 const RUNTIME_REFRESH: &str = "crates/perl-lsp-rs/src/runtime/refresh.rs";
@@ -124,6 +125,11 @@ const FEATURE_CATALOG_MARKERS: &[RequiredMarker] = &[
 const REFRESH_METHODS_TEST_MARKERS: &[RequiredMarker] = &[RequiredMarker {
     label: "workspace/foldingRange/refresh positive receipt",
     marker: "lsp_refresh_folding_range_sent_with_client_support",
+}];
+
+const SCHEMA_VALIDATION_TEST_MARKERS: &[RequiredMarker] = &[RequiredMarker {
+    label: "SignatureHelp nullable activeParameter compatibility",
+    marker: "signature_help_active_parameter_accepts_lsp_318_null",
 }];
 
 const CAPABILITY_ABSENCE_CHECKS: &[JsonAbsenceCheck] = &[
@@ -250,6 +256,12 @@ pub fn run() -> Result<()> {
         REFRESH_METHODS_TEST_MARKERS,
         &mut violations,
     )?;
+    check_required_markers(
+        &root,
+        SCHEMA_VALIDATION_TEST,
+        SCHEMA_VALIDATION_TEST_MARKERS,
+        &mut violations,
+    )?;
     check_feature_catalog(&root, &mut violations)?;
     check_capability_snapshots(&root, &mut violations)?;
     check_folding_range_refresh_guard(&root, &mut violations)?;
@@ -257,11 +269,12 @@ pub fn run() -> Result<()> {
 
     if violations.is_empty() {
         println!(
-            "LSP 3.18 claim guard OK: {} capability snapshots, {} feature markers, {} negative-test markers, {} positive refresh markers, {} spec markers checked",
+            "LSP 3.18 claim guard OK: {} capability snapshots, {} feature markers, {} negative-test markers, {} positive refresh markers, {} schema markers, {} spec markers checked",
             CAPABILITY_SNAPSHOTS.len(),
             FEATURE_CATALOG_MARKERS.len(),
             NEGATIVE_TEST_MARKERS.len(),
             REFRESH_METHODS_TEST_MARKERS.len(),
+            SCHEMA_VALIDATION_TEST_MARKERS.len(),
             SPEC_MARKERS.len()
         );
         return Ok(());

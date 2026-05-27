@@ -15,6 +15,14 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 // ======================== SCHEMA VALIDATORS ========================
 
+fn validate_nullable_unsigned_integer(value: &Value, field: &str) -> TestResult {
+    if value.is_null() || value.as_u64().is_some() {
+        return Ok(());
+    }
+
+    Err(format!("{field} must be unsigned integer or null").into())
+}
+
 /// Validates Position object per LSP spec
 fn validate_position(pos: &Value) -> Result<(), String> {
     if !pos.is_object() {
@@ -1103,58 +1111,103 @@ fn test_signature_help_response_schema() -> TestResult {
     }));
 
     if !response["result"].is_null() {
-        let sig_help = &response["result"];
+        validate_signature_help_result(&response["result"])?;
+    }
+    Ok(())
+}
 
-        let signatures = sig_help
-            .get("signatures")
-            .and_then(|s| s.as_array())
-            .ok_or("SignatureHelp must have 'signatures' array")?;
+fn validate_signature_help_result(sig_help: &Value) -> TestResult {
+    let signatures = sig_help
+        .get("signatures")
+        .and_then(|s| s.as_array())
+        .ok_or("SignatureHelp must have 'signatures' array")?;
 
-        assert!(!signatures.is_empty(), "Must have at least one signature");
+    assert!(!signatures.is_empty(), "Must have at least one signature");
 
-        for sig in signatures {
-            sig.get("label")
-                .and_then(|l| l.as_str())
-                .ok_or("SignatureInformation must have 'label'")?;
+    for sig in signatures {
+        sig.get("label")
+            .and_then(|l| l.as_str())
+            .ok_or("SignatureInformation must have 'label'")?;
 
-            if let Some(params) = sig.get("parameters") {
-                let param_arr = params.as_array().ok_or("parameters must be array")?;
+        if let Some(params) = sig.get("parameters") {
+            let param_arr = params.as_array().ok_or("parameters must be array")?;
 
-                for param in param_arr {
-                    // Must have label
-                    let label =
-                        param.get("label").ok_or("ParameterInformation must have 'label'")?;
+            for param in param_arr {
+                // Must have label
+                let label = param.get("label").ok_or("ParameterInformation must have 'label'")?;
 
-                    // Label can be string or [usize, usize]
-                    if label.is_string() {
-                        // Valid
-                    } else if label.is_array() {
-                        let arr = label.as_array().ok_or("label must be array")?;
-                        assert_eq!(arr.len(), 2, "label array must have 2 elements");
-                        arr.first().and_then(|v| v.as_u64()).ok_or("label[0] must be number")?;
-                        arr.get(1).and_then(|v| v.as_u64()).ok_or("label[1] must be number")?;
-                    } else {
-                        return Err("Parameter label must be string or [number, number]".into());
-                    }
+                // Label can be string or [usize, usize]
+                if label.is_string() {
+                    // Valid
+                } else if label.is_array() {
+                    let arr = label.as_array().ok_or("label must be array")?;
+                    assert_eq!(arr.len(), 2, "label array must have 2 elements");
+                    arr.first().and_then(|v| v.as_u64()).ok_or("label[0] must be number")?;
+                    arr.get(1).and_then(|v| v.as_u64()).ok_or("label[1] must be number")?;
+                } else {
+                    return Err("Parameter label must be string or [number, number]".into());
                 }
             }
-
-            // 3.16+ activeParameter per signature
-            if let Some(active_param) = sig.get("activeParameter") {
-                active_param.as_u64().ok_or("activeParameter must be number")?;
-            }
         }
 
-        // Optional activeSignature
-        if let Some(active_sig) = sig_help.get("activeSignature") {
-            active_sig.as_u64().ok_or("activeSignature must be number")?;
-        }
-
-        // Optional activeParameter (deprecated in favor of per-signature)
-        if let Some(active_param) = sig_help.get("activeParameter") {
-            active_param.as_u64().ok_or("activeParameter must be number")?;
+        // LSP 3.18 allows this to be null when no active parameter exists.
+        if let Some(active_param) = sig.get("activeParameter") {
+            validate_nullable_unsigned_integer(
+                active_param,
+                "SignatureInformation.activeParameter",
+            )?;
         }
     }
+
+    // Optional activeSignature
+    if let Some(active_sig) = sig_help.get("activeSignature") {
+        active_sig.as_u64().ok_or("activeSignature must be number")?;
+    }
+
+    // Optional activeParameter (deprecated in favor of per-signature)
+    if let Some(active_param) = sig_help.get("activeParameter") {
+        validate_nullable_unsigned_integer(active_param, "SignatureHelp.activeParameter")?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn signature_help_active_parameter_accepts_lsp_318_null() -> TestResult {
+    let sig_help = json!({
+        "signatures": [
+            {
+                "label": "example($value)",
+                "parameters": [
+                    {"label": "$value"}
+                ],
+                "activeParameter": null
+            }
+        ],
+        "activeSignature": 0,
+        "activeParameter": null
+    });
+
+    validate_signature_help_result(&sig_help)?;
+    Ok(())
+}
+
+#[test]
+fn signature_help_active_parameter_rejects_non_number_non_null() -> TestResult {
+    let sig_help = json!({
+        "signatures": [
+            {
+                "label": "example($value)",
+                "parameters": [
+                    {"label": "$value"}
+                ],
+                "activeParameter": "0"
+            }
+        ],
+        "activeSignature": 0
+    });
+
+    assert!(validate_signature_help_result(&sig_help).is_err());
     Ok(())
 }
 
