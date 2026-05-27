@@ -713,6 +713,9 @@ impl LspServer {
                             let list = perl_lsp_rs_core::providers::inline_completion::InlineCompletionList {
                                 items: items.clone(),
                             };
+                            let list = provider.apply_replacement_ranges_for_context(
+                                list, &context, line, character,
+                            );
                             let list = constrain_inline_completions_to_selected_info(
                                 list,
                                 selected_completion.as_ref(),

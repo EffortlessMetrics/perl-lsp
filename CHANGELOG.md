@@ -53,6 +53,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Inline completion now treats automatic trigger requests conservatively by
   returning only the top deterministic candidate, while explicit invoked
   requests keep the richer deterministic candidate set.
+- Inline completion now returns explicit single-line UTF-16 replacement ranges
+  for matching partial tokens such as `use str` and `$obj->n`, preventing ghost
+  text from duplicating text the user already typed.
 - Lean editor mode now honors `--file-watchers=false` during dynamic watcher
   registration while leaving feature-specific dynamic registrations, such as
   inline completion, available. Semantic tokens advertise full-only support
