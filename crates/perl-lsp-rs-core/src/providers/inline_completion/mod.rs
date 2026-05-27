@@ -183,10 +183,41 @@ impl InlineCompletionProvider {
     ) -> InlineCompletionList {
         if let Some(context) = self.prepare_context(text, line, character) {
             let items = self.get_completions_for_context(&context);
-            return InlineCompletionList { items };
+            return self.apply_replacement_ranges_for_context(
+                InlineCompletionList { items },
+                &context,
+                line,
+                character,
+            );
         }
 
         InlineCompletionList { items: vec![] }
+    }
+
+    /// Add an explicit single-line replacement range when the user has already
+    /// typed part of the token the completion would finish.
+    pub fn apply_replacement_ranges_for_context(
+        &self,
+        mut list: InlineCompletionList,
+        context: &PreparedInlineCompletionContext,
+        line: u32,
+        character: u32,
+    ) -> InlineCompletionList {
+        let Some(fragment) = replacement_fragment_at_cursor(context.prefix.as_str()) else {
+            return list;
+        };
+        let Some(range) = replacement_range(context.prefix.as_str(), &fragment, line, character)
+        else {
+            return list;
+        };
+
+        for item in &mut list.items {
+            if item.range.is_none() && item_matches_fragment(item, fragment.text) {
+                item.range = Some(range.clone());
+            }
+        }
+
+        list
     }
 
     /// Prepare surrounding code context for deterministic suggestions and
@@ -260,7 +291,9 @@ impl InlineCompletionProvider {
         };
 
         // Rule 1: After `->` suggest `new()`
-        if prefix.ends_with("->") {
+        if let Some(fragment) = method_arrow_fragment(prefix)
+            && completion_matches_fragment("new", "new()", fragment)
+        {
             push_item(
                 0,
                 InlineCompletionItem {
@@ -273,37 +306,44 @@ impl InlineCompletionProvider {
         }
 
         // Rule 2: After `use ` suggest common pragmas
-        if prefix.trim_end() == "use" || ends_with_keyword(prefix, "use ") {
+        if prefix.trim_end() == "use" || use_completion_fragment(prefix).is_some() {
+            let typed_fragment = use_completion_fragment(prefix).unwrap_or("");
             // Suggest strict first as it's most common
-            push_item(
-                0,
-                InlineCompletionItem {
-                    insert_text: "strict;".into(),
-                    filter_text: Some("strict".into()),
-                    range: None,
-                    command: None,
-                },
-            );
+            if completion_matches_fragment("strict", "strict;", typed_fragment) {
+                push_item(
+                    0,
+                    InlineCompletionItem {
+                        insert_text: "strict;".into(),
+                        filter_text: Some("strict".into()),
+                        range: None,
+                        command: None,
+                    },
+                );
+            }
 
-            push_item(
-                1,
-                InlineCompletionItem {
-                    insert_text: "warnings;".into(),
-                    filter_text: Some("warnings".into()),
-                    range: None,
-                    command: None,
-                },
-            );
+            if completion_matches_fragment("warnings", "warnings;", typed_fragment) {
+                push_item(
+                    1,
+                    InlineCompletionItem {
+                        insert_text: "warnings;".into(),
+                        filter_text: Some("warnings".into()),
+                        range: None,
+                        command: None,
+                    },
+                );
+            }
 
-            push_item(
-                2,
-                InlineCompletionItem {
-                    insert_text: "feature ':5.36';".into(),
-                    filter_text: Some("feature".into()),
-                    range: None,
-                    command: None,
-                },
-            );
+            if completion_matches_fragment("feature", "feature ':5.36';", typed_fragment) {
+                push_item(
+                    2,
+                    InlineCompletionItem {
+                        insert_text: "feature ':5.36';".into(),
+                        filter_text: Some("feature".into()),
+                        range: None,
+                        command: None,
+                    },
+                );
+            }
         }
 
         // Rule 3: After `sub <name>` without `{`, suggest smart body based on name pattern
@@ -833,6 +873,11 @@ struct LineContext<'a> {
     current_line: &'a str,
 }
 
+struct ReplacementFragment<'a> {
+    text: &'a str,
+    start_byte: usize,
+}
+
 fn is_keyword_boundary(ch: char) -> bool {
     ch.is_whitespace() || matches!(ch, '!' | ';' | '{' | '}' | '(' | ')' | ',')
 }
@@ -863,6 +908,75 @@ fn contains_keyword(text: &str, keyword: &str) -> bool {
     last_keyword_index(text, keyword).is_some()
 }
 
+fn method_arrow_fragment(prefix: &str) -> Option<&str> {
+    let arrow_index = prefix.rfind("->")?;
+    let fragment = &prefix[arrow_index + 2..];
+    fragment.chars().all(is_identifier_fragment_char).then_some(fragment)
+}
+
+fn use_completion_fragment(prefix: &str) -> Option<&str> {
+    let use_index = last_keyword_index(prefix, "use ")?;
+    let fragment = &prefix[use_index + 4..];
+    fragment.chars().all(is_module_fragment_char).then_some(fragment)
+}
+
+fn completion_matches_fragment(filter_text: &str, insert_text: &str, fragment: &str) -> bool {
+    fragment.is_empty() || filter_text.starts_with(fragment) || insert_text.starts_with(fragment)
+}
+
+fn item_matches_fragment(item: &InlineCompletionItem, fragment: &str) -> bool {
+    item.filter_text.as_deref().is_some_and(|filter_text| filter_text.starts_with(fragment))
+        || item.insert_text.starts_with(fragment)
+}
+
+fn replacement_fragment_at_cursor(prefix: &str) -> Option<ReplacementFragment<'_>> {
+    let mut start_byte = prefix.len();
+    for (idx, ch) in prefix.char_indices().rev() {
+        if is_replacement_fragment_char(ch) {
+            start_byte = idx;
+        } else {
+            break;
+        }
+    }
+
+    (start_byte < prefix.len())
+        .then_some(ReplacementFragment { text: &prefix[start_byte..], start_byte })
+}
+
+fn replacement_range(
+    prefix: &str,
+    fragment: &ReplacementFragment<'_>,
+    line: u32,
+    character: u32,
+) -> Option<lsp_types::Range> {
+    if fragment.text.is_empty() {
+        return None;
+    }
+
+    let start_character =
+        u32::try_from(prefix[..fragment.start_byte].encode_utf16().count()).ok()?;
+    if start_character > character {
+        return None;
+    }
+
+    Some(lsp_types::Range {
+        start: lsp_types::Position::new(line, start_character),
+        end: lsp_types::Position::new(line, character),
+    })
+}
+
+fn is_replacement_fragment_char(ch: char) -> bool {
+    is_identifier_fragment_char(ch) || matches!(ch, '$' | '@' | '%')
+}
+
+fn is_identifier_fragment_char(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || ch == '_'
+}
+
+fn is_module_fragment_char(ch: char) -> bool {
+    is_identifier_fragment_char(ch) || ch == ':'
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -881,6 +995,64 @@ mod tests {
         let completions = provider.get_inline_completions("use ", 0, 4);
         assert!(!completions.items.is_empty());
         assert!(completions.items.iter().any(|i| i.insert_text == "strict;"));
+    }
+
+    #[test]
+    fn use_partial_token_replaces_typed_prefix() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let completions = provider.get_inline_completions("use str", 0, 7);
+        let item = completions
+            .items
+            .iter()
+            .find(|item| item.insert_text == "strict;")
+            .ok_or("expected strict; completion for use str")?;
+        let range = item.range.as_ref().ok_or("partial token completion must carry a range")?;
+
+        assert_eq!(range.start.line, 0);
+        assert_eq!(range.start.character, 4);
+        assert_eq!(range.end.line, 0);
+        assert_eq!(range.end.character, 7);
+        assert!(completions.items.iter().all(|item| item.insert_text != "warnings;"));
+        Ok(())
+    }
+
+    #[test]
+    fn method_arrow_partial_token_replaces_only_method_fragment()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let completions = provider.get_inline_completions("$obj->n", 0, 7);
+        let item = completions
+            .items
+            .iter()
+            .find(|item| item.insert_text == "new()")
+            .ok_or("expected new() completion for $obj->n")?;
+        let range = item.range.as_ref().ok_or("method fragment completion must carry a range")?;
+
+        assert_eq!(range.start.line, 0);
+        assert_eq!(range.start.character, 6);
+        assert_eq!(range.end.line, 0);
+        assert_eq!(range.end.character, 7);
+        Ok(())
+    }
+
+    #[test]
+    fn partial_token_range_uses_utf16_wire_positions() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "my $emoji = \"😀\"; use str";
+        let character = u32::try_from(source.encode_utf16().count())?;
+        let completions = provider.get_inline_completions(source, 0, character);
+        let item = completions
+            .items
+            .iter()
+            .find(|item| item.insert_text == "strict;")
+            .ok_or("expected strict; completion after UTF-16 prefix")?;
+        let range = item.range.as_ref().ok_or("UTF-16 partial token must carry a range")?;
+
+        assert_eq!(range.start.line, 0);
+        assert_eq!(range.start.character, character - 3);
+        assert_eq!(range.end.line, 0);
+        assert_eq!(range.end.character, character);
+        Ok(())
     }
 
     #[test]
