@@ -35,6 +35,13 @@ The JetBrains lane now has two separate surfaces:
 - User docs: prefer the upstream LSP4IJ `perl-lsp` integration when available,
   and keep manual Raw Command setup in separate fallback/development guidance.
 
+Inline-completion quality work is a separate semantic editing rail. This
+latency rollout keeps the editor loop responsive; it does not add candidate
+sources, ranking, parse-safety filters, or AI behavior. See
+[Semantic Inline Completion Roadmap](INLINE_COMPLETION_ROADMAP.md) for the lane
+that turns the existing LSP 3.18 inline-completion surface into project-aware,
+parse-safe ghost text.
+
 | Phase | Tracker | Scope | Stack on |
 |---|---|---|---|
 | 1. Scope-lock doc | this PR (umbrella [#229](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/229)) | docs only | n/a - lands first |

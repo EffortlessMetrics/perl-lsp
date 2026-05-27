@@ -60,6 +60,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated JetBrains/LSP4IJ setup docs to prefer the upstream LSP4IJ `perl-lsp`
   integration when available, with manual `perllsp --stdio` registration
   moved to separate fallback and development guidance.
+- Added the semantic inline-completion roadmap, defining deterministic
+  project-aware ghost text as the lane goal while keeping AI optional and
+  gated behind parse-safety, ranking, and fixture receipts.
 
 ### Notes (0.15.1)
 
