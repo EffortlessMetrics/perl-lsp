@@ -1983,3 +1983,69 @@ fn valid_diagnostic_range(source: &str, range: (usize, usize)) -> Option<(usize,
     }
     Some((start, end))
 }
+
+/// Drop an undefined loop-control label (PL410 / `LoopControlUndefinedLabel`).
+///
+/// Fires for `next LABEL`, `last LABEL`, and `redo LABEL` when `LABEL` is not
+/// defined anywhere in the file.  The fix strips the label so the statement
+/// targets the innermost enclosing loop instead.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    // Message format: "`{op} {label}` references a label that is not defined in this file"
+    let Some(inner) = diagnostic.message.split('`').nth(1) else {
+        return Vec::new();
+    };
+    let parts: Vec<&str> = inner.split_whitespace().collect();
+    if parts.len() != 2 {
+        return Vec::new();
+    }
+    let (op, label) = (parts[0], parts[1]);
+    if !matches!(op, "next" | "last" | "redo") {
+        return Vec::new();
+    }
+
+    let Some((range_start, range_end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+
+    let Some(slice) = source.get(range_start..range_end) else {
+        return Vec::new();
+    };
+
+    // The node slice must begin with the operator keyword.
+    if !slice.starts_with(op) {
+        return Vec::new();
+    }
+
+    // Locate the label within the slice (after the op keyword).
+    let after_op = &slice[op.len()..];
+    let Some(label_rel_offset) = after_op.find(label) else {
+        return Vec::new();
+    };
+
+    // Delete from end-of-op through end-of-label (removes " LABEL" including space).
+    let delete_start = range_start + op.len();
+    let delete_end = delete_start + label_rel_offset + label.len();
+
+    if delete_end > range_end
+        || !source.is_char_boundary(delete_start)
+        || !source.is_char_boundary(delete_end)
+    {
+        return Vec::new();
+    }
+
+    vec![CodeAction {
+        title: format!("Drop undefined label '{label}' — '{op}' targets the innermost loop"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: delete_start, end: delete_end },
+                new_text: String::new(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
