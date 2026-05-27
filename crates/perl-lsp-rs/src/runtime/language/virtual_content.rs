@@ -26,6 +26,14 @@ impl LspServer {
             data: None,
         })?;
 
+        if !is_valid_virtual_content_uri(uri) {
+            return Err(JsonRpcError {
+                code: crate::protocol::INVALID_PARAMS,
+                message: "Missing or invalid URI".to_string(),
+                data: None,
+            });
+        }
+
         let workspace_config = self.workspace_config.lock().clone();
         if let Some(content) = fetch_virtual_content(uri, &workspace_config) {
             Ok(Some(json!({ "text": content })))
@@ -43,6 +51,17 @@ impl LspServer {
         self.send_request("workspace/textDocumentContent/refresh", json!({ "uri": uri }))
             .map(|_| ())
     }
+}
+
+fn is_valid_virtual_content_uri(uri: &str) -> bool {
+    let Some((scheme, rest)) = uri.split_once("://") else {
+        return false;
+    };
+
+    !scheme.is_empty()
+        && !rest.is_empty()
+        && scheme.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '+' | '-' | '.'))
+        && !uri.chars().any(char::is_whitespace)
 }
 
 /// Fetch content for a virtual URI
@@ -130,6 +149,14 @@ mod tests {
         let config = WorkspaceConfig::default();
         let content = fetch_virtual_content(uri, &config);
         assert!(content.is_none());
+    }
+
+    #[test]
+    fn parser_virtual_content_rejects_malformed_uri() {
+        assert!(!is_valid_virtual_content_uri("not a uri"));
+        assert!(!is_valid_virtual_content_uri("perldoc://"));
+        assert!(is_valid_virtual_content_uri("perldoc://strict"));
+        assert!(is_valid_virtual_content_uri("perldoc://Module::Name"));
     }
 
     #[test]
