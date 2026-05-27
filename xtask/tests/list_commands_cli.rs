@@ -13,6 +13,7 @@ fn list_commands_emits_sorted_top_level_names() -> Result<()> {
     assert!(lines.contains(&"check-active-goal-manifest"));
     assert!(lines.contains(&"ci"));
     assert!(lines.contains(&"check-active-goal-manifest"));
+    assert!(lines.contains(&"check-lsp-318-claims"));
     assert!(lines.contains(&"check-only"));
     assert!(lines.contains(&"check-test-wiring"));
     assert!(lines.contains(&"layer-check"));

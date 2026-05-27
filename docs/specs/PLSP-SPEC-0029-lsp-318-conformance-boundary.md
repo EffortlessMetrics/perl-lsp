@@ -174,6 +174,7 @@ For this docs-only boundary:
 ```bash
 git diff --check
 cargo xtask check-support-claims
+cargo xtask check-lsp-318-claims
 cargo xtask docs-check
 ```
 
@@ -190,6 +191,7 @@ For behavior or test PRs touching this boundary, run the relevant subset:
 ./scripts/cargo-safe test -p perl-lsp-rs --test lsp_registration_tests --profile agent --locked
 ./scripts/cargo-safe test -p perl-lsp-rs --test lsp_text_document_content_tests --profile agent --locked
 ./scripts/cargo-safe test -p perl-lsp-rs --test lsp_318_negative_claims --profile agent --locked
+cargo xtask check-lsp-318-claims
 ./scripts/cargo-safe check -p perl-lsp-rs --all-targets --profile agent --locked
 git diff --check
 ./scripts/storage-doctor

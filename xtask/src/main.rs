@@ -92,6 +92,10 @@ enum Commands {
     /// Validate semantic-token class promotion registry.
     CheckSemanticTokenClasses,
 
+    /// Validate selected LSP 3.18 claim-boundary guardrails.
+    #[command(name = "check-lsp-318-claims")]
+    CheckLsp318Claims,
+
     /// Validate workspace-symbol class promotion registry.
     CheckWorkspaceSymbolClasses,
 
@@ -2594,6 +2598,7 @@ fn main() -> Result<()> {
         Commands::CheckOracleFixtureManifest => oracle_fixture_manifest::run(),
         Commands::CheckOracleReceiptSchema => oracle_receipt_schema::run(),
         Commands::CheckSemanticTokenClasses => semantic_token_classes::run(),
+        Commands::CheckLsp318Claims => lsp_318_claims::run(),
         Commands::CheckWorkspaceSymbolClasses => workspace_symbol_classes::run(),
         Commands::Queue { command } => match command {
             QueueCommand::Snapshot { out, fixture } => queue_snapshot::run_snapshot(out, fixture),
