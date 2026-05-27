@@ -33,6 +33,111 @@ pub struct PreparedInlineCompletionContext {
     pub imports: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SemanticInlineContext {
+    pub(crate) lexical_scope: InlineLexicalScope,
+    pub(crate) package: Option<String>,
+    pub(crate) enclosing_sub: Option<String>,
+    pub(crate) expected_syntax: ExpectedSyntax,
+    pub(crate) visible_variables: Vec<VariableFact>,
+    pub(crate) receiver_hint: Option<ReceiverHint>,
+    pub(crate) imported_modules: Vec<ModuleFact>,
+    pub(crate) file_role: FileRole,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum InlineLexicalScope {
+    File,
+    Subroutine(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ExpectedSyntax {
+    EmptyStatement,
+    UseModule,
+    MethodName,
+    LexicalVariableName,
+    PackageName,
+    BlessArguments,
+    ReturnExpression,
+    LoopBinding,
+    TestAssertionArguments,
+    ShebangInterpreter,
+    SubroutineBody,
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct VariableFact {
+    pub(crate) sigil: VariableSigil,
+    pub(crate) name: String,
+}
+
+impl VariableFact {
+    fn from_perl_variable(variable: &str) -> Option<Self> {
+        let mut chars = variable.chars();
+        let sigil = VariableSigil::from_char(chars.next()?)?;
+        let name: String = chars.collect();
+        (!name.is_empty()).then_some(Self { sigil, name })
+    }
+
+    fn as_perl_variable(&self) -> String {
+        format!("{}{}", self.sigil.as_char(), self.name)
+    }
+
+    fn is_scalar_self(&self) -> bool {
+        self.sigil == VariableSigil::Scalar && self.name == "self"
+    }
+
+    fn is_scalar(&self) -> bool {
+        self.sigil == VariableSigil::Scalar
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum VariableSigil {
+    Scalar,
+    Array,
+    Hash,
+}
+
+impl VariableSigil {
+    fn from_char(ch: char) -> Option<Self> {
+        match ch {
+            '$' => Some(Self::Scalar),
+            '@' => Some(Self::Array),
+            '%' => Some(Self::Hash),
+            _ => None,
+        }
+    }
+
+    fn as_char(self) -> char {
+        match self {
+            Self::Scalar => '$',
+            Self::Array => '@',
+            Self::Hash => '%',
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ModuleFact {
+    pub(crate) name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ReceiverHint {
+    SelfReceiver,
+    Variable(VariableFact),
+    Package(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FileRole {
+    Test,
+    Unknown,
+}
+
 /// Inline completion item (LSP 3.18 preview)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -295,6 +400,7 @@ impl InlineCompletionProvider {
         &self,
         context: &PreparedInlineCompletionContext,
     ) -> Vec<InlineCompletionItem> {
+        let semantic_context = self.semantic_context_for_prepared_context(context);
         let prefix = context.prefix.as_str();
         let full_line = context.current_line.as_str();
         let mut items = Vec::<RankedCompletionItem>::new();
@@ -307,6 +413,7 @@ impl InlineCompletionProvider {
 
         // Rule 1: After `->` suggest `new()`
         if let Some(fragment) = method_arrow_fragment(prefix)
+            && semantic_context.expected_syntax == ExpectedSyntax::MethodName
             && completion_matches_fragment("new", "new()", fragment)
         {
             push_item(
@@ -418,7 +525,7 @@ impl InlineCompletionProvider {
 
         // Rule 7: After `return ` in constructor context
         if ends_with_keyword(prefix, "return ") {
-            if let Some(variable) = self.preferred_return_variable(context) {
+            if let Some(variable) = self.preferred_return_variable(&semantic_context) {
                 push_item(
                     0,
                     InlineCompletionItem {
@@ -428,7 +535,9 @@ impl InlineCompletionProvider {
                         command: None,
                     },
                 );
-            } else if self.is_in_constructor_context(context.current_function.as_deref(), prefix) {
+            } else if self
+                .is_in_constructor_context(semantic_context.enclosing_sub.as_deref(), prefix)
+            {
                 push_item(
                     1,
                     InlineCompletionItem {
@@ -504,7 +613,7 @@ impl InlineCompletionProvider {
             );
         }
 
-        self.add_contextual_fallbacks(context, &mut items, &mut sequence);
+        self.add_contextual_fallbacks(context, &semantic_context, &mut items, &mut sequence);
         self.normalize_items(items)
     }
 
@@ -737,9 +846,83 @@ impl InlineCompletionProvider {
         (!name.is_empty()).then_some(name)
     }
 
+    fn semantic_context_for_prepared_context(
+        &self,
+        context: &PreparedInlineCompletionContext,
+    ) -> SemanticInlineContext {
+        let lexical_scope = context
+            .current_function
+            .as_ref()
+            .map_or(InlineLexicalScope::File, |name| InlineLexicalScope::Subroutine(name.clone()));
+        let visible_variables = context
+            .variables
+            .iter()
+            .filter_map(|variable| VariableFact::from_perl_variable(variable))
+            .collect();
+        let imported_modules =
+            context.imports.iter().map(|name| ModuleFact { name: name.clone() }).collect();
+
+        SemanticInlineContext {
+            lexical_scope,
+            package: context.current_package.clone(),
+            enclosing_sub: context.current_function.clone(),
+            expected_syntax: self.expected_syntax(context),
+            visible_variables,
+            receiver_hint: receiver_hint_from_prefix(context.prefix.as_str()),
+            imported_modules,
+            file_role: self.file_role(context),
+        }
+    }
+
+    fn expected_syntax(&self, context: &PreparedInlineCompletionContext) -> ExpectedSyntax {
+        let prefix = context.prefix.as_str();
+        if prefix.trim().is_empty() {
+            return ExpectedSyntax::EmptyStatement;
+        }
+        if prefix.trim_end() == "use" || use_completion_fragment(prefix).is_some() {
+            return ExpectedSyntax::UseModule;
+        }
+        if method_arrow_fragment(prefix).is_some() {
+            return ExpectedSyntax::MethodName;
+        }
+        if ends_with_keyword(prefix, "my $") {
+            return ExpectedSyntax::LexicalVariableName;
+        }
+        if ends_with_keyword(prefix, "package ") {
+            return ExpectedSyntax::PackageName;
+        }
+        if ends_with_keyword(prefix, "bless ") {
+            return ExpectedSyntax::BlessArguments;
+        }
+        if ends_with_keyword(prefix, "return ") {
+            return ExpectedSyntax::ReturnExpression;
+        }
+        if ends_with_keyword(prefix, "for ") || ends_with_keyword(prefix, "foreach ") {
+            return ExpectedSyntax::LoopBinding;
+        }
+        if ends_with_keyword(prefix, "ok(") || ends_with_keyword(prefix, "is(") {
+            return ExpectedSyntax::TestAssertionArguments;
+        }
+        if prefix == "#!" || prefix == "#!/" {
+            return ExpectedSyntax::ShebangInterpreter;
+        }
+        if self.match_sub_declaration(prefix).is_some() && !context.current_line.contains('{') {
+            return ExpectedSyntax::SubroutineBody;
+        }
+        ExpectedSyntax::Unknown
+    }
+
+    fn file_role(&self, context: &PreparedInlineCompletionContext) -> FileRole {
+        if context.imports.iter().any(|import| import == "Test::More" || import == "Test2::V0") {
+            return FileRole::Test;
+        }
+        FileRole::Unknown
+    }
+
     fn add_contextual_fallbacks(
         &self,
         context: &PreparedInlineCompletionContext,
+        semantic_context: &SemanticInlineContext,
         items: &mut Vec<RankedCompletionItem>,
         sequence: &mut usize,
     ) {
@@ -751,7 +934,7 @@ impl InlineCompletionProvider {
             .unwrap_or(false);
 
         if context.current_line.is_empty()
-            && context.current_function.is_none()
+            && matches!(semantic_context.lexical_scope, InlineLexicalScope::File)
             && context.imports.is_empty()
             && context.variables.is_empty()
         {
@@ -780,7 +963,7 @@ impl InlineCompletionProvider {
         }
 
         if prefix.is_empty() {
-            if let Some(variable) = self.preferred_return_variable(context) {
+            if let Some(variable) = self.preferred_return_variable(semantic_context) {
                 items.push(RankedCompletionItem {
                     priority: 0,
                     order: *sequence,
@@ -794,9 +977,7 @@ impl InlineCompletionProvider {
                 *sequence += 1;
             }
 
-            if self.imports_include(context, "Test::More")
-                || self.imports_include(context, "Test2::V0")
-            {
+            if semantic_context.file_role == FileRole::Test {
                 items.push(RankedCompletionItem {
                     priority: 1,
                     order: *sequence,
@@ -810,7 +991,9 @@ impl InlineCompletionProvider {
                 *sequence += 1;
             }
 
-            if comment_context && let Some(variable) = self.preferred_assignment_variable(context) {
+            if comment_context
+                && let Some(variable) = self.preferred_assignment_variable(semantic_context)
+            {
                 items.push(RankedCompletionItem {
                     priority: 2,
                     order: *sequence,
@@ -848,31 +1031,21 @@ impl InlineCompletionProvider {
         deduped
     }
 
-    fn preferred_return_variable(
-        &self,
-        context: &PreparedInlineCompletionContext,
-    ) -> Option<String> {
+    fn preferred_return_variable(&self, context: &SemanticInlineContext) -> Option<String> {
         context
-            .variables
+            .visible_variables
             .iter()
-            .find(|variable| variable.as_str() == "$self")
-            .cloned()
-            .or_else(|| context.variables.first().cloned())
+            .find(|variable| variable.is_scalar_self())
+            .map(VariableFact::as_perl_variable)
+            .or_else(|| context.visible_variables.first().map(VariableFact::as_perl_variable))
     }
 
-    fn preferred_assignment_variable(
-        &self,
-        context: &PreparedInlineCompletionContext,
-    ) -> Option<String> {
+    fn preferred_assignment_variable(&self, context: &SemanticInlineContext) -> Option<String> {
         context
-            .variables
+            .visible_variables
             .iter()
-            .find(|variable| variable.starts_with('$') && variable.as_str() != "$self")
-            .cloned()
-    }
-
-    fn imports_include(&self, context: &PreparedInlineCompletionContext, expected: &str) -> bool {
-        context.imports.iter().any(|import_name| import_name == expected)
+            .find(|variable| variable.is_scalar() && !variable.is_scalar_self())
+            .map(VariableFact::as_perl_variable)
     }
 
     fn push_unique(&self, values: &mut Vec<String>, value: String) {
@@ -921,6 +1094,36 @@ fn last_keyword_index(prefix: &str, keyword: &str) -> Option<usize> {
 
 fn contains_keyword(text: &str, keyword: &str) -> bool {
     last_keyword_index(text, keyword).is_some()
+}
+
+fn receiver_hint_from_prefix(prefix: &str) -> Option<ReceiverHint> {
+    let arrow_index = prefix.rfind("->")?;
+    let receiver_prefix = prefix[..arrow_index].trim_end();
+    let receiver_start = receiver_prefix
+        .char_indices()
+        .rev()
+        .find_map(|(idx, ch)| (!is_receiver_fragment_char(ch)).then_some(idx + ch.len_utf8()))
+        .unwrap_or(0);
+    let receiver = receiver_prefix[receiver_start..].trim();
+    if receiver.is_empty() {
+        return None;
+    }
+
+    if receiver == "$self" {
+        return Some(ReceiverHint::SelfReceiver);
+    }
+    if let Some(variable) = VariableFact::from_perl_variable(receiver) {
+        return Some(ReceiverHint::Variable(variable));
+    }
+    if receiver.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | ':')) {
+        return Some(ReceiverHint::Package(receiver.to_string()));
+    }
+
+    None
+}
+
+fn is_receiver_fragment_char(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || matches!(ch, '_' | ':' | '$' | '@' | '%')
 }
 
 fn hard_reject_zone_at_cursor(
@@ -1394,6 +1597,137 @@ mod tests {
         assert!(context.imports.iter().any(|import_name| import_name == "Test::More"));
         assert!(context.variables.iter().any(|variable| variable == "$status"));
         assert!(context.variables.iter().any(|variable| variable == "$result"));
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_context_scaffold_derives_existing_perl_facts()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Test::More;\npackage Demo;\n\nsub helper {\n    my @items = fetch_items();\n    my $status = $items[0];\n    \n}\n";
+        let prepared =
+            provider.prepare_context(source, 6, 4).ok_or("expected prepared inline context")?;
+        let semantic = provider.semantic_context_for_prepared_context(&prepared);
+
+        assert_eq!(semantic.lexical_scope, InlineLexicalScope::Subroutine("helper".into()));
+        assert_eq!(semantic.package.as_deref(), Some("Demo"));
+        assert_eq!(semantic.enclosing_sub.as_deref(), Some("helper"));
+        assert_eq!(semantic.expected_syntax, ExpectedSyntax::EmptyStatement);
+        assert_eq!(semantic.file_role, FileRole::Test);
+        assert!(
+            semantic.imported_modules.iter().any(|module| module.name == "Test::More"),
+            "expected Test::More module fact, got {:?}",
+            semantic.imported_modules
+        );
+        assert!(
+            semantic
+                .visible_variables
+                .iter()
+                .any(|variable| variable.as_perl_variable() == "$status"),
+            "expected nearby scalar variable fact, got {:?}",
+            semantic.visible_variables
+        );
+        assert!(
+            semantic
+                .visible_variables
+                .iter()
+                .any(|variable| variable.as_perl_variable() == "@items"),
+            "expected array variable fact, got {:?}",
+            semantic.visible_variables
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_context_scaffold_detects_method_receiver() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let provider = InlineCompletionProvider::new();
+        let source = "package Demo;\nsub helper {\n    $self->n\n}\n";
+        let character = "    $self->n".encode_utf16().count() as u32;
+        let prepared = provider
+            .prepare_context(source, 2, character)
+            .ok_or("expected prepared inline context")?;
+        let semantic = provider.semantic_context_for_prepared_context(&prepared);
+
+        assert_eq!(semantic.expected_syntax, ExpectedSyntax::MethodName);
+        assert_eq!(semantic.receiver_hint, Some(ReceiverHint::SelfReceiver));
+        assert_eq!(semantic.file_role, FileRole::Unknown);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_context_scaffold_detects_use_context() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "package Demo;\nuse My::";
+        let character = "use My::".encode_utf16().count() as u32;
+        let prepared = provider
+            .prepare_context(source, 1, character)
+            .ok_or("expected prepared inline context")?;
+        let semantic = provider.semantic_context_for_prepared_context(&prepared);
+
+        assert_eq!(semantic.expected_syntax, ExpectedSyntax::UseModule);
+        assert_eq!(semantic.file_role, FileRole::Unknown);
+        assert_eq!(semantic.package.as_deref(), Some("Demo"));
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_context_scaffold_detects_package_receiver() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let provider = InlineCompletionProvider::new();
+        let source = "Demo::Widget->";
+        let character = source.encode_utf16().count() as u32;
+        let prepared =
+            provider.prepare_context(source, 0, character).ok_or("expected prepared context")?;
+        let semantic = provider.semantic_context_for_prepared_context(&prepared);
+
+        assert_eq!(semantic.expected_syntax, ExpectedSyntax::MethodName);
+        assert_eq!(semantic.receiver_hint, Some(ReceiverHint::Package("Demo::Widget".into())));
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_context_scaffold_classifies_existing_trigger_prefixes()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let cases = [
+            ("use ", ExpectedSyntax::UseModule),
+            ("$obj->", ExpectedSyntax::MethodName),
+            ("sub helper", ExpectedSyntax::SubroutineBody),
+            ("my $", ExpectedSyntax::LexicalVariableName),
+            ("package ", ExpectedSyntax::PackageName),
+            ("bless ", ExpectedSyntax::BlessArguments),
+            ("return ", ExpectedSyntax::ReturnExpression),
+            ("for ", ExpectedSyntax::LoopBinding),
+            ("ok(", ExpectedSyntax::TestAssertionArguments),
+            ("is(", ExpectedSyntax::TestAssertionArguments),
+            ("#!", ExpectedSyntax::ShebangInterpreter),
+        ];
+
+        for (source, expected) in cases {
+            let character = source.encode_utf16().count() as u32;
+            let prepared = provider
+                .prepare_context(source, 0, character)
+                .ok_or("expected prepared context")?;
+            let semantic = provider.semantic_context_for_prepared_context(&prepared);
+            assert_eq!(semantic.expected_syntax, expected, "prefix {source:?}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_context_scaffold_keeps_neutral_context_unknown()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "my $value = 42;";
+        let character = source.encode_utf16().count() as u32;
+        let prepared =
+            provider.prepare_context(source, 0, character).ok_or("expected prepared context")?;
+        let semantic = provider.semantic_context_for_prepared_context(&prepared);
+
+        assert_eq!(semantic.file_role, FileRole::Unknown);
+        assert_eq!(semantic.receiver_hint, None);
+        assert_eq!(semantic.expected_syntax, ExpectedSyntax::Unknown);
         Ok(())
     }
 
