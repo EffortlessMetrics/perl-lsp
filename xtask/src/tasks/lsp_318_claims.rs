@@ -7,6 +7,7 @@ use std::fs;
 use std::path::Path;
 
 const SPEC_PATH: &str = "docs/specs/PLSP-SPEC-0029-lsp-318-conformance-boundary.md";
+const MATRIX_PATH: &str = "docs/specs/lsp-318-conformance-matrix.md";
 const NEGATIVE_CLAIMS_TEST: &str = "crates/perl-lsp-rs/tests/lsp_318_negative_claims.rs";
 const CLIENT_REQUESTS: &str = "crates/perl-lsp-rs/src/runtime/client_requests.rs";
 const LIFECYCLE_CAPABILITIES: &str = "crates/perl-lsp-rs/src/runtime/lifecycle/capabilities.rs";
@@ -26,6 +27,23 @@ const SPEC_MARKERS: &[RequiredMarker] = &[
         label: "selected-surface claim boundary",
         marker: "This spec may claim that `perl-lsp` has a documented LSP 3.18 selected-surface",
     },
+];
+
+const MATRIX_MARKERS: &[RequiredMarker] = &[
+    RequiredMarker {
+        label: "matrix generator command",
+        marker: "cargo xtask generate-lsp-318-matrix --check",
+    },
+    RequiredMarker { label: "matrix inline-completion row", marker: "Standard inline completion" },
+    RequiredMarker {
+        label: "matrix textDocumentContent row",
+        marker: "`workspace/textDocumentContent`",
+    },
+    RequiredMarker {
+        label: "matrix negative-gated vocabulary",
+        marker: "`negative-gated+documented`",
+    },
+    RequiredMarker { label: "matrix notebook classification", marker: "Notebook 3.18 additions" },
 ];
 
 const NEGATIVE_TEST_MARKERS: &[RequiredMarker] = &[
@@ -218,6 +236,7 @@ pub fn run() -> Result<()> {
     let mut violations = Vec::new();
 
     check_required_markers(&root, SPEC_PATH, SPEC_MARKERS, &mut violations)?;
+    check_required_markers(&root, MATRIX_PATH, MATRIX_MARKERS, &mut violations)?;
     check_required_markers(&root, NEGATIVE_CLAIMS_TEST, NEGATIVE_TEST_MARKERS, &mut violations)?;
     check_feature_catalog(&root, &mut violations)?;
     check_capability_snapshots(&root, &mut violations)?;
