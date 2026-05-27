@@ -1972,6 +1972,59 @@ fn diagnostic_line_range(source: &str, range: (usize, usize)) -> Option<(usize, 
     Some((line_start, line_end))
 }
 
+/// Remove an undefined loop-control label (PL410).
+///
+/// `next LABEL`, `last LABEL`, and `redo LABEL` where the named label is not
+/// defined anywhere in the file will cause a fatal runtime error in Perl. The
+/// only safe mechanical fix is to drop the label so the statement targets the
+/// innermost enclosing loop instead.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some(op) = extract_loop_control_op(&diagnostic.message) else {
+        return Vec::new();
+    };
+    let Some((range_start, range_end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let Some(at_range) = source.get(range_start..range_end) else {
+        return Vec::new();
+    };
+    if !at_range.starts_with(op) {
+        return Vec::new();
+    }
+
+    vec![CodeAction {
+        title: format!("Drop undefined label: change `{at_range}` to `{op}`"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: range_start, end: range_end },
+                new_text: op.to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
+/// Extract the loop-control operator from a PL410 diagnostic message.
+///
+/// Message format: `` "`{op} {label}` references a label that is not defined in this file" ``
+fn extract_loop_control_op(message: &str) -> Option<&'static str> {
+    let inner = message.strip_prefix('`')?;
+    if inner.starts_with("next ") {
+        Some("next")
+    } else if inner.starts_with("last ") {
+        Some("last")
+    } else if inner.starts_with("redo ") {
+        Some("redo")
+    } else {
+        None
+    }
+}
+
 fn valid_diagnostic_range(source: &str, range: (usize, usize)) -> Option<(usize, usize)> {
     let (start, end) = range;
     if start > end
