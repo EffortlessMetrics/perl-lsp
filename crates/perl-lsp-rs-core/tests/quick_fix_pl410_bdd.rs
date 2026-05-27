@@ -263,9 +263,18 @@ fn pl410_code_is_routed_to_fix_handler() -> Result<(), Box<dyn std::error::Error
     let has_last_fix = actions.iter().any(|a| a.title.contains("last MISSING"));
     let has_redo_fix = actions.iter().any(|a| a.title.contains("redo NOWHERE"));
 
-    assert!(has_next_fix, "PL410 route did not produce action for 'next OUTER'; actions: {actions:?}");
-    assert!(has_last_fix, "PL410 route did not produce action for 'last MISSING'; actions: {actions:?}");
-    assert!(has_redo_fix, "PL410 route did not produce action for 'redo NOWHERE'; actions: {actions:?}");
+    assert!(
+        has_next_fix,
+        "PL410 route did not produce action for 'next OUTER'; actions: {actions:?}"
+    );
+    assert!(
+        has_last_fix,
+        "PL410 route did not produce action for 'last MISSING'; actions: {actions:?}"
+    );
+    assert!(
+        has_redo_fix,
+        "PL410 route did not produce action for 'redo NOWHERE'; actions: {actions:?}"
+    );
 
     Ok(())
 }
