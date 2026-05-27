@@ -33,7 +33,7 @@ perllsp --health
 | VS Code | install the extension or point it at `perllsp --stdio` | [docs/EDITORS/VS_CODE_SETUP.md](../EDITORS/VS_CODE_SETUP.md) |
 | Cursor | install the VS Code-compatible extension and configure it with the `perl-lsp.*` settings namespace | [docs/EDITORS/CURSOR_SETUP.md](../EDITORS/CURSOR_SETUP.md) |
 | Trae (ByteDance) | install the VS Code-compatible extension or set command to `perllsp --stdio` | [docs/EDITORS/TRAE_SETUP.md](../EDITORS/TRAE_SETUP.md) |
-| IntelliJ IDEA | install the LSP4IJ plugin and register `perllsp --stdio` as a Raw Command server | [docs/EDITORS/INTELLIJ_IDEA_SETUP.md](../EDITORS/INTELLIJ_IDEA_SETUP.md) |
+| IntelliJ IDEA / JetBrains IDEs | install or update LSP4IJ and use the upstream `perl-lsp` server entry | [docs/EDITORS/INTELLIJ_IDEA_SETUP.md](../EDITORS/INTELLIJ_IDEA_SETUP.md) |
 | Neovim | define a custom `perllsp` config with `vim.lsp.config()` and enable via `vim.lsp.enable()` (legacy `nvim-lspconfig` supported for older Neovim) | [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) |
 | Vim | use `vim-lsp` with `perllsp --stdio` | [docs/EDITORS/VIM_SETUP.md](../EDITORS/VIM_SETUP.md) |
 | coc.nvim | configure `languageserver.perl-lsp` in `coc-settings.json` to launch `perllsp --stdio`; works in Neovim and Vim when the buffer filetype is `perl` | [docs/EDITORS/COC_NEOVIM_SETUP.md](../EDITORS/COC_NEOVIM_SETUP.md) |
@@ -244,17 +244,18 @@ and `.t`. See [docs/EDITORS/OPENCODE_SETUP.md](../EDITORS/OPENCODE_SETUP.md) for
 
 ### IntelliJ IDEA
 
-Install the [LSP4IJ](https://plugins.jetbrains.com/plugin/23257-lsp4ij) plugin,
-then open **File > Settings > Languages & Frameworks > Language Servers** and add:
+Install or update the [LSP4IJ](https://plugins.jetbrains.com/plugin/23257-lsp4ij)
+plugin and use the upstream `perl-lsp` server entry when your LSP4IJ version
+includes it. Set the `perllsp` binary path only if LSP4IJ asks for it or the
+binary is not on the IDE `PATH`.
 
-| Field | Value |
-| --- | --- |
-| Name | `perl-lsp` |
-| Command | `perllsp --stdio` |
-| File name patterns | `*.pl`, `*.pm`, `*.t`, `*.psgi`, `*.cgi` |
+Use the legacy Raw Command fallback only when your LSP4IJ build does not yet
+include the upstream entry, when you are testing a local `perllsp` build, or
+when you need temporary custom launch flags:
+[docs/EDITORS/INTELLIJ_IDEA_LEGACY_RAW_COMMAND.md](../EDITORS/INTELLIJ_IDEA_LEGACY_RAW_COMMAND.md).
 
-See [docs/EDITORS/INTELLIJ_IDEA_SETUP.md](../EDITORS/INTELLIJ_IDEA_SETUP.md) for the full workflow,
-initialization options, and troubleshooting.
+See [docs/EDITORS/INTELLIJ_IDEA_SETUP.md](../EDITORS/INTELLIJ_IDEA_SETUP.md)
+for the full workflow, initialization options, and troubleshooting.
 
 LSP4IJ-shaped clients use standard LSP 3.18 inline completion:
 `textDocument.inlineCompletion.dynamicRegistration` selects dynamic

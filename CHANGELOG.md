@@ -55,6 +55,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   inline completion, available. Semantic tokens advertise full-only support
   until the delta/result-id path is implemented.
 
+### Documentation
+
+- Updated JetBrains/LSP4IJ setup docs to prefer the upstream LSP4IJ `perl-lsp`
+  integration when available, with manual `perllsp --stdio` registration
+  moved to separate fallback and development guidance.
+
 ### Notes (0.15.1)
 
 - This release does not implement true incremental AST reuse. The live

@@ -1,11 +1,17 @@
-# IntelliJ IDEA Setup Guide for perl-lsp
+# IntelliJ IDEA / JetBrains Setup Guide for perl-lsp
 
 This guide covers using `perl-lsp` with IntelliJ IDEA via the
 [LSP4IJ](https://github.com/redhat-developer/lsp4ij) plugin.
 
-LSP4IJ is a community plugin maintained by Red Hat that provides a generic LSP
-client for all JetBrains IDEs. It lets you register any language server that speaks
-stdio by pointing it at a shell command.
+LSP4IJ is a community plugin maintained by Red Hat that provides LSP client
+support for JetBrains IDEs. This guide uses the upstream LSP4IJ `perl-lsp`
+integration path.
+
+Manual `perllsp --stdio` registration is still supported for older LSP4IJ
+builds, local development, and custom launch flags. Keep that path separate:
+use [Legacy Raw Command Setup](INTELLIJ_IDEA_LEGACY_RAW_COMMAND.md) only when
+the upstream LSP4IJ entry is not available or you are testing an unreleased
+server build.
 
 > **Applies to:** IntelliJ IDEA (Community and Ultimate), as well as other
 > JetBrains IDEs (PyCharm, WebStorm, Rider, etc.) that support LSP4IJ.
@@ -41,64 +47,36 @@ Alternatively, download the plugin from the
 [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/23257-lsp4ij)
 and install it via **Plugins > Settings > Install Plugin from Disk**.
 
-## Configure the perl-lsp Server
+## Recommended: LSP4IJ Upstream Integration
 
-### Add a New Language Server
+Use this path when your installed LSP4IJ version includes a `perl-lsp` or Perl
+language-server entry.
 
-1. Open **File > Settings > Languages & Frameworks > Language Servers**.
-2. Click **+** to add a new server definition.
-3. Fill in the fields:
+1. Install or update LSP4IJ.
+2. Open a Perl file such as `lib/My/Module.pm` or `t/basic.t`.
+3. Confirm LSP4IJ offers or enables the upstream `perl-lsp` server for Perl.
+4. Set the `perllsp` binary path only if LSP4IJ asks for it or the binary is
+   not visible on the IDE `PATH`.
+5. Verify diagnostics, hover, go-to-definition, and inline completion if your
+   LSP4IJ build exposes inline completion.
 
-   | Field | Value |
-   |-------|-------|
-   | **Name** | `perl-lsp` |
-   | **Command** | `perllsp --stdio` |
-   | **Mappings: File name patterns** | `*.pl`, `*.pm`, `*.t`, `*.psgi`, `*.cgi` |
+If LSP4IJ does not show a `perl-lsp` entry yet, update LSP4IJ first. If the
+entry is still unavailable, use the
+[legacy Raw Command fallback](INTELLIJ_IDEA_LEGACY_RAW_COMMAND.md).
 
-4. Click **OK** to save.
+## Binary Path
 
-### Example Configuration
+The upstream LSP4IJ entry should launch `perllsp` with stdio transport. If your
+IDE does not inherit your shell `PATH`, set the binary path in the LSP4IJ
+integration settings when prompted.
 
-If your IntelliJ installation does not inherit your shell `PATH`, use an absolute
-binary path:
+Find the binary path with `command -v perllsp` on Unix-like shells or
+`where perllsp` in Windows PowerShell.
 
-| Field | Value |
-|-------|-------|
-| **Command** | `/usr/local/bin/perllsp --stdio` |
+The upstream entry owns the server descriptor and file mappings. You should not
+need to create a custom descriptor for normal setup.
 
-Find the path with:
-
-```bash
-command -v perllsp
-```
-
-On Windows PowerShell:
-
-```powershell
-where perllsp
-```
-
-Minimal descriptor/config example:
-
-```json
-{
-  "name": "Perl Language Server",
-  "languageId": "perl",
-  "fileExtensions": ["pl", "pm", "t", "psgi"],
-  "command": ["perllsp", "--stdio"]
-}
-```
-
-The same example is checked in at
-[`docs/EDITORS/lsp4ij-perl-lsp.json`](lsp4ij-perl-lsp.json).
-
-On Windows, use the full path with forward slashes or escaped backslashes:
-
-```
-C:/path/to/perllsp.exe --stdio
-```
-
-### Initialization Options
+## Initialization Options
 
 To pass server-specific startup settings, add an `initializationOptions` JSON
 block in the LSP4IJ **Server** tab under **Initialization options**:
@@ -120,16 +98,17 @@ Prefer `.perl-lsp.toml` in the project root for settings that should apply acros
 all editors and teammates. Use LSP4IJ initialization options for IDE-specific
 overrides.
 
-## File Type Association
+## File Type Activation
 
 IntelliJ IDEA does not recognize Perl files by default unless the **Perl plugin**
-is also installed. LSP4IJ maps language servers by file name pattern, so even
-without the Perl plugin, LSP4IJ can activate `perllsp` for files matching
-`*.pl`, `*.pm`, and `*.t`.
+is also installed. The upstream LSP4IJ `perl-lsp` integration provides the Perl
+server mapping for common Perl extensions such as `*.pl`, `*.pm`, and `*.t`.
 
 If you have the IntelliJ Perl plugin installed, IntelliJ already knows the `Perl`
-file type. In that case, you can also map by file type instead of pattern in the
-LSP4IJ settings.
+file type. If Perl files still open as plain text, update LSP4IJ and confirm the
+upstream `perl-lsp` integration is enabled. For older LSP4IJ builds, use the
+[legacy Raw Command fallback](INTELLIJ_IDEA_LEGACY_RAW_COMMAND.md), which covers
+manual file-pattern mapping.
 
 ## Optional: Inlay Hints
 
@@ -149,7 +128,8 @@ inlay_hints = true
 ## Optional: Inline Completion
 
 `perl-lsp` supports the standard LSP 3.18 `textDocument/inlineCompletion`
-request. LSP4IJ advertises dynamic inline-completion registration, so
+request. Static clients receive the top-level `inlineCompletionProvider`
+capability. LSP4IJ advertises dynamic inline-completion registration, so
 `perllsp` registers `textDocument/inlineCompletion` with
 `client/registerCapability` after `initialized` instead of also advertising a
 duplicate static `inlineCompletionProvider`.
@@ -169,11 +149,12 @@ Protocol notes:
 - The registration selector includes `perl` and `perl5`.
 - LSP wire positions use UTF-16 code units, per the LSP spec; `perllsp` converts client-provided positions to internal offsets before analysis.
 
-## Verify It Is Running
+## Verify Upstream LSP4IJ Behavior
 
 1. Open a Perl file such as `lib/My/Module.pm` or `t/basic.t`.
-2. Confirm that LSP4IJ activates: the status bar should show the language server
-   indicator.
+2. Confirm that LSP4IJ activates: the status bar should show the language
+   server indicator, and the LSP console should show `perllsp --stdio` starting
+   successfully.
 3. Introduce a temporary syntax error (e.g., remove a semicolon).
 4. Confirm a diagnostic appears in the editor gutter.
 5. Remove the syntax error.
@@ -184,6 +165,12 @@ Try LSP-backed navigation:
 - **Find Usages**: `Alt+F7`
 - **Hover**: mouse over a symbol or `Ctrl+Q` / `Ctrl+J`
 - **Rename**: `Shift+F6`
+
+Also confirm:
+
+- workspace symbols do not retain closed virtual documents,
+- inline completion is available if enabled by your LSP4IJ build,
+- feature availability matches your LSP4IJ and IDE versions.
 
 LSP4IJ exposes available LSP features through IntelliJ's standard action system.
 Not all IntelliJ actions have LSP equivalents, but diagnostics, hover, go-to-definition,
@@ -202,8 +189,9 @@ perllsp --version
 perllsp --health
 ```
 
-If IntelliJ does not inherit your shell `PATH`, use an absolute path in the
-**Command** field.
+If IntelliJ does not inherit your shell `PATH`, set the absolute `perllsp`
+binary path in the upstream LSP4IJ integration settings. For older LSP4IJ builds,
+use the [legacy Raw Command fallback](INTELLIJ_IDEA_LEGACY_RAW_COMMAND.md).
 
 ### `perllsp --stdio` appears to hang when run manually
 
@@ -218,8 +206,9 @@ perllsp --check path/to/file.pl
 
 ### No diagnostics for Perl files
 
-- Confirm the file name pattern in LSP4IJ matches the file extension (e.g.,
-  `*.pm`, `*.pl`, `*.t`).
+- Confirm the upstream LSP4IJ `perl-lsp` integration is enabled.
+- Confirm IntelliJ recognizes the file as Perl or that the file extension is a
+  common Perl extension such as `*.pm`, `*.pl`, or `*.t`.
 - Check that the LSP4IJ plugin is enabled in **Plugins**.
 - Open the LSP Console to confirm the server started without error.
 
@@ -253,13 +242,14 @@ reload `perllsp` without restarting IntelliJ IDEA.
 
 - Use the full path to `perllsp.exe` if it is not on the system `PATH`.
 - IntelliJ on Windows may not inherit PowerShell `PATH` entries. Set the binary
-  path explicitly in the LSP4IJ **Command** field.
+  path explicitly in the LSP4IJ integration settings.
 - Use forward slashes in paths or double backslashes:
-  `C:/path/to/perllsp.exe --stdio`
+  `C:/path/to/perllsp.exe`
 
 ## See Also
 
 - [Editor Setup](../how-to/EDITOR_SETUP.md)
+- [Legacy Raw Command Setup](INTELLIJ_IDEA_LEGACY_RAW_COMMAND.md)
 - [Configuration Reference](../reference/CONFIG.md)
 - [Troubleshooting Guide](../how-to/TROUBLESHOOTING.md)
 - [LSP4IJ Documentation](https://github.com/redhat-developer/lsp4ij/blob/main/docs/user-guide.md)
