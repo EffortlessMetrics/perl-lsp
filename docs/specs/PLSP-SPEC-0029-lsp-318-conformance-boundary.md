@@ -68,6 +68,7 @@ perl-lsp supports selected LSP 3.18 surfaces with capability-honest contracts.
 | Multi-range formatting | `documentRangeFormattingProvider.rangesSupport`, `textDocument/rangesFormatting` | Multi-range formatting uses the spec capability shape and routed method; the non-spec plural capability is absent. | `lsp_caps_contract_shapes`, `lsp_disabled_features_tests`, `lsp_formatting_e2e`, `lsp_capabilities_snapshot`, `lsp_cap_snap` |
 | Dynamic text document content | `workspace.textDocumentContent.schemes`, `workspace/textDocumentContent` | `perldoc` scheme is advertised; invalid params and malformed URIs return `InvalidParams`; unsupported schemes return deterministic unavailable errors. | `lsp_text_document_content_tests`, `lsp_cap_snap` |
 | Text document content refresh | `workspace/textDocumentContent/refresh` | Server-originated request IDs are bounded and emitted through the standard server request path. | `lsp_text_document_content_tests` |
+| Folding range refresh | `workspace.foldingRange.refreshSupport`, `workspace/foldingRange/refresh` | Server sends refresh requests only for clients that advertise `workspace.foldingRange.refreshSupport`; request IDs are bounded and emitted through the standard server request path. | `lsp_refresh_methods_tests`, `lsp_318_negative_claims`, `check-lsp-318-claims` |
 | Semantic tokens | `semanticTokensProvider.full`, `semanticTokensProvider.range` | Full and range are advertised; delta is not advertised without result-id state. | `lsp_caps_contract_shapes`, `lsp_semantic_legend_contract_tests`, `lsp_cap_snap` |
 | Lean/e2e watcher behavior | `workspace/didChangeWatchedFiles` dynamic registration | Runtime tuning can suppress file watchers without suppressing inline-completion dynamic registration. | `lsp_registration_tests`, lean UX receipts |
 
@@ -90,7 +91,8 @@ capability parsing, wire tests, docs, and negative gates:
 - `MessageType.Debug`
 - `Command.tooltip`
 - `RelativePattern` document selectors and watcher glob patterns
-- `workspace/foldingRange/refresh` without `workspace.foldingRange.refreshSupport`
+- ungated `workspace/foldingRange/refresh` without
+  `workspace.foldingRange.refreshSupport`
 - trusted markdown command execution or theme-icon markdown behavior
 - notebook-specific 3.18 additions beyond existing notebook sync claims
 
