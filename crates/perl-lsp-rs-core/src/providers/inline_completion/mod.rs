@@ -4,6 +4,7 @@
 //! ghost text. Deterministic completions are based on patterns; AI-powered
 //! suggestions use the `InlineCompletionBackend` trait for pluggable providers.
 
+use perl_lexer::{PerlLexer, TokenType};
 use perl_position_tracking::utf16_line_col_to_offset;
 use serde::{Deserialize, Serialize};
 
@@ -159,6 +160,15 @@ struct RankedCompletionItem {
     item: InlineCompletionItem,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HardRejectZone {
+    Comment,
+    StringLike,
+    HeredocBody,
+    Pod,
+    RegexLike,
+}
+
 /// A provider for inline completions.
 pub struct InlineCompletionProvider;
 
@@ -229,6 +239,11 @@ impl InlineCompletionProvider {
         character: u32,
     ) -> Option<PreparedInlineCompletionContext> {
         let line_context = self.line_context_at_position(text, line, character)?;
+        let cursor_offset = utf16_line_col_to_offset(text, line, character);
+        if hard_reject_zone_at_cursor(text, line_context.prefix, cursor_offset).is_some() {
+            return None;
+        }
+
         let lines = self.normalized_lines(text);
         let line_index = usize::try_from(line).ok()?;
         let (current_function, function_start_line) =
@@ -908,6 +923,232 @@ fn contains_keyword(text: &str, keyword: &str) -> bool {
     last_keyword_index(text, keyword).is_some()
 }
 
+fn hard_reject_zone_at_cursor(
+    text: &str,
+    prefix: &str,
+    cursor_offset: usize,
+) -> Option<HardRejectZone> {
+    if cursor_is_inside_pod(text, cursor_offset) {
+        return Some(HardRejectZone::Pod);
+    }
+
+    let protected_ranges = protected_token_ranges(text);
+    if let Some(zone) = protected_ranges
+        .iter()
+        .find_map(|range| range.contains_cursor(cursor_offset).then_some(range.zone))
+    {
+        return Some(zone);
+    }
+
+    if cursor_is_inside_line_comment(prefix, cursor_offset, &protected_ranges) {
+        return Some(HardRejectZone::Comment);
+    }
+
+    if prefix_has_unclosed_match_regex(prefix) {
+        return Some(HardRejectZone::RegexLike);
+    }
+
+    None
+}
+
+#[derive(Debug)]
+struct ProtectedRange {
+    start: usize,
+    end: usize,
+    zone: HardRejectZone,
+    include_start: bool,
+    include_end: bool,
+}
+
+impl ProtectedRange {
+    fn contains_cursor(&self, cursor_offset: usize) -> bool {
+        (self.start < cursor_offset || (self.include_start && self.start == cursor_offset))
+            && (cursor_offset < self.end || (self.include_end && self.end == cursor_offset))
+    }
+
+    fn contains_byte(&self, byte_offset: usize) -> bool {
+        self.start <= byte_offset && byte_offset < self.end
+    }
+}
+
+fn protected_token_ranges(text: &str) -> Vec<ProtectedRange> {
+    let mut lexer = PerlLexer::with_body_tokens(text);
+    lexer
+        .collect_tokens()
+        .into_iter()
+        .filter_map(|token| {
+            token_hard_reject_zone(&token.token_type).map(|(zone, include_start, include_end)| {
+                ProtectedRange {
+                    start: token.start,
+                    end: token.end,
+                    zone,
+                    include_start,
+                    include_end,
+                }
+            })
+        })
+        .collect()
+}
+
+fn token_hard_reject_zone(token_type: &TokenType) -> Option<(HardRejectZone, bool, bool)> {
+    match token_type {
+        TokenType::StringLiteral
+        | TokenType::InterpolatedString(_)
+        | TokenType::QuoteSingle
+        | TokenType::QuoteDouble
+        | TokenType::QuoteWords
+        | TokenType::QuoteCommand => Some((HardRejectZone::StringLike, false, false)),
+        TokenType::RegexMatch
+        | TokenType::QuoteRegex
+        | TokenType::Substitution
+        | TokenType::Transliteration => Some((HardRejectZone::RegexLike, false, false)),
+        TokenType::HeredocBody(_) | TokenType::FormatBody(_) | TokenType::DataBody(_) => {
+            Some((HardRejectZone::HeredocBody, true, false))
+        }
+        TokenType::Error(message)
+            if message.contains("unterminated string") || message.contains("unclosed") =>
+        {
+            Some((HardRejectZone::StringLike, false, true))
+        }
+        _ => None,
+    }
+}
+
+fn cursor_is_inside_line_comment(
+    prefix: &str,
+    cursor_offset: usize,
+    protected_ranges: &[ProtectedRange],
+) -> bool {
+    let line_start = cursor_offset.saturating_sub(prefix.len());
+    for (idx, ch) in prefix.char_indices() {
+        if ch != '#' {
+            continue;
+        }
+
+        let hash_offset = line_start + idx;
+        if protected_ranges.iter().any(|range| range.contains_byte(hash_offset)) {
+            continue;
+        }
+        if is_shebang_completion_prefix(prefix, hash_offset) {
+            continue;
+        }
+
+        return cursor_offset > hash_offset;
+    }
+
+    false
+}
+
+fn is_shebang_completion_prefix(prefix: &str, hash_offset: usize) -> bool {
+    hash_offset == 0 && matches!(prefix, "#!" | "#!/")
+}
+
+fn cursor_is_inside_pod(text: &str, cursor_offset: usize) -> bool {
+    let mut pod_start = None;
+    for (line_start, line_end, line_text) in line_spans(text) {
+        if pod_start.is_none() && is_pod_start_line(line_text) {
+            pod_start = Some(line_start);
+        }
+
+        if let Some(start) = pod_start {
+            if start <= cursor_offset && cursor_offset < line_end {
+                return true;
+            }
+            if is_pod_cut_line(line_text) {
+                pod_start = None;
+            }
+        }
+    }
+
+    pod_start.is_some_and(|start| start <= cursor_offset)
+}
+
+fn line_spans(text: &str) -> impl Iterator<Item = (usize, usize, &str)> {
+    let mut offset = 0usize;
+    text.split_inclusive('\n').map(move |line| {
+        let start = offset;
+        offset += line.len();
+        let content = line.strip_suffix('\n').unwrap_or(line);
+        let content = content.strip_suffix('\r').unwrap_or(content);
+        (start, offset, content)
+    })
+}
+
+fn is_pod_start_line(line: &str) -> bool {
+    if !line.starts_with('=') {
+        return false;
+    }
+
+    matches!(
+        line.split_whitespace().next(),
+        Some(
+            "=pod"
+                | "=head1"
+                | "=head2"
+                | "=head3"
+                | "=head4"
+                | "=over"
+                | "=item"
+                | "=back"
+                | "=begin"
+                | "=end"
+                | "=for"
+                | "=encoding"
+        )
+    )
+}
+
+fn is_pod_cut_line(line: &str) -> bool {
+    if !line.starts_with('=') {
+        return false;
+    }
+
+    line.split_whitespace().next() == Some("=cut")
+}
+
+fn prefix_has_unclosed_match_regex(prefix: &str) -> bool {
+    let Some(operator_index) = last_regex_match_operator(prefix) else {
+        return false;
+    };
+    let after_operator = prefix[operator_index + 2..].trim_start();
+    let Some(pattern) = after_operator.strip_prefix('/') else {
+        return false;
+    };
+
+    !contains_unescaped_slash(pattern)
+}
+
+fn last_regex_match_operator(prefix: &str) -> Option<usize> {
+    let match_index = prefix.rfind("=~");
+    let negated_match_index = prefix.rfind("!~");
+    match (match_index, negated_match_index) {
+        (Some(left), Some(right)) => Some(left.max(right)),
+        (Some(index), None) | (None, Some(index)) => Some(index),
+        (None, None) => None,
+    }
+}
+
+fn contains_unescaped_slash(text: &str) -> bool {
+    let mut escaped = false;
+    for ch in text.chars() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        if ch == '\\' {
+            escaped = true;
+            continue;
+        }
+
+        if ch == '/' {
+            return true;
+        }
+    }
+
+    false
+}
+
 fn method_arrow_fragment(prefix: &str) -> Option<&str> {
     let arrow_index = prefix.rfind("->")?;
     let fragment = &prefix[arrow_index + 2..];
@@ -1184,6 +1425,109 @@ mod tests {
         assert!(!completions.items.is_empty());
         assert!(completions.items.iter().any(|item| item.insert_text == "return $result;"));
         assert!(completions.items.iter().any(|item| item.insert_text == "done_testing();"));
+    }
+
+    #[test]
+    fn inline_completion_is_suppressed_inside_line_comment() {
+        let provider = InlineCompletionProvider::new();
+        let completions = provider.get_inline_completions("# use ", 0, 6);
+
+        assert!(completions.items.is_empty());
+    }
+
+    #[test]
+    fn inline_completion_is_suppressed_inside_trailing_comment() {
+        let provider = InlineCompletionProvider::new();
+        let source = "my $value = '#'; # use ";
+        let character = source.encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 0, character);
+
+        assert!(completions.items.is_empty());
+    }
+
+    #[test]
+    fn inline_completion_is_suppressed_inside_string_literal() {
+        let provider = InlineCompletionProvider::new();
+        let source = "my $text = \"use \";";
+        let character = "my $text = \"use ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 0, character);
+
+        assert!(completions.items.is_empty());
+    }
+
+    #[test]
+    fn inline_completion_is_suppressed_inside_heredoc_body() {
+        let provider = InlineCompletionProvider::new();
+        let source = "print <<'EOF';\nuse \nEOF\n";
+        let completions = provider.get_inline_completions(source, 1, 4);
+
+        assert!(completions.items.is_empty());
+    }
+
+    #[test]
+    fn inline_completion_is_suppressed_at_heredoc_body_start() {
+        let provider = InlineCompletionProvider::new();
+        let source = "print <<'EOF';\nuse \nEOF\n";
+        let completions = provider.get_inline_completions(source, 1, 0);
+
+        assert!(completions.items.is_empty());
+    }
+
+    #[test]
+    fn inline_completion_is_suppressed_inside_pod() {
+        let provider = InlineCompletionProvider::new();
+        let source = "=pod\nuse \n=cut\nuse ";
+        let completions = provider.get_inline_completions(source, 1, 4);
+
+        assert!(completions.items.is_empty());
+    }
+
+    #[test]
+    fn inline_completion_resumes_after_pod_cut() {
+        let provider = InlineCompletionProvider::new();
+        let source = "=pod\nwords\n=cut\nuse ";
+        let completions = provider.get_inline_completions(source, 3, 4);
+
+        assert!(completions.items.iter().any(|item| item.insert_text == "strict;"));
+    }
+
+    #[test]
+    fn indented_equals_text_is_not_treated_as_pod() {
+        let provider = InlineCompletionProvider::new();
+        let source = " =pod\nuse ";
+        let completions = provider.get_inline_completions(source, 1, 4);
+
+        assert!(completions.items.iter().any(|item| item.insert_text == "strict;"));
+    }
+
+    #[test]
+    fn inline_completion_is_suppressed_inside_regex_literal() {
+        let provider = InlineCompletionProvider::new();
+        let source = "if ($name =~ /use /) {}";
+        let character = "if ($name =~ /use ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 0, character);
+
+        assert!(completions.items.is_empty());
+    }
+
+    #[test]
+    fn inline_completion_is_suppressed_inside_unclosed_match_regex() {
+        let provider = InlineCompletionProvider::new();
+        let source = "if ($name =~ /use ";
+        let character = source.encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 0, character);
+
+        assert!(completions.items.is_empty());
+    }
+
+    #[test]
+    fn inline_completion_is_suppressed_inside_unclosed_string_at_eof() {
+        let provider = InlineCompletionProvider::new();
+        let source = "my $text = \"use ";
+        let character = source.encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 0, character);
+
+        assert!(completions.items.is_empty());
     }
 
     #[test]
