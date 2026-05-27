@@ -71,6 +71,7 @@ pub mod intent_diff_gate;
 pub mod label_projector;
 pub mod layer_check;
 pub mod lsp_318_claims;
+pub mod lsp_318_matrix;
 pub mod memory_trends;
 pub mod merge_ready;
 pub mod methodology_gate;

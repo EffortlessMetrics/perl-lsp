@@ -96,6 +96,14 @@ enum Commands {
     #[command(name = "check-lsp-318-claims")]
     CheckLsp318Claims,
 
+    /// Generate or check the selected LSP 3.18 conformance matrix.
+    #[command(name = "generate-lsp-318-matrix")]
+    GenerateLsp318Matrix {
+        /// Check that the checked-in matrix matches generated content.
+        #[arg(long)]
+        check: bool,
+    },
+
     /// Validate workspace-symbol class promotion registry.
     CheckWorkspaceSymbolClasses,
 
@@ -2599,6 +2607,7 @@ fn main() -> Result<()> {
         Commands::CheckOracleReceiptSchema => oracle_receipt_schema::run(),
         Commands::CheckSemanticTokenClasses => semantic_token_classes::run(),
         Commands::CheckLsp318Claims => lsp_318_claims::run(),
+        Commands::GenerateLsp318Matrix { check } => lsp_318_matrix::run(check),
         Commands::CheckWorkspaceSymbolClasses => workspace_symbol_classes::run(),
         Commands::Queue { command } => match command {
             QueueCommand::Snapshot { out, fixture } => queue_snapshot::run_snapshot(out, fixture),
