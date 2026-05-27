@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Inline completion now treats automatic trigger requests conservatively by
+  returning only the top deterministic candidate, while explicit invoked
+  requests keep the richer deterministic candidate set.
+
 ### Planned
 
 - Documented the Rust 1.95 / 0.14.0 rollout sequence before implementation: compatibility spike first, then MSRV/toolchain, lint, no-panic, file-policy, CI routing, and release-prep lanes.

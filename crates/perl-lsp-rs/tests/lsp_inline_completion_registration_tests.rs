@@ -144,6 +144,31 @@ fn lsp4ij_dynamic_inline_completion_with_trigger_context_returns_deterministic_i
 }
 
 #[test]
+fn inline_completion_automatic_trigger_returns_one_conservative_item() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_automatic_trigger.pl";
+    harness.open(uri, "use ")?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, uri, 0, 4, 2)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+
+    assert_eq!(
+        items.len(),
+        1,
+        "automatic inline completion must show only the top conservative item"
+    );
+    assert_eq!(items[0].get("insertText"), Some(&json!("strict;")));
+    Ok(())
+}
+
+#[test]
 fn inline_completion_invoked_trigger_returns_deterministic_items() -> TestResult {
     let mut harness = LspHarness::new();
     harness.initialize(Some(json!({
@@ -160,9 +185,12 @@ fn inline_completion_invoked_trigger_returns_deterministic_items() -> TestResult
         .ok_or("inline completion result must contain items array")?;
 
     assert!(!items.is_empty(), "invoked trigger must return deterministic items");
+    let insert_texts = item_insert_texts(items);
+    assert!(insert_texts.contains(&"strict;"), "expected strict; item, got: {items:?}");
+    assert!(insert_texts.contains(&"warnings;"), "expected warnings; item, got: {items:?}");
     assert!(
-        items.iter().any(|item| item.get("insertText") == Some(&json!("strict;"))),
-        "expected deterministic strict; suggestion for invoked trigger, got: {items:?}"
+        insert_texts.contains(&"feature ':5.36';"),
+        "expected feature pragma item, got: {items:?}"
     );
     Ok(())
 }
@@ -361,6 +389,8 @@ fn inline_completion_without_context_remains_permissive() -> TestResult {
         items.iter().any(|item| item.get("insertText") == Some(&json!("strict;"))),
         "legacy no-context request remains permissive behavior, got: {items:?}"
     );
+    let insert_texts = item_insert_texts(items);
+    assert!(insert_texts.contains(&"warnings;"), "legacy no-context request should stay rich");
     Ok(())
 }
 
@@ -405,6 +435,34 @@ fn inline_completion_unsupported_position_returns_empty_items() -> TestResult {
         .ok_or("inline completion result must contain items array")?;
 
     assert!(items.is_empty(), "unsupported position must not emit noisy suggestions");
+    Ok(())
+}
+
+#[test]
+fn inline_completion_invalid_trigger_kind_is_rejected() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_invalid_trigger_kind.pl";
+    harness.open(uri, "use ")?;
+    let response = harness.request_raw(json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "textDocument/inlineCompletion",
+        "params": {
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 4 },
+            "context": { "triggerKind": 99 }
+        }
+    }));
+
+    assert_eq!(response.pointer("/error/code"), Some(&json!(-32602)));
+    assert_eq!(
+        response.pointer("/error/message"),
+        Some(&json!("Invalid inlineCompletion.context.triggerKind"))
+    );
     Ok(())
 }
 
@@ -601,4 +659,8 @@ fn request_inline_completion_without_context(
             "position": { "line": line, "character": character }
         }),
     )
+}
+
+fn item_insert_texts(items: &[Value]) -> Vec<&str> {
+    items.iter().filter_map(|item| item.get("insertText").and_then(Value::as_str)).collect()
 }
