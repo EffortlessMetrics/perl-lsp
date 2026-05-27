@@ -50,6 +50,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dynamic LSP4IJ-shaped client receives deterministic suggestions, including
   `strict;` for a `use ` prefix. Disabling `lsp.inline_completion` suppresses
   advertisement, registration, and execution.
+- Inline completion now treats automatic trigger requests conservatively by
+  returning only the top deterministic candidate, while explicit invoked
+  requests keep the richer deterministic candidate set.
 - Lean editor mode now honors `--file-watchers=false` during dynamic watcher
   registration while leaving feature-specific dynamic registrations, such as
   inline completion, available. Semantic tokens advertise full-only support

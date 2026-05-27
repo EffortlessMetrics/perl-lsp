@@ -50,6 +50,24 @@ struct SelectedInlineCompletionInfo {
     text: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InlineCompletionTriggerKind {
+    Invoked,
+    Automatic,
+    LegacyNoContext,
+}
+
+fn inline_completion_trigger_kind(
+    params: &Value,
+) -> Result<InlineCompletionTriggerKind, JsonRpcError> {
+    match params.pointer("/context/triggerKind").and_then(Value::as_u64) {
+        Some(1) => Ok(InlineCompletionTriggerKind::Invoked),
+        Some(2) => Ok(InlineCompletionTriggerKind::Automatic),
+        Some(_) => Err(invalid_params("Invalid inlineCompletion.context.triggerKind")),
+        None => Ok(InlineCompletionTriggerKind::LegacyNoContext),
+    }
+}
+
 fn selected_inline_completion_info(
     params: &Value,
 ) -> Result<Option<SelectedInlineCompletionInfo>, JsonRpcError> {
@@ -112,6 +130,17 @@ fn constrain_inline_completions_to_selected_info(
             }
         })
         .collect();
+    list
+}
+
+fn apply_inline_completion_trigger_policy(
+    mut list: perl_lsp_rs_core::providers::inline_completion::InlineCompletionList,
+    trigger_kind: InlineCompletionTriggerKind,
+) -> perl_lsp_rs_core::providers::inline_completion::InlineCompletionList {
+    if trigger_kind == InlineCompletionTriggerKind::Automatic {
+        list.items.truncate(1);
+    }
+
     list
 }
 
@@ -658,6 +687,7 @@ impl LspServer {
         if let Some(params) = params {
             let uri = req_uri(&params)?;
             let (line, character) = req_position(&params)?;
+            let trigger_kind = inline_completion_trigger_kind(&params)?;
             let selected_completion = selected_inline_completion_info(&params)?;
 
             // Snapshot text under document lock, then release before any slow work
@@ -689,6 +719,7 @@ impl LspServer {
                                 line,
                                 character,
                             );
+                            let list = apply_inline_completion_trigger_policy(list, trigger_kind);
                             if !list.items.is_empty() || !ai_config.fallback {
                                 return Ok(Some(serde_json::to_value(list).map_err(|e| {
                                     crate::protocol::internal_error(&format!(
@@ -722,6 +753,7 @@ impl LspServer {
                 line,
                 character,
             );
+            let completions = apply_inline_completion_trigger_policy(completions, trigger_kind);
             return Ok(Some(serde_json::to_value(completions).map_err(|e| {
                 crate::protocol::internal_error(&format!(
                     "Failed to serialize inline completions: {}",
