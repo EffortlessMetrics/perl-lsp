@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added LSP 3.18 claim-boundary guards, text-document-content contract tests,
+  and the `xtask lsp-318-claims` check so unsupported protocol surfaces stay
+  explicit instead of accidentally documented as supported.
+- Added the semantic inline-completion roadmap for deterministic, parse-safe,
+  context-aware ghost text before any optional AI expansion.
+
 ### Fixed
 
 - Inline completion now treats automatic trigger requests conservatively by
