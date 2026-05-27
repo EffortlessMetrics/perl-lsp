@@ -1964,6 +1964,46 @@ fn parse_printf_format_mismatch(message: &str) -> Option<(usize, String)> {
     specifiers.checked_sub(supplied).filter(|&n| n > 0).map(|n| (n, call_name))
 }
 
+/// Insert a POD documentation stub before an exported subroutine (PL304).
+///
+/// Extracts the subroutine name from the diagnostic message and inserts a
+/// `=head2` skeleton immediately before the line containing the `sub` keyword.
+/// The stub is minimal but valid POD:
+///
+/// ```text
+/// =head2 name
+///
+/// Description.
+///
+/// =cut
+///
+/// ```
+pub fn fix_missing_pod_coverage(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
+    let Some(sub_name) = diagnostic.message.split('\'').nth(1) else {
+        return Vec::new();
+    };
+    let Some((range_start, _)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+
+    let insert_pos = source[..range_start].rfind('\n').map_or(0, |p| p + 1);
+
+    let pod_stub = format!("=head2 {sub_name}\n\nDescription.\n\n=cut\n\n");
+
+    vec![CodeAction {
+        title: format!("Add '=head2 {sub_name}' POD documentation stub"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::MissingPodCoverage.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: insert_pos, end: insert_pos },
+                new_text: pod_stub,
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
 fn diagnostic_line_range(source: &str, range: (usize, usize)) -> Option<(usize, usize)> {
     let (start, end) = valid_diagnostic_range(source, range)?;
     let line_start = source[..start].rfind('\n').map_or(0, |idx| idx + 1);
