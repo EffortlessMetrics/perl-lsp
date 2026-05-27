@@ -25,6 +25,16 @@ completion registration, deterministic inline-completion execution, and
 semantic-token full-only capability advertisement. These receipts remain wiring
 proofs; benchmark latency claims still require dedicated hardware.
 
+The JetBrains lane now has two separate surfaces:
+
+- Runtime/server contract: advertise standard LSP capabilities correctly, keep
+  server-generated request IDs inside the LSP integer range, support inline
+  completion through standard `inlineCompletionProvider` / dynamic
+  `textDocument/inlineCompletion` registration, and keep lean startup dials
+  documented.
+- User docs: prefer the upstream LSP4IJ `perl-lsp` integration when available,
+  and keep manual Raw Command setup in separate fallback/development guidance.
+
 | Phase | Tracker | Scope | Stack on |
 |---|---|---|---|
 | 1. Scope-lock doc | this PR (umbrella [#229](https://github.com/EffortlessMetrics/perl-lsp-swarm/issues/229)) | docs only | n/a - lands first |

@@ -2,6 +2,11 @@
 
 This directory contains importable snippets for JetBrains IDEs.
 
+For LSP setup in JetBrains IDEs, use the upstream LSP4IJ `perl-lsp`
+integration when available. See
+[`../../EDITORS/INTELLIJ_IDEA_SETUP.md`](../../EDITORS/INTELLIJ_IDEA_SETUP.md).
+The external-tool snippets here are only for test-running workflows.
+
 ## External Tool: repo test watch
 
 `external-tools.xml` defines two external tools:
