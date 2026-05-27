@@ -196,6 +196,75 @@ fn inline_completion_invoked_trigger_returns_deterministic_items() -> TestResult
 }
 
 #[test]
+fn inline_completion_use_partial_token_returns_replacement_range() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_use_partial_range.pl";
+    harness.open(uri, "use str")?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, uri, 0, 7, 1)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+    let strict = item_with_insert_text(items, "strict;")?;
+
+    assert_item_range(strict, 0, 4, 0, 7)?;
+    assert!(
+        items.iter().all(|item| item.get("insertText") != Some(&json!("warnings;"))),
+        "partial use prefix `str` must not return non-matching pragma items"
+    );
+    Ok(())
+}
+
+#[test]
+fn inline_completion_method_arrow_partial_token_returns_replacement_range() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_method_partial_range.pl";
+    harness.open(uri, "$obj->n")?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, uri, 0, 7, 1)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+    let item = item_with_insert_text(items, "new()")?;
+
+    assert_item_range(item, 0, 6, 0, 7)?;
+    Ok(())
+}
+
+#[test]
+fn inline_completion_partial_token_range_uses_utf16_wire_positions() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_utf16_partial_range.pl";
+    let source = "my $emoji = \"😀\"; use str";
+    let character = u32::try_from(source.encode_utf16().count())?;
+    harness.open(uri, source)?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, uri, 0, character, 1)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+    let strict = item_with_insert_text(items, "strict;")?;
+
+    assert_item_range(strict, 0, character - 3, 0, character)?;
+    Ok(())
+}
+
+#[test]
 fn inline_completion_selected_completion_info_matching_text_returns_same_range() -> TestResult {
     let mut harness = LspHarness::new();
     harness.initialize(Some(json!({
@@ -663,4 +732,25 @@ fn request_inline_completion_without_context(
 
 fn item_insert_texts(items: &[Value]) -> Vec<&str> {
     items.iter().filter_map(|item| item.get("insertText").and_then(Value::as_str)).collect()
+}
+
+fn item_with_insert_text<'a>(items: &'a [Value], insert_text: &str) -> Result<&'a Value, String> {
+    items
+        .iter()
+        .find(|item| item.get("insertText").and_then(Value::as_str) == Some(insert_text))
+        .ok_or_else(|| format!("expected inline completion item {insert_text}, got: {items:?}"))
+}
+
+fn assert_item_range(
+    item: &Value,
+    start_line: u32,
+    start_character: u32,
+    end_line: u32,
+    end_character: u32,
+) -> TestResult {
+    assert_eq!(item.pointer("/range/start/line"), Some(&json!(start_line)));
+    assert_eq!(item.pointer("/range/start/character"), Some(&json!(start_character)));
+    assert_eq!(item.pointer("/range/end/line"), Some(&json!(end_line)));
+    assert_eq!(item.pointer("/range/end/character"), Some(&json!(end_character)));
+    Ok(())
 }
