@@ -182,6 +182,52 @@ enum Commands {
         check: bool,
     },
 
+    /// Generate or check a coverage baseline receipt for the quality lane.
+    #[command(name = "coverage-baseline")]
+    CoverageBaseline {
+        /// LCOV input path.
+        #[arg(long, default_value = "target/lcov.info")]
+        lcov: PathBuf,
+        /// Coverage receipt JSON path.
+        #[arg(long, default_value = "target/receipts/quality/coverage-baseline.json")]
+        receipt: PathBuf,
+        /// Codecov configuration path.
+        #[arg(long, default_value = "codecov.yml")]
+        codecov: PathBuf,
+        /// Patch coverage percentage from Codecov for this PR.
+        #[arg(long)]
+        patch_coverage: Option<f64>,
+        /// Validate the existing receipt instead of rewriting it.
+        #[arg(long)]
+        check: bool,
+    },
+
+    /// Evaluate coverage and RIPR proof receipts for local and CI gates.
+    #[command(name = "quality-gate")]
+    QualityGate {
+        /// Gate mode to evaluate.
+        #[arg(long, value_enum)]
+        mode: tasks::quality_gate::QualityGateMode,
+        /// Coverage receipt JSON path.
+        #[arg(long, default_value = "target/receipts/quality/coverage-baseline.json")]
+        coverage_receipt: PathBuf,
+        /// Codecov configuration path.
+        #[arg(long, default_value = "codecov.yml")]
+        codecov: PathBuf,
+        /// Patch coverage percentage from Codecov for this PR.
+        #[arg(long)]
+        patch_coverage: Option<f64>,
+        /// Quality-gate JSON receipt path.
+        #[arg(long, default_value = "target/receipts/quality/quality-gate.json")]
+        receipt: PathBuf,
+        /// Quality-gate Markdown summary path.
+        #[arg(long, default_value = "target/receipts/quality/quality-gate.md")]
+        summary: PathBuf,
+        /// Validate existing quality-gate outputs instead of rewriting them.
+        #[arg(long)]
+        check: bool,
+    },
+
     /// Produce diff-scoped RIPR PR evidence artifacts.
     RiprPr {
         /// Root passed to RIPR. Defaults to the repository root.
@@ -2658,6 +2704,32 @@ fn main() -> Result<()> {
         },
         Commands::InlineCompletionSmoke { binary } => inline_completion_smoke::run(binary),
         Commands::Badges { check } => badges::run(check),
+        Commands::CoverageBaseline { lcov, receipt, codecov, patch_coverage, check } => {
+            quality_baseline::run(quality_baseline::CoverageBaselineArgs {
+                lcov,
+                receipt,
+                codecov,
+                patch_coverage,
+                check,
+            })
+        }
+        Commands::QualityGate {
+            mode,
+            coverage_receipt,
+            codecov,
+            patch_coverage,
+            receipt,
+            summary,
+            check,
+        } => quality_gate::run(quality_gate::QualityGateArgs {
+            mode,
+            coverage_receipt,
+            codecov,
+            patch_coverage,
+            receipt,
+            summary,
+            check,
+        }),
         Commands::RiprPr { root, base, head, check } => {
             ripr_evidence::ripr_pr(&root, &base, &head, check)
         }

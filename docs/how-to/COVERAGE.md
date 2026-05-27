@@ -55,8 +55,30 @@ Patch coverage is the front-door PR coverage gate in Codecov policy:
 - **Project coverage**: Target `95%`, informational during burn-down.
 - **Coverage scope**: Workspace policy includes proof-rail `xtask/src/` code.
 
-Workflow wiring and local `quality-gate` receipt validation are separate follow-up slices. This page documents the Codecov policy posture and existing coverage commands.
+Workflow wiring remains a separate follow-up slice. This page documents the Codecov policy posture, coverage receipt, and local patch coverage quality-gate commands.
 Project coverage remains informational during burn-down.
+
+### Patch Coverage Quality Gate
+
+Generate the coverage receipt from LCOV before running the patch gate:
+
+```bash
+rtk cargo xtask coverage-baseline --lcov target/lcov.info --receipt target/receipts/quality/coverage-baseline.json --codecov codecov.yml --patch-coverage <patch-percent>
+```
+
+Then run the patch coverage quality gate:
+
+```bash
+rtk cargo xtask quality-gate --mode enforce-patch-coverage --coverage-receipt target/receipts/quality/coverage-baseline.json --codecov codecov.yml
+```
+
+Use `--check` on either command to validate existing receipts instead of rewriting them. A failing patch gate writes JSON and Markdown receipts under `target/receipts/quality/` and names the missing proof:
+
+- `coverage_receipt_not_current` means the coverage receipt is missing or stale for the current commit.
+- `patch_coverage_unknown` means the receipt is current but does not contain a patch coverage percentage.
+- `patch_coverage_below_target` means patch coverage is below 95%.
+
+Failure output includes sample uncovered lines and repair guidance. Treat those as behavior-oriented tests to add around error paths, boundaries, config parsing, serialization, cancellation, and output contracts, not as a prompt to add line-touch tests.
 
 ### Viewing Coverage in PRs
 

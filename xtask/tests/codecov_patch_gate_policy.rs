@@ -74,7 +74,7 @@ fn codecov_flags_do_not_carry_status_targets() -> Result<(), Box<dyn std::error:
 }
 
 #[test]
-fn coverage_docs_describe_patch_front_door_without_quality_gate_cli()
+fn coverage_docs_describe_patch_front_door_without_ci_wiring()
 -> Result<(), Box<dyn std::error::Error>> {
     let root = project_root()?;
     let coverage_doc = fs::read_to_string(root.join("docs/how-to/COVERAGE.md"))?;
@@ -93,12 +93,15 @@ fn coverage_docs_describe_patch_front_door_without_quality_gate_cli()
         .ok_or("coverage how-to is missing CI Integration section")?;
     assert!(
         ci_section.contains("Patch coverage is the front-door PR coverage gate")
-            && ci_section.contains("Project coverage remains informational during burn-down"),
+            && ci_section.contains("Project coverage remains informational during burn-down")
+            && ci_section.contains("Workflow wiring remains a separate follow-up slice"),
         "coverage how-to must describe the transitional Codecov rollout posture"
     );
     assert!(
-        !ci_section.contains("ci:coverage") && !ci_section.contains("cargo xtask quality-gate"),
-        "PR2 docs must not preserve label-gated or quality-gate CLI commands in active CI guidance"
+        !ci_section.contains("ci:coverage")
+            && !ci_section.contains("quality-gate --mode enforce-new-ripr")
+            && !ci_section.contains("quality-gate --mode enforce "),
+        "coverage docs must not preserve label-gated, RIPR, or final quality-gate CI language"
     );
 
     let current_policy = section_block(&rollout_doc, "## Proof-lane Codecov posture")
