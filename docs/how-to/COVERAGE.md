@@ -17,7 +17,7 @@ The initial PR slice keeps the branch gate on library/unit tests (`--lib`) so it
 Generate an HTML coverage report locally:
 
 ```bash
-just coverage
+rtk just coverage
 ```
 
 This will:
@@ -32,7 +32,7 @@ This will:
 Get a quick coverage summary in the terminal:
 
 ```bash
-just coverage-summary
+rtk just coverage-summary
 ```
 
 ### LCOV Format (for CI)
@@ -40,7 +40,7 @@ just coverage-summary
 Generate coverage in LCOV format (compatible with Codecov):
 
 ```bash
-just coverage-lcov
+rtk just coverage-lcov
 ```
 
 This creates `lcov.info` in the project root.
@@ -49,15 +49,18 @@ This creates `lcov.info` in the project root.
 
 ### Automatic Coverage Reports
 
-Coverage is automatically generated and uploaded to Codecov from the nightly `test-coverage` job in `.github/workflows/ci-nightly.yml`:
+Patch coverage is the front-door PR coverage gate in Codecov policy:
 
-- **On every push to `main`/`master`**: No coverage job by default
-- **On PRs with `ci:coverage` label**: Parser coverage with branch data
-- **On manual workflow dispatch**: Parser coverage with branch data
+- **Patch coverage**: Target `95%` with `0%` threshold.
+- **Project coverage**: Target `95%`, informational during burn-down.
+- **Coverage scope**: Workspace policy includes proof-rail `xtask/src/` code.
+
+Workflow wiring and local `quality-gate` receipt validation are separate follow-up slices. This page documents the Codecov policy posture and existing coverage commands.
+Project coverage remains informational during burn-down.
 
 ### Viewing Coverage in PRs
 
-When the `ci:coverage` label is applied to a PR:
+When Codecov reports on a PR:
 
 1. The nightly coverage job runs automatically
 2. Coverage data is uploaded to Codecov
@@ -67,7 +70,7 @@ When the `ci:coverage` label is applied to a PR:
    - Per-file coverage changes
    - Flags for each crate (parser, lsp, lexer, dap, corpus)
 
-The nightly coverage lane also generates branch coverage in `lcov.info` and checks it against `.ci/coverage-baseline.txt`. The first slice is a ratchet: branch coverage can stay flat or improve, and it fails if the total drops by more than the allowed percentage point budget.
+The nightly coverage lane also generates branch coverage in `lcov.info` and checks it against `.ci/coverage-baseline.txt`. That lane remains a ratchet: branch coverage can stay flat or improve, and it fails if the total drops by more than the allowed percentage point budget.
 
 ### Coverage Badge
 
@@ -81,19 +84,14 @@ Coverage thresholds are defined in `codecov.yml`:
 
 | Target | Threshold | Notes |
 |--------|-----------|-------|
-| **Project** | 70% | Overall workspace coverage |
-| **Patch** | 75% | New code should have higher coverage |
-| **perl-parser** | 75% | Core parsing logic |
-| **perl-lsp** | 70% | LSP integration |
-| **perl-lexer** | 80% | Tokenization (highly testable) |
-| **perl-dap** | 65% | Experimental, bridge mode |
-| **perl-corpus** | 60% | Test infrastructure |
+| **Patch** | 95% | Blocking PR gate with `0%` threshold |
+| **Project** | 95% | Informational during burn-down; final target is blocking |
 
 ### Threshold Philosophy
 
-- **70% baseline**: Prevents coverage regressions without blocking velocity
-- **75% for patches**: Encourages well-tested new code
-- **Per-crate targets**: Higher for core, testable components (parser, lexer)
+- **95% for patches**: New code must carry its own proof.
+- **95% project target**: Project coverage remains transitional until the burn-down closes.
+- **No per-flag targets**: Codecov status targets live under project and patch status blocks.
 
 Branch coverage uses the checked-in policy file instead of Codecov status thresholds for the initial PR slice:
 
@@ -114,9 +112,10 @@ The following paths are excluded from coverage analysis (configured in `codecov.
 - `crates/*/benches/**` - Benchmark code
 - `crates/*/examples/**` - Example code
 - `crates/*/build.rs` - Build scripts
-- `xtask/**` - Development tooling
 - `fuzz/**` - Fuzzing infrastructure
 - `**/*_generated.rs` - Generated code
+
+`xtask/**` is not excluded because proof-rail CLI and receipt code must stay visible to patch coverage.
 
 ## Coverage Workflow
 
@@ -176,7 +175,7 @@ The coverage workflow file defines:
 The `just coverage` recipes automatically install `cargo-llvm-cov` if missing. To install manually:
 
 ```bash
-cargo install cargo-llvm-cov --locked
+rtk cargo install cargo-llvm-cov --locked
 ```
 
 ### Coverage report generation fails
@@ -243,7 +242,7 @@ Use coverage to find gaps:
 
 ```bash
 # Generate HTML report
-just coverage
+rtk just coverage
 
 # Open target/coverage/index.html
 # Find uncovered lines (red highlighting)
@@ -253,15 +252,9 @@ just coverage
 
 ## Integration with CI Gates
 
-Coverage is **not** part of the fast merge gate (`just ci-gate`) to avoid slowing down the development cycle. Coverage runs:
-
-- On `main`/`master` for baseline tracking
-- On PRs with explicit `ci:coverage` label
-- On manual workflow dispatch
+Patch coverage is the Codecov PR coverage gate for new code. Project coverage remains informational during burn-down and is promoted to blocking after the project reaches the `95%` target.
 
 Branch coverage in the parser coverage lane is enforced separately through the baseline ratchet in `.ci/coverage-baseline.txt`.
-
-This keeps the merge gate fast (<5 min) while providing coverage visibility when needed.
 
 ## Test Analytics
 

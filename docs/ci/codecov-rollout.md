@@ -10,6 +10,19 @@ useful alongside the other evidence lanes.
 > tests, `ripr`, mutation, real-Perl oracle, no-panic, file policy, and
 > release readiness. It is **not** a release-readiness proof.
 
+## Proof-lane Codecov posture
+
+The proof-enforcement lane supersedes the original non-blocking Codecov rollout posture for PR coverage policy.
+
+Current policy:
+
+- patch `95%` / `0%` is the front-door PR coverage policy;
+- project `95%` remains informational during burn-down;
+- `xtask/src/` is included so proof-rail CLI code stays visible to coverage;
+- per-flag `target` fields are not used because project and patch status blocks own thresholds.
+
+This PR slice aligns Codecov configuration and documentation only. It does not implement workflow enforcement, project-coverage final enforcement, or the `quality-gate` CLI.
+
 ## What Codecov answers (and doesn't)
 
 Codecov answers:
@@ -28,7 +41,20 @@ Codecov does **not** answer:
 - whether no-panic policy is clean,
 - whether release readiness is proven.
 
-## Current vs target
+## Current proof-lane target
+
+| Surface                 | Current                                                               | Target                                                    |
+| ----------------------- | --------------------------------------------------------------------- | --------------------------------------------------------- |
+| Patch status            | Codecov patch `95%` / `0%`, blocking                                  | unchanged                                                 |
+| Project status          | Codecov project `95%`, informational during burn-down                 | blocking after project coverage reaches target            |
+| Coverage flags          | crate-level flags, including `xtask/src/` for proof-rail code         | keep flags inspectable without per-flag status targets    |
+| Branch-coverage ratchet | `.ci/coverage-baseline.txt` parser branch ratchet                     | unchanged in this slice                                   |
+| Coverage receipt        | not part of this PR slice                                             | later quality-gate slices define receipt freshness checks |
+| Test Analytics          | receipt to JUnit upload in PR-fast / gate shards / UX regression lanes | unchanged; documented as **test telemetry**               |
+
+## Historical current vs target
+
+The table below is retained for historical context and is superseded by the proof-enforcement lane policy above.
 
 | Surface                  | Current                                                                                              | Target                                                                                  |
 | ------------------------ | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
@@ -40,6 +66,10 @@ Codecov does **not** answer:
 | Coverage receipt         | absent                                                                                               | `target/coverage/coverage-receipt.json` per run, with claim boundary inlined            |
 | Test Analytics           | receipt → JUnit upload in PR-fast / gate shards / UX regression lanes                                | unchanged; documented as **test telemetry**, distinct from coverage                      |
 | Policy registration      | `codecov.yml` not in `policy/non-rust-allowlist.toml`                                                | added under `policy/non-rust-allowlist.toml` with `review_after` + `covered_by`         |
+
+## Historical Codecov ladder
+
+The older parser-branch Codecov ladder below is retained as history only. Its non-blocking, label-gated posture is superseded by the proof-enforcement lane for active PR coverage policy.
 
 ## PR ladder
 
