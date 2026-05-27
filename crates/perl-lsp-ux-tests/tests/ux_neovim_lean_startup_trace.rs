@@ -128,6 +128,13 @@ fn ux_neovim_lean_startup_trace_receipt() -> Result<()> {
     );
     record_event(&mut events, "semantic_tokens_capability_checked", start);
 
+    assert_eq!(
+        init.pointer("/result/capabilities/workspace/textDocumentContent/schemes"),
+        Some(&json!(["perldoc"])),
+        "lean startup trace must keep perldoc textDocumentContent capability advertised"
+    );
+    record_event(&mut events, "text_document_content_capability_checked", start);
+
     let inline_registered =
         wait_for_registration(&harness, "textDocument/inlineCompletion", Duration::from_secs(2));
     assert!(
@@ -170,6 +177,7 @@ fn ux_neovim_lean_startup_trace_receipt() -> Result<()> {
         "file_watchers_registered": watcher_registered,
         "inline_completion_registered": inline_registered,
         "semantic_tokens_delta_advertised": false,
+        "text_document_content_schemes": ["perldoc"],
         "diagnostic_mode": "syntax_only",
         "diagnostic_debounce_ms": 0,
         "events": events,
