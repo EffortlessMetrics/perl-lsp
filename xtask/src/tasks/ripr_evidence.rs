@@ -36,6 +36,31 @@ pub fn ripr_pr(root: &str, base: &str, head: &str, check: bool) -> Result<()> {
     if check { check_pr_evidence(&repo, &options) } else { write_pr_evidence(&repo, &options) }
 }
 
+pub fn ripr_plus(root: &str, receipt: &Path, check: bool) -> Result<()> {
+    let repo = repo_root()?;
+    let options = RiprPlusOptions { root: normalized_option(root, DEFAULT_ROOT) };
+    let packet = ripr_plus_packet(&repo, &options)?;
+    let rendered = format_json(&packet)?;
+    let receipt_path = repo.join(receipt);
+    if check {
+        let actual = fs::read_to_string(&receipt_path)
+            .with_context(|| format!("missing or unreadable {}", receipt_path.display()))?;
+        if actual != rendered {
+            bail!(
+                "{} is stale; run `cargo xtask ripr-plus --root {} --receipt {}`",
+                receipt_path.display(),
+                options.root,
+                receipt.display()
+            );
+        }
+        println!("RIPR+ receipt is current: {}", receipt_path.display());
+    } else {
+        write_text(&receipt_path, &rendered)?;
+        println!("Wrote {}", receipt_path.display());
+    }
+    Ok(())
+}
+
 pub fn ripr_review_comments(
     root: &str,
     base: &str,
@@ -157,6 +182,77 @@ struct PrEvidenceOptions {
     root: String,
     base: String,
     head: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct RiprPlusOptions {
+    root: String,
+}
+
+fn ripr_plus_packet(repo: &Path, options: &RiprPlusOptions) -> Result<Value> {
+    let root = command_root_arg(repo, &options.root)?;
+    let raw = run_ripr(&[
+        "check".to_string(),
+        "--root".to_string(),
+        root,
+        "--format".to_string(),
+        "repo-seams-json".to_string(),
+    ])?;
+    let value: Value =
+        serde_json::from_str(&raw).context("ripr repo-seams-json was invalid JSON")?;
+    let seams = value
+        .get("seams")
+        .and_then(Value::as_array)
+        .ok_or_else(|| eyre!("ripr repo-seams-json output did not include seams[]"))?;
+    Ok(json!({
+        "schema_version": 1,
+        "kind": "ripr_plus_baseline",
+        "mode": "advisory",
+        "head": current_head(repo)?,
+        "root": options.root,
+        "source_format": "ripr check --format repo-seams-json",
+        "unresolved": seams.len(),
+        "new_unresolved": null,
+        "top_files": ripr_plus_top_files(seams, 10),
+        "decision": "advisory",
+        "claim_boundary": [
+            "Measurement only; this receipt does not enforce ripr+ zero.",
+            "unresolved is the repo-seam count from RIPR repo-seams-json.",
+            "new_unresolved is null until PR diff comparison is wired in the quality gate."
+        ]
+    }))
+}
+
+fn ripr_plus_top_files(seams: &[Value], limit: usize) -> Vec<Value> {
+    let mut counts = std::collections::BTreeMap::<String, u64>::new();
+    for seam in seams {
+        if let Some(path) = ripr_plus_seam_path(seam) {
+            *counts.entry(path).or_default() += 1;
+        }
+    }
+    let mut rows = counts.into_iter().collect::<Vec<_>>();
+    rows.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
+    rows.truncate(limit);
+    rows.into_iter().map(|(name, count)| json!({ "name": name, "count": count })).collect()
+}
+
+fn ripr_plus_seam_path(seam: &Value) -> Option<String> {
+    let direct = ["path", "file"].into_iter().find_map(|key| seam.get(key).and_then(Value::as_str));
+    let nested = seam
+        .get("location")
+        .and_then(|value| value.get("path"))
+        .and_then(Value::as_str)
+        .or_else(|| {
+            seam.get("placement").and_then(|value| value.get("path")).and_then(Value::as_str)
+        })
+        .or_else(|| {
+            seam.get("evidence_record").and_then(|value| value.get("path")).and_then(Value::as_str)
+        });
+    direct.or(nested).map(normalize_path_text).filter(|path| !path.trim().is_empty())
+}
+
+fn current_head(repo: &Path) -> Result<String> {
+    Ok(run_git_output(repo, &["rev-parse", "HEAD"])?.trim().to_string())
 }
 
 fn write_pr_evidence(repo: &Path, options: &PrEvidenceOptions) -> Result<()> {
@@ -1300,6 +1396,29 @@ mod tests {
 
         assert!(command_root_arg(&repo, "../outside").is_err());
         Ok(())
+    }
+
+    #[test]
+    fn ripr_plus_top_files_rank_repo_seams_across_path_shapes() {
+        let seams = vec![
+            json!({"file": "crates/perl-parser/src/lib.rs"}),
+            json!({"path": "crates/perl-lexer/src/lib.rs"}),
+            json!({"location": {"path": r"crates\perl-parser\src\lib.rs"}}),
+            json!({"placement": {"path": "crates/perl-workspace/src/index.rs"}}),
+            json!({"evidence_record": {"path": "crates/perl-lexer/src/lib.rs"}}),
+            json!({"file": ""}),
+            json!({}),
+        ];
+
+        let rows = ripr_plus_top_files(&seams, 2);
+
+        assert_eq!(
+            rows,
+            vec![
+                json!({"name": "crates/perl-lexer/src/lib.rs", "count": 2}),
+                json!({"name": "crates/perl-parser/src/lib.rs", "count": 2}),
+            ]
+        );
     }
 
     #[test]

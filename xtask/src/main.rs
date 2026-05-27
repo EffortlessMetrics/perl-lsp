@@ -198,6 +198,19 @@ enum Commands {
         check: bool,
     },
 
+    /// Emit a repo-wide RIPR+ baseline receipt for the quality lane.
+    RiprPlus {
+        /// Root passed to RIPR. Defaults to the repository root.
+        #[arg(long, default_value = ".")]
+        root: String,
+        /// Receipt JSON path.
+        #[arg(long, default_value = "target/receipts/quality/ripr-plus.json")]
+        receipt: PathBuf,
+        /// Validate the existing receipt instead of rewriting it.
+        #[arg(long)]
+        check: bool,
+    },
+
     /// Produce diff-scoped RIPR review guidance artifacts without posting comments.
     RiprReviewComments {
         /// Root passed to RIPR. Defaults to the repository root.
@@ -2647,6 +2660,9 @@ fn main() -> Result<()> {
         Commands::Badges { check } => badges::run(check),
         Commands::RiprPr { root, base, head, check } => {
             ripr_evidence::ripr_pr(&root, &base, &head, check)
+        }
+        Commands::RiprPlus { root, receipt, check } => {
+            ripr_evidence::ripr_plus(&root, &receipt, check)
         }
         Commands::RiprReviewComments { root, base, head, timeout_seconds, check } => {
             ripr_evidence::ripr_review_comments(&root, &base, &head, timeout_seconds, check)

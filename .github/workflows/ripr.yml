@@ -8,14 +8,7 @@ name: ripr
 on:
   pull_request:
     branches: [master, main]
-    paths:
-      - 'crates/**'
-      - 'xtask/**'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'ripr.toml'
-      - 'policy/ripr-suppressions.toml'
-      - '.github/workflows/ripr.yml'
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch: {}
 
 concurrency:
@@ -61,6 +54,10 @@ jobs:
       - name: Generate PR evidence
         run: cargo xtask ripr-pr --base "origin/${{ github.base_ref || 'master' }}" --head HEAD
 
+      - name: Generate repo-wide RIPR+ baseline receipt
+        if: always()
+        run: cargo xtask ripr-plus --receipt target/receipts/quality/ripr-plus.json
+
       - name: Generate review guidance
         if: always()
         run: cargo xtask ripr-review-comments --base "origin/${{ github.base_ref || 'master' }}" --head HEAD --timeout-seconds 210
@@ -81,6 +78,7 @@ jobs:
         if: always()
         run: |
           cargo xtask ripr-pr --base "origin/${{ github.base_ref || 'master' }}" --head HEAD --check
+          cargo xtask ripr-plus --receipt target/receipts/quality/ripr-plus.json --check
           cargo xtask ripr-review-comments --base "origin/${{ github.base_ref || 'master' }}" --head HEAD --check
           cargo xtask impacted-evidence --labels-csv "$PR_LABELS" --check
           cargo xtask ripr-pr-summary --check
@@ -108,5 +106,6 @@ jobs:
             target/ripr/pr/**
             target/ripr/review/**
             target/xtask/impacted-evidence/**
+            target/receipts/quality/ripr-plus.json
           retention-days: 14
           if-no-files-found: warn
