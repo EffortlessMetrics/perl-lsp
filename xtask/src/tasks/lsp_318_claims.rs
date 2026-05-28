@@ -91,6 +91,10 @@ const NEGATIVE_TEST_MARKERS: &[RequiredMarker] = &[
     },
     RequiredMarker { label: "Command.tooltip gate", marker: "assert_no_command_tooltip" },
     RequiredMarker {
+        label: "trusted markdown command/theme-icon gate",
+        marker: "markdown_surfaces_do_not_emit_trusted_commands_or_theme_icons_without_support",
+    },
+    RequiredMarker {
         label: "experimental inline-completion provider gate",
         marker: "/experimental/inlineCompletionProvider",
     },
@@ -249,6 +253,8 @@ const FEATURE_CATALOG_FORBIDDEN_PATTERNS: &[RawPatternCheck] = &[
     RawPatternCheck { needle: "MessageType.Debug", label: "MessageType.Debug feature claim" },
     RawPatternCheck { needle: "Command.tooltip", label: "Command.tooltip feature claim" },
     RawPatternCheck { needle: "RelativePattern", label: "RelativePattern feature claim" },
+    RawPatternCheck { needle: "supportThemeIcons", label: "markdown theme-icon feature claim" },
+    RawPatternCheck { needle: "enabledCommands", label: "trusted markdown command feature claim" },
 ];
 
 #[derive(Clone, Copy)]

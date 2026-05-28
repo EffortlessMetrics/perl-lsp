@@ -127,6 +127,8 @@ The `lsp_318_negative_claims` test suite is the current guardrail for optional
 - registers file watchers with relative-pattern objects instead of string globs
 - sends `workspace/foldingRange/refresh` without client refresh support
 - emits `MessageType.Debug`
+- emits markdown `command:` links or `$()` theme-icon syntax without explicit
+  trusted-markdown/theme-icon support
 
 The suite is intentionally absence-first. It does not implement the optional
 features and must not be treated as proof that those features work.

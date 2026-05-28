@@ -256,6 +256,89 @@ fn window_message_type_does_not_emit_debug_level() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn markdown_surfaces_do_not_emit_trusted_commands_or_theme_icons_without_support() -> TestResult {
+    let mut harness = LspHarness::new_raw();
+    harness.initialize_ready(
+        "file:///workspace",
+        Some(json!({
+            "textDocument": {
+                "completion": {
+                    "completionItem": {
+                        "documentationFormat": ["markdown", "plaintext"],
+                        "snippetSupport": true
+                    }
+                },
+                "hover": {
+                    "contentFormat": ["markdown", "plaintext"]
+                },
+                "signatureHelp": {
+                    "signatureInformation": {
+                        "documentationFormat": ["markdown", "plaintext"],
+                        "parameterInformation": {
+                            "labelOffsetSupport": true
+                        }
+                    }
+                }
+            }
+        })),
+    )?;
+
+    harness.open("file:///markdown.pl", "my $rx = qr/foo\\d+/;\nprint(\"value\");\npri")?;
+
+    let hover = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": "file:///markdown.pl" },
+            "position": { "line": 0, "character": 13 }
+        }),
+    )?;
+    assert_no_trusted_markdown_affordances(&hover)?;
+    assert!(
+        value_contains_markdown_kind(&hover),
+        "expected regex hover to exercise a markdown surface: {hover}"
+    );
+
+    let completion = harness.request(
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": "file:///markdown.pl" },
+            "position": { "line": 2, "character": 3 },
+            "context": { "triggerKind": 1 }
+        }),
+    )?;
+    assert_no_trusted_markdown_affordances(&completion)?;
+
+    let print_item = find_completion_item(&completion, "print")?;
+    let resolved_print = harness.request("completionItem/resolve", print_item.clone())?;
+    assert_no_trusted_markdown_affordances(&resolved_print)?;
+    assert!(
+        value_contains_markdown_kind(&resolved_print),
+        "expected completion resolve to exercise markdown documentation: {resolved_print}"
+    );
+
+    let signature = harness.request(
+        "textDocument/signatureHelp",
+        json!({
+            "textDocument": { "uri": "file:///markdown.pl" },
+            "position": { "line": 1, "character": 7 }
+        }),
+    )?;
+    assert_no_trusted_markdown_affordances(&signature)?;
+
+    let perldoc = harness.request_raw(json!({
+        "jsonrpc": "2.0",
+        "id": 3180,
+        "method": "workspace/textDocumentContent",
+        "params": { "uri": "perldoc://strict" }
+    }));
+    if perldoc.get("error").is_none() {
+        assert_no_trusted_markdown_affordances(&perldoc)?;
+    }
+
+    Ok(())
+}
+
 fn assert_absent(value: &Value, pointer: &str) -> TestResult {
     assert!(value.pointer(pointer).is_none(), "{pointer} must be absent from {value}");
     Ok(())
@@ -356,6 +439,63 @@ fn collect_non_string_message_paths(value: &Value, path: &str, paths: &mut Vec<S
         }
         _ => {}
     }
+}
+
+fn assert_no_trusted_markdown_affordances(value: &Value) -> TestResult {
+    let mut paths = Vec::new();
+    collect_trusted_markdown_affordance_paths(value, "$", &mut paths);
+    assert!(
+        paths.is_empty(),
+        "trusted markdown command links and theme icons are not claimed; found at {}",
+        paths.join(", ")
+    );
+    Ok(())
+}
+
+fn collect_trusted_markdown_affordance_paths(value: &Value, path: &str, paths: &mut Vec<String>) {
+    match value {
+        Value::String(text) => {
+            if text.to_ascii_lowercase().contains("command:") || text.contains("$(") {
+                paths.push(path.to_string());
+            }
+        }
+        Value::Object(map) => {
+            for (name, child) in map {
+                collect_trusted_markdown_affordance_paths(child, &format!("{path}.{name}"), paths);
+            }
+        }
+        Value::Array(items) => {
+            for (idx, child) in items.iter().enumerate() {
+                collect_trusted_markdown_affordance_paths(child, &format!("{path}[{idx}]"), paths);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn value_contains_markdown_kind(value: &Value) -> bool {
+    match value {
+        Value::Object(map) => {
+            map.get("kind").and_then(Value::as_str) == Some("markdown")
+                || map.values().any(value_contains_markdown_kind)
+        }
+        Value::Array(items) => items.iter().any(value_contains_markdown_kind),
+        _ => false,
+    }
+}
+
+fn find_completion_item(completion: &Value, label: &str) -> TestResult<Value> {
+    let items = completion
+        .get("items")
+        .and_then(Value::as_array)
+        .or_else(|| completion.as_array())
+        .ok_or_else(|| format!("completion response missing items: {completion}"))?;
+
+    items
+        .iter()
+        .find(|item| item.get("label").and_then(Value::as_str) == Some(label))
+        .cloned()
+        .ok_or_else(|| format!("completion response missing {label} item: {completion}").into())
 }
 
 fn registration_for_method<'a>(requests: &'a [Value], method: &str) -> Option<&'a Value> {
