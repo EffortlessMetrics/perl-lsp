@@ -339,4 +339,10 @@ pub struct ClientCapabilities {
     /// When true the server may include a `labelDetails` object in completion
     /// items and in `completionItem/resolve` responses.
     pub label_details_support: bool,
+    /// Client supports `CompletionList.itemDefaults.data` (LSP 3.18).
+    ///
+    /// Parsed from `capabilities.textDocument.completion.completionList.itemDefaults`.
+    /// When true, completion responses may include shared `itemDefaults.data`
+    /// for clients that understand completion-list default item data.
+    pub completion_list_item_defaults_data_support: bool,
 }

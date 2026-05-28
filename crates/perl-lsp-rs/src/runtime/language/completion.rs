@@ -589,6 +589,34 @@ impl LspServer {
         })
     }
 
+    fn completion_list_default_data() -> Value {
+        json!({
+            "provider": "perl-lsp",
+            "kind": "completion-list",
+            "schemaVersion": 1
+        })
+    }
+
+    fn completion_list_response(
+        is_incomplete: bool,
+        items: Vec<Value>,
+        item_defaults_data_support: bool,
+    ) -> Value {
+        let has_items = !items.is_empty();
+        let mut response = json!({
+            "isIncomplete": is_incomplete,
+            "items": items
+        });
+
+        if item_defaults_data_support && has_items {
+            response["itemDefaults"] = json!({
+                "data": Self::completion_list_default_data()
+            });
+        }
+
+        response
+    }
+
     /// Format type information concisely for completion detail
     pub(crate) fn format_type_for_detail(t: &crate::type_inference::PerlType) -> String {
         use perl_parser::type_inference::PerlType;
@@ -762,6 +790,8 @@ impl LspServer {
                 let snippet_support = client_caps.snippet_support;
                 let commit_chars_support = client_caps.completion_commit_characters_support;
                 let label_details_support = client_caps.label_details_support;
+                let item_defaults_data_support =
+                    client_caps.completion_list_item_defaults_data_support;
 
                 let items: Vec<Value> = completions
                     .into_iter()
@@ -868,7 +898,11 @@ impl LspServer {
                 } else {
                     tracing::debug!(count = items.len(), "Returning completions");
                 }
-                return Ok(Some(json!({"isIncomplete": is_incomplete, "items": items})));
+                return Ok(Some(Self::completion_list_response(
+                    is_incomplete,
+                    items,
+                    item_defaults_data_support,
+                )));
             }
         }
 
@@ -1034,6 +1068,8 @@ impl LspServer {
                 let commit_chars_support = client_caps.completion_commit_characters_support;
                 let snippet_support = client_caps.snippet_support;
                 let label_details_support = client_caps.label_details_support;
+                let item_defaults_data_support =
+                    client_caps.completion_list_item_defaults_data_support;
 
                 let items: Vec<Value> = completions
                     .into_iter()
@@ -1124,7 +1160,11 @@ impl LspServer {
                     })
                     .collect();
 
-                return Ok(Some(json!({"isIncomplete": false, "items": items})));
+                return Ok(Some(Self::completion_list_response(
+                    false,
+                    items,
+                    item_defaults_data_support,
+                )));
             }
 
             Ok(Some(json!({"isIncomplete": false, "items": []})))

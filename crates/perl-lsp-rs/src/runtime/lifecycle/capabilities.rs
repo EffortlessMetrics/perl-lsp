@@ -175,6 +175,10 @@ impl LspServer {
                     .and_then(|ci| ci.get("labelDetailsSupport"))
                     .and_then(|b| b.as_bool())
                     .unwrap_or(false);
+                caps.completion_list_item_defaults_data_support = params
+                    .pointer("/capabilities/textDocument/completion/completionList/itemDefaults")
+                    .and_then(Value::as_array)
+                    .is_some_and(|items| items.iter().any(|item| item.as_str() == Some("data")));
 
                 // Check if client supports markdown message content in diagnostics (LSP 3.18)
                 caps.markup_message_support = params
@@ -866,6 +870,52 @@ mod tests {
         let caps = server.client_capabilities.lock();
         assert!(caps.snippet_support);
         assert!(caps.completion_commit_characters_support);
+    }
+
+    #[test]
+    fn initialize_parses_completion_list_item_defaults_data_support() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "textDocument": {
+                    "completion": {
+                        "completionList": {
+                            "itemDefaults": [
+                                "commitCharacters",
+                                "editRange",
+                                "insertTextFormat",
+                                "insertTextMode",
+                                "data"
+                            ]
+                        }
+                    }
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        assert!(server.client_capabilities.lock().completion_list_item_defaults_data_support);
+    }
+
+    #[test]
+    fn initialize_leaves_completion_list_item_defaults_data_disabled_when_absent() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "textDocument": {
+                    "completion": {
+                        "completionList": {
+                            "itemDefaults": ["commitCharacters", "insertTextFormat"]
+                        }
+                    }
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        assert!(!server.client_capabilities.lock().completion_list_item_defaults_data_support);
     }
 
     #[test]

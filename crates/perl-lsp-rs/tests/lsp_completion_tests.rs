@@ -24,6 +24,18 @@ fn completion_item_caps(
     })
 }
 
+fn completion_list_item_defaults_data_caps() -> serde_json::Value {
+    json!({
+        "textDocument": {
+            "completion": {
+                "completionList": {
+                    "itemDefaults": ["commitCharacters", "insertTextFormat", "data"]
+                }
+            }
+        }
+    })
+}
+
 /// Test basic variable completion
 #[test]
 fn test_scalar_variable_completion() -> Result<(), Box<dyn std::error::Error>> {
@@ -1646,6 +1658,107 @@ fn test_cross_editor_completion_capability_profiles() -> Result<(), Box<dyn std:
             assert_eq!(insert_text_format, 1, "profile '{name}' should degrade snippet format");
         }
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_completion_list_item_defaults_data_absent_without_support()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    let uri = "file:///completion_item_defaults_absent.pl";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "my $alpha = 1;\n$al\n"
+                }
+            }
+        }),
+    );
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
+
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": { "line": 1, "character": 3 },
+                "context": { "triggerKind": 1 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+    assert!(!items.is_empty(), "completion fixture must produce at least one item: {response}");
+    assert!(
+        response["result"].get("itemDefaults").is_none(),
+        "CompletionList.itemDefaults.data must stay absent without client support: {response}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_completion_list_item_defaults_data_emitted_when_supported()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp_with_capabilities(&server, completion_list_item_defaults_data_caps());
+
+    let uri = "file:///completion_item_defaults_supported.pl";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "my $alpha = 1;\n$al\n"
+                }
+            }
+        }),
+    );
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
+
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": { "line": 1, "character": 3 },
+                "context": { "triggerKind": 1 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+    assert!(!items.is_empty(), "completion fixture must produce at least one item: {response}");
+
+    let data = response["result"]
+        .pointer("/itemDefaults/data")
+        .ok_or_else(|| format!("supported client must receive itemDefaults.data: {response}"))?;
+    assert_eq!(data.get("provider").and_then(|value| value.as_str()), Some("perl-lsp"));
+    assert_eq!(data.get("kind").and_then(|value| value.as_str()), Some("completion-list"));
+    assert_eq!(data.get("schemaVersion").and_then(|value| value.as_i64()), Some(1));
+    assert!(
+        response["result"].get("applyKind").is_none(),
+        "itemDefaults.data support must not imply CompletionList.applyKind: {response}"
+    );
 
     Ok(())
 }

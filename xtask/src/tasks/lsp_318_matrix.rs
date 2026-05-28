@@ -192,14 +192,14 @@ const ROWS: &[MatrixRow] = &[
     MatrixRow {
         feature: "`CompletionList.itemDefaults.data`",
         since_or_flag: "LSP 3.18",
-        client_gate: "completion-list item default support",
+        client_gate: "`textDocument.completion.completionList.itemDefaults` contains `data`",
         server_shape: "`CompletionList.itemDefaults.data`",
         method_or_shape: "`textDocument/completion`; `completionItem/resolve`",
-        status: "negative-gated+documented",
-        proof: "`lsp_318_negative_claims`; `check-lsp-318-claims`",
+        status: "implemented+tested+documented",
+        proof: "`lsp_completion_tests`; `lsp_318_negative_claims`; `check-lsp-318-claims`",
         owner: "`crates/perl-lsp-rs/src/runtime/language/completion.rs`",
         priority: "P2",
-        notes: "Useful for shared resolve context; keep absent until capability support and resolve behavior are proven.",
+        notes: "Supported clients receive shared completion-list data; unsupported clients retain the current response shape. Does not imply `CompletionList.applyKind` support.",
     },
     MatrixRow {
         feature: "`CompletionList.applyKind`",

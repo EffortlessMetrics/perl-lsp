@@ -13,6 +13,7 @@ const DIAGNOSTIC_ENRICHMENT_TEST: &str =
     "crates/perl-lsp-rs/tests/lsp_diagnostic_enrichment_test.rs";
 const REFRESH_METHODS_TEST: &str = "crates/perl-lsp-rs/tests/lsp_refresh_methods_tests.rs";
 const SCHEMA_VALIDATION_TEST: &str = "crates/perl-lsp-rs/tests/lsp_schema_validation.rs";
+const COMPLETION_TEST: &str = "crates/perl-lsp-rs/tests/lsp_completion_tests.rs";
 const CODE_LENS_TEST: &str = "crates/perl-lsp-rs/tests/lsp_codelens_tests.rs";
 const WINDOW_TEST: &str = "crates/perl-lsp-rs/tests/lsp_window_tests.rs";
 const CLIENT_REQUESTS: &str = "crates/perl-lsp-rs/src/runtime/client_requests.rs";
@@ -137,6 +138,10 @@ const FEATURE_CATALOG_MARKERS: &[RequiredMarker] = &[
         label: "CodeLens resolveSupport.properties feature catalog row",
         marker: "id = \"lsp.code_lens_resolve_support_properties\"",
     },
+    RequiredMarker {
+        label: "CompletionList.itemDefaults.data feature catalog row",
+        marker: "id = \"lsp.completion_list_item_defaults_data\"",
+    },
 ];
 
 const REFRESH_METHODS_TEST_MARKERS: &[RequiredMarker] = &[RequiredMarker {
@@ -157,6 +162,17 @@ const SCHEMA_VALIDATION_TEST_MARKERS: &[RequiredMarker] = &[
     RequiredMarker {
         label: "Diagnostic.message MarkupContent schema compatibility",
         marker: "diagnostic_message_accepts_lsp_318_markup_content",
+    },
+];
+
+const COMPLETION_TEST_MARKERS: &[RequiredMarker] = &[
+    RequiredMarker {
+        label: "CompletionList.itemDefaults.data positive receipt",
+        marker: "test_completion_list_item_defaults_data_emitted_when_supported",
+    },
+    RequiredMarker {
+        label: "CompletionList.itemDefaults.data negative receipt",
+        marker: "test_completion_list_item_defaults_data_absent_without_support",
     },
 ];
 
@@ -262,10 +278,6 @@ const FEATURE_CATALOG_FORBIDDEN_PATTERNS: &[RawPatternCheck] = &[
         label: "CompletionList.applyKind feature claim",
     },
     RawPatternCheck {
-        needle: "CompletionList.itemDefaults.data",
-        label: "CompletionList.itemDefaults.data feature claim",
-    },
-    RawPatternCheck {
         needle: "CodeAction.documentation",
         label: "CodeAction.documentation feature claim",
     },
@@ -328,23 +340,26 @@ pub fn run() -> Result<()> {
         SCHEMA_VALIDATION_TEST_MARKERS,
         &mut violations,
     )?;
+    check_required_markers(&root, COMPLETION_TEST, COMPLETION_TEST_MARKERS, &mut violations)?;
     check_required_markers(&root, CODE_LENS_TEST, CODE_LENS_TEST_MARKERS, &mut violations)?;
     check_required_markers(&root, WINDOW_TEST, WINDOW_TEST_MARKERS, &mut violations)?;
     check_feature_catalog(&root, &mut violations)?;
     check_capability_snapshots(&root, &mut violations)?;
     check_folding_range_refresh_guard(&root, &mut violations)?;
     check_code_lens_resolve_support_guard(&root, &mut violations)?;
+    check_completion_item_defaults_data_guard(&root, &mut violations)?;
     check_message_type_debug_support(&root, &mut violations)?;
 
     if violations.is_empty() {
         println!(
-            "LSP 3.18 claim guard OK: {} capability snapshots, {} feature markers, {} negative-test markers, {} positive refresh markers, {} diagnostic markers, {} schema markers, {} CodeLens markers, {} window markers, {} spec markers checked",
+            "LSP 3.18 claim guard OK: {} capability snapshots, {} feature markers, {} negative-test markers, {} positive refresh markers, {} diagnostic markers, {} schema markers, {} completion markers, {} CodeLens markers, {} window markers, {} spec markers checked",
             CAPABILITY_SNAPSHOTS.len(),
             FEATURE_CATALOG_MARKERS.len(),
             NEGATIVE_TEST_MARKERS.len(),
             REFRESH_METHODS_TEST_MARKERS.len(),
             DIAGNOSTIC_ENRICHMENT_TEST_MARKERS.len(),
             SCHEMA_VALIDATION_TEST_MARKERS.len(),
+            COMPLETION_TEST_MARKERS.len(),
             CODE_LENS_TEST_MARKERS.len(),
             WINDOW_TEST_MARKERS.len(),
             SPEC_MARKERS.len()
@@ -510,6 +525,48 @@ fn check_code_lens_resolve_support_guard(
             "prepare_code_lenses_for_client",
         ],
         "CodeLens command lazy-resolution gate",
+        violations,
+    );
+
+    Ok(())
+}
+
+fn check_completion_item_defaults_data_guard(
+    root: &Path,
+    violations: &mut Vec<Violation>,
+) -> Result<()> {
+    let state_document = read_required(root, STATE_DOCUMENT)?;
+    let lifecycle_capabilities = read_required(root, LIFECYCLE_CAPABILITIES)?;
+    let completion = read_required(root, "crates/perl-lsp-rs/src/runtime/language/completion.rs")?;
+
+    require_all(
+        STATE_DOCUMENT,
+        &state_document,
+        &["completion_list_item_defaults_data_support"],
+        "CompletionList.itemDefaults.data capability storage",
+        violations,
+    );
+    require_all(
+        LIFECYCLE_CAPABILITIES,
+        &lifecycle_capabilities,
+        &[
+            "/capabilities/textDocument/completion/completionList/itemDefaults",
+            "completion_list_item_defaults_data_support",
+            "Some(\"data\")",
+        ],
+        "CompletionList.itemDefaults.data capability parser",
+        violations,
+    );
+    require_all(
+        "crates/perl-lsp-rs/src/runtime/language/completion.rs",
+        &completion,
+        &[
+            "completion_list_default_data",
+            "completion_list_response",
+            "\"itemDefaults\"",
+            "\"data\"",
+        ],
+        "CompletionList.itemDefaults.data response gate",
         violations,
     );
 
