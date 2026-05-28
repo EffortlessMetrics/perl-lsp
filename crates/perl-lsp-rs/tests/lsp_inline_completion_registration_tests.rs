@@ -169,6 +169,66 @@ fn inline_completion_automatic_trigger_returns_one_conservative_item() -> TestRe
 }
 
 #[test]
+fn inline_completion_automatic_trigger_suppresses_multiline_constructor_template() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_automatic_constructor.pl";
+    harness.open(uri, "sub new")?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, uri, 0, 7, 2)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+
+    assert!(items.is_empty(), "automatic trigger must stay silent for constructor templates");
+    Ok(())
+}
+
+#[test]
+fn inline_completion_automatic_trigger_suppresses_package_template() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_automatic_package.pl";
+    harness.open(uri, "package ")?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, uri, 0, 8, 2)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+
+    assert!(items.is_empty(), "automatic trigger must stay silent for package templates");
+    Ok(())
+}
+
+#[test]
+fn inline_completion_automatic_trigger_suppresses_generic_method_guess() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_automatic_method_guess.pl";
+    harness.open(uri, "$obj->n")?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, uri, 0, 7, 2)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+
+    assert!(items.is_empty(), "automatic trigger must not show generic method guesses");
+    Ok(())
+}
+
+#[test]
 fn inline_completion_invoked_trigger_returns_deterministic_items() -> TestResult {
     let mut harness = LspHarness::new();
     harness.initialize(Some(json!({
@@ -191,6 +251,60 @@ fn inline_completion_invoked_trigger_returns_deterministic_items() -> TestResult
     assert!(
         insert_texts.contains(&"feature ':5.36';"),
         "expected feature pragma item, got: {items:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn inline_completion_invoked_trigger_keeps_constructor_template() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_invoked_constructor.pl";
+    harness.open(uri, "sub new")?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, uri, 0, 7, 1)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+
+    assert!(
+        items.iter().any(|item| {
+            item.get("insertText")
+                .and_then(Value::as_str)
+                .is_some_and(|text| text.contains("bless") && text.contains("my $class = shift"))
+        }),
+        "invoked trigger must keep richer constructor template, got: {items:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn inline_completion_invoked_trigger_keeps_package_template() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_invoked_package.pl";
+    harness.open(uri, "package ")?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, uri, 0, 8, 1)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+
+    assert!(
+        items.iter().any(|item| {
+            item.get("insertText")
+                .and_then(Value::as_str)
+                .is_some_and(|text| text.contains("MyPackage;") && text.contains("use strict;"))
+        }),
+        "invoked trigger must keep richer package template, got: {items:?}"
     );
     Ok(())
 }

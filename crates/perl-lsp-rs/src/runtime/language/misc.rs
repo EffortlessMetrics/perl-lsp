@@ -140,10 +140,22 @@ fn apply_inline_completion_trigger_policy(
     trigger_kind: InlineCompletionTriggerKind,
 ) -> perl_lsp_rs_core::providers::inline_completion::InlineCompletionList {
     if trigger_kind == InlineCompletionTriggerKind::Automatic {
+        list.items.retain(is_safe_automatic_inline_item);
         list.items.truncate(1);
     }
 
     list
+}
+
+fn is_safe_automatic_inline_item(
+    item: &perl_lsp_rs_core::providers::inline_completion::InlineCompletionItem,
+) -> bool {
+    let text = item.insert_text.trim();
+    !text.is_empty()
+        && text.chars().count() <= 80
+        && text.ends_with(';')
+        && !text.contains(['\r', '\n', '$', '@', '%', '{', '}', '[', ']', '(', ')'])
+        && !text.contains("...")
 }
 
 fn inline_use_module_fragment(prefix: &str) -> Option<&str> {
