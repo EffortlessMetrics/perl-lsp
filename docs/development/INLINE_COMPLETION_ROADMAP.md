@@ -352,10 +352,22 @@ Current completed or substantially implemented phases:
   continuations;
 - ranking, parse-safety filtering, and local quality receipts.
 
+Current semantic inline UX receipt inventory:
+
+| Receipt | Scenario | Proves |
+| --- | --- | --- |
+| `mojolicious_inline_completion_quality` | `ux_scenario_51_mojolicious_inline_completion_quality.rs` | Real-workspace Mojolicious inline behavior, module import ghost text, selected-completion alignment, and hard-zone silence. |
+| `test_inline_completion_quality` | `ux_scenario_52_test_inline_completion_quality.rs` | Test::More and Test2 assertion ghost text through stdio. |
+| `constructor_inline_completion_quality` | `ux_scenario_53_constructor_inline_completion_quality.rs` | Constructor suggestions that follow shift-style and signature-style local idioms. |
+| `self_receiver_inline_completion_quality` | `ux_scenario_54_self_receiver_inline_completion_quality.rs` | `$self->` current-package method suggestions without unrelated or generic constructor guesses. |
+| `dbi_receiver_inline_completion_quality` | `ux_scenario_55_dbi_receiver_inline_completion_quality.rs` | DBI database-handle and statement-handle receiver suggestions without generic constructor guesses. |
+| `lexical_return_inline_completion_quality` | `ux_scenario_56_lexical_return_inline_completion_quality.rs` | Visible lexical return ghost text from real stdio requests. |
+| `loop_binding_inline_completion_quality` | `ux_scenario_57_loop_binding_inline_completion_quality.rs` | Visible collection loop bindings, hash key iteration, array preference, and safe singular naming. |
+
 Still future or deliberately gated:
 
-- larger real-project UX receipts for inline quality beyond deterministic unit
-  fixtures;
+- broader real-project UX receipts for inline quality beyond the current receipt
+  inventory;
 - next-edit suggestions;
 - optional AI candidate boundaries.
 

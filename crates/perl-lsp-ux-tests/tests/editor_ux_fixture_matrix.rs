@@ -28,6 +28,15 @@ const VALID_COMPONENTS: &[&str] = &[
 
 /// Required keys inside each workflow's `instrumentation` object.
 const INSTRUMENTATION_KEYS: &[&str] = &["run_receipt", "first_useful_result", "protocol_goldens"];
+const SEMANTIC_INLINE_RECEIPT_IDS: &[&str] = &[
+    "mojolicious_inline_completion_quality",
+    "test_inline_completion_quality",
+    "constructor_inline_completion_quality",
+    "self_receiver_inline_completion_quality",
+    "dbi_receiver_inline_completion_quality",
+    "lexical_return_inline_completion_quality",
+    "loop_binding_inline_completion_quality",
+];
 
 fn workspace_root() -> &'static Path {
     match Path::new(env!("CARGO_MANIFEST_DIR")).parent().and_then(Path::parent) {
@@ -36,13 +45,16 @@ fn workspace_root() -> &'static Path {
     }
 }
 
-#[test]
-fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
+fn load_fixture_matrix() -> Result<Value> {
     let matrix_path = workspace_root().join(FIXTURE_MATRIX);
     let matrix_text = fs::read_to_string(&matrix_path)
         .with_context(|| format!("reading {}", matrix_path.display()))?;
-    let matrix: Value = serde_json::from_str(&matrix_text)
-        .with_context(|| format!("parsing {}", matrix_path.display()))?;
+    serde_json::from_str(&matrix_text).with_context(|| format!("parsing {}", matrix_path.display()))
+}
+
+#[test]
+fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
+    let matrix = load_fixture_matrix()?;
 
     let schema_version =
         matrix.get("schema_version").and_then(Value::as_u64).context("schema_version missing")?;
@@ -222,6 +234,105 @@ fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
             "component metric `{component_metric}` must be exercised by at least two workflows (found {count})"
         );
     }
+
+    Ok(())
+}
+
+#[test]
+fn semantic_inline_completion_receipt_inventory_is_current() -> Result<()> {
+    let matrix = load_fixture_matrix()?;
+    let workflows =
+        matrix.get("workflows").and_then(Value::as_array).context("workflows missing")?;
+    let by_id: HashMap<&str, &Value> = workflows
+        .iter()
+        .filter_map(|workflow| {
+            let id = workflow.get("id")?.as_str()?;
+            Some((id, workflow))
+        })
+        .collect();
+
+    let mut receipt_backed_count = 0_usize;
+    let mut direct_stdio_count = 0_usize;
+
+    for id in SEMANTIC_INLINE_RECEIPT_IDS {
+        let workflow = by_id.get(id).with_context(|| {
+            format!("semantic inline workflow `{id}` missing from fixture matrix")
+        })?;
+        let scenario_file = workflow
+            .get("scenario_file")
+            .and_then(Value::as_str)
+            .with_context(|| format!("workflow `{id}` missing scenario_file"))?;
+        let component = workflow
+            .get("component")
+            .and_then(Value::as_str)
+            .with_context(|| format!("workflow `{id}` missing component"))?;
+        assert_eq!(
+            component, "completion",
+            "semantic inline workflow `{id}` must remain in the completion component"
+        );
+        assert!(
+            scenario_file.contains("inline_completion_quality"),
+            "semantic inline workflow `{id}` should point at an inline-completion quality scenario, got `{scenario_file}`"
+        );
+
+        let instrumentation = workflow
+            .get("instrumentation")
+            .and_then(Value::as_object)
+            .with_context(|| format!("workflow `{id}` missing instrumentation"))?;
+        let run_receipt = instrumentation
+            .get("run_receipt")
+            .and_then(Value::as_bool)
+            .with_context(|| format!("workflow `{id}` missing instrumentation.run_receipt"))?;
+        if run_receipt {
+            receipt_backed_count += 1;
+        } else {
+            direct_stdio_count += 1;
+        }
+
+        let measures = collect_string_set(
+            workflow
+                .get("measures")
+                .with_context(|| format!("workflow `{id}` missing measures"))?,
+            id,
+        )?;
+        assert!(
+            measures.contains("workflow_pass_rate") && measures.contains("workflow_stability_rate"),
+            "semantic inline workflow `{id}` must stay visible in pass and stability rollups"
+        );
+
+        let confidence_signals = collect_string_set(
+            workflow
+                .get("confidence_signals")
+                .with_context(|| format!("workflow `{id}` missing confidence_signals"))?,
+            &format!("{id}.confidence_signals"),
+        )?;
+        assert!(
+            confidence_signals.contains("first_five_minutes_harness")
+                && confidence_signals.contains("manual_editor_smoke")
+                && confidence_signals.contains("issue_burndown_regression_guard"),
+            "semantic inline workflow `{id}` must keep the standard UX confidence signals"
+        );
+
+        let expected_outcomes = workflow
+            .get("expected_outcomes")
+            .and_then(Value::as_array)
+            .with_context(|| format!("workflow `{id}` missing expected_outcomes"))?;
+        assert!(
+            expected_outcomes.iter().filter_map(Value::as_str).any(|outcome| {
+                outcome.contains("inline completion") || outcome.contains("inline-completion")
+            }),
+            "semantic inline workflow `{id}` must state an inline completion outcome"
+        );
+    }
+
+    assert!(
+        receipt_backed_count >= 5,
+        "semantic inline inventory should keep at least five receipt-backed workflows, got {receipt_backed_count}"
+    );
+    assert!(
+        direct_stdio_count >= 2,
+        "semantic inline inventory should keep direct stdio proof workflows visible, got {direct_stdio_count}"
+    );
 
     Ok(())
 }
