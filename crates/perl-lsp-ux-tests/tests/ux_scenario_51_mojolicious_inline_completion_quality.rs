@@ -1,0 +1,282 @@
+//! Scenario 51 - Mojolicious inline-completion quality receipt.
+//!
+//! This receipt exercises inline completion over the committed Mojolicious
+//! skeleton workspace. It records whether invoked module ghost text uses
+//! reachable project modules and whether automatic ghost text stays silent in
+//! a hard reject zone.
+
+// UX receipt tests intentionally write structured receipts to stderr for --nocapture logs.
+#![allow(clippy::print_stderr)]
+
+use anyhow::{Context, Result};
+use perl_lsp_ux_tests::{
+    LspEvent, ProjectFixtureFile, UxCiTier, UxComponent, UxHarness, binary_available,
+    fixture_scenario_config, load_mojolicious_fixture_files, missing_binary_skip,
+    open_all_fixture_files, run_ux_scenario,
+};
+use serde::Serialize;
+use serde_json::{Value, json};
+use std::time::{Duration, Instant};
+
+const SCENARIO_FILE: &str = "ux_scenario_51_mojolicious_inline_completion_quality.rs";
+const MODULE_IMPORT_PROBE_PATH: &str = "script/inline-mojolicious-import.pl";
+const HARD_ZONE_PROBE_PATH: &str = "script/inline-mojolicious-comment.pl";
+const MODULE_MARKER: &str = "use Mojolicious::";
+const HARD_ZONE_MARKER: &str = "Mojolicious::";
+
+const MODULE_IMPORT_PROBE_SOURCE: &str = r#"use strict;
+use warnings;
+use lib 'lib';
+use Mojolicious::
+"#;
+
+const HARD_ZONE_PROBE_SOURCE: &str = r#"# use Mojolicious::
+"#;
+
+const EXPECTED_MODULE_INSERTS: &[&str] =
+    &["Mojolicious::Commands;", "Mojolicious::Controller;", "Mojolicious::Renderer;"];
+
+const FORBIDDEN_MODULE_INSERTS: &[&str] =
+    &["strict;", "warnings;", "feature ':5.36';", "Mojo::Base;"];
+
+#[derive(Debug, Serialize)]
+struct InlineModuleProbeReport {
+    file: &'static str,
+    trigger_kind: u8,
+    candidate_count: usize,
+    insert_texts: Vec<String>,
+    expected_insert_texts: Vec<&'static str>,
+    missing_expected_insert_texts: Vec<&'static str>,
+    forbidden_insert_texts: Vec<&'static str>,
+}
+
+#[derive(Debug, Serialize)]
+struct InlineSilenceProbeReport {
+    file: &'static str,
+    trigger_kind: u8,
+    candidate_count: usize,
+    stayed_silent: bool,
+    insert_texts: Vec<String>,
+}
+
+fn create_harness(fixture_files: &[ProjectFixtureFile]) -> Result<UxHarness> {
+    let mut config = fixture_scenario_config(fixture_files)
+        .with_file(MODULE_IMPORT_PROBE_PATH, MODULE_IMPORT_PROBE_SOURCE)
+        .with_file(HARD_ZONE_PROBE_PATH, HARD_ZONE_PROBE_SOURCE);
+    config.client_capability_overrides = json!({
+        "textDocument": {
+            "inlineCompletion": {
+                "dynamicRegistration": true
+            }
+        }
+    });
+
+    UxHarness::new(config)
+}
+
+fn position_after(source: &str, needle: &str) -> Result<(u32, u32)> {
+    let byte_offset =
+        source.find(needle).with_context(|| format!("missing `{needle}`"))? + needle.len();
+    position_from_byte_offset(source, byte_offset)
+}
+
+fn position_from_byte_offset(source: &str, byte_offset: usize) -> Result<(u32, u32)> {
+    let prefix = source
+        .get(..byte_offset)
+        .with_context(|| format!("byte offset {byte_offset} is not a UTF-8 boundary"))?;
+    let line = prefix.bytes().filter(|byte| *byte == b'\n').count();
+    let character = prefix.rsplit('\n').next().map(str::chars).map(Iterator::count).unwrap_or(0);
+    Ok((u32::try_from(line)?, u32::try_from(character)?))
+}
+
+fn inline_insert_text(item: &Value) -> Option<String> {
+    item.get("insertText").and_then(Value::as_str).map(str::to_string)
+}
+
+fn item_has_inline_shape(item: &Value) -> bool {
+    item.get("insertText").and_then(Value::as_str).is_some()
+}
+
+fn inline_registration_seen(events: &[LspEvent]) -> bool {
+    events.iter().any(|event| {
+        let LspEvent::Other { method, params } = event else {
+            return false;
+        };
+        method == "client/registerCapability"
+            && params.get("registrations").and_then(Value::as_array).into_iter().flatten().any(
+                |registration| {
+                    registration.get("method").and_then(Value::as_str)
+                        == Some("textDocument/inlineCompletion")
+                        && registration.get("id").and_then(Value::as_str)
+                            == Some("perl-inlineCompletion")
+                },
+            )
+    })
+}
+
+fn wait_for_inline_registration(harness: &UxHarness) -> bool {
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while Instant::now() < deadline {
+        if inline_registration_seen(&harness.client.peek_events()) {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    false
+}
+
+fn probe_module_inline_completion(harness: &UxHarness) -> Result<InlineModuleProbeReport> {
+    let (line, character) = position_after(MODULE_IMPORT_PROBE_SOURCE, MODULE_MARKER)?;
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let items = loop {
+        let items = harness.inline_completion_with_trigger_kind(
+            MODULE_IMPORT_PROBE_PATH,
+            line,
+            character,
+            1,
+        )?;
+        for item in &items {
+            anyhow::ensure!(
+                item_has_inline_shape(item),
+                "inline item must include insertText: {item:?}"
+            );
+        }
+        let insert_texts = insert_texts_for(&items);
+        if EXPECTED_MODULE_INSERTS
+            .iter()
+            .all(|expected| insert_texts.iter().any(|actual| actual == expected))
+            || Instant::now() >= deadline
+        {
+            break items;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    };
+
+    let insert_texts = insert_texts_for(&items);
+    let missing_expected_insert_texts = EXPECTED_MODULE_INSERTS
+        .iter()
+        .copied()
+        .filter(|expected| !insert_texts.iter().any(|actual| actual == expected))
+        .collect::<Vec<_>>();
+    let forbidden_insert_texts = FORBIDDEN_MODULE_INSERTS
+        .iter()
+        .copied()
+        .filter(|forbidden| insert_texts.iter().any(|actual| actual == forbidden))
+        .collect::<Vec<_>>();
+
+    Ok(InlineModuleProbeReport {
+        file: MODULE_IMPORT_PROBE_PATH,
+        trigger_kind: 1,
+        candidate_count: items.len(),
+        insert_texts,
+        expected_insert_texts: EXPECTED_MODULE_INSERTS.to_vec(),
+        missing_expected_insert_texts,
+        forbidden_insert_texts,
+    })
+}
+
+fn probe_hard_zone_inline_completion(harness: &UxHarness) -> Result<InlineSilenceProbeReport> {
+    let (line, character) = position_after(HARD_ZONE_PROBE_SOURCE, HARD_ZONE_MARKER)?;
+    let items =
+        harness.inline_completion_with_trigger_kind(HARD_ZONE_PROBE_PATH, line, character, 2)?;
+    for item in &items {
+        anyhow::ensure!(
+            item_has_inline_shape(item),
+            "inline item must include insertText: {item:?}"
+        );
+    }
+    let insert_texts = insert_texts_for(&items);
+
+    Ok(InlineSilenceProbeReport {
+        file: HARD_ZONE_PROBE_PATH,
+        trigger_kind: 2,
+        candidate_count: items.len(),
+        stayed_silent: items.is_empty(),
+        insert_texts,
+    })
+}
+
+fn insert_texts_for(items: &[Value]) -> Vec<String> {
+    items.iter().filter_map(inline_insert_text).collect()
+}
+
+#[test]
+fn scenario_51_mojolicious_inline_completion_quality_receipt() {
+    run_ux_scenario(
+        "mojolicious_inline_completion_quality",
+        SCENARIO_FILE,
+        "scenario_51_mojolicious_inline_completion_quality_receipt",
+        UxCiTier::Pr,
+        Some(UxComponent::Completion),
+        |recorder| {
+            if !binary_available() {
+                return Err(missing_binary_skip().into());
+            }
+
+            let fixture_files = load_mojolicious_fixture_files()?;
+            recorder
+                .check("mojolicious fixture has committed Perl files", !fixture_files.is_empty())?;
+            let fixture_file_count = fixture_files.len();
+            let harness = create_harness(&fixture_files)?;
+            open_all_fixture_files(&harness, &fixture_files)?;
+            harness.open_file(MODULE_IMPORT_PROBE_PATH, MODULE_IMPORT_PROBE_SOURCE)?;
+            harness.open_file(HARD_ZONE_PROBE_PATH, HARD_ZONE_PROBE_SOURCE)?;
+            std::thread::sleep(Duration::from_millis(500));
+
+            recorder.mark_request_start("dynamic_inline_registration");
+            let dynamic_registration_seen = wait_for_inline_registration(&harness);
+            if dynamic_registration_seen {
+                recorder.mark_first_useful_result("dynamic_inline_registration");
+            }
+
+            recorder.mark_request_start("module_import_inline_completion");
+            let module_report = probe_module_inline_completion(&harness)?;
+            if module_report.missing_expected_insert_texts.is_empty() {
+                recorder.mark_first_useful_result("module_import_inline_completion");
+            }
+
+            recorder.mark_request_start("hard_zone_inline_completion");
+            let hard_zone_report = probe_hard_zone_inline_completion(&harness)?;
+            if hard_zone_report.stayed_silent {
+                recorder.mark_first_useful_result("hard_zone_inline_completion");
+            }
+
+            let receipt = json!({
+                "schema_version": 1,
+                "receipt": "mojolicious_inline_completion_quality",
+                "workspace_fixture": "mojolicious_skeleton",
+                "claim_boundary": "real-workspace inline-completion quality receipt only; no provider behavior change, support-tier promotion, source mirror, release action, or AI behavior",
+                "fixture_file_count": fixture_file_count,
+                "dynamic_registration_seen": dynamic_registration_seen,
+                "module_probe": module_report,
+                "hard_zone_probe": hard_zone_report,
+            });
+            eprintln!(
+                "mojolicious_inline_completion_quality_receipt={}",
+                serde_json::to_string_pretty(&receipt)?
+            );
+
+            recorder
+                .check("dynamic inline registration was observed", dynamic_registration_seen)?;
+            recorder.check(
+                "invoked module inline completion returned candidates",
+                module_report.candidate_count > 0,
+            )?;
+            recorder.check(
+                "invoked module inline completion used reachable Mojolicious modules",
+                module_report.missing_expected_insert_texts.is_empty(),
+            )?;
+            recorder.check(
+                "invoked module inline completion avoided unrelated/generic inserts",
+                module_report.forbidden_insert_texts.is_empty(),
+            )?;
+            recorder.check(
+                "automatic inline completion stayed silent in line comment",
+                hard_zone_report.stayed_silent,
+            )?;
+
+            harness.assert_no_crash();
+            Ok(())
+        },
+    );
+}

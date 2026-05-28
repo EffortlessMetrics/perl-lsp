@@ -1442,6 +1442,33 @@
       ]
     },
     {
+      "id": "mojolicious_inline_completion_quality",
+      "scenario_file": "ux_scenario_51_mojolicious_inline_completion_quality.rs",
+      "subsystem_owner": "editor_trust",
+      "ci_tier": "pr",
+      "component": "completion",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "request inline completion over the committed Mojolicious skeleton and record project-module ghost text plus hard-zone silence",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "dynamic inline-completion registration is observed for an LSP4IJ-shaped client",
+        "invoked inline completion after a Mojolicious module prefix returns reachable project modules",
+        "automatic inline completion stays silent inside a line comment"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "real_workspace_providers",
       "scenario_file": "ux_scenario_20_real_workspace_providers.rs",
       "subsystem_owner": "editor_intelligence",
