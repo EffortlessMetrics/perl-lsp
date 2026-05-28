@@ -142,6 +142,10 @@ const FEATURE_CATALOG_MARKERS: &[RequiredMarker] = &[
         label: "CompletionList.itemDefaults.data feature catalog row",
         marker: "id = \"lsp.completion_list_item_defaults_data\"",
     },
+    RequiredMarker {
+        label: "CompletionList.applyKind feature catalog row",
+        marker: "id = \"lsp.completion_list_apply_kind\"",
+    },
 ];
 
 const REFRESH_METHODS_TEST_MARKERS: &[RequiredMarker] = &[RequiredMarker {
@@ -173,6 +177,14 @@ const COMPLETION_TEST_MARKERS: &[RequiredMarker] = &[
     RequiredMarker {
         label: "CompletionList.itemDefaults.data negative receipt",
         marker: "test_completion_list_item_defaults_data_absent_without_support",
+    },
+    RequiredMarker {
+        label: "CompletionList.applyKind positive receipt",
+        marker: "test_completion_list_apply_kind_emitted_when_supported",
+    },
+    RequiredMarker {
+        label: "CompletionList.applyKind fallback receipt",
+        marker: "test_completion_list_apply_kind_absent_without_item_defaults",
     },
 ];
 
@@ -226,7 +238,7 @@ const CAPABILITY_ABSENCE_CHECKS: &[JsonAbsenceCheck] = &[
     JsonAbsenceCheck {
         pointer: "/completionProvider/applyKind",
         label: "CompletionList.applyKind",
-        reason: "applyKind must stay absent until applyKindSupport is parsed and tested",
+        reason: "applyKind is a CompletionList response field, not an initialize server capability",
     },
     JsonAbsenceCheck {
         pointer: "/completionProvider/itemDefaults/data",
@@ -273,10 +285,6 @@ const FEATURE_CATALOG_FORBIDDEN_PATTERNS: &[RawPatternCheck] = &[
         label: "semantic-token delta feature claim",
     },
     RawPatternCheck { needle: "SnippetTextEdit", label: "SnippetTextEdit feature claim" },
-    RawPatternCheck {
-        needle: "CompletionList.applyKind",
-        label: "CompletionList.applyKind feature claim",
-    },
     RawPatternCheck {
         needle: "CodeAction.documentation",
         label: "CodeAction.documentation feature claim",
@@ -348,6 +356,7 @@ pub fn run() -> Result<()> {
     check_folding_range_refresh_guard(&root, &mut violations)?;
     check_code_lens_resolve_support_guard(&root, &mut violations)?;
     check_completion_item_defaults_data_guard(&root, &mut violations)?;
+    check_completion_apply_kind_guard(&root, &mut violations)?;
     check_message_type_debug_support(&root, &mut violations)?;
 
     if violations.is_empty() {
@@ -567,6 +576,39 @@ fn check_completion_item_defaults_data_guard(
             "\"data\"",
         ],
         "CompletionList.itemDefaults.data response gate",
+        violations,
+    );
+
+    Ok(())
+}
+
+fn check_completion_apply_kind_guard(root: &Path, violations: &mut Vec<Violation>) -> Result<()> {
+    let state_document = read_required(root, STATE_DOCUMENT)?;
+    let lifecycle_capabilities = read_required(root, LIFECYCLE_CAPABILITIES)?;
+    let completion = read_required(root, "crates/perl-lsp-rs/src/runtime/language/completion.rs")?;
+
+    require_all(
+        STATE_DOCUMENT,
+        &state_document,
+        &["completion_list_apply_kind_support"],
+        "CompletionList.applyKind capability storage",
+        violations,
+    );
+    require_all(
+        LIFECYCLE_CAPABILITIES,
+        &lifecycle_capabilities,
+        &[
+            "/capabilities/textDocument/completion/completionList/applyKindSupport",
+            "completion_list_apply_kind_support",
+        ],
+        "CompletionList.applyKind capability parser",
+        violations,
+    );
+    require_all(
+        "crates/perl-lsp-rs/src/runtime/language/completion.rs",
+        &completion,
+        &["completion_list_response", "\"applyKind\"", "\"data\": 2"],
+        "CompletionList.applyKind response gate",
         violations,
     );
 

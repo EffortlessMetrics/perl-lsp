@@ -35,6 +35,19 @@ tests = [
 description = "Capability-gated CompletionList.itemDefaults.data shared completion-list context"
 
 [[feature]]
+id = "lsp.completion_list_apply_kind"
+spec = "LSP 3.18"
+area = "text_document"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_completion_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_318_negative_claims.rs",
+]
+description = "Capability-gated CompletionList.applyKind merge semantics for supported completion-list defaults"
+
+[[feature]]
 id = "lsp.hover"
 spec = "LSP 3.0"
 area = "text_document"

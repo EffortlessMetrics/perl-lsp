@@ -179,6 +179,12 @@ impl LspServer {
                     .pointer("/capabilities/textDocument/completion/completionList/itemDefaults")
                     .and_then(Value::as_array)
                     .is_some_and(|items| items.iter().any(|item| item.as_str() == Some("data")));
+                caps.completion_list_apply_kind_support = params
+                    .pointer(
+                        "/capabilities/textDocument/completion/completionList/applyKindSupport",
+                    )
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
 
                 // Check if client supports markdown message content in diagnostics (LSP 3.18)
                 caps.markup_message_support = params
@@ -916,6 +922,46 @@ mod tests {
         let _ = server.handle_initialize(Some(params));
 
         assert!(!server.client_capabilities.lock().completion_list_item_defaults_data_support);
+    }
+
+    #[test]
+    fn initialize_parses_completion_list_apply_kind_support() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "textDocument": {
+                    "completion": {
+                        "completionList": {
+                            "applyKindSupport": true
+                        }
+                    }
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        assert!(server.client_capabilities.lock().completion_list_apply_kind_support);
+    }
+
+    #[test]
+    fn initialize_leaves_completion_list_apply_kind_disabled_when_absent() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "textDocument": {
+                    "completion": {
+                        "completionList": {
+                            "itemDefaults": ["data"]
+                        }
+                    }
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        assert!(!server.client_capabilities.lock().completion_list_apply_kind_support);
     }
 
     #[test]

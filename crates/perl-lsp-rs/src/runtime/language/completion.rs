@@ -601,6 +601,7 @@ impl LspServer {
         is_incomplete: bool,
         items: Vec<Value>,
         item_defaults_data_support: bool,
+        apply_kind_support: bool,
     ) -> Value {
         let has_items = !items.is_empty();
         let mut response = json!({
@@ -612,6 +613,11 @@ impl LspServer {
             response["itemDefaults"] = json!({
                 "data": Self::completion_list_default_data()
             });
+            if apply_kind_support {
+                response["applyKind"] = json!({
+                    "data": 2
+                });
+            }
         }
 
         response
@@ -792,6 +798,7 @@ impl LspServer {
                 let label_details_support = client_caps.label_details_support;
                 let item_defaults_data_support =
                     client_caps.completion_list_item_defaults_data_support;
+                let apply_kind_support = client_caps.completion_list_apply_kind_support;
 
                 let items: Vec<Value> = completions
                     .into_iter()
@@ -902,6 +909,7 @@ impl LspServer {
                     is_incomplete,
                     items,
                     item_defaults_data_support,
+                    apply_kind_support,
                 )));
             }
         }
@@ -1070,6 +1078,7 @@ impl LspServer {
                 let label_details_support = client_caps.label_details_support;
                 let item_defaults_data_support =
                     client_caps.completion_list_item_defaults_data_support;
+                let apply_kind_support = client_caps.completion_list_apply_kind_support;
 
                 let items: Vec<Value> = completions
                     .into_iter()
@@ -1164,6 +1173,7 @@ impl LspServer {
                     false,
                     items,
                     item_defaults_data_support,
+                    apply_kind_support,
                 )));
             }
 

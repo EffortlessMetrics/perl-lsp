@@ -345,4 +345,10 @@ pub struct ClientCapabilities {
     /// When true, completion responses may include shared `itemDefaults.data`
     /// for clients that understand completion-list default item data.
     pub completion_list_item_defaults_data_support: bool,
+    /// Client supports `CompletionList.applyKind` (LSP 3.18).
+    ///
+    /// Parsed from `capabilities.textDocument.completion.completionList.applyKindSupport`.
+    /// When true, completion responses may describe how supported item defaults
+    /// combine with per-item fields.
+    pub completion_list_apply_kind_support: bool,
 }
