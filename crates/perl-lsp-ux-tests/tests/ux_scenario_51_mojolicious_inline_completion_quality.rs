@@ -48,6 +48,26 @@ struct InlineModuleProbeReport {
     expected_insert_texts: Vec<&'static str>,
     missing_expected_insert_texts: Vec<&'static str>,
     forbidden_insert_texts: Vec<&'static str>,
+    expected_range: InlineRangeExpectation,
+    range_reports: Vec<InlineRangeReport>,
+    range_violation_insert_texts: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct InlineRangeExpectation {
+    start_line: u32,
+    start_character: u32,
+    end_line: u32,
+    end_character: u32,
+    replaces: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+struct InlineRangeReport {
+    insert_text: String,
+    range: Option<Value>,
+    single_line: bool,
+    replaces_typed_prefix: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -163,6 +183,21 @@ fn probe_module_inline_completion(harness: &UxHarness) -> Result<InlineModulePro
         .copied()
         .filter(|forbidden| insert_texts.iter().any(|actual| actual == forbidden))
         .collect::<Vec<_>>();
+    let expected_range = expected_module_range()?;
+    let range_reports = EXPECTED_MODULE_INSERTS
+        .iter()
+        .filter_map(|expected| {
+            items
+                .iter()
+                .find(|item| item.get("insertText").and_then(Value::as_str) == Some(*expected))
+                .map(|item| range_report_for_item(item, &expected_range))
+        })
+        .collect::<Vec<_>>();
+    let range_violation_insert_texts = range_reports
+        .iter()
+        .filter(|report| !report.replaces_typed_prefix)
+        .map(|report| report.insert_text.clone())
+        .collect::<Vec<_>>();
 
     Ok(InlineModuleProbeReport {
         file: MODULE_IMPORT_PROBE_PATH,
@@ -172,7 +207,59 @@ fn probe_module_inline_completion(harness: &UxHarness) -> Result<InlineModulePro
         expected_insert_texts: EXPECTED_MODULE_INSERTS.to_vec(),
         missing_expected_insert_texts,
         forbidden_insert_texts,
+        expected_range,
+        range_reports,
+        range_violation_insert_texts,
     })
+}
+
+fn expected_module_range() -> Result<InlineRangeExpectation> {
+    let marker_start = MODULE_IMPORT_PROBE_SOURCE
+        .find(MODULE_MARKER)
+        .with_context(|| format!("missing `{MODULE_MARKER}`"))?;
+    let start_byte = marker_start + "use ".len();
+    let end_byte = marker_start + MODULE_MARKER.len();
+    let (start_line, start_character) =
+        position_from_byte_offset(MODULE_IMPORT_PROBE_SOURCE, start_byte)?;
+    let (end_line, end_character) =
+        position_from_byte_offset(MODULE_IMPORT_PROBE_SOURCE, end_byte)?;
+
+    Ok(InlineRangeExpectation {
+        start_line,
+        start_character,
+        end_line,
+        end_character,
+        replaces: "Mojolicious::",
+    })
+}
+
+fn range_report_for_item(item: &Value, expected: &InlineRangeExpectation) -> InlineRangeReport {
+    let insert_text =
+        item.get("insertText").and_then(Value::as_str).unwrap_or_default().to_string();
+    let range = item.get("range").cloned();
+    let tuple = range_tuple(item);
+    let single_line = tuple.is_some_and(|(start_line, _, end_line, _)| start_line == end_line);
+    let replaces_typed_prefix =
+        tuple.is_some_and(|(start_line, start_character, end_line, end_character)| {
+            start_line == expected.start_line
+                && start_character == expected.start_character
+                && end_line == expected.end_line
+                && end_character == expected.end_character
+        });
+
+    InlineRangeReport { insert_text, range, single_line, replaces_typed_prefix }
+}
+
+fn range_tuple(item: &Value) -> Option<(u32, u32, u32, u32)> {
+    let range = item.get("range")?;
+    let start = range.get("start")?;
+    let end = range.get("end")?;
+    Some((
+        u32::try_from(start.get("line")?.as_u64()?).ok()?,
+        u32::try_from(start.get("character")?.as_u64()?).ok()?,
+        u32::try_from(end.get("line")?.as_u64()?).ok()?,
+        u32::try_from(end.get("character")?.as_u64()?).ok()?,
+    ))
 }
 
 fn probe_hard_zone_inline_completion(harness: &UxHarness) -> Result<InlineSilenceProbeReport> {
@@ -269,6 +356,10 @@ fn scenario_51_mojolicious_inline_completion_quality_receipt() {
             recorder.check(
                 "invoked module inline completion avoided unrelated/generic inserts",
                 module_report.forbidden_insert_texts.is_empty(),
+            )?;
+            recorder.check(
+                "invoked module inline completion replaced the typed module prefix",
+                module_report.range_violation_insert_texts.is_empty(),
             )?;
             recorder.check(
                 "automatic inline completion stayed silent in line comment",
