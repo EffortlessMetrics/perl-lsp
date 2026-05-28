@@ -357,20 +357,156 @@ pub trait InlineCompletionBackend: Send + Sync {
 
 #[derive(Debug)]
 struct RankedCompletionItem {
-    priority: u8,
+    score: InlineCandidateScore,
     order: usize,
     item: InlineCompletionItem,
 }
 
-#[derive(Debug, Default)]
-struct InlineCandidateSink {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct InlineCandidateScore(i16);
+
+impl InlineCandidateScore {
+    const LEGACY_PRIORITY_STEP: i16 = 100;
+
+    fn for_candidate(
+        source: InlineCandidateSourceKind,
+        priority: u8,
+        item: &InlineCompletionItem,
+        semantic_context: &SemanticInlineContext,
+    ) -> Self {
+        Self(Self::legacy_base(priority) + semantic_bonus(source, item, semantic_context))
+    }
+
+    fn legacy_base(priority: u8) -> i16 {
+        10_000 - i16::from(priority) * Self::LEGACY_PRIORITY_STEP
+    }
+
+    #[cfg(test)]
+    fn from_legacy_priority(priority: u8) -> Self {
+        Self(Self::legacy_base(priority))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InlineCandidateSourceKind {
+    Receiver,
+    Syntax,
+    Test,
+    Shebang,
+    ContextualFallback,
+}
+
+fn semantic_bonus(
+    source: InlineCandidateSourceKind,
+    item: &InlineCompletionItem,
+    context: &SemanticInlineContext,
+) -> i16 {
+    match source {
+        InlineCandidateSourceKind::Receiver => receiver_candidate_bonus(item, context),
+        InlineCandidateSourceKind::Syntax => syntax_candidate_bonus(item, context),
+        InlineCandidateSourceKind::Test => test_candidate_bonus(context),
+        InlineCandidateSourceKind::Shebang => shebang_candidate_bonus(context),
+        InlineCandidateSourceKind::ContextualFallback => {
+            contextual_fallback_candidate_bonus(item, context)
+        }
+    }
+}
+
+fn receiver_candidate_bonus(item: &InlineCompletionItem, context: &SemanticInlineContext) -> i16 {
+    if context.expected_syntax != ExpectedSyntax::MethodName {
+        return 0;
+    }
+
+    let method_name = item.insert_text.trim_end_matches("()");
+    if context.current_package_methods.iter().any(|method| method.name == method_name) {
+        return 30;
+    }
+
+    10
+}
+
+fn syntax_candidate_bonus(item: &InlineCompletionItem, context: &SemanticInlineContext) -> i16 {
+    match context.expected_syntax {
+        ExpectedSyntax::UseModule
+            if matches!(
+                item.insert_text.as_str(),
+                "strict;" | "warnings;" | "feature ':5.36';"
+            ) =>
+        {
+            20
+        }
+        ExpectedSyntax::ReturnExpression if item.insert_text.ends_with(';') => 20,
+        ExpectedSyntax::LexicalVariableName
+            if item.insert_text.starts_with("self =")
+                && context.visible_variables.iter().any(VariableFact::is_scalar_self) =>
+        {
+            20
+        }
+        ExpectedSyntax::PackageName
+        | ExpectedSyntax::BlessArguments
+        | ExpectedSyntax::LoopBinding => 15,
+        ExpectedSyntax::SubroutineBody if item.insert_text.starts_with(" {") => 15,
+        _ => 0,
+    }
+}
+
+fn test_candidate_bonus(context: &SemanticInlineContext) -> i16 {
+    match context.expected_syntax {
+        ExpectedSyntax::TestAssertionArguments => 30,
+        _ if context.file_role == FileRole::Test => 20,
+        _ => 0,
+    }
+}
+
+fn shebang_candidate_bonus(context: &SemanticInlineContext) -> i16 {
+    if context.expected_syntax == ExpectedSyntax::ShebangInterpreter { 20 } else { 0 }
+}
+
+fn contextual_fallback_candidate_bonus(
+    item: &InlineCompletionItem,
+    context: &SemanticInlineContext,
+) -> i16 {
+    if context.file_role == FileRole::Test
+        && (item.insert_text.starts_with("is(") || item.insert_text.starts_with("ok("))
+    {
+        return 25;
+    }
+
+    if item.insert_text.starts_with("return ")
+        && matches!(context.expected_syntax, ExpectedSyntax::EmptyStatement)
+        && !context.visible_variables.is_empty()
+    {
+        return 15;
+    }
+
+    if item.insert_text == "done_testing();" && context.file_role == FileRole::Test {
+        return 10;
+    }
+
+    0
+}
+
+#[derive(Debug)]
+struct InlineCandidateSink<'a> {
+    semantic_context: &'a SemanticInlineContext,
     items: Vec<RankedCompletionItem>,
     sequence: usize,
 }
 
-impl InlineCandidateSink {
-    fn push(&mut self, priority: u8, item: InlineCompletionItem) {
-        self.items.push(RankedCompletionItem { priority, order: self.sequence, item });
+impl<'a> InlineCandidateSink<'a> {
+    fn new(semantic_context: &'a SemanticInlineContext) -> Self {
+        Self { semantic_context, items: Vec::new(), sequence: 0 }
+    }
+
+    fn push(
+        &mut self,
+        source: InlineCandidateSourceKind,
+        priority: u8,
+        item: InlineCompletionItem,
+    ) {
+        let score =
+            InlineCandidateScore::for_candidate(source, priority, &item, self.semantic_context);
+        self.items.push(RankedCompletionItem { score, order: self.sequence, item });
         self.sequence += 1;
     }
 
@@ -380,12 +516,14 @@ impl InlineCandidateSink {
 }
 
 trait InlineCandidateSource {
+    const SOURCE: InlineCandidateSourceKind;
+
     fn add_candidates(
         &self,
         provider: &InlineCompletionProvider,
         context: &PreparedInlineCompletionContext,
         semantic_context: &SemanticInlineContext,
-        sink: &mut InlineCandidateSink,
+        sink: &mut InlineCandidateSink<'_>,
     );
 }
 
@@ -541,7 +679,7 @@ impl InlineCompletionProvider {
         context: &PreparedInlineCompletionContext,
         semantic_context: &SemanticInlineContext,
     ) -> Vec<InlineCompletionItem> {
-        let mut sink = InlineCandidateSink::default();
+        let mut sink = InlineCandidateSink::new(semantic_context);
         ReceiverCandidateSource.add_candidates(self, context, semantic_context, &mut sink);
         SyntaxCandidateSource.add_candidates(self, context, semantic_context, &mut sink);
         TestCandidateSource.add_candidates(self, context, semantic_context, &mut sink);
@@ -904,7 +1042,7 @@ impl InlineCompletionProvider {
         &self,
         context: &PreparedInlineCompletionContext,
         semantic_context: &SemanticInlineContext,
-        sink: &mut InlineCandidateSink,
+        sink: &mut InlineCandidateSink<'_>,
     ) {
         let prefix = context.prefix.trim();
         let comment_context = context
@@ -920,6 +1058,7 @@ impl InlineCompletionProvider {
             && context.previous_non_empty_line.is_none()
         {
             sink.push(
+                InlineCandidateSourceKind::ContextualFallback,
                 8,
                 InlineCompletionItem {
                     insert_text: "#!/usr/bin/env perl\nuse strict;\nuse warnings;\n\n".into(),
@@ -929,6 +1068,7 @@ impl InlineCompletionProvider {
                 },
             );
             sink.push(
+                InlineCandidateSourceKind::ContextualFallback,
                 9,
                 InlineCompletionItem {
                     insert_text: "use strict;\nuse warnings;\n\n".into(),
@@ -945,6 +1085,7 @@ impl InlineCompletionProvider {
                 && let Some(assertion) = self.preferred_test_statement(semantic_context)
             {
                 sink.push(
+                    InlineCandidateSourceKind::ContextualFallback,
                     0,
                     InlineCompletionItem {
                         filter_text: Some(test_statement_filter_text(assertion.as_str()).into()),
@@ -958,6 +1099,7 @@ impl InlineCompletionProvider {
 
             if let Some(variable) = self.preferred_return_variable(semantic_context) {
                 sink.push(
+                    InlineCandidateSourceKind::ContextualFallback,
                     0,
                     InlineCompletionItem {
                         insert_text: format!("return {variable};"),
@@ -970,6 +1112,7 @@ impl InlineCompletionProvider {
 
             if semantic_context.file_role == FileRole::Test && !pushed_test_assertion {
                 sink.push(
+                    InlineCandidateSourceKind::ContextualFallback,
                     1,
                     InlineCompletionItem {
                         insert_text: "done_testing();".into(),
@@ -984,6 +1127,7 @@ impl InlineCompletionProvider {
                 && let Some(variable) = self.preferred_assignment_variable(semantic_context)
             {
                 sink.push(
+                    InlineCandidateSourceKind::ContextualFallback,
                     2,
                     InlineCompletionItem {
                         insert_text: format!("my {variable} = shift;"),
@@ -998,7 +1142,7 @@ impl InlineCompletionProvider {
 
     fn normalize_items(&self, mut items: Vec<RankedCompletionItem>) -> Vec<InlineCompletionItem> {
         items.sort_by(|left, right| {
-            left.priority.cmp(&right.priority).then_with(|| left.order.cmp(&right.order))
+            right.score.0.cmp(&left.score.0).then_with(|| left.order.cmp(&right.order))
         });
 
         let mut deduped = Vec::new();
@@ -1131,12 +1275,14 @@ impl InlineCompletionProvider {
 }
 
 impl InlineCandidateSource for ReceiverCandidateSource {
+    const SOURCE: InlineCandidateSourceKind = InlineCandidateSourceKind::Receiver;
+
     fn add_candidates(
         &self,
         provider: &InlineCompletionProvider,
         context: &PreparedInlineCompletionContext,
         semantic_context: &SemanticInlineContext,
-        sink: &mut InlineCandidateSink,
+        sink: &mut InlineCandidateSink<'_>,
     ) {
         let prefix = context.prefix.as_str();
         if let Some(fragment) = method_arrow_fragment(prefix)
@@ -1144,10 +1290,11 @@ impl InlineCandidateSource for ReceiverCandidateSource {
         {
             if semantic_context.receiver_hint == Some(ReceiverHint::SelfReceiver) {
                 for method in provider.current_package_method_items(semantic_context, fragment) {
-                    sink.push(0, method);
+                    sink.push(Self::SOURCE, 0, method);
                 }
             } else if completion_matches_fragment("new", "new()", fragment) {
                 sink.push(
+                    Self::SOURCE,
                     0,
                     InlineCompletionItem {
                         insert_text: "new()".into(),
@@ -1162,12 +1309,14 @@ impl InlineCandidateSource for ReceiverCandidateSource {
 }
 
 impl InlineCandidateSource for SyntaxCandidateSource {
+    const SOURCE: InlineCandidateSourceKind = InlineCandidateSourceKind::Syntax;
+
     fn add_candidates(
         &self,
         provider: &InlineCompletionProvider,
         context: &PreparedInlineCompletionContext,
         semantic_context: &SemanticInlineContext,
-        sink: &mut InlineCandidateSink,
+        sink: &mut InlineCandidateSink<'_>,
     ) {
         let prefix = context.prefix.as_str();
         let full_line = context.current_line.as_str();
@@ -1176,6 +1325,7 @@ impl InlineCandidateSource for SyntaxCandidateSource {
             let typed_fragment = use_completion_fragment(prefix).unwrap_or("");
             if completion_matches_fragment("strict", "strict;", typed_fragment) {
                 sink.push(
+                    Self::SOURCE,
                     0,
                     InlineCompletionItem {
                         insert_text: "strict;".into(),
@@ -1188,6 +1338,7 @@ impl InlineCandidateSource for SyntaxCandidateSource {
 
             if completion_matches_fragment("warnings", "warnings;", typed_fragment) {
                 sink.push(
+                    Self::SOURCE,
                     1,
                     InlineCompletionItem {
                         insert_text: "warnings;".into(),
@@ -1200,6 +1351,7 @@ impl InlineCandidateSource for SyntaxCandidateSource {
 
             if completion_matches_fragment("feature", "feature ':5.36';", typed_fragment) {
                 sink.push(
+                    Self::SOURCE,
                     2,
                     InlineCompletionItem {
                         insert_text: "feature ':5.36';".into(),
@@ -1216,6 +1368,7 @@ impl InlineCandidateSource for SyntaxCandidateSource {
         {
             let body = provider.generate_smart_body(&sub_name);
             sink.push(
+                Self::SOURCE,
                 0,
                 InlineCompletionItem {
                     insert_text: format!(" {{\n{}\n}}", body),
@@ -1228,6 +1381,7 @@ impl InlineCandidateSource for SyntaxCandidateSource {
 
         if ends_with_keyword(prefix, "my $") {
             sink.push(
+                Self::SOURCE,
                 0,
                 InlineCompletionItem {
                     insert_text: "self = shift;".into(),
@@ -1240,6 +1394,7 @@ impl InlineCandidateSource for SyntaxCandidateSource {
 
         if ends_with_keyword(prefix, "package ") {
             sink.push(
+                Self::SOURCE,
                 0,
                 InlineCompletionItem {
                     insert_text: "MyPackage;\n\nuse strict;\nuse warnings;".into(),
@@ -1252,6 +1407,7 @@ impl InlineCandidateSource for SyntaxCandidateSource {
 
         if ends_with_keyword(prefix, "bless ") {
             sink.push(
+                Self::SOURCE,
                 0,
                 InlineCompletionItem {
                     insert_text: "$self, $class;".into(),
@@ -1265,6 +1421,7 @@ impl InlineCandidateSource for SyntaxCandidateSource {
         if ends_with_keyword(prefix, "return ") {
             if let Some(variable) = provider.preferred_return_variable(semantic_context) {
                 sink.push(
+                    Self::SOURCE,
                     0,
                     InlineCompletionItem {
                         insert_text: format!("{variable};"),
@@ -1277,6 +1434,7 @@ impl InlineCandidateSource for SyntaxCandidateSource {
                 .is_in_constructor_context(semantic_context.enclosing_sub.as_deref(), prefix)
             {
                 sink.push(
+                    Self::SOURCE,
                     1,
                     InlineCompletionItem {
                         insert_text: "$self;".into(),
@@ -1290,6 +1448,7 @@ impl InlineCandidateSource for SyntaxCandidateSource {
 
         if ends_with_keyword(prefix, "for ") || ends_with_keyword(prefix, "foreach ") {
             sink.push(
+                Self::SOURCE,
                 0,
                 InlineCompletionItem {
                     insert_text: "my $item (@items) {\n    \n}".into(),
@@ -1303,12 +1462,14 @@ impl InlineCandidateSource for SyntaxCandidateSource {
 }
 
 impl InlineCandidateSource for TestCandidateSource {
+    const SOURCE: InlineCandidateSourceKind = InlineCandidateSourceKind::Test;
+
     fn add_candidates(
         &self,
         provider: &InlineCompletionProvider,
         context: &PreparedInlineCompletionContext,
         semantic_context: &SemanticInlineContext,
-        sink: &mut InlineCandidateSink,
+        sink: &mut InlineCandidateSink<'_>,
     ) {
         let prefix = context.prefix.as_str();
 
@@ -1316,6 +1477,7 @@ impl InlineCandidateSource for TestCandidateSource {
             && let Some(arguments) = provider.preferred_ok_assertion_arguments(semantic_context)
         {
             sink.push(
+                Self::SOURCE,
                 0,
                 InlineCompletionItem {
                     filter_text: Some(arguments.clone()),
@@ -1330,6 +1492,7 @@ impl InlineCandidateSource for TestCandidateSource {
             && let Some(arguments) = provider.preferred_is_assertion_arguments(semantic_context)
         {
             sink.push(
+                Self::SOURCE,
                 0,
                 InlineCompletionItem {
                     filter_text: Some(arguments.clone()),
@@ -1343,16 +1506,19 @@ impl InlineCandidateSource for TestCandidateSource {
 }
 
 impl InlineCandidateSource for ShebangCandidateSource {
+    const SOURCE: InlineCandidateSourceKind = InlineCandidateSourceKind::Shebang;
+
     fn add_candidates(
         &self,
         _provider: &InlineCompletionProvider,
         context: &PreparedInlineCompletionContext,
         _semantic_context: &SemanticInlineContext,
-        sink: &mut InlineCandidateSink,
+        sink: &mut InlineCandidateSink<'_>,
     ) {
         let prefix = context.prefix.as_str();
         if prefix == "#!" || prefix == "#!/" {
             sink.push(
+                Self::SOURCE,
                 0,
                 InlineCompletionItem {
                     insert_text: "/usr/bin/env perl".into(),
@@ -1366,12 +1532,14 @@ impl InlineCandidateSource for ShebangCandidateSource {
 }
 
 impl InlineCandidateSource for ContextualFallbackSource {
+    const SOURCE: InlineCandidateSourceKind = InlineCandidateSourceKind::ContextualFallback;
+
     fn add_candidates(
         &self,
         provider: &InlineCompletionProvider,
         context: &PreparedInlineCompletionContext,
         semantic_context: &SemanticInlineContext,
-        sink: &mut InlineCandidateSink,
+        sink: &mut InlineCandidateSink<'_>,
     ) {
         provider.add_contextual_fallbacks(context, semantic_context, sink);
     }
@@ -3040,7 +3208,7 @@ mod tests {
         let provider = InlineCompletionProvider::new();
         let items = vec![
             RankedCompletionItem {
-                priority: 2,
+                score: InlineCandidateScore::from_legacy_priority(2),
                 order: 0,
                 item: InlineCompletionItem {
                     insert_text: "late".into(),
@@ -3050,7 +3218,7 @@ mod tests {
                 },
             },
             RankedCompletionItem {
-                priority: 0,
+                score: InlineCandidateScore::from_legacy_priority(0),
                 order: 1,
                 item: InlineCompletionItem {
                     insert_text: "first".into(),
@@ -3060,7 +3228,7 @@ mod tests {
                 },
             },
             RankedCompletionItem {
-                priority: 0,
+                score: InlineCandidateScore::from_legacy_priority(0),
                 order: 2,
                 item: InlineCompletionItem {
                     insert_text: "first".into(),
@@ -3070,7 +3238,7 @@ mod tests {
                 },
             },
             RankedCompletionItem {
-                priority: 1,
+                score: InlineCandidateScore::from_legacy_priority(1),
                 order: 3,
                 item: InlineCompletionItem {
                     insert_text: "second".into(),
@@ -3080,7 +3248,7 @@ mod tests {
                 },
             },
             RankedCompletionItem {
-                priority: 3,
+                score: InlineCandidateScore::from_legacy_priority(3),
                 order: 4,
                 item: InlineCompletionItem {
                     insert_text: "third".into(),
@@ -3090,7 +3258,7 @@ mod tests {
                 },
             },
             RankedCompletionItem {
-                priority: 4,
+                score: InlineCandidateScore::from_legacy_priority(4),
                 order: 5,
                 item: InlineCompletionItem {
                     insert_text: "fourth".into(),
@@ -3100,7 +3268,7 @@ mod tests {
                 },
             },
             RankedCompletionItem {
-                priority: 5,
+                score: InlineCandidateScore::from_legacy_priority(5),
                 order: 6,
                 item: InlineCompletionItem {
                     insert_text: "fifth".into(),
@@ -3119,5 +3287,37 @@ mod tests {
         assert_eq!(normalized[2].insert_text, "late");
         assert_eq!(normalized[3].insert_text, "third");
         assert_eq!(normalized[4].insert_text, "fourth");
+    }
+
+    #[test]
+    fn test_normalize_items_prefers_semantic_score_before_sequence() {
+        let provider = InlineCompletionProvider::new();
+        let items = vec![
+            RankedCompletionItem {
+                score: InlineCandidateScore::from_legacy_priority(0),
+                order: 0,
+                item: InlineCompletionItem {
+                    insert_text: "return $result;".into(),
+                    filter_text: Some("$result".into()),
+                    range: None,
+                    command: None,
+                },
+            },
+            RankedCompletionItem {
+                score: InlineCandidateScore(InlineCandidateScore::legacy_base(0) + 25),
+                order: 1,
+                item: InlineCompletionItem {
+                    insert_text: "is($got, $expected, 'test description');".into(),
+                    filter_text: Some("is".into()),
+                    range: None,
+                    command: None,
+                },
+            },
+        ];
+
+        let normalized = provider.normalize_items(items);
+
+        assert_eq!(normalized[0].insert_text, "is($got, $expected, 'test description');");
+        assert_eq!(normalized[1].insert_text, "return $result;");
     }
 }
