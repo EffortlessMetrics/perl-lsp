@@ -69,6 +69,67 @@ fn initialize_does_not_advertise_unimplemented_318_capabilities() -> TestResult 
 }
 
 #[test]
+fn code_action_documentation_advertised_when_supported() -> TestResult {
+    let mut harness = LspHarness::new_raw();
+    let init = harness.initialize_ready(
+        "file:///workspace",
+        Some(json!({
+            "textDocument": {
+                "codeAction": {
+                    "documentationSupport": true
+                }
+            }
+        })),
+    )?;
+    let docs = init
+        .pointer("/capabilities/codeActionProvider/documentation")
+        .and_then(Value::as_array)
+        .ok_or_else(|| format!("expected CodeActionOptions.documentation in initialize: {init}"))?;
+    assert_eq!(docs.len(), 3, "server should document quickfix, refactor, and source.fixAll kinds");
+
+    let execute_commands = init
+        .pointer("/capabilities/executeCommandProvider/commands")
+        .and_then(Value::as_array)
+        .ok_or_else(|| format!("expected executeCommandProvider.commands in initialize: {init}"))?;
+    assert!(
+        execute_commands
+            .iter()
+            .any(|command| command.as_str() == Some("perl.explainProviderDecision")),
+        "code-action documentation commands must use an advertised command: {init}"
+    );
+
+    for expected_kind in ["quickfix", "refactor", "source.fixAll"] {
+        let doc = docs
+            .iter()
+            .find(|doc| doc.get("kind").and_then(Value::as_str) == Some(expected_kind))
+            .ok_or_else(|| format!("missing documentation entry for {expected_kind}: {docs:?}"))?;
+        let command = doc
+            .get("command")
+            .and_then(Value::as_object)
+            .ok_or_else(|| format!("documentation entry missing command object: {doc}"))?;
+        assert_eq!(
+            command.get("command").and_then(Value::as_str),
+            Some("perl.explainProviderDecision"),
+            "documentation entry must point at the existing provider-decision command: {doc}"
+        );
+        assert!(
+            command.get("title").and_then(Value::as_str).is_some_and(|title| !title.is_empty()),
+            "documentation command must have a user-visible title: {doc}"
+        );
+        let argument = command
+            .get("arguments")
+            .and_then(Value::as_array)
+            .and_then(|args| args.first())
+            .ok_or_else(|| format!("documentation command missing argument payload: {doc}"))?;
+        assert!(
+            argument.get("provider").and_then(Value::as_str).is_some(),
+            "provider-decision documentation command must include provider context: {doc}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn semantic_tokens_delta_request_returns_method_not_found() -> TestResult {
     let mut harness = LspHarness::new_raw();
     harness.initialize_ready("file:///workspace", Some(json!({})))?;

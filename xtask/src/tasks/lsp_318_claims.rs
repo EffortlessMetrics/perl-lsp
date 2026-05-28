@@ -73,6 +73,10 @@ const NEGATIVE_TEST_MARKERS: &[RequiredMarker] = &[
         label: "CodeAction documentation and tag gates",
         marker: "code_action_and_workspace_edit_responses_do_not_emit_optional_318_shapes",
     },
+    RequiredMarker {
+        label: "CodeAction.documentation positive gate",
+        marker: "code_action_documentation_advertised_when_supported",
+    },
     RequiredMarker { label: "WorkspaceEdit metadata gate", marker: "metadata" },
     RequiredMarker { label: "SnippetTextEdit gate", marker: "snippet" },
     RequiredMarker {
@@ -145,6 +149,10 @@ const FEATURE_CATALOG_MARKERS: &[RequiredMarker] = &[
     RequiredMarker {
         label: "CompletionList.applyKind feature catalog row",
         marker: "id = \"lsp.completion_list_apply_kind\"",
+    },
+    RequiredMarker {
+        label: "CodeAction.documentation feature catalog row",
+        marker: "id = \"lsp.code_action_documentation\"",
     },
 ];
 
@@ -248,7 +256,7 @@ const CAPABILITY_ABSENCE_CHECKS: &[JsonAbsenceCheck] = &[
     JsonAbsenceCheck {
         pointer: "/codeActionProvider/documentation",
         label: "CodeAction.documentation",
-        reason: "code action documentation must be client-capability gated before advertisement",
+        reason: "code action documentation is client-capability gated and must stay absent from static snapshots",
     },
     JsonAbsenceCheck {
         pointer: "/workspace/foldingRange",
@@ -285,10 +293,6 @@ const FEATURE_CATALOG_FORBIDDEN_PATTERNS: &[RawPatternCheck] = &[
         label: "semantic-token delta feature claim",
     },
     RawPatternCheck { needle: "SnippetTextEdit", label: "SnippetTextEdit feature claim" },
-    RawPatternCheck {
-        needle: "CodeAction.documentation",
-        label: "CodeAction.documentation feature claim",
-    },
     RawPatternCheck { needle: "CodeAction.tags", label: "CodeAction.tags feature claim" },
     RawPatternCheck { needle: "Command.tooltip", label: "Command.tooltip feature claim" },
     RawPatternCheck { needle: "RelativePattern", label: "RelativePattern feature claim" },
@@ -357,6 +361,7 @@ pub fn run() -> Result<()> {
     check_code_lens_resolve_support_guard(&root, &mut violations)?;
     check_completion_item_defaults_data_guard(&root, &mut violations)?;
     check_completion_apply_kind_guard(&root, &mut violations)?;
+    check_code_action_documentation_guard(&root, &mut violations)?;
     check_message_type_debug_support(&root, &mut violations)?;
 
     if violations.is_empty() {
@@ -609,6 +614,48 @@ fn check_completion_apply_kind_guard(root: &Path, violations: &mut Vec<Violation
         &completion,
         &["completion_list_response", "\"applyKind\"", "\"data\": 2"],
         "CompletionList.applyKind response gate",
+        violations,
+    );
+
+    Ok(())
+}
+
+fn check_code_action_documentation_guard(
+    root: &Path,
+    violations: &mut Vec<Violation>,
+) -> Result<()> {
+    let state_document = read_required(root, STATE_DOCUMENT)?;
+    let lifecycle_capabilities = read_required(root, LIFECYCLE_CAPABILITIES)?;
+    let negative_claims = read_required(root, NEGATIVE_CLAIMS_TEST)?;
+
+    require_all(
+        STATE_DOCUMENT,
+        &state_document,
+        &["code_action_documentation_support"],
+        "CodeAction.documentation capability storage",
+        violations,
+    );
+    require_all(
+        LIFECYCLE_CAPABILITIES,
+        &lifecycle_capabilities,
+        &[
+            "/capabilities/textDocument/codeAction/documentationSupport",
+            "code_action_documentation_support",
+            "code_action_documentation_entries",
+            "\"documentation\"",
+        ],
+        "CodeAction.documentation capability gate",
+        violations,
+    );
+    require_all(
+        NEGATIVE_CLAIMS_TEST,
+        &negative_claims,
+        &[
+            "/codeActionProvider/documentation",
+            "code_action_documentation_advertised_when_supported",
+            "perl.explainProviderDecision",
+        ],
+        "CodeAction.documentation wire receipts",
         violations,
     );
 

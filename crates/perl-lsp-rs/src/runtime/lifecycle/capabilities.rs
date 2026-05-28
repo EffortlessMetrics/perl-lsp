@@ -45,6 +45,47 @@ fn merge_experimental_capability(capabilities: &mut Value, key: &str, value: Val
     experimental.insert(key.to_string(), value);
 }
 
+fn code_action_documentation_entries() -> Value {
+    json!([
+        {
+            "kind": "quickfix",
+            "command": {
+                "title": "Explain Perl quick fixes",
+                "command": "perl.explainProviderDecision",
+                "arguments": [{
+                    "provider": "diagnostics",
+                    "receipt_id": "docs/specs/PLSP-SPEC-0029-lsp-318-conformance-boundary.md#code-action-documentation",
+                    "scenario": "lsp_318_code_action_documentation_quickfix"
+                }]
+            }
+        },
+        {
+            "kind": "refactor",
+            "command": {
+                "title": "Explain Perl refactors",
+                "command": "perl.explainProviderDecision",
+                "arguments": [{
+                    "provider": "rename",
+                    "receipt_id": "docs/specs/PLSP-SPEC-0029-lsp-318-conformance-boundary.md#code-action-documentation",
+                    "scenario": "lsp_318_code_action_documentation_refactor"
+                }]
+            }
+        },
+        {
+            "kind": "source.fixAll",
+            "command": {
+                "title": "Explain Perl fix-all actions",
+                "command": "perl.explainProviderDecision",
+                "arguments": [{
+                    "provider": "diagnostics",
+                    "receipt_id": "docs/specs/PLSP-SPEC-0029-lsp-318-conformance-boundary.md#code-action-documentation",
+                    "scenario": "lsp_318_code_action_documentation_fix_all"
+                }]
+            }
+        }
+    ])
+}
+
 impl LspServer {
     /// Handle initialize request
     pub(crate) fn handle_initialize(
@@ -183,6 +224,10 @@ impl LspServer {
                     .pointer(
                         "/capabilities/textDocument/completion/completionList/applyKindSupport",
                     )
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                caps.code_action_documentation_support = params
+                    .pointer("/capabilities/textDocument/codeAction/documentationSupport")
                     .and_then(Value::as_bool)
                     .unwrap_or(false);
 
@@ -508,6 +553,20 @@ impl LspServer {
         if features.declaration {
             capabilities["declarationProvider"] = json!(true);
         }
+        let code_action_documentation_support =
+            self.client_capabilities.lock().code_action_documentation_support;
+        if features.code_action && code_action_documentation_support {
+            if let Some(code_action_provider) =
+                capabilities.get_mut("codeActionProvider").and_then(Value::as_object_mut)
+            {
+                code_action_provider
+                    .insert("documentation".to_string(), code_action_documentation_entries());
+            } else {
+                tracing::warn!(
+                    "Cannot advertise CodeAction.documentation; codeActionProvider is not an object"
+                );
+            }
+        }
         // Override text document sync with more detailed options
         capabilities["textDocumentSync"] = json!({
             "openClose": true,
@@ -676,7 +735,7 @@ mod tests {
     use crate::LspServer;
     use crate::protocol::capabilities::BuildFlags;
     use perl_workspace::folder::root_path_to_file_uri;
-    use serde_json::json;
+    use serde_json::{Value, json};
     use std::sync::atomic::Ordering;
 
     #[test]
@@ -962,6 +1021,54 @@ mod tests {
         let _ = server.handle_initialize(Some(params));
 
         assert!(!server.client_capabilities.lock().completion_list_apply_kind_support);
+    }
+
+    #[test]
+    fn initialize_parses_code_action_documentation_support() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "textDocument": {
+                    "codeAction": {
+                        "documentationSupport": true
+                    }
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        assert!(server.client_capabilities.lock().code_action_documentation_support);
+    }
+
+    #[test]
+    fn initialize_advertises_code_action_documentation_only_when_supported()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let unsupported = LspServer::new()
+            .handle_initialize(Some(json!({ "capabilities": {} })))?
+            .ok_or("initialize should return unsupported-client payload")?;
+        assert!(
+            unsupported.pointer("/capabilities/codeActionProvider/documentation").is_none(),
+            "default clients must not receive CodeAction.documentation: {unsupported}"
+        );
+
+        let supported = LspServer::new()
+            .handle_initialize(Some(json!({
+                "capabilities": {
+                    "textDocument": {
+                        "codeAction": {
+                            "documentationSupport": true
+                        }
+                    }
+                }
+            })))?
+            .ok_or("initialize should return supported-client payload")?;
+        let docs = supported
+            .pointer("/capabilities/codeActionProvider/documentation")
+            .and_then(Value::as_array)
+            .ok_or("supported clients should receive CodeActionOptions.documentation")?;
+        assert_eq!(docs.len(), 3, "expected quickfix, refactor, and source.fixAll docs");
+        Ok(())
     }
 
     #[test]

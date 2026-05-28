@@ -303,6 +303,12 @@ pub struct ClientCapabilities {
     /// When true, the server can provide `Diagnostic.message` as
     /// `MarkupContent` in pull diagnostics responses.
     pub markup_message_support: bool,
+    /// Supports static documentation for classes of code actions (LSP 3.18).
+    ///
+    /// Parsed from `capabilities.textDocument.codeAction.documentationSupport`.
+    /// When true, the server may advertise `CodeActionOptions.documentation` in
+    /// `codeActionProvider`.
+    pub code_action_documentation_support: bool,
     /// Supports workspace/codeLens/refresh request
     pub code_lens_refresh_support: bool,
     /// Supports workspace/semanticTokens/refresh request

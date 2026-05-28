@@ -130,6 +130,18 @@ tests = ["crates/perl-lsp-rs/tests/lsp_code_actions_tests.rs"]
 description = "Code actions with 9 action kinds: QuickFix (diagnostic fixes for undefined/unused variables, missing strict/warnings, deprecated patterns), Refactor, RefactorExtract (extract variable/subroutine), RefactorInline, RefactorRewrite (C-style for to foreach, postfix if conversion), Source, SourceOrganizeImports, SourceFixAll, SourceModernize (legacy pattern modernization)"
 
 [[feature]]
+id = "lsp.code_action_documentation"
+spec = "LSP 3.18"
+area = "text_document"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_318_negative_claims.rs",
+]
+description = "Capability-gated CodeActionOptions.documentation entries for documented code-action kinds"
+
+[[feature]]
 id = "lsp.code_lens"
 spec = "LSP 3.0"
 area = "text_document"
