@@ -2463,6 +2463,10 @@ fn hard_reject_zone_at_cursor(
         return Some(HardRejectZone::Pod);
     }
 
+    if cursor_is_inside_format_body(text, cursor_offset) {
+        return Some(HardRejectZone::HeredocBody);
+    }
+
     let protected_ranges = protected_token_ranges(text);
     if let Some(zone) = protected_ranges
         .iter()
@@ -2594,6 +2598,33 @@ fn cursor_is_inside_pod(text: &str, cursor_offset: usize) -> bool {
     pod_start.is_some_and(|start| start <= cursor_offset)
 }
 
+fn cursor_is_inside_format_body(text: &str, cursor_offset: usize) -> bool {
+    let mut body_start = None;
+    for (line_start, line_end, line_text) in line_spans(text) {
+        if body_start.is_none() {
+            if is_format_declaration_line(line_text) {
+                body_start = Some(line_end);
+            }
+            continue;
+        }
+
+        if is_format_terminator_line(line_text) {
+            body_start = None;
+            continue;
+        }
+
+        if body_start.is_some_and(|start| start <= cursor_offset && cursor_offset < line_end) {
+            return true;
+        }
+
+        if cursor_offset < line_start {
+            return false;
+        }
+    }
+
+    body_start.is_some_and(|start| start <= cursor_offset)
+}
+
 fn line_spans(text: &str) -> impl Iterator<Item = (usize, usize, &str)> {
     let mut offset = 0usize;
     text.split_inclusive('\n').map(move |line| {
@@ -2635,6 +2666,19 @@ fn is_pod_cut_line(line: &str) -> bool {
     }
 
     line.split_whitespace().next() == Some("=cut")
+}
+
+fn is_format_declaration_line(line: &str) -> bool {
+    let code = code_before_line_comment(line).trim();
+    let Some(rest) = code.strip_prefix("format") else {
+        return false;
+    };
+
+    rest.chars().next().is_some_and(is_keyword_boundary) && code.ends_with('=')
+}
+
+fn is_format_terminator_line(line: &str) -> bool {
+    line.trim() == "."
 }
 
 fn prefix_has_unclosed_match_regex(prefix: &str) -> bool {

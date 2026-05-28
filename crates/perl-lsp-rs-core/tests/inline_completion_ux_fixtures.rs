@@ -151,9 +151,19 @@ fn inline_completion_fixture_corpus_stays_silent_in_reject_zones() -> TestResult
     let fixtures = [
         SilentFixture { name: "line_comment", source: "# use <<CURSOR>>" },
         SilentFixture { name: "string_literal", source: "my $text = \"use <<CURSOR>>\";" },
+        SilentFixture { name: "unterminated_string", source: "my $text = \"use <<CURSOR>>" },
+        SilentFixture { name: "quote_words", source: "my @words = qw(use <<CURSOR>>);" },
+        SilentFixture { name: "quote_command", source: "my $output = qx(use <<CURSOR>>);" },
         SilentFixture { name: "heredoc_body", source: "print <<'EOF';\nuse <<CURSOR>>\nEOF\n" },
+        SilentFixture {
+            name: "format_body",
+            source: "format STDOUT =\nuse <<CURSOR>>\n.\nwrite STDOUT;\n",
+        },
+        SilentFixture { name: "data_body", source: "__DATA__\nuse <<CURSOR>>\n" },
         SilentFixture { name: "pod_body", source: "=pod\nuse <<CURSOR>>\n=cut\n" },
         SilentFixture { name: "regex_literal", source: "if ($name =~ /use <<CURSOR>>/) {}" },
+        SilentFixture { name: "substitution", source: "$name =~ s/use <<CURSOR>>/strict/;" },
+        SilentFixture { name: "transliteration", source: "$name =~ tr/use <<CURSOR>>/abc/;" },
     ];
 
     for fixture in fixtures {
