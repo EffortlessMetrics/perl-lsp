@@ -569,10 +569,6 @@ fn parse_probe_after_item(
     line: u32,
     character: u32,
 ) -> Option<String> {
-    if item.insert_text.contains(['\n', '\r']) {
-        return None;
-    }
-
     let (start_character, end_character) = item
         .range
         .as_ref()
@@ -2853,6 +2849,39 @@ mod tests {
 
         assert!(filtered.items.iter().any(|item| item.insert_text == "my $value = 1;"));
         assert!(filtered.items.iter().all(|item| item.insert_text != "my $value = ;"));
+        Ok(())
+    }
+
+    #[test]
+    fn parse_safety_rejects_multiline_candidate_that_adds_error()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let context = provider.prepare_context("", 0, 0).ok_or("expected prepared context")?;
+        let list = InlineCompletionList {
+            items: vec![
+                InlineCompletionItem {
+                    insert_text: "my $value = 1;\nreturn $value;".into(),
+                    filter_text: Some("$value".into()),
+                    range: None,
+                    command: None,
+                },
+                InlineCompletionItem {
+                    insert_text: "my $value = ;\nreturn $value;".into(),
+                    filter_text: Some("$value".into()),
+                    range: None,
+                    command: None,
+                },
+            ],
+        };
+
+        let filtered = provider.filter_parse_safe_items(list, &context, 0, 0);
+
+        assert!(
+            filtered.items.iter().any(|item| item.insert_text == "my $value = 1;\nreturn $value;")
+        );
+        assert!(
+            filtered.items.iter().all(|item| item.insert_text != "my $value = ;\nreturn $value;")
+        );
         Ok(())
     }
 
