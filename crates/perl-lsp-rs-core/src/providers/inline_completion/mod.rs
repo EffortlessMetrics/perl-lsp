@@ -857,47 +857,10 @@ impl InlineCompletionProvider {
     }
 
     fn collect_variables(&self, visible_text: &str) -> Vec<String> {
-        let mut matches = Vec::new();
-        let bytes = visible_text.as_bytes();
-        let mut index = 0usize;
-
-        while index < bytes.len() {
-            let byte = bytes[index];
-            if byte == b'$' || byte == b'@' || byte == b'%' {
-                let start = index;
-                index += 1;
-
-                if index >= bytes.len() {
-                    break;
-                }
-
-                let first = bytes[index] as char;
-                if !(first.is_ascii_alphabetic() || first == '_') {
-                    continue;
-                }
-
-                index += 1;
-                while index < bytes.len() {
-                    let next = bytes[index] as char;
-                    if next.is_ascii_alphanumeric() || next == '_' {
-                        index += 1;
-                    } else {
-                        break;
-                    }
-                }
-
-                matches.push(visible_text[start..index].to_string());
-                continue;
-            }
-
-            index += 1;
-        }
-
         let mut variables = Vec::new();
-        for variable in matches.into_iter().rev() {
-            self.push_unique(&mut variables, variable);
-            if variables.len() >= 8 {
-                break;
+        for declaration_group in collect_declared_variable_groups(visible_text).into_iter().rev() {
+            for variable in declaration_group {
+                self.push_unique_variable(&mut variables, variable);
             }
         }
 
@@ -1072,6 +1035,7 @@ impl InlineCompletionProvider {
             && matches!(semantic_context.lexical_scope, InlineLexicalScope::File)
             && context.imports.is_empty()
             && context.variables.is_empty()
+            && context.previous_non_empty_line.is_none()
         {
             items.push(RankedCompletionItem {
                 priority: 8,
@@ -1189,6 +1153,13 @@ impl InlineCompletionProvider {
         }
         values.push(value);
     }
+
+    fn push_unique_variable(&self, values: &mut Vec<String>, value: String) {
+        if values.len() >= 8 {
+            return;
+        }
+        self.push_unique(values, value);
+    }
 }
 
 struct LineContext<'a> {
@@ -1295,6 +1266,171 @@ fn non_comment_code_lines(text: &str) -> impl Iterator<Item = &str> {
         let trimmed = line.trim_start();
         !trimmed.is_empty() && !trimmed.starts_with('#')
     })
+}
+
+fn collect_declared_variable_groups(text: &str) -> Vec<Vec<String>> {
+    let mut groups = Vec::new();
+    for raw_line in non_comment_code_lines(text) {
+        let line = code_before_line_comment(raw_line);
+        let mut search_start = 0usize;
+        while search_start < line.len() {
+            let Some((keyword_start, tail_start)) = find_variable_declaration(line, search_start)
+            else {
+                break;
+            };
+            let variables = variables_declared_after_keyword(&line[tail_start..]);
+            if !variables.is_empty() {
+                groups.push(variables);
+            }
+            search_start = keyword_start + 1;
+        }
+    }
+    groups
+}
+
+fn find_variable_declaration(line: &str, search_start: usize) -> Option<(usize, usize)> {
+    for (relative_index, _) in line[search_start..].char_indices() {
+        let index = search_start + relative_index;
+        for keyword in ["my", "our", "state"] {
+            if !line[index..].starts_with(keyword) {
+                continue;
+            }
+            if !declaration_keyword_has_boundary(line, index, keyword) {
+                continue;
+            }
+            if is_inside_simple_quoted_text(line, index) {
+                continue;
+            }
+            let after_keyword = index + keyword.len();
+            let tail_start = declaration_tail_start(line, after_keyword)?;
+            return Some((index, tail_start));
+        }
+    }
+    None
+}
+
+fn declaration_keyword_has_boundary(line: &str, index: usize, keyword: &str) -> bool {
+    let left_boundary = index == 0
+        || line[..index]
+            .chars()
+            .next_back()
+            .is_some_and(|ch| ch.is_whitespace() || is_keyword_boundary(ch));
+    if !left_boundary {
+        return false;
+    }
+
+    let after_keyword = index + keyword.len();
+    line[after_keyword..]
+        .chars()
+        .next()
+        .is_some_and(|ch| ch.is_whitespace() || ch == '(' || matches!(ch, '$' | '@' | '%'))
+}
+
+fn declaration_tail_start(line: &str, after_keyword: usize) -> Option<usize> {
+    let mut tail_start = after_keyword;
+    while tail_start < line.len() {
+        let ch = line[tail_start..].chars().next()?;
+        if !ch.is_whitespace() {
+            break;
+        }
+        tail_start += ch.len_utf8();
+    }
+    Some(tail_start)
+}
+
+fn variables_declared_after_keyword(tail: &str) -> Vec<String> {
+    let trimmed = tail.trim_start();
+    if let Some(list_tail) = trimmed.strip_prefix('(') {
+        let list_end = list_tail.find(')').unwrap_or(list_tail.len());
+        return collect_variable_mentions(&list_tail[..list_end]);
+    }
+
+    collect_variable_mentions(trimmed).into_iter().take(1).collect()
+}
+
+fn code_before_line_comment(line: &str) -> &str {
+    let mut single_quoted = false;
+    let mut double_quoted = false;
+    let mut escaped = false;
+
+    for (index, ch) in line.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        match ch {
+            '\\' if single_quoted || double_quoted => escaped = true,
+            '\'' if !double_quoted => single_quoted = !single_quoted,
+            '"' if !single_quoted => double_quoted = !double_quoted,
+            '#' if !single_quoted && !double_quoted => return &line[..index],
+            _ => {}
+        }
+    }
+
+    line
+}
+
+fn is_inside_simple_quoted_text(line: &str, byte_index: usize) -> bool {
+    let mut single_quoted = false;
+    let mut double_quoted = false;
+    let mut escaped = false;
+
+    for (_, ch) in line[..byte_index].char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        match ch {
+            '\\' if single_quoted || double_quoted => escaped = true,
+            '\'' if !double_quoted => single_quoted = !single_quoted,
+            '"' if !single_quoted => double_quoted = !double_quoted,
+            _ => {}
+        }
+    }
+
+    single_quoted || double_quoted
+}
+
+fn collect_variable_mentions(text: &str) -> Vec<String> {
+    let mut variables = Vec::new();
+    let bytes = text.as_bytes();
+    let mut index = 0usize;
+
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if byte == b'$' || byte == b'@' || byte == b'%' {
+            let start = index;
+            index += 1;
+
+            if index >= bytes.len() {
+                break;
+            }
+
+            let first = bytes[index] as char;
+            if !(first.is_ascii_alphabetic() || first == '_') {
+                continue;
+            }
+
+            index += 1;
+            while index < bytes.len() {
+                let next = bytes[index] as char;
+                if next.is_ascii_alphanumeric() || next == '_' {
+                    index += 1;
+                } else {
+                    break;
+                }
+            }
+
+            variables.push(text[start..index].to_string());
+            continue;
+        }
+
+        index += 1;
+    }
+
+    variables
 }
 
 fn receiver_hint_from_prefix(prefix: &str) -> Option<ReceiverHint> {
@@ -2065,6 +2201,126 @@ mod tests {
         assert_eq!(decoded.variables, vec!["$result"]);
         assert_eq!(decoded.imports, vec!["Test::More"]);
         Ok(())
+    }
+
+    #[test]
+    fn prepared_context_prefers_declared_variables_over_rhs_mentions()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source =
+            "sub helper {\n    my $input = seed();\n    my $result = compute($input);\n    \n}\n";
+        let prepared = provider.prepare_context(source, 3, 4).ok_or("expected prepared context")?;
+
+        let result_position = prepared
+            .variables
+            .iter()
+            .position(|variable| variable == "$result")
+            .ok_or("expected declared $result to be collected")?;
+        let input_position = prepared
+            .variables
+            .iter()
+            .position(|variable| variable == "$input")
+            .ok_or("expected $input to be collected")?;
+        assert!(
+            result_position < input_position,
+            "declared $result should outrank RHS mention $input: {:?}",
+            prepared.variables
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn prepared_context_collects_parenthesized_variable_declarations()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub helper {\n    my ($self, %args) = @_;\n    \n}\n";
+        let prepared = provider.prepare_context(source, 2, 4).ok_or("expected prepared context")?;
+
+        let self_position = prepared
+            .variables
+            .iter()
+            .position(|variable| variable == "$self")
+            .ok_or("expected declared $self to be collected")?;
+        let args_position = prepared
+            .variables
+            .iter()
+            .position(|variable| variable == "%args")
+            .ok_or("expected declared %args to be collected")?;
+        assert!(
+            self_position < args_position,
+            "nearest declaration order should stay stable: {:?}",
+            prepared.variables
+        );
+        assert!(
+            prepared.variables.iter().all(|variable| variable != "@_"),
+            "assignment source @_ should not be treated as a visible lexical: {:?}",
+            prepared.variables
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn prepared_context_collects_loop_variable_without_iterable_mentions()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub helper {\n    for my $user (@users) {\n        \n    }\n}\n";
+        let prepared = provider.prepare_context(source, 2, 8).ok_or("expected prepared context")?;
+
+        assert!(prepared.variables.iter().any(|variable| variable == "$user"));
+        assert!(
+            prepared.variables.iter().all(|variable| variable != "@users"),
+            "iterable mention should not be treated as a loop lexical: {:?}",
+            prepared.variables
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn prepared_context_ignores_undeclared_mentions_for_return_context()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub helper {\n    $result = compute();\n    \n}\n";
+        let prepared = provider.prepare_context(source, 2, 4).ok_or("expected prepared context")?;
+
+        assert!(
+            prepared.variables.iter().all(|variable| variable != "$result"),
+            "undeclared mention should not be treated as a visible lexical: {:?}",
+            prepared.variables
+        );
+
+        let completions = provider.get_inline_completions(source, 2, 4);
+        assert!(completions.items.iter().all(|item| item.insert_text != "return $result;"));
+        Ok(())
+    }
+
+    #[test]
+    fn prepared_context_ignores_decl_like_text_in_comments_and_strings()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub helper {\n    # my $comment_var = 1;\n    my $text = \"prefix my $string_var\";\n    \n}\n";
+        let prepared = provider.prepare_context(source, 3, 4).ok_or("expected prepared context")?;
+
+        assert!(prepared.variables.iter().any(|variable| variable == "$text"));
+        assert!(
+            prepared.variables.iter().all(|variable| variable != "$comment_var"),
+            "comment declaration should not be collected: {:?}",
+            prepared.variables
+        );
+        assert!(
+            prepared.variables.iter().all(|variable| variable != "$string_var"),
+            "quoted declaration text should not be collected: {:?}",
+            prepared.variables
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn non_empty_file_without_declarations_does_not_get_empty_file_scaffold() {
+        let provider = InlineCompletionProvider::new();
+        let source = "$ghost = compute();\n";
+        let completions = provider.get_inline_completions(source, 1, 0);
+
+        assert!(completions.items.iter().all(|item| !item.insert_text.contains("use strict;")));
     }
 
     #[test]
