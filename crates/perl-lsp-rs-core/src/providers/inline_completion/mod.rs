@@ -112,6 +112,10 @@ impl VariableFact {
     fn is_array(&self) -> bool {
         self.sigil == VariableSigil::Array
     }
+
+    fn is_hash(&self) -> bool {
+        self.sigil == VariableSigil::Hash
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1411,9 +1415,14 @@ impl InlineCompletionProvider {
     }
 
     fn preferred_loop_binding(&self, context: &SemanticInlineContext) -> Option<String> {
-        let array = context.visible_variables.iter().find(|variable| variable.is_array())?;
-        let item_name = singular_loop_variable_name(array.name.as_str());
-        Some(format!("my ${item_name} ({}) {{\n    \n}}", array.as_perl_variable()))
+        if let Some(array) = context.visible_variables.iter().find(|variable| variable.is_array()) {
+            let item_name = singular_loop_variable_name(array.name.as_str());
+            return Some(format!("my ${item_name} ({}) {{\n    \n}}", array.as_perl_variable()));
+        }
+
+        let hash = context.visible_variables.iter().find(|variable| variable.is_hash())?;
+        let key_name = hash_key_loop_variable_name(hash.name.as_str());
+        Some(format!("my ${key_name} (keys {}) {{\n    \n}}", hash.as_perl_variable()))
     }
 
     fn current_package_method_items(
@@ -1857,6 +1866,15 @@ fn singular_loop_variable_name(array_name: &str) -> String {
         name if name.ends_with('s') && name.len() > 1 => name[..name.len() - 1].to_string(),
         _ => "item".into(),
     }
+}
+
+fn hash_key_loop_variable_name(hash_name: &str) -> String {
+    hash_name
+        .strip_suffix("_by_id")
+        .map(|_| "id".into())
+        .or_else(|| hash_name.strip_suffix("_by_name").map(|_| "name".into()))
+        .or_else(|| hash_name.strip_suffix("_by_key").map(|_| "key".into()))
+        .unwrap_or_else(|| "key".into())
 }
 
 struct LineContext<'a> {
@@ -3834,13 +3852,46 @@ mod tests {
     }
 
     #[test]
-    fn loop_binding_without_visible_array_stays_silent() {
+    fn for_loop_uses_visible_hash_keys_when_no_array_is_available()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "my %users_by_id = load_users();\nfor ";
+        let completions = provider.get_inline_completions(source, 1, 4);
+        let first = completions.items.first().ok_or("expected hash key loop completion")?;
+
+        assert_eq!(first.insert_text, "my $id (keys %users_by_id) {\n    \n}");
+        assert!(
+            completions.items.iter().all(|item| !item.insert_text.contains("(@items)")),
+            "loop completion must not fall back to snippet placeholders: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn for_loop_prefers_visible_array_over_hash() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "my %users_by_id = load_users();\nmy @users = values %users_by_id;\nfor ";
+        let completions = provider.get_inline_completions(source, 2, 4);
+        let first = completions.items.first().ok_or("expected array loop completion")?;
+
+        assert_eq!(first.insert_text, "my $user (@users) {\n    \n}");
+        assert!(
+            completions.items.iter().all(|item| !item.insert_text.contains("keys %users_by_id")),
+            "visible arrays should stay preferred over hash key loops: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn loop_binding_without_visible_collection_stays_silent() {
         let provider = InlineCompletionProvider::new();
         let completions = provider.get_inline_completions("for ", 0, 4);
 
         assert!(
             completions.items.is_empty(),
-            "loop binding should not invent placeholder arrays: {:?}",
+            "loop binding should not invent placeholder collections: {:?}",
             completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
         );
     }

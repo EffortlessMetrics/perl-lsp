@@ -415,6 +415,17 @@ fn scenarios() -> &'static [Scenario] {
             },
         },
         Scenario {
+            name: "for_loop_uses_visible_hash_keys_when_no_array_is_available",
+            source_name: "syntax",
+            source: "my %users_by_id = load_users();\nfor <<CURSOR>>",
+            available_modules: &[],
+            assertion: ScenarioAssertion::Suggestion {
+                first: Some("my $id (keys %users_by_id) {\n    \n}"),
+                expected: &["my $id (keys %users_by_id) {\n    \n}"],
+                not_expected: &["my $item (@items)"],
+            },
+        },
+        Scenario {
             name: "self_receiver_prefers_current_package_methods",
             source_name: "receiver",
             source: "package Other;\nsub external {}\n\npackage Demo;\nsub save {}\nsub display_name {}\nsub caller {\n    my $self = shift;\n    $self-><<CURSOR>>\n}\n",
