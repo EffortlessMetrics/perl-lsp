@@ -1778,6 +1778,156 @@ paths = ["archive/["]
         Ok(())
     }
 
+    #[test]
+    fn render_annotations_emits_escaped_github_warning_packets() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path();
+        fs::create_dir_all(repo.join("target/ripr/review"))?;
+        fs::write(
+            repo.join(REVIEW_COMMENTS_JSON),
+            format_json(&json!({
+                "comments": [
+                    {
+                        "placement": {
+                            "path": "crates/perl-parser/src/lib.rs",
+                            "line": 42,
+                            "mode": "exact_seam_line"
+                        },
+                        "severity": "strong:gap",
+                        "kind": "focused,test",
+                        "reason": "branch lacks boundary proof: below, equal, above",
+                        "suggested_test": {
+                            "intent": "add % branch table"
+                        }
+                    }
+                ]
+            }))?,
+        )?;
+
+        let rendered = render_annotations(repo, REVIEW_COMMENTS_JSON)?;
+
+        assert!(!rendered.comments_missing);
+        assert!(rendered.text.contains("::warning file=crates/perl-parser/src/lib.rs,line=42"));
+        assert!(rendered.text.contains("title=ripr strong%3Agap focused%2Ctest"));
+        assert!(rendered.text.contains("boundary proof%3A below%2C equal%2C above"));
+        assert!(rendered.text.contains("Suggested test%3A add %25 branch table"));
+        Ok(())
+    }
+
+    #[test]
+    fn render_annotations_rejects_summary_only_placement_as_not_annotation_safe() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path();
+        fs::create_dir_all(repo.join("target/ripr/review"))?;
+        fs::write(
+            repo.join(REVIEW_COMMENTS_JSON),
+            format_json(&json!({
+                "comments": [
+                    {
+                        "placement": {
+                            "path": "crates/perl-parser/src/lib.rs",
+                            "line": 42,
+                            "mode": "summary_only"
+                        },
+                        "reason": "summary-only guidance should not become a line annotation"
+                    }
+                ]
+            }))?,
+        )?;
+
+        let err = match render_annotations(repo, REVIEW_COMMENTS_JSON) {
+            Ok(_) => bail!("summary-only placement must not become a warning annotation"),
+            Err(err) => err,
+        };
+
+        assert!(err.to_string().contains("not annotation-safe"));
+        Ok(())
+    }
+
+    #[test]
+    fn impacted_evidence_routes_severe_ripr_gap_without_label() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path();
+        fs::create_dir_all(repo.join("target/ripr/pr"))?;
+        fs::write(
+            repo.join(PR_EVIDENCE_JSON),
+            format_json(&json!({
+                "summary": {
+                    "ripr_severe_gap": true,
+                    "requires_targeted_mutation": false
+                }
+            }))?,
+        )?;
+        let options = ImpactedEvidenceOptions {
+            pr_evidence: PR_EVIDENCE_JSON.to_string(),
+            labels: Vec::new(),
+        };
+
+        let packet = impacted_evidence_packet(repo, &options);
+
+        assert_eq!(packet.pointer("/status"), Some(&json!("advisory")));
+        assert_eq!(packet.pointer("/summary/mutation_mode"), Some(&json!("targeted")));
+        assert_eq!(packet.pointer("/summary/requires_targeted_mutation"), Some(&json!(true)));
+        assert_eq!(packet.pointer("/summary/routing_reason"), Some(&json!("ripr severe gap")));
+        assert_eq!(packet.pointer("/artifacts/2/available"), Some(&json!(true)));
+        Ok(())
+    }
+
+    #[test]
+    fn impacted_evidence_missing_pr_receipt_keeps_label_route_and_warns() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path();
+        let options = ImpactedEvidenceOptions {
+            pr_evidence: PR_EVIDENCE_JSON.to_string(),
+            labels: vec!["release-risk".to_string()],
+        };
+
+        let packet = impacted_evidence_packet(repo, &options);
+        let markdown = render_impacted_evidence_markdown(&packet);
+
+        assert_eq!(packet.pointer("/status"), Some(&json!("incomplete")));
+        assert_eq!(packet.pointer("/summary/mutation_mode"), Some(&json!("targeted")));
+        assert_eq!(packet.pointer("/summary/routing_reason"), Some(&json!("release-risk label")));
+        assert_eq!(packet.pointer("/artifacts/2/available"), Some(&json!(false)));
+        assert_eq!(packet.pointer("/warnings/0/kind"), Some(&json!("missing_artifact")));
+        assert!(markdown.contains("missing_artifact"));
+        assert!(markdown.contains("release-risk label"));
+        Ok(())
+    }
+
+    #[test]
+    fn render_pr_evidence_summary_names_missing_and_invalid_inputs() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path();
+        fs::create_dir_all(repo.join("target/ripr/pr"))?;
+        fs::create_dir_all(repo.join("target/xtask/impacted-evidence"))?;
+        fs::write(repo.join(PR_EVIDENCE_JSON), "{not json\n")?;
+        fs::write(
+            repo.join(IMPACTED_JSON),
+            format_json(&json!({
+                "status": "advisory",
+                "summary": {
+                    "mutation_mode": "fast_only",
+                    "requires_targeted_mutation": false,
+                    "ripr_severe_gap": false,
+                    "routing_reason": null
+                }
+            }))?,
+        )?;
+
+        let summary = render_pr_evidence_summary(repo);
+
+        assert!(summary.contains("- PR evidence JSON: invalid:"), "{summary}");
+        assert!(summary.contains("- review guidance JSON: missing"), "{summary}");
+        assert!(summary.contains("- impacted evidence JSON: present"), "{summary}");
+        assert!(
+            summary
+                .contains("| PR evidence Markdown | `target/ripr/pr/repo-exposure.md` | missing |")
+        );
+        assert!(summary.contains("- mutation_mode: `fast_only`"), "{summary}");
+        Ok(())
+    }
+
     fn init_git_repo(repo: &Path) -> Result<()> {
         fs::write(repo.join("tracked.txt"), "base\n")?;
         run_git(repo, &["init"])?;
