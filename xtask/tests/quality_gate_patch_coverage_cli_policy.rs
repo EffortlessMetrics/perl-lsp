@@ -36,6 +36,13 @@ fn coverage_how_to_documents_patch_gate_cli_guidance() -> TestResult {
             && coverage_doc.contains("behavior-oriented tests"),
         "coverage how-to must describe actionable patch coverage repair guidance"
     );
+    assert!(
+        coverage_doc.contains("coverage.patch")
+            && coverage_doc.contains("coverage.project")
+            && coverage_doc.contains("project coverage")
+            && coverage_doc.contains("burn-down number"),
+        "coverage how-to must explain that the receipt carries project coverage visibility"
+    );
 
     Ok(())
 }
@@ -55,6 +62,7 @@ fn coverage_baseline_writes_and_checks_receipt_with_actionable_file_samples() ->
     assert_eq!(payload.get("kind").and_then(Value::as_str), Some("coverage_baseline"));
     assert_eq!(payload.get("head").and_then(Value::as_str), Some(current_head(&root)?.as_str()));
     assert_eq!(payload.pointer("/coverage/patch").and_then(Value::as_f64), Some(97.1));
+    assert_eq!(payload.pointer("/coverage/project").and_then(Value::as_f64), Some(60.0));
     assert_eq!(payload.pointer("/measured/line_found").and_then(Value::as_u64), Some(5));
     assert_eq!(payload.pointer("/measured/line_hit").and_then(Value::as_u64), Some(3));
     assert_eq!(
@@ -108,6 +116,8 @@ fn quality_gate_cli_writes_and_checks_patch_gate_receipts() -> TestResult {
     assert_eq!(payload.get("decision").and_then(Value::as_str), Some("pass"));
     assert_eq!(payload.pointer("/coverage/status").and_then(Value::as_str), Some("present"));
     assert_eq!(payload.pointer("/coverage/patch").and_then(Value::as_f64), Some(97.1));
+    assert_eq!(payload.pointer("/coverage/project").and_then(Value::as_f64), Some(60.0));
+    assert_eq!(payload.pointer("/coverage/scope").and_then(Value::as_str), Some("unspecified"));
     assert_eq!(
         payload.pointer("/coverage/codecov_config_status").and_then(Value::as_str),
         Some("present")
@@ -116,6 +126,8 @@ fn quality_gate_cli_writes_and_checks_patch_gate_receipts() -> TestResult {
     let markdown = fs::read_to_string(&summary)?;
     assert!(markdown.contains("## Quality Gates"), "{markdown}");
     assert!(markdown.contains("patch coverage: `97.10%` / `95.00%`"), "{markdown}");
+    assert!(markdown.contains("project coverage: `60.00%` / `95.00%`"), "{markdown}");
+    assert!(markdown.contains("coverage scope: `unspecified`"), "{markdown}");
 
     patch_quality_gate_command(&root, &coverage, &receipt, &summary, None)?
         .arg("--check")

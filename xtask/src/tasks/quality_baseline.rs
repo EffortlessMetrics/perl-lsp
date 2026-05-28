@@ -93,6 +93,7 @@ fn build_receipt(root: &Path, args: &CoverageBaselineArgs) -> Result<JsonValue> 
         .collect::<Vec<_>>();
 
     let mut coverage = serde_json::Map::new();
+    coverage.insert("project".to_string(), json!(line_coverage));
     if let Some(patch) = patch_coverage {
         coverage.insert("patch".to_string(), json!(patch));
     }
@@ -705,7 +706,8 @@ coverage:
 
         let receipt = build_receipt(repo, &args)?;
 
-        assert!(receipt["coverage"].as_object().is_some_and(serde_json::Map::is_empty));
+        assert_eq!(receipt.pointer("/coverage/project").and_then(JsonValue::as_f64), Some(100.0));
+        assert!(receipt.pointer("/coverage/patch").is_none());
         assert_eq!(receipt["scope"], json!("unspecified"));
         Ok(())
     }

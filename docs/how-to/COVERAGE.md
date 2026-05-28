@@ -72,6 +72,10 @@ CI derives patch coverage from the PR diff and the workspace library plus proof-
 rtk cargo xtask coverage-baseline --lcov target/lcov.info --receipt target/receipts/quality/coverage-baseline.json --codecov codecov.yml --patch-base origin/HEAD --scope workspace-lib-xtask-quality
 ```
 
+The coverage receipt records both `coverage.patch` and `coverage.project` so
+the patch gate can block new unproven code while still showing the project
+coverage burn-down number.
+
 Then run the patch coverage quality gate:
 
 ```bash
