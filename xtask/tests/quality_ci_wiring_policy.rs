@@ -122,6 +122,7 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
         "source \"$coverage_env\"",
         "cargo test --workspace --lib --locked",
         "cargo test -p xtask --bin xtask quality_baseline --locked",
+        "cargo test -p xtask --bin xtask merge_ready --locked",
         "cargo test -p xtask --bin xtask ripr --locked",
         "cargo test -p xtask --locked",
         "--test quality_ci_wiring_policy",
@@ -167,6 +168,36 @@ fn docs_describe_transitional_blocking_contract() {
             && status_doc.contains("burn-down targets"),
         "status doc must keep final targets separate from transitional enforcement"
     );
+}
+
+#[test]
+fn conventional_required_checks_record_live_proof_floor() {
+    let root = repo_root();
+    let policy = must(fs::read_to_string(root.join(".ci/policies/required-checks.toml")));
+    let merge_ready_doc = must(fs::read_to_string(root.join("docs/ci/merge-ready-protocol.md")));
+    let status_doc =
+        must(fs::read_to_string(root.join("docs/project/status/coverage_and_ripr_enforcement.md")));
+    let parsed: toml::Value = must(toml::from_str(&policy));
+
+    for required in ["Perl LSP Rust Small Result", "ripr+ New Gap Gate", "Codecov / Patch 95"] {
+        assert!(
+            policy_required_check(&parsed, required),
+            "required-check policy must mark `{required}` as required under GitHub enforcement"
+        );
+        assert!(
+            merge_ready_doc.contains(required) && status_doc.contains(required),
+            "docs must name live required proof context `{required}`"
+        );
+    }
+}
+
+fn policy_required_check(policy: &toml::Value, name: &str) -> bool {
+    policy.get("checks").and_then(toml::Value::as_array).into_iter().flatten().any(|item| {
+        item.get("name").and_then(toml::Value::as_str) == Some(name)
+            && item.get("required").and_then(toml::Value::as_bool) == Some(true)
+            && item.get("enforcement").and_then(toml::Value::as_str)
+                == Some("github-branch-protection")
+    })
 }
 
 fn repo_root() -> PathBuf {

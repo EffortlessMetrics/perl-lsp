@@ -1941,6 +1941,7 @@ coverage-proof base='origin/main':
     source "$coverage_env"
     "$HOME/.cargo/bin/rustup" run nightly cargo test --workspace --lib --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask quality_baseline --locked
+    "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask merge_ready --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask ripr --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --locked \
         --test codecov_patch_gate_policy \

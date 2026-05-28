@@ -23,6 +23,13 @@ Receipt JSON uses `.ci/receipts/schemas/merge-readiness.schema.json` and include
 
 This repository uses rulesets. Conventional required checks are read from `.ci/policies/required-checks.toml` first.
 
+Only entries explicitly marked `required = true` are treated as required. The
+current proof-floor branch-protection contexts are:
+
+- `Perl LSP Rust Small Result`
+- `ripr+ New Gap Gate`
+- `Codecov / Patch 95`
+
 ## Gate graph versioning
 
 `gate_graph_version` is a deterministic hash over:

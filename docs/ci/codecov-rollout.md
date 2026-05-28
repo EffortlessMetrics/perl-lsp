@@ -355,7 +355,7 @@ or release readiness.
 - Scope matches PR title:
 - Files touched are expected:
 - No duplicate coverage upload lane:
-- Codecov remains non-blocking:
+- Codecov patch gate remains blocking; project coverage remains burn-down:
 - Codecov comments remain disabled:
 - Coverage / Test Analytics distinction preserved:
 - Local validation:
@@ -368,7 +368,7 @@ or release readiness.
 
 - Combine Codecov work with: Rust 1.95 lint cleanup, no-panic baseline,
   file-policy rollout, provider cutover, `@INC` work, dependency bumps.
-- Make Codecov branch-protection blocking.
+- Make Codecov project coverage branch-protection blocking before burn-down.
 - Enable Codecov PR comments.
 - Claim Codecov proves parser semantics, LSP / DAP behavior, `@INC`
   correctness, CPAN corpus adequacy, mutation adequacy, no-panic safety,
@@ -487,7 +487,7 @@ gh issue view 8594
   baseline, file-policy strict-mode promotion (Cov-6 lands *after*
   advisory mode is stable), provider cutover, `@INC` work,
   Perl-oracle migrations, dependency bumps.
-- Do not make Codecov branch-protection blocking.
+- Do not make Codecov project coverage branch-protection blocking before burn-down.
 - Do not enable Codecov PR comments.
 - Do not claim Codecov proves parser semantics, LSP / DAP behavior,
   `@INC` correctness, CPAN corpus adequacy, mutation adequacy,

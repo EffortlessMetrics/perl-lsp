@@ -1,6 +1,11 @@
 version = 1
 source = "ruleset-conventional"
 
+# `[[check]]` entries are consumed by workflow-trigger-lint for required-style
+# workflow shape. `[[checks]]` entries are the merge-ready / branch-protection
+# status context inventory; only entries with `required = true` are treated as
+# required by `cargo xtask merge-ready`.
+
 [[check]]
 name = "CI Gate"
 workflow = ".github/workflows/ci.yml"
@@ -15,6 +20,27 @@ required = false
 name = "Methodology Gate"
 workflow = ".github/workflows/methodology-gate.yml"
 required = false
+
+[[checks]]
+name = "Perl LSP Rust Small Result"
+workflow = ".github/workflows/em-ci-routed-rust.yml"
+required = true
+enforcement = "github-branch-protection"
+reason = "Live main protection requires the routed Rust aggregate before merge."
+
+[[checks]]
+name = "ripr+ New Gap Gate"
+workflow = ".github/workflows/ripr.yml"
+required = true
+enforcement = "github-branch-protection"
+reason = "Proof lane blocks new RIPR gaps and stale/missing RIPR receipts."
+
+[[checks]]
+name = "Codecov / Patch 95"
+workflow = ".github/workflows/ci-nightly.yml"
+required = true
+enforcement = "github-branch-protection"
+reason = "Proof lane blocks patch coverage below 95% and stale/missing coverage receipts."
 
 [[checks]]
 name = "tokmd Review Cockpit"

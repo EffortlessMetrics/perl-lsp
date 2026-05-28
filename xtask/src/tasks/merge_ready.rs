@@ -213,17 +213,25 @@ fn load_required_checks(root: &Path) -> Result<Vec<String>> {
     let value: toml::Value = toml::from_str(&raw)
         .with_context(|| format!("failed to parse required checks policy: {}", path.display()))?;
 
+    Ok(required_check_names_from_policy(&value))
+}
+
+fn required_check_names_from_policy(value: &toml::Value) -> Vec<String> {
     let mut checks = Vec::new();
+
     if let Some(array) = value.get("checks").and_then(toml::Value::as_array) {
         for item in array {
-            if let Some(name) = item.get("name").and_then(toml::Value::as_str) {
+            if item.get("required").and_then(toml::Value::as_bool) == Some(true)
+                && let Some(name) = item.get("name").and_then(toml::Value::as_str)
+            {
                 checks.push(name.to_string());
             }
         }
     }
 
     checks.sort_unstable();
-    Ok(checks)
+    checks.dedup();
+    checks
 }
 
 fn resolve_base_sha(root: &Path) -> Result<String> {
@@ -333,6 +341,7 @@ fn is_required_workflow_candidate(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_tdd_support::must;
 
     fn make_receipt(
         head_sha: &str,
@@ -505,5 +514,70 @@ mod tests {
         let h1 = fnv1a64_hex(b"hello");
         let h2 = fnv1a64_hex(b"world");
         assert_ne!(h1, h2);
+    }
+
+    #[test]
+    fn test_load_required_checks_reads_required_status_contexts_from_policy_file() {
+        let tmp_dir = must(tempfile::tempdir());
+        let policy_dir = tmp_dir.path().join(".ci").join("policies");
+        must(fs::create_dir_all(&policy_dir));
+        must(fs::write(
+            policy_dir.join("required-checks.toml"),
+            concat!(
+                "[[check]]\n",
+                "name = \"Workflow-shape lint only\"\n",
+                "required = true\n",
+                "\n",
+                "[[checks]]\n",
+                "name = \"Codecov / Patch 95\"\n",
+                "required = true\n",
+                "\n",
+                "[[checks]]\n",
+                "name = \"ripr+ New Gap Gate\"\n",
+                "required = true\n",
+            ),
+        ));
+
+        let checks = must(load_required_checks(tmp_dir.path()));
+        assert_eq!(checks, vec!["Codecov / Patch 95", "ripr+ New Gap Gate"]);
+    }
+
+    #[test]
+    fn test_required_check_names_include_only_required_status_contexts() {
+        let policy: toml::Value = must(toml::from_str(concat!(
+            "[[check]]\n",
+            "name = \"Workflow-shape lint only\"\n",
+            "required = true\n",
+            "\n",
+            "[[checks]]\n",
+            "name = \"Proof required\"\n",
+            "required = true\n",
+            "\n",
+            "[[checks]]\n",
+            "name = \"Missing required flag\"\n",
+        )));
+
+        let checks = required_check_names_from_policy(&policy);
+        assert_eq!(checks, vec!["Proof required"]);
+    }
+
+    #[test]
+    fn test_required_check_names_deduplicate_sorted_names() {
+        let policy: toml::Value = must(toml::from_str(concat!(
+            "[[check]]\n",
+            "name = \"ripr+ New Gap Gate\"\n",
+            "required = true\n",
+            "\n",
+            "[[checks]]\n",
+            "name = \"Codecov / Patch 95\"\n",
+            "required = true\n",
+            "\n",
+            "[[checks]]\n",
+            "name = \"ripr+ New Gap Gate\"\n",
+            "required = true\n",
+        )));
+
+        let checks = required_check_names_from_policy(&policy);
+        assert_eq!(checks, vec!["Codecov / Patch 95", "ripr+ New Gap Gate"]);
     }
 }

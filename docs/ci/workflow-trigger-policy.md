@@ -4,7 +4,11 @@
 
 ## Why this exists
 
-The repository currently has no GitHub ruleset `required_status_checks` configured. Until ruleset enforcement lands, `.ci/policies/required-checks.toml` is the conventional source of truth for which checks are treated as required.
+GitHub branch protection currently requires the proof-floor contexts listed in
+`.ci/policies/required-checks.toml`: `Perl LSP Rust Small Result`,
+`ripr+ New Gap Gate`, and `Codecov / Patch 95`. The workflow-trigger lint still
+audits required-style workflow shape in advisory mode while the remaining
+ruleset rollout work continues.
 
 ## Required-workflow lint rules
 
