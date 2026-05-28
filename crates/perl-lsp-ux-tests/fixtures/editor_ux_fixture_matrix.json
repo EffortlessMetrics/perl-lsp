@@ -1471,6 +1471,34 @@
       ]
     },
     {
+      "id": "test_inline_completion_quality",
+      "scenario_file": "ux_scenario_52_test_inline_completion_quality.rs",
+      "subsystem_owner": "editor_trust",
+      "ci_tier": "pr",
+      "component": "completion",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "request inline completion in Perl test files and record framework-aware assertion ghost text",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "dynamic inline-completion registration is observed for an LSP4IJ-shaped client",
+        "Test::More inline completion uses visible $got/$expected lexicals",
+        "Test2 inline completion uses the visible $result lexical",
+        "test assertion inline completions avoid unrelated framework snippets"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "real_workspace_providers",
       "scenario_file": "ux_scenario_20_real_workspace_providers.rs",
       "subsystem_owner": "editor_intelligence",
