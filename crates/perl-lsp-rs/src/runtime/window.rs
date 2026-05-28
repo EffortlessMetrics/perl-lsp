@@ -16,6 +16,8 @@ pub enum MessageType {
     Info = 3,
     /// Log message (4)
     Log = 4,
+    /// Debug message (5), added by LSP 3.18.
+    Debug = 5,
 }
 
 /// Options for window/showDocument request

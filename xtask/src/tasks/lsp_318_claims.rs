@@ -14,6 +14,7 @@ const DIAGNOSTIC_ENRICHMENT_TEST: &str =
 const REFRESH_METHODS_TEST: &str = "crates/perl-lsp-rs/tests/lsp_refresh_methods_tests.rs";
 const SCHEMA_VALIDATION_TEST: &str = "crates/perl-lsp-rs/tests/lsp_schema_validation.rs";
 const CODE_LENS_TEST: &str = "crates/perl-lsp-rs/tests/lsp_codelens_tests.rs";
+const WINDOW_TEST: &str = "crates/perl-lsp-rs/tests/lsp_window_tests.rs";
 const CLIENT_REQUESTS: &str = "crates/perl-lsp-rs/src/runtime/client_requests.rs";
 const LIFECYCLE_CAPABILITIES: &str = "crates/perl-lsp-rs/src/runtime/lifecycle/capabilities.rs";
 const RUNTIME_LANGUAGE_MISC: &str = "crates/perl-lsp-rs/src/runtime/language/misc.rs";
@@ -86,7 +87,7 @@ const NEGATIVE_TEST_MARKERS: &[RequiredMarker] = &[
         marker: "folding_range_refresh_is_not_sent_without_client_support",
     },
     RequiredMarker {
-        label: "MessageType.Debug gate",
+        label: "normal runtime window messages avoid Debug",
         marker: "window_message_type_does_not_emit_debug_level",
     },
     RequiredMarker {
@@ -182,6 +183,14 @@ const CODE_LENS_TEST_MARKERS: &[RequiredMarker] = &[
     },
 ];
 
+const WINDOW_TEST_MARKERS: &[RequiredMarker] = &[
+    RequiredMarker { label: "MessageType.Debug discriminant", marker: "MessageType::Debug, 5" },
+    RequiredMarker {
+        label: "MessageType.Debug positive receipt",
+        marker: "lsp_window_debug_message_type_serializes_to_five",
+    },
+];
+
 const CAPABILITY_ABSENCE_CHECKS: &[JsonAbsenceCheck] = &[
     JsonAbsenceCheck {
         pointer: "/documentRangesFormattingProvider",
@@ -261,7 +270,6 @@ const FEATURE_CATALOG_FORBIDDEN_PATTERNS: &[RawPatternCheck] = &[
         label: "CodeAction.documentation feature claim",
     },
     RawPatternCheck { needle: "CodeAction.tags", label: "CodeAction.tags feature claim" },
-    RawPatternCheck { needle: "MessageType.Debug", label: "MessageType.Debug feature claim" },
     RawPatternCheck { needle: "Command.tooltip", label: "Command.tooltip feature claim" },
     RawPatternCheck { needle: "RelativePattern", label: "RelativePattern feature claim" },
     RawPatternCheck { needle: "supportThemeIcons", label: "markdown theme-icon feature claim" },
@@ -321,15 +329,16 @@ pub fn run() -> Result<()> {
         &mut violations,
     )?;
     check_required_markers(&root, CODE_LENS_TEST, CODE_LENS_TEST_MARKERS, &mut violations)?;
+    check_required_markers(&root, WINDOW_TEST, WINDOW_TEST_MARKERS, &mut violations)?;
     check_feature_catalog(&root, &mut violations)?;
     check_capability_snapshots(&root, &mut violations)?;
     check_folding_range_refresh_guard(&root, &mut violations)?;
     check_code_lens_resolve_support_guard(&root, &mut violations)?;
-    check_forbidden_source_claims(&root, &mut violations)?;
+    check_message_type_debug_support(&root, &mut violations)?;
 
     if violations.is_empty() {
         println!(
-            "LSP 3.18 claim guard OK: {} capability snapshots, {} feature markers, {} negative-test markers, {} positive refresh markers, {} diagnostic markers, {} schema markers, {} CodeLens markers, {} spec markers checked",
+            "LSP 3.18 claim guard OK: {} capability snapshots, {} feature markers, {} negative-test markers, {} positive refresh markers, {} diagnostic markers, {} schema markers, {} CodeLens markers, {} window markers, {} spec markers checked",
             CAPABILITY_SNAPSHOTS.len(),
             FEATURE_CATALOG_MARKERS.len(),
             NEGATIVE_TEST_MARKERS.len(),
@@ -337,6 +346,7 @@ pub fn run() -> Result<()> {
             DIAGNOSTIC_ENRICHMENT_TEST_MARKERS.len(),
             SCHEMA_VALIDATION_TEST_MARKERS.len(),
             CODE_LENS_TEST_MARKERS.len(),
+            WINDOW_TEST_MARKERS.len(),
             SPEC_MARKERS.len()
         );
         return Ok(());
@@ -506,23 +516,15 @@ fn check_code_lens_resolve_support_guard(
     Ok(())
 }
 
-fn check_forbidden_source_claims(root: &Path, violations: &mut Vec<Violation>) -> Result<()> {
+fn check_message_type_debug_support(root: &Path, violations: &mut Vec<Violation>) -> Result<()> {
     let window = read_required(root, "crates/perl-lsp-rs/src/runtime/window.rs")?;
-    for (idx, line) in window.lines().enumerate() {
-        let trimmed = line.trim();
-        if trimmed.contains("MessageType::Debug")
-            || trimmed == "Debug,"
-            || trimmed.starts_with("Debug =")
-        {
-            violations.push(Violation {
-                rel_path: "crates/perl-lsp-rs/src/runtime/window.rs".to_string(),
-                line: idx + 1,
-                label: "MessageType.Debug",
-                detail: "MessageType.Debug is not part of the current selected 3.18 claim"
-                    .to_string(),
-            });
-        }
-    }
+    require_all(
+        "crates/perl-lsp-rs/src/runtime/window.rs",
+        &window,
+        &["Debug = 5"],
+        "MessageType.Debug enum support",
+        violations,
+    );
     Ok(())
 }
 

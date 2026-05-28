@@ -41,6 +41,8 @@ Current lock points:
 - CodeLens command lazy-resolution is gated by
   `textDocument.codeLens.resolveSupport.properties`
 - CodeLens commands include plain LSP 3.18 `Command.tooltip` text
+- explicit window debug messages serialize LSP 3.18 `MessageType.Debug` as
+  type `5`
 - pull diagnostics can emit `Diagnostic.message` as `MarkupContent` only when
   clients advertise `textDocument.diagnostic.markupMessageSupport`
 - `workspace/textDocumentContent` is wired for the `perldoc` scheme
@@ -80,6 +82,7 @@ perl-lsp supports selected LSP 3.18 surfaces with capability-honest contracts.
 | Signature-help nullable active parameter | `textDocument/signatureHelp` response | `SignatureHelp.activeParameter` and `SignatureInformation.activeParameter` schema validation accepts unsigned integer or `null`; current runtime receipts preserve numeric active-parameter tracking when known. | `lsp_schema_validation`, `lsp_signature_help_tests`, `check-lsp-318-claims` |
 | CodeLens resolve support properties | `textDocument.codeLens.resolveSupport.properties`, `codeLensProvider.resolveProvider`, `codeLens/resolve` | Clients receive unresolved command/reference lenses only when `command` appears in resolve-support properties; clients without that property receive eager command lenses while `codeLens/resolve` remains routed. | `lsp_codelens_tests`, `lsp_code_lens_tests`, `lsp_bdd_workflows`, `check-lsp-318-claims` |
 | CodeLens command tooltips | `Command.tooltip` on CodeLens command objects | CodeLens commands returned by `textDocument/codeLens` and `codeLens/resolve` carry deterministic plain-text tooltips; non-CodeLens command tooltips remain unclaimed. | `lsp_codelens_tests`, `lsp_318_negative_claims`, `check-lsp-318-claims` |
+| Window debug messages | `MessageType.Debug`, `window/logMessage`, `window/showMessage`, `window/showMessageRequest` | Explicit debug message calls serialize type `5`; normal runtime paths continue using the existing non-debug message levels unless a later PR intentionally wires debug policy. | `lsp_window_tests`, `lsp_318_negative_claims`, `check-lsp-318-claims` |
 | Diagnostic markup messages | `textDocument.diagnostic.markupMessageSupport`, `textDocument/diagnostic`, `workspace/diagnostic` | Pull diagnostics may emit `Diagnostic.message` as `MarkupContent` only when support is true; unsupported clients and publish diagnostics remain string-only. | `lsp_diagnostic_enrichment_test`, `lsp_318_negative_claims`, `lsp_schema_validation`, `check-lsp-318-claims` |
 | Lean/e2e watcher behavior | `workspace/didChangeWatchedFiles` dynamic registration | Runtime tuning can suppress file watchers without suppressing inline-completion dynamic registration. | `lsp_registration_tests`, lean UX receipts |
 
@@ -99,7 +102,6 @@ capability parsing, wire tests, docs, and negative gates:
 - `CodeAction.documentation`
 - `CodeAction.tags`
 - `CodeActionTag.LLMGenerated`
-- `MessageType.Debug`
 - `Command.tooltip` outside CodeLens command objects
 - `RelativePattern` document selectors and watcher glob patterns
 - ungated `workspace/foldingRange/refresh` without
@@ -128,7 +130,8 @@ The `lsp_318_negative_claims` test suite is the current guardrail for optional
 - emits diagnostic `message` as `MarkupContent` without markup support
 - registers file watchers with relative-pattern objects instead of string globs
 - sends `workspace/foldingRange/refresh` without client refresh support
-- emits `MessageType.Debug`
+- emits `MessageType.Debug` from normal runtime paths that have not
+  intentionally opted into debug-level messages
 - emits `Command.tooltip` outside CodeLens command objects
 - emits markdown `command:` links or `$()` theme-icon syntax without explicit
   trusted-markdown/theme-icon support

@@ -250,7 +250,7 @@ fn window_message_type_does_not_emit_debug_level() -> TestResult {
                 .pointer("/params/type")
                 .and_then(Value::as_i64)
                 .ok_or_else(|| format!("window message missing numeric type: {message}"))?;
-            assert_ne!(typ, 5, "MessageType.Debug is not claimed: {message}");
+            assert_ne!(typ, 5, "normal runtime paths must not emit debug messages: {message}");
         }
     }
     Ok(())

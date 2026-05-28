@@ -459,6 +459,7 @@ fn lsp_window_message_types() {
         (MessageType::Warning, 2),
         (MessageType::Info, 3),
         (MessageType::Log, 4),
+        (MessageType::Debug, 5),
     ];
 
     for (msg_type, expected_value) in types {
@@ -471,6 +472,38 @@ fn lsp_window_message_types() {
         let message = message.unwrap_or_else(|| unreachable!());
         assert_eq!(message["params"]["type"], expected_value);
     }
+}
+
+#[test]
+fn lsp_window_debug_message_type_serializes_to_five() -> Result<(), Box<dyn std::error::Error>> {
+    let output = OutputCapture::new();
+    let output_box: Box<dyn Write + Send> = Box::new(output.clone());
+    let server = LspServer::with_output(Arc::new(Mutex::new(output_box)));
+
+    server.log_message(MessageType::Debug, "debug log")?;
+    let log_message = wait_for_method(&output, "window/logMessage")
+        .ok_or("Expected window/logMessage debug notification")?;
+    assert_eq!(log_message["params"]["type"], 5);
+    assert_eq!(log_message["params"]["message"], "debug log");
+
+    output.clear();
+
+    server.show_message(MessageType::Debug, "debug show")?;
+    let show_message = wait_for_method(&output, "window/showMessage")
+        .ok_or("Expected window/showMessage debug notification")?;
+    assert_eq!(show_message["params"]["type"], 5);
+    assert_eq!(show_message["params"]["message"], "debug show");
+
+    output.clear();
+
+    server.show_message_request(MessageType::Debug, "debug request", vec!["Inspect"])?;
+    let request = wait_for_method(&output, "window/showMessageRequest")
+        .ok_or("Expected window/showMessageRequest debug request")?;
+    assert_eq!(request["params"]["type"], 5);
+    assert_eq!(request["params"]["message"], "debug request");
+    assert_eq!(request["params"]["actions"][0]["title"], "Inspect");
+
+    Ok(())
 }
 
 #[test]
