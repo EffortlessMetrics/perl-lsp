@@ -426,6 +426,13 @@ fn scenarios() -> &'static [Scenario] {
             },
         },
         Scenario {
+            name: "for_loop_ignores_closed_block_array",
+            source_name: "scope",
+            source: "{\n    my @users = fetch_users();\n}\nfor <<CURSOR>>",
+            available_modules: &[],
+            assertion: ScenarioAssertion::Silent,
+        },
+        Scenario {
             name: "for_loop_uses_visible_hash_keys_when_no_array_is_available",
             source_name: "syntax",
             source: "my %users_by_id = load_users();\nfor <<CURSOR>>",

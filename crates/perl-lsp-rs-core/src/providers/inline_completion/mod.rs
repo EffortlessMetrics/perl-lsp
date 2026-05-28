@@ -943,15 +943,28 @@ impl InlineCompletionProvider {
         lines: &[&str],
         line_index: usize,
     ) -> (Option<String>, Option<usize>) {
-        lines.iter().take(line_index + 1).enumerate().fold(
-            (None, None),
-            |mut state, (idx, line)| {
-                if let Some(name) = self.parse_sub_name(line) {
-                    state = (Some(name), Some(idx));
+        let mut scope = None::<FunctionScope>;
+        for (idx, line) in lines.iter().take(line_index + 1).enumerate() {
+            if let Some(name) = self.parse_sub_name(line) {
+                scope = Some(FunctionScope {
+                    name,
+                    start_line: idx,
+                    block_depth: 0,
+                    opened_block: false,
+                });
+            }
+
+            if let Some(active) = scope.as_mut() {
+                let delta = brace_delta(line);
+                active.opened_block |= line_opens_block(line);
+                active.block_depth += delta;
+                if idx < line_index && active.opened_block && active.block_depth <= 0 {
+                    scope = None;
                 }
-                state
-            },
-        )
+            }
+        }
+
+        scope.map(|active| (Some(active.name), Some(active.start_line))).unwrap_or((None, None))
     }
 
     fn current_package(&self, lines: &[&str], line_index: usize) -> Option<String> {
@@ -1015,7 +1028,9 @@ impl InlineCompletionProvider {
 
     fn collect_variables(&self, visible_text: &str) -> Vec<String> {
         let mut variables = Vec::new();
-        for declaration_group in collect_declared_variable_groups(visible_text).into_iter().rev() {
+        for declaration_group in
+            collect_live_declared_variable_groups(visible_text).into_iter().rev()
+        {
             for variable in declaration_group {
                 self.push_unique_variable(&mut variables, variable);
             }
@@ -1903,6 +1918,14 @@ struct ReplacementFragment<'a> {
     start_byte: usize,
 }
 
+#[derive(Debug)]
+struct FunctionScope {
+    name: String,
+    start_line: usize,
+    block_depth: i32,
+    opened_block: bool,
+}
+
 #[derive(Debug, Default)]
 struct PackageScopeScanner {
     package: Option<String>,
@@ -1965,7 +1988,11 @@ fn contains_keyword(text: &str, keyword: &str) -> bool {
 }
 
 fn package_line_opens_block(line: &str) -> bool {
-    line.trim_start().starts_with("package ") && code_before_line_comment(line).contains('{')
+    line.trim_start().starts_with("package ") && line_opens_block(line)
+}
+
+fn line_opens_block(line: &str) -> bool {
+    code_before_line_comment(line).contains('{')
 }
 
 fn brace_delta(line: &str) -> i32 {
@@ -2058,8 +2085,20 @@ fn non_comment_code_lines(text: &str) -> impl Iterator<Item = &str> {
     })
 }
 
-fn collect_declared_variable_groups(text: &str) -> Vec<Vec<String>> {
+fn collect_live_declared_variable_groups(text: &str) -> Vec<Vec<String>> {
+    let (groups, final_depth) = collect_scoped_declared_variable_groups_with_final_depth(text);
+    groups
+        .into_iter()
+        .filter(|group| group.depth <= final_depth)
+        .map(|group| group.variables)
+        .collect()
+}
+
+fn collect_scoped_declared_variable_groups_with_final_depth(
+    text: &str,
+) -> (Vec<ScopedVariableGroup>, i32) {
     let mut groups = Vec::new();
+    let mut depth = 0;
     for raw_line in non_comment_code_lines(text) {
         let line = code_before_line_comment(raw_line);
         let mut search_start = 0usize;
@@ -2070,12 +2109,38 @@ fn collect_declared_variable_groups(text: &str) -> Vec<Vec<String>> {
             };
             let variables = variables_declared_after_keyword(&line[tail_start..]);
             if !variables.is_empty() {
-                groups.push(variables);
+                groups.push(ScopedVariableGroup {
+                    depth: declaration_scope_depth(line, keyword_start, depth),
+                    variables,
+                });
             }
             search_start = keyword_start + 1;
         }
+        depth += brace_delta(line);
     }
-    groups
+    (groups, depth)
+}
+
+#[derive(Debug)]
+struct ScopedVariableGroup {
+    depth: i32,
+    variables: Vec<String>,
+}
+
+fn declaration_scope_depth(line: &str, keyword_start: usize, line_depth: i32) -> i32 {
+    let depth_before_declaration = line_depth + brace_delta(&line[..keyword_start]);
+    if declaration_is_for_loop_binding(line, keyword_start) {
+        depth_before_declaration + 1
+    } else {
+        depth_before_declaration
+    }
+}
+
+fn declaration_is_for_loop_binding(line: &str, keyword_start: usize) -> bool {
+    line[..keyword_start]
+        .split_whitespace()
+        .next_back()
+        .is_some_and(|keyword| matches!(keyword, "for" | "foreach"))
 }
 
 fn find_variable_declaration(line: &str, search_start: usize) -> Option<(usize, usize)> {
@@ -3486,6 +3551,71 @@ mod tests {
             prepared.variables.iter().all(|variable| variable != "@users"),
             "iterable mention should not be treated as a loop lexical: {:?}",
             prepared.variables
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn prepared_context_excludes_variables_from_closed_blocks()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "{\n    my @users = fetch_users();\n}\nfor ";
+        let prepared = provider.prepare_context(source, 3, 4).ok_or("expected prepared context")?;
+        let completions = provider.get_inline_completions(source, 3, 4);
+
+        assert!(
+            prepared.variables.iter().all(|variable| variable != "@users"),
+            "closed block array should not be visible at the cursor: {:?}",
+            prepared.variables
+        );
+        assert!(
+            completions.items.is_empty(),
+            "loop binding should stay silent when the only collection is out of scope: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn prepared_context_excludes_variables_from_closed_subroutines()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub helper {\n    my $result = compute();\n}\n\nreturn ";
+        let prepared = provider.prepare_context(source, 4, 7).ok_or("expected prepared context")?;
+        let completions = provider.get_inline_completions(source, 4, 7);
+
+        assert_eq!(prepared.current_function, None);
+        assert!(
+            prepared.variables.iter().all(|variable| variable != "$result"),
+            "closed subroutine scalar should not be visible at the cursor: {:?}",
+            prepared.variables
+        );
+        assert!(
+            completions.items.iter().all(|item| item.insert_text != "$result;"),
+            "return completion should not use a closed subroutine lexical: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn prepared_context_excludes_variables_from_single_line_closed_subroutines()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub helper { my $result = compute(); }\n\nreturn ";
+        let prepared = provider.prepare_context(source, 2, 7).ok_or("expected prepared context")?;
+        let completions = provider.get_inline_completions(source, 2, 7);
+
+        assert_eq!(prepared.current_function, None);
+        assert!(
+            prepared.variables.iter().all(|variable| variable != "$result"),
+            "single-line closed subroutine scalar should not be visible at the cursor: {:?}",
+            prepared.variables
+        );
+        assert!(
+            completions.items.iter().all(|item| item.insert_text != "$result;"),
+            "return completion should not use a single-line closed subroutine lexical: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
         );
         Ok(())
     }
