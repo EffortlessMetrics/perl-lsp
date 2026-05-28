@@ -1461,6 +1461,7 @@
         "dynamic inline-completion registration is observed for an LSP4IJ-shaped client",
         "invoked inline completion after a Mojolicious module prefix returns reachable project modules",
         "invoked module inline-completion items replace the typed module prefix instead of duplicating it",
+        "selectedCompletionInfo returns only same-range extending module ghost text and suppresses conflicting selections",
         "automatic inline completion stays silent inside a line comment"
       ],
       "confidence_signals": [
