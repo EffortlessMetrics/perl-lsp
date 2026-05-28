@@ -13,9 +13,12 @@ const DIAGNOSTIC_ENRICHMENT_TEST: &str =
     "crates/perl-lsp-rs/tests/lsp_diagnostic_enrichment_test.rs";
 const REFRESH_METHODS_TEST: &str = "crates/perl-lsp-rs/tests/lsp_refresh_methods_tests.rs";
 const SCHEMA_VALIDATION_TEST: &str = "crates/perl-lsp-rs/tests/lsp_schema_validation.rs";
+const CODE_LENS_TEST: &str = "crates/perl-lsp-rs/tests/lsp_codelens_tests.rs";
 const CLIENT_REQUESTS: &str = "crates/perl-lsp-rs/src/runtime/client_requests.rs";
 const LIFECYCLE_CAPABILITIES: &str = "crates/perl-lsp-rs/src/runtime/lifecycle/capabilities.rs";
+const RUNTIME_LANGUAGE_MISC: &str = "crates/perl-lsp-rs/src/runtime/language/misc.rs";
 const RUNTIME_REFRESH: &str = "crates/perl-lsp-rs/src/runtime/refresh.rs";
+const STATE_DOCUMENT: &str = "crates/perl-lsp-rs/src/state/document.rs";
 const FEATURE_CATALOG: &str = "features.toml";
 
 const CAPABILITY_SNAPSHOTS: &[&str] = &[
@@ -122,6 +125,10 @@ const FEATURE_CATALOG_MARKERS: &[RequiredMarker] = &[
         label: "folding range refresh feature catalog row",
         marker: "id = \"lsp.folding_range_refresh\"",
     },
+    RequiredMarker {
+        label: "CodeLens resolveSupport.properties feature catalog row",
+        marker: "id = \"lsp.code_lens_resolve_support_properties\"",
+    },
 ];
 
 const REFRESH_METHODS_TEST_MARKERS: &[RequiredMarker] = &[RequiredMarker {
@@ -142,6 +149,21 @@ const SCHEMA_VALIDATION_TEST_MARKERS: &[RequiredMarker] = &[
     RequiredMarker {
         label: "Diagnostic.message MarkupContent schema compatibility",
         marker: "diagnostic_message_accepts_lsp_318_markup_content",
+    },
+];
+
+const CODE_LENS_TEST_MARKERS: &[RequiredMarker] = &[
+    RequiredMarker {
+        label: "CodeLens eager fallback without resolve support",
+        marker: "test_codelens_eager_without_resolve_support",
+    },
+    RequiredMarker {
+        label: "CodeLens command resolve support positive gate",
+        marker: "test_codelens_defers_command_when_resolve_support_allows_command",
+    },
+    RequiredMarker {
+        label: "CodeLens command resolve support negative gate",
+        marker: "test_codelens_eager_when_resolve_support_lacks_command",
     },
 ];
 
@@ -281,20 +303,23 @@ pub fn run() -> Result<()> {
         SCHEMA_VALIDATION_TEST_MARKERS,
         &mut violations,
     )?;
+    check_required_markers(&root, CODE_LENS_TEST, CODE_LENS_TEST_MARKERS, &mut violations)?;
     check_feature_catalog(&root, &mut violations)?;
     check_capability_snapshots(&root, &mut violations)?;
     check_folding_range_refresh_guard(&root, &mut violations)?;
+    check_code_lens_resolve_support_guard(&root, &mut violations)?;
     check_forbidden_source_claims(&root, &mut violations)?;
 
     if violations.is_empty() {
         println!(
-            "LSP 3.18 claim guard OK: {} capability snapshots, {} feature markers, {} negative-test markers, {} positive refresh markers, {} diagnostic markers, {} schema markers, {} spec markers checked",
+            "LSP 3.18 claim guard OK: {} capability snapshots, {} feature markers, {} negative-test markers, {} positive refresh markers, {} diagnostic markers, {} schema markers, {} CodeLens markers, {} spec markers checked",
             CAPABILITY_SNAPSHOTS.len(),
             FEATURE_CATALOG_MARKERS.len(),
             NEGATIVE_TEST_MARKERS.len(),
             REFRESH_METHODS_TEST_MARKERS.len(),
             DIAGNOSTIC_ENRICHMENT_TEST_MARKERS.len(),
             SCHEMA_VALIDATION_TEST_MARKERS.len(),
+            CODE_LENS_TEST_MARKERS.len(),
             SPEC_MARKERS.len()
         );
         return Ok(());
@@ -421,6 +446,43 @@ fn check_folding_range_refresh_guard(root: &Path, violations: &mut Vec<Violation
             "request_folding_range_refresh",
         ],
         "workspace/foldingRange/refresh debounce path",
+        violations,
+    );
+
+    Ok(())
+}
+
+fn check_code_lens_resolve_support_guard(
+    root: &Path,
+    violations: &mut Vec<Violation>,
+) -> Result<()> {
+    let state_document = read_required(root, STATE_DOCUMENT)?;
+    let lifecycle_capabilities = read_required(root, LIFECYCLE_CAPABILITIES)?;
+    let runtime_language_misc = read_required(root, RUNTIME_LANGUAGE_MISC)?;
+
+    require_all(
+        STATE_DOCUMENT,
+        &state_document,
+        &["code_lens_resolve_support", "HashSet<String>"],
+        "CodeLens resolveSupport.properties capability storage",
+        violations,
+    );
+    require_all(
+        LIFECYCLE_CAPABILITIES,
+        &lifecycle_capabilities,
+        &["/textDocument/codeLens/resolveSupport/properties", "code_lens_resolve_support"],
+        "CodeLens resolveSupport.properties capability parser",
+        violations,
+    );
+    require_all(
+        RUNTIME_LANGUAGE_MISC,
+        &runtime_language_misc,
+        &[
+            "client_supports_code_lens_command_resolve",
+            "properties.contains(\"command\")",
+            "prepare_code_lenses_for_client",
+        ],
+        "CodeLens command lazy-resolution gate",
         violations,
     );
 

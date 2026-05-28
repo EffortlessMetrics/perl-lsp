@@ -950,10 +950,25 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 tests = [
+  "crates/perl-lsp-rs/tests/lsp_codelens_tests.rs",
   "crates/perl-lsp-rs/tests/lsp_code_lens_tests.rs",
   "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
 ]
 description = "Resolve code lens command"
+
+[[feature]]
+id = "lsp.code_lens_resolve_support_properties"
+spec = "LSP 3.18"
+area = "text_document"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_codelens_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_code_lens_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+]
+description = "Gate lazy CodeLens command resolution on textDocument.codeLens.resolveSupport.properties"
 
 [[feature]]
 id = "lsp.document_link_resolve"

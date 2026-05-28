@@ -28,6 +28,18 @@ use support::lsp_harness::LspHarness;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
+fn code_lens_resolve_capabilities(properties: &[&str]) -> serde_json::Value {
+    json!({
+        "textDocument": {
+            "codeLens": {
+                "resolveSupport": {
+                    "properties": properties
+                }
+            }
+        }
+    })
+}
+
 /// Tests feature spec: code_lens_provider.rs#basic-code-lens-extraction
 ///
 /// Validates that basic codeLens requests return appropriate lenses for
@@ -235,7 +247,7 @@ my $c = calculate(6, 7);
 "#;
 
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize(Some(code_lens_resolve_capabilities(&["command"])))?;
     harness.open_document("file:///math.pl", doc)?;
 
     // Get code lenses
@@ -300,7 +312,7 @@ my $value = used_function();
 "#;
 
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize(Some(code_lens_resolve_capabilities(&["command"])))?;
     harness.open_document("file:///unused.pl", doc)?;
 
     let lenses_result = harness
@@ -316,11 +328,13 @@ my $value = used_function();
 
     // Find lens for unused_function
     let unused_lens = lenses.iter().find(|lens| {
-        lens.get("data")
-            .and_then(|d| d.get("name"))
-            .and_then(|n| n.as_str())
-            .map(|n| n == "unused_function")
-            .unwrap_or(false)
+        lens.get("command").is_none()
+            && lens
+                .get("data")
+                .and_then(|d| d.get("name"))
+                .and_then(|n| n.as_str())
+                .map(|n| n == "unused_function")
+                .unwrap_or(false)
     });
 
     assert!(unused_lens.is_some(), "Should have lens for unused_function");

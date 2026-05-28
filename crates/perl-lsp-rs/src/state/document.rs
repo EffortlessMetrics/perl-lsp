@@ -311,6 +311,12 @@ pub struct ClientCapabilities {
     pub inlay_hint_refresh_support: bool,
     /// Client declared textDocument/inlayHint capability
     pub inlay_hint_support: bool,
+    /// Properties the client can resolve via codeLens/resolve
+    ///
+    /// Parsed from `capabilities.textDocument.codeLens.resolveSupport.properties`.
+    /// The server must only defer CodeLens properties that appear here. A `None`
+    /// value means the client sent no CodeLens `resolveSupport` entry.
+    pub code_lens_resolve_support: Option<std::collections::HashSet<String>>,
     /// Supports workspace/inlineValue/refresh request
     pub inline_value_refresh_support: bool,
     /// Supports workspace/diagnostic/refresh request

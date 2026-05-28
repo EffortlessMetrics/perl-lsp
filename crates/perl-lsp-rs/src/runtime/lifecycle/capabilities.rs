@@ -193,6 +193,21 @@ impl LspServer {
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false);
 
+                    // textDocument/codeLens resolveSupport.properties
+                    if let Some(properties) =
+                        cap_val.pointer("/textDocument/codeLens/resolveSupport/properties")
+                    {
+                        let props: std::collections::HashSet<String> = properties
+                            .as_array()
+                            .map(|arr| {
+                                arr.iter()
+                                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        caps.code_lens_resolve_support = Some(props);
+                    }
+
                     // workspace/semanticTokens/refresh
                     caps.semantic_tokens_refresh_support = cap_val
                         .pointer("/workspace/semanticTokens/refreshSupport")

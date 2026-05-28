@@ -3,6 +3,27 @@ mod support;
 use serde_json::json;
 use support::lsp_harness::LspHarness;
 
+fn code_lens_resolve_capabilities(properties: &[&str]) -> serde_json::Value {
+    json!({
+        "textDocument": {
+            "codeLens": {
+                "resolveSupport": {
+                    "properties": properties
+                }
+            }
+        }
+    })
+}
+
+fn code_lens_command_id(lens: &serde_json::Value) -> Option<&str> {
+    lens.pointer("/command/command").and_then(serde_json::Value::as_str)
+}
+
+fn has_unresolved_reference_lens(lens: &serde_json::Value) -> bool {
+    lens.get("command").is_none()
+        && lens.pointer("/data/kind").and_then(serde_json::Value::as_str).is_some()
+}
+
 #[test]
 
 fn test_shows_codelens_on_sub() -> Result<(), Box<dyn std::error::Error>> {
@@ -139,7 +160,7 @@ my $x = helper();
 my $y = helper();
 "#;
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    harness.initialize(Some(code_lens_resolve_capabilities(&["command"])))?;
     harness.open_document("file:///test.pl", doc)?;
     let uri = "file:///test.pl";
 
@@ -169,6 +190,110 @@ my $y = helper();
             }
         }
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_codelens_eager_without_resolve_support() -> Result<(), Box<dyn std::error::Error>> {
+    let doc = r#"
+sub helper {
+    return 42;
+}
+
+my $x = helper();
+my $y = helper();
+"#;
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///test.pl", doc)?;
+
+    let result = harness.request(
+        "textDocument/codeLens",
+        json!({
+            "textDocument": {"uri": "file:///test.pl"}
+        }),
+    )?;
+    let lenses = result.as_array().ok_or("Expected codeLens result array")?;
+
+    assert!(
+        !lenses.iter().any(has_unresolved_reference_lens),
+        "clients without codeLens.resolveSupport.command must receive eager command lenses; got {lenses:?}"
+    );
+    assert!(
+        lenses
+            .iter()
+            .any(|lens| code_lens_command_id(lens) == Some("editor.action.findReferences")),
+        "expected eager findReferences command lens; got {lenses:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_codelens_defers_command_when_resolve_support_allows_command()
+-> Result<(), Box<dyn std::error::Error>> {
+    let doc = r#"
+sub helper {
+    return 42;
+}
+
+my $x = helper();
+my $y = helper();
+"#;
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(code_lens_resolve_capabilities(&["command"])))?;
+    harness.open_document("file:///test.pl", doc)?;
+
+    let result = harness.request(
+        "textDocument/codeLens",
+        json!({
+            "textDocument": {"uri": "file:///test.pl"}
+        }),
+    )?;
+    let lenses = result.as_array().ok_or("Expected codeLens result array")?;
+
+    assert!(
+        lenses.iter().any(has_unresolved_reference_lens),
+        "clients that support resolving command may receive unresolved reference lenses; got {lenses:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_codelens_eager_when_resolve_support_lacks_command() -> Result<(), Box<dyn std::error::Error>>
+{
+    let doc = r#"
+sub helper {
+    return 42;
+}
+
+my $x = helper();
+my $y = helper();
+"#;
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(code_lens_resolve_capabilities(&["tooltip"])))?;
+    harness.open_document("file:///test.pl", doc)?;
+
+    let result = harness.request(
+        "textDocument/codeLens",
+        json!({
+            "textDocument": {"uri": "file:///test.pl"}
+        }),
+    )?;
+    let lenses = result.as_array().ok_or("Expected codeLens result array")?;
+
+    assert!(
+        !lenses.iter().any(has_unresolved_reference_lens),
+        "clients that do not list command in resolveSupport must not receive unresolved command lenses; got {lenses:?}"
+    );
+    assert!(
+        lenses
+            .iter()
+            .any(|lens| code_lens_command_id(lens) == Some("editor.action.findReferences")),
+        "expected eager findReferences command lens; got {lenses:?}"
+    );
 
     Ok(())
 }

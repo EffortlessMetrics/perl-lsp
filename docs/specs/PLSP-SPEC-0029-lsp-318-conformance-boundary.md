@@ -38,6 +38,8 @@ Current lock points:
 - semantic tokens advertise full/range support without delta
 - signature-help active parameter schema validation accepts unsigned integer or
   `null`
+- CodeLens command lazy-resolution is gated by
+  `textDocument.codeLens.resolveSupport.properties`
 - pull diagnostics can emit `Diagnostic.message` as `MarkupContent` only when
   clients advertise `textDocument.diagnostic.markupMessageSupport`
 - `workspace/textDocumentContent` is wired for the `perldoc` scheme
@@ -75,6 +77,7 @@ perl-lsp supports selected LSP 3.18 surfaces with capability-honest contracts.
 | Folding range refresh | `workspace.foldingRange.refreshSupport`, `workspace/foldingRange/refresh` | Server sends refresh requests only for clients that advertise `workspace.foldingRange.refreshSupport`; request IDs are bounded and emitted through the standard server request path. | `lsp_refresh_methods_tests`, `lsp_318_negative_claims`, `check-lsp-318-claims` |
 | Semantic tokens | `semanticTokensProvider.full`, `semanticTokensProvider.range` | Full and range are advertised; delta is not advertised without result-id state. | `lsp_caps_contract_shapes`, `lsp_semantic_legend_contract_tests`, `lsp_cap_snap` |
 | Signature-help nullable active parameter | `textDocument/signatureHelp` response | `SignatureHelp.activeParameter` and `SignatureInformation.activeParameter` schema validation accepts unsigned integer or `null`; current runtime receipts preserve numeric active-parameter tracking when known. | `lsp_schema_validation`, `lsp_signature_help_tests`, `check-lsp-318-claims` |
+| CodeLens resolve support properties | `textDocument.codeLens.resolveSupport.properties`, `codeLensProvider.resolveProvider`, `codeLens/resolve` | Clients receive unresolved command/reference lenses only when `command` appears in resolve-support properties; clients without that property receive eager command lenses while `codeLens/resolve` remains routed. | `lsp_codelens_tests`, `lsp_code_lens_tests`, `lsp_bdd_workflows`, `check-lsp-318-claims` |
 | Diagnostic markup messages | `textDocument.diagnostic.markupMessageSupport`, `textDocument/diagnostic`, `workspace/diagnostic` | Pull diagnostics may emit `Diagnostic.message` as `MarkupContent` only when support is true; unsupported clients and publish diagnostics remain string-only. | `lsp_diagnostic_enrichment_test`, `lsp_318_negative_claims`, `lsp_schema_validation`, `check-lsp-318-claims` |
 | Lean/e2e watcher behavior | `workspace/didChangeWatchedFiles` dynamic registration | Runtime tuning can suppress file watchers without suppressing inline-completion dynamic registration. | `lsp_registration_tests`, lean UX receipts |
 
