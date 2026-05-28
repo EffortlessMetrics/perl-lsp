@@ -12,6 +12,8 @@
 
 use super::super::*;
 use crate::protocol::{invalid_params, req_position, req_uri};
+#[cfg(feature = "workspace")]
+use crate::runtime::routing::{IndexAccessMode, route_index_access};
 use crate::state::{code_lens_cap, code_lens_resolve_deadline, inlay_hints_cap};
 use perl_lsp_rs_core::providers::completion::collect_module_names_from_roots_with_cache;
 use perl_lsp_rs_core::providers::inline_completion::InlineCompletionEnvironment;
@@ -57,6 +59,27 @@ enum InlineCompletionTriggerKind {
     Invoked,
     Automatic,
     LegacyNoContext,
+}
+
+#[cfg(feature = "workspace")]
+fn is_inline_workspace_module_symbol(symbol: &crate::workspace_index::WorkspaceSymbol) -> bool {
+    matches!(
+        symbol.kind,
+        crate::workspace_index::SymbolKind::Package
+            | crate::workspace_index::SymbolKind::Class
+            | crate::workspace_index::SymbolKind::Role
+    )
+}
+
+#[cfg(feature = "workspace")]
+fn inline_workspace_module_name(symbol: &crate::workspace_index::WorkspaceSymbol) -> String {
+    symbol
+        .qualified_name
+        .clone()
+        .or_else(|| {
+            symbol.container_name.as_ref().map(|container| format!("{container}::{}", symbol.name))
+        })
+        .unwrap_or_else(|| symbol.name.clone())
 }
 
 fn inline_completion_trigger_kind(
@@ -891,7 +914,7 @@ impl LspServer {
 
         let (include_paths, system_inc_paths, include_system_inc) =
             self.module_completion_roots_for_doc(uri, text, cursor_offset);
-        let available_modules = collect_module_names_from_roots_with_cache(
+        let mut available_modules = collect_module_names_from_roots_with_cache(
             fragment,
             &include_paths,
             &system_inc_paths,
@@ -899,8 +922,59 @@ impl LspServer {
             Some(&self.module_scan_cache),
             &|| false,
         );
+        self.add_workspace_index_inline_modules(
+            fragment,
+            uri,
+            text,
+            cursor_offset,
+            &mut available_modules,
+        );
+        available_modules.sort();
+        available_modules.dedup();
 
         InlineCompletionEnvironment { available_modules }
+    }
+
+    fn add_workspace_index_inline_modules(
+        &self,
+        fragment: &str,
+        uri: &str,
+        text: &str,
+        cursor_offset: usize,
+        available_modules: &mut Vec<String>,
+    ) {
+        #[cfg(feature = "workspace")]
+        {
+            let IndexAccessMode::Full(coordinator) = route_index_access(self.coordinator()) else {
+                return;
+            };
+            let inc_context =
+                self.effective_inc_context_for_doc(Some(uri), Some(text), Some(cursor_offset));
+            let mut seen: std::collections::HashSet<String> =
+                available_modules.iter().cloned().collect();
+
+            for symbol in coordinator.index().find_symbols(fragment) {
+                if !is_inline_workspace_module_symbol(&symbol) {
+                    continue;
+                }
+                if let Some(ref context) = inc_context {
+                    if !context.symbol_uri_reachable(&symbol.uri) {
+                        continue;
+                    }
+                }
+
+                let module_name = inline_workspace_module_name(&symbol);
+                if !module_name.starts_with(fragment) {
+                    continue;
+                }
+                if seen.insert(module_name.clone()) {
+                    available_modules.push(module_name);
+                }
+            }
+        }
+
+        #[cfg(not(feature = "workspace"))]
+        let _ = (fragment, uri, text, cursor_offset, available_modules);
     }
 
     /// Attempt AI-backed inline completion.

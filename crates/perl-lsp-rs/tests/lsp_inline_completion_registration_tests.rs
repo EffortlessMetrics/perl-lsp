@@ -1,6 +1,7 @@
 mod support;
 
 use serde_json::{Value, json};
+use std::time::Duration;
 use support::lsp_harness::LspHarness;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -341,6 +342,39 @@ fn inline_completion_use_namespace_returns_reachable_workspace_module() -> TestR
         items.iter().all(|item| item.get("insertText") != Some(&json!("Other::Tool;"))),
         "inline module completion must stay within the typed namespace, got: {items:?}"
     );
+    Ok(())
+}
+
+#[test]
+fn inline_completion_use_namespace_returns_indexed_open_workspace_module() -> TestResult {
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+
+    let mut harness = LspHarness::new_raw();
+    harness.initialize_ready(
+        &workspace.root_uri,
+        Some(json!({
+            "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+        })),
+    )?;
+
+    let module_uri = workspace.uri("lib/My/Live.pm");
+    harness.open(&module_uri, "package My::Live;\n1;\n")?;
+    harness.wait_for_symbol("My::Live", Some(&module_uri), Duration::from_secs(2))?;
+
+    let script_uri = workspace.uri("script.pl");
+    harness.open(&script_uri, "use My::")?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, &script_uri, 0, 8, 1)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+    let module = item_with_insert_text(items, "My::Live;")?;
+
+    assert_eq!(module.pointer("/range/start/line"), Some(&json!(0)));
+    assert_eq!(module.pointer("/range/start/character"), Some(&json!(4)));
+    assert_eq!(module.pointer("/range/end/line"), Some(&json!(0)));
+    assert_eq!(module.pointer("/range/end/character"), Some(&json!(8)));
     Ok(())
 }
 
