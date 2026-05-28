@@ -43,6 +43,7 @@ pub(crate) struct SemanticInlineContext {
     pub(crate) receiver_hint: Option<ReceiverHint>,
     pub(crate) imported_modules: Vec<ModuleFact>,
     pub(crate) file_role: FileRole,
+    pub(crate) style: InlineStyleContext,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -134,8 +135,98 @@ pub(crate) enum ReceiverHint {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FileRole {
+    Module,
+    Script,
     Test,
     Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct InlineStyleContext {
+    pub(crate) indentation: IndentationStyle,
+    pub(crate) language_prelude: LanguagePreludeStyle,
+    pub(crate) sub_argument_style: SubArgumentStyle,
+    pub(crate) constructor_style: ConstructorStyle,
+    pub(crate) test_framework: TestFramework,
+}
+
+impl InlineStyleContext {
+    fn unknown(context: &PreparedInlineCompletionContext) -> Self {
+        Self {
+            indentation: indentation_style_from_line(context.current_line.as_str()),
+            language_prelude: LanguagePreludeStyle::from_imports(&context.imports),
+            sub_argument_style: SubArgumentStyle::Unknown,
+            constructor_style: ConstructorStyle::Unknown,
+            test_framework: TestFramework::from_imports(&context.imports),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum IndentationStyle {
+    Spaces(usize),
+    Tabs,
+    Mixed,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LanguagePreludeStyle {
+    ModernPerl,
+    StrictWarnings,
+    StrictOnly,
+    WarningsOnly,
+    Unknown,
+}
+
+impl LanguagePreludeStyle {
+    fn from_imports(imports: &[String]) -> Self {
+        if imports.iter().any(|import| import == "Modern::Perl") {
+            return Self::ModernPerl;
+        }
+
+        let has_strict = imports.iter().any(|import| import == "strict");
+        let has_warnings = imports.iter().any(|import| import == "warnings");
+        match (has_strict, has_warnings) {
+            (true, true) => Self::StrictWarnings,
+            (true, false) => Self::StrictOnly,
+            (false, true) => Self::WarningsOnly,
+            (false, false) => Self::Unknown,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SubArgumentStyle {
+    AtUnderscore,
+    Shift,
+    Signature,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ConstructorStyle {
+    BlessHashReturnSelf,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TestFramework {
+    Test2V0,
+    TestMore,
+    Unknown,
+}
+
+impl TestFramework {
+    fn from_imports(imports: &[String]) -> Self {
+        if imports.iter().any(|import| import == "Test2::V0") {
+            return Self::Test2V0;
+        }
+        if imports.iter().any(|import| import == "Test::More") {
+            return Self::TestMore;
+        }
+        Self::Unknown
+    }
 }
 
 /// Inline completion item (LSP 3.18 preview)
@@ -297,7 +388,8 @@ impl InlineCompletionProvider {
         character: u32,
     ) -> InlineCompletionList {
         if let Some(context) = self.prepare_context(text, line, character) {
-            let items = self.get_completions_for_context(&context);
+            let semantic_context = self.semantic_context_for_source(text, &context);
+            let items = self.get_completions_for_context(&context, &semantic_context);
             return self.apply_replacement_ranges_for_context(
                 InlineCompletionList { items },
                 &context,
@@ -399,8 +491,8 @@ impl InlineCompletionProvider {
     fn get_completions_for_context(
         &self,
         context: &PreparedInlineCompletionContext,
+        semantic_context: &SemanticInlineContext,
     ) -> Vec<InlineCompletionItem> {
-        let semantic_context = self.semantic_context_for_prepared_context(context);
         let prefix = context.prefix.as_str();
         let full_line = context.current_line.as_str();
         let mut items = Vec::<RankedCompletionItem>::new();
@@ -871,7 +963,19 @@ impl InlineCompletionProvider {
             receiver_hint: receiver_hint_from_prefix(context.prefix.as_str()),
             imported_modules,
             file_role: self.file_role(context),
+            style: InlineStyleContext::unknown(context),
         }
+    }
+
+    fn semantic_context_for_source(
+        &self,
+        text: &str,
+        context: &PreparedInlineCompletionContext,
+    ) -> SemanticInlineContext {
+        let mut semantic_context = self.semantic_context_for_prepared_context(context);
+        semantic_context.file_role = self.file_role_for_source(context, text);
+        semantic_context.style = self.style_context_for_source(context, text);
+        semantic_context
     }
 
     fn expected_syntax(&self, context: &PreparedInlineCompletionContext) -> ExpectedSyntax {
@@ -917,6 +1021,37 @@ impl InlineCompletionProvider {
             return FileRole::Test;
         }
         FileRole::Unknown
+    }
+
+    fn file_role_for_source(
+        &self,
+        context: &PreparedInlineCompletionContext,
+        text: &str,
+    ) -> FileRole {
+        if self.file_role(context) == FileRole::Test {
+            return FileRole::Test;
+        }
+        if text.lines().next().is_some_and(|line| line.starts_with("#!")) {
+            return FileRole::Script;
+        }
+        if context.current_package.is_some() {
+            return FileRole::Module;
+        }
+        FileRole::Unknown
+    }
+
+    fn style_context_for_source(
+        &self,
+        context: &PreparedInlineCompletionContext,
+        text: &str,
+    ) -> InlineStyleContext {
+        InlineStyleContext {
+            indentation: indentation_style_from_line(context.current_line.as_str()),
+            language_prelude: LanguagePreludeStyle::from_imports(&context.imports),
+            sub_argument_style: sub_argument_style(text),
+            constructor_style: constructor_style(text),
+            test_framework: TestFramework::from_imports(&context.imports),
+        }
     }
 
     fn add_contextual_fallbacks(
@@ -1094,6 +1229,72 @@ fn last_keyword_index(prefix: &str, keyword: &str) -> Option<usize> {
 
 fn contains_keyword(text: &str, keyword: &str) -> bool {
     last_keyword_index(text, keyword).is_some()
+}
+
+fn indentation_style_from_line(line: &str) -> IndentationStyle {
+    let mut spaces = 0usize;
+    let mut tabs = 0usize;
+    for ch in line.chars().take_while(|ch| ch.is_whitespace()) {
+        match ch {
+            ' ' => spaces += 1,
+            '\t' => tabs += 1,
+            _ => {}
+        }
+    }
+
+    match (spaces, tabs) {
+        (0, 0) => IndentationStyle::Unknown,
+        (_, 0) => IndentationStyle::Spaces(spaces),
+        (0, _) => IndentationStyle::Tabs,
+        (_, _) => IndentationStyle::Mixed,
+    }
+}
+
+fn sub_argument_style(text: &str) -> SubArgumentStyle {
+    let code_lines: Vec<&str> = non_comment_code_lines(text).collect();
+    if code_lines.iter().copied().any(line_declares_signature_sub) {
+        return SubArgumentStyle::Signature;
+    }
+    if code_lines.iter().any(|line| line.contains("= @_;")) {
+        return SubArgumentStyle::AtUnderscore;
+    }
+    if code_lines.iter().any(|line| line.contains("= shift;") || line.trim() == "shift;") {
+        return SubArgumentStyle::Shift;
+    }
+    SubArgumentStyle::Unknown
+}
+
+fn line_declares_signature_sub(line: &str) -> bool {
+    let trimmed = line.trim_start();
+    if !trimmed.starts_with("sub ") {
+        return false;
+    }
+    let Some(paren_index) = trimmed.find('(') else {
+        return false;
+    };
+    let brace_index = trimmed.find('{').unwrap_or(trimmed.len());
+    paren_index < brace_index
+}
+
+fn constructor_style(text: &str) -> ConstructorStyle {
+    let mut has_bless_hash = false;
+    let mut has_return_self = false;
+    for line in non_comment_code_lines(text) {
+        has_bless_hash |= line.contains("bless {},");
+        has_return_self |= line.contains("return $self;");
+    }
+
+    if has_bless_hash && has_return_self {
+        return ConstructorStyle::BlessHashReturnSelf;
+    }
+    ConstructorStyle::Unknown
+}
+
+fn non_comment_code_lines(text: &str) -> impl Iterator<Item = &str> {
+    text.lines().filter(|line| {
+        let trimmed = line.trim_start();
+        !trimmed.is_empty() && !trimmed.starts_with('#')
+    })
 }
 
 fn receiver_hint_from_prefix(prefix: &str) -> Option<ReceiverHint> {
@@ -1728,6 +1929,141 @@ mod tests {
         assert_eq!(semantic.file_role, FileRole::Unknown);
         assert_eq!(semantic.receiver_hint, None);
         assert_eq!(semantic.expected_syntax, ExpectedSyntax::Unknown);
+        assert_eq!(semantic.style.indentation, IndentationStyle::Unknown);
+        assert_eq!(semantic.style.language_prelude, LanguagePreludeStyle::Unknown);
+        assert_eq!(semantic.style.sub_argument_style, SubArgumentStyle::Unknown);
+        assert_eq!(semantic.style.constructor_style, ConstructorStyle::Unknown);
+        assert_eq!(semantic.style.test_framework, TestFramework::Unknown);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_context_source_detects_file_roles() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+
+        let module_source = "package Demo;\n\n";
+        let module_prepared =
+            provider.prepare_context(module_source, 1, 0).ok_or("expected module context")?;
+        let module_semantic = provider.semantic_context_for_source(module_source, &module_prepared);
+        assert_eq!(module_semantic.file_role, FileRole::Module);
+
+        let script_source = "#!/usr/bin/env perl\n\n";
+        let script_prepared =
+            provider.prepare_context(script_source, 1, 0).ok_or("expected script context")?;
+        let script_semantic = provider.semantic_context_for_source(script_source, &script_prepared);
+        assert_eq!(script_semantic.file_role, FileRole::Script);
+
+        let test_source = "#!/usr/bin/env perl\nuse Test2::V0;\npackage Demo;\n\n";
+        let test_prepared =
+            provider.prepare_context(test_source, 3, 0).ok_or("expected test context")?;
+        let test_semantic = provider.semantic_context_for_source(test_source, &test_prepared);
+        assert_eq!(test_semantic.file_role, FileRole::Test);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_context_source_detects_test2_signature_constructor_style()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Test2::V0;\n\nsub new ($class, %args) {\n    my $self = bless {}, $class;\n    return $self;\n    \n}\n";
+        let prepared = provider.prepare_context(source, 5, 4).ok_or("expected style context")?;
+        let semantic = provider.semantic_context_for_source(source, &prepared);
+
+        assert_eq!(semantic.file_role, FileRole::Test);
+        assert_eq!(semantic.style.indentation, IndentationStyle::Spaces(4));
+        assert_eq!(semantic.style.language_prelude, LanguagePreludeStyle::Unknown);
+        assert_eq!(semantic.style.sub_argument_style, SubArgumentStyle::Signature);
+        assert_eq!(semantic.style.constructor_style, ConstructorStyle::BlessHashReturnSelf);
+        assert_eq!(semantic.style.test_framework, TestFramework::Test2V0);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_context_source_detects_language_prelude_and_indentation_style()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+
+        let strict_source = "use strict;\nuse warnings;\nsub helper {\n    \n}\n";
+        let strict_prepared =
+            provider.prepare_context(strict_source, 3, 4).ok_or("expected strict style context")?;
+        let strict_semantic = provider.semantic_context_for_source(strict_source, &strict_prepared);
+        assert_eq!(strict_semantic.style.indentation, IndentationStyle::Spaces(4));
+        assert_eq!(strict_semantic.style.language_prelude, LanguagePreludeStyle::StrictWarnings);
+
+        let modern_source = "use Modern::Perl;\nsub helper {\n\t\n}\n";
+        let modern_prepared =
+            provider.prepare_context(modern_source, 2, 1).ok_or("expected modern style context")?;
+        let modern_semantic = provider.semantic_context_for_source(modern_source, &modern_prepared);
+        assert_eq!(modern_semantic.style.indentation, IndentationStyle::Tabs);
+        assert_eq!(modern_semantic.style.language_prelude, LanguagePreludeStyle::ModernPerl);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_context_source_detects_shift_and_at_underscore_styles()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+
+        let shift_source = "sub helper {\n    my $self = shift;\n    \n}\n";
+        let shift_prepared =
+            provider.prepare_context(shift_source, 2, 4).ok_or("expected shift style context")?;
+        let shift_semantic = provider.semantic_context_for_source(shift_source, &shift_prepared);
+        assert_eq!(shift_semantic.style.sub_argument_style, SubArgumentStyle::Shift);
+
+        let at_underscore_source = "sub helper {\n    my ($self, %args) = @_;\n    \n}\n";
+        let at_underscore_prepared = provider
+            .prepare_context(at_underscore_source, 2, 4)
+            .ok_or("expected @_ style context")?;
+        let at_underscore_semantic =
+            provider.semantic_context_for_source(at_underscore_source, &at_underscore_prepared);
+        assert_eq!(at_underscore_semantic.style.sub_argument_style, SubArgumentStyle::AtUnderscore);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_context_source_ignores_commented_style_examples()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub helper {\n    # my $self = shift;\n    # my $self = bless {}, $class;\n    # return $self;\n    \n}\n";
+        let prepared =
+            provider.prepare_context(source, 4, 4).ok_or("expected commented style context")?;
+        let semantic = provider.semantic_context_for_source(source, &prepared);
+
+        assert_eq!(semantic.style.sub_argument_style, SubArgumentStyle::Unknown);
+        assert_eq!(semantic.style.constructor_style, ConstructorStyle::Unknown);
+        Ok(())
+    }
+
+    #[test]
+    fn prepared_inline_context_serialization_shape_stays_stable()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source =
+            "use Test::More;\npackage Demo;\n\nsub helper {\n    my $result = 1;\n    \n}\n";
+        let prepared = provider.prepare_context(source, 5, 4).ok_or("expected prepared context")?;
+        let value = serde_json::to_value(&prepared)?;
+
+        assert!(value.get("fileRole").is_none(), "prepared context leaked fileRole: {value:?}");
+        assert!(value.get("style").is_none(), "prepared context leaked style: {value:?}");
+        assert!(value.get("localStyle").is_none(), "prepared context leaked localStyle: {value:?}");
+        assert!(
+            value.get("semanticContext").is_none(),
+            "prepared context leaked semanticContext: {value:?}"
+        );
+
+        let legacy = r#"{
+            "prefix": "    ",
+            "currentLine": "    ",
+            "previousNonEmptyLine": "    my $result = 1;",
+            "currentFunction": "helper",
+            "currentPackage": "Demo",
+            "variables": ["$result"],
+            "imports": ["Test::More"]
+        }"#;
+        let decoded: PreparedInlineCompletionContext = serde_json::from_str(legacy)?;
+        assert_eq!(decoded.current_function.as_deref(), Some("helper"));
+        assert_eq!(decoded.variables, vec!["$result"]);
+        assert_eq!(decoded.imports, vec!["Test::More"]);
         Ok(())
     }
 
