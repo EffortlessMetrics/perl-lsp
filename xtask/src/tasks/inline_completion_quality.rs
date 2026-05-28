@@ -72,6 +72,7 @@ struct Scenario {
     source_name: &'static str,
     source: &'static str,
     available_modules: &'static [&'static str],
+    hard_zone: bool,
     assertion: ScenarioAssertion,
 }
 
@@ -124,7 +125,7 @@ pub fn run(receipt: PathBuf) -> Result<()> {
                 record_source_result(&mut receipt_data.sources, scenario.source_name, passed);
                 update_check_counts(&mut receipt_data.checks, scenario, passed);
 
-                if matches!(scenario.assertion, ScenarioAssertion::Silent) {
+                if scenario.hard_zone {
                     receipt_data.checks.hard_zone_rejected += 1;
                     notes.push("hard zone stayed silent".to_string());
                 }
@@ -480,6 +481,7 @@ fn scenarios() -> &'static [Scenario] {
             source_name: "syntax",
             source: "use <<CURSOR>>",
             available_modules: &[],
+            hard_zone: false,
             assertion: ScenarioAssertion::Suggestion {
                 first: Some("strict;"),
                 expected: &["strict;", "warnings;"],
@@ -491,6 +493,7 @@ fn scenarios() -> &'static [Scenario] {
             source_name: "module",
             source: "use My::<<CURSOR>>",
             available_modules: &["My::App", "My::App::Config", "Other::Tool"],
+            hard_zone: false,
             assertion: ScenarioAssertion::Suggestion {
                 first: Some("My::App;"),
                 expected: &["My::App;", "My::App::Config;"],
@@ -502,6 +505,7 @@ fn scenarios() -> &'static [Scenario] {
             source_name: "test",
             source: "use Test::More;\n\nmy $got = compute();\nmy $expected = 42;\n\n<<CURSOR>>",
             available_modules: &[],
+            hard_zone: false,
             assertion: ScenarioAssertion::Suggestion {
                 first: Some("is($got, $expected, 'test description');"),
                 expected: &["is($got, $expected, 'test description');"],
@@ -513,6 +517,7 @@ fn scenarios() -> &'static [Scenario] {
             source_name: "test",
             source: "use Test2::V0;\n\nmy $result = compute();\n\n<<CURSOR>>",
             available_modules: &[],
+            hard_zone: false,
             assertion: ScenarioAssertion::Suggestion {
                 first: Some("ok($result, 'test description');"),
                 expected: &["ok($result, 'test description');"],
@@ -524,6 +529,7 @@ fn scenarios() -> &'static [Scenario] {
             source_name: "contextual_fallback",
             source: "sub compute {\n    my $result = build();\n    <<CURSOR>>\n}\n",
             available_modules: &[],
+            hard_zone: false,
             assertion: ScenarioAssertion::Suggestion {
                 first: Some("return $result;"),
                 expected: &["return $result;"],
@@ -535,6 +541,7 @@ fn scenarios() -> &'static [Scenario] {
             source_name: "syntax",
             source: "my @users = fetch_users();\nfor <<CURSOR>>",
             available_modules: &[],
+            hard_zone: false,
             assertion: ScenarioAssertion::Suggestion {
                 first: Some("my $user (@users) {\n    \n}"),
                 expected: &["my $user (@users) {\n    \n}"],
@@ -546,6 +553,7 @@ fn scenarios() -> &'static [Scenario] {
             source_name: "syntax",
             source: "my @status = fetch_status();\nfor <<CURSOR>>",
             available_modules: &[],
+            hard_zone: false,
             assertion: ScenarioAssertion::Suggestion {
                 first: Some("my $item (@status) {\n    \n}"),
                 expected: &["my $item (@status) {\n    \n}"],
@@ -557,6 +565,7 @@ fn scenarios() -> &'static [Scenario] {
             source_name: "scope",
             source: "{\n    my @users = fetch_users();\n}\nfor <<CURSOR>>",
             available_modules: &[],
+            hard_zone: false,
             assertion: ScenarioAssertion::Silent,
         },
         Scenario {
@@ -564,6 +573,7 @@ fn scenarios() -> &'static [Scenario] {
             source_name: "syntax",
             source: "my %users_by_id = load_users();\nfor <<CURSOR>>",
             available_modules: &[],
+            hard_zone: false,
             assertion: ScenarioAssertion::Suggestion {
                 first: Some("my $id (keys %users_by_id) {\n    \n}"),
                 expected: &["my $id (keys %users_by_id) {\n    \n}"],
@@ -575,6 +585,7 @@ fn scenarios() -> &'static [Scenario] {
             source_name: "receiver",
             source: "package Other;\nsub external {}\n\npackage Demo;\nsub save {}\nsub display_name {}\nsub caller {\n    my $self = shift;\n    $self-><<CURSOR>>\n}\n",
             available_modules: &[],
+            hard_zone: false,
             assertion: ScenarioAssertion::Suggestion {
                 first: Some("save()"),
                 expected: &["save()", "display_name()"],
@@ -586,6 +597,7 @@ fn scenarios() -> &'static [Scenario] {
             source_name: "receiver",
             source: "use DBI;\nmy $dbh = DBI->connect($dsn);\n$dbh-><<CURSOR>>\n",
             available_modules: &[],
+            hard_zone: false,
             assertion: ScenarioAssertion::Suggestion {
                 first: Some("prepare()"),
                 expected: &["prepare()", "do()", "disconnect()"],
@@ -597,6 +609,7 @@ fn scenarios() -> &'static [Scenario] {
             source_name: "syntax",
             source: "sub helper ($self, %args) {\n}\n\nsub new<<CURSOR>>",
             available_modules: &[],
+            hard_zone: false,
             assertion: ScenarioAssertion::Suggestion {
                 first: Some(
                     " ($class, %args) {\n    my $self = bless {}, $class;\n    return $self;\n}",
@@ -612,6 +625,7 @@ fn scenarios() -> &'static [Scenario] {
             source_name: "hard_zone",
             source: "# use <<CURSOR>>",
             available_modules: &[],
+            hard_zone: true,
             assertion: ScenarioAssertion::Silent,
         },
         Scenario {
@@ -619,6 +633,7 @@ fn scenarios() -> &'static [Scenario] {
             source_name: "hard_zone",
             source: "my $text = \"use <<CURSOR>>\";",
             available_modules: &[],
+            hard_zone: true,
             assertion: ScenarioAssertion::Silent,
         },
         Scenario {
@@ -626,6 +641,7 @@ fn scenarios() -> &'static [Scenario] {
             source_name: "hard_zone",
             source: "print <<'EOF';\nuse <<CURSOR>>\nEOF\n",
             available_modules: &[],
+            hard_zone: true,
             assertion: ScenarioAssertion::Silent,
         },
         Scenario {
@@ -633,6 +649,7 @@ fn scenarios() -> &'static [Scenario] {
             source_name: "hard_zone",
             source: "=pod\nuse <<CURSOR>>\n=cut\n",
             available_modules: &[],
+            hard_zone: true,
             assertion: ScenarioAssertion::Silent,
         },
         Scenario {
@@ -640,6 +657,7 @@ fn scenarios() -> &'static [Scenario] {
             source_name: "hard_zone",
             source: "if ($name =~ /use <<CURSOR>>/) {}",
             available_modules: &[],
+            hard_zone: true,
             assertion: ScenarioAssertion::Silent,
         },
         Scenario {
@@ -647,6 +665,7 @@ fn scenarios() -> &'static [Scenario] {
             source_name: "replacement_range",
             source: "use str<<CURSOR>>",
             available_modules: &[],
+            hard_zone: false,
             assertion: ScenarioAssertion::ReplacementRange {
                 insert_text: "strict;",
                 replaces: "str",
@@ -657,6 +676,7 @@ fn scenarios() -> &'static [Scenario] {
             source_name: "replacement_range",
             source: "$obj->n<<CURSOR>>",
             available_modules: &[],
+            hard_zone: false,
             assertion: ScenarioAssertion::ReplacementRange { insert_text: "new()", replaces: "n" },
         },
     ]
