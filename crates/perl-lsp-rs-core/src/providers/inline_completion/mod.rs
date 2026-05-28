@@ -668,24 +668,28 @@ impl InlineCompletionProvider {
         }
 
         // Rule 9: Complete common test patterns
-        if ends_with_keyword(prefix, "ok(") {
+        if ends_with_keyword(prefix, "ok(")
+            && let Some(arguments) = self.preferred_ok_assertion_arguments(&semantic_context)
+        {
             push_item(
                 0,
                 InlineCompletionItem {
-                    insert_text: "$result, 'test description');".into(),
-                    filter_text: Some("$result".into()),
+                    filter_text: Some(arguments.clone()),
+                    insert_text: arguments,
                     range: None,
                     command: None,
                 },
             );
         }
 
-        if ends_with_keyword(prefix, "is(") {
+        if ends_with_keyword(prefix, "is(")
+            && let Some(arguments) = self.preferred_is_assertion_arguments(&semantic_context)
+        {
             push_item(
                 0,
                 InlineCompletionItem {
-                    insert_text: "$got, $expected, 'test description');".into(),
-                    filter_text: Some("$got".into()),
+                    filter_text: Some(arguments.clone()),
+                    insert_text: arguments,
                     range: None,
                     command: None,
                 },
@@ -1062,6 +1066,24 @@ impl InlineCompletionProvider {
         }
 
         if prefix.is_empty() {
+            let mut pushed_test_assertion = false;
+            if semantic_context.file_role == FileRole::Test
+                && let Some(assertion) = self.preferred_test_statement(semantic_context)
+            {
+                items.push(RankedCompletionItem {
+                    priority: 0,
+                    order: *sequence,
+                    item: InlineCompletionItem {
+                        filter_text: Some(test_statement_filter_text(assertion.as_str()).into()),
+                        insert_text: assertion,
+                        range: None,
+                        command: None,
+                    },
+                });
+                *sequence += 1;
+                pushed_test_assertion = true;
+            }
+
             if let Some(variable) = self.preferred_return_variable(semantic_context) {
                 items.push(RankedCompletionItem {
                     priority: 0,
@@ -1076,7 +1098,7 @@ impl InlineCompletionProvider {
                 *sequence += 1;
             }
 
-            if semantic_context.file_role == FileRole::Test {
+            if semantic_context.file_role == FileRole::Test && !pushed_test_assertion {
                 items.push(RankedCompletionItem {
                     priority: 1,
                     order: *sequence,
@@ -1147,6 +1169,62 @@ impl InlineCompletionProvider {
             .map(VariableFact::as_perl_variable)
     }
 
+    fn preferred_test_statement(&self, context: &SemanticInlineContext) -> Option<String> {
+        self.preferred_is_assertion_arguments(context)
+            .map(|arguments| format!("is({arguments}"))
+            .or_else(|| {
+                self.preferred_ok_assertion_arguments(context)
+                    .map(|arguments| format!("ok({arguments}"))
+            })
+    }
+
+    fn preferred_ok_assertion_arguments(&self, context: &SemanticInlineContext) -> Option<String> {
+        if !self.supports_test_assertions(context) {
+            return None;
+        }
+
+        let actual = self.preferred_test_actual_variable(context)?;
+        Some(format!("{}, 'test description');", actual.as_perl_variable()))
+    }
+
+    fn preferred_is_assertion_arguments(&self, context: &SemanticInlineContext) -> Option<String> {
+        if !self.supports_test_assertions(context) {
+            return None;
+        }
+
+        let actual = self.preferred_test_actual_variable(context)?;
+        let expected = context.visible_variables.iter().find(|variable| {
+            variable.is_scalar()
+                && !variable.is_scalar_self()
+                && is_preferred_test_expected_name(variable.name.as_str())
+        })?;
+
+        if actual == expected {
+            return None;
+        }
+
+        Some(format!(
+            "{}, {}, 'test description');",
+            actual.as_perl_variable(),
+            expected.as_perl_variable()
+        ))
+    }
+
+    fn preferred_test_actual_variable<'a>(
+        &self,
+        context: &'a SemanticInlineContext,
+    ) -> Option<&'a VariableFact> {
+        context.visible_variables.iter().find(|variable| {
+            variable.is_scalar()
+                && !variable.is_scalar_self()
+                && is_preferred_test_actual_name(variable.name.as_str())
+        })
+    }
+
+    fn supports_test_assertions(&self, context: &SemanticInlineContext) -> bool {
+        matches!(context.style.test_framework, TestFramework::Test2V0 | TestFramework::TestMore)
+    }
+
     fn push_unique(&self, values: &mut Vec<String>, value: String) {
         if values.iter().any(|existing| existing == &value) {
             return;
@@ -1160,6 +1238,18 @@ impl InlineCompletionProvider {
         }
         self.push_unique(values, value);
     }
+}
+
+fn is_preferred_test_actual_name(name: &str) -> bool {
+    matches!(name, "actual" | "got" | "result" | "status" | "success" | "value")
+}
+
+fn is_preferred_test_expected_name(name: &str) -> bool {
+    matches!(name, "expected" | "expected_result" | "want")
+}
+
+fn test_statement_filter_text(statement: &str) -> &'static str {
+    if statement.starts_with("ok(") { "ok" } else { "is" }
 }
 
 struct LineContext<'a> {
@@ -2343,6 +2433,102 @@ mod tests {
     }
 
     #[test]
+    fn test_file_blank_line_suggests_test_more_assertion_from_declared_variables()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Test::More;\n\nmy $got = compute();\nmy $expected = 42;\n\n";
+        let completions = provider.get_inline_completions(source, 4, 0);
+
+        let first = completions.items.first().ok_or("expected inline completion")?;
+        assert_eq!(first.insert_text, "is($got, $expected, 'test description');");
+        assert!(
+            completions.items.iter().all(|item| item.insert_text != "done_testing();"),
+            "done_testing should not be suggested ahead of a concrete assertion: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_file_blank_line_suggests_test2_assertion_from_declared_variables()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Test2::V0;\n\nmy $result = compute();\n\n";
+        let completions = provider.get_inline_completions(source, 3, 0);
+
+        let first = completions.items.first().ok_or("expected inline completion")?;
+        assert_eq!(first.insert_text, "ok($result, 'test description');");
+        Ok(())
+    }
+
+    #[test]
+    fn test_file_blank_line_without_test_import_does_not_suggest_assertion() {
+        let provider = InlineCompletionProvider::new();
+        let source = "my $got = compute();\nmy $expected = 42;\n\n";
+        let completions = provider.get_inline_completions(source, 2, 0);
+
+        assert!(
+            completions
+                .items
+                .iter()
+                .all(|item| !item.insert_text.starts_with("is(")
+                    && !item.insert_text.starts_with("ok(")),
+            "non-test files should not get test assertion statements: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn ok_paren_in_test_file_uses_declared_scalar_argument()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Test::More;\nmy $status = compute();\n!ok(";
+        let completions = provider.get_inline_completions(source, 2, 4);
+
+        let item = completions
+            .items
+            .iter()
+            .find(|item| item.insert_text.starts_with("$status,"))
+            .ok_or("expected ok arguments from declared $status")?;
+        assert_eq!(item.insert_text, "$status, 'test description');");
+        Ok(())
+    }
+
+    #[test]
+    fn is_paren_in_test_file_uses_declared_actual_expected_pair()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Test::More;\nmy $actual = compute();\nmy $expected = 42;\nis(";
+        let completions = provider.get_inline_completions(source, 3, 3);
+
+        let item = completions
+            .items
+            .iter()
+            .find(|item| item.insert_text.starts_with("$actual,"))
+            .ok_or("expected is arguments from declared actual/expected variables")?;
+        assert_eq!(item.insert_text, "$actual, $expected, 'test description');");
+        Ok(())
+    }
+
+    #[test]
+    fn test_assertion_requires_declared_actual_and_expected_variables() {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Test::More;\n\n$got = compute();\nmy $expected = 42;\n\n";
+        let completions = provider.get_inline_completions(source, 4, 0);
+
+        assert!(
+            completions
+                .items
+                .iter()
+                .all(|item| !item.insert_text.starts_with("is(")
+                    && !item.insert_text.starts_with("ok(")),
+            "undeclared actual variable should not drive assertion suggestion: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+        assert!(completions.items.iter().any(|item| item.insert_text == "done_testing();"));
+    }
+
+    #[test]
     fn test_blank_line_after_comment_still_has_contextual_suggestions() {
         let provider = InlineCompletionProvider::new();
         let source = "use Test::More;\n\nsub helper {\n    my $result = 1;\n    # explain next step\n    \n}\n";
@@ -2350,7 +2536,12 @@ mod tests {
 
         assert!(!completions.items.is_empty());
         assert!(completions.items.iter().any(|item| item.insert_text == "return $result;"));
-        assert!(completions.items.iter().any(|item| item.insert_text == "done_testing();"));
+        let has_ok_assertion = completions
+            .items
+            .iter()
+            .any(|item| item.insert_text == "ok($result, 'test description');");
+        assert!(has_ok_assertion);
+        assert!(completions.items.iter().all(|item| item.insert_text != "done_testing();"));
     }
 
     #[test]
@@ -2534,7 +2725,8 @@ mod tests {
     #[test]
     fn ok_paren_trigger_fires_after_negation_operator() {
         let provider = InlineCompletionProvider::new();
-        let completions = provider.get_inline_completions("!ok(", 0, 4);
+        let source = "use Test::More;\nmy $result = compute();\n!ok(";
+        let completions = provider.get_inline_completions(source, 2, 4);
         assert!(completions.items.iter().any(|i| i.insert_text.starts_with("$result,")));
     }
 
