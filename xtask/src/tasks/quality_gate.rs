@@ -1374,10 +1374,21 @@ fn render_markdown(receipt: &Value, args: &QualityGateArgs) -> Result<String> {
         let source = coverage.get("patch_source").and_then(Value::as_str).unwrap_or("unknown");
         let status = coverage.get("status").and_then(Value::as_str).unwrap_or("unknown");
         let scope = coverage.get("scope").and_then(Value::as_str).unwrap_or("unknown");
+        let codecov_patch = coverage
+            .get("codecov_patch_status")
+            .or_else(|| coverage.get("codecov_config_status"))
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let codecov_project =
+            coverage.get("codecov_project_status").and_then(Value::as_str).unwrap_or("unknown");
         markdown.push_str(&format!("- coverage receipt: `{status}`\n"));
         markdown.push_str(&format!("- patch coverage: `{patch}` / `95.00%`\n"));
         markdown.push_str(&format!("- project coverage: `{project}` / `95.00%`\n"));
         markdown.push_str(&format!("- coverage scope: `{scope}`\n"));
+        markdown.push_str(&format!("- Codecov patch policy: `{codecov_patch}`\n"));
+        if coverage.get("codecov_project_status").is_some() {
+            markdown.push_str(&format!("- Codecov project policy: `{codecov_project}`\n"));
+        }
         markdown.push_str(&format!("- patch source: `{source}`\n"));
     }
     if let Some(ripr_pr) = receipt.get("ripr_pr") {
@@ -1400,6 +1411,10 @@ fn render_markdown(receipt: &Value, args: &QualityGateArgs) -> Result<String> {
         markdown.push_str(&format!("- repo RIPR+ receipt: `{status}`\n"));
         markdown.push_str(&format!("- total RIPR+ gaps: `{unresolved}`\n"));
     }
+    if let Some(review) = receipt.get("review_guidance") {
+        let status = review.get("status").and_then(Value::as_str).unwrap_or("unknown");
+        markdown.push_str(&format!("- review guidance receipt: `{status}`\n"));
+    }
     if let Some(exceptions) = receipt.get("temporary_exceptions") {
         let status = exceptions.get("status").and_then(Value::as_str).unwrap_or("unknown");
         let active_count =
@@ -1418,9 +1433,20 @@ fn render_markdown(receipt: &Value, args: &QualityGateArgs) -> Result<String> {
             }
         }
     }
+    let freshness = receipt_freshness_summary(receipt);
+    if !freshness.is_empty() {
+        markdown.push_str(&format!("- receipt freshness: `{freshness}`\n"));
+    }
+    markdown.push('\n');
+
+    markdown.push_str("## Proof Commands\n\n");
     markdown.push_str(&format!(
         "- verify: `{}`\n",
         quality_gate_command(args, true, args.patch_coverage)
+    ));
+    markdown.push_str(&format!(
+        "- receipt: `{}`\n",
+        quality_gate_command(args, false, args.patch_coverage)
     ));
     markdown.push('\n');
 
@@ -1455,7 +1481,9 @@ fn render_markdown(receipt: &Value, args: &QualityGateArgs) -> Result<String> {
                             .join(", ")
                     })
                     .unwrap_or_default();
-                markdown.push_str(&format!("- file: `{path}` sample uncovered lines: {samples}\n"));
+                markdown.push_str(&format!(
+                    "- coverage file: `{path}` sample uncovered lines: {samples}\n"
+                ));
             }
         }
         if let Some(gaps) = action.get("top_gaps").and_then(Value::as_array) {
@@ -1470,7 +1498,7 @@ fn render_markdown(receipt: &Value, args: &QualityGateArgs) -> Result<String> {
                     .and_then(Value::as_str)
                     .unwrap_or("add focused proof");
                 markdown.push_str(&format!(
-                    "- gap: `{gap_id}` `{path}:{line}` seam `{seam}` reason `{reason}` suggested test `{suggested_test}`\n"
+                    "- ripr gap: `{gap_id}` `{path}:{line}` seam `{seam}` reason `{reason}` suggested test `{suggested_test}`\n"
                 ));
             }
         }
@@ -1478,6 +1506,22 @@ fn render_markdown(receipt: &Value, args: &QualityGateArgs) -> Result<String> {
     }
 
     Ok(markdown)
+}
+
+fn receipt_freshness_summary(receipt: &Value) -> String {
+    [
+        ("coverage", "/coverage/status"),
+        ("repo_ripr", "/ripr_plus/status"),
+        ("diff_ripr", "/ripr_pr/status"),
+        ("review_guidance", "/review_guidance/status"),
+        ("exceptions", "/temporary_exceptions/status"),
+    ]
+    .iter()
+    .filter_map(|(label, pointer)| {
+        receipt.pointer(pointer).and_then(Value::as_str).map(|status| format!("{label}={status}"))
+    })
+    .collect::<Vec<_>>()
+    .join(", ")
 }
 
 fn coverage_baseline_command(args: &QualityGateArgs, check: bool) -> String {

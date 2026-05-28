@@ -57,6 +57,17 @@ like (#0000) or (#9999) will fail CI.
 - [ ] `cargo test -p <crate>` — pass
 - [ ] This PR introduces UX-visible changes. I have verified that error messages are actionable and the UX test harness still passes.
 
+## Quality Gates
+<!-- Paste or summarize target/receipts/quality/quality-gate.md when this PR touches proof-gated code, receipts, coverage policy, RIPR policy, CI, or test evidence. Write N/A only when no proof-gated surface changed. -->
+- new RIPR gaps:
+- total RIPR+ gaps:
+- patch coverage:
+- project coverage:
+- receipt freshness:
+- exception status:
+- local verify command:
+- receipt command:
+
 ## Retained State
 <!-- Complete this when the PR adds or changes a long-lived map, cache, queue, background task, session holder, or subprocess lifecycle. Otherwise write "N/A". -->
 - [ ] Owner, key type, bound, and cleanup event are documented.
