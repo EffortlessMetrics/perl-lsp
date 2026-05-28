@@ -1,8 +1,12 @@
 use color_eyre::eyre::{Result, bail, eyre};
 use perl_lsp_rs_core::providers::inline_completion::{
-    InlineCompletionEnvironment, InlineCompletionList, InlineCompletionProvider,
+    InlineCompletionEnvironment, InlineCompletionItem, InlineCompletionList,
+    InlineCompletionProvider,
 };
-use perl_parser_core::position::{offset_to_utf16_line_col, utf16_line_col_to_offset};
+use perl_parser_core::{
+    Parser, RecoverySalvageProfile,
+    position::{offset_to_utf16_line_col, utf16_line_col_to_offset},
+};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::fs;
@@ -113,27 +117,38 @@ pub fn run(receipt: PathBuf) -> Result<()> {
         let latency_ms = started.elapsed().as_millis();
         latencies.push(latency_ms);
 
-        let passed = result.is_ok();
-        record_source_result(&mut receipt_data.sources, scenario.source_name, passed);
-        update_check_counts(&mut receipt_data.checks, scenario, passed);
-
         match result {
-            Ok((item_count, mut notes)) => {
-                receipt_data.fixtures_passed += 1;
+            Ok((item_count, mut notes, parse_regressions)) => {
+                receipt_data.checks.parse_regressions += parse_regressions;
+                let passed = parse_regressions == 0;
+                record_source_result(&mut receipt_data.sources, scenario.source_name, passed);
+                update_check_counts(&mut receipt_data.checks, scenario, passed);
+
                 if matches!(scenario.assertion, ScenarioAssertion::Silent) {
                     receipt_data.checks.hard_zone_rejected += 1;
                     notes.push("hard zone stayed silent".to_string());
                 }
+                if parse_regressions == 0 {
+                    receipt_data.fixtures_passed += 1;
+                } else {
+                    failures.push(format!(
+                        "{}: {parse_regressions} returned item(s) worsened parse damage",
+                        scenario.name
+                    ));
+                    notes.push(format!("parse_regressions={parse_regressions}"));
+                }
                 receipt_data.scenarios.push(ScenarioQualityReceipt {
                     name: scenario.name,
                     source: scenario.source_name,
-                    outcome: "pass",
+                    outcome: if passed { "pass" } else { "fail" },
                     item_count,
                     latency_ms,
                     notes,
                 });
             }
             Err(error) => {
+                record_source_result(&mut receipt_data.sources, scenario.source_name, false);
+                update_check_counts(&mut receipt_data.checks, scenario, false);
                 let message = error.to_string();
                 failures.push(format!("{}: {message}", scenario.name));
                 receipt_data.scenarios.push(ScenarioQualityReceipt {
@@ -185,7 +200,7 @@ fn record_source_result(
 fn run_scenario(
     provider: &InlineCompletionProvider,
     scenario: &Scenario,
-) -> Result<(usize, Vec<String>)> {
+) -> Result<(usize, Vec<String>, usize)> {
     let fixture = InlineCompletionScenario::from_fixture(scenario.source)?;
     let environment = InlineCompletionEnvironment {
         available_modules: scenario
@@ -201,7 +216,7 @@ fn run_scenario(
         &environment,
     );
     let item_count = completions.items.len();
-    let notes = match scenario.assertion {
+    let mut notes = match scenario.assertion {
         ScenarioAssertion::Suggestion { first, expected, not_expected } => {
             assert_suggestion(scenario.name, &completions, first, expected, not_expected)?
         }
@@ -217,7 +232,9 @@ fn run_scenario(
             replaces,
         )?,
     };
-    Ok((item_count, notes))
+    let parse_regressions =
+        count_parse_regressions(scenario.name, &fixture, &completions, &mut notes)?;
+    Ok((item_count, notes, parse_regressions))
 }
 
 fn update_check_counts(
@@ -313,6 +330,108 @@ fn assert_replacement_range(
     Ok(vec![format!("replaces={replaced:?}")])
 }
 
+fn count_parse_regressions(
+    name: &str,
+    fixture: &InlineCompletionScenario,
+    completions: &InlineCompletionList,
+    notes: &mut Vec<String>,
+) -> Result<usize> {
+    let current_line = fixture.current_line()?;
+    let baseline = parse_damage_for_probe(current_line);
+    let mut regressions = 0;
+    let mut checked = 0;
+
+    for item in &completions.items {
+        let Some(probe) =
+            parse_probe_after_item(current_line, item, fixture.line, fixture.character)?
+        else {
+            notes.push(format!("parse probe skipped for {:?}", item.insert_text));
+            continue;
+        };
+        checked += 1;
+        let candidate = parse_damage_for_probe(probe.as_str());
+        if candidate.worse_than(&baseline) {
+            regressions += 1;
+            notes.push(format!(
+                "parse regression for {:?}: baseline={baseline:?}; candidate={candidate:?}",
+                item.insert_text
+            ));
+        }
+    }
+
+    notes.push(format!("parse_checked={checked}; parse_regressions={regressions}"));
+    if regressions > 0 {
+        notes.push(format!("{name}: returned completions must not worsen parse damage"));
+    }
+    Ok(regressions)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ParseDamage {
+    terminated_early: bool,
+    error_node_count: usize,
+    diagnostics_count: usize,
+    recovered_count: usize,
+}
+
+impl ParseDamage {
+    fn worse_than(&self, baseline: &Self) -> bool {
+        (self.terminated_early && !baseline.terminated_early)
+            || self.error_node_count > baseline.error_node_count
+            || self.diagnostics_count > baseline.diagnostics_count
+            || self.recovered_count > baseline.recovered_count
+    }
+}
+
+fn parse_damage_for_probe(source: &str) -> ParseDamage {
+    let mut parser = Parser::new(source);
+    let output = parser.parse_with_recovery();
+    let salvage = RecoverySalvageProfile::from_parse(&output.ast, &output.diagnostics, false);
+
+    ParseDamage {
+        terminated_early: output.terminated_early,
+        error_node_count: salvage.error_node_count,
+        diagnostics_count: output.error_count(),
+        recovered_count: output.recovered_count,
+    }
+}
+
+fn parse_probe_after_item(
+    current_line: &str,
+    item: &InlineCompletionItem,
+    line: u32,
+    character: u32,
+) -> Result<Option<String>> {
+    let Some((start_character, end_character)) = item
+        .range
+        .as_ref()
+        .map(|range| {
+            if range.start.line != line || range.end.line != line {
+                return None;
+            }
+            Some((range.start.character, range.end.character))
+        })
+        .unwrap_or(Some((character, character)))
+    else {
+        return Ok(None);
+    };
+
+    let start = utf16_line_col_to_offset(current_line, 0, start_character);
+    let end = utf16_line_col_to_offset(current_line, 0, end_character);
+    if start > end {
+        return Ok(None);
+    }
+    let before =
+        current_line.get(..start).ok_or_else(|| eyre!("invalid UTF-8 range start {start}"))?;
+    let after = current_line.get(end..).ok_or_else(|| eyre!("invalid UTF-8 range end {end}"))?;
+
+    let mut probe = String::with_capacity(current_line.len() + item.insert_text.len());
+    probe.push_str(before);
+    probe.push_str(item.insert_text.as_str());
+    probe.push_str(after);
+    Ok(Some(probe))
+}
+
 fn completion_texts(completions: &InlineCompletionList) -> Vec<&str> {
     completions.items.iter().map(|item| item.insert_text.as_str()).collect()
 }
@@ -343,6 +462,14 @@ impl InlineCompletionScenario {
         let (line, character) = offset_to_utf16_line_col(&text, byte);
 
         Ok(Self { text, line, character })
+    }
+
+    fn current_line(&self) -> Result<&str> {
+        let line_index = usize::try_from(self.line)?;
+        self.text
+            .split('\n')
+            .nth(line_index)
+            .ok_or_else(|| eyre!("fixture line {} is out of range", self.line))
     }
 }
 
