@@ -175,6 +175,14 @@ enum Commands {
         binary: PathBuf,
     },
 
+    /// Emit a deterministic inline-completion quality receipt.
+    #[command(name = "inline-completion-quality")]
+    InlineCompletionQuality {
+        /// Receipt JSON path to write.
+        #[arg(long, default_value = "target/receipts/inline-completion-quality.json")]
+        receipt: PathBuf,
+    },
+
     /// Regenerate public Shields endpoint JSON for README badges.
     Badges {
         /// Check committed endpoints for drift without updating badges/.
@@ -2721,6 +2729,7 @@ fn main() -> Result<()> {
             SmokeCommand::InlineCompletion { binary } => inline_completion_smoke::run(binary),
         },
         Commands::InlineCompletionSmoke { binary } => inline_completion_smoke::run(binary),
+        Commands::InlineCompletionQuality { receipt } => inline_completion_quality::run(receipt),
         Commands::Badges { check } => badges::run(check),
         Commands::CoverageBaseline { lcov, receipt, codecov, patch_coverage, check } => {
             quality_baseline::run(quality_baseline::CoverageBaselineArgs {

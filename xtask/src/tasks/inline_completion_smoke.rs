@@ -1,7 +1,7 @@
 use color_eyre::eyre::{Result, bail, eyre};
 use perl_lsp_ux_tests::{FakeWorkspace, ScenarioConfig, UxClient};
 use serde_json::{Value, json};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -16,7 +16,7 @@ pub fn run(binary: PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn run_static_client(binary: &PathBuf) -> Result<()> {
+fn run_static_client(binary: &Path) -> Result<()> {
     let workspace = ux(FakeWorkspace::new())?;
     let timeout = Duration::from_secs(30);
     let config = ScenarioConfig { timeout, ..ScenarioConfig::default() };
@@ -29,7 +29,7 @@ fn run_static_client(binary: &PathBuf) -> Result<()> {
     shutdown_exit(&client, timeout)
 }
 
-fn run_dynamic_client(binary: &PathBuf) -> Result<()> {
+fn run_dynamic_client(binary: &Path) -> Result<()> {
     let workspace = ux(FakeWorkspace::new())?;
     let timeout = Duration::from_secs(30);
     let config = ScenarioConfig {
@@ -53,7 +53,7 @@ fn run_dynamic_client(binary: &PathBuf) -> Result<()> {
     shutdown_exit(&client, timeout)
 }
 
-fn run_disabled_client(binary: &PathBuf) -> Result<()> {
+fn run_disabled_client(binary: &Path) -> Result<()> {
     let workspace = ux(FakeWorkspace::new())?;
     let timeout = Duration::from_secs(30);
     let config = ScenarioConfig {
@@ -87,7 +87,7 @@ fn run_disabled_client(binary: &PathBuf) -> Result<()> {
 }
 
 fn spawn_client(
-    binary: &PathBuf,
+    binary: &Path,
     workspace: &FakeWorkspace,
     config: &ScenarioConfig,
 ) -> Result<UxClient> {

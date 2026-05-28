@@ -65,6 +65,7 @@ pub mod highlight;
 pub mod hook_checks;
 pub mod ignored_tests;
 pub mod inject_sha_assets;
+pub mod inline_completion_quality;
 pub mod inline_completion_smoke;
 pub mod install_surface_check;
 pub mod intent_diff_gate;
