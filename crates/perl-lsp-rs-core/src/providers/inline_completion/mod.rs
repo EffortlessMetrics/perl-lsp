@@ -1860,10 +1860,26 @@ fn singular_loop_variable_name(array_name: &str) -> String {
         "entries" => "entry".into(),
         "items" => "item".into(),
         "people" => "person".into(),
+        "statuses" => "status".into(),
         name if name.ends_with("ies") && name.len() > 3 => {
             format!("{}y", &name[..name.len() - 3])
         }
-        name if name.ends_with('s') && name.len() > 1 => name[..name.len() - 1].to_string(),
+        name if name.ends_with("ches")
+            || name.ends_with("shes")
+            || name.ends_with("sses")
+            || name.ends_with("xes")
+            || name.ends_with("zes") =>
+        {
+            name[..name.len() - 2].to_string()
+        }
+        name if name.ends_with('s')
+            && name.len() > 1
+            && !name.ends_with("is")
+            && !name.ends_with("ss")
+            && !name.ends_with("us") =>
+        {
+            name[..name.len() - 1].to_string()
+        }
         _ => "item".into(),
     }
 }
@@ -3848,6 +3864,34 @@ mod tests {
         let first = completions.items.first().ok_or("expected foreach binding completion")?;
 
         assert_eq!(first.insert_text, "my $entry (@entries) {\n    \n}");
+        Ok(())
+    }
+
+    #[test]
+    fn loop_binding_does_not_blindly_trim_non_plural_s_suffixes()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "my @status = fetch_status();\nfor ";
+        let completions = provider.get_inline_completions(source, 1, 4);
+        let first = completions.items.first().ok_or("expected loop binding completion")?;
+
+        assert_eq!(first.insert_text, "my $item (@status) {\n    \n}");
+        assert!(
+            completions.items.iter().all(|item| !item.insert_text.contains("$statu")),
+            "loop binding must not trim singular-looking names ending in s: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn loop_binding_handles_statuses_plural() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "my @statuses = fetch_statuses();\nfor ";
+        let completions = provider.get_inline_completions(source, 1, 4);
+        let first = completions.items.first().ok_or("expected loop binding completion")?;
+
+        assert_eq!(first.insert_text, "my $status (@statuses) {\n    \n}");
         Ok(())
     }
 

@@ -266,9 +266,9 @@ fn assert_suggestion(
     }
 
     for unexpected in not_expected {
-        if completions.items.iter().any(|item| item.insert_text == *unexpected) {
+        if completions.items.iter().any(|item| item.insert_text.contains(*unexpected)) {
             bail!(
-                "{name}: unexpected completion {unexpected}, got {:?}",
+                "{name}: unexpected completion containing {unexpected}, got {:?}",
                 completion_texts(completions)
             );
         }
@@ -412,6 +412,17 @@ fn scenarios() -> &'static [Scenario] {
                 first: Some("my $user (@users) {\n    \n}"),
                 expected: &["my $user (@users) {\n    \n}"],
                 not_expected: &["my $item (@items)"],
+            },
+        },
+        Scenario {
+            name: "for_loop_does_not_trim_singular_status_name",
+            source_name: "syntax",
+            source: "my @status = fetch_status();\nfor <<CURSOR>>",
+            available_modules: &[],
+            assertion: ScenarioAssertion::Suggestion {
+                first: Some("my $item (@status) {\n    \n}"),
+                expected: &["my $item (@status) {\n    \n}"],
+                not_expected: &["$statu"],
             },
         },
         Scenario {
