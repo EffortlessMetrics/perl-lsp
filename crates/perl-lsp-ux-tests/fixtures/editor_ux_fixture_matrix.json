@@ -1610,6 +1610,35 @@
       ]
     },
     {
+      "id": "loop_binding_inline_completion_quality",
+      "scenario_file": "ux_scenario_57_loop_binding_inline_completion_quality.rs",
+      "subsystem_owner": "editor_trust",
+      "ci_tier": "pr",
+      "component": "completion",
+      "instrumentation": {
+        "run_receipt": false,
+        "first_useful_result": false,
+        "protocol_goldens": false
+      },
+      "user_journey": "request inline completion after for and record visible-collection loop binding ghost text",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "dynamic inline-completion registration is observed for an LSP4IJ-shaped client",
+        "array loop binding uses the visible @users collection",
+        "hash loop binding uses keys from the visible %users_by_id hash",
+        "array loop binding stays preferred when both array and hash collections are visible",
+        "loop binding avoids placeholder snippets and unsafe singular trimming"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "real_workspace_providers",
       "scenario_file": "ux_scenario_20_real_workspace_providers.rs",
       "subsystem_owner": "editor_intelligence",
