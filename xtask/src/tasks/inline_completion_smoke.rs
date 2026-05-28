@@ -78,7 +78,7 @@ fn run_disabled_client(binary: &Path) -> Result<()> {
 
     let uri = "file:///release-inline-disabled.pl";
     ux(client.did_open(uri, "use "))?;
-    let response = request_inline_completion_response(&client, uri, 0, 4, timeout)?;
+    let response = request_inline_completion_response(&client, uri, 0, 4, 2, timeout)?;
     if response.get("error").is_none() {
         bail!("disabled inline completion unexpectedly succeeded: {}", response);
     }
@@ -226,16 +226,33 @@ fn assert_inline_completion_runtime(
     label: &str,
     timeout: Duration,
 ) -> Result<()> {
-    let uri = format!("file:///release-inline-{label}.pl");
-    ux(client.did_open(&uri, "use "))?;
-    let items = request_inline_completion_items(client, &uri, 0, 4, timeout)?;
-    if !items.iter().any(|item| item.get("insertText") == Some(&json!("strict;"))) {
-        bail!("inline-completion smoke expected insertText strict;, got: {}", Value::Array(items));
+    let automatic_uri = format!("file:///release-inline-automatic-{label}.pl");
+    ux(client.did_open(&automatic_uri, "use "))?;
+    let automatic_items =
+        request_inline_completion_items(client, &automatic_uri, 0, 4, 2, timeout)?;
+    if automatic_items.len() != 1 || automatic_items[0].get("insertText") != Some(&json!("strict;"))
+    {
+        bail!(
+            "inline-completion smoke expected one automatic strict; item, got: {}",
+            Value::Array(automatic_items)
+        );
+    }
+
+    let invoked_uri = format!("file:///release-inline-invoked-{label}.pl");
+    ux(client.did_open(&invoked_uri, "use "))?;
+    let invoked_items = request_inline_completion_items(client, &invoked_uri, 0, 4, 1, timeout)?;
+    for expected in ["strict;", "warnings;", "feature ':5.36';"] {
+        if !invoked_items.iter().any(|item| item.get("insertText") == Some(&json!(expected))) {
+            bail!(
+                "inline-completion smoke expected invoked insertText {expected}, got: {}",
+                Value::Array(invoked_items)
+            );
+        }
     }
 
     let neutral_uri = format!("file:///release-inline-neutral-{label}.pl");
     ux(client.did_open(&neutral_uri, "my $name = \"World\";"))?;
-    let neutral_items = request_inline_completion_items(client, &neutral_uri, 0, 11, timeout)?;
+    let neutral_items = request_inline_completion_items(client, &neutral_uri, 0, 11, 2, timeout)?;
     if !neutral_items.is_empty() {
         bail!(
             "inline-completion smoke expected empty unsupported-position result, got: {}",
@@ -251,6 +268,7 @@ fn request_inline_completion_response(
     uri: &str,
     line: u32,
     character: u32,
+    trigger_kind: u8,
     timeout: Duration,
 ) -> Result<Value> {
     ux(client.request(
@@ -258,7 +276,7 @@ fn request_inline_completion_response(
         json!({
             "textDocument": { "uri": uri },
             "position": { "line": line, "character": character },
-            "context": { "triggerKind": 2 }
+            "context": { "triggerKind": trigger_kind }
         }),
         timeout,
     ))
@@ -269,9 +287,11 @@ fn request_inline_completion_items(
     uri: &str,
     line: u32,
     character: u32,
+    trigger_kind: u8,
     timeout: Duration,
 ) -> Result<Vec<Value>> {
-    let response = request_inline_completion_response(client, uri, line, character, timeout)?;
+    let response =
+        request_inline_completion_response(client, uri, line, character, trigger_kind, timeout)?;
 
     if let Some(error) = response.get("error") {
         bail!("textDocument/inlineCompletion returned error: {}", error);
