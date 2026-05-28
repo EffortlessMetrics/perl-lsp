@@ -197,7 +197,7 @@ fn code_action_and_workspace_edit_responses_do_not_emit_optional_318_shapes() ->
 
     assert_no_key(&actions, "documentation")?;
     assert_no_key(&actions, "tags")?;
-    assert_no_key(&actions, "metadata")?;
+    assert_no_workspace_edit_metadata(&actions)?;
     assert_no_key(&actions, "snippet")?;
     assert_no_command_tooltip(&actions)?;
 
@@ -214,7 +214,7 @@ fn code_action_and_workspace_edit_responses_do_not_emit_optional_318_shapes() ->
         }),
     )?;
 
-    assert_no_key(&rename, "metadata")?;
+    assert_no_workspace_edit_metadata(&rename)?;
     assert_no_key(&rename, "snippet")?;
     Ok(())
 }
@@ -419,6 +419,10 @@ fn assert_no_key(value: &Value, key: &str) -> TestResult {
     collect_key_paths(value, key, "$", &mut paths);
     assert!(paths.is_empty(), "key '{key}' must be absent; found at {}", paths.join(", "));
     Ok(())
+}
+
+fn assert_no_workspace_edit_metadata(value: &Value) -> TestResult {
+    assert_no_key(value, "metadata")
 }
 
 fn collect_key_paths(value: &Value, key: &str, path: &str, paths: &mut Vec<String>) {

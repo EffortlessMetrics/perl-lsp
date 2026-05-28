@@ -79,7 +79,10 @@ const NEGATIVE_TEST_MARKERS: &[RequiredMarker] = &[
         label: "CodeAction.documentation positive gate",
         marker: "code_action_documentation_advertised_when_supported",
     },
-    RequiredMarker { label: "WorkspaceEdit metadata gate", marker: "metadata" },
+    RequiredMarker {
+        label: "WorkspaceEdit metadata absence gate",
+        marker: "assert_no_workspace_edit_metadata",
+    },
     RequiredMarker { label: "SnippetTextEdit gate", marker: "snippet" },
     RequiredMarker {
         label: "Diagnostic MarkupContent gate",

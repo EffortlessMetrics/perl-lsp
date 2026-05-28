@@ -104,8 +104,8 @@ capability parsing, wire tests, docs, and negative gates:
 - `textDocument/semanticTokens/full/delta`
 - semantic-token delta `resultId` state
 - `WorkspaceEdit` `SnippetTextEdit`
-- `WorkspaceEdit` metadata
 - `ApplyWorkspaceEditParams.metadata`
+- non-spec `WorkspaceEdit.metadata` response fields
 - `CodeAction.tags`
 - `CodeActionTag.LLMGenerated`
 - `Command.tooltip` outside CodeLens command objects
@@ -120,6 +120,12 @@ Unsupported or unclaimed surfaces must be absent from capabilities and from
 representative responses unless the client capability and server behavior are
 both implemented and tested.
 
+For the current 3.18 metadata boundary, upstream metadata is
+`ApplyWorkspaceEditParams.metadata` on a server-originated
+`workspace/applyEdit` request. It is not a field on ordinary `WorkspaceEdit`
+responses returned from `textDocument/rename`, `textDocument/codeAction`, or
+file-operation requests.
+
 ## Negative Claim Gates
 
 The `lsp_318_negative_claims` test suite is the current guardrail for optional
@@ -133,8 +139,11 @@ The `lsp_318_negative_claims` test suite is the current guardrail for optional
 - emits `CompletionList.itemDefaults.data` without explicit support
 - advertises `CodeAction.documentation` without client support or emits
   `CodeAction.tags`
-- emits workspace-edit metadata or snippet edits in representative edit
+- emits non-spec `WorkspaceEdit.metadata` fields in representative edit
   responses
+- emits `ApplyWorkspaceEditParams.metadata` without a gated
+  `workspace/applyEdit` server-request path
+- emits `SnippetTextEdit` without explicit support
 - emits diagnostic `message` as `MarkupContent` without markup support
 - registers file watchers with relative-pattern objects without
   `workspace.didChangeWatchedFiles.relativePatternSupport`
