@@ -22,6 +22,11 @@ correctly, tested over JSON-RPC, and documented; every unsupported 3.18 behavior
 must stay absent from capabilities or return the standard unsupported or invalid
 params error.
 
+The current upstream 3.18 spec does not define VS Code-style markdown theme
+icons or trusted markdown command links as LSP capabilities. `supportThemeIcons`
+and trusted markdown `enabledCommands` therefore remain defensive absence
+guards, not 3.18 implementation targets.
+
 Spec source: [Language Server Protocol Specification - 3.18](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.18/specification/).
 
 Current lock points:
@@ -106,7 +111,8 @@ capability parsing, wire tests, docs, and negative gates:
 - `RelativePattern` document selectors and watcher glob patterns
 - ungated `workspace/foldingRange/refresh` without
   `workspace.foldingRange.refreshSupport`
-- trusted markdown command execution or theme-icon markdown behavior
+- VS Code-style markdown command links, theme-icon syntax, `supportThemeIcons`,
+  or trusted markdown `enabledCommands` as LSP 3.18 capabilities
 - notebook-specific 3.18 additions beyond existing notebook sync claims
 
 Unsupported or unclaimed surfaces must be absent from capabilities and from
@@ -134,8 +140,8 @@ The `lsp_318_negative_claims` test suite is the current guardrail for optional
 - emits `MessageType.Debug` from normal runtime paths that have not
   intentionally opted into debug-level messages
 - emits `Command.tooltip` outside CodeLens command objects
-- emits markdown `command:` links or `$()` theme-icon syntax without explicit
-  trusted-markdown/theme-icon support
+- emits markdown `command:` links or `$()` theme-icon syntax while the project
+  has no separate editor-specific capability contract for those affordances
 
 The suite is intentionally absence-first. It does not implement the optional
 features and must not be treated as proof that those features work.
