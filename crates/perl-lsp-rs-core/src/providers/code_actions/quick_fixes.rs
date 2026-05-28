@@ -1872,6 +1872,40 @@ pub fn fix_security_signal_handler(
     }]
 }
 
+/// Drop an undefined label from a loop-control statement (PL410).
+///
+/// `next LABEL`, `last LABEL`, and `redo LABEL` die at runtime when the label
+/// is not defined in the current file. The single sensible mechanical fix is
+/// to drop the label so the statement targets the innermost enclosing loop.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((start, end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let Some(snippet) = source.get(start..end) else {
+        return Vec::new();
+    };
+    let op = match snippet.split_whitespace().next() {
+        Some(op) if matches!(op, "next" | "last" | "redo") => op.to_string(),
+        _ => return Vec::new(),
+    };
+
+    vec![CodeAction {
+        title: format!("Drop undefined label (use bare '{op}' to target innermost loop)"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start, end },
+                new_text: op,
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
 /// Add missing arguments to a `printf`/`sprintf` call (PL405 / `native.common.printf_format_arity`).
 ///
 /// When the format string has more specifiers than supplied arguments, this fix
