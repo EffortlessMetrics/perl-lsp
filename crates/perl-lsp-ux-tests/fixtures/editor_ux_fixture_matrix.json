@@ -1582,6 +1582,34 @@
       ]
     },
     {
+      "id": "lexical_return_inline_completion_quality",
+      "scenario_file": "ux_scenario_56_lexical_return_inline_completion_quality.rs",
+      "subsystem_owner": "editor_trust",
+      "ci_tier": "pr",
+      "component": "completion",
+      "instrumentation": {
+        "run_receipt": false,
+        "first_useful_result": false,
+        "protocol_goldens": false
+      },
+      "user_journey": "request inline completion on blank lines inside a sub and prove visible-lexical return ghost text",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "stdio inline-completion returns visible-lexical return ghost text",
+        "blank-line inline completion uses the nearby visible $result lexical",
+        "after-comment inline completion keeps nearby lexical context",
+        "lexical return inline completions avoid unrelated snippets and scaffold guesses"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "real_workspace_providers",
       "scenario_file": "ux_scenario_20_real_workspace_providers.rs",
       "subsystem_owner": "editor_intelligence",
