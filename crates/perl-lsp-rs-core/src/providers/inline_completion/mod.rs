@@ -42,6 +42,7 @@ pub(crate) struct SemanticInlineContext {
     pub(crate) visible_variables: Vec<VariableFact>,
     pub(crate) receiver_hint: Option<ReceiverHint>,
     pub(crate) imported_modules: Vec<ModuleFact>,
+    pub(crate) current_package_methods: Vec<MethodFact>,
     pub(crate) file_role: FileRole,
     pub(crate) style: InlineStyleContext,
 }
@@ -123,6 +124,11 @@ impl VariableSigil {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ModuleFact {
+    pub(crate) name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct MethodFact {
     pub(crate) name: String,
 }
 
@@ -503,20 +509,25 @@ impl InlineCompletionProvider {
             sequence += 1;
         };
 
-        // Rule 1: After `->` suggest `new()`
+        // Rule 1: After `->` suggest methods for the current receiver.
         if let Some(fragment) = method_arrow_fragment(prefix)
             && semantic_context.expected_syntax == ExpectedSyntax::MethodName
-            && completion_matches_fragment("new", "new()", fragment)
         {
-            push_item(
-                0,
-                InlineCompletionItem {
-                    insert_text: "new()".into(),
-                    filter_text: Some("new".into()),
-                    range: None,
-                    command: None,
-                },
-            );
+            if semantic_context.receiver_hint == Some(ReceiverHint::SelfReceiver) {
+                for method in self.current_package_method_items(semantic_context, fragment) {
+                    push_item(0, method);
+                }
+            } else if completion_matches_fragment("new", "new()", fragment) {
+                push_item(
+                    0,
+                    InlineCompletionItem {
+                        insert_text: "new()".into(),
+                        filter_text: Some("new".into()),
+                        range: None,
+                        command: None,
+                    },
+                );
+            }
         }
 
         // Rule 2: After `use ` suggest common pragmas
@@ -929,6 +940,7 @@ impl InlineCompletionProvider {
             visible_variables,
             receiver_hint: receiver_hint_from_prefix(context.prefix.as_str()),
             imported_modules,
+            current_package_methods: Vec::new(),
             file_role: self.file_role(context),
             style: InlineStyleContext::unknown(context),
         }
@@ -942,7 +954,49 @@ impl InlineCompletionProvider {
         let mut semantic_context = self.semantic_context_for_prepared_context(context);
         semantic_context.file_role = self.file_role_for_source(context, text);
         semantic_context.style = self.style_context_for_source(context, text);
+        semantic_context.current_package_methods = self.current_package_methods_for_source(
+            text,
+            semantic_context.package.as_deref(),
+            semantic_context.enclosing_sub.as_deref(),
+        );
         semantic_context
+    }
+
+    fn current_package_methods_for_source(
+        &self,
+        text: &str,
+        current_package: Option<&str>,
+        enclosing_sub: Option<&str>,
+    ) -> Vec<MethodFact> {
+        let Some(target_package) = current_package else {
+            return Vec::new();
+        };
+
+        let mut package = None::<String>;
+        let mut methods = Vec::<MethodFact>::new();
+        for line in self.normalized_lines(text) {
+            if let Some(name) = self.parse_package_name(line) {
+                package = Some(name);
+            }
+
+            if package.as_deref() != Some(target_package) {
+                continue;
+            }
+
+            let Some(method_name) = self.parse_sub_name(line) else {
+                continue;
+            };
+            if enclosing_sub == Some(method_name.as_str()) {
+                continue;
+            }
+            if methods.iter().any(|method| method.name == method_name) {
+                continue;
+            }
+
+            methods.push(MethodFact { name: method_name });
+        }
+
+        methods
     }
 
     fn expected_syntax(&self, context: &PreparedInlineCompletionContext) -> ExpectedSyntax {
@@ -1167,6 +1221,30 @@ impl InlineCompletionProvider {
             .iter()
             .find(|variable| variable.is_scalar() && !variable.is_scalar_self())
             .map(VariableFact::as_perl_variable)
+    }
+
+    fn current_package_method_items(
+        &self,
+        context: &SemanticInlineContext,
+        fragment: &str,
+    ) -> Vec<InlineCompletionItem> {
+        context
+            .current_package_methods
+            .iter()
+            .filter(|method| {
+                completion_matches_fragment(
+                    method.name.as_str(),
+                    &format!("{}()", method.name),
+                    fragment,
+                )
+            })
+            .map(|method| InlineCompletionItem {
+                insert_text: format!("{}()", method.name),
+                filter_text: Some(method.name.clone()),
+                range: None,
+                command: None,
+            })
+            .collect()
     }
 
     fn preferred_test_statement(&self, context: &SemanticInlineContext) -> Option<String> {
@@ -2009,6 +2087,68 @@ mod tests {
     }
 
     #[test]
+    fn self_receiver_prefers_current_package_methods() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source =
+            "package Demo;\nsub save {}\nsub display_name {}\nsub caller {\n    $self->\n}\n";
+        let character = "    $self->".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 4, character);
+
+        let first = completions.items.first().ok_or("expected self method completion")?;
+        assert_eq!(first.insert_text, "save()");
+        assert!(
+            completions.items.iter().any(|item| item.insert_text == "display_name()"),
+            "expected current package method suggestions, got {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+        assert!(
+            completions.items.iter().all(|item| item.insert_text != "new()"),
+            "$self-> should not fall back to generic constructor guesses when methods are known"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn self_receiver_partial_method_replaces_typed_fragment()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source =
+            "package Demo;\nsub save {}\nsub display_name {}\nsub caller {\n    $self->dis\n}\n";
+        let character = "    $self->dis".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 4, character);
+        let item = completions
+            .items
+            .iter()
+            .find(|item| item.insert_text == "display_name()")
+            .ok_or("expected display_name() completion")?;
+        let range = item.range.as_ref().ok_or("partial method completion must carry a range")?;
+
+        assert_eq!(range.start.line, 4);
+        assert_eq!(range.start.character, "    $self->".encode_utf16().count() as u32);
+        assert_eq!(range.end.line, 4);
+        assert_eq!(range.end.character, character);
+        Ok(())
+    }
+
+    #[test]
+    fn self_receiver_does_not_suggest_other_package_methods() {
+        let provider = InlineCompletionProvider::new();
+        let source =
+            "package Other;\nsub external {}\npackage Demo;\nsub caller {\n    $self->\n}\n";
+        let character = "    $self->".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 4, character);
+
+        assert!(
+            completions.items.iter().all(|item| item.insert_text != "external()"),
+            "other package methods should not be suggested for current-package self receiver"
+        );
+        assert!(
+            completions.items.iter().all(|item| item.insert_text != "new()"),
+            "$self-> with no known current-package methods should stay quiet"
+        );
+    }
+
+    #[test]
     fn test_prepare_context_collects_function_variables_and_imports()
     -> Result<(), Box<dyn std::error::Error>> {
         let provider = InlineCompletionProvider::new();
@@ -2079,6 +2219,23 @@ mod tests {
         assert_eq!(semantic.expected_syntax, ExpectedSyntax::MethodName);
         assert_eq!(semantic.receiver_hint, Some(ReceiverHint::SelfReceiver));
         assert_eq!(semantic.file_role, FileRole::Unknown);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_context_source_collects_current_package_methods()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "package Other;\nsub external {}\npackage Demo;\nsub save {}\nsub display_name {}\nsub caller {\n    $self->\n}\n";
+        let character = "    $self->".encode_utf16().count() as u32;
+        let prepared = provider
+            .prepare_context(source, 6, character)
+            .ok_or("expected prepared inline context")?;
+        let semantic = provider.semantic_context_for_source(source, &prepared);
+
+        let methods: Vec<&str> =
+            semantic.current_package_methods.iter().map(|method| method.name.as_str()).collect();
+        assert_eq!(methods, vec!["save", "display_name"]);
         Ok(())
     }
 
