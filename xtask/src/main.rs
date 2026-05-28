@@ -208,6 +208,9 @@ enum Commands {
         /// Gate mode to evaluate.
         #[arg(long, value_enum)]
         mode: tasks::quality_gate::QualityGateMode,
+        /// Temporary quality exception policy path.
+        #[arg(long, default_value = "policy/quality-gate-exceptions.toml")]
+        exception_policy: PathBuf,
         /// Repo-wide RIPR+ receipt JSON path.
         #[arg(long, default_value = "target/receipts/quality/ripr-plus.json")]
         ripr_receipt: PathBuf,
@@ -2730,6 +2733,7 @@ fn main() -> Result<()> {
         }
         Commands::QualityGate {
             mode,
+            exception_policy,
             ripr_receipt,
             ripr_pr_receipt,
             review_receipt,
@@ -2743,6 +2747,7 @@ fn main() -> Result<()> {
             check,
         } => quality_gate::run(quality_gate::QualityGateArgs {
             mode,
+            exception_policy,
             ripr_receipt,
             ripr_pr_receipt,
             review_receipt,

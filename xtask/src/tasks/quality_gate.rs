@@ -1,13 +1,16 @@
 //! Quality gates for the proof lane.
 
 use std::{
+    collections::BTreeSet,
     fs,
     path::{Path, PathBuf},
     process::Command,
 };
 
+use chrono::{NaiveDate, Utc};
 use clap::ValueEnum;
 use color_eyre::eyre::{Context, Result, bail};
+use serde::Deserialize;
 use serde_json::{Value, json};
 use serde_yaml_ng::Value as YamlValue;
 
@@ -32,6 +35,7 @@ impl QualityGateMode {
 #[derive(Debug)]
 pub struct QualityGateArgs {
     pub mode: QualityGateMode,
+    pub exception_policy: PathBuf,
     pub ripr_receipt: PathBuf,
     pub ripr_pr_receipt: PathBuf,
     pub review_receipt: PathBuf,
@@ -92,7 +96,9 @@ fn evaluate(root: &Path, args: &QualityGateArgs) -> Result<GateEvaluation> {
 fn evaluate_patch_coverage(head: &str, args: &QualityGateArgs) -> Result<GateEvaluation> {
     let codecov_status = read_codecov_patch_status(&args.codecov)?;
     let coverage = read_coverage_receipt(&args.coverage_receipt, head);
+    let exceptions = read_exception_policy(&args.exception_policy, today());
     let mut next_actions = Vec::new();
+    next_actions.extend(exceptions.actions.clone());
 
     if !matches!(coverage.status.as_str(), "present") {
         next_actions.push(coverage_receipt_action(&coverage, head, args));
@@ -148,6 +154,7 @@ fn evaluate_patch_coverage(head: &str, args: &QualityGateArgs) -> Result<GateEva
             "codecov_config": display_path(&args.codecov),
             "codecov_config_status": codecov_status,
         },
+        "temporary_exceptions": exceptions.receipt,
         "next_actions": next_actions,
     });
     let markdown = render_markdown(&receipt, args)?;
@@ -159,7 +166,9 @@ fn evaluate_new_ripr(head: &str, args: &QualityGateArgs) -> Result<GateEvaluatio
     let ripr = read_ripr_plus_receipt(&args.ripr_receipt, head);
     let ripr_pr = read_ripr_pr_receipt(&args.ripr_pr_receipt, head);
     let review = read_review_guidance_receipt(&args.review_receipt, head);
+    let exceptions = read_exception_policy(&args.exception_policy, today());
     let mut next_actions = Vec::new();
+    next_actions.extend(exceptions.actions.clone());
 
     if ripr.status != "present" {
         next_actions.push(ripr_receipt_action(&ripr, head, args));
@@ -220,6 +229,7 @@ fn evaluate_new_ripr(head: &str, args: &QualityGateArgs) -> Result<GateEvaluatio
             "base_sha": review.base_sha,
             "top_gaps": review.top_gaps,
         },
+        "temporary_exceptions": exceptions.receipt,
         "next_actions": next_actions,
     });
     let markdown = render_markdown(&receipt, args)?;
@@ -261,10 +271,238 @@ struct ReviewGuidanceReceipt {
     top_gaps: Vec<Value>,
 }
 
+#[derive(Debug)]
+struct ExceptionPolicyEvaluation {
+    receipt: Value,
+    actions: Vec<Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct QualityExceptionPolicy {
+    schema_version: u64,
+    policy: String,
+    owner: String,
+    status: String,
+    updated: String,
+    #[serde(default)]
+    due_review: Option<String>,
+    #[serde(default)]
+    requirements: ExceptionRequirements,
+    #[serde(default, rename = "exception")]
+    exceptions: Vec<QualityException>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct ExceptionRequirements {
+    #[serde(default)]
+    required_active: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct QualityException {
+    id: String,
+    owner: String,
+    reason: String,
+    final_target: String,
+    evidence: String,
+    removal_criteria: String,
+    created: String,
+    review_after: String,
+    expires: String,
+}
+
 enum JsonReceipt {
     Missing,
     Invalid,
     Present(Value),
+}
+
+fn read_exception_policy(path: &Path, today: NaiveDate) -> ExceptionPolicyEvaluation {
+    let raw = match fs::read_to_string(path) {
+        Ok(raw) => raw,
+        Err(_) => {
+            return ExceptionPolicyEvaluation {
+                receipt: json!({
+                    "status": "missing",
+                    "policy": display_path(path),
+                    "active_count": 0,
+                    "final_enforcement_blocked": false,
+                    "active": [],
+                }),
+                actions: vec![quality_exception_policy_action(
+                    path,
+                    "missing",
+                    "quality exception policy ledger is missing",
+                )],
+            };
+        }
+    };
+
+    let policy = match toml::from_str::<QualityExceptionPolicy>(&raw) {
+        Ok(policy) => policy,
+        Err(_) => {
+            return ExceptionPolicyEvaluation {
+                receipt: json!({
+                    "status": "invalid",
+                    "policy": display_path(path),
+                    "active_count": 0,
+                    "final_enforcement_blocked": false,
+                    "active": [],
+                }),
+                actions: vec![quality_exception_policy_action(
+                    path,
+                    "invalid_toml",
+                    "quality exception policy ledger is not valid TOML",
+                )],
+            };
+        }
+    };
+
+    let due_review = policy.due_review.as_deref().unwrap_or("fail");
+    let mut active = Vec::new();
+    let mut active_ids = BTreeSet::new();
+    let mut actions = Vec::new();
+
+    if policy.schema_version != 1 || policy.policy != "quality-gate-exceptions" {
+        actions.push(quality_exception_policy_action(
+            path,
+            "invalid_header",
+            "quality exception policy must use schema_version = 1 and policy = \"quality-gate-exceptions\"",
+        ));
+    }
+    if policy.owner.trim().is_empty()
+        || policy.status != "active"
+        || policy.updated.trim().is_empty()
+    {
+        actions.push(quality_exception_policy_action(
+            path,
+            "invalid_metadata",
+            "quality exception policy must have owner, status = \"active\", and updated",
+        ));
+    }
+
+    for exception in &policy.exceptions {
+        let validation_errors = exception_validation_errors(exception);
+        if !validation_errors.is_empty() {
+            actions.push(quality_exception_invalid_action(path, exception, validation_errors));
+            continue;
+        }
+
+        let review_after = parse_policy_date(&exception.review_after);
+        let expires = parse_policy_date(&exception.expires);
+        let created = parse_policy_date(&exception.created);
+        if review_after.is_none() || expires.is_none() || created.is_none() {
+            actions.push(quality_exception_invalid_action(
+                path,
+                exception,
+                vec!["created, review_after, and expires must use YYYY-MM-DD".to_string()],
+            ));
+            continue;
+        }
+
+        let Some(expires) = expires else {
+            continue;
+        };
+        if expires < today {
+            actions.push(quality_exception_expired_action(path, exception, expires, today));
+            continue;
+        }
+
+        active_ids.insert(exception.id.clone());
+        active.push(quality_exception_receipt_entry(exception, review_after, expires));
+
+        let Some(review_after) = review_after else {
+            continue;
+        };
+        if review_after <= today {
+            actions.push(quality_exception_review_due_action(
+                path,
+                exception,
+                review_after,
+                today,
+                due_review,
+            ));
+        }
+    }
+
+    let missing_required = policy
+        .requirements
+        .required_active
+        .iter()
+        .filter(|id| !active_ids.contains(*id))
+        .cloned()
+        .collect::<Vec<_>>();
+    if !missing_required.is_empty() {
+        actions.push(quality_exception_required_missing_action(
+            path,
+            &missing_required,
+            &policy.requirements.required_active,
+        ));
+    }
+
+    let blocking =
+        actions.iter().any(|action| action.get("blocking").and_then(Value::as_bool) == Some(true));
+    let status = if blocking { "invalid" } else { "present" };
+
+    ExceptionPolicyEvaluation {
+        receipt: json!({
+            "status": status,
+            "policy": display_path(path),
+            "due_review": due_review,
+            "required_active": policy.requirements.required_active,
+            "active_count": active.len(),
+            "final_enforcement_blocked": !active.is_empty(),
+            "active": active,
+            "missing_required": missing_required,
+        }),
+        actions,
+    }
+}
+
+fn exception_validation_errors(exception: &QualityException) -> Vec<String> {
+    let mut errors = Vec::new();
+    for (field, value) in [
+        ("id", exception.id.as_str()),
+        ("owner", exception.owner.as_str()),
+        ("reason", exception.reason.as_str()),
+        ("final_target", exception.final_target.as_str()),
+        ("evidence", exception.evidence.as_str()),
+        ("removal_criteria", exception.removal_criteria.as_str()),
+        ("created", exception.created.as_str()),
+        ("review_after", exception.review_after.as_str()),
+        ("expires", exception.expires.as_str()),
+    ] {
+        if value.trim().is_empty() {
+            errors.push(format!("{field} is required"));
+        }
+    }
+    errors
+}
+
+fn parse_policy_date(value: &str) -> Option<NaiveDate> {
+    NaiveDate::parse_from_str(value.trim(), "%Y-%m-%d").ok()
+}
+
+fn today() -> NaiveDate {
+    Utc::now().date_naive()
+}
+
+fn quality_exception_receipt_entry(
+    exception: &QualityException,
+    review_after: Option<NaiveDate>,
+    expires: NaiveDate,
+) -> Value {
+    json!({
+        "id": exception.id,
+        "owner": exception.owner,
+        "reason": exception.reason,
+        "final_target": exception.final_target,
+        "evidence": exception.evidence,
+        "removal_criteria": exception.removal_criteria,
+        "review_after": review_after.map(|date| date.to_string()).unwrap_or_else(|| exception.review_after.clone()),
+        "expires": expires.to_string(),
+        "blocks_final_enforcement": true,
+    })
 }
 
 fn read_coverage_receipt(path: &Path, expected_head: &str) -> CoverageReceipt {
@@ -613,6 +851,91 @@ fn codecov_policy_action(status: &str, args: &QualityGateArgs) -> Value {
     })
 }
 
+fn quality_exception_policy_action(path: &Path, reason: &str, repair: &str) -> Value {
+    json!({
+        "kind": "quality_exception_policy_not_current",
+        "blocking": true,
+        "path": display_path(path),
+        "reason": reason,
+        "repair": repair,
+        "verify": quality_exception_policy_command(path, true),
+        "receipt": quality_exception_policy_command(path, false),
+    })
+}
+
+fn quality_exception_invalid_action(
+    path: &Path,
+    exception: &QualityException,
+    errors: Vec<String>,
+) -> Value {
+    json!({
+        "kind": "quality_exception_invalid",
+        "blocking": true,
+        "path": display_path(path),
+        "id": exception.id,
+        "reason": errors.join("; "),
+        "repair": "Fill owner, reason, final_target, evidence, removal_criteria, review_after, and expires for the temporary quality exception.",
+        "verify": quality_exception_policy_command(path, true),
+        "receipt": quality_exception_policy_command(path, false),
+    })
+}
+
+fn quality_exception_expired_action(
+    path: &Path,
+    exception: &QualityException,
+    expires: NaiveDate,
+    today: NaiveDate,
+) -> Value {
+    json!({
+        "kind": "quality_exception_expired",
+        "blocking": true,
+        "path": display_path(path),
+        "id": exception.id,
+        "reason": format!("expires {expires} is before {today}"),
+        "repair": "Remove the temporary quality exception by completing its removal criteria, or replace it with a fresh policy PR that names new evidence and expiry.",
+        "verify": quality_exception_policy_command(path, true),
+        "receipt": quality_exception_policy_command(path, false),
+    })
+}
+
+fn quality_exception_review_due_action(
+    path: &Path,
+    exception: &QualityException,
+    review_after: NaiveDate,
+    today: NaiveDate,
+    due_review: &str,
+) -> Value {
+    let blocking = due_review != "warn";
+    json!({
+        "kind": "quality_exception_review_due",
+        "blocking": blocking,
+        "path": display_path(path),
+        "id": exception.id,
+        "reason": format!("review_after {review_after} is on or before {today}"),
+        "repair": "Re-review the temporary quality exception, update current evidence, and either remove it or move review_after/expires in a policy PR.",
+        "verify": quality_exception_policy_command(path, true),
+        "receipt": quality_exception_policy_command(path, false),
+    })
+}
+
+fn quality_exception_required_missing_action(
+    path: &Path,
+    missing: &[String],
+    required: &[String],
+) -> Value {
+    json!({
+        "kind": "quality_exception_required_missing",
+        "blocking": true,
+        "path": display_path(path),
+        "reason": format!("missing required active temporary quality exception(s): {}", missing.join(", ")),
+        "missing": missing,
+        "required_active": required,
+        "repair": "Document every transitional burn-down exception in policy/quality-gate-exceptions.toml, or remove it from required_active after the target has been met and enforcement is final.",
+        "verify": quality_exception_policy_command(path, true),
+        "receipt": quality_exception_policy_command(path, false),
+    })
+}
+
 fn ripr_receipt_action(
     ripr: &RiprPlusReceipt,
     expected_head: &str,
@@ -767,6 +1090,24 @@ fn render_markdown(receipt: &Value, args: &QualityGateArgs) -> Result<String> {
         markdown.push_str(&format!("- repo RIPR+ receipt: `{status}`\n"));
         markdown.push_str(&format!("- total RIPR+ gaps: `{unresolved}`\n"));
     }
+    if let Some(exceptions) = receipt.get("temporary_exceptions") {
+        let status = exceptions.get("status").and_then(Value::as_str).unwrap_or("unknown");
+        let active_count =
+            exceptions.get("active_count").and_then(Value::as_u64).unwrap_or_default();
+        let final_blocked =
+            exceptions.get("final_enforcement_blocked").and_then(Value::as_bool).unwrap_or(false);
+        markdown.push_str(&format!("- temporary exceptions: `{status}`\n"));
+        markdown.push_str(&format!("- active temporary exceptions: `{active_count}`\n"));
+        markdown.push_str(&format!("- final enforcement blocked: `{final_blocked}`\n"));
+        if let Some(active) = exceptions.get("active").and_then(Value::as_array) {
+            for exception in active {
+                let id = exception.get("id").and_then(Value::as_str).unwrap_or("unknown");
+                let target =
+                    exception.get("final_target").and_then(Value::as_str).unwrap_or("unknown");
+                markdown.push_str(&format!("- exception: `{id}` final target `{target}`\n"));
+            }
+        }
+    }
     markdown.push_str(&format!(
         "- verify: `{}`\n",
         quality_gate_command(args, true, args.patch_coverage)
@@ -846,6 +1187,7 @@ fn coverage_baseline_command(args: &QualityGateArgs, check: bool) -> String {
 
 fn quality_gate_command(args: &QualityGateArgs, check: bool, patch: Option<f64>) -> String {
     let mut command = format!("rtk cargo xtask quality-gate --mode {}", args.mode.as_str());
+    command.push_str(&format!(" --exception-policy {}", args.exception_policy.display()));
     match args.mode {
         QualityGateMode::EnforcePatchCoverage => {
             command.push_str(&format!(
@@ -901,6 +1243,17 @@ fn ripr_review_command(args: &QualityGateArgs, check: bool) -> String {
     let mut command = format!(
         "rtk cargo xtask ripr-review-comments --base {} --head {}",
         args.ripr_base, args.ripr_head
+    );
+    if check {
+        command.push_str(" --check");
+    }
+    command
+}
+
+fn quality_exception_policy_command(path: &Path, check: bool) -> String {
+    let mut command = format!(
+        "rtk cargo xtask quality-gate --mode enforce-patch-coverage --exception-policy {} --coverage-receipt target/receipts/quality/coverage-baseline.json --codecov codecov.yml --receipt target/receipts/quality/quality-gate.json --summary target/receipts/quality/quality-gate.md",
+        path.display()
     );
     if check {
         command.push_str(" --check");
