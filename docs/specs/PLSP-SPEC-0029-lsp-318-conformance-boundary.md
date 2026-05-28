@@ -84,6 +84,7 @@ perl-lsp supports selected LSP 3.18 surfaces with capability-honest contracts.
 | Text document content refresh | `workspace/textDocumentContent/refresh` | Server-originated request IDs are bounded and emitted through the standard server request path. | `lsp_text_document_content_tests` |
 | Folding range refresh | `workspace.foldingRange.refreshSupport`, `workspace/foldingRange/refresh` | Server sends refresh requests only for clients that advertise `workspace.foldingRange.refreshSupport`; request IDs are bounded and emitted through the standard server request path. | `lsp_refresh_methods_tests`, `lsp_318_negative_claims`, `check-lsp-318-claims` |
 | Semantic tokens | `semanticTokensProvider.full`, `semanticTokensProvider.range` | Full and range are advertised; delta is not advertised without result-id state. | `lsp_caps_contract_shapes`, `lsp_semantic_legend_contract_tests`, `lsp_cap_snap` |
+| Semantic token `label` type | `semanticTokensProvider.legend.tokenTypes` | `SemanticTokenTypes.label` remains absent until the provider can emit matching token indexes; emitted token indexes and modifier bits stay within the advertised legend bounds. | `lsp_semantic_legend_contract_tests`, `check-lsp-318-claims` |
 | Signature-help nullable active parameter | `textDocument/signatureHelp` response | `SignatureHelp.activeParameter` and `SignatureInformation.activeParameter` schema validation accepts unsigned integer or `null`; current runtime receipts preserve numeric active-parameter tracking when known. | `lsp_schema_validation`, `lsp_signature_help_tests`, `check-lsp-318-claims` |
 | CodeLens resolve support properties | `textDocument.codeLens.resolveSupport.properties`, `codeLensProvider.resolveProvider`, `codeLens/resolve` | Clients receive unresolved command/reference lenses only when `command` appears in resolve-support properties; clients without that property receive eager command lenses while `codeLens/resolve` remains routed. | `lsp_codelens_tests`, `lsp_code_lens_tests`, `lsp_bdd_workflows`, `check-lsp-318-claims` |
 | CodeLens command tooltips | `Command.tooltip` on CodeLens command objects | CodeLens commands returned by `textDocument/codeLens` and `codeLens/resolve` carry deterministic plain-text tooltips; non-CodeLens command tooltips remain unclaimed. | `lsp_codelens_tests`, `lsp_318_negative_claims`, `check-lsp-318-claims` |
@@ -103,6 +104,7 @@ capability parsing, wire tests, docs, and negative gates:
 - complete LSP 3.18 implementation
 - `textDocument/semanticTokens/full/delta`
 - semantic-token delta `resultId` state
+- `SemanticTokenTypes.label`
 - `WorkspaceEdit` `SnippetTextEdit`
 - `ApplyWorkspaceEditParams.metadata`
 - non-spec `WorkspaceEdit.metadata` response fields
@@ -133,6 +135,8 @@ The `lsp_318_negative_claims` test suite is the current guardrail for optional
 
 - advertises semantic-token delta
 - accepts `textDocument/semanticTokens/full/delta` as implemented
+- advertises `SemanticTokenTypes.label` before the provider can emit matching
+  semantic-token legend indexes
 - reintroduces `experimental.inlineCompletionProvider`
 - reintroduces `documentRangesFormattingProvider`
 - emits `CompletionList.applyKind` without explicit support

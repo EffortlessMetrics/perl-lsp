@@ -136,10 +136,10 @@ const ROWS: &[MatrixRow] = &[
         server_shape: "`semanticTokensProvider.legend.tokenTypes`",
         method_or_shape: "token type indexes must stay within legend bounds",
         status: "negative-gated+documented",
-        proof: "`lsp_cap_snap__semantic_tokens_legend_from_capabilities`; `lsp_semantic_legend_contract_tests`",
+        proof: "`semantic_token_label_type_is_not_advertised_without_provider_support`; `semantic_token_result_indexes_stay_within_advertised_legend_bounds`; `check-lsp-318-claims`",
         owner: "`crates/perl-lsp-rs-core/src/providers/semantic_tokens/`",
         priority: "P3",
-        notes: "`label` must not appear until the provider can emit matching legend indexes.",
+        notes: "`label` must stay absent until the provider can emit matching legend indexes; emitted token indexes and modifier bits remain bounds-checked.",
     },
     MatrixRow {
         feature: "`Diagnostic.message` as `MarkupContent`",

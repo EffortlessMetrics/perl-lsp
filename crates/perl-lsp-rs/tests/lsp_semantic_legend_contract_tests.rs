@@ -61,6 +61,168 @@ fn recv_until_id(
 }
 
 #[test]
+fn semantic_token_label_type_is_not_advertised_without_provider_support() -> Result<(), BoxError> {
+    let bin = env!("CARGO_BIN_EXE_perl-lsp");
+    let mut child = Command::new(bin)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()?;
+
+    let mut stdin = child.stdin.take().ok_or("no stdin")?;
+    let stdout = child.stdout.take().ok_or("no stdout")?;
+    let mut reader = BufReader::new(stdout);
+
+    let init_req = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "capabilities": {
+                "general": { "positionEncodings": ["utf-16"] }
+            }
+        }
+    })
+    .to_string();
+    send_msg(&mut stdin, &init_req)?;
+    let init_resp = recv_until_id(&mut reader, 1)?;
+
+    let advertised_legend = init_resp["result"]["capabilities"]["semanticTokensProvider"]["legend"]
+        ["tokenTypes"]
+        .as_array()
+        .ok_or("semanticTokensProvider.legend.tokenTypes missing from initialize response")?;
+
+    assert!(
+        !advertised_legend.iter().any(|token_type| token_type.as_str() == Some("label")),
+        "SemanticTokenTypes.label is an unclaimed LSP 3.18 token type until the provider can emit matching legend indexes: {advertised_legend:?}"
+    );
+
+    send_msg(
+        &mut stdin,
+        &serde_json::json!({"jsonrpc":"2.0","id":2,"method":"shutdown","params":null}).to_string(),
+    )?;
+    let _ = recv_until_id(&mut reader, 2)?;
+    send_msg(
+        &mut stdin,
+        &serde_json::json!({"jsonrpc":"2.0","method":"exit","params":null}).to_string(),
+    )?;
+    let _ = child.wait();
+    Ok(())
+}
+
+#[test]
+fn semantic_token_result_indexes_stay_within_advertised_legend_bounds() -> Result<(), BoxError> {
+    let bin = env!("CARGO_BIN_EXE_perl-lsp");
+    let mut child = Command::new(bin)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()?;
+
+    let mut stdin = child.stdin.take().ok_or("no stdin")?;
+    let stdout = child.stdout.take().ok_or("no stdout")?;
+    let mut reader = BufReader::new(stdout);
+
+    let init_req = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "capabilities": {
+                "general": { "positionEncodings": ["utf-16"] }
+            }
+        }
+    })
+    .to_string();
+    send_msg(&mut stdin, &init_req)?;
+    let init_resp = recv_until_id(&mut reader, 1)?;
+
+    let advertised_type_legend =
+        init_resp["result"]["capabilities"]["semanticTokensProvider"]["legend"]["tokenTypes"]
+            .as_array()
+            .ok_or("semanticTokensProvider.legend.tokenTypes missing from initialize response")?;
+    let advertised_modifier_legend = init_resp["result"]["capabilities"]["semanticTokensProvider"]
+        ["legend"]["tokenModifiers"]
+        .as_array()
+        .ok_or("semanticTokensProvider.legend.tokenModifiers missing from initialize response")?;
+    let type_count = advertised_type_legend.len() as u64;
+    let allowed_modifier_mask = if advertised_modifier_legend.len() >= u64::BITS as usize {
+        u64::MAX
+    } else {
+        (1u64 << advertised_modifier_legend.len()) - 1
+    };
+
+    send_msg(
+        &mut stdin,
+        &serde_json::json!({"jsonrpc":"2.0","method":"initialized","params":{}}).to_string(),
+    )?;
+
+    let source = "my $dbh = undef;\n$dbh->prepare(\"SELECT 1\");\nsub f { return $_; }\n";
+    let did_open = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "textDocument/didOpen",
+        "params": {
+            "textDocument": {
+                "uri": "file:///semantic_bounds_contract_test.pl",
+                "languageId": "perl",
+                "version": 1,
+                "text": source
+            }
+        }
+    })
+    .to_string();
+    send_msg(&mut stdin, &did_open)?;
+
+    let sem_req = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "textDocument/semanticTokens/full",
+        "params": {
+            "textDocument": { "uri": "file:///semantic_bounds_contract_test.pl" }
+        }
+    })
+    .to_string();
+    send_msg(&mut stdin, &sem_req)?;
+    let sem_resp = recv_until_id(&mut reader, 2)?;
+
+    let data = sem_resp["result"]["data"]
+        .as_array()
+        .ok_or("semanticTokens response missing data array")?;
+    assert_eq!(
+        data.len() % 5,
+        0,
+        "semanticTokens data must be encoded as 5-uinteger tuples: {data:?}"
+    );
+
+    for (token_idx, chunk) in data.chunks(5).enumerate() {
+        let type_idx = chunk[3].as_u64().ok_or("token_type not u64")?;
+        assert!(
+            type_idx < type_count,
+            "semantic token {token_idx} type index {type_idx} is outside advertised legend length {type_count}"
+        );
+
+        let modifier_bits = chunk[4].as_u64().ok_or("token_modifiers not u64")?;
+        assert_eq!(
+            modifier_bits & !allowed_modifier_mask,
+            0,
+            "semantic token {token_idx} modifier bits {modifier_bits:#b} exceed advertised modifier legend mask {allowed_modifier_mask:#b}"
+        );
+    }
+
+    send_msg(
+        &mut stdin,
+        &serde_json::json!({"jsonrpc":"2.0","id":3,"method":"shutdown","params":null}).to_string(),
+    )?;
+    let _ = recv_until_id(&mut reader, 3)?;
+    send_msg(
+        &mut stdin,
+        &serde_json::json!({"jsonrpc":"2.0","method":"exit","params":null}).to_string(),
+    )?;
+    let _ = child.wait();
+    Ok(())
+}
+
+#[test]
 fn semantic_token_indices_match_advertised_legend() -> Result<(), BoxError> {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
     let mut child = Command::new(bin)

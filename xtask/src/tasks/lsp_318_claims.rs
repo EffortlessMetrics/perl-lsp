@@ -14,6 +14,7 @@ const DIAGNOSTIC_ENRICHMENT_TEST: &str =
     "crates/perl-lsp-rs/tests/lsp_diagnostic_enrichment_test.rs";
 const REFRESH_METHODS_TEST: &str = "crates/perl-lsp-rs/tests/lsp_refresh_methods_tests.rs";
 const SCHEMA_VALIDATION_TEST: &str = "crates/perl-lsp-rs/tests/lsp_schema_validation.rs";
+const SEMANTIC_LEGEND_TEST: &str = "crates/perl-lsp-rs/tests/lsp_semantic_legend_contract_tests.rs";
 const COMPLETION_TEST: &str = "crates/perl-lsp-rs/tests/lsp_completion_tests.rs";
 const CODE_LENS_TEST: &str = "crates/perl-lsp-rs/tests/lsp_codelens_tests.rs";
 const WINDOW_TEST: &str = "crates/perl-lsp-rs/tests/lsp_window_tests.rs";
@@ -193,6 +194,17 @@ const SCHEMA_VALIDATION_TEST_MARKERS: &[RequiredMarker] = &[
     },
 ];
 
+const SEMANTIC_LEGEND_TEST_MARKERS: &[RequiredMarker] = &[
+    RequiredMarker {
+        label: "SemanticTokenTypes.label negative receipt",
+        marker: "semantic_token_label_type_is_not_advertised_without_provider_support",
+    },
+    RequiredMarker {
+        label: "semantic-token legend bounds receipt",
+        marker: "semantic_token_result_indexes_stay_within_advertised_legend_bounds",
+    },
+];
+
 const COMPLETION_TEST_MARKERS: &[RequiredMarker] = &[
     RequiredMarker {
         label: "CompletionList.itemDefaults.data positive receipt",
@@ -369,6 +381,8 @@ pub fn run() -> Result<()> {
         SCHEMA_VALIDATION_TEST_MARKERS,
         &mut violations,
     )?;
+    let semantic_legend_markers = SEMANTIC_LEGEND_TEST_MARKERS;
+    check_required_markers(&root, SEMANTIC_LEGEND_TEST, semantic_legend_markers, &mut violations)?;
     check_required_markers(&root, COMPLETION_TEST, COMPLETION_TEST_MARKERS, &mut violations)?;
     check_required_markers(&root, CODE_LENS_TEST, CODE_LENS_TEST_MARKERS, &mut violations)?;
     check_required_markers(&root, WINDOW_TEST, WINDOW_TEST_MARKERS, &mut violations)?;
@@ -384,7 +398,7 @@ pub fn run() -> Result<()> {
 
     if violations.is_empty() {
         println!(
-            "LSP 3.18 claim guard OK: {} capability snapshots, {} feature markers, {} negative-test markers, {} positive refresh markers, {} RelativePattern registration markers, {} diagnostic markers, {} schema markers, {} completion markers, {} CodeLens markers, {} window markers, {} spec markers checked",
+            "LSP 3.18 claim guard OK: {} capability snapshots, {} feature markers, {} negative-test markers, {} positive refresh markers, {} RelativePattern registration markers, {} diagnostic markers, {} schema markers, {} semantic legend markers, {} completion markers, {} CodeLens markers, {} window markers, {} spec markers checked",
             CAPABILITY_SNAPSHOTS.len(),
             FEATURE_CATALOG_MARKERS.len(),
             NEGATIVE_TEST_MARKERS.len(),
@@ -392,6 +406,7 @@ pub fn run() -> Result<()> {
             REGISTRATION_TEST_MARKERS.len(),
             DIAGNOSTIC_ENRICHMENT_TEST_MARKERS.len(),
             SCHEMA_VALIDATION_TEST_MARKERS.len(),
+            SEMANTIC_LEGEND_TEST_MARKERS.len(),
             COMPLETION_TEST_MARKERS.len(),
             CODE_LENS_TEST_MARKERS.len(),
             WINDOW_TEST_MARKERS.len(),
