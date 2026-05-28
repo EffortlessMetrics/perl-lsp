@@ -28,3 +28,17 @@ reason = "Generated status docs are verified through status-generation checks, n
 created = "2026-05-07"
 review_after = "2026-06-07"
 expires = "2026-08-07"
+
+# -----------------------------------------------------------------------------
+# Archived source: retained historical code, not active workspace behavior.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-archive"
+kind = "generated_or_non_production_surface"
+paths = ["archive/**"]
+owner = "proof-lane"
+issue = "#8197"
+reason = "Archived source is retained for historical reference and is excluded from active workspace proof targets; current behavior must be proven in live crates instead."
+created = "2026-05-28"
+review_after = "2026-06-28"
+expires = "2026-09-30"

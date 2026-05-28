@@ -49,7 +49,9 @@ fn ripr_workflow_runs_on_ready_for_review_without_path_filter()
         "ripr.yml must generate, check, and upload the repo-wide RIPR+ receipt"
     );
     assert!(
-        xtask_main.contains("RiprPlus") && xtask_main.contains("ripr_plus(&root, &receipt, check)"),
+        xtask_main.contains("RiprPlus")
+            && xtask_main.contains("ripr_plus(&root, &receipt, &suppressions, check)")
+            && xtask_main.contains("default_value = \"policy/ripr-suppressions.toml\""),
         "PR1 workflow must not call a missing `cargo xtask ripr-plus` command"
     );
     assert!(

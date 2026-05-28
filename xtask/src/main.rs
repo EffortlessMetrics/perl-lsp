@@ -284,6 +284,9 @@ enum Commands {
         /// Receipt JSON path.
         #[arg(long, default_value = "target/receipts/quality/ripr-plus.json")]
         receipt: PathBuf,
+        /// RIPR suppression policy path.
+        #[arg(long, default_value = "policy/ripr-suppressions.toml")]
+        suppressions: PathBuf,
         /// Validate the existing receipt instead of rewriting it.
         #[arg(long)]
         check: bool,
@@ -2786,8 +2789,8 @@ fn main() -> Result<()> {
         Commands::RiprPr { root, base, head, check } => {
             ripr_evidence::ripr_pr(&root, &base, &head, check)
         }
-        Commands::RiprPlus { root, receipt, check } => {
-            ripr_evidence::ripr_plus(&root, &receipt, check)
+        Commands::RiprPlus { root, receipt, suppressions, check } => {
+            ripr_evidence::ripr_plus(&root, &receipt, &suppressions, check)
         }
         Commands::RiprReviewComments { root, base, head, timeout_seconds, check } => {
             ripr_evidence::ripr_review_comments(&root, &base, &head, timeout_seconds, check)

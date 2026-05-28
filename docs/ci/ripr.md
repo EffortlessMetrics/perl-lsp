@@ -71,6 +71,9 @@ Do **not** translate these into `killed` / `survived`. They mean something diffe
 - Produces diff-scoped PR evidence under `target/ripr/pr/`.
 - Produces the repo-wide RIPR+ baseline receipt at
   `target/receipts/quality/ripr-plus.json`.
+  The repo-wide receipt applies `policy/ripr-suppressions.toml` path
+  suppressions before computing the unresolved total so non-production retained
+  surfaces such as `archive/**` do not count against the final zero target.
 - Produces review guidance under `target/ripr/review/`.
 - Runs `cargo xtask quality-gate --mode enforce-new-ripr`, which blocks new
   severe RIPR gaps and stale or missing repo-wide, diff-scoped, or
@@ -100,6 +103,9 @@ Each suppression requires:
 - `created`, `review_after`, `expires` — dates
 
 The suppression file is read by `ripr.toml`'s `[suppressions] path` setting.
+The `cargo xtask ripr-plus` wrapper also applies the same path suppressions when
+it computes the repo-wide baseline receipt and reports suppressed files
+separately from active unresolved gaps.
 
 ---
 

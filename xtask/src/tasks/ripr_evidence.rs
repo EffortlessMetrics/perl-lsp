@@ -4,6 +4,8 @@
 //! under `target/` for PR review, annotations, and mutation routing.
 
 use color_eyre::eyre::{Context, Result, bail, eyre};
+use glob::Pattern;
+use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use std::collections::BTreeSet;
 use std::env;
@@ -15,7 +17,6 @@ use std::time::{Duration, Instant};
 const DEFAULT_ROOT: &str = ".";
 const DEFAULT_BASE: &str = "origin/master";
 const DEFAULT_HEAD: &str = "HEAD";
-
 const PR_EVIDENCE_JSON: &str = "target/ripr/pr/repo-exposure.json";
 const PR_EVIDENCE_MD: &str = "target/ripr/pr/repo-exposure.md";
 const PR_DIFF: &str = "target/ripr/pr/pr.diff";
@@ -36,9 +37,12 @@ pub fn ripr_pr(root: &str, base: &str, head: &str, check: bool) -> Result<()> {
     if check { check_pr_evidence(&repo, &options) } else { write_pr_evidence(&repo, &options) }
 }
 
-pub fn ripr_plus(root: &str, receipt: &Path, check: bool) -> Result<()> {
+pub fn ripr_plus(root: &str, receipt: &Path, suppressions: &Path, check: bool) -> Result<()> {
     let repo = repo_root()?;
-    let options = RiprPlusOptions { root: normalized_option(root, DEFAULT_ROOT) };
+    let options = RiprPlusOptions {
+        root: normalized_option(root, DEFAULT_ROOT),
+        suppressions: suppressions.to_path_buf(),
+    };
     let packet = ripr_plus_packet(&repo, &options)?;
     let rendered = format_json(&packet)?;
     let receipt_path = repo.join(receipt);
@@ -187,6 +191,7 @@ struct PrEvidenceOptions {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct RiprPlusOptions {
     root: String,
+    suppressions: PathBuf,
 }
 
 fn ripr_plus_packet(repo: &Path, options: &RiprPlusOptions) -> Result<Value> {
@@ -204,6 +209,12 @@ fn ripr_plus_packet(repo: &Path, options: &RiprPlusOptions) -> Result<Value> {
         .get("seams")
         .and_then(Value::as_array)
         .ok_or_else(|| eyre!("ripr repo-seams-json output did not include seams[]"))?;
+    let suppressions = read_ripr_suppression_rules(repo, &options.suppressions)?;
+    let active_seams = seams
+        .iter()
+        .filter(|seam| !suppression_matches_seam(&suppressions, seam))
+        .collect::<Vec<_>>();
+    let suppressed_count = seams.len().saturating_sub(active_seams.len());
     Ok(json!({
         "schema_version": 1,
         "kind": "ripr_plus_baseline",
@@ -211,19 +222,30 @@ fn ripr_plus_packet(repo: &Path, options: &RiprPlusOptions) -> Result<Value> {
         "head": current_head(repo)?,
         "root": options.root,
         "source_format": "ripr check --format repo-seams-json",
-        "unresolved": seams.len(),
+        "unresolved": active_seams.len(),
+        "suppressed": suppressed_count,
         "new_unresolved": null,
-        "top_files": ripr_plus_top_files(seams, 10),
+        "top_files": ripr_plus_top_files(active_seams.iter().copied(), 10),
+        "top_suppressed_files": ripr_plus_top_files(
+            seams.iter().filter(|seam| suppression_matches_seam(&suppressions, seam)),
+            10,
+        ),
+        "suppressions": {
+            "path": display_path(&options.suppressions),
+            "path_patterns": suppressions.display_patterns,
+            "invalid_patterns": suppressions.invalid_patterns,
+        },
         "decision": "advisory",
         "claim_boundary": [
             "Measurement only; this receipt does not enforce ripr+ zero.",
             "unresolved is the repo-seam count from RIPR repo-seams-json.",
+            "Suppressed non-production surfaces are excluded from unresolved and reported separately.",
             "new_unresolved is null until PR diff comparison is wired in the quality gate."
         ]
     }))
 }
 
-fn ripr_plus_top_files(seams: &[Value], limit: usize) -> Vec<Value> {
+fn ripr_plus_top_files<'a>(seams: impl IntoIterator<Item = &'a Value>, limit: usize) -> Vec<Value> {
     let mut counts = std::collections::BTreeMap::<String, u64>::new();
     for seam in seams {
         if let Some(path) = ripr_plus_seam_path(seam) {
@@ -249,6 +271,57 @@ fn ripr_plus_seam_path(seam: &Value) -> Option<String> {
             seam.get("evidence_record").and_then(|value| value.get("path")).and_then(Value::as_str)
         });
     direct.or(nested).map(normalize_path_text).filter(|path| !path.trim().is_empty())
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct RiprSuppressionPolicy {
+    #[serde(default, rename = "suppress")]
+    suppressions: Vec<RiprSuppression>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct RiprSuppression {
+    #[serde(default)]
+    paths: Vec<String>,
+}
+
+#[derive(Debug, Default)]
+struct RiprSuppressionRules {
+    display_patterns: Vec<String>,
+    path_patterns: Vec<Pattern>,
+    invalid_patterns: Vec<String>,
+}
+
+fn read_ripr_suppression_rules(repo: &Path, path: &Path) -> Result<RiprSuppressionRules> {
+    let policy_path = if path.is_absolute() { path.to_path_buf() } else { repo.join(path) };
+    let raw = fs::read_to_string(&policy_path)
+        .with_context(|| format!("reading RIPR suppressions {}", policy_path.display()))?;
+    let policy: RiprSuppressionPolicy = toml::from_str(&raw)
+        .with_context(|| format!("parsing RIPR suppressions {}", policy_path.display()))?;
+
+    let mut rules = RiprSuppressionRules::default();
+    for suppression in policy.suppressions {
+        for path_pattern in suppression.paths {
+            match Pattern::new(&normalize_path_text(&path_pattern)) {
+                Ok(pattern) => {
+                    rules.display_patterns.push(normalize_path_text(&path_pattern));
+                    rules.path_patterns.push(pattern);
+                }
+                Err(_) => rules.invalid_patterns.push(path_pattern),
+            }
+        }
+    }
+    if !rules.invalid_patterns.is_empty() {
+        bail!("invalid RIPR suppression path pattern(s): {}", rules.invalid_patterns.join(", "));
+    }
+    Ok(rules)
+}
+
+fn suppression_matches_seam(rules: &RiprSuppressionRules, seam: &Value) -> bool {
+    let Some(path) = ripr_plus_seam_path(seam) else {
+        return false;
+    };
+    rules.path_patterns.iter().any(|pattern| pattern.matches(&path))
 }
 
 fn current_head(repo: &Path) -> Result<String> {
@@ -1382,6 +1455,10 @@ fn normalize_path_text(value: &str) -> String {
     value.replace('\\', "/")
 }
 
+fn display_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
 fn escape_cmd(value: &str) -> String {
     value
         .replace('%', "%25")
@@ -1445,7 +1522,7 @@ mod tests {
             json!({}),
         ];
 
-        let rows = ripr_plus_top_files(&seams, 2);
+        let rows = ripr_plus_top_files(seams.iter(), 2);
 
         assert_eq!(
             rows,
@@ -1454,6 +1531,71 @@ mod tests {
                 json!({"name": "crates/perl-parser/src/lib.rs", "count": 2}),
             ]
         );
+    }
+
+    #[test]
+    fn ripr_plus_suppression_rules_match_non_production_paths() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path();
+        fs::create_dir_all(repo.join("policy"))?;
+        fs::write(
+            repo.join("policy/ripr-suppressions.toml"),
+            r#"schema_version = 1
+policy = "ripr-suppressions"
+owner = "EffortlessMetrics"
+status = "advisory"
+updated = "2026-05-28"
+
+[[suppress]]
+id = "ripr-suppress-archive"
+paths = ["archive/**"]
+
+[[suppress]]
+id = "ripr-suppress-generated-status-docs"
+paths = ["docs/project/status/**"]
+"#,
+        )?;
+
+        let rules = read_ripr_suppression_rules(repo, Path::new("policy/ripr-suppressions.toml"))?;
+
+        assert!(suppression_matches_seam(
+            &rules,
+            &json!({"file": "archive/crates/perl-parser/src/lib.rs"})
+        ));
+        assert!(suppression_matches_seam(
+            &rules,
+            &json!({"location": {"path": r"docs\project\status\quality.rs"}})
+        ));
+        assert!(!suppression_matches_seam(
+            &rules,
+            &json!({"file": "crates/perl-parser/src/lib.rs"})
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn ripr_plus_suppression_rules_reject_invalid_path_globs() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path();
+        fs::create_dir_all(repo.join("policy"))?;
+        fs::write(
+            repo.join("policy/ripr-suppressions.toml"),
+            r#"schema_version = 1
+policy = "ripr-suppressions"
+owner = "EffortlessMetrics"
+status = "advisory"
+updated = "2026-05-28"
+
+[[suppress]]
+id = "ripr-suppress-invalid"
+paths = ["archive/["]
+"#,
+        )?;
+
+        assert!(
+            read_ripr_suppression_rules(repo, Path::new("policy/ripr-suppressions.toml")).is_err()
+        );
+        Ok(())
     }
 
     #[test]
