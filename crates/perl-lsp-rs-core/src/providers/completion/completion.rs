@@ -114,6 +114,7 @@ pub use self::context::CompletionContext;
 pub use self::items::{CompletionItem, CompletionItemKind};
 pub use self::methods::get_dbi_method_documentation;
 pub use self::test_more::get_test_more_documentation;
+pub use self::workspace::collect_module_names_from_roots_with_cache;
 pub use self::xs_api::{add_xs_api_completions_for_prefix, get_xs_api_documentation, is_xs_source};
 
 use crate::providers::completion::module_scan_cache::ModuleCompletionScanCache;

@@ -26,6 +26,7 @@ pub mod module_scan_cache;
 
 pub use completion::{
     CompletionContext, CompletionItem, CompletionItemKind, CompletionProvider,
-    add_xs_api_completions_for_prefix, get_dbi_method_documentation, get_test_more_documentation,
-    get_xs_api_documentation, is_xs_source,
+    add_xs_api_completions_for_prefix, collect_module_names_from_roots_with_cache,
+    get_dbi_method_documentation, get_test_more_documentation, get_xs_api_documentation,
+    is_xs_source,
 };

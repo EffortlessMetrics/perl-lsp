@@ -34,6 +34,17 @@ pub struct PreparedInlineCompletionContext {
     pub imports: Vec<String>,
 }
 
+/// Request-local facts supplied by the LSP runtime.
+///
+/// The deterministic provider remains usable with only source text, but the
+/// runtime can pass workspace-derived facts here so inline completion can
+/// prefer project-aware suggestions without depending on runtime state.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct InlineCompletionEnvironment {
+    /// Modules reachable from the current document's effective `@INC`.
+    pub available_modules: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SemanticInlineContext {
     pub(crate) lexical_scope: InlineLexicalScope,
@@ -43,6 +54,7 @@ pub(crate) struct SemanticInlineContext {
     pub(crate) visible_variables: Vec<VariableFact>,
     pub(crate) receiver_hint: Option<ReceiverHint>,
     pub(crate) imported_modules: Vec<ModuleFact>,
+    pub(crate) available_modules: Vec<ModuleFact>,
     pub(crate) current_package_methods: Vec<MethodFact>,
     pub(crate) file_role: FileRole,
     pub(crate) style: InlineStyleContext,
@@ -391,6 +403,7 @@ impl InlineCandidateScore {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum InlineCandidateSourceKind {
     Receiver,
+    Module,
     Syntax,
     Test,
     Shebang,
@@ -404,6 +417,7 @@ fn semantic_bonus(
 ) -> i16 {
     match source {
         InlineCandidateSourceKind::Receiver => receiver_candidate_bonus(item, context),
+        InlineCandidateSourceKind::Module => module_candidate_bonus(item, context),
         InlineCandidateSourceKind::Syntax => syntax_candidate_bonus(item, context),
         InlineCandidateSourceKind::Test => test_candidate_bonus(context),
         InlineCandidateSourceKind::Shebang => shebang_candidate_bonus(context),
@@ -411,6 +425,23 @@ fn semantic_bonus(
             contextual_fallback_candidate_bonus(item, context)
         }
     }
+}
+
+fn module_candidate_bonus(item: &InlineCompletionItem, context: &SemanticInlineContext) -> i16 {
+    if context.expected_syntax != ExpectedSyntax::UseModule {
+        return 0;
+    }
+
+    let module_name = item.insert_text.trim_end_matches(';');
+    if context
+        .available_modules
+        .binary_search_by(|module| module.name.as_str().cmp(module_name))
+        .is_ok()
+    {
+        return 35;
+    }
+
+    0
 }
 
 fn receiver_candidate_bonus(item: &InlineCompletionItem, context: &SemanticInlineContext) -> i16 {
@@ -596,6 +627,9 @@ trait InlineCandidateSource {
 struct ReceiverCandidateSource;
 
 #[derive(Debug, Clone, Copy)]
+struct ModuleCandidateSource;
+
+#[derive(Debug, Clone, Copy)]
 struct SyntaxCandidateSource;
 
 #[derive(Debug, Clone, Copy)]
@@ -638,8 +672,25 @@ impl InlineCompletionProvider {
         line: u32,
         character: u32,
     ) -> InlineCompletionList {
+        self.get_inline_completions_with_environment(
+            text,
+            line,
+            character,
+            &InlineCompletionEnvironment::default(),
+        )
+    }
+
+    /// Get inline completions using request-local semantic environment facts.
+    pub fn get_inline_completions_with_environment(
+        &self,
+        text: &str,
+        line: u32,
+        character: u32,
+        environment: &InlineCompletionEnvironment,
+    ) -> InlineCompletionList {
         if let Some(context) = self.prepare_context(text, line, character) {
-            let semantic_context = self.semantic_context_for_source(text, &context);
+            let semantic_context =
+                self.semantic_context_for_source_with_environment(text, &context, environment);
             let items = self.get_completions_for_context(&context, &semantic_context);
             let list = self.apply_replacement_ranges_for_context(
                 InlineCompletionList { items },
@@ -771,6 +822,7 @@ impl InlineCompletionProvider {
     ) -> Vec<InlineCompletionItem> {
         let mut sink = InlineCandidateSink::new(semantic_context);
         ReceiverCandidateSource.add_candidates(self, context, semantic_context, &mut sink);
+        ModuleCandidateSource.add_candidates(self, context, semantic_context, &mut sink);
         SyntaxCandidateSource.add_candidates(self, context, semantic_context, &mut sink);
         TestCandidateSource.add_candidates(self, context, semantic_context, &mut sink);
         ShebangCandidateSource.add_candidates(self, context, semantic_context, &mut sink);
@@ -1015,18 +1067,34 @@ impl InlineCompletionProvider {
             visible_variables,
             receiver_hint: receiver_hint_from_prefix(context.prefix.as_str()),
             imported_modules,
+            available_modules: Vec::new(),
             current_package_methods: Vec::new(),
             file_role: self.file_role(context),
             style: InlineStyleContext::unknown(context),
         }
     }
 
+    #[cfg(test)]
     fn semantic_context_for_source(
         &self,
         text: &str,
         context: &PreparedInlineCompletionContext,
     ) -> SemanticInlineContext {
+        self.semantic_context_for_source_with_environment(
+            text,
+            context,
+            &InlineCompletionEnvironment::default(),
+        )
+    }
+
+    fn semantic_context_for_source_with_environment(
+        &self,
+        text: &str,
+        context: &PreparedInlineCompletionContext,
+        environment: &InlineCompletionEnvironment,
+    ) -> SemanticInlineContext {
         let mut semantic_context = self.semantic_context_for_prepared_context(context);
+        semantic_context.available_modules = available_module_facts(&environment.available_modules);
         semantic_context.file_role = self.file_role_for_source(context, text);
         semantic_context.style = self.style_context_for_source(context, text);
         semantic_context.current_package_methods = self.current_package_methods_for_source(
@@ -1413,6 +1481,51 @@ impl InlineCandidateSource for ReceiverCandidateSource {
                         command: None,
                     },
                 );
+            }
+        }
+    }
+}
+
+impl InlineCandidateSource for ModuleCandidateSource {
+    const SOURCE: InlineCandidateSourceKind = InlineCandidateSourceKind::Module;
+
+    fn add_candidates(
+        &self,
+        _provider: &InlineCompletionProvider,
+        context: &PreparedInlineCompletionContext,
+        semantic_context: &SemanticInlineContext,
+        sink: &mut InlineCandidateSink<'_>,
+    ) {
+        if semantic_context.expected_syntax != ExpectedSyntax::UseModule {
+            return;
+        }
+
+        let Some(fragment) = use_completion_fragment(context.prefix.as_str()) else {
+            return;
+        };
+        if !should_suggest_available_module(fragment) {
+            return;
+        }
+
+        let mut added = 0usize;
+        for module in &semantic_context.available_modules {
+            if !completion_matches_fragment(module.name.as_str(), module.name.as_str(), fragment) {
+                continue;
+            }
+
+            sink.push(
+                Self::SOURCE,
+                0,
+                InlineCompletionItem {
+                    insert_text: format!("{};", module.name),
+                    filter_text: Some(module.name.clone()),
+                    range: None,
+                    command: None,
+                },
+            );
+            added += 1;
+            if added >= MAX_INLINE_COMPLETION_ITEMS {
+                break;
             }
         }
     }
@@ -2265,6 +2378,23 @@ fn use_completion_fragment(prefix: &str) -> Option<&str> {
     fragment.chars().all(is_module_fragment_char).then_some(fragment)
 }
 
+fn should_suggest_available_module(fragment: &str) -> bool {
+    !fragment.is_empty()
+        && (fragment.contains("::")
+            || fragment.chars().next().is_some_and(|ch| ch.is_ascii_uppercase()))
+}
+
+fn available_module_facts(modules: &[String]) -> Vec<ModuleFact> {
+    let mut facts: Vec<ModuleFact> = modules
+        .iter()
+        .filter(|module| !module.is_empty())
+        .map(|module| ModuleFact { name: module.clone() })
+        .collect();
+    facts.sort_by(|left, right| left.name.cmp(&right.name));
+    facts.dedup_by(|left, right| left.name == right.name);
+    facts
+}
+
 fn completion_matches_fragment(filter_text: &str, insert_text: &str, fragment: &str) -> bool {
     fragment.is_empty() || filter_text.starts_with(fragment) || insert_text.starts_with(fragment)
 }
@@ -2311,7 +2441,7 @@ fn replacement_range(
 }
 
 fn is_replacement_fragment_char(ch: char) -> bool {
-    is_identifier_fragment_char(ch) || matches!(ch, '$' | '@' | '%')
+    is_identifier_fragment_char(ch) || matches!(ch, '$' | '@' | '%' | ':')
 }
 
 fn is_identifier_fragment_char(ch: char) -> bool {
@@ -2340,6 +2470,41 @@ mod tests {
         let completions = provider.get_inline_completions("use ", 0, 4);
         assert!(!completions.items.is_empty());
         assert!(completions.items.iter().any(|i| i.insert_text == "strict;"));
+    }
+
+    #[test]
+    fn use_namespace_suggests_available_module_from_environment()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let environment = InlineCompletionEnvironment {
+            available_modules: vec![
+                "A::First".to_string(),
+                "B::Second".to_string(),
+                "C::Third".to_string(),
+                "D::Fourth".to_string(),
+                "E::Fifth".to_string(),
+                "F::Sixth".to_string(),
+                "Other::Tool".to_string(),
+                "My::App".to_string(),
+                "My::App::Config".to_string(),
+            ],
+        };
+        let completions =
+            provider.get_inline_completions_with_environment("use My::", 0, 8, &environment);
+
+        let module = completions
+            .items
+            .iter()
+            .find(|item| item.insert_text == "My::App;")
+            .ok_or("expected My::App module inline completion")?;
+        assert_eq!(module.filter_text.as_deref(), Some("My::App"));
+        let range = module.range.as_ref().ok_or("module completion should replace typed prefix")?;
+        assert_eq!(range.start.line, 0);
+        assert_eq!(range.start.character, 4);
+        assert_eq!(range.end.line, 0);
+        assert_eq!(range.end.character, 8);
+        assert!(completions.items.iter().all(|item| item.insert_text != "Other::Tool;"));
+        Ok(())
     }
 
     #[test]

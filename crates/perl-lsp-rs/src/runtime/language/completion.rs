@@ -226,7 +226,7 @@ impl LspServer {
         }
     }
 
-    fn module_completion_roots_for_doc(
+    pub(super) fn module_completion_roots_for_doc(
         &self,
         uri: &str,
         doc_text: &str,

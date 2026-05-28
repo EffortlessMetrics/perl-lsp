@@ -196,6 +196,41 @@ fn inline_completion_invoked_trigger_returns_deterministic_items() -> TestResult
 }
 
 #[test]
+fn inline_completion_use_namespace_returns_reachable_workspace_module() -> TestResult {
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    workspace.write("lib/My/App.pm", "package My::App;\n1;\n")?;
+    workspace.write("lib/Other/Tool.pm", "package Other::Tool;\n1;\n")?;
+
+    let mut harness = LspHarness::new_raw();
+    harness.initialize_ready(
+        &workspace.root_uri,
+        Some(json!({
+            "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+        })),
+    )?;
+
+    let uri = workspace.uri("script.pl");
+    harness.open(&uri, "use My::")?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, &uri, 0, 8, 1)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+    let module = item_with_insert_text(items, "My::App;")?;
+
+    assert_eq!(module.pointer("/range/start/line"), Some(&json!(0)));
+    assert_eq!(module.pointer("/range/start/character"), Some(&json!(4)));
+    assert_eq!(module.pointer("/range/end/line"), Some(&json!(0)));
+    assert_eq!(module.pointer("/range/end/character"), Some(&json!(8)));
+    assert!(
+        items.iter().all(|item| item.get("insertText") != Some(&json!("Other::Tool;"))),
+        "inline module completion must stay within the typed namespace, got: {items:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn inline_completion_use_partial_token_returns_replacement_range() -> TestResult {
     let mut harness = LspHarness::new();
     harness.initialize(Some(json!({

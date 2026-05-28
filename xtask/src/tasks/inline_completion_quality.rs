@@ -1,6 +1,6 @@
 use color_eyre::eyre::{Result, bail, eyre};
 use perl_lsp_rs_core::providers::inline_completion::{
-    InlineCompletionList, InlineCompletionProvider,
+    InlineCompletionEnvironment, InlineCompletionList, InlineCompletionProvider,
 };
 use perl_parser_core::position::{offset_to_utf16_line_col, utf16_line_col_to_offset};
 use serde::Serialize;
@@ -67,6 +67,7 @@ struct Scenario {
     name: &'static str,
     source_name: &'static str,
     source: &'static str,
+    available_modules: &'static [&'static str],
     assertion: ScenarioAssertion,
 }
 
@@ -186,8 +187,19 @@ fn run_scenario(
     scenario: &Scenario,
 ) -> Result<(usize, Vec<String>)> {
     let fixture = InlineCompletionScenario::from_fixture(scenario.source)?;
-    let completions =
-        provider.get_inline_completions(fixture.text.as_str(), fixture.line, fixture.character);
+    let environment = InlineCompletionEnvironment {
+        available_modules: scenario
+            .available_modules
+            .iter()
+            .map(|module| module.to_string())
+            .collect(),
+    };
+    let completions = provider.get_inline_completions_with_environment(
+        fixture.text.as_str(),
+        fixture.line,
+        fixture.character,
+        &environment,
+    );
     let item_count = completions.items.len();
     let notes = match scenario.assertion {
         ScenarioAssertion::Suggestion { first, expected, not_expected } => {
@@ -340,6 +352,7 @@ fn scenarios() -> &'static [Scenario] {
             name: "use_pragmas",
             source_name: "syntax",
             source: "use <<CURSOR>>",
+            available_modules: &[],
             assertion: ScenarioAssertion::Suggestion {
                 first: Some("strict;"),
                 expected: &["strict;", "warnings;"],
@@ -347,9 +360,21 @@ fn scenarios() -> &'static [Scenario] {
             },
         },
         Scenario {
+            name: "use_namespace_prefers_available_project_module",
+            source_name: "module",
+            source: "use My::<<CURSOR>>",
+            available_modules: &["My::App", "My::App::Config", "Other::Tool"],
+            assertion: ScenarioAssertion::Suggestion {
+                first: Some("My::App;"),
+                expected: &["My::App;", "My::App::Config;"],
+                not_expected: &["Other::Tool;", "strict;"],
+            },
+        },
+        Scenario {
             name: "test_more_assertion_prefers_visible_actual_expected",
             source_name: "test",
             source: "use Test::More;\n\nmy $got = compute();\nmy $expected = 42;\n\n<<CURSOR>>",
+            available_modules: &[],
             assertion: ScenarioAssertion::Suggestion {
                 first: Some("is($got, $expected, 'test description');"),
                 expected: &["is($got, $expected, 'test description');"],
@@ -360,6 +385,7 @@ fn scenarios() -> &'static [Scenario] {
             name: "test2_assertion_uses_visible_result",
             source_name: "test",
             source: "use Test2::V0;\n\nmy $result = compute();\n\n<<CURSOR>>",
+            available_modules: &[],
             assertion: ScenarioAssertion::Suggestion {
                 first: Some("ok($result, 'test description');"),
                 expected: &["ok($result, 'test description');"],
@@ -370,6 +396,7 @@ fn scenarios() -> &'static [Scenario] {
             name: "blank_line_in_sub_uses_visible_lexical",
             source_name: "contextual_fallback",
             source: "sub compute {\n    my $result = build();\n    <<CURSOR>>\n}\n",
+            available_modules: &[],
             assertion: ScenarioAssertion::Suggestion {
                 first: Some("return $result;"),
                 expected: &["return $result;"],
@@ -380,6 +407,7 @@ fn scenarios() -> &'static [Scenario] {
             name: "self_receiver_prefers_current_package_methods",
             source_name: "receiver",
             source: "package Other;\nsub external {}\n\npackage Demo;\nsub save {}\nsub display_name {}\nsub caller {\n    my $self = shift;\n    $self-><<CURSOR>>\n}\n",
+            available_modules: &[],
             assertion: ScenarioAssertion::Suggestion {
                 first: Some("save()"),
                 expected: &["save()", "display_name()"],
@@ -390,6 +418,7 @@ fn scenarios() -> &'static [Scenario] {
             name: "constructor_completion_keeps_signature_style",
             source_name: "syntax",
             source: "sub helper ($self, %args) {\n}\n\nsub new<<CURSOR>>",
+            available_modules: &[],
             assertion: ScenarioAssertion::Suggestion {
                 first: Some(
                     " ($class, %args) {\n    my $self = bless {}, $class;\n    return $self;\n}",
@@ -404,36 +433,42 @@ fn scenarios() -> &'static [Scenario] {
             name: "line_comment_stays_silent",
             source_name: "hard_zone",
             source: "# use <<CURSOR>>",
+            available_modules: &[],
             assertion: ScenarioAssertion::Silent,
         },
         Scenario {
             name: "string_literal_stays_silent",
             source_name: "hard_zone",
             source: "my $text = \"use <<CURSOR>>\";",
+            available_modules: &[],
             assertion: ScenarioAssertion::Silent,
         },
         Scenario {
             name: "heredoc_body_stays_silent",
             source_name: "hard_zone",
             source: "print <<'EOF';\nuse <<CURSOR>>\nEOF\n",
+            available_modules: &[],
             assertion: ScenarioAssertion::Silent,
         },
         Scenario {
             name: "pod_body_stays_silent",
             source_name: "hard_zone",
             source: "=pod\nuse <<CURSOR>>\n=cut\n",
+            available_modules: &[],
             assertion: ScenarioAssertion::Silent,
         },
         Scenario {
             name: "regex_literal_stays_silent",
             source_name: "hard_zone",
             source: "if ($name =~ /use <<CURSOR>>/) {}",
+            available_modules: &[],
             assertion: ScenarioAssertion::Silent,
         },
         Scenario {
             name: "use_partial_token_replacement_range",
             source_name: "replacement_range",
             source: "use str<<CURSOR>>",
+            available_modules: &[],
             assertion: ScenarioAssertion::ReplacementRange {
                 insert_text: "strict;",
                 replaces: "str",
@@ -443,6 +478,7 @@ fn scenarios() -> &'static [Scenario] {
             name: "method_arrow_partial_token_replacement_range",
             source_name: "replacement_range",
             source: "$obj->n<<CURSOR>>",
+            available_modules: &[],
             assertion: ScenarioAssertion::ReplacementRange { insert_text: "new()", replaces: "n" },
         },
     ]

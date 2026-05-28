@@ -13,6 +13,8 @@
 use super::super::*;
 use crate::protocol::{invalid_params, req_position, req_uri};
 use crate::state::{code_lens_cap, code_lens_resolve_deadline, inlay_hints_cap};
+use perl_lsp_rs_core::providers::completion::collect_module_names_from_roots_with_cache;
+use perl_lsp_rs_core::providers::inline_completion::InlineCompletionEnvironment;
 use perl_lsp_rs_core::providers::normalize_provider_decision_receipt;
 use perl_parser_core::source_file::is_perl_source_uri;
 use std::time::{Duration, Instant};
@@ -142,6 +144,22 @@ fn apply_inline_completion_trigger_policy(
     }
 
     list
+}
+
+fn inline_use_module_fragment(prefix: &str) -> Option<&str> {
+    let current_line = prefix.rsplit(['\n', '\r']).next()?;
+    let use_index = current_line.rfind("use ")?;
+    let fragment = &current_line[use_index + 4..];
+    fragment
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, ':' | '_'))
+        .then_some(fragment)
+}
+
+fn should_collect_inline_modules(fragment: &str) -> bool {
+    !fragment.is_empty()
+        && (fragment.contains("::")
+            || fragment.chars().next().is_some_and(|ch| ch.is_ascii_uppercase()))
 }
 
 impl LspServer {
@@ -806,8 +824,25 @@ impl LspServer {
             }
 
             // Deterministic fallback
+            let environment = provider
+                .prepare_context(&text, line, character)
+                .map(|context| {
+                    self.inline_completion_environment_for_context(
+                        uri,
+                        text.as_str(),
+                        line,
+                        character,
+                        &context,
+                    )
+                })
+                .unwrap_or_default();
             let completions = constrain_inline_completions_to_selected_info(
-                provider.get_inline_completions(&text, line, character),
+                provider.get_inline_completions_with_environment(
+                    &text,
+                    line,
+                    character,
+                    &environment,
+                ),
                 selected_completion.as_ref(),
                 line,
                 character,
@@ -822,6 +857,38 @@ impl LspServer {
         }
 
         Ok(Some(json!({ "items": [] })))
+    }
+
+    fn inline_completion_environment_for_context(
+        &self,
+        uri: &str,
+        text: &str,
+        line: u32,
+        character: u32,
+        context: &perl_lsp_rs_core::providers::inline_completion::PreparedInlineCompletionContext,
+    ) -> InlineCompletionEnvironment {
+        let Some(fragment) = inline_use_module_fragment(context.prefix.as_str()) else {
+            return InlineCompletionEnvironment::default();
+        };
+        if !should_collect_inline_modules(fragment) {
+            return InlineCompletionEnvironment::default();
+        }
+        let Some(cursor_offset) = position_to_offset(text, line, character) else {
+            return InlineCompletionEnvironment::default();
+        };
+
+        let (include_paths, system_inc_paths, include_system_inc) =
+            self.module_completion_roots_for_doc(uri, text, cursor_offset);
+        let available_modules = collect_module_names_from_roots_with_cache(
+            fragment,
+            &include_paths,
+            &system_inc_paths,
+            include_system_inc,
+            Some(&self.module_scan_cache),
+            &|| false,
+        );
+
+        InlineCompletionEnvironment { available_modules }
     }
 
     /// Attempt AI-backed inline completion.
