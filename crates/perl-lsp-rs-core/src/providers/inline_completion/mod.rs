@@ -5,6 +5,7 @@
 //! suggestions use the `InlineCompletionBackend` trait for pluggable providers.
 
 use perl_lexer::{PerlLexer, TokenType};
+use perl_parser_core::{Parser, RecoverySalvageProfile};
 use perl_position_tracking::utf16_line_col_to_offset;
 use serde::{Deserialize, Serialize};
 
@@ -486,6 +487,70 @@ fn contextual_fallback_candidate_bonus(
     0
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ParseDamage {
+    terminated_early: bool,
+    error_node_count: usize,
+    diagnostics_count: usize,
+    recovered_count: usize,
+}
+
+impl ParseDamage {
+    fn worse_than(&self, baseline: &Self) -> bool {
+        (self.terminated_early && !baseline.terminated_early)
+            || self.error_node_count > baseline.error_node_count
+            || self.diagnostics_count > baseline.diagnostics_count
+            || self.recovered_count > baseline.recovered_count
+    }
+}
+
+fn parse_damage_for_probe(source: &str) -> ParseDamage {
+    let mut parser = Parser::new(source);
+    let output = parser.parse_with_recovery();
+    let salvage = RecoverySalvageProfile::from_parse(&output.ast, &output.diagnostics, false);
+
+    ParseDamage {
+        terminated_early: output.terminated_early,
+        error_node_count: salvage.error_node_count,
+        diagnostics_count: output.error_count(),
+        recovered_count: output.recovered_count,
+    }
+}
+
+fn parse_probe_after_item(
+    current_line: &str,
+    item: &InlineCompletionItem,
+    line: u32,
+    character: u32,
+) -> Option<String> {
+    if item.insert_text.contains(['\n', '\r']) {
+        return None;
+    }
+
+    let (start_character, end_character) = item
+        .range
+        .as_ref()
+        .map(|range| {
+            if range.start.line != line || range.end.line != line {
+                return None;
+            }
+            Some((range.start.character, range.end.character))
+        })
+        .unwrap_or(Some((character, character)))?;
+
+    let start = utf16_line_col_to_offset(current_line, 0, start_character);
+    let end = utf16_line_col_to_offset(current_line, 0, end_character);
+    if start > end {
+        return None;
+    }
+
+    let mut probe = String::with_capacity(current_line.len() + item.insert_text.len());
+    probe.push_str(&current_line[..start]);
+    probe.push_str(item.insert_text.as_str());
+    probe.push_str(&current_line[end..]);
+    Some(probe)
+}
+
 #[derive(Debug)]
 struct InlineCandidateSink<'a> {
     semantic_context: &'a SemanticInlineContext,
@@ -576,12 +641,13 @@ impl InlineCompletionProvider {
         if let Some(context) = self.prepare_context(text, line, character) {
             let semantic_context = self.semantic_context_for_source(text, &context);
             let items = self.get_completions_for_context(&context, &semantic_context);
-            return self.apply_replacement_ranges_for_context(
+            let list = self.apply_replacement_ranges_for_context(
                 InlineCompletionList { items },
                 &context,
                 line,
                 character,
             );
+            return self.filter_parse_safe_items(list, &context, line, character);
         }
 
         InlineCompletionList { items: vec![] }
@@ -611,6 +677,30 @@ impl InlineCompletionProvider {
         }
 
         list
+    }
+
+    fn filter_parse_safe_items(
+        &self,
+        list: InlineCompletionList,
+        context: &PreparedInlineCompletionContext,
+        line: u32,
+        character: u32,
+    ) -> InlineCompletionList {
+        let baseline = parse_damage_for_probe(context.current_line.as_str());
+        let items = list
+            .items
+            .into_iter()
+            .filter(|item| {
+                parse_probe_after_item(context.current_line.as_str(), item, line, character)
+                    .map(|probe| {
+                        let candidate = parse_damage_for_probe(probe.as_str());
+                        !candidate.worse_than(&baseline)
+                    })
+                    .unwrap_or(true)
+            })
+            .collect();
+
+        InlineCompletionList { items }
     }
 
     /// Prepare surrounding code context for deterministic suggestions and
@@ -2232,6 +2322,70 @@ mod tests {
         assert_eq!(range.end.line, 0);
         assert_eq!(range.end.character, 7);
         assert!(completions.items.iter().all(|item| item.insert_text != "warnings;"));
+        Ok(())
+    }
+
+    #[test]
+    fn parse_safety_keeps_partial_token_replacement() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let completions = provider.get_inline_completions("use str", 0, 7);
+        let item = completions
+            .items
+            .iter()
+            .find(|item| item.insert_text == "strict;")
+            .ok_or("expected parse-safe strict; completion")?;
+
+        assert_eq!(item.filter_text.as_deref(), Some("strict"));
+        assert!(item.range.is_some());
+        Ok(())
+    }
+
+    #[test]
+    fn parse_safety_rejects_candidate_that_adds_error() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let context = provider.prepare_context("", 0, 0).ok_or("expected prepared context")?;
+        let list = InlineCompletionList {
+            items: vec![
+                InlineCompletionItem {
+                    insert_text: "my $value = 1;".into(),
+                    filter_text: Some("$value".into()),
+                    range: None,
+                    command: None,
+                },
+                InlineCompletionItem {
+                    insert_text: "my $value = ;".into(),
+                    filter_text: Some("$value".into()),
+                    range: None,
+                    command: None,
+                },
+            ],
+        };
+
+        let filtered = provider.filter_parse_safe_items(list, &context, 0, 0);
+
+        assert!(filtered.items.iter().any(|item| item.insert_text == "my $value = 1;"));
+        assert!(filtered.items.iter().all(|item| item.insert_text != "my $value = ;"));
+        Ok(())
+    }
+
+    #[test]
+    fn parse_safety_does_not_drop_incomplete_baseline_improvements()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "my $value = ";
+        let context = provider.prepare_context(source, 0, 12).ok_or("expected prepared context")?;
+        let list = InlineCompletionList {
+            items: vec![InlineCompletionItem {
+                insert_text: "1;".into(),
+                filter_text: Some("1".into()),
+                range: None,
+                command: None,
+            }],
+        };
+
+        let filtered = provider.filter_parse_safe_items(list, &context, 0, 12);
+
+        assert!(filtered.items.iter().any(|item| item.insert_text == "1;"));
         Ok(())
     }
 
