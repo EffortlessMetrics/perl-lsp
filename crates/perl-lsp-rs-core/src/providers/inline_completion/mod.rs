@@ -108,6 +108,10 @@ impl VariableFact {
     fn is_scalar(&self) -> bool {
         self.sigil == VariableSigil::Scalar
     }
+
+    fn is_array(&self) -> bool {
+        self.sigil == VariableSigil::Array
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1406,6 +1410,12 @@ impl InlineCompletionProvider {
             .map(VariableFact::as_perl_variable)
     }
 
+    fn preferred_loop_binding(&self, context: &SemanticInlineContext) -> Option<String> {
+        let array = context.visible_variables.iter().find(|variable| variable.is_array())?;
+        let item_name = singular_loop_variable_name(array.name.as_str());
+        Some(format!("my ${item_name} ({}) {{\n    \n}}", array.as_perl_variable()))
+    }
+
     fn current_package_method_items(
         &self,
         context: &SemanticInlineContext,
@@ -1723,16 +1733,18 @@ impl InlineCandidateSource for SyntaxCandidateSource {
         }
 
         if ends_with_keyword(prefix, "for ") || ends_with_keyword(prefix, "foreach ") {
-            sink.push(
-                Self::SOURCE,
-                0,
-                InlineCompletionItem {
-                    insert_text: "my $item (@items) {\n    \n}".into(),
-                    filter_text: Some("my".into()),
-                    range: None,
-                    command: None,
-                },
-            );
+            if let Some(binding) = provider.preferred_loop_binding(semantic_context) {
+                sink.push(
+                    Self::SOURCE,
+                    0,
+                    InlineCompletionItem {
+                        insert_text: binding,
+                        filter_text: Some("my".into()),
+                        range: None,
+                        command: None,
+                    },
+                );
+            }
         }
     }
 }
@@ -1831,6 +1843,20 @@ fn is_preferred_test_expected_name(name: &str) -> bool {
 
 fn test_statement_filter_text(statement: &str) -> &'static str {
     if statement.starts_with("ok(") { "ok" } else { "is" }
+}
+
+fn singular_loop_variable_name(array_name: &str) -> String {
+    match array_name {
+        "children" => "child".into(),
+        "entries" => "entry".into(),
+        "items" => "item".into(),
+        "people" => "person".into(),
+        name if name.ends_with("ies") && name.len() > 3 => {
+            format!("{}y", &name[..name.len() - 3])
+        }
+        name if name.ends_with('s') && name.len() > 1 => name[..name.len() - 1].to_string(),
+        _ => "item".into(),
+    }
 }
 
 struct LineContext<'a> {
@@ -3778,6 +3804,45 @@ mod tests {
         let provider = InlineCompletionProvider::new();
         let completions = provider.get_inline_completions("sufor ", 0, 6);
         assert!(completions.items.iter().all(|i| !i.insert_text.contains("(@items)")));
+    }
+
+    #[test]
+    fn for_loop_uses_visible_array_for_binding() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "my @users = fetch_users();\nfor ";
+        let completions = provider.get_inline_completions(source, 1, 4);
+        let first = completions.items.first().ok_or("expected loop binding completion")?;
+
+        assert_eq!(first.insert_text, "my $user (@users) {\n    \n}");
+        assert!(
+            completions.items.iter().all(|item| !item.insert_text.contains("(@items)")),
+            "loop completion must use visible arrays instead of snippet placeholders: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn foreach_loop_singularizes_visible_array_name() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "my @entries = read_entries();\nforeach ";
+        let completions = provider.get_inline_completions(source, 1, 8);
+        let first = completions.items.first().ok_or("expected foreach binding completion")?;
+
+        assert_eq!(first.insert_text, "my $entry (@entries) {\n    \n}");
+        Ok(())
+    }
+
+    #[test]
+    fn loop_binding_without_visible_array_stays_silent() {
+        let provider = InlineCompletionProvider::new();
+        let completions = provider.get_inline_completions("for ", 0, 4);
+
+        assert!(
+            completions.items.is_empty(),
+            "loop binding should not invent placeholder arrays: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
     }
 
     #[test]
