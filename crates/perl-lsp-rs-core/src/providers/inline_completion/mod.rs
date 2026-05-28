@@ -426,7 +426,7 @@ impl InlineCompletionProvider {
 
         for item in &mut list.items {
             if item.range.is_none() && item_matches_fragment(item, fragment.text) {
-                item.range = Some(range.clone());
+                item.range = Some(range);
             }
         }
 
@@ -628,7 +628,7 @@ impl InlineCompletionProvider {
 
         // Rule 7: After `return ` in constructor context
         if ends_with_keyword(prefix, "return ") {
-            if let Some(variable) = self.preferred_return_variable(&semantic_context) {
+            if let Some(variable) = self.preferred_return_variable(semantic_context) {
                 push_item(
                     0,
                     InlineCompletionItem {
@@ -680,7 +680,7 @@ impl InlineCompletionProvider {
 
         // Rule 9: Complete common test patterns
         if ends_with_keyword(prefix, "ok(")
-            && let Some(arguments) = self.preferred_ok_assertion_arguments(&semantic_context)
+            && let Some(arguments) = self.preferred_ok_assertion_arguments(semantic_context)
         {
             push_item(
                 0,
@@ -694,7 +694,7 @@ impl InlineCompletionProvider {
         }
 
         if ends_with_keyword(prefix, "is(")
-            && let Some(arguments) = self.preferred_is_assertion_arguments(&semantic_context)
+            && let Some(arguments) = self.preferred_is_assertion_arguments(semantic_context)
         {
             push_item(
                 0,
@@ -720,7 +720,7 @@ impl InlineCompletionProvider {
             );
         }
 
-        self.add_contextual_fallbacks(context, &semantic_context, &mut items, &mut sequence);
+        self.add_contextual_fallbacks(context, semantic_context, &mut items, &mut sequence);
         self.normalize_items(items)
     }
 
