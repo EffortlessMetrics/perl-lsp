@@ -1499,6 +1499,34 @@
       ]
     },
     {
+      "id": "constructor_inline_completion_quality",
+      "scenario_file": "ux_scenario_53_constructor_inline_completion_quality.rs",
+      "subsystem_owner": "editor_trust",
+      "ci_tier": "pr",
+      "component": "completion",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "request inline completion at constructor declarations and record local-style ghost text",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "dynamic inline-completion registration is observed for an LSP4IJ-shaped client",
+        "shift-style constructor inline completion keeps the shift/bless idiom",
+        "signature-style constructor inline completion keeps the signature/bless idiom",
+        "constructor inline completions avoid mixing incompatible local styles"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "real_workspace_providers",
       "scenario_file": "ux_scenario_20_real_workspace_providers.rs",
       "subsystem_owner": "editor_intelligence",
