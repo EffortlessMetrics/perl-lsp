@@ -208,6 +208,15 @@ enum Commands {
         /// Gate mode to evaluate.
         #[arg(long, value_enum)]
         mode: tasks::quality_gate::QualityGateMode,
+        /// Repo-wide RIPR+ receipt JSON path.
+        #[arg(long, default_value = "target/receipts/quality/ripr-plus.json")]
+        ripr_receipt: PathBuf,
+        /// Diff-scoped RIPR PR evidence JSON path.
+        #[arg(long, default_value = "target/ripr/pr/repo-exposure.json")]
+        ripr_pr_receipt: PathBuf,
+        /// RIPR review-guidance receipt JSON path.
+        #[arg(long, default_value = "target/ripr/review/comments.json")]
+        review_receipt: PathBuf,
         /// Coverage receipt JSON path.
         #[arg(long, default_value = "target/receipts/quality/coverage-baseline.json")]
         coverage_receipt: PathBuf,
@@ -217,6 +226,12 @@ enum Commands {
         /// Patch coverage percentage from Codecov for this PR.
         #[arg(long)]
         patch_coverage: Option<f64>,
+        /// Base revision used for diff-scoped RIPR receipt commands.
+        #[arg(long, default_value = "origin/HEAD")]
+        ripr_base: String,
+        /// Head revision used for diff-scoped RIPR receipt commands.
+        #[arg(long, default_value = "HEAD")]
+        ripr_head: String,
         /// Quality-gate JSON receipt path.
         #[arg(long, default_value = "target/receipts/quality/quality-gate.json")]
         receipt: PathBuf,
@@ -2715,17 +2730,27 @@ fn main() -> Result<()> {
         }
         Commands::QualityGate {
             mode,
+            ripr_receipt,
+            ripr_pr_receipt,
+            review_receipt,
             coverage_receipt,
             codecov,
             patch_coverage,
+            ripr_base,
+            ripr_head,
             receipt,
             summary,
             check,
         } => quality_gate::run(quality_gate::QualityGateArgs {
             mode,
+            ripr_receipt,
+            ripr_pr_receipt,
+            review_receipt,
             coverage_receipt,
             codecov,
             patch_coverage,
+            ripr_base,
+            ripr_head,
             receipt,
             summary,
             check,
