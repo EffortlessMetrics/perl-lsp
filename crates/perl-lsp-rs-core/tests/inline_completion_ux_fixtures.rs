@@ -100,6 +100,43 @@ fn inline_completion_fixture_corpus_returns_expected_ghost_text() -> TestResult 
             expected: &["save()", "display_name()"],
             not_expected: &["external()", "new()"],
         },
+        SuggestionFixture {
+            name: "constructor_completion_keeps_shift_style",
+            source: "sub helper {\n    my $self = shift;\n}\n\nsub new<<CURSOR>>",
+            first: Some(
+                " {\n    my $class = shift;\n    my $self = bless {}, $class;\n    return $self;\n}",
+            ),
+            expected: &[
+                " {\n    my $class = shift;\n    my $self = bless {}, $class;\n    return $self;\n}",
+            ],
+            not_expected: &[
+                " ($class, %args) {\n    my $self = bless {}, $class;\n    return $self;\n}",
+            ],
+        },
+        SuggestionFixture {
+            name: "constructor_completion_keeps_at_underscore_style",
+            source: "sub helper {\n    my ($self, %args) = @_;\n}\n\nsub new<<CURSOR>>",
+            first: Some(
+                " {\n    my ($class, %args) = @_;\n    my $self = bless {}, $class;\n    return $self;\n}",
+            ),
+            expected: &[
+                " {\n    my ($class, %args) = @_;\n    my $self = bless {}, $class;\n    return $self;\n}",
+            ],
+            not_expected: &[
+                " {\n    my $class = shift;\n    my $self = bless {}, $class;\n    return $self;\n}",
+            ],
+        },
+        SuggestionFixture {
+            name: "constructor_completion_keeps_signature_style",
+            source: "sub helper ($self, %args) {\n}\n\nsub new<<CURSOR>>",
+            first: Some(
+                " ($class, %args) {\n    my $self = bless {}, $class;\n    return $self;\n}",
+            ),
+            expected: &[
+                " ($class, %args) {\n    my $self = bless {}, $class;\n    return $self;\n}",
+            ],
+            not_expected: &["my $class = shift;"],
+        },
     ];
 
     for fixture in fixtures {

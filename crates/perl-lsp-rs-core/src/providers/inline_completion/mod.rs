@@ -810,11 +810,31 @@ impl InlineCompletionProvider {
     /// - `is_*`, `has_*`, `can_*` -> boolean accessor pattern
     /// - `_*` -> private method placeholder
     /// - default -> simple method template
-    fn generate_smart_body(&self, sub_name: &str) -> String {
+    fn generate_subroutine_completion(
+        &self,
+        sub_name: &str,
+        semantic_context: &SemanticInlineContext,
+    ) -> String {
+        if sub_name == "new"
+            && semantic_context.style.sub_argument_style == SubArgumentStyle::Signature
+        {
+            return format!(
+                " ($class, %args) {{\n{}\n}}",
+                self.generate_smart_body(sub_name, semantic_context)
+            );
+        }
+
+        format!(" {{\n{}\n}}", self.generate_smart_body(sub_name, semantic_context))
+    }
+
+    fn generate_smart_body(
+        &self,
+        sub_name: &str,
+        semantic_context: &SemanticInlineContext,
+    ) -> String {
         // Constructor patterns
         if sub_name == "new" || sub_name == "BUILD" {
-            return "    my $class = shift;\n    my $self = bless {}, $class;\n    return $self;"
-                .to_string();
+            return constructor_body(semantic_context.style.sub_argument_style);
         }
 
         // Getter pattern: get_something or something_getter
@@ -1456,12 +1476,12 @@ impl InlineCandidateSource for SyntaxCandidateSource {
         if let Some(sub_name) = provider.match_sub_declaration(prefix)
             && !full_line.contains('{')
         {
-            let body = provider.generate_smart_body(&sub_name);
+            let insert_text = provider.generate_subroutine_completion(&sub_name, semantic_context);
             sink.push(
                 Self::SOURCE,
                 0,
                 InlineCompletionItem {
-                    insert_text: format!(" {{\n{}\n}}", body),
+                    insert_text,
                     filter_text: Some("{".into()),
                     range: None,
                     command: None,
@@ -1787,6 +1807,22 @@ fn constructor_style(text: &str) -> ConstructorStyle {
         return ConstructorStyle::BlessHashReturnSelf;
     }
     ConstructorStyle::Unknown
+}
+
+fn constructor_body(argument_style: SubArgumentStyle) -> String {
+    match argument_style {
+        SubArgumentStyle::Signature => {
+            "    my $self = bless {}, $class;\n    return $self;".to_string()
+        }
+        SubArgumentStyle::AtUnderscore => {
+            "    my ($class, %args) = @_;\n    my $self = bless {}, $class;\n    return $self;"
+                .to_string()
+        }
+        SubArgumentStyle::Shift | SubArgumentStyle::Unknown => {
+            "    my $class = shift;\n    my $self = bless {}, $class;\n    return $self;"
+                .to_string()
+        }
+    }
 }
 
 fn non_comment_code_lines(text: &str) -> impl Iterator<Item = &str> {
