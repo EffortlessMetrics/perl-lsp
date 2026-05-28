@@ -1988,15 +1988,46 @@ fn package_line_opens_block(line: &str) -> bool {
 }
 
 fn line_opens_block(line: &str) -> bool {
-    code_before_line_comment(line).contains('{')
+    structural_brace_scan(line).opens_block
 }
 
 fn brace_delta(line: &str) -> i32 {
-    code_before_line_comment(line).chars().fold(0, |depth, ch| match ch {
-        '{' => depth + 1,
-        '}' => depth - 1,
-        _ => depth,
-    })
+    structural_brace_scan(line).delta
+}
+
+#[derive(Debug, Default)]
+struct StructuralBraceScan {
+    opens_block: bool,
+    delta: i32,
+}
+
+fn structural_brace_scan(line: &str) -> StructuralBraceScan {
+    let mut scan = StructuralBraceScan::default();
+    let mut single_quoted = false;
+    let mut double_quoted = false;
+    let mut escaped = false;
+
+    for ch in line.chars() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        match ch {
+            '\\' if single_quoted || double_quoted => escaped = true,
+            '\'' if !double_quoted => single_quoted = !single_quoted,
+            '"' if !single_quoted => double_quoted = !double_quoted,
+            '#' if !single_quoted && !double_quoted => break,
+            '{' if !single_quoted && !double_quoted => {
+                scan.opens_block = true;
+                scan.delta += 1;
+            }
+            '}' if !single_quoted && !double_quoted => scan.delta -= 1,
+            _ => {}
+        }
+    }
+
+    scan
 }
 
 fn indentation_style_from_line(line: &str) -> IndentationStyle {
@@ -3644,6 +3675,62 @@ mod tests {
         assert!(
             completions.items.iter().all(|item| item.insert_text != "$result;"),
             "return completion should not use a single-line closed subroutine lexical: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn structural_brace_scan_ignores_simple_quoted_braces() {
+        assert!(!line_opens_block("my $text = \"{\";"));
+        assert!(!line_opens_block("my $text = '{';"));
+        assert_eq!(brace_delta("my $text = \"{\";"), 0);
+        assert_eq!(brace_delta("my $text = \"}\";"), 0);
+        assert_eq!(brace_delta("my $text = \"\\\"{\";"), 0);
+        assert_eq!(brace_delta("sub helper {"), 1);
+        assert_eq!(brace_delta("}"), -1);
+    }
+
+    #[test]
+    fn prepared_context_excludes_variables_when_closed_sub_contains_open_brace_string()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub helper {\n    my $result = \"{\";\n}\n\nreturn ";
+        let prepared = provider.prepare_context(source, 4, 7).ok_or("expected prepared context")?;
+        let completions = provider.get_inline_completions(source, 4, 7);
+
+        assert_eq!(prepared.current_function, None);
+        assert!(
+            prepared.variables.iter().all(|variable| variable != "$result"),
+            "closed subroutine scalar should not stay visible because a string contains '{{': {:?}",
+            prepared.variables
+        );
+        assert!(
+            completions.items.iter().all(|item| item.insert_text != "$result;"),
+            "return completion should not use a closed subroutine lexical after quoted '{{': {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn prepared_context_keeps_function_scope_when_string_contains_close_brace()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub helper {\n    my $text = \"}\";\n    return ";
+        let prepared =
+            provider.prepare_context(source, 2, 11).ok_or("expected prepared context")?;
+        let completions = provider.get_inline_completions(source, 2, 11);
+
+        assert_eq!(prepared.current_function.as_deref(), Some("helper"));
+        assert!(
+            prepared.variables.iter().any(|variable| variable == "$text"),
+            "lexical declared inside the active subroutine should remain visible: {:?}",
+            prepared.variables
+        );
+        assert!(
+            completions.items.iter().any(|item| item.insert_text == "$text;"),
+            "return completion should still use active subroutine lexical after quoted '}}': {:?}",
             completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
         );
         Ok(())
