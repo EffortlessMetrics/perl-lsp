@@ -89,7 +89,10 @@ const NEGATIVE_TEST_MARKERS: &[RequiredMarker] = &[
         label: "MessageType.Debug gate",
         marker: "window_message_type_does_not_emit_debug_level",
     },
-    RequiredMarker { label: "Command.tooltip gate", marker: "assert_no_command_tooltip" },
+    RequiredMarker {
+        label: "non-CodeLens Command.tooltip gate",
+        marker: "assert_no_command_tooltip",
+    },
     RequiredMarker {
         label: "trusted markdown command/theme-icon gate",
         marker: "markdown_surfaces_do_not_emit_trusted_commands_or_theme_icons_without_support",
@@ -168,6 +171,14 @@ const CODE_LENS_TEST_MARKERS: &[RequiredMarker] = &[
     RequiredMarker {
         label: "CodeLens command resolve support negative gate",
         marker: "test_codelens_eager_when_resolve_support_lacks_command",
+    },
+    RequiredMarker {
+        label: "CodeLens Command.tooltip positive receipt",
+        marker: "test_codelens_commands_include_lsp_318_tooltips",
+    },
+    RequiredMarker {
+        label: "CodeLens resolve Command.tooltip positive receipt",
+        marker: "test_codelens_resolve_adds_lsp_318_command_tooltip",
     },
 ];
 

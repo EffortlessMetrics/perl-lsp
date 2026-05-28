@@ -385,7 +385,7 @@ fn assert_no_command_tooltip(value: &Value) -> TestResult {
     collect_command_tooltip_paths(value, "$", &mut paths);
     assert!(
         paths.is_empty(),
-        "Command.tooltip is not claimed; found command objects with tooltip at {}",
+        "Command.tooltip outside CodeLens command objects is not claimed; found command objects with tooltip at {}",
         paths.join(", ")
     );
     Ok(())
