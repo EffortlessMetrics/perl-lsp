@@ -263,11 +263,11 @@ fn dynamic_file_watcher_registration_uses_string_globs_not_relative_patterns() -
             .ok_or_else(|| format!("watcher missing globPattern: {watcher}"))?;
         assert!(
             glob_pattern.is_string(),
-            "relative-pattern objects are not claimed for file watchers: {watcher}"
+            "clients without relativePatternSupport must keep string file watcher globs: {watcher}"
         );
         assert!(
             glob_pattern.get("baseUri").is_none(),
-            "relative-pattern baseUri must be absent unless relativePatternSupport is handled: {watcher}"
+            "relative-pattern baseUri must be absent without relativePatternSupport: {watcher}"
         );
     }
     Ok(())

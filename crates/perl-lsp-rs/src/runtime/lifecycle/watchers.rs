@@ -4,10 +4,27 @@
 
 use super::super::*;
 use lsp_types::{
-    DidChangeWatchedFilesRegistrationOptions, FileSystemWatcher, GlobPattern, Registration,
-    RegistrationParams, WatchKind,
+    DidChangeWatchedFilesRegistrationOptions, FileSystemWatcher, GlobPattern, OneOf, Registration,
+    RegistrationParams, RelativePattern, Uri, WatchKind,
     notification::{DidChangeWatchedFiles, Notification},
 };
+
+const PERL_WATCH_PATTERNS: &[&str] = &["**/*.pl", "**/*.pm", "**/*.t", "**/*.psgi"];
+
+fn perl_watch_kind() -> WatchKind {
+    WatchKind::Create | WatchKind::Change | WatchKind::Delete
+}
+
+fn string_file_watchers() -> Vec<FileSystemWatcher> {
+    PERL_WATCH_PATTERNS
+        .iter()
+        .map(|pattern| FileSystemWatcher {
+            glob_pattern: GlobPattern::String((*pattern).into()),
+            kind: Some(perl_watch_kind()),
+        })
+        .collect()
+}
+
 impl LspServer {
     /// Register file watchers for Perl files
     pub(crate) fn register_file_watchers_if_needed(&self) {
@@ -24,24 +41,13 @@ impl LspServer {
             return;
         }
 
-        let watchers = vec![
-            FileSystemWatcher {
-                glob_pattern: GlobPattern::String("**/*.pl".into()),
-                kind: Some(WatchKind::Create | WatchKind::Change | WatchKind::Delete),
-            },
-            FileSystemWatcher {
-                glob_pattern: GlobPattern::String("**/*.pm".into()),
-                kind: Some(WatchKind::Create | WatchKind::Change | WatchKind::Delete),
-            },
-            FileSystemWatcher {
-                glob_pattern: GlobPattern::String("**/*.t".into()),
-                kind: Some(WatchKind::Create | WatchKind::Change | WatchKind::Delete),
-            },
-            FileSystemWatcher {
-                glob_pattern: GlobPattern::String("**/*.psgi".into()),
-                kind: Some(WatchKind::Create | WatchKind::Change | WatchKind::Delete),
-            },
-        ];
+        let supports_relative_patterns =
+            self.client_capabilities.lock().file_watcher_relative_pattern_support;
+        let watchers = if supports_relative_patterns {
+            self.relative_file_watchers().unwrap_or_else(string_file_watchers)
+        } else {
+            string_file_watchers()
+        };
 
         let opts = DidChangeWatchedFilesRegistrationOptions { watchers };
         let register_options = match serde_json::to_value(opts) {
@@ -69,6 +75,42 @@ impl LspServer {
         if let Err(error) = self.send_request("client/registerCapability", params_value) {
             tracing::error!(%error, "Failed to send file watcher registration request");
         }
+    }
+
+    fn relative_file_watchers(&self) -> Option<Vec<FileSystemWatcher>> {
+        let workspace_uris = self.workspace_folder_uris();
+        let base_uris = workspace_uris
+            .iter()
+            .filter_map(|uri| match uri.parse::<Uri>() {
+                Ok(parsed) => Some(parsed),
+                Err(error) => {
+                    tracing::debug!(uri, %error, "Skipping invalid workspace URI for file watcher RelativePattern");
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        if base_uris.is_empty() {
+            tracing::debug!(
+                "Falling back to string file watcher globs; no valid workspace URI for RelativePattern"
+            );
+            return None;
+        }
+
+        let watchers = base_uris
+            .into_iter()
+            .flat_map(|base_uri| {
+                PERL_WATCH_PATTERNS.iter().map(move |pattern| FileSystemWatcher {
+                    glob_pattern: GlobPattern::Relative(RelativePattern {
+                        base_uri: OneOf::Right(base_uri.clone()),
+                        pattern: (*pattern).into(),
+                    }),
+                    kind: Some(perl_watch_kind()),
+                })
+            })
+            .collect::<Vec<_>>();
+
+        Some(watchers)
     }
 
     pub(crate) fn register_inline_completion_if_needed(&self) {

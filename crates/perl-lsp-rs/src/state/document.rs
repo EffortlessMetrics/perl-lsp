@@ -286,6 +286,11 @@ pub struct ClientCapabilities {
     /// capability fields; this flag is deliberately forced off for some
     /// clients without disabling unrelated dynamic registrations.
     pub dynamic_registration_support: bool,
+    /// Supports `RelativePattern` objects in dynamic file watcher registrations.
+    ///
+    /// Parsed from `capabilities.workspace.didChangeWatchedFiles.relativePatternSupport`.
+    /// When false, watcher registrations must keep the existing string glob shape.
+    pub file_watcher_relative_pattern_support: bool,
     /// Client declared textDocument/inlineCompletion capability
     pub inline_completion_support: bool,
     /// Supports dynamic registration for textDocument/inlineCompletion

@@ -93,6 +93,7 @@ perl-lsp supports selected LSP 3.18 surfaces with capability-honest contracts.
 | Window debug messages | `MessageType.Debug`, `window/logMessage`, `window/showMessage`, `window/showMessageRequest` | Explicit debug message calls serialize type `5`; normal runtime paths continue using the existing non-debug message levels unless a later PR intentionally wires debug policy. | `lsp_window_tests`, `lsp_318_negative_claims`, `check-lsp-318-claims` |
 | Diagnostic markup messages | `textDocument.diagnostic.markupMessageSupport`, `textDocument/diagnostic`, `workspace/diagnostic` | Pull diagnostics may emit `Diagnostic.message` as `MarkupContent` only when support is true; unsupported clients and publish diagnostics remain string-only. | `lsp_diagnostic_enrichment_test`, `lsp_318_negative_claims`, `lsp_schema_validation`, `check-lsp-318-claims` |
 | Lean/e2e watcher behavior | `workspace/didChangeWatchedFiles` dynamic registration | Runtime tuning can suppress file watchers without suppressing inline-completion dynamic registration. | `lsp_registration_tests`, lean UX receipts |
+| RelativePattern watcher registrations | `workspace.didChangeWatchedFiles.relativePatternSupport`, `workspace/didChangeWatchedFiles` dynamic registration | Clients that support relative watcher glob patterns receive `baseUri`/`pattern` objects rooted at workspace folders; unsupported clients and invalid workspace roots keep string glob fallback. | `lsp_registration_tests`, `lsp_318_negative_claims`, `check-lsp-318-claims` |
 
 ## Explicitly Unclaimed Surfaces
 
@@ -108,7 +109,7 @@ capability parsing, wire tests, docs, and negative gates:
 - `CodeAction.tags`
 - `CodeActionTag.LLMGenerated`
 - `Command.tooltip` outside CodeLens command objects
-- `RelativePattern` document selectors and watcher glob patterns
+- `RelativePattern` document selectors
 - ungated `workspace/foldingRange/refresh` without
   `workspace.foldingRange.refreshSupport`
 - VS Code-style markdown command links, theme-icon syntax, `supportThemeIcons`,
@@ -135,7 +136,8 @@ The `lsp_318_negative_claims` test suite is the current guardrail for optional
 - emits workspace-edit metadata or snippet edits in representative edit
   responses
 - emits diagnostic `message` as `MarkupContent` without markup support
-- registers file watchers with relative-pattern objects instead of string globs
+- registers file watchers with relative-pattern objects without
+  `workspace.didChangeWatchedFiles.relativePatternSupport`
 - sends `workspace/foldingRange/refresh` without client refresh support
 - emits `MessageType.Debug` from normal runtime paths that have not
   intentionally opted into debug-level messages
@@ -143,8 +145,9 @@ The `lsp_318_negative_claims` test suite is the current guardrail for optional
 - emits markdown `command:` links or `$()` theme-icon syntax while the project
   has no separate editor-specific capability contract for those affordances
 
-The suite is intentionally absence-first. It does not implement the optional
-features and must not be treated as proof that those features work.
+The suite is intentionally absence-first for still-unclaimed surfaces. Positive
+receipts for implemented optional features live beside the relevant wire tests
+and are checked by `cargo xtask check-lsp-318-claims`.
 
 ## Valid PR Shapes
 

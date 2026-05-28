@@ -151,6 +151,10 @@ impl LspServer {
                     .and_then(|d| d.get("dynamicRegistration"))
                     .and_then(|b| b.as_bool())
                     .unwrap_or(false);
+                caps.file_watcher_relative_pattern_support = params
+                    .pointer("/capabilities/workspace/didChangeWatchedFiles/relativePatternSupport")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
 
                 caps.inline_completion_support =
                     params.pointer("/capabilities/textDocument/inlineCompletion").is_some();
@@ -859,6 +863,27 @@ mod tests {
 
         assert!(server.client_capabilities.lock().workspace_configuration_support);
         assert!(server.client_capabilities.lock().workspace_folders_support);
+    }
+
+    #[test]
+    fn initialize_parses_file_watcher_relative_pattern_support() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "workspace": {
+                    "didChangeWatchedFiles": {
+                        "dynamicRegistration": true,
+                        "relativePatternSupport": true
+                    }
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        let caps = server.client_capabilities.lock();
+        assert!(caps.dynamic_registration_support);
+        assert!(caps.file_watcher_relative_pattern_support);
     }
 
     #[test]
