@@ -53,6 +53,7 @@ pub(crate) struct SemanticInlineContext {
     pub(crate) expected_syntax: ExpectedSyntax,
     pub(crate) visible_variables: Vec<VariableFact>,
     pub(crate) receiver_hint: Option<ReceiverHint>,
+    pub(crate) dbi_receiver_kind: Option<DbiReceiverKind>,
     pub(crate) imported_modules: Vec<ModuleFact>,
     pub(crate) available_modules: Vec<ModuleFact>,
     pub(crate) current_package_methods: Vec<MethodFact>,
@@ -150,6 +151,12 @@ pub(crate) enum ReceiverHint {
     SelfReceiver,
     Variable(VariableFact),
     Package(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DbiReceiverKind {
+    DatabaseHandle,
+    StatementHandle,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1066,6 +1073,7 @@ impl InlineCompletionProvider {
             expected_syntax: self.expected_syntax(context),
             visible_variables,
             receiver_hint: receiver_hint_from_prefix(context.prefix.as_str()),
+            dbi_receiver_kind: None,
             imported_modules,
             available_modules: Vec::new(),
             current_package_methods: Vec::new(),
@@ -1097,6 +1105,7 @@ impl InlineCompletionProvider {
         semantic_context.available_modules = available_module_facts(&environment.available_modules);
         semantic_context.file_role = self.file_role_for_source(context, text);
         semantic_context.style = self.style_context_for_source(context, text);
+        semantic_context.dbi_receiver_kind = dbi_receiver_kind_for_source(text, &semantic_context);
         semantic_context.current_package_methods = self.current_package_methods_for_source(
             text,
             semantic_context.package.as_deref(),
@@ -1468,6 +1477,10 @@ impl InlineCandidateSource for ReceiverCandidateSource {
         {
             if semantic_context.receiver_hint == Some(ReceiverHint::SelfReceiver) {
                 for method in provider.current_package_method_items(semantic_context, fragment) {
+                    sink.push(Self::SOURCE, 0, method);
+                }
+            } else if let Some(kind) = semantic_context.dbi_receiver_kind {
+                for method in dbi_receiver_method_items(kind, fragment) {
                     sink.push(Self::SOURCE, 0, method);
                 }
             } else if completion_matches_fragment("new", "new()", fragment) {
@@ -2136,6 +2149,84 @@ fn receiver_hint_from_prefix(prefix: &str) -> Option<ReceiverHint> {
     None
 }
 
+fn dbi_receiver_kind_for_source(
+    text: &str,
+    context: &SemanticInlineContext,
+) -> Option<DbiReceiverKind> {
+    let Some(ReceiverHint::Variable(variable)) = context.receiver_hint.as_ref() else {
+        return None;
+    };
+    if !variable.is_scalar() {
+        return None;
+    }
+
+    let imported_dbi = context.imported_modules.iter().any(|module| module.name == "DBI");
+    let assigned_from_dbi_connect = non_comment_code_lines(text)
+        .map(code_before_line_comment)
+        .any(|line| line_assigns_variable_from_method(line, variable.name.as_str(), "connect"));
+    if is_likely_dbi_database_handle(
+        variable.name.as_str(),
+        imported_dbi,
+        assigned_from_dbi_connect,
+    ) {
+        return Some(DbiReceiverKind::DatabaseHandle);
+    }
+
+    let prepared_statement = non_comment_code_lines(text)
+        .map(code_before_line_comment)
+        .any(|line| line_assigns_variable_from_method(line, variable.name.as_str(), "prepare"));
+    if is_likely_dbi_statement_handle(variable.name.as_str(), imported_dbi, prepared_statement) {
+        return Some(DbiReceiverKind::StatementHandle);
+    }
+
+    None
+}
+
+fn is_likely_dbi_database_handle(name: &str, imported_dbi: bool, has_dbi_connect: bool) -> bool {
+    has_dbi_connect || (matches!(name, "dbh" | "db") && imported_dbi)
+}
+
+fn is_likely_dbi_statement_handle(
+    name: &str,
+    imported_dbi: bool,
+    prepared_statement: bool,
+) -> bool {
+    prepared_statement && (name == "sth" || name.ends_with("_sth") || imported_dbi)
+}
+
+fn line_assigns_variable_from_method(line: &str, variable_name: &str, method_name: &str) -> bool {
+    let Some((left, right)) = line.split_once('=') else {
+        return false;
+    };
+    let variable = format!("${variable_name}");
+    let method_call = format!("->{method_name}");
+    left.split(|ch: char| !(ch.is_ascii_alphanumeric() || matches!(ch, '_' | '$')))
+        .any(|part| part == variable)
+        && right.contains(method_call.as_str())
+}
+
+fn dbi_receiver_method_items(kind: DbiReceiverKind, fragment: &str) -> Vec<InlineCompletionItem> {
+    let method_names: &[&str] = match kind {
+        DbiReceiverKind::DatabaseHandle => {
+            &["prepare", "do", "selectrow_array", "selectall_arrayref", "disconnect"]
+        }
+        DbiReceiverKind::StatementHandle => {
+            &["execute", "fetchrow_hashref", "fetchrow_array", "finish"]
+        }
+    };
+
+    method_names
+        .iter()
+        .filter(|method| completion_matches_fragment(method, &format!("{method}()"), fragment))
+        .map(|method| InlineCompletionItem {
+            insert_text: format!("{method}()"),
+            filter_text: Some((*method).to_string()),
+            range: None,
+            command: None,
+        })
+        .collect()
+}
+
 fn is_receiver_fragment_char(ch: char) -> bool {
     ch.is_ascii_alphanumeric() || matches!(ch, '_' | ':' | '$' | '@' | '%')
 }
@@ -2729,6 +2820,51 @@ mod tests {
         assert!(
             completions.items.iter().all(|item| item.insert_text != "new()"),
             "$self-> should not fall back to generic constructor guesses when methods are known"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn dbi_database_handle_receiver_suggests_common_methods() {
+        let provider = InlineCompletionProvider::new();
+        let source = "use DBI;\nmy $dbh = DBI->connect($dsn);\n$dbh->\n";
+        let character = "$dbh->".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 2, character);
+        let insert_texts: Vec<&str> =
+            completions.items.iter().map(|item| item.insert_text.as_str()).collect();
+
+        assert_eq!(insert_texts.first(), Some(&"prepare()"));
+        assert!(insert_texts.contains(&"do()"));
+        assert!(insert_texts.contains(&"disconnect()"));
+        assert!(
+            !insert_texts.contains(&"new()"),
+            "DBI database handle must not fall back to generic constructor guesses"
+        );
+    }
+
+    #[test]
+    fn dbi_statement_handle_partial_receiver_suggests_fetch_methods_with_range()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source =
+            "use DBI;\nmy $dbh = DBI->connect($dsn);\nmy $sth = $dbh->prepare($sql);\n$sth->f\n";
+        let character = "$sth->f".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 3, character);
+        let item = completions
+            .items
+            .iter()
+            .find(|item| item.insert_text == "fetchrow_hashref()")
+            .ok_or("expected DBI statement handle fetchrow_hashref() completion")?;
+        let range =
+            item.range.as_ref().ok_or("partial DBI method completion must carry a range")?;
+
+        assert_eq!(range.start.line, 3);
+        assert_eq!(range.start.character, "$sth->".encode_utf16().count() as u32);
+        assert_eq!(range.end.line, 3);
+        assert_eq!(range.end.character, character);
+        assert!(
+            completions.items.iter().all(|item| item.insert_text != "new()"),
+            "DBI statement handle must not fall back to generic constructor guesses"
         );
         Ok(())
     }

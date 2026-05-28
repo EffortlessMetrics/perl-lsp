@@ -415,6 +415,17 @@ fn scenarios() -> &'static [Scenario] {
             },
         },
         Scenario {
+            name: "dbi_database_handle_prefers_dbi_methods",
+            source_name: "receiver",
+            source: "use DBI;\nmy $dbh = DBI->connect($dsn);\n$dbh-><<CURSOR>>\n",
+            available_modules: &[],
+            assertion: ScenarioAssertion::Suggestion {
+                first: Some("prepare()"),
+                expected: &["prepare()", "do()", "disconnect()"],
+                not_expected: &["new()"],
+            },
+        },
+        Scenario {
             name: "constructor_completion_keeps_signature_style",
             source_name: "syntax",
             source: "sub helper ($self, %args) {\n}\n\nsub new<<CURSOR>>",
