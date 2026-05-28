@@ -813,11 +813,11 @@ impl InlineCompletionProvider {
     }
 
     fn current_package(&self, lines: &[&str], line_index: usize) -> Option<String> {
-        lines
-            .iter()
-            .take(line_index + 1)
-            .filter_map(|line| self.parse_package_name(line))
-            .next_back()
+        let mut scanner = PackageScopeScanner::new();
+        for line in lines.iter().take(line_index + 1) {
+            scanner.advance(line, self.parse_package_name(line));
+        }
+        scanner.current_package().map(str::to_string)
     }
 
     fn previous_non_empty_line<'a>(
@@ -972,14 +972,12 @@ impl InlineCompletionProvider {
             return Vec::new();
         };
 
-        let mut package = None::<String>;
+        let mut package_scanner = PackageScopeScanner::new();
         let mut methods = Vec::<MethodFact>::new();
         for line in self.normalized_lines(text) {
-            if let Some(name) = self.parse_package_name(line) {
-                package = Some(name);
-            }
+            package_scanner.advance(line, self.parse_package_name(line));
 
-            if package.as_deref() != Some(target_package) {
+            if package_scanner.current_package() != Some(target_package) {
                 continue;
             }
 
@@ -1340,6 +1338,37 @@ struct ReplacementFragment<'a> {
     start_byte: usize,
 }
 
+#[derive(Debug, Default)]
+struct PackageScopeScanner {
+    package: Option<String>,
+    block_depth: Option<i32>,
+}
+
+impl PackageScopeScanner {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    fn current_package(&self) -> Option<&str> {
+        self.package.as_deref()
+    }
+
+    fn advance(&mut self, line: &str, parsed_package: Option<String>) {
+        if let Some(package) = parsed_package {
+            self.package = Some(package);
+            self.block_depth = package_line_opens_block(line).then_some(0);
+        }
+
+        if let Some(depth) = self.block_depth.as_mut() {
+            *depth += brace_delta(line);
+            if *depth <= 0 {
+                self.package = None;
+                self.block_depth = None;
+            }
+        }
+    }
+}
+
 fn is_keyword_boundary(ch: char) -> bool {
     ch.is_whitespace() || matches!(ch, '!' | ';' | '{' | '}' | '(' | ')' | ',')
 }
@@ -1368,6 +1397,18 @@ fn last_keyword_index(prefix: &str, keyword: &str) -> Option<usize> {
 
 fn contains_keyword(text: &str, keyword: &str) -> bool {
     last_keyword_index(text, keyword).is_some()
+}
+
+fn package_line_opens_block(line: &str) -> bool {
+    line.trim_start().starts_with("package ") && code_before_line_comment(line).contains('{')
+}
+
+fn brace_delta(line: &str) -> i32 {
+    code_before_line_comment(line).chars().fold(0, |depth, ch| match ch {
+        '{' => depth + 1,
+        '}' => depth - 1,
+        _ => depth,
+    })
 }
 
 fn indentation_style_from_line(line: &str) -> IndentationStyle {
@@ -2149,6 +2190,21 @@ mod tests {
     }
 
     #[test]
+    fn self_receiver_does_not_leak_methods_after_block_scoped_package() {
+        let provider = InlineCompletionProvider::new();
+        let source =
+            "package Demo {\nsub save {}\nsub caller {\n    $self->\n}\n}\nsub external {}\n";
+        let character = "    $self->".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 3, character);
+
+        assert!(completions.items.iter().any(|item| item.insert_text == "save()"));
+        assert!(
+            completions.items.iter().all(|item| item.insert_text != "external()"),
+            "methods after a block-scoped package must not leak into that package"
+        );
+    }
+
+    #[test]
     fn test_prepare_context_collects_function_variables_and_imports()
     -> Result<(), Box<dyn std::error::Error>> {
         let provider = InlineCompletionProvider::new();
@@ -2236,6 +2292,19 @@ mod tests {
         let methods: Vec<&str> =
             semantic.current_package_methods.iter().map(|method| method.name.as_str()).collect();
         assert_eq!(methods, vec!["save", "display_name"]);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_context_source_resets_after_block_scoped_package()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "package Demo {\nsub save {}\n}\n\nmy $value = 1;\n";
+        let prepared = provider.prepare_context(source, 4, 0).ok_or("expected context")?;
+        let semantic = provider.semantic_context_for_source(source, &prepared);
+
+        assert_eq!(semantic.package, None);
+        assert!(semantic.current_package_methods.is_empty());
         Ok(())
     }
 
