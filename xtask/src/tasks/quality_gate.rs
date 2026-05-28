@@ -15,10 +15,12 @@ use serde_json::{Value, json};
 use serde_yaml_ng::Value as YamlValue;
 
 const PATCH_TARGET: f64 = 95.0;
+const PROJECT_TARGET: f64 = 95.0;
 const NEW_RIPR_GAP_SUGGESTED_TEST: &str = "Add or update the focused test named by RIPR review guidance for the changed file, line, and seam.";
 
 #[derive(Clone, Debug, ValueEnum)]
 pub enum QualityGateMode {
+    Enforce,
     EnforcePatchCoverage,
     EnforceNewRipr,
 }
@@ -26,6 +28,7 @@ pub enum QualityGateMode {
 impl QualityGateMode {
     fn as_str(&self) -> &'static str {
         match self {
+            Self::Enforce => "enforce",
             Self::EnforcePatchCoverage => "enforce-patch-coverage",
             Self::EnforceNewRipr => "enforce-new-ripr",
         }
@@ -88,9 +91,158 @@ pub fn run(args: QualityGateArgs) -> Result<()> {
 fn evaluate(root: &Path, args: &QualityGateArgs) -> Result<GateEvaluation> {
     let head = current_head(root)?;
     match args.mode {
+        QualityGateMode::Enforce => evaluate_final(&head, args),
         QualityGateMode::EnforcePatchCoverage => evaluate_patch_coverage(&head, args),
         QualityGateMode::EnforceNewRipr => evaluate_new_ripr(&head, args),
     }
+}
+
+fn evaluate_final(head: &str, args: &QualityGateArgs) -> Result<GateEvaluation> {
+    let codecov_patch_status = read_codecov_patch_status(&args.codecov)?;
+    let codecov_project_status = read_codecov_project_status(&args.codecov)?;
+    let coverage = read_coverage_receipt(&args.coverage_receipt, head);
+    let ripr = read_ripr_plus_receipt(&args.ripr_receipt, head);
+    let ripr_pr = read_ripr_pr_receipt(&args.ripr_pr_receipt, head);
+    let review = read_review_guidance_receipt(&args.review_receipt, head);
+    let exceptions = read_exception_policy(&args.exception_policy, today());
+    let mut next_actions = Vec::new();
+    next_actions.extend(exceptions.actions.clone());
+
+    if !matches!(coverage.status.as_str(), "present") {
+        next_actions.push(coverage_receipt_action(&coverage, head, args));
+    }
+    if coverage.status == "present" {
+        let patch = args.patch_coverage.or(coverage.patch);
+        let patch_source = if args.patch_coverage.is_some() {
+            Some("cli")
+        } else if coverage.patch.is_some() {
+            Some("coverage_receipt")
+        } else {
+            None
+        };
+        if patch.is_none() {
+            next_actions.push(patch_coverage_unknown_action(args));
+        }
+        if let Some(patch) = patch {
+            if patch < PATCH_TARGET {
+                next_actions.push(patch_coverage_below_target_action(
+                    patch,
+                    patch_source.unwrap_or("unknown"),
+                    &coverage,
+                    args,
+                ));
+            }
+        }
+        match coverage.project {
+            Some(project) if project < PROJECT_TARGET => {
+                next_actions.push(project_coverage_below_target_action(project, &coverage, args));
+            }
+            None => next_actions.push(project_coverage_unknown_action(args)),
+            _ => {}
+        }
+        if coverage.scope.as_deref() != Some("workspace") {
+            next_actions.push(coverage_scope_not_workspace_action(&coverage, args));
+        }
+    }
+
+    if codecov_patch_status != "present" {
+        next_actions.push(codecov_policy_action(&codecov_patch_status, args));
+    }
+    if codecov_project_status != "present" {
+        next_actions.push(codecov_project_policy_action(&codecov_project_status, args));
+    }
+
+    if ripr.status != "present" {
+        next_actions.push(ripr_receipt_action(&ripr, head, args));
+    }
+    if ripr.status == "present" {
+        match ripr.unresolved {
+            Some(count) if count > 0 => {
+                next_actions.push(ripr_total_unresolved_action(count, args))
+            }
+            None => next_actions.push(ripr_total_unknown_action(args)),
+            _ => {}
+        }
+    }
+    if ripr_pr.status != "present" {
+        next_actions.push(ripr_pr_receipt_action(&ripr_pr, head, args));
+    }
+    if review.status != "present" {
+        next_actions.push(ripr_review_receipt_action(&review, head, args));
+    }
+    if ripr_pr.status == "present" {
+        match ripr_pr.new_unresolved {
+            Some(count) if count > 0 => {
+                next_actions.push(new_ripr_gap_action(count, &ripr_pr, &review, args));
+                if review.status == "present" && review.top_gaps.is_empty() {
+                    next_actions.push(ripr_review_guidance_gap_action(&review, head, args));
+                }
+            }
+            None => next_actions.push(new_ripr_gap_unknown_action(&ripr_pr, args)),
+            _ => {}
+        }
+    }
+    if exceptions.receipt.get("active_count").and_then(Value::as_u64).is_some_and(|count| count > 0)
+    {
+        next_actions.push(quality_exception_active_final_blocker_action(&exceptions, args));
+    }
+
+    let failed = next_actions
+        .iter()
+        .any(|action| action.get("blocking").and_then(Value::as_bool) == Some(true));
+    let decision = if failed { "fail" } else { "pass" };
+    let patch = args.patch_coverage.or(coverage.patch);
+
+    let receipt = json!({
+        "schema_version": 1,
+        "kind": "quality_gate",
+        "mode": args.mode.as_str(),
+        "decision": decision,
+        "head": head,
+        "coverage": {
+            "status": coverage.status,
+            "receipt": display_path(&args.coverage_receipt),
+            "receipt_head": coverage.receipt_head,
+            "patch": patch.map(round2),
+            "project": coverage.project.map(round2),
+            "target": PROJECT_TARGET,
+            "scope": coverage.scope,
+            "lcov": coverage.lcov,
+            "codecov_config": display_path(&args.codecov),
+            "codecov_patch_status": codecov_patch_status,
+            "codecov_project_status": codecov_project_status,
+        },
+        "ripr_plus": {
+            "status": ripr.status,
+            "receipt": display_path(&args.ripr_receipt),
+            "receipt_head": ripr.receipt_head,
+            "expected_head": head,
+            "unresolved": ripr.unresolved,
+        },
+        "ripr_pr": {
+            "status": ripr_pr.status,
+            "receipt": display_path(&args.ripr_pr_receipt),
+            "receipt_head_sha": ripr_pr.receipt_head_sha,
+            "expected_head_sha": head,
+            "base": ripr_pr.base,
+            "base_sha": ripr_pr.base_sha,
+            "new_unresolved": ripr_pr.new_unresolved,
+        },
+        "review_guidance": {
+            "status": review.status,
+            "receipt": display_path(&args.review_receipt),
+            "receipt_head_sha": review.receipt_head_sha,
+            "expected_head_sha": head,
+            "base": review.base,
+            "base_sha": review.base_sha,
+            "top_gaps": review.top_gaps,
+        },
+        "temporary_exceptions": exceptions.receipt,
+        "next_actions": next_actions,
+    });
+    let markdown = render_markdown(&receipt, args)?;
+
+    Ok(GateEvaluation { receipt, markdown, failed })
 }
 
 fn evaluate_patch_coverage(head: &str, args: &QualityGateArgs) -> Result<GateEvaluation> {
@@ -243,6 +395,8 @@ struct CoverageReceipt {
     receipt_head: Option<String>,
     lcov: Option<String>,
     patch: Option<f64>,
+    project: Option<f64>,
+    scope: Option<String>,
     top_files: Vec<Value>,
 }
 
@@ -512,6 +666,8 @@ fn read_coverage_receipt(path: &Path, expected_head: &str) -> CoverageReceipt {
             receipt_head: None,
             lcov: None,
             patch: None,
+            project: None,
+            scope: None,
             top_files: Vec::new(),
         };
     };
@@ -521,6 +677,8 @@ fn read_coverage_receipt(path: &Path, expected_head: &str) -> CoverageReceipt {
             receipt_head: None,
             lcov: None,
             patch: None,
+            project: None,
+            scope: None,
             top_files: Vec::new(),
         };
     };
@@ -528,6 +686,8 @@ fn read_coverage_receipt(path: &Path, expected_head: &str) -> CoverageReceipt {
     let receipt_head = payload.get("head").and_then(Value::as_str).map(ToOwned::to_owned);
     let status = if receipt_head.as_deref() == Some(expected_head) { "present" } else { "stale" };
     let patch = payload.pointer("/coverage/patch").and_then(Value::as_f64);
+    let project = payload.pointer("/coverage/project").and_then(Value::as_f64);
+    let scope = payload.get("scope").and_then(Value::as_str).map(ToOwned::to_owned);
     let lcov = payload.get("lcov").and_then(Value::as_str).map(ToOwned::to_owned);
     let top_files = payload
         .get("files_below_target")
@@ -535,7 +695,15 @@ fn read_coverage_receipt(path: &Path, expected_head: &str) -> CoverageReceipt {
         .map(|items| items.iter().filter_map(actionable_file_gap).take(3).collect::<Vec<_>>())
         .unwrap_or_default();
 
-    CoverageReceipt { status: status.to_string(), receipt_head, lcov, patch, top_files }
+    CoverageReceipt {
+        status: status.to_string(),
+        receipt_head,
+        lcov,
+        patch,
+        project,
+        scope,
+        top_files,
+    }
 }
 
 fn read_json_receipt(path: &Path) -> JsonReceipt {
@@ -761,6 +929,34 @@ fn read_codecov_patch_status(path: &Path) -> Result<String> {
     }
 }
 
+fn read_codecov_project_status(path: &Path) -> Result<String> {
+    let raw = fs::read_to_string(path)
+        .with_context(|| format!("reading Codecov config {}", path.display()))?;
+    let parsed: YamlValue = serde_yaml_ng::from_str(&raw)
+        .with_context(|| format!("parsing Codecov config {}", path.display()))?;
+    let target = yaml_path(&parsed, &["coverage", "status", "project", "default", "target"])
+        .and_then(yaml_scalar);
+    let threshold = yaml_path(&parsed, &["coverage", "status", "project", "default", "threshold"])
+        .and_then(yaml_scalar);
+    let informational =
+        yaml_path(&parsed, &["coverage", "status", "project", "default", "informational"])
+            .and_then(yaml_scalar);
+    let threshold = threshold.as_deref().and_then(parse_percent);
+
+    if target.as_deref() == Some("95%")
+        && threshold.is_some_and(|value| value <= 0.25)
+        && informational.as_deref() != Some("true")
+    {
+        Ok("present".to_string())
+    } else {
+        Ok("project_policy_not_blocking".to_string())
+    }
+}
+
+fn parse_percent(value: &str) -> Option<f64> {
+    value.trim().trim_end_matches('%').parse::<f64>().ok()
+}
+
 fn yaml_path<'a>(value: &'a YamlValue, path: &[&str]) -> Option<&'a YamlValue> {
     let mut current = value;
     for key in path {
@@ -839,6 +1035,59 @@ fn patch_coverage_below_target_action(
     })
 }
 
+fn project_coverage_unknown_action(args: &QualityGateArgs) -> Value {
+    json!({
+        "kind": "project_coverage_unknown",
+        "blocking": true,
+        "path": display_path(&args.coverage_receipt),
+        "reason": "coverage receipt did not include coverage.project",
+        "repair": "Regenerate the workspace coverage receipt with project coverage evidence before final enforcement.",
+        "verify": coverage_baseline_command(args, true),
+        "receipt": coverage_baseline_command(args, false),
+    })
+}
+
+fn project_coverage_below_target_action(
+    project: f64,
+    coverage: &CoverageReceipt,
+    args: &QualityGateArgs,
+) -> Value {
+    let path = coverage
+        .top_files
+        .first()
+        .and_then(|file| file.get("path"))
+        .and_then(Value::as_str)
+        .unwrap_or_else(|| args.coverage_receipt.to_str().unwrap_or("coverage"));
+
+    json!({
+        "kind": "project_coverage_below_target",
+        "blocking": true,
+        "path": path,
+        "current": round2(project),
+        "target": PROJECT_TARGET,
+        "top_files": coverage.top_files,
+        "suggested_test": "Prioritize public API boundaries, error handling, config parsing, serialization, cancellation, provider decisions, and report generators.",
+        "repair": "Burn down meaningful uncovered behavior until workspace project coverage reaches the final target, then refresh coverage evidence.",
+        "verify": quality_gate_command(args, true, args.patch_coverage),
+        "receipt": quality_gate_command(args, false, args.patch_coverage),
+    })
+}
+
+fn coverage_scope_not_workspace_action(
+    coverage: &CoverageReceipt,
+    args: &QualityGateArgs,
+) -> Value {
+    json!({
+        "kind": "coverage_scope_not_workspace",
+        "blocking": true,
+        "path": display_path(&args.coverage_receipt),
+        "reason": format!("coverage scope is {}", coverage.scope.as_deref().unwrap_or("unknown")),
+        "repair": "Regenerate the coverage receipt from workspace-wide coverage, not a crate or partial path subset.",
+        "verify": coverage_baseline_command(args, true),
+        "receipt": coverage_baseline_command(args, false),
+    })
+}
+
 fn codecov_policy_action(status: &str, args: &QualityGateArgs) -> Value {
     json!({
         "kind": "codecov_patch_policy_not_blocking",
@@ -846,6 +1095,18 @@ fn codecov_policy_action(status: &str, args: &QualityGateArgs) -> Value {
         "path": display_path(&args.codecov),
         "reason": status,
         "repair": "Set Codecov patch status to target 95%, threshold 0%, and keep it blocking.",
+        "verify": quality_gate_command(args, true, args.patch_coverage),
+        "receipt": quality_gate_command(args, false, args.patch_coverage),
+    })
+}
+
+fn codecov_project_policy_action(status: &str, args: &QualityGateArgs) -> Value {
+    json!({
+        "kind": "codecov_project_policy_not_blocking",
+        "blocking": true,
+        "path": display_path(&args.codecov),
+        "reason": status,
+        "repair": "Promote Codecov project status to blocking at target 95% with threshold 0.25% or tighter before final enforcement.",
         "verify": quality_gate_command(args, true, args.patch_coverage),
         "receipt": quality_gate_command(args, false, args.patch_coverage),
     })
@@ -951,6 +1212,47 @@ fn ripr_receipt_action(
         "repair": "Regenerate and check the repo-wide RIPR+ receipt. This transition gate does not require total RIPR+ zero yet, but it does require current total-debt proof.",
         "verify": ripr_plus_command(args, true),
         "receipt": ripr_plus_command(args, false),
+    })
+}
+
+fn ripr_total_unresolved_action(count: u64, args: &QualityGateArgs) -> Value {
+    json!({
+        "kind": "ripr_total_unresolved",
+        "blocking": true,
+        "path": display_path(&args.ripr_receipt),
+        "unresolved": count,
+        "reason": "repo-wide RIPR+ unresolved total is above zero",
+        "repair": "Burn down the remaining repo-wide RIPR+ gap cluster with focused tests, then refresh the RIPR+ receipt.",
+        "verify": ripr_plus_command(args, true),
+        "receipt": ripr_plus_command(args, false),
+    })
+}
+
+fn ripr_total_unknown_action(args: &QualityGateArgs) -> Value {
+    json!({
+        "kind": "ripr_total_unknown",
+        "blocking": true,
+        "path": display_path(&args.ripr_receipt),
+        "reason": "repo-wide RIPR+ receipt did not include unresolved",
+        "repair": "Regenerate the RIPR+ receipt so final enforcement can prove unresolved total = 0.",
+        "verify": ripr_plus_command(args, true),
+        "receipt": ripr_plus_command(args, false),
+    })
+}
+
+fn quality_exception_active_final_blocker_action(
+    exceptions: &ExceptionPolicyEvaluation,
+    args: &QualityGateArgs,
+) -> Value {
+    json!({
+        "kind": "quality_exception_active_final_blocker",
+        "blocking": true,
+        "path": display_path(&args.exception_policy),
+        "reason": "active temporary quality exceptions remain",
+        "active": exceptions.receipt.get("active").cloned().unwrap_or_else(|| json!([])),
+        "repair": "Complete the burn-down removal criteria and remove active temporary quality exceptions before final enforcement can pass.",
+        "verify": quality_gate_command(args, true, args.patch_coverage),
+        "receipt": quality_gate_command(args, false, args.patch_coverage),
     })
 }
 
@@ -1064,10 +1366,18 @@ fn render_markdown(receipt: &Value, args: &QualityGateArgs) -> Result<String> {
             .and_then(Value::as_f64)
             .map(|value| format!("{value:.2}%"))
             .unwrap_or_else(|| "unknown".to_string());
+        let project = coverage
+            .get("project")
+            .and_then(Value::as_f64)
+            .map(|value| format!("{value:.2}%"))
+            .unwrap_or_else(|| "unknown".to_string());
         let source = coverage.get("patch_source").and_then(Value::as_str).unwrap_or("unknown");
         let status = coverage.get("status").and_then(Value::as_str).unwrap_or("unknown");
+        let scope = coverage.get("scope").and_then(Value::as_str).unwrap_or("unknown");
         markdown.push_str(&format!("- coverage receipt: `{status}`\n"));
         markdown.push_str(&format!("- patch coverage: `{patch}` / `95.00%`\n"));
+        markdown.push_str(&format!("- project coverage: `{project}` / `95.00%`\n"));
+        markdown.push_str(&format!("- coverage scope: `{scope}`\n"));
         markdown.push_str(&format!("- patch source: `{source}`\n"));
     }
     if let Some(ripr_pr) = receipt.get("ripr_pr") {
@@ -1189,6 +1499,18 @@ fn quality_gate_command(args: &QualityGateArgs, check: bool, patch: Option<f64>)
     let mut command = format!("rtk cargo xtask quality-gate --mode {}", args.mode.as_str());
     command.push_str(&format!(" --exception-policy {}", args.exception_policy.display()));
     match args.mode {
+        QualityGateMode::Enforce => {
+            command.push_str(&format!(
+                " --coverage-receipt {} --codecov {} --ripr-receipt {} --ripr-pr-receipt {} --review-receipt {} --ripr-base {} --ripr-head {}",
+                args.coverage_receipt.display(),
+                args.codecov.display(),
+                args.ripr_receipt.display(),
+                args.ripr_pr_receipt.display(),
+                args.review_receipt.display(),
+                args.ripr_base,
+                args.ripr_head
+            ));
+        }
         QualityGateMode::EnforcePatchCoverage => {
             command.push_str(&format!(
                 " --coverage-receipt {} --codecov {}",
