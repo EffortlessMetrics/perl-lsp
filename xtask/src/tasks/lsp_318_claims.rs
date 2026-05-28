@@ -9,6 +9,8 @@ use std::path::Path;
 const SPEC_PATH: &str = "docs/specs/PLSP-SPEC-0029-lsp-318-conformance-boundary.md";
 const MATRIX_PATH: &str = "docs/specs/lsp-318-conformance-matrix.md";
 const NEGATIVE_CLAIMS_TEST: &str = "crates/perl-lsp-rs/tests/lsp_318_negative_claims.rs";
+const DIAGNOSTIC_ENRICHMENT_TEST: &str =
+    "crates/perl-lsp-rs/tests/lsp_diagnostic_enrichment_test.rs";
 const REFRESH_METHODS_TEST: &str = "crates/perl-lsp-rs/tests/lsp_refresh_methods_tests.rs";
 const SCHEMA_VALIDATION_TEST: &str = "crates/perl-lsp-rs/tests/lsp_schema_validation.rs";
 const CLIENT_REQUESTS: &str = "crates/perl-lsp-rs/src/runtime/client_requests.rs";
@@ -127,10 +129,21 @@ const REFRESH_METHODS_TEST_MARKERS: &[RequiredMarker] = &[RequiredMarker {
     marker: "lsp_refresh_folding_range_sent_with_client_support",
 }];
 
-const SCHEMA_VALIDATION_TEST_MARKERS: &[RequiredMarker] = &[RequiredMarker {
-    label: "SignatureHelp nullable activeParameter compatibility",
-    marker: "signature_help_active_parameter_accepts_lsp_318_null",
+const DIAGNOSTIC_ENRICHMENT_TEST_MARKERS: &[RequiredMarker] = &[RequiredMarker {
+    label: "Diagnostic.message MarkupContent positive receipt",
+    marker: "test_markup_message_support_populates_standard_message_markup",
 }];
+
+const SCHEMA_VALIDATION_TEST_MARKERS: &[RequiredMarker] = &[
+    RequiredMarker {
+        label: "SignatureHelp nullable activeParameter compatibility",
+        marker: "signature_help_active_parameter_accepts_lsp_318_null",
+    },
+    RequiredMarker {
+        label: "Diagnostic.message MarkupContent schema compatibility",
+        marker: "diagnostic_message_accepts_lsp_318_markup_content",
+    },
+];
 
 const CAPABILITY_ABSENCE_CHECKS: &[JsonAbsenceCheck] = &[
     JsonAbsenceCheck {
@@ -258,6 +271,12 @@ pub fn run() -> Result<()> {
     )?;
     check_required_markers(
         &root,
+        DIAGNOSTIC_ENRICHMENT_TEST,
+        DIAGNOSTIC_ENRICHMENT_TEST_MARKERS,
+        &mut violations,
+    )?;
+    check_required_markers(
+        &root,
         SCHEMA_VALIDATION_TEST,
         SCHEMA_VALIDATION_TEST_MARKERS,
         &mut violations,
@@ -269,11 +288,12 @@ pub fn run() -> Result<()> {
 
     if violations.is_empty() {
         println!(
-            "LSP 3.18 claim guard OK: {} capability snapshots, {} feature markers, {} negative-test markers, {} positive refresh markers, {} schema markers, {} spec markers checked",
+            "LSP 3.18 claim guard OK: {} capability snapshots, {} feature markers, {} negative-test markers, {} positive refresh markers, {} diagnostic markers, {} schema markers, {} spec markers checked",
             CAPABILITY_SNAPSHOTS.len(),
             FEATURE_CATALOG_MARKERS.len(),
             NEGATIVE_TEST_MARKERS.len(),
             REFRESH_METHODS_TEST_MARKERS.len(),
+            DIAGNOSTIC_ENRICHMENT_TEST_MARKERS.len(),
             SCHEMA_VALIDATION_TEST_MARKERS.len(),
             SPEC_MARKERS.len()
         );

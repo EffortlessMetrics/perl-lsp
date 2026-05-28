@@ -140,7 +140,8 @@ fn validate_text_document_identifier(doc: &Value) -> Result<(), String> {
     Ok(())
 }
 
-/// Validates Diagnostic object per LSP 3.17
+/// Validates Diagnostic object per LSP 3.17 plus the selected LSP 3.18
+/// Diagnostic.message MarkupContent shape.
 fn validate_diagnostic(diag: &Value) -> Result<(), String> {
     if !diag.is_object() {
         return Err("Diagnostic must be object".into());
@@ -150,14 +151,19 @@ fn validate_diagnostic(diag: &Value) -> Result<(), String> {
     let range = diag.get("range").ok_or("Diagnostic missing 'range'")?;
     validate_range(range)?;
 
-    let message = diag
-        .get("message")
-        .ok_or("Diagnostic missing 'message'")?
-        .as_str()
-        .ok_or("Diagnostic.message must be string")?;
-
-    if message.is_empty() {
-        return Err("Diagnostic.message cannot be empty".into());
+    let message = diag.get("message").ok_or("Diagnostic missing 'message'")?;
+    if let Some(message_text) = message.as_str() {
+        if message_text.is_empty() {
+            return Err("Diagnostic.message cannot be empty".into());
+        }
+    } else {
+        validate_markup_content(message)
+            .map_err(|e| format!("Diagnostic.message MarkupContent: {e}"))?;
+        if let Some(value) = message.get("value").and_then(Value::as_str) {
+            if value.is_empty() {
+                return Err("Diagnostic.message MarkupContent.value cannot be empty".into());
+            }
+        }
     }
 
     // Optional fields with validation
@@ -1037,6 +1043,42 @@ fn validate_publish_diagnostics_params(params: &Value) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[test]
+fn diagnostic_message_accepts_lsp_318_markup_content() -> TestResult {
+    let diagnostic = json!({
+        "range": {
+            "start": {"line": 0, "character": 0},
+            "end": {"line": 0, "character": 5}
+        },
+        "message": {
+            "kind": "markdown",
+            "value": "`PL100`: Missing `use strict;`"
+        }
+    });
+
+    validate_diagnostic(&diagnostic).map_err(|e| e.into())
+}
+
+#[test]
+fn diagnostic_message_rejects_invalid_lsp_318_markup_content() -> TestResult {
+    let diagnostic = json!({
+        "range": {
+            "start": {"line": 0, "character": 0},
+            "end": {"line": 0, "character": 5}
+        },
+        "message": {
+            "kind": "html",
+            "value": "<b>not supported</b>"
+        }
+    });
+
+    match validate_diagnostic(&diagnostic) {
+        Ok(()) => Err("invalid Diagnostic.message MarkupContent must be rejected".into()),
+        Err(err) if err.contains("MarkupContent.kind") => Ok(()),
+        Err(err) => Err(format!("unexpected validation error: {err}").into()),
+    }
 }
 
 #[test]

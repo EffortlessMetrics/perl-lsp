@@ -1161,8 +1161,11 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp-rs/tests/lsp_diagnostic_enrichment_test.rs"]
-description = "Markdown-formatted diagnostic messages (textDocument.diagnostic.markupMessageSupport) — server includes messageMarkup in diagnostic data when client opts in"
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_diagnostic_enrichment_test.rs",
+  "crates/perl-lsp-rs/tests/lsp_318_negative_claims.rs",
+]
+description = "Markdown-formatted pull diagnostic messages (textDocument.diagnostic.markupMessageSupport) - server emits standard Diagnostic.message MarkupContent and compatibility messageMarkup data only when the client opts in"
 
 [[feature]]
 id = "lsp.text_document_content"

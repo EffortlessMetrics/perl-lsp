@@ -332,7 +332,7 @@ fn assert_plain_message_values(value: &Value) -> TestResult {
     collect_non_string_message_paths(value, "$", &mut non_string_paths);
     assert!(
         non_string_paths.is_empty(),
-        "Diagnostic.message MarkupContent is not claimed; non-string message values at {}",
+        "Diagnostic.message MarkupContent must be gated by markupMessageSupport; non-string message values at {}",
         non_string_paths.join(", ")
     );
     Ok(())

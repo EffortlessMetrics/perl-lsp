@@ -298,10 +298,10 @@ pub struct ClientCapabilities {
     pub snippet_support: bool,
     /// Supports `completionItem.commitCharacters` in completion results
     pub completion_commit_characters_support: bool,
-    /// Supports markdown message content in diagnostics (LSP 3.18)
+    /// Supports markup message content in pull diagnostics (LSP 3.18)
     ///
-    /// When true, the server can provide rich markdown formatting in diagnostic
-    /// messages via the `data.messageMarkup` field in pull diagnostics responses.
+    /// When true, the server can provide `Diagnostic.message` as
+    /// `MarkupContent` in pull diagnostics responses.
     pub markup_message_support: bool,
     /// Supports workspace/codeLens/refresh request
     pub code_lens_refresh_support: bool,
