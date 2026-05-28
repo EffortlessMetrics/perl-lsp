@@ -411,6 +411,39 @@ fn inline_completion_use_namespace_suppresses_indexed_module_after_no_lib() -> T
 }
 
 #[test]
+fn inline_completion_use_namespace_suppresses_indexed_module_outside_inc_roots() -> TestResult {
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+
+    let mut harness = LspHarness::new_raw();
+    harness.initialize_ready(
+        &workspace.root_uri,
+        Some(json!({
+            "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+        })),
+    )?;
+
+    let module_uri = workspace.uri("t/My/Hidden.pm");
+    harness.open(&module_uri, "package My::Hidden;\n1;\n")?;
+    harness.wait_for_symbol("My::Hidden", Some(&module_uri), Duration::from_secs(2))?;
+
+    let script_uri = workspace.uri("script.pl");
+    harness.open(&script_uri, "use My::")?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, &script_uri, 0, 8, 1)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+
+    assert!(
+        items.iter().all(|item| item.get("insertText") != Some(&json!("My::Hidden;"))),
+        "inline module completion must not leak indexed modules outside effective @INC, got: \
+         {items:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn inline_completion_use_partial_token_returns_replacement_range() -> TestResult {
     let mut harness = LspHarness::new();
     harness.initialize(Some(json!({
