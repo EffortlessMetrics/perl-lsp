@@ -159,6 +159,8 @@ fn inline_completion_fixture_corpus_stays_silent_in_reject_zones() -> TestResult
         SilentFixture { name: "line_comment", source: "# use <<CURSOR>>" },
         SilentFixture { name: "string_literal", source: "my $text = \"use <<CURSOR>>\";" },
         SilentFixture { name: "unterminated_string", source: "my $text = \"use <<CURSOR>>" },
+        SilentFixture { name: "quote_single", source: "my $text = q{use <<CURSOR>>};" },
+        SilentFixture { name: "quote_double", source: "my $text = qq{use <<CURSOR>>};" },
         SilentFixture { name: "quote_words", source: "my @words = qw(use <<CURSOR>>);" },
         SilentFixture { name: "quote_command", source: "my $output = qx(use <<CURSOR>>);" },
         SilentFixture { name: "heredoc_body", source: "print <<'EOF';\nuse <<CURSOR>>\nEOF\n" },
