@@ -362,6 +362,48 @@ struct RankedCompletionItem {
     item: InlineCompletionItem,
 }
 
+#[derive(Debug, Default)]
+struct InlineCandidateSink {
+    items: Vec<RankedCompletionItem>,
+    sequence: usize,
+}
+
+impl InlineCandidateSink {
+    fn push(&mut self, priority: u8, item: InlineCompletionItem) {
+        self.items.push(RankedCompletionItem { priority, order: self.sequence, item });
+        self.sequence += 1;
+    }
+
+    fn into_items(self) -> Vec<RankedCompletionItem> {
+        self.items
+    }
+}
+
+trait InlineCandidateSource {
+    fn add_candidates(
+        &self,
+        provider: &InlineCompletionProvider,
+        context: &PreparedInlineCompletionContext,
+        semantic_context: &SemanticInlineContext,
+        sink: &mut InlineCandidateSink,
+    );
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ReceiverCandidateSource;
+
+#[derive(Debug, Clone, Copy)]
+struct SyntaxCandidateSource;
+
+#[derive(Debug, Clone, Copy)]
+struct TestCandidateSource;
+
+#[derive(Debug, Clone, Copy)]
+struct ShebangCandidateSource;
+
+#[derive(Debug, Clone, Copy)]
+struct ContextualFallbackSource;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum HardRejectZone {
     Comment,
@@ -499,229 +541,14 @@ impl InlineCompletionProvider {
         context: &PreparedInlineCompletionContext,
         semantic_context: &SemanticInlineContext,
     ) -> Vec<InlineCompletionItem> {
-        let prefix = context.prefix.as_str();
-        let full_line = context.current_line.as_str();
-        let mut items = Vec::<RankedCompletionItem>::new();
-        let mut sequence = 0usize;
+        let mut sink = InlineCandidateSink::default();
+        ReceiverCandidateSource.add_candidates(self, context, semantic_context, &mut sink);
+        SyntaxCandidateSource.add_candidates(self, context, semantic_context, &mut sink);
+        TestCandidateSource.add_candidates(self, context, semantic_context, &mut sink);
+        ShebangCandidateSource.add_candidates(self, context, semantic_context, &mut sink);
+        ContextualFallbackSource.add_candidates(self, context, semantic_context, &mut sink);
 
-        let mut push_item = |priority: u8, item: InlineCompletionItem| {
-            items.push(RankedCompletionItem { priority, order: sequence, item });
-            sequence += 1;
-        };
-
-        // Rule 1: After `->` suggest methods for the current receiver.
-        if let Some(fragment) = method_arrow_fragment(prefix)
-            && semantic_context.expected_syntax == ExpectedSyntax::MethodName
-        {
-            if semantic_context.receiver_hint == Some(ReceiverHint::SelfReceiver) {
-                for method in self.current_package_method_items(semantic_context, fragment) {
-                    push_item(0, method);
-                }
-            } else if completion_matches_fragment("new", "new()", fragment) {
-                push_item(
-                    0,
-                    InlineCompletionItem {
-                        insert_text: "new()".into(),
-                        filter_text: Some("new".into()),
-                        range: None,
-                        command: None,
-                    },
-                );
-            }
-        }
-
-        // Rule 2: After `use ` suggest common pragmas
-        if prefix.trim_end() == "use" || use_completion_fragment(prefix).is_some() {
-            let typed_fragment = use_completion_fragment(prefix).unwrap_or("");
-            // Suggest strict first as it's most common
-            if completion_matches_fragment("strict", "strict;", typed_fragment) {
-                push_item(
-                    0,
-                    InlineCompletionItem {
-                        insert_text: "strict;".into(),
-                        filter_text: Some("strict".into()),
-                        range: None,
-                        command: None,
-                    },
-                );
-            }
-
-            if completion_matches_fragment("warnings", "warnings;", typed_fragment) {
-                push_item(
-                    1,
-                    InlineCompletionItem {
-                        insert_text: "warnings;".into(),
-                        filter_text: Some("warnings".into()),
-                        range: None,
-                        command: None,
-                    },
-                );
-            }
-
-            if completion_matches_fragment("feature", "feature ':5.36';", typed_fragment) {
-                push_item(
-                    2,
-                    InlineCompletionItem {
-                        insert_text: "feature ':5.36';".into(),
-                        filter_text: Some("feature".into()),
-                        range: None,
-                        command: None,
-                    },
-                );
-            }
-        }
-
-        // Rule 3: After `sub <name>` without `{`, suggest smart body based on name pattern
-        if let Some(sub_name) = self.match_sub_declaration(prefix) {
-            if !full_line.contains('{') {
-                let body = self.generate_smart_body(&sub_name);
-                push_item(
-                    0,
-                    InlineCompletionItem {
-                        insert_text: format!(" {{\n{}\n}}", body),
-                        filter_text: Some("{".into()),
-                        range: None,
-                        command: None,
-                    },
-                );
-            }
-        }
-
-        // Rule 4: After `my $` suggest common variable patterns
-        if ends_with_keyword(prefix, "my $") {
-            push_item(
-                0,
-                InlineCompletionItem {
-                    insert_text: "self = shift;".into(),
-                    filter_text: Some("self".into()),
-                    range: None,
-                    command: None,
-                },
-            );
-        }
-
-        // Rule 5: After `package ` suggest common suffix patterns
-        if ends_with_keyword(prefix, "package ") {
-            push_item(
-                0,
-                InlineCompletionItem {
-                    insert_text: "MyPackage;\n\nuse strict;\nuse warnings;".into(),
-                    filter_text: Some("MyPackage".into()),
-                    range: None,
-                    command: None,
-                },
-            );
-        }
-
-        // Rule 6: After `bless ` suggest common patterns
-        if ends_with_keyword(prefix, "bless ") {
-            push_item(
-                0,
-                InlineCompletionItem {
-                    insert_text: "$self, $class;".into(),
-                    filter_text: Some("$self".into()),
-                    range: None,
-                    command: None,
-                },
-            );
-        }
-
-        // Rule 7: After `return ` in constructor context
-        if ends_with_keyword(prefix, "return ") {
-            if let Some(variable) = self.preferred_return_variable(semantic_context) {
-                push_item(
-                    0,
-                    InlineCompletionItem {
-                        insert_text: format!("{variable};"),
-                        filter_text: Some(variable),
-                        range: None,
-                        command: None,
-                    },
-                );
-            } else if self
-                .is_in_constructor_context(semantic_context.enclosing_sub.as_deref(), prefix)
-            {
-                push_item(
-                    1,
-                    InlineCompletionItem {
-                        insert_text: "$self;".into(),
-                        filter_text: Some("$self".into()),
-                        range: None,
-                        command: None,
-                    },
-                );
-            }
-        }
-
-        // Rule 8: Complete common loops
-        if ends_with_keyword(prefix, "for ") {
-            push_item(
-                0,
-                InlineCompletionItem {
-                    insert_text: "my $item (@items) {\n    \n}".into(),
-                    filter_text: Some("my".into()),
-                    range: None,
-                    command: None,
-                },
-            );
-        }
-
-        if ends_with_keyword(prefix, "foreach ") {
-            push_item(
-                0,
-                InlineCompletionItem {
-                    insert_text: "my $item (@items) {\n    \n}".into(),
-                    filter_text: Some("my".into()),
-                    range: None,
-                    command: None,
-                },
-            );
-        }
-
-        // Rule 9: Complete common test patterns
-        if ends_with_keyword(prefix, "ok(")
-            && let Some(arguments) = self.preferred_ok_assertion_arguments(semantic_context)
-        {
-            push_item(
-                0,
-                InlineCompletionItem {
-                    filter_text: Some(arguments.clone()),
-                    insert_text: arguments,
-                    range: None,
-                    command: None,
-                },
-            );
-        }
-
-        if ends_with_keyword(prefix, "is(")
-            && let Some(arguments) = self.preferred_is_assertion_arguments(semantic_context)
-        {
-            push_item(
-                0,
-                InlineCompletionItem {
-                    filter_text: Some(arguments.clone()),
-                    insert_text: arguments,
-                    range: None,
-                    command: None,
-                },
-            );
-        }
-
-        // Rule 10: Complete shebang
-        if prefix == "#!" || prefix == "#!/" {
-            push_item(
-                0,
-                InlineCompletionItem {
-                    insert_text: "/usr/bin/env perl".into(),
-                    filter_text: Some("perl".into()),
-                    range: None,
-                    command: None,
-                },
-            );
-        }
-
-        self.add_contextual_fallbacks(context, semantic_context, &mut items, &mut sequence);
-        self.normalize_items(items)
+        self.normalize_items(sink.into_items())
     }
 
     /// Check if we're after a sub declaration without body
@@ -1077,8 +904,7 @@ impl InlineCompletionProvider {
         &self,
         context: &PreparedInlineCompletionContext,
         semantic_context: &SemanticInlineContext,
-        items: &mut Vec<RankedCompletionItem>,
-        sequence: &mut usize,
+        sink: &mut InlineCandidateSink,
     ) {
         let prefix = context.prefix.trim();
         let comment_context = context
@@ -1093,28 +919,24 @@ impl InlineCompletionProvider {
             && context.variables.is_empty()
             && context.previous_non_empty_line.is_none()
         {
-            items.push(RankedCompletionItem {
-                priority: 8,
-                order: *sequence,
-                item: InlineCompletionItem {
+            sink.push(
+                8,
+                InlineCompletionItem {
                     insert_text: "#!/usr/bin/env perl\nuse strict;\nuse warnings;\n\n".into(),
                     filter_text: Some("perl".into()),
                     range: None,
                     command: None,
                 },
-            });
-            *sequence += 1;
-            items.push(RankedCompletionItem {
-                priority: 9,
-                order: *sequence,
-                item: InlineCompletionItem {
+            );
+            sink.push(
+                9,
+                InlineCompletionItem {
                     insert_text: "use strict;\nuse warnings;\n\n".into(),
                     filter_text: Some("strict".into()),
                     range: None,
                     command: None,
                 },
-            });
-            *sequence += 1;
+            );
         }
 
         if prefix.is_empty() {
@@ -1122,62 +944,54 @@ impl InlineCompletionProvider {
             if semantic_context.file_role == FileRole::Test
                 && let Some(assertion) = self.preferred_test_statement(semantic_context)
             {
-                items.push(RankedCompletionItem {
-                    priority: 0,
-                    order: *sequence,
-                    item: InlineCompletionItem {
+                sink.push(
+                    0,
+                    InlineCompletionItem {
                         filter_text: Some(test_statement_filter_text(assertion.as_str()).into()),
                         insert_text: assertion,
                         range: None,
                         command: None,
                     },
-                });
-                *sequence += 1;
+                );
                 pushed_test_assertion = true;
             }
 
             if let Some(variable) = self.preferred_return_variable(semantic_context) {
-                items.push(RankedCompletionItem {
-                    priority: 0,
-                    order: *sequence,
-                    item: InlineCompletionItem {
+                sink.push(
+                    0,
+                    InlineCompletionItem {
                         insert_text: format!("return {variable};"),
                         filter_text: Some(variable),
                         range: None,
                         command: None,
                     },
-                });
-                *sequence += 1;
+                );
             }
 
             if semantic_context.file_role == FileRole::Test && !pushed_test_assertion {
-                items.push(RankedCompletionItem {
-                    priority: 1,
-                    order: *sequence,
-                    item: InlineCompletionItem {
+                sink.push(
+                    1,
+                    InlineCompletionItem {
                         insert_text: "done_testing();".into(),
                         filter_text: Some("done_testing".into()),
                         range: None,
                         command: None,
                     },
-                });
-                *sequence += 1;
+                );
             }
 
             if comment_context
                 && let Some(variable) = self.preferred_assignment_variable(semantic_context)
             {
-                items.push(RankedCompletionItem {
-                    priority: 2,
-                    order: *sequence,
-                    item: InlineCompletionItem {
+                sink.push(
+                    2,
+                    InlineCompletionItem {
                         insert_text: format!("my {variable} = shift;"),
                         filter_text: Some(variable),
                         range: None,
                         command: None,
                     },
-                });
-                *sequence += 1;
+                );
             }
         }
     }
@@ -1313,6 +1127,253 @@ impl InlineCompletionProvider {
             return;
         }
         self.push_unique(values, value);
+    }
+}
+
+impl InlineCandidateSource for ReceiverCandidateSource {
+    fn add_candidates(
+        &self,
+        provider: &InlineCompletionProvider,
+        context: &PreparedInlineCompletionContext,
+        semantic_context: &SemanticInlineContext,
+        sink: &mut InlineCandidateSink,
+    ) {
+        let prefix = context.prefix.as_str();
+        if let Some(fragment) = method_arrow_fragment(prefix)
+            && semantic_context.expected_syntax == ExpectedSyntax::MethodName
+        {
+            if semantic_context.receiver_hint == Some(ReceiverHint::SelfReceiver) {
+                for method in provider.current_package_method_items(semantic_context, fragment) {
+                    sink.push(0, method);
+                }
+            } else if completion_matches_fragment("new", "new()", fragment) {
+                sink.push(
+                    0,
+                    InlineCompletionItem {
+                        insert_text: "new()".into(),
+                        filter_text: Some("new".into()),
+                        range: None,
+                        command: None,
+                    },
+                );
+            }
+        }
+    }
+}
+
+impl InlineCandidateSource for SyntaxCandidateSource {
+    fn add_candidates(
+        &self,
+        provider: &InlineCompletionProvider,
+        context: &PreparedInlineCompletionContext,
+        semantic_context: &SemanticInlineContext,
+        sink: &mut InlineCandidateSink,
+    ) {
+        let prefix = context.prefix.as_str();
+        let full_line = context.current_line.as_str();
+
+        if prefix.trim_end() == "use" || use_completion_fragment(prefix).is_some() {
+            let typed_fragment = use_completion_fragment(prefix).unwrap_or("");
+            if completion_matches_fragment("strict", "strict;", typed_fragment) {
+                sink.push(
+                    0,
+                    InlineCompletionItem {
+                        insert_text: "strict;".into(),
+                        filter_text: Some("strict".into()),
+                        range: None,
+                        command: None,
+                    },
+                );
+            }
+
+            if completion_matches_fragment("warnings", "warnings;", typed_fragment) {
+                sink.push(
+                    1,
+                    InlineCompletionItem {
+                        insert_text: "warnings;".into(),
+                        filter_text: Some("warnings".into()),
+                        range: None,
+                        command: None,
+                    },
+                );
+            }
+
+            if completion_matches_fragment("feature", "feature ':5.36';", typed_fragment) {
+                sink.push(
+                    2,
+                    InlineCompletionItem {
+                        insert_text: "feature ':5.36';".into(),
+                        filter_text: Some("feature".into()),
+                        range: None,
+                        command: None,
+                    },
+                );
+            }
+        }
+
+        if let Some(sub_name) = provider.match_sub_declaration(prefix)
+            && !full_line.contains('{')
+        {
+            let body = provider.generate_smart_body(&sub_name);
+            sink.push(
+                0,
+                InlineCompletionItem {
+                    insert_text: format!(" {{\n{}\n}}", body),
+                    filter_text: Some("{".into()),
+                    range: None,
+                    command: None,
+                },
+            );
+        }
+
+        if ends_with_keyword(prefix, "my $") {
+            sink.push(
+                0,
+                InlineCompletionItem {
+                    insert_text: "self = shift;".into(),
+                    filter_text: Some("self".into()),
+                    range: None,
+                    command: None,
+                },
+            );
+        }
+
+        if ends_with_keyword(prefix, "package ") {
+            sink.push(
+                0,
+                InlineCompletionItem {
+                    insert_text: "MyPackage;\n\nuse strict;\nuse warnings;".into(),
+                    filter_text: Some("MyPackage".into()),
+                    range: None,
+                    command: None,
+                },
+            );
+        }
+
+        if ends_with_keyword(prefix, "bless ") {
+            sink.push(
+                0,
+                InlineCompletionItem {
+                    insert_text: "$self, $class;".into(),
+                    filter_text: Some("$self".into()),
+                    range: None,
+                    command: None,
+                },
+            );
+        }
+
+        if ends_with_keyword(prefix, "return ") {
+            if let Some(variable) = provider.preferred_return_variable(semantic_context) {
+                sink.push(
+                    0,
+                    InlineCompletionItem {
+                        insert_text: format!("{variable};"),
+                        filter_text: Some(variable),
+                        range: None,
+                        command: None,
+                    },
+                );
+            } else if provider
+                .is_in_constructor_context(semantic_context.enclosing_sub.as_deref(), prefix)
+            {
+                sink.push(
+                    1,
+                    InlineCompletionItem {
+                        insert_text: "$self;".into(),
+                        filter_text: Some("$self".into()),
+                        range: None,
+                        command: None,
+                    },
+                );
+            }
+        }
+
+        if ends_with_keyword(prefix, "for ") || ends_with_keyword(prefix, "foreach ") {
+            sink.push(
+                0,
+                InlineCompletionItem {
+                    insert_text: "my $item (@items) {\n    \n}".into(),
+                    filter_text: Some("my".into()),
+                    range: None,
+                    command: None,
+                },
+            );
+        }
+    }
+}
+
+impl InlineCandidateSource for TestCandidateSource {
+    fn add_candidates(
+        &self,
+        provider: &InlineCompletionProvider,
+        context: &PreparedInlineCompletionContext,
+        semantic_context: &SemanticInlineContext,
+        sink: &mut InlineCandidateSink,
+    ) {
+        let prefix = context.prefix.as_str();
+
+        if ends_with_keyword(prefix, "ok(")
+            && let Some(arguments) = provider.preferred_ok_assertion_arguments(semantic_context)
+        {
+            sink.push(
+                0,
+                InlineCompletionItem {
+                    filter_text: Some(arguments.clone()),
+                    insert_text: arguments,
+                    range: None,
+                    command: None,
+                },
+            );
+        }
+
+        if ends_with_keyword(prefix, "is(")
+            && let Some(arguments) = provider.preferred_is_assertion_arguments(semantic_context)
+        {
+            sink.push(
+                0,
+                InlineCompletionItem {
+                    filter_text: Some(arguments.clone()),
+                    insert_text: arguments,
+                    range: None,
+                    command: None,
+                },
+            );
+        }
+    }
+}
+
+impl InlineCandidateSource for ShebangCandidateSource {
+    fn add_candidates(
+        &self,
+        _provider: &InlineCompletionProvider,
+        context: &PreparedInlineCompletionContext,
+        _semantic_context: &SemanticInlineContext,
+        sink: &mut InlineCandidateSink,
+    ) {
+        let prefix = context.prefix.as_str();
+        if prefix == "#!" || prefix == "#!/" {
+            sink.push(
+                0,
+                InlineCompletionItem {
+                    insert_text: "/usr/bin/env perl".into(),
+                    filter_text: Some("perl".into()),
+                    range: None,
+                    command: None,
+                },
+            );
+        }
+    }
+}
+
+impl InlineCandidateSource for ContextualFallbackSource {
+    fn add_candidates(
+        &self,
+        provider: &InlineCompletionProvider,
+        context: &PreparedInlineCompletionContext,
+        semantic_context: &SemanticInlineContext,
+        sink: &mut InlineCandidateSink,
+    ) {
+        provider.add_contextual_fallbacks(context, semantic_context, sink);
     }
 }
 
