@@ -73,6 +73,13 @@ fn inline_completion_fixture_corpus_returns_expected_ghost_text() -> TestResult 
             not_expected: &["done_testing();"],
         },
         SuggestionFixture {
+            name: "use_pragmas_after_format_terminator",
+            source: "format STDOUT =\n@<<<<\n$name\n.\nuse <<CURSOR>>",
+            first: Some("strict;"),
+            expected: &["strict;", "warnings;"],
+            not_expected: &["done_testing();"],
+        },
+        SuggestionFixture {
             name: "test_more_assertion_prefers_visible_actual_expected",
             source: "use Test::More;\n\nmy $got = compute();\nmy $expected = 42;\n\n<<CURSOR>>",
             first: Some("is($got, $expected, 'test description');"),
