@@ -926,6 +926,27 @@ review_after = "2026-06-07"
 expires = "2026-11-07"
 
 [[lane]]
+id = "lsp_318_claim_guard"
+workflow = ".github/workflows/lsp-318-claim-guard.yml"
+job = "claim-guard"
+tier = "frontdoor"
+kind = "lsp"
+blocking = true
+default_pr = false
+runner = "ubuntu_24_04"
+base_lem = 3
+owner = "lsp"
+intent = "Run the selected LSP 3.18 claim guard and generated matrix check when protocol claim surfaces change."
+failure_mode = "Unsupported or undocumented LSP 3.18 claims land without the mechanical guard or stale matrix being checked."
+proof_obligation = "Run cargo xtask check-lsp-318-claims and cargo xtask generate-lsp-318-matrix --check."
+evidence = ["job output"]
+allowed_triggers = ["pull_request", "push", "workflow_dispatch"]
+expensive = false
+duplicate_of = []
+review_after = "2026-06-28"
+expires = "2026-11-28"
+
+[[lane]]
 id = "policy_validators"
 workflow = ".github/workflows/policy-validators.yml"
 job = "validate"
