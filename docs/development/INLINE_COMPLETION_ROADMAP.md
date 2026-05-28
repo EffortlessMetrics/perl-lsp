@@ -1,6 +1,6 @@
 # Semantic Inline Completion Roadmap
 
-Status: planning
+Status: active implementation
 Owner: perl-lsp maintainers
 Related:
 - [Inline Completion Release Gate](INLINE_COMPLETION_RELEASE_GATE.md)
@@ -44,9 +44,32 @@ standard LSP 3.18 `textDocument/inlineCompletion` target:
 - a simple `use ` fixture returns deterministic `strict;`;
 - neutral positions return empty.
 
-Those receipts are protocol and process-boundary proof. They are not a claim
-that inline completion is semantically rich, project-aware, or ready to expand
-into AI-first behavior.
+Those receipts are protocol and process-boundary proof. The semantic lane has
+since moved beyond the release smoke, but the claim boundary remains narrow:
+implemented behavior is only trusted where covered by provider tests, stdio
+smokes, and the deterministic quality receipt.
+
+Current implemented foundations include:
+
+- editor-safety contracts for replacement ranges, UTF-16 wire positions, and
+  `selectedCompletionInfo` alignment;
+- hard-zone suppression for comments, strings, heredocs, POD, regex bodies, and
+  other unsupported syntax contexts covered by fixtures;
+- an internal `SemanticInlineContext` used by deterministic candidate sources;
+- candidate sources for syntax continuations, visible lexicals, workspace module
+  imports, Test::More/Test2 assertions, current-package receiver methods, DBI
+  receiver hints, constructor style, and contextual fallbacks;
+- scored ranking that prefers local symbols, project modules, file role, and
+  style-compatible candidates;
+- a parse-safety filter that suppresses returned candidates which worsen local
+  parser damage;
+- local deterministic quality receipts that record fixture totals, source
+  outcomes, latency, hard-zone suppression, replacement-range checks, and parse
+  regressions.
+
+The remaining work is not "make inline completion exist." It is to grow the
+fixture corpus, keep the receipt counters honest, add real-editor/project-shape
+receipts where useful, and only then consider next-edit or optional AI surfaces.
 
 ## Non-Goals
 
@@ -138,7 +161,7 @@ The provider must stay silent in zones where code ghost text is likely wrong:
 ## Semantic Context Target
 
 `SemanticInlineContext` is the bridge from line scanning to project-aware Perl
-suggestions. The initial shape should be internal and narrow:
+suggestions. The current implementation keeps this context internal and narrow:
 
 ```rust
 pub struct SemanticInlineContext {
@@ -153,13 +176,15 @@ pub struct SemanticInlineContext {
 }
 ```
 
-The first implementation may use placeholders or best-effort facts when a field
-is not yet available. The important contract is the direction: candidate sources
-should consume semantic context instead of scraping only the current line.
+Some fields still use best-effort facts when richer parser, semantic, or
+workspace data is not available. The important contract is the direction:
+candidate sources should consume semantic context instead of scraping only the
+current line.
 
 ## Candidate Sources
 
-The deterministic engine should split candidate generation into sources:
+The deterministic engine is split into candidate sources and should stay that
+way as new suggestions are added:
 
 ```rust
 trait InlineCandidateSource {
@@ -167,9 +192,9 @@ trait InlineCandidateSource {
 }
 ```
 
-Initial sources:
+Current and intended sources:
 
-- `SyntaxSource`: safe Perl continuations such as `use`, `return`, and control
+- `SyntaxSource`: safe Perl continuations such as `use`, `return`, `for`, and control
   flow scaffolding;
 - `LexicalSource`: visible lexical variables and nearby symbols;
 - `ImportSource`: workspace modules from effective include context;
@@ -184,7 +209,7 @@ negative fixtures proving where it stays silent.
 
 ## Ranking
 
-Candidate ordering should move from fixed rule order to scored confidence.
+Candidate ordering uses scored confidence rather than fixed rule order.
 
 Useful score components:
 
@@ -207,20 +232,22 @@ ghost text.
 Parse safety does not mean the whole document must become valid Perl after every
 candidate. It means the candidate must not make the local edit state worse.
 
-The filter should:
+The filter:
 
-- splice the candidate into the current buffer;
-- parse the affected region or document using the available parser path;
-- reject candidates that increase local error score;
-- allow candidates that improve an incomplete construct;
-- record parse-safe rejections in local/dev receipts.
+- splices the candidate into the current line or replacement range;
+- parses the probe using the available parser path;
+- rejects candidates that increase local error score;
+- allows candidates that improve an incomplete construct;
+- records returned-item parse regressions in local/dev receipts.
 
 This is the core trust mechanism for automatic suggestions.
 
 ## Fixture UX Corpus
 
 Inline completion should be tested as editor UX, not only as provider units.
-Fixture tests should encode expected and forbidden ghost text:
+The current fixture receipt is implemented as a Rust xtask fixture list; a future
+YAML or data-file corpus is still acceptable if it improves reviewability.
+Fixtures should encode expected and forbidden ghost text:
 
 ```yaml
 source: |
@@ -281,6 +308,11 @@ code.
 
 Build the rails before expanding intelligence.
 
+This ladder is historical and directional. Several phases are already complete
+or partially complete in the current tree; do not reopen them unless a failing
+test, receipt, or real editor report shows drift. Future work should extend the
+implemented rails instead of replacing them.
+
 | Phase | PR shape | Scope |
 | --- | --- | --- |
 | 0 | `docs(inline): define semantic inline-completion roadmap` | This document and related docs pointers. |
@@ -305,6 +337,27 @@ Build the rails before expanding intelligence.
 | 19 | `ci(inline): emit inline completion quality receipts` | Fixture totals, source counters, latency, parse regressions. |
 | 20 | `feat(inline): add gated next-edit suggestion scaffold` | Feature-gated scaffold only. |
 | 21 | `feat(inline): add guarded AI candidate source boundary` | Optional AI boundary after deterministic path is trusted. |
+
+Current completed or substantially implemented phases:
+
+- protocol contracts, release-built stdio smokes, and static/dynamic/disabled
+  paths;
+- replacement ranges and UTF-16 wire-position checks;
+- `selectedCompletionInfo` alignment;
+- hard reject zones;
+- semantic context, file role, style context, visible lexical facts, and
+  source-split deterministic candidates;
+- workspace module imports, test assertions, current-package `$self->` methods,
+  constructor style, DBI receiver hints, and visible-context loop/guard
+  continuations;
+- ranking, parse-safety filtering, and local quality receipts.
+
+Still future or deliberately gated:
+
+- larger real-project UX receipts for inline quality beyond deterministic unit
+  fixtures;
+- next-edit suggestions;
+- optional AI candidate boundaries.
 
 ## High-Value Perl Wins
 
@@ -344,10 +397,13 @@ It may claim:
 - the intended semantic inline-completion direction;
 - the order in which the lane should build protocol safety, context, sources,
   ranking, parse safety, local receipts, next-edit scaffolding, and optional AI.
+- implemented semantic candidate behavior when backed by named tests, smokes, or
+  quality receipts.
 
 It may not claim:
 
-- that semantic candidate sources are implemented;
+- that semantic inline completion is complete across all Perl styles, project
+  layouts, or editor integrations;
 - that AI is enabled or planned as default behavior;
 - that inline completion is generally perfect or production-complete;
 - complete LSP 3.18 conformance;
