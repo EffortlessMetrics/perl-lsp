@@ -30,13 +30,11 @@ fn ripr_workflow_runs_on_ready_for_review_without_path_filter()
         workflow.contains("if: github.event.pull_request.draft != true"),
         "ripr.yml may skip draft PRs while they are still draft"
     );
+    let gate_step = workflow_step(&workflow, "Enforce new RIPR gap quality gate")
+        .ok_or("missing RIPR gate step")?;
     assert!(
-        workflow.contains("continue-on-error: true"),
-        "PR1 is routing and receipt generation only; blocking enforcement belongs to a later CI slice"
-    );
-    assert!(
-        !workflow.contains("quality-gate") && !workflow.contains("if-no-files-found: error"),
-        "PR1 must not include blocking quality-gate or required-artifact semantics"
+        !gate_step.contains("continue-on-error: true"),
+        "RIPR workflow is now promoted past PR1 routing-only mode and must block new-gap failures"
     );
     assert!(
         workflow.contains("cargo xtask ripr-pr --base") && workflow.contains("target/ripr/pr/**"),
@@ -85,8 +83,8 @@ fn ripr_workflow_runs_on_ready_for_review_without_path_filter()
         );
     }
     assert!(
-        upload_step.contains("if-no-files-found: warn"),
-        "PR1 keeps artifact upload advisory; hard-fail upload semantics belong to PR8"
+        upload_step.contains("if-no-files-found: error"),
+        "RIPR proof artifacts are required after PR8"
     );
     let summary_step =
         workflow_step(&workflow, "Append PR evidence summary").ok_or("missing summary step")?;
@@ -111,9 +109,10 @@ fn ripr_docs_describe_unfiltered_ready_for_review_receipt_routing()
         .ok_or("docs/ci/ripr.md is missing the Behavior section")?;
 
     assert!(
-        posture.contains("remains advisory for merge decisions")
-            && posture.contains("quality-gate` enforcement are separate follow-up slices"),
-        "RIPR docs must keep PR1 claim boundary routing-only"
+        posture.contains("blocks PRs that introduce")
+            && posture.contains("Repo-wide")
+            && posture.contains("RIPR+ total zero remains a burn-down target"),
+        "RIPR docs must describe the promoted new-gap blocking posture without final total-zero enforcement"
     );
     assert!(
         when_it_runs.contains("Every PR targeting `master` or `main`"),
@@ -136,14 +135,10 @@ fn ripr_docs_describe_unfiltered_ready_for_review_receipt_routing()
             && behavior.contains("target/ripr/review/"),
         "RIPR docs must name diff-scoped, repo-wide, and review-guidance receipts"
     );
-    for forbidden in [
-        "Blocks merges",
-        "quality-gate --mode enforce-new-ripr",
-        "target/receipts/quality/quality-gate",
-    ] {
+    for forbidden in ["Blocks merges", "quality-gate --mode enforce "] {
         assert!(
             !docs.contains(forbidden),
-            "PR1 docs must not carry later blocking quality-gate text `{forbidden}`"
+            "RIPR docs must not carry final quality-gate text `{forbidden}`"
         );
     }
 
@@ -161,17 +156,19 @@ fn ripr_docs_use_rtk_for_local_proof_commands() -> Result<(), Box<dyn std::error
     for command in &commands {
         assert!(command.starts_with("rtk "), "RIPR local proof command must use rtk: {command}");
         assert!(
-            !command.contains("quality-gate"),
-            "PR1 local proof commands must stay routing-only; quality-gate commands belong to later slices: {command}"
+            !command.contains("quality-gate --mode enforce "),
+            "RIPR local proof commands must not run final enforcement before burn-down: {command}"
         );
     }
     for required in [
         "cargo xtask ripr-pr --base origin/HEAD --head HEAD",
         "cargo xtask ripr-plus --receipt target/receipts/quality/ripr-plus.json",
         "cargo xtask ripr-review-comments --base origin/HEAD --head HEAD",
+        "cargo xtask quality-gate --mode enforce-new-ripr",
         "cargo xtask ripr-pr --base origin/HEAD --head HEAD --check",
         "cargo xtask ripr-plus --receipt target/receipts/quality/ripr-plus.json --check",
         "cargo xtask ripr-review-comments --base origin/HEAD --head HEAD --check",
+        "cargo xtask quality-gate --mode enforce-new-ripr",
     ] {
         assert!(
             commands.iter().any(|command| command.contains(required)),

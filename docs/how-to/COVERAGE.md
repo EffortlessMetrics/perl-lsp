@@ -53,9 +53,9 @@ Patch coverage is the front-door PR coverage gate in Codecov policy:
 
 - **Patch coverage**: Target `95%` with `0%` threshold.
 - **Project coverage**: Target `95%`, informational during burn-down.
-- **Coverage scope**: Workspace policy includes proof-rail `xtask/src/` code.
+- **Coverage scope**: The PR patch gate measures workspace library units plus focused proof-lane `xtask` tests. Integration-heavy project coverage remains a burn-down target.
 
-Workflow wiring remains a separate follow-up slice. This page documents the Codecov policy posture, coverage receipt, and local patch coverage quality-gate commands.
+The coverage proof workflow now runs the patch coverage quality gate on PRs.
 Project coverage remains informational during burn-down.
 
 ### Patch Coverage Quality Gate
@@ -64,6 +64,12 @@ Generate the coverage receipt from LCOV before running the patch gate:
 
 ```bash
 rtk cargo xtask coverage-baseline --lcov target/lcov.info --receipt target/receipts/quality/coverage-baseline.json --codecov codecov.yml --patch-coverage <patch-percent>
+```
+
+CI derives patch coverage from the PR diff and the workspace library plus proof-lane LCOV file:
+
+```bash
+rtk cargo xtask coverage-baseline --lcov target/lcov.info --receipt target/receipts/quality/coverage-baseline.json --codecov codecov.yml --patch-base origin/HEAD --scope workspace-lib-xtask-quality
 ```
 
 Then run the patch coverage quality gate:
@@ -274,7 +280,7 @@ rtk just coverage
 
 ## Integration with CI Gates
 
-Patch coverage is the Codecov PR coverage gate for new code. Project coverage remains informational during burn-down and is promoted to blocking after the project reaches the `95%` target.
+Patch coverage is the blocking PR coverage gate for new code. CI runs `just coverage-proof <base>` to generate workspace library plus focused proof-lane LCOV, write and check `target/receipts/quality/coverage-baseline.json`, run `cargo xtask quality-gate --mode enforce-patch-coverage`, append `target/receipts/quality/quality-gate-coverage.md` to the GitHub summary, and upload required coverage proof artifacts. Project coverage remains informational during burn-down and is promoted to blocking after the project reaches the `95%` target.
 
 Branch coverage in the parser coverage lane is enforced separately through the baseline ratchet in `.ci/coverage-baseline.txt`.
 

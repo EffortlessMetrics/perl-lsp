@@ -8,7 +8,7 @@ on:
   pull_request:
     branches: [ main, master ]
     # Keep label-gated jobs alive after the label is applied.
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
   schedule:
     # Run nightly at 3am UTC
     - cron: '0 3 * * *'
@@ -418,16 +418,18 @@ jobs:
           retention-days: 30
 
   test-coverage:
-    name: Test Coverage
+    name: Codecov / Patch 95
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     if: |
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' &&
-       contains(github.event.pull_request.labels.*.name, 'ci:coverage')) ||
+      (github.event_name == 'pull_request' && github.event.pull_request.draft != true) ||
       github.event_name == 'schedule'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # nightly (master)
@@ -439,6 +441,7 @@ jobs:
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
         with:
           key: ${{ runner.os }}-coverage-${{ hashFiles('Cargo.lock') }}
+          cache-targets: false
           cache-on-failure: true
 
       - name: Install just
@@ -456,21 +459,46 @@ jobs:
           touch archive/legacy-tests/test_fixtures/Module.pm
           touch archive/legacy-tests/test_fixtures/test.t
 
-      - name: Run tests with coverage (parser only, lean)
+      - name: Run workspace coverage proof
         env:
-          RUSTFLAGS: "-Copt-level=1 -Cdebuginfo=2"
-          CARGO_BUILD_JOBS: 2
-        run: just coverage-branch-gate
+          BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}
+          RUSTFLAGS: "-Cdebuginfo=0"
+          CARGO_BUILD_JOBS: 1
+        run: |
+          base_ref="$BASE_REF"
+          git fetch --no-tags --depth=200 origin "$base_ref" || true
+          just coverage-proof "origin/$base_ref"
+
+      - name: Append coverage proof summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f target/receipts/quality/quality-gate-coverage.md ]; then
+            cat target/receipts/quality/quality-gate-coverage.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No coverage quality-gate summary was produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354  # v6.0.1
-        continue-on-error: true
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: lcov.info
-          flags: parser
-          name: parser-branch-coverage
-          fail_ci_if_error: false
+          files: target/lcov.info
+          name: workspace-patch-coverage
+          fail_ci_if_error: true
+
+      - name: Upload coverage proof artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        with:
+          name: coverage-proof-${{ github.sha }}
+          path: |
+            target/lcov.info
+            target/receipts/quality/coverage-baseline.json
+            target/receipts/quality/quality-gate-coverage.json
+            target/receipts/quality/quality-gate-coverage.md
+          retention-days: 14
+          if-no-files-found: error
 
   tautology-check:
     name: Tautology Detection

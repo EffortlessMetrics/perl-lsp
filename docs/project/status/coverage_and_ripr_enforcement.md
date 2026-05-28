@@ -10,6 +10,8 @@ The proof lane is in transition from measurement to enforcement:
 
 - new RIPR gaps are enforced by `cargo xtask quality-gate --mode enforce-new-ripr`
 - patch coverage is enforced by `cargo xtask quality-gate --mode enforce-patch-coverage`
+- CI uploads required RIPR and coverage proof artifacts and appends quality-gate
+  Markdown summaries to the GitHub job summary
 - repo-wide RIPR+ zero and project coverage 95% remain burn-down targets
 - temporary burn-down exceptions are tracked in
   [`policy/quality-gate-exceptions.toml`](../../../policy/quality-gate-exceptions.toml)

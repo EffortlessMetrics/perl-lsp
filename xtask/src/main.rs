@@ -205,6 +205,12 @@ enum Commands {
         /// Patch coverage percentage from Codecov for this PR.
         #[arg(long)]
         patch_coverage: Option<f64>,
+        /// Compute patch coverage from executable lines changed since this git base.
+        #[arg(long)]
+        patch_base: Option<String>,
+        /// Coverage scope recorded in the receipt.
+        #[arg(long)]
+        scope: Option<String>,
         /// Validate the existing receipt instead of rewriting it.
         #[arg(long)]
         check: bool,
@@ -2731,15 +2737,23 @@ fn main() -> Result<()> {
         Commands::InlineCompletionSmoke { binary } => inline_completion_smoke::run(binary),
         Commands::InlineCompletionQuality { receipt } => inline_completion_quality::run(receipt),
         Commands::Badges { check } => badges::run(check),
-        Commands::CoverageBaseline { lcov, receipt, codecov, patch_coverage, check } => {
-            quality_baseline::run(quality_baseline::CoverageBaselineArgs {
-                lcov,
-                receipt,
-                codecov,
-                patch_coverage,
-                check,
-            })
-        }
+        Commands::CoverageBaseline {
+            lcov,
+            receipt,
+            codecov,
+            patch_coverage,
+            patch_base,
+            scope,
+            check,
+        } => quality_baseline::run(quality_baseline::CoverageBaselineArgs {
+            lcov,
+            receipt,
+            codecov,
+            patch_coverage,
+            patch_base,
+            scope,
+            check,
+        }),
         Commands::QualityGate {
             mode,
             exception_policy,

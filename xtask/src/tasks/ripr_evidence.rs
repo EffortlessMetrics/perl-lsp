@@ -252,19 +252,25 @@ fn ripr_plus_seam_path(seam: &Value) -> Option<String> {
 }
 
 fn current_head(repo: &Path) -> Result<String> {
-    Ok(run_git_output(repo, &["rev-parse", "HEAD"])?.trim().to_string())
+    revision_sha(repo, "HEAD")
+}
+
+fn revision_sha(repo: &Path, revision: &str) -> Result<String> {
+    Ok(run_git_output(repo, &["rev-parse", revision])?.trim().to_string())
 }
 
 fn write_pr_evidence(repo: &Path, options: &PrEvidenceOptions) -> Result<()> {
     verify_revision(repo, &options.base)?;
     verify_revision(repo, &options.head)?;
+    let base_sha = revision_sha(repo, &options.base)?;
+    let head_sha = revision_sha(repo, &options.head)?;
     let changed_files = changed_files(repo, &options.base, &options.head)?;
     write_pr_diff(repo, &options.base, &options.head)?;
     let check_json = run_ripr_check(repo, options)?;
     let check_value: Value =
         serde_json::from_str(&check_json).context("ripr check output was not valid JSON")?;
-    let packet = pr_evidence_packet(options, &changed_files, &check_value);
-    validate_pr_evidence_packet(&packet, options, changed_files.len(), true)?;
+    let packet = pr_evidence_packet(options, &changed_files, &check_value, &base_sha, &head_sha);
+    validate_pr_evidence_packet(&packet, options, changed_files.len(), true, &base_sha, &head_sha)?;
     write_text(&repo.join(PR_EVIDENCE_JSON), &format_json(&packet)?)?;
     write_text(&repo.join(PR_EVIDENCE_MD), &render_pr_evidence_markdown(&packet))?;
     println!("Wrote {PR_EVIDENCE_JSON}");
@@ -275,6 +281,8 @@ fn write_pr_evidence(repo: &Path, options: &PrEvidenceOptions) -> Result<()> {
 fn check_pr_evidence(repo: &Path, options: &PrEvidenceOptions) -> Result<()> {
     verify_revision(repo, &options.base)?;
     verify_revision(repo, &options.head)?;
+    let base_sha = revision_sha(repo, &options.base)?;
+    let head_sha = revision_sha(repo, &options.head)?;
     let changed_files = changed_files(repo, &options.base, &options.head)?;
     let text = fs::read_to_string(repo.join(PR_EVIDENCE_JSON))
         .with_context(|| format!("missing or unreadable {PR_EVIDENCE_JSON}"))?;
@@ -285,6 +293,8 @@ fn check_pr_evidence(repo: &Path, options: &PrEvidenceOptions) -> Result<()> {
         options,
         changed_files.len(),
         repo.join(PR_EVIDENCE_MD).exists(),
+        &base_sha,
+        &head_sha,
     )?;
     println!("PR evidence contract ok: {PR_EVIDENCE_JSON}");
     Ok(())
@@ -308,6 +318,8 @@ fn pr_evidence_packet(
     options: &PrEvidenceOptions,
     changed_files: &[String],
     check_value: &Value,
+    base_sha: &str,
+    head_sha: &str,
 ) -> Value {
     let check_summary = check_value.get("summary").and_then(Value::as_object);
     let weakly_exposed = count_field(check_summary, "weakly_exposed");
@@ -333,7 +345,9 @@ fn pr_evidence_packet(
         "status": if warnings.is_empty() { "advisory" } else { "incomplete" },
         "root": options.root,
         "base": options.base,
+        "base_sha": base_sha,
         "head": options.head,
+        "head_sha": head_sha,
         "summary": {
             "changed_files": changed_files.len(),
             "comments": 0,
@@ -385,6 +399,8 @@ fn validate_pr_evidence_packet(
     options: &PrEvidenceOptions,
     expected_changed_files: usize,
     markdown_exists: bool,
+    expected_base_sha: &str,
+    expected_head_sha: &str,
 ) -> Result<()> {
     let mut violations = Vec::new();
     expect_string(packet, "schema_version", "0.1", &mut violations);
@@ -393,7 +409,9 @@ fn validate_pr_evidence_packet(
     expect_string(packet, "scope", "diff", &mut violations);
     expect_string(packet, "root", &options.root, &mut violations);
     expect_string(packet, "base", &options.base, &mut violations);
+    expect_string(packet, "base_sha", expected_base_sha, &mut violations);
     expect_string(packet, "head", &options.head, &mut violations);
+    expect_string(packet, "head_sha", expected_head_sha, &mut violations);
     match packet.get("status").and_then(Value::as_str) {
         Some("advisory" | "incomplete" | "error") => {}
         Some(other) => violations.push(format!("status {other:?} is not valid")),
@@ -518,6 +536,7 @@ fn write_review_comments(repo: &Path, options: &ReviewCommentsOptions) -> Result
     if let Err(err) = run_ripr_review_comments(repo, options, &root) {
         write_error_review_comments(repo, options, &root, &err.to_string())?;
     }
+    stamp_review_comments_receipt(repo, options)?;
     validate_review_comments(repo, options, true)?;
     println!("Wrote {REVIEW_COMMENTS_JSON}");
     println!("Wrote {REVIEW_COMMENTS_MD}");
@@ -573,7 +592,9 @@ fn validate_review_comments(
     expect_string(&packet, "schema_version", "0.1", &mut violations);
     expect_string(&packet, "tool", "ripr", &mut violations);
     expect_string(&packet, "base", &options.base, &mut violations);
+    expect_string(&packet, "base_sha", &revision_sha(repo, &options.base)?, &mut violations);
     expect_string(&packet, "head", &options.head, &mut violations);
+    expect_string(&packet, "head_sha", &revision_sha(repo, &options.head)?, &mut violations);
     match packet.get("status").and_then(Value::as_str) {
         Some("advisory" | "incomplete" | "error") => {}
         Some(other) => violations.push(format!("status {other:?} is not valid")),
@@ -595,6 +616,20 @@ fn validate_review_comments(
     } else {
         bail!("review comments contract violations:\n{}", bullet_list(&violations));
     }
+}
+
+fn stamp_review_comments_receipt(repo: &Path, options: &ReviewCommentsOptions) -> Result<()> {
+    let path = repo.join(REVIEW_COMMENTS_JSON);
+    let text = fs::read_to_string(&path)
+        .with_context(|| format!("missing or unreadable {REVIEW_COMMENTS_JSON}"))?;
+    let mut packet: Value = serde_json::from_str(&text)
+        .with_context(|| format!("{REVIEW_COMMENTS_JSON} is not valid JSON"))?;
+    let Some(object) = packet.as_object_mut() else {
+        bail!("{REVIEW_COMMENTS_JSON} is not a JSON object");
+    };
+    object.insert("base_sha".to_string(), json!(revision_sha(repo, &options.base)?));
+    object.insert("head_sha".to_string(), json!(revision_sha(repo, &options.head)?));
+    write_text(&path, &format_json(&packet)?)
 }
 
 fn write_error_review_comments(
@@ -1443,5 +1478,191 @@ mod tests {
         assert!(!decision.requires_targeted_mutation);
         assert!(!decision.requires_full_owner_mutation);
         assert_eq!(decision.mode, "fast_only");
+    }
+
+    #[test]
+    fn normalized_option_uses_default_for_blank_values() {
+        assert_eq!(normalized_option("", DEFAULT_ROOT), DEFAULT_ROOT);
+        assert_eq!(normalized_option("  ", DEFAULT_BASE), DEFAULT_BASE);
+        assert_eq!(normalized_option("HEAD", DEFAULT_HEAD), "HEAD");
+    }
+
+    #[test]
+    fn revision_sha_reads_current_head() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path();
+        init_git_repo(repo)?;
+
+        let head = revision_sha(repo, "HEAD")?;
+
+        assert_eq!(current_head(repo)?, head);
+        assert_eq!(head.len(), 40);
+        Ok(())
+    }
+
+    #[test]
+    fn revision_sha_rejects_missing_revision() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path();
+        init_git_repo(repo)?;
+
+        assert!(revision_sha(repo, "refs/heads/does-not-exist").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn pr_evidence_packet_carries_revision_shas() -> Result<()> {
+        let options = PrEvidenceOptions {
+            root: ".".to_string(),
+            base: "origin/main".to_string(),
+            head: "HEAD".to_string(),
+        };
+        let check_value = json!({
+            "summary": {
+                "weakly_exposed": 1,
+                "reachable_unrevealed": 0,
+                "no_static_path": 0
+            }
+        });
+
+        let packet = pr_evidence_packet(
+            &options,
+            &["xtask/src/tasks/ripr_evidence.rs".to_string()],
+            &check_value,
+            "base-sha",
+            "head-sha",
+        );
+
+        assert_eq!(packet["base_sha"], json!("base-sha"));
+        assert_eq!(packet["head_sha"], json!("head-sha"));
+        validate_pr_evidence_packet(&packet, &options, 1, true, "base-sha", "head-sha")?;
+        Ok(())
+    }
+
+    #[test]
+    fn stamp_review_comments_receipt_records_current_revisions() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path();
+        init_git_repo(repo)?;
+        fs::create_dir_all(repo.join("target/ripr/review"))?;
+        fs::write(repo.join(REVIEW_COMMENTS_MD), "# Review comments\n")?;
+        fs::write(
+            repo.join(REVIEW_COMMENTS_JSON),
+            format_json(&json!({
+                "schema_version": "0.1",
+                "tool": "ripr",
+                "status": "advisory",
+                "root": ".",
+                "base": "HEAD",
+                "head": "HEAD",
+                "mode": "fast",
+                "summary": {},
+                "comments": [],
+                "summary_only": [],
+                "suppressed": [],
+                "warnings": []
+            }))?,
+        )?;
+        let options = ReviewCommentsOptions {
+            root: ".".to_string(),
+            base: "HEAD".to_string(),
+            head: "HEAD".to_string(),
+            timeout_seconds: None,
+        };
+
+        stamp_review_comments_receipt(repo, &options)?;
+        validate_review_comments(repo, &options, true)?;
+        let packet: Value =
+            serde_json::from_str(&fs::read_to_string(repo.join(REVIEW_COMMENTS_JSON))?)?;
+        let head = revision_sha(repo, "HEAD")?;
+
+        assert_eq!(packet["base_sha"], json!(head));
+        assert_eq!(packet["head_sha"], json!(head));
+        Ok(())
+    }
+
+    #[test]
+    fn stamp_review_comments_receipt_rejects_non_object() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path();
+        init_git_repo(repo)?;
+        fs::create_dir_all(repo.join("target/ripr/review"))?;
+        fs::write(repo.join(REVIEW_COMMENTS_JSON), "[]\n")?;
+        let options = ReviewCommentsOptions {
+            root: ".".to_string(),
+            base: "HEAD".to_string(),
+            head: "HEAD".to_string(),
+            timeout_seconds: None,
+        };
+
+        assert!(stamp_review_comments_receipt(repo, &options).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn validate_review_comments_rejects_stale_revision_receipt() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path();
+        init_git_repo(repo)?;
+        fs::create_dir_all(repo.join("target/ripr/review"))?;
+        fs::write(repo.join(REVIEW_COMMENTS_MD), "# Review comments\n")?;
+        fs::write(
+            repo.join(REVIEW_COMMENTS_JSON),
+            format_json(&json!({
+                "schema_version": "0.1",
+                "tool": "ripr",
+                "status": "advisory",
+                "root": ".",
+                "base": "HEAD",
+                "base_sha": "stale-base",
+                "head": "HEAD",
+                "head_sha": "stale-head",
+                "mode": "fast",
+                "summary": {},
+                "comments": [],
+                "summary_only": [],
+                "suppressed": [],
+                "warnings": []
+            }))?,
+        )?;
+        let options = ReviewCommentsOptions {
+            root: ".".to_string(),
+            base: "HEAD".to_string(),
+            head: "HEAD".to_string(),
+            timeout_seconds: None,
+        };
+
+        assert!(validate_review_comments(repo, &options, true).is_err());
+        Ok(())
+    }
+
+    fn init_git_repo(repo: &Path) -> Result<()> {
+        fs::write(repo.join("tracked.txt"), "base\n")?;
+        run_git(repo, &["init"])?;
+        run_git(repo, &["add", "tracked.txt"])?;
+        run_git(
+            repo,
+            &["-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-m", "base"],
+        )?;
+        Ok(())
+    }
+
+    fn run_git(repo: &Path, args: &[&str]) -> Result<String> {
+        let output = Command::new("git").args(args).current_dir(repo).output()?;
+        if !output.status.success() {
+            bail!("git {:?} failed with status {}", args, output.status);
+        }
+        Ok(String::from_utf8(output.stdout)
+            .context("git command returned non-UTF8 output")?
+            .trim()
+            .to_string())
+    }
+
+    #[test]
+    fn run_git_reports_failure_status() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+
+        assert!(run_git(temp.path(), &["definitely-not-a-git-command"]).is_err());
+        Ok(())
     }
 }

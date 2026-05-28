@@ -47,6 +47,20 @@ fn codecov_patch_status_requires_95_with_no_threshold() -> Result<(), Box<dyn st
         !raw_config.contains("- \"xtask/**\""),
         "proof-rail xtask code must not be ignored by Codecov"
     );
+    let ignored_paths = config
+        .get("ignore")
+        .and_then(Value::as_sequence)
+        .ok_or("codecov.yml is missing ignore paths")?;
+    for required_ignore in
+        [".github/**", ".ci/**", "codecov.yml", "docs/**", "justfile", "xtask/tests/**"]
+    {
+        assert!(
+            ignored_paths
+                .iter()
+                .any(|path| matches!(path, Value::String(path) if path == required_ignore)),
+            "Codecov patch status must ignore non-LCOV proof-lane path `{required_ignore}`"
+        );
+    }
     assert_eq!(
         yaml_path(&config, &["flags", "xtask", "paths", "0"]),
         Some("xtask/src/"),
@@ -94,7 +108,9 @@ fn coverage_docs_describe_patch_front_door_without_ci_wiring()
     assert!(
         ci_section.contains("Patch coverage is the front-door PR coverage gate")
             && ci_section.contains("Project coverage remains informational during burn-down")
-            && ci_section.contains("Workflow wiring remains a separate follow-up slice"),
+            && ci_section.contains(
+                "coverage proof workflow now runs the patch coverage quality gate on PRs"
+            ),
         "coverage how-to must describe the transitional Codecov rollout posture"
     );
     assert!(
@@ -109,9 +125,9 @@ fn coverage_docs_describe_patch_front_door_without_ci_wiring()
     assert!(
         current_policy.contains("patch `95%` / `0%`")
             && current_policy.contains("project `95%` remains informational")
-            && current_policy.contains("does not implement workflow enforcement")
-            && current_policy.contains("`quality-gate` CLI"),
-        "rollout doc must describe the active PR2 policy/docs boundary"
+            && current_policy.contains("first blocking proof workflow now runs patch coverage")
+            && current_policy.contains("quality-gate --mode enforce-patch-coverage"),
+        "rollout doc must describe the active proof-lane Codecov posture"
     );
     assert!(
         rollout_doc.contains("Historical Codecov ladder")

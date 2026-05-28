@@ -21,13 +21,19 @@ coverage:
 
 # Files/patterns to exclude from coverage analysis
 ignore:
+  - ".github/**"
+  - ".ci/**"
   - "archive/**"
+  - "codecov.yml"
+  - "docs/**"
   - "crates/tree-sitter-perl-c/**"
   - "crates/*/tests/**"
   - "crates/*/benches/**"
   - "crates/*/examples/**"
   - "crates/*/build.rs"
   - "fuzz/**"
+  - "justfile"
+  - "xtask/tests/**"
   - "**/*_generated.rs"
 
 # Per-crate coverage flags for detailed tracking

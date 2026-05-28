@@ -20,11 +20,11 @@ oracle-aware than coverage, far cheaper than mutation testing.
 
 ## Current routing posture
 
-During the proof-lane rollout, `ripr` remains advisory for merge decisions in
-this slice, but the workflow now runs for every PR when it is ready for review.
-The goal of this step is current proof receipt generation for all changes,
-including docs-only, policy-only, and workflow-only PRs. New-gap blocking and
-full `quality-gate` enforcement are separate follow-up slices.
+During the proof-lane rollout, the `ripr` workflow now blocks PRs that introduce
+new diff-scoped RIPR gaps or fail to produce current RIPR receipts. Repo-wide
+RIPR+ total zero remains a burn-down target until the final enforcement slice.
+The workflow still runs for every PR when it is ready for review so docs-only,
+policy-only, workflow-only, and code PRs all carry current proof receipts.
 
 ## What ripr does
 
@@ -68,18 +68,22 @@ Do **not** translate these into `killed` / `survived`. They mean something diffe
 
 ## Behavior
 
-- `continue-on-error: true` - does **not** block merges.
 - Produces diff-scoped PR evidence under `target/ripr/pr/`.
 - Produces the repo-wide RIPR+ baseline receipt at
   `target/receipts/quality/ripr-plus.json`.
 - Produces review guidance under `target/ripr/review/`.
-- In CI, review guidance has an explicit timeout and falls back to an
-  advisory `error` artifact instead of blocking the workflow.
+- Runs `cargo xtask quality-gate --mode enforce-new-ripr`, which blocks new
+  severe RIPR gaps and stale or missing repo-wide, diff-scoped, or
+  review-guidance receipts.
+- In CI, review guidance has an explicit timeout. If guidance cannot produce an
+  actionable receipt for a new gap, the quality gate reports the missing repair
+  packet instead of hiding the failure.
 - Emits non-blocking warning annotations from `comments[]` only.
 - Produces mutation-routing evidence under
   `target/xtask/impacted-evidence/`.
-- Uploads the `ripr-pr-evidence` artifact.
-- Appends `target/ripr/pr/summary.md` to the GitHub step summary.
+- Uploads the `ripr-pr-evidence` artifact with required-artifact semantics.
+- Appends `target/ripr/pr/summary.md` and
+  `target/receipts/quality/quality-gate-ripr.md` to the GitHub step summary.
 
 ---
 
@@ -104,11 +108,12 @@ The suppression file is read by `ripr.toml`'s `[suppressions] path` setting.
 | PR | What happens |
 |---:|---|
 | 1 | Unfiltered ready-for-review workflow routing plus current RIPR receipts; no CI enforcement. |
-| Later | Blocking new-gap gate for diff-scoped RIPR PR evidence. |
+| 8 | Blocking new-gap gate for diff-scoped RIPR PR evidence and receipt freshness. |
 | Later | Total RIPR+ unresolved count reaches zero, then full `quality-gate --mode enforce` becomes blocking. |
 
-This slice only makes the proof workflow run for the right PR events and emit
-the current receipts. Blocking semantics remain in later proof-lane PRs.
+This slice blocks new RIPR gaps and stale or missing RIPR proof receipts. It does
+not require repo-wide RIPR+ total zero; that remains exception-backed until the
+burn-down closes.
 
 ---
 
@@ -130,10 +135,12 @@ rtk cargo xtask ripr-review-comments --base origin/HEAD --head HEAD
 rtk cargo xtask impacted-evidence
 rtk cargo xtask ripr-pr-summary
 rtk cargo xtask ripr-annotations
+rtk cargo xtask quality-gate --mode enforce-new-ripr --ripr-receipt target/receipts/quality/ripr-plus.json --ripr-pr-receipt target/ripr/pr/repo-exposure.json --review-receipt target/ripr/review/comments.json --ripr-base origin/HEAD --ripr-head HEAD --receipt target/receipts/quality/quality-gate-ripr.json --summary target/receipts/quality/quality-gate-ripr.md
 rtk cargo xtask ripr-pr --base origin/HEAD --head HEAD --check
 rtk cargo xtask ripr-plus --receipt target/receipts/quality/ripr-plus.json --check
 rtk cargo xtask ripr-review-comments --base origin/HEAD --head HEAD --check
 rtk cargo xtask impacted-evidence --check
 rtk cargo xtask ripr-pr-summary --check
 rtk cargo xtask ripr-annotations --check
+rtk cargo xtask quality-gate --mode enforce-new-ripr --ripr-receipt target/receipts/quality/ripr-plus.json --ripr-pr-receipt target/ripr/pr/repo-exposure.json --review-receipt target/ripr/review/comments.json --ripr-base origin/HEAD --ripr-head HEAD --receipt target/receipts/quality/quality-gate-ripr.json --summary target/receipts/quality/quality-gate-ripr.md --check
 ```

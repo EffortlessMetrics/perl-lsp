@@ -20,13 +20,13 @@ permissions:
 
 jobs:
   ripr:
-    name: ripr static exposure
+    name: ripr+ New Gap Gate
     runs-on: ubuntu-24.04
     timeout-minutes: 45
-    continue-on-error: true
     if: github.event.pull_request.draft != true
     env:
       RIPR_VERSION: "0.5.0"
+      BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}
       PR_LABELS: ${{ github.event_name == 'pull_request' && join(github.event.pull_request.labels.*.name, ',') || '' }}
     steps:
       - name: Checkout
@@ -52,7 +52,7 @@ jobs:
         run: ripr doctor
 
       - name: Generate PR evidence
-        run: cargo xtask ripr-pr --base "origin/${{ github.base_ref || 'master' }}" --head HEAD
+        run: cargo xtask ripr-pr --base "origin/$BASE_REF" --head HEAD
 
       - name: Generate repo-wide RIPR+ baseline receipt
         if: always()
@@ -60,7 +60,7 @@ jobs:
 
       - name: Generate review guidance
         if: always()
-        run: cargo xtask ripr-review-comments --base "origin/${{ github.base_ref || 'master' }}" --head HEAD --timeout-seconds 210
+        run: cargo xtask ripr-review-comments --base "origin/$BASE_REF" --head HEAD --timeout-seconds 210
 
       - name: Generate impacted evidence
         if: always()
@@ -77,12 +77,35 @@ jobs:
       - name: Validate PR evidence contracts
         if: always()
         run: |
-          cargo xtask ripr-pr --base "origin/${{ github.base_ref || 'master' }}" --head HEAD --check
+          cargo xtask ripr-pr --base "origin/$BASE_REF" --head HEAD --check
           cargo xtask ripr-plus --receipt target/receipts/quality/ripr-plus.json --check
-          cargo xtask ripr-review-comments --base "origin/${{ github.base_ref || 'master' }}" --head HEAD --check
+          cargo xtask ripr-review-comments --base "origin/$BASE_REF" --head HEAD --check
           cargo xtask impacted-evidence --labels-csv "$PR_LABELS" --check
           cargo xtask ripr-pr-summary --check
           cargo xtask ripr-annotations --check
+
+      - name: Enforce new RIPR gap quality gate
+        if: always()
+        run: |
+          cargo xtask quality-gate \
+            --mode enforce-new-ripr \
+            --ripr-receipt target/receipts/quality/ripr-plus.json \
+            --ripr-pr-receipt target/ripr/pr/repo-exposure.json \
+            --review-receipt target/ripr/review/comments.json \
+            --ripr-base "origin/$BASE_REF" \
+            --ripr-head HEAD \
+            --receipt target/receipts/quality/quality-gate-ripr.json \
+            --summary target/receipts/quality/quality-gate-ripr.md
+          cargo xtask quality-gate \
+            --mode enforce-new-ripr \
+            --ripr-receipt target/receipts/quality/ripr-plus.json \
+            --ripr-pr-receipt target/ripr/pr/repo-exposure.json \
+            --review-receipt target/ripr/review/comments.json \
+            --ripr-base "origin/$BASE_REF" \
+            --ripr-head HEAD \
+            --receipt target/receipts/quality/quality-gate-ripr.json \
+            --summary target/receipts/quality/quality-gate-ripr.md \
+            --check
 
       - name: Append PR evidence summary
         if: always()
@@ -92,6 +115,12 @@ jobs:
             cat target/ripr/pr/summary.md >> "$GITHUB_STEP_SUMMARY"
           else
             echo "No RIPR PR evidence summary was produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f target/receipts/quality/quality-gate-ripr.md ]; then
+            printf '\n' >> "$GITHUB_STEP_SUMMARY"
+            cat target/receipts/quality/quality-gate-ripr.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No RIPR quality-gate summary was produced." >> "$GITHUB_STEP_SUMMARY"
           fi
           if [ -f target/ripr/review/annotations.txt ]; then
             cat target/ripr/review/annotations.txt
@@ -107,5 +136,7 @@ jobs:
             target/ripr/review/**
             target/xtask/impacted-evidence/**
             target/receipts/quality/ripr-plus.json
+            target/receipts/quality/quality-gate-ripr.json
+            target/receipts/quality/quality-gate-ripr.md
           retention-days: 14
-          if-no-files-found: warn
+          if-no-files-found: error
