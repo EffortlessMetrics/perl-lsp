@@ -1983,3 +1983,57 @@ fn valid_diagnostic_range(source: &str, range: (usize, usize)) -> Option<(usize,
     }
     Some((start, end))
 }
+
+/// Remove the undefined label from a loop-control statement (PL410).
+///
+/// `next LABEL`, `last LABEL`, and `redo LABEL` statements that reference a
+/// label that does not exist in any enclosing loop cause a runtime-fatal
+/// "Label not found" error in Perl. The one mechanical fix is to drop the
+/// label so the statement targets the innermost enclosing loop instead.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((range_start, range_end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let Some(text) = source.get(range_start..range_end) else {
+        return Vec::new();
+    };
+    let trimmed = text.trim_start();
+    let Some(op) = loop_control_op(trimmed) else {
+        return Vec::new();
+    };
+    // Verify whitespace follows the operator — guards against "nextfoo" or bare "next".
+    if !trimmed[op.len()..].starts_with(|c: char| c.is_whitespace()) {
+        return Vec::new();
+    }
+    // Preserve any leading indentation that precedes the operator in the range.
+    let leading = text.len() - trimmed.len();
+    let new_text = format!("{}{op}", &text[..leading]);
+
+    vec![CodeAction {
+        title: format!("Remove undefined label from '{op}'"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: range_start, end: range_end },
+                new_text,
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
+fn loop_control_op(text: &str) -> Option<&'static str> {
+    if text.starts_with("next") {
+        Some("next")
+    } else if text.starts_with("last") {
+        Some("last")
+    } else if text.starts_with("redo") {
+        Some("redo")
+    } else {
+        None
+    }
+}
