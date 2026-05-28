@@ -697,7 +697,7 @@ impl InlineCompletionProvider {
     ) -> InlineCompletionList {
         if let Some(context) = self.prepare_context(text, line, character) {
             let semantic_context =
-                self.semantic_context_for_source_with_environment(text, &context, environment);
+                self.semantic_context_for_request(text, line, &context, environment);
             let items = self.get_completions_for_context(&context, &semantic_context);
             let list = self.apply_replacement_ranges_for_context(
                 InlineCompletionList { items },
@@ -1095,9 +1095,48 @@ impl InlineCompletionProvider {
         )
     }
 
+    #[cfg(test)]
     fn semantic_context_for_source_with_environment(
         &self,
         text: &str,
+        context: &PreparedInlineCompletionContext,
+        environment: &InlineCompletionEnvironment,
+    ) -> SemanticInlineContext {
+        self.semantic_context_for_source_with_environment_and_dbi_text(
+            text,
+            text,
+            context,
+            environment,
+        )
+    }
+
+    fn semantic_context_for_request(
+        &self,
+        text: &str,
+        line: u32,
+        context: &PreparedInlineCompletionContext,
+        environment: &InlineCompletionEnvironment,
+    ) -> SemanticInlineContext {
+        let lines = self.normalized_lines(text);
+        let line_index = usize::try_from(line).unwrap_or(usize::MAX);
+        let visible_text = if line_index < lines.len() {
+            self.visible_text_until_cursor(&lines, line_index, context.prefix.as_str())
+        } else {
+            text.to_string()
+        };
+
+        self.semantic_context_for_source_with_environment_and_dbi_text(
+            text,
+            visible_text.as_str(),
+            context,
+            environment,
+        )
+    }
+
+    fn semantic_context_for_source_with_environment_and_dbi_text(
+        &self,
+        text: &str,
+        dbi_visible_text: &str,
         context: &PreparedInlineCompletionContext,
         environment: &InlineCompletionEnvironment,
     ) -> SemanticInlineContext {
@@ -1105,7 +1144,8 @@ impl InlineCompletionProvider {
         semantic_context.available_modules = available_module_facts(&environment.available_modules);
         semantic_context.file_role = self.file_role_for_source(context, text);
         semantic_context.style = self.style_context_for_source(context, text);
-        semantic_context.dbi_receiver_kind = dbi_receiver_kind_for_source(text, &semantic_context);
+        semantic_context.dbi_receiver_kind =
+            dbi_receiver_kind_for_source(dbi_visible_text, &semantic_context);
         semantic_context.current_package_methods = self.current_package_methods_for_source(
             text,
             semantic_context.package.as_deref(),
@@ -2163,7 +2203,7 @@ fn dbi_receiver_kind_for_source(
     let imported_dbi = context.imported_modules.iter().any(|module| module.name == "DBI");
     let assigned_from_dbi_connect = non_comment_code_lines(text)
         .map(code_before_line_comment)
-        .any(|line| line_assigns_variable_from_method(line, variable.name.as_str(), "connect"));
+        .any(|line| line_assigns_variable_from_dbi_connect(line, variable.name.as_str()));
     if is_likely_dbi_database_handle(
         variable.name.as_str(),
         imported_dbi,
@@ -2174,7 +2214,7 @@ fn dbi_receiver_kind_for_source(
 
     let prepared_statement = non_comment_code_lines(text)
         .map(code_before_line_comment)
-        .any(|line| line_assigns_variable_from_method(line, variable.name.as_str(), "prepare"));
+        .any(|line| line_assigns_variable_from_dbi_prepare(line, variable.name.as_str()));
     if is_likely_dbi_statement_handle(variable.name.as_str(), imported_dbi, prepared_statement) {
         return Some(DbiReceiverKind::StatementHandle);
     }
@@ -2183,7 +2223,7 @@ fn dbi_receiver_kind_for_source(
 }
 
 fn is_likely_dbi_database_handle(name: &str, imported_dbi: bool, has_dbi_connect: bool) -> bool {
-    has_dbi_connect || (matches!(name, "dbh" | "db") && imported_dbi)
+    has_dbi_connect || (matches!(name, "dbh" | "db") || name.ends_with("_dbh")) && imported_dbi
 }
 
 fn is_likely_dbi_statement_handle(
@@ -2194,15 +2234,46 @@ fn is_likely_dbi_statement_handle(
     prepared_statement && (name == "sth" || name.ends_with("_sth") || imported_dbi)
 }
 
-fn line_assigns_variable_from_method(line: &str, variable_name: &str, method_name: &str) -> bool {
-    let Some((left, right)) = line.split_once('=') else {
-        return false;
-    };
+fn line_assigns_variable_from_dbi_connect(line: &str, variable_name: &str) -> bool {
+    line_assigns_variable_from_method_receiver(line, variable_name, "connect")
+        .is_some_and(|receiver| receiver == "DBI")
+        || line_assigns_variable_from_method_receiver(line, variable_name, "connect_cached")
+            .is_some_and(|receiver| receiver == "DBI")
+}
+
+fn line_assigns_variable_from_dbi_prepare(line: &str, variable_name: &str) -> bool {
+    line_assigns_variable_from_method_receiver(line, variable_name, "prepare")
+        .is_some_and(is_likely_dbi_database_receiver)
+}
+
+fn is_likely_dbi_database_receiver(receiver: &str) -> bool {
+    receiver == "$dbh" || receiver == "$db" || receiver.ends_with("_dbh")
+}
+
+fn line_assigns_variable_from_method_receiver<'line>(
+    line: &'line str,
+    variable_name: &str,
+    method_name: &str,
+) -> Option<&'line str> {
+    let (left, right) = line.split_once('=')?;
     let variable = format!("${variable_name}");
-    let method_call = format!("->{method_name}");
-    left.split(|ch: char| !(ch.is_ascii_alphanumeric() || matches!(ch, '_' | '$')))
+    if !left
+        .split(|ch: char| !(ch.is_ascii_alphanumeric() || matches!(ch, '_' | '$')))
         .any(|part| part == variable)
-        && right.contains(method_call.as_str())
+    {
+        return None;
+    }
+
+    let method_call = format!("->{method_name}");
+    let method_start = right.find(method_call.as_str())?;
+    let receiver_prefix = right[..method_start].trim_end();
+    let receiver_start = receiver_prefix
+        .char_indices()
+        .rev()
+        .find_map(|(idx, ch)| (!is_receiver_fragment_char(ch)).then_some(idx + ch.len_utf8()))
+        .unwrap_or(0);
+    let receiver = receiver_prefix[receiver_start..].trim();
+    (!receiver.is_empty()).then_some(receiver)
 }
 
 fn dbi_receiver_method_items(kind: DbiReceiverKind, fragment: &str) -> Vec<InlineCompletionItem> {
@@ -2867,6 +2938,54 @@ mod tests {
             "DBI statement handle must not fall back to generic constructor guesses"
         );
         Ok(())
+    }
+
+    #[test]
+    fn non_dbi_connect_receiver_does_not_get_dbi_methods() {
+        let provider = InlineCompletionProvider::new();
+        let source = "my $socket = Client->connect($dsn);\n$socket->\n";
+        let character = "$socket->".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 1, character);
+        let insert_texts: Vec<&str> =
+            completions.items.iter().map(|item| item.insert_text.as_str()).collect();
+
+        for unexpected in ["prepare()", "do()", "disconnect()"] {
+            assert!(
+                !insert_texts.contains(&unexpected),
+                "non-DBI connect receivers must not receive DBI methods: {insert_texts:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn imported_dbi_unrelated_prepare_receiver_does_not_get_statement_methods() {
+        let provider = InlineCompletionProvider::new();
+        let source = "use DBI;\nmy $query = $builder->prepare($sql);\n$query->f\n";
+        let character = "$query->f".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 2, character);
+
+        assert!(
+            completions.items.iter().all(|item| item.insert_text != "fetchrow_hashref()"),
+            "non-DBI prepare receivers must not receive statement-handle methods: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn future_dbi_assignment_does_not_affect_current_receiver_completion() {
+        let provider = InlineCompletionProvider::new();
+        let source = "use DBI;\n$conn->\nmy $conn = DBI->connect($dsn);\n";
+        let character = "$conn->".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 1, character);
+        let insert_texts: Vec<&str> =
+            completions.items.iter().map(|item| item.insert_text.as_str()).collect();
+
+        for unexpected in ["prepare()", "do()", "disconnect()"] {
+            assert!(
+                !insert_texts.contains(&unexpected),
+                "future DBI assignments must not shape current receiver completions: {insert_texts:?}"
+            );
+        }
     }
 
     #[test]
