@@ -459,6 +459,82 @@ fn inline_completion_selected_completion_info_matching_text_returns_same_range()
 }
 
 #[test]
+fn inline_completion_selected_completion_info_use_partial_token_returns_replacement_range()
+-> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_selected_completion_use_partial_range.pl";
+    harness.open(uri, "use str")?;
+
+    let selected_range = json!({
+        "start": { "line": 0, "character": 4 },
+        "end": { "line": 0, "character": 7 }
+    });
+    let result = request_inline_completion_with_context(
+        &mut harness,
+        uri,
+        0,
+        7,
+        json!({
+            "triggerKind": 1,
+            "selectedCompletionInfo": {
+                "range": selected_range,
+                "text": "strict"
+            }
+        }),
+    )?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+    let strict = item_with_insert_text(items, "strict;")?;
+
+    assert_item_range(strict, 0, 4, 0, 7)?;
+    Ok(())
+}
+
+#[test]
+fn inline_completion_selected_completion_info_method_partial_token_returns_replacement_range()
+-> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_selected_completion_method_partial_range.pl";
+    harness.open(uri, "$obj->n")?;
+
+    let selected_range = json!({
+        "start": { "line": 0, "character": 6 },
+        "end": { "line": 0, "character": 7 }
+    });
+    let result = request_inline_completion_with_context(
+        &mut harness,
+        uri,
+        0,
+        7,
+        json!({
+            "triggerKind": 1,
+            "selectedCompletionInfo": {
+                "range": selected_range,
+                "text": "new"
+            }
+        }),
+    )?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+    let new_method = item_with_insert_text(items, "new()")?;
+
+    assert_item_range(new_method, 0, 6, 0, 7)?;
+    Ok(())
+}
+
+#[test]
 fn inline_completion_selected_completion_info_text_mismatch_returns_empty() -> TestResult {
     let mut harness = LspHarness::new();
     harness.initialize(Some(json!({
