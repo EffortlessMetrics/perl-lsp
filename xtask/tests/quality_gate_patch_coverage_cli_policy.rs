@@ -66,6 +66,13 @@ fn coverage_baseline_writes_and_checks_receipt_with_actionable_file_samples() ->
         Some(12)
     );
     assert!(
+        payload
+            .get("patch_files_below_target")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty),
+        "manual patch coverage receipts should not invent changed-file guidance: {payload}"
+    );
+    assert!(
         !payload
             .pointer("/files_below_target/0/sample_uncovered_lines")
             .and_then(Value::as_array)
@@ -231,7 +238,13 @@ fn quality_gate_cli_blocks_patch_coverage_below_target_with_file_guidance() -> T
     let receipt = dir.path().join("quality-gate.json");
     let summary = dir.path().join("quality-gate.md");
 
-    write_coverage_receipt(&coverage, &current_head(&root)?, Some(94.9), coverage_gap_files())?;
+    write_coverage_receipt_with_patch_files(
+        &coverage,
+        &current_head(&root)?,
+        Some(94.9),
+        coverage_gap_files(),
+        patch_coverage_gap_files(),
+    )?;
 
     let output =
         patch_quality_gate_command(&root, &coverage, &receipt, &summary, None)?.output()?;
@@ -251,11 +264,11 @@ fn quality_gate_cli_blocks_patch_coverage_below_target_with_file_guidance() -> T
     assert_eq!(action.get("source").and_then(Value::as_str), Some("coverage_receipt"));
     assert_eq!(
         action.pointer("/top_files/0/path").and_then(Value::as_str),
-        Some("crates/perl-parser/src/lib.rs")
+        Some("xtask/src/tasks/ripr_evidence.rs")
     );
     assert_eq!(
         action.pointer("/top_files/0/sample_uncovered_lines/0").and_then(Value::as_u64),
-        Some(12)
+        Some(212)
     );
     assert!(
         action
@@ -269,8 +282,9 @@ fn quality_gate_cli_blocks_patch_coverage_below_target_with_file_guidance() -> T
 
     let markdown = fs::read_to_string(&summary)?;
     assert!(markdown.contains("patch_coverage_below_target"), "{markdown}");
-    assert!(markdown.contains("crates/perl-parser/src/lib.rs"), "{markdown}");
-    assert!(markdown.contains("sample uncovered lines: 12, 13, 17"), "{markdown}");
+    assert!(markdown.contains("xtask/src/tasks/ripr_evidence.rs"), "{markdown}");
+    assert!(markdown.contains("sample uncovered lines: 212, 213, 214"), "{markdown}");
+    assert!(!markdown.contains("crates/perl-ast-v2/src/lib.rs"), "{markdown}");
 
     Ok(())
 }
@@ -337,6 +351,16 @@ fn write_coverage_receipt(
     patch: Option<f64>,
     files_below_target: Value,
 ) -> TestResult {
+    write_coverage_receipt_with_patch_files(path, head, patch, files_below_target, json!([]))
+}
+
+fn write_coverage_receipt_with_patch_files(
+    path: &Path,
+    head: &str,
+    patch: Option<f64>,
+    files_below_target: Value,
+    patch_files_below_target: Value,
+) -> TestResult {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -366,6 +390,7 @@ fn write_coverage_receipt(
                 "line_found": 100,
                 "line_coverage": 96.0
             },
+            "patch_files_below_target": patch_files_below_target,
             "files_below_target": files_below_target
         }))?,
     )?;
@@ -375,11 +400,23 @@ fn write_coverage_receipt(
 fn coverage_gap_files() -> Value {
     json!([
         {
-            "path": "crates/perl-parser/src/lib.rs",
+            "path": "crates/perl-ast-v2/src/lib.rs",
             "line_hit": 4,
             "line_found": 10,
             "line_coverage": 40.0,
             "sample_uncovered_lines": [12, 13, 17]
+        }
+    ])
+}
+
+fn patch_coverage_gap_files() -> Value {
+    json!([
+        {
+            "path": "xtask/src/tasks/ripr_evidence.rs",
+            "line_hit": 55,
+            "line_found": 81,
+            "line_coverage": 67.9,
+            "sample_uncovered_lines": [212, 213, 214]
         }
     ])
 }

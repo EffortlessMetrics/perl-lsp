@@ -71,11 +71,19 @@ fn build_receipt(root: &Path, args: &CoverageBaselineArgs) -> Result<JsonValue> 
     let lcov = parse_lcov(&args.lcov)?;
     let codecov = read_codecov_status(&args.codecov)?;
     let line_coverage = percent(lcov.line_hit, lcov.line_found);
-    let patch_coverage = match (args.patch_coverage, args.patch_base.as_deref()) {
+    let changed_lines =
+        args.patch_base.as_deref().map(|base| changed_lines_since(root, base)).transpose()?;
+    let patch_coverage = match (args.patch_coverage, changed_lines.as_ref()) {
         (Some(patch), _) => Some(round2(patch)),
-        (None, Some(base)) => Some(patch_coverage_from_diff(root, base, &lcov)?),
+        (None, Some(changed)) => {
+            Some(patch_coverage_from_changed_lines_for_root(Some(root), &lcov, changed))
+        }
         (None, None) => None,
     };
+    let patch_files_below_target = changed_lines
+        .as_ref()
+        .map(|changed| patch_file_gaps_for_root(Some(root), &lcov, changed))
+        .unwrap_or_default();
     let files_below_target = lcov
         .files
         .iter()
@@ -106,6 +114,7 @@ fn build_receipt(root: &Path, args: &CoverageBaselineArgs) -> Result<JsonValue> 
             "line_found": lcov.line_found,
             "line_coverage": line_coverage,
         },
+        "patch_files_below_target": patch_files_below_target,
         "files_below_target": files_below_target,
     }))
 }
@@ -162,11 +171,6 @@ fn finish_file(summary: &mut LcovSummary, current: &mut FileCoverage) {
     summary.line_hit += current.line_hit;
     summary.line_found += current.line_found;
     summary.files.push(std::mem::take(current));
-}
-
-fn patch_coverage_from_diff(root: &Path, base: &str, lcov: &LcovSummary) -> Result<f64> {
-    let changed_lines = changed_lines_since(root, base)?;
-    Ok(patch_coverage_from_changed_lines_for_root(Some(root), lcov, &changed_lines))
 }
 
 fn changed_lines_since(root: &Path, base: &str) -> Result<BTreeMap<String, BTreeSet<u64>>> {
@@ -254,6 +258,53 @@ fn patch_coverage_from_changed_lines_for_root(
     }
 
     if executable_found == 0 { 100.0 } else { percent(executable_hit, executable_found) }
+}
+
+fn patch_file_gaps_for_root(
+    root: Option<&Path>,
+    lcov: &LcovSummary,
+    changed_lines: &BTreeMap<String, BTreeSet<u64>>,
+) -> Vec<JsonValue> {
+    lcov.files.iter().filter_map(|file| patch_file_gap_json(root, file, changed_lines)).collect()
+}
+
+fn patch_file_gap_json(
+    root: Option<&Path>,
+    file: &FileCoverage,
+    changed_lines: &BTreeMap<String, BTreeSet<u64>>,
+) -> Option<JsonValue> {
+    let changed = changed_lines_for_lcov_file(root, &file.path, changed_lines)?;
+    let mut line_found = 0;
+    let mut line_hit = 0;
+    let mut sample_uncovered_lines = Vec::new();
+
+    for line in &file.lines {
+        if !changed.contains(&line.number) {
+            continue;
+        }
+        line_found += 1;
+        if line.hit_count > 0 {
+            line_hit += 1;
+        } else if sample_uncovered_lines.len() < 10 {
+            sample_uncovered_lines.push(line.number);
+        }
+    }
+
+    if line_found == 0 || percent(line_hit, line_found) >= 95.0 || sample_uncovered_lines.is_empty()
+    {
+        return None;
+    }
+
+    let path = root
+        .and_then(|root| relative_lcov_path(root, &file.path))
+        .unwrap_or_else(|| file.path.clone());
+    Some(json!({
+        "path": path,
+        "line_hit": line_hit,
+        "line_found": line_found,
+        "line_coverage": percent(line_hit, line_found),
+        "sample_uncovered_lines": sample_uncovered_lines,
+    }))
 }
 
 fn changed_lines_for_lcov_file<'a>(
@@ -462,6 +513,11 @@ index 3333333..4444444 100644
         )]);
 
         assert_eq!(patch_coverage_from_changed_lines_for_root(None, &lcov, &changed), 50.0);
+        let gaps = patch_file_gaps_for_root(None, &lcov, &changed);
+        assert_eq!(gaps.len(), 1);
+        assert_eq!(gaps[0]["path"], json!("crates/example/src/lib.rs"));
+        assert_eq!(gaps[0]["line_coverage"], json!(50.0));
+        assert_eq!(gaps[0]["sample_uncovered_lines"], json!([12]));
         Ok(())
     }
 
@@ -613,6 +669,8 @@ coverage:
         let receipt = build_receipt(repo, &args)?;
 
         assert_eq!(receipt["coverage"]["patch"], json!(0.0));
+        assert_eq!(receipt["patch_files_below_target"][0]["path"], json!("src/lib.rs"));
+        assert_eq!(receipt["patch_files_below_target"][0]["sample_uncovered_lines"], json!([2]));
         assert_eq!(receipt["scope"], json!("workspace-lib-xtask-quality"));
         Ok(())
     }

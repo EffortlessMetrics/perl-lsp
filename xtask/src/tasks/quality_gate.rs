@@ -397,6 +397,7 @@ struct CoverageReceipt {
     patch: Option<f64>,
     project: Option<f64>,
     scope: Option<String>,
+    patch_files: Vec<Value>,
     top_files: Vec<Value>,
 }
 
@@ -668,6 +669,7 @@ fn read_coverage_receipt(path: &Path, expected_head: &str) -> CoverageReceipt {
             patch: None,
             project: None,
             scope: None,
+            patch_files: Vec::new(),
             top_files: Vec::new(),
         };
     };
@@ -679,6 +681,7 @@ fn read_coverage_receipt(path: &Path, expected_head: &str) -> CoverageReceipt {
             patch: None,
             project: None,
             scope: None,
+            patch_files: Vec::new(),
             top_files: Vec::new(),
         };
     };
@@ -694,6 +697,11 @@ fn read_coverage_receipt(path: &Path, expected_head: &str) -> CoverageReceipt {
         .and_then(Value::as_array)
         .map(|items| items.iter().filter_map(actionable_file_gap).take(3).collect::<Vec<_>>())
         .unwrap_or_default();
+    let patch_files = payload
+        .get("patch_files_below_target")
+        .and_then(Value::as_array)
+        .map(|items| items.iter().filter_map(actionable_file_gap).take(3).collect::<Vec<_>>())
+        .unwrap_or_default();
 
     CoverageReceipt {
         status: status.to_string(),
@@ -702,6 +710,7 @@ fn read_coverage_receipt(path: &Path, expected_head: &str) -> CoverageReceipt {
         patch,
         project,
         scope,
+        patch_files,
         top_files,
     }
 }
@@ -1013,9 +1022,12 @@ fn patch_coverage_below_target_action(
     coverage: &CoverageReceipt,
     args: &QualityGateArgs,
 ) -> Value {
+    let top_files =
+        if coverage.patch_files.is_empty() { &coverage.top_files } else { &coverage.patch_files };
     let path = coverage
-        .top_files
+        .patch_files
         .first()
+        .or_else(|| coverage.top_files.first())
         .and_then(|file| file.get("path"))
         .and_then(Value::as_str)
         .unwrap_or_else(|| args.coverage_receipt.to_str().unwrap_or("coverage"));
@@ -1027,7 +1039,7 @@ fn patch_coverage_below_target_action(
         "current": round2(patch),
         "target": PATCH_TARGET,
         "source": source,
-        "top_files": coverage.top_files,
+        "top_files": top_files,
         "suggested_test": "Prefer focused tests for error paths, boundary conditions, config parsing, serialization, cancellation, and output contracts.",
         "repair": "Add behavior-oriented tests for the uncovered changed-code surfaces, then refresh coverage evidence.",
         "verify": quality_gate_command(args, true, Some(patch)),
