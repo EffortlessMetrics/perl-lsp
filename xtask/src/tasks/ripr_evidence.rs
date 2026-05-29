@@ -1888,6 +1888,101 @@ paths = ["archive/["]
     }
 
     #[test]
+    fn write_error_review_comments_writes_stamped_error_receipts() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path();
+        init_git_repo(repo)?;
+        let options = ReviewCommentsOptions {
+            root: ".".to_string(),
+            base: "HEAD".to_string(),
+            head: "HEAD".to_string(),
+            timeout_seconds: None,
+        };
+
+        write_error_review_comments(
+            repo,
+            &options,
+            r"crates\perl-parser",
+            "ripr review-comments failed | timeout\nsecondary detail",
+        )?;
+        stamp_review_comments_receipt(repo, &options)?;
+        validate_review_comments(repo, &options, true)?;
+
+        let packet: Value =
+            serde_json::from_str(&fs::read_to_string(repo.join(REVIEW_COMMENTS_JSON))?)?;
+        let markdown = fs::read_to_string(repo.join(REVIEW_COMMENTS_MD))?;
+        let head = revision_sha(repo, "HEAD")?;
+
+        assert_eq!(packet["status"], json!("error"));
+        assert_eq!(packet["root"], json!("crates/perl-parser"));
+        assert_eq!(packet["base_sha"], json!(head));
+        assert_eq!(packet["head_sha"], json!(head));
+        assert_eq!(
+            packet.pointer("/warnings/0/message"),
+            Some(&json!("ripr review-comments failed | timeout"))
+        );
+        assert_eq!(packet.pointer("/summary/comments"), Some(&json!(0)));
+        assert_eq!(packet.pointer("/summary/summary_only"), Some(&json!(0)));
+        assert_eq!(packet.pointer("/summary/suppressed"), Some(&json!(0)));
+        assert!(markdown.contains("- status: error"), "{markdown}");
+        assert!(markdown.contains("tool_error: ripr review-comments failed \\| timeout"));
+        assert!(!markdown.contains("secondary detail"), "{markdown}");
+        Ok(())
+    }
+
+    #[test]
+    fn render_pr_evidence_summary_surfaces_error_review_guidance() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path();
+        init_git_repo(repo)?;
+        let options = ReviewCommentsOptions {
+            root: ".".to_string(),
+            base: "HEAD".to_string(),
+            head: "HEAD".to_string(),
+            timeout_seconds: None,
+        };
+        let pr_options = PrEvidenceOptions {
+            root: ".".to_string(),
+            base: "HEAD".to_string(),
+            head: "HEAD".to_string(),
+        };
+        let head = revision_sha(repo, "HEAD")?;
+        let pr_packet = pr_evidence_packet(
+            &pr_options,
+            &["xtask/src/tasks/ripr_evidence.rs".to_string()],
+            &json!({
+                "summary": {
+                    "weakly_exposed": 0,
+                    "reachable_unrevealed": 0,
+                    "no_static_path": 0
+                }
+            }),
+            &head,
+            &head,
+        );
+        write_text(&repo.join(PR_EVIDENCE_JSON), &format_json(&pr_packet)?)?;
+        write_text(&repo.join(PR_EVIDENCE_MD), &render_pr_evidence_markdown(&pr_packet))?;
+        write_error_review_comments(repo, &options, ".", "ripr review-comments failed")?;
+        stamp_review_comments_receipt(repo, &options)?;
+
+        let summary = render_pr_evidence_summary(repo);
+
+        assert!(summary.contains("- PR evidence JSON: present"), "{summary}");
+        assert!(summary.contains("- review guidance JSON: present"), "{summary}");
+        assert!(summary.contains("- review guidance status: `error`"), "{summary}");
+        assert!(summary.contains("- changed-line comments: 0"), "{summary}");
+        assert!(summary.contains("- summary-only guidance: 0"), "{summary}");
+        assert!(summary.contains("- suppressed guidance: 0"), "{summary}");
+        assert!(
+            summary.contains(
+                "| Review guidance Markdown | `target/ripr/review/comments.md` | present |"
+            ),
+            "{summary}"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn render_annotations_emits_escaped_github_warning_packets() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let repo = temp.path();
