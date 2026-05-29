@@ -138,6 +138,78 @@ fn quality_gate_cli_writes_and_checks_patch_gate_receipts() -> TestResult {
 }
 
 #[test]
+fn quality_gate_cli_check_blocks_stale_patch_gate_json_receipt() -> TestResult {
+    let root = repo_root()?;
+    let dir = tempdir()?;
+    let lcov = dir.path().join("lcov.info");
+    let coverage = dir.path().join("coverage-baseline.json");
+    let receipt = dir.path().join("quality-gate.json");
+    let summary = dir.path().join("quality-gate.md");
+
+    write_lcov(&lcov)?;
+    coverage_baseline_command(&root, &lcov, &coverage, Some(97.1))?.assert().success();
+    patch_quality_gate_command(&root, &coverage, &receipt, &summary, None)?.assert().success();
+
+    fs::write(
+        &receipt,
+        serde_json::to_string_pretty(&json!({
+            "schema_version": 1,
+            "kind": "quality_gate",
+            "mode": "enforce-patch-coverage",
+            "decision": "pass",
+            "head": "stale-quality-gate-head"
+        }))?,
+    )?;
+
+    let output = patch_quality_gate_command(&root, &coverage, &receipt, &summary, None)?
+        .arg("--check")
+        .output()?;
+    assert!(!output.status.success(), "quality-gate --check must fail when JSON receipt is stale");
+
+    let stderr = String::from_utf8(output.stderr)?;
+    assert!(
+        stderr.contains("quality gate JSON receipt is stale")
+            && stderr.contains(&receipt.to_string_lossy().to_string()),
+        "stale JSON receipt failure must name the stale proof file: {stderr}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn quality_gate_cli_check_blocks_stale_patch_gate_markdown_summary() -> TestResult {
+    let root = repo_root()?;
+    let dir = tempdir()?;
+    let lcov = dir.path().join("lcov.info");
+    let coverage = dir.path().join("coverage-baseline.json");
+    let receipt = dir.path().join("quality-gate.json");
+    let summary = dir.path().join("quality-gate.md");
+
+    write_lcov(&lcov)?;
+    coverage_baseline_command(&root, &lcov, &coverage, Some(97.1))?.assert().success();
+    patch_quality_gate_command(&root, &coverage, &receipt, &summary, None)?.assert().success();
+
+    fs::write(&summary, "# Quality Gate\n\nstale summary\n")?;
+
+    let output = patch_quality_gate_command(&root, &coverage, &receipt, &summary, None)?
+        .arg("--check")
+        .output()?;
+    assert!(
+        !output.status.success(),
+        "quality-gate --check must fail when Markdown summary is stale"
+    );
+
+    let stderr = String::from_utf8(output.stderr)?;
+    assert!(
+        stderr.contains("quality gate Markdown summary is stale")
+            && stderr.contains(&summary.to_string_lossy().to_string()),
+        "stale Markdown summary failure must name the stale proof file: {stderr}"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn quality_gate_cli_blocks_patch_gate_when_coverage_receipt_is_missing() -> TestResult {
     let root = repo_root()?;
     let dir = tempdir()?;
