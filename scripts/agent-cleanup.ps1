@@ -75,6 +75,24 @@ function Invoke-Git {
     return @($output)
 }
 
+function Convert-ToBashPath {
+    param([string]$Path)
+
+    $fullPath = Get-FullPath $Path
+    if ($fullPath -match '^([A-Za-z]):\\(.*)$') {
+        $drive = $matches[1].ToLowerInvariant()
+        $rest = $matches[2] -replace '\\', '/'
+        return "/mnt/$drive/$rest"
+    }
+
+    return ($fullPath -replace '\\', '/')
+}
+
+function Quote-BashArgument {
+    param([string]$Value)
+    return "'" + ($Value -replace "'", "'\''") + "'"
+}
+
 if ($Slug -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$' -or $Slug -match '[\\/]') {
     Fail "Slug must be a path-safe token, not '$Slug'."
 }
@@ -177,12 +195,19 @@ if ($canonicalStatus.Count -gt 0) {
 
 $storageDoctor = Join-Path $canonical 'scripts\storage-doctor'
 if (Test-Path -Path $storageDoctor) {
-    Push-Location $canonical
-    try {
-        & '.\scripts\storage-doctor'
+    $bash = Get-Command bash -ErrorAction SilentlyContinue
+    if ($null -ne $bash) {
+        $bashCanonical = Quote-BashArgument (Convert-ToBashPath $canonical)
+        & bash -lc "cd $bashCanonical && ./scripts/storage-doctor"
     }
-    finally {
-        Pop-Location
+    else {
+        Push-Location $canonical
+        try {
+            & '.\scripts\storage-doctor'
+        }
+        finally {
+            Pop-Location
+        }
     }
 
     if ($LASTEXITCODE -ne 0) {
