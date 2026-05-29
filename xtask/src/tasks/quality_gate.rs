@@ -1024,8 +1024,8 @@ fn patch_coverage_below_target_action(
     coverage: &CoverageReceipt,
     args: &QualityGateArgs,
 ) -> Value {
-    let top_files =
-        if coverage.patch_files.is_empty() { &coverage.top_files } else { &coverage.patch_files };
+    let uses_changed_files = !coverage.patch_files.is_empty();
+    let top_files = if uses_changed_files { &coverage.patch_files } else { &coverage.top_files };
     let path = coverage
         .patch_files
         .first()
@@ -1041,6 +1041,7 @@ fn patch_coverage_below_target_action(
         "current": round2(patch),
         "target": PATCH_TARGET,
         "source": source,
+        "file_scope": if uses_changed_files { "changed_files" } else { "project_fallback" },
         "top_files": top_files,
         "suggested_test": "Prefer focused tests for error paths, boundary conditions, config parsing, serialization, cancellation, and output contracts.",
         "repair": "Add behavior-oriented tests for the uncovered changed-code surfaces, then refresh coverage evidence.",
@@ -1481,6 +1482,14 @@ fn render_markdown(receipt: &Value, args: &QualityGateArgs) -> Result<String> {
             }
         }
         if let Some(files) = action.get("top_files").and_then(Value::as_array) {
+            let coverage_file_label = match (kind, action.get("file_scope").and_then(Value::as_str))
+            {
+                ("patch_coverage_below_target", Some("changed_files")) => "changed coverage file",
+                ("patch_coverage_below_target", Some("project_fallback")) => {
+                    "project fallback coverage file"
+                }
+                _ => "coverage file",
+            };
             for file in files {
                 let path = file.get("path").and_then(Value::as_str).unwrap_or("unknown");
                 let samples = file
@@ -1496,7 +1505,7 @@ fn render_markdown(receipt: &Value, args: &QualityGateArgs) -> Result<String> {
                     })
                     .unwrap_or_default();
                 markdown.push_str(&format!(
-                    "- coverage file: `{path}` sample uncovered lines: {samples}\n"
+                    "- {coverage_file_label}: `{path}` sample uncovered lines: {samples}\n"
                 ));
             }
         }

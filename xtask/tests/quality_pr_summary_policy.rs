@@ -30,6 +30,24 @@ fn quality_gate_summary_names_gates_receipts_and_repair_packets() -> TestResult 
     let output = final_quality_gate_command(&root, &paths)?.output()?;
     assert!(!output.status.success(), "fixture should fail so the summary includes repairs");
 
+    let receipt: Value = serde_json::from_str(&fs::read_to_string(&paths.receipt)?)?;
+    let patch_action = receipt
+        .pointer("/next_actions/0")
+        .ok_or("quality gate receipt must include patch coverage repair action first")?;
+    assert_eq!(
+        patch_action.get("kind").and_then(Value::as_str),
+        Some("patch_coverage_below_target")
+    );
+    assert_eq!(patch_action.get("file_scope").and_then(Value::as_str), Some("changed_files"));
+    assert_eq!(
+        patch_action.pointer("/top_files/0/path").and_then(Value::as_str),
+        Some("xtask/src/tasks/ripr_evidence.rs")
+    );
+    assert_eq!(
+        patch_action.pointer("/top_files/0/sample_uncovered_lines/0").and_then(Value::as_u64),
+        Some(212)
+    );
+
     let summary = fs::read_to_string(&paths.summary)?;
     for required in [
         "## Quality Gates",
@@ -50,6 +68,7 @@ fn quality_gate_summary_names_gates_receipts_and_repair_packets() -> TestResult 
         "project_coverage_below_target",
         "new_ripr_gap",
         "quality_exception_active_final_blocker",
+        "changed coverage file: `xtask/src/tasks/ripr_evidence.rs` sample uncovered lines: 212, 213, 214",
         "coverage file: `xtask/src/tasks/quality_gate.rs` sample uncovered lines: 41, 42, 43",
         "ripr gap: `RIPR-SPEC-ONE` `xtask/src/tasks/quality_gate.rs:77` seam `summary_renderer` reason `summary does not expose repair packet` suggested test `assert repair packet markdown`",
         "ripr gap: `RIPR-SPEC-TWO` `xtask/src/tasks/quality_gate.rs:88` seam `receipt_freshness` reason `summary does not expose stale receipt` suggested test `assert receipt freshness markdown`",
@@ -141,6 +160,13 @@ fn write_coverage_receipt(path: &Path, head: &str, patch: f64, project: f64) -> 
                     "path": "xtask/src/tasks/quality_gate.rs",
                     "line_coverage": 72.0,
                     "sample_uncovered_lines": [41, 42, 43]
+                }
+            ],
+            "patch_files_below_target": [
+                {
+                    "path": "xtask/src/tasks/ripr_evidence.rs",
+                    "line_coverage": 67.9,
+                    "sample_uncovered_lines": [212, 213, 214]
                 }
             ]
         }),
