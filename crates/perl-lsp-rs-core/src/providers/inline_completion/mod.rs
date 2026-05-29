@@ -388,7 +388,123 @@ pub trait InlineCompletionBackend: Send + Sync {
 struct RankedCompletionItem {
     score: InlineCandidateScore,
     order: usize,
+    metadata: InlineCandidateMetadata,
     item: InlineCompletionItem,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct InlineCandidateMetadata {
+    source: InlineCandidateSourceKind,
+    reason: InlineCandidateReason,
+    confidence: InlineCandidateConfidence,
+}
+
+impl InlineCandidateMetadata {
+    fn for_candidate(
+        source: InlineCandidateSourceKind,
+        item: &InlineCompletionItem,
+        semantic_context: &SemanticInlineContext,
+    ) -> Self {
+        let reason = InlineCandidateReason::for_candidate(source, item, semantic_context);
+        let confidence = InlineCandidateConfidence::for_reason(reason);
+        Self { source, reason, confidence }
+    }
+
+    fn stable_tiebreak(self) -> u8 {
+        self.source.stable_rank() * 32
+            + self.reason.stable_rank() * 4
+            + self.confidence.stable_rank()
+    }
+
+    #[cfg(test)]
+    fn test_fixture() -> Self {
+        Self {
+            source: InlineCandidateSourceKind::Syntax,
+            reason: InlineCandidateReason::SourceSyntax,
+            confidence: InlineCandidateConfidence::Medium,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InlineCandidateReason {
+    CurrentPackageMethod,
+    DbiReceiverMethod,
+    EffectiveIncModule,
+    VisibleLexical,
+    SourceReceiver,
+    SourceModule,
+    SourceSyntax,
+    SourceTest,
+    SourceShebang,
+    SourceContextualFallback,
+}
+
+impl InlineCandidateReason {
+    fn for_candidate(
+        source: InlineCandidateSourceKind,
+        item: &InlineCompletionItem,
+        semantic_context: &SemanticInlineContext,
+    ) -> Self {
+        match source {
+            InlineCandidateSourceKind::Receiver => {
+                receiver_candidate_reason(item, semantic_context)
+            }
+            InlineCandidateSourceKind::Module => module_candidate_reason(item, semantic_context),
+            InlineCandidateSourceKind::Syntax => syntax_candidate_reason(semantic_context),
+            InlineCandidateSourceKind::Test => Self::SourceTest,
+            InlineCandidateSourceKind::Shebang => Self::SourceShebang,
+            InlineCandidateSourceKind::ContextualFallback => Self::SourceContextualFallback,
+        }
+    }
+
+    fn stable_rank(self) -> u8 {
+        match self {
+            Self::CurrentPackageMethod => 0,
+            Self::DbiReceiverMethod => 1,
+            Self::EffectiveIncModule => 2,
+            Self::VisibleLexical => 3,
+            Self::SourceReceiver => 4,
+            Self::SourceModule => 5,
+            Self::SourceSyntax => 6,
+            Self::SourceTest => 7,
+            Self::SourceShebang => 8,
+            Self::SourceContextualFallback => 9,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InlineCandidateConfidence {
+    High,
+    Medium,
+    Low,
+}
+
+impl InlineCandidateConfidence {
+    fn for_reason(reason: InlineCandidateReason) -> Self {
+        match reason {
+            InlineCandidateReason::CurrentPackageMethod
+            | InlineCandidateReason::DbiReceiverMethod
+            | InlineCandidateReason::EffectiveIncModule
+            | InlineCandidateReason::VisibleLexical
+            | InlineCandidateReason::SourceTest => Self::High,
+            InlineCandidateReason::SourceSyntax | InlineCandidateReason::SourceShebang => {
+                Self::Medium
+            }
+            InlineCandidateReason::SourceReceiver
+            | InlineCandidateReason::SourceModule
+            | InlineCandidateReason::SourceContextualFallback => Self::Low,
+        }
+    }
+
+    fn stable_rank(self) -> u8 {
+        match self {
+            Self::High => 0,
+            Self::Medium => 1,
+            Self::Low => 2,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -424,6 +540,58 @@ enum InlineCandidateSourceKind {
     Test,
     Shebang,
     ContextualFallback,
+}
+
+impl InlineCandidateSourceKind {
+    fn stable_rank(self) -> u8 {
+        match self {
+            Self::Receiver => 0,
+            Self::Module => 1,
+            Self::Syntax => 2,
+            Self::Test => 3,
+            Self::Shebang => 4,
+            Self::ContextualFallback => 5,
+        }
+    }
+}
+
+fn receiver_candidate_reason(
+    item: &InlineCompletionItem,
+    context: &SemanticInlineContext,
+) -> InlineCandidateReason {
+    let method_name = item.insert_text.trim_end_matches("()");
+    if context.receiver_hint == Some(ReceiverHint::SelfReceiver)
+        && context.current_package_methods.iter().any(|method| method.name == method_name)
+    {
+        return InlineCandidateReason::CurrentPackageMethod;
+    }
+
+    if context.dbi_receiver_kind.is_some() {
+        return InlineCandidateReason::DbiReceiverMethod;
+    }
+
+    InlineCandidateReason::SourceReceiver
+}
+
+fn module_candidate_reason(
+    item: &InlineCompletionItem,
+    context: &SemanticInlineContext,
+) -> InlineCandidateReason {
+    let module_name = item.insert_text.trim_end_matches(';');
+    if context.available_modules.iter().any(|module| module.name == module_name) {
+        return InlineCandidateReason::EffectiveIncModule;
+    }
+
+    InlineCandidateReason::SourceModule
+}
+
+fn syntax_candidate_reason(context: &SemanticInlineContext) -> InlineCandidateReason {
+    match context.expected_syntax {
+        ExpectedSyntax::ReturnExpression
+        | ExpectedSyntax::GuardCondition
+        | ExpectedSyntax::LoopBinding => InlineCandidateReason::VisibleLexical,
+        _ => InlineCandidateReason::SourceSyntax,
+    }
 }
 
 fn semantic_bonus(
@@ -618,7 +786,8 @@ impl<'a> InlineCandidateSink<'a> {
     ) {
         let score =
             InlineCandidateScore::for_candidate(source, priority, &item, self.semantic_context);
-        self.items.push(RankedCompletionItem { score, order: self.sequence, item });
+        let metadata = InlineCandidateMetadata::for_candidate(source, &item, self.semantic_context);
+        self.items.push(RankedCompletionItem { score, order: self.sequence, metadata, item });
         self.sequence += 1;
     }
 
@@ -1396,7 +1565,9 @@ impl InlineCompletionProvider {
 
     fn normalize_items(&self, mut items: Vec<RankedCompletionItem>) -> Vec<InlineCompletionItem> {
         items.sort_by(|left, right| {
-            right.score.0.cmp(&left.score.0).then_with(|| left.order.cmp(&right.order))
+            right.score.0.cmp(&left.score.0).then_with(|| left.order.cmp(&right.order)).then_with(
+                || left.metadata.stable_tiebreak().cmp(&right.metadata.stable_tiebreak()),
+            )
         });
 
         let mut deduped = Vec::new();
@@ -4421,12 +4592,185 @@ mod tests {
     }
 
     #[test]
+    fn candidate_metadata_explains_semantic_sources() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+
+        let module_source = "package Demo;\nuse My::";
+        let module_character = "use My::".encode_utf16().count() as u32;
+        let module_prepared = provider
+            .prepare_context(module_source, 1, module_character)
+            .ok_or("expected module context")?;
+        let mut module_context = provider.semantic_context_for_prepared_context(&module_prepared);
+        module_context.available_modules = vec![ModuleFact { name: "My::App".into() }];
+        let module_item = InlineCompletionItem {
+            insert_text: "My::App;".into(),
+            filter_text: Some("My::App".into()),
+            range: None,
+            command: None,
+        };
+        let module_metadata = InlineCandidateMetadata::for_candidate(
+            InlineCandidateSourceKind::Module,
+            &module_item,
+            &module_context,
+        );
+        assert_eq!(module_metadata.source, InlineCandidateSourceKind::Module);
+        assert_eq!(module_metadata.reason, InlineCandidateReason::EffectiveIncModule);
+        assert_eq!(module_metadata.confidence, InlineCandidateConfidence::High);
+
+        let receiver_source = "package Demo;\nsub save {}\nsub caller {\n    $self->\n}\n";
+        let receiver_character = "    $self->".encode_utf16().count() as u32;
+        let receiver_prepared = provider
+            .prepare_context(receiver_source, 3, receiver_character)
+            .ok_or("expected receiver context")?;
+        let receiver_context =
+            provider.semantic_context_for_source(receiver_source, &receiver_prepared);
+        let receiver_item = InlineCompletionItem {
+            insert_text: "save()".into(),
+            filter_text: Some("save".into()),
+            range: None,
+            command: None,
+        };
+        let receiver_metadata = InlineCandidateMetadata::for_candidate(
+            InlineCandidateSourceKind::Receiver,
+            &receiver_item,
+            &receiver_context,
+        );
+        assert_eq!(receiver_metadata.reason, InlineCandidateReason::CurrentPackageMethod);
+        assert_eq!(receiver_metadata.confidence, InlineCandidateConfidence::High);
+
+        Ok(())
+    }
+
+    #[test]
+    fn candidate_metadata_explains_fallback_sources() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let prepared = provider.prepare_context("return ", 0, 7).ok_or("expected context")?;
+        let mut semantic = provider.semantic_context_for_prepared_context(&prepared);
+        let lexical_item = InlineCompletionItem {
+            insert_text: "$result;".into(),
+            filter_text: Some("$result".into()),
+            range: None,
+            command: None,
+        };
+        let lexical_metadata = InlineCandidateMetadata::for_candidate(
+            InlineCandidateSourceKind::Syntax,
+            &lexical_item,
+            &semantic,
+        );
+        assert_eq!(lexical_metadata.reason, InlineCandidateReason::VisibleLexical);
+        assert_eq!(lexical_metadata.confidence, InlineCandidateConfidence::High);
+
+        semantic.expected_syntax = ExpectedSyntax::Unknown;
+        semantic.receiver_hint = Some(ReceiverHint::Variable(VariableFact {
+            sigil: VariableSigil::Scalar,
+            name: "dbh".into(),
+        }));
+        semantic.dbi_receiver_kind = Some(DbiReceiverKind::DatabaseHandle);
+        let dbi_item = InlineCompletionItem {
+            insert_text: "prepare()".into(),
+            filter_text: Some("prepare".into()),
+            range: None,
+            command: None,
+        };
+        let dbi_metadata = InlineCandidateMetadata::for_candidate(
+            InlineCandidateSourceKind::Receiver,
+            &dbi_item,
+            &semantic,
+        );
+        assert_eq!(dbi_metadata.reason, InlineCandidateReason::DbiReceiverMethod);
+
+        let source_reason_cases = [
+            (InlineCandidateSourceKind::Module, InlineCandidateReason::SourceModule),
+            (InlineCandidateSourceKind::Syntax, InlineCandidateReason::SourceSyntax),
+            (InlineCandidateSourceKind::Test, InlineCandidateReason::SourceTest),
+            (InlineCandidateSourceKind::Shebang, InlineCandidateReason::SourceShebang),
+            (
+                InlineCandidateSourceKind::ContextualFallback,
+                InlineCandidateReason::SourceContextualFallback,
+            ),
+        ];
+        for (source, reason) in source_reason_cases {
+            let metadata = InlineCandidateMetadata::for_candidate(source, &dbi_item, &semantic);
+            assert_eq!(metadata.reason, reason, "source {source:?}");
+        }
+
+        semantic.dbi_receiver_kind = None;
+        let receiver_metadata = InlineCandidateMetadata::for_candidate(
+            InlineCandidateSourceKind::Receiver,
+            &dbi_item,
+            &semantic,
+        );
+        assert_eq!(receiver_metadata.reason, InlineCandidateReason::SourceReceiver);
+        assert_eq!(receiver_metadata.confidence, InlineCandidateConfidence::Low);
+
+        Ok(())
+    }
+
+    #[test]
+    fn candidate_metadata_tiebreak_ranks_are_stable() -> Result<(), Box<dyn std::error::Error>> {
+        let source_ranks: Vec<_> = [
+            InlineCandidateSourceKind::Receiver,
+            InlineCandidateSourceKind::Module,
+            InlineCandidateSourceKind::Syntax,
+            InlineCandidateSourceKind::Test,
+            InlineCandidateSourceKind::Shebang,
+            InlineCandidateSourceKind::ContextualFallback,
+        ]
+        .into_iter()
+        .map(|source| source.stable_rank())
+        .collect();
+        assert_eq!(source_ranks, vec![0, 1, 2, 3, 4, 5]);
+
+        let reason_ranks: Vec<_> = [
+            InlineCandidateReason::CurrentPackageMethod,
+            InlineCandidateReason::DbiReceiverMethod,
+            InlineCandidateReason::EffectiveIncModule,
+            InlineCandidateReason::VisibleLexical,
+            InlineCandidateReason::SourceReceiver,
+            InlineCandidateReason::SourceModule,
+            InlineCandidateReason::SourceSyntax,
+            InlineCandidateReason::SourceTest,
+            InlineCandidateReason::SourceShebang,
+            InlineCandidateReason::SourceContextualFallback,
+        ]
+        .into_iter()
+        .map(|reason| reason.stable_rank())
+        .collect();
+        assert_eq!(reason_ranks, vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+
+        let confidence_ranks: Vec<_> = [
+            InlineCandidateConfidence::High,
+            InlineCandidateConfidence::Medium,
+            InlineCandidateConfidence::Low,
+        ]
+        .into_iter()
+        .map(|confidence| confidence.stable_rank())
+        .collect();
+        assert_eq!(confidence_ranks, vec![0, 1, 2]);
+
+        let high_confidence = InlineCandidateMetadata {
+            source: InlineCandidateSourceKind::Receiver,
+            reason: InlineCandidateReason::CurrentPackageMethod,
+            confidence: InlineCandidateConfidence::High,
+        };
+        let low_confidence = InlineCandidateMetadata {
+            source: InlineCandidateSourceKind::ContextualFallback,
+            reason: InlineCandidateReason::SourceContextualFallback,
+            confidence: InlineCandidateConfidence::Low,
+        };
+        assert!(high_confidence.stable_tiebreak() < low_confidence.stable_tiebreak());
+
+        Ok(())
+    }
+
+    #[test]
     fn test_normalize_items_orders_deduplicates_and_limits() {
         let provider = InlineCompletionProvider::new();
         let items = vec![
             RankedCompletionItem {
                 score: InlineCandidateScore::from_legacy_priority(2),
                 order: 0,
+                metadata: InlineCandidateMetadata::test_fixture(),
                 item: InlineCompletionItem {
                     insert_text: "late".into(),
                     filter_text: None,
@@ -4437,6 +4781,7 @@ mod tests {
             RankedCompletionItem {
                 score: InlineCandidateScore::from_legacy_priority(0),
                 order: 1,
+                metadata: InlineCandidateMetadata::test_fixture(),
                 item: InlineCompletionItem {
                     insert_text: "first".into(),
                     filter_text: None,
@@ -4447,6 +4792,7 @@ mod tests {
             RankedCompletionItem {
                 score: InlineCandidateScore::from_legacy_priority(0),
                 order: 2,
+                metadata: InlineCandidateMetadata::test_fixture(),
                 item: InlineCompletionItem {
                     insert_text: "first".into(),
                     filter_text: Some("duplicate".into()),
@@ -4457,6 +4803,7 @@ mod tests {
             RankedCompletionItem {
                 score: InlineCandidateScore::from_legacy_priority(1),
                 order: 3,
+                metadata: InlineCandidateMetadata::test_fixture(),
                 item: InlineCompletionItem {
                     insert_text: "second".into(),
                     filter_text: None,
@@ -4467,6 +4814,7 @@ mod tests {
             RankedCompletionItem {
                 score: InlineCandidateScore::from_legacy_priority(3),
                 order: 4,
+                metadata: InlineCandidateMetadata::test_fixture(),
                 item: InlineCompletionItem {
                     insert_text: "third".into(),
                     filter_text: None,
@@ -4477,6 +4825,7 @@ mod tests {
             RankedCompletionItem {
                 score: InlineCandidateScore::from_legacy_priority(4),
                 order: 5,
+                metadata: InlineCandidateMetadata::test_fixture(),
                 item: InlineCompletionItem {
                     insert_text: "fourth".into(),
                     filter_text: None,
@@ -4487,6 +4836,7 @@ mod tests {
             RankedCompletionItem {
                 score: InlineCandidateScore::from_legacy_priority(5),
                 order: 6,
+                metadata: InlineCandidateMetadata::test_fixture(),
                 item: InlineCompletionItem {
                     insert_text: "fifth".into(),
                     filter_text: None,
@@ -4507,12 +4857,58 @@ mod tests {
     }
 
     #[test]
+    fn test_normalize_items_uses_metadata_tiebreak_after_score_and_sequence()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let items = vec![
+            RankedCompletionItem {
+                score: InlineCandidateScore::from_legacy_priority(0),
+                order: 0,
+                metadata: InlineCandidateMetadata {
+                    source: InlineCandidateSourceKind::ContextualFallback,
+                    reason: InlineCandidateReason::SourceContextualFallback,
+                    confidence: InlineCandidateConfidence::Low,
+                },
+                item: InlineCompletionItem {
+                    insert_text: "fallback".into(),
+                    filter_text: None,
+                    range: None,
+                    command: None,
+                },
+            },
+            RankedCompletionItem {
+                score: InlineCandidateScore::from_legacy_priority(0),
+                order: 0,
+                metadata: InlineCandidateMetadata {
+                    source: InlineCandidateSourceKind::Receiver,
+                    reason: InlineCandidateReason::CurrentPackageMethod,
+                    confidence: InlineCandidateConfidence::High,
+                },
+                item: InlineCompletionItem {
+                    insert_text: "save()".into(),
+                    filter_text: None,
+                    range: None,
+                    command: None,
+                },
+            },
+        ];
+
+        let normalized = provider.normalize_items(items);
+
+        assert_eq!(normalized[0].insert_text, "save()");
+        assert_eq!(normalized[1].insert_text, "fallback");
+
+        Ok(())
+    }
+
+    #[test]
     fn test_normalize_items_prefers_semantic_score_before_sequence() {
         let provider = InlineCompletionProvider::new();
         let items = vec![
             RankedCompletionItem {
                 score: InlineCandidateScore::from_legacy_priority(0),
                 order: 0,
+                metadata: InlineCandidateMetadata::test_fixture(),
                 item: InlineCompletionItem {
                     insert_text: "return $result;".into(),
                     filter_text: Some("$result".into()),
@@ -4523,6 +4919,7 @@ mod tests {
             RankedCompletionItem {
                 score: InlineCandidateScore(InlineCandidateScore::legacy_base(0) + 25),
                 order: 1,
+                metadata: InlineCandidateMetadata::test_fixture(),
                 item: InlineCompletionItem {
                     insert_text: "is($got, $expected, 'test description');".into(),
                     filter_text: Some("is".into()),
