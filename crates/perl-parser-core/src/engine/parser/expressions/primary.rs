@@ -563,6 +563,27 @@ impl<'a> Parser<'a> {
                 }
             }
 
+            TokenKind::LeftShift => {
+                // `<<>>` — double-diamond operator (Perl 5.22+, perlop "I/O Operators").
+                // Reads from @ARGV but refuses magic/pipe filenames.
+                // The lexer tokenises `<<` as LeftShift when not starting a heredoc.
+                // Only the exact `<<>>` shape is an I/O operator; anything else that
+                // reaches primary with a LeftShift token is not a valid expression
+                // here — return an error so the caller's recovery logic can handle it.
+                let start = self.consume_token()?.start; // consume <<
+                if self.peek_kind() == Some(TokenKind::RightShift) {
+                    self.consume_token()?; // consume >>
+                    let end = self.previous_position();
+                    Ok(Node::new(NodeKind::Diamond, SourceLocation { start, end }))
+                } else {
+                    Err(ParseError::unexpected(
+                        "expression",
+                        TokenKind::LeftShift.display_name(),
+                        start,
+                    ))
+                }
+            }
+
             TokenKind::Less => {
                 // Could be diamond operator <> or <FILEHANDLE>
                 let start = self.consume_token()?.start; // consume <
