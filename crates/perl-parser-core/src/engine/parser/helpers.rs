@@ -450,12 +450,22 @@ impl<'a> Parser<'a> {
         Ok(true)
     }
 
+    /// Returns true if `name` is a Perl lvalue builtin — one that can legally
+    /// appear as the target of an assignment:  `pos($s) = 0`,
+    /// `substr($s,0,5) = "x"`, `vec($s,0,8) = 0xFF`.
+    ///
+    /// Non-lvalue builtins such as `length`, `index`, `pack` must NOT be
+    /// listed here; `length($x) = 5` is not valid Perl.
+    pub(crate) fn is_lvalue_builtin(name: &str) -> bool {
+        matches!(name, "pos" | "substr" | "vec")
+    }
+
     fn parse_lvalue_builtin_assignment_tail(
         &mut self,
         func_name: &str,
         expr: Node,
     ) -> ParseResult<Node> {
-        if func_name != "substr" {
+        if !Self::is_lvalue_builtin(func_name) {
             return Ok(expr);
         }
 

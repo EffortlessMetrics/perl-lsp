@@ -937,6 +937,7 @@ impl<'a> Parser<'a> {
                             } else if self.peek_kind() == Some(TokenKind::LeftParen)
                                 && (Self::is_block_list_func(func_name.as_ref())
                                     || Self::is_optional_arg_builtin(func_name.as_ref())
+                                    || Self::is_lvalue_builtin(func_name.as_ref())
                                     || matches!(
                                         func_name.as_ref(),
                                         "exec" | "system" | "print" | "say" | "printf" | "send"
@@ -955,6 +956,11 @@ impl<'a> Parser<'a> {
                                 // applies to the call's RESULT rather than being absorbed as an
                                 // argument.  e.g. `chr($x) ? 1 : 0` must parse as
                                 // `(ternary (chr $x) 1 0)` not `(chr (ternary $x 1 0))`.
+                                //
+                                // is_lvalue_builtin names (pos, substr, vec) also use
+                                // parse_args() when followed by `(` so that the parens
+                                // tightly bind and the subsequent `= RHS` is handled by
+                                // parse_lvalue_builtin_assignment_tail as an outer assignment.
                                 let paren_args = if matches!(
                                     func_name.as_ref(),
                                     "print" | "say" | "printf" | "send"
