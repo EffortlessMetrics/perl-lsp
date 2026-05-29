@@ -220,6 +220,146 @@ fn code_action_and_workspace_edit_responses_do_not_emit_optional_318_shapes() ->
 }
 
 #[test]
+fn code_action_pragmas_emit_snippet_text_edits_when_supported() -> TestResult {
+    let mut harness = LspHarness::new_raw();
+    harness.initialize_ready(
+        "file:///workspace",
+        Some(json!({
+            "workspace": {
+                "workspaceEdit": {
+                    "documentChanges": true,
+                    "snippetEditSupport": true
+                }
+            }
+        })),
+    )?;
+    harness.open("file:///snippet.pl", "print \"hi\";\n")?;
+
+    let actions = harness.request(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": { "uri": "file:///snippet.pl" },
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": 0, "character": 0 }
+            },
+            "context": {
+                "diagnostics": [],
+                "only": ["quickfix"],
+                "triggerKind": 1
+            }
+        }),
+    )?;
+
+    let action_items =
+        actions.as_array().ok_or_else(|| format!("expected code action array: {actions}"))?;
+    let strict_actions: Vec<&Value> = action_items
+        .iter()
+        .filter(|action| action.get("title").and_then(Value::as_str) == Some("Add use strict;"))
+        .collect();
+    assert_eq!(
+        strict_actions.len(),
+        1,
+        "expected exactly one strict pragma code action: {actions}"
+    );
+    let strict_action = strict_actions
+        .first()
+        .copied()
+        .ok_or_else(|| format!("strict pragma code action missing after count check: {actions}"))?;
+    assert_absent(strict_action, "/edit/changes")?;
+
+    let document_change = strict_action
+        .pointer("/edit/documentChanges")
+        .and_then(Value::as_array)
+        .and_then(|changes| changes.first())
+        .ok_or_else(|| {
+            format!("expected snippet action to use documentChanges: {strict_action}")
+        })?;
+    assert_eq!(
+        document_change.pointer("/textDocument/uri").and_then(Value::as_str),
+        Some("file:///snippet.pl"),
+        "snippet action should target the current document: {strict_action}"
+    );
+    assert_eq!(
+        document_change.pointer("/textDocument/version").and_then(Value::as_i64),
+        Some(1),
+        "snippet action should carry the current document version: {strict_action}"
+    );
+
+    let edit = document_change
+        .get("edits")
+        .and_then(Value::as_array)
+        .and_then(|edits| edits.first())
+        .ok_or_else(|| format!("expected SnippetTextEdit in document change: {strict_action}"))?;
+    assert_absent(edit, "/newText")?;
+    assert_eq!(
+        edit.pointer("/snippet/kind").and_then(Value::as_str),
+        Some("snippet"),
+        "SnippetTextEdit must use a StringValue snippet kind: {edit}"
+    );
+    assert_eq!(
+        edit.pointer("/snippet/value").and_then(Value::as_str),
+        Some("use strict;\n"),
+        "pragma snippet should preserve the plain fallback text: {edit}"
+    );
+    Ok(())
+}
+
+#[test]
+fn code_action_pragmas_require_document_changes_for_snippet_text_edits() -> TestResult {
+    let mut harness = LspHarness::new_raw();
+    harness.initialize_ready(
+        "file:///workspace",
+        Some(json!({
+            "workspace": {
+                "workspaceEdit": {
+                    "snippetEditSupport": true
+                }
+            }
+        })),
+    )?;
+    harness.open("file:///snippet-fallback.pl", "print \"hi\";\n")?;
+
+    let actions = harness.request(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": { "uri": "file:///snippet-fallback.pl" },
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": 0, "character": 0 }
+            },
+            "context": {
+                "diagnostics": [],
+                "only": ["quickfix"],
+                "triggerKind": 1
+            }
+        }),
+    )?;
+
+    assert_no_key(&actions, "snippet")?;
+    let action_items =
+        actions.as_array().ok_or_else(|| format!("expected code action array: {actions}"))?;
+    let strict_actions: Vec<&Value> = action_items
+        .iter()
+        .filter(|action| action.get("title").and_then(Value::as_str) == Some("Add use strict;"))
+        .collect();
+    assert_eq!(
+        strict_actions.len(),
+        1,
+        "expected exactly one strict pragma code action: {actions}"
+    );
+    let strict_action = strict_actions
+        .first()
+        .copied()
+        .ok_or_else(|| format!("strict pragma code action missing after count check: {actions}"))?;
+    assert!(
+        strict_action.pointer("/edit/changes").is_some(),
+        "clients without documentChanges support must keep plain WorkspaceEdit.changes: {strict_action}"
+    );
+    Ok(())
+}
+
+#[test]
 fn diagnostics_keep_plain_string_messages_without_markup_support() -> TestResult {
     let mut harness = LspHarness::new_raw();
     harness.initialize_ready("file:///workspace", Some(json!({})))?;

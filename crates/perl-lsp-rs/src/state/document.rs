@@ -301,6 +301,16 @@ pub struct ClientCapabilities {
     pub workspace_folders_support: bool,
     /// Supports snippet syntax in completion items
     pub snippet_support: bool,
+    /// Supports versioned document edits in `WorkspaceEdit`s.
+    ///
+    /// Parsed from `capabilities.workspace.workspaceEdit.documentChanges`.
+    /// `SnippetTextEdit` can only be emitted inside document changes.
+    pub workspace_edit_document_changes_support: bool,
+    /// Supports `SnippetTextEdit` workspace edits (LSP 3.18).
+    ///
+    /// Parsed from `capabilities.workspace.workspaceEdit.snippetEditSupport`.
+    /// Unsupported clients must keep receiving plain `TextEdit`s.
+    pub workspace_edit_snippet_edit_support: bool,
     /// Supports `completionItem.commitCharacters` in completion results
     pub completion_commit_characters_support: bool,
     /// Supports markup message content in pull diagnostics (LSP 3.18)

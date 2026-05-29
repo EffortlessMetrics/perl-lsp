@@ -86,6 +86,7 @@ perl-lsp supports selected LSP 3.18 surfaces with capability-honest contracts.
 | Semantic tokens | `semanticTokensProvider.full`, `semanticTokensProvider.range` | Full and range are advertised; delta is not advertised without result-id state. | `lsp_caps_contract_shapes`, `lsp_semantic_legend_contract_tests`, `lsp_cap_snap` |
 | Semantic token `label` type | `semanticTokensProvider.legend.tokenTypes` | `SemanticTokenTypes.label` remains absent until the provider can emit matching token indexes; emitted token indexes and modifier bits stay within the advertised legend bounds. | `lsp_semantic_legend_contract_tests`, `check-lsp-318-claims` |
 | Signature-help nullable active parameter | `textDocument/signatureHelp` response | `SignatureHelp.activeParameter` and `SignatureInformation.activeParameter` schema validation accepts unsigned integer or `null`; current runtime receipts preserve numeric active-parameter tracking when known. | `lsp_schema_validation`, `lsp_signature_help_tests`, `check-lsp-318-claims` |
+| SnippetTextEdit workspace edits | `workspace.workspaceEdit.documentChanges`, `workspace.workspaceEdit.snippetEditSupport` | Pragma quick-fix code actions emit `SnippetTextEdit` in `WorkspaceEdit.documentChanges` only when both capabilities are present; unsupported clients and aggregate fix-all actions keep plain `TextEdit` fallback. | `lsp_318_negative_claims`, `features.toml`, `check-lsp-318-claims` |
 | CodeLens resolve support properties | `textDocument.codeLens.resolveSupport.properties`, `codeLensProvider.resolveProvider`, `codeLens/resolve` | Clients receive unresolved command/reference lenses only when `command` appears in resolve-support properties; clients without that property receive eager command lenses while `codeLens/resolve` remains routed. | `lsp_codelens_tests`, `lsp_code_lens_tests`, `lsp_bdd_workflows`, `check-lsp-318-claims` |
 | CodeLens command tooltips | `Command.tooltip` on CodeLens command objects | CodeLens commands returned by `textDocument/codeLens` and `codeLens/resolve` carry deterministic plain-text tooltips; non-CodeLens command tooltips remain unclaimed. | `lsp_codelens_tests`, `lsp_318_negative_claims`, `check-lsp-318-claims` |
 | Completion list default data | `textDocument.completion.completionList.itemDefaults`, `textDocument/completion` | Clients that include `data` in supported completion-list defaults receive shared `CompletionList.itemDefaults.data`; unsupported clients retain the current response shape. | `lsp_completion_tests`, `lsp_318_negative_claims`, `check-lsp-318-claims` |
@@ -105,7 +106,6 @@ capability parsing, wire tests, docs, and negative gates:
 - `textDocument/semanticTokens/full/delta`
 - semantic-token delta `resultId` state
 - `SemanticTokenTypes.label`
-- `WorkspaceEdit` `SnippetTextEdit`
 - `ApplyWorkspaceEditParams.metadata`
 - non-spec `WorkspaceEdit.metadata` response fields
 - `CodeAction.tags`

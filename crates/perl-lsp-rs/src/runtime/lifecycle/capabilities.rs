@@ -230,6 +230,14 @@ impl LspServer {
                     )
                     .and_then(Value::as_bool)
                     .unwrap_or(false);
+                caps.workspace_edit_document_changes_support = params
+                    .pointer("/capabilities/workspace/workspaceEdit/documentChanges")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                caps.workspace_edit_snippet_edit_support = params
+                    .pointer("/capabilities/workspace/workspaceEdit/snippetEditSupport")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
                 caps.code_action_documentation_support = params
                     .pointer("/capabilities/textDocument/codeAction/documentationSupport")
                     .and_then(Value::as_bool)
@@ -1046,6 +1054,47 @@ mod tests {
         let _ = server.handle_initialize(Some(params));
 
         assert!(!server.client_capabilities.lock().completion_list_apply_kind_support);
+    }
+
+    #[test]
+    fn initialize_parses_workspace_edit_snippet_text_edit_support() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "workspace": {
+                    "workspaceEdit": {
+                        "documentChanges": true,
+                        "snippetEditSupport": true
+                    }
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+        let caps = server.client_capabilities.lock();
+
+        assert!(caps.workspace_edit_document_changes_support);
+        assert!(caps.workspace_edit_snippet_edit_support);
+    }
+
+    #[test]
+    fn initialize_leaves_workspace_edit_snippet_text_edit_disabled_when_absent() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "workspace": {
+                    "workspaceEdit": {
+                        "documentChanges": true
+                    }
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+        let caps = server.client_capabilities.lock();
+
+        assert!(caps.workspace_edit_document_changes_support);
+        assert!(!caps.workspace_edit_snippet_edit_support);
     }
 
     #[test]

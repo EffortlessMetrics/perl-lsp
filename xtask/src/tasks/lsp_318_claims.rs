@@ -160,6 +160,10 @@ const FEATURE_CATALOG_MARKERS: &[RequiredMarker] = &[
         label: "CodeAction.documentation feature catalog row",
         marker: "id = \"lsp.code_action_documentation\"",
     },
+    RequiredMarker {
+        label: "SnippetTextEdit feature catalog row",
+        marker: "id = \"lsp.workspace_edit_snippet_text_edit\"",
+    },
 ];
 
 const REFRESH_METHODS_TEST_MARKERS: &[RequiredMarker] = &[RequiredMarker {
@@ -320,7 +324,6 @@ const FEATURE_CATALOG_FORBIDDEN_PATTERNS: &[RawPatternCheck] = &[
         needle: "semanticTokens/full/delta",
         label: "semantic-token delta feature claim",
     },
-    RawPatternCheck { needle: "SnippetTextEdit", label: "SnippetTextEdit feature claim" },
     RawPatternCheck { needle: "CodeAction.tags", label: "CodeAction.tags feature claim" },
     RawPatternCheck { needle: "Command.tooltip", label: "Command.tooltip feature claim" },
     RawPatternCheck { needle: "RelativePattern", label: "RelativePattern feature claim" },
@@ -394,6 +397,7 @@ pub fn run() -> Result<()> {
     check_completion_item_defaults_data_guard(&root, &mut violations)?;
     check_completion_apply_kind_guard(&root, &mut violations)?;
     check_code_action_documentation_guard(&root, &mut violations)?;
+    check_snippet_text_edit_guard(&root, &mut violations)?;
     check_message_type_debug_support(&root, &mut violations)?;
 
     if violations.is_empty() {
@@ -742,6 +746,60 @@ fn check_code_action_documentation_guard(
             "perl.explainProviderDecision",
         ],
         "CodeAction.documentation wire receipts",
+        violations,
+    );
+
+    Ok(())
+}
+
+fn check_snippet_text_edit_guard(root: &Path, violations: &mut Vec<Violation>) -> Result<()> {
+    let state_document = read_required(root, STATE_DOCUMENT)?;
+    let lifecycle_capabilities = read_required(root, LIFECYCLE_CAPABILITIES)?;
+    let code_actions =
+        read_required(root, "crates/perl-lsp-rs/src/runtime/language/code_actions.rs")?;
+    let negative_claims = read_required(root, NEGATIVE_CLAIMS_TEST)?;
+
+    require_all(
+        STATE_DOCUMENT,
+        &state_document,
+        &["workspace_edit_document_changes_support", "workspace_edit_snippet_edit_support"],
+        "SnippetTextEdit workspace-edit capability storage",
+        violations,
+    );
+    require_all(
+        LIFECYCLE_CAPABILITIES,
+        &lifecycle_capabilities,
+        &[
+            "/capabilities/workspace/workspaceEdit/documentChanges",
+            "/capabilities/workspace/workspaceEdit/snippetEditSupport",
+            "workspace_edit_document_changes_support",
+            "workspace_edit_snippet_edit_support",
+        ],
+        "SnippetTextEdit workspace-edit capability parser",
+        violations,
+    );
+    require_all(
+        "crates/perl-lsp-rs/src/runtime/language/code_actions.rs",
+        &code_actions,
+        &[
+            "supports_workspace_snippet_text_edits",
+            "convert_pragma_quickfix_edits_to_snippet_text_edits",
+            "\"documentChanges\"",
+            "\"snippet\"",
+            "\"kind\": \"snippet\"",
+        ],
+        "SnippetTextEdit response gate",
+        violations,
+    );
+    require_all(
+        NEGATIVE_CLAIMS_TEST,
+        &negative_claims,
+        &[
+            "code_action_pragmas_emit_snippet_text_edits_when_supported",
+            "code_action_pragmas_require_document_changes_for_snippet_text_edits",
+            "snippetEditSupport",
+        ],
+        "SnippetTextEdit wire receipts",
         violations,
     );
 

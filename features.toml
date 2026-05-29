@@ -474,6 +474,18 @@ tests = ["crates/perl-lsp-rs/tests/lsp_workspace_file_ops_tests.rs"]
 description = "Apply workspace-wide edits"
 
 [[feature]]
+id = "lsp.workspace_edit_snippet_text_edit"
+spec = "LSP 3.18"
+area = "workspace"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_318_negative_claims.rs",
+]
+description = "Capability-gated SnippetTextEdit workspace edits for pragma quick fixes"
+
+[[feature]]
 id = "lsp.moniker"
 spec = "LSP 3.16"
 area = "workspace"
