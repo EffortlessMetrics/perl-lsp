@@ -23,6 +23,7 @@ fn init_git_repo() -> Result<TempDir> {
     git_cmd(&["init", "-b", "master"], dir.path()).or_else(|_| git_cmd(&["init"], dir.path()))?;
     git_cmd(&["config", "user.email", "test@test.com"], dir.path())?;
     git_cmd(&["config", "user.name", "Test"], dir.path())?;
+    git_cmd(&["config", "commit.gpgsign", "false"], dir.path())?;
     fs::write(dir.path().join("README.md"), "init")?;
     git_cmd(&["add", "."], dir.path())?;
     git_cmd(&["commit", "-m", "fix(scope): initial commit (#1234)"], dir.path())?;
@@ -68,14 +69,75 @@ fn missing_issue_ref_fails() -> Result<()> {
     Ok(())
 }
 
-/// A title with a zero-valued issue reference (#0) fails (Codex placeholder).
+/// A zero-valued issue reference (#0 / #0000) is the sanctioned placeholder
+/// for an unknown issue (issue #724). It WARNS but does not fail in default
+/// mode (exit 0), so agents never have to guess a real issue number.
 #[test]
-fn zero_issue_ref_fails() -> Result<()> {
+fn zero_issue_ref_warns_exits_zero() -> Result<()> {
     let mut cmd = cargo_bin_cmd!("xtask");
-    cmd.args(["pr", "title-check", "--no-gh", "fix(scope): subject (#0)"])
+    cmd.args(["pr", "title-check", "--no-gh", "fix(scope): subject (#0)"]).assert().success();
+    Ok(())
+}
+
+/// The four-digit placeholder `#0000` is also accepted (warn, exit 0).
+#[test]
+fn placeholder_0000_warns_exits_zero() -> Result<()> {
+    let mut cmd = cargo_bin_cmd!("xtask");
+    cmd.args(["pr", "title-check", "--no-gh", "fix(scope): subject (#0000)"]).assert().success();
+    Ok(())
+}
+
+/// In `--strict` mode, the placeholder reference fails (warns become errors).
+#[test]
+fn placeholder_fails_in_strict_mode() -> Result<()> {
+    let mut cmd = cargo_bin_cmd!("xtask");
+    cmd.args(["pr", "title-check", "--no-gh", "--strict", "fix(scope): subject (#0000)"])
         .assert()
         .failure()
         .code(1);
+    Ok(())
+}
+
+/// JSON receipt for a placeholder reference reports overall=warn and a warn
+/// status on the issue-ref-present check, with no real issue_ref captured.
+#[test]
+fn json_placeholder_reports_warn() -> Result<()> {
+    let mut cmd = cargo_bin_cmd!("xtask");
+    let stdout = cmd
+        .args(["pr", "title-check", "--no-gh", "--json", "fix(scope): subject (#0000)"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let v = parse_json(&stdout)?;
+    assert_eq!(v["overall"], "warn", "placeholder ref must yield overall=warn");
+    assert!(v["issue_ref"].is_null(), "placeholder must not capture a real issue_ref");
+    let checks =
+        v["checks"].as_array().ok_or_else(|| anyhow::anyhow!("checks should be an array"))?;
+    let present = checks
+        .iter()
+        .find(|c| c["name"] == "issue-ref-present")
+        .ok_or_else(|| anyhow::anyhow!("missing issue-ref-present check"))?;
+    assert_eq!(present["status"], "warn", "issue-ref-present must warn for placeholder");
+    Ok(())
+}
+
+/// A real reference still wins even if a placeholder also appears in the title.
+#[test]
+fn real_ref_alongside_placeholder_passes_ok() -> Result<()> {
+    let mut cmd = cargo_bin_cmd!("xtask");
+    let stdout = cmd
+        .args(["pr", "title-check", "--no-gh", "--json", "fix(scope): subject (#0000) (#1234)"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let v = parse_json(&stdout)?;
+    assert_eq!(v["issue_ref"], 1234, "real reference must take precedence over placeholder");
     Ok(())
 }
 
@@ -202,6 +264,7 @@ fn reads_head_commit_fails_when_missing_issue_ref() -> Result<()> {
     git_cmd(&["init", "-b", "master"], dir.path()).or_else(|_| git_cmd(&["init"], dir.path()))?;
     git_cmd(&["config", "user.email", "test@test.com"], dir.path())?;
     git_cmd(&["config", "user.name", "Test"], dir.path())?;
+    git_cmd(&["config", "commit.gpgsign", "false"], dir.path())?;
     fs::write(dir.path().join("README.md"), "init")?;
     git_cmd(&["add", "."], dir.path())?;
     // Commit with no issue ref.

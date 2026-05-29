@@ -39,11 +39,13 @@ jobs:
 
             const BOT_MARKER = '<!-- pr-title-check-bot -->';
             const issueGuidance = [
-              'For Codex or other agent-authored PRs: file the plan as a GitHub issue first, then update the PR title to reference that real issue.',
+              'For Codex or other agent-authored PRs: prefer filing the plan as a GitHub issue first, then reference it in the title (e.g. `(#1234)`).',
               '',
               'The issue should preserve the plan context: problem, scope, constraints, files or surfaces, validation, and explicit non-goals.',
               '',
-              'Do not use `#0000` as a placeholder. Do not use `skip-title-check` to bypass a missing planning issue; that label is reserved for maintainer-owned exceptions.',
+              'If you genuinely cannot determine the issue number, use the placeholder `(#0000)` — do NOT guess a real issue number, because a wrong-but-real reference silently pollutes an unrelated issue. `(#0000)` passes this check (non-blocking) but flags the PR with `needs-issue-link`; a real issue must be linked before merge.',
+              '',
+              '`skip-title-check` is reserved for maintainer-owned exceptions.',
             ].join('\n');
             const upsertTitleCheckComment = async (commentBody) => {
               // Deduplicate: find and update existing bot comment instead of posting a new one.
@@ -101,22 +103,28 @@ jobs:
               return;
             }
 
-            // Reject zero-valued issue references anywhere in the title.
-            // Real GitHub issues start at #1; zero is the placeholder for an unknown issue.
+            // Zero-valued references (#0 / #0000) are the sanctioned placeholder
+            // for "issue number not yet known" (issue #724). They are NON-BLOCKING:
+            // the check passes, but the PR is flagged with `needs-issue-link` and a
+            // real issue must be linked before merge (ops is the backstop). This
+            // removes any incentive to guess a real issue number \u2014 a wrong-but-real
+            // reference silently pollutes an unrelated issue's thread.
+            const nonZeroMatch = issueMatches.find((match) => parseInt(match[1], 10) !== 0);
             const zeroIssueMatch = issueMatches.find((match) => parseInt(match[1], 10) === 0);
-            if (zeroIssueMatch) {
-              core.setFailed(
-                `PR title contains zero-valued issue reference "${zeroIssueMatch[0]}", which is the Codex placeholder for an unknown issue. ` +
-                `File the plan as an issue and replace it with the actual issue number, e.g. "(#1234)". Got: "${title}"`
+
+            if (!nonZeroMatch && zeroIssueMatch) {
+              core.info(
+                `Placeholder issue reference "${zeroIssueMatch[0]}" accepted (non-blocking). ` +
+                `Flagging needs-issue-link.`
               );
               const commentBody = [
-                '## \u26a0\ufe0f PR Title Check Failed',
+                '## \u2139\ufe0f PR Title \u2014 placeholder issue reference',
                 '',
                 BOT_MARKER,
                 '',
-                `This PR title uses the placeholder issue reference \`${zeroIssueMatch[0]}\`.`,
+                `This PR title uses the placeholder issue reference \`${zeroIssueMatch[0]}\`. The title check **passes** (non-blocking), but a **real issue must be linked before merge** \u2014 this PR is labeled \`needs-issue-link\`.`,
                 '',
-                '**Expected format:** `type: description (#1234)`',
+                'If you know the issue, update the title to reference it, e.g. `(#1234)`. Never guess a real issue number.',
                 '',
                 issueGuidance,
                 '',
@@ -124,11 +132,22 @@ jobs:
               ].join('\n');
 
               await upsertTitleCheckComment(commentBody);
+              try {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pr.number,
+                  labels: ['needs-issue-link'],
+                });
+              } catch (e) {
+                core.warning(`Could not add needs-issue-link label: ${e.message}`);
+              }
+              core.info('PR title passes validation (placeholder reference).');
               return;
             }
 
-            // Validate the first non-placeholder issue reference.
-            const issueNumber = parseInt(issueMatches[0][1], 10);
+            // Validate the first real (non-placeholder) issue reference.
+            const issueNumber = parseInt(nonZeroMatch[1], 10);
             try {
               await github.rest.issues.get({
                 owner: context.repo.owner,
