@@ -6,7 +6,8 @@
 
 GitHub branch protection currently requires the proof-floor contexts listed in
 `.ci/policies/required-checks.toml`: `Perl LSP Rust Small Result`,
-`ripr+ New Gap Gate`, and `Codecov / Patch 95`. The workflow-trigger lint still
+`ripr+ New Gap Gate`, `Codecov / Patch 95`, and `codecov/patch`. The
+workflow-trigger lint still
 audits required-style workflow shape in advisory mode while the remaining
 ruleset rollout work continues.
 

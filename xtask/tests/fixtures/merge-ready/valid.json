@@ -6,7 +6,7 @@
   "head_sha": "$CURRENT_HEAD",
   "base_sha": "$CURRENT_BASE",
   "gate_graph_version": "$CURRENT_GATE_GRAPH",
-  "required_checks": ["Codecov / Patch 95", "Perl LSP Rust Small Result", "ripr+ New Gap Gate"],
+  "required_checks": ["Codecov / Patch 95", "Perl LSP Rust Small Result", "codecov/patch", "ripr+ New Gap Gate"],
   "review_evidence": ["reviewed-deep", "ci-green"],
   "blocker_labels_absent": true,
   "verdict": "valid",

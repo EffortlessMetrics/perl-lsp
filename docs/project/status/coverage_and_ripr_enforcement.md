@@ -11,7 +11,7 @@ The proof lane is in transition from measurement to enforcement:
 - new RIPR gaps are enforced by `cargo xtask quality-gate --mode enforce-new-ripr`
 - patch coverage is enforced by `cargo xtask quality-gate --mode enforce-patch-coverage`
 - GitHub branch protection requires the current proof-floor contexts:
-  `ripr+ New Gap Gate`, `Codecov / Patch 95`, and
+  `ripr+ New Gap Gate`, `Codecov / Patch 95`, `codecov/patch`, and
   `Perl LSP Rust Small Result`
 - CI uploads required RIPR and coverage proof artifacts and appends quality-gate
   Markdown summaries to the GitHub job summary

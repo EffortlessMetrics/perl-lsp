@@ -56,15 +56,17 @@
 
 use color_eyre::eyre::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::fs;
 use std::io::Write as IoWrite;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::utils::project_root;
 
 /// Default output path for the queue reconciliation receipt.
 const DEFAULT_QUEUE_RECEIPT_PATH: &str = "target/receipts/queue-reconcile.json";
+const REQUIRED_CHECKS_PATH: &str = ".ci/policies/required-checks.toml";
 
 /// Within this many seconds, treat two label-applied timestamps as simultaneous.
 /// When simultaneous, sign-off labels beat routing (needs-*) labels.
@@ -586,14 +588,15 @@ pub fn detect_contradictions_from_labels(labels: &[String]) -> Vec<Contradiction
 ///
 /// Returns `CiOutcome::Pending` when any check is still in progress or on error.
 /// Returns `CiOutcome::Failure` when any check definitively failed.
-/// Returns `CiOutcome::Success` when all checks passed.
+/// Returns `CiOutcome::Success` when all required proof checks are present and passed.
 pub fn query_live_ci_state(pr_number: u64) -> Result<CiOutcome> {
     let root = project_root()?;
     let pr_str = pr_number.to_string();
+    let required_checks = load_required_ci_checks(&root)?;
 
     let output = Command::new("gh")
         .current_dir(&root)
-        .args(["pr", "view", &pr_str, "--json", "statusCheckRollup"])
+        .args(["pr", "view", &pr_str, "--json", "statusCheckRollup,headRefOid"])
         .output()
         .context("failed to execute gh pr view for CI state")?;
 
@@ -611,53 +614,118 @@ pub fn query_live_ci_state(pr_number: u64) -> Result<CiOutcome> {
         .and_then(serde_json::Value::as_array)
         .cloned()
         .unwrap_or_default();
+    let pr_head_sha = val.get("headRefOid").and_then(serde_json::Value::as_str);
 
-    if checks.is_empty() {
-        return Ok(CiOutcome::Pending);
+    Ok(classify_live_ci_state(&checks, &required_checks, pr_head_sha))
+}
+
+fn classify_live_ci_state(
+    checks: &[serde_json::Value],
+    required_checks: &BTreeSet<String>,
+    pr_head_sha: Option<&str>,
+) -> CiOutcome {
+    if checks.is_empty() || required_checks.is_empty() {
+        return CiOutcome::Pending;
     }
 
-    let mut any_definitive_success = false;
-    let mut saw_expected_skip = false;
+    for required in required_checks {
+        let matching = checks
+            .iter()
+            .filter(|check| check_context_name(check).as_deref() == Some(required.as_str()))
+            .collect::<Vec<_>>();
 
-    for check in &checks {
-        // GitHub uses `conclusion` for completed runs (SUCCESS, FAILURE, SKIPPED, etc.)
-        // and `state` as a fallback for older check-suite entries. When `conclusion`
-        // is present as a JSON null (check still in progress), fall through to `state`.
-        let conclusion_val = check.get("conclusion");
-        let state_val = if conclusion_val.and_then(serde_json::Value::as_str).is_none() {
-            check.get("state")
-        } else {
-            conclusion_val
-        };
-        let state = state_val.and_then(serde_json::Value::as_str);
-        let status = normalize_check_status(&CheckContext {
-            check_name: check.get("name").and_then(serde_json::Value::as_str).unwrap_or("unknown"),
-            required: true,
-            conclusion_or_state: state,
-            event_type: Some("pull_request"),
-            check_head_sha: None,
-            pr_head_sha: None,
-        });
+        if matching.is_empty() {
+            return CiOutcome::Pending;
+        }
 
-        match status {
-            NormalizedCheckStatus::Passed => any_definitive_success = true,
-            NormalizedCheckStatus::Pending => return Ok(CiOutcome::Pending),
-            NormalizedCheckStatus::ExpectedSkip => saw_expected_skip = true,
-            NormalizedCheckStatus::Failed
-            | NormalizedCheckStatus::UnexpectedSkip
-            | NormalizedCheckStatus::Stale => return Ok(CiOutcome::Failure),
+        let mut passed = false;
+        for check in matching {
+            let status = normalize_check_status(&CheckContext {
+                check_name: required,
+                required: true,
+                conclusion_or_state: check_conclusion_or_state(check),
+                event_type: Some("required_proof"),
+                check_head_sha: check_head_sha(check),
+                pr_head_sha,
+            });
+
+            match status {
+                NormalizedCheckStatus::Passed => passed = true,
+                NormalizedCheckStatus::Pending => return CiOutcome::Pending,
+                NormalizedCheckStatus::ExpectedSkip
+                | NormalizedCheckStatus::Failed
+                | NormalizedCheckStatus::UnexpectedSkip
+                | NormalizedCheckStatus::Stale => return CiOutcome::Failure,
+            }
+        }
+
+        if !passed {
+            return CiOutcome::Pending;
         }
     }
 
-    if any_definitive_success {
-        return Ok(CiOutcome::Success);
+    CiOutcome::Success
+}
+
+fn check_context_name(check: &serde_json::Value) -> Option<String> {
+    check
+        .get("name")
+        .or_else(|| check.get("context"))
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(ToString::to_string)
+}
+
+fn check_conclusion_or_state(check: &serde_json::Value) -> Option<&str> {
+    check
+        .get("conclusion")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| {
+            check
+                .get("status")
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+        })
+        .or_else(|| {
+            check
+                .get("state")
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+        })
+}
+
+fn check_head_sha(check: &serde_json::Value) -> Option<&str> {
+    check
+        .get("headSha")
+        .or_else(|| check.get("head_sha"))
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+}
+
+fn load_required_ci_checks(root: &Path) -> Result<BTreeSet<String>> {
+    let path = root.join(REQUIRED_CHECKS_PATH);
+    let raw = fs::read_to_string(&path)
+        .with_context(|| format!("failed to read required checks policy: {}", path.display()))?;
+    let policy: toml::Value = toml::from_str(&raw)
+        .with_context(|| format!("failed to parse required checks policy: {}", path.display()))?;
+    Ok(required_ci_checks_from_policy(&policy))
+}
+
+fn required_ci_checks_from_policy(policy: &toml::Value) -> BTreeSet<String> {
+    let mut checks = BTreeSet::new();
+
+    if let Some(items) = policy.get("checks").and_then(toml::Value::as_array) {
+        for item in items {
+            if item.get("required").and_then(toml::Value::as_bool) == Some(true)
+                && let Some(name) = item.get("name").and_then(toml::Value::as_str)
+            {
+                checks.insert(name.to_string());
+            }
+        }
     }
-    if saw_expected_skip {
-        return Ok(CiOutcome::Skipped);
-    }
-    // No failures, no pending, no explicit successes: all present checks were
-    // SKIPPED (path-conditioning). Report as Skipped — not applicable.
-    Ok(CiOutcome::Skipped)
+
+    checks
 }
 
 // ---------------------------------------------------------------------------
@@ -984,6 +1052,156 @@ mod tests {
     }
 
     const TEST_TS: &str = "2026-04-27T00:00:00Z";
+
+    fn required_checks(names: &[&str]) -> BTreeSet<String> {
+        names.iter().map(|name| (*name).to_string()).collect()
+    }
+
+    fn successful_check(name: &str) -> serde_json::Value {
+        serde_json::json!({
+            "name": name,
+            "conclusion": "SUCCESS",
+            "status": "COMPLETED",
+            "headSha": "current-head"
+        })
+    }
+
+    // -----------------------------------------------------------------------
+    // Required proof context aggregation
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn merge_ready_required_checks_policy_loads_only_required_contexts() -> Result<()> {
+        let root = unique_policy_root("required-checks");
+        let policy_dir = root.join(".ci").join("policies");
+        std::fs::create_dir_all(&policy_dir)?;
+        std::fs::write(
+            policy_dir.join("required-checks.toml"),
+            r#"
+[[checks]]
+name = "Perl LSP Rust Small Result"
+required = true
+
+[[checks]]
+name = "ripr+ New Gap Gate"
+required = true
+
+[[checks]]
+name = "advisory-lint"
+required = false
+"#,
+        )?;
+
+        let checks = load_required_ci_checks(&root)?;
+
+        assert!(checks.contains("Perl LSP Rust Small Result"));
+        assert!(checks.contains("ripr+ New Gap Gate"));
+        assert!(!checks.contains("advisory-lint"));
+
+        let _cleanup = std::fs::remove_dir_all(&root);
+        Ok(())
+    }
+
+    fn unique_policy_root(name: &str) -> PathBuf {
+        let suffix = match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+            Ok(duration) => duration.as_nanos(),
+            Err(_) => 0,
+        };
+        std::env::temp_dir()
+            .join(format!("perl-lsp-swarm-queue-reconciler-{name}-{}-{suffix}", std::process::id()))
+    }
+
+    #[test]
+    fn merge_ready_live_ci_classifier_blocks_missing_required_proof_context() {
+        let checks = vec![
+            successful_check("Perl LSP Rust Small Result"),
+            successful_check("ripr+ New Gap Gate"),
+        ];
+        let required = required_checks(&[
+            "Perl LSP Rust Small Result",
+            "ripr+ New Gap Gate",
+            "Codecov / Patch 95",
+            "codecov/patch",
+        ]);
+
+        let outcome = classify_live_ci_state(&checks, &required, Some("current-head"));
+        assert_eq!(outcome, CiOutcome::Pending);
+    }
+
+    #[test]
+    fn merge_ready_live_ci_classifier_blocks_pending_required_proof_context() {
+        let checks = vec![
+            successful_check("Perl LSP Rust Small Result"),
+            successful_check("ripr+ New Gap Gate"),
+            serde_json::json!({
+                "name": "Codecov / Patch 95",
+                "conclusion": "",
+                "status": "IN_PROGRESS",
+                "headSha": "current-head"
+            }),
+            successful_check("codecov/patch"),
+        ];
+        let required = required_checks(&[
+            "Perl LSP Rust Small Result",
+            "ripr+ New Gap Gate",
+            "Codecov / Patch 95",
+            "codecov/patch",
+        ]);
+
+        let outcome = classify_live_ci_state(&checks, &required, Some("current-head"));
+        assert_eq!(outcome, CiOutcome::Pending);
+    }
+
+    #[test]
+    fn merge_ready_live_ci_classifier_blocks_skipped_required_proof_context() {
+        let checks = vec![
+            successful_check("Perl LSP Rust Small Result"),
+            successful_check("ripr+ New Gap Gate"),
+            serde_json::json!({
+                "name": "Codecov / Patch 95",
+                "conclusion": "SKIPPED",
+                "status": "COMPLETED",
+                "headSha": "current-head"
+            }),
+            successful_check("codecov/patch"),
+        ];
+        let required = required_checks(&[
+            "Perl LSP Rust Small Result",
+            "ripr+ New Gap Gate",
+            "Codecov / Patch 95",
+            "codecov/patch",
+        ]);
+
+        let outcome = classify_live_ci_state(&checks, &required, Some("current-head"));
+        assert_eq!(outcome, CiOutcome::Failure);
+    }
+
+    #[test]
+    fn merge_ready_live_ci_classifier_passes_only_when_required_proof_contexts_pass() {
+        let checks = vec![
+            successful_check("Perl LSP Rust Small Result"),
+            successful_check("ripr+ New Gap Gate"),
+            successful_check("Codecov / Patch 95"),
+            serde_json::json!({
+                "context": "codecov/patch",
+                "state": "SUCCESS"
+            }),
+            serde_json::json!({
+                "name": "advisory-lint",
+                "conclusion": "FAILURE",
+                "status": "COMPLETED"
+            }),
+        ];
+        let required = required_checks(&[
+            "Perl LSP Rust Small Result",
+            "ripr+ New Gap Gate",
+            "Codecov / Patch 95",
+            "codecov/patch",
+        ]);
+
+        let outcome = classify_live_ci_state(&checks, &required, Some("current-head"));
+        assert_eq!(outcome, CiOutcome::Success);
+    }
 
     // -----------------------------------------------------------------------
     // CI-specific detection (live state is ground truth)

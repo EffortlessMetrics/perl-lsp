@@ -43,6 +43,13 @@ enforcement = "github-branch-protection"
 reason = "Proof lane blocks patch coverage below 95% and stale/missing coverage receipts."
 
 [[checks]]
+name = "codecov/patch"
+workflow = "codecov"
+required = true
+enforcement = "github-branch-protection"
+reason = "External Codecov patch status must finish and pass before merge; the CI job alone is not enough."
+
+[[checks]]
 name = "tokmd Review Cockpit"
 workflow = ".github/workflows/tokmd.yml"
 # Phase 1: advisory-only (visibility gate, no merge blocking).
