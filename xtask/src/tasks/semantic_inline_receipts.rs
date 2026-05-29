@@ -90,6 +90,7 @@ struct InlineQualityCounterSummary {
     fixtures_total: Option<u64>,
     fixtures_passed: Option<u64>,
     hard_zone_rejections: Option<u64>,
+    suppression_reasons: Option<BTreeMap<String, u64>>,
     parse_regressions: Option<u64>,
 }
 
@@ -124,19 +125,41 @@ fn read_optional_quality_counter_summary(path: &Path) -> Result<InlineQualityCou
             fixtures_total: None,
             fixtures_passed: None,
             hard_zone_rejections: None,
+            suppression_reasons: None,
             parse_regressions: None,
         });
     }
 
     let quality = read_json(path)?;
+    let suppression_reasons = quality_counter_map(&quality, "/checks/suppression_reasons")?;
     Ok(InlineQualityCounterSummary {
         source,
         available: true,
         fixtures_total: quality.get("fixtures_total").and_then(Value::as_u64),
         fixtures_passed: quality.get("fixtures_passed").and_then(Value::as_u64),
         hard_zone_rejections: quality.pointer("/checks/hard_zone_rejected").and_then(Value::as_u64),
+        suppression_reasons,
         parse_regressions: quality.pointer("/checks/parse_regressions").and_then(Value::as_u64),
     })
+}
+
+fn quality_counter_map(quality: &Value, pointer: &str) -> Result<Option<BTreeMap<String, u64>>> {
+    let Some(counters) = quality.pointer(pointer) else {
+        return Ok(None);
+    };
+    let counters = counters
+        .as_object()
+        .ok_or_else(|| eyre!("quality receipt `{pointer}` must be an object"))?;
+
+    let mut result = BTreeMap::new();
+    for (name, count) in counters {
+        let count = count
+            .as_u64()
+            .ok_or_else(|| eyre!("quality receipt `{pointer}/{name}` must be an unsigned count"))?;
+        result.insert(name.clone(), count);
+    }
+
+    Ok(Some(result))
 }
 
 fn summarize_matrix(
@@ -310,6 +333,7 @@ mod tests {
             fixtures_total: None,
             fixtures_passed: None,
             hard_zone_rejections: None,
+            suppression_reasons: None,
             parse_regressions: None,
         }
     }
@@ -363,6 +387,21 @@ mod tests {
             error.to_string().contains("real_workspace_module_import_inline_completion_quality"),
             "error should identify missing workflow, got {error}"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn quality_counter_map_returns_none_when_counter_is_absent() -> Result<()> {
+        let quality = json!({
+            "fixtures_total": 2,
+            "checks": {
+                "hard_zone_rejected": 1,
+                "parse_regressions": 0
+            }
+        });
+
+        assert!(quality_counter_map(&quality, "/checks/suppression_reasons")?.is_none());
+
         Ok(())
     }
 }

@@ -92,6 +92,10 @@ fn semantic_inline_receipts_cli_embeds_quality_counters_when_available() -> Resu
             "fixtures_passed": 28,
             "checks": {
                 "hard_zone_rejected": 14,
+                "suppression_reasons": {
+                    "hard_zone": 14,
+                    "no_visible_context": 1
+                },
                 "parse_regressions": 0
             }
         }))?,
@@ -117,6 +121,20 @@ fn semantic_inline_receipts_cli_embeds_quality_counters_when_available() -> Resu
     assert_eq!(quality_counters.get("fixtures_total").and_then(Value::as_u64), Some(28));
     assert_eq!(quality_counters.get("fixtures_passed").and_then(Value::as_u64), Some(28));
     assert_eq!(quality_counters.get("hard_zone_rejections").and_then(Value::as_u64), Some(14));
+    assert_eq!(
+        quality_counters
+            .get("suppression_reasons")
+            .and_then(|reasons| reasons.get("hard_zone"))
+            .and_then(Value::as_u64),
+        Some(14)
+    );
+    assert_eq!(
+        quality_counters
+            .get("suppression_reasons")
+            .and_then(|reasons| reasons.get("no_visible_context"))
+            .and_then(Value::as_u64),
+        Some(1)
+    );
     assert_eq!(quality_counters.get("parse_regressions").and_then(Value::as_u64), Some(0));
 
     Ok(())

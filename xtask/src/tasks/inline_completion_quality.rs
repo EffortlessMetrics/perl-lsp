@@ -14,6 +14,8 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 const CURSOR: &str = "<<CURSOR>>";
+const SUPPRESSION_HARD_ZONE: &str = "hard_zone";
+const SUPPRESSION_NO_VISIBLE_CONTEXT: &str = "no_visible_context";
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -37,6 +39,7 @@ struct InlineCompletionQualityChecks {
     silence: CountReceipt,
     replacement_range: CountReceipt,
     hard_zone_rejected: usize,
+    suppression_reasons: BTreeMap<String, usize>,
     parse_regressions: usize,
 }
 
@@ -125,9 +128,13 @@ pub fn run(receipt: PathBuf) -> Result<()> {
                 record_source_result(&mut receipt_data.sources, scenario.source_name, passed);
                 update_check_counts(&mut receipt_data.checks, scenario, passed);
 
-                if scenario.hard_zone {
-                    receipt_data.checks.hard_zone_rejected += 1;
-                    notes.push("hard zone stayed silent".to_string());
+                if let Some(reason) = measured_suppression_reason(scenario, item_count, passed) {
+                    record_suppression_reason(&mut receipt_data.checks, reason);
+                    notes.push(format!("suppression_reason={reason}"));
+                    if reason == SUPPRESSION_HARD_ZONE {
+                        receipt_data.checks.hard_zone_rejected += 1;
+                        notes.push("hard zone stayed silent".to_string());
+                    }
                 }
                 if parse_regressions == 0 {
                     receipt_data.fixtures_passed += 1;
@@ -236,6 +243,26 @@ fn run_scenario(
     let parse_regressions =
         count_parse_regressions(scenario.name, &fixture, &completions, &mut notes)?;
     Ok((item_count, notes, parse_regressions))
+}
+
+fn measured_suppression_reason(
+    scenario: &Scenario,
+    item_count: usize,
+    passed: bool,
+) -> Option<&'static str> {
+    if !passed || item_count != 0 {
+        return None;
+    }
+
+    match scenario.assertion {
+        ScenarioAssertion::Silent if scenario.hard_zone => Some(SUPPRESSION_HARD_ZONE),
+        ScenarioAssertion::Silent => Some(SUPPRESSION_NO_VISIBLE_CONTEXT),
+        ScenarioAssertion::Suggestion { .. } | ScenarioAssertion::ReplacementRange { .. } => None,
+    }
+}
+
+fn record_suppression_reason(checks: &mut InlineCompletionQualityChecks, reason: &str) {
+    *checks.suppression_reasons.entry(reason.to_string()).or_default() += 1;
 }
 
 fn update_check_counts(
@@ -781,6 +808,8 @@ fn scenarios() -> &'static [Scenario] {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::Value;
+    use tempfile::TempDir;
 
     #[test]
     fn inline_completion_quality_guard_condition_scenarios_are_registered() {
@@ -805,6 +834,75 @@ mod tests {
             let (_item_count, _notes, parse_regressions) = run_scenario(&provider, scenario)?;
             assert_eq!(parse_regressions, 0);
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn measured_suppression_reason_ignores_non_silent_scenarios() {
+        let suggestion = Scenario {
+            name: "suggestion",
+            source_name: "unit",
+            source: "use <<CURSOR>>",
+            available_modules: &[],
+            hard_zone: false,
+            assertion: ScenarioAssertion::Suggestion {
+                first: Some("strict;"),
+                expected: &["strict;"],
+                not_expected: &[],
+            },
+        };
+        let replacement = Scenario {
+            name: "replacement",
+            source_name: "unit",
+            source: "use str<<CURSOR>>",
+            available_modules: &[],
+            hard_zone: false,
+            assertion: ScenarioAssertion::ReplacementRange {
+                insert_text: "strict;",
+                replaces: "str",
+            },
+        };
+
+        assert!(measured_suppression_reason(&suggestion, 0, true).is_none());
+        assert!(measured_suppression_reason(&replacement, 0, true).is_none());
+    }
+
+    #[test]
+    fn inline_completion_quality_receipt_records_suppression_reasons() -> Result<()> {
+        let temp = TempDir::new()?;
+        let receipt_path = temp.path().join("inline-completion-quality.json");
+
+        run(receipt_path.clone())?;
+
+        let receipt: Value = serde_json::from_slice(&fs::read(&receipt_path)?)?;
+        let expected_hard_zones = scenarios()
+            .iter()
+            .filter(|scenario| {
+                scenario.hard_zone && matches!(scenario.assertion, ScenarioAssertion::Silent)
+            })
+            .count() as u64;
+        let expected_no_visible_context = scenarios()
+            .iter()
+            .filter(|scenario| {
+                !scenario.hard_zone && matches!(scenario.assertion, ScenarioAssertion::Silent)
+            })
+            .count() as u64;
+
+        assert_eq!(
+            receipt.pointer("/checks/suppression_reasons/hard_zone").and_then(Value::as_u64),
+            Some(expected_hard_zones)
+        );
+        assert_eq!(
+            receipt
+                .pointer("/checks/suppression_reasons/no_visible_context")
+                .and_then(Value::as_u64),
+            Some(expected_no_visible_context)
+        );
+        assert_eq!(
+            receipt.pointer("/checks/hard_zone_rejected").and_then(Value::as_u64),
+            Some(expected_hard_zones)
+        );
 
         Ok(())
     }
