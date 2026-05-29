@@ -984,8 +984,11 @@ impl<'a> Parser<'a> {
         // Check for default value (= expression)
         let default_value = if self.peek_kind() == Some(TokenKind::Assign) {
             self.tokens.next()?; // consume =
-            // Parse a primary expression for default value to avoid parsing too far
-            Some(Box::new(self.parse_primary()?))
+            // Parse a full scalar expression for the default value (perlsub: "any scalar
+            // expression").  parse_ternary covers calls, binops, and ternary expressions
+            // while stopping at the `,` or `)` that delimits signature parameters, since
+            // comma collection only happens in parse_comma (one level above).
+            Some(Box::new(self.parse_ternary()?))
         } else {
             None
         };
