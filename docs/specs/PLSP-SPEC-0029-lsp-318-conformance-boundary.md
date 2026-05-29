@@ -95,6 +95,7 @@ perl-lsp supports selected LSP 3.18 surfaces with capability-honest contracts.
 | Completion list apply kind | `textDocument.completion.completionList.applyKindSupport`, `textDocument/completion` | Clients that support apply kind and `itemDefaults.data` receive `CompletionList.applyKind.data = 2` (`ApplyKind.Merge`); unsupported clients, or clients without supported defaults, receive no `applyKind`. | `lsp_completion_tests`, `lsp_318_negative_claims`, `check-lsp-318-claims` |
 | CodeAction documentation | `textDocument.codeAction.documentationSupport`, `codeActionProvider.documentation` | Clients that support code-action documentation receive `CodeActionOptions.documentation` for `quickfix`, `refactor`, and `source.fixAll`; unsupported clients receive no documentation advertisement and individual code-action responses remain unchanged. | `lsp_318_negative_claims`, `check-lsp-318-claims` |
 | CodeAction tag trust boundary | `textDocument.codeAction.tagSupport.valueSet`, `CodeAction.tags` | The server parses support for `CodeActionTag.LLMGenerated`, strips unsupported or malformed tag payloads from code-action and resolve responses, and verifies deterministic code actions remain untagged even for tag-capable clients. Actual generated-action tagging remains unclaimed until a generated-action source exists. | `lsp_318_negative_claims`, `check-lsp-318-claims` |
+| Apply-edit metadata | `workspace.applyEdit`, `workspace.workspaceEdit.metadataSupport`, `workspace/applyEdit` | Server-originated refactoring apply-edit requests may include `ApplyWorkspaceEditParams.metadata.isRefactoring` only when both capabilities are present; ordinary `WorkspaceEdit` responses stay metadata-free. | `lsp_318_negative_claims`, `features.toml`, `check-lsp-318-claims` |
 | Window debug messages | `MessageType.Debug`, `window/logMessage`, `window/showMessage`, `window/showMessageRequest` | Explicit debug message calls serialize type `5`; normal runtime paths continue using the existing non-debug message levels unless a later PR intentionally wires debug policy. | `lsp_window_tests`, `lsp_318_negative_claims`, `check-lsp-318-claims` |
 | Diagnostic markup messages | `textDocument.diagnostic.markupMessageSupport`, `textDocument/diagnostic`, `workspace/diagnostic` | Pull diagnostics may emit `Diagnostic.message` as `MarkupContent` only when support is true; unsupported clients and publish diagnostics remain string-only. | `lsp_diagnostic_enrichment_test`, `lsp_318_negative_claims`, `lsp_schema_validation`, `check-lsp-318-claims` |
 | Lean/e2e watcher behavior | `workspace/didChangeWatchedFiles` dynamic registration | Runtime tuning can suppress file watchers without suppressing inline-completion dynamic registration. | `lsp_registration_tests`, lean UX receipts |
@@ -108,7 +109,6 @@ capability parsing, wire tests, docs, and negative gates:
 - complete LSP 3.18 implementation
 - `textDocument/semanticTokens/full/delta`
 - semantic-token delta `resultId` state
-- `ApplyWorkspaceEditParams.metadata`
 - non-spec `WorkspaceEdit.metadata` response fields
 - generated-action `CodeAction.tags` emission
 - `CodeActionTag.LLMGenerated` on deterministic actions

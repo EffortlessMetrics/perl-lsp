@@ -21,6 +21,8 @@ const WINDOW_TEST: &str = "crates/perl-lsp-rs/tests/lsp_window_tests.rs";
 const CLIENT_REQUESTS: &str = "crates/perl-lsp-rs/src/runtime/client_requests.rs";
 const LIFECYCLE_CAPABILITIES: &str = "crates/perl-lsp-rs/src/runtime/lifecycle/capabilities.rs";
 const RUNTIME_LANGUAGE_MISC: &str = "crates/perl-lsp-rs/src/runtime/language/misc.rs";
+const REFACTOR_RUNTIME_RECEIPTS: &str =
+    "crates/perl-lsp-rs/src/runtime/language/refactor_runtime_blocker_receipts.rs";
 const LIFECYCLE_WATCHERS: &str = "crates/perl-lsp-rs/src/runtime/lifecycle/watchers.rs";
 const RUNTIME_REFRESH: &str = "crates/perl-lsp-rs/src/runtime/refresh.rs";
 const STATE_DOCUMENT: &str = "crates/perl-lsp-rs/src/state/document.rs";
@@ -91,6 +93,14 @@ const NEGATIVE_TEST_MARKERS: &[RequiredMarker] = &[
     RequiredMarker {
         label: "WorkspaceEdit metadata absence gate",
         marker: "assert_no_workspace_edit_metadata",
+    },
+    RequiredMarker {
+        label: "ApplyWorkspaceEditParams.metadata positive gate",
+        marker: "apply_workspace_edit_metadata_emitted_when_supported_for_refactor_request",
+    },
+    RequiredMarker {
+        label: "ApplyWorkspaceEditParams.metadata negative gate",
+        marker: "apply_workspace_edit_metadata_absent_without_metadata_support",
     },
     RequiredMarker { label: "SnippetTextEdit gate", marker: "snippet" },
     RequiredMarker {
@@ -171,6 +181,10 @@ const FEATURE_CATALOG_MARKERS: &[RequiredMarker] = &[
     RequiredMarker {
         label: "SnippetTextEdit feature catalog row",
         marker: "id = \"lsp.workspace_edit_snippet_text_edit\"",
+    },
+    RequiredMarker {
+        label: "ApplyWorkspaceEditParams.metadata feature catalog row",
+        marker: "id = \"lsp.apply_edit_metadata\"",
     },
 ];
 
@@ -407,6 +421,7 @@ pub fn run() -> Result<()> {
     check_code_action_documentation_guard(&root, &mut violations)?;
     check_code_action_tag_guard(&root, &mut violations)?;
     check_snippet_text_edit_guard(&root, &mut violations)?;
+    check_apply_edit_metadata_guard(&root, &mut violations)?;
     check_message_type_debug_support(&root, &mut violations)?;
 
     if violations.is_empty() {
@@ -861,6 +876,76 @@ fn check_snippet_text_edit_guard(root: &Path, violations: &mut Vec<Violation>) -
             "snippetEditSupport",
         ],
         "SnippetTextEdit wire receipts",
+        violations,
+    );
+
+    Ok(())
+}
+
+fn check_apply_edit_metadata_guard(root: &Path, violations: &mut Vec<Violation>) -> Result<()> {
+    let state_document = read_required(root, STATE_DOCUMENT)?;
+    let lifecycle_capabilities = read_required(root, LIFECYCLE_CAPABILITIES)?;
+    let client_requests = read_required(root, CLIENT_REQUESTS)?;
+    let refactor_receipts = read_required(root, REFACTOR_RUNTIME_RECEIPTS)?;
+    let negative_claims = read_required(root, NEGATIVE_CLAIMS_TEST)?;
+
+    require_all(
+        STATE_DOCUMENT,
+        &state_document,
+        &["workspace_apply_edit_support", "workspace_edit_metadata_support"],
+        "ApplyWorkspaceEditParams.metadata capability storage",
+        violations,
+    );
+    require_all(
+        LIFECYCLE_CAPABILITIES,
+        &lifecycle_capabilities,
+        &[
+            "/capabilities/workspace/applyEdit",
+            "/capabilities/workspace/workspaceEdit/metadataSupport",
+            "workspace_apply_edit_support",
+            "workspace_edit_metadata_support",
+            "initialize_parses_apply_edit_metadata_support",
+        ],
+        "ApplyWorkspaceEditParams.metadata capability parser",
+        violations,
+    );
+    require_all(
+        CLIENT_REQUESTS,
+        &client_requests,
+        &[
+            "request_apply_workspace_edit_with_metadata",
+            "request_apply_workspace_edit_with_metadata_call_presence_observer",
+            "request_apply_workspace_edit_with_metadata_boundary_discriminator",
+            "request_apply_workspace_edit_with_metadata_return_value_discriminator",
+            "WORKSPACE_APPLY_EDIT",
+            "\"metadata\"",
+            "\"isRefactoring\"",
+        ],
+        "ApplyWorkspaceEditParams.metadata request helper",
+        violations,
+    );
+    require_all(
+        REFACTOR_RUNTIME_RECEIPTS,
+        &refactor_receipts,
+        &[
+            "request_apply_workspace_edit_with_metadata",
+            "apply_edit_requested",
+            "apply_edit_request",
+        ],
+        "ApplyWorkspaceEditParams.metadata safe-delete apply path",
+        violations,
+    );
+    require_all(
+        NEGATIVE_CLAIMS_TEST,
+        &negative_claims,
+        &[
+            "apply_workspace_edit_metadata_emitted_when_supported_for_refactor_request",
+            "apply_workspace_edit_metadata_absent_without_metadata_support",
+            "metadataSupport",
+            "workspace/applyEdit",
+            "/edit/metadata",
+        ],
+        "ApplyWorkspaceEditParams.metadata wire receipts",
         violations,
     );
 

@@ -1152,6 +1152,16 @@ tests = ["crates/perl-lsp-rs/tests/lsp_workspace_tests.rs"]
 description = "workspace/applyEdit request (server->client)"
 
 [[feature]]
+id = "lsp.apply_edit_metadata"
+spec = "LSP 3.18"
+area = "workspace"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-lsp-rs/tests/lsp_318_negative_claims.rs"]
+description = "Capability-gated ApplyWorkspaceEditParams.metadata on server-originated workspace/applyEdit refactoring requests"
+
+[[feature]]
 id = "lsp.publish_diagnostics"
 spec = "LSP 3.0"
 area = "text_document"
