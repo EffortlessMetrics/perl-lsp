@@ -113,6 +113,90 @@ fn quality_gate_cli_passes_when_new_ripr_receipts_are_current_and_zero() -> Test
 }
 
 #[test]
+fn quality_gate_cli_check_blocks_stale_new_ripr_gate_json_receipt() -> TestResult {
+    let root = repo_root()?;
+    let dir = tempdir()?;
+    let ripr = dir.path().join("ripr-plus.json");
+    let ripr_pr = dir.path().join("repo-exposure.json");
+    let review = dir.path().join("comments.json");
+    let receipt = dir.path().join("quality-gate.json");
+    let summary = dir.path().join("quality-gate.md");
+    let head = current_head(&root)?;
+
+    write_ripr_plus_receipt(&ripr, &head)?;
+    write_ripr_pr_receipt(&ripr_pr, &head, 0)?;
+    write_empty_review_guidance_receipt(&review, &head)?;
+    new_ripr_quality_gate_command(&root, &ripr, &ripr_pr, &review, &receipt, &summary)?
+        .assert()
+        .success();
+
+    fs::write(
+        &receipt,
+        serde_json::to_string_pretty(&json!({
+            "schema_version": 1,
+            "kind": "quality_gate",
+            "mode": "enforce-new-ripr",
+            "decision": "pass",
+            "head": "stale-quality-gate-head"
+        }))?,
+    )?;
+
+    let output =
+        new_ripr_quality_gate_command(&root, &ripr, &ripr_pr, &review, &receipt, &summary)?
+            .arg("--check")
+            .output()?;
+    assert!(!output.status.success(), "quality-gate --check must fail when JSON receipt is stale");
+
+    let stderr = String::from_utf8(output.stderr)?;
+    assert!(
+        stderr.contains("quality gate JSON receipt is stale")
+            && stderr.contains(&receipt.to_string_lossy().to_string()),
+        "stale JSON receipt failure must name the stale proof file: {stderr}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn quality_gate_cli_check_blocks_stale_new_ripr_gate_markdown_summary() -> TestResult {
+    let root = repo_root()?;
+    let dir = tempdir()?;
+    let ripr = dir.path().join("ripr-plus.json");
+    let ripr_pr = dir.path().join("repo-exposure.json");
+    let review = dir.path().join("comments.json");
+    let receipt = dir.path().join("quality-gate.json");
+    let summary = dir.path().join("quality-gate.md");
+    let head = current_head(&root)?;
+
+    write_ripr_plus_receipt(&ripr, &head)?;
+    write_ripr_pr_receipt(&ripr_pr, &head, 0)?;
+    write_empty_review_guidance_receipt(&review, &head)?;
+    new_ripr_quality_gate_command(&root, &ripr, &ripr_pr, &review, &receipt, &summary)?
+        .assert()
+        .success();
+
+    fs::write(&summary, "# Quality Gate\n\nstale summary\n")?;
+
+    let output =
+        new_ripr_quality_gate_command(&root, &ripr, &ripr_pr, &review, &receipt, &summary)?
+            .arg("--check")
+            .output()?;
+    assert!(
+        !output.status.success(),
+        "quality-gate --check must fail when Markdown summary is stale"
+    );
+
+    let stderr = String::from_utf8(output.stderr)?;
+    assert!(
+        stderr.contains("quality gate Markdown summary is stale")
+            && stderr.contains(&summary.to_string_lossy().to_string()),
+        "stale Markdown summary failure must name the stale proof file: {stderr}"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn quality_gate_cli_blocks_new_ripr_when_required_receipts_are_missing() -> TestResult {
     let root = repo_root()?;
     let dir = tempdir()?;
