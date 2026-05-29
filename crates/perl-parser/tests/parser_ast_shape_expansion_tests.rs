@@ -638,3 +638,153 @@ fn diamond_readline_glob_and_typeglob_expression_shapes_are_preserved() -> Resul
 
     Ok(())
 }
+
+fn expression_node(statement: &Node) -> Result<&Node, String> {
+    match &statement.kind {
+        NodeKind::ExpressionStatement { expression } => Ok(expression),
+        other => Err(format!("expected ExpressionStatement node, got {other:?}")),
+    }
+}
+
+#[test]
+fn angle_bracket_io_forms_keep_distinct_ast_nodes() -> Result<(), String> {
+    let ast = parse_without_errors("<>; <STDIN>; <*.pm>;")?;
+    let statements = program_statements(&ast)?;
+    assert_eq!(statements.len(), 3);
+
+    assert!(matches!(expression_node(&statements[0])?.kind, NodeKind::Diamond));
+
+    match &expression_node(&statements[1])?.kind {
+        NodeKind::Readline { filehandle } => assert_eq!(filehandle.as_deref(), Some("STDIN")),
+        other => return Err(format!("expected Readline node, got {other:?}")),
+    }
+
+    match &expression_node(&statements[2])?.kind {
+        NodeKind::Glob { pattern } => assert_eq!(pattern, "*.pm"),
+        other => return Err(format!("expected Glob node, got {other:?}")),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn tie_and_untie_preserve_bound_variable_package_and_args() -> Result<(), String> {
+    let ast = parse_without_errors("tie %cache, 'Local::TieHash', $seed, @rest; untie %cache;")?;
+    let statements = program_statements(&ast)?;
+    assert_eq!(statements.len(), 2);
+
+    match &expression_node(&statements[0])?.kind {
+        NodeKind::Tie { variable, package, args } => {
+            assert_eq!(variable_name(variable)?, "%cache");
+            match &package.kind {
+                NodeKind::String { value, interpolated } => {
+                    assert_eq!(value, "'Local::TieHash'");
+                    assert!(!interpolated);
+                }
+                other => return Err(format!("expected tie package string, got {other:?}")),
+            }
+            assert_eq!(args.len(), 2);
+            assert_eq!(variable_name(&args[0])?, "$seed");
+            assert_eq!(variable_name(&args[1])?, "@rest");
+        }
+        other => return Err(format!("expected Tie node, got {other:?}")),
+    }
+
+    match &expression_node(&statements[1])?.kind {
+        NodeKind::Untie { variable } => assert_eq!(variable_name(variable)?, "%cache"),
+        other => return Err(format!("expected Untie node, got {other:?}")),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn labeled_loop_control_modifiers_and_goto_keep_targets() -> Result<(), String> {
+    let ast = parse_without_errors(
+        r#"LINE: while ($line = <STDIN>) {
+    next LINE if $line =~ /^#/;
+    last LINE if done($line);
+    redo LINE if retry($line);
+    goto FINISH;
+}"#,
+    )?;
+    let statements = program_statements(&ast)?;
+    assert_eq!(statements.len(), 1);
+
+    let NodeKind::LabeledStatement { label, statement } = &statements[0].kind else {
+        return Err(format!("expected LabeledStatement node, got {:?}", statements[0].kind));
+    };
+    assert_eq!(label, "LINE");
+
+    let NodeKind::While { body, .. } = &statement.kind else {
+        return Err(format!("expected While node, got {:?}", statement.kind));
+    };
+    let body_statements = block_statements(body)?;
+    assert_eq!(body_statements.len(), 4);
+
+    for (statement, expected_op) in body_statements.iter().take(3).zip(["next", "last", "redo"]) {
+        let NodeKind::StatementModifier { statement, modifier, .. } = &statement.kind else {
+            return Err(format!("expected StatementModifier node, got {:?}", statement.kind));
+        };
+        assert_eq!(modifier, "if");
+        match &statement.kind {
+            NodeKind::LoopControl { op, label } => {
+                assert_eq!(op, expected_op);
+                assert_eq!(label.as_deref(), Some("LINE"));
+            }
+            other => return Err(format!("expected LoopControl node, got {other:?}")),
+        }
+    }
+
+    match &body_statements[3].kind {
+        NodeKind::Goto { target } => match &target.kind {
+            NodeKind::Identifier { name } => assert_eq!(name, "FINISH"),
+            other => return Err(format!("expected goto target identifier, got {other:?}")),
+        },
+        other => return Err(format!("expected Goto node, got {other:?}")),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn regex_binding_forms_preserve_negation_and_modifiers() -> Result<(), String> {
+    let ast = parse_without_errors(
+        r#"$text =~ /foo/i;
+$text !~ s/foo/bar/g;
+$text =~ tr/a-z/A-Z/r;"#,
+    )?;
+    let statements = program_statements(&ast)?;
+    assert_eq!(statements.len(), 3);
+
+    match &expression_node(&statements[0])?.kind {
+        NodeKind::Match { pattern, modifiers, negated, .. } => {
+            assert_eq!(pattern, "/foo/");
+            assert_eq!(modifiers, "i");
+            assert!(!negated);
+        }
+        other => return Err(format!("expected Match node, got {other:?}")),
+    }
+
+    match &expression_node(&statements[1])?.kind {
+        NodeKind::Substitution { pattern, replacement, modifiers, negated, .. } => {
+            assert_eq!(pattern, "foo");
+            assert_eq!(replacement, "bar");
+            assert_eq!(modifiers, "g");
+            assert!(*negated);
+        }
+        other => return Err(format!("expected Substitution node, got {other:?}")),
+    }
+
+    match &expression_node(&statements[2])?.kind {
+        NodeKind::Transliteration { search, replace, modifiers, negated, .. } => {
+            assert_eq!(search, "a-z");
+            assert_eq!(replace, "A-Z");
+            assert_eq!(modifiers, "r");
+            assert!(!negated);
+        }
+        other => return Err(format!("expected Transliteration node, got {other:?}")),
+    }
+
+    Ok(())
+}
