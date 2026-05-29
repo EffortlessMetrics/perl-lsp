@@ -269,5 +269,6 @@ It may not claim:
 - extraction readiness beyond the separate extraction boundary spec
 - editor support beyond current receipts
 - semantic-token delta support
-- workspace-edit snippet or metadata support
+- non-spec `WorkspaceEdit.metadata` response fields
+- ungated workspace-edit snippet or apply-edit metadata support
 - optional 3.18 response-shape support without client capability handling
