@@ -15,6 +15,23 @@ fn test_internal_pl_sv_yes_hover_from_sigiled_token() {
 }
 
 #[test]
+fn pragma_hover_links_external_and_virtual_perldoc() {
+    let hover = must_some(LspServer::build_pragma_hover("strict"));
+    let value = must_some(hover["contents"]["value"].as_str());
+
+    let expected = "**Pragma: `strict`**\n\n\
+        _Enable strict variable/subroutine/reference checking_\n\n\
+        Restricts unsafe Perl constructs. Enables compile-time errors for undeclared variables \
+        (`vars`), bareword subroutine names (`subs`), and symbolic references (`refs`). Use \
+        `use strict;` to enable all three categories at once, or `use strict 'vars'` for \
+        individual categories.\n\n\
+        **Common usage**: Always include `use strict;` at the top of every Perl file.\n\n\
+        [perldoc strict](https://perldoc.perl.org/strict) | \
+        [Open virtual perldoc](perldoc://strict)";
+    assert_eq!(value, expected);
+}
+
+#[test]
 fn pod_hover_cache_prunes_at_cap_and_evicts_active_document_path()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = LspServer::with_io(Box::new(std::io::empty()), Box::new(Vec::<u8>::new()));

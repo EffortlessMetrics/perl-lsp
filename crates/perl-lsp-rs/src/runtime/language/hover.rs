@@ -1247,14 +1247,16 @@ Not found in workspace or configured include paths.
         let version_line =
             doc.version_required.map(|v| format!("\n\n**Requires**: Perl {v}")).unwrap_or_default();
 
-        let perldoc_link =
+        let perldoc_web_link =
             format!("[perldoc {module_name}](https://perldoc.perl.org/{module_name})");
+        let perldoc_virtual_link = format!("[Open virtual perldoc](perldoc://{module_name})");
+        let perldoc_links = format!("{perldoc_web_link} | {perldoc_virtual_link}");
 
         Some(json!({
             "contents": {
                 "kind": "markdown",
                 "value": format!(
-                    "**Pragma: `{module_name}`**\n\n_{summary}_\n\n{description}{version_line}\n\n{perldoc_link}",
+                    "**Pragma: `{module_name}`**\n\n_{summary}_\n\n{description}{version_line}\n\n{perldoc_links}",
                     summary = doc.summary,
                     description = doc.description,
                 ),
