@@ -423,7 +423,12 @@ jobs:
           for name, value in sorted(needs.items()):
               result = value.get("result", "")
               lines.append(f"| {name} | {result} |")
-              if result != "success":
+              # "cancelled" means a GitHub concurrency-group kill on a superseded SHA —
+              # infra-noise, not a real failure.  "skipped" is an intentional gate bypass.
+              # Only genuine "failure" / "timed_out" / etc. block the merge gate.
+              # The agent-level classifier (green-ci-check, #351) remains the authoritative
+              # routing interpretation for per-PR check states.
+              if result not in ("success", "skipped", "cancelled"):
                   failed.append(name)
 
           if failed:
@@ -447,8 +452,10 @@ jobs:
         with:
           script: |
             const needs = JSON.parse(process.env.NEEDS_JSON || '{}');
+            // Mirror the Gate summary classifier: cancelled (concurrency-group kill on
+            // superseded SHA) and skipped are non-blocking; only failure/timed_out/etc block.
             const failed = Object.entries(needs)
-              .filter(([name, value]) => value.result !== 'success')
+              .filter(([name, value]) => !['success', 'skipped', 'cancelled'].includes(value.result))
               .map(([name]) => name);
             const status = failed.length === 0 ? 'success' : 'failure';
             const description = failed.length === 0
