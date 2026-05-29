@@ -4,23 +4,42 @@
 > change. Do not use this page to claim final enforcement before the gates are
 > blocking in CI.
 
-## Current Posture
+## Current Blocking Proof Floor
 
 The proof lane is in transition from measurement to enforcement:
 
-- new RIPR gaps are enforced by `cargo xtask quality-gate --mode enforce-new-ripr`
-- patch coverage is enforced by `cargo xtask quality-gate --mode enforce-patch-coverage`
 - GitHub branch protection requires the current proof-floor contexts:
   `ripr+ New Gap Gate`, `Codecov / Patch 95`, `codecov/patch`, and
   `Perl LSP Rust Small Result`
+- `Perl LSP Rust Small Result` must pass before merge
+- `ripr+ New Gap Gate` blocks new RIPR gaps and stale or missing RIPR proof
+  receipts
+- `Codecov / Patch 95` blocks patch coverage below 95%, stale or missing
+  coverage receipts, missing coverage artifacts, and Codecov upload or
+  processing failures through `fail_ci_if_error: true`
+- `codecov/patch` must complete and pass after Codecov processes the uploaded
+  LCOV
+- generated quality-gate receipts are freshness-checked for patch, new-RIPR,
+  and final modes; the final mode remains a future enforcement flip until
+  burn-down closes
 - CI uploads required RIPR and coverage proof artifacts and appends quality-gate
   Markdown summaries to the GitHub job summary
-- repo-wide RIPR+ zero and project coverage 95% remain burn-down targets
+
+This is the current merge contract. A PR with pending, failed, missing, skipped
+unexpectedly, or stale required proof contexts is not merge-ready.
+
+## Transitional Targets
+
+- project coverage is visible in coverage receipts as `coverage.project`, but
+  project coverage 95% is not branch-protection blocking yet
+- total active RIPR+ unresolved gaps still have to burn down to zero before
+  final enforcement can block on repo-wide RIPR+ total
 - temporary burn-down exceptions are tracked in
   [`policy/quality-gate-exceptions.toml`](../../../policy/quality-gate-exceptions.toml)
 
 Temporary exceptions are not success criteria. They exist so the transition gate
 can block new proof regressions while existing repo-wide debt is burned down.
+An active temporary exception is not a final-enforcement pass.
 
 ## Exception Contract
 

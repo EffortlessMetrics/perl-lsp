@@ -178,8 +178,15 @@ fn docs_describe_transitional_blocking_contract() {
     assert!(
         status_doc.contains("quality-gate")
             && status_doc.contains("Markdown summaries")
-            && status_doc.contains("repo-wide RIPR+ zero and project coverage 95% remain")
-            && status_doc.contains("burn-down targets"),
+            && status_doc.contains("Current Blocking Proof Floor")
+            && status_doc.contains("Codecov upload or")
+            && status_doc.contains("processing failures through `fail_ci_if_error: true`")
+            && status_doc.contains(
+                "generated quality-gate receipts are freshness-checked for patch, new-RIPR,"
+            )
+            && status_doc.contains("project coverage is visible in coverage receipts")
+            && status_doc.contains("total active RIPR+ unresolved gaps")
+            && status_doc.contains("An active temporary exception is not a final-enforcement pass"),
         "status doc must keep final targets separate from transitional enforcement"
     );
 }
