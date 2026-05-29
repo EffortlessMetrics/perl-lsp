@@ -546,12 +546,31 @@ impl<'a> Parser<'a> {
         self.consume_token()?; // consume 'use'
 
         // Parse module name, version, or identifier
-        let mut module =
-            if matches!(self.peek_kind(), Some(TokenKind::Number) | Some(TokenKind::VString)) {
-                // Numeric version like 5.036 or v-string like v5.14, v5.12.0
-                self.consume_token()?.text.to_string()
-            } else {
-                let first_token = self.consume_token()?;
+        let mut module = if matches!(
+            self.peek_kind(),
+            Some(TokenKind::Number) | Some(TokenKind::VString)
+        ) {
+            // Numeric version like 5.036 or v-string like v5.14, v5.12.0.
+            // For three-part dotted versions like `5.10.1`, the lexer emits
+            // `5.10` as a Number token, then `Dot` (`.`), then `Number("1")`
+            // as three separate tokens.  Stitch trailing `Dot Number` pairs
+            // so the full version is captured and no segment leaks into the
+            // import-args list.
+            let mut ver = self.consume_token()?.text.to_string();
+            // Consume `Dot Number` pairs: e.g. `.` `1` in `5.10.1`.
+            // Only stitch when the dot is immediately followed by a plain
+            // number (not whitespace-separated or part of a method chain).
+            while self.peek_kind() == Some(TokenKind::Dot)
+                && self.tokens.peek_second().map(|t| t.kind) == Ok(TokenKind::Number)
+            {
+                self.consume_token()?; // consume Dot
+                let num = self.consume_token()?; // consume Number
+                ver.push('.');
+                ver.push_str(&num.text);
+            }
+            ver
+        } else {
+            let first_token = self.consume_token()?;
 
                 // Check for version strings
                 if first_token.kind == TokenKind::Identifier
