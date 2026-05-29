@@ -140,6 +140,22 @@ fn coverage_docs_describe_patch_front_door_without_ci_wiring()
             && coverage_readme.contains("rtk just coverage-baseline-refresh"),
         "coverage README must show rtk-prefixed local coverage policy commands"
     );
+    assert!(
+        coverage_doc.contains("Codecov / Patch 95")
+            && coverage_doc.contains("fail_ci_if_error: true"),
+        "coverage how-to must describe the active blocking Codecov patch upload"
+    );
+    for stale_phrase in [
+        "fail_ci_if_error: false",
+        "Codecov upload failures are configured as non-blocking",
+        "Codecov upload step is non-blocking",
+        "so service outages or missing token setup do not block merge-gate CI",
+    ] {
+        assert!(
+            !coverage_doc.contains(stale_phrase),
+            "coverage how-to must not preserve stale non-blocking Codecov upload guidance: {stale_phrase}"
+        );
+    }
 
     Ok(())
 }

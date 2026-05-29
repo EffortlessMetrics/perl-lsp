@@ -177,7 +177,7 @@ Set this GitHub Actions secret at the repository or organization level:
 
 - `CODECOV_TOKEN`
 
-The coverage and test-results uploads use this token. Codecov upload failures are configured as non-blocking so service outages or missing token setup do not block merge-gate CI.
+The coverage upload uses this token. The proof-lane patch coverage upload is blocking: the `Codecov / Patch 95` job sets `fail_ci_if_error: true`, so a missing token, upload error, or Codecov processing failure prevents the PR from merging without current patch proof.
 
 ## Configuration Files
 
@@ -222,11 +222,14 @@ If your shell does not proxy `cargo +nightly` correctly on Windows, use `rustup 
 
 ### Codecov upload fails
 
-The workflow sets `fail_ci_if_error: false` so Codecov upload failures don't block PRs. Check:
+The proof-lane patch coverage workflow sets `fail_ci_if_error: true`, so upload failures block PRs until current patch proof is available. Check:
 
-1. Codecov service status: https://status.codecov.io/
-2. Workflow logs for upload details
-3. Codecov dashboard for processing status
+1. `CODECOV_TOKEN` is configured as a GitHub Actions secret.
+2. `target/lcov.info` exists.
+3. `target/receipts/quality/coverage-baseline.json` exists.
+4. `target/receipts/quality/quality-gate-coverage.json` and `target/receipts/quality/quality-gate-coverage.md` exist.
+5. Codecov service status: https://status.codecov.io/
+6. Workflow logs and the Codecov dashboard show processing details for `Codecov / Patch 95`.
 
 ### Test Analytics upload fails
 
@@ -235,7 +238,7 @@ Check:
 1. `CODECOV_TOKEN` is configured as a GitHub Actions secret.
 2. The JUnit file exists under `target/test-results/`.
 3. The receipt JSON exists under `target/receipts/`.
-4. The Codecov upload step is non-blocking, so failures should be visible in logs without failing the gate.
+4. Test-results upload failures should be visible in their workflow logs and must not be confused with the blocking patch coverage proof upload.
 
 ### Coverage numbers look wrong
 
