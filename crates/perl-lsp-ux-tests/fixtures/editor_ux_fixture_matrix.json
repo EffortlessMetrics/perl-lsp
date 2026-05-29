@@ -1639,6 +1639,34 @@
       ]
     },
     {
+      "id": "guard_condition_inline_completion_quality",
+      "scenario_file": "ux_scenario_58_guard_condition_inline_completion_quality.rs",
+      "subsystem_owner": "editor_trust",
+      "ci_tier": "pr",
+      "component": "completion",
+      "instrumentation": {
+        "run_receipt": false,
+        "first_useful_result": false,
+        "protocol_goldens": false
+      },
+      "user_journey": "request inline completion in guard clauses and record visible-scalar condition ghost text",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "dynamic inline-completion registration is observed for an LSP4IJ-shaped client",
+        "return guard inline completion uses a visible boolean lexical",
+        "next guard inline completion uses a visible skip lexical",
+        "guard condition inline completion avoids unrelated result and receiver lexicals"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "real_workspace_providers",
       "scenario_file": "ux_scenario_20_real_workspace_providers.rs",
       "subsystem_owner": "editor_intelligence",

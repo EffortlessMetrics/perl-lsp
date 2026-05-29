@@ -76,6 +76,7 @@ pub(crate) enum ExpectedSyntax {
     PackageName,
     BlessArguments,
     ReturnExpression,
+    GuardCondition,
     LoopBinding,
     TestAssertionArguments,
     ShebangInterpreter,
@@ -482,7 +483,11 @@ fn syntax_candidate_bonus(item: &InlineCompletionItem, context: &SemanticInlineC
         {
             20
         }
-        ExpectedSyntax::ReturnExpression if item.insert_text.ends_with(';') => 20,
+        ExpectedSyntax::ReturnExpression | ExpectedSyntax::GuardCondition
+            if item.insert_text.ends_with(';') =>
+        {
+            20
+        }
         ExpectedSyntax::LexicalVariableName
             if item.insert_text.starts_with("self =")
                 && context.visible_variables.iter().any(VariableFact::is_scalar_self) =>
@@ -1231,6 +1236,9 @@ impl InlineCompletionProvider {
         if ends_with_keyword(prefix, "return ") {
             return ExpectedSyntax::ReturnExpression;
         }
+        if is_guard_condition_prefix(prefix) {
+            return ExpectedSyntax::GuardCondition;
+        }
         if ends_with_keyword(prefix, "for ") || ends_with_keyword(prefix, "foreach ") {
             return ExpectedSyntax::LoopBinding;
         }
@@ -1415,6 +1423,24 @@ impl InlineCompletionProvider {
             .find(|variable| variable.is_scalar_self())
             .map(VariableFact::as_perl_variable)
             .or_else(|| context.visible_variables.first().map(VariableFact::as_perl_variable))
+    }
+
+    fn preferred_guard_condition(&self, context: &SemanticInlineContext) -> Option<String> {
+        context
+            .visible_variables
+            .iter()
+            .find(|variable| {
+                variable.is_scalar()
+                    && !variable.is_scalar_self()
+                    && is_preferred_guard_condition_name(variable.name.as_str())
+            })
+            .or_else(|| {
+                context
+                    .visible_variables
+                    .iter()
+                    .find(|variable| variable.is_scalar() && !variable.is_scalar_self())
+            })
+            .map(VariableFact::as_perl_variable)
     }
 
     fn preferred_assignment_variable(&self, context: &SemanticInlineContext) -> Option<String> {
@@ -1752,6 +1778,21 @@ impl InlineCandidateSource for SyntaxCandidateSource {
             }
         }
 
+        if is_guard_condition_prefix(prefix)
+            && let Some(condition) = provider.preferred_guard_condition(semantic_context)
+        {
+            sink.push(
+                Self::SOURCE,
+                0,
+                InlineCompletionItem {
+                    insert_text: format!("{condition};"),
+                    filter_text: Some(condition),
+                    range: None,
+                    command: None,
+                },
+            );
+        }
+
         if ends_with_keyword(prefix, "for ") || ends_with_keyword(prefix, "foreach ") {
             if let Some(binding) = provider.preferred_loop_binding(semantic_context) {
                 sink.push(
@@ -1859,6 +1900,24 @@ fn is_preferred_test_actual_name(name: &str) -> bool {
 
 fn is_preferred_test_expected_name(name: &str) -> bool {
     matches!(name, "expected" | "expected_result" | "want")
+}
+
+fn is_preferred_guard_condition_name(name: &str) -> bool {
+    name == "ok"
+        || name == "valid"
+        || name == "ready"
+        || name.starts_with("is_")
+        || name.starts_with("has_")
+        || name.starts_with("can_")
+        || name.starts_with("should_")
+        || name.ends_with("_ok")
+}
+
+fn is_guard_condition_prefix(prefix: &str) -> bool {
+    ends_with_keyword(prefix, "return unless ")
+        || ends_with_keyword(prefix, "return if ")
+        || ends_with_keyword(prefix, "next if ")
+        || ends_with_keyword(prefix, "last if ")
 }
 
 fn test_statement_filter_text(statement: &str) -> &'static str {
@@ -3215,6 +3274,104 @@ mod tests {
                 "future DBI assignments must not shape current receiver completions: {insert_texts:?}"
             );
         }
+    }
+
+    #[test]
+    fn guard_condition_prefers_boolean_named_visible_scalar() {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub helper {\n    my $result = compute();\n    my $is_valid = validate($result);\n    return unless ";
+        let character = "    return unless ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 3, character);
+        let insert_texts: Vec<&str> =
+            completions.items.iter().map(|item| item.insert_text.as_str()).collect();
+
+        assert!(insert_texts.contains(&"$is_valid;"));
+        assert!(!insert_texts.contains(&"$result;"));
+    }
+
+    #[test]
+    fn guard_condition_stays_quiet_without_visible_scalar() {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub helper {\n    my @users = fetch_users();\n    return unless ";
+        let character = "    return unless ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 2, character);
+
+        assert!(completions.items.is_empty());
+    }
+
+    #[test]
+    fn guard_condition_prefers_valid_scalar_name() {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub helper {\n    my $valid = validate();\n    return unless ";
+        let character = "    return unless ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 2, character);
+
+        assert_eq!(
+            completions.items.first().map(|item| item.insert_text.as_str()),
+            Some("$valid;")
+        );
+    }
+
+    #[test]
+    fn guard_condition_prefers_ready_scalar_name() {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub helper {\n    my $ready = is_ready();\n    return if ";
+        let character = "    return if ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 2, character);
+
+        assert_eq!(
+            completions.items.first().map(|item| item.insert_text.as_str()),
+            Some("$ready;")
+        );
+    }
+
+    #[test]
+    fn guard_condition_prefers_ok_scalar_name() {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub helper {\n    my $ok = check_status();\n    last if ";
+        let character = "    last if ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 2, character);
+
+        assert_eq!(completions.items.first().map(|item| item.insert_text.as_str()), Some("$ok;"));
+    }
+
+    #[test]
+    fn guard_condition_prefers_has_prefix_scalar_name() {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub helper {\n    my $has_value = load_value();\n    return unless ";
+        let character = "    return unless ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 2, character);
+
+        assert_eq!(
+            completions.items.first().map(|item| item.insert_text.as_str()),
+            Some("$has_value;")
+        );
+    }
+
+    #[test]
+    fn guard_condition_prefers_can_prefix_scalar_name() {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub helper {\n    my $can_retry = should_retry();\n    return if ";
+        let character = "    return if ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 2, character);
+
+        assert_eq!(
+            completions.items.first().map(|item| item.insert_text.as_str()),
+            Some("$can_retry;")
+        );
+    }
+
+    #[test]
+    fn guard_condition_prefers_ok_suffix_scalar_name() {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub helper {\n    my $status_ok = check_status();\n    next if ";
+        let character = "    next if ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 2, character);
+
+        assert_eq!(
+            completions.items.first().map(|item| item.insert_text.as_str()),
+            Some("$status_ok;")
+        );
     }
 
     #[test]

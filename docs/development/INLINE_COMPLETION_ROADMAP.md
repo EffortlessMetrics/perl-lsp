@@ -363,6 +363,7 @@ Current semantic inline UX receipt inventory:
 | `dbi_receiver_inline_completion_quality` | `ux_scenario_55_dbi_receiver_inline_completion_quality.rs` | DBI database-handle and statement-handle receiver suggestions without generic constructor guesses. |
 | `lexical_return_inline_completion_quality` | `ux_scenario_56_lexical_return_inline_completion_quality.rs` | Visible lexical return ghost text from real stdio requests. |
 | `loop_binding_inline_completion_quality` | `ux_scenario_57_loop_binding_inline_completion_quality.rs` | Visible collection loop bindings, hash key iteration, array preference, and safe singular naming. |
+| `guard_condition_inline_completion_quality` | `ux_scenario_58_guard_condition_inline_completion_quality.rs` | Guard-condition continuations use visible scalar facts without unrelated result or receiver guesses. |
 
 Still future or deliberately gated:
 
