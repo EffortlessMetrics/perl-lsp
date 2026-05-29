@@ -210,30 +210,32 @@ fn ripr_plus_packet(repo: &Path, options: &RiprPlusOptions) -> Result<Value> {
         .and_then(Value::as_array)
         .ok_or_else(|| eyre!("ripr repo-seams-json output did not include seams[]"))?;
     let suppressions = read_ripr_suppression_rules(repo, &options.suppressions)?;
-    let active_seams = seams
-        .iter()
-        .filter(|seam| !suppression_matches_seam(&suppressions, seam))
-        .collect::<Vec<_>>();
-    let suppressed_count = seams.len().saturating_sub(active_seams.len());
-    Ok(json!({
+    let seam_summary = ripr_plus_seam_summary(seams, &suppressions, 10);
+    Ok(ripr_plus_receipt_packet(options, &current_head(repo)?, &suppressions, seam_summary))
+}
+
+fn ripr_plus_receipt_packet(
+    options: &RiprPlusOptions,
+    head: &str,
+    suppressions: &RiprSuppressionRules,
+    seam_summary: RiprPlusSeamSummary,
+) -> Value {
+    json!({
         "schema_version": 1,
         "kind": "ripr_plus_baseline",
         "mode": "advisory",
-        "head": current_head(repo)?,
+        "head": head,
         "root": options.root,
         "source_format": "ripr check --format repo-seams-json",
-        "unresolved": active_seams.len(),
-        "suppressed": suppressed_count,
+        "unresolved": seam_summary.unresolved,
+        "suppressed": seam_summary.suppressed,
         "new_unresolved": null,
-        "top_files": ripr_plus_top_files(active_seams.iter().copied(), 10),
-        "top_suppressed_files": ripr_plus_top_files(
-            seams.iter().filter(|seam| suppression_matches_seam(&suppressions, seam)),
-            10,
-        ),
+        "top_files": seam_summary.top_files,
+        "top_suppressed_files": seam_summary.top_suppressed_files,
         "suppressions": {
             "path": display_path(&options.suppressions),
-            "path_patterns": suppressions.display_patterns,
-            "invalid_patterns": suppressions.invalid_patterns,
+            "path_patterns": suppressions.display_patterns.clone(),
+            "invalid_patterns": suppressions.invalid_patterns.clone(),
         },
         "decision": "advisory",
         "claim_boundary": [
@@ -242,7 +244,37 @@ fn ripr_plus_packet(repo: &Path, options: &RiprPlusOptions) -> Result<Value> {
             "Suppressed non-production surfaces are excluded from unresolved and reported separately.",
             "new_unresolved is null until PR diff comparison is wired in the quality gate."
         ]
-    }))
+    })
+}
+
+#[derive(Debug)]
+struct RiprPlusSeamSummary {
+    unresolved: usize,
+    suppressed: usize,
+    top_files: Vec<Value>,
+    top_suppressed_files: Vec<Value>,
+}
+
+fn ripr_plus_seam_summary(
+    seams: &[Value],
+    suppressions: &RiprSuppressionRules,
+    limit: usize,
+) -> RiprPlusSeamSummary {
+    let active = seams
+        .iter()
+        .filter(|seam| !suppression_matches_seam(suppressions, seam))
+        .collect::<Vec<_>>();
+    let suppressed = seams
+        .iter()
+        .filter(|seam| suppression_matches_seam(suppressions, seam))
+        .collect::<Vec<_>>();
+
+    RiprPlusSeamSummary {
+        unresolved: active.len(),
+        suppressed: suppressed.len(),
+        top_files: ripr_plus_top_files(active.iter().copied(), limit),
+        top_suppressed_files: ripr_plus_top_files(suppressed.iter().copied(), limit),
+    }
 }
 
 fn ripr_plus_top_files<'a>(seams: impl IntoIterator<Item = &'a Value>, limit: usize) -> Vec<Value> {
@@ -1531,6 +1563,83 @@ mod tests {
                 json!({"name": "crates/perl-parser/src/lib.rs", "count": 2}),
             ]
         );
+    }
+
+    #[test]
+    fn ripr_plus_seam_summary_splits_active_and_suppressed_paths() -> Result<()> {
+        let seams = vec![
+            json!({"file": "crates/perl-parser/src/lib.rs"}),
+            json!({"path": "archive/crates/perl-parser/src/lib.rs"}),
+            json!({"location": {"path": r"docs\project\status\quality.rs"}}),
+            json!({"placement": {"path": "crates/perl-parser/src/lib.rs"}}),
+            json!({"file": ""}),
+        ];
+        let suppressions = RiprSuppressionRules {
+            display_patterns: vec!["archive/**".to_string(), "docs/project/status/**".to_string()],
+            path_patterns: vec![
+                Pattern::new("archive/**")?,
+                Pattern::new("docs/project/status/**")?,
+            ],
+            invalid_patterns: Vec::new(),
+        };
+
+        let summary = ripr_plus_seam_summary(&seams, &suppressions, 10);
+
+        assert_eq!(summary.unresolved, 3);
+        assert_eq!(summary.suppressed, 2);
+        assert_eq!(
+            summary.top_files,
+            vec![json!({"name": "crates/perl-parser/src/lib.rs", "count": 2})]
+        );
+        assert_eq!(
+            summary.top_suppressed_files,
+            vec![
+                json!({"name": "archive/crates/perl-parser/src/lib.rs", "count": 1}),
+                json!({"name": "docs/project/status/quality.rs", "count": 1}),
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn ripr_plus_receipt_packet_reports_active_and_suppressed_totals() {
+        let options = RiprPlusOptions {
+            root: ".".to_string(),
+            suppressions: PathBuf::from("policy/ripr-suppressions.toml"),
+        };
+        let suppressions = RiprSuppressionRules {
+            display_patterns: vec!["archive/**".to_string()],
+            path_patterns: Vec::new(),
+            invalid_patterns: vec!["archive/[".to_string()],
+        };
+        let packet = ripr_plus_receipt_packet(
+            &options,
+            "head-sha",
+            &suppressions,
+            RiprPlusSeamSummary {
+                unresolved: 2,
+                suppressed: 1,
+                top_files: vec![json!({"name": "xtask/src/tasks/ripr_evidence.rs", "count": 2})],
+                top_suppressed_files: vec![json!({"name": "archive/old.rs", "count": 1})],
+            },
+        );
+
+        assert_eq!(packet["head"], json!("head-sha"));
+        assert_eq!(packet["root"], json!("."));
+        assert_eq!(packet["unresolved"], json!(2));
+        assert_eq!(packet["suppressed"], json!(1));
+        assert_eq!(
+            packet.pointer("/top_files/0/name"),
+            Some(&json!("xtask/src/tasks/ripr_evidence.rs"))
+        );
+        assert_eq!(packet.pointer("/top_suppressed_files/0/name"), Some(&json!("archive/old.rs")));
+        assert_eq!(
+            packet.pointer("/suppressions/path"),
+            Some(&json!("policy/ripr-suppressions.toml"))
+        );
+        assert_eq!(packet.pointer("/suppressions/path_patterns/0"), Some(&json!("archive/**")));
+        assert_eq!(packet.pointer("/suppressions/invalid_patterns/0"), Some(&json!("archive/[")));
+        assert_eq!(packet["decision"], json!("advisory"));
     }
 
     #[test]
