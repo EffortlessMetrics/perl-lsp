@@ -324,6 +324,12 @@ pub struct ClientCapabilities {
     /// When true, the server may advertise `CodeActionOptions.documentation` in
     /// `codeActionProvider`.
     pub code_action_documentation_support: bool,
+    /// Supports the LSP 3.18 `CodeActionTag.LLMGenerated` tag.
+    ///
+    /// Parsed from `capabilities.textDocument.codeAction.tagSupport.valueSet`.
+    /// Deterministic actions must remain untagged; generated actions may only
+    /// emit `tags: [1]` when this is true.
+    pub code_action_llm_generated_tag_support: bool,
     /// Supports workspace/codeLens/refresh request
     pub code_lens_refresh_support: bool,
     /// Supports workspace/semanticTokens/refresh request

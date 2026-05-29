@@ -220,6 +220,67 @@ fn code_action_and_workspace_edit_responses_do_not_emit_optional_318_shapes() ->
 }
 
 #[test]
+fn code_actions_do_not_emit_llm_generated_tags_for_deterministic_actions() -> TestResult {
+    let mut harness = LspHarness::new_raw();
+    harness.initialize_ready(
+        "file:///workspace",
+        Some(json!({
+            "textDocument": {
+                "codeAction": {
+                    "tagSupport": {
+                        "valueSet": [1]
+                    }
+                }
+            }
+        })),
+    )?;
+    harness.open("file:///deterministic-actions.pl", "print \"hi\";\n")?;
+
+    let actions = harness.request(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": { "uri": "file:///deterministic-actions.pl" },
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": 0, "character": 0 }
+            },
+            "context": {
+                "diagnostics": [],
+                "only": ["quickfix", "refactor", "source"],
+                "triggerKind": 1
+            }
+        }),
+    )?;
+
+    let action_items =
+        actions.as_array().ok_or_else(|| format!("expected code action array: {actions}"))?;
+    assert!(
+        action_items.iter().any(|action| action.get("title").is_some()),
+        "test must exercise at least one deterministic action: {actions}"
+    );
+    assert_no_key(&actions, "tags")?;
+    Ok(())
+}
+
+#[test]
+fn code_action_resolve_does_not_echo_tags_without_client_support() -> TestResult {
+    let mut harness = LspHarness::new_raw();
+    harness.initialize_ready("file:///workspace", Some(json!({})))?;
+
+    let resolved = harness.request(
+        "codeAction/resolve",
+        json!({
+            "title": "client supplied generated action",
+            "kind": "quickfix",
+            "tags": [1]
+        }),
+    )?;
+
+    assert_no_key(&resolved, "tags")?;
+    Ok(())
+}
+
+#[test]
 fn code_action_pragmas_emit_snippet_text_edits_when_supported() -> TestResult {
     let mut harness = LspHarness::new_raw();
     harness.initialize_ready(

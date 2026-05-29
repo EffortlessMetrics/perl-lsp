@@ -77,6 +77,14 @@ const NEGATIVE_TEST_MARKERS: &[RequiredMarker] = &[
         marker: "code_action_and_workspace_edit_responses_do_not_emit_optional_318_shapes",
     },
     RequiredMarker {
+        label: "CodeAction.tags supported-client trust boundary",
+        marker: "code_actions_do_not_emit_llm_generated_tags_for_deterministic_actions",
+    },
+    RequiredMarker {
+        label: "CodeAction.tags resolve echo gate",
+        marker: "code_action_resolve_does_not_echo_tags_without_client_support",
+    },
+    RequiredMarker {
         label: "CodeAction.documentation positive gate",
         marker: "code_action_documentation_advertised_when_supported",
     },
@@ -397,6 +405,7 @@ pub fn run() -> Result<()> {
     check_completion_item_defaults_data_guard(&root, &mut violations)?;
     check_completion_apply_kind_guard(&root, &mut violations)?;
     check_code_action_documentation_guard(&root, &mut violations)?;
+    check_code_action_tag_guard(&root, &mut violations)?;
     check_snippet_text_edit_guard(&root, &mut violations)?;
     check_message_type_debug_support(&root, &mut violations)?;
 
@@ -746,6 +755,58 @@ fn check_code_action_documentation_guard(
             "perl.explainProviderDecision",
         ],
         "CodeAction.documentation wire receipts",
+        violations,
+    );
+
+    Ok(())
+}
+
+fn check_code_action_tag_guard(root: &Path, violations: &mut Vec<Violation>) -> Result<()> {
+    let state_document = read_required(root, STATE_DOCUMENT)?;
+    let lifecycle_capabilities = read_required(root, LIFECYCLE_CAPABILITIES)?;
+    let code_actions =
+        read_required(root, "crates/perl-lsp-rs/src/runtime/language/code_actions.rs")?;
+    let negative_claims = read_required(root, NEGATIVE_CLAIMS_TEST)?;
+
+    require_all(
+        STATE_DOCUMENT,
+        &state_document,
+        &["code_action_llm_generated_tag_support"],
+        "CodeAction.tags capability storage",
+        violations,
+    );
+    require_all(
+        LIFECYCLE_CAPABILITIES,
+        &lifecycle_capabilities,
+        &[
+            "/capabilities/textDocument/codeAction/tagSupport/valueSet",
+            "code_action_llm_generated_tag_support",
+            "initialize_parses_code_action_llm_generated_tag_support",
+        ],
+        "CodeAction.tags capability parser",
+        violations,
+    );
+    require_all(
+        "crates/perl-lsp-rs/src/runtime/language/code_actions.rs",
+        &code_actions,
+        &[
+            "CODE_ACTION_TAG_LLM_GENERATED",
+            "enforce_code_action_tag_capability",
+            "code_action_llm_generated_tag_support",
+        ],
+        "CodeAction.tags response gate",
+        violations,
+    );
+    require_all(
+        NEGATIVE_CLAIMS_TEST,
+        &negative_claims,
+        &[
+            "tagSupport",
+            "valueSet",
+            "code_actions_do_not_emit_llm_generated_tags_for_deterministic_actions",
+            "code_action_resolve_does_not_echo_tags_without_client_support",
+        ],
+        "CodeAction.tags wire receipts",
         violations,
     );
 

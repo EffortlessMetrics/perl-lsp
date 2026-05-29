@@ -233,9 +233,9 @@ const ROWS: &[MatrixRow] = &[
         method_or_shape: "`textDocument/codeAction` responses",
         status: "negative-gated+documented",
         proof: "`lsp_318_negative_claims`; `check-lsp-318-claims`",
-        owner: "`crates/perl-lsp-rs/src/runtime/language/code_actions.rs`",
+        owner: "`crates/perl-lsp-rs/src/runtime/lifecycle/capabilities.rs`; `crates/perl-lsp-rs/src/runtime/language/code_actions.rs`",
         priority: "P2",
-        notes: "`LLMGenerated` must never be emitted for deterministic actions.",
+        notes: "`tagSupport.valueSet` is parsed and code-action/resolve response tags are stripped unless supported; deterministic actions remain untagged. Generated-action tagging remains unclaimed until a generated-action source exists.",
     },
     MatrixRow {
         feature: "`MessageType.Debug`",

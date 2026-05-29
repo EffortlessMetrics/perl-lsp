@@ -15,6 +15,7 @@ static GLOBAL_VAR_ASSIGNMENT_RE: LazyLock<regex::Regex> =
         Ok(re) => re,
         Err(err) => unreachable!("GLOBAL_VAR_ASSIGNMENT_RE is a known-good static pattern: {err}"),
     });
+const CODE_ACTION_TAG_LLM_GENERATED: i64 = 1;
 
 fn requested_code_action_kinds(params: &Value) -> Vec<&str> {
     params
@@ -45,6 +46,35 @@ fn retain_requested_code_action_kinds(code_actions: &mut Vec<Value>, requested_k
                 .any(|requested_kind| code_action_kind_matches_filter(kind, requested_kind))
         })
     });
+}
+
+fn enforce_code_action_tag_capability(
+    code_actions: &mut [Value],
+    supports_llm_generated_tag: bool,
+) {
+    for action in code_actions {
+        let Some(action_object) = action.as_object_mut() else {
+            continue;
+        };
+
+        if !action_object.contains_key("tags") {
+            continue;
+        }
+
+        if !supports_llm_generated_tag {
+            action_object.remove("tags");
+            continue;
+        }
+
+        let Some(tags) = action_object.get_mut("tags").and_then(Value::as_array_mut) else {
+            action_object.remove("tags");
+            continue;
+        };
+        tags.retain(|tag| tag.as_i64() == Some(CODE_ACTION_TAG_LLM_GENERATED));
+        if tags.is_empty() {
+            action_object.remove("tags");
+        }
+    }
 }
 
 fn display_diagnostic_message(diagnostic: &crate::features::diagnostics::Diagnostic) -> String {
@@ -356,6 +386,12 @@ impl LspServer {
         caps.workspace_edit_document_changes_support && caps.workspace_edit_snippet_edit_support
     }
 
+    fn enforce_code_action_tag_capabilities(&self, code_actions: &mut [Value]) {
+        let supports_llm_generated_tag =
+            self.client_capabilities.lock().code_action_llm_generated_tag_support;
+        enforce_code_action_tag_capability(code_actions, supports_llm_generated_tag);
+    }
+
     /// Handle textDocument/codeAction request
     pub(crate) fn handle_code_action(
         &self,
@@ -658,6 +694,7 @@ impl LspServer {
                 );
             }
 
+            self.enforce_code_action_tag_capabilities(&mut code_actions);
             retain_requested_code_action_kinds(&mut code_actions, &requested_kinds);
             Ok(Some(json!(code_actions)))
         } else {
@@ -736,6 +773,7 @@ impl LspServer {
                 }));
             }
 
+            self.enforce_code_action_tag_capabilities(&mut code_actions);
             retain_requested_code_action_kinds(&mut code_actions, &requested_kinds);
             Ok(Some(json!(code_actions)))
         }
@@ -806,6 +844,7 @@ impl LspServer {
                 }
             }
 
+            self.enforce_code_action_tag_capabilities(std::slice::from_mut(&mut action));
             Ok(Some(action))
         } else {
             Ok(None)
@@ -1021,6 +1060,63 @@ mod tests {
         let remaining_kinds: Vec<&str> =
             actions.iter().filter_map(|action| action["kind"].as_str()).collect();
         assert_eq!(remaining_kinds, vec!["refactor.rewrite"]);
+    }
+
+    #[test]
+    fn code_action_tag_gate_strips_tags_without_client_support() {
+        let mut actions = vec![json!({
+            "title": "generated",
+            "kind": "quickfix",
+            "tags": [CODE_ACTION_TAG_LLM_GENERATED],
+        })];
+
+        enforce_code_action_tag_capability(&mut actions, false);
+
+        assert!(
+            actions[0].get("tags").is_none(),
+            "unsupported clients must not receive code-action tags: {actions:?}"
+        );
+    }
+
+    #[test]
+    fn code_action_tag_gate_keeps_only_supported_llm_generated_tag()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut actions = vec![
+            json!({
+                "title": "generated",
+                "kind": "quickfix",
+                "tags": [CODE_ACTION_TAG_LLM_GENERATED, 99],
+            }),
+            json!({
+                "title": "unknown",
+                "kind": "quickfix",
+                "tags": [99],
+            }),
+            json!({
+                "title": "malformed",
+                "kind": "quickfix",
+                "tags": "LLMGenerated",
+            }),
+        ];
+
+        enforce_code_action_tag_capability(&mut actions, true);
+
+        assert_eq!(
+            actions[0]
+                .get("tags")
+                .and_then(Value::as_array)
+                .ok_or("expected supported LLMGenerated tag to remain")?,
+            &vec![json!(CODE_ACTION_TAG_LLM_GENERATED)]
+        );
+        assert!(
+            actions[1].get("tags").is_none(),
+            "unsupported tag values should be removed: {actions:?}"
+        );
+        assert!(
+            actions[2].get("tags").is_none(),
+            "malformed tag payloads should be removed: {actions:?}"
+        );
+        Ok(())
     }
 
     fn open_test_document(server: &LspServer, uri: &str, text: &str) {

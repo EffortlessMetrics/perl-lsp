@@ -242,6 +242,10 @@ impl LspServer {
                     .pointer("/capabilities/textDocument/codeAction/documentationSupport")
                     .and_then(Value::as_bool)
                     .unwrap_or(false);
+                caps.code_action_llm_generated_tag_support = params
+                    .pointer("/capabilities/textDocument/codeAction/tagSupport/valueSet")
+                    .and_then(Value::as_array)
+                    .is_some_and(|tags| tags.iter().any(|tag| tag.as_i64() == Some(1)));
 
                 // Check if client supports markdown message content in diagnostics (LSP 3.18)
                 caps.markup_message_support = params
@@ -1113,6 +1117,46 @@ mod tests {
         let _ = server.handle_initialize(Some(params));
 
         assert!(server.client_capabilities.lock().code_action_documentation_support);
+    }
+
+    #[test]
+    fn initialize_parses_code_action_llm_generated_tag_support() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "textDocument": {
+                    "codeAction": {
+                        "tagSupport": {
+                            "valueSet": [1]
+                        }
+                    }
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        assert!(server.client_capabilities.lock().code_action_llm_generated_tag_support);
+    }
+
+    #[test]
+    fn initialize_leaves_code_action_llm_generated_tag_disabled_when_value_set_omits_it() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "textDocument": {
+                    "codeAction": {
+                        "tagSupport": {
+                            "valueSet": [99]
+                        }
+                    }
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        assert!(!server.client_capabilities.lock().code_action_llm_generated_tag_support);
     }
 
     #[test]

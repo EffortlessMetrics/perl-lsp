@@ -92,6 +92,7 @@ perl-lsp supports selected LSP 3.18 surfaces with capability-honest contracts.
 | Completion list default data | `textDocument.completion.completionList.itemDefaults`, `textDocument/completion` | Clients that include `data` in supported completion-list defaults receive shared `CompletionList.itemDefaults.data`; unsupported clients retain the current response shape. | `lsp_completion_tests`, `lsp_318_negative_claims`, `check-lsp-318-claims` |
 | Completion list apply kind | `textDocument.completion.completionList.applyKindSupport`, `textDocument/completion` | Clients that support apply kind and `itemDefaults.data` receive `CompletionList.applyKind.data = 2` (`ApplyKind.Merge`); unsupported clients, or clients without supported defaults, receive no `applyKind`. | `lsp_completion_tests`, `lsp_318_negative_claims`, `check-lsp-318-claims` |
 | CodeAction documentation | `textDocument.codeAction.documentationSupport`, `codeActionProvider.documentation` | Clients that support code-action documentation receive `CodeActionOptions.documentation` for `quickfix`, `refactor`, and `source.fixAll`; unsupported clients receive no documentation advertisement and individual code-action responses remain unchanged. | `lsp_318_negative_claims`, `check-lsp-318-claims` |
+| CodeAction tag trust boundary | `textDocument.codeAction.tagSupport.valueSet`, `CodeAction.tags` | The server parses support for `CodeActionTag.LLMGenerated`, strips unsupported or malformed tag payloads from code-action and resolve responses, and verifies deterministic code actions remain untagged even for tag-capable clients. Actual generated-action tagging remains unclaimed until a generated-action source exists. | `lsp_318_negative_claims`, `check-lsp-318-claims` |
 | Window debug messages | `MessageType.Debug`, `window/logMessage`, `window/showMessage`, `window/showMessageRequest` | Explicit debug message calls serialize type `5`; normal runtime paths continue using the existing non-debug message levels unless a later PR intentionally wires debug policy. | `lsp_window_tests`, `lsp_318_negative_claims`, `check-lsp-318-claims` |
 | Diagnostic markup messages | `textDocument.diagnostic.markupMessageSupport`, `textDocument/diagnostic`, `workspace/diagnostic` | Pull diagnostics may emit `Diagnostic.message` as `MarkupContent` only when support is true; unsupported clients and publish diagnostics remain string-only. | `lsp_diagnostic_enrichment_test`, `lsp_318_negative_claims`, `lsp_schema_validation`, `check-lsp-318-claims` |
 | Lean/e2e watcher behavior | `workspace/didChangeWatchedFiles` dynamic registration | Runtime tuning can suppress file watchers without suppressing inline-completion dynamic registration. | `lsp_registration_tests`, lean UX receipts |
@@ -108,8 +109,8 @@ capability parsing, wire tests, docs, and negative gates:
 - `SemanticTokenTypes.label`
 - `ApplyWorkspaceEditParams.metadata`
 - non-spec `WorkspaceEdit.metadata` response fields
-- `CodeAction.tags`
-- `CodeActionTag.LLMGenerated`
+- generated-action `CodeAction.tags` emission
+- `CodeActionTag.LLMGenerated` on deterministic actions
 - `Command.tooltip` outside CodeLens command objects
 - `RelativePattern` document selectors
 - ungated `workspace/foldingRange/refresh` without
@@ -142,7 +143,8 @@ The `lsp_318_negative_claims` test suite is the current guardrail for optional
 - emits `CompletionList.applyKind` without explicit support
 - emits `CompletionList.itemDefaults.data` without explicit support
 - advertises `CodeAction.documentation` without client support or emits
-  `CodeAction.tags`
+  `CodeAction.tags` without an explicit generated-action source and client
+  `tagSupport`
 - emits non-spec `WorkspaceEdit.metadata` fields in representative edit
   responses
 - emits `ApplyWorkspaceEditParams.metadata` without a gated
