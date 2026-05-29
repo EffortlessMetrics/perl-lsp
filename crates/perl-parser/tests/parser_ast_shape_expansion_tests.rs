@@ -494,3 +494,147 @@ fn use_and_no_pragmas_preserve_import_args_and_filter_risk() -> Result<(), Strin
 
     Ok(())
 }
+
+fn find_first<'a>(node: &'a Node, predicate: &impl Fn(&NodeKind) -> bool) -> Option<&'a Node> {
+    if predicate(&node.kind) {
+        return Some(node);
+    }
+
+    let mut found = None;
+    node.for_each_child(|child| {
+        if found.is_none() {
+            found = find_first(child, predicate);
+        }
+    });
+    found
+}
+
+fn find_all<'a>(node: &'a Node, predicate: &impl Fn(&NodeKind) -> bool, out: &mut Vec<&'a Node>) {
+    if predicate(&node.kind) {
+        out.push(node);
+    }
+    node.for_each_child(|child| find_all(child, predicate, out));
+}
+
+#[test]
+fn tie_untie_eval_and_statement_modifier_shapes_are_preserved() -> Result<(), String> {
+    let source =
+        r#"eval { tie %db, 'DB_File', 'data.db', 0644; untie %db; }; warn "tie failed" if $@;"#;
+    let ast = parse_without_errors(source)?;
+
+    let eval_node = find_first(&ast, &|kind| matches!(kind, NodeKind::Eval { .. }))
+        .ok_or("missing eval node")?;
+    match &eval_node.kind {
+        NodeKind::Eval { block } => assert_eq!(block_statements(block)?.len(), 2),
+        other => return Err(format!("expected Eval node, got {other:?}")),
+    }
+
+    let tie_node =
+        find_first(&ast, &|kind| matches!(kind, NodeKind::Tie { .. })).ok_or("missing tie node")?;
+    match &tie_node.kind {
+        NodeKind::Tie { variable, package, args } => {
+            assert_eq!(variable_name(variable)?, "%db");
+            match &package.kind {
+                NodeKind::String { value, interpolated } => {
+                    assert_eq!(value, "'DB_File'");
+                    assert!(!interpolated);
+                }
+                other => return Err(format!("expected tie package string, got {other:?}")),
+            }
+            assert_eq!(args.len(), 2);
+        }
+        other => return Err(format!("expected Tie node, got {other:?}")),
+    }
+
+    let untie_node = find_first(&ast, &|kind| matches!(kind, NodeKind::Untie { .. }))
+        .ok_or("missing untie node")?;
+    match &untie_node.kind {
+        NodeKind::Untie { variable } => assert_eq!(variable_name(variable)?, "%db"),
+        other => return Err(format!("expected Untie node, got {other:?}")),
+    }
+
+    let modifier_node =
+        find_first(&ast, &|kind| matches!(kind, NodeKind::StatementModifier { .. }))
+            .ok_or("missing statement modifier")?;
+    match &modifier_node.kind {
+        NodeKind::StatementModifier { statement, modifier, condition } => {
+            assert_eq!(modifier, "if");
+            assert!(matches!(statement.kind, NodeKind::ExpressionStatement { .. }));
+            assert_eq!(variable_name(condition)?, "$@");
+        }
+        other => return Err(format!("expected StatementModifier node, got {other:?}")),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn labeled_loop_control_and_goto_targets_are_preserved() -> Result<(), String> {
+    let ast = parse_without_errors(
+        r#"OUTER: while ($ok) { next OUTER; goto DONE; } DONE: print "done";"#,
+    )?;
+
+    let mut labels = Vec::new();
+    find_all(&ast, &|kind| matches!(kind, NodeKind::LabeledStatement { .. }), &mut labels);
+    let label_names: Vec<&str> = labels
+        .iter()
+        .filter_map(|node| match &node.kind {
+            NodeKind::LabeledStatement { label, .. } => Some(label.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(label_names, vec!["OUTER", "DONE"]);
+
+    let loop_control = find_first(&ast, &|kind| {
+        matches!(kind, NodeKind::LoopControl { op, label } if op == "next" && label.as_deref() == Some("OUTER"))
+    })
+    .ok_or("missing labeled next")?;
+    assert!(matches!(loop_control.kind, NodeKind::LoopControl { .. }));
+
+    let goto_node =
+        find_first(&ast, &|kind| matches!(kind, NodeKind::Goto { .. })).ok_or("missing goto")?;
+    match &goto_node.kind {
+        NodeKind::Goto { target } => match &target.kind {
+            NodeKind::Identifier { name } => assert_eq!(name, "DONE"),
+            other => return Err(format!("expected identifier goto target, got {other:?}")),
+        },
+        other => return Err(format!("expected Goto node, got {other:?}")),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn diamond_readline_glob_and_typeglob_expression_shapes_are_preserved() -> Result<(), String> {
+    let ast = parse_without_errors(
+        r#"while (<>) { my $line = <STDIN>; my @files = <*.pl>; *alias = *STDOUT; }"#,
+    )?;
+
+    let diamond = find_first(&ast, &|kind| matches!(kind, NodeKind::Diamond))
+        .ok_or("missing diamond operator")?;
+    assert!(matches!(diamond.kind, NodeKind::Diamond));
+
+    let readline = find_first(&ast, &|kind| {
+        matches!(kind, NodeKind::Readline { filehandle } if filehandle.as_deref() == Some("STDIN"))
+    })
+    .ok_or("missing readline filehandle")?;
+    assert!(matches!(readline.kind, NodeKind::Readline { .. }));
+
+    let glob =
+        find_first(&ast, &|kind| matches!(kind, NodeKind::Glob { pattern } if pattern == "*.pl"))
+            .ok_or("missing glob pattern")?;
+    assert!(matches!(glob.kind, NodeKind::Glob { .. }));
+
+    let mut typeglobs = Vec::new();
+    find_all(&ast, &|kind| matches!(kind, NodeKind::Typeglob { .. }), &mut typeglobs);
+    let names: Vec<&str> = typeglobs
+        .iter()
+        .filter_map(|node| match &node.kind {
+            NodeKind::Typeglob { name } => Some(name.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(names, vec!["alias", "STDOUT"]);
+
+    Ok(())
+}
