@@ -4763,6 +4763,182 @@ mod tests {
         Ok(())
     }
 
+    fn ranked_candidate(
+        source: InlineCandidateSourceKind,
+        priority: u8,
+        order: usize,
+        insert_text: &str,
+        filter_text: Option<&str>,
+        semantic_context: &SemanticInlineContext,
+    ) -> RankedCompletionItem {
+        let item = InlineCompletionItem {
+            insert_text: insert_text.into(),
+            filter_text: filter_text.map(str::to_string),
+            range: None,
+            command: None,
+        };
+        let score = InlineCandidateScore::for_candidate(source, priority, &item, semantic_context);
+        let metadata = InlineCandidateMetadata::for_candidate(source, &item, semantic_context);
+        RankedCompletionItem { score, order, metadata, item }
+    }
+
+    #[test]
+    fn ranking_calibration_prefers_effective_inc_module_over_generic_use_suggestion()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "package Demo;\nuse My::";
+        let character = "use My::".encode_utf16().count() as u32;
+        let prepared =
+            provider.prepare_context(source, 1, character).ok_or("expected use-module context")?;
+        let mut semantic = provider.semantic_context_for_prepared_context(&prepared);
+        semantic.available_modules = vec![ModuleFact { name: "My::App".into() }];
+
+        let normalized = provider.normalize_items(vec![
+            ranked_candidate(
+                InlineCandidateSourceKind::Syntax,
+                0,
+                0,
+                "strict;",
+                Some("strict"),
+                &semantic,
+            ),
+            ranked_candidate(
+                InlineCandidateSourceKind::Module,
+                0,
+                1,
+                "My::App;",
+                Some("My::App"),
+                &semantic,
+            ),
+        ]);
+
+        assert_eq!(normalized[0].insert_text, "My::App;");
+        assert_eq!(normalized[1].insert_text, "strict;");
+        Ok(())
+    }
+
+    #[test]
+    fn ranking_calibration_prefers_current_package_method_over_generic_receiver()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "package Demo;\nsub save {}\nsub caller {\n    $self->\n}\n";
+        let character = "    $self->".encode_utf16().count() as u32;
+        let prepared =
+            provider.prepare_context(source, 3, character).ok_or("expected receiver context")?;
+        let semantic = provider.semantic_context_for_source(source, &prepared);
+
+        let normalized = provider.normalize_items(vec![
+            ranked_candidate(
+                InlineCandidateSourceKind::Receiver,
+                0,
+                0,
+                "new()",
+                Some("new"),
+                &semantic,
+            ),
+            ranked_candidate(
+                InlineCandidateSourceKind::Receiver,
+                0,
+                1,
+                "save()",
+                Some("save"),
+                &semantic,
+            ),
+        ]);
+
+        assert_eq!(normalized[0].insert_text, "save()");
+        assert_eq!(normalized[1].insert_text, "new()");
+        Ok(())
+    }
+
+    #[test]
+    fn ranking_calibration_prefers_test_assertion_over_generic_return()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Test::More;\nmy $got = compute();\n\n";
+        let prepared = provider.prepare_context(source, 2, 0).ok_or("expected test context")?;
+        let semantic = provider.semantic_context_for_source(source, &prepared);
+
+        let normalized = provider.normalize_items(vec![
+            ranked_candidate(
+                InlineCandidateSourceKind::ContextualFallback,
+                0,
+                0,
+                "return $got;",
+                Some("$got"),
+                &semantic,
+            ),
+            ranked_candidate(
+                InlineCandidateSourceKind::ContextualFallback,
+                0,
+                1,
+                "is($got, $expected, 'test description');",
+                Some("is"),
+                &semantic,
+            ),
+        ]);
+
+        assert_eq!(normalized[0].insert_text, "is($got, $expected, 'test description');");
+        assert_eq!(normalized[1].insert_text, "return $got;");
+        Ok(())
+    }
+
+    #[test]
+    fn ranking_calibration_prefers_visible_guard_scalar_over_generic_condition()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub helper {\n    my $is_valid = validate();\n    return unless ";
+        let character = "    return unless ".encode_utf16().count() as u32;
+        let prepared =
+            provider.prepare_context(source, 2, character).ok_or("expected guard context")?;
+        let semantic = provider.semantic_context_for_source(source, &prepared);
+
+        let normalized = provider.normalize_items(vec![
+            ranked_candidate(
+                InlineCandidateSourceKind::ContextualFallback,
+                0,
+                0,
+                "$condition;",
+                Some("$condition"),
+                &semantic,
+            ),
+            ranked_candidate(
+                InlineCandidateSourceKind::Syntax,
+                0,
+                1,
+                "$is_valid;",
+                Some("$is_valid"),
+                &semantic,
+            ),
+        ]);
+
+        assert_eq!(normalized[0].insert_text, "$is_valid;");
+        assert_eq!(normalized[1].insert_text, "$condition;");
+        Ok(())
+    }
+
+    #[test]
+    fn ranking_calibration_keeps_signature_constructor_style_first()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub existing ($class, %args) {\n    my $self = bless {}, $class;\n    return $self;\n}\n\nsub new";
+        let character = "sub new".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 5, character);
+        let first = completions.items.first().ok_or("expected constructor completion")?;
+
+        assert!(
+            first.insert_text.starts_with(" ($class, %args) {"),
+            "signature-style constructor should keep signature arguments first: {}",
+            first.insert_text
+        );
+        assert!(
+            !first.insert_text.contains("my $class = shift;"),
+            "signature-style constructor should not fall back to shift style: {}",
+            first.insert_text
+        );
+        Ok(())
+    }
+
     #[test]
     fn test_normalize_items_orders_deduplicates_and_limits() {
         let provider = InlineCompletionProvider::new();
