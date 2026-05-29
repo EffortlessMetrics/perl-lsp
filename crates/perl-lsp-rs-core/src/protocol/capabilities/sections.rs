@@ -235,7 +235,6 @@ fn semantic_token_types() -> Vec<SemanticTokenType> {
         SemanticTokenType::MACRO,
         SemanticTokenType::VARIABLE,
         SemanticTokenType::PARAMETER,
-        // SemanticTokenType::LABEL is not available in lsp-types 0.97.
         SemanticTokenType::KEYWORD,
         SemanticTokenType::MODIFIER,
         SemanticTokenType::COMMENT,
@@ -246,6 +245,8 @@ fn semantic_token_types() -> Vec<SemanticTokenType> {
         SemanticTokenType::new("sql_string"), // DBI/SQL string context (Issue #2337)
         SemanticTokenType::new("sql_heredoc_keyword"), // SQL keyword in <<SQL heredoc (Issue #2059)
         SemanticTokenType::new("json_heredoc_key"), // JSON key in <<JSON heredoc (Issue #2059)
+        // SemanticTokenType::LABEL is not available in lsp-types 0.97.
+        SemanticTokenType::new("label"),
     ]
 }
 

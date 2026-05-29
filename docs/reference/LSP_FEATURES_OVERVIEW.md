@@ -125,9 +125,10 @@ Workspace-wide diagnostics: `lsp.workspace_diagnostics`.
 
 ### Semantic Tokens (`lsp.semantic_tokens`)
 
-23 token types including `namespace`, `class`, `function`, `method`,
-`variable`, `parameter`, `keyword`, `regexp`, and three embedded-language
-types (`sql_string`, `sql_heredoc_keyword`, `json_heredoc_key`).
+24 token types including `namespace`, `class`, `function`, `method`,
+`variable`, `parameter`, `keyword`, `regexp`, `label`, and three
+embedded-language types (`sql_string`, `sql_heredoc_keyword`,
+`json_heredoc_key`).
 
 13 modifiers including `declaration`, `readonly`, `deprecated`, `async`,
 `scalarVariable`, `arrayVariable`, `hashVariable`.

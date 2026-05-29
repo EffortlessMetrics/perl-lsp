@@ -208,8 +208,8 @@ const SCHEMA_VALIDATION_TEST_MARKERS: &[RequiredMarker] = &[
 
 const SEMANTIC_LEGEND_TEST_MARKERS: &[RequiredMarker] = &[
     RequiredMarker {
-        label: "SemanticTokenTypes.label negative receipt",
-        marker: "semantic_token_label_type_is_not_advertised_without_provider_support",
+        label: "SemanticTokenTypes.label positive receipt",
+        marker: "semantic_token_label_type_decodes_for_perl_labels",
     },
     RequiredMarker {
         label: "semantic-token legend bounds receipt",
