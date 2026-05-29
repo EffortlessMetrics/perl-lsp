@@ -47,6 +47,14 @@ fn quality_gate_cli_reports_active_temporary_exceptions_as_final_blockers() -> T
             .and_then(Value::as_bool),
         Some(true)
     );
+    assert_eq!(
+        payload.pointer("/temporary_exceptions/active/0/kind").and_then(Value::as_str),
+        Some("temporary_burndown")
+    );
+    assert_eq!(
+        payload.pointer("/temporary_exceptions/active/0/scope").and_then(Value::as_str),
+        Some("ripr_plus_total")
+    );
     assert_eq!(payload.get("next_actions").and_then(Value::as_array).map(Vec::len), Some(0));
 
     let markdown = fs::read_to_string(&summary)?;
@@ -78,6 +86,52 @@ fn quality_gate_cli_blocks_missing_exception_policy() -> TestResult {
     );
     let action = next_action(&payload, "quality_exception_policy_not_current")?;
     assert_eq!(action.get("reason").and_then(Value::as_str), Some("missing"));
+    assert_repair_contract(action)?;
+
+    Ok(())
+}
+
+#[test]
+fn quality_gate_cli_blocks_exception_without_temporary_burndown_scope() -> TestResult {
+    let root = repo_root()?;
+    let dir = tempdir()?;
+    let coverage = dir.path().join("coverage-baseline.json");
+    let policy = dir.path().join("quality-gate-exceptions.toml");
+    let receipt = dir.path().join("quality-gate.json");
+    let summary = dir.path().join("quality-gate.md");
+
+    write_coverage_receipt(&coverage, &current_head(&root)?, 97.1)?;
+    write_policy_text(
+        &policy,
+        &format!(
+            "{}\n[requirements]\nrequired_active = [\"ripr-total-burndown\"]\n{}",
+            policy_header("fail"),
+            r#"
+[[exception]]
+id = "ripr-total-burndown"
+kind = "permanent_bypass"
+owner = "proof-lane"
+reason = "transition burn-down remains active"
+final_target = "repo-wide ripr+ unresolved total = 0"
+evidence = "target/receipts/quality/ripr-plus.json"
+removal_criteria = "remove this exception when final enforcement is blocking"
+created = "2026-05-28"
+review_after = "2099-01-01"
+expires = "2099-12-31"
+"#
+        ),
+    )?;
+
+    let output =
+        patch_quality_gate_command(&root, &coverage, &policy, &receipt, &summary)?.output()?;
+    assert!(!output.status.success(), "non-temporary or unscoped exception must fail");
+
+    let payload: Value = serde_json::from_str(&fs::read_to_string(&receipt)?)?;
+    let action = next_action(&payload, "quality_exception_invalid")?;
+    assert_eq!(action.get("id").and_then(Value::as_str), Some("ripr-total-burndown"));
+    let reason = action.get("reason").and_then(Value::as_str).unwrap_or_default();
+    assert!(reason.contains("scope is required"), "{reason}");
+    assert!(reason.contains("kind must be temporary_burndown"), "{reason}");
     assert_repair_contract(action)?;
 
     Ok(())
@@ -286,10 +340,13 @@ due_review = "{due_review}"
 
 fn exception_entry(id: &str, review_after: &str, expires: &str) -> String {
     format!(
-        r#"
+        r##"
 [[exception]]
 id = "{id}"
+kind = "temporary_burndown"
+scope = "{scope}"
 owner = "proof-lane"
+issue = "#8197"
 reason = "transition burn-down remains active"
 final_target = "final proof target is met"
 evidence = "target/receipts/quality/quality-gate.json"
@@ -297,8 +354,17 @@ removal_criteria = "remove this exception when final enforcement is blocking"
 created = "2026-05-28"
 review_after = "{review_after}"
 expires = "{expires}"
-"#
+"##,
+        scope = exception_scope(id)
     )
+}
+
+fn exception_scope(id: &str) -> &'static str {
+    match id {
+        "ripr-total-burndown" => "ripr_plus_total",
+        "project-coverage-burndown" => "project_coverage",
+        _ => "quality_gate_transition",
+    }
 }
 
 fn next_action<'a>(receipt: &'a Value, kind: &str) -> TestResult<&'a Value> {

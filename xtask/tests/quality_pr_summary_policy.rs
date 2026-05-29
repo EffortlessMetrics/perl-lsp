@@ -272,7 +272,7 @@ fn write_review_guidance_receipt(path: &Path, head: &str) -> TestResult {
 fn write_active_exception_policy(path: &Path) -> TestResult {
     write_text(
         path,
-        r#"schema_version = 1
+        r##"schema_version = 1
 policy = "quality-gate-exceptions"
 owner = "EffortlessMetrics"
 status = "active"
@@ -284,7 +284,10 @@ required_active = ["ripr-total-burndown"]
 
 [[exception]]
 id = "ripr-total-burndown"
+kind = "temporary_burndown"
+scope = "ripr_plus_total"
 owner = "proof-lane"
+issue = "#8197"
 reason = "transition burn-down remains active"
 final_target = "repo-wide ripr+ unresolved total = 0"
 evidence = "target/receipts/quality/ripr-plus.json"
@@ -292,7 +295,7 @@ removal_criteria = "remove when RIPR+ total is zero"
 created = "2026-05-28"
 review_after = "2099-01-01"
 expires = "2099-12-31"
-"#,
+"##,
     )
 }
 

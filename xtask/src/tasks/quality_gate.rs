@@ -458,7 +458,13 @@ struct ExceptionRequirements {
 #[derive(Debug, Deserialize)]
 struct QualityException {
     id: String,
+    #[serde(default)]
+    kind: String,
+    #[serde(default)]
+    scope: String,
     owner: String,
+    #[serde(default)]
+    issue: Option<String>,
     reason: String,
     final_target: String,
     evidence: String,
@@ -620,6 +626,8 @@ fn exception_validation_errors(exception: &QualityException) -> Vec<String> {
     let mut errors = Vec::new();
     for (field, value) in [
         ("id", exception.id.as_str()),
+        ("kind", exception.kind.as_str()),
+        ("scope", exception.scope.as_str()),
         ("owner", exception.owner.as_str()),
         ("reason", exception.reason.as_str()),
         ("final_target", exception.final_target.as_str()),
@@ -632,6 +640,9 @@ fn exception_validation_errors(exception: &QualityException) -> Vec<String> {
         if value.trim().is_empty() {
             errors.push(format!("{field} is required"));
         }
+    }
+    if !exception.kind.trim().is_empty() && exception.kind != "temporary_burndown" {
+        errors.push("kind must be temporary_burndown".to_string());
     }
     errors
 }
@@ -651,7 +662,10 @@ fn quality_exception_receipt_entry(
 ) -> Value {
     json!({
         "id": exception.id,
+        "kind": exception.kind,
+        "scope": exception.scope,
         "owner": exception.owner,
+        "issue": exception.issue,
         "reason": exception.reason,
         "final_target": exception.final_target,
         "evidence": exception.evidence,
@@ -1150,7 +1164,7 @@ fn quality_exception_invalid_action(
         "path": display_path(path),
         "id": exception.id,
         "reason": errors.join("; "),
-        "repair": "Fill owner, reason, final_target, evidence, removal_criteria, review_after, and expires for the temporary quality exception.",
+        "repair": "Fill kind = \"temporary_burndown\", scope, owner, reason, final_target, evidence, removal_criteria, review_after, and expires for the temporary quality exception.",
         "verify": quality_exception_policy_command(path, true),
         "receipt": quality_exception_policy_command(path, false),
     })

@@ -45,6 +45,8 @@ An active temporary exception is not a final-enforcement pass.
 
 Every temporary quality exception must name:
 
+- `kind = "temporary_burndown"`
+- `scope`
 - `owner`
 - `reason`
 - `final_target`
@@ -60,10 +62,10 @@ exception is removed.
 
 ## Active Burn-Down Exceptions
 
-| ID | Final target | Removal signal |
-|---|---|---|
-| `ripr-total-burndown` | repo-wide ripr+ unresolved total = 0 | final quality gate requires total zero |
-| `project-coverage-burndown` | workspace project coverage >= 95% | Codecov project coverage is blocking at target |
+| ID | Scope | Final target | Removal signal |
+|---|---|---|---|
+| `ripr-total-burndown` | `ripr_plus_total` | repo-wide ripr+ unresolved total = 0 | final quality gate requires total zero |
+| `project-coverage-burndown` | `project_coverage` | workspace project coverage >= 95% | Codecov project coverage is blocking at target |
 
 ## Non-Goals
 
