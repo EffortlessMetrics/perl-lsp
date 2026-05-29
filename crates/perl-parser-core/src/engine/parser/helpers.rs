@@ -1181,8 +1181,9 @@ impl<'a> Parser<'a> {
             return false;
         }
 
-        // Exclude string comparison operators that are TokenKind::Identifier
-        if matches!(name, "eq" | "ne" | "lt" | "le" | "gt" | "ge" | "cmp" | "x" | "ISA") {
+        // Exclude string comparison operators and infix keyword operators that are
+        // TokenKind::Identifier. `isa` is the Perl 5.32+ infix class-check operator.
+        if matches!(name, "eq" | "ne" | "lt" | "le" | "gt" | "ge" | "cmp" | "x" | "ISA" | "isa") {
             return false;
         }
 
