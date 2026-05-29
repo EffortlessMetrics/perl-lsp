@@ -330,7 +330,9 @@ fn evaluate_new_ripr(head: &str, args: &QualityGateArgs) -> Result<GateEvaluatio
     if ripr_pr.status != "present" {
         next_actions.push(ripr_pr_receipt_action(&ripr_pr, head, args));
     }
-    if review.status != "present" {
+    let review_receipt_blocks_without_new_gaps =
+        matches!(review.status.as_str(), "missing" | "invalid" | "stale");
+    if review_receipt_blocks_without_new_gaps {
         next_actions.push(ripr_review_receipt_action(&review, head, args));
     }
 
@@ -338,7 +340,11 @@ fn evaluate_new_ripr(head: &str, args: &QualityGateArgs) -> Result<GateEvaluatio
         match ripr_pr.new_unresolved {
             Some(count) if count > 0 => {
                 next_actions.push(new_ripr_gap_action(count, &ripr_pr, &review, args));
-                if review.status == "present" && review.top_gaps.is_empty() {
+                if review.status != "present" {
+                    if !review_receipt_blocks_without_new_gaps {
+                        next_actions.push(ripr_review_receipt_action(&review, head, args));
+                    }
+                } else if review.top_gaps.is_empty() {
                     next_actions.push(ripr_review_guidance_gap_action(&review, head, args));
                 }
             }
@@ -816,10 +822,13 @@ fn read_review_guidance_receipt(path: &Path, expected_head: &str) -> ReviewGuida
         JsonReceipt::Present(payload) => {
             let receipt_head_sha =
                 payload.get("head_sha").and_then(Value::as_str).map(ToOwned::to_owned);
-            let mut status = if receipt_head_sha.as_deref() == Some(expected_head) {
-                "present"
-            } else {
+            let producer_status = payload.get("status").and_then(Value::as_str);
+            let mut status = if receipt_head_sha.as_deref() != Some(expected_head) {
                 "stale"
+            } else if matches!(producer_status, Some("error" | "incomplete")) {
+                producer_status.unwrap_or("incomplete")
+            } else {
+                "present"
             }
             .to_string();
             let top_gaps =

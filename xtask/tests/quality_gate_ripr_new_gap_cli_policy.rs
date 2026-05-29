@@ -298,6 +298,74 @@ fn quality_gate_cli_blocks_new_ripr_when_receipts_are_stale() -> TestResult {
 }
 
 #[test]
+fn quality_gate_cli_passes_when_review_guidance_generation_failed_without_new_gaps() -> TestResult {
+    let root = repo_root()?;
+    let dir = tempdir()?;
+    let ripr = dir.path().join("ripr-plus.json");
+    let ripr_pr = dir.path().join("repo-exposure.json");
+    let review = dir.path().join("comments.json");
+    let receipt = dir.path().join("quality-gate.json");
+    let summary = dir.path().join("quality-gate.md");
+    let head = current_head(&root)?;
+
+    write_ripr_plus_receipt(&ripr, &head)?;
+    write_ripr_pr_receipt(&ripr_pr, &head, 0)?;
+    write_error_review_guidance_receipt(&review, &head)?;
+
+    new_ripr_quality_gate_command(&root, &ripr, &ripr_pr, &review, &receipt, &summary)?
+        .assert()
+        .success();
+
+    let payload: Value = serde_json::from_str(&fs::read_to_string(&receipt)?)?;
+    assert_eq!(payload.pointer("/review_guidance/status").and_then(Value::as_str), Some("error"));
+    assert_eq!(payload.pointer("/decision").and_then(Value::as_str), Some("pass"));
+    assert_eq!(payload.get("next_actions").and_then(Value::as_array).map(Vec::len), Some(0));
+
+    Ok(())
+}
+
+#[test]
+fn quality_gate_cli_blocks_new_ripr_when_review_guidance_generation_failed_with_new_gaps()
+-> TestResult {
+    let root = repo_root()?;
+    let dir = tempdir()?;
+    let ripr = dir.path().join("ripr-plus.json");
+    let ripr_pr = dir.path().join("repo-exposure.json");
+    let review = dir.path().join("comments.json");
+    let receipt = dir.path().join("quality-gate.json");
+    let summary = dir.path().join("quality-gate.md");
+    let head = current_head(&root)?;
+
+    write_ripr_plus_receipt(&ripr, &head)?;
+    write_ripr_pr_receipt(&ripr_pr, &head, 1)?;
+    write_error_review_guidance_receipt(&review, &head)?;
+
+    let output =
+        new_ripr_quality_gate_command(&root, &ripr, &ripr_pr, &review, &receipt, &summary)?
+            .output()?;
+    assert!(
+        !output.status.success(),
+        "new RIPR gaps must fail when review guidance producer returned an error receipt"
+    );
+
+    let payload: Value = serde_json::from_str(&fs::read_to_string(&receipt)?)?;
+    assert_eq!(payload.pointer("/review_guidance/status").and_then(Value::as_str), Some("error"));
+    assert_eq!(payload.pointer("/ripr_pr/new_unresolved").and_then(Value::as_u64), Some(1));
+    next_action(&payload, "new_ripr_gap")?;
+    let action = next_action(&payload, "ripr_review_receipt_not_current")?;
+    assert_eq!(action.get("reason").and_then(Value::as_str), Some("error"));
+    assert!(
+        action.get("repair").and_then(Value::as_str).is_some_and(|repair| {
+            repair.contains("exact file, line, seam, and suggested proof")
+        }),
+        "failed review guidance must point agents back to receipt regeneration: {action}"
+    );
+    assert_blocking_actions_have_repair_contract(&payload)?;
+
+    Ok(())
+}
+
+#[test]
 fn quality_gate_cli_blocks_new_ripr_when_review_guidance_is_not_actionable() -> TestResult {
     let root = repo_root()?;
     let dir = tempdir()?;
@@ -542,6 +610,36 @@ fn write_non_actionable_review_guidance_receipt(path: &Path, head: &str) -> Test
             "summary_only": [],
             "suppressed": [],
             "warnings": []
+        }),
+    )
+}
+
+fn write_error_review_guidance_receipt(path: &Path, head: &str) -> TestResult {
+    write_json(
+        path,
+        json!({
+            "schema_version": "0.1",
+            "tool": "ripr",
+            "status": "error",
+            "base": "quality-gate-cli-test-base",
+            "base_sha": "quality-gate-cli-test-base-sha",
+            "head": "HEAD",
+            "head_sha": head,
+            "summary": {
+                "comments": 0,
+                "summary_only": 0,
+                "suppressed": 0
+            },
+            "comments": [],
+            "summary_only": [],
+            "suppressed": [],
+            "warnings": [
+                {
+                    "kind": "tool_error",
+                    "message": "ripr review-comments failed",
+                    "path": null
+                }
+            ]
         }),
     )
 }
