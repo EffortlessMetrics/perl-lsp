@@ -366,6 +366,16 @@ Current semantic inline UX receipt inventory:
 | `guard_condition_inline_completion_quality` | `ux_scenario_58_guard_condition_inline_completion_quality.rs` | Guard-condition continuations use visible scalar facts without unrelated result or receiver guesses. |
 | `real_workspace_module_import_inline_completion_quality` | `ux_scenario_59_real_workspace_module_import_inline_completion_quality.rs` | Effective `@INC`-aware module-import ghost text, `no lib` suppression, and workspace-root wildcard suppression. |
 
+The machine-readable dashboard for this inventory is:
+
+```bash
+cargo xtask semantic-inline-receipts --receipt target/receipts/semantic-inline-receipts.json
+```
+
+That dashboard aggregates the registered semantic inline UX workflows and keeps
+next-edit and optional AI explicitly future-gated. It is an inventory receipt;
+it does not run the UX scenarios or promote support status by itself.
+
 Still future or deliberately gated:
 
 - broader real-project UX receipts for inline quality beyond the current module

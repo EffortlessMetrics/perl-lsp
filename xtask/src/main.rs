@@ -183,6 +183,17 @@ enum Commands {
         receipt: PathBuf,
     },
 
+    /// Emit a semantic inline-completion UX receipt dashboard.
+    #[command(name = "semantic-inline-receipts")]
+    SemanticInlineReceipts {
+        /// Receipt JSON path to write.
+        #[arg(long, default_value = "target/receipts/semantic-inline-receipts.json")]
+        receipt: PathBuf,
+        /// Optional deterministic quality receipt to summarize when present.
+        #[arg(long, default_value = "target/receipts/inline-completion-quality.json")]
+        quality_receipt: PathBuf,
+    },
+
     /// Regenerate public Shields endpoint JSON for README badges.
     Badges {
         /// Check committed endpoints for drift without updating badges/.
@@ -2739,6 +2750,9 @@ fn main() -> Result<()> {
         },
         Commands::InlineCompletionSmoke { binary } => inline_completion_smoke::run(binary),
         Commands::InlineCompletionQuality { receipt } => inline_completion_quality::run(receipt),
+        Commands::SemanticInlineReceipts { receipt, quality_receipt } => {
+            semantic_inline_receipts::run(receipt, quality_receipt)
+        }
         Commands::Badges { check } => badges::run(check),
         Commands::CoverageBaseline {
             lcov,

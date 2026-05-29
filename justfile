@@ -1945,6 +1945,7 @@ coverage-proof base='origin/main':
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask queue_reconciler --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask ripr --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask inline_completion_quality --locked
+    "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask semantic_inline_receipts --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --locked \
         --test codecov_patch_gate_policy \
         --test quality_ci_wiring_policy \
@@ -1953,6 +1954,7 @@ coverage-proof base='origin/main':
         --test quality_gate_patch_coverage_cli_policy \
         --test quality_gate_ripr_new_gap_cli_policy \
         --test quality_pr_summary_policy \
+        --test semantic_inline_receipts_cli \
         --test ripr_new_gap_gate_workflow
     "$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov report --lcov --output-path target/lcov.info \
         --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/'
