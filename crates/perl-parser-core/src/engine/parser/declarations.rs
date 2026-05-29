@@ -304,13 +304,51 @@ impl<'a> Parser<'a> {
 
     /// Parse class declaration (Perl 5.38+)
     ///
-    /// Handles the full syntax: `class Name :isa(Parent) :isa(Parent2) { ... }`
+    /// Handles the full syntax:
+    ///   `class Name { ... }`
+    ///   `class Name VERSION { ... }`
+    ///   `class Name :isa(Parent) { ... }`
+    ///   `class Name VERSION :isa(Parent) { ... }`
+    ///
+    /// The optional VERSION is a decimal number (e.g. `1.23`) or a v-string
+    /// (e.g. `v1.2.3`).  It is consumed and ignored since `NodeKind::Class`
+    /// does not currently carry a version field.  This mirrors the way
+    /// `parse_package` silently absorbs a version token.
+    ///
     /// Multiple `:isa(...)` attributes may appear; each contributes a parent class.
     fn parse_class(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'class'
 
         let (name, _) = self.parse_qualified_name(false)?;
+
+        // Consume optional version: `1.23` (Number) or `v1.2.3` (VString).
+        // An Identifier starting with `v` followed by digits is also a v-string
+        // (e.g. `v5` before the lexer coalesces dots) — handle that path too.
+        if self.peek_kind() == Some(TokenKind::Number)
+            || self.peek_kind() == Some(TokenKind::VString)
+        {
+            self.tokens.next()?; // consume and discard version token
+        } else if let Some(TokenKind::Identifier) = self.peek_kind() {
+            if let Ok(token) = self.tokens.peek() {
+                if token.text.starts_with('v') && token.text.len() > 1 {
+                    // v-string identifier like `v5` — consume it and any trailing
+                    // `.N` number tokens that the lexer emits as separate tokens.
+                    self.tokens.next()?;
+                    while let Some(TokenKind::Number) = self.peek_kind() {
+                        if let Ok(num_token) = self.tokens.peek() {
+                            if num_token.text.starts_with('.') {
+                                self.tokens.next()?;
+                            } else {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
 
         // Parse class-level attributes (e.g. `:isa(Parent)`).
         // Pass BUILTIN_CLASS_ATTRIBUTES so `:isa` and `:does` don't produce
