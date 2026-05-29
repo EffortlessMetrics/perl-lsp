@@ -88,6 +88,7 @@ $worktreeRootFull = Get-FullPath $WorktreeRoot
 $targetRootFull = Get-FullPath $TargetRoot
 $worktreePath = Assert-ChildPath -Child (Join-Path $worktreeRootFull "$Issue-$Slug") -Parent $worktreeRootFull -Description 'Worktree path'
 $targetPath = Assert-ChildPath -Child (Join-Path $targetRootFull "$Issue-$Slug") -Parent $targetRootFull -Description 'Cargo target path'
+$verifiedMergedPr = $false
 
 if (-not (Test-Path -Path $canonical -PathType Container)) {
     Fail "Canonical checkout does not exist: $canonical"
@@ -102,6 +103,9 @@ if ($PrNumber -gt 0) {
     $pr = $prJson | ConvertFrom-Json
     if (-not $Abandoned -and [string]::IsNullOrWhiteSpace([string]$pr.mergedAt)) {
         Fail "PR #$PrNumber is not merged. Cleanup is blocked."
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace([string]$pr.mergedAt)) {
+        $verifiedMergedPr = $true
     }
 
     if ([string]::IsNullOrWhiteSpace($Branch)) {
@@ -140,9 +144,17 @@ if (-not [string]::IsNullOrWhiteSpace($Branch) -and -not $Abandoned) {
     $localBranches = @(Invoke-Git -Repository $canonical -GitArgs @('branch', '--format', '%(refname:short)', '--list', $Branch))
     if ($localBranches -contains $Branch) {
         $mergedBranches = @(Invoke-Git -Repository $canonical -GitArgs @('branch', '--merged', 'origin/main', '--format', '%(refname:short)'))
-        if ($mergedBranches -contains $Branch) {
-            if ($PSCmdlet.ShouldProcess($Branch, 'delete merged local branch')) {
-                Invoke-Git -Repository $canonical -GitArgs @('branch', '-d', $Branch) | Out-Null
+        $branchDeleteArgs = @('branch', '-d', $Branch)
+        $branchDeleteAction = 'delete merged local branch'
+
+        if ($mergedBranches -notcontains $Branch -and $verifiedMergedPr) {
+            $branchDeleteArgs = @('branch', '-D', $Branch)
+            $branchDeleteAction = 'delete squash-merged local branch'
+        }
+
+        if ($mergedBranches -contains $Branch -or $verifiedMergedPr) {
+            if ($PSCmdlet.ShouldProcess($Branch, $branchDeleteAction)) {
+                Invoke-Git -Repository $canonical -GitArgs $branchDeleteArgs | Out-Null
             }
         }
         else {
