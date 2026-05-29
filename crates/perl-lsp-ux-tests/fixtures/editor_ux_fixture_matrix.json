@@ -1667,6 +1667,35 @@
       ]
     },
     {
+      "id": "real_workspace_module_import_inline_completion_quality",
+      "scenario_file": "ux_scenario_59_real_workspace_module_import_inline_completion_quality.rs",
+      "subsystem_owner": "editor_trust",
+      "ci_tier": "pr",
+      "component": "completion",
+      "instrumentation": {
+        "run_receipt": false,
+        "first_useful_result": false,
+        "protocol_goldens": false
+      },
+      "user_journey": "request inline module-import completion in a CPAN-shaped workspace and record effective @INC reachability",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "dynamic inline-completion registration is observed for an LSP4IJ-shaped client",
+        "reachable lib modules are suggested from effective @INC",
+        "no lib cancellation suppresses lib module import suggestions",
+        "reachable local/lib/perl5 modules are suggested from effective @INC",
+        "workspace root does not leak root-only modules into import ghost text"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "real_workspace_providers",
       "scenario_file": "ux_scenario_20_real_workspace_providers.rs",
       "subsystem_owner": "editor_intelligence",

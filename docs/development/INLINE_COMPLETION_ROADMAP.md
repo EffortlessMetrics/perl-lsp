@@ -364,11 +364,12 @@ Current semantic inline UX receipt inventory:
 | `lexical_return_inline_completion_quality` | `ux_scenario_56_lexical_return_inline_completion_quality.rs` | Visible lexical return ghost text from real stdio requests. |
 | `loop_binding_inline_completion_quality` | `ux_scenario_57_loop_binding_inline_completion_quality.rs` | Visible collection loop bindings, hash key iteration, array preference, and safe singular naming. |
 | `guard_condition_inline_completion_quality` | `ux_scenario_58_guard_condition_inline_completion_quality.rs` | Guard-condition continuations use visible scalar facts without unrelated result or receiver guesses. |
+| `real_workspace_module_import_inline_completion_quality` | `ux_scenario_59_real_workspace_module_import_inline_completion_quality.rs` | Effective `@INC`-aware module-import ghost text, `no lib` suppression, and workspace-root wildcard suppression. |
 
 Still future or deliberately gated:
 
-- broader real-project UX receipts for inline quality beyond the current receipt
-  inventory;
+- broader real-project UX receipts for inline quality beyond the current module
+  import receipt and existing inventory;
 - next-edit suggestions;
 - optional AI candidate boundaries.
 

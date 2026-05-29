@@ -19,6 +19,7 @@ use perl_lsp_rs_core::providers::completion::collect_module_names_from_roots_wit
 use perl_lsp_rs_core::providers::inline_completion::InlineCompletionEnvironment;
 use perl_lsp_rs_core::providers::normalize_provider_decision_receipt;
 use perl_parser_core::source_file::is_perl_source_uri;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 mod debug_launch;
@@ -914,6 +915,7 @@ impl LspServer {
 
         let (include_paths, system_inc_paths, include_system_inc) =
             self.module_completion_roots_for_doc(uri, text, cursor_offset);
+        let include_paths = self.inline_module_scan_roots(uri, text, cursor_offset, include_paths);
         let mut available_modules = collect_module_names_from_roots_with_cache(
             fragment,
             &include_paths,
@@ -933,6 +935,22 @@ impl LspServer {
         available_modules.dedup();
 
         InlineCompletionEnvironment { available_modules }
+    }
+
+    fn inline_module_scan_roots(
+        &self,
+        uri: &str,
+        text: &str,
+        cursor_offset: usize,
+        include_paths: Vec<PathBuf>,
+    ) -> Vec<PathBuf> {
+        let Some(context) =
+            self.effective_inc_context_for_doc(Some(uri), Some(text), Some(cursor_offset))
+        else {
+            return include_paths;
+        };
+
+        filter_workspace_root_from_inline_module_scan_roots(&context.root, include_paths)
     }
 
     fn add_workspace_index_inline_modules(
@@ -1621,13 +1639,39 @@ impl LspServer {
     }
 }
 
+fn filter_workspace_root_from_inline_module_scan_roots(
+    workspace_root: &Path,
+    include_paths: Vec<PathBuf>,
+) -> Vec<PathBuf> {
+    include_paths
+        .into_iter()
+        .filter(|path| {
+            // The default workspace `.` root is valid for resolution, but
+            // inline import ghost text should not scan the whole project as
+            // if every root-level package path were deliberately reachable.
+            lexical_path_key(&workspace_root.join(path)) != lexical_path_key(workspace_root)
+        })
+        .collect()
+}
+
+fn lexical_path_key(path: &Path) -> String {
+    path.to_string_lossy()
+        .replace('\\', "/")
+        .replace("/./", "/")
+        .trim_end_matches("/.")
+        .trim_end_matches('/')
+        .to_string()
+}
+
 #[cfg(test)]
 mod tests {
+    use super::{filter_workspace_root_from_inline_module_scan_roots, lexical_path_key};
     use crate::LspServer;
     use crate::state::ClientCapabilities;
     use serde_json::json;
     use std::collections::HashSet;
     use std::io::Cursor;
+    use std::path::PathBuf;
 
     /// Build a minimal test server with custom capabilities applied.
     fn make_server_with_caps(caps: ClientCapabilities) -> LspServer {
@@ -1635,6 +1679,116 @@ mod tests {
             LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(Vec::<u8>::new()));
         *server.client_capabilities.lock() = caps;
         server
+    }
+
+    #[test]
+    fn lexical_path_key_normalizes_current_dir_components() {
+        assert_eq!(
+            lexical_path_key(std::path::Path::new("workspace/./lib")),
+            lexical_path_key(std::path::Path::new("workspace/lib")),
+            "current-directory components should not change lexical path keys"
+        );
+        assert_ne!(
+            lexical_path_key(std::path::Path::new("workspace/./lib")),
+            lexical_path_key(std::path::Path::new("workspace/t/lib")),
+            "different lexical paths must stay different after current-directory normalization"
+        );
+    }
+
+    #[test]
+    fn inline_module_scan_roots_excludes_workspace_root() {
+        let workspace = PathBuf::from("/workspace");
+        let lib = workspace.join("lib");
+        let local_lib = workspace.join("local").join("lib").join("perl5");
+        let external = PathBuf::from("/opt/perl5/lib");
+
+        let filtered = filter_workspace_root_from_inline_module_scan_roots(
+            &workspace,
+            vec![
+                workspace.clone(),
+                workspace.join("."),
+                lib.clone(),
+                local_lib.clone(),
+                external.clone(),
+            ],
+        );
+
+        assert_eq!(
+            filtered,
+            vec![lib, local_lib, external],
+            "inline module scan roots must drop workspace-root wildcards while preserving explicit include roots"
+        );
+    }
+
+    #[test]
+    fn inline_module_scan_roots_preserves_paths_without_context() {
+        let server = LspServer::default();
+        let include_paths = vec![PathBuf::from("/workspace"), PathBuf::from("/workspace/lib")];
+
+        let filtered = server.inline_module_scan_roots(
+            "file:///outside.pl",
+            "use My::",
+            "use My::".len(),
+            include_paths.clone(),
+        );
+
+        assert_eq!(
+            filtered, include_paths,
+            "without a document include context, inline scan roots should remain unchanged"
+        );
+    }
+
+    #[test]
+    fn inline_completion_environment_filters_workspace_root_scan_candidates()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::runtime::workspace_folder::WorkspaceFolderState;
+        use perl_lsp_rs_core::providers::inline_completion::InlineCompletionProvider;
+        use tempfile::TempDir;
+        use url::Url;
+
+        let temp = TempDir::new()?;
+        let workspace = temp.path().join("workspace");
+        let lib_module = workspace.join("lib").join("My").join("App.pm");
+        let root_only_module = workspace.join("My").join("RootOnly.pm");
+        std::fs::create_dir_all(lib_module.parent().ok_or("missing lib parent")?)?;
+        std::fs::create_dir_all(root_only_module.parent().ok_or("missing root parent")?)?;
+        std::fs::write(&lib_module, "package My::App;\n1;\n")?;
+        std::fs::write(&root_only_module, "package My::RootOnly;\n1;\n")?;
+
+        let doc_path = workspace.join("script.pl");
+        let doc_text = "use lib 'lib';\nuse My::";
+        std::fs::write(&doc_path, doc_text)?;
+
+        let workspace_uri =
+            Url::from_file_path(&workspace).map_err(|()| "failed workspace URI")?.to_string();
+        let doc_uri =
+            Url::from_file_path(&doc_path).map_err(|()| "failed document URI")?.to_string();
+
+        let server = LspServer::default();
+        let folder = WorkspaceFolderState::new(workspace_uri).with_path(workspace.clone());
+        server.workspace_folders.lock().push(folder);
+        assert_eq!(
+            server.workspace_folders.lock().len(),
+            1,
+            "test setup should register one workspace folder"
+        );
+
+        let provider = InlineCompletionProvider::new();
+        let context = provider.prepare_context(doc_text, 1, 8).ok_or("expected inline context")?;
+        let environment =
+            server.inline_completion_environment_for_context(&doc_uri, doc_text, 1, 8, &context);
+
+        assert!(
+            environment.available_modules.contains(&"My::App".to_string()),
+            "explicit use lib module should be available; got {:?}",
+            environment.available_modules
+        );
+        assert!(
+            !environment.available_modules.contains(&"My::RootOnly".to_string()),
+            "workspace-root-only module must not leak through scan roots; got {:?}",
+            environment.available_modules
+        );
+        Ok(())
     }
 
     /// When the client declares "label.location" in resolveSupport.properties,
