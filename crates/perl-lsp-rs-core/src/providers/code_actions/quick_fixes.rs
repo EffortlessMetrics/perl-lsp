@@ -1983,3 +1983,53 @@ fn valid_diagnostic_range(source: &str, range: (usize, usize)) -> Option<(usize,
     }
     Some((start, end))
 }
+
+/// Drop the undefined label from a `next LABEL`, `last LABEL`, or `redo LABEL`
+/// statement so it targets the innermost enclosing loop instead (PL410).
+///
+/// The diagnostic range covers the entire loop-control node (`next OUTER`).
+/// The fix replaces that span with just the bare operator (`next`), which is
+/// always valid when an enclosing loop exists at runtime.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((start, end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let text = &source[start..end];
+
+    let op = if text.starts_with("next") {
+        "next"
+    } else if text.starts_with("last") {
+        "last"
+    } else if text.starts_with("redo") {
+        "redo"
+    } else {
+        return Vec::new();
+    };
+
+    // Require at least one whitespace after the keyword, confirming there is a
+    // label to drop (bare `next;` would not reach this handler at all because
+    // the lint only fires on labelled forms).
+    let after_op = match text.get(op.len()..) {
+        Some(s) if s.starts_with(char::is_whitespace) => s,
+        _ => return Vec::new(),
+    };
+
+    let label = after_op.trim();
+    let title = format!("Drop label '{label}' from '{op}' (target innermost loop)");
+
+    vec![CodeAction {
+        title,
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start, end },
+                new_text: op.to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
