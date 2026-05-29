@@ -1983,3 +1983,38 @@ fn valid_diagnostic_range(source: &str, range: (usize, usize)) -> Option<(usize,
     }
     Some((start, end))
 }
+
+/// Drop undefined label from `next`/`last`/`redo LABEL` (PL410).
+///
+/// The only safe automated fix is to remove the label so the statement
+/// targets the innermost enclosing loop. For example, `next OUTER` becomes
+/// `next`. This is a runtime-fatal condition in Perl, so `is_preferred: true`.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((range_start, range_end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let Some(snippet) = source.get(range_start..range_end) else {
+        return Vec::new();
+    };
+
+    let op = snippet.split_whitespace().next().unwrap_or("");
+    if !matches!(op, "next" | "last" | "redo") {
+        return Vec::new();
+    }
+
+    vec![CodeAction {
+        title: format!("Remove undefined label — write '{op}' to target innermost loop"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: range_start, end: range_end },
+                new_text: op.to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
