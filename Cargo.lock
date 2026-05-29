@@ -1552,6 +1552,7 @@ name = "perl-diagnostics"
 version = "0.15.0"
 dependencies = [
  "perl-test-must",
+ "proptest",
  "serde",
  "serde_json",
 ]

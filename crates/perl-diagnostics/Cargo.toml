@@ -19,6 +19,7 @@ serde = ["dep:serde"]
 
 [dev-dependencies]
 perl-test-must = { path = "../perl-test-must" }
+proptest.workspace = true
 
 [lints]
 workspace = true
