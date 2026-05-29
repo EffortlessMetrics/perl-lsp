@@ -132,13 +132,38 @@ The pipeline must keep protocol concerns separate from candidate quality:
 Returned ranges must be editor-safe:
 
 - start at the current token or partial expression;
-- stay single-line unless a later explicit multiline contract is added;
+- stay single-line by default, with multiline ghost text allowed only under the
+  explicit policy below;
 - replace the typed prefix rather than duplicating it;
 - use LSP UTF-16 positions on the wire;
 - avoid fighting text typed after the request started.
 
 Bad ranges make ghost text feel like an editor bug. Range correctness should
 land before semantic expansion.
+
+### Multiline Ghost-Text Boundaries
+
+Multiline ghost text is future-gated. The current trusted contract remains
+single-line completion unless a later PR adds a narrow, fixture-backed exception.
+
+Any multiline exception must follow these rules:
+
+- automatic trigger stays single-line unless the case is explicitly whitelisted,
+  high-confidence, parse-safe, and backed by a real editor UX receipt;
+- invoked trigger may return richer multiline text only when the candidate has a
+  compatible replacement range, passes parse-safety, and has both positive and
+  negative fixtures;
+- multiline items must not conflict with `selectedCompletionInfo` or an open
+  completion popup;
+- hard reject zones remain silent regardless of trigger mode;
+- unsupported Perl object systems or constructor idioms should stay silent
+  instead of emitting a generic block.
+
+Good first candidates for future multiline work are narrow and idiomatic, such
+as an invoked-only constructor body in a file that already proves the local
+constructor style. Broad block generation, snippet-like scaffolds, and AI-backed
+multiline suggestions remain out of scope until deterministic receipts make the
+case safe.
 
 ### `selectedCompletionInfo`
 
