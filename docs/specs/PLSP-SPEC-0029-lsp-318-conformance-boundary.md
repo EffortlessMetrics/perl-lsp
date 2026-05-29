@@ -260,7 +260,14 @@ inline-completion binary smoke commands relevant to the touched editor surface.
 ## Claim Boundaries
 
 This spec may claim that `perl-lsp` has a documented LSP 3.18 selected-surface
-support boundary and negative gates for unimplemented optional surfaces.
+support boundary and negative gates for unimplemented optional surfaces,
+including:
+
+- capability-gated `SnippetTextEdit` workspace edits in
+  `WorkspaceEdit.documentChanges`, with plain `TextEdit` fallback for
+  unsupported clients
+- capability-gated `ApplyWorkspaceEditParams.metadata` on server-originated
+  `workspace/applyEdit` requests
 
 It may not claim:
 
