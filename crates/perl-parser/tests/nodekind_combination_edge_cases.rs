@@ -633,3 +633,253 @@ close $fh;
         "<$fh> should currently parse as Glob {{ pattern: \"$fh\" }} (see test doc); got {patterns:?}"
     );
 }
+
+/// Statement modifiers share a compact grammar across conditionals and loops.
+/// This locks each supported modifier keyword to `NodeKind::StatementModifier`
+/// so future parser changes cannot silently collapse one spelling into a plain
+/// call or binary expression.
+#[test]
+fn test_statement_modifier_keyword_matrix() {
+    let code = r#"
+print "ready" if $ready;
+print "missing" unless $ready;
+$tries++ while $tries < 3;
+$waited++ until $done;
+print $item for @items;
+print $entry foreach @entries;
+"#;
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+
+    let mut modifiers: std::collections::BTreeMap<String, usize> = Default::default();
+    fn walk(n: &Node, out: &mut std::collections::BTreeMap<String, usize>) {
+        if let NodeKind::StatementModifier { modifier, statement, condition } = &n.kind {
+            *out.entry(modifier.clone()).or_default() += 1;
+            assert!(
+                !matches!(statement.kind, NodeKind::MissingStatement | NodeKind::UnknownRest),
+                "StatementModifier `{modifier}` must keep its statement subtree"
+            );
+            assert!(
+                !matches!(condition.kind, NodeKind::MissingExpression | NodeKind::UnknownRest),
+                "StatementModifier `{modifier}` must keep its condition/list subtree"
+            );
+        }
+        n.for_each_child(|c| walk(c, out));
+    }
+    walk(&ast, &mut modifiers);
+
+    for expected in ["if", "unless", "while", "until", "for", "foreach"] {
+        assert_eq!(
+            modifiers.get(expected).copied().map_or(0, |count| count),
+            1,
+            "Missing exactly one StatementModifier `{expected}` in {modifiers:?}"
+        );
+    }
+    assert_eq!(
+        modifiers.values().sum::<usize>(),
+        6,
+        "Unexpected modifier inventory: {modifiers:?}"
+    );
+}
+
+/// Signature nodes are only useful to downstream semantic analysis if the
+/// parser preserves each parameter shape instead of reducing the whole
+/// signature to a flat token list.  Cover mandatory, optional, slurpy, and
+/// named-parameter forms.
+#[test]
+fn test_signature_parameter_nodekind_shapes() {
+    let code = r#"
+use feature 'signatures';
+sub configure($required, $optional = 10, @rest, :$named) {
+    return $required + $optional;
+}
+"#;
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+
+    let signature_count = count_nodes(&ast, &|k| matches!(k, NodeKind::Signature { .. }));
+    assert!(
+        signature_count >= 1,
+        "Expected at least the subroutine signature to surface, got {signature_count}"
+    );
+
+    let mandatory = count_nodes(&ast, &|k| matches!(k, NodeKind::MandatoryParameter { .. }));
+    let optional = count_nodes(&ast, &|k| matches!(k, NodeKind::OptionalParameter { .. }));
+    let slurpy = count_nodes(&ast, &|k| matches!(k, NodeKind::SlurpyParameter { .. }));
+    let named = count_nodes(&ast, &|k| matches!(k, NodeKind::NamedParameter { .. }));
+
+    assert!(mandatory >= 1, "Expected mandatory parameters, got {mandatory}");
+    assert!(optional >= 1, "Expected optional parameter with default, got {optional}");
+    assert!(slurpy >= 1, "Expected slurpy parameter, got {slurpy}");
+    assert_eq!(named, 1, "Expected :$named to surface as NamedParameter");
+}
+
+/// Package declarations have both statement and inline-block forms.  Cover the
+/// block-bearing package shape together with `use`/`no` arguments so provider
+/// traversals can rely on the stored module metadata and package body.
+#[test]
+fn test_package_use_no_block_shapes() {
+    let code = r#"
+package Outer::One;
+use strict;
+no warnings 'experimental::signatures';
+
+package Outer::Two {
+    use feature qw(signatures class);
+    no strict 'refs';
+
+    sub inside($name) {
+        return $name;
+    }
+}
+"#;
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+
+    let mut package_names = Vec::new();
+    let mut block_package_names = Vec::new();
+    let mut use_modules = Vec::new();
+    let mut no_modules = Vec::new();
+    fn walk(
+        n: &Node,
+        packages: &mut Vec<String>,
+        block_packages: &mut Vec<String>,
+        uses: &mut Vec<(String, Vec<String>)>,
+        nos: &mut Vec<(String, Vec<String>)>,
+    ) {
+        match &n.kind {
+            NodeKind::Package { name, block, .. } => {
+                packages.push(name.clone());
+                if block.is_some() {
+                    block_packages.push(name.clone());
+                }
+            }
+            NodeKind::Use { module, args, .. } => uses.push((module.clone(), args.clone())),
+            NodeKind::No { module, args, .. } => nos.push((module.clone(), args.clone())),
+            _ => {}
+        }
+        n.for_each_child(|c| walk(c, packages, block_packages, uses, nos));
+    }
+    walk(&ast, &mut package_names, &mut block_package_names, &mut use_modules, &mut no_modules);
+
+    assert!(
+        package_names.iter().any(|name| name == "Outer::One"),
+        "Missing statement package: {package_names:?}"
+    );
+    assert!(
+        package_names.iter().any(|name| name == "Outer::Two"),
+        "Missing block package: {package_names:?}"
+    );
+    assert_eq!(
+        block_package_names,
+        vec!["Outer::Two".to_string()],
+        "Only package Outer::Two should own a block"
+    );
+    assert!(
+        use_modules.iter().any(|(module, _)| module == "strict")
+            && use_modules.iter().any(|(module, args)| {
+                module == "feature" && args.iter().any(|arg| arg.contains("signatures"))
+            }),
+        "Expected strict and feature uses, got {use_modules:?}"
+    );
+    assert!(
+        no_modules.iter().any(|(module, args)| module == "warnings"
+            && args.iter().any(|arg| arg.contains("experimental::signatures")))
+            && no_modules
+                .iter()
+                .any(|(module, args)| module == "strict"
+                    && args.iter().any(|arg| arg.contains("refs"))),
+        "Expected warnings/strict no declarations with arguments, got {no_modules:?}"
+    );
+}
+
+/// Regex-family NodeKinds carry important flags beyond merely existing:
+/// modifiers, negated bind operators, replacement text, and embedded-code
+/// detection.  Exercise `Regex`, `Match`, and `Substitution` together.
+#[test]
+fn test_regex_family_payload_shapes() {
+    let code = r#"
+my $subject = "abc123";
+my $compiled = qr/a(?{ track() })c/ix;
+my $positive = $subject =~ /abc/i;
+my $negative = $subject !~ /def/ms;
+my $changed = $subject =~ s/(abc)(\d+)/$1-$2/ge;
+my $unchanged = $subject !~ s/xyz/uvw/r;
+"#;
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+
+    let mut regexes = Vec::new();
+    let mut matches = Vec::new();
+    let mut substitutions = Vec::new();
+    fn walk(
+        n: &Node,
+        regexes: &mut Vec<(String, String, bool)>,
+        matches_out: &mut Vec<(String, String, bool)>,
+        substitutions_out: &mut Vec<(String, String, String, bool)>,
+    ) {
+        match &n.kind {
+            NodeKind::Regex { pattern, modifiers, has_embedded_code, .. } => {
+                regexes.push((pattern.clone(), modifiers.clone(), *has_embedded_code));
+            }
+            NodeKind::Match { pattern, modifiers, negated, .. } => {
+                matches_out.push((pattern.clone(), modifiers.clone(), *negated));
+            }
+            NodeKind::Substitution { pattern, replacement, modifiers, negated, .. } => {
+                substitutions_out.push((
+                    pattern.clone(),
+                    replacement.clone(),
+                    modifiers.clone(),
+                    *negated,
+                ));
+            }
+            _ => {}
+        }
+        n.for_each_child(|c| walk(c, regexes, matches_out, substitutions_out));
+    }
+    walk(&ast, &mut regexes, &mut matches, &mut substitutions);
+
+    assert!(
+        regexes.iter().any(|(pattern, modifiers, embedded)| {
+            pattern.contains("track")
+                && modifiers.contains('i')
+                && modifiers.contains('x')
+                && *embedded
+        }),
+        "Expected qr// with embedded code and ix modifiers, got {regexes:?}"
+    );
+    assert!(
+        matches.iter().any(|(pattern, modifiers, negated)| {
+            pattern.contains("abc") && modifiers.contains('i') && !negated
+        }),
+        "Expected positive match with abc pattern and i modifier, got {matches:?}"
+    );
+    assert!(
+        matches.iter().any(|(pattern, modifiers, negated)| pattern.contains("def")
+            && modifiers.contains('m')
+            && modifiers.contains('s')
+            && *negated),
+        "Expected negated match with ms modifiers, got {matches:?}"
+    );
+    assert!(
+        substitutions.iter().any(|(pattern, replacement, modifiers, negated)| {
+            pattern.contains("abc")
+                && replacement == "$1-$2"
+                && modifiers.contains('g')
+                && modifiers.contains('e')
+                && !negated
+        }),
+        "Expected positive substitution payload, got {substitutions:?}"
+    );
+    assert!(
+        substitutions.iter().any(|(pattern, replacement, modifiers, negated)| pattern == "xyz"
+            && replacement == "uvw"
+            && modifiers == "r"
+            && *negated),
+        "Expected negated substitution payload, got {substitutions:?}"
+    );
+}
