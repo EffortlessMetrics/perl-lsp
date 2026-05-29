@@ -555,13 +555,12 @@ BEGIN { $main::extra = 'second BEGIN' }
 ///   * `<>` — bare diamond → `NodeKind::Diamond`
 ///   * `<STDIN>` / `<FH>` — bareword filehandle readline → `NodeKind::Readline`
 ///   * `<*.pat>` — file glob → `NodeKind::Glob { pattern }`
-///   * `<$fh>` — scalar-filehandle readline (an ambiguous Perl construct: the
-///     reference parser resolves at compile time by checking whether `$fh` is
-///     a filehandle, but a static parser cannot know that, so it picks one
-///     surface representation). The current implementation classifies
-///     `<$fh>` as `Glob { pattern: "$fh" }`; this test locks that behavior
-///     in to prevent silent regression and to make any future reclassification
-///     explicit.
+///   * `<$fh>` — a simple scalar variable in angle brackets is an indirect
+///     filehandle read per perlop (the scalar holds the filehandle), so it
+///     classifies as `NodeKind::Readline { filehandle: Some("$fh") }`, NOT a
+///     glob. Only glob metacharacters or path separators (e.g. `<$dir/*>`)
+///     make a scalar-bearing angle construct a `Glob`. This test locks the
+///     corrected classification (see PR #708 / issue #356).
 #[test]
 fn test_angle_bracket_variants_disambiguation() {
     let code = r#"
@@ -580,7 +579,7 @@ close FH;
 my @pms     = <*.pm>;
 my @configs = <conf/*.ini>;
 
-# Scalar-handle form — currently classified as Glob (see test doc).
+# Scalar-handle form — a simple scalar variable is an indirect Readline (see test doc).
 open my $fh, '<', '/etc/hosts' or die $!;
 my $line = <$fh>;
 close $fh;
@@ -593,11 +592,14 @@ close $fh;
     assert_eq!(diamonds, 1, "Expected exactly 1 Diamond node");
 
     let readlines = count_nodes(&ast, &|k| matches!(k, NodeKind::Readline { .. }));
-    assert_eq!(readlines, 2, "Expected 2 Readline nodes (<STDIN> and <FH>)");
+    assert_eq!(
+        readlines, 3,
+        "Expected 3 Readline nodes (<STDIN>, <FH>, and <$fh> simple-scalar handle)"
+    );
 
-    // Three Globs: <*.pm>, <conf/*.ini>, and <$fh> (parser quirk).
+    // Two Globs: <*.pm> and <conf/*.ini>. <$fh> is a Readline (see test doc).
     let globs = count_nodes(&ast, &|k| matches!(k, NodeKind::Glob { .. }));
-    assert_eq!(globs, 3, "Expected 3 Glob nodes (<*.pm>, <conf/*.ini>, <$fh>)");
+    assert_eq!(globs, 2, "Expected 2 Glob nodes (<*.pm> and <conf/*.ini>)");
 
     // Verify Readline filehandle text is preserved for both bareword forms.
     let mut handles: Vec<Option<String>> = Vec::new();
@@ -616,6 +618,10 @@ close $fh;
         handles.iter().any(|h| h.as_deref() == Some("FH")),
         "Readline for <FH> should preserve filehandle=Some(\"FH\"), got {handles:?}"
     );
+    assert!(
+        handles.iter().any(|h| h.as_deref() == Some("$fh")),
+        "<$fh> simple-scalar handle should be a Readline with filehandle=Some(\"$fh\"), got {handles:?}"
+    );
 
     // Verify Glob patterns are preserved, including the `$fh` quirk form.
     let mut patterns: Vec<String> = Vec::new();
@@ -629,8 +635,8 @@ close $fh;
     assert!(patterns.iter().any(|p| p.contains("*.pm")), "Glob `*.pm` missing in {patterns:?}");
     assert!(patterns.iter().any(|p| p.contains("*.ini")), "Glob `*.ini` missing in {patterns:?}");
     assert!(
-        patterns.iter().any(|p| p == "$fh"),
-        "<$fh> should currently parse as Glob {{ pattern: \"$fh\" }} (see test doc); got {patterns:?}"
+        !patterns.iter().any(|p| p == "$fh"),
+        "<$fh> is a simple scalar handle and must NOT be a Glob; it should be a Readline (see test doc); got {patterns:?}"
     );
 }
 
