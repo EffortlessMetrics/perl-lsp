@@ -346,6 +346,36 @@ fn inline_completion_use_namespace_returns_reachable_workspace_module() -> TestR
 }
 
 #[test]
+fn inline_completion_use_namespace_returns_file_local_use_lib_module() -> TestResult {
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    workspace.write("t/lib/My/FromTestLib.pm", "package My::FromTestLib;\n1;\n")?;
+
+    let mut harness = LspHarness::new_raw();
+    harness.initialize_ready(
+        &workspace.root_uri,
+        Some(json!({
+            "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+        })),
+    )?;
+
+    let uri = workspace.uri("script.pl");
+    harness.open(&uri, "use lib 't/lib';\nuse My::")?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, &uri, 1, 8, 1)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+    let module = item_with_insert_text(items, "My::FromTestLib;")?;
+
+    assert_eq!(module.pointer("/range/start/line"), Some(&json!(1)));
+    assert_eq!(module.pointer("/range/start/character"), Some(&json!(4)));
+    assert_eq!(module.pointer("/range/end/line"), Some(&json!(1)));
+    assert_eq!(module.pointer("/range/end/character"), Some(&json!(8)));
+    Ok(())
+}
+
+#[test]
 fn inline_completion_use_namespace_returns_indexed_open_workspace_module() -> TestResult {
     let workspace = support::lsp_harness::TempWorkspace::new()?;
 
