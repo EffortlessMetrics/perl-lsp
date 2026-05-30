@@ -7,6 +7,7 @@ use super::super::*;
 #[cfg(not(target_arch = "wasm32"))]
 use perl_lsp_rs_core::config::PerlOracleEnv;
 use perl_lsp_rs_core::config::WorkspaceConfig;
+use std::path::Path;
 
 impl LspServer {
     /// Handle workspace/textDocumentContent request
@@ -34,8 +35,7 @@ impl LspServer {
             });
         }
 
-        let workspace_config = self.workspace_config.lock().clone();
-        if let Some(content) = fetch_virtual_content(uri, &workspace_config) {
+        if let Some(content) = self.fetch_virtual_content(uri) {
             Ok(Some(json!({ "text": content })))
         } else {
             Err(JsonRpcError {
@@ -65,12 +65,35 @@ fn is_valid_virtual_content_uri(uri: &str) -> bool {
 }
 
 /// Fetch content for a virtual URI
-fn fetch_virtual_content(uri: &str, config: &WorkspaceConfig) -> Option<String> {
-    if let Some(module_name) = uri.strip_prefix("perldoc://") {
-        fetch_perldoc(module_name, config)
-            .map(|content| enrich_core_pragma_perldoc(module_name, content))
-    } else {
-        None
+impl LspServer {
+    fn fetch_virtual_content(&self, uri: &str) -> Option<String> {
+        if let Some(module_name) = uri.strip_prefix("perldoc://") {
+            self.fetch_workspace_perldoc(module_name)
+                .or_else(|| {
+                    let workspace_config = self.workspace_config.lock().clone();
+                    fetch_perldoc(module_name, &workspace_config)
+                })
+                .map(|content| enrich_core_pragma_perldoc(module_name, content))
+        } else {
+            None
+        }
+    }
+
+    fn fetch_workspace_perldoc(&self, module_name: &str) -> Option<String> {
+        if self.root_path.lock().is_none() && self.workspace_folders.lock().is_empty() {
+            return None;
+        }
+
+        let path = self.resolve_module_path(module_name, None)?;
+        let pod = match perl_pod::extract_pod_from_file(&path) {
+            Ok(pod) => pod,
+            Err(error) => {
+                tracing::warn!(module = module_name, path = %path.display(), %error, "Failed to extract local POD");
+                return None;
+            }
+        };
+
+        format_workspace_pod_virtual_content(module_name, &path, &pod)
     }
 }
 
@@ -82,6 +105,41 @@ fn enrich_core_pragma_perldoc(module_name: &str, content: String) -> String {
     };
 
     format!("Related virtual perldoc:\n- {related_uri}\n\n{content}")
+}
+
+fn format_workspace_pod_virtual_content(
+    module_name: &str,
+    path: &Path,
+    pod: &perl_pod::PodDoc,
+) -> Option<String> {
+    if pod.is_empty() {
+        return None;
+    }
+
+    let mut sections = vec![format!(
+        "Workspace virtual perldoc\nModule: {module_name}\nSource: {}",
+        path.display()
+    )];
+
+    if let Some(name) = &pod.name {
+        sections.push(format!("NAME\n{name}"));
+    }
+    if let Some(synopsis) = &pod.synopsis {
+        sections.push(format!("SYNOPSIS\n{synopsis}"));
+    }
+    if let Some(description) = &pod.description {
+        sections.push(format!("DESCRIPTION\n{description}"));
+    }
+
+    let mut method_names: Vec<&String> = pod.methods.keys().collect();
+    method_names.sort();
+    for method_name in method_names {
+        if let Some(method_doc) = pod.methods.get(method_name) {
+            sections.push(format!("METHOD {method_name}\n{method_doc}"));
+        }
+    }
+
+    Some(sections.join("\n\n"))
 }
 
 /// Fetch Perl documentation using perldoc
@@ -121,6 +179,9 @@ fn fetch_perldoc(_module: &str, _config: &WorkspaceConfig) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
 
     #[test]
     fn parser_fetch_perldoc_strict() {
@@ -147,7 +208,9 @@ mod tests {
     fn parser_virtual_content_perldoc_uri() {
         let uri = "perldoc://strict";
         let config = WorkspaceConfig::default();
-        let content = fetch_virtual_content(uri, &config);
+        let server = LspServer::new();
+        *server.workspace_config.lock() = config;
+        let content = server.fetch_virtual_content(uri);
         // May be None if perldoc is not available
         if let Some(content) = content {
             assert!(!content.is_empty());
@@ -158,7 +221,9 @@ mod tests {
     fn parser_virtual_content_invalid_scheme() {
         let uri = "invalid://some/path";
         let config = WorkspaceConfig::default();
-        let content = fetch_virtual_content(uri, &config);
+        let server = LspServer::new();
+        *server.workspace_config.lock() = config;
+        let content = server.fetch_virtual_content(uri);
         assert!(content.is_none());
     }
 
@@ -201,5 +266,130 @@ mod tests {
         let content = enrich_core_pragma_perldoc("vars", "vars docs".to_string());
 
         assert_eq!(content, "vars docs");
+    }
+
+    #[test]
+    fn parser_fetch_workspace_perldoc_requires_workspace() {
+        let server = LspServer::new();
+
+        assert!(server.fetch_workspace_perldoc("Local::Doc").is_none());
+    }
+
+    #[test]
+    fn parser_fetch_workspace_perldoc_reads_local_pod() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path().join("workspace");
+        let module_dir = root.join("lib").join("Local");
+        fs::create_dir_all(&module_dir)?;
+        fs::write(
+            module_dir.join("Doc.pm"),
+            "package Local::Doc;\n\n=head1 NAME\n\nLocal::Doc - local docs\n\n=head1 DESCRIPTION\n\nLocal POD.\n\n=head2 reset\n\nReset local state.\n\n=cut\n\n1;\n",
+        )?;
+
+        let server = LspServer::new();
+        let workspace_uri =
+            url::Url::from_directory_path(&root).map_err(|_| "failed to create workspace URI")?;
+        *server.workspace_folders.lock() = vec![
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(workspace_uri.to_string())
+                .with_path(root),
+        ];
+        {
+            let mut config = server.workspace_config.lock();
+            config.include_paths = vec!["lib".to_string()];
+            config.use_perl5lib = false;
+            config.use_system_inc = false;
+        }
+
+        let content =
+            server.fetch_workspace_perldoc("Local::Doc").ok_or("expected local workspace POD")?;
+
+        assert!(content.contains("Workspace virtual perldoc"));
+        assert!(content.contains("Module: Local::Doc"));
+        assert!(content.contains("Local::Doc - local docs"));
+        assert!(content.contains("DESCRIPTION\nLocal POD."));
+        assert!(content.contains("METHOD reset\nReset local state."));
+        Ok(())
+    }
+
+    #[test]
+    fn parser_workspace_text_document_content_returns_local_pod() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path().join("workspace");
+        let module_dir = root.join("lib").join("Local");
+        fs::create_dir_all(&module_dir)?;
+        fs::write(
+            module_dir.join("Doc.pm"),
+            "package Local::Doc;\n\n=head1 NAME\n\nLocal::Doc - local docs\n\n=head1 DESCRIPTION\n\nLocal POD.\n\n=cut\n\n1;\n",
+        )?;
+
+        let server = LspServer::new();
+        let workspace_uri =
+            url::Url::from_directory_path(&root).map_err(|_| "failed to create workspace URI")?;
+        *server.workspace_folders.lock() = vec![
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(workspace_uri.to_string())
+                .with_path(root),
+        ];
+        {
+            let mut config = server.workspace_config.lock();
+            config.include_paths = vec!["lib".to_string()];
+            config.use_perl5lib = false;
+            config.use_system_inc = false;
+        }
+
+        let result = server
+            .handle_text_document_content(Some(json!({ "uri": "perldoc://Local::Doc" })))?
+            .ok_or("expected workspace textDocumentContent result")?;
+        let text = result.get("text").and_then(Value::as_str).ok_or("expected text result")?;
+
+        assert!(text.contains("Workspace virtual perldoc"));
+        assert!(text.contains("Local::Doc - local docs"));
+        Ok(())
+    }
+
+    #[test]
+    fn parser_fetch_workspace_perldoc_ignores_local_module_without_pod() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path().join("workspace");
+        let module_dir = root.join("lib").join("Local");
+        fs::create_dir_all(&module_dir)?;
+        fs::write(module_dir.join("NoPod.pm"), "package Local::NoPod;\n1;\n")?;
+
+        let server = LspServer::new();
+        let workspace_uri =
+            url::Url::from_directory_path(&root).map_err(|_| "failed to create workspace URI")?;
+        *server.workspace_folders.lock() = vec![
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(workspace_uri.to_string())
+                .with_path(root),
+        ];
+        {
+            let mut config = server.workspace_config.lock();
+            config.include_paths = vec!["lib".to_string()];
+            config.use_perl5lib = false;
+            config.use_system_inc = false;
+        }
+
+        assert!(server.fetch_workspace_perldoc("Local::NoPod").is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn parser_formats_workspace_pod_virtual_content() -> TestResult {
+        let mut pod = perl_pod::PodDoc {
+            name: Some("Local::Doc - local docs".to_string()),
+            synopsis: Some("use Local::Doc;".to_string()),
+            description: Some("Local documentation from the workspace.".to_string()),
+            methods: std::collections::HashMap::new(),
+        };
+        pod.methods.insert("reset".to_string(), "Reset local state.".to_string());
+
+        let content =
+            format_workspace_pod_virtual_content("Local::Doc", Path::new("lib/Local/Doc.pm"), &pod)
+                .ok_or("expected workspace POD content")?;
+
+        assert!(content.contains("Workspace virtual perldoc"));
+        assert!(content.contains("Module: Local::Doc"));
+        assert!(content.contains("Local::Doc - local docs"));
+        assert!(content.contains("METHOD reset\nReset local state."));
+        Ok(())
     }
 }

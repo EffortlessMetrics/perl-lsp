@@ -197,6 +197,63 @@ fn text_document_content_perldoc_warnings_links_back_to_strict_or_unavailable() 
 }
 
 #[test]
+fn text_document_content_perldoc_local_module_prefers_workspace_pod() -> TestResult {
+    let (mut harness, _workspace) = LspHarness::with_workspace(&[(
+        "lib/Local/VirtualDoc.pm",
+        r#"package Local::VirtualDoc;
+
+=head1 NAME
+
+Local::VirtualDoc - workspace virtual docs
+
+=head1 SYNOPSIS
+
+use Local::VirtualDoc;
+
+=head1 DESCRIPTION
+
+Local POD served from the workspace module file.
+
+=head2 reset
+
+Reset the local virtual document fixture.
+
+=cut
+
+1;
+"#,
+    )])?;
+
+    let result = harness.request(
+        "workspace/textDocumentContent",
+        json!({ "uri": "perldoc://Local::VirtualDoc" }),
+    )?;
+    let text = result
+        .get("text")
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("workspace/textDocumentContent missing result.text: {result}"))?;
+
+    assert!(
+        text.contains("Workspace virtual perldoc"),
+        "local module should use workspace POD, got: {text}"
+    );
+    assert!(text.contains("Module: Local::VirtualDoc"), "module heading missing: {text}");
+    assert!(
+        text.contains("Local::VirtualDoc - workspace virtual docs"),
+        "NAME POD missing: {text}"
+    );
+    assert!(
+        text.contains("Local POD served from the workspace module file."),
+        "DESCRIPTION POD missing: {text}"
+    );
+    assert!(
+        text.contains("METHOD reset\nReset the local virtual document fixture."),
+        "head2 method POD missing: {text}"
+    );
+    Ok(())
+}
+
+#[test]
 fn text_document_content_refresh_uses_bounded_server_request_id() -> TestResult {
     let output = OutputCapture::default();
     let server = LspServer::with_output(Arc::new(Mutex::new(

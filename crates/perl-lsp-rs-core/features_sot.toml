@@ -1146,8 +1146,11 @@ spec = "LSP 3.18"
 area = "workspace"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-rs/tests/lsp_virtual_content_tests.rs"]
-description = "workspace/textDocumentContent request (@proposed)"
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_virtual_content_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_text_document_content_tests.rs",
+]
+description = "workspace/textDocumentContent request for perldoc:// virtual documents, preferring workspace POD for locally resolved modules and falling back to external perldoc (@proposed)"
 
 [[feature]]
 id = "lsp.text_document_content_refresh"
