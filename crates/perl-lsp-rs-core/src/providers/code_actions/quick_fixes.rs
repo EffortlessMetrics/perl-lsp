@@ -1983,3 +1983,104 @@ fn valid_diagnostic_range(source: &str, range: (usize, usize)) -> Option<(usize,
     }
     Some((start, end))
 }
+
+/// Drop the label from a `next LABEL`, `last LABEL`, or `redo LABEL` statement (PL410).
+///
+/// When the named label is not defined anywhere in the file, Perl dies at
+/// runtime with "Label not found". Dropping the label makes the statement
+/// target the innermost enclosing loop — the only safe automated fix.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((range_start, _range_end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+
+    // Locate the operator in source at the diagnostic range.
+    let range_text = match source.get(range_start..) {
+        Some(t) => t,
+        None => return Vec::new(),
+    };
+    let ws_len = first_non_whitespace(range_text).unwrap_or(0);
+    let from_op = match range_text.get(ws_len..) {
+        Some(t) => t,
+        None => return Vec::new(),
+    };
+
+    // Validate: must start with a recognized loop-control keyword followed by whitespace.
+    let op = ["next", "last", "redo"].iter().copied().find(|&k| {
+        from_op.starts_with(k)
+            && from_op
+                .get(k.len()..)
+                .map_or(false, |rest| rest.starts_with(|c: char| c.is_whitespace()))
+    });
+    let Some(op) = op else {
+        return Vec::new();
+    };
+
+    // Find the label name from the message to include in the title.
+    let label_name = parse_loop_control_label(&diagnostic.message).unwrap_or_default();
+
+    // Find and measure the " LABEL" span after the keyword.
+    let after_op = match from_op.get(op.len()..) {
+        Some(t) => t,
+        None => return Vec::new(),
+    };
+    let span = loop_control_label_span(after_op);
+    if span == 0 {
+        return Vec::new();
+    }
+
+    let delete_start = range_start + ws_len + op.len();
+    let delete_end = delete_start + span;
+
+    if !source.is_char_boundary(delete_end) {
+        return Vec::new();
+    }
+
+    let title = if label_name.is_empty() {
+        format!("Drop undefined label and use '{op}' to target the innermost loop")
+    } else {
+        format!("Drop undefined label '{label_name}' and use '{op}' to target the innermost loop")
+    };
+
+    vec![CodeAction {
+        title,
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: delete_start, end: delete_end },
+                new_text: String::new(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
+/// Parse the label name from a PL410 message.
+///
+/// Message form: `` `{op} {label}` references a label ... ``
+fn parse_loop_control_label(message: &str) -> Option<String> {
+    let start = message.find('`')? + 1;
+    let inner = &message[start..];
+    let end = inner.find('`')?;
+    let inside = &inner[..end]; // e.g., "next OUTER"
+    inside.split_whitespace().nth(1).map(str::to_string)
+}
+
+/// Measure the " LABEL" span (whitespace + identifier) after the op keyword.
+fn loop_control_label_span(after_op: &str) -> usize {
+    let ws_len = after_op.len() - after_op.trim_start().len();
+    if ws_len == 0 {
+        return 0;
+    }
+    let label_part = &after_op[ws_len..];
+    let label_len =
+        label_part.find(|c: char| !c.is_alphanumeric() && c != '_').unwrap_or(label_part.len());
+    if label_len == 0 {
+        return 0;
+    }
+    ws_len + label_len
+}
