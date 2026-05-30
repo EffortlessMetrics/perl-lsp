@@ -120,13 +120,17 @@ struct InlineCompletionScenario {
 }
 
 pub fn run(receipt: PathBuf) -> Result<()> {
+    run_with_scenarios(receipt, scenarios())
+}
+
+fn run_with_scenarios(receipt: PathBuf, scenario_set: &[Scenario]) -> Result<()> {
     let provider = InlineCompletionProvider::new();
     let mut receipt_data = InlineCompletionQualityReceipt {
         schema_version: "inline-completion-quality.v1",
         provider: "inline_completion",
         provider_action: "deterministic_fixture_quality",
         claim_boundary: "local deterministic fixture receipt only; no telemetry upload and no AI/provider behavior change",
-        fixtures_total: scenarios().len(),
+        fixtures_total: scenario_set.len(),
         fixtures_passed: 0,
         latency_p95_ms: 0,
         checks: InlineCompletionQualityChecks::default(),
@@ -136,7 +140,7 @@ pub fn run(receipt: PathBuf) -> Result<()> {
     let mut latencies = Vec::new();
     let mut failures = Vec::new();
 
-    for scenario in scenarios() {
+    for scenario in scenario_set {
         let started = Instant::now();
         let result = run_scenario(&provider, scenario);
         let latency_ms = started.elapsed().as_millis();
@@ -1266,6 +1270,48 @@ mod tests {
             .and_then(Value::as_u64)
             .ok_or_else(|| eyre!("missing module returned_items source receipt"))?;
         assert!(module_returned_items > 0);
+
+        Ok(())
+    }
+
+    #[test]
+    fn inline_completion_quality_receipt_records_scenario_errors() -> Result<()> {
+        let temp = TempDir::new()?;
+        let receipt_path = temp.path().join("inline-completion-quality.json");
+        let scenario_set = [Scenario {
+            name: "bad_fixture",
+            source_name: "unit_source",
+            source: "missing cursor",
+            available_modules: &[],
+            hard_zone: false,
+            assertion: ScenarioAssertion::Suggestion {
+                first: Some("strict;"),
+                expected: &["strict;"],
+                not_expected: &[],
+            },
+        }];
+
+        let error = run_with_scenarios(receipt_path.clone(), &scenario_set)
+            .expect_err("invalid fixture should fail the quality receipt");
+
+        assert!(
+            error.to_string().contains("inline-completion quality receipt failed 1 fixture(s)")
+        );
+        let receipt: Value = serde_json::from_slice(&fs::read(&receipt_path)?)?;
+        assert_eq!(receipt.pointer("/fixtures_passed").and_then(Value::as_u64), Some(0));
+        assert_eq!(
+            receipt.pointer("/sources/unit_source/expected").and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(receipt.pointer("/sources/unit_source/failed").and_then(Value::as_u64), Some(1));
+        assert_eq!(
+            receipt.pointer("/sources/unit_source/returned_items").and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            receipt.pointer("/scenarios/0/notes/0").and_then(Value::as_str),
+            Some("fixture must include <<CURSOR>> marker")
+        );
 
         Ok(())
     }
