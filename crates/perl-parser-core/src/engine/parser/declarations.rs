@@ -75,6 +75,18 @@ impl<'a> Parser<'a> {
     /// `:does(Role)` is reserved for future Perl versions.
     const BUILTIN_CLASS_ATTRIBUTES: &'static [&'static str] = &["isa", "does"];
 
+    /// Built-in variable-level attributes from the Perl 5.38+ `field` feature
+    /// (Object::Pad style) and common pragmas.
+    ///
+    /// `:param`, `:reader`, `:writer`, `:accessor`, `:predicate`, `:weak` are defined
+    /// by Perl 5.38+ `use feature 'class'` (and the Object::Pad CPAN module).
+    /// `:shared` is defined by `threads::shared`.
+    ///
+    /// Custom attributes are still allowed (via `Attribute::Handlers` etc.) and
+    /// produce a soft warning, not a hard error.
+    const BUILTIN_VAR_ATTRIBUTES: &'static [&'static str] =
+        &["param", "reader", "writer", "accessor", "predicate", "weak", "shared"];
+
     /// Return `true` if `name` is a known built-in subroutine attribute.
     fn is_builtin_sub_attribute(name: &str) -> bool {
         Self::BUILTIN_SUB_ATTRIBUTES.contains(&name)
@@ -200,6 +212,15 @@ impl<'a> Parser<'a> {
     /// Convenience wrapper for the common subroutine/method case (no extra-known attributes).
     fn parse_declaration_attributes(&mut self) -> ParseResult<Vec<String>> {
         self.parse_declaration_attributes_with_extras(&[])
+    }
+
+    /// Parse variable declaration attributes (`:shared`, `:param`, `:reader`, etc.).
+    ///
+    /// Delegates to `parse_declaration_attributes_with_extras` with the known
+    /// variable/field attributes whitelisted so they do not trigger the
+    /// "unknown subroutine attribute" soft warning.
+    fn parse_variable_attributes(&mut self) -> ParseResult<Vec<String>> {
+        self.parse_declaration_attributes_with_extras(Self::BUILTIN_VAR_ATTRIBUTES)
     }
 
     /// Parse subroutine definition

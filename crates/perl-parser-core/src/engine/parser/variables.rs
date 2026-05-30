@@ -16,12 +16,11 @@ impl<'a> Parser<'a> {
                 let var = self.parse_variable_list_item()?;
 
                 // Parse optional attributes for this specific variable
-                let mut var_attributes = Vec::new();
-                while self.peek_kind() == Some(TokenKind::Colon) {
-                    self.tokens.next()?; // consume colon
-                    let attr_token = self.expect(TokenKind::Identifier)?;
-                    var_attributes.push(attr_token.text.to_string());
-                }
+                let var_attributes = if self.peek_kind() == Some(TokenKind::Colon) {
+                    self.parse_variable_attributes()?
+                } else {
+                    Vec::new()
+                };
 
                 // Create a node that includes both the variable and its attributes
                 let var_with_attrs = if var_attributes.is_empty() {
@@ -101,12 +100,11 @@ impl<'a> Parser<'a> {
             };
 
             // Parse optional attributes
-            let mut attributes = Vec::new();
-            while self.peek_kind() == Some(TokenKind::Colon) {
-                self.tokens.next()?; // consume colon
-                let attr_token = self.expect(TokenKind::Identifier)?;
-                attributes.push(attr_token.text.to_string());
-            }
+            let attributes = if self.peek_kind() == Some(TokenKind::Colon) {
+                self.parse_variable_attributes()?
+            } else {
+                Vec::new()
+            };
 
             // Accept both simple `=` and compound operators (`||=`, `//=`, `.=`, etc.)
             // Perl allows `our $x ||= 0;` and `my $y .= "suffix";`
