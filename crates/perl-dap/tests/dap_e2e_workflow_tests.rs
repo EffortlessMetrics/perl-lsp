@@ -50,9 +50,14 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 // ─── Test 1: single breakpoint → inspect → continue → exit ───────────────────
 
 /// Validates the core debugging workflow:
-/// launch with stopOnEntry=false → set one breakpoint → configurationDone →
+/// launch with stopOnEntry=false → set one breakpoint (verified) → configurationDone →
 /// wait for stopped(reason=breakpoint) → stackTrace → scopes → variables(non-empty)
 /// → continue → terminated.
+///
+/// This test is the DETERMINISTIC LINE CONTRACT TEST for the breakpoint subsystem:
+/// it asserts that the adapter-resolved line equals the stopped-frame line.  This
+/// proves the debugger contract: `setBreakpoints` resolves to a line, and when the
+/// debugger stops at that breakpoint the `stackTrace` reports the same line.
 #[test]
 fn test_e2e_single_breakpoint_hit_inspect_continue() -> TestResult {
     if !perl_available() {
@@ -72,16 +77,10 @@ fn test_e2e_single_breakpoint_hit_inspect_continue() -> TestResult {
     session.launch(&script_str)?;
 
     // DAP ordering: setBreakpoints BEFORE configurationDone.
-    let bp_body = session.set_breakpoints(&script_str, &[BP_LINE_1])?;
-    let bp_body = bp_body.ok_or("setBreakpoints returned no body")?;
-    let breakpoints = bp_body
-        .get("breakpoints")
-        .and_then(|v| v.as_array())
-        .ok_or("setBreakpoints body missing `breakpoints` array")?;
-    assert!(
-        !breakpoints.is_empty(),
-        "setBreakpoints response must contain at least one breakpoint entry"
-    );
+    // set_breakpoints_checked asserts verified=true and returns adapter-resolved lines.
+    let resolved = session.set_breakpoints_checked(&script_str, &[BP_LINE_1])?;
+    let resolved_line =
+        resolved.first().copied().ok_or("set_breakpoints_checked returned empty resolved lines")?;
 
     session.configuration_done()?;
 
@@ -101,9 +100,13 @@ fn test_e2e_single_breakpoint_hit_inspect_continue() -> TestResult {
         source_path.contains("workflow_e2e"),
         "stack frame source path `{source_path}` should refer to the workflow fixture"
     );
+
+    // LINE CONTRACT: the stopped-frame line must equal the adapter-resolved line.
+    // For BP_LINE_1 (line 4, `my $x = 10;`) there is no remap, so resolved == requested.
     assert_eq!(
-        frame_line, BP_LINE_1 as i64,
-        "stack frame line must be {BP_LINE_1} (BP_LINE_1), got {frame_line}"
+        frame_line, resolved_line,
+        "stack frame line must equal the adapter-resolved breakpoint line \
+         (resolved={resolved_line}, BP_LINE_1={BP_LINE_1}), got {frame_line}"
     );
 
     // Retrieve locals scope reference, then variables.
@@ -131,13 +134,17 @@ fn test_e2e_single_breakpoint_hit_inspect_continue() -> TestResult {
 
 // ─── Test 2: multi-breakpoint sequence ────────────────────────────────────────
 
-/// Validates that multiple breakpoints are hit in source order.
+/// Validates that multiple breakpoints are hit in source order with correct line reporting.
 ///
 /// Uses BP_LINE_2 and BP_LINE_3 (not BP_LINE_1) because BP_LINE_1 is the
 /// initial implicit stop line: `perl -d` pauses there before processing any
 /// stdin, and the initial `c` from `configurationDone` runs past it without
 /// re-triggering.  Breakpoints at BP_LINE_2 and BP_LINE_3 are reliably hit
 /// in sequence.
+///
+/// This test uses `set_breakpoints_checked` (verified=true + adapter-resolved lines)
+/// and `wait_stopped_with_frame` (stopped event + immediate stackTrace) to
+/// assert that stopped-frame lines match the adapter-resolved lines exactly.
 #[test]
 fn test_e2e_multi_breakpoint_sequence() -> TestResult {
     if !perl_available() {
@@ -155,42 +162,57 @@ fn test_e2e_multi_breakpoint_sequence() -> TestResult {
     let mut session = DapWorkflowSession::new(timeout)?;
 
     session.launch(&script_str)?;
-    session.set_breakpoints(&script_str, &[BP_LINE_2, BP_LINE_3])?;
-    session.configuration_done()?;
 
-    // First stop — must be at BP_LINE_2.
-    let first_stop = session.wait_stopped()?;
-    assert_eq!(
-        first_stop.reason, "breakpoint",
-        "first stop reason must be `breakpoint`, got `{}`",
-        first_stop.reason
+    // set_breakpoints_checked: asserts verified=true for each entry, returns resolved lines.
+    let resolved = session.set_breakpoints_checked(&script_str, &[BP_LINE_2, BP_LINE_3])?;
+    let resolved_line_2 =
+        resolved.first().copied().ok_or("expected at least one resolved breakpoint line")?;
+    let resolved_line_3 =
+        resolved.get(1).copied().ok_or("expected at least two resolved breakpoint lines")?;
+
+    // Resolved lines must be in ascending order (source order guarantee).
+    assert!(
+        resolved_line_2 < resolved_line_3,
+        "adapter-resolved breakpoint lines must be in ascending source order: \
+         first={resolved_line_2}, second={resolved_line_3}"
     );
 
-    // Verify the stack frame line — the stopped event doesn't carry a line
-    // number, but stackTrace always does.
-    let (_, _, first_line) = session.stack_trace(first_stop.thread_id)?;
+    session.configuration_done()?;
+
+    // First stop — must be at BP_LINE_2 (resolved).
+    // wait_stopped_with_frame combines stopped event + immediate stackTrace.
+    let first = session.wait_stopped_with_frame()?;
     assert_eq!(
-        first_line, BP_LINE_2 as i64,
-        "first breakpoint must be at line {BP_LINE_2}, stack frame reports {first_line}"
+        first.reason, "breakpoint",
+        "first stop reason must be `breakpoint`, got `{}`",
+        first.reason
+    );
+    assert_eq!(
+        first.line,
+        resolved_line_2,
+        "first breakpoint: stopped-frame line must equal adapter-resolved line \
+         (resolved={resolved_line_2}, BP_LINE_2={BP_LINE_2}), got {line}",
+        line = first.line
     );
 
     // Continue to second breakpoint.
-    session.continue_exec(first_stop.thread_id)?;
-    let second_stop = session.wait_stopped()?;
+    session.continue_exec(first.thread_id)?;
+    let second = session.wait_stopped_with_frame()?;
     assert_eq!(
-        second_stop.reason, "breakpoint",
+        second.reason, "breakpoint",
         "second stop reason must be `breakpoint`, got `{}`",
-        second_stop.reason
+        second.reason
     );
-
-    let (_, _, second_line) = session.stack_trace(second_stop.thread_id)?;
     assert_eq!(
-        second_line, BP_LINE_3 as i64,
-        "second breakpoint must be at line {BP_LINE_3}, stack frame reports {second_line}"
+        second.line,
+        resolved_line_3,
+        "second breakpoint: stopped-frame line must equal adapter-resolved line \
+         (resolved={resolved_line_3}, BP_LINE_3={BP_LINE_3}), got {line}",
+        line = second.line
     );
 
     // Continue to script exit.
-    session.continue_exec(second_stop.thread_id)?;
+    session.continue_exec(second.thread_id)?;
     let _ = session.drain_until_event("terminated");
     session.disconnect()?;
 
@@ -287,14 +309,18 @@ fn test_e2e_attach_workflow_stopped_event() -> TestResult {
 
     let _thread_id = attached.thread_id;
 
-    // After attach, we can set breakpoints (the adapter accepts them)
+    // After attach, we can set breakpoints (the adapter accepts them).
+    // Use set_breakpoints_checked to assert verified=true for all entries.
     let workspace = tempdir()?;
     let script = workspace.path().join("dummy.pl");
     write(&script, workflow_script_content())?;
     let script_str = script.to_str().ok_or("script path is not valid UTF-8")?.to_string();
 
-    let bp_response = session.set_breakpoints(&script_str, &[BP_LINE_2])?;
-    assert!(bp_response.is_some(), "setBreakpoints should succeed after attach");
+    let resolved = session.set_breakpoints_checked(&script_str, &[BP_LINE_2])?;
+    assert!(
+        !resolved.is_empty(),
+        "setBreakpoints after attach must return at least one verified breakpoint"
+    );
 
     session.disconnect()?;
 

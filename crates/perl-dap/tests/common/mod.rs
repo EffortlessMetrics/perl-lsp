@@ -24,6 +24,27 @@ pub struct StoppedInfo {
     pub thread_id: i64,
 }
 
+/// Information from a `stopped` event paired with an immediate `stackTrace` call.
+///
+/// Used by `wait_stopped_with_frame()` to provide the stopped reason AND the
+/// current source location in a single atomic helper — avoiding the caller
+/// having to issue a separate `stackTrace` request.
+#[derive(Debug, Clone)]
+// Fields are read selectively in test assertions; allow unused in broader test helpers.
+#[allow(dead_code)]
+pub struct StoppedFrameInfo {
+    /// Stopped reason, e.g. `"breakpoint"`, `"step"`, `"entry"`.
+    pub reason: String,
+    /// Thread ID (from `stopped.body.threadId`).
+    pub thread_id: i64,
+    /// Top stack frame ID (from `stackTrace.stackFrames[0].id`).
+    pub frame_id: i64,
+    /// Source path of the top stack frame.
+    pub source_path: String,
+    /// 1-based source line of the top stack frame as reported by the adapter.
+    pub line: i64,
+}
+
 /// High-level handle for a DAP workflow test session.
 ///
 /// Wraps `DebugAdapter` with helpers that handle protocol sequencing:
@@ -62,10 +83,24 @@ impl DapWorkflowSession {
     /// Callers must call `set_breakpoints` and `configuration_done` before
     /// `wait_stopped` to follow the DAP ordering requirement.
     pub fn launch(&mut self, script_path: &str) -> Result<(), String> {
+        self.launch_with_stop_on_entry(script_path, false)
+    }
+
+    /// Launch a script with explicit `stopOnEntry` control.
+    ///
+    /// When `stop_on_entry` is `true`, the adapter emits a `stopped(reason=entry)` event
+    /// immediately after launch, before any `configurationDone` is sent.
+    /// When `false`, callers must call `set_breakpoints` and `configuration_done` before
+    /// `wait_stopped` to follow the DAP ordering requirement.
+    pub fn launch_with_stop_on_entry(
+        &mut self,
+        script_path: &str,
+        stop_on_entry: bool,
+    ) -> Result<(), String> {
         let args = json!({
             "program": script_path,
             "args": [],
-            "stopOnEntry": false,
+            "stopOnEntry": stop_on_entry,
             "env": {
                 "PERL_PERTURB_KEYS": "0",
                 "PERL_HASH_SEED": "0",
@@ -108,6 +143,75 @@ impl DapWorkflowSession {
         });
         let resp = self.request("setBreakpoints", Some(args));
         self.expect_success(&resp, "setBreakpoints")
+    }
+
+    /// Send `setBreakpoints`, assert that all entries are `verified: true`, and return
+    /// the adapter-resolved line numbers.
+    ///
+    /// The returned lines are what the adapter resolved each requested line to.
+    /// For plain executable statements with no remap, resolved == requested.
+    /// Tests should assert runtime stopped-frame lines against the RESOLVED lines,
+    /// not the originally requested lines, to survive future breakpoint-validation
+    /// remapping without false failures.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the response is missing, the `breakpoints` array is absent,
+    /// the count doesn't match, or any entry has `verified: false`.
+    pub fn set_breakpoints_checked(
+        &mut self,
+        source_path: &str,
+        lines: &[u64],
+    ) -> Result<Vec<i64>, String> {
+        let body =
+            self.set_breakpoints(source_path, lines)?.ok_or("setBreakpoints returned no body")?;
+
+        let bp_array = body
+            .get("breakpoints")
+            .and_then(|v| v.as_array())
+            .ok_or("setBreakpoints response missing `breakpoints` array")?;
+
+        if bp_array.len() != lines.len() {
+            return Err(format!(
+                "setBreakpoints: requested {} breakpoints, adapter returned {}",
+                lines.len(),
+                bp_array.len()
+            ));
+        }
+
+        let mut resolved = Vec::with_capacity(lines.len());
+        for (idx, bp) in bp_array.iter().enumerate() {
+            let verified = bp.get("verified").and_then(|v| v.as_bool()).unwrap_or(false);
+            if !verified {
+                return Err(format!(
+                    "setBreakpoints: entry[{idx}] (requested line {}) has verified=false",
+                    lines[idx]
+                ));
+            }
+            let adapter_line = bp.get("line").and_then(|v| v.as_i64()).unwrap_or(lines[idx] as i64);
+            resolved.push(adapter_line);
+        }
+        Ok(resolved)
+    }
+
+    /// Block until a `stopped` event arrives, then immediately issue a `stackTrace`
+    /// request to obtain the current source location.
+    ///
+    /// Returns a [`StoppedFrameInfo`] combining the stopped reason/thread with
+    /// the top stack frame's id, source path, and 1-based line number.
+    ///
+    /// Use this helper when the test must assert BOTH the stop reason AND the
+    /// current source line, without the latency of a separate `stack_trace()` call.
+    pub fn wait_stopped_with_frame(&mut self) -> Result<StoppedFrameInfo, String> {
+        let stopped = self.wait_stopped()?;
+        let (frame_id, source_path, line) = self.stack_trace(stopped.thread_id)?;
+        Ok(StoppedFrameInfo {
+            reason: stopped.reason,
+            thread_id: stopped.thread_id,
+            frame_id,
+            source_path,
+            line,
+        })
     }
 
     /// Send `configurationDone`.
