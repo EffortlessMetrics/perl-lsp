@@ -192,6 +192,9 @@ enum Commands {
         /// Optional deterministic quality receipt to summarize when present.
         #[arg(long, default_value = "target/receipts/inline-completion-quality.json")]
         quality_receipt: PathBuf,
+        /// Optional next-edit scaffold receipt to validate and summarize when present.
+        #[arg(long, default_value = "target/receipts/semantic-inline-next-edit.json")]
+        next_edit_receipt: PathBuf,
     },
 
     /// Emit a semantic inline-completion next-edit scaffold receipt.
@@ -2766,8 +2769,8 @@ fn main() -> Result<()> {
         },
         Commands::InlineCompletionSmoke { binary } => inline_completion_smoke::run(binary),
         Commands::InlineCompletionQuality { receipt } => inline_completion_quality::run(receipt),
-        Commands::SemanticInlineReceipts { receipt, quality_receipt } => {
-            semantic_inline_receipts::run(receipt, quality_receipt)
+        Commands::SemanticInlineReceipts { receipt, quality_receipt, next_edit_receipt } => {
+            semantic_inline_receipts::run(receipt, quality_receipt, next_edit_receipt)
         }
         Commands::SemanticInlineNextEdit { receipt } => semantic_inline_next_edit::run(receipt),
         Commands::SupportedEditorInlineSmoke { receipt } => {

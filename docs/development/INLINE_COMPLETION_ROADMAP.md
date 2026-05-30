@@ -394,12 +394,17 @@ Current semantic inline UX receipt inventory:
 The machine-readable dashboard for this inventory is:
 
 ```bash
-cargo xtask semantic-inline-receipts --receipt target/receipts/semantic-inline-receipts.json
+cargo xtask semantic-inline-next-edit \
+  --receipt target/receipts/semantic-inline-next-edit.json
+cargo xtask semantic-inline-receipts \
+  --receipt target/receipts/semantic-inline-receipts.json \
+  --next-edit-receipt target/receipts/semantic-inline-next-edit.json
 ```
 
-That dashboard aggregates the registered semantic inline UX workflows and keeps
-next-edit and optional AI explicitly future-gated. It is an inventory receipt;
-it does not run the UX scenarios or promote support status by itself.
+That dashboard aggregates the registered semantic inline UX workflows, validates
+the next-edit scaffold receipt when present, and keeps next-edit runtime behavior
+and optional AI explicitly future-gated. It is an inventory receipt; it does not
+run the UX scenarios or promote support status by itself.
 
 Still future or deliberately gated:
 

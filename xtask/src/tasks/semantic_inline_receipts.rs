@@ -73,6 +73,7 @@ struct SemanticInlineReceipt {
     all_required_capabilities_registered: bool,
     semantic_inline: BTreeMap<&'static str, SemanticInlineCapabilityReceipt>,
     quality_counters: InlineQualityCounterSummary,
+    next_edit_scaffold: NextEditScaffoldSummary,
     future_gated: BTreeMap<&'static str, &'static str>,
 }
 
@@ -121,12 +122,31 @@ struct QualityCountSummary {
     failed: u64,
 }
 
-pub fn run(receipt: PathBuf, quality_receipt: PathBuf) -> Result<()> {
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct NextEditScaffoldSummary {
+    source: String,
+    available: bool,
+    schema_version: Option<String>,
+    provider_action: Option<String>,
+    enabled_by_default: Option<bool>,
+    runtime_provider_registered: Option<bool>,
+    ai_candidate_source_enabled: Option<bool>,
+    default_status: Option<String>,
+    receipt_only_status: Option<String>,
+    explicit_gate_status: Option<String>,
+    planned_candidate_families: Option<Vec<String>>,
+    future_gated: Option<Vec<String>>,
+}
+
+pub fn run(receipt: PathBuf, quality_receipt: PathBuf, next_edit_receipt: PathBuf) -> Result<()> {
     let root = crate::utils::project_root()?;
     let matrix_path = root.join(MATRIX_PATH);
     let matrix = read_json(&matrix_path)?;
     let quality = read_optional_quality_counter_summary(&root.join(&quality_receipt))?;
-    let receipt_data = summarize_matrix(&matrix, MATRIX_PATH, quality)?;
+    let next_edit_scaffold =
+        read_optional_next_edit_scaffold_summary(&root.join(&next_edit_receipt))?;
+    let receipt_data = summarize_matrix(&matrix, MATRIX_PATH, quality, next_edit_scaffold)?;
 
     write_receipt(&receipt, &receipt_data)?;
     println!(
@@ -178,6 +198,192 @@ fn read_optional_quality_counter_summary(path: &Path) -> Result<InlineQualityCou
     };
     validate_quality_counter_summary(&summary)?;
     Ok(summary)
+}
+
+fn read_optional_next_edit_scaffold_summary(path: &Path) -> Result<NextEditScaffoldSummary> {
+    let source = path.display().to_string();
+    if !path.exists() {
+        return Ok(NextEditScaffoldSummary {
+            source,
+            available: false,
+            schema_version: None,
+            provider_action: None,
+            enabled_by_default: None,
+            runtime_provider_registered: None,
+            ai_candidate_source_enabled: None,
+            default_status: None,
+            receipt_only_status: None,
+            explicit_gate_status: None,
+            planned_candidate_families: None,
+            future_gated: None,
+        });
+    }
+
+    let scaffold = read_json(path)?;
+    let summary = NextEditScaffoldSummary {
+        source,
+        available: true,
+        schema_version: scaffold
+            .get("schema_version")
+            .and_then(Value::as_str)
+            .map(ToString::to_string),
+        provider_action: scaffold
+            .get("provider_action")
+            .and_then(Value::as_str)
+            .map(ToString::to_string),
+        enabled_by_default: scaffold.get("enabled_by_default").and_then(Value::as_bool),
+        runtime_provider_registered: scaffold
+            .get("runtime_provider_registered")
+            .and_then(Value::as_bool),
+        ai_candidate_source_enabled: scaffold
+            .get("ai_candidate_source_enabled")
+            .and_then(Value::as_bool),
+        default_status: scaffold
+            .pointer("/default_response/status")
+            .and_then(Value::as_str)
+            .map(ToString::to_string),
+        receipt_only_status: scaffold
+            .pointer("/receipt_only_response/status")
+            .and_then(Value::as_str)
+            .map(ToString::to_string),
+        explicit_gate_status: scaffold
+            .pointer("/explicit_gate_response/status")
+            .and_then(Value::as_str)
+            .map(ToString::to_string),
+        planned_candidate_families: string_array_field(&scaffold, "planned_candidate_families")?,
+        future_gated: string_array_field(&scaffold, "future_gated")?,
+    };
+    validate_next_edit_scaffold_summary(&summary, &scaffold)?;
+    Ok(summary)
+}
+
+fn string_array_field(value: &Value, field: &str) -> Result<Option<Vec<String>>> {
+    let Some(items) = value.get(field) else {
+        return Ok(None);
+    };
+    let items = items
+        .as_array()
+        .ok_or_else(|| eyre!("next-edit scaffold receipt `{field}` must be an array"))?;
+    let mut result = Vec::with_capacity(items.len());
+    for item in items {
+        result.push(
+            item.as_str()
+                .ok_or_else(|| {
+                    eyre!("next-edit scaffold receipt `{field}` entries must be strings")
+                })?
+                .to_string(),
+        );
+    }
+    Ok(Some(result))
+}
+
+fn validate_next_edit_scaffold_summary(
+    summary: &NextEditScaffoldSummary,
+    scaffold: &Value,
+) -> Result<()> {
+    if !summary.available {
+        return Ok(());
+    }
+
+    require_next_edit_value(
+        summary.schema_version.as_deref(),
+        "schema_version",
+        "semantic-inline-next-edit.v1",
+    )?;
+    require_next_edit_value(
+        summary.provider_action.as_deref(),
+        "provider_action",
+        "next_edit_scaffold",
+    )?;
+    require_next_edit_bool(summary.enabled_by_default, "enabled_by_default", false)?;
+    require_next_edit_bool(
+        summary.runtime_provider_registered,
+        "runtime_provider_registered",
+        false,
+    )?;
+    require_next_edit_bool(
+        summary.ai_candidate_source_enabled,
+        "ai_candidate_source_enabled",
+        false,
+    )?;
+    require_next_edit_value(
+        summary.default_status.as_deref(),
+        "default_response/status",
+        "disabled",
+    )?;
+    require_next_edit_value(
+        summary.receipt_only_status.as_deref(),
+        "receipt_only_response/status",
+        "receipt_only",
+    )?;
+    require_next_edit_value(
+        summary.explicit_gate_status.as_deref(),
+        "explicit_gate_response/status",
+        "runtime_provider_not_registered",
+    )?;
+    require_empty_suggestions(scaffold, "/default_response/suggestions")?;
+    require_empty_suggestions(scaffold, "/receipt_only_response/suggestions")?;
+    require_empty_suggestions(scaffold, "/explicit_gate_response/suggestions")?;
+
+    let planned = summary
+        .planned_candidate_families
+        .as_ref()
+        .ok_or_else(|| eyre!("next-edit scaffold receipt missing planned_candidate_families"))?;
+    for required in
+        ["missing_import", "test_assertion_body", "call_site_update", "rename_occurrence"]
+    {
+        if !planned.iter().any(|family| family == required) {
+            bail!("next-edit scaffold receipt missing planned family `{required}`");
+        }
+    }
+
+    let future_gated = summary
+        .future_gated
+        .as_ref()
+        .ok_or_else(|| eyre!("next-edit scaffold receipt missing future_gated list"))?;
+    for required in [
+        "runtime_next_edit_provider",
+        "editor_visible_next_edit_suggestions",
+        "missing_import_next_action",
+        "optional_ai_candidate_source",
+    ] {
+        if !future_gated.iter().any(|entry| entry == required) {
+            bail!("next-edit scaffold receipt missing future-gated item `{required}`");
+        }
+    }
+
+    Ok(())
+}
+
+fn require_next_edit_value(actual: Option<&str>, field: &str, expected: &str) -> Result<()> {
+    if actual != Some(expected) {
+        bail!(
+            "next-edit scaffold receipt `{field}` must be `{expected}`, got `{}`",
+            actual.unwrap_or("<missing>")
+        );
+    }
+    Ok(())
+}
+
+fn require_next_edit_bool(actual: Option<bool>, field: &str, expected: bool) -> Result<()> {
+    if actual != Some(expected) {
+        bail!(
+            "next-edit scaffold receipt `{field}` must be `{expected}`, got `{}`",
+            actual.map_or("<missing>".to_string(), |value| value.to_string())
+        );
+    }
+    Ok(())
+}
+
+fn require_empty_suggestions(scaffold: &Value, pointer: &str) -> Result<()> {
+    let suggestions = scaffold
+        .pointer(pointer)
+        .and_then(Value::as_array)
+        .ok_or_else(|| eyre!("next-edit scaffold receipt `{pointer}` must be an array"))?;
+    if !suggestions.is_empty() {
+        bail!("next-edit scaffold receipt `{pointer}` must remain empty");
+    }
+    Ok(())
 }
 
 fn quality_count_summary(quality: &Value, pointer: &str) -> Result<Option<QualityCountSummary>> {
@@ -396,6 +602,7 @@ fn summarize_matrix(
     matrix: &Value,
     matrix_path: &'static str,
     quality_counters: InlineQualityCounterSummary,
+    next_edit_scaffold: NextEditScaffoldSummary,
 ) -> Result<SemanticInlineReceipt> {
     validate_quality_counter_summary(&quality_counters)?;
 
@@ -453,6 +660,7 @@ fn summarize_matrix(
         all_required_capabilities_registered: true,
         semantic_inline,
         quality_counters,
+        next_edit_scaffold,
         future_gated,
     })
 }
@@ -573,6 +781,57 @@ mod tests {
         }
     }
 
+    fn unavailable_next_edit_scaffold() -> NextEditScaffoldSummary {
+        NextEditScaffoldSummary {
+            source: "target/receipts/semantic-inline-next-edit.json".to_string(),
+            available: false,
+            schema_version: None,
+            provider_action: None,
+            enabled_by_default: None,
+            runtime_provider_registered: None,
+            ai_candidate_source_enabled: None,
+            default_status: None,
+            receipt_only_status: None,
+            explicit_gate_status: None,
+            planned_candidate_families: None,
+            future_gated: None,
+        }
+    }
+
+    fn valid_next_edit_scaffold_json() -> Value {
+        json!({
+            "schema_version": "semantic-inline-next-edit.v1",
+            "provider_action": "next_edit_scaffold",
+            "enabled_by_default": false,
+            "runtime_provider_registered": false,
+            "ai_candidate_source_enabled": false,
+            "default_response": {
+                "status": "disabled",
+                "suggestions": []
+            },
+            "receipt_only_response": {
+                "status": "receipt_only",
+                "suggestions": []
+            },
+            "explicit_gate_response": {
+                "status": "runtime_provider_not_registered",
+                "suggestions": []
+            },
+            "planned_candidate_families": [
+                "missing_import",
+                "test_assertion_body",
+                "call_site_update",
+                "rename_occurrence"
+            ],
+            "future_gated": [
+                "runtime_next_edit_provider",
+                "editor_visible_next_edit_suggestions",
+                "missing_import_next_action",
+                "optional_ai_candidate_source"
+            ]
+        })
+    }
+
     fn green_quality() -> InlineQualityCounterSummary {
         let mut sources = BTreeMap::new();
         sources.insert(
@@ -604,7 +863,12 @@ mod tests {
 
     #[test]
     fn dashboard_summarizes_required_semantic_inline_capabilities() -> Result<()> {
-        let receipt = summarize_matrix(&complete_matrix(), MATRIX_PATH, unavailable_quality())?;
+        let receipt = summarize_matrix(
+            &complete_matrix(),
+            MATRIX_PATH,
+            unavailable_quality(),
+            unavailable_next_edit_scaffold(),
+        )?;
 
         assert!(receipt.all_required_capabilities_registered);
         assert_eq!(receipt.required_capability_count, REQUIRED_SEMANTIC_INLINE_RECEIPTS.len());
@@ -629,6 +893,7 @@ mod tests {
         }
         assert_eq!(receipt.future_gated.get("next_edit"), Some(&"future_gated"));
         assert_eq!(receipt.future_gated.get("optional_ai_candidate_source"), Some(&"future_gated"));
+        assert!(!receipt.next_edit_scaffold.available);
         Ok(())
     }
 
@@ -644,12 +909,159 @@ mod tests {
                 != Some("real_workspace_module_import_inline_completion_quality")
         });
 
-        let Err(error) = summarize_matrix(&matrix, MATRIX_PATH, unavailable_quality()) else {
+        let Err(error) = summarize_matrix(
+            &matrix,
+            MATRIX_PATH,
+            unavailable_quality(),
+            unavailable_next_edit_scaffold(),
+        ) else {
             bail!("missing workflow must fail dashboard generation");
         };
         assert!(
             error.to_string().contains("real_workspace_module_import_inline_completion_quality"),
             "error should identify missing workflow, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_accepts_disabled_receipt() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+        fs::write(&path, serde_json::to_vec_pretty(&valid_next_edit_scaffold_json())?)?;
+
+        let summary = read_optional_next_edit_scaffold_summary(&path)?;
+
+        assert!(summary.available);
+        assert_eq!(summary.schema_version.as_deref(), Some("semantic-inline-next-edit.v1"));
+        assert_eq!(summary.enabled_by_default, Some(false));
+        assert_eq!(summary.runtime_provider_registered, Some(false));
+        assert_eq!(summary.ai_candidate_source_enabled, Some(false));
+        assert_eq!(summary.default_status.as_deref(), Some("disabled"));
+        assert_eq!(
+            summary.explicit_gate_status.as_deref(),
+            Some("runtime_provider_not_registered")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_treats_missing_receipt_as_unavailable() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+
+        let summary = read_optional_next_edit_scaffold_summary(&path)?;
+
+        assert!(!summary.available);
+        assert_eq!(summary.schema_version, None);
+        assert_eq!(summary.planned_candidate_families, None);
+        validate_next_edit_scaffold_summary(&summary, &json!({}))?;
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_malformed_candidate_lists() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["planned_candidate_families"] = json!("missing_import");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold with scalar planned families must fail");
+        };
+        assert!(
+            error.to_string().contains("planned_candidate_families"),
+            "error should identify scalar planned families, got {error}"
+        );
+
+        scaffold = valid_next_edit_scaffold_json();
+        scaffold["future_gated"] = json!(["runtime_next_edit_provider", false]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold with non-string future gate must fail");
+        };
+        assert!(
+            error.to_string().contains("future_gated"),
+            "error should identify non-string future gate, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_missing_required_lists() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold
+            .as_object_mut()
+            .ok_or_else(|| eyre!("test scaffold must be an object"))?
+            .remove("planned_candidate_families");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold missing planned families must fail");
+        };
+        assert!(
+            error.to_string().contains("planned_candidate_families"),
+            "error should identify missing planned families, got {error}"
+        );
+
+        scaffold = valid_next_edit_scaffold_json();
+        scaffold
+            .as_object_mut()
+            .ok_or_else(|| eyre!("test scaffold must be an object"))?
+            .remove("future_gated");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold missing future gates must fail");
+        };
+        assert!(
+            error.to_string().contains("future_gated"),
+            "error should identify missing future gates, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_editor_visible_suggestions() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["explicit_gate_response"]["suggestions"] = json!([
+            {
+                "family": "missing_import",
+                "newText": "use My::App;\n"
+            }
+        ]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold with suggestions must fail");
+        };
+        assert!(
+            error.to_string().contains("explicit_gate_response/suggestions"),
+            "error should identify emitted suggestions, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_ai_enabled() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["ai_candidate_source_enabled"] = json!(true);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold with AI enabled must fail");
+        };
+        assert!(
+            error.to_string().contains("ai_candidate_source_enabled"),
+            "error should identify AI gate drift, got {error}"
         );
         Ok(())
     }
@@ -772,7 +1184,12 @@ mod tests {
 
     #[test]
     fn dashboard_accepts_green_quality_counters() -> Result<()> {
-        let receipt = summarize_matrix(&complete_matrix(), MATRIX_PATH, green_quality())?;
+        let receipt = summarize_matrix(
+            &complete_matrix(),
+            MATRIX_PATH,
+            green_quality(),
+            unavailable_next_edit_scaffold(),
+        )?;
 
         assert!(receipt.quality_counters.available);
         assert_eq!(receipt.quality_counters.all_checks_green, Some(true));
@@ -807,7 +1224,12 @@ mod tests {
             sources: Some(BTreeMap::new()),
         };
 
-        let Err(error) = summarize_matrix(&complete_matrix(), MATRIX_PATH, quality) else {
+        let Err(error) = summarize_matrix(
+            &complete_matrix(),
+            MATRIX_PATH,
+            quality,
+            unavailable_next_edit_scaffold(),
+        ) else {
             bail!("failing quality counters must fail dashboard generation");
         };
         assert!(
@@ -822,7 +1244,12 @@ mod tests {
         let mut quality = green_quality();
         quality.parse_regressions = Some(1);
 
-        let Err(error) = summarize_matrix(&complete_matrix(), MATRIX_PATH, quality) else {
+        let Err(error) = summarize_matrix(
+            &complete_matrix(),
+            MATRIX_PATH,
+            quality,
+            unavailable_next_edit_scaffold(),
+        ) else {
             bail!("parse regressions must fail dashboard generation");
         };
         assert!(
@@ -837,7 +1264,12 @@ mod tests {
         let mut quality = green_quality();
         quality.edit_application = Some(QualityCountSummary { total: 2, passed: 1, failed: 0 });
 
-        let Err(error) = summarize_matrix(&complete_matrix(), MATRIX_PATH, quality) else {
+        let Err(error) = summarize_matrix(
+            &complete_matrix(),
+            MATRIX_PATH,
+            quality,
+            unavailable_next_edit_scaffold(),
+        ) else {
             bail!("invalid edit application total must fail dashboard generation");
         };
         assert!(
@@ -852,7 +1284,12 @@ mod tests {
         let mut quality = green_quality();
         quality.edit_application = Some(QualityCountSummary { total: 1, passed: 0, failed: 1 });
 
-        let Err(error) = summarize_matrix(&complete_matrix(), MATRIX_PATH, quality) else {
+        let Err(error) = summarize_matrix(
+            &complete_matrix(),
+            MATRIX_PATH,
+            quality,
+            unavailable_next_edit_scaffold(),
+        ) else {
             bail!("failed edit application count must fail dashboard generation");
         };
         assert!(
@@ -890,7 +1327,12 @@ mod tests {
             sources: Some(sources),
         };
 
-        let Err(error) = summarize_matrix(&complete_matrix(), MATRIX_PATH, quality) else {
+        let Err(error) = summarize_matrix(
+            &complete_matrix(),
+            MATRIX_PATH,
+            quality,
+            unavailable_next_edit_scaffold(),
+        ) else {
             bail!("failing source quality counters must fail dashboard generation");
         };
         assert!(
@@ -908,7 +1350,12 @@ mod tests {
             sources.get_mut("module").ok_or_else(|| eyre!("missing module source summary"))?;
         source.expected = 3;
 
-        let Err(error) = summarize_matrix(&complete_matrix(), MATRIX_PATH, quality) else {
+        let Err(error) = summarize_matrix(
+            &complete_matrix(),
+            MATRIX_PATH,
+            quality,
+            unavailable_next_edit_scaffold(),
+        ) else {
             bail!("source count mismatch must fail dashboard generation");
         };
         assert!(
@@ -927,7 +1374,12 @@ mod tests {
         source.expected = 3;
         source.failed = 1;
 
-        let Err(error) = summarize_matrix(&complete_matrix(), MATRIX_PATH, quality) else {
+        let Err(error) = summarize_matrix(
+            &complete_matrix(),
+            MATRIX_PATH,
+            quality,
+            unavailable_next_edit_scaffold(),
+        ) else {
             bail!("failed source count must fail dashboard generation");
         };
         assert!(
