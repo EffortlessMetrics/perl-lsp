@@ -87,6 +87,7 @@ fn quality_gate_cli_blocks_missing_exception_policy() -> TestResult {
     let action = next_action(&payload, "quality_exception_policy_not_current")?;
     assert_eq!(action.get("reason").and_then(Value::as_str), Some("missing"));
     assert_repair_contract(action)?;
+    assert_action_commands_use_quality_gate_mode(action, "enforce-patch-coverage")?;
 
     Ok(())
 }
@@ -133,6 +134,7 @@ expires = "2099-12-31"
     assert!(reason.contains("scope is required"), "{reason}");
     assert!(reason.contains("kind must be temporary_burndown"), "{reason}");
     assert_repair_contract(action)?;
+    assert_action_commands_use_quality_gate_mode(action, "enforce-patch-coverage")?;
 
     Ok(())
 }
@@ -157,6 +159,7 @@ fn quality_gate_cli_blocks_expired_quality_exception() -> TestResult {
     let action = next_action(&payload, "quality_exception_expired")?;
     assert_eq!(action.get("id").and_then(Value::as_str), Some("ripr-total-burndown"));
     assert_repair_contract(action)?;
+    assert_action_commands_use_quality_gate_mode(action, "enforce-patch-coverage")?;
 
     Ok(())
 }
@@ -182,6 +185,7 @@ fn quality_gate_cli_blocks_due_review_when_policy_requires_failure() -> TestResu
     assert_eq!(action.get("blocking").and_then(Value::as_bool), Some(true));
     assert_eq!(action.get("id").and_then(Value::as_str), Some("ripr-total-burndown"));
     assert_repair_contract(action)?;
+    assert_action_commands_use_quality_gate_mode(action, "enforce-patch-coverage")?;
 
     Ok(())
 }
@@ -204,6 +208,7 @@ fn quality_gate_cli_warns_due_review_when_policy_allows_warning() -> TestResult 
     assert_eq!(payload.pointer("/decision").and_then(Value::as_str), Some("pass"));
     let action = next_action(&payload, "quality_exception_review_due")?;
     assert_eq!(action.get("blocking").and_then(Value::as_bool), Some(false));
+    assert_action_commands_use_quality_gate_mode(action, "enforce-patch-coverage")?;
 
     Ok(())
 }
@@ -238,6 +243,7 @@ fn quality_gate_cli_blocks_missing_required_exception() -> TestResult {
         Some("project-coverage-burndown")
     );
     assert_repair_contract(action)?;
+    assert_action_commands_use_quality_gate_mode(action, "enforce-patch-coverage")?;
 
     Ok(())
 }
@@ -387,6 +393,24 @@ fn assert_repair_contract(action: &Value) -> TestResult {
         if matches!(field, "verify" | "receipt") {
             assert!(value.starts_with("rtk "), "action {field} must use rtk: {value}");
         }
+    }
+    Ok(())
+}
+
+fn assert_action_commands_use_quality_gate_mode(action: &Value, mode: &str) -> TestResult {
+    for field in ["verify", "receipt"] {
+        let command = action
+            .get(field)
+            .and_then(Value::as_str)
+            .ok_or_else(|| format!("action missing {field}: {action}"))?;
+        assert!(
+            command.contains(&format!("quality-gate --mode {mode} ")),
+            "action {field} must use active quality-gate mode `{mode}`: {command}"
+        );
+        assert!(
+            command.contains("--coverage-receipt") && command.contains("--codecov"),
+            "patch exception policy {field} command must include patch proof inputs: {command}"
+        );
     }
     Ok(())
 }

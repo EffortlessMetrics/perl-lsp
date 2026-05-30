@@ -104,7 +104,7 @@ fn evaluate_final(head: &str, args: &QualityGateArgs) -> Result<GateEvaluation> 
     let ripr = read_ripr_plus_receipt(&args.ripr_receipt, head);
     let ripr_pr = read_ripr_pr_receipt(&args.ripr_pr_receipt, head);
     let review = read_review_guidance_receipt(&args.review_receipt, head);
-    let exceptions = read_exception_policy(&args.exception_policy, today());
+    let exceptions = read_exception_policy(args, today());
     let mut next_actions = Vec::new();
     next_actions.extend(exceptions.actions.clone());
 
@@ -248,7 +248,7 @@ fn evaluate_final(head: &str, args: &QualityGateArgs) -> Result<GateEvaluation> 
 fn evaluate_patch_coverage(head: &str, args: &QualityGateArgs) -> Result<GateEvaluation> {
     let codecov_status = read_codecov_patch_status(&args.codecov)?;
     let coverage = read_coverage_receipt(&args.coverage_receipt, head);
-    let exceptions = read_exception_policy(&args.exception_policy, today());
+    let exceptions = read_exception_policy(args, today());
     let mut next_actions = Vec::new();
     next_actions.extend(exceptions.actions.clone());
 
@@ -320,7 +320,7 @@ fn evaluate_new_ripr(head: &str, args: &QualityGateArgs) -> Result<GateEvaluatio
     let ripr = read_ripr_plus_receipt(&args.ripr_receipt, head);
     let ripr_pr = read_ripr_pr_receipt(&args.ripr_pr_receipt, head);
     let review = read_review_guidance_receipt(&args.review_receipt, head);
-    let exceptions = read_exception_policy(&args.exception_policy, today());
+    let exceptions = read_exception_policy(args, today());
     let mut next_actions = Vec::new();
     next_actions.extend(exceptions.actions.clone());
 
@@ -486,7 +486,8 @@ enum JsonReceipt {
     Present(Value),
 }
 
-fn read_exception_policy(path: &Path, today: NaiveDate) -> ExceptionPolicyEvaluation {
+fn read_exception_policy(args: &QualityGateArgs, today: NaiveDate) -> ExceptionPolicyEvaluation {
+    let path = &args.exception_policy;
     let raw = match fs::read_to_string(path) {
         Ok(raw) => raw,
         Err(_) => {
@@ -499,7 +500,7 @@ fn read_exception_policy(path: &Path, today: NaiveDate) -> ExceptionPolicyEvalua
                     "active": [],
                 }),
                 actions: vec![quality_exception_policy_action(
-                    path,
+                    args,
                     "missing",
                     "quality exception policy ledger is missing",
                 )],
@@ -519,7 +520,7 @@ fn read_exception_policy(path: &Path, today: NaiveDate) -> ExceptionPolicyEvalua
                     "active": [],
                 }),
                 actions: vec![quality_exception_policy_action(
-                    path,
+                    args,
                     "invalid_toml",
                     "quality exception policy ledger is not valid TOML",
                 )],
@@ -534,7 +535,7 @@ fn read_exception_policy(path: &Path, today: NaiveDate) -> ExceptionPolicyEvalua
 
     if policy.schema_version != 1 || policy.policy != "quality-gate-exceptions" {
         actions.push(quality_exception_policy_action(
-            path,
+            args,
             "invalid_header",
             "quality exception policy must use schema_version = 1 and policy = \"quality-gate-exceptions\"",
         ));
@@ -544,7 +545,7 @@ fn read_exception_policy(path: &Path, today: NaiveDate) -> ExceptionPolicyEvalua
         || policy.updated.trim().is_empty()
     {
         actions.push(quality_exception_policy_action(
-            path,
+            args,
             "invalid_metadata",
             "quality exception policy must have owner, status = \"active\", and updated",
         ));
@@ -553,7 +554,7 @@ fn read_exception_policy(path: &Path, today: NaiveDate) -> ExceptionPolicyEvalua
     for exception in &policy.exceptions {
         let validation_errors = exception_validation_errors(exception);
         if !validation_errors.is_empty() {
-            actions.push(quality_exception_invalid_action(path, exception, validation_errors));
+            actions.push(quality_exception_invalid_action(args, exception, validation_errors));
             continue;
         }
 
@@ -562,7 +563,7 @@ fn read_exception_policy(path: &Path, today: NaiveDate) -> ExceptionPolicyEvalua
         let created = parse_policy_date(&exception.created);
         if review_after.is_none() || expires.is_none() || created.is_none() {
             actions.push(quality_exception_invalid_action(
-                path,
+                args,
                 exception,
                 vec!["created, review_after, and expires must use YYYY-MM-DD".to_string()],
             ));
@@ -573,7 +574,7 @@ fn read_exception_policy(path: &Path, today: NaiveDate) -> ExceptionPolicyEvalua
             continue;
         };
         if expires < today {
-            actions.push(quality_exception_expired_action(path, exception, expires, today));
+            actions.push(quality_exception_expired_action(args, exception, expires, today));
             continue;
         }
 
@@ -585,7 +586,7 @@ fn read_exception_policy(path: &Path, today: NaiveDate) -> ExceptionPolicyEvalua
         };
         if review_after <= today {
             actions.push(quality_exception_review_due_action(
-                path,
+                args,
                 exception,
                 review_after,
                 today,
@@ -603,7 +604,7 @@ fn read_exception_policy(path: &Path, today: NaiveDate) -> ExceptionPolicyEvalua
         .collect::<Vec<_>>();
     if !missing_required.is_empty() {
         actions.push(quality_exception_required_missing_action(
-            path,
+            args,
             &missing_required,
             &policy.requirements.required_active,
         ));
@@ -1150,37 +1151,37 @@ fn codecov_project_policy_action(status: &str, args: &QualityGateArgs) -> Value 
     })
 }
 
-fn quality_exception_policy_action(path: &Path, reason: &str, repair: &str) -> Value {
+fn quality_exception_policy_action(args: &QualityGateArgs, reason: &str, repair: &str) -> Value {
     json!({
         "kind": "quality_exception_policy_not_current",
         "blocking": true,
-        "path": display_path(path),
+        "path": display_path(&args.exception_policy),
         "reason": reason,
         "repair": repair,
-        "verify": quality_exception_policy_command(path, true),
-        "receipt": quality_exception_policy_command(path, false),
+        "verify": quality_gate_command(args, true, args.patch_coverage),
+        "receipt": quality_gate_command(args, false, args.patch_coverage),
     })
 }
 
 fn quality_exception_invalid_action(
-    path: &Path,
+    args: &QualityGateArgs,
     exception: &QualityException,
     errors: Vec<String>,
 ) -> Value {
     json!({
         "kind": "quality_exception_invalid",
         "blocking": true,
-        "path": display_path(path),
+        "path": display_path(&args.exception_policy),
         "id": exception.id,
         "reason": errors.join("; "),
         "repair": "Fill kind = \"temporary_burndown\", scope, owner, reason, final_target, evidence, removal_criteria, review_after, and expires for the temporary quality exception.",
-        "verify": quality_exception_policy_command(path, true),
-        "receipt": quality_exception_policy_command(path, false),
+        "verify": quality_gate_command(args, true, args.patch_coverage),
+        "receipt": quality_gate_command(args, false, args.patch_coverage),
     })
 }
 
 fn quality_exception_expired_action(
-    path: &Path,
+    args: &QualityGateArgs,
     exception: &QualityException,
     expires: NaiveDate,
     today: NaiveDate,
@@ -1188,17 +1189,17 @@ fn quality_exception_expired_action(
     json!({
         "kind": "quality_exception_expired",
         "blocking": true,
-        "path": display_path(path),
+        "path": display_path(&args.exception_policy),
         "id": exception.id,
         "reason": format!("expires {expires} is before {today}"),
         "repair": "Remove the temporary quality exception by completing its removal criteria, or replace it with a fresh policy PR that names new evidence and expiry.",
-        "verify": quality_exception_policy_command(path, true),
-        "receipt": quality_exception_policy_command(path, false),
+        "verify": quality_gate_command(args, true, args.patch_coverage),
+        "receipt": quality_gate_command(args, false, args.patch_coverage),
     })
 }
 
 fn quality_exception_review_due_action(
-    path: &Path,
+    args: &QualityGateArgs,
     exception: &QualityException,
     review_after: NaiveDate,
     today: NaiveDate,
@@ -1208,30 +1209,30 @@ fn quality_exception_review_due_action(
     json!({
         "kind": "quality_exception_review_due",
         "blocking": blocking,
-        "path": display_path(path),
+        "path": display_path(&args.exception_policy),
         "id": exception.id,
         "reason": format!("review_after {review_after} is on or before {today}"),
         "repair": "Re-review the temporary quality exception, update current evidence, and either remove it or move review_after/expires in a policy PR.",
-        "verify": quality_exception_policy_command(path, true),
-        "receipt": quality_exception_policy_command(path, false),
+        "verify": quality_gate_command(args, true, args.patch_coverage),
+        "receipt": quality_gate_command(args, false, args.patch_coverage),
     })
 }
 
 fn quality_exception_required_missing_action(
-    path: &Path,
+    args: &QualityGateArgs,
     missing: &[String],
     required: &[String],
 ) -> Value {
     json!({
         "kind": "quality_exception_required_missing",
         "blocking": true,
-        "path": display_path(path),
+        "path": display_path(&args.exception_policy),
         "reason": format!("missing required active temporary quality exception(s): {}", missing.join(", ")),
         "missing": missing,
         "required_active": required,
         "repair": "Document every transitional burn-down exception in policy/quality-gate-exceptions.toml, or remove it from required_active after the target has been met and enforcement is final.",
-        "verify": quality_exception_policy_command(path, true),
-        "receipt": quality_exception_policy_command(path, false),
+        "verify": quality_gate_command(args, true, args.patch_coverage),
+        "receipt": quality_gate_command(args, false, args.patch_coverage),
     })
 }
 
@@ -1655,17 +1656,6 @@ fn ripr_review_command(args: &QualityGateArgs, check: bool) -> String {
     let mut command = format!(
         "rtk cargo xtask ripr-review-comments --base {} --head {}",
         args.ripr_base, args.ripr_head
-    );
-    if check {
-        command.push_str(" --check");
-    }
-    command
-}
-
-fn quality_exception_policy_command(path: &Path, check: bool) -> String {
-    let mut command = format!(
-        "rtk cargo xtask quality-gate --mode enforce-patch-coverage --exception-policy {} --coverage-receipt target/receipts/quality/coverage-baseline.json --codecov codecov.yml --receipt target/receipts/quality/quality-gate.json --summary target/receipts/quality/quality-gate.md",
-        path.display()
     );
     if check {
         command.push_str(" --check");
