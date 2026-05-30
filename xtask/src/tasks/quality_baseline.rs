@@ -93,7 +93,7 @@ fn build_receipt(root: &Path, args: &CoverageBaselineArgs) -> Result<JsonValue> 
         .filter(|file| project_file_below_target(file))
         .filter_map(file_gap_json)
         .collect::<Vec<_>>();
-    let top_project_files = top_project_file_gaps(&lcov, 10);
+    let top_project_files = top_project_file_gaps(Some(root), &lcov, 10);
     let recommended_project_clusters = recommended_project_clusters(&top_project_files, 10);
 
     let mut coverage = serde_json::Map::new();
@@ -388,16 +388,22 @@ fn file_gap_json(file: &FileCoverage) -> Option<JsonValue> {
     }))
 }
 
-fn top_project_file_gaps(lcov: &LcovSummary, limit: usize) -> Vec<JsonValue> {
+fn top_project_file_gaps(root: Option<&Path>, lcov: &LcovSummary, limit: usize) -> Vec<JsonValue> {
     let mut rows = lcov
         .files
         .iter()
         .filter(|file| !file.path.trim().is_empty())
         .filter(|file| project_file_below_target(file))
         .filter_map(|file| {
-            let gap = file_gap_json(file)?;
+            let mut gap = file_gap_json(file)?;
+            let path = root
+                .and_then(|root| relative_lcov_path(root, &file.path))
+                .unwrap_or_else(|| file.path.clone());
+            if let Some(object) = gap.as_object_mut() {
+                object.insert("path".to_string(), json!(path.clone()));
+            }
             Some(ProjectFileGap {
-                path: file.path.clone(),
+                path,
                 line_coverage: percent(file.line_hit, file.line_found),
                 uncovered_line_count: file.line_found.saturating_sub(file.line_hit),
                 gap,
@@ -800,7 +806,7 @@ end_of_record
         )?;
         let summary = parse_lcov(&lcov)?;
 
-        let rows = top_project_file_gaps(&summary, 2);
+        let rows = top_project_file_gaps(None, &summary, 2);
 
         assert_eq!(rows[0]["path"], json!("crates/perl-config/src/lib.rs"));
         assert_eq!(rows[0]["uncovered_line_count"], json!(3));
@@ -826,7 +832,7 @@ end_of_record
         assert_eq!(summary.files[0].line_found, 0);
         assert_eq!(percent(summary.files[0].line_hit, summary.files[0].line_found), 0.0);
         assert!(!project_file_below_target(&summary.files[0]));
-        assert_eq!(top_project_file_gaps(&summary, 10), Vec::<JsonValue>::new());
+        assert_eq!(top_project_file_gaps(None, &summary, 10), Vec::<JsonValue>::new());
         Ok(())
     }
 
@@ -976,7 +982,8 @@ coverage:
     #[test]
     fn build_receipt_derives_patch_coverage_from_git_diff() -> TestResult {
         let temp = tempfile::tempdir()?;
-        let repo = temp.path();
+        let repo_root = temp.path().join("perl-lsp-swarm-coverage-target");
+        let repo = repo_root.as_path();
         fs::create_dir_all(repo.join("src"))?;
         fs::write(repo.join("src/lib.rs"), "pub fn value() -> bool {\n    true\n}\n")?;
         run_git(repo, &["init"])?;

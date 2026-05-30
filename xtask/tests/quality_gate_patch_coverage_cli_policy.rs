@@ -244,6 +244,36 @@ fn quality_gate_cli_blocks_patch_gate_when_coverage_receipt_is_missing() -> Test
 }
 
 #[test]
+fn quality_gate_cli_blocks_patch_gate_when_coverage_receipt_is_invalid() -> TestResult {
+    let root = repo_root()?;
+    let dir = tempdir()?;
+    let coverage = dir.path().join("coverage-baseline.json");
+    let receipt = dir.path().join("quality-gate.json");
+    let summary = dir.path().join("quality-gate.md");
+
+    fs::write(&coverage, "{not-json")?;
+
+    let output =
+        patch_quality_gate_command(&root, &coverage, &receipt, &summary, None)?.output()?;
+    assert!(!output.status.success(), "invalid coverage receipt must fail the gate");
+    assert_failure_stderr_points_to_receipt_and_summary(
+        &String::from_utf8(output.stderr)?,
+        &receipt,
+        &summary,
+    );
+
+    let payload: Value = serde_json::from_str(&fs::read_to_string(&receipt)?)?;
+    assert_eq!(payload.get("decision").and_then(Value::as_str), Some("fail"));
+    assert_eq!(payload.pointer("/coverage/status").and_then(Value::as_str), Some("invalid"));
+
+    let action = next_action(&payload, "coverage_receipt_not_current")?;
+    assert_eq!(action.get("reason").and_then(Value::as_str), Some("invalid"));
+    assert_repair_contract(action)?;
+
+    Ok(())
+}
+
+#[test]
 fn quality_gate_cli_blocks_patch_gate_when_coverage_receipt_is_stale() -> TestResult {
     let root = repo_root()?;
     let dir = tempdir()?;

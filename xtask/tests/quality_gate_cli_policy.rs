@@ -177,6 +177,42 @@ fn quality_gate_final_enforce_blocks_missing_receipts() -> TestResult {
 }
 
 #[test]
+fn quality_gate_final_enforce_blocks_invalid_receipts() -> TestResult {
+    let root = repo_root()?;
+    let dir = tempdir()?;
+    let paths = FixturePaths::new(dir.path());
+
+    write_final_codecov(&paths.codecov)?;
+    write_empty_exception_policy(&paths.exceptions)?;
+    fs::write(&paths.coverage, "{not-json")?;
+    fs::write(&paths.ripr, "{not-json")?;
+    fs::write(&paths.ripr_pr, "{not-json")?;
+    fs::write(&paths.review, "{not-json")?;
+
+    let output = final_quality_gate_command(&root, &paths)?.output()?;
+    assert!(!output.status.success(), "final enforcement must fail on invalid proof receipts");
+
+    let payload: Value = serde_json::from_str(&fs::read_to_string(&paths.receipt)?)?;
+    assert_eq!(payload.pointer("/coverage/status").and_then(Value::as_str), Some("invalid"));
+    assert_eq!(payload.pointer("/ripr_plus/status").and_then(Value::as_str), Some("invalid"));
+    assert_eq!(payload.pointer("/ripr_pr/status").and_then(Value::as_str), Some("invalid"));
+    assert_eq!(payload.pointer("/review_guidance/status").and_then(Value::as_str), Some("invalid"));
+
+    for kind in [
+        "coverage_receipt_not_current",
+        "ripr_receipt_not_current",
+        "ripr_pr_receipt_not_current",
+        "ripr_review_receipt_not_current",
+    ] {
+        let action = next_action(&payload, kind)?;
+        assert_eq!(action.get("reason").and_then(Value::as_str), Some("invalid"));
+        assert_repair_contract(action)?;
+    }
+
+    Ok(())
+}
+
+#[test]
 fn quality_gate_final_enforce_blocks_advisory_project_policy_and_partial_scope() -> TestResult {
     let root = repo_root()?;
     let dir = tempdir()?;

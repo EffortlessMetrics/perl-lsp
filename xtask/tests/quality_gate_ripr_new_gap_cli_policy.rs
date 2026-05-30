@@ -255,6 +255,48 @@ fn quality_gate_cli_blocks_new_ripr_when_required_receipts_are_missing() -> Test
 }
 
 #[test]
+fn quality_gate_cli_blocks_new_ripr_when_required_receipts_are_invalid() -> TestResult {
+    let root = repo_root()?;
+    let dir = tempdir()?;
+    let ripr = dir.path().join("ripr-plus.json");
+    let ripr_pr = dir.path().join("repo-exposure.json");
+    let review = dir.path().join("comments.json");
+    let receipt = dir.path().join("quality-gate.json");
+    let summary = dir.path().join("quality-gate.md");
+
+    fs::write(&ripr, "{not-json")?;
+    fs::write(&ripr_pr, "{not-json")?;
+    fs::write(&review, "{not-json")?;
+
+    let output =
+        new_ripr_quality_gate_command(&root, &ripr, &ripr_pr, &review, &receipt, &summary)?
+            .output()?;
+    assert!(!output.status.success(), "invalid required RIPR receipts must fail");
+    assert_failure_stderr_points_to_receipt_and_summary(
+        &String::from_utf8(output.stderr)?,
+        &receipt,
+        &summary,
+    )?;
+
+    let payload: Value = serde_json::from_str(&fs::read_to_string(&receipt)?)?;
+    assert_eq!(payload.pointer("/ripr_plus/status").and_then(Value::as_str), Some("invalid"));
+    assert_eq!(payload.pointer("/ripr_pr/status").and_then(Value::as_str), Some("invalid"));
+    assert_eq!(payload.pointer("/review_guidance/status").and_then(Value::as_str), Some("invalid"));
+
+    for kind in [
+        "ripr_receipt_not_current",
+        "ripr_pr_receipt_not_current",
+        "ripr_review_receipt_not_current",
+    ] {
+        let action = next_action(&payload, kind)?;
+        assert_eq!(action.get("reason").and_then(Value::as_str), Some("invalid"));
+    }
+    assert_blocking_actions_have_repair_contract(&payload)?;
+
+    Ok(())
+}
+
+#[test]
 fn quality_gate_cli_blocks_new_ripr_when_receipts_are_stale() -> TestResult {
     let root = repo_root()?;
     let dir = tempdir()?;
