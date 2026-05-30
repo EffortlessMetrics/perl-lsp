@@ -345,6 +345,16 @@ const RAW_SNAPSHOT_PATTERNS: &[RawPatternCheck] = &[
     RawPatternCheck { needle: "\"applyKind\"", label: "CompletionList.applyKind JSON snapshot" },
 ];
 
+const MATRIX_TRANSITIONAL_STATUS_PATTERNS: &[RawPatternCheck] = &[
+    RawPatternCheck {
+        needle: "implemented-needs-positive-wire-test",
+        label: "transitional matrix status",
+    },
+    RawPatternCheck { needle: "needs-capability-parser", label: "transitional matrix status" },
+    RawPatternCheck { needle: "needs-compat-test", label: "transitional matrix status" },
+    RawPatternCheck { needle: "planned-needs-negative-gate", label: "transitional matrix status" },
+];
+
 const FEATURE_CATALOG_FORBIDDEN_PATTERNS: &[RawPatternCheck] = &[
     RawPatternCheck {
         needle: "documentRangesFormattingProvider",
@@ -424,6 +434,7 @@ pub fn run() -> Result<()> {
     check_required_markers(&root, CODE_LENS_TEST, CODE_LENS_TEST_MARKERS, &mut violations)?;
     check_required_markers(&root, WINDOW_TEST, WINDOW_TEST_MARKERS, &mut violations)?;
     check_feature_catalog(&root, &mut violations)?;
+    check_matrix_closeout_statuses(&root, &mut violations)?;
     check_capability_snapshots(&root, &mut violations)?;
     check_folding_range_refresh_guard(&root, &mut violations)?;
     check_relative_pattern_guard(&root, &mut violations)?;
@@ -482,6 +493,25 @@ fn check_required_markers(
             });
         }
     }
+    Ok(())
+}
+
+fn check_matrix_closeout_statuses(root: &Path, violations: &mut Vec<Violation>) -> Result<()> {
+    let text = read_required(root, MATRIX_PATH)?;
+    for pattern in MATRIX_TRANSITIONAL_STATUS_PATTERNS {
+        if text.contains(pattern.needle) {
+            violations.push(Violation {
+                rel_path: MATRIX_PATH.to_string(),
+                line: line_number_for(&text, pattern.needle),
+                label: pattern.label,
+                detail: format!(
+                    "matrix closeout must classify every row as implemented, negative-gated, or not-applicable: {:?}",
+                    pattern.needle
+                ),
+            });
+        }
+    }
+
     Ok(())
 }
 
@@ -1015,6 +1045,15 @@ fn line_number_for_pointer(text: &str, pointer: &str) -> usize {
 mod tests {
     use super::*;
 
+    fn write_matrix_fixture(root: &Path, text: &str) -> Result<()> {
+        let path = root.join(MATRIX_PATH);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(path, text)?;
+        Ok(())
+    }
+
     #[test]
     fn line_number_for_reports_first_matching_line() {
         let text = "one\ntwo marker\nthree marker\n";
@@ -1030,5 +1069,39 @@ mod tests {
     fn pointer_line_uses_last_path_segment() {
         let text = "{\n  \"semanticTokensProvider\": {\n    \"delta\": true\n  }\n}\n";
         assert_eq!(line_number_for_pointer(text, "/semanticTokensProvider/full/delta"), 3);
+    }
+
+    #[test]
+    fn matrix_closeout_status_check_accepts_closed_statuses() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        write_matrix_fixture(
+            temp.path(),
+            "| Feature | Status |\n| --- | --- |\n| Inline completion | implemented+tested+documented |\n| Notebook | not-applicable+documented |\n| Delta | negative-gated+documented |\n",
+        )?;
+
+        let mut violations = Vec::new();
+        check_matrix_closeout_statuses(temp.path(), &mut violations)?;
+
+        assert!(violations.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn matrix_closeout_status_check_rejects_transitional_statuses() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        write_matrix_fixture(
+            temp.path(),
+            "| Feature | Status |\n| --- | --- |\n| Folding refresh | implemented-needs-positive-wire-test |\n",
+        )?;
+
+        let mut violations = Vec::new();
+        check_matrix_closeout_statuses(temp.path(), &mut violations)?;
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].rel_path, MATRIX_PATH);
+        assert_eq!(violations[0].line, 3);
+        assert_eq!(violations[0].label, "transitional matrix status");
+        assert!(violations[0].detail.contains("implemented-needs-positive-wire-test"));
+        Ok(())
     }
 }

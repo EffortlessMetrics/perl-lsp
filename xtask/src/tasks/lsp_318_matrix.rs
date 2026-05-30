@@ -311,6 +311,10 @@ const ROWS: &[MatrixRow] = &[
     },
 ];
 
+#[cfg(test)]
+const CLOSED_STATUSES: &[&str] =
+    &["implemented+tested+documented", "negative-gated+documented", "not-applicable+documented"];
+
 pub fn run(check: bool) -> Result<()> {
     let root = project_root()?;
     let path = root.join(MATRIX_PATH);
@@ -341,16 +345,10 @@ fn render_matrix() -> String {
     output.push_str(
         "Boundary spec: [PLSP-SPEC-0029](PLSP-SPEC-0029-lsp-318-conformance-boundary.md)\n\n",
     );
-    output.push_str("This matrix is the working ledger for selected LSP 3.18 coverage. It is not a blanket full-conformance claim and does not imply release readiness. Each row classifies a surface so future PRs can move it from negative-gated or planned to implemented+tested+documented only when capability parsing, runtime behavior, wire tests, snapshots, docs, and editor receipts are present where relevant.\n\n");
+    output.push_str("This matrix is the working ledger for selected LSP 3.18 coverage. It is not a blanket full-conformance claim and does not imply release readiness. Each row classifies a surface as implemented, intentionally absent, or outside the current Perl editor substrate lane. The current closeout state has no unknown or transitional rows.\n\n");
     output.push_str("Status vocabulary:\n\n");
     output.push_str("- `implemented+tested+documented`: implemented, tested over the wire or snapshots, and documented in the current boundary.\n");
     output.push_str("- `negative-gated+documented`: intentionally unsupported or absent until a later capability-gated implementation PR.\n");
-    output.push_str("- `implemented-needs-positive-wire-test`: code path exists, but the matrix still requires a positive client-capability receipt before it is locked.\n");
-    output.push_str("- `needs-capability-parser`: existing behavior is adjacent, but 3.18-specific client capability parsing is not yet proven.\n");
-    output.push_str("- `needs-compat-test`: current behavior may be acceptable, but 3.18 compatibility is not explicitly locked.\n");
-    output.push_str(
-        "- `planned-needs-negative-gate`: planned or adjacent to current behavior, but missing a direct absence test.\n",
-    );
     output.push_str(
         "- `not-applicable+documented`: explicitly outside the current Perl editor substrate lane.\n\n",
     );
@@ -429,6 +427,34 @@ mod tests {
         let rendered = render_matrix();
         let data_rows = rendered.lines().filter(|line| line.starts_with("| ")).count() - 2;
         assert_eq!(data_rows, ROWS.len());
+    }
+
+    #[test]
+    fn matrix_rows_use_only_closed_statuses() {
+        for row in ROWS {
+            assert!(
+                CLOSED_STATUSES.contains(&row.status),
+                "matrix row {} uses non-closed status {}",
+                row.feature,
+                row.status
+            );
+        }
+    }
+
+    #[test]
+    fn rendered_matrix_has_no_transitional_status_vocabulary() {
+        let rendered = render_matrix();
+        for transitional in [
+            "implemented-needs-positive-wire-test",
+            "needs-capability-parser",
+            "needs-compat-test",
+            "planned-needs-negative-gate",
+        ] {
+            assert!(
+                !rendered.contains(transitional),
+                "rendered matrix still documents transitional status {transitional}"
+            );
+        }
     }
 
     #[test]

@@ -6,16 +6,12 @@ Generator: `cargo xtask generate-lsp-318-matrix`
 Check: `cargo xtask generate-lsp-318-matrix --check`
 Boundary spec: [PLSP-SPEC-0029](PLSP-SPEC-0029-lsp-318-conformance-boundary.md)
 
-This matrix is the working ledger for selected LSP 3.18 coverage. It is not a blanket full-conformance claim and does not imply release readiness. Each row classifies a surface so future PRs can move it from negative-gated or planned to implemented+tested+documented only when capability parsing, runtime behavior, wire tests, snapshots, docs, and editor receipts are present where relevant.
+This matrix is the working ledger for selected LSP 3.18 coverage. It is not a blanket full-conformance claim and does not imply release readiness. Each row classifies a surface as implemented, intentionally absent, or outside the current Perl editor substrate lane. The current closeout state has no unknown or transitional rows.
 
 Status vocabulary:
 
 - `implemented+tested+documented`: implemented, tested over the wire or snapshots, and documented in the current boundary.
 - `negative-gated+documented`: intentionally unsupported or absent until a later capability-gated implementation PR.
-- `implemented-needs-positive-wire-test`: code path exists, but the matrix still requires a positive client-capability receipt before it is locked.
-- `needs-capability-parser`: existing behavior is adjacent, but 3.18-specific client capability parsing is not yet proven.
-- `needs-compat-test`: current behavior may be acceptable, but 3.18 compatibility is not explicitly locked.
-- `planned-needs-negative-gate`: planned or adjacent to current behavior, but missing a direct absence test.
 - `not-applicable+documented`: explicitly outside the current Perl editor substrate lane.
 
 | Feature | Since / proposed flag | Client capability gate | Server capability / advertised shape | Method / response shape | Status | Current proof | Owner module | Priority | Notes |

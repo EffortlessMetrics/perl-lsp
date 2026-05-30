@@ -101,6 +101,20 @@ perl-lsp supports selected LSP 3.18 surfaces with capability-honest contracts.
 | Lean/e2e watcher behavior | `workspace/didChangeWatchedFiles` dynamic registration | Runtime tuning can suppress file watchers without suppressing inline-completion dynamic registration. | `lsp_registration_tests`, lean UX receipts |
 | RelativePattern watcher registrations | `workspace.didChangeWatchedFiles.relativePatternSupport`, `workspace/didChangeWatchedFiles` dynamic registration | Clients that support relative watcher glob patterns receive `baseUri`/`pattern` objects rooted at workspace folders; unsupported clients and invalid workspace roots keep string glob fallback. | `lsp_registration_tests`, `lsp_318_negative_claims`, `check-lsp-318-claims` |
 
+## Matrix Closeout State
+
+The generated LSP 3.18 matrix is closed for the current support boundary. Every
+row is classified as one of:
+
+- `implemented+tested+documented`
+- `negative-gated+documented`
+- `not-applicable+documented`
+
+Rows must not use transitional statuses such as "needs capability parser" or
+"planned needs negative gate" unless a later PR intentionally reopens the matrix
+with a documented follow-up lane. `cargo xtask check-lsp-318-claims` enforces
+that the checked-in matrix stays in this closed-state vocabulary.
+
 ## Explicitly Unclaimed Surfaces
 
 These surfaces are not part of the current claim unless a later PR adds behavior,
