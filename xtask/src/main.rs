@@ -194,6 +194,14 @@ enum Commands {
         quality_receipt: PathBuf,
     },
 
+    /// Emit a semantic inline-completion next-edit scaffold receipt.
+    #[command(name = "semantic-inline-next-edit")]
+    SemanticInlineNextEdit {
+        /// Receipt JSON path to write.
+        #[arg(long, default_value = "target/receipts/semantic-inline-next-edit.json")]
+        receipt: PathBuf,
+    },
+
     /// Emit a supported-editor inline-completion smoke receipt bundle.
     #[command(name = "supported-editor-inline-smoke")]
     SupportedEditorInlineSmoke {
@@ -2761,6 +2769,7 @@ fn main() -> Result<()> {
         Commands::SemanticInlineReceipts { receipt, quality_receipt } => {
             semantic_inline_receipts::run(receipt, quality_receipt)
         }
+        Commands::SemanticInlineNextEdit { receipt } => semantic_inline_next_edit::run(receipt),
         Commands::SupportedEditorInlineSmoke { receipt } => {
             supported_editor_inline_smoke::run(receipt)
         }

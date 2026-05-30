@@ -9,6 +9,12 @@ use perl_parser_core::{Parser, RecoverySalvageProfile};
 use perl_position_tracking::utf16_line_col_to_offset;
 use serde::{Deserialize, Serialize};
 
+pub mod next_edit;
+pub use next_edit::{
+    NextEditCandidateFamily, NextEditFeatureGate, NextEditGateSource, NextEditProvider,
+    NextEditRequest, NextEditResponse, NextEditSafetyPolicy, NextEditStatus, NextEditSuggestion,
+};
+
 const MAX_INLINE_COMPLETION_ITEMS: usize = 5;
 
 /// Prepared context for inline completion suggestions and future AI handoff.
