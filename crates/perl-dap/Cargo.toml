@@ -201,6 +201,11 @@ path = "tests/dap_scope_filtering_tests.rs"
 # AC:#782 Content-level scope filtering: locals/package/globals with no cross-contamination
 
 [[test]]
+name = "dap_stdio_transport_e2e"
+path = "tests/dap_stdio_transport_e2e.rs"
+# End-to-end stdio transport framing against the packaged perl-dap binary
+
+[[test]]
 name = "dap_scorecard_harness"
 path = "tests/dap_scorecard_harness.rs"
 # AC:4069 DAP launch-success scorecard: 5 fixtures, ≥80% pass rate, p50/p95 latency
