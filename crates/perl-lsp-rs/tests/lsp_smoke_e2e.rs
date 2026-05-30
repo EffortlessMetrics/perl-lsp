@@ -608,6 +608,166 @@ my $value = gre
 }
 
 #[test]
+fn lsp_smoke_e2e_ignores_stale_did_change_versions() -> Result<(), Box<dyn std::error::Error>> {
+    let server = common::start_lsp_server();
+    let timeout = Duration::from_secs(2);
+    let init_timeout = common::timeout_scaler::TimeoutProfile::Initialization.timeout();
+    let uri = "file:///tmp/lsp_smoke_e2e_stale_change.pl";
+
+    let original_source = r#"use strict;
+use warnings;
+
+sub stable_symbol { return 42; }
+my $value = stable_symbol();
+"#;
+
+    let stale_broken_source = r#"use strict;
+use warnings;
+
+sub stable_symbol { return ;
+my $value = stable_symbol();
+"#;
+
+    let init_response = send_request_with_timeout(
+        &server,
+        201,
+        "initialize",
+        json!({
+            "processId": null,
+            "rootUri": null,
+            "capabilities": {
+                "textDocument": {
+                    "diagnostic": {
+                        "dynamicRegistration": false
+                    },
+                    "hover": {
+                        "contentFormat": ["markdown", "plaintext"]
+                    }
+                }
+            }
+        }),
+        init_timeout,
+    )?;
+    assert!(init_response.get("error").is_none(), "initialize returned error: {init_response:#}");
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "initialized",
+            "params": {}
+        }),
+    );
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 2,
+                    "text": original_source
+                }
+            }
+        }),
+    );
+
+    let initial_diagnostic_response = send_request_with_timeout(
+        &server,
+        202,
+        "textDocument/diagnostic",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+        timeout,
+    )?;
+    assert!(
+        initial_diagnostic_response.get("error").is_none(),
+        "initial diagnostic request returned error: {initial_diagnostic_response:#}"
+    );
+    let initial_messages = diagnostic_messages(diagnostic_items(&initial_diagnostic_response)?);
+    assert!(
+        initial_messages.iter().all(|message| {
+            let lower = message.to_ascii_lowercase();
+            !lower.contains("expected") && !lower.contains("recovered from missingoperand")
+        }),
+        "opened document should not start with parse-error diagnostics: {initial_messages:?}"
+    );
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didChange",
+            "params": {
+                "textDocument": { "uri": uri, "version": 1 },
+                "contentChanges": [{ "text": stale_broken_source }]
+            }
+        }),
+    );
+
+    std::thread::sleep(Duration::from_millis(50));
+
+    let stale_diagnostic_response = send_request_with_timeout(
+        &server,
+        203,
+        "textDocument/diagnostic",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+        timeout,
+    )?;
+    assert!(
+        stale_diagnostic_response.get("error").is_none(),
+        "diagnostic request after stale didChange returned error: {stale_diagnostic_response:#}"
+    );
+    let stale_messages = diagnostic_messages(diagnostic_items(&stale_diagnostic_response)?);
+    assert!(
+        stale_messages.iter().all(|message| {
+            let lower = message.to_ascii_lowercase();
+            !lower.contains("expected") && !lower.contains("recovered from missingoperand")
+        }),
+        "stale didChange must not replace the newer clean document with parse errors: {stale_messages:?}"
+    );
+
+    let (hover_line, hover_col) = line_col(original_source, 4, "stable_symbol")?;
+    let hover_response = send_request_with_timeout(
+        &server,
+        204,
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": hover_line, "character": hover_col }
+        }),
+        timeout,
+    )?;
+    assert!(
+        hover_response.get("error").is_none(),
+        "server should remain responsive after ignoring stale didChange: {hover_response:#}"
+    );
+
+    let shutdown_response =
+        send_request_with_timeout(&server, 205, "shutdown", json!(null), timeout)?;
+    assert!(
+        shutdown_response.get("error").is_none(),
+        "shutdown returned error: {shutdown_response:#}"
+    );
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+            "params": null
+        }),
+    );
+
+    Ok(())
+}
+
+#[test]
 fn lsp_smoke_e2e_pull_diagnostics_refresh_after_change() -> Result<(), Box<dyn std::error::Error>> {
     let server = common::start_lsp_server();
     let timeout = Duration::from_secs(2);
