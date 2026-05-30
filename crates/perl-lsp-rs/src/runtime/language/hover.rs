@@ -1146,6 +1146,8 @@ impl LspServer {
     ) -> Value {
         // MetaCPAN link is included in every branch — compute once up front.
         let metacpan_link = format!("[View on MetaCPAN](https://metacpan.org/pod/{module_name})");
+        let perldoc_virtual_link = Self::perldoc_virtual_link(module_name);
+        let docs_links = format!("{metacpan_link} \u{2022} {perldoc_virtual_link}");
 
         // Try URI resolution (handles open docs + workspace folders)
         if let Some(uri) = self.resolve_module_to_path_with_doc_at_offset(
@@ -1162,7 +1164,7 @@ impl LspServer {
                 "contents": {
                     "kind": "markdown",
                     "value": format!(
-                        "**{module_name}**\n\n`{display_path}`\n\n[Go to module]({uri}) \u{2022} {metacpan_link}{pod_section}"
+                        "**{module_name}**\n\n`{display_path}`\n\n[Go to module]({uri}) \u{2022} {docs_links}{pod_section}"
                     ),
                 },
             });
@@ -1182,7 +1184,7 @@ impl LspServer {
                     "contents": {
                         "kind": "markdown",
                         "value": format!(
-                            "**{module_name}**\n\n`{display}`\n\n[Go to module]({file_uri}) \u{2022} {metacpan_link}{pod_section}"
+                            "**{module_name}**\n\n`{display}`\n\n[Go to module]({file_uri}) \u{2022} {docs_links}{pod_section}"
                         ),
                     },
                 });
@@ -1191,7 +1193,7 @@ impl LspServer {
                 "contents": {
                     "kind": "markdown",
                     "value": format!(
-                        "**{module_name}**\n\n`{display}`\n\n{metacpan_link}{pod_section}"
+                        "**{module_name}**\n\n`{display}`\n\n{docs_links}{pod_section}"
                     ),
                 },
             });
@@ -1223,10 +1225,14 @@ Not found in workspace or configured include paths.
 
 **Next steps**: install `{module_name}` (for example, `cpanm {module_name}`) or add the directory that contains it to `.perl-lsp.toml` `include_paths`.
 
-{metacpan_link}"
+{docs_links}"
                 ),
             },
         })
+    }
+
+    fn perldoc_virtual_link(module_name: &str) -> String {
+        format!("[Open virtual perldoc](perldoc://{module_name})")
     }
 
     fn format_missing_module_search_paths(include_paths: &[String]) -> String {
@@ -1249,7 +1255,7 @@ Not found in workspace or configured include paths.
 
         let perldoc_web_link =
             format!("[perldoc {module_name}](https://perldoc.perl.org/{module_name})");
-        let perldoc_virtual_link = format!("[Open virtual perldoc](perldoc://{module_name})");
+        let perldoc_virtual_link = Self::perldoc_virtual_link(module_name);
         let perldoc_links = format!("{perldoc_web_link} | {perldoc_virtual_link}");
 
         Some(json!({
