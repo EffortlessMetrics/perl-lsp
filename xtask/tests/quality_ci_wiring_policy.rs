@@ -188,6 +188,11 @@ fn docs_describe_transitional_blocking_contract() {
             )
             && status_doc.contains("project coverage is visible in coverage receipts")
             && status_doc.contains("total active RIPR+ unresolved gaps")
+            && status_doc.contains("Active RIPR+ Inventory")
+            && status_doc.contains("active_unresolved")
+            && status_doc.contains("suppressed_unresolved")
+            && status_doc.contains("top_active_gap_kinds")
+            && status_doc.contains("recommended_first_clusters")
             && status_doc.contains("An active temporary exception is not a final-enforcement pass"),
         "status doc must keep final targets separate from transitional enforcement"
     );
