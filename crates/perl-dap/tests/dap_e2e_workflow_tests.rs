@@ -502,3 +502,65 @@ fn test_e2e_locals_scope_payload_contract() -> TestResult {
     session.disconnect()?;
     Ok(())
 }
+
+// ─── Test 9: evaluate expression in stopped frame ────────────────────────────
+
+/// Validates the watch/evaluate path against a real `perl -d` session:
+/// stop at breakpoint → stackTrace → evaluate arithmetic/string expressions.
+///
+/// This catches regressions in command framing and debugger-output parsing that
+/// unit tests without an active process cannot exercise.
+#[test]
+fn test_e2e_evaluate_expression_in_stopped_frame() -> TestResult {
+    if !perl_available() {
+        eprintln!("Skipping test_e2e_evaluate_expression_in_stopped_frame - perl not available");
+        return Ok(());
+    }
+
+    let workspace = tempdir()?;
+    let script = workspace.path().join("workflow_evaluate.pl");
+    write(&script, workflow_script_content())?;
+
+    let script_str = script.to_str().ok_or("script path is not valid UTF-8")?.to_string();
+
+    let timeout = workflow_timeout();
+    let mut session = DapWorkflowSession::new(timeout)?;
+
+    session.launch(&script_str)?;
+    session.set_breakpoints(&script_str, &[BP_LINE_2])?;
+    session.configuration_done()?;
+
+    let stopped = session.wait_stopped()?;
+    assert_eq!(
+        stopped.reason, "breakpoint",
+        "stopped reason must be `breakpoint`, got `{}`",
+        stopped.reason
+    );
+
+    let (frame_id, source_path, frame_line) = session.stack_trace(stopped.thread_id)?;
+    assert_eq!(source_path, script_str, "evaluate should run while stopped in the launched script");
+    assert!(frame_line > 0, "stopped frame should report a source line");
+
+    let (arithmetic_result, arithmetic_type) = session.evaluate_expression("10+5", frame_id)?;
+    assert!(
+        arithmetic_result.contains("15"),
+        "watch evaluate should include the arithmetic result in debugger output, got `{arithmetic_result}`"
+    );
+    assert!(
+        matches!(arithmetic_type.as_deref(), Some("scalar" | "integer" | "string")),
+        "arithmetic evaluate should include a scalar-like result type, got {arithmetic_type:?}"
+    );
+
+    let (string_result, string_type) = session.evaluate_expression("'dap-e2e'", frame_id)?;
+    assert!(
+        string_result.contains("dap-e2e"),
+        "watch evaluate should include string literal values, got `{string_result}`"
+    );
+    assert!(
+        matches!(string_type.as_deref(), Some("scalar" | "string")),
+        "string evaluate should include a scalar-like result type, got {string_type:?}"
+    );
+
+    session.disconnect()?;
+    Ok(())
+}

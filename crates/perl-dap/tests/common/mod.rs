@@ -257,6 +257,34 @@ impl DapWorkflowSession {
         Ok(vars)
     }
 
+    /// Evaluate a debugger expression in the currently stopped frame.
+    ///
+    /// Returns the string result and optional DAP type reported by the adapter.
+    pub fn evaluate_expression(
+        &mut self,
+        expression: &str,
+        frame_id: i64,
+    ) -> Result<(String, Option<String>), String> {
+        let args = json!({
+            "expression": expression,
+            "frameId": frame_id,
+            "context": "watch",
+            "allowSideEffects": false
+        });
+        let resp = self.request("evaluate", Some(args));
+        let body = self.expect_success(&resp, "evaluate")?;
+
+        let body = body.ok_or("evaluate response had no body")?;
+        let result = body
+            .get("result")
+            .and_then(Value::as_str)
+            .ok_or("evaluate body missing string `result`")?
+            .to_string();
+        let ty = body.get("type").and_then(Value::as_str).map(ToString::to_string);
+
+        Ok((result, ty))
+    }
+
     /// Send `continue` for `thread_id`.
     pub fn continue_exec(&mut self, thread_id: i64) -> Result<(), String> {
         let args = json!({"threadId": thread_id});
