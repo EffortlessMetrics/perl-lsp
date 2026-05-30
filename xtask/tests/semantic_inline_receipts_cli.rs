@@ -109,6 +109,36 @@ fn semantic_inline_receipts_cli_embeds_quality_counters_when_available() -> Resu
                     "no_visible_context": 1
                 },
                 "parse_regressions": 0
+            },
+            "sources": {
+                "module": {
+                    "expected": 4,
+                    "passed": 4,
+                    "failed": 0,
+                    "returned_items": 6,
+                    "edit_application": {
+                        "total": 4,
+                        "passed": 4,
+                        "failed": 0
+                    },
+                    "parse_regressions": 0,
+                    "suppression_reasons": {}
+                },
+                "hard_zone": {
+                    "expected": 14,
+                    "passed": 14,
+                    "failed": 0,
+                    "returned_items": 0,
+                    "edit_application": {
+                        "total": 0,
+                        "passed": 0,
+                        "failed": 0
+                    },
+                    "parse_regressions": 0,
+                    "suppression_reasons": {
+                        "hard_zone": 14
+                    }
+                }
             }
         }))?,
     )?;
@@ -169,6 +199,32 @@ fn semantic_inline_receipts_cli_embeds_quality_counters_when_available() -> Resu
         Some(1)
     );
     assert_eq!(quality_counters.get("parse_regressions").and_then(Value::as_u64), Some(0));
+    assert_eq!(
+        quality_counters
+            .get("sources")
+            .and_then(|sources| sources.get("module"))
+            .and_then(|source| source.get("returned_items"))
+            .and_then(Value::as_u64),
+        Some(6)
+    );
+    assert_eq!(
+        quality_counters
+            .get("sources")
+            .and_then(|sources| sources.get("module"))
+            .and_then(|source| source.get("edit_application"))
+            .and_then(|edit_application| edit_application.get("passed"))
+            .and_then(Value::as_u64),
+        Some(4)
+    );
+    assert_eq!(
+        quality_counters
+            .get("sources")
+            .and_then(|sources| sources.get("hard_zone"))
+            .and_then(|source| source.get("suppression_reasons"))
+            .and_then(|suppression_reasons| suppression_reasons.get("hard_zone"))
+            .and_then(Value::as_u64),
+        Some(14)
+    );
 
     Ok(())
 }

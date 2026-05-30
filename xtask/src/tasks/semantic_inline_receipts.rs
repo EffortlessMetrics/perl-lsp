@@ -97,6 +97,19 @@ struct InlineQualityCounterSummary {
     hard_zone_rejections: Option<u64>,
     suppression_reasons: Option<BTreeMap<String, u64>>,
     parse_regressions: Option<u64>,
+    sources: Option<BTreeMap<String, SourceQualityCounterSummary>>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct SourceQualityCounterSummary {
+    expected: u64,
+    passed: u64,
+    failed: u64,
+    returned_items: u64,
+    edit_application: QualityCountSummary,
+    parse_regressions: u64,
+    suppression_reasons: BTreeMap<String, u64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -141,12 +154,14 @@ fn read_optional_quality_counter_summary(path: &Path) -> Result<InlineQualityCou
             hard_zone_rejections: None,
             suppression_reasons: None,
             parse_regressions: None,
+            sources: None,
         });
     }
 
     let quality = read_json(path)?;
     let suppression_reasons = quality_counter_map(&quality, "/checks/suppression_reasons")?;
     let edit_application = quality_count_summary(&quality, "/checks/edit_application")?;
+    let sources = quality_source_summaries(&quality)?;
     Ok(InlineQualityCounterSummary {
         source,
         available: true,
@@ -156,6 +171,7 @@ fn read_optional_quality_counter_summary(path: &Path) -> Result<InlineQualityCou
         hard_zone_rejections: quality.pointer("/checks/hard_zone_rejected").and_then(Value::as_u64),
         suppression_reasons,
         parse_regressions: quality.pointer("/checks/parse_regressions").and_then(Value::as_u64),
+        sources,
     })
 }
 
@@ -201,6 +217,97 @@ fn quality_counter_map(quality: &Value, pointer: &str) -> Result<Option<BTreeMap
     }
 
     Ok(Some(result))
+}
+
+fn quality_source_summaries(
+    quality: &Value,
+) -> Result<Option<BTreeMap<String, SourceQualityCounterSummary>>> {
+    let Some(sources) = quality.get("sources") else {
+        return Ok(None);
+    };
+    let sources =
+        sources.as_object().ok_or_else(|| eyre!("quality receipt `/sources` must be an object"))?;
+
+    let mut result = BTreeMap::new();
+    for (source_name, source) in sources {
+        let source = source
+            .as_object()
+            .ok_or_else(|| eyre!("quality receipt `/sources/{source_name}` must be an object"))?;
+        let edit_application = quality_count_summary_object(
+            source,
+            &format!("/sources/{source_name}/edit_application"),
+        )?;
+        let suppression_reasons = required_quality_counter_map(
+            source,
+            &format!("/sources/{source_name}/suppression_reasons"),
+        )?;
+
+        result.insert(
+            source_name.clone(),
+            SourceQualityCounterSummary {
+                expected: quality_count_field(
+                    source,
+                    &format!("/sources/{source_name}"),
+                    "expected",
+                )?,
+                passed: quality_count_field(source, &format!("/sources/{source_name}"), "passed")?,
+                failed: quality_count_field(source, &format!("/sources/{source_name}"), "failed")?,
+                returned_items: quality_count_field(
+                    source,
+                    &format!("/sources/{source_name}"),
+                    "returned_items",
+                )?,
+                edit_application,
+                parse_regressions: quality_count_field(
+                    source,
+                    &format!("/sources/{source_name}"),
+                    "parse_regressions",
+                )?,
+                suppression_reasons,
+            },
+        );
+    }
+
+    Ok(Some(result))
+}
+
+fn quality_count_summary_object(
+    object: &serde_json::Map<String, Value>,
+    pointer: &str,
+) -> Result<QualityCountSummary> {
+    let value = object
+        .get("edit_application")
+        .ok_or_else(|| eyre!("quality receipt `{pointer}` must be an object"))?;
+    let object =
+        value.as_object().ok_or_else(|| eyre!("quality receipt `{pointer}` must be an object"))?;
+
+    Ok(QualityCountSummary {
+        total: quality_count_field(object, pointer, "total")?,
+        passed: quality_count_field(object, pointer, "passed")?,
+        failed: quality_count_field(object, pointer, "failed")?,
+    })
+}
+
+fn required_quality_counter_map(
+    object: &serde_json::Map<String, Value>,
+    pointer: &str,
+) -> Result<BTreeMap<String, u64>> {
+    let counters = object
+        .get("suppression_reasons")
+        .ok_or_else(|| eyre!("quality receipt `{pointer}` must be an object"))?;
+    let counters = counters
+        .as_object()
+        .ok_or_else(|| eyre!("quality receipt `{pointer}` must be an object"))?;
+
+    let mut result = BTreeMap::new();
+    for (name, count) in counters {
+        let count = count
+            .as_u64()
+            .ok_or_else(|| eyre!("quality receipt `{pointer}/{name}` must be an unsigned count"))?;
+        result.insert(name.clone(), count);
+    }
+
+    Ok(result)
 }
 
 fn summarize_matrix(
@@ -377,6 +484,7 @@ mod tests {
             hard_zone_rejections: None,
             suppression_reasons: None,
             parse_regressions: None,
+            sources: None,
         }
     }
 
@@ -465,6 +573,86 @@ mod tests {
         assert_eq!(summary.passed, 2);
         assert_eq!(summary.failed, 1);
 
+        Ok(())
+    }
+
+    #[test]
+    fn quality_source_summaries_embed_source_outcomes() -> Result<()> {
+        let quality = json!({
+            "sources": {
+                "module": {
+                    "expected": 4,
+                    "passed": 4,
+                    "failed": 0,
+                    "returned_items": 6,
+                    "edit_application": {
+                        "total": 4,
+                        "passed": 4,
+                        "failed": 0
+                    },
+                    "parse_regressions": 0,
+                    "suppression_reasons": {}
+                },
+                "hard_zone": {
+                    "expected": 2,
+                    "passed": 2,
+                    "failed": 0,
+                    "returned_items": 0,
+                    "edit_application": {
+                        "total": 0,
+                        "passed": 0,
+                        "failed": 0
+                    },
+                    "parse_regressions": 0,
+                    "suppression_reasons": {
+                        "hard_zone": 2
+                    }
+                }
+            }
+        });
+
+        let sources = quality_source_summaries(&quality)?
+            .ok_or_else(|| eyre!("missing quality source summaries"))?;
+
+        let module = sources.get("module").ok_or_else(|| eyre!("missing module source"))?;
+        assert_eq!(module.expected, 4);
+        assert_eq!(module.returned_items, 6);
+        assert_eq!(module.edit_application.passed, 4);
+
+        let hard_zone =
+            sources.get("hard_zone").ok_or_else(|| eyre!("missing hard_zone source"))?;
+        assert_eq!(hard_zone.returned_items, 0);
+        assert_eq!(hard_zone.suppression_reasons.get("hard_zone").copied(), Some(2));
+        Ok(())
+    }
+
+    #[test]
+    fn quality_source_summaries_require_unsigned_fields() -> Result<()> {
+        let quality = json!({
+            "sources": {
+                "module": {
+                    "expected": "bad",
+                    "passed": 0,
+                    "failed": 0,
+                    "returned_items": 0,
+                    "edit_application": {
+                        "total": 0,
+                        "passed": 0,
+                        "failed": 0
+                    },
+                    "parse_regressions": 0,
+                    "suppression_reasons": {}
+                }
+            }
+        });
+
+        let Err(error) = quality_source_summaries(&quality) else {
+            bail!("invalid source summary must fail");
+        };
+        assert!(
+            error.to_string().contains("/sources/module/expected"),
+            "error should identify invalid source field, got {error}"
+        );
         Ok(())
     }
 }
