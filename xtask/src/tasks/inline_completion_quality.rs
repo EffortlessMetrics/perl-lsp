@@ -50,6 +50,10 @@ struct SourceQualityReceipt {
     expected: usize,
     passed: usize,
     failed: usize,
+    returned_items: usize,
+    edit_application: CountReceipt,
+    parse_regressions: usize,
+    suppression_reasons: BTreeMap<String, usize>,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -100,6 +104,15 @@ enum EditApplicationOutcome {
     Failed,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct SourceScenarioOutcome {
+    passed: bool,
+    item_count: usize,
+    parse_regressions: usize,
+    edit_application: EditApplicationOutcome,
+    suppression_reason: Option<&'static str>,
+}
+
 struct InlineCompletionScenario {
     text: String,
     line: u32,
@@ -107,13 +120,17 @@ struct InlineCompletionScenario {
 }
 
 pub fn run(receipt: PathBuf) -> Result<()> {
+    run_with_scenarios(receipt, scenarios())
+}
+
+fn run_with_scenarios(receipt: PathBuf, scenario_set: &[Scenario]) -> Result<()> {
     let provider = InlineCompletionProvider::new();
     let mut receipt_data = InlineCompletionQualityReceipt {
         schema_version: "inline-completion-quality.v1",
         provider: "inline_completion",
         provider_action: "deterministic_fixture_quality",
         claim_boundary: "local deterministic fixture receipt only; no telemetry upload and no AI/provider behavior change",
-        fixtures_total: scenarios().len(),
+        fixtures_total: scenario_set.len(),
         fixtures_passed: 0,
         latency_p95_ms: 0,
         checks: InlineCompletionQualityChecks::default(),
@@ -123,7 +140,7 @@ pub fn run(receipt: PathBuf) -> Result<()> {
     let mut latencies = Vec::new();
     let mut failures = Vec::new();
 
-    for scenario in scenarios() {
+    for scenario in scenario_set {
         let started = Instant::now();
         let result = run_scenario(&provider, scenario);
         let latency_ms = started.elapsed().as_millis();
@@ -135,10 +152,21 @@ pub fn run(receipt: PathBuf) -> Result<()> {
                 record_edit_application(&mut receipt_data.checks, edit_application);
                 let passed = parse_regressions == 0
                     && !matches!(edit_application, EditApplicationOutcome::Failed);
-                record_source_result(&mut receipt_data.sources, scenario.source_name, passed);
                 update_check_counts(&mut receipt_data.checks, scenario, passed);
+                let suppression_reason = measured_suppression_reason(scenario, item_count, passed);
+                record_source_result(
+                    &mut receipt_data.sources,
+                    scenario.source_name,
+                    SourceScenarioOutcome {
+                        passed,
+                        item_count,
+                        parse_regressions,
+                        edit_application,
+                        suppression_reason,
+                    },
+                );
 
-                if let Some(reason) = measured_suppression_reason(scenario, item_count, passed) {
+                if let Some(reason) = suppression_reason {
                     record_suppression_reason(&mut receipt_data.checks, reason);
                     notes.push(format!("suppression_reason={reason}"));
                     if reason == SUPPRESSION_HARD_ZONE {
@@ -171,20 +199,13 @@ pub fn run(receipt: PathBuf) -> Result<()> {
                     notes,
                 });
             }
-            Err(error) => {
-                record_source_result(&mut receipt_data.sources, scenario.source_name, false);
-                update_check_counts(&mut receipt_data.checks, scenario, false);
-                let message = error.to_string();
-                failures.push(format!("{}: {message}", scenario.name));
-                receipt_data.scenarios.push(ScenarioQualityReceipt {
-                    name: scenario.name,
-                    source: scenario.source_name,
-                    outcome: "fail",
-                    item_count: 0,
-                    latency_ms,
-                    notes: vec![message],
-                });
-            }
+            Err(error) => record_scenario_error(
+                &mut receipt_data,
+                &mut failures,
+                scenario,
+                latency_ms,
+                error.to_string(),
+            ),
         }
     }
 
@@ -211,15 +232,51 @@ pub fn run(receipt: PathBuf) -> Result<()> {
 fn record_source_result(
     sources: &mut BTreeMap<String, SourceQualityReceipt>,
     source_name: &str,
-    passed: bool,
+    outcome: SourceScenarioOutcome,
 ) {
     let source_entry = sources.entry(source_name.to_string()).or_default();
     source_entry.expected += 1;
-    if passed {
+    source_entry.returned_items += outcome.item_count;
+    source_entry.parse_regressions += outcome.parse_regressions;
+    record_edit_application_count(&mut source_entry.edit_application, outcome.edit_application);
+    if let Some(reason) = outcome.suppression_reason {
+        *source_entry.suppression_reasons.entry(reason.to_string()).or_default() += 1;
+    }
+    if outcome.passed {
         source_entry.passed += 1;
     } else {
         source_entry.failed += 1;
     }
+}
+
+fn record_scenario_error(
+    receipt_data: &mut InlineCompletionQualityReceipt,
+    failures: &mut Vec<String>,
+    scenario: &Scenario,
+    latency_ms: u128,
+    message: String,
+) {
+    record_source_result(
+        &mut receipt_data.sources,
+        scenario.source_name,
+        SourceScenarioOutcome {
+            passed: false,
+            item_count: 0,
+            parse_regressions: 0,
+            edit_application: EditApplicationOutcome::NotApplicable,
+            suppression_reason: None,
+        },
+    );
+    update_check_counts(&mut receipt_data.checks, scenario, false);
+    failures.push(format!("{}: {message}", scenario.name));
+    receipt_data.scenarios.push(ScenarioQualityReceipt {
+        name: scenario.name,
+        source: scenario.source_name,
+        outcome: "fail",
+        item_count: 0,
+        latency_ms,
+        notes: vec![message],
+    });
 }
 
 fn run_scenario(
@@ -288,15 +345,19 @@ fn record_edit_application(
     checks: &mut InlineCompletionQualityChecks,
     outcome: EditApplicationOutcome,
 ) {
+    record_edit_application_count(&mut checks.edit_application, outcome);
+}
+
+fn record_edit_application_count(counter: &mut CountReceipt, outcome: EditApplicationOutcome) {
     match outcome {
         EditApplicationOutcome::NotApplicable => {}
         EditApplicationOutcome::Passed => {
-            checks.edit_application.total += 1;
-            checks.edit_application.passed += 1;
+            counter.total += 1;
+            counter.passed += 1;
         }
         EditApplicationOutcome::Failed => {
-            checks.edit_application.total += 1;
-            checks.edit_application.failed += 1;
+            counter.total += 1;
+            counter.failed += 1;
         }
     }
 }
@@ -1154,6 +1215,176 @@ mod tests {
             receipt.pointer("/checks/edit_application/failed").and_then(Value::as_u64),
             Some(0)
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn inline_completion_quality_receipt_breaks_down_source_outcomes() -> Result<()> {
+        let temp = TempDir::new()?;
+        let receipt_path = temp.path().join("inline-completion-quality.json");
+
+        run(receipt_path.clone())?;
+
+        let receipt: Value = serde_json::from_slice(&fs::read(&receipt_path)?)?;
+        let expected_hard_zone_scenarios =
+            scenarios().iter().filter(|scenario| scenario.source_name == "hard_zone").count()
+                as u64;
+        let expected_replacement_range_scenarios = scenarios()
+            .iter()
+            .filter(|scenario| scenario.source_name == "replacement_range")
+            .count() as u64;
+
+        assert_eq!(
+            receipt.pointer("/sources/hard_zone/expected").and_then(Value::as_u64),
+            Some(expected_hard_zone_scenarios)
+        );
+        assert_eq!(
+            receipt.pointer("/sources/hard_zone/returned_items").and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            receipt
+                .pointer("/sources/hard_zone/suppression_reasons/hard_zone")
+                .and_then(Value::as_u64),
+            Some(expected_hard_zone_scenarios)
+        );
+        assert_eq!(
+            receipt.pointer("/sources/hard_zone/edit_application/total").and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            receipt
+                .pointer("/sources/replacement_range/edit_application/total")
+                .and_then(Value::as_u64),
+            Some(expected_replacement_range_scenarios)
+        );
+        assert_eq!(
+            receipt
+                .pointer("/sources/replacement_range/edit_application/passed")
+                .and_then(Value::as_u64),
+            Some(expected_replacement_range_scenarios)
+        );
+        let module_returned_items = receipt
+            .pointer("/sources/module/returned_items")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| eyre!("missing module returned_items source receipt"))?;
+        assert!(module_returned_items > 0);
+
+        Ok(())
+    }
+
+    #[test]
+    fn inline_completion_quality_receipt_records_scenario_errors() -> Result<()> {
+        let temp = TempDir::new()?;
+        let receipt_path = temp.path().join("inline-completion-quality.json");
+        let scenario_set = [Scenario {
+            name: "bad_fixture",
+            source_name: "unit_source",
+            source: "missing cursor",
+            available_modules: &[],
+            hard_zone: false,
+            assertion: ScenarioAssertion::Suggestion {
+                first: Some("strict;"),
+                expected: &["strict;"],
+                not_expected: &[],
+            },
+        }];
+
+        let error = run_with_scenarios(receipt_path.clone(), &scenario_set)
+            .expect_err("invalid fixture should fail the quality receipt");
+
+        assert!(
+            error.to_string().contains("inline-completion quality receipt failed 1 fixture(s)")
+        );
+        let receipt: Value = serde_json::from_slice(&fs::read(&receipt_path)?)?;
+        assert_eq!(receipt.pointer("/fixtures_passed").and_then(Value::as_u64), Some(0));
+        assert_eq!(
+            receipt.pointer("/sources/unit_source/expected").and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(receipt.pointer("/sources/unit_source/failed").and_then(Value::as_u64), Some(1));
+        assert_eq!(
+            receipt.pointer("/sources/unit_source/returned_items").and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            receipt.pointer("/scenarios/0/notes/0").and_then(Value::as_str),
+            Some("fixture must include <<CURSOR>> marker")
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn source_breakdown_records_failed_scenario_accounting() -> Result<()> {
+        let mut receipt = InlineCompletionQualityReceipt {
+            schema_version: "inline-completion-quality.v1",
+            provider: "inline_completion",
+            provider_action: "deterministic_fixture_quality",
+            claim_boundary: "unit test receipt",
+            fixtures_total: 1,
+            fixtures_passed: 0,
+            latency_p95_ms: 0,
+            checks: InlineCompletionQualityChecks::default(),
+            sources: BTreeMap::new(),
+            scenarios: Vec::new(),
+        };
+        let mut failures = Vec::new();
+        let scenario = Scenario {
+            name: "bad_fixture",
+            source_name: "unit_source",
+            source: "missing cursor",
+            available_modules: &[],
+            hard_zone: false,
+            assertion: ScenarioAssertion::Suggestion {
+                first: Some("strict;"),
+                expected: &["strict;"],
+                not_expected: &[],
+            },
+        };
+
+        record_scenario_error(
+            &mut receipt,
+            &mut failures,
+            &scenario,
+            7,
+            "missing cursor marker".to_string(),
+        );
+        record_source_result(
+            &mut receipt.sources,
+            "unit_source",
+            SourceScenarioOutcome {
+                passed: false,
+                item_count: 3,
+                parse_regressions: 2,
+                edit_application: EditApplicationOutcome::Failed,
+                suppression_reason: Some(SUPPRESSION_NO_VISIBLE_CONTEXT),
+            },
+        );
+
+        let source = receipt
+            .sources
+            .get("unit_source")
+            .ok_or_else(|| eyre!("missing unit source receipt"))?;
+        assert_eq!(source.expected, 2);
+        assert_eq!(source.passed, 0);
+        assert_eq!(source.failed, 2);
+        assert_eq!(source.returned_items, 3);
+        assert_eq!(source.parse_regressions, 2);
+        assert_eq!(source.edit_application.total, 1);
+        assert_eq!(source.edit_application.failed, 1);
+        assert_eq!(
+            source.suppression_reasons.get(SUPPRESSION_NO_VISIBLE_CONTEXT).copied(),
+            Some(1)
+        );
+        assert_eq!(receipt.checks.expected_text.total, 1);
+        assert_eq!(receipt.checks.expected_text.failed, 1);
+        assert_eq!(receipt.scenarios.len(), 1);
+        assert_eq!(receipt.scenarios[0].outcome, "fail");
+        assert_eq!(receipt.scenarios[0].latency_ms, 7);
+        assert_eq!(receipt.scenarios[0].notes, vec!["missing cursor marker"]);
+        assert_eq!(failures, vec!["bad_fixture: missing cursor marker"]);
 
         Ok(())
     }
