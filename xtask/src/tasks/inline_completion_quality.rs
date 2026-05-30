@@ -38,6 +38,7 @@ struct InlineCompletionQualityChecks {
     expected_text: CountReceipt,
     silence: CountReceipt,
     replacement_range: CountReceipt,
+    edit_application: CountReceipt,
     hard_zone_rejected: usize,
     suppression_reasons: BTreeMap<String, usize>,
     parse_regressions: usize,
@@ -92,6 +93,13 @@ enum ScenarioAssertion {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EditApplicationOutcome {
+    NotApplicable,
+    Passed,
+    Failed,
+}
+
 struct InlineCompletionScenario {
     text: String,
     line: u32,
@@ -122,9 +130,11 @@ pub fn run(receipt: PathBuf) -> Result<()> {
         latencies.push(latency_ms);
 
         match result {
-            Ok((item_count, mut notes, parse_regressions)) => {
+            Ok((item_count, mut notes, parse_regressions, edit_application)) => {
                 receipt_data.checks.parse_regressions += parse_regressions;
-                let passed = parse_regressions == 0;
+                record_edit_application(&mut receipt_data.checks, edit_application);
+                let passed = parse_regressions == 0
+                    && !matches!(edit_application, EditApplicationOutcome::Failed);
                 record_source_result(&mut receipt_data.sources, scenario.source_name, passed);
                 update_check_counts(&mut receipt_data.checks, scenario, passed);
 
@@ -137,7 +147,14 @@ pub fn run(receipt: PathBuf) -> Result<()> {
                     }
                 }
                 if parse_regressions == 0 {
-                    receipt_data.fixtures_passed += 1;
+                    if matches!(edit_application, EditApplicationOutcome::Failed) {
+                        failures.push(format!(
+                            "{}: top inline completion edit application was not parse-stable",
+                            scenario.name
+                        ));
+                    } else {
+                        receipt_data.fixtures_passed += 1;
+                    }
                 } else {
                     failures.push(format!(
                         "{}: {parse_regressions} returned item(s) worsened parse damage",
@@ -208,7 +225,7 @@ fn record_source_result(
 fn run_scenario(
     provider: &InlineCompletionProvider,
     scenario: &Scenario,
-) -> Result<(usize, Vec<String>, usize)> {
+) -> Result<(usize, Vec<String>, usize, EditApplicationOutcome)> {
     let fixture = InlineCompletionScenario::from_fixture(scenario.source)?;
     let environment = InlineCompletionEnvironment {
         available_modules: scenario
@@ -240,9 +257,11 @@ fn run_scenario(
             replaces,
         )?,
     };
+    let edit_application =
+        check_top_edit_application(scenario.name, scenario, &fixture, &completions, &mut notes)?;
     let parse_regressions =
         count_parse_regressions(scenario.name, &fixture, &completions, &mut notes)?;
-    Ok((item_count, notes, parse_regressions))
+    Ok((item_count, notes, parse_regressions, edit_application))
 }
 
 fn measured_suppression_reason(
@@ -263,6 +282,23 @@ fn measured_suppression_reason(
 
 fn record_suppression_reason(checks: &mut InlineCompletionQualityChecks, reason: &str) {
     *checks.suppression_reasons.entry(reason.to_string()).or_default() += 1;
+}
+
+fn record_edit_application(
+    checks: &mut InlineCompletionQualityChecks,
+    outcome: EditApplicationOutcome,
+) {
+    match outcome {
+        EditApplicationOutcome::NotApplicable => {}
+        EditApplicationOutcome::Passed => {
+            checks.edit_application.total += 1;
+            checks.edit_application.passed += 1;
+        }
+        EditApplicationOutcome::Failed => {
+            checks.edit_application.total += 1;
+            checks.edit_application.failed += 1;
+        }
+    }
 }
 
 fn update_check_counts(
@@ -356,6 +392,43 @@ fn assert_replacement_range(
     }
 
     Ok(vec![format!("replaces={replaced:?}")])
+}
+
+fn check_top_edit_application(
+    name: &str,
+    scenario: &Scenario,
+    fixture: &InlineCompletionScenario,
+    completions: &InlineCompletionList,
+    notes: &mut Vec<String>,
+) -> Result<EditApplicationOutcome> {
+    if matches!(scenario.assertion, ScenarioAssertion::Silent) {
+        return Ok(EditApplicationOutcome::NotApplicable);
+    }
+
+    let Some(item) = completions.items.first() else {
+        notes.push("edit_application=missing_top_item".to_string());
+        return Ok(EditApplicationOutcome::Failed);
+    };
+
+    let current_line = fixture.current_line()?;
+    let Some(probe) = parse_probe_after_item(current_line, item, fixture.line, fixture.character)?
+    else {
+        notes.push(format!("edit_application=unsupported_range for {:?}", item.insert_text));
+        return Ok(EditApplicationOutcome::Failed);
+    };
+
+    let baseline = parse_damage_for_probe(current_line);
+    let candidate = parse_damage_for_probe(probe.as_str());
+    if candidate.worse_than(&baseline) {
+        notes.push(format!(
+            "{name}: edit_application=failed for {:?}; baseline={baseline:?}; candidate={candidate:?}",
+            item.insert_text
+        ));
+        return Ok(EditApplicationOutcome::Failed);
+    }
+
+    notes.push(format!("edit_application=passed for {:?}", item.insert_text));
+    Ok(EditApplicationOutcome::Passed)
 }
 
 fn count_parse_regressions(
@@ -808,7 +881,7 @@ fn scenarios() -> &'static [Scenario] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::Value;
+    use serde_json::{Value, json};
     use tempfile::TempDir;
 
     #[test]
@@ -831,10 +904,159 @@ mod tests {
                 .iter()
                 .find(|scenario| scenario.name == name)
                 .ok_or_else(|| eyre!("missing inline completion quality scenario {name}"))?;
-            let (_item_count, _notes, parse_regressions) = run_scenario(&provider, scenario)?;
+            let (_item_count, _notes, parse_regressions, edit_application) =
+                run_scenario(&provider, scenario)?;
             assert_eq!(parse_regressions, 0);
+            assert_eq!(edit_application, EditApplicationOutcome::Passed);
         }
 
+        Ok(())
+    }
+
+    #[test]
+    fn edit_application_outcome_records_failed_counts() {
+        let mut checks = InlineCompletionQualityChecks::default();
+
+        record_edit_application(&mut checks, EditApplicationOutcome::NotApplicable);
+        record_edit_application(&mut checks, EditApplicationOutcome::Passed);
+        record_edit_application(&mut checks, EditApplicationOutcome::Failed);
+
+        assert_eq!(checks.edit_application.total, 2);
+        assert_eq!(checks.edit_application.passed, 1);
+        assert_eq!(checks.edit_application.failed, 1);
+    }
+
+    #[test]
+    fn check_top_edit_application_skips_silent_scenarios() -> Result<()> {
+        let scenario = Scenario {
+            name: "silent",
+            source_name: "unit",
+            source: "use <<CURSOR>>",
+            available_modules: &[],
+            hard_zone: true,
+            assertion: ScenarioAssertion::Silent,
+        };
+        let fixture = InlineCompletionScenario::from_fixture(scenario.source)?;
+        let completions = InlineCompletionList { items: Vec::new() };
+        let mut notes = Vec::new();
+
+        let outcome = check_top_edit_application(
+            scenario.name,
+            &scenario,
+            &fixture,
+            &completions,
+            &mut notes,
+        )?;
+
+        assert_eq!(outcome, EditApplicationOutcome::NotApplicable);
+        assert!(notes.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn check_top_edit_application_reports_missing_top_item() -> Result<()> {
+        let scenario = Scenario {
+            name: "missing_top_item",
+            source_name: "unit",
+            source: "use <<CURSOR>>",
+            available_modules: &[],
+            hard_zone: false,
+            assertion: ScenarioAssertion::Suggestion {
+                first: Some("strict;"),
+                expected: &["strict;"],
+                not_expected: &[],
+            },
+        };
+        let fixture = InlineCompletionScenario::from_fixture(scenario.source)?;
+        let completions = InlineCompletionList { items: Vec::new() };
+        let mut notes = Vec::new();
+
+        let outcome = check_top_edit_application(
+            scenario.name,
+            &scenario,
+            &fixture,
+            &completions,
+            &mut notes,
+        )?;
+
+        assert_eq!(outcome, EditApplicationOutcome::Failed);
+        assert_eq!(notes, vec!["edit_application=missing_top_item"]);
+        Ok(())
+    }
+
+    #[test]
+    fn check_top_edit_application_reports_unsupported_ranges() -> Result<()> {
+        let scenario = Scenario {
+            name: "unsupported_range",
+            source_name: "unit",
+            source: "use <<CURSOR>>",
+            available_modules: &[],
+            hard_zone: false,
+            assertion: ScenarioAssertion::Suggestion {
+                first: Some("strict;"),
+                expected: &["strict;"],
+                not_expected: &[],
+            },
+        };
+        let fixture = InlineCompletionScenario::from_fixture(scenario.source)?;
+        let item = serde_json::from_value(json!({
+            "insertText": "strict;",
+            "range": {
+                "start": { "line": 1, "character": 0 },
+                "end": { "line": 1, "character": 0 }
+            }
+        }))?;
+        let completions = InlineCompletionList { items: vec![item] };
+        let mut notes = Vec::new();
+
+        let outcome = check_top_edit_application(
+            scenario.name,
+            &scenario,
+            &fixture,
+            &completions,
+            &mut notes,
+        )?;
+
+        assert_eq!(outcome, EditApplicationOutcome::Failed);
+        assert_eq!(notes, vec!["edit_application=unsupported_range for \"strict;\""]);
+        Ok(())
+    }
+
+    #[test]
+    fn check_top_edit_application_reports_parse_worsening_edits() -> Result<()> {
+        let scenario = Scenario {
+            name: "parse_worse",
+            source_name: "unit",
+            source: "my $value = 1;<<CURSOR>>",
+            available_modules: &[],
+            hard_zone: false,
+            assertion: ScenarioAssertion::Suggestion {
+                first: Some(")"),
+                expected: &[")"],
+                not_expected: &[],
+            },
+        };
+        let fixture = InlineCompletionScenario::from_fixture(scenario.source)?;
+        let completions = InlineCompletionList {
+            items: vec![InlineCompletionItem {
+                insert_text: ")".to_string(),
+                filter_text: None,
+                range: None,
+                command: None,
+            }],
+        };
+        let mut notes = Vec::new();
+
+        let outcome = check_top_edit_application(
+            scenario.name,
+            &scenario,
+            &fixture,
+            &completions,
+            &mut notes,
+        )?;
+
+        assert_eq!(outcome, EditApplicationOutcome::Failed);
+        assert!(notes.iter().any(|note| note.contains("edit_application=failed")));
         Ok(())
     }
 
@@ -902,6 +1124,35 @@ mod tests {
         assert_eq!(
             receipt.pointer("/checks/hard_zone_rejected").and_then(Value::as_u64),
             Some(expected_hard_zones)
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn inline_completion_quality_receipt_records_edit_application_checks() -> Result<()> {
+        let temp = TempDir::new()?;
+        let receipt_path = temp.path().join("inline-completion-quality.json");
+
+        run(receipt_path.clone())?;
+
+        let receipt: Value = serde_json::from_slice(&fs::read(&receipt_path)?)?;
+        let expected_applicable = scenarios()
+            .iter()
+            .filter(|scenario| !matches!(scenario.assertion, ScenarioAssertion::Silent))
+            .count() as u64;
+
+        assert_eq!(
+            receipt.pointer("/checks/edit_application/total").and_then(Value::as_u64),
+            Some(expected_applicable)
+        );
+        assert_eq!(
+            receipt.pointer("/checks/edit_application/passed").and_then(Value::as_u64),
+            Some(expected_applicable)
+        );
+        assert_eq!(
+            receipt.pointer("/checks/edit_application/failed").and_then(Value::as_u64),
+            Some(0)
         );
 
         Ok(())

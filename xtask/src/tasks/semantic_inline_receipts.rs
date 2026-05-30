@@ -89,9 +89,18 @@ struct InlineQualityCounterSummary {
     available: bool,
     fixtures_total: Option<u64>,
     fixtures_passed: Option<u64>,
+    edit_application: Option<QualityCountSummary>,
     hard_zone_rejections: Option<u64>,
     suppression_reasons: Option<BTreeMap<String, u64>>,
     parse_regressions: Option<u64>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct QualityCountSummary {
+    total: u64,
+    passed: u64,
+    failed: u64,
 }
 
 pub fn run(receipt: PathBuf, quality_receipt: PathBuf) -> Result<()> {
@@ -124,6 +133,7 @@ fn read_optional_quality_counter_summary(path: &Path) -> Result<InlineQualityCou
             available: false,
             fixtures_total: None,
             fixtures_passed: None,
+            edit_application: None,
             hard_zone_rejections: None,
             suppression_reasons: None,
             parse_regressions: None,
@@ -132,15 +142,42 @@ fn read_optional_quality_counter_summary(path: &Path) -> Result<InlineQualityCou
 
     let quality = read_json(path)?;
     let suppression_reasons = quality_counter_map(&quality, "/checks/suppression_reasons")?;
+    let edit_application = quality_count_summary(&quality, "/checks/edit_application")?;
     Ok(InlineQualityCounterSummary {
         source,
         available: true,
         fixtures_total: quality.get("fixtures_total").and_then(Value::as_u64),
         fixtures_passed: quality.get("fixtures_passed").and_then(Value::as_u64),
+        edit_application,
         hard_zone_rejections: quality.pointer("/checks/hard_zone_rejected").and_then(Value::as_u64),
         suppression_reasons,
         parse_regressions: quality.pointer("/checks/parse_regressions").and_then(Value::as_u64),
     })
+}
+
+fn quality_count_summary(quality: &Value, pointer: &str) -> Result<Option<QualityCountSummary>> {
+    let Some(value) = quality.pointer(pointer) else {
+        return Ok(None);
+    };
+    let object =
+        value.as_object().ok_or_else(|| eyre!("quality receipt `{pointer}` must be an object"))?;
+
+    Ok(Some(QualityCountSummary {
+        total: quality_count_field(object, pointer, "total")?,
+        passed: quality_count_field(object, pointer, "passed")?,
+        failed: quality_count_field(object, pointer, "failed")?,
+    }))
+}
+
+fn quality_count_field(
+    object: &serde_json::Map<String, Value>,
+    pointer: &str,
+    field: &str,
+) -> Result<u64> {
+    object
+        .get(field)
+        .and_then(Value::as_u64)
+        .ok_or_else(|| eyre!("quality receipt `{pointer}/{field}` must be an unsigned count"))
 }
 
 fn quality_counter_map(quality: &Value, pointer: &str) -> Result<Option<BTreeMap<String, u64>>> {
@@ -332,6 +369,7 @@ mod tests {
             available: false,
             fixtures_total: None,
             fixtures_passed: None,
+            edit_application: None,
             hard_zone_rejections: None,
             suppression_reasons: None,
             parse_regressions: None,
@@ -401,6 +439,27 @@ mod tests {
         });
 
         assert!(quality_counter_map(&quality, "/checks/suppression_reasons")?.is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn quality_count_summary_requires_structured_counts() -> Result<()> {
+        let quality = json!({
+            "checks": {
+                "edit_application": {
+                    "total": 3,
+                    "passed": 2,
+                    "failed": 1
+                }
+            }
+        });
+
+        let summary = quality_count_summary(&quality, "/checks/edit_application")?
+            .ok_or_else(|| eyre!("missing edit_application summary"))?;
+        assert_eq!(summary.total, 3);
+        assert_eq!(summary.passed, 2);
+        assert_eq!(summary.failed, 1);
 
         Ok(())
     }
