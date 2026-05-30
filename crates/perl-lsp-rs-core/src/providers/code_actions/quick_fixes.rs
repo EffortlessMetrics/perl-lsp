@@ -1964,6 +1964,39 @@ fn parse_printf_format_mismatch(message: &str) -> Option<(usize, String)> {
     specifiers.checked_sub(supplied).filter(|&n| n > 0).map(|n| (n, call_name))
 }
 
+/// Drop the undefined label from a `next`/`last`/`redo LABEL` statement (PL410).
+///
+/// Replaces `next LABEL` with `next` so the statement targets the innermost
+/// enclosing loop instead of a non-existent named loop.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((start, end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let Some(span_text) = source.get(start..end) else {
+        return Vec::new();
+    };
+    let op = span_text.split_whitespace().next().unwrap_or("");
+    if !matches!(op, "next" | "last" | "redo") {
+        return Vec::new();
+    }
+
+    vec![CodeAction {
+        title: format!("Drop label — write `{op}` to target the innermost enclosing loop"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start, end },
+                new_text: op.to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
 fn diagnostic_line_range(source: &str, range: (usize, usize)) -> Option<(usize, usize)> {
     let (start, end) = valid_diagnostic_range(source, range)?;
     let line_start = source[..start].rfind('\n').map_or(0, |idx| idx + 1);
