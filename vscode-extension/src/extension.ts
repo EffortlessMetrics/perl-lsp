@@ -2427,6 +2427,24 @@ export async function validateIncludePaths(context: vscode.ExtensionContext): Pr
         const cacheKey = `perl-lsp.includePathsWarning.${encodeURIComponent(folder.uri.toString())}`;
         const config = vscode.workspace.getConfiguration('perl-lsp', folder.uri);
         const includePaths: string[] = config.get('includePaths', ['lib', 'local/lib/perl5']);
+
+        // Origin-aware validation: built-in default include paths (e.g. "lib",
+        // "local/lib/perl5") are optional search hints: used if present,
+        // silently ignored if missing. Only explicitly-configured paths are
+        // expectations worth a user-facing warning. Otherwise a fresh project
+        // without a lib/ directory looks broken on first run when it is not.
+        const inspected =
+            typeof config.inspect === 'function'
+                ? config.inspect<string[]>('includePaths')
+                : undefined;
+        const defaultPaths = new Set<string>([
+            // The workspace root "." always exists, but treat it as a default
+            // hint defensively so it can never trigger the warning.
+            '.',
+            ...(inspected?.defaultValue ?? ['lib', 'local/lib/perl5']),
+        ]);
+        const isDefaultPath = (includePath: string): boolean => defaultPaths.has(includePath);
+
         let workspaceRealPath: string;
         try {
             workspaceRealPath = fs.realpathSync(folder.uri.fsPath);
@@ -2434,6 +2452,10 @@ export async function validateIncludePaths(context: vscode.ExtensionContext): Pr
             continue;
         }
         const missingPaths = includePaths.filter(includePath => {
+            // Missing built-in defaults are optional hints: never reported.
+            if (isDefaultPath(includePath)) {
+                return false;
+            }
             const resolved = path.resolve(folder.uri.fsPath, includePath);
             return !fs.existsSync(resolved);
         });
@@ -2476,7 +2498,7 @@ export async function validateIncludePaths(context: vscode.ExtensionContext): Pr
         }
 
         const choice = await vscode.window.showWarningMessage(
-            `Perl LSP: include path "${firstMissing}" (${relativeNote}) does not exist.${suffix}`,
+            `Perl LSP: configured include path "${firstMissing}" (${relativeNote}) does not exist.${suffix}`,
             ...actions
         );
 
