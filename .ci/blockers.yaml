@@ -7,7 +7,7 @@
 # re-investigating known issues.
 #
 # Schema Version: 1
-# Last Verified: 2026-03-21  (counts from .ci/parser-corpus-baseline.json)
+# Last Verified: 2026-05-18  (counts from .ci/parser-corpus-baseline.json)
 #
 # Usage:
 #   - Scouts: read this before /scout-dedup — if status: filed or partial, stop.
@@ -20,13 +20,13 @@
 # =============================================================================
 
 schema_version: 1
-last_verified: "2026-04-02"
+last_verified: "2026-05-18"
 
 budgets:
   max_active_blockers: 50  # advisory only — no gate enforcement today
   note: "Archive entries with status: fixed — do not delete, move to archived section"
   clean_rate_target: 0.90  # 90% CPAN/system corpus clean rate is the 0.12.x release criterion
-  clean_rate_note: "Baseline stale (2026-03-20 = 85.4%). Post-baseline fixes (#2674, #2723, #2613, #2767, #2897, #2769, #2892, #2787, #2840) estimated +386 CPAN files clean → ~94.3%. CI ratchet via PR #3110 will confirm."
+  clean_rate_note: "System corpus 2026-05-18: 7047/7095 = 99.32% clean (first_error_buckets: {}). CPAN corpus 2026-04-09: 8931/9372 = 95.29% clean. Both meet the 90% release criterion."
 
 # =============================================================================
 # Parser Error Buckets
@@ -84,21 +84,13 @@ parser_blockers:
     issue: "#2391"
     note: "Fixed via commit 4b16e2f3. Counts stale — run corpus ratchet."
 
-  - id: "expected_module_name"
-    category: "module"
-    affected_files: 69
-    root_cause: "VString forms in use statements (e.g., use v5.10)"
-    status: "partial"
-    issue: null
-    note: "Partial fix via commit 5cbda340 (VString support in parse_use). 16 tests pass. CPAN corpus may need ratchet or have remaining edge cases."
-
   - id: "unclosed_brace_semicolon"
     category: "block"
-    affected_files: 21
+    affected_files: 28
     root_cause: "Brace not closed before semicolon — block/hash ambiguity (bare function call with block: capture{}, where{}, scope_guard{})"
     status: "partial"
     issue: null
-    note: "Partial fix via PR #2261 (2026-03-19). System corpus 21 files remain; CPAN had 58 at 2026-03-20 baseline. Remaining cases need deeper investigation."
+    note: "Partial fix via PR #2261 (2026-03-19). System corpus 2026-05-18: 0 files. CPAN corpus 2026-04-09: 28 files remain — CPAN baseline predates system fix; run just cpan-corpus-sweep to confirm whether CPAN is also clean before archiving."
 
   - id: "expected_left_brace"
     category: "block"
@@ -110,11 +102,11 @@ parser_blockers:
 
   - id: "expected_colon"
     category: "expression"
-    affected_files: 16
+    affected_files: 20
     root_cause: "Ternary operator or label colon in unexpected position"
     status: "needs_investigation"
     issue: null
-    note: "Tier 2: 16 files. No issue filed."
+    note: "System corpus 2026-05-18: 0 files. CPAN corpus 2026-04-09: 20 files remain (IO/Socket/SSL/Intercept.pm, Mojo/Log.pm, Mojolicious/Plugin/DefaultHelpers.pm, Mojolicious/Routes.pm, and others). Run just cpan-corpus-sweep to confirm before archiving."
 
   - id: "expected_identifier"
     category: "identifier"
@@ -131,14 +123,6 @@ parser_blockers:
     status: "filed"
     issue: "#2395"
     note: "Tier 2: 8 files."
-
-  - id: "unexpected_slash_expr"
-    category: "regex"
-    affected_files: 8
-    root_cause: "Division slash vs regex delimiter ambiguity"
-    status: "needs_investigation"
-    issue: null
-    note: "Tier 2: 8 files. No issue filed."
 
   - id: "expected_left_paren"
     category: "expression"
@@ -262,3 +246,23 @@ archived:
     closed_date: "2026-03-21"
     closed_pr: null
     note: "Tier 2: 9 files in issue; baseline shows 16. builder-ready. FIXED: moved to archived on 2026-03-21 when issue #2392 closed."
+
+  - id: "expected_module_name"
+    category: "module"
+    affected_files: 69
+    root_cause: "VString forms in use statements (e.g., use v5.10)"
+    status: "fixed"
+    issue: null
+    closed_date: "2026-05-18"
+    closed_pr: null
+    note: "Partial fix via commit 5cbda340 (VString support in parse_use). Absent from CPAN corpus 2026-04-09 (bucket not present). System corpus 2026-05-18: 0 files. Archived — all known cases resolved, no remaining CPAN or system hits."
+
+  - id: "unexpected_slash_expr"
+    category: "regex"
+    affected_files: 8
+    root_cause: "Division slash vs regex delimiter ambiguity"
+    status: "fixed"
+    issue: null
+    closed_date: "2026-05-18"
+    closed_pr: null
+    note: "Absent from CPAN corpus 2026-04-09 (bucket not present). System corpus 2026-05-18: 0 files (first_error_buckets empty). Archived without tracking issue — cleaned via parser improvements before a dedicated issue was filed."
