@@ -78,14 +78,33 @@ impl<'a> Parser<'a> {
     /// Built-in variable-level attributes from the Perl 5.38+ `field` feature
     /// (Object::Pad style) and common pragmas.
     ///
-    /// `:param`, `:reader`, `:writer`, `:accessor`, `:predicate`, `:weak` are defined
-    /// by Perl 5.38+ `use feature 'class'` (and the Object::Pad CPAN module).
+    /// `:param`, `:reader`, `:writer`, `:accessor`, `:mutator`, `:predicate`, `:weak` are
+    /// defined by Perl 5.38+ `use feature 'class'` (and the Object::Pad CPAN module).
+    /// `:default` (with optional parenthesized argument) sets a field's default value
+    /// in Object::Pad.  `:builder` designates a builder method for initialization.
+    /// `:isa` constrains the field's type.
     /// `:shared` is defined by `threads::shared`.
+    ///
+    /// Note: `default` is tokenized as `TokenKind::Default` (a keyword), not
+    /// `TokenKind::Identifier`.  The attribute parser (`parse_declaration_attributes_with_extras`)
+    /// accepts any token that `can_be_sub_name` covers so that keyword-named attributes
+    /// like `:default` do not produce spurious parse errors.
     ///
     /// Custom attributes are still allowed (via `Attribute::Handlers` etc.) and
     /// produce a soft warning, not a hard error.
-    const BUILTIN_VAR_ATTRIBUTES: &'static [&'static str] =
-        &["param", "reader", "writer", "accessor", "predicate", "weak", "shared"];
+    const BUILTIN_VAR_ATTRIBUTES: &'static [&'static str] = &[
+        "param",
+        "reader",
+        "writer",
+        "accessor",
+        "mutator",
+        "predicate",
+        "weak",
+        "shared",
+        "default",
+        "builder",
+        "isa",
+    ];
 
     /// Return `true` if `name` is a known built-in subroutine attribute.
     fn is_builtin_sub_attribute(name: &str) -> bool {
@@ -129,8 +148,16 @@ impl<'a> Parser<'a> {
             let mut parsed_any = false;
 
             loop {
+                // Accept any token that can serve as a bareword attribute name.
+                // Plain `Identifier` and `Method` tokens are the common case.
+                // Keyword tokens are also accepted here because Perl attribute
+                // names are barewords, and some attribute names coincide with
+                // keyword spellings — notably `:default(expr)` used by
+                // Object::Pad / Perl 5.38+ `field` declarations, where `default`
+                // is tokenized as `TokenKind::Default`.  `can_be_sub_name` covers
+                // the full set of keyword token kinds that are valid barewords.
                 let attr_token = match self.peek_kind() {
-                    Some(TokenKind::Identifier | TokenKind::Method) => self.tokens.next()?,
+                    Some(kind) if Self::can_be_sub_name(kind) => self.tokens.next()?,
                     _ if parsed_any => break,
                     _ => {
                         return Err(ParseError::syntax(
@@ -197,6 +224,14 @@ impl<'a> Parser<'a> {
 
                 attributes.push(attr_name);
 
+                // Only continue to the next adjacent attribute name (after the same
+                // `:`) when the token is a plain identifier or `method`.  We do NOT
+                // extend this to all keyword tokens here because statement-modifier
+                // keywords (`if`, `while`, `for`, …) can follow an attribute at
+                // statement level (e.g. `my $x :shared if $cond;`) and must not be
+                // consumed as part of the attribute list.  Keyword-named attributes
+                // (like `:default`) always appear as the sole attr after their own
+                // `:`, so the initial token consumed above is sufficient.
                 match self.peek_kind() {
                     Some(TokenKind::Identifier | TokenKind::Method) => continue,
                     _ => break,
