@@ -68,9 +68,20 @@ fn is_valid_virtual_content_uri(uri: &str) -> bool {
 fn fetch_virtual_content(uri: &str, config: &WorkspaceConfig) -> Option<String> {
     if let Some(module_name) = uri.strip_prefix("perldoc://") {
         fetch_perldoc(module_name, config)
+            .map(|content| enrich_core_pragma_perldoc(module_name, content))
     } else {
         None
     }
+}
+
+fn enrich_core_pragma_perldoc(module_name: &str, content: String) -> String {
+    let related_uri = match module_name {
+        "strict" => "perldoc://warnings",
+        "warnings" => "perldoc://strict",
+        _ => return content,
+    };
+
+    format!("Related virtual perldoc:\n- {related_uri}\n\n{content}")
 }
 
 /// Fetch Perl documentation using perldoc
@@ -167,5 +178,28 @@ mod tests {
         let config = WorkspaceConfig::default();
         let result = fetch_perldoc("-f", &config);
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn parser_enriches_strict_perldoc_with_warnings_link() {
+        let content = enrich_core_pragma_perldoc("strict", "strict docs".to_string());
+
+        assert!(content.starts_with("Related virtual perldoc:\n- perldoc://warnings\n\n"));
+        assert!(content.ends_with("strict docs"));
+    }
+
+    #[test]
+    fn parser_enriches_warnings_perldoc_with_strict_link() {
+        let content = enrich_core_pragma_perldoc("warnings", "warnings docs".to_string());
+
+        assert!(content.starts_with("Related virtual perldoc:\n- perldoc://strict\n\n"));
+        assert!(content.ends_with("warnings docs"));
+    }
+
+    #[test]
+    fn parser_leaves_other_perldoc_content_unchanged() {
+        let content = enrich_core_pragma_perldoc("vars", "vars docs".to_string());
+
+        assert_eq!(content, "vars docs");
     }
 }

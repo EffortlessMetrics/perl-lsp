@@ -162,6 +162,37 @@ fn text_document_content_perldoc_strict_returns_text_or_explicit_unavailable_err
         .ok_or_else(|| format!("workspace/textDocumentContent missing result.text: {response}"))?;
     assert!(!text.trim().is_empty(), "perldoc text must not be empty");
     assert!(text.to_ascii_lowercase().contains("strict"), "strict perldoc should mention strict");
+    assert!(text.contains("perldoc://warnings"), "strict virtual perldoc should link to warnings");
+    Ok(())
+}
+
+#[test]
+fn text_document_content_perldoc_warnings_links_back_to_strict_or_unavailable() -> TestResult {
+    let response = text_document_content_response(Some(json!({ "uri": "perldoc://warnings" })))?;
+
+    if response.get("error").is_some() {
+        assert_error_code(&response, INVALID_REQUEST)?;
+        let message = response
+            .pointer("/error/message")
+            .and_then(Value::as_str)
+            .ok_or_else(|| format!("missing error message in response: {response}"))?;
+        assert!(
+            message.contains("Unsupported URI scheme or content not found"),
+            "perldoc unavailable path should be explicit, got: {message}"
+        );
+        return Ok(());
+    }
+
+    let text = response
+        .pointer("/result/text")
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("workspace/textDocumentContent missing result.text: {response}"))?;
+    assert!(!text.trim().is_empty(), "perldoc text must not be empty");
+    assert!(
+        text.to_ascii_lowercase().contains("warnings"),
+        "warnings perldoc should mention warnings"
+    );
+    assert!(text.contains("perldoc://strict"), "warnings virtual perldoc should link to strict");
     Ok(())
 }
 
