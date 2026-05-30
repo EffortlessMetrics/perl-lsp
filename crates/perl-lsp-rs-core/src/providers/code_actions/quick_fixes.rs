@@ -1972,6 +1972,67 @@ fn diagnostic_line_range(source: &str, range: (usize, usize)) -> Option<(usize, 
     Some((line_start, line_end))
 }
 
+/// Drop the undefined label from a `next LABEL`, `last LABEL`, or `redo LABEL`
+/// statement (PL410).
+///
+/// The only safe mechanical transformation when the named label does not exist
+/// is to remove the label so the statement targets the innermost enclosing
+/// loop. Introducing a matching label definition requires AST rewrite guidance
+/// that this action cannot supply.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((range_start, _)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let Some(at_pos) = source.get(range_start..) else {
+        return Vec::new();
+    };
+
+    let op = if at_pos.starts_with("next ") {
+        "next"
+    } else if at_pos.starts_with("last ") {
+        "last"
+    } else if at_pos.starts_with("redo ") {
+        "redo"
+    } else {
+        return Vec::new();
+    };
+
+    // Label identifier starts right after `{op} ` (one space).
+    let label_offset = op.len() + 1;
+    let Some(label_and_rest) = at_pos.get(label_offset..) else {
+        return Vec::new();
+    };
+    let label_len =
+        label_and_rest.bytes().take_while(|b| b.is_ascii_alphanumeric() || *b == b'_').count();
+    if label_len == 0 {
+        return Vec::new();
+    }
+    let label = &label_and_rest[..label_len];
+
+    // Remove the ` LABEL` portion that immediately follows the operator keyword.
+    let remove_start = range_start + op.len();
+    let remove_end = remove_start + 1 + label_len;
+    if remove_end > source.len() || !source.is_char_boundary(remove_end) {
+        return Vec::new();
+    }
+
+    vec![CodeAction {
+        title: format!("Remove label '{label}' — use bare '{op}' to target innermost loop"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: remove_start, end: remove_end },
+                new_text: String::new(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
 fn valid_diagnostic_range(source: &str, range: (usize, usize)) -> Option<(usize, usize)> {
     let (start, end) = range;
     if start > end
