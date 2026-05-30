@@ -531,7 +531,9 @@ pub fn collect_semantic_tokens(
                     | "return" | "next" | "last" | "redo" | "goto" | "eval" | "given" | "when"
                     | "default" | "break" | "continue" | "unless" | "no" | "BEGIN" | "END"
                     | "CHECK" | "INIT" | "UNITCHECK" | "class" | "method" | "try" | "catch"
-                    | "finally" | "await" => "keyword",
+                    | "finally" | "await"
+                    // Infix operator keywords (perlop) — `isa` added for Perl 5.32+ (issue #778)
+                    | "isa" | "cmp" => "keyword",
                     _ => continue,
                 }
             }
