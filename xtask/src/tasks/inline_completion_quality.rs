@@ -195,30 +195,13 @@ pub fn run(receipt: PathBuf) -> Result<()> {
                     notes,
                 });
             }
-            Err(error) => {
-                record_source_result(
-                    &mut receipt_data.sources,
-                    scenario.source_name,
-                    SourceScenarioOutcome {
-                        passed: false,
-                        item_count: 0,
-                        parse_regressions: 0,
-                        edit_application: EditApplicationOutcome::NotApplicable,
-                        suppression_reason: None,
-                    },
-                );
-                update_check_counts(&mut receipt_data.checks, scenario, false);
-                let message = error.to_string();
-                failures.push(format!("{}: {message}", scenario.name));
-                receipt_data.scenarios.push(ScenarioQualityReceipt {
-                    name: scenario.name,
-                    source: scenario.source_name,
-                    outcome: "fail",
-                    item_count: 0,
-                    latency_ms,
-                    notes: vec![message],
-                });
-            }
+            Err(error) => record_scenario_error(
+                &mut receipt_data,
+                &mut failures,
+                scenario,
+                latency_ms,
+                error.to_string(),
+            ),
         }
     }
 
@@ -260,6 +243,36 @@ fn record_source_result(
     } else {
         source_entry.failed += 1;
     }
+}
+
+fn record_scenario_error(
+    receipt_data: &mut InlineCompletionQualityReceipt,
+    failures: &mut Vec<String>,
+    scenario: &Scenario,
+    latency_ms: u128,
+    message: String,
+) {
+    record_source_result(
+        &mut receipt_data.sources,
+        scenario.source_name,
+        SourceScenarioOutcome {
+            passed: false,
+            item_count: 0,
+            parse_regressions: 0,
+            edit_application: EditApplicationOutcome::NotApplicable,
+            suppression_reason: None,
+        },
+    );
+    update_check_counts(&mut receipt_data.checks, scenario, false);
+    failures.push(format!("{}: {message}", scenario.name));
+    receipt_data.scenarios.push(ScenarioQualityReceipt {
+        name: scenario.name,
+        source: scenario.source_name,
+        outcome: "fail",
+        item_count: 0,
+        latency_ms,
+        notes: vec![message],
+    });
 }
 
 fn run_scenario(
@@ -1253,6 +1266,79 @@ mod tests {
             .and_then(Value::as_u64)
             .ok_or_else(|| eyre!("missing module returned_items source receipt"))?;
         assert!(module_returned_items > 0);
+
+        Ok(())
+    }
+
+    #[test]
+    fn source_breakdown_records_failed_scenario_accounting() -> Result<()> {
+        let mut receipt = InlineCompletionQualityReceipt {
+            schema_version: "inline-completion-quality.v1",
+            provider: "inline_completion",
+            provider_action: "deterministic_fixture_quality",
+            claim_boundary: "unit test receipt",
+            fixtures_total: 1,
+            fixtures_passed: 0,
+            latency_p95_ms: 0,
+            checks: InlineCompletionQualityChecks::default(),
+            sources: BTreeMap::new(),
+            scenarios: Vec::new(),
+        };
+        let mut failures = Vec::new();
+        let scenario = Scenario {
+            name: "bad_fixture",
+            source_name: "unit_source",
+            source: "missing cursor",
+            available_modules: &[],
+            hard_zone: false,
+            assertion: ScenarioAssertion::Suggestion {
+                first: Some("strict;"),
+                expected: &["strict;"],
+                not_expected: &[],
+            },
+        };
+
+        record_scenario_error(
+            &mut receipt,
+            &mut failures,
+            &scenario,
+            7,
+            "missing cursor marker".to_string(),
+        );
+        record_source_result(
+            &mut receipt.sources,
+            "unit_source",
+            SourceScenarioOutcome {
+                passed: false,
+                item_count: 3,
+                parse_regressions: 2,
+                edit_application: EditApplicationOutcome::Failed,
+                suppression_reason: Some(SUPPRESSION_NO_VISIBLE_CONTEXT),
+            },
+        );
+
+        let source = receipt
+            .sources
+            .get("unit_source")
+            .ok_or_else(|| eyre!("missing unit source receipt"))?;
+        assert_eq!(source.expected, 2);
+        assert_eq!(source.passed, 0);
+        assert_eq!(source.failed, 2);
+        assert_eq!(source.returned_items, 3);
+        assert_eq!(source.parse_regressions, 2);
+        assert_eq!(source.edit_application.total, 1);
+        assert_eq!(source.edit_application.failed, 1);
+        assert_eq!(
+            source.suppression_reasons.get(SUPPRESSION_NO_VISIBLE_CONTEXT).copied(),
+            Some(1)
+        );
+        assert_eq!(receipt.checks.expected_text.total, 1);
+        assert_eq!(receipt.checks.expected_text.failed, 1);
+        assert_eq!(receipt.scenarios.len(), 1);
+        assert_eq!(receipt.scenarios[0].outcome, "fail");
+        assert_eq!(receipt.scenarios[0].latency_ms, 7);
+        assert_eq!(receipt.scenarios[0].notes, vec!["missing cursor marker"]);
+        assert_eq!(failures, vec!["bad_fixture: missing cursor marker"]);
 
         Ok(())
     }
