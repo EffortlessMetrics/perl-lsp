@@ -4705,3 +4705,128 @@ fn test_use_completion_namespaced_prefix_directed() -> Result<(), Box<dyn std::e
 
     Ok(())
 }
+
+// ── Special variable completion tests (issue #788) ─────────────────────────
+
+/// Special scalar variables are offered when the user types `$` and each has
+/// a documentation string.
+#[test]
+fn test_special_scalar_vars_offered_with_docs() {
+    let code = "$";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, code.len());
+
+    // Core special vars that MUST appear
+    for label in ["$_", "$!", "$/", "$@", "$?", "$$", "$0", "$1"] {
+        let item = completions.iter().find(|c| c.label == label);
+        assert!(item.is_some(), "expected {label} in scalar completions");
+        // Each special variable must carry documentation
+        let doc = item.and_then(|c| c.documentation.as_deref());
+        assert!(doc.is_some_and(|d| !d.is_empty()), "{label} must have non-empty documentation");
+    }
+
+    // Extended capture-group vars $2..$9 must also be present
+    for label in ["$2", "$3", "$4", "$5", "$6", "$7", "$8", "$9"] {
+        assert!(
+            completions.iter().any(|c| c.label == label),
+            "expected {label} (capture group var) in scalar completions"
+        );
+    }
+
+    // Additional perlvar special scalars
+    for label in ["$;", "$\"", "$|", "$^X", "$^I", "$^F"] {
+        assert!(
+            completions.iter().any(|c| c.label == label),
+            "expected {label} in scalar completions"
+        );
+    }
+}
+
+/// Special array variables are offered when the user types `@`.
+#[test]
+fn test_special_array_vars_offered() {
+    let code = "@";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, code.len());
+
+    for label in ["@_", "@ARGV", "@INC", "@ISA", "@EXPORT", "@EXPORT_OK"] {
+        let item = completions.iter().find(|c| c.label == label);
+        assert!(item.is_some(), "expected {label} in array completions");
+        let doc = item.and_then(|c| c.documentation.as_deref());
+        assert!(doc.is_some_and(|d| !d.is_empty()), "{label} must have non-empty documentation");
+    }
+}
+
+/// Special hash variables are offered when the user types `%`.
+#[test]
+fn test_special_hash_vars_offered() {
+    let code = "%";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, code.len());
+
+    for label in ["%ENV", "%INC", "%SIG"] {
+        let item = completions.iter().find(|c| c.label == label);
+        assert!(item.is_some(), "expected {label} in hash completions");
+        let doc = item.and_then(|c| c.documentation.as_deref());
+        assert!(doc.is_some_and(|d| !d.is_empty()), "{label} must have non-empty documentation");
+    }
+}
+
+/// Prefix filtering works: typing `$E` should NOT return `$_` but SHOULD return
+/// `$ENV_` style vars if any; typing `$_` should only match topic-variable `$_`.
+#[test]
+fn test_special_var_prefix_filtering() {
+    // "$_" prefix — only the topic variable should match from special vars
+    let code = "$_";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "$_"),
+        "typing '$_' should still offer $_ as a completion"
+    );
+    // $. (current line) should NOT match because $. does not start with $_
+    assert!(!completions.iter().any(|c| c.label == "$."), "$. must not appear when prefix is '$_'");
+}
+
+/// Regression: lexical variables and builtins still appear alongside special vars.
+#[test]
+fn test_special_vars_do_not_displace_lexical_or_builtins() {
+    let code = r#"my $xyzzy = 1; $x"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, code.len());
+
+    // Lexical var declared above must appear
+    assert!(
+        completions.iter().any(|c| c.label == "$xyzzy"),
+        "lexical $xyzzy must appear alongside special vars"
+    );
+}
+
+/// The expanded special-variable list has at least 40 entries across all sigils.
+#[test]
+fn test_special_var_count_at_least_40() {
+    let mut total = 0usize;
+
+    for (code, pos) in [("$", 1usize), ("@", 1), ("%", 1)] {
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, pos);
+        // Count only items that have "special variable" detail (not lexical vars)
+        total +=
+            completions.iter().filter(|c| c.detail.as_deref() == Some("special variable")).count();
+    }
+
+    assert!(total >= 40, "expected at least 40 special variables across all sigils, got {total}");
+}
