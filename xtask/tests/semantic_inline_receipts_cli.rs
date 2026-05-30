@@ -160,6 +160,7 @@ fn semantic_inline_receipts_cli_embeds_quality_counters_when_available() -> Resu
         .ok_or_else(|| anyhow!("semantic inline receipt omitted quality_counters"))?;
 
     assert_eq!(quality_counters.get("available").and_then(Value::as_bool), Some(true));
+    assert_eq!(quality_counters.get("all_checks_green").and_then(Value::as_bool), Some(true));
     assert_eq!(quality_counters.get("fixtures_total").and_then(Value::as_u64), Some(28));
     assert_eq!(quality_counters.get("fixtures_passed").and_then(Value::as_u64), Some(28));
     assert_eq!(
