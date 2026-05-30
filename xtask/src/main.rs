@@ -194,6 +194,14 @@ enum Commands {
         quality_receipt: PathBuf,
     },
 
+    /// Emit a supported-editor inline-completion smoke receipt bundle.
+    #[command(name = "supported-editor-inline-smoke")]
+    SupportedEditorInlineSmoke {
+        /// Receipt JSON path to write.
+        #[arg(long, default_value = "target/receipts/supported-editor-inline-smoke.json")]
+        receipt: PathBuf,
+    },
+
     /// Regenerate public Shields endpoint JSON for README badges.
     Badges {
         /// Check committed endpoints for drift without updating badges/.
@@ -2752,6 +2760,9 @@ fn main() -> Result<()> {
         Commands::InlineCompletionQuality { receipt } => inline_completion_quality::run(receipt),
         Commands::SemanticInlineReceipts { receipt, quality_receipt } => {
             semantic_inline_receipts::run(receipt, quality_receipt)
+        }
+        Commands::SupportedEditorInlineSmoke { receipt } => {
+            supported_editor_inline_smoke::run(receipt)
         }
         Commands::Badges { check } => badges::run(check),
         Commands::CoverageBaseline {
