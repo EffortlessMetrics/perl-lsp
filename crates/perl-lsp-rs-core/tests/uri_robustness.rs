@@ -26,7 +26,6 @@ fn is_valid_uri(s: &str) -> bool {
 /// defect so a follow-up builder can add the empty-string guard to
 /// `parse_uri` (check `sanitized.is_empty()` before the parse attempt).
 #[test]
-#[ignore = "BUG #815: lsp_types::Uri accepts empty string — parse_uri must guard before calling parse"]
 fn test_parse_uri_empty_string_returns_valid_fallback() {
     let uri = parse_uri("");
     assert!(!uri.as_str().is_empty(), "empty input must not produce an empty URI");
@@ -40,7 +39,6 @@ fn test_parse_uri_empty_string_returns_valid_fallback() {
 ///
 /// `#[ignore]`d for the same reason — pending fix in `parse_uri`.
 #[test]
-#[ignore = "BUG #815: lsp_types::Uri accepts empty string — parse_uri must guard before calling parse"]
 fn test_parse_uri_whitespace_only_returns_valid_fallback() {
     // After trimming, the sanitized string is empty — must use fallback.
     for ws in ["   ", "\t\t", "\n\r\n", "  \t  \n  "] {
