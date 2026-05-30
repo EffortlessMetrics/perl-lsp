@@ -1,0 +1,30 @@
+[
+  {
+    "name": "security_audit",
+    "conclusion": "failure",
+    "required": true,
+    "quarantine": true,
+    "comment": "cargo-audit broken on CVSS 4.0 — debt-ledger.yaml: cargo-audit-broken-install-2026-04-26; spec acceptance test 3"
+  },
+  {
+    "name": "parser_corpus_ratchet",
+    "conclusion": "failure",
+    "required": false,
+    "quarantine": false,
+    "comment": "corpus threshold drift — not blocking; spec acceptance test 8"
+  },
+  {
+    "name": "mutation",
+    "conclusion": "failure",
+    "required": true,
+    "quarantine": true,
+    "comment": "mutation testing quarantined — noise/duration, not a product regression"
+  },
+  {
+    "name": "fuzz-bounded",
+    "conclusion": "failure",
+    "required": true,
+    "quarantine": true,
+    "comment": "fuzzing quarantined — stochastic, not a product defect signal"
+  }
+]
