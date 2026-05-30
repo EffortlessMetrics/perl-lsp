@@ -149,6 +149,42 @@ fn semantic_tokens_delta_request_returns_method_not_found() -> TestResult {
 }
 
 #[test]
+fn inline_completion_does_not_emit_object_form_string_value() -> TestResult {
+    let mut harness = LspHarness::new_raw();
+    harness.initialize_ready(
+        "file:///workspace",
+        Some(json!({
+            "textDocument": {
+                "inlineCompletion": {
+                    "dynamicRegistration": true
+                }
+            }
+        })),
+    )?;
+    harness.open("file:///inline-string-value.pl", "use ")?;
+
+    let result = harness.request(
+        "textDocument/inlineCompletion",
+        json!({
+            "textDocument": { "uri": "file:///inline-string-value.pl" },
+            "position": { "line": 0, "character": 4 },
+            "context": { "triggerKind": 1 }
+        }),
+    )?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or_else(|| format!("inline completion response missing items: {result}"))?;
+
+    assert!(!items.is_empty(), "test must exercise deterministic inline items: {result}");
+    assert!(
+        items.iter().all(|item| item.get("insertText").is_some_and(Value::is_string)),
+        "object-form StringValue insertText remains unclaimed without implementation proof: {items:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn completion_response_does_not_emit_apply_kind_without_client_support() -> TestResult {
     let mut harness = LspHarness::new_raw();
     harness.initialize_ready("file:///workspace", Some(json!({})))?;

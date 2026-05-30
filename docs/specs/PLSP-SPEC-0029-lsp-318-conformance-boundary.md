@@ -107,6 +107,7 @@ These surfaces are not part of the current claim unless a later PR adds behavior
 capability parsing, wire tests, docs, and negative gates:
 
 - complete LSP 3.18 implementation
+- object-form `StringValue` inline completion insert text
 - `textDocument/semanticTokens/full/delta`
 - semantic-token delta `resultId` state
 - non-spec `WorkspaceEdit.metadata` response fields
@@ -139,6 +140,8 @@ The `lsp_318_negative_claims` test suite is the current guardrail for optional
 - accepts `textDocument/semanticTokens/full/delta` as implemented
 - reintroduces `experimental.inlineCompletionProvider`
 - reintroduces `documentRangesFormattingProvider`
+- emits object-form `StringValue` values for
+  `InlineCompletionItem.insertText` without an intentional implementation
 - emits `CompletionList.applyKind` without explicit support
 - emits `CompletionList.itemDefaults.data` without explicit support
 - advertises `CodeAction.documentation` without client support or emits
@@ -276,6 +279,7 @@ It may not claim:
 - extraction readiness beyond the separate extraction boundary spec
 - editor support beyond current receipts
 - semantic-token delta support
+- object-form `StringValue` inline completion insert text
 - non-spec `WorkspaceEdit.metadata` response fields
 - ungated workspace-edit snippet or apply-edit metadata support
 - optional 3.18 response-shape support without client capability handling

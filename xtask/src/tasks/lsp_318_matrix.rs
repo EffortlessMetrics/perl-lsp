@@ -46,16 +46,16 @@ const ROWS: &[MatrixRow] = &[
         notes: "Returned items must use the same range and extend selected text, or return empty.",
     },
     MatrixRow {
-        feature: "`StringValue` inline insert text",
+        feature: "Object-form `StringValue` inline insert text",
         since_or_flag: "LSP 3.18",
         client_gate: "`textDocument.inlineCompletion`",
-        server_shape: "`InlineCompletionItem.insertText`",
-        method_or_shape: "string value; object-form `StringValue` remains unclaimed",
-        status: "implemented-string-only",
+        server_shape: "`InlineCompletionItem.insertText` object form",
+        method_or_shape: "`InlineCompletionItem.insertText: StringValue`",
+        status: "negative-gated+documented",
         proof: "`lsp_inline_completion_registration_tests`",
         owner: "`crates/perl-lsp-rs/src/runtime/language/misc.rs`; inline-completion provider",
         priority: "P1",
-        notes: "Current deterministic items use strings; do not claim object-form `StringValue` support until a provider returns it with wire proof.",
+        notes: "Standard inline completion currently emits plain string `insertText`; object-form `StringValue` remains unclaimed until a provider returns it with wire proof.",
     },
     MatrixRow {
         feature: "Multi-range formatting",
@@ -344,7 +344,6 @@ fn render_matrix() -> String {
     output.push_str("This matrix is the working ledger for selected LSP 3.18 coverage. It is not a blanket full-conformance claim and does not imply release readiness. Each row classifies a surface so future PRs can move it from negative-gated or planned to implemented+tested+documented only when capability parsing, runtime behavior, wire tests, snapshots, docs, and editor receipts are present where relevant.\n\n");
     output.push_str("Status vocabulary:\n\n");
     output.push_str("- `implemented+tested+documented`: implemented, tested over the wire or snapshots, and documented in the current boundary.\n");
-    output.push_str("- `implemented-string-only`: only the string form is claimed; object-form support remains unclaimed.\n");
     output.push_str("- `negative-gated+documented`: intentionally unsupported or absent until a later capability-gated implementation PR.\n");
     output.push_str("- `implemented-needs-positive-wire-test`: code path exists, but the matrix still requires a positive client-capability receipt before it is locked.\n");
     output.push_str("- `needs-capability-parser`: existing behavior is adjacent, but 3.18-specific client capability parsing is not yet proven.\n");
@@ -403,7 +402,6 @@ mod tests {
         for surface in [
             "Standard inline completion",
             "`selectedCompletionInfo` inline context",
-            "`StringValue` inline insert text",
             "Multi-range formatting",
             "`workspace/textDocumentContent`",
             "`workspace/textDocumentContent/refresh`",

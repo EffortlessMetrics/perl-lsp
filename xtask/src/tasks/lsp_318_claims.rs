@@ -41,6 +41,10 @@ const SPEC_MARKERS: &[RequiredMarker] = &[
         label: "selected-surface claim boundary",
         marker: "This spec may claim that `perl-lsp` has a documented LSP 3.18 selected-surface",
     },
+    RequiredMarker {
+        label: "StringValue object-form non-claim",
+        marker: "object-form `StringValue` inline completion insert text",
+    },
 ];
 
 const MATRIX_MARKERS: &[RequiredMarker] = &[
@@ -54,6 +58,10 @@ const MATRIX_MARKERS: &[RequiredMarker] = &[
         marker: "`workspace/textDocumentContent`",
     },
     RequiredMarker {
+        label: "matrix StringValue object-form row",
+        marker: "Object-form `StringValue` inline insert text",
+    },
+    RequiredMarker {
         label: "matrix negative-gated vocabulary",
         marker: "`negative-gated+documented`",
     },
@@ -61,6 +69,10 @@ const MATRIX_MARKERS: &[RequiredMarker] = &[
 ];
 
 const NEGATIVE_TEST_MARKERS: &[RequiredMarker] = &[
+    RequiredMarker {
+        label: "StringValue object-form negative receipt",
+        marker: "inline_completion_does_not_emit_object_form_string_value",
+    },
     RequiredMarker {
         label: "unsupported capability snapshot assertions",
         marker: "initialize_does_not_advertise_unimplemented_318_capabilities",

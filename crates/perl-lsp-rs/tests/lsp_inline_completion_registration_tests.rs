@@ -739,7 +739,7 @@ fn inline_completion_selected_completion_info_multiline_range_returns_empty() ->
 }
 
 #[test]
-fn inline_completion_items_use_string_insert_text() -> TestResult {
+fn inline_completion_items_do_not_emit_object_form_string_value() -> TestResult {
     let mut harness = LspHarness::new();
     harness.initialize(Some(json!({
         "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
@@ -757,7 +757,7 @@ fn inline_completion_items_use_string_insert_text() -> TestResult {
     assert!(!items.is_empty(), "expected deterministic inline completion items");
     assert!(
         items.iter().all(|item| item.get("insertText").is_some_and(Value::is_string)),
-        "InlineCompletionItem.insertText must be a string or valid StringValue object"
+        "object-form StringValue insertText is unclaimed; current inline items must use plain strings"
     );
     Ok(())
 }
