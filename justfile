@@ -2811,11 +2811,15 @@ lsp-tier-c:
 # ============================================================================
 
 # Clean up stale agent worktrees (safe — only removes worktrees with no uncommitted changes and no open PR)
+# Also reaps orphaned /tmp build-target directories to reclaim disk space.
 clean-worktrees:
     #!/usr/bin/env bash
     set -euo pipefail
     repo_name=$(basename "$PWD")
     managed_root="$(dirname "$PWD")/${repo_name}-worktrees"
+    echo "Reaping orphaned /tmp agent build targets (dry-run — pass APPLY=1 to prune)..."
+    bash "$(git rev-parse --show-toplevel)/scripts/clean-tmp-targets.sh" || true
+    echo ""
     echo "Pruning unreferenced worktrees..."
     git worktree prune
     echo "Checking ${managed_root}/ for stale entries..."
@@ -2850,3 +2854,12 @@ clean-worktrees:
 # Query, allocate, release, or clean up reusable worktree slots
 worktree-manager *ARGS:
     python3 scripts/worktree-manager.py {{ARGS}}
+
+# List orphaned agent /tmp build-target directories (dry-run by default).
+# These accumulate from finished/zombie agent sessions and can exhaust disk space.
+# Pass --prune (or set APPLY=1) to delete them.
+# Only touches /tmp/agent-*-target and /tmp/wt-*-target patterns.
+# Never removes a target belonging to a currently registered git worktree.
+# Skips dirs modified within the last 5 minutes (grace period for active builds).
+clean-tmp-targets *ARGS:
+    bash scripts/clean-tmp-targets.sh {{ARGS}}
