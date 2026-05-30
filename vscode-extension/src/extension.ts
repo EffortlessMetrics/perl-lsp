@@ -41,6 +41,10 @@ let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
 let testAdapter: PerlTestAdapter | undefined;
 let currentServerPath: string | null = null;
+// Set by getServerPath() when perl-lsp.serverPath is configured but the file
+// does not exist, so the "not found" error can name the broken setting instead
+// of failing silently.
+let configuredServerPathMissing: string | null = null;
 let statusBarItem: vscode.StatusBarItem | undefined;
 let healthWidget: HealthWidget | undefined;
 let streamingController: StreamingCompletionController | undefined;
@@ -1775,16 +1779,42 @@ export async function deactivate() {
     await disposeLanguageClient();
 }
 
+/**
+ * If `userPath` (the configured perl-lsp.serverPath) is set but does not exist,
+ * log a diagnostic and return it so callers can surface an actionable error —
+ * instead of silently falling through to PATH/bundled and leaving the user with
+ * a generic "not found" that gives no hint their setting was the cause. Returns
+ * null when no configured path was rejected. Exported for testing.
+ */
+export function diagnoseConfiguredServerPath(
+    userPath: string | undefined,
+    pathExists: boolean,
+    channel: vscode.OutputChannel,
+): string | null {
+    if (!userPath || pathExists) {
+        return null;
+    }
+    channel.appendLine(
+        `[startup] perl-lsp.serverPath is configured but does not exist: ${userPath}. ` +
+        `Falling back to PATH/bundled binary (or auto-download).`,
+    );
+    return userPath;
+}
+
 async function getServerPath(context: vscode.ExtensionContext): Promise<string | null> {
     // First check user settings
     const config = vscode.workspace.getConfiguration('perl-lsp');
     const userPath = config.get<string>('serverPath');
-    
-    if (userPath && fs.existsSync(userPath)) {
+    const userPathExists = userPath ? fs.existsSync(userPath) : false;
+
+    if (userPath && userPathExists) {
         outputChannel.appendLine(`Using user-configured Perl LSP binary: ${userPath}`);
+        configuredServerPathMissing = null;
         return userPath;
     }
-    
+
+    configuredServerPathMissing = diagnoseConfiguredServerPath(userPath, userPathExists, outputChannel);
+
     const platform = process.platform;
     const arch = process.arch;
     const binaryNames = platform === 'win32'
@@ -1882,8 +1912,11 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
     currentServerPath = await getServerPath(context);
     if (!currentServerPath) {
         healthWidget?.onStateChange(ClientState.Stopped);
+        const notFoundMessage = configuredServerPathMissing
+            ? `Perl Language Server not found: your perl-lsp.serverPath points to "${configuredServerPathMissing}", which does not exist. Fix the path or clear the setting to auto-download.`
+            : 'Perl Language Server (perllsp) not found.';
         const choice = await vscode.window.showErrorMessage(
-            'Perl Language Server (perllsp) not found.',
+            notFoundMessage,
             'Install (cargo install perllsp)',
             'Open Settings'
         );

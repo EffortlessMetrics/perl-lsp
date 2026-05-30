@@ -19,6 +19,7 @@ jest.mock('vscode-languageclient/node', () => ({
 }));
 import {
   copyProviderDecisionReceiptCommand,
+  diagnoseConfiguredServerPath,
   explainDiagnosticCommand,
   explainMissingModuleLookupCommand,
   explainProviderDecisionCommand,
@@ -48,6 +49,35 @@ function makeContext(version = '0.12.3'): any {
     },
   };
 }
+
+describe('diagnoseConfiguredServerPath (perl-lsp.serverPath validation)', () => {
+  function makeChannel(): any {
+    return { appendLine: jest.fn() };
+  }
+
+  test('flags a configured serverPath that does not exist and logs a diagnostic', () => {
+    const channel = makeChannel();
+    const result = diagnoseConfiguredServerPath('/nonexistent/perllsp', false, channel);
+    expect(result).toBe('/nonexistent/perllsp');
+    expect(channel.appendLine).toHaveBeenCalledTimes(1);
+    expect(channel.appendLine.mock.calls[0][0]).toContain('/nonexistent/perllsp');
+    expect(channel.appendLine.mock.calls[0][0]).toContain('does not exist');
+  });
+
+  test('returns null and stays silent when the configured serverPath exists', () => {
+    const channel = makeChannel();
+    const result = diagnoseConfiguredServerPath('/usr/local/bin/perllsp', true, channel);
+    expect(result).toBeNull();
+    expect(channel.appendLine).not.toHaveBeenCalled();
+  });
+
+  test('returns null and stays silent when no serverPath is configured', () => {
+    const channel = makeChannel();
+    expect(diagnoseConfiguredServerPath(undefined, false, channel)).toBeNull();
+    expect(diagnoseConfiguredServerPath('', false, channel)).toBeNull();
+    expect(channel.appendLine).not.toHaveBeenCalled();
+  });
+});
 
 describe('extension UX warnings', () => {
   afterEach(() => {
