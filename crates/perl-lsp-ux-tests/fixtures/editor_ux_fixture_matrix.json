@@ -1696,6 +1696,35 @@
       ]
     },
     {
+      "id": "gated_multiline_constructor_inline_completion_quality",
+      "scenario_file": "ux_scenario_60_gated_multiline_constructor_inline_completion_quality.rs",
+      "subsystem_owner": "editor_trust",
+      "ci_tier": "pr",
+      "component": "completion",
+      "instrumentation": {
+        "run_receipt": false,
+        "first_useful_result": false,
+        "protocol_goldens": false
+      },
+      "user_journey": "request invoked multiline constructor inline completion and record policy-gated acceptance safety",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "dynamic inline-completion registration is observed for an LSP4IJ-shaped client",
+        "invoked inline completion returns the fixture-backed multiline constructor body",
+        "automatic inline completion suppresses multiline constructor ghost text",
+        "selectedCompletionInfo conflicts suppress multiline constructor ghost text",
+        "accepting the multiline constructor edit produces the expected source without parser diagnostics"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "real_workspace_providers",
       "scenario_file": "ux_scenario_20_real_workspace_providers.rs",
       "subsystem_owner": "editor_intelligence",
