@@ -3,7 +3,15 @@
 mod common;
 
 use serde_json::{Value, json};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
+
+static NEXT_URI_ID: AtomicU64 = AtomicU64::new(1);
+
+fn unique_test_uri(test_name: &str) -> String {
+    let id = NEXT_URI_ID.fetch_add(1, Ordering::Relaxed);
+    format!("file:///tmp/perl-lsp-{test_name}-{}-{id}.pl", std::process::id())
+}
 
 fn send_request_with_timeout(
     server: &common::LspServer,
@@ -98,7 +106,7 @@ fn lsp_smoke_e2e_push_diagnostics_clear_after_fix() -> Result<(), Box<dyn std::e
     let request_timeout = Duration::from_secs(3);
     let diagnostics_timeout = Duration::from_secs(5);
     let init_timeout = common::timeout_scaler::TimeoutProfile::Initialization.timeout();
-    let uri = "file:///tmp/lsp_smoke_e2e_diagnostics.pl";
+    let uri = unique_test_uri("push-diagnostics-clear");
 
     let init_response = send_request_with_timeout(
         &server,
@@ -156,7 +164,7 @@ sub broken {
     );
 
     let broken_diagnostics =
-        wait_for_diagnostics_matching(&server, uri, diagnostics_timeout, |diagnostics| {
+        wait_for_diagnostics_matching(&server, &uri, diagnostics_timeout, |diagnostics| {
             diagnostics.iter().any(|diagnostic| {
                 diagnostic.get("source").and_then(Value::as_str) == Some("perl-parser")
                     && diagnostic.get("severity").and_then(Value::as_i64) == Some(1)
@@ -197,7 +205,7 @@ print $answer;
     );
 
     let fixed_diagnostics =
-        wait_for_diagnostics_matching(&server, uri, diagnostics_timeout, |diagnostics| {
+        wait_for_diagnostics_matching(&server, &uri, diagnostics_timeout, |diagnostics| {
             diagnostics.is_empty()
         })?;
     assert_eq!(
@@ -245,7 +253,7 @@ fn lsp_smoke_e2e_stdio_flow() -> Result<(), Box<dyn std::error::Error>> {
     let timeout = Duration::from_secs(2);
     let init_timeout = common::timeout_scaler::TimeoutProfile::Initialization.timeout();
 
-    let uri = "file:///tmp/lsp_smoke_e2e.pl";
+    let uri = unique_test_uri("stdio-flow");
     let fixture = r#"use strict;
 use warnings;
 
@@ -557,7 +565,7 @@ my $value = gre
         .and_then(Value::as_object)
         .ok_or("rename changes should be an object")?;
     let this_file_edits = rename_changes
-        .get(uri)
+        .get(&uri)
         .and_then(Value::as_array)
         .ok_or("rename should contain edits for opened document")?;
     assert!(
@@ -605,7 +613,7 @@ fn lsp_smoke_e2e_pull_diagnostics_refresh_after_change() -> Result<(), Box<dyn s
     let timeout = Duration::from_secs(2);
     let init_timeout = common::timeout_scaler::TimeoutProfile::Initialization.timeout();
 
-    let uri = "file:///tmp/lsp_smoke_e2e_diagnostics.pl";
+    let uri = unique_test_uri("pull-diagnostics-refresh");
     let broken_fixture = "use strict;
 use warnings;
 
