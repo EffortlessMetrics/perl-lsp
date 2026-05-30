@@ -373,3 +373,84 @@ jobs:
       - name: Fail UX regression gate on test failures
         if: steps.harness_check.outputs.harness_available == 'true' && steps.ux_tests.outcome == 'failure'
         run: exit 1
+
+  # ---------------------------------------------------------------------------
+  # Extension Jest gate
+  #
+  # The Rust UX harness above does NOT exercise the VS Code extension's own
+  # TypeScript test suite. Before this job existed, a `vscode-extension/**`
+  # change could merge with its Jest suite never running in PR CI — which is
+  # exactly how the activation-events regression (#860) reached master while
+  # the guard test sat green-because-never-run. This job closes that hole:
+  # lint -> typecheck -> jest, on every PR that touches extension paths.
+  #
+  # ROLLOUT: jest runs report-only (continue-on-error) for now. The suite has
+  # never been CI-enforced and carries pre-existing failures, so this closes the
+  # silent-skip hole first (tests run + results visible) without blocking on
+  # rot. Flip jest to blocking once the suite is confirmed clean on the CI
+  # runner — tracked by the follow-up triage issue.
+  # ---------------------------------------------------------------------------
+  extension-jest:
+    name: Extension Jest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: vscode-extension/package-lock.json
+
+      - name: Install dependencies (npm ci)
+        working-directory: vscode-extension
+        run: npm ci
+
+      - name: Lint (eslint)
+        working-directory: vscode-extension
+        run: npm run lint
+
+      - name: Typecheck (tsc)
+        working-directory: vscode-extension
+        run: npm run compile
+
+      - name: Unit tests (jest --ci) — report-only
+        id: jest
+        # Report-only during initial rollout: the extension Jest suite has never
+        # run in PR CI, so it carries pre-existing / environment-sensitive
+        # failures. Tolerate them now (visibility first); flip to blocking by
+        # removing continue-on-error once the suite is confirmed clean on the
+        # CI runner. Tracked by the follow-up issue.
+        continue-on-error: true
+        working-directory: vscode-extension
+        run: npm run test:ci
+
+      - name: Report extension Jest result (ci/extension-jest)
+        if: always()
+        uses: actions/github-script@v9
+        with:
+          script: |
+            // Report-only rollout: this status never blocks merge yet. It records
+            // that the extension suite RAN (closing the silent-skip hole) and
+            // surfaces the result. Promote to blocking by deriving state from the
+            // real jest outcome once the suite is confirmed clean on CI.
+            const jest = '${{ steps.jest.outcome }}';
+            const state = 'success';
+            const description = jest === 'success'
+              ? 'report-only: extension lint + typecheck + jest all green'
+              : 'report-only (advisory, non-blocking): jest reported failures — see job log';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state,
+              context: 'ci/extension-jest',
+              description,
+              target_url: `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
+            });
