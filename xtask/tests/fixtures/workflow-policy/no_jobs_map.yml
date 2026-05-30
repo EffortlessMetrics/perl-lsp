@@ -1,0 +1,7 @@
+name: No Jobs Map Fixture
+
+# Intentionally has no `jobs:` map — exercises the STALE_WHITELIST_JOB
+# branch that fires when a whitelist lane references a job in a workflow
+# that defines no jobs at all.
+on:
+  workflow_dispatch:
