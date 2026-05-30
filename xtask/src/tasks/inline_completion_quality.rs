@@ -50,6 +50,10 @@ struct SourceQualityReceipt {
     expected: usize,
     passed: usize,
     failed: usize,
+    returned_items: usize,
+    edit_application: CountReceipt,
+    parse_regressions: usize,
+    suppression_reasons: BTreeMap<String, usize>,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -100,6 +104,15 @@ enum EditApplicationOutcome {
     Failed,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct SourceScenarioOutcome {
+    passed: bool,
+    item_count: usize,
+    parse_regressions: usize,
+    edit_application: EditApplicationOutcome,
+    suppression_reason: Option<&'static str>,
+}
+
 struct InlineCompletionScenario {
     text: String,
     line: u32,
@@ -135,10 +148,21 @@ pub fn run(receipt: PathBuf) -> Result<()> {
                 record_edit_application(&mut receipt_data.checks, edit_application);
                 let passed = parse_regressions == 0
                     && !matches!(edit_application, EditApplicationOutcome::Failed);
-                record_source_result(&mut receipt_data.sources, scenario.source_name, passed);
                 update_check_counts(&mut receipt_data.checks, scenario, passed);
+                let suppression_reason = measured_suppression_reason(scenario, item_count, passed);
+                record_source_result(
+                    &mut receipt_data.sources,
+                    scenario.source_name,
+                    SourceScenarioOutcome {
+                        passed,
+                        item_count,
+                        parse_regressions,
+                        edit_application,
+                        suppression_reason,
+                    },
+                );
 
-                if let Some(reason) = measured_suppression_reason(scenario, item_count, passed) {
+                if let Some(reason) = suppression_reason {
                     record_suppression_reason(&mut receipt_data.checks, reason);
                     notes.push(format!("suppression_reason={reason}"));
                     if reason == SUPPRESSION_HARD_ZONE {
@@ -172,7 +196,17 @@ pub fn run(receipt: PathBuf) -> Result<()> {
                 });
             }
             Err(error) => {
-                record_source_result(&mut receipt_data.sources, scenario.source_name, false);
+                record_source_result(
+                    &mut receipt_data.sources,
+                    scenario.source_name,
+                    SourceScenarioOutcome {
+                        passed: false,
+                        item_count: 0,
+                        parse_regressions: 0,
+                        edit_application: EditApplicationOutcome::NotApplicable,
+                        suppression_reason: None,
+                    },
+                );
                 update_check_counts(&mut receipt_data.checks, scenario, false);
                 let message = error.to_string();
                 failures.push(format!("{}: {message}", scenario.name));
@@ -211,11 +245,17 @@ pub fn run(receipt: PathBuf) -> Result<()> {
 fn record_source_result(
     sources: &mut BTreeMap<String, SourceQualityReceipt>,
     source_name: &str,
-    passed: bool,
+    outcome: SourceScenarioOutcome,
 ) {
     let source_entry = sources.entry(source_name.to_string()).or_default();
     source_entry.expected += 1;
-    if passed {
+    source_entry.returned_items += outcome.item_count;
+    source_entry.parse_regressions += outcome.parse_regressions;
+    record_edit_application_count(&mut source_entry.edit_application, outcome.edit_application);
+    if let Some(reason) = outcome.suppression_reason {
+        *source_entry.suppression_reasons.entry(reason.to_string()).or_default() += 1;
+    }
+    if outcome.passed {
         source_entry.passed += 1;
     } else {
         source_entry.failed += 1;
@@ -288,15 +328,19 @@ fn record_edit_application(
     checks: &mut InlineCompletionQualityChecks,
     outcome: EditApplicationOutcome,
 ) {
+    record_edit_application_count(&mut checks.edit_application, outcome);
+}
+
+fn record_edit_application_count(counter: &mut CountReceipt, outcome: EditApplicationOutcome) {
     match outcome {
         EditApplicationOutcome::NotApplicable => {}
         EditApplicationOutcome::Passed => {
-            checks.edit_application.total += 1;
-            checks.edit_application.passed += 1;
+            counter.total += 1;
+            counter.passed += 1;
         }
         EditApplicationOutcome::Failed => {
-            checks.edit_application.total += 1;
-            checks.edit_application.failed += 1;
+            counter.total += 1;
+            counter.failed += 1;
         }
     }
 }
@@ -1154,6 +1198,61 @@ mod tests {
             receipt.pointer("/checks/edit_application/failed").and_then(Value::as_u64),
             Some(0)
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn inline_completion_quality_receipt_breaks_down_source_outcomes() -> Result<()> {
+        let temp = TempDir::new()?;
+        let receipt_path = temp.path().join("inline-completion-quality.json");
+
+        run(receipt_path.clone())?;
+
+        let receipt: Value = serde_json::from_slice(&fs::read(&receipt_path)?)?;
+        let expected_hard_zone_scenarios =
+            scenarios().iter().filter(|scenario| scenario.source_name == "hard_zone").count()
+                as u64;
+        let expected_replacement_range_scenarios = scenarios()
+            .iter()
+            .filter(|scenario| scenario.source_name == "replacement_range")
+            .count() as u64;
+
+        assert_eq!(
+            receipt.pointer("/sources/hard_zone/expected").and_then(Value::as_u64),
+            Some(expected_hard_zone_scenarios)
+        );
+        assert_eq!(
+            receipt.pointer("/sources/hard_zone/returned_items").and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            receipt
+                .pointer("/sources/hard_zone/suppression_reasons/hard_zone")
+                .and_then(Value::as_u64),
+            Some(expected_hard_zone_scenarios)
+        );
+        assert_eq!(
+            receipt.pointer("/sources/hard_zone/edit_application/total").and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            receipt
+                .pointer("/sources/replacement_range/edit_application/total")
+                .and_then(Value::as_u64),
+            Some(expected_replacement_range_scenarios)
+        );
+        assert_eq!(
+            receipt
+                .pointer("/sources/replacement_range/edit_application/passed")
+                .and_then(Value::as_u64),
+            Some(expected_replacement_range_scenarios)
+        );
+        let module_returned_items = receipt
+            .pointer("/sources/module/returned_items")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| eyre!("missing module returned_items source receipt"))?;
+        assert!(module_returned_items > 0);
 
         Ok(())
     }
