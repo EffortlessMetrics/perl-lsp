@@ -55,6 +55,13 @@ describe('BinaryDownloader.getPlatformTarget', () => {
     androidRootBackup = process.env.ANDROID_ROOT;
     androidDataBackup = process.env.ANDROID_DATA;
     termuxVersionBackup = process.env.TERMUX_VERSION;
+    // Isolate the target-triple unit from ambient platform detection so these
+    // tests are deterministic regardless of host or sibling-test state. The
+    // Termux test overrides isTermuxEnvironment explicitly below; libc tests
+    // exercise the non-Android Linux path and must not be shadowed by leaked
+    // detector state.
+    jest.spyOn(downloader as any, 'isTermuxEnvironment').mockReturnValue(false);
+    jest.spyOn(downloader as any, 'isAndroidEnvironment').mockReturnValue(false);
   });
 
   afterEach(() => {
