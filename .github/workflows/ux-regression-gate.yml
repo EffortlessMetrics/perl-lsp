@@ -384,11 +384,9 @@ jobs:
   # the guard test sat green-because-never-run. This job closes that hole:
   # lint -> typecheck -> jest, on every PR that touches extension paths.
   #
-  # ROLLOUT: jest runs report-only (continue-on-error) for now. The suite has
-  # never been CI-enforced and carries pre-existing failures, so this closes the
-  # silent-skip hole first (tests run + results visible) without blocking on
-  # rot. Flip jest to blocking once the suite is confirmed clean on the CI
-  # runner — tracked by the follow-up triage issue.
+  # This is a BLOCKING gate: lint, typecheck, and jest must pass. The suite was
+  # de-flaked (network transport stubbed in tests) and confirmed deterministically
+  # green before enforcement was enabled (#932).
   # ---------------------------------------------------------------------------
   extension-jest:
     name: Extension Jest
@@ -420,14 +418,8 @@ jobs:
         working-directory: vscode-extension
         run: npm run compile
 
-      - name: Unit tests (jest --ci) — report-only
+      - name: Unit tests (jest --ci)
         id: jest
-        # Report-only during initial rollout: the extension Jest suite has never
-        # run in PR CI, so it carries pre-existing / environment-sensitive
-        # failures. Tolerate them now (visibility first); flip to blocking by
-        # removing continue-on-error once the suite is confirmed clean on the
-        # CI runner. Tracked by the follow-up issue.
-        continue-on-error: true
         working-directory: vscode-extension
         run: npm run test:ci
 
@@ -436,15 +428,12 @@ jobs:
         uses: actions/github-script@v9
         with:
           script: |
-            // Report-only rollout: this status never blocks merge yet. It records
-            // that the extension suite RAN (closing the silent-skip hole) and
-            // surfaces the result. Promote to blocking by deriving state from the
-            // real jest outcome once the suite is confirmed clean on CI.
+            // Blocking gate: the commit status reflects the real jest outcome.
             const jest = '${{ steps.jest.outcome }}';
-            const state = 'success';
-            const description = jest === 'success'
-              ? 'report-only: extension lint + typecheck + jest all green'
-              : 'report-only (advisory, non-blocking): jest reported failures — see job log';
+            const state = jest === 'success' ? 'success' : 'failure';
+            const description = state === 'success'
+              ? 'extension lint + typecheck + jest all green'
+              : 'extension jest failed — run: cd vscode-extension && npm run test:ci';
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,

@@ -9,6 +9,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { EventEmitter } from 'events';
 import { afterEach, beforeEach, describe, expect, jest, test } from '@jest/globals';
 import {
   BinaryDownloader,
@@ -735,10 +736,30 @@ describe('BinaryDownloader download URL security', () => {
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dl-sec-'));
     downloader = new BinaryDownloader(makeContext(), makeOutputChannel());
+    // Stub the HTTP transport so the "allowed" (loopback) cases reject on a
+    // synthetic connection error instead of opening a REAL socket to
+    // 127.0.0.x:9999. The security checks in downloadFile() run before .get(),
+    // so rejections for disallowed protocols/hosts are unaffected; only the
+    // post-check connection is replaced. This removes the real-network + 500ms
+    // timeout race that made these tests flaky under parallel CI load.
+    const makeRefusedRequest = (): EventEmitter => {
+      const req: any = new EventEmitter();
+      req.destroy = () => {};
+      req.end = () => {};
+      process.nextTick(() =>
+        req.emit(
+          'error',
+          Object.assign(new Error('connect ECONNREFUSED (stubbed)'), { code: 'ECONNREFUSED' })
+        )
+      );
+      return req;
+    };
+    jest.spyOn(downloader as any, 'httpGet').mockImplementation((() => makeRefusedRequest()) as any);
   });
 
   afterEach(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
+    jest.restoreAllMocks();
   });
 
   const dest = () => path.join(tmpDir, 'test-download');
