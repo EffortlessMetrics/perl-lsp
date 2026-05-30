@@ -1779,7 +1779,7 @@ impl<'a> PerlLexer<'a> {
                     | "return" | "die" | "warn" | "do" | "eval" => {
                         self.mode = LexerMode::ExpectTerm;
                     }
-                    "sub" => {
+                    "sub" | "method" => {
                         self.after_sub = true;
                         self.mode = LexerMode::ExpectTerm;
                     }
