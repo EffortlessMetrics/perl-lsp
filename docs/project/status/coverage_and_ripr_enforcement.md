@@ -55,6 +55,34 @@ suppressed archive/generated/non-production surfaces and recommends reviewable
 clusters for future burn-down PRs. It does not start parser, semantic, lexer, or
 LSP behavior burn-down by itself.
 
+## Project Coverage Burn-Down Inventory
+
+The workspace coverage baseline is generated with:
+
+```bash
+rtk cargo xtask coverage-baseline --lcov target/lcov.info --receipt target/receipts/quality/coverage-baseline.json --codecov codecov.yml --patch-base origin/HEAD --scope workspace-lib-xtask-quality
+rtk cargo xtask coverage-baseline --lcov target/lcov.info --receipt target/receipts/quality/coverage-baseline.json --codecov codecov.yml --patch-base origin/HEAD --scope workspace-lib-xtask-quality --check
+```
+
+The receipt keeps patch-gate fields for enforcement and also reports the
+project burn-down queue:
+
+- `coverage.project`
+- `project_burndown.target`
+- `project_burndown.current`
+- `project_burndown.remaining_percentage_points`
+- `project_burndown.status`
+- `project_files_below_target`
+- `top_project_files`
+- `recommended_project_clusters`
+
+This inventory is queue-shaping only while project coverage remains
+transitional. Use it to split future coverage PRs by behavior surface:
+proof infrastructure, CLI/report generation, provider decisions,
+scheduler/cancellation, config parsing, serialization/deserialization, and
+error handling. Do not treat the inventory as permission to chase generated code
+or add constructor-only line coverage tests.
+
 ## Transitional Targets
 
 - project coverage is visible in coverage receipts as `coverage.project`, but

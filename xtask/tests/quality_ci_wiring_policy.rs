@@ -195,6 +195,11 @@ fn docs_describe_transitional_blocking_contract() {
             && status_doc.contains("suppressed_unresolved")
             && status_doc.contains("top_active_gap_kinds")
             && status_doc.contains("recommended_first_clusters")
+            && status_doc.contains("Project Coverage Burn-Down Inventory")
+            && status_doc.contains("project_burndown.remaining_percentage_points")
+            && status_doc.contains("project_files_below_target")
+            && status_doc.contains("top_project_files")
+            && status_doc.contains("recommended_project_clusters")
             && status_doc.contains("An active temporary exception is not a final-enforcement pass"),
         "status doc must keep final targets separate from transitional enforcement"
     );
