@@ -1725,6 +1725,34 @@
       ]
     },
     {
+      "id": "package_boundary_receiver_inline_completion_quality",
+      "scenario_file": "ux_scenario_61_package_boundary_receiver_inline_completion_quality.rs",
+      "subsystem_owner": "editor_trust",
+      "ci_tier": "pr",
+      "component": "completion",
+      "instrumentation": {
+        "run_receipt": false,
+        "first_useful_result": false,
+        "protocol_goldens": false
+      },
+      "user_journey": "request inline completion after $self-> in a multi-file package-boundary workspace and record current-package method ghost text",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "dynamic inline-completion registration is observed for an LSP4IJ-shaped client",
+        "$self receiver inline completion returns current-package methods",
+        "$self receiver inline completion prefers current-package methods",
+        "$self receiver inline completion avoids sibling-package methods and generic constructor guesses"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "real_workspace_providers",
       "scenario_file": "ux_scenario_20_real_workspace_providers.rs",
       "subsystem_owner": "editor_intelligence",

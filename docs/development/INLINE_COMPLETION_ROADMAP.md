@@ -390,6 +390,8 @@ Current semantic inline UX receipt inventory:
 | `loop_binding_inline_completion_quality` | `ux_scenario_57_loop_binding_inline_completion_quality.rs` | Visible collection loop bindings, hash key iteration, array preference, and safe singular naming. |
 | `guard_condition_inline_completion_quality` | `ux_scenario_58_guard_condition_inline_completion_quality.rs` | Guard-condition continuations use visible scalar facts without unrelated result or receiver guesses. |
 | `real_workspace_module_import_inline_completion_quality` | `ux_scenario_59_real_workspace_module_import_inline_completion_quality.rs` | Effective `@INC`-aware module-import ghost text, `no lib` suppression, and workspace-root wildcard suppression. |
+| `gated_multiline_constructor_inline_completion_quality` | `ux_scenario_60_gated_multiline_constructor_inline_completion_quality.rs` | Invoked-only multiline constructor ghost text, automatic-trigger suppression, selected-completion conflict suppression, and accepted-edit parse safety. |
+| `package_boundary_receiver_inline_completion_quality` | `ux_scenario_61_package_boundary_receiver_inline_completion_quality.rs` | `$self->` current-package method suggestions stay preferred in a multi-file package-boundary workspace without sibling-package or generic constructor leaks. |
 
 The machine-readable dashboard for this inventory is:
 
@@ -409,7 +411,7 @@ run the UX scenarios or promote support status by itself.
 Still future or deliberately gated:
 
 - broader real-project UX receipts for inline quality beyond the current module
-  import receipt and existing inventory;
+  import and package-boundary receiver receipts;
 - next-edit suggestions;
 - optional AI candidate boundaries.
 

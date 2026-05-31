@@ -49,6 +49,10 @@ const REQUIRED_SEMANTIC_INLINE_RECEIPTS: &[SemanticInlineRequirement] = &[
         workflow_id: "real_workspace_module_import_inline_completion_quality",
     },
     SemanticInlineRequirement {
+        capability: "package_boundary_receiver",
+        workflow_id: "package_boundary_receiver_inline_completion_quality",
+    },
+    SemanticInlineRequirement {
         capability: "gated_multiline_constructor",
         workflow_id: "gated_multiline_constructor_inline_completion_quality",
     },

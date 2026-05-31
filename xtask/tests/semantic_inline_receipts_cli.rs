@@ -50,7 +50,7 @@ fn semantic_inline_receipts_cli_writes_dashboard_inventory() -> Result<()> {
         .get("semantic_inline")
         .and_then(Value::as_object)
         .ok_or_else(|| anyhow!("semantic_inline map missing"))?;
-    assert_eq!(semantic_inline.len(), 11);
+    assert_eq!(semantic_inline.len(), 12);
     assert_eq!(
         semantic_inline
             .get("project_module_import")
@@ -71,6 +71,13 @@ fn semantic_inline_receipts_cli_writes_dashboard_inventory() -> Result<()> {
             .and_then(|entry| entry.get("workflow_id"))
             .and_then(Value::as_str),
         Some("gated_multiline_constructor_inline_completion_quality")
+    );
+    assert_eq!(
+        semantic_inline
+            .get("package_boundary_receiver")
+            .and_then(|entry| entry.get("workflow_id"))
+            .and_then(Value::as_str),
+        Some("package_boundary_receiver_inline_completion_quality")
     );
 
     let future_gated = dashboard

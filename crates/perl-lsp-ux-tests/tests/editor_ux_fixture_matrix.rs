@@ -38,6 +38,7 @@ const SEMANTIC_INLINE_RECEIPT_IDS: &[&str] = &[
     "loop_binding_inline_completion_quality",
     "guard_condition_inline_completion_quality",
     "real_workspace_module_import_inline_completion_quality",
+    "package_boundary_receiver_inline_completion_quality",
 ];
 
 fn workspace_root() -> &'static Path {
