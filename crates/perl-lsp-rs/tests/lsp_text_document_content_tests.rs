@@ -213,6 +213,8 @@ use Local::VirtualDoc;
 =head1 DESCRIPTION
 
 Local POD served from the workspace module file.
+See also L<Local::Dependency>, L<Local::Dependency>, L<Local::Helper>, and L<Local::VirtualDoc>.
+Ignore local sections such as L</reset> and labeled targets such as L<helper|Local::Skipped>.
 
 =head2 reset
 
@@ -245,6 +247,20 @@ Reset the local virtual document fixture.
     assert!(
         text.contains("Local POD served from the workspace module file."),
         "DESCRIPTION POD missing: {text}"
+    );
+    assert!(
+        text.contains(
+            "Related virtual perldoc:\n- perldoc://Local::Dependency\n- perldoc://Local::Helper"
+        ),
+        "workspace POD module links should become sorted virtual perldoc links: {text}"
+    );
+    assert!(
+        !text.contains("perldoc://Local::VirtualDoc"),
+        "workspace POD virtual content should ignore self-links: {text}"
+    );
+    assert!(
+        !text.contains("perldoc://Local::Skipped") && !text.contains("perldoc:///reset"),
+        "workspace POD virtual content should ignore non-simple POD targets: {text}"
     );
     assert!(
         text.contains("METHOD reset\nReset the local virtual document fixture."),
