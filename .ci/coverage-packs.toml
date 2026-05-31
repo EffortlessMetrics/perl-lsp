@@ -70,13 +70,20 @@ files = [
   ".github/workflows/",
   ".ci/",
   "policy/",
+  "xtask/tests/codecov_patch_gate_policy.rs",
+  "xtask/tests/quality_ci_wiring_policy.rs",
+  "xtask/tests/quality_gate_patch_coverage_cli_policy.rs",
 ]
 commands = [
   "cargo xtask workflow-trigger-lint --policy .ci/policies/required-checks.toml --receipt target/receipts/workflow-trigger-lint.json",
+  "cargo test -p xtask --test codecov_patch_gate_policy --profile agent --locked -- --nocapture",
   "cargo test -p xtask --test quality_ci_wiring_policy --profile agent --locked -- --nocapture",
+  "cargo test -p xtask --test quality_gate_patch_coverage_cli_policy --profile agent --locked -- --nocapture",
 ]
 coverage_filters = [
+  "codecov_patch_gate_policy",
   "quality_ci_wiring_policy",
+  "quality_gate_patch_coverage_cli_policy",
   "workflow_trigger_lint",
 ]
 

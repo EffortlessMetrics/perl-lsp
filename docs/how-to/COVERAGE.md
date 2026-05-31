@@ -55,8 +55,12 @@ Patch coverage is the front-door PR coverage gate in Codecov policy:
 - **Project coverage**: Target `95%`, informational during burn-down.
 - **Coverage scope**: The PR patch gate measures workspace library units plus focused proof-lane `xtask` tests. Integration-heavy project coverage remains a burn-down target.
 
-The coverage proof workflow now runs the patch coverage quality gate on PRs.
-Project coverage remains informational during burn-down.
+The coverage proof workflow now routes PR patch coverage by changed surface.
+Code routes run the focused coverage pack selected by `cargo xtask ci route`.
+Routes without a coverage pack fall back to the broader workspace proof so the
+required Codecov status is still produced. Scheduled and manually dispatched
+coverage runs still use the broader workspace proof. Project coverage remains
+informational during burn-down.
 
 ### Patch Coverage Quality Gate
 
@@ -66,10 +70,11 @@ Generate the coverage receipt from LCOV before running the patch gate:
 rtk cargo xtask coverage-baseline --lcov target/lcov.info --receipt target/receipts/quality/coverage-baseline.json --codecov codecov.yml --patch-coverage <patch-percent>
 ```
 
-CI derives patch coverage from the PR diff and the workspace library plus proof-lane LCOV file:
+CI derives patch coverage from the PR diff and the route-selected proof-pack
+LCOV file:
 
 ```bash
-rtk cargo xtask coverage-baseline --lcov target/lcov.info --receipt target/receipts/quality/coverage-baseline.json --codecov codecov.yml --patch-base origin/HEAD --scope workspace-lib-xtask-quality
+rtk cargo xtask coverage-baseline --lcov target/lcov.info --receipt target/receipts/quality/coverage-baseline.json --codecov codecov.yml --patch-base origin/HEAD --scope routed-coverage-packs
 ```
 
 The coverage receipt records both `coverage.patch` and `coverage.project` so
@@ -287,9 +292,22 @@ rtk just coverage
 
 ## Integration with CI Gates
 
-Patch coverage is the blocking PR coverage gate for new code. CI runs `just coverage-proof <base>` to generate workspace library plus focused proof-lane LCOV, write and check `target/receipts/quality/coverage-baseline.json`, run `cargo xtask quality-gate --mode enforce-patch-coverage`, append `target/receipts/quality/ci-route.md` and `target/receipts/quality/quality-gate-coverage.md` to the GitHub summary, and upload required coverage proof artifacts. Project coverage remains informational during burn-down and is promoted to blocking after the project reaches the `95%` target.
+Patch coverage is the blocking PR coverage gate for new code. CI runs
+`cargo xtask ci route` first, then `just coverage-proof-routed <base> HEAD` for
+PRs with coverage packs. The routed proof generates focused LCOV from
+`.ci/coverage-packs.toml`, writes and checks
+`target/receipts/quality/coverage-baseline.json`, runs
+`cargo xtask quality-gate --mode enforce-patch-coverage`, appends
+`target/receipts/quality/ci-route.md` and
+`target/receipts/quality/quality-gate-coverage.md` to the GitHub summary, and
+uploads required coverage proof artifacts. Routes without a coverage pack fall
+back to the broader workspace proof until the external Codecov status can be
+made route-conditional safely.
 
-Changed-file routing is advisory while coverage remains a single blocking `Codecov / Patch 95` context. `cargo xtask ci route` emits `coverage_pack_selector` and `coverage_proof_packs` from `.ci/coverage-packs.toml` and writes a Markdown summary so reviewers can see which focused commands are expected to cover the changed surface before the Codecov job is split by pack.
+Scheduled and manually dispatched coverage jobs still run
+`just coverage-proof <base>` to generate the broader workspace library plus
+focused proof-lane LCOV. Project coverage remains informational during burn-down
+and is promoted to blocking after the project reaches the `95%` target.
 
 Branch coverage in the parser coverage lane is enforced separately through the baseline ratchet in `.ci/coverage-baseline.txt`.
 

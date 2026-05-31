@@ -1990,6 +1990,72 @@ coverage-proof base='origin/main':
         --summary target/receipts/quality/quality-gate-coverage.md \
         --check
 
+# Generate route-selected coverage for PR patch proof, derive patch coverage from
+# the diff, and enforce the patch gate. Scheduled/manual runs still use
+# `coverage-proof` for the broad workspace receipt.
+coverage-proof-routed base='origin/main' head='HEAD':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    coverage_target="${CARGO_TARGET_DIR:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/perl-lsp-swarm-coverage-target}"
+    mkdir -p target/receipts/quality
+    mkdir -p "$coverage_target"
+    if [[ -f target/receipts/quality/ci-route.json ]] && python3 -c 'import json, sys; from pathlib import Path; receipt = json.loads(Path("target/receipts/quality/ci-route.json").read_text(encoding="utf-8")); sys.exit(0 if receipt.get("base") == "{{base}}" and receipt.get("head") == "{{head}}" else 1)'; then
+        echo "using existing coverage route receipt for {{base}}...{{head}}"
+    else
+        cargo xtask ci route \
+            --base "{{base}}" \
+            --head "{{head}}" \
+            --receipt target/receipts/quality/ci-route.json \
+            --summary target/receipts/quality/ci-route.md
+    fi
+    pack_count="$(python3 -c 'import json; from pathlib import Path; route = json.loads(Path("target/receipts/quality/ci-route.json").read_text(encoding="utf-8")); print(len(route.get("coverage_proof_packs") or []))')"
+    if [[ "$pack_count" == "0" ]]; then
+        printf '# Patch Coverage Proof\n\n- decision: `skipped-by-policy`\n- reason: changed-file routing selected no coverage proof packs\n' \
+            > target/receipts/quality/quality-gate-coverage.md
+        echo "coverage route selected no coverage proof packs; skipping Codecov LCOV generation"
+        exit 0
+    fi
+    if [[ ! -x "$HOME/.cargo/bin/cargo-llvm-cov" ]]; then
+        echo "cargo-llvm-cov not found. Installing..."
+        "$HOME/.cargo/bin/rustup" run nightly cargo install cargo-llvm-cov --locked
+    fi
+    echo "coverage target: $coverage_target"
+    export CARGO_TARGET_DIR="$coverage_target"
+    "$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov clean --workspace
+    coverage_env="$coverage_target/llvm-cov-env.sh"
+    "$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov show-env --sh > "$coverage_env"
+    source "$coverage_env"
+    python3 -c 'import json, shlex; from pathlib import Path; route = json.loads(Path("target/receipts/quality/ci-route.json").read_text(encoding="utf-8")); packs = route.get("coverage_proof_packs") or []; commands = []; seen = set(); pack_ids = []; exec("for pack in packs:\n    pack_ids.append(str(pack.get(\"id\", \"<unknown>\")))\n    for command in pack.get(\"commands\") or []:\n        if command not in seen:\n            seen.add(command)\n            commands.append(command)"); Path("target/receipts/quality/coverage-route-selected-packs.txt").write_text(", ".join(pack_ids) + "\n", encoding="utf-8"); body = "#!/usr/bin/env bash\nset -euo pipefail\n" + "".join("echo " + shlex.quote(">>> routed coverage: " + command) + "\n" + command + "\n" for command in commands); Path("target/receipts/quality/coverage-pack-commands.sh").write_text(body, encoding="utf-8")'
+    bash target/receipts/quality/coverage-pack-commands.sh
+    "$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov report --profile agent --lcov --output-path target/lcov.info \
+        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/'
+    cargo xtask coverage-baseline \
+        --lcov target/lcov.info \
+        --receipt target/receipts/quality/coverage-baseline.json \
+        --codecov codecov.yml \
+        --patch-base "{{base}}" \
+        --scope routed-coverage-packs
+    cargo xtask coverage-baseline \
+        --lcov target/lcov.info \
+        --receipt target/receipts/quality/coverage-baseline.json \
+        --codecov codecov.yml \
+        --patch-base "{{base}}" \
+        --scope routed-coverage-packs \
+        --check
+    cargo xtask quality-gate \
+        --mode enforce-patch-coverage \
+        --coverage-receipt target/receipts/quality/coverage-baseline.json \
+        --codecov codecov.yml \
+        --receipt target/receipts/quality/quality-gate-coverage.json \
+        --summary target/receipts/quality/quality-gate-coverage.md
+    cargo xtask quality-gate \
+        --mode enforce-patch-coverage \
+        --coverage-receipt target/receipts/quality/coverage-baseline.json \
+        --codecov codecov.yml \
+        --receipt target/receipts/quality/quality-gate-coverage.json \
+        --summary target/receipts/quality/quality-gate-coverage.md \
+        --check
+
 # Refresh the checked-in coverage baseline from a fresh parser coverage snapshot.
 coverage-baseline-refresh:
     @just coverage-lcov

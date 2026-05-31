@@ -274,6 +274,12 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
     if file.starts_with(".github/workflows/")
         || file.starts_with(".ci/")
         || file.starts_with("policy/")
+        || matches!(
+            file,
+            "xtask/tests/codecov_patch_gate_policy.rs"
+                | "xtask/tests/quality_ci_wiring_policy.rs"
+                | "xtask/tests/quality_gate_patch_coverage_cli_policy.rs"
+        )
     {
         route.add_surface("ci-policy");
         route.add_pack(CI_POLICY_PACK);
@@ -625,6 +631,33 @@ mod tests {
     }
 
     #[test]
+    fn ci_route_receipt_maps_ci_policy_tests_to_ci_policy_pack() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec!["xtask/tests/quality_ci_wiring_policy.rs".to_string()],
+        )?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["ci-policy"]);
+        assert!(proof_pack_ids(&receipt).contains(&"ci-policy-focused"));
+        assert!(
+            receipt.coverage_pack_selector.iter().any(|pack| pack == "patch-coverage-ci-policy")
+        );
+        assert!(receipt.coverage_proof_packs.iter().any(|pack| {
+            pack.id == "patch-coverage-ci-policy"
+                && pack.commands.iter().any(|command| command.contains("quality_ci_wiring_policy"))
+        }));
+        assert!(
+            !receipt
+                .coverage_pack_selector
+                .iter()
+                .any(|pack| pack == "patch-coverage-rust-focused"),
+            "CI policy tests should not fall through to broad Rust coverage"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn ci_route_coverage_proof_pack_receipts_materializes_each_selected_pack() -> Result<()> {
         let selector = vec![
             "patch-coverage-xtask-semantic-inline".to_string(),
@@ -819,6 +852,22 @@ mod tests {
             &route_selectors.iter().map(|selector| (*selector).to_string()).collect::<Vec<_>>(),
         )?;
         assert_eq!(proof_packs.len(), route_selectors.len());
+        let ci_policy_pack = proof_packs
+            .iter()
+            .find(|pack| pack.id == "patch-coverage-ci-policy")
+            .ok_or_else(|| eyre!("missing CI policy coverage pack"))?;
+        assert!(
+            ci_policy_pack
+                .files
+                .iter()
+                .any(|file| { file == "xtask/tests/quality_ci_wiring_policy.rs" })
+        );
+        assert!(
+            ci_policy_pack
+                .commands
+                .iter()
+                .any(|command| { command.contains("quality_gate_patch_coverage_cli_policy") })
+        );
         Ok(())
     }
 

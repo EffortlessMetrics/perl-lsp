@@ -17,6 +17,10 @@ The proof lane is in transition from measurement to enforcement:
 - `Codecov / Patch 95` blocks patch coverage below 95%, stale or missing
   coverage receipts, missing coverage artifacts, and Codecov upload or
   processing failures through `fail_ci_if_error: true`
+- PR patch coverage is routed by changed surface through `cargo xtask ci route`;
+  code routes run the focused coverage pack selected from
+  `.ci/coverage-packs.toml`, while routes without a coverage pack fall back to
+  the broader workspace proof so the required Codecov status is still produced
 - `codecov/patch` must complete and pass after Codecov processes the uploaded
   LCOV
 - generated quality-gate receipts are freshness-checked for patch, new-RIPR,
@@ -60,8 +64,8 @@ LSP behavior burn-down by itself.
 The workspace coverage baseline is generated with:
 
 ```bash
-rtk cargo xtask coverage-baseline --lcov target/lcov.info --receipt target/receipts/quality/coverage-baseline.json --codecov codecov.yml --patch-base origin/HEAD --scope workspace-lib-xtask-quality
-rtk cargo xtask coverage-baseline --lcov target/lcov.info --receipt target/receipts/quality/coverage-baseline.json --codecov codecov.yml --patch-base origin/HEAD --scope workspace-lib-xtask-quality --check
+rtk cargo xtask coverage-baseline --lcov target/lcov.info --receipt target/receipts/quality/coverage-baseline.json --codecov codecov.yml --patch-base origin/HEAD --scope routed-coverage-packs
+rtk cargo xtask coverage-baseline --lcov target/lcov.info --receipt target/receipts/quality/coverage-baseline.json --codecov codecov.yml --patch-base origin/HEAD --scope routed-coverage-packs --check
 ```
 
 The receipt keeps patch-gate fields for enforcement and also reports the

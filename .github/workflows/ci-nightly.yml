@@ -461,7 +461,37 @@ jobs:
           touch archive/legacy-tests/test_fixtures/Module.pm
           touch archive/legacy-tests/test_fixtures/test.t
 
+      - name: Emit changed-file coverage route summary
+        id: coverage_route
+        env:
+          BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/receipts/quality
+          base_ref="$BASE_REF"
+          git fetch --no-tags --depth=200 origin "$base_ref" || true
+          python3 scripts/ci/route-codecov-packs.py \
+            --base "origin/$base_ref" \
+            --head HEAD \
+            --manifest .ci/coverage-packs.toml \
+            --receipt target/receipts/quality/ci-route.json \
+            --summary target/receipts/quality/ci-route.md
+          coverage_required="$(python3 -c 'import json; from pathlib import Path; route = json.loads(Path("target/receipts/quality/ci-route.json").read_text(encoding="utf-8")); print("true" if route.get("coverage_proof_packs") else "false")')"
+          echo "coverage_required=$coverage_required" >> "$GITHUB_OUTPUT"
+
+      - name: Run routed PR coverage proof
+        if: github.event_name == 'pull_request' && steps.coverage_route.outputs.coverage_required == 'true'
+        env:
+          BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}
+          RUSTFLAGS: "-Cdebuginfo=0"
+          CARGO_BUILD_JOBS: 1
+        run: |
+          base_ref="$BASE_REF"
+          git fetch --no-tags --depth=200 origin "$base_ref" || true
+          just coverage-proof-routed "origin/$base_ref" "HEAD"
+
       - name: Run workspace coverage proof
+        if: github.event_name != 'pull_request' || steps.coverage_route.outputs.coverage_required != 'true'
         env:
           BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}
           RUSTFLAGS: "-Cdebuginfo=0"
@@ -470,21 +500,6 @@ jobs:
           base_ref="$BASE_REF"
           git fetch --no-tags --depth=200 origin "$base_ref" || true
           just coverage-proof "origin/$base_ref"
-
-      - name: Emit changed-file coverage route summary
-        if: always()
-        env:
-          BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}
-        run: |
-          set -euo pipefail
-          mkdir -p target/receipts/quality
-          base_ref="$BASE_REF"
-          git fetch --no-tags --depth=200 origin "$base_ref" || true
-          cargo xtask ci route \
-            --base "origin/$base_ref" \
-            --head HEAD \
-            --receipt target/receipts/quality/ci-route.json \
-            --summary target/receipts/quality/ci-route.md
 
       - name: Append coverage proof summary
         if: always()

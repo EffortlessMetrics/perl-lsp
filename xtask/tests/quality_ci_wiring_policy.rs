@@ -89,12 +89,19 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
     for required in [
         "BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}",
         "base_ref=\"$BASE_REF\"",
+        "id: coverage_route",
+        "coverage_required=$coverage_required",
+        "Run routed PR coverage proof",
+        "steps.coverage_route.outputs.coverage_required == 'true'",
+        "just coverage-proof-routed \"origin/$base_ref\" \"HEAD\"",
+        "if: github.event_name != 'pull_request' || steps.coverage_route.outputs.coverage_required != 'true'",
         "just coverage-proof \"origin/$base_ref\"",
         "cache-targets: false",
         "RUSTFLAGS: \"-Cdebuginfo=0\"",
         "CARGO_BUILD_JOBS: 1",
         "- name: Emit changed-file coverage route summary",
-        "cargo xtask ci route",
+        "python3 scripts/ci/route-codecov-packs.py",
+        "--manifest .ci/coverage-packs.toml",
         "--receipt target/receipts/quality/ci-route.json",
         "--summary target/receipts/quality/ci-route.md",
         "target/receipts/quality/ci-route.md",
@@ -120,6 +127,19 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
         !coverage_job.contains("continue-on-error: true"),
         "coverage patch proof must not make Codecov upload advisory"
     );
+    for required in [
+        "coverage-proof-routed base='origin/main' head='HEAD':",
+        "cargo xtask ci route",
+        "--receipt target/receipts/quality/ci-route.json",
+        "--summary target/receipts/quality/ci-route.md",
+        "coverage-pack-commands.sh",
+        "coverage-route-selected-packs.txt",
+        "changed-file routing selected no coverage proof packs",
+        "cargo llvm-cov report --profile agent --lcov --output-path target/lcov.info",
+        "--scope routed-coverage-packs",
+    ] {
+        assert!(justfile.contains(required), "coverage-proof-routed missing `{required}`");
+    }
     for required in [
         "coverage-proof base='origin/main':",
         "coverage_target=\"${CARGO_TARGET_DIR:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/perl-lsp-swarm-coverage-target}\"",
@@ -183,7 +203,8 @@ fn docs_describe_transitional_blocking_contract() {
         "RIPR docs must distinguish new-gap blocking from final total-zero enforcement"
     );
     assert!(
-        coverage_doc.contains("coverage proof workflow now runs the patch coverage quality gate")
+        coverage_doc.contains("coverage proof workflow now routes PR patch coverage")
+            && coverage_doc.contains("just coverage-proof-routed <base> HEAD")
             && coverage_doc.contains("just coverage-proof <base>")
             && coverage_doc.contains("Project coverage remains informational during burn-down"),
         "coverage docs must describe PR8 patch enforcement and transitional project coverage"
