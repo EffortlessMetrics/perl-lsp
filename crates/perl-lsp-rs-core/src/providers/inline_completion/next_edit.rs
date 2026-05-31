@@ -382,7 +382,9 @@ impl NextEditProvider {
         }
 
         let offset = insertion_offset.unwrap_or(0);
-        let edit = NextEditTextEdit::new(offset, offset, format!("use {};\n", request.module));
+        let line_ending = insertion_line_ending(&request.document_text);
+        let edit =
+            NextEditTextEdit::new(offset, offset, format!("use {};{line_ending}", request.module));
         MissingImportNextEditProof {
             status: NextEditStatus::ReceiptOnly,
             candidate: Some(MissingImportNextEditCandidate {
@@ -447,6 +449,10 @@ fn import_insertion_offset(document_text: &str) -> Option<usize> {
         break;
     }
     Some(insertion_offset)
+}
+
+fn insertion_line_ending(document_text: &str) -> &'static str {
+    if document_text.contains("\r\n") { "\r\n" } else { "\n" }
 }
 
 #[cfg(test)]
@@ -569,6 +575,31 @@ mod tests {
             unreachable_proof.rejection_reasons,
             vec![NextEditRejectionReason::UnreachableModule]
         );
+        Ok(())
+    }
+
+    #[test]
+    fn missing_import_receipt_preserves_document_line_endings()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = NextEditProvider;
+        let source = "package Demo;\r\nuse strict;\r\nmy $value = My::App->new;\r\n";
+        let request = MissingImportNextEditRequest::receipt_only(
+            source,
+            "My::App",
+            vec!["My::App".to_string()],
+            vec!["strict".to_string()],
+        );
+
+        let proof = provider.prove_missing_import(&request);
+
+        let candidate = proof.candidate.ok_or("missing import candidate not prepared")?;
+        assert_eq!(candidate.edit.new_text, "use My::App;\r\n");
+        let edited = candidate.edit.apply_to(source).ok_or("edit did not apply")?;
+        assert_eq!(
+            edited,
+            "package Demo;\r\nuse strict;\r\nuse My::App;\r\nmy $value = My::App->new;\r\n"
+        );
+        assert!(!edited.contains(";\nmy $value"));
         Ok(())
     }
 

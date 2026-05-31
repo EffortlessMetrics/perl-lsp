@@ -38,7 +38,9 @@ struct MissingImportNextActionReceipt {
     default_gate: MissingImportNextEditProof,
     explicit_gate: MissingImportNextEditProof,
     accepted_document_text: String,
+    crlf_accepted_document_text: String,
     parse_stable: bool,
+    line_endings_preserved: bool,
 }
 
 pub fn run(receipt: PathBuf) -> Result<()> {
@@ -130,6 +132,17 @@ fn missing_import_next_action_receipt(
     explicit_gate.gate = NextEditFeatureGate::explicit_enabled();
     let explicit_gate = provider.prove_missing_import(&explicit_gate);
 
+    let crlf_source = "package Demo;\r\nuse strict;\r\nmy $value = My::App->new;\r\n";
+    let crlf_expected =
+        "package Demo;\r\nuse strict;\r\nuse My::App;\r\nmy $value = My::App->new;\r\n";
+    let crlf_reachable =
+        provider.prove_missing_import(&MissingImportNextEditRequest::receipt_only(
+            crlf_source,
+            "My::App",
+            vec!["My::App".to_string()],
+            vec!["strict".to_string()],
+        ));
+
     let candidate = reachable.candidate.as_ref().ok_or_else(|| {
         color_eyre::eyre::eyre!("reachable missing-import proof omitted candidate")
     })?;
@@ -144,6 +157,23 @@ fn missing_import_next_action_receipt(
     if !parse_stable {
         bail!("reachable missing-import edit did not preserve parse success");
     }
+    let crlf_candidate = crlf_reachable
+        .candidate
+        .as_ref()
+        .ok_or_else(|| color_eyre::eyre::eyre!("CRLF missing-import proof omitted candidate"))?;
+    let crlf_accepted_document_text = crlf_candidate
+        .edit
+        .apply_to(crlf_source)
+        .ok_or_else(|| color_eyre::eyre::eyre!("CRLF missing-import edit did not apply"))?;
+    if crlf_accepted_document_text != crlf_expected {
+        bail!("CRLF missing-import edit produced unexpected document text");
+    }
+    let line_endings_preserved = crlf_candidate.edit.new_text.ends_with("\r\n")
+        && crlf_accepted_document_text.contains("use My::App;\r\nmy $value")
+        && !crlf_accepted_document_text.contains("use My::App;\nmy $value");
+    if !line_endings_preserved {
+        bail!("missing-import next action did not preserve CRLF line endings");
+    }
 
     let receipt = MissingImportNextActionReceipt {
         claim_boundary: "receipt-only missing-import next-action proof; no runtime LSP method, editor-visible next-edit provider, source mirror, release action, or AI behavior",
@@ -153,7 +183,9 @@ fn missing_import_next_action_receipt(
         default_gate,
         explicit_gate,
         accepted_document_text,
+        crlf_accepted_document_text,
         parse_stable,
+        line_endings_preserved,
     };
     validate_missing_import_next_action(&receipt)?;
     Ok(receipt)
@@ -210,6 +242,9 @@ fn validate_missing_import_next_action(receipt: &MissingImportNextActionReceipt)
     }
     if !receipt.parse_stable {
         bail!("missing-import next action must keep local parse state stable");
+    }
+    if !receipt.line_endings_preserved {
+        bail!("missing-import next action must preserve document line endings");
     }
     Ok(())
 }
@@ -379,6 +414,18 @@ mod tests {
             value.pointer("/missing_import_next_action/parse_stable").and_then(Value::as_bool),
             Some(true)
         );
+        assert_eq!(
+            value
+                .pointer("/missing_import_next_action/line_endings_preserved")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert!(
+            value
+                .pointer("/missing_import_next_action/crlf_accepted_document_text")
+                .and_then(Value::as_str)
+                .is_some_and(|text| text.contains("use My::App;\r\nmy $value"))
+        );
 
         Ok(())
     }
@@ -416,6 +463,15 @@ mod tests {
         assert!(
             error.to_string().contains("parse state stable"),
             "error should identify parse-stability drift, got {error}"
+        );
+
+        let mut receipt = missing_import_next_action_receipt(&provider)?;
+        receipt.line_endings_preserved = false;
+        let error = validate_missing_import_next_action(&receipt)
+            .expect_err("line-ending drift must fail validation");
+        assert!(
+            error.to_string().contains("line endings"),
+            "error should identify line-ending drift, got {error}"
         );
 
         Ok(())

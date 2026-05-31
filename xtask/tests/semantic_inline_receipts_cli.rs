@@ -301,6 +301,13 @@ fn semantic_inline_receipts_cli_embeds_quality_counters_when_available() -> Resu
             .and_then(Value::as_bool),
         Some(true)
     );
+    assert_eq!(
+        next_edit_scaffold
+            .get("missing_import_next_action")
+            .and_then(|action| action.get("line_endings_preserved"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
 
     Ok(())
 }
@@ -408,6 +415,41 @@ fn semantic_inline_receipts_cli_rejects_enabled_next_edit_runtime_provider() -> 
     Ok(())
 }
 
+#[test]
+fn semantic_inline_receipts_cli_rejects_missing_import_line_ending_drift() -> Result<()> {
+    let temp = TempDir::new()?;
+    let receipt = temp.path().join("semantic-inline-receipts.json");
+    let missing_quality_receipt = temp.path().join("missing-inline-quality.json");
+    let next_edit_receipt = temp.path().join("semantic-inline-next-edit.json");
+    let mut next_edit = valid_next_edit_receipt_json();
+    next_edit["missing_import_next_action"]["line_endings_preserved"] = json!(false);
+    std::fs::write(&next_edit_receipt, serde_json::to_vec_pretty(&next_edit)?)?;
+
+    let output = cargo_bin_cmd!("xtask")
+        .args([
+            "semantic-inline-receipts",
+            "--receipt",
+            &receipt.display().to_string(),
+            "--quality-receipt",
+            &missing_quality_receipt.display().to_string(),
+            "--next-edit-receipt",
+            &next_edit_receipt.display().to_string(),
+        ])
+        .output()?;
+
+    assert!(
+        !output.status.success(),
+        "dashboard generation should reject missing-import line-ending drift"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("line_endings_preserved") || stderr.contains("line endings"),
+        "error should identify line-ending drift, got {stderr}"
+    );
+
+    Ok(())
+}
+
 fn valid_next_edit_receipt_json() -> Value {
     json!({
         "schema_version": "semantic-inline-next-edit.v1",
@@ -507,6 +549,8 @@ fn valid_missing_import_next_action_json() -> Value {
             "rejectionReasons": ["runtime_provider_not_registered"]
         },
         "accepted_document_text": "use strict;\nuse warnings;\nuse My::App;\nmy $value = My::App->new;\n",
+        "crlf_accepted_document_text": "package Demo;\r\nuse strict;\r\nuse My::App;\r\nmy $value = My::App->new;\r\n",
+        "line_endings_preserved": true,
         "parse_stable": true
     })
 }

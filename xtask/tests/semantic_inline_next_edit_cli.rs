@@ -112,6 +112,13 @@ fn semantic_inline_next_edit_cli_writes_scaffold_receipt() -> Result<()> {
             .is_some_and(|text| text.contains("use My::App;\nmy $value"))
     );
     assert_eq!(missing_import.get("parse_stable").and_then(Value::as_bool), Some(true));
+    assert_eq!(missing_import.get("line_endings_preserved").and_then(Value::as_bool), Some(true));
+    assert!(
+        missing_import
+            .get("crlf_accepted_document_text")
+            .and_then(Value::as_str)
+            .is_some_and(|text| text.contains("use My::App;\r\nmy $value"))
+    );
 
     Ok(())
 }
