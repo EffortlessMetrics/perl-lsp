@@ -1872,6 +1872,43 @@ pub fn fix_security_signal_handler(
     }]
 }
 
+/// Fix PL410 (`next`/`last`/`redo LABEL` with undefined label) by dropping the label.
+///
+/// At runtime, Perl dies with `Label not found for "next LABEL"` when the named
+/// label is absent. The only mechanical fix that preserves program flow is to drop
+/// the label so the statement targets the innermost enclosing loop instead.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((start, end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let snippet = &source[start..end];
+    let op = if snippet.starts_with("next ") {
+        "next"
+    } else if snippet.starts_with("last ") {
+        "last"
+    } else if snippet.starts_with("redo ") {
+        "redo"
+    } else {
+        return Vec::new();
+    };
+
+    vec![CodeAction {
+        title: format!("Drop label: replace with bare `{op}`"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start, end },
+                new_text: op.to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
 /// Add missing arguments to a `printf`/`sprintf` call (PL405 / `native.common.printf_format_arity`).
 ///
 /// When the format string has more specifiers than supplied arguments, this fix

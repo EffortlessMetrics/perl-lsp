@@ -202,6 +202,10 @@ fn quick_fixes_for_diagnostic(source: &str, diagnostic: &Diagnostic) -> Vec<Code
         {
             actions.extend(quick_fixes::fix_printf_format_arity(source, &qf_diag));
         }
+        // PL410: next/last/redo targets a label not defined in the file
+        c if c == DiagnosticCode::LoopControlUndefinedLabel.as_str() => {
+            actions.extend(quick_fixes::fix_loop_control_undefined_label(source, &qf_diag));
+        }
         _ => {}
     }
 
