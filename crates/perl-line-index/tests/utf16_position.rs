@@ -151,3 +151,49 @@ fn test_utf16_first_line_unaffected_by_second_line() -> Result<(), Box<dyn std::
     assert_eq!(idx.position_to_byte_utf16(text, 1, 4), Some(11));
     Ok(())
 }
+
+/// CRLF line endings are included in the addressable line text: callers may
+/// address the `\r`, the `\n`, and the one-past-end range position at the
+/// start of the next line while still using UTF-16 columns.
+#[test]
+fn test_utf16_crlf_line_accepts_newline_and_range_end_positions()
+-> Result<(), Box<dyn std::error::Error>> {
+    let text = "ab\r\nc\u{1F600}d";
+    let idx = LineIndex::new(text);
+
+    assert_eq!(idx.position_to_byte_utf16(text, 0, 0), Some(0));
+    assert_eq!(idx.position_to_byte_utf16(text, 0, 2), Some(2));
+    assert_eq!(idx.position_to_byte_utf16(text, 0, 3), Some(3));
+    assert_eq!(idx.position_to_byte_utf16(text, 0, 4), Some(4));
+
+    // Line 1 starts after the CRLF. The emoji occupies two UTF-16 units, so
+    // column 3 is the `d` after the emoji and column 2 is an invalid interior
+    // surrogate-pair position.
+    assert_eq!(idx.position_to_byte_utf16(text, 1, 3), Some(9));
+    assert_eq!(idx.position_to_byte_utf16(text, 1, 2), None);
+    Ok(())
+}
+
+/// A trailing newline creates an empty final line. UTF-16 column 0 should map
+/// to the end of the buffer, while any later column is out of range.
+#[test]
+fn test_utf16_trailing_newline_empty_final_line() -> Result<(), Box<dyn std::error::Error>> {
+    let text = "alpha\n";
+    let idx = LineIndex::new(text);
+
+    assert_eq!(idx.position_to_byte_utf16(text, 1, 0), Some(text.len()));
+    assert_eq!(idx.position_to_byte_utf16(text, 1, 1), None);
+    Ok(())
+}
+
+/// The UTF-16 conversion requires the same source text used to build the index.
+/// If callers pass shorter unrelated text, the internal slice lookup must fail
+/// safely instead of panicking on stale line offsets.
+#[test]
+fn test_utf16_mismatched_shorter_text_returns_none() -> Result<(), Box<dyn std::error::Error>> {
+    let indexed_text = "line one\nline two";
+    let idx = LineIndex::new(indexed_text);
+
+    assert_eq!(idx.position_to_byte_utf16("short", 1, 0), None);
+    Ok(())
+}
