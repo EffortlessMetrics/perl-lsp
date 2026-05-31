@@ -66,6 +66,7 @@ pub(crate) struct SemanticInlineContext {
     pub(crate) imported_modules: Vec<ModuleFact>,
     pub(crate) available_modules: Vec<ModuleFact>,
     pub(crate) current_package_methods: Vec<MethodFact>,
+    pub(crate) has_done_testing_call: bool,
     pub(crate) file_role: FileRole,
     pub(crate) style: InlineStyleContext,
 }
@@ -1279,6 +1280,7 @@ impl InlineCompletionProvider {
             imported_modules,
             available_modules: Vec::new(),
             current_package_methods: Vec::new(),
+            has_done_testing_call: false,
             file_role: self.file_role(context),
             style: InlineStyleContext::unknown(context),
         }
@@ -1346,6 +1348,7 @@ impl InlineCompletionProvider {
         semantic_context.available_modules = available_module_facts(&environment.available_modules);
         semantic_context.file_role = self.file_role_for_source(context, text);
         semantic_context.style = self.style_context_for_source(context, text);
+        semantic_context.has_done_testing_call = source_has_done_testing_call(text);
         semantic_context.dbi_receiver_kind =
             dbi_receiver_kind_for_source(dbi_visible_text, &semantic_context);
         semantic_context.current_package_methods = self.current_package_methods_for_source(
@@ -1542,7 +1545,10 @@ impl InlineCompletionProvider {
                 );
             }
 
-            if semantic_context.file_role == FileRole::Test && !pushed_test_assertion {
+            if semantic_context.file_role == FileRole::Test
+                && !pushed_test_assertion
+                && !semantic_context.has_done_testing_call
+            {
                 sink.push(
                     InlineCandidateSourceKind::ContextualFallback,
                     1,
@@ -2122,6 +2128,63 @@ fn is_guard_condition_prefix(prefix: &str) -> bool {
 
 fn test_statement_filter_text(statement: &str) -> &'static str {
     if statement.starts_with("ok(") { "ok" } else { "is" }
+}
+
+fn source_has_done_testing_call(text: &str) -> bool {
+    text.lines().any(line_has_done_testing_call)
+}
+
+fn line_has_done_testing_call(line: &str) -> bool {
+    let mut quote = None;
+    let mut escaped = false;
+
+    for (idx, ch) in line.char_indices() {
+        if let Some(quote_char) = quote {
+            if escaped {
+                escaped = false;
+                continue;
+            }
+            if ch == '\\' {
+                escaped = true;
+                continue;
+            }
+            if ch == quote_char {
+                quote = None;
+            }
+            continue;
+        }
+
+        match ch {
+            '#' => return false,
+            '\'' | '"' => {
+                quote = Some(ch);
+                continue;
+            }
+            _ => {}
+        }
+
+        if line[idx..].starts_with("done_testing") && done_testing_call_boundaries(line, idx) {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn done_testing_call_boundaries(line: &str, start: usize) -> bool {
+    let before_ok =
+        line[..start].chars().next_back().is_none_or(|ch| !is_perl_qualified_identifier_char(ch));
+    if !before_ok {
+        return false;
+    }
+
+    let after = &line[start + "done_testing".len()..];
+    let after_ok = after.chars().next().is_none_or(|ch| !is_perl_qualified_identifier_char(ch));
+    after_ok && after.trim_start().starts_with('(')
+}
+
+fn is_perl_qualified_identifier_char(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || matches!(ch, '_' | ':')
 }
 
 fn singular_loop_variable_name(array_name: &str) -> String {
@@ -4349,6 +4412,75 @@ mod tests {
             completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
         );
         assert!(completions.items.iter().any(|item| item.insert_text == "done_testing();"));
+    }
+
+    #[test]
+    fn test_blank_line_suggests_done_testing_when_missing() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Test::More;\nok(1, 'works');\n\n";
+        let completions = provider.get_inline_completions(source, 2, 0);
+
+        assert!(
+            completions.items.iter().any(|item| item.insert_text == "done_testing();"),
+            "test files without done_testing should keep the fallback: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_blank_line_does_not_suggest_duplicate_done_testing()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Test::More;\nok(1, 'works');\ndone_testing();\n\n";
+        let completions = provider.get_inline_completions(source, 3, 0);
+
+        assert!(
+            completions.items.iter().all(|item| item.insert_text != "done_testing();"),
+            "test files with done_testing should not duplicate it: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_commented_done_testing_does_not_suppress_fallback()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Test::More;\n# done_testing();\n\n";
+        let completions = provider.get_inline_completions(source, 2, 0);
+
+        assert!(
+            completions.items.iter().any(|item| item.insert_text == "done_testing();"),
+            "commented done_testing should not suppress the fallback: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_string_and_identifier_done_testing_mentions_do_not_suppress_fallback()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Test::More;\nmy $not_done_testing = 'done_testing(); is mentioned';\n\n";
+        let completions = provider.get_inline_completions(source, 2, 0);
+
+        assert!(
+            completions.items.iter().any(|item| item.insert_text == "done_testing();"),
+            "non-call done_testing mentions should not suppress the fallback: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_done_testing_detector_skips_escaped_quote_mention_before_real_call()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let line = r#"my $escaped = "escaped \" done_testing(); still string"; done_testing();"#;
+
+        assert!(line_has_done_testing_call(line));
+        Ok(())
     }
 
     #[test]
