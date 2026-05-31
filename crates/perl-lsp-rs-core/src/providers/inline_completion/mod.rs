@@ -570,7 +570,7 @@ fn receiver_candidate_reason(
     context: &SemanticInlineContext,
 ) -> InlineCandidateReason {
     let method_name = item.insert_text.trim_end_matches("()");
-    if context.receiver_hint == Some(ReceiverHint::SelfReceiver)
+    if receiver_targets_current_package(context)
         && context.current_package_methods.iter().any(|method| method.name == method_name)
     {
         return InlineCandidateReason::CurrentPackageMethod;
@@ -581,6 +581,17 @@ fn receiver_candidate_reason(
     }
 
     InlineCandidateReason::SourceReceiver
+}
+
+fn receiver_targets_current_package(context: &SemanticInlineContext) -> bool {
+    match context.receiver_hint.as_ref() {
+        Some(ReceiverHint::SelfReceiver) => true,
+        Some(ReceiverHint::Package(package)) => context
+            .package
+            .as_deref()
+            .is_some_and(|current_package| package == "__PACKAGE__" || package == current_package),
+        _ => false,
+    }
 }
 
 fn module_candidate_reason(
@@ -1762,7 +1773,7 @@ impl InlineCandidateSource for ReceiverCandidateSource {
         if let Some(fragment) = method_arrow_fragment(prefix)
             && semantic_context.expected_syntax == ExpectedSyntax::MethodName
         {
-            if semantic_context.receiver_hint == Some(ReceiverHint::SelfReceiver) {
+            if receiver_targets_current_package(semantic_context) {
                 for method in provider.current_package_method_items(semantic_context, fragment) {
                     sink.push(Self::SOURCE, 0, method);
                 }
@@ -4801,6 +4812,57 @@ mod tests {
             completions.items.iter().any(|i| i.insert_text == "self = shift;"),
             "`my $` after `(` should still trigger the my-dollar rule"
         );
+    }
+
+    #[test]
+    fn package_receiver_suggests_current_package_methods() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let provider = InlineCompletionProvider::new();
+        let source = "package Demo::Widget;\nsub save {}\nsub render {}\nDemo::Widget->sa";
+        let character = "Demo::Widget->sa".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 3, character);
+        let item = completions
+            .items
+            .iter()
+            .find(|item| item.insert_text == "save()")
+            .ok_or("expected current package method completion for package receiver")?;
+
+        assert_eq!(item.filter_text.as_deref(), Some("save"));
+        let range = item.range.as_ref().ok_or("typed method fragment should be replaced")?;
+        assert_eq!(range.start.line, 3);
+        assert_eq!(range.start.character, 14);
+        assert_eq!(range.end.line, 3);
+        assert_eq!(range.end.character, character);
+        assert!(completions.items.iter().all(|item| item.insert_text != "render()"));
+        Ok(())
+    }
+
+    #[test]
+    fn package_magic_receiver_suggests_current_package_methods()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "package Demo::Widget;\nsub save {}\n__PACKAGE__->";
+        let character = "__PACKAGE__->".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 2, character);
+
+        assert!(
+            completions.items.iter().any(|item| item.insert_text == "save()"),
+            "__PACKAGE__ receiver should use current package methods: {:?}",
+            completions.items
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn different_package_receiver_does_not_suggest_current_package_methods()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "package Demo::Widget;\nsub save {}\nOther::Widget->sa";
+        let character = "Other::Widget->sa".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 2, character);
+
+        assert!(completions.items.iter().all(|item| item.insert_text != "save()"));
+        Ok(())
     }
 
     #[test]
