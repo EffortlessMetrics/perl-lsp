@@ -2513,6 +2513,25 @@ enum NativeToolingCommand {
 enum CiSubcommand {
     /// Run local/CI parity diagnostic: toolchain pin, components, git state, fmt drift, Perl, binary.
     Doctor,
+
+    /// Emit an advisory changed-file proof-pack route receipt.
+    Route {
+        /// Git base ref used for changed-file detection.
+        #[arg(long, default_value = "origin/main")]
+        base: String,
+
+        /// Git head ref used for changed-file detection.
+        #[arg(long, default_value = "HEAD")]
+        head: String,
+
+        /// Output path for the route receipt.
+        #[arg(long, default_value = "target/receipts/ci-route.json")]
+        receipt: PathBuf,
+
+        /// Explicit changed file path. Repeat for tests or disconnected runs; when omitted, git diff is used.
+        #[arg(long = "changed-file")]
+        changed_file: Vec<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -2718,6 +2737,14 @@ fn main() -> Result<()> {
         Commands::Ci { command } => match command {
             None => ci::run(),
             Some(CiSubcommand::Doctor) => ci_doctor::run(),
+            Some(CiSubcommand::Route { base, head, receipt, changed_file }) => {
+                ci_route::run(ci_route::CiRouteArgs {
+                    base,
+                    head,
+                    receipt,
+                    changed_files: changed_file,
+                })
+            }
         },
         Commands::CheckOnly => ci::check_only(),
         Commands::CheckLintPolicy => check_lint_policy::run(),
