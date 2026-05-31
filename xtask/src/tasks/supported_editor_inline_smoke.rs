@@ -1,4 +1,8 @@
 use color_eyre::eyre::{Context, Result, bail};
+use perl_lsp_rs_core::providers::inline_completion::{
+    NextEditFeatureGate, NextEditProvider, NextEditRequest, NextEditResponse, NextEditStatus,
+    PreparedInlineCompletionContext,
+};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::fs;
@@ -121,6 +125,7 @@ struct SupportedEditorInlineSmokeReceipt {
     route_count: usize,
     all_supported_routes_registered: bool,
     supported_editor_routes: BTreeMap<&'static str, SupportedEditorRouteReceipt>,
+    next_edit_boundary: NextEditSupportedEditorBoundaryReceipt,
     future_gated: BTreeMap<&'static str, &'static str>,
 }
 
@@ -139,6 +144,19 @@ struct ProofSurfaceReceipt {
     path: &'static str,
     required_marker_count: usize,
     required_markers: Vec<&'static str>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct NextEditSupportedEditorBoundaryReceipt {
+    claim_boundary: &'static str,
+    enabled_by_default: bool,
+    explicit_dev_gate_enabled: bool,
+    runtime_provider_registered: bool,
+    editor_visible_suggestions: bool,
+    ai_candidate_source_enabled: bool,
+    default_response: NextEditResponse,
+    explicit_gate_response: NextEditResponse,
 }
 
 pub fn run(receipt: PathBuf) -> Result<()> {
@@ -183,18 +201,70 @@ fn summarize_supported_editor_routes(
     let future_gated = BTreeMap::from([
         ("live_vscode_ui_automation", "future_gated"),
         ("live_lsp4ij_ui_automation", "future_gated"),
+        ("runtime_next_edit_provider", "future_gated"),
+        ("editor_visible_next_edit_suggestions", "future_gated"),
         ("runtime_multiline_inline_completion", "future_gated"),
+        ("optional_ai_candidate_source", "future_gated"),
     ]);
+    let next_edit_boundary = summarize_next_edit_supported_editor_boundary()?;
 
     Ok(SupportedEditorInlineSmokeReceipt {
         schema_version: "supported-editor-inline-smoke.v1",
         provider: "inline_completion",
         provider_action: "supported_editor_inline_smoke_bundle",
-        claim_boundary: "machine-readable supported-editor inline smoke bundle only; verifies repository proof surfaces and command contracts, not live editor UI automation, source mirror, release, AI, next-edit, or runtime multiline behavior",
+        claim_boundary: "machine-readable supported-editor inline smoke bundle only; verifies repository proof surfaces, command contracts, and default-off next-edit boundary state, not live editor UI automation, source mirror, release, AI behavior, editor-visible next-edit suggestions, or runtime multiline behavior",
         route_count: requirements.len(),
         all_supported_routes_registered: true,
         supported_editor_routes,
+        next_edit_boundary,
         future_gated,
+    })
+}
+
+fn summarize_next_edit_supported_editor_boundary() -> Result<NextEditSupportedEditorBoundaryReceipt>
+{
+    let provider = NextEditProvider;
+    let context = PreparedInlineCompletionContext {
+        prefix: "use My::".to_string(),
+        current_line: "use My::".to_string(),
+        previous_non_empty_line: Some("use strict;".to_string()),
+        current_function: None,
+        current_package: Some("Demo".to_string()),
+        variables: vec!["$got".to_string()],
+        imports: vec!["strict".to_string(), "warnings".to_string()],
+    };
+    let mut request = NextEditRequest::receipt_only(context);
+
+    request.gate = NextEditFeatureGate::default();
+    let default_response = provider.suggest(&request);
+    if default_response.status != NextEditStatus::Disabled
+        || !default_response.suggestions.is_empty()
+    {
+        bail!("supported-editor next-edit boundary must default to disabled with no suggestions");
+    }
+
+    request.gate = NextEditFeatureGate::explicit_enabled();
+    let explicit_gate_response = provider.suggest(&request);
+    if explicit_gate_response.status != NextEditStatus::RuntimeProviderNotRegistered
+        || !explicit_gate_response.suggestions.is_empty()
+    {
+        bail!(
+            "supported-editor next-edit explicit gate must remain provider-not-registered with no suggestions"
+        );
+    }
+    if request.safety_policy.ai_source_enabled {
+        bail!("supported-editor next-edit boundary must not enable AI candidate sources");
+    }
+
+    Ok(NextEditSupportedEditorBoundaryReceipt {
+        claim_boundary: "supported-editor next-edit boundary proof only; default config emits no suggestions and explicit dev config still has no registered runtime provider",
+        enabled_by_default: false,
+        explicit_dev_gate_enabled: true,
+        runtime_provider_registered: false,
+        editor_visible_suggestions: false,
+        ai_candidate_source_enabled: request.safety_policy.ai_source_enabled,
+        default_response,
+        explicit_gate_response,
     })
 }
 
@@ -250,7 +320,7 @@ mod tests {
     }];
 
     #[test]
-    fn receipt_records_supported_editor_routes() -> Result<()> {
+    fn semantic_inline_receipts_record_supported_editor_routes() -> Result<()> {
         let temp = TempDir::new()?;
         write_fixture_files(temp.path(), ROUTES)?;
 
@@ -275,9 +345,24 @@ mod tests {
         }
         assert_eq!(receipt.future_gated.get("live_vscode_ui_automation"), Some(&"future_gated"));
         assert_eq!(receipt.future_gated.get("live_lsp4ij_ui_automation"), Some(&"future_gated"));
+        assert_eq!(receipt.future_gated.get("runtime_next_edit_provider"), Some(&"future_gated"));
+        assert_eq!(
+            receipt.future_gated.get("editor_visible_next_edit_suggestions"),
+            Some(&"future_gated")
+        );
         assert_eq!(
             receipt.future_gated.get("runtime_multiline_inline_completion"),
             Some(&"future_gated")
+        );
+        assert!(!receipt.next_edit_boundary.enabled_by_default);
+        assert!(receipt.next_edit_boundary.explicit_dev_gate_enabled);
+        assert!(!receipt.next_edit_boundary.runtime_provider_registered);
+        assert!(!receipt.next_edit_boundary.editor_visible_suggestions);
+        assert!(!receipt.next_edit_boundary.ai_candidate_source_enabled);
+        assert_eq!(receipt.next_edit_boundary.default_response.status, NextEditStatus::Disabled);
+        assert_eq!(
+            receipt.next_edit_boundary.explicit_gate_response.status,
+            NextEditStatus::RuntimeProviderNotRegistered
         );
 
         Ok(())
@@ -300,7 +385,7 @@ mod tests {
     }
 
     #[test]
-    fn receipt_json_keeps_claim_boundary() -> Result<()> {
+    fn semantic_inline_receipts_json_keeps_claim_boundary() -> Result<()> {
         let temp = TempDir::new()?;
         write_fixture_files(temp.path(), ROUTES)?;
         let receipt = summarize_supported_editor_routes(temp.path(), ROUTES)?;
@@ -319,7 +404,46 @@ mod tests {
             .and_then(Value::as_str)
             .ok_or_else(|| color_eyre::eyre::eyre!("missing claim_boundary"))?;
         assert!(boundary.contains("not live editor UI automation"));
+        assert!(boundary.contains("editor-visible next-edit suggestions"));
         assert!(boundary.contains("runtime multiline behavior"));
+        let next_edit_boundary = value
+            .get("next_edit_boundary")
+            .and_then(Value::as_object)
+            .ok_or_else(|| color_eyre::eyre::eyre!("missing next_edit_boundary"))?;
+        assert_eq!(
+            next_edit_boundary.get("enabled_by_default").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            next_edit_boundary.get("explicit_dev_gate_enabled").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            next_edit_boundary.get("runtime_provider_registered").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            next_edit_boundary.get("editor_visible_suggestions").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            next_edit_boundary.get("ai_candidate_source_enabled").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            next_edit_boundary
+                .get("default_response")
+                .and_then(|response| response.get("status"))
+                .and_then(Value::as_str),
+            Some("disabled")
+        );
+        assert_eq!(
+            next_edit_boundary
+                .get("explicit_gate_response")
+                .and_then(|response| response.get("status"))
+                .and_then(Value::as_str),
+            Some("runtime_provider_not_registered")
+        );
 
         Ok(())
     }

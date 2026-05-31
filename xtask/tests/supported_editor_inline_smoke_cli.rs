@@ -32,6 +32,7 @@ fn supported_editor_inline_smoke_cli_writes_route_bundle() -> Result<()> {
         .and_then(Value::as_str)
         .ok_or_else(|| anyhow!("claim_boundary missing"))?;
     assert!(boundary.contains("not live editor UI automation"));
+    assert!(boundary.contains("editor-visible next-edit suggestions"));
     assert!(boundary.contains("runtime multiline behavior"));
 
     let routes = bundle
@@ -104,8 +105,51 @@ fn supported_editor_inline_smoke_cli_writes_route_bundle() -> Result<()> {
         Some("future_gated")
     );
     assert_eq!(
+        future_gated.get("runtime_next_edit_provider").and_then(Value::as_str),
+        Some("future_gated")
+    );
+    assert_eq!(
+        future_gated.get("editor_visible_next_edit_suggestions").and_then(Value::as_str),
+        Some("future_gated")
+    );
+    assert_eq!(
         future_gated.get("live_lsp4ij_ui_automation").and_then(Value::as_str),
         Some("future_gated")
+    );
+    let next_edit_boundary = bundle
+        .get("next_edit_boundary")
+        .and_then(Value::as_object)
+        .ok_or_else(|| anyhow!("next_edit_boundary map missing"))?;
+    assert_eq!(next_edit_boundary.get("enabled_by_default").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        next_edit_boundary.get("explicit_dev_gate_enabled").and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_boundary.get("runtime_provider_registered").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        next_edit_boundary.get("editor_visible_suggestions").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        next_edit_boundary.get("ai_candidate_source_enabled").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        next_edit_boundary
+            .get("default_response")
+            .and_then(|response| response.get("status"))
+            .and_then(Value::as_str),
+        Some("disabled")
+    );
+    assert_eq!(
+        next_edit_boundary
+            .get("explicit_gate_response")
+            .and_then(|response| response.get("status"))
+            .and_then(Value::as_str),
+        Some("runtime_provider_not_registered")
     );
 
     Ok(())
