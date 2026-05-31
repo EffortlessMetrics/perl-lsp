@@ -1,5 +1,5 @@
 use color_eyre::eyre::{Result, bail};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -26,6 +26,7 @@ struct CiRouteReceipt {
     required_proof_packs: Vec<ProofPackReceipt>,
     skipped_by_policy: BTreeMap<String, String>,
     coverage_pack_selector: Vec<String>,
+    coverage_proof_packs: Vec<CoverageProofPackReceipt>,
     estimated_lem: u64,
 }
 
@@ -41,6 +42,30 @@ struct ProofPack {
     id: &'static str,
     commands: &'static [&'static str],
 }
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct CoverageProofPackReceipt {
+    id: String,
+    files: Vec<String>,
+    commands: Vec<String>,
+    coverage_filters: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CoveragePackManifest {
+    pack: Vec<CoveragePack>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct CoveragePack {
+    id: String,
+    files: Vec<String>,
+    commands: Vec<String>,
+    coverage_filters: Vec<String>,
+}
+
+const COVERAGE_PACKS_TOML: &str = include_str!("../../../.ci/coverage-packs.toml");
 
 const PREFLIGHT_PACK: ProofPack = ProofPack {
     id: "preflight",
@@ -117,7 +142,7 @@ pub fn run(args: CiRouteArgs) -> Result<()> {
     } else {
         normalize_changed_files(args.changed_files)
     };
-    let receipt = route_receipt(&args.base, &args.head, changed_files);
+    let receipt = route_receipt(&args.base, &args.head, changed_files)?;
     write_receipt(&args.receipt, &receipt)?;
     println!(
         "ci route receipt OK: {} changed files, {} proof packs, {}",
@@ -151,7 +176,7 @@ fn normalize_changed_files(files: Vec<String>) -> Vec<String> {
         .collect()
 }
 
-fn route_receipt(base: &str, head: &str, changed_files: Vec<String>) -> CiRouteReceipt {
+fn route_receipt(base: &str, head: &str, changed_files: Vec<String>) -> Result<CiRouteReceipt> {
     let mut route = RouteBuilder::default();
     route.add_pack(PREFLIGHT_PACK);
 
@@ -178,10 +203,13 @@ fn route_receipt(base: &str, head: &str, changed_files: Vec<String>) -> CiRouteR
 
     let estimated_lem = route.estimated_lem();
 
-    CiRouteReceipt {
+    let coverage_pack_selector: Vec<String> = route.coverage_pack_selector.into_iter().collect();
+    let coverage_proof_packs = coverage_proof_pack_receipts(&coverage_pack_selector)?;
+
+    Ok(CiRouteReceipt {
         schema_version: "ci-route.v1",
         provider_action: "changed_file_proof_pack_route",
-        claim_boundary: "advisory changed-file proof routing only; does not weaken required checks or skip branch protection",
+        claim_boundary: "advisory changed-file proof routing only; coverage pack commands are not enforced by CI yet",
         base: base.to_string(),
         head: head.to_string(),
         changed_files,
@@ -195,9 +223,10 @@ fn route_receipt(base: &str, head: &str, changed_files: Vec<String>) -> CiRouteR
             })
             .collect(),
         skipped_by_policy: route.skipped_by_policy,
-        coverage_pack_selector: route.coverage_pack_selector.into_iter().collect(),
+        coverage_pack_selector,
+        coverage_proof_packs,
         estimated_lem,
-    }
+    })
 }
 
 fn route_file(file: &str, route: &mut RouteBuilder) {
@@ -285,6 +314,53 @@ fn write_receipt(path: &Path, receipt: &CiRouteReceipt) -> Result<()> {
     Ok(())
 }
 
+fn coverage_proof_pack_receipts(selector: &[String]) -> Result<Vec<CoverageProofPackReceipt>> {
+    let manifest = coverage_pack_manifest()?;
+    let packs_by_id: BTreeMap<&str, &CoveragePack> =
+        manifest.pack.iter().map(|pack| (pack.id.as_str(), pack)).collect();
+    selector
+        .iter()
+        .map(|pack_id| {
+            let Some(pack) = packs_by_id.get(pack_id.as_str()) else {
+                bail!("coverage pack `{pack_id}` is missing from .ci/coverage-packs.toml");
+            };
+            Ok(CoverageProofPackReceipt {
+                id: pack.id.clone(),
+                files: pack.files.clone(),
+                commands: pack.commands.clone(),
+                coverage_filters: pack.coverage_filters.clone(),
+            })
+        })
+        .collect()
+}
+
+fn coverage_pack_manifest() -> Result<CoveragePackManifest> {
+    parse_coverage_pack_manifest(COVERAGE_PACKS_TOML)
+}
+
+fn parse_coverage_pack_manifest(contents: &str) -> Result<CoveragePackManifest> {
+    let manifest: CoveragePackManifest = toml::from_str(contents)?;
+    let mut ids = BTreeSet::new();
+    for pack in &manifest.pack {
+        if pack.id.trim().is_empty() {
+            bail!("coverage pack id must not be empty");
+        }
+        if pack.files.is_empty() {
+            bail!("coverage pack `{}` must list at least one file", pack.id);
+        }
+        if pack.commands.is_empty() {
+            bail!("coverage pack `{}` must list at least one command", pack.id);
+        }
+        if pack.coverage_filters.is_empty() {
+            bail!("coverage pack `{}` must list at least one coverage filter", pack.id);
+        }
+        if !ids.insert(pack.id.as_str()) {
+            bail!("duplicate coverage pack id `{}`", pack.id);
+        }
+    }
+    Ok(manifest)
+}
+
 #[derive(Default)]
 struct RouteBuilder {
     surfaces: BTreeSet<String>,
@@ -325,12 +401,12 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    fn route_receipt_maps_supported_editor_smoke_to_focused_pack() -> Result<()> {
+    fn ci_route_receipt_maps_supported_editor_smoke_to_focused_pack() -> Result<()> {
         let receipt = route_receipt(
             "origin/main",
             "HEAD",
             vec!["xtask/src/tasks/supported_editor_inline_smoke.rs".to_string()],
-        );
+        )?;
 
         assert_eq!(receipt.changed_surfaces, vec!["xtask-supported-editor-inline-smoke"]);
         assert!(proof_pack_ids(&receipt).contains(&"xtask-supported-editor-inline-smoke"));
@@ -340,6 +416,17 @@ mod tests {
                 .iter()
                 .any(|pack| pack == "patch-coverage-xtask-supported-editor-inline-smoke")
         );
+        assert!(receipt.coverage_proof_packs.iter().any(|pack| {
+            pack.id == "patch-coverage-xtask-supported-editor-inline-smoke"
+                && pack
+                    .commands
+                    .iter()
+                    .any(|command| command.contains("supported_editor_inline_smoke"))
+                && pack
+                    .coverage_filters
+                    .iter()
+                    .any(|filter| filter == "supported_editor_inline_smoke")
+        }));
         assert_eq!(
             receipt.skipped_by_policy.get("full-ux-regression").map(String::as_str),
             Some("supported-editor smoke receipt change")
@@ -348,12 +435,12 @@ mod tests {
     }
 
     #[test]
-    fn route_receipt_maps_semantic_inline_receipts_to_dashboard_pack() -> Result<()> {
+    fn ci_route_receipt_maps_semantic_inline_receipts_to_dashboard_pack() -> Result<()> {
         let receipt = route_receipt(
             "origin/main",
             "HEAD",
             vec!["xtask/src/tasks/semantic_inline_receipts.rs".to_string()],
-        );
+        )?;
 
         assert_eq!(receipt.changed_surfaces, vec!["xtask-semantic-inline-receipts"]);
         assert!(proof_pack_ids(&receipt).contains(&"xtask-semantic-inline-receipts"));
@@ -363,20 +450,25 @@ mod tests {
                 .iter()
                 .any(|pack| pack == "patch-coverage-xtask-semantic-inline")
         );
+        assert!(receipt.coverage_proof_packs.iter().any(|pack| {
+            pack.id == "patch-coverage-xtask-semantic-inline"
+                && pack.commands.iter().any(|command| command.contains("semantic_inline_receipts"))
+        }));
         Ok(())
     }
 
     #[test]
-    fn route_receipt_skips_coverage_for_docs_only_changes() -> Result<()> {
+    fn ci_route_receipt_skips_coverage_for_docs_only_changes() -> Result<()> {
         let receipt = route_receipt(
             "origin/main",
             "HEAD",
             vec!["docs/development/INLINE_COMPLETION_ROADMAP.md".to_string()],
-        );
+        )?;
 
         assert_eq!(receipt.changed_surfaces, vec!["docs"]);
         assert!(proof_pack_ids(&receipt).contains(&"docs-focused"));
         assert!(receipt.coverage_pack_selector.is_empty());
+        assert!(receipt.coverage_proof_packs.is_empty());
         assert_eq!(
             receipt.skipped_by_policy.get("codecov-patch-95").map(String::as_str),
             Some("docs-only change")
@@ -387,18 +479,220 @@ mod tests {
     #[test]
     fn route_receipt_maps_ci_route_files_to_route_pack() -> Result<()> {
         let receipt =
-            route_receipt("origin/main", "HEAD", vec!["xtask/src/tasks/ci_route.rs".to_string()]);
+            route_receipt("origin/main", "HEAD", vec!["xtask/src/tasks/ci_route.rs".to_string()])?;
 
         assert_eq!(receipt.changed_surfaces, vec!["ci-routing"]);
         assert!(proof_pack_ids(&receipt).contains(&"ci-route-receipt"));
         assert!(
             receipt.coverage_pack_selector.iter().any(|pack| pack == "patch-coverage-ci-route")
         );
+        assert!(receipt.coverage_proof_packs.iter().any(|pack| {
+            pack.id == "patch-coverage-ci-route"
+                && pack.commands.iter().any(|command| command.contains("ci_route"))
+        }));
         Ok(())
     }
 
     #[test]
-    fn route_command_writes_receipt_from_explicit_changed_files() -> Result<()> {
+    fn ci_route_coverage_proof_pack_receipts_materializes_each_selected_pack() -> Result<()> {
+        let selector = vec![
+            "patch-coverage-xtask-semantic-inline".to_string(),
+            "patch-coverage-xtask-supported-editor-inline-smoke".to_string(),
+        ];
+        let packs = coverage_proof_pack_receipts(&selector)?;
+
+        let pack_ids: Vec<&str> = packs.iter().map(|pack| pack.id.as_str()).collect();
+        assert_eq!(
+            pack_ids,
+            vec![
+                "patch-coverage-xtask-semantic-inline",
+                "patch-coverage-xtask-supported-editor-inline-smoke"
+            ]
+        );
+
+        let semantic_pack = packs.first().ok_or_else(|| eyre!("missing semantic coverage pack"))?;
+        assert_eq!(
+            semantic_pack.files,
+            vec![
+                "xtask/src/tasks/semantic_inline_receipts.rs",
+                "xtask/src/tasks/semantic_inline_next_edit.rs",
+                "xtask/tests/semantic_inline_receipts_cli.rs",
+                "xtask/tests/semantic_inline_next_edit_cli.rs",
+            ]
+        );
+        assert_eq!(
+            semantic_pack.coverage_filters,
+            vec!["semantic_inline_receipts", "semantic_inline_next_edit"]
+        );
+
+        let supported_editor_pack =
+            packs.get(1).ok_or_else(|| eyre!("missing supported-editor coverage pack"))?;
+        assert_eq!(
+            supported_editor_pack.files,
+            vec![
+                "xtask/src/tasks/supported_editor_inline_smoke.rs",
+                "xtask/tests/supported_editor_inline_smoke_cli.rs",
+            ]
+        );
+        assert_eq!(
+            supported_editor_pack.coverage_filters,
+            vec!["supported_editor_inline_smoke", "semantic_inline_receipts"]
+        );
+        assert!(supported_editor_pack.commands.iter().any(|command| {
+            command
+                == "cargo test -p xtask --test supported_editor_inline_smoke_cli --profile agent --locked -- --nocapture"
+        }));
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_coverage_proof_pack_receipts_reports_unknown_selector() -> Result<()> {
+        let selector = vec!["patch-coverage-missing-pack".to_string()];
+        let Err(error) = coverage_proof_pack_receipts(&selector) else {
+            bail!("unknown coverage selector should fail");
+        };
+        assert_eq!(
+            error.to_string(),
+            "coverage pack `patch-coverage-missing-pack` is missing from .ci/coverage-packs.toml"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_coverage_pack_manifest_rejects_empty_pack_id() -> Result<()> {
+        let Err(error) = parse_coverage_pack_manifest(
+            r#"
+                [[pack]]
+                id = " "
+                files = ["xtask/src/tasks/ci_route.rs"]
+                commands = ["cargo test -p xtask ci_route"]
+                coverage_filters = ["ci_route"]
+            "#,
+        ) else {
+            bail!("empty coverage pack id should fail");
+        };
+        assert_eq!(error.to_string(), "coverage pack id must not be empty");
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_coverage_pack_manifest_rejects_empty_file_list() -> Result<()> {
+        let Err(error) = parse_coverage_pack_manifest(
+            r#"
+                [[pack]]
+                id = "patch-coverage-ci-route"
+                files = []
+                commands = ["cargo test -p xtask ci_route"]
+                coverage_filters = ["ci_route"]
+            "#,
+        ) else {
+            bail!("coverage pack without files should fail");
+        };
+        assert_eq!(
+            error.to_string(),
+            "coverage pack `patch-coverage-ci-route` must list at least one file"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_coverage_pack_manifest_rejects_empty_command_list() -> Result<()> {
+        let Err(error) = parse_coverage_pack_manifest(
+            r#"
+                [[pack]]
+                id = "patch-coverage-ci-route"
+                files = ["xtask/src/tasks/ci_route.rs"]
+                commands = []
+                coverage_filters = ["ci_route"]
+            "#,
+        ) else {
+            bail!("coverage pack without commands should fail");
+        };
+        assert_eq!(
+            error.to_string(),
+            "coverage pack `patch-coverage-ci-route` must list at least one command"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_coverage_pack_manifest_rejects_empty_coverage_filter_list() -> Result<()> {
+        let Err(error) = parse_coverage_pack_manifest(
+            r#"
+                [[pack]]
+                id = "patch-coverage-ci-route"
+                files = ["xtask/src/tasks/ci_route.rs"]
+                commands = ["cargo test -p xtask ci_route"]
+                coverage_filters = []
+            "#,
+        ) else {
+            bail!("coverage pack without filters should fail");
+        };
+        assert_eq!(
+            error.to_string(),
+            "coverage pack `patch-coverage-ci-route` must list at least one coverage filter"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_coverage_pack_manifest_rejects_duplicate_pack_id() -> Result<()> {
+        let Err(error) = parse_coverage_pack_manifest(
+            r#"
+                [[pack]]
+                id = "patch-coverage-ci-route"
+                files = ["xtask/src/tasks/ci_route.rs"]
+                commands = ["cargo test -p xtask ci_route"]
+                coverage_filters = ["ci_route"]
+
+                [[pack]]
+                id = "patch-coverage-ci-route"
+                files = ["xtask/tests/ci_route_cli.rs"]
+                commands = ["cargo test -p xtask --test ci_route_cli"]
+                coverage_filters = ["ci_route_cli"]
+            "#,
+        ) else {
+            bail!("duplicate coverage pack id should fail");
+        };
+        assert_eq!(error.to_string(), "duplicate coverage pack id `patch-coverage-ci-route`");
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_coverage_pack_manifest_lists_every_route_selector() -> Result<()> {
+        let manifest = coverage_pack_manifest()?;
+        let manifest_ids: Vec<&str> = manifest.pack.iter().map(|pack| pack.id.as_str()).collect();
+
+        assert_eq!(
+            manifest_ids,
+            vec![
+                "patch-coverage-xtask-supported-editor-inline-smoke",
+                "patch-coverage-xtask-semantic-inline",
+                "patch-coverage-inline-core",
+                "patch-coverage-ux-scenario",
+                "patch-coverage-ci-policy",
+                "patch-coverage-ci-route",
+                "patch-coverage-rust-focused",
+            ]
+        );
+        let route_selectors = [
+            "patch-coverage-xtask-semantic-inline",
+            "patch-coverage-xtask-supported-editor-inline-smoke",
+            "patch-coverage-inline-core",
+            "patch-coverage-ux-scenario",
+            "patch-coverage-ci-policy",
+            "patch-coverage-ci-route",
+            "patch-coverage-rust-focused",
+        ];
+        let proof_packs = coverage_proof_pack_receipts(
+            &route_selectors.iter().map(|selector| (*selector).to_string()).collect::<Vec<_>>(),
+        )?;
+        assert_eq!(proof_packs.len(), route_selectors.len());
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_command_writes_receipt_from_explicit_changed_files() -> Result<()> {
         let temp = TempDir::new()?;
         let receipt_path = temp.path().join("ci-route.json");
 

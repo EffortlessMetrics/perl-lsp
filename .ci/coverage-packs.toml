@@ -1,0 +1,109 @@
+# Coverage proof-pack manifest used by `cargo xtask ci route`.
+#
+# This file is advisory until CI consumes route-selected packs directly. It keeps
+# coverage routing tied to changed surfaces instead of test-name accidents.
+
+[[pack]]
+id = "patch-coverage-xtask-supported-editor-inline-smoke"
+files = [
+  "xtask/src/tasks/supported_editor_inline_smoke.rs",
+  "xtask/tests/supported_editor_inline_smoke_cli.rs",
+]
+commands = [
+  "cargo test -p xtask --bin xtask --profile agent --locked supported_editor_inline_smoke -- --nocapture",
+  "cargo test -p xtask --test supported_editor_inline_smoke_cli --profile agent --locked -- --nocapture",
+  "cargo test -p xtask --bin xtask --profile agent --locked semantic_inline_receipts -- --nocapture",
+]
+coverage_filters = [
+  "supported_editor_inline_smoke",
+  "semantic_inline_receipts",
+]
+
+[[pack]]
+id = "patch-coverage-xtask-semantic-inline"
+files = [
+  "xtask/src/tasks/semantic_inline_receipts.rs",
+  "xtask/src/tasks/semantic_inline_next_edit.rs",
+  "xtask/tests/semantic_inline_receipts_cli.rs",
+  "xtask/tests/semantic_inline_next_edit_cli.rs",
+]
+commands = [
+  "cargo test -p xtask --bin xtask --profile agent --locked semantic_inline_receipts -- --nocapture",
+  "cargo test -p xtask --test semantic_inline_receipts_cli --profile agent --locked -- --nocapture",
+]
+coverage_filters = [
+  "semantic_inline_receipts",
+  "semantic_inline_next_edit",
+]
+
+[[pack]]
+id = "patch-coverage-inline-core"
+files = [
+  "crates/perl-lsp-rs-core/src/providers/inline_completion/",
+]
+commands = [
+  "cargo test -p perl-lsp-rs-core --lib --profile agent --locked inline_completion -- --nocapture",
+  "cargo run -p xtask --profile agent --locked -- inline-completion-quality --receipt target/receipts/inline-completion-quality.json",
+]
+coverage_filters = [
+  "inline_completion",
+  "inline_completion_quality",
+]
+
+[[pack]]
+id = "patch-coverage-ux-scenario"
+files = [
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_",
+]
+commands = [
+  "cargo test -p perl-lsp-ux-tests --profile agent --locked -- --nocapture",
+  "python -m json.tool crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+]
+coverage_filters = [
+  "ux_scenario",
+  "editor_ux_fixture_matrix",
+]
+
+[[pack]]
+id = "patch-coverage-ci-policy"
+files = [
+  ".github/workflows/",
+  ".ci/",
+  "policy/",
+]
+commands = [
+  "cargo xtask workflow-trigger-lint --policy .ci/policies/required-checks.toml --receipt target/receipts/workflow-trigger-lint.json",
+  "cargo test -p xtask --test quality_ci_wiring_policy --profile agent --locked -- --nocapture",
+]
+coverage_filters = [
+  "quality_ci_wiring_policy",
+  "workflow_trigger_lint",
+]
+
+[[pack]]
+id = "patch-coverage-ci-route"
+files = [
+  "xtask/src/tasks/ci_route.rs",
+  "xtask/tests/ci_route_cli.rs",
+]
+commands = [
+  "cargo test -p xtask --bin xtask --profile agent --locked ci_route -- --nocapture",
+  "cargo test -p xtask --test ci_route_cli --profile agent --locked -- --nocapture",
+  "cargo run -p xtask --profile agent --locked -- ci route --base origin/main --head HEAD --receipt target/receipts/ci-route.json",
+]
+coverage_filters = [
+  "ci_route",
+]
+
+[[pack]]
+id = "patch-coverage-rust-focused"
+files = [
+  "*.rs",
+]
+commands = [
+  "cargo test --workspace --lib --profile agent --locked",
+  "cargo check --workspace --all-targets --profile agent --locked",
+]
+coverage_filters = [
+  "workspace-lib",
+]
