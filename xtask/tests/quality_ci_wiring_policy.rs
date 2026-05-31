@@ -47,6 +47,7 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
     let root = repo_root();
     let workflow = must(fs::read_to_string(root.join(".github/workflows/ci-nightly.yml")));
     let justfile = must(fs::read_to_string(root.join("justfile")));
+    let codecov_router = must(fs::read_to_string(root.join("scripts/ci/route-codecov-packs.py")));
     let coverage_start = must_some(workflow.find("  test-coverage:"));
     let coverage_tail = &workflow[coverage_start..];
     let coverage_end = must_some(coverage_tail.find("\n  tautology-check:"));
@@ -128,6 +129,12 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
     assert!(
         !coverage_job.contains("continue-on-error: true"),
         "coverage patch proof must not make Codecov upload advisory"
+    );
+    assert!(
+        codecov_router.contains("CI-enforced lightweight Codecov coverage-pack route")
+            && codecov_router.contains("feed Codecov / Patch 95")
+            && !codecov_router.contains("not enforced by CI yet"),
+        "Codecov route receipt must not describe live routed patch proof as advisory"
     );
     for required in [
         "coverage-proof-routed base='origin/main' head='HEAD':",

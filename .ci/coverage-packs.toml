@@ -1,7 +1,8 @@
-# Coverage proof-pack manifest used by `cargo xtask ci route`.
+# CI-enforced coverage proof-pack manifest used by Codecov / Patch 95 and
+# `cargo xtask ci route`.
 #
-# This file is advisory until CI consumes route-selected packs directly. It keeps
-# coverage routing tied to changed surfaces instead of test-name accidents.
+# This keeps coverage routing tied to changed surfaces instead of test-name
+# accidents.
 
 [[pack]]
 id = "patch-coverage-xtask-supported-editor-inline-smoke"

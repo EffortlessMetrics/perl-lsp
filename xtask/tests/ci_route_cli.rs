@@ -30,6 +30,16 @@ fn ci_route_cli_writes_supported_editor_proof_pack_receipt() -> Result<()> {
 
     let route: Value = serde_json::from_str(&std::fs::read_to_string(receipt)?)?;
     assert_eq!(route.get("schema_version").and_then(Value::as_str), Some("ci-route.v1"));
+    let claim_boundary = route
+        .get("claim_boundary")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("missing claim_boundary"))?;
+    assert!(claim_boundary.contains("CI-enforced changed-file proof routing"));
+    assert!(claim_boundary.contains("Codecov / Patch 95"));
+    assert!(
+        !claim_boundary.contains("not enforced by CI yet"),
+        "ci route receipt must not describe live coverage packs as advisory"
+    );
     assert_eq!(
         route.pointer("/changed_surfaces/0").and_then(Value::as_str),
         Some("xtask-supported-editor-inline-smoke")
@@ -72,7 +82,13 @@ fn coverage_pack_manifest_declares_supported_editor_pack() -> Result<()> {
         .map(PathBuf::from)
         .ok_or_else(|| anyhow!("xtask manifest path has no parent"))?
         .join(".ci/coverage-packs.toml");
-    let manifest: toml::Value = toml::from_str(&fs::read_to_string(manifest_path)?)?;
+    let manifest_text = fs::read_to_string(manifest_path)?;
+    assert!(manifest_text.contains("CI-enforced coverage proof-pack manifest"));
+    assert!(
+        !manifest_text.contains("advisory until CI consumes route-selected packs directly"),
+        "coverage pack manifest must not describe routed patch proof as future advisory work"
+    );
+    let manifest: toml::Value = toml::from_str(&manifest_text)?;
     let packs = manifest
         .get("pack")
         .and_then(toml::Value::as_array)
