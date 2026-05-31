@@ -912,6 +912,15 @@ mod tests {
         json!({ "workflows": workflows })
     }
 
+    fn next_edit_scaffold_summary_error(
+        path: &Path,
+        expectation: &'static str,
+    ) -> color_eyre::Report {
+        let result = read_optional_next_edit_scaffold_summary(path);
+        assert!(result.is_err(), "{expectation}");
+        result.err().unwrap_or_else(|| eyre!("{expectation}"))
+    }
+
     fn unavailable_quality() -> InlineQualityCounterSummary {
         InlineQualityCounterSummary {
             source: "target/receipts/inline-completion-quality.json".to_string(),
@@ -1016,8 +1025,8 @@ mod tests {
             },
             "accepted_document_text": "use strict;\nuse warnings;\nuse My::App;\nmy $value = My::App->new;\n",
             "crlf_accepted_document_text": "package Demo;\r\nuse strict;\r\nuse My::App;\r\nmy $value = My::App->new;\r\n",
-            "line_endings_preserved": true,
-            "parse_stable": true
+            "parse_stable": true,
+            "line_endings_preserved": true
         })
     }
 
@@ -1298,9 +1307,8 @@ mod tests {
         scaffold["missing_import_next_action"]["reachable_candidate"]["candidate"]["edit"]["newText"] =
             json!("use Other::Module;\n");
         fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
-        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
-            bail!("wrong missing-import edit text must fail");
-        };
+        let error =
+            next_edit_scaffold_summary_error(&path, "wrong missing-import edit text must fail");
         assert!(
             error.to_string().contains("candidate/edit/newText"),
             "error should identify missing-import edit text drift, got {error}"
@@ -1310,9 +1318,10 @@ mod tests {
         scaffold["missing_import_next_action"]["accepted_document_text"] =
             json!("use strict;\nuse warnings;\nmy $value = My::App->new;\n");
         fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
-        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
-            bail!("accepted text without inserted import must fail");
-        };
+        let error = next_edit_scaffold_summary_error(
+            &path,
+            "accepted text without inserted import must fail",
+        );
         assert!(
             error.to_string().contains("accepted document text"),
             "error should identify missing accepted import drift, got {error}"
@@ -1321,10 +1330,10 @@ mod tests {
         let mut scaffold = valid_next_edit_scaffold_json();
         scaffold["missing_import_next_action"]["parse_stable"] = json!(false);
         fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
-        let error = read_optional_next_edit_scaffold_summary(&path)
-            .err()
-            .map(|error| error.to_string())
-            .unwrap_or_default();
+        let error = next_edit_scaffold_summary_error(
+            &path,
+            "parse-unstable missing-import proof must fail",
+        );
         assert!(
             error.to_string().contains("parse_stable"),
             "error should identify parse-stability drift, got {error}"
@@ -1333,24 +1342,17 @@ mod tests {
         let mut scaffold = valid_next_edit_scaffold_json();
         scaffold["missing_import_next_action"]["line_endings_preserved"] = json!(false);
         fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
-        let error = read_optional_next_edit_scaffold_summary(&path)
-            .err()
-            .map(|error| error.to_string())
-            .unwrap_or_default();
+        let error = next_edit_scaffold_summary_error(&path, "line-ending drift must fail");
         assert!(
-            error.to_string().contains("line_endings_preserved"),
+            error.to_string().contains("line_endings_preserved")
+                || error.to_string().contains("line endings"),
             "error should identify line-ending drift, got {error}"
         );
 
         let mut scaffold = valid_next_edit_scaffold_json();
-        if let Some(action) = scaffold["missing_import_next_action"].as_object_mut() {
-            action.remove("crlf_accepted_document_text");
-        }
+        scaffold["missing_import_next_action"]["crlf_accepted_document_text"] = Value::Null;
         fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
-        let error = read_optional_next_edit_scaffold_summary(&path)
-            .err()
-            .map(|error| error.to_string())
-            .unwrap_or_default();
+        let error = next_edit_scaffold_summary_error(&path, "missing CRLF accepted text must fail");
         assert!(
             error.to_string().contains("crlf_accepted_document_text"),
             "error should identify missing CRLF accepted text, got {error}"
@@ -1360,10 +1362,7 @@ mod tests {
         scaffold["missing_import_next_action"]["crlf_accepted_document_text"] =
             json!("package Demo;\r\nuse strict;\r\nuse My::App;\nmy $value = My::App->new;\r\n");
         fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
-        let error = read_optional_next_edit_scaffold_summary(&path)
-            .err()
-            .map(|error| error.to_string())
-            .unwrap_or_default();
+        let error = next_edit_scaffold_summary_error(&path, "LF-only CRLF accepted text must fail");
         assert!(
             error.to_string().contains("preserve line endings"),
             "error should identify CRLF preservation drift, got {error}"
@@ -1374,10 +1373,8 @@ mod tests {
             "package Demo;\r\nuse strict;\r\nuse My::App;\r\nmy $value = My::App->new;\r\nuse My::App;\nmy $value = My::App->new;\r\n"
         );
         fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
-        let error = read_optional_next_edit_scaffold_summary(&path)
-            .err()
-            .map(|error| error.to_string())
-            .unwrap_or_default();
+        let error =
+            next_edit_scaffold_summary_error(&path, "mixed-line-ending accepted text must fail");
         assert!(
             error.to_string().contains("mixed LF line endings"),
             "error should identify mixed LF line endings, got {error}"
