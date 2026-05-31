@@ -287,7 +287,7 @@ rtk just coverage
 
 ## Integration with CI Gates
 
-Patch coverage is the blocking PR coverage gate for new code. CI runs `just coverage-proof <base>` to generate workspace library plus focused proof-lane LCOV, write and check `target/receipts/quality/coverage-baseline.json`, run `cargo xtask quality-gate --mode enforce-patch-coverage`, append `target/receipts/quality/quality-gate-coverage.md` to the GitHub summary, and upload required coverage proof artifacts. Project coverage remains informational during burn-down and is promoted to blocking after the project reaches the `95%` target.
+Patch coverage is the blocking PR coverage gate for new code. CI runs `just coverage-proof <base>` to generate workspace library plus focused proof-lane LCOV, write and check `target/receipts/quality/coverage-baseline.json`, run `cargo xtask quality-gate --mode enforce-patch-coverage`, append `target/receipts/quality/ci-route.md` and `target/receipts/quality/quality-gate-coverage.md` to the GitHub summary, and upload required coverage proof artifacts. Project coverage remains informational during burn-down and is promoted to blocking after the project reaches the `95%` target.
 
 Changed-file routing is advisory while coverage remains a single blocking `Codecov / Patch 95` context. `cargo xtask ci route` emits `coverage_pack_selector` and `coverage_proof_packs` from `.ci/coverage-packs.toml` and writes a Markdown summary so reviewers can see which focused commands are expected to cover the changed surface before the Codecov job is split by pack.
 

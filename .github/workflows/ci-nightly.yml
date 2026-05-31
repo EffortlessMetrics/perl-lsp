@@ -471,10 +471,31 @@ jobs:
           git fetch --no-tags --depth=200 origin "$base_ref" || true
           just coverage-proof "origin/$base_ref"
 
+      - name: Emit changed-file coverage route summary
+        if: always()
+        env:
+          BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/receipts/quality
+          base_ref="$BASE_REF"
+          git fetch --no-tags --depth=200 origin "$base_ref" || true
+          cargo xtask ci route \
+            --base "origin/$base_ref" \
+            --head HEAD \
+            --receipt target/receipts/quality/ci-route.json \
+            --summary target/receipts/quality/ci-route.md
+
       - name: Append coverage proof summary
         if: always()
         shell: bash
         run: |
+          if [ -f target/receipts/quality/ci-route.md ]; then
+            cat target/receipts/quality/ci-route.md >> "$GITHUB_STEP_SUMMARY"
+            printf '\n' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No changed-file coverage route summary was produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
           if [ -f target/receipts/quality/quality-gate-coverage.md ]; then
             cat target/receipts/quality/quality-gate-coverage.md >> "$GITHUB_STEP_SUMMARY"
           else
@@ -496,6 +517,8 @@ jobs:
           name: coverage-proof-${{ github.sha }}
           path: |
             target/lcov.info
+            target/receipts/quality/ci-route.json
+            target/receipts/quality/ci-route.md
             target/receipts/quality/coverage-baseline.json
             target/receipts/quality/quality-gate-coverage.json
             target/receipts/quality/quality-gate-coverage.md
