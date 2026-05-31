@@ -72,6 +72,15 @@ impl LspServer {
                                 )
                             }
                         } else if let Some(module_name) =
+                            Self::find_require_module_at_offset(&doc.text, offset)
+                        {
+                            HoverExtracted::UseModule(
+                                module_name,
+                                doc.text.clone(),
+                                uri.to_string(),
+                                offset,
+                            )
+                        } else if let Some(module_name) =
                             Self::find_with_module_at_offset(ast, offset)
                         {
                             // Check for `with 'Role'` / `extends 'Parent'` at this offset
@@ -890,6 +899,58 @@ impl LspServer {
         }
 
         None
+    }
+
+    /// Find a static `require Module::Name` reference whose module token spans `offset`.
+    fn find_require_module_at_offset(text: &str, offset: usize) -> Option<String> {
+        let cursor = Self::normalize_hover_text_offset(text, offset);
+        let line_start = text[..cursor].rfind('\n').map_or(0, |idx| idx + 1);
+        let line_end = text[cursor..].find('\n').map_or(text.len(), |idx| cursor + idx);
+        let line = &text[line_start..line_end];
+        let cursor_in_line = cursor.saturating_sub(line_start);
+
+        let head = perl_module::import::parse_module_import_head(line)?;
+        if !Self::is_static_require_module(head.kind, head.require_form()) {
+            return None;
+        }
+        if !Self::cursor_spans_module_token(cursor_in_line, head.token_start, head.token_end) {
+            return None;
+        }
+
+        let span = perl_module::token_parser::parse_module_token(line, head.token_start)?;
+        if !Self::module_token_span_matches_head(span.end, head.token_end) {
+            return None;
+        }
+
+        Some(perl_module::name::normalize_package_separator(head.token).into_owned())
+    }
+
+    fn is_static_require_module(
+        kind: perl_module::import::ModuleImportKind,
+        require_form: Option<perl_module::import::RequireForm>,
+    ) -> bool {
+        kind == perl_module::import::ModuleImportKind::Require
+            && require_form == Some(perl_module::import::RequireForm::ModuleName)
+    }
+
+    fn cursor_spans_module_token(
+        cursor_in_line: usize,
+        token_start: usize,
+        token_end: usize,
+    ) -> bool {
+        cursor_in_line >= token_start && cursor_in_line <= token_end
+    }
+
+    fn module_token_span_matches_head(span_end: usize, token_end: usize) -> bool {
+        span_end == token_end
+    }
+
+    fn normalize_hover_text_offset(text: &str, offset: usize) -> usize {
+        let mut normalized = offset.min(text.len());
+        while normalized > 0 && !text.is_char_boundary(normalized) {
+            normalized -= 1;
+        }
+        normalized
     }
 
     /// Walk the AST to find a `with 'Role'` or `extends 'Parent'` name at `offset`.
