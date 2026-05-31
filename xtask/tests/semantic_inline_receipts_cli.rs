@@ -315,6 +315,41 @@ fn semantic_inline_receipts_cli_embeds_quality_counters_when_available() -> Resu
             .and_then(Value::as_bool),
         Some(true)
     );
+    assert_eq!(
+        next_edit_scaffold
+            .get("test_assertion_next_action")
+            .and_then(|action| action.get("test_more_candidate_prepared"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("test_assertion_next_action")
+            .and_then(|action| action.get("test_more_candidate_editor_visible"))
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("test_assertion_next_action")
+            .and_then(|action| action.get("test2_candidate_prepared"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("test_assertion_next_action")
+            .and_then(|action| action.get("non_test_file_rejected"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("test_assertion_next_action")
+            .and_then(|action| action.get("parse_stable"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
 
     Ok(())
 }
@@ -457,6 +492,42 @@ fn semantic_inline_receipts_cli_rejects_missing_import_line_ending_drift() -> Re
     Ok(())
 }
 
+#[test]
+fn semantic_inline_receipts_cli_rejects_test_assertion_runtime_drift() -> Result<()> {
+    let temp = TempDir::new()?;
+    let receipt = temp.path().join("semantic-inline-receipts.json");
+    let missing_quality_receipt = temp.path().join("missing-inline-quality.json");
+    let next_edit_receipt = temp.path().join("semantic-inline-next-edit.json");
+    let mut next_edit = valid_next_edit_receipt_json();
+    next_edit["test_assertion_next_action"]["test_more_candidate"]["candidate"]["editorVisible"] =
+        json!(true);
+    std::fs::write(&next_edit_receipt, serde_json::to_vec_pretty(&next_edit)?)?;
+
+    let output = cargo_bin_cmd!("xtask")
+        .args([
+            "semantic-inline-receipts",
+            "--receipt",
+            &receipt.display().to_string(),
+            "--quality-receipt",
+            &missing_quality_receipt.display().to_string(),
+            "--next-edit-receipt",
+            &next_edit_receipt.display().to_string(),
+        ])
+        .output()?;
+
+    assert!(
+        !output.status.success(),
+        "dashboard generation should reject editor-visible test assertion next actions"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("test_assertion_next_action") || stderr.contains("editorVisible"),
+        "error should identify test assertion next-action drift, got {stderr}"
+    );
+
+    Ok(())
+}
+
 fn valid_next_edit_receipt_json() -> Value {
     json!({
         "schema_version": "semantic-inline-next-edit.v1",
@@ -486,9 +557,11 @@ fn valid_next_edit_receipt_json() -> Value {
             "runtime_next_edit_provider",
             "editor_visible_next_edit_suggestions",
             "missing_import_next_action",
+            "test_assertion_next_action",
             "optional_ai_candidate_source"
         ],
-        "missing_import_next_action": valid_missing_import_next_action_json()
+        "missing_import_next_action": valid_missing_import_next_action_json(),
+        "test_assertion_next_action": valid_test_assertion_next_action_json()
     })
 }
 
@@ -515,9 +588,11 @@ fn next_edit_receipt_without_candidate_families_json() -> Value {
             "runtime_next_edit_provider",
             "editor_visible_next_edit_suggestions",
             "missing_import_next_action",
+            "test_assertion_next_action",
             "optional_ai_candidate_source"
         ],
-        "missing_import_next_action": valid_missing_import_next_action_json()
+        "missing_import_next_action": valid_missing_import_next_action_json(),
+        "test_assertion_next_action": valid_test_assertion_next_action_json()
     })
 }
 
@@ -558,6 +633,64 @@ fn valid_missing_import_next_action_json() -> Value {
         "accepted_document_text": "use strict;\nuse warnings;\nuse My::App;\nmy $value = My::App->new;\n",
         "crlf_accepted_document_text": "package Demo;\r\nuse strict;\r\nuse My::App;\r\nmy $value = My::App->new;\r\n",
         "line_endings_preserved": true,
+        "parse_stable": true
+    })
+}
+
+fn valid_test_assertion_next_action_json() -> Value {
+    json!({
+        "claim_boundary": "receipt-only test assertion next-action proof",
+        "test_more_candidate": {
+            "status": "receipt_only",
+            "candidate": {
+                "family": "test_assertion_body",
+                "framework": "test_more",
+                "reason": "visible_lexical_assertion",
+                "edit": {
+                    "startByte": 56,
+                    "endByte": 56,
+                    "newText": "is($got, $expected, 'test description');\n"
+                },
+                "editorVisible": false
+            },
+            "rejectionReasons": []
+        },
+        "test2_candidate": {
+            "status": "receipt_only",
+            "candidate": {
+                "family": "test_assertion_body",
+                "framework": "test2_v0",
+                "reason": "visible_lexical_assertion",
+                "edit": {
+                    "startByte": 54,
+                    "endByte": 54,
+                    "newText": "is($result, $want, 'test description');\n"
+                },
+                "editorVisible": false
+            },
+            "rejectionReasons": []
+        },
+        "non_test_file": {
+            "status": "receipt_only",
+            "rejectionReasons": ["test_file_required"]
+        },
+        "unsupported_framework": {
+            "status": "receipt_only",
+            "rejectionReasons": ["unsupported_test_framework"]
+        },
+        "missing_variables": {
+            "status": "receipt_only",
+            "rejectionReasons": ["missing_assertion_variables"]
+        },
+        "default_gate": {
+            "status": "disabled",
+            "rejectionReasons": ["gate_disabled"]
+        },
+        "explicit_gate": {
+            "status": "runtime_provider_not_registered",
+            "rejectionReasons": ["runtime_provider_not_registered"]
+        },
+        "accepted_document_text": "use Test::More;\nmy $got = compute();\nmy $expected = 42;\nis($got, $expected, 'test description');\n",
         "parse_stable": true
     })
 }

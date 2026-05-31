@@ -14,7 +14,8 @@ pub use next_edit::{
     MissingImportNextEditCandidate, MissingImportNextEditProof, MissingImportNextEditRequest,
     NextEditCandidateFamily, NextEditFeatureGate, NextEditGateSource, NextEditProvider,
     NextEditRejectionReason, NextEditRequest, NextEditResponse, NextEditSafetyPolicy,
-    NextEditStatus, NextEditSuggestion, NextEditTextEdit,
+    NextEditStatus, NextEditSuggestion, NextEditTextEdit, TestAssertionNextEditCandidate,
+    TestAssertionNextEditFramework, TestAssertionNextEditProof, TestAssertionNextEditRequest,
 };
 
 const MAX_INLINE_COMPLETION_ITEMS: usize = 5;

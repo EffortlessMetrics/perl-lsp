@@ -142,6 +142,7 @@ struct NextEditScaffoldSummary {
     planned_candidate_families: Option<Vec<String>>,
     future_gated: Option<Vec<String>>,
     missing_import_next_action: Option<MissingImportNextActionSummary>,
+    test_assertion_next_action: Option<TestAssertionNextActionSummary>,
 }
 
 #[derive(Debug, Serialize)]
@@ -155,6 +156,21 @@ struct MissingImportNextActionSummary {
     explicit_gate_runtime_unregistered: bool,
     parse_stable: bool,
     line_endings_preserved: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct TestAssertionNextActionSummary {
+    test_more_candidate_prepared: bool,
+    test_more_candidate_editor_visible: bool,
+    test2_candidate_prepared: bool,
+    test2_candidate_editor_visible: bool,
+    non_test_file_rejected: bool,
+    unsupported_framework_rejected: bool,
+    missing_variables_rejected: bool,
+    default_gate_disabled: bool,
+    explicit_gate_runtime_unregistered: bool,
+    parse_stable: bool,
 }
 
 pub fn run(receipt: PathBuf, quality_receipt: PathBuf, next_edit_receipt: PathBuf) -> Result<()> {
@@ -235,6 +251,7 @@ fn read_optional_next_edit_scaffold_summary(path: &Path) -> Result<NextEditScaff
             planned_candidate_families: None,
             future_gated: None,
             missing_import_next_action: None,
+            test_assertion_next_action: None,
         });
     }
 
@@ -272,6 +289,7 @@ fn read_optional_next_edit_scaffold_summary(path: &Path) -> Result<NextEditScaff
         planned_candidate_families: string_array_field(&scaffold, "planned_candidate_families")?,
         future_gated: string_array_field(&scaffold, "future_gated")?,
         missing_import_next_action: Some(missing_import_next_action_summary(&scaffold)?),
+        test_assertion_next_action: Some(test_assertion_next_action_summary(&scaffold)?),
     };
     validate_next_edit_scaffold_summary(&summary, &scaffold)?;
     Ok(summary)
@@ -365,6 +383,7 @@ fn validate_next_edit_scaffold_summary(
         "runtime_next_edit_provider",
         "editor_visible_next_edit_suggestions",
         "missing_import_next_action",
+        "test_assertion_next_action",
         "optional_ai_candidate_source",
     ] {
         if !future_gated.iter().any(|entry| entry == required) {
@@ -372,6 +391,7 @@ fn validate_next_edit_scaffold_summary(
         }
     }
     require_missing_import_next_action(scaffold)?;
+    require_test_assertion_next_action(scaffold)?;
 
     Ok(())
 }
@@ -408,6 +428,48 @@ fn missing_import_next_action_summary(scaffold: &Value) -> Result<MissingImportN
             .get("line_endings_preserved")
             .and_then(Value::as_bool)
             .unwrap_or(false),
+    })
+}
+
+fn test_assertion_next_action_summary(scaffold: &Value) -> Result<TestAssertionNextActionSummary> {
+    let action = scaffold
+        .get("test_assertion_next_action")
+        .ok_or_else(|| eyre!("next-edit scaffold receipt missing test_assertion_next_action"))?;
+    let test_more_candidate = action.pointer("/test_more_candidate/candidate");
+    let test2_candidate = action.pointer("/test2_candidate/candidate");
+    Ok(TestAssertionNextActionSummary {
+        test_more_candidate_prepared: test_more_candidate.is_some(),
+        test_more_candidate_editor_visible: test_more_candidate
+            .and_then(|candidate| candidate.get("editorVisible"))
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+        test2_candidate_prepared: test2_candidate.is_some(),
+        test2_candidate_editor_visible: test2_candidate
+            .and_then(|candidate| candidate.get("editorVisible"))
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+        non_test_file_rejected: rejection_reason_present(
+            action,
+            "/non_test_file/rejectionReasons",
+            "test_file_required",
+        )?,
+        unsupported_framework_rejected: rejection_reason_present(
+            action,
+            "/unsupported_framework/rejectionReasons",
+            "unsupported_test_framework",
+        )?,
+        missing_variables_rejected: rejection_reason_present(
+            action,
+            "/missing_variables/rejectionReasons",
+            "missing_assertion_variables",
+        )?,
+        default_gate_disabled: action.pointer("/default_gate/status").and_then(Value::as_str)
+            == Some("disabled"),
+        explicit_gate_runtime_unregistered: action
+            .pointer("/explicit_gate/status")
+            .and_then(Value::as_str)
+            == Some("runtime_provider_not_registered"),
+        parse_stable: action.get("parse_stable").and_then(Value::as_bool).unwrap_or(false),
     })
 }
 
@@ -490,6 +552,90 @@ fn require_missing_import_next_action(scaffold: &Value) -> Result<()> {
     if crlf_accepted_text.contains("use My::App;\nmy $value = My::App->new;") {
         bail!("missing-import next action CRLF accepted document text mixed LF line endings");
     }
+    Ok(())
+}
+
+fn require_test_assertion_next_action(scaffold: &Value) -> Result<()> {
+    let action = scaffold
+        .get("test_assertion_next_action")
+        .ok_or_else(|| eyre!("next-edit scaffold receipt missing test_assertion_next_action"))?;
+    require_next_edit_value(
+        action.pointer("/test_more_candidate/status").and_then(Value::as_str),
+        "test_assertion_next_action/test_more_candidate/status",
+        "receipt_only",
+    )?;
+    require_next_edit_value(
+        action.pointer("/test_more_candidate/candidate/family").and_then(Value::as_str),
+        "test_assertion_next_action/test_more_candidate/candidate/family",
+        "test_assertion_body",
+    )?;
+    require_next_edit_value(
+        action.pointer("/test_more_candidate/candidate/edit/newText").and_then(Value::as_str),
+        "test_assertion_next_action/test_more_candidate/candidate/edit/newText",
+        "is($got, $expected, 'test description');\n",
+    )?;
+    require_next_edit_bool(
+        action.pointer("/test_more_candidate/candidate/editorVisible").and_then(Value::as_bool),
+        "test_assertion_next_action/test_more_candidate/candidate/editorVisible",
+        false,
+    )?;
+    require_next_edit_value(
+        action.pointer("/test2_candidate/status").and_then(Value::as_str),
+        "test_assertion_next_action/test2_candidate/status",
+        "receipt_only",
+    )?;
+    require_next_edit_value(
+        action.pointer("/test2_candidate/candidate/framework").and_then(Value::as_str),
+        "test_assertion_next_action/test2_candidate/candidate/framework",
+        "test2_v0",
+    )?;
+    require_next_edit_bool(
+        action.pointer("/test2_candidate/candidate/editorVisible").and_then(Value::as_bool),
+        "test_assertion_next_action/test2_candidate/candidate/editorVisible",
+        false,
+    )?;
+    let accepted_text =
+        action.get("accepted_document_text").and_then(Value::as_str).ok_or_else(|| {
+            eyre!("next-edit scaffold receipt missing test assertion accepted_document_text")
+        })?;
+    if !accepted_text.contains("is($got, $expected, 'test description');") {
+        bail!("test assertion next action accepted document text did not contain assertion");
+    }
+    if accepted_text.contains("done_testing") {
+        bail!("test assertion next action should not emit done_testing");
+    }
+    if !rejection_reason_present(action, "/non_test_file/rejectionReasons", "test_file_required")? {
+        bail!("test assertion next action did not reject non-test file context");
+    }
+    if !rejection_reason_present(
+        action,
+        "/unsupported_framework/rejectionReasons",
+        "unsupported_test_framework",
+    )? {
+        bail!("test assertion next action did not reject unsupported framework");
+    }
+    if !rejection_reason_present(
+        action,
+        "/missing_variables/rejectionReasons",
+        "missing_assertion_variables",
+    )? {
+        bail!("test assertion next action did not reject missing variables");
+    }
+    require_next_edit_value(
+        action.pointer("/default_gate/status").and_then(Value::as_str),
+        "test_assertion_next_action/default_gate/status",
+        "disabled",
+    )?;
+    require_next_edit_value(
+        action.pointer("/explicit_gate/status").and_then(Value::as_str),
+        "test_assertion_next_action/explicit_gate/status",
+        "runtime_provider_not_registered",
+    )?;
+    require_next_edit_bool(
+        action.get("parse_stable").and_then(Value::as_bool),
+        "test_assertion_next_action/parse_stable",
+        true,
+    )?;
     Ok(())
 }
 
@@ -951,6 +1097,7 @@ mod tests {
             planned_candidate_families: None,
             future_gated: None,
             missing_import_next_action: None,
+            test_assertion_next_action: None,
         }
     }
 
@@ -983,9 +1130,11 @@ mod tests {
                 "runtime_next_edit_provider",
                 "editor_visible_next_edit_suggestions",
                 "missing_import_next_action",
+                "test_assertion_next_action",
                 "optional_ai_candidate_source"
             ],
-            "missing_import_next_action": valid_missing_import_next_action_json()
+            "missing_import_next_action": valid_missing_import_next_action_json(),
+            "test_assertion_next_action": valid_test_assertion_next_action_json()
         })
     }
 
@@ -1027,6 +1176,64 @@ mod tests {
             "crlf_accepted_document_text": "package Demo;\r\nuse strict;\r\nuse My::App;\r\nmy $value = My::App->new;\r\n",
             "parse_stable": true,
             "line_endings_preserved": true
+        })
+    }
+
+    fn valid_test_assertion_next_action_json() -> Value {
+        json!({
+            "claim_boundary": "receipt-only test assertion next-action proof",
+            "test_more_candidate": {
+                "status": "receipt_only",
+                "candidate": {
+                    "family": "test_assertion_body",
+                    "framework": "test_more",
+                    "reason": "visible_lexical_assertion",
+                    "edit": {
+                        "startByte": 56,
+                        "endByte": 56,
+                        "newText": "is($got, $expected, 'test description');\n"
+                    },
+                    "editorVisible": false
+                },
+                "rejectionReasons": []
+            },
+            "test2_candidate": {
+                "status": "receipt_only",
+                "candidate": {
+                    "family": "test_assertion_body",
+                    "framework": "test2_v0",
+                    "reason": "visible_lexical_assertion",
+                    "edit": {
+                        "startByte": 54,
+                        "endByte": 54,
+                        "newText": "is($result, $want, 'test description');\n"
+                    },
+                    "editorVisible": false
+                },
+                "rejectionReasons": []
+            },
+            "non_test_file": {
+                "status": "receipt_only",
+                "rejectionReasons": ["test_file_required"]
+            },
+            "unsupported_framework": {
+                "status": "receipt_only",
+                "rejectionReasons": ["unsupported_test_framework"]
+            },
+            "missing_variables": {
+                "status": "receipt_only",
+                "rejectionReasons": ["missing_assertion_variables"]
+            },
+            "default_gate": {
+                "status": "disabled",
+                "rejectionReasons": ["gate_disabled"]
+            },
+            "explicit_gate": {
+                "status": "runtime_provider_not_registered",
+                "rejectionReasons": ["runtime_provider_not_registered"]
+            },
+            "accepted_document_text": "use Test::More;\nmy $got = compute();\nmy $expected = 42;\nis($got, $expected, 'test description');\n",
+            "parse_stable": true
         })
     }
 
@@ -1431,6 +1638,116 @@ mod tests {
         assert!(
             error.to_string().contains("explicit_gate/status"),
             "error should identify explicit gate status drift, got {error}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_test_assertion_field_drift() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["test_assertion_next_action"]["test_more_candidate"]["candidate"]["edit"]["newText"] =
+            json!("done_testing();\n");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "wrong test assertion edit text must fail");
+        assert!(
+            error.to_string().contains("candidate/edit/newText"),
+            "error should identify test assertion edit text drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["test_assertion_next_action"]["accepted_document_text"] =
+            json!("use Test::More;\nmy $got = compute();\nmy $expected = 42;\n");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(
+            &path,
+            "accepted text without inserted assertion must fail",
+        );
+        assert!(
+            error.to_string().contains("accepted document text"),
+            "error should identify missing accepted assertion drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["test_assertion_next_action"]["accepted_document_text"] = json!(
+            "use Test::More;\nmy $got = compute();\nmy $expected = 42;\nis($got, $expected, 'test description');\ndone_testing();\n"
+        );
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "premature done_testing must fail");
+        assert!(
+            error.to_string().contains("done_testing"),
+            "error should identify done_testing drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["test_assertion_next_action"]["parse_stable"] = json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(
+            &path,
+            "parse-unstable test assertion proof must fail",
+        );
+        assert!(
+            error.to_string().contains("parse_stable"),
+            "error should identify parse-stability drift, got {error}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_test_assertion_rejection_drift() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["test_assertion_next_action"]["non_test_file"]["rejectionReasons"] = json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "non-test rejection drift must fail");
+        assert!(
+            error.to_string().contains("non-test file"),
+            "error should identify non-test rejection drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["test_assertion_next_action"]["unsupported_framework"]["rejectionReasons"] =
+            json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "framework rejection drift must fail");
+        assert!(
+            error.to_string().contains("unsupported framework"),
+            "error should identify framework rejection drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["test_assertion_next_action"]["missing_variables"]["rejectionReasons"] = json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "missing-variable rejection drift must fail");
+        assert!(
+            error.to_string().contains("missing variables"),
+            "error should identify missing-variable rejection drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["test_assertion_next_action"]["default_gate"]["status"] = json!("receipt_only");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "default gate drift must fail");
+        assert!(
+            error.to_string().contains("default_gate/status"),
+            "error should identify default gate drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["test_assertion_next_action"]["explicit_gate"]["status"] = json!("receipt_only");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "explicit gate drift must fail");
+        assert!(
+            error.to_string().contains("explicit_gate/status"),
+            "error should identify explicit gate drift, got {error}"
         );
 
         Ok(())

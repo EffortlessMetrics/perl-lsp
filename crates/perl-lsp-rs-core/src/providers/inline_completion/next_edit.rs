@@ -207,6 +207,12 @@ pub enum NextEditRejectionReason {
     DuplicateImport,
     /// The insertion point could not be prepared safely.
     UnsafeInsertionPoint,
+    /// Test-body candidates only apply in test files.
+    TestFileRequired,
+    /// The current test framework is unknown or unsupported.
+    UnsupportedTestFramework,
+    /// No suitable visible actual/expected variables were available.
+    MissingAssertionVariables,
 }
 
 /// Receipt-only request for the first deterministic next-edit family:
@@ -274,6 +280,88 @@ pub struct MissingImportNextEditProof {
     /// Candidate when all deterministic gates pass.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub candidate: Option<MissingImportNextEditCandidate>,
+    /// Reasons the candidate was not prepared.
+    pub rejection_reasons: Vec<NextEditRejectionReason>,
+}
+
+/// Test framework used by a receipt-only test-body next-edit candidate.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TestAssertionNextEditFramework {
+    /// `Test::More` assertion style.
+    TestMore,
+    /// `Test2::V0` assertion style.
+    Test2V0,
+}
+
+/// Receipt-only request for preparing a test assertion body next edit.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TestAssertionNextEditRequest {
+    /// Current document text.
+    pub document_text: String,
+    /// Byte offset where the assertion body would be inserted.
+    pub insertion_byte: usize,
+    /// Whether the current file role is known to be a Perl test file.
+    pub file_role_is_test: bool,
+    /// Imports visible in the current document.
+    pub imports: Vec<String>,
+    /// Visible lexicals near the intended insertion point.
+    pub visible_variables: Vec<String>,
+    /// Gate used for this receipt-only proof.
+    pub gate: NextEditFeatureGate,
+}
+
+impl TestAssertionNextEditRequest {
+    /// Construct a receipt-only test assertion request.
+    #[must_use]
+    pub fn receipt_only(
+        document_text: impl Into<String>,
+        insertion_byte: usize,
+        imports: Vec<String>,
+        visible_variables: Vec<String>,
+    ) -> Self {
+        Self {
+            document_text: document_text.into(),
+            insertion_byte,
+            file_role_is_test: true,
+            imports,
+            visible_variables,
+            gate: NextEditFeatureGate::receipt_only(),
+        }
+    }
+}
+
+/// Receipt-only test assertion candidate prepared by the deterministic
+/// next-edit scaffold. It is not editor-visible runtime output.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TestAssertionNextEditCandidate {
+    /// Candidate family.
+    pub family: NextEditCandidateFamily,
+    /// Framework that shaped the assertion.
+    pub framework: TestAssertionNextEditFramework,
+    /// Reason recorded for receipts and debugging.
+    pub reason: String,
+    /// Edit that would insert the assertion.
+    pub edit: NextEditTextEdit,
+    /// Receipt-only candidates must not be editor-visible runtime suggestions.
+    pub editor_visible: bool,
+}
+
+/// Receipt-only test assertion proof result.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TestAssertionNextEditProof {
+    /// Scaffold status for this proof.
+    pub status: NextEditStatus,
+    /// Candidate when all deterministic gates pass.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub candidate: Option<TestAssertionNextEditCandidate>,
     /// Reasons the candidate was not prepared.
     pub rejection_reasons: Vec<NextEditRejectionReason>,
 }
@@ -397,6 +485,92 @@ impl NextEditProvider {
             rejection_reasons,
         }
     }
+
+    /// Prepare a receipt-only test assertion next-edit candidate.
+    ///
+    /// This does not register a runtime provider and does not emit editor-visible
+    /// suggestions. It proves that a second deterministic next-edit family can
+    /// be prepared only for known test files with supported frameworks and
+    /// visible actual/expected variables.
+    #[must_use]
+    pub fn prove_test_assertion(
+        &self,
+        request: &TestAssertionNextEditRequest,
+    ) -> TestAssertionNextEditProof {
+        match (request.gate.enabled, request.gate.source) {
+            (_, NextEditGateSource::ReceiptOnly) => {}
+            (false, _) => {
+                return TestAssertionNextEditProof {
+                    status: NextEditStatus::Disabled,
+                    candidate: None,
+                    rejection_reasons: vec![NextEditRejectionReason::GateDisabled],
+                };
+            }
+            (true, _) => {
+                return TestAssertionNextEditProof {
+                    status: NextEditStatus::RuntimeProviderNotRegistered,
+                    candidate: None,
+                    rejection_reasons: vec![NextEditRejectionReason::RuntimeProviderNotRegistered],
+                };
+            }
+        }
+
+        let mut rejection_reasons = Vec::new();
+        if !request.file_role_is_test {
+            rejection_reasons.push(NextEditRejectionReason::TestFileRequired);
+        }
+        let framework = test_assertion_framework(&request.imports);
+        if framework.is_none() {
+            rejection_reasons.push(NextEditRejectionReason::UnsupportedTestFramework);
+        }
+        let variables = test_assertion_variables(&request.visible_variables);
+        if variables.is_none() {
+            rejection_reasons.push(NextEditRejectionReason::MissingAssertionVariables);
+        }
+        if !is_safe_next_edit_insertion(&request.document_text, request.insertion_byte) {
+            rejection_reasons.push(NextEditRejectionReason::UnsafeInsertionPoint);
+        }
+
+        if !rejection_reasons.is_empty() {
+            return TestAssertionNextEditProof {
+                status: NextEditStatus::ReceiptOnly,
+                candidate: None,
+                rejection_reasons,
+            };
+        }
+
+        let Some(framework) = framework else {
+            return TestAssertionNextEditProof {
+                status: NextEditStatus::ReceiptOnly,
+                candidate: None,
+                rejection_reasons: vec![NextEditRejectionReason::UnsupportedTestFramework],
+            };
+        };
+        let Some((actual, expected)) = variables else {
+            return TestAssertionNextEditProof {
+                status: NextEditStatus::ReceiptOnly,
+                candidate: None,
+                rejection_reasons: vec![NextEditRejectionReason::MissingAssertionVariables],
+            };
+        };
+        let line_ending = insertion_line_ending(&request.document_text);
+        let assertion = format!("is({actual}, {expected}, 'test description');{line_ending}");
+        TestAssertionNextEditProof {
+            status: NextEditStatus::ReceiptOnly,
+            candidate: Some(TestAssertionNextEditCandidate {
+                family: NextEditCandidateFamily::TestAssertionBody,
+                framework,
+                reason: "visible_lexical_assertion".to_string(),
+                edit: NextEditTextEdit::new(
+                    request.insertion_byte,
+                    request.insertion_byte,
+                    assertion,
+                ),
+                editor_visible: false,
+            }),
+            rejection_reasons,
+        }
+    }
 }
 
 fn is_safe_module_name(module: &str) -> bool {
@@ -453,6 +627,57 @@ fn import_insertion_offset(document_text: &str) -> Option<usize> {
 
 fn insertion_line_ending(document_text: &str) -> &'static str {
     if document_text.contains("\r\n") { "\r\n" } else { "\n" }
+}
+
+fn test_assertion_framework(imports: &[String]) -> Option<TestAssertionNextEditFramework> {
+    if imports.iter().any(|import| import == "Test2::V0") {
+        return Some(TestAssertionNextEditFramework::Test2V0);
+    }
+    if imports.iter().any(|import| import == "Test::More") {
+        return Some(TestAssertionNextEditFramework::TestMore);
+    }
+    None
+}
+
+fn test_assertion_variables(variables: &[String]) -> Option<(&str, &str)> {
+    let actual = variables.iter().find(|variable| is_actual_assertion_variable(variable))?;
+    let expected = variables.iter().find(|variable| is_expected_assertion_variable(variable))?;
+    (actual != expected).then_some((actual.as_str(), expected.as_str()))
+}
+
+fn is_actual_assertion_variable(variable: &str) -> bool {
+    matches!(variable, "$got" | "$result" | "$actual")
+}
+
+fn is_expected_assertion_variable(variable: &str) -> bool {
+    matches!(variable, "$expected" | "$want")
+}
+
+fn is_safe_next_edit_insertion(document_text: &str, insertion_byte: usize) -> bool {
+    if insertion_byte > document_text.len()
+        || document_text.get(..insertion_byte).is_none()
+        || document_text.get(insertion_byte..).is_none()
+    {
+        return false;
+    }
+    let prefix = &document_text[..insertion_byte];
+    if prefix.lines().any(|line| line.trim_start().starts_with("__DATA__")) {
+        return false;
+    }
+    !is_inside_pod(prefix)
+}
+
+fn is_inside_pod(prefix: &str) -> bool {
+    let mut in_pod = false;
+    for line in prefix.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("=cut") {
+            in_pod = false;
+        } else if trimmed.starts_with('=') {
+            in_pod = true;
+        }
+    }
+    in_pod
 }
 
 #[cfg(test)]
@@ -676,6 +901,170 @@ mod tests {
 
         request.gate = NextEditFeatureGate::explicit_enabled();
         let runtime = provider.prove_missing_import(&request);
+        assert_eq!(runtime.status, NextEditStatus::RuntimeProviderNotRegistered);
+        assert!(runtime.candidate.is_none());
+        assert_eq!(
+            runtime.rejection_reasons,
+            vec![NextEditRejectionReason::RuntimeProviderNotRegistered]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_assertion_receipt_prepares_test_more_visible_lexical_assertion()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = NextEditProvider;
+        let source = "use Test::More;\nmy $got = compute();\nmy $expected = 42;\n";
+        let request = TestAssertionNextEditRequest::receipt_only(
+            source,
+            source.len(),
+            vec!["Test::More".to_string()],
+            vec!["$got".to_string(), "$expected".to_string()],
+        );
+
+        let proof = provider.prove_test_assertion(&request);
+
+        assert_eq!(proof.status, NextEditStatus::ReceiptOnly);
+        assert!(proof.rejection_reasons.is_empty());
+        let candidate = proof.candidate.ok_or("test assertion candidate not prepared")?;
+        assert_eq!(candidate.family, NextEditCandidateFamily::TestAssertionBody);
+        assert_eq!(candidate.framework, TestAssertionNextEditFramework::TestMore);
+        assert!(!candidate.editor_visible);
+        assert_eq!(candidate.edit.new_text, "is($got, $expected, 'test description');\n");
+        let edited = candidate.edit.apply_to(source).ok_or("edit did not apply")?;
+        assert_eq!(
+            edited,
+            "use Test::More;\nmy $got = compute();\nmy $expected = 42;\nis($got, $expected, 'test description');\n"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_assertion_receipt_supports_test2_visible_result_assertion()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = NextEditProvider;
+        let source = "use Test2::V0;\nmy $result = compute();\nmy $want = 42;\n";
+        let request = TestAssertionNextEditRequest::receipt_only(
+            source,
+            source.len(),
+            vec!["Test2::V0".to_string()],
+            vec!["$result".to_string(), "$want".to_string()],
+        );
+
+        let proof = provider.prove_test_assertion(&request);
+
+        let candidate = proof.candidate.ok_or("test assertion candidate not prepared")?;
+        assert_eq!(candidate.framework, TestAssertionNextEditFramework::Test2V0);
+        assert_eq!(candidate.edit.new_text, "is($result, $want, 'test description');\n");
+        assert!(!candidate.editor_visible);
+        Ok(())
+    }
+
+    #[test]
+    fn test_assertion_receipt_rejects_non_test_and_unknown_framework()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = NextEditProvider;
+        let source = "my $got = compute();\nmy $expected = 42;\n";
+        let mut request = TestAssertionNextEditRequest::receipt_only(
+            source,
+            source.len(),
+            vec![],
+            vec!["$got".to_string(), "$expected".to_string()],
+        );
+        request.file_role_is_test = false;
+
+        let proof = provider.prove_test_assertion(&request);
+
+        assert!(proof.candidate.is_none());
+        assert_eq!(
+            proof.rejection_reasons,
+            vec![
+                NextEditRejectionReason::TestFileRequired,
+                NextEditRejectionReason::UnsupportedTestFramework,
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_assertion_receipt_rejects_missing_variables_and_unsafe_insertion()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = NextEditProvider;
+        let source = "=pod\nmy $got = compute();\n";
+        let request = TestAssertionNextEditRequest::receipt_only(
+            source,
+            source.len(),
+            vec!["Test::More".to_string()],
+            vec!["$got".to_string()],
+        );
+
+        let proof = provider.prove_test_assertion(&request);
+
+        assert!(proof.candidate.is_none());
+        assert_eq!(
+            proof.rejection_reasons,
+            vec![
+                NextEditRejectionReason::MissingAssertionVariables,
+                NextEditRejectionReason::UnsafeInsertionPoint,
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_assertion_receipt_rejects_data_section_and_invalid_offsets()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = NextEditProvider;
+        let data_source = "use Test::More;\n__DATA__\n";
+        let data_request = TestAssertionNextEditRequest::receipt_only(
+            data_source,
+            data_source.len(),
+            vec!["Test::More".to_string()],
+            vec!["$got".to_string(), "$expected".to_string()],
+        );
+        let invalid_offset_request = TestAssertionNextEditRequest::receipt_only(
+            "use Test::More;\nmy $got = compute();\nmy $expected = 42;\n",
+            usize::MAX,
+            vec!["Test::More".to_string()],
+            vec!["$got".to_string(), "$expected".to_string()],
+        );
+
+        let data_proof = provider.prove_test_assertion(&data_request);
+        assert!(data_proof.candidate.is_none());
+        assert_eq!(
+            data_proof.rejection_reasons,
+            vec![NextEditRejectionReason::UnsafeInsertionPoint]
+        );
+
+        let invalid_offset_proof = provider.prove_test_assertion(&invalid_offset_request);
+        assert!(invalid_offset_proof.candidate.is_none());
+        assert_eq!(
+            invalid_offset_proof.rejection_reasons,
+            vec![NextEditRejectionReason::UnsafeInsertionPoint]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_assertion_receipt_does_not_bypass_runtime_gate()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = NextEditProvider;
+        let source = "use Test::More;\nmy $got = compute();\nmy $expected = 42;\n";
+        let mut request = TestAssertionNextEditRequest::receipt_only(
+            source,
+            source.len(),
+            vec!["Test::More".to_string()],
+            vec!["$got".to_string(), "$expected".to_string()],
+        );
+
+        request.gate = NextEditFeatureGate::default();
+        let disabled = provider.prove_test_assertion(&request);
+        assert_eq!(disabled.status, NextEditStatus::Disabled);
+        assert!(disabled.candidate.is_none());
+        assert_eq!(disabled.rejection_reasons, vec![NextEditRejectionReason::GateDisabled]);
+
+        request.gate = NextEditFeatureGate::explicit_enabled();
+        let runtime = provider.prove_test_assertion(&request);
         assert_eq!(runtime.status, NextEditStatus::RuntimeProviderNotRegistered);
         assert!(runtime.candidate.is_none());
         assert_eq!(

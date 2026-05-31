@@ -408,11 +408,23 @@ the next-edit scaffold receipt when present, and keeps next-edit runtime behavio
 and optional AI explicitly future-gated. It is an inventory receipt; it does not
 run the UX scenarios or promote support status by itself.
 
+The next-edit scaffold now includes receipt-only proofs for the first two
+deterministic next-action families:
+
+- missing-import next actions, using effective-`@INC` reachability and duplicate
+  import rejection;
+- test assertion body next actions, using Test::More/Test2 imports and visible
+  `$got`/`$expected`-style lexicals.
+
+These receipts remain non-runtime and non-editor-visible. They prove candidate
+preparation, gate rejection, accepted edit application, and parse stability
+without registering an LSP next-edit provider.
+
 Still future or deliberately gated:
 
 - broader real-project UX receipts for inline quality beyond the current module
   import and package-boundary receiver receipts;
-- next-edit suggestions;
+- runtime/editor-visible next-edit suggestions;
 - optional AI candidate boundaries.
 
 ## High-Value Perl Wins
