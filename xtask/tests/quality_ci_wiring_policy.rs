@@ -66,10 +66,10 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
         "coverage proof checkout must be pinned and must not persist write credentials"
     );
     assert!(
-        coverage_job.contains(
-            "(github.event_name == 'pull_request' && github.event.pull_request.draft != true)"
-        ) && !coverage_job.contains("ci:coverage"),
-        "patch coverage must be a front-door PR gate, not label-gated"
+        coverage_job.contains("github.event.pull_request.draft != true")
+            && coverage_job.contains("github.event.action != 'labeled'")
+            && !coverage_job.contains("ci:coverage"),
+        "patch coverage must be a front-door PR gate, skip label-only churn, and not be label-gated"
     );
     let codecov_upload_start = must_some(coverage_job.find("- name: Upload coverage to Codecov"));
     let after_codecov_upload = &coverage_job[codecov_upload_start..];
