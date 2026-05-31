@@ -93,10 +93,13 @@ coverage_filters = [
 id = "patch-coverage-ci-route"
 lcov = false
 files = [
+  "scripts/ci/route-codecov-packs.py",
+  "scripts/ci/test_route_codecov_packs.py",
   "xtask/src/tasks/ci_route.rs",
   "xtask/tests/ci_route_cli.rs",
 ]
 commands = [
+  "python -m unittest scripts/ci/test_route_codecov_packs.py",
   "cargo test -p xtask --bin xtask --profile agent --locked ci_route -- --nocapture",
   "cargo test -p xtask --test ci_route_cli --profile agent --locked -- --nocapture",
   "cargo run -p xtask --profile agent --locked -- ci route --base origin/main --head HEAD --receipt target/receipts/ci-route.json",

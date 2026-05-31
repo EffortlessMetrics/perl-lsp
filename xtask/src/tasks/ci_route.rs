@@ -133,6 +133,7 @@ const CI_POLICY_PACK: ProofPack = ProofPack {
 const CI_ROUTE_PACK: ProofPack = ProofPack {
     id: "ci-route-receipt",
     commands: &[
+        "python -m unittest scripts/ci/test_route_codecov_packs.py",
         "cargo test -p xtask --bin xtask --profile agent --locked ci_route -- --nocapture",
         "cargo test -p xtask --test ci_route_cli --profile agent --locked -- --nocapture",
         "cargo run -p xtask --profile agent --locked -- ci route --base origin/main --head HEAD --receipt target/receipts/ci-route.json",
@@ -297,7 +298,11 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         return;
     }
 
-    if file == "xtask/src/tasks/ci_route.rs" || file == "xtask/tests/ci_route_cli.rs" {
+    if file == "scripts/ci/route-codecov-packs.py"
+        || file == "scripts/ci/test_route_codecov_packs.py"
+        || file == "xtask/src/tasks/ci_route.rs"
+        || file == "xtask/tests/ci_route_cli.rs"
+    {
         route.add_surface("ci-routing");
         route.add_pack(CI_ROUTE_PACK);
         route.add_coverage_pack("patch-coverage-ci-route");
@@ -686,6 +691,31 @@ mod tests {
 
         assert_eq!(receipt.changed_surfaces, vec!["ci-routing"]);
         assert!(proof_pack_ids(&receipt).contains(&"ci-route-receipt"));
+        assert!(receipt.coverage_pack_selector.is_empty());
+        assert!(receipt.coverage_proof_packs.is_empty());
+        assert_eq!(
+            receipt.skipped_by_policy.get("patch-coverage-ci-route").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn route_receipt_maps_codecov_router_script_to_focused_non_lcov_route_pack() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec!["scripts/ci/route-codecov-packs.py".to_string()],
+        )?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["ci-routing"]);
+        assert!(proof_pack_ids(&receipt).contains(&"ci-route-receipt"));
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "ci-route-receipt"
+                && pack.commands.iter().any(|command| {
+                    command == "python -m unittest scripts/ci/test_route_codecov_packs.py"
+                })
+        }));
         assert!(receipt.coverage_pack_selector.is_empty());
         assert!(receipt.coverage_proof_packs.is_empty());
         assert_eq!(
