@@ -2528,6 +2528,10 @@ enum CiSubcommand {
         #[arg(long, default_value = "target/receipts/ci-route.json")]
         receipt: PathBuf,
 
+        /// Output path for the Markdown route summary.
+        #[arg(long, default_value = "target/receipts/ci-route.md")]
+        summary: PathBuf,
+
         /// Explicit changed file path. Repeat for tests or disconnected runs; when omitted, git diff is used.
         #[arg(long = "changed-file")]
         changed_file: Vec<String>,
@@ -2737,11 +2741,12 @@ fn main() -> Result<()> {
         Commands::Ci { command } => match command {
             None => ci::run(),
             Some(CiSubcommand::Doctor) => ci_doctor::run(),
-            Some(CiSubcommand::Route { base, head, receipt, changed_file }) => {
+            Some(CiSubcommand::Route { base, head, receipt, summary, changed_file }) => {
                 ci_route::run(ci_route::CiRouteArgs {
                     base,
                     head,
                     receipt,
+                    summary,
                     changed_files: changed_file,
                 })
             }

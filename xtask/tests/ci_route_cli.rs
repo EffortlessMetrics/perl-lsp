@@ -8,6 +8,7 @@ use tempfile::TempDir;
 fn ci_route_cli_writes_supported_editor_proof_pack_receipt() -> Result<()> {
     let temp = TempDir::new()?;
     let receipt = temp.path().join("ci-route.json");
+    let summary = temp.path().join("ci-route.md");
 
     cargo_bin_cmd!("xtask")
         .args([
@@ -19,6 +20,8 @@ fn ci_route_cli_writes_supported_editor_proof_pack_receipt() -> Result<()> {
             "HEAD",
             "--receipt",
             receipt.to_str().ok_or_else(|| anyhow!("invalid ci route receipt path"))?,
+            "--summary",
+            summary.to_str().ok_or_else(|| anyhow!("invalid ci route summary path"))?,
             "--changed-file",
             "xtask/src/tasks/supported_editor_inline_smoke.rs",
         ])
@@ -55,6 +58,10 @@ fn ci_route_cli_writes_supported_editor_proof_pack_receipt() -> Result<()> {
         route.pointer("/skipped_by_policy/full-ux-regression").and_then(Value::as_str),
         Some("supported-editor smoke receipt change")
     );
+    let summary = fs::read_to_string(summary)?;
+    assert!(summary.contains("## Coverage Proof Packs"));
+    assert!(summary.contains("patch-coverage-xtask-supported-editor-inline-smoke"));
+    assert!(summary.contains("cargo test -p xtask --test supported_editor_inline_smoke_cli"));
     Ok(())
 }
 

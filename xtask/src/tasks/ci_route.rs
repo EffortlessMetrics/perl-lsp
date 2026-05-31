@@ -1,6 +1,7 @@
 use color_eyre::eyre::{Result, bail};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -10,6 +11,7 @@ pub struct CiRouteArgs {
     pub base: String,
     pub head: String,
     pub receipt: PathBuf,
+    pub summary: PathBuf,
     pub changed_files: Vec<String>,
 }
 
@@ -144,11 +146,14 @@ pub fn run(args: CiRouteArgs) -> Result<()> {
     };
     let receipt = route_receipt(&args.base, &args.head, changed_files)?;
     write_receipt(&args.receipt, &receipt)?;
+    let markdown = render_summary(&args.receipt, &args.summary, &receipt);
+    write_text(&args.summary, &markdown)?;
     println!(
-        "ci route receipt OK: {} changed files, {} proof packs, {}",
+        "ci route receipt OK: {} changed files, {} proof packs, receipt {} summary {}",
         receipt.changed_files.len(),
         receipt.required_proof_packs.len(),
-        args.receipt.display()
+        args.receipt.display(),
+        args.summary.display()
     );
     Ok(())
 }
@@ -306,12 +311,138 @@ fn is_docs_file(file: &str) -> bool {
 }
 
 fn write_receipt(path: &Path, receipt: &CiRouteReceipt) -> Result<()> {
+    let json = serde_json::to_string_pretty(receipt)?;
+    write_text(path, &format!("{json}\n"))
+}
+
+fn write_text(path: &Path, text: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let json = serde_json::to_string_pretty(receipt)?;
-    fs::write(path, format!("{json}\n"))?;
+    fs::write(path, text)?;
     Ok(())
+}
+
+fn render_summary(receipt_path: &Path, summary_path: &Path, receipt: &CiRouteReceipt) -> String {
+    let mut markdown = String::new();
+    writeln!(markdown, "# CI Route Proof Packet").ok();
+    writeln!(markdown).ok();
+    writeln!(markdown, "- decision: `advisory`").ok();
+    writeln!(markdown, "- provider_action: `{}`", receipt.provider_action).ok();
+    writeln!(markdown, "- claim_boundary: {}", receipt.claim_boundary).ok();
+    writeln!(markdown, "- base: `{}`", receipt.base).ok();
+    writeln!(markdown, "- head: `{}`", receipt.head).ok();
+    writeln!(markdown, "- receipt: `{}`", receipt_path.display()).ok();
+    writeln!(markdown, "- summary: `{}`", summary_path.display()).ok();
+    writeln!(markdown, "- estimated_lem: `{}`", receipt.estimated_lem).ok();
+    writeln!(markdown).ok();
+
+    markdown_list(&mut markdown, "Changed Files", &receipt.changed_files);
+    markdown_list(&mut markdown, "Changed Surfaces", &receipt.changed_surfaces);
+    markdown_skips(&mut markdown, &receipt.skipped_by_policy);
+    markdown_proof_packs(&mut markdown, &receipt.required_proof_packs);
+    markdown_coverage_packs(&mut markdown, &receipt.coverage_proof_packs);
+
+    writeln!(markdown, "## Refresh Command").ok();
+    writeln!(markdown).ok();
+    writeln!(markdown, "```bash").ok();
+    writeln!(markdown, "{}", refresh_command(receipt_path, summary_path, receipt)).ok();
+    writeln!(markdown, "```").ok();
+    markdown
+}
+
+fn refresh_command(receipt_path: &Path, summary_path: &Path, receipt: &CiRouteReceipt) -> String {
+    let mut command = format!(
+        "rtk cargo xtask ci route --base {} --head {} --receipt {} --summary {}",
+        shell_quote(&receipt.base),
+        shell_quote(&receipt.head),
+        shell_quote(&receipt_path.display().to_string()),
+        shell_quote(&summary_path.display().to_string())
+    );
+    for file in &receipt.changed_files {
+        write!(command, " --changed-file {}", shell_quote(file)).ok();
+    }
+    command
+}
+
+fn shell_quote(value: &str) -> String {
+    if value
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '/' | '\\' | '-' | '_' | '.' | ':'))
+    {
+        value.to_string()
+    } else {
+        format!("'{}'", value.replace('\'', "'\\''"))
+    }
+}
+
+fn markdown_list(markdown: &mut String, heading: &str, values: &[String]) {
+    writeln!(markdown, "## {heading}").ok();
+    writeln!(markdown).ok();
+    if values.is_empty() {
+        writeln!(markdown, "- none").ok();
+    } else {
+        for value in values {
+            writeln!(markdown, "- `{value}`").ok();
+        }
+    }
+    writeln!(markdown).ok();
+}
+
+fn markdown_skips(markdown: &mut String, skipped_by_policy: &BTreeMap<String, String>) {
+    writeln!(markdown, "## Skipped By Policy").ok();
+    writeln!(markdown).ok();
+    if skipped_by_policy.is_empty() {
+        writeln!(markdown, "- none").ok();
+    } else {
+        for (pack, reason) in skipped_by_policy {
+            writeln!(markdown, "- `{pack}`: {reason}").ok();
+        }
+    }
+    writeln!(markdown).ok();
+}
+
+fn markdown_proof_packs(markdown: &mut String, proof_packs: &[ProofPackReceipt]) {
+    writeln!(markdown, "## Required Proof Packs").ok();
+    writeln!(markdown).ok();
+    for pack in proof_packs {
+        writeln!(markdown, "### `{}`", pack.id).ok();
+        writeln!(markdown).ok();
+        for command in &pack.commands {
+            writeln!(markdown, "- `{command}`").ok();
+        }
+        writeln!(markdown).ok();
+    }
+}
+
+fn markdown_coverage_packs(markdown: &mut String, coverage_packs: &[CoverageProofPackReceipt]) {
+    writeln!(markdown, "## Coverage Proof Packs").ok();
+    writeln!(markdown).ok();
+    if coverage_packs.is_empty() {
+        writeln!(markdown, "- none").ok();
+        writeln!(markdown).ok();
+        return;
+    }
+
+    for pack in coverage_packs {
+        writeln!(markdown, "### `{}`", pack.id).ok();
+        writeln!(markdown).ok();
+        writeln!(markdown, "Files:").ok();
+        for file in &pack.files {
+            writeln!(markdown, "- `{file}`").ok();
+        }
+        writeln!(markdown).ok();
+        writeln!(markdown, "Coverage filters:").ok();
+        for filter in &pack.coverage_filters {
+            writeln!(markdown, "- `{filter}`").ok();
+        }
+        writeln!(markdown).ok();
+        writeln!(markdown, "Commands:").ok();
+        for command in &pack.commands {
+            writeln!(markdown, "- `{command}`").ok();
+        }
+        writeln!(markdown).ok();
+    }
 }
 
 fn coverage_proof_pack_receipts(selector: &[String]) -> Result<Vec<CoverageProofPackReceipt>> {
@@ -692,14 +823,38 @@ mod tests {
     }
 
     #[test]
+    fn ci_route_summary_reports_docs_only_without_coverage_packs() -> Result<()> {
+        let receipt =
+            route_receipt("origin/main", "HEAD", vec!["docs/release notes.md".to_string()])?;
+        let summary = render_summary(
+            Path::new("target/receipts/ci route.json"),
+            Path::new("target/receipts/ci route.md"),
+            &receipt,
+        );
+
+        assert!(summary.contains("## Coverage Proof Packs"));
+        assert!(summary.contains("- none"));
+        assert!(summary.contains("`docs/release notes.md`"));
+        assert!(summary.contains("`codecov-patch-95`: docs-only change"));
+        assert!(
+            summary.contains(
+                "rtk cargo xtask ci route --base origin/main --head HEAD --receipt 'target/receipts/ci route.json' --summary 'target/receipts/ci route.md' --changed-file 'docs/release notes.md'"
+            )
+        );
+        Ok(())
+    }
+
+    #[test]
     fn ci_route_command_writes_receipt_from_explicit_changed_files() -> Result<()> {
         let temp = TempDir::new()?;
         let receipt_path = temp.path().join("ci-route.json");
+        let summary_path = temp.path().join("ci-route.md");
 
         run(CiRouteArgs {
             base: "origin/main".to_string(),
             head: "HEAD".to_string(),
             receipt: receipt_path.clone(),
+            summary: summary_path.clone(),
             changed_files: vec!["xtask\\src\\tasks\\supported_editor_inline_smoke.rs".to_string()],
         })?;
 
@@ -724,6 +879,14 @@ mod tests {
                 .and_then(Value::as_str)
                 .ok_or_else(|| eyre!("missing coverage pack"))?,
             "patch-coverage-xtask-supported-editor-inline-smoke"
+        );
+        let summary = fs::read_to_string(summary_path)?;
+        assert!(summary.contains("# CI Route Proof Packet"));
+        assert!(summary.contains("patch-coverage-xtask-supported-editor-inline-smoke"));
+        assert!(summary.contains("supported_editor_inline_smoke"));
+        assert!(summary.contains("rtk cargo xtask ci route --base origin/main --head HEAD"));
+        assert!(
+            summary.contains("--changed-file xtask/src/tasks/supported_editor_inline_smoke.rs")
         );
         Ok(())
     }
