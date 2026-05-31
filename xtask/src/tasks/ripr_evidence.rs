@@ -2875,4 +2875,48 @@ esac
         assert!(run_git(temp.path(), &["definitely-not-a-git-command"]).is_err());
         Ok(())
     }
+
+    #[test]
+    fn split_labels_splits_on_comma_semicolon_and_newline_with_trim() {
+        let labels = split_labels(" mutation , needs-ci-fix ;size/M\nsize/L ");
+        assert_eq!(labels, vec!["mutation", "needs-ci-fix", "size/M", "size/L"]);
+    }
+
+    #[test]
+    fn split_labels_drops_empty_and_whitespace_only_segments() {
+        // Trailing/leading separators and blank segments must not yield empty
+        // labels, otherwise downstream routing would match a "" label.
+        let labels = split_labels(",, mutation ;; \n ; ,");
+        assert_eq!(labels, vec!["mutation"]);
+        assert!(split_labels("   ").is_empty());
+        assert!(split_labels("").is_empty());
+    }
+
+    #[test]
+    fn normalize_labels_lowercases_dedupes_and_sorts() {
+        let input = vec!["Mutation".to_string(), "mutation".to_string(), "  CI  ".to_string()];
+        let normalized = normalize_labels(&input);
+        // case-folded, de-duplicated across cases, trimmed, and sorted.
+        assert_eq!(normalized, vec!["ci".to_string(), "mutation".to_string()]);
+    }
+
+    #[test]
+    fn normalize_labels_filters_blank_after_trim() {
+        let input = vec!["   ".to_string(), "\t".to_string(), "keep".to_string()];
+        assert_eq!(normalize_labels(&input), vec!["keep".to_string()]);
+    }
+
+    #[test]
+    fn merged_labels_unions_explicit_and_csv_then_normalizes() {
+        // Explicit labels are non-empty, so the env fallback path is not taken.
+        // Duplicates across the two sources collapse; output is folded and sorted.
+        let merged = merged_labels(&["Zeta".to_string()], Some("alpha, Zeta; BETA"));
+        assert_eq!(merged, vec!["alpha".to_string(), "beta".to_string(), "zeta".to_string()]);
+    }
+
+    #[test]
+    fn merged_labels_accepts_csv_only_without_explicit_labels() {
+        let merged = merged_labels(&[], Some("needs-ci-fix,needs-ci-fix"));
+        assert_eq!(merged, vec!["needs-ci-fix".to_string()]);
+    }
 }
