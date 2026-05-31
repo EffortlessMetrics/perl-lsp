@@ -1983,3 +1983,45 @@ fn valid_diagnostic_range(source: &str, range: (usize, usize)) -> Option<(usize,
     }
     Some((start, end))
 }
+
+/// Fix undefined loop-control label by dropping the label (PL410).
+///
+/// `next LABEL`, `last LABEL`, and `redo LABEL` statements die at runtime when
+/// the named label is not defined. The only mechanical fix is to drop the label
+/// so the statement targets the innermost enclosing loop.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((start, end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let snippet = &source[start..end];
+    let Some(op) = loop_control_op(snippet) else {
+        return Vec::new();
+    };
+
+    vec![CodeAction {
+        title: format!("Remove undefined label (use bare '{op}')"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start, end },
+                new_text: op.to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
+fn loop_control_op(snippet: &str) -> Option<&'static str> {
+    for op in ["next", "last", "redo"] {
+        if let Some(rest) = snippet.strip_prefix(op) {
+            if rest.starts_with(|c: char| c.is_whitespace()) {
+                return Some(op);
+            }
+        }
+    }
+    None
+}

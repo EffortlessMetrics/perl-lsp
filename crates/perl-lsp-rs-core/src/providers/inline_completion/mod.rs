@@ -223,7 +223,7 @@ impl InlineCompletionProvider {
 
         for item in &mut list.items {
             if item.range.is_none() && item_matches_fragment(item, fragment.text) {
-                item.range = Some(range.clone());
+                item.range = Some(range);
             }
         }
 
