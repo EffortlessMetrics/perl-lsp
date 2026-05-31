@@ -1614,11 +1614,23 @@ impl InlineCompletionProvider {
     }
 
     fn preferred_return_variable(&self, context: &SemanticInlineContext) -> Option<String> {
-        context
+        let self_variable = context
             .visible_variables
             .iter()
             .find(|variable| variable.is_scalar_self())
+            .map(VariableFact::as_perl_variable);
+
+        if is_constructor_sub(context.enclosing_sub.as_deref()) {
+            return self_variable
+                .or_else(|| context.visible_variables.first().map(VariableFact::as_perl_variable));
+        }
+
+        context
+            .visible_variables
+            .iter()
+            .find(|variable| variable.is_scalar() && !variable.is_scalar_self())
             .map(VariableFact::as_perl_variable)
+            .or(self_variable)
             .or_else(|| context.visible_variables.first().map(VariableFact::as_perl_variable))
     }
 
@@ -2117,6 +2129,10 @@ fn is_preferred_test_actual_name(name: &str) -> bool {
 
 fn is_preferred_test_expected_name(name: &str) -> bool {
     matches!(name, "expected" | "expected_result" | "want")
+}
+
+fn is_constructor_sub(name: Option<&str>) -> bool {
+    matches!(name, Some("new" | "BUILD"))
 }
 
 fn is_preferred_guard_condition_name(name: &str) -> bool {
@@ -4276,6 +4292,45 @@ mod tests {
 
         assert!(!completions.items.is_empty());
         assert!(completions.items.iter().any(|item| item.insert_text == "return $result;"));
+    }
+
+    #[test]
+    fn method_blank_line_prefers_domain_scalar_over_self() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let provider = InlineCompletionProvider::new();
+        let source =
+            "sub render {\n    my $self = shift;\n    my $result = $self->build_result;\n    \n}\n";
+        let completions = provider.get_inline_completions(source, 3, 4);
+        let first = completions.items.first().ok_or("expected return completion")?;
+
+        assert_eq!(first.insert_text, "return $result;");
+        assert!(
+            completions.items.iter().all(|item| item.insert_text != "return $self;"),
+            "non-constructor methods should not prefer returning receiver state over a closer scalar: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn constructor_return_context_still_prefers_self() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+
+        for constructor in ["new", "BUILD"] {
+            let source = format!(
+                "sub {constructor} {{\n    my $class = shift;\n    my $self = bless {{}}, $class;\n    my $result = $self;\n    return \n}}\n"
+            );
+            let character = "    return ".encode_utf16().count() as u32;
+            let completions = provider.get_inline_completions(&source, 4, character);
+            let first =
+                completions.items.first().ok_or("expected constructor return completion")?;
+
+            assert_eq!(
+                first.insert_text, "$self;",
+                "{constructor} should keep preferring the constructed receiver"
+            );
+        }
+        Ok(())
     }
 
     #[test]
