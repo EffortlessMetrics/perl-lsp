@@ -60,5 +60,58 @@ fn semantic_inline_next_edit_cli_writes_scaffold_receipt() -> Result<()> {
     assert!(boundary.contains("emit editor-visible next-edit suggestions"));
     assert!(boundary.contains("enable AI behavior"));
 
+    let missing_import = scaffold
+        .get("missing_import_next_action")
+        .and_then(Value::as_object)
+        .ok_or_else(|| anyhow!("missing_import_next_action receipt missing"))?;
+    assert_eq!(
+        missing_import
+            .get("reachable_candidate")
+            .and_then(|proof| proof.get("status"))
+            .and_then(Value::as_str),
+        Some("receipt_only")
+    );
+    assert_eq!(
+        missing_import
+            .get("reachable_candidate")
+            .and_then(|proof| proof.get("candidate"))
+            .and_then(|candidate| candidate.get("module"))
+            .and_then(Value::as_str),
+        Some("My::App")
+    );
+    assert_eq!(
+        missing_import
+            .get("reachable_candidate")
+            .and_then(|proof| proof.get("candidate"))
+            .and_then(|candidate| candidate.get("editorVisible"))
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        missing_import
+            .get("duplicate_import")
+            .and_then(|proof| proof.get("rejectionReasons"))
+            .and_then(Value::as_array)
+            .and_then(|reasons| reasons.first())
+            .and_then(Value::as_str),
+        Some("duplicate_import")
+    );
+    assert_eq!(
+        missing_import
+            .get("unreachable_module")
+            .and_then(|proof| proof.get("rejectionReasons"))
+            .and_then(Value::as_array)
+            .and_then(|reasons| reasons.first())
+            .and_then(Value::as_str),
+        Some("unreachable_module")
+    );
+    assert!(
+        missing_import
+            .get("accepted_document_text")
+            .and_then(Value::as_str)
+            .is_some_and(|text| text.contains("use My::App;\nmy $value"))
+    );
+    assert_eq!(missing_import.get("parse_stable").and_then(Value::as_bool), Some(true));
+
     Ok(())
 }

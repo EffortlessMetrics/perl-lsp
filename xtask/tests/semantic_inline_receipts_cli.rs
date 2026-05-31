@@ -266,6 +266,41 @@ fn semantic_inline_receipts_cli_embeds_quality_counters_when_available() -> Resu
         next_edit_scaffold.get("explicit_gate_status").and_then(Value::as_str),
         Some("runtime_provider_not_registered")
     );
+    assert_eq!(
+        next_edit_scaffold
+            .get("missing_import_next_action")
+            .and_then(|action| action.get("reachable_candidate_prepared"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("missing_import_next_action")
+            .and_then(|action| action.get("reachable_candidate_editor_visible"))
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("missing_import_next_action")
+            .and_then(|action| action.get("duplicate_import_rejected"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("missing_import_next_action")
+            .and_then(|action| action.get("unreachable_module_rejected"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("missing_import_next_action")
+            .and_then(|action| action.get("parse_stable"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
 
     Ok(())
 }
@@ -403,7 +438,8 @@ fn valid_next_edit_receipt_json() -> Value {
             "editor_visible_next_edit_suggestions",
             "missing_import_next_action",
             "optional_ai_candidate_source"
-        ]
+        ],
+        "missing_import_next_action": valid_missing_import_next_action_json()
     })
 }
 
@@ -431,6 +467,46 @@ fn next_edit_receipt_without_candidate_families_json() -> Value {
             "editor_visible_next_edit_suggestions",
             "missing_import_next_action",
             "optional_ai_candidate_source"
-        ]
+        ],
+        "missing_import_next_action": valid_missing_import_next_action_json()
+    })
+}
+
+fn valid_missing_import_next_action_json() -> Value {
+    json!({
+        "claim_boundary": "receipt-only missing-import next-action proof",
+        "reachable_candidate": {
+            "status": "receipt_only",
+            "candidate": {
+                "family": "missing_import",
+                "module": "My::App",
+                "reason": "reachable_module_from_effective_inc",
+                "edit": {
+                    "startByte": 26,
+                    "endByte": 26,
+                    "newText": "use My::App;\n"
+                },
+                "editorVisible": false
+            },
+            "rejectionReasons": []
+        },
+        "duplicate_import": {
+            "status": "receipt_only",
+            "rejectionReasons": ["duplicate_import"]
+        },
+        "unreachable_module": {
+            "status": "receipt_only",
+            "rejectionReasons": ["unreachable_module"]
+        },
+        "default_gate": {
+            "status": "disabled",
+            "rejectionReasons": ["gate_disabled"]
+        },
+        "explicit_gate": {
+            "status": "runtime_provider_not_registered",
+            "rejectionReasons": ["runtime_provider_not_registered"]
+        },
+        "accepted_document_text": "use strict;\nuse warnings;\nuse My::App;\nmy $value = My::App->new;\n",
+        "parse_stable": true
     })
 }

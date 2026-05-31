@@ -137,6 +137,19 @@ struct NextEditScaffoldSummary {
     explicit_gate_status: Option<String>,
     planned_candidate_families: Option<Vec<String>>,
     future_gated: Option<Vec<String>>,
+    missing_import_next_action: Option<MissingImportNextActionSummary>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct MissingImportNextActionSummary {
+    reachable_candidate_prepared: bool,
+    reachable_candidate_editor_visible: bool,
+    duplicate_import_rejected: bool,
+    unreachable_module_rejected: bool,
+    default_gate_disabled: bool,
+    explicit_gate_runtime_unregistered: bool,
+    parse_stable: bool,
 }
 
 pub fn run(receipt: PathBuf, quality_receipt: PathBuf, next_edit_receipt: PathBuf) -> Result<()> {
@@ -216,6 +229,7 @@ fn read_optional_next_edit_scaffold_summary(path: &Path) -> Result<NextEditScaff
             explicit_gate_status: None,
             planned_candidate_families: None,
             future_gated: None,
+            missing_import_next_action: None,
         });
     }
 
@@ -252,6 +266,7 @@ fn read_optional_next_edit_scaffold_summary(path: &Path) -> Result<NextEditScaff
             .map(ToString::to_string),
         planned_candidate_families: string_array_field(&scaffold, "planned_candidate_families")?,
         future_gated: string_array_field(&scaffold, "future_gated")?,
+        missing_import_next_action: Some(missing_import_next_action_summary(&scaffold)?),
     };
     validate_next_edit_scaffold_summary(&summary, &scaffold)?;
     Ok(summary)
@@ -351,8 +366,113 @@ fn validate_next_edit_scaffold_summary(
             bail!("next-edit scaffold receipt missing future-gated item `{required}`");
         }
     }
+    require_missing_import_next_action(scaffold)?;
 
     Ok(())
+}
+
+fn missing_import_next_action_summary(scaffold: &Value) -> Result<MissingImportNextActionSummary> {
+    let action = scaffold
+        .get("missing_import_next_action")
+        .ok_or_else(|| eyre!("next-edit scaffold receipt missing missing_import_next_action"))?;
+    let reachable_candidate = action.pointer("/reachable_candidate/candidate");
+    Ok(MissingImportNextActionSummary {
+        reachable_candidate_prepared: reachable_candidate.is_some(),
+        reachable_candidate_editor_visible: reachable_candidate
+            .and_then(|candidate| candidate.get("editorVisible"))
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+        duplicate_import_rejected: rejection_reason_present(
+            action,
+            "/duplicate_import/rejectionReasons",
+            "duplicate_import",
+        )?,
+        unreachable_module_rejected: rejection_reason_present(
+            action,
+            "/unreachable_module/rejectionReasons",
+            "unreachable_module",
+        )?,
+        default_gate_disabled: action.pointer("/default_gate/status").and_then(Value::as_str)
+            == Some("disabled"),
+        explicit_gate_runtime_unregistered: action
+            .pointer("/explicit_gate/status")
+            .and_then(Value::as_str)
+            == Some("runtime_provider_not_registered"),
+        parse_stable: action.get("parse_stable").and_then(Value::as_bool).unwrap_or(false),
+    })
+}
+
+fn require_missing_import_next_action(scaffold: &Value) -> Result<()> {
+    let action = scaffold
+        .get("missing_import_next_action")
+        .ok_or_else(|| eyre!("next-edit scaffold receipt missing missing_import_next_action"))?;
+    require_next_edit_value(
+        action.pointer("/reachable_candidate/status").and_then(Value::as_str),
+        "missing_import_next_action/reachable_candidate/status",
+        "receipt_only",
+    )?;
+    require_next_edit_value(
+        action.pointer("/reachable_candidate/candidate/family").and_then(Value::as_str),
+        "missing_import_next_action/reachable_candidate/candidate/family",
+        "missing_import",
+    )?;
+    require_next_edit_value(
+        action.pointer("/reachable_candidate/candidate/module").and_then(Value::as_str),
+        "missing_import_next_action/reachable_candidate/candidate/module",
+        "My::App",
+    )?;
+    require_next_edit_bool(
+        action.pointer("/reachable_candidate/candidate/editorVisible").and_then(Value::as_bool),
+        "missing_import_next_action/reachable_candidate/candidate/editorVisible",
+        false,
+    )?;
+    require_next_edit_value(
+        action.pointer("/reachable_candidate/candidate/edit/newText").and_then(Value::as_str),
+        "missing_import_next_action/reachable_candidate/candidate/edit/newText",
+        "use My::App;\n",
+    )?;
+    let accepted_text =
+        action.get("accepted_document_text").and_then(Value::as_str).ok_or_else(|| {
+            eyre!("next-edit scaffold receipt missing missing_import accepted_document_text")
+        })?;
+    if !accepted_text.contains("use My::App;\nmy $value = My::App->new;") {
+        bail!("missing-import next action accepted document text did not contain import");
+    }
+    if !rejection_reason_present(action, "/duplicate_import/rejectionReasons", "duplicate_import")?
+    {
+        bail!("missing-import next action did not reject duplicate import");
+    }
+    if !rejection_reason_present(
+        action,
+        "/unreachable_module/rejectionReasons",
+        "unreachable_module",
+    )? {
+        bail!("missing-import next action did not reject unreachable module");
+    }
+    require_next_edit_value(
+        action.pointer("/default_gate/status").and_then(Value::as_str),
+        "missing_import_next_action/default_gate/status",
+        "disabled",
+    )?;
+    require_next_edit_value(
+        action.pointer("/explicit_gate/status").and_then(Value::as_str),
+        "missing_import_next_action/explicit_gate/status",
+        "runtime_provider_not_registered",
+    )?;
+    require_next_edit_bool(
+        action.get("parse_stable").and_then(Value::as_bool),
+        "missing_import_next_action/parse_stable",
+        true,
+    )?;
+    Ok(())
+}
+
+fn rejection_reason_present(action: &Value, pointer: &str, expected: &str) -> Result<bool> {
+    let reasons = action
+        .pointer(pointer)
+        .and_then(Value::as_array)
+        .ok_or_else(|| eyre!("next-edit scaffold receipt `{pointer}` must be an array"))?;
+    Ok(reasons.iter().any(|reason| reason.as_str() == Some(expected)))
 }
 
 fn require_next_edit_value(actual: Option<&str>, field: &str, expected: &str) -> Result<()> {
@@ -795,6 +915,7 @@ mod tests {
             explicit_gate_status: None,
             planned_candidate_families: None,
             future_gated: None,
+            missing_import_next_action: None,
         }
     }
 
@@ -828,7 +949,47 @@ mod tests {
                 "editor_visible_next_edit_suggestions",
                 "missing_import_next_action",
                 "optional_ai_candidate_source"
-            ]
+            ],
+            "missing_import_next_action": valid_missing_import_next_action_json()
+        })
+    }
+
+    fn valid_missing_import_next_action_json() -> Value {
+        json!({
+            "claim_boundary": "receipt-only missing-import next-action proof",
+            "reachable_candidate": {
+                "status": "receipt_only",
+                "candidate": {
+                    "family": "missing_import",
+                    "module": "My::App",
+                    "reason": "reachable_module_from_effective_inc",
+                    "edit": {
+                        "startByte": 26,
+                        "endByte": 26,
+                        "newText": "use My::App;\n"
+                    },
+                    "editorVisible": false
+                },
+                "rejectionReasons": []
+            },
+            "duplicate_import": {
+                "status": "receipt_only",
+                "rejectionReasons": ["duplicate_import"]
+            },
+            "unreachable_module": {
+                "status": "receipt_only",
+                "rejectionReasons": ["unreachable_module"]
+            },
+            "default_gate": {
+                "status": "disabled",
+                "rejectionReasons": ["gate_disabled"]
+            },
+            "explicit_gate": {
+                "status": "runtime_provider_not_registered",
+                "rejectionReasons": ["runtime_provider_not_registered"]
+            },
+            "accepted_document_text": "use strict;\nuse warnings;\nuse My::App;\nmy $value = My::App->new;\n",
+            "parse_stable": true
         })
     }
 
@@ -1063,6 +1224,136 @@ mod tests {
             error.to_string().contains("ai_candidate_source_enabled"),
             "error should identify AI gate drift, got {error}"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_missing_import_drift() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold
+            .as_object_mut()
+            .ok_or_else(|| eyre!("test scaffold must be an object"))?
+            .remove("missing_import_next_action");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold without missing-import proof must fail");
+        };
+        assert!(
+            error.to_string().contains("missing_import_next_action"),
+            "error should identify missing missing-import proof, got {error}"
+        );
+
+        scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["reachable_candidate"]["candidate"]["editorVisible"] =
+            json!(true);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("editor-visible missing-import proof must fail");
+        };
+        assert!(
+            error.to_string().contains("editorVisible"),
+            "error should identify editor-visible missing-import drift, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_missing_import_field_drift() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["reachable_candidate"]["candidate"]["edit"]["newText"] =
+            json!("use Other::Module;\n");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("wrong missing-import edit text must fail");
+        };
+        assert!(
+            error.to_string().contains("candidate/edit/newText"),
+            "error should identify missing-import edit text drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["accepted_document_text"] =
+            json!("use strict;\nuse warnings;\nmy $value = My::App->new;\n");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("accepted text without inserted import must fail");
+        };
+        assert!(
+            error.to_string().contains("accepted document text"),
+            "error should identify missing accepted import drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["parse_stable"] = json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("parse-unstable missing-import proof must fail");
+        };
+        assert!(
+            error.to_string().contains("parse_stable"),
+            "error should identify parse-stability drift, got {error}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_missing_import_rejection_drift() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["duplicate_import"]["rejectionReasons"] = json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("duplicate import without rejection reason must fail");
+        };
+        assert!(
+            error.to_string().contains("duplicate import"),
+            "error should identify duplicate import rejection drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["unreachable_module"]["rejectionReasons"] =
+            json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("unreachable module without rejection reason must fail");
+        };
+        assert!(
+            error.to_string().contains("unreachable module"),
+            "error should identify unreachable module rejection drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["default_gate"]["status"] = json!("receipt_only");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("default gate status drift must fail");
+        };
+        assert!(
+            error.to_string().contains("default_gate/status"),
+            "error should identify default gate status drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["explicit_gate"]["status"] = json!("receipt_only");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("explicit gate status drift must fail");
+        };
+        assert!(
+            error.to_string().contains("explicit_gate/status"),
+            "error should identify explicit gate status drift, got {error}"
+        );
+
         Ok(())
     }
 

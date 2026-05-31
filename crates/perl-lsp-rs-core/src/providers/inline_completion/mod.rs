@@ -11,8 +11,10 @@ use serde::{Deserialize, Serialize};
 
 pub mod next_edit;
 pub use next_edit::{
+    MissingImportNextEditCandidate, MissingImportNextEditProof, MissingImportNextEditRequest,
     NextEditCandidateFamily, NextEditFeatureGate, NextEditGateSource, NextEditProvider,
-    NextEditRequest, NextEditResponse, NextEditSafetyPolicy, NextEditStatus, NextEditSuggestion,
+    NextEditRejectionReason, NextEditRequest, NextEditResponse, NextEditSafetyPolicy,
+    NextEditStatus, NextEditSuggestion, NextEditTextEdit,
 };
 
 const MAX_INLINE_COMPLETION_ITEMS: usize = 5;
