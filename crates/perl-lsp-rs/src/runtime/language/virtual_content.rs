@@ -207,7 +207,15 @@ fn collect_simple_pod_module_links(
 }
 
 fn is_simple_pod_module_target(target: &str) -> bool {
+    is_simple_package_pod_target(target) || is_supported_core_pragma_pod_target(target)
+}
+
+fn is_simple_package_pod_target(target: &str) -> bool {
     target.contains("::") && target.split("::").all(is_perl_module_segment)
+}
+
+fn is_supported_core_pragma_pod_target(target: &str) -> bool {
+    matches!(target, "strict" | "warnings")
 }
 
 fn is_perl_module_segment(segment: &str) -> bool {
@@ -536,6 +544,7 @@ Local::Doc - local docs
 =head1 DESCRIPTION
 
 See L<Zoo::Last>, L<Alpha::First>, L<Zoo::Last>, and L<Local::Doc>.
+Core pragma links L<strict> and L<warnings> are valid virtual perldoc targets.
 Ignore L</reset>, L<display|Beta::Skipped>, L<https://example.invalid>, and L<NotAModule>.
 
 =cut
@@ -547,7 +556,15 @@ my $non_pod = 'L<Code::Reference>';
 
         let links = workspace_pod_related_perldoc_uris("Local::Doc", source);
 
-        assert_eq!(links, vec!["perldoc://Alpha::First", "perldoc://Zoo::Last"]);
+        assert_eq!(
+            links,
+            vec![
+                "perldoc://Alpha::First",
+                "perldoc://Zoo::Last",
+                "perldoc://strict",
+                "perldoc://warnings"
+            ]
+        );
     }
 
     #[test]

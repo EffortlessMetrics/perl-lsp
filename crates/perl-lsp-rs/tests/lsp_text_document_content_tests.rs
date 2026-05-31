@@ -214,6 +214,7 @@ use Local::VirtualDoc;
 
 Local POD served from the workspace module file.
 See also L<Local::Dependency>, L<Local::Dependency>, L<Local::Helper>, and L<Local::VirtualDoc>.
+Core pragma docs L<strict> and L<warnings> should stay navigable.
 Ignore local sections such as L</reset> and labeled targets such as L<helper|Local::Skipped>.
 
 =head2 reset
@@ -250,7 +251,7 @@ Reset the local virtual document fixture.
     );
     assert!(
         text.contains(
-            "Related virtual perldoc:\n- perldoc://Local::Dependency\n- perldoc://Local::Helper"
+            "Related virtual perldoc:\n- perldoc://Local::Dependency\n- perldoc://Local::Helper\n- perldoc://strict\n- perldoc://warnings"
         ),
         "workspace POD module links should become sorted virtual perldoc links: {text}"
     );

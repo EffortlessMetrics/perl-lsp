@@ -79,7 +79,7 @@ const ROWS: &[MatrixRow] = &[
         proof: "`lsp_text_document_content_tests`; `lsp_virtual_content_tests`; `lsp_cap_snap`",
         owner: "`crates/perl-lsp-rs/src/runtime/language/virtual_content.rs`",
         priority: "P0",
-        notes: "`perldoc` is the current advertised virtual-document scheme; workspace POD output includes sorted related `perldoc://` links for simple `L<Module::Name>` references.",
+        notes: "`perldoc` is the current advertised virtual-document scheme; workspace POD output includes sorted related `perldoc://` links for simple `L<Module::Name>` references and supported core pragmas.",
     },
     MatrixRow {
         feature: "`workspace/textDocumentContent/refresh`",
