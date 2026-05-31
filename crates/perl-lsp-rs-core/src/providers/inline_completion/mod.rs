@@ -1722,6 +1722,11 @@ impl InlineCompletionProvider {
         matches!(context.style.test_framework, TestFramework::Test2V0 | TestFramework::TestMore)
     }
 
+    fn preferred_subtest_block(&self, context: &SemanticInlineContext) -> Option<String> {
+        self.supports_test_assertions(context)
+            .then(|| "'test description' => sub {\n    \n};".to_string())
+    }
+
     fn push_unique(&self, values: &mut Vec<String>, value: String) {
         if values.iter().any(|existing| existing == &value) {
             return;
@@ -2026,6 +2031,21 @@ impl InlineCandidateSource for TestCandidateSource {
                 InlineCompletionItem {
                     filter_text: Some(arguments.clone()),
                     insert_text: arguments,
+                    range: None,
+                    command: None,
+                },
+            );
+        }
+
+        if ends_with_keyword(prefix, "subtest ")
+            && let Some(block) = provider.preferred_subtest_block(semantic_context)
+        {
+            sink.push(
+                Self::SOURCE,
+                0,
+                InlineCompletionItem {
+                    filter_text: Some("subtest".into()),
+                    insert_text: block,
                     range: None,
                     command: None,
                 },
@@ -4260,6 +4280,57 @@ mod tests {
             .ok_or("expected is arguments from declared actual/expected variables")?;
         assert_eq!(item.insert_text, "$actual, $expected, 'test description');");
         Ok(())
+    }
+
+    #[test]
+    fn subtest_in_test_file_suggests_block() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Test2::V0;\n\nsubtest ";
+        let character = "subtest ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 2, character);
+
+        let item = completions
+            .items
+            .iter()
+            .find(|item| item.insert_text.starts_with("'test description' => sub"))
+            .ok_or("expected subtest block completion")?;
+        assert_eq!(item.insert_text, "'test description' => sub {\n    \n};");
+        assert_eq!(item.filter_text.as_deref(), Some("subtest"));
+        Ok(())
+    }
+
+    #[test]
+    fn subtest_in_test_more_file_suggests_block() {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Test::More;\n\nsubtest ";
+        let character = "subtest ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 2, character);
+
+        assert!(
+            completions
+                .items
+                .iter()
+                .any(|item| item.insert_text == "'test description' => sub {\n    \n};"),
+            "Test::More files should get subtest block completions: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn subtest_without_test_import_stays_quiet() {
+        let provider = InlineCompletionProvider::new();
+        let source = "subtest ";
+        let character = source.encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 0, character);
+
+        assert!(
+            completions
+                .items
+                .iter()
+                .all(|item| !item.insert_text.starts_with("'test description' => sub")),
+            "non-test files should not get subtest block completions: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
     }
 
     #[test]
