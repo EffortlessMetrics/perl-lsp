@@ -72,6 +72,28 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
             && !coverage_job.contains("ci:coverage"),
         "patch coverage must be a front-door PR gate, skip label-only churn, and not be label-gated"
     );
+    let route_step =
+        must_some(coverage_job.find("- name: Emit changed-file coverage route summary"));
+    let install_rust_step = must_some(coverage_job.find("- name: Install Rust"));
+    assert!(
+        route_step < install_rust_step,
+        "coverage routing must run before Rust/cargo setup so skipped PRs avoid expensive setup"
+    );
+    for setup_step in [
+        "Install Rust",
+        "Cache cargo dependencies",
+        "Install just",
+        "Install cargo-llvm-cov",
+        "Create legacy LSP fixtures (CI-only)",
+    ] {
+        let step = must_some(workflow_step(coverage_job, setup_step));
+        assert!(
+            step.contains(
+                "if: github.event_name != 'pull_request' || steps.coverage_route.outputs.coverage_required == 'true'"
+            ),
+            "coverage setup step `{setup_step}` must run only when routed coverage is required"
+        );
+    }
     let codecov_upload_start = must_some(coverage_job.find("- name: Upload coverage to Codecov"));
     let after_codecov_upload = &coverage_job[codecov_upload_start..];
     let codecov_upload_end =
