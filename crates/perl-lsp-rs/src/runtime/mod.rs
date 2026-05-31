@@ -447,6 +447,35 @@ impl LspServer {
         self.ai_inline_backend.lock().clone()
     }
 
+    /// Runtime feature gate for future next-edit suggestions.
+    ///
+    /// This boundary is intentionally default-off. Even when explicit config
+    /// enables the gate, the current runtime still reports that no editor-visible
+    /// next-edit provider is registered.
+    pub(crate) fn next_edit_feature_gate(
+        &self,
+    ) -> perl_lsp_rs_core::providers::inline_completion::NextEditFeatureGate {
+        if self.config.lock().next_edit.enabled {
+            perl_lsp_rs_core::providers::inline_completion::NextEditFeatureGate::explicit_enabled()
+        } else {
+            perl_lsp_rs_core::providers::inline_completion::NextEditFeatureGate::default()
+        }
+    }
+
+    /// Evaluate the next-edit scaffold against runtime configuration.
+    ///
+    /// The returned response is a boundary proof only; it never produces
+    /// editor-visible suggestions until a future provider is deliberately wired.
+    pub(crate) fn next_edit_scaffold_response(
+        &self,
+        context: perl_lsp_rs_core::providers::inline_completion::PreparedInlineCompletionContext,
+    ) -> perl_lsp_rs_core::providers::inline_completion::NextEditResponse {
+        let mut request =
+            perl_lsp_rs_core::providers::inline_completion::NextEditRequest::receipt_only(context);
+        request.gate = self.next_edit_feature_gate();
+        perl_lsp_rs_core::providers::inline_completion::NextEditProvider.suggest(&request)
+    }
+
     /// Refresh the AI inline-completion backend based on current configuration.
     ///
     /// When `ai_completion.enabled` is `true` and the API key environment variable
@@ -1102,6 +1131,21 @@ mod tests {
     use crate::features::formatting::FormatRange;
     use crate::runtime::types::workspace_folder_matches_doc_uri;
     use perl_lsp_rs_core::config::AiCompletionConfig;
+    use perl_lsp_rs_core::providers::inline_completion::{
+        NextEditGateSource, NextEditStatus, PreparedInlineCompletionContext,
+    };
+
+    fn next_edit_test_context() -> PreparedInlineCompletionContext {
+        PreparedInlineCompletionContext {
+            prefix: "use My::".to_string(),
+            current_line: "use My::".to_string(),
+            previous_non_empty_line: Some("use strict;".to_string()),
+            current_function: None,
+            current_package: Some("Demo".to_string()),
+            variables: vec!["$got".to_string()],
+            imports: vec!["strict".to_string(), "warnings".to_string()],
+        }
+    }
 
     #[test]
     fn workspace_folder_matching_supports_non_file_uri_schemes() {
@@ -1219,6 +1263,76 @@ mod tests {
             "doc outside all folders must not match any folder",
         );
         assert!(server.config_for_doc(&doc_uri).is_none());
+    }
+
+    #[test]
+    fn next_edit_runtime_boundary_defaults_disabled() {
+        let server = LspServer::new();
+
+        let gate = server.next_edit_feature_gate();
+        assert!(!gate.enabled);
+        assert_eq!(gate.source, NextEditGateSource::DefaultOff);
+
+        let response = server.next_edit_scaffold_response(next_edit_test_context());
+        assert_eq!(response.status, NextEditStatus::Disabled);
+        assert!(response.suggestions.is_empty());
+    }
+
+    #[test]
+    fn next_edit_runtime_boundary_honors_explicit_config_without_provider_registration() {
+        let server = LspServer::new();
+
+        server.handle_did_change_configuration(Some(json!({
+            "settings": {
+                "perl": {
+                    "nextEdit": {
+                        "enabled": true
+                    }
+                }
+            }
+        })));
+
+        let gate = server.next_edit_feature_gate();
+        assert!(gate.enabled);
+        assert_eq!(gate.source, NextEditGateSource::ExplicitConfig);
+
+        let response = server.next_edit_scaffold_response(next_edit_test_context());
+        assert_eq!(response.status, NextEditStatus::RuntimeProviderNotRegistered);
+        assert!(response.suggestions.is_empty());
+    }
+
+    #[test]
+    fn next_edit_runtime_boundary_can_be_disabled_after_explicit_config() {
+        let server = LspServer::new();
+
+        server.handle_did_change_configuration(Some(json!({
+            "settings": {
+                "perl": {
+                    "nextEdit": {
+                        "enabled": true
+                    }
+                }
+            }
+        })));
+        assert!(server.next_edit_feature_gate().enabled);
+
+        server.handle_did_change_configuration(Some(json!({
+            "settings": {
+                "perl": {
+                    "nextEdit": {
+                        "enabled": false
+                    }
+                }
+            }
+        })));
+
+        let gate = server.next_edit_feature_gate();
+        assert!(!gate.enabled);
+        assert_eq!(gate.source, NextEditGateSource::DefaultOff);
+
+        let response = server.next_edit_scaffold_response(next_edit_test_context());
+        assert_eq!(response.status, NextEditStatus::Disabled);
+        assert!(response.suggestions.is_empty());
     }
 
     #[test]

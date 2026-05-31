@@ -151,8 +151,22 @@ pub struct ServerConfig {
     /// Timeout in seconds for perltidy.
     pub perltidy_timeout_secs: u64,
 
+    /// Feature gate for future next-edit suggestions.
+    pub next_edit: NextEditConfig,
+
     /// AI-powered inline completion configuration.
     pub ai_completion: AiCompletionConfig,
+}
+
+/// Configuration for gated next-edit suggestions.
+///
+/// Disabled by default. Enabling this only opens the runtime boundary; no
+/// editor-visible next-edit provider is registered yet.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct NextEditConfig {
+    /// Whether the future next-edit runtime boundary is explicitly enabled.
+    pub enabled: bool,
 }
 
 /// Configuration for AI-powered inline completions.
@@ -254,6 +268,7 @@ impl Default for ServerConfig {
             perltidy_block_comment_indentation: Some(0),
             perltidy_extra_args: Vec::new(),
             perltidy_timeout_secs: 10,
+            next_edit: NextEditConfig::default(),
             ai_completion: AiCompletionConfig::default(),
         }
     }
@@ -300,6 +315,12 @@ impl ServerConfig {
             && let Some(enabled) = telemetry.get("enabled").and_then(|v| v.as_bool())
         {
             self.telemetry_enabled = enabled;
+        }
+
+        if let Some(next_edit) = settings.get("nextEdit")
+            && let Some(enabled) = next_edit.get("enabled").and_then(|v| v.as_bool())
+        {
+            self.next_edit.enabled = enabled;
         }
 
         if let Some(critic) = settings.get("perlcritic") {
@@ -859,6 +880,8 @@ pub struct ProjectConfig {
     pub features: ProjectFeaturesConfig,
     /// `[ai_completion]` section: AI completion settings.
     pub ai_completion: ProjectAiCompletionConfig,
+    /// `[next_edit]` section: gated next-edit settings.
+    pub next_edit: ProjectNextEditConfig,
     /// `[formatting]` section: native formatter and legacy adapter configuration.
     pub formatting: ProjectFormattingConfig,
     /// `[critic]` section: native critic and legacy adapter configuration.
@@ -931,6 +954,15 @@ pub struct ProjectAiCompletionConfig {
     pub model: Option<String>,
     /// Environment variable name for API key.
     pub api_key_env: Option<String>,
+}
+
+/// `[next_edit]` section of `.perl-lsp.toml`.
+#[non_exhaustive]
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(default)]
+pub struct ProjectNextEditConfig {
+    /// Whether the future next-edit runtime boundary is explicitly enabled.
+    pub enabled: Option<bool>,
 }
 
 /// `[formatting]` section of `.perl-lsp.toml`.
@@ -1067,6 +1099,9 @@ impl ProjectConfig {
         }
         if let Some(ref key_env) = self.ai_completion.api_key_env {
             config.ai_completion.api_key_env = key_env.clone();
+        }
+        if let Some(enabled) = self.next_edit.enabled {
+            config.next_edit.enabled = enabled;
         }
 
         // Apply formatting configuration
@@ -1352,6 +1387,29 @@ profile = "recommended"
     }
 
     #[test]
+    fn server_config_update_from_value_applies_next_edit_gate() -> TestResult {
+        let mut config = ServerConfig::default();
+        assert!(!config.next_edit.enabled);
+
+        config.update_from_value(&serde_json::json!({
+            "nextEdit": {
+                "enabled": true
+            }
+        }));
+
+        assert!(config.next_edit.enabled);
+
+        config.update_from_value(&serde_json::json!({
+            "nextEdit": {
+                "enabled": false
+            }
+        }));
+
+        assert!(!config.next_edit.enabled);
+        Ok(())
+    }
+
+    #[test]
     fn server_config_update_from_value_applies_formatting_and_ai_settings() -> TestResult {
         let mut config = ServerConfig::default();
 
@@ -1576,10 +1634,34 @@ profile = "recommended"
     }
 
     #[test]
+    fn project_config_applies_next_edit_gate() {
+        let mut config = ServerConfig::default();
+        let mut project = ProjectConfig::default();
+        project.next_edit.enabled = Some(true);
+
+        project.apply_to_server_config(&mut config);
+
+        assert!(config.next_edit.enabled);
+    }
+
+    #[test]
+    fn project_config_can_disable_next_edit_gate() {
+        let mut config = ServerConfig::default();
+        config.next_edit.enabled = true;
+        let mut project = ProjectConfig::default();
+        project.next_edit.enabled = Some(false);
+
+        project.apply_to_server_config(&mut config);
+
+        assert!(!config.next_edit.enabled);
+    }
+
+    #[test]
     fn apply_to_server_config_does_not_overwrite_unset_values() {
         let mut config = ServerConfig {
             perlcritic_enabled: true,
             inlay_hints_enabled: true,
+            next_edit: NextEditConfig { enabled: true },
             ..ServerConfig::default()
         };
         let project = ProjectConfig::default();
@@ -1588,6 +1670,7 @@ profile = "recommended"
 
         assert!(config.perlcritic_enabled);
         assert!(config.inlay_hints_enabled);
+        assert!(config.next_edit.enabled);
     }
 
     #[test]
