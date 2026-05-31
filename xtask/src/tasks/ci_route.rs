@@ -65,9 +65,13 @@ struct CoveragePack {
     files: Vec<String>,
     commands: Vec<String>,
     coverage_filters: Vec<String>,
+    #[serde(default = "default_lcov")]
+    lcov: bool,
 }
 
 const COVERAGE_PACKS_TOML: &str = include_str!("../../../.ci/coverage-packs.toml");
+const NON_LCOV_COVERAGE_SKIP_REASON: &str =
+    "non-LCOV CI policy/routing surface; covered by focused CI gates";
 
 const PREFLIGHT_PACK: ProofPack = ProofPack {
     id: "preflight",
@@ -206,10 +210,14 @@ fn route_receipt(base: &str, head: &str, changed_files: Vec<String>) -> Result<C
         route.skip("docker", "no docker or release workflow changed");
     }
 
-    let estimated_lem = route.estimated_lem();
-
-    let coverage_pack_selector: Vec<String> = route.coverage_pack_selector.into_iter().collect();
-    let coverage_proof_packs = coverage_proof_pack_receipts(&coverage_pack_selector)?;
+    let requested_coverage_pack_selector: Vec<String> =
+        route.coverage_pack_selector.iter().cloned().collect();
+    let (coverage_pack_selector, skipped_coverage_packs, coverage_proof_packs) =
+        coverage_proof_pack_selection(&requested_coverage_pack_selector)?;
+    for (pack, reason) in skipped_coverage_packs {
+        route.skip(pack, reason);
+    }
+    let estimated_lem = route.estimated_lem(coverage_pack_selector.len());
 
     Ok(CiRouteReceipt {
         schema_version: "ci-route.v1",
@@ -451,28 +459,46 @@ fn markdown_coverage_packs(markdown: &mut String, coverage_packs: &[CoverageProo
     }
 }
 
+#[cfg(test)]
 fn coverage_proof_pack_receipts(selector: &[String]) -> Result<Vec<CoverageProofPackReceipt>> {
+    let (_, _, proof_packs) = coverage_proof_pack_selection(selector)?;
+    Ok(proof_packs)
+}
+
+fn coverage_proof_pack_selection(
+    selector: &[String],
+) -> Result<(Vec<String>, BTreeMap<String, String>, Vec<CoverageProofPackReceipt>)> {
     let manifest = coverage_pack_manifest()?;
     let packs_by_id: BTreeMap<&str, &CoveragePack> =
         manifest.pack.iter().map(|pack| (pack.id.as_str(), pack)).collect();
-    selector
-        .iter()
-        .map(|pack_id| {
-            let Some(pack) = packs_by_id.get(pack_id.as_str()) else {
-                bail!("coverage pack `{pack_id}` is missing from .ci/coverage-packs.toml");
-            };
-            Ok(CoverageProofPackReceipt {
-                id: pack.id.clone(),
-                files: pack.files.clone(),
-                commands: pack.commands.clone(),
-                coverage_filters: pack.coverage_filters.clone(),
-            })
-        })
-        .collect()
+    let mut selected = Vec::new();
+    let mut skipped = BTreeMap::new();
+    let mut proof_packs = Vec::new();
+    for pack_id in selector {
+        let Some(pack) = packs_by_id.get(pack_id.as_str()) else {
+            bail!("coverage pack `{pack_id}` is missing from .ci/coverage-packs.toml");
+        };
+        if !pack.lcov {
+            skipped.insert(pack_id.clone(), NON_LCOV_COVERAGE_SKIP_REASON.to_string());
+            continue;
+        }
+        selected.push(pack_id.clone());
+        proof_packs.push(CoverageProofPackReceipt {
+            id: pack.id.clone(),
+            files: pack.files.clone(),
+            commands: pack.commands.clone(),
+            coverage_filters: pack.coverage_filters.clone(),
+        });
+    }
+    Ok((selected, skipped, proof_packs))
 }
 
 fn coverage_pack_manifest() -> Result<CoveragePackManifest> {
     parse_coverage_pack_manifest(COVERAGE_PACKS_TOML)
+}
+
+fn default_lcov() -> bool {
+    true
 }
 
 fn parse_coverage_pack_manifest(contents: &str) -> Result<CoveragePackManifest> {
@@ -523,9 +549,9 @@ impl RouteBuilder {
         self.coverage_pack_selector.insert(pack.into());
     }
 
-    fn estimated_lem(&self) -> u64 {
+    fn estimated_lem(&self, coverage_pack_count: usize) -> u64 {
         let pack_cost = u64::try_from(self.proof_packs.len()).unwrap_or(u64::MAX);
-        let coverage_cost = u64::try_from(self.coverage_pack_selector.len()).unwrap_or(u64::MAX);
+        let coverage_cost = u64::try_from(coverage_pack_count).unwrap_or(u64::MAX);
         2 + pack_cost.saturating_mul(3) + coverage_cost.saturating_mul(4)
     }
 }
@@ -614,24 +640,23 @@ mod tests {
     }
 
     #[test]
-    fn route_receipt_maps_ci_route_files_to_route_pack() -> Result<()> {
+    fn route_receipt_maps_ci_route_files_to_focused_non_lcov_route_pack() -> Result<()> {
         let receipt =
             route_receipt("origin/main", "HEAD", vec!["xtask/src/tasks/ci_route.rs".to_string()])?;
 
         assert_eq!(receipt.changed_surfaces, vec!["ci-routing"]);
         assert!(proof_pack_ids(&receipt).contains(&"ci-route-receipt"));
-        assert!(
-            receipt.coverage_pack_selector.iter().any(|pack| pack == "patch-coverage-ci-route")
+        assert!(receipt.coverage_pack_selector.is_empty());
+        assert!(receipt.coverage_proof_packs.is_empty());
+        assert_eq!(
+            receipt.skipped_by_policy.get("patch-coverage-ci-route").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
         );
-        assert!(receipt.coverage_proof_packs.iter().any(|pack| {
-            pack.id == "patch-coverage-ci-route"
-                && pack.commands.iter().any(|command| command.contains("ci_route"))
-        }));
         Ok(())
     }
 
     #[test]
-    fn ci_route_receipt_maps_ci_policy_tests_to_ci_policy_pack() -> Result<()> {
+    fn ci_route_receipt_maps_ci_policy_tests_to_focused_non_lcov_policy_pack() -> Result<()> {
         let receipt = route_receipt(
             "origin/main",
             "HEAD",
@@ -640,19 +665,11 @@ mod tests {
 
         assert_eq!(receipt.changed_surfaces, vec!["ci-policy"]);
         assert!(proof_pack_ids(&receipt).contains(&"ci-policy-focused"));
-        assert!(
-            receipt.coverage_pack_selector.iter().any(|pack| pack == "patch-coverage-ci-policy")
-        );
-        assert!(receipt.coverage_proof_packs.iter().any(|pack| {
-            pack.id == "patch-coverage-ci-policy"
-                && pack.commands.iter().any(|command| command.contains("quality_ci_wiring_policy"))
-        }));
-        assert!(
-            !receipt
-                .coverage_pack_selector
-                .iter()
-                .any(|pack| pack == "patch-coverage-rust-focused"),
-            "CI policy tests should not fall through to broad Rust coverage"
+        assert!(receipt.coverage_pack_selector.is_empty());
+        assert!(receipt.coverage_proof_packs.is_empty());
+        assert_eq!(
+            receipt.skipped_by_policy.get("patch-coverage-ci-policy").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
         );
         Ok(())
     }
@@ -848,25 +865,42 @@ mod tests {
             "patch-coverage-ci-route",
             "patch-coverage-rust-focused",
         ];
-        let proof_packs = coverage_proof_pack_receipts(
+        let (selected, skipped, proof_packs) = coverage_proof_pack_selection(
             &route_selectors.iter().map(|selector| (*selector).to_string()).collect::<Vec<_>>(),
         )?;
-        assert_eq!(proof_packs.len(), route_selectors.len());
-        let ci_policy_pack = proof_packs
+        assert_eq!(
+            selected,
+            vec![
+                "patch-coverage-xtask-semantic-inline",
+                "patch-coverage-xtask-supported-editor-inline-smoke",
+                "patch-coverage-inline-core",
+                "patch-coverage-ux-scenario",
+                "patch-coverage-rust-focused",
+            ]
+        );
+        assert_eq!(
+            skipped.get("patch-coverage-ci-policy").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        assert_eq!(
+            skipped.get("patch-coverage-ci-route").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        let inline_core_pack = proof_packs
             .iter()
-            .find(|pack| pack.id == "patch-coverage-ci-policy")
-            .ok_or_else(|| eyre!("missing CI policy coverage pack"))?;
+            .find(|pack| pack.id == "patch-coverage-inline-core")
+            .ok_or_else(|| eyre!("missing inline core coverage pack"))?;
         assert!(
-            ci_policy_pack
+            inline_core_pack
                 .files
                 .iter()
-                .any(|file| { file == "xtask/tests/quality_ci_wiring_policy.rs" })
+                .any(|file| { file == "crates/perl-lsp-rs-core/src/providers/inline_completion/" })
         );
         assert!(
-            ci_policy_pack
+            inline_core_pack
                 .commands
                 .iter()
-                .any(|command| { command.contains("quality_gate_patch_coverage_cli_policy") })
+                .any(|command| { command.contains("inline-completion-quality") })
         );
         Ok(())
     }
