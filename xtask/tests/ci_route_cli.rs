@@ -182,3 +182,59 @@ fn ci_route_cli_skips_non_lcov_policy_packs_from_codecov_coverage_receipt() -> R
     assert!(summary.contains("- none"));
     Ok(())
 }
+
+#[test]
+fn ci_route_cli_reports_lcov_pack_that_only_matched_test_files() -> Result<()> {
+    let temp = TempDir::new()?;
+    let receipt = temp.path().join("ci-route.json");
+    let summary = temp.path().join("ci-route.md");
+
+    cargo_bin_cmd!("xtask")
+        .args([
+            "ci",
+            "route",
+            "--base",
+            "origin/main",
+            "--head",
+            "HEAD",
+            "--receipt",
+            receipt.to_str().ok_or_else(|| anyhow!("invalid ci route receipt path"))?,
+            "--summary",
+            summary.to_str().ok_or_else(|| anyhow!("invalid ci route summary path"))?,
+            "--changed-file",
+            "xtask/tests/semantic_inline_receipts_cli.rs",
+        ])
+        .assert()
+        .success();
+
+    let route: Value = serde_json::from_str(&std::fs::read_to_string(receipt)?)?;
+    assert_eq!(
+        route.pointer("/changed_surfaces/0").and_then(Value::as_str),
+        Some("xtask-semantic-inline-receipts")
+    );
+    assert!(
+        route.get("required_proof_packs").and_then(Value::as_array).is_some_and(|packs| packs
+            .iter()
+            .any(|pack| {
+                pack.get("id").and_then(Value::as_str) == Some("xtask-semantic-inline-receipts")
+            })),
+        "test-only LCOV matches still need focused proof packs"
+    );
+    assert!(
+        route.get("coverage_pack_selector").and_then(Value::as_array).is_some_and(Vec::is_empty),
+        "test-only LCOV matches must not be selected for Codecov LCOV upload"
+    );
+    assert_eq!(
+        route
+            .pointer("/skipped_by_policy/patch-coverage-xtask-semantic-inline")
+            .and_then(Value::as_str),
+        Some("LCOV coverage pack matched only non-source files; covered by focused CI gates")
+    );
+    let summary = fs::read_to_string(summary)?;
+    assert!(summary.contains(
+        "`patch-coverage-xtask-semantic-inline`: LCOV coverage pack matched only non-source files"
+    ));
+    assert!(summary.contains("## Coverage Proof Packs"));
+    assert!(summary.contains("- none"));
+    Ok(())
+}

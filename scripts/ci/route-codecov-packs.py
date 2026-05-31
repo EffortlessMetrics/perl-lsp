@@ -17,6 +17,8 @@ except ModuleNotFoundError:  # pragma: no cover - CI uses Python 3.11+.
 
 
 FALLBACK_PACK_ID = "patch-coverage-rust-focused"
+NON_LCOV_SKIP_REASON = "non-LCOV CI policy/routing surface; covered by focused CI gates"
+NON_SOURCE_LCOV_SKIP_REASON = "LCOV coverage pack matched only non-source files; covered by focused CI gates"
 
 
 def parse_args() -> argparse.Namespace:
@@ -94,6 +96,19 @@ def non_lcov_matches(packs: list[dict[str, object]], paths: list[str]) -> list[d
     ]
 
 
+def lcov_matches_without_source(
+    packs: list[dict[str, object]], paths: list[str]
+) -> list[dict[str, object]]:
+    return [
+        pack
+        for pack in packs
+        if pack.get("id") != FALLBACK_PACK_ID
+        and is_lcov_pack(pack)
+        and pack_matches(pack, paths)
+        and not pack_matches_lcov_source(pack, paths)
+    ]
+
+
 def selected_packs(packs: list[dict[str, object]], paths: list[str]) -> list[dict[str, object]]:
     fallback = next((pack for pack in packs if pack.get("id") == FALLBACK_PACK_ID), None)
     selected = [
@@ -151,9 +166,14 @@ def main() -> int:
     coverage_packs = [normalize_pack(pack) for pack in selected_packs(packs, paths)]
     coverage_pack_ids = [pack["id"] for pack in coverage_packs]
     skipped_by_policy = {
-        str(pack.get("id", "")): "non-LCOV CI policy/routing surface; covered by focused CI gates"
-        for pack in non_lcov_matches(packs, paths)
+        str(pack.get("id", "")): NON_LCOV_SKIP_REASON for pack in non_lcov_matches(packs, paths)
     }
+    skipped_by_policy.update(
+        {
+            str(pack.get("id", "")): NON_SOURCE_LCOV_SKIP_REASON
+            for pack in lcov_matches_without_source(packs, paths)
+        }
+    )
     receipt = {
         "schema_version": "ci_route.v1",
         "provider_action": "changed_file_proof_routing",

@@ -72,6 +72,8 @@ struct CoveragePack {
 const COVERAGE_PACKS_TOML: &str = include_str!("../../../.ci/coverage-packs.toml");
 const NON_LCOV_COVERAGE_SKIP_REASON: &str =
     "non-LCOV CI policy/routing surface; covered by focused CI gates";
+const NON_SOURCE_LCOV_COVERAGE_SKIP_REASON: &str =
+    "LCOV coverage pack matched only non-source files; covered by focused CI gates";
 
 const PREFLIGHT_PACK: ProofPack = ProofPack {
     id: "preflight",
@@ -213,7 +215,7 @@ fn route_receipt(base: &str, head: &str, changed_files: Vec<String>) -> Result<C
     let requested_coverage_pack_selector: Vec<String> =
         route.coverage_pack_selector.iter().cloned().collect();
     let (coverage_pack_selector, skipped_coverage_packs, coverage_proof_packs) =
-        coverage_proof_pack_selection(&requested_coverage_pack_selector)?;
+        coverage_proof_pack_selection(&requested_coverage_pack_selector, &changed_files)?;
     for (pack, reason) in skipped_coverage_packs {
         route.skip(pack, reason);
     }
@@ -461,12 +463,21 @@ fn markdown_coverage_packs(markdown: &mut String, coverage_packs: &[CoverageProo
 
 #[cfg(test)]
 fn coverage_proof_pack_receipts(selector: &[String]) -> Result<Vec<CoverageProofPackReceipt>> {
-    let (_, _, proof_packs) = coverage_proof_pack_selection(selector)?;
+    let manifest = coverage_pack_manifest()?;
+    let changed_files: Vec<String> = manifest
+        .pack
+        .iter()
+        .filter(|pack| selector.iter().any(|selected| selected == &pack.id))
+        .flat_map(|pack| pack.files.iter().cloned())
+        .filter(|path| is_lcov_source_path(path))
+        .collect();
+    let (_, _, proof_packs) = coverage_proof_pack_selection(selector, &changed_files)?;
     Ok(proof_packs)
 }
 
 fn coverage_proof_pack_selection(
     selector: &[String],
+    changed_files: &[String],
 ) -> Result<(Vec<String>, BTreeMap<String, String>, Vec<CoverageProofPackReceipt>)> {
     let manifest = coverage_pack_manifest()?;
     let packs_by_id: BTreeMap<&str, &CoveragePack> =
@@ -482,6 +493,10 @@ fn coverage_proof_pack_selection(
             skipped.insert(pack_id.clone(), NON_LCOV_COVERAGE_SKIP_REASON.to_string());
             continue;
         }
+        if !pack_matches_lcov_source(pack, changed_files) {
+            skipped.insert(pack_id.clone(), NON_SOURCE_LCOV_COVERAGE_SKIP_REASON.to_string());
+            continue;
+        }
         selected.push(pack_id.clone());
         proof_packs.push(CoverageProofPackReceipt {
             id: pack.id.clone(),
@@ -491,6 +506,31 @@ fn coverage_proof_pack_selection(
         });
     }
     Ok((selected, skipped, proof_packs))
+}
+
+fn pack_matches_lcov_source(pack: &CoveragePack, paths: &[String]) -> bool {
+    paths.iter().any(|path| {
+        is_lcov_source_path(path)
+            && pack.files.iter().any(|pattern| matches_coverage_pattern(path, pattern))
+    })
+}
+
+fn is_lcov_source_path(path: &str) -> bool {
+    path.ends_with(".rs")
+        && !path.starts_with("xtask/tests/")
+        && !path.contains("/tests/")
+        && (path.starts_with("xtask/src/") || path.starts_with("crates/"))
+}
+
+fn matches_coverage_pattern(path: &str, pattern: &str) -> bool {
+    let normalized_pattern = pattern.replace('\\', "/");
+    if let Some(suffix) = normalized_pattern.strip_prefix("*.") {
+        return path.ends_with(&format!(".{suffix}"));
+    }
+    if normalized_pattern.ends_with('/') {
+        return path.starts_with(&normalized_pattern);
+    }
+    path == normalized_pattern || path.starts_with(&normalized_pattern)
 }
 
 fn coverage_pack_manifest() -> Result<CoveragePackManifest> {
@@ -865,8 +905,15 @@ mod tests {
             "patch-coverage-ci-route",
             "patch-coverage-rust-focused",
         ];
+        let changed_files = vec![
+            "xtask/src/tasks/semantic_inline_receipts.rs".to_string(),
+            "xtask/src/tasks/supported_editor_inline_smoke.rs".to_string(),
+            "crates/perl-lsp-rs-core/src/providers/inline_completion/engine.rs".to_string(),
+            "crates/perl-parser/src/lib.rs".to_string(),
+        ];
         let (selected, skipped, proof_packs) = coverage_proof_pack_selection(
             &route_selectors.iter().map(|selector| (*selector).to_string()).collect::<Vec<_>>(),
+            &changed_files,
         )?;
         assert_eq!(
             selected,
@@ -874,7 +921,6 @@ mod tests {
                 "patch-coverage-xtask-semantic-inline",
                 "patch-coverage-xtask-supported-editor-inline-smoke",
                 "patch-coverage-inline-core",
-                "patch-coverage-ux-scenario",
                 "patch-coverage-rust-focused",
             ]
         );
@@ -885,6 +931,10 @@ mod tests {
         assert_eq!(
             skipped.get("patch-coverage-ci-route").map(String::as_str),
             Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        assert_eq!(
+            skipped.get("patch-coverage-ux-scenario").map(String::as_str),
+            Some(NON_SOURCE_LCOV_COVERAGE_SKIP_REASON)
         );
         let inline_core_pack = proof_packs
             .iter()
@@ -901,6 +951,28 @@ mod tests {
                 .commands
                 .iter()
                 .any(|command| { command.contains("inline-completion-quality") })
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_receipt_skips_lcov_pack_when_only_matching_test_file_changed() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec!["xtask/tests/semantic_inline_receipts_cli.rs".to_string()],
+        )?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["xtask-semantic-inline-receipts"]);
+        assert!(proof_pack_ids(&receipt).contains(&"xtask-semantic-inline-receipts"));
+        assert!(receipt.coverage_pack_selector.is_empty());
+        assert!(receipt.coverage_proof_packs.is_empty());
+        assert_eq!(
+            receipt
+                .skipped_by_policy
+                .get("patch-coverage-xtask-semantic-inline")
+                .map(String::as_str),
+            Some(NON_SOURCE_LCOV_COVERAGE_SKIP_REASON)
         );
         Ok(())
     }
