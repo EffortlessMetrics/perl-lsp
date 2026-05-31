@@ -66,6 +66,7 @@ coverage_filters = [
 
 [[pack]]
 id = "patch-coverage-ci-policy"
+lcov = false
 files = [
   ".github/workflows/",
   ".ci/",
@@ -89,6 +90,7 @@ coverage_filters = [
 
 [[pack]]
 id = "patch-coverage-ci-route"
+lcov = false
 files = [
   "xtask/src/tasks/ci_route.rs",
   "xtask/tests/ci_route_cli.rs",

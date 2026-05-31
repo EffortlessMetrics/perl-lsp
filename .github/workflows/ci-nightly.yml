@@ -478,6 +478,12 @@ jobs:
             --summary target/receipts/quality/ci-route.md
           coverage_required="$(python3 -c 'import json; from pathlib import Path; route = json.loads(Path("target/receipts/quality/ci-route.json").read_text(encoding="utf-8")); print("true" if route.get("coverage_proof_packs") else "false")')"
           echo "coverage_required=$coverage_required" >> "$GITHUB_OUTPUT"
+          if [ "$coverage_required" != "true" ]; then
+            printf '# Patch Coverage Proof\n\n- decision: `skipped-by-policy`\n- reason: changed-file routing selected no LCOV coverage proof packs\n' \
+              > target/receipts/quality/quality-gate-coverage.md
+            printf '{"schema_version":"quality_gate.v1","mode":"enforce-patch-coverage","decision":"skipped-by-policy","reason":"changed-file routing selected no LCOV coverage proof packs"}\n' \
+              > target/receipts/quality/quality-gate-coverage.json
+          fi
 
       - name: Run routed PR coverage proof
         if: github.event_name == 'pull_request' && steps.coverage_route.outputs.coverage_required == 'true'
@@ -491,7 +497,7 @@ jobs:
           just coverage-proof-routed "origin/$base_ref" "HEAD"
 
       - name: Run workspace coverage proof
-        if: github.event_name != 'pull_request' || steps.coverage_route.outputs.coverage_required != 'true'
+        if: github.event_name != 'pull_request'
         env:
           BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}
           RUSTFLAGS: "-Cdebuginfo=0"
@@ -518,6 +524,7 @@ jobs:
           fi
 
       - name: Upload coverage to Codecov
+        if: github.event_name != 'pull_request' || steps.coverage_route.outputs.coverage_required == 'true'
         uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354  # v6.0.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

@@ -300,9 +300,9 @@ PRs with coverage packs. The routed proof generates focused LCOV from
 `cargo xtask quality-gate --mode enforce-patch-coverage`, appends
 `target/receipts/quality/ci-route.md` and
 `target/receipts/quality/quality-gate-coverage.md` to the GitHub summary, and
-uploads required coverage proof artifacts. Routes without a coverage pack fall
-back to the broader workspace proof until the external Codecov status can be
-made route-conditional safely.
+uploads required coverage proof artifacts. On PRs, routes without an LCOV
+coverage pack are recorded as `skipped-by-policy`; scheduled and manual runs
+remain responsible for the broader workspace proof.
 
 Scheduled and manually dispatched coverage jobs still run
 `just coverage-proof <base>` to generate the broader workspace library plus

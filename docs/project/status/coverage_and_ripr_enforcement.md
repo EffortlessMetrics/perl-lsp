@@ -19,8 +19,9 @@ The proof lane is in transition from measurement to enforcement:
   processing failures through `fail_ci_if_error: true`
 - PR patch coverage is routed by changed surface through `cargo xtask ci route`;
   code routes run the focused coverage pack selected from
-  `.ci/coverage-packs.toml`, while routes without a coverage pack fall back to
-  the broader workspace proof so the required Codecov status is still produced
+  `.ci/coverage-packs.toml`, while PR routes without an LCOV coverage pack are
+  recorded as `skipped-by-policy` instead of falling back to broad workspace
+  coverage
 - `codecov/patch` must complete and pass after Codecov processes the uploaded
   LCOV
 - generated quality-gate receipts are freshness-checked for patch, new-RIPR,

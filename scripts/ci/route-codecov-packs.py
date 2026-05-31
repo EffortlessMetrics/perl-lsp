@@ -80,17 +80,34 @@ def pack_matches_lcov_source(pack: dict[str, object], paths: list[str]) -> bool:
     )
 
 
+def is_lcov_pack(pack: dict[str, object]) -> bool:
+    return pack.get("lcov") is not False
+
+
+def non_lcov_matches(packs: list[dict[str, object]], paths: list[str]) -> list[dict[str, object]]:
+    return [
+        pack
+        for pack in packs
+        if pack.get("id") != FALLBACK_PACK_ID
+        and not is_lcov_pack(pack)
+        and pack_matches(pack, paths)
+    ]
+
+
 def selected_packs(packs: list[dict[str, object]], paths: list[str]) -> list[dict[str, object]]:
     fallback = next((pack for pack in packs if pack.get("id") == FALLBACK_PACK_ID), None)
     selected = [
         pack
         for pack in packs
         if pack.get("id") != FALLBACK_PACK_ID
+        and is_lcov_pack(pack)
         and pack_matches(pack, paths)
         and pack_matches_lcov_source(pack, paths)
     ]
     if selected:
         return selected
+    if non_lcov_matches(packs, paths):
+        return []
     if fallback is not None and any(is_lcov_source_path(path) for path in paths):
         return [fallback]
     return []
@@ -119,6 +136,11 @@ def write_summary(path: Path, receipt: dict[str, object]) -> None:
                 handle.write(f"  - `{pack['id']}`\n")
         else:
             handle.write("- coverage proof packs: skipped-by-policy\n")
+            skipped = receipt.get("skipped_by_policy") or {}
+            if skipped:
+                handle.write("- skipped proof packs:\n")
+                for pack_id, reason in skipped.items():
+                    handle.write(f"  - `{pack_id}`: {reason}\n")
 
 
 def main() -> int:
@@ -128,6 +150,10 @@ def main() -> int:
     paths = changed_files(args.base, args.head)
     coverage_packs = [normalize_pack(pack) for pack in selected_packs(packs, paths)]
     coverage_pack_ids = [pack["id"] for pack in coverage_packs]
+    skipped_by_policy = {
+        str(pack.get("id", "")): "non-LCOV CI policy/routing surface; covered by focused CI gates"
+        for pack in non_lcov_matches(packs, paths)
+    }
     receipt = {
         "schema_version": "ci_route.v1",
         "provider_action": "changed_file_proof_routing",
@@ -137,7 +163,7 @@ def main() -> int:
         "changed_files": paths,
         "changed_surfaces": coverage_pack_ids,
         "required_proof_packs": [],
-        "skipped_by_policy": {},
+        "skipped_by_policy": skipped_by_policy,
         "coverage_pack_selector": coverage_pack_ids,
         "coverage_proof_packs": coverage_packs,
         "estimated_lem": 1,
