@@ -1539,9 +1539,40 @@ fn verify_revision(repo: &Path, rev: &str) -> Result<()> {
 
 fn changed_files(repo: &Path, base: &str, head: &str) -> Result<Vec<String>> {
     let range = format!("{base}...{head}");
+    // A shallow clone (Claude Code on the web, default Actions checkout) has no
+    // common history, so `base...head` has no merge base and git diff fails with
+    // an opaque message. Attach actionable guidance as context while preserving
+    // the underlying git error as the cause; CI is unaffected (ripr.yml uses
+    // fetch-depth: 0).
     let output =
-        run_git_output(repo, &["diff", "--name-only", "--diff-filter=ACMR", range.as_str()])?;
+        run_git_output(repo, &["diff", "--name-only", "--diff-filter=ACMR", range.as_str()])
+            .with_context(|| merge_base_failure_guidance(base, head, is_shallow_clone(repo)))?;
     Ok(output.lines().map(str::trim).filter(|line| !line.is_empty()).map(str::to_string).collect())
+}
+
+fn is_shallow_clone(repo: &Path) -> bool {
+    run_git_output(repo, &["rev-parse", "--is-shallow-repository"])
+        .map(|out| out.trim() == "true")
+        .unwrap_or(false)
+}
+
+fn merge_base_failure_guidance(base: &str, head: &str, shallow: bool) -> String {
+    let mut message =
+        format!("cannot compute diff range `{base}...{head}`: no merge base between them.");
+    if shallow {
+        message.push_str(&format!(
+            " This checkout is a shallow clone, so `{base}` and `{head}` share no common history. \
+             Deepen the clone before running diff-scoped RIPR locally, e.g. \
+             `git fetch --unshallow` or `git fetch --deepen=200 origin {base}`. \
+             CI is unaffected: the RIPR workflow checks out with fetch-depth: 0."
+        ));
+    } else {
+        message.push_str(&format!(
+            " Ensure `{base}` is fetched and shares history with `{head}`, \
+             e.g. `git fetch origin {base}`."
+        ));
+    }
+    message
 }
 
 fn write_pr_diff(repo: &Path, base: &str, head: &str) -> Result<()> {
@@ -2873,6 +2904,53 @@ esac
         let temp = tempfile::tempdir()?;
 
         assert!(run_git(temp.path(), &["definitely-not-a-git-command"]).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn merge_base_guidance_points_to_unshallow_for_shallow_clone() {
+        let message = merge_base_failure_guidance("origin/main", "HEAD", true);
+        assert!(message.contains("origin/main...HEAD"), "range echoed: {message}");
+        assert!(message.contains("no merge base"), "diagnosis: {message}");
+        assert!(message.contains("shallow clone"), "shallow cause: {message}");
+        assert!(message.contains("git fetch --unshallow"), "remedy: {message}");
+        assert!(message.contains("fetch-depth: 0"), "CI note: {message}");
+    }
+
+    #[test]
+    fn merge_base_guidance_suggests_fetch_for_non_shallow() {
+        let message = merge_base_failure_guidance("origin/master", "HEAD", false);
+        assert!(message.contains("no merge base"), "diagnosis: {message}");
+        assert!(!message.contains("shallow"), "must not blame shallow: {message}");
+        assert!(message.contains("git fetch origin origin/master"), "fetch remedy: {message}");
+    }
+
+    #[test]
+    fn changed_files_reports_missing_merge_base_with_guidance() -> Result<()> {
+        // The workspace root is a real git repo; a bogus base has no merge base
+        // with HEAD, so changed_files must bail with the actionable guidance
+        // instead of propagating a raw git failure.
+        let repo = repo_root()?;
+        match changed_files(&repo, "ripr-no-such-base-xyz", "HEAD") {
+            Ok(files) => Err(eyre!("expected missing-merge-base error, got {files:?}")),
+            Err(err) => {
+                let message = format!("{err:#}");
+                assert!(message.contains("no merge base"), "guidance surfaced: {message}");
+                Ok(())
+            }
+        }
+    }
+
+    #[test]
+    fn changed_files_succeeds_for_valid_range() -> Result<()> {
+        // The workspace root is a real git repo; `HEAD...HEAD` is a valid range
+        // with an empty symmetric diff, exercising the success path.
+        let repo = repo_root()?;
+        let files = changed_files(&repo, "HEAD", "HEAD")?;
+        assert!(files.is_empty(), "HEAD...HEAD has no changed files: {files:?}");
+        // Exercise the shallow probe; its value is environment-dependent, so we
+        // only assert it returns without error.
+        let _ = is_shallow_clone(&repo);
         Ok(())
     }
 
