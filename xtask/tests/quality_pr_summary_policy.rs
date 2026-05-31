@@ -85,8 +85,12 @@ fn pull_request_template_has_quality_gate_repair_packet_fields() -> TestResult {
     let template = fs::read_to_string(root.join(".github/PULL_REQUEST_TEMPLATE.md"))?;
 
     for required in [
+        "## Objective",
         "## Quality Gates",
         "target/receipts/quality/quality-gate.md",
+        "## Claim Boundary",
+        "## Non-goals",
+        "## Local Proof Commands",
         "new RIPR gaps:",
         "total RIPR+ gaps:",
         "patch coverage:",
@@ -95,6 +99,9 @@ fn pull_request_template_has_quality_gate_repair_packet_fields() -> TestResult {
         "exception status:",
         "local verify command:",
         "receipt command:",
+        "## RIPR / Coverage Effect",
+        "## Cleanup Performed",
+        "## Remaining Work",
     ] {
         assert!(template.contains(required), "PR template missing `{required}`");
     }
