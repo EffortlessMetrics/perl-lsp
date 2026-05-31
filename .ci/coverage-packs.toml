@@ -72,11 +72,14 @@ files = [
   ".github/workflows/",
   ".ci/",
   "policy/",
+  "scripts/ci/ci_classify.py",
+  "scripts/ci/test_ci_classify.py",
   "xtask/tests/codecov_patch_gate_policy.rs",
   "xtask/tests/quality_ci_wiring_policy.rs",
   "xtask/tests/quality_gate_patch_coverage_cli_policy.rs",
 ]
 commands = [
+  "python -m unittest scripts/ci/test_ci_classify.py",
   "cargo xtask workflow-trigger-lint --policy .ci/policies/required-checks.toml --receipt target/receipts/workflow-trigger-lint.json",
   "cargo test -p xtask --test codecov_patch_gate_policy --profile agent --locked -- --nocapture",
   "cargo test -p xtask --test quality_ci_wiring_policy --profile agent --locked -- --nocapture",

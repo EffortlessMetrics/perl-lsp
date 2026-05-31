@@ -133,6 +133,48 @@ fn coverage_pack_manifest_declares_supported_editor_pack() -> Result<()> {
 }
 
 #[test]
+fn coverage_pack_manifest_declares_ci_policy_pack_owns_classifier() -> Result<()> {
+    let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(PathBuf::from)
+        .ok_or_else(|| anyhow!("xtask manifest path has no parent"))?
+        .join(".ci/coverage-packs.toml");
+    let manifest: toml::Value = toml::from_str(&fs::read_to_string(manifest_path)?)?;
+    let packs = manifest
+        .get("pack")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| anyhow!("coverage pack manifest must contain pack array"))?;
+    let pack = packs
+        .iter()
+        .find(|pack| {
+            pack.get("id").and_then(toml::Value::as_str) == Some("patch-coverage-ci-policy")
+        })
+        .ok_or_else(|| anyhow!("missing ci policy coverage pack"))?;
+    let files = pack
+        .get("files")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| anyhow!("coverage pack files must be an array"))?;
+    let commands = pack
+        .get("commands")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| anyhow!("coverage pack commands must be an array"))?;
+
+    assert!(
+        files
+            .iter()
+            .filter_map(toml::Value::as_str)
+            .any(|value| value == "scripts/ci/ci_classify.py")
+    );
+    assert!(
+        commands
+            .iter()
+            .filter_map(toml::Value::as_str)
+            .any(|value| value == "python -m unittest scripts/ci/test_ci_classify.py")
+    );
+    Ok(())
+}
+
+#[test]
 fn coverage_pack_manifest_declares_ci_route_pack_owns_python_router() -> Result<()> {
     let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -276,6 +318,60 @@ fn ci_route_cli_maps_codecov_router_script_to_route_proof_pack() -> Result<()> {
     let summary = fs::read_to_string(summary)?;
     assert!(summary.contains("python -m unittest scripts/ci/test_route_codecov_packs.py"));
     assert!(summary.contains("`patch-coverage-ci-route`: non-LCOV CI policy/routing surface"));
+    Ok(())
+}
+
+#[test]
+fn ci_route_cli_maps_ci_classifier_script_to_policy_proof_pack() -> Result<()> {
+    let temp = TempDir::new()?;
+    let receipt = temp.path().join("ci-route.json");
+    let summary = temp.path().join("ci-route.md");
+
+    cargo_bin_cmd!("xtask")
+        .args([
+            "ci",
+            "route",
+            "--base",
+            "origin/main",
+            "--head",
+            "HEAD",
+            "--receipt",
+            receipt.to_str().ok_or_else(|| anyhow!("invalid ci route receipt path"))?,
+            "--summary",
+            summary.to_str().ok_or_else(|| anyhow!("invalid ci route summary path"))?,
+            "--changed-file",
+            "scripts/ci/ci_classify.py",
+        ])
+        .assert()
+        .success();
+
+    let route: Value = serde_json::from_str(&std::fs::read_to_string(receipt)?)?;
+    assert_eq!(route.pointer("/changed_surfaces/0").and_then(Value::as_str), Some("ci-policy"));
+    assert!(
+        route.get("required_proof_packs").and_then(Value::as_array).is_some_and(|packs| packs
+            .iter()
+            .any(|pack| {
+                pack.get("id").and_then(Value::as_str) == Some("ci-policy-focused")
+                    && pack.get("commands").and_then(Value::as_array).is_some_and(|commands| {
+                        commands.iter().any(|command| {
+                            command.as_str()
+                                == Some("python -m unittest scripts/ci/test_ci_classify.py")
+                        })
+                    })
+            })),
+        "CI classifier changes must run the focused classifier proof"
+    );
+    assert!(
+        route.get("coverage_pack_selector").and_then(Value::as_array).is_some_and(Vec::is_empty),
+        "ci-policy proof pack is non-LCOV and must not be uploaded as Codecov coverage"
+    );
+    assert_eq!(
+        route.pointer("/skipped_by_policy/patch-coverage-ci-policy").and_then(Value::as_str),
+        Some("non-LCOV CI policy/routing surface; covered by focused CI gates")
+    );
+    let summary = fs::read_to_string(summary)?;
+    assert!(summary.contains("python -m unittest scripts/ci/test_ci_classify.py"));
+    assert!(summary.contains("`patch-coverage-ci-policy`: non-LCOV CI policy/routing surface"));
     Ok(())
 }
 

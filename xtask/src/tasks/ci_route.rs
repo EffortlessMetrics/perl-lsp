@@ -125,6 +125,7 @@ const UX_SCENARIO_PACK: ProofPack = ProofPack {
 const CI_POLICY_PACK: ProofPack = ProofPack {
     id: "ci-policy-focused",
     commands: &[
+        "python -m unittest scripts/ci/test_ci_classify.py",
         "cargo xtask workflow-trigger-lint --policy .ci/policies/required-checks.toml --receipt target/receipts/workflow-trigger-lint.json",
         "cargo test -p xtask --test quality_ci_wiring_policy --profile agent --locked -- --nocapture",
     ],
@@ -285,6 +286,8 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
     if file.starts_with(".github/workflows/")
         || file.starts_with(".ci/")
         || file.starts_with("policy/")
+        || file == "scripts/ci/ci_classify.py"
+        || file == "scripts/ci/test_ci_classify.py"
         || matches!(
             file,
             "xtask/tests/codecov_patch_gate_policy.rs"
@@ -735,6 +738,29 @@ mod tests {
 
         assert_eq!(receipt.changed_surfaces, vec!["ci-policy"]);
         assert!(proof_pack_ids(&receipt).contains(&"ci-policy-focused"));
+        assert!(receipt.coverage_pack_selector.is_empty());
+        assert!(receipt.coverage_proof_packs.is_empty());
+        assert_eq!(
+            receipt.skipped_by_policy.get("patch-coverage-ci-policy").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_receipt_maps_ci_classifier_script_to_focused_policy_pack() -> Result<()> {
+        let receipt =
+            route_receipt("origin/main", "HEAD", vec!["scripts/ci/ci_classify.py".to_string()])?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["ci-policy"]);
+        assert!(proof_pack_ids(&receipt).contains(&"ci-policy-focused"));
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "ci-policy-focused"
+                && pack
+                    .commands
+                    .iter()
+                    .any(|command| command == "python -m unittest scripts/ci/test_ci_classify.py")
+        }));
         assert!(receipt.coverage_pack_selector.is_empty());
         assert!(receipt.coverage_proof_packs.is_empty());
         assert_eq!(
