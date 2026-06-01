@@ -182,6 +182,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-gate-lane-mapping"
+lcov = false
+files = [
+  "scripts/ci/validate_gate_lane_mapping.py",
+  "scripts/ci/test_validate_gate_lane_mapping.py",
+]
+commands = [
+  "python -m unittest scripts/ci/test_validate_gate_lane_mapping.py",
+]
+coverage_filters = [
+  "validate_gate_lane_mapping",
+]
+
+[[pack]]
 id = "patch-coverage-rust-focused"
 files = [
   "*.rs",
