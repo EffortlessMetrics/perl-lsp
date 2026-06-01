@@ -288,6 +288,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-pr-overlap"
+lcov = false
+files = [
+  "scripts/pr_overlap.py",
+  "scripts/tests/test_pr_overlap.py",
+]
+commands = [
+  "python scripts/tests/test_pr_overlap.py",
+]
+coverage_filters = [
+  "pr_overlap",
+]
+
+[[pack]]
 id = "patch-coverage-clean-tmp-targets"
 lcov = false
 files = [
