@@ -1753,6 +1753,34 @@
       ]
     },
     {
+      "id": "project_test_assertion_inline_completion_quality",
+      "scenario_file": "ux_scenario_62_project_test_assertion_inline_completion_quality.rs",
+      "subsystem_owner": "editor_trust",
+      "ci_tier": "pr",
+      "component": "completion",
+      "instrumentation": {
+        "run_receipt": false,
+        "first_useful_result": false,
+        "protocol_goldens": false
+      },
+      "user_journey": "request inline completion in CPAN-shaped project test files and record framework-aware assertion ghost text",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "dynamic inline-completion registration is observed for an LSP4IJ-shaped client",
+        "project Test::More inline completion uses visible $got/$expected lexicals",
+        "project Test2 inline completion uses the visible $result lexical",
+        "project test assertion inline completions avoid return noise, premature done_testing, and module-import ghost text"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "real_workspace_providers",
       "scenario_file": "ux_scenario_20_real_workspace_providers.rs",
       "subsystem_owner": "editor_intelligence",

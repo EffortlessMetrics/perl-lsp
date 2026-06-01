@@ -49,7 +49,7 @@ expires = "2026-09-30"
 [[suppress]]
 id = "ripr-suppress-ux-receipt-tests"
 kind = "test_receipt_surface"
-paths = ["crates/perl-lsp-ux-tests/tests/**"]
+paths = ["crates/perl-lsp-ux-tests/tests/*", "crates/perl-lsp-ux-tests/tests/**"]
 owner = "editor-trust"
 issue = "#8197"
 reason = "Editor UX receipt tests are proof inputs validated by cargo/UX gates and fixture inventory; diff-scoped RIPR should not block on oracle gaps inside newly added receipt tests."

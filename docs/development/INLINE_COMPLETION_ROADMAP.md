@@ -392,6 +392,7 @@ Current semantic inline UX receipt inventory:
 | `real_workspace_module_import_inline_completion_quality` | `ux_scenario_59_real_workspace_module_import_inline_completion_quality.rs` | Effective `@INC`-aware module-import ghost text, `no lib` suppression, and workspace-root wildcard suppression. |
 | `gated_multiline_constructor_inline_completion_quality` | `ux_scenario_60_gated_multiline_constructor_inline_completion_quality.rs` | Invoked-only multiline constructor ghost text, automatic-trigger suppression, selected-completion conflict suppression, and accepted-edit parse safety. |
 | `package_boundary_receiver_inline_completion_quality` | `ux_scenario_61_package_boundary_receiver_inline_completion_quality.rs` | `$self->` current-package method suggestions stay preferred in a multi-file package-boundary workspace without sibling-package or generic constructor leaks. |
+| `project_test_assertion_inline_completion_quality` | `ux_scenario_62_project_test_assertion_inline_completion_quality.rs` | Test::More and Test2 assertion ghost text stay preferred in CPAN-shaped project test files without return noise, premature `done_testing`, or module-import ghost text. |
 
 The machine-readable dashboard for this inventory is:
 
@@ -423,7 +424,7 @@ without registering an LSP next-edit provider.
 Still future or deliberately gated:
 
 - broader real-project UX receipts for inline quality beyond the current module
-  import and package-boundary receiver receipts;
+  import, package-boundary receiver, and project test assertion receipts;
 - runtime/editor-visible next-edit suggestions;
 - optional AI candidate boundaries.
 

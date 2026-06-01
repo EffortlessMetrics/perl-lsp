@@ -782,27 +782,38 @@ fn suppression_matches_finding(rules: &RiprSuppressionRules, finding: &Value) ->
         return false;
     };
     let path = normalize_suppression_match_path(&path);
-    rules.path_patterns.iter().any(|pattern| pattern.matches(&path))
+    rules.path_patterns.iter().zip(rules.display_patterns.iter()).any(|(pattern, pattern_text)| {
+        pattern.matches(&path) || suppression_directory_pattern_matches(pattern_text, &path)
+    })
+}
+
+fn suppression_directory_pattern_matches(pattern: &str, path: &str) -> bool {
+    let Some(prefix) = pattern.strip_suffix("/**").or_else(|| pattern.strip_suffix("/*")) else {
+        return false;
+    };
+    let prefix = prefix.trim_end_matches('/');
+    path == prefix || path.strip_prefix(prefix).is_some_and(|rest| rest.starts_with('/'))
 }
 
 fn ripr_finding_path(finding: &Value) -> Option<String> {
-    ripr_plus_seam_path(finding)
-        .or_else(|| {
-            finding
-                .get("probe")
-                .and_then(|probe| {
-                    ["path", "file"]
-                        .into_iter()
-                        .find_map(|key| probe.get(key).and_then(Value::as_str))
-                })
-                .map(normalize_path_text)
+    finding
+        .get("probe")
+        .and_then(|probe| {
+            ["path", "file"].into_iter().find_map(|key| probe.get(key).and_then(Value::as_str))
         })
+        .map(normalize_path_text)
+        .or_else(|| ripr_plus_seam_path(finding))
         .filter(|path| !path.trim().is_empty())
 }
 
 fn normalize_suppression_match_path(path: &str) -> String {
     let normalized = normalize_path_text(path);
-    normalized.strip_prefix("./").unwrap_or(&normalized).to_string()
+    let normalized = normalized.strip_prefix("./").unwrap_or(&normalized);
+    ["crates/", "docs/", "archive/", "xtask/", "scripts/", "policy/", ".ci/"]
+        .into_iter()
+        .filter_map(|anchor| normalized.find(anchor))
+        .min()
+        .map_or_else(|| normalized.to_string(), |index| normalized[index..].to_string())
 }
 
 fn pr_evidence_packet(
@@ -1032,7 +1043,9 @@ fn write_review_comments(repo: &Path, options: &ReviewCommentsOptions) -> Result
     verify_revision(repo, &options.base)?;
     verify_revision(repo, &options.head)?;
     let root = command_root_arg(repo, &options.root)?;
-    if let Err(err) = run_ripr_review_comments(repo, options, &root) {
+    if current_pr_evidence_has_no_severe_gaps(repo, options)? {
+        write_clean_review_comments(repo, options, &root)?;
+    } else if let Err(err) = run_ripr_review_comments(repo, options, &root) {
         write_error_review_comments(repo, options, &root, &err.to_string())?;
     }
     stamp_review_comments_receipt(repo, options)?;
@@ -1076,6 +1089,32 @@ fn run_ripr_review_comments(
         options.timeout_seconds,
     )
     .map(|_| ())
+}
+
+fn current_pr_evidence_has_no_severe_gaps(
+    repo: &Path,
+    options: &ReviewCommentsOptions,
+) -> Result<bool> {
+    let path = repo.join(PR_EVIDENCE_JSON);
+    let Ok(text) = fs::read_to_string(&path) else {
+        return Ok(false);
+    };
+    let Ok(packet) = serde_json::from_str::<Value>(&text) else {
+        return Ok(false);
+    };
+    if packet.get("base").and_then(Value::as_str) != Some(options.base.as_str())
+        || packet.get("head").and_then(Value::as_str) != Some(options.head.as_str())
+    {
+        return Ok(false);
+    }
+    let base_sha = revision_sha(repo, &options.base)?;
+    let head_sha = revision_sha(repo, &options.head)?;
+    if packet.get("base_sha").and_then(Value::as_str) != Some(base_sha.as_str())
+        || packet.get("head_sha").and_then(Value::as_str) != Some(head_sha.as_str())
+    {
+        return Ok(false);
+    }
+    Ok(packet.pointer("/summary/severe_gaps").and_then(Value::as_u64) == Some(0))
 }
 
 fn validate_review_comments(
@@ -1129,6 +1168,49 @@ fn stamp_review_comments_receipt(repo: &Path, options: &ReviewCommentsOptions) -
     object.insert("base_sha".to_string(), json!(revision_sha(repo, &options.base)?));
     object.insert("head_sha".to_string(), json!(revision_sha(repo, &options.head)?));
     write_text(&path, &format_json(&packet)?)
+}
+
+fn write_clean_review_comments(
+    repo: &Path,
+    options: &ReviewCommentsOptions,
+    root: &str,
+) -> Result<()> {
+    let packet = json!({
+        "schema_version": "0.1",
+        "tool": "ripr",
+        "status": "advisory",
+        "root": normalize_path_text(root),
+        "base": options.base,
+        "head": options.head,
+        "mode": "pr_evidence_clean",
+        "rendering_limits": {
+            "max_inline_comments": 0,
+            "max_summary_items": 0
+        },
+        "summary": {
+            "comments": 0,
+            "summary_only": 0,
+            "suppressed": 0,
+            "unchanged_tests": true,
+            "source": "pr_evidence",
+            "skip_reason": "pr_evidence_zero_severe_gaps"
+        },
+        "comments": [],
+        "summary_only": [],
+        "suppressed": [],
+        "warnings": [],
+        "limits_note": "Review guidance generation skipped because diff-scoped PR evidence reported zero severe gaps."
+    });
+    write_text(&repo.join(REVIEW_COMMENTS_JSON), &format_json(&packet)?)?;
+    write_text(&repo.join(REVIEW_COMMENTS_MD), &render_clean_review_comments_markdown(&packet))
+}
+
+fn render_clean_review_comments_markdown(packet: &Value) -> String {
+    format!(
+        "# RIPR PR Guidance\n\n- status: advisory\n- base: `{}`\n- head: `{}`\n- line annotations: 0\n- summary-only recommendations: 0\n- suppressed recommendations: 0\n\nNo review guidance was generated because diff-scoped PR evidence reported zero severe gaps.\n",
+        string_field(packet, "base", DEFAULT_BASE),
+        string_field(packet, "head", DEFAULT_HEAD)
+    )
 }
 
 fn write_error_review_comments(
@@ -2633,6 +2715,134 @@ paths = ["archive/["]
             packet.pointer("/summary/suppression_patterns/0"),
             Some(&json!("crates/perl-lsp-ux-tests/tests/**"))
         );
+        Ok(())
+    }
+
+    #[test]
+    fn suppression_matches_windows_probe_paths_under_receipt_test_directory() -> Result<()> {
+        let rules = RiprSuppressionRules {
+            display_patterns: vec![
+                "crates/perl-lsp-ux-tests/tests/*".to_string(),
+                "crates/perl-lsp-ux-tests/tests/**".to_string(),
+            ],
+            path_patterns: vec![
+                Pattern::new("crates/perl-lsp-ux-tests/tests/*")?,
+                Pattern::new("crates/perl-lsp-ux-tests/tests/**")?,
+            ],
+            invalid_patterns: Vec::new(),
+            suppression_reasons: Vec::new(),
+        };
+        let finding = json!({
+            "classification": "reachable_unrevealed",
+            "probe": {
+                "file": r".\crates/perl-lsp-ux-tests/tests/ux_scenario_62_project_test_assertion_inline_completion_quality.rs"
+            }
+        });
+
+        assert!(suppression_matches_finding(&rules, &finding));
+        Ok(())
+    }
+
+    #[test]
+    fn suppression_matches_absolute_probe_paths_under_receipt_test_directory() -> Result<()> {
+        let rules = RiprSuppressionRules {
+            display_patterns: vec!["crates/perl-lsp-ux-tests/tests/**".to_string()],
+            path_patterns: vec![Pattern::new("crates/perl-lsp-ux-tests/tests/**")?],
+            invalid_patterns: Vec::new(),
+            suppression_reasons: Vec::new(),
+        };
+        let finding = json!({
+            "classification": "weakly_exposed",
+            "probe": {
+                "file": "//?/H:/Code/Rust3/perl-lsp-swarm\\crates/perl-lsp-ux-tests/tests/ux_scenario_62_project_test_assertion_inline_completion_quality.rs"
+            }
+        });
+
+        assert!(suppression_matches_finding(&rules, &finding));
+        Ok(())
+    }
+
+    #[test]
+    fn write_review_comments_skips_ripr_when_current_pr_evidence_has_no_severe_gaps() -> Result<()>
+    {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path();
+        init_git_repo(repo)?;
+        let ripr = write_fake_ripr_binary(repo)?;
+        let _override = override_ripr_bin(&ripr)?;
+        let options = ReviewCommentsOptions {
+            root: ".".to_string(),
+            base: "HEAD".to_string(),
+            head: "HEAD".to_string(),
+            timeout_seconds: Some(1),
+        };
+        let pr_options = PrEvidenceOptions {
+            root: ".".to_string(),
+            base: "HEAD".to_string(),
+            head: "HEAD".to_string(),
+        };
+        let head = revision_sha(repo, "HEAD")?;
+        let pr_packet = pr_evidence_packet(
+            &pr_options,
+            &["crates/perl-lsp-ux-tests/tests/ux_scenario_62_project_test_assertion_inline_completion_quality.rs".to_string()],
+            &json!({
+                "summary": {
+                    "weakly_exposed": 0,
+                    "reachable_unrevealed": 0,
+                    "no_static_path": 0
+                }
+            }),
+            &head,
+            &head,
+            &RiprSuppressionRules::default(),
+        );
+        write_text(&repo.join(PR_EVIDENCE_JSON), &format_json(&pr_packet)?)?;
+
+        write_review_comments(repo, &options)?;
+
+        let packet: Value =
+            serde_json::from_str(&fs::read_to_string(repo.join(REVIEW_COMMENTS_JSON))?)?;
+        let markdown = fs::read_to_string(repo.join(REVIEW_COMMENTS_MD))?;
+        assert_eq!(packet["status"], json!("advisory"));
+        assert_eq!(packet["mode"], json!("pr_evidence_clean"));
+        assert_eq!(
+            packet.pointer("/summary/skip_reason"),
+            Some(&json!("pr_evidence_zero_severe_gaps"))
+        );
+        assert!(
+            packet.get("comments").and_then(Value::as_array).is_some_and(|items| items.is_empty())
+        );
+        assert_eq!(packet["head_sha"], json!(head));
+        assert!(markdown.contains("zero severe gaps"), "{markdown}");
+        Ok(())
+    }
+
+    #[test]
+    fn current_pr_evidence_has_no_severe_gaps_rejects_stale_receipt() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path();
+        init_git_repo(repo)?;
+        fs::create_dir_all(repo.join("target/ripr/pr"))?;
+        fs::write(
+            repo.join(PR_EVIDENCE_JSON),
+            format_json(&json!({
+                "base": "HEAD",
+                "base_sha": "stale-base",
+                "head": "HEAD",
+                "head_sha": "stale-head",
+                "summary": {
+                    "severe_gaps": 0
+                }
+            }))?,
+        )?;
+        let options = ReviewCommentsOptions {
+            root: ".".to_string(),
+            base: "HEAD".to_string(),
+            head: "HEAD".to_string(),
+            timeout_seconds: None,
+        };
+
+        assert!(!current_pr_evidence_has_no_severe_gaps(repo, &options)?);
         Ok(())
     }
 
