@@ -1972,6 +1972,55 @@ fn diagnostic_line_range(source: &str, range: (usize, usize)) -> Option<(usize, 
     Some((line_start, line_end))
 }
 
+/// Fix an undefined loop-control label by stripping the label from the statement (PL410).
+///
+/// `next LABEL`, `last LABEL`, and `redo LABEL` that reference a label not defined
+/// anywhere in the file are runtime-fatal. The only safe mechanical fix is to drop
+/// the label so the statement targets the innermost enclosing loop instead.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((start, end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let snippet = &source[start..end];
+
+    // Extract the operator from the beginning of the snippet.
+    let op = if snippet.starts_with("next") {
+        "next"
+    } else if snippet.starts_with("last") {
+        "last"
+    } else if snippet.starts_with("redo") {
+        "redo"
+    } else {
+        return Vec::new();
+    };
+
+    // The character immediately after the operator must be whitespace (not alphanumeric).
+    // This guards against e.g. "nextval" or "lastmod" edge cases.
+    let after_op = &snippet[op.len()..];
+    let Some(first_char) = after_op.chars().next() else {
+        return Vec::new();
+    };
+    if !first_char.is_ascii_whitespace() {
+        return Vec::new();
+    }
+
+    vec![CodeAction {
+        title: format!("Remove undefined label (use bare `{op}` to target innermost loop)"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start, end },
+                new_text: op.to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
 fn valid_diagnostic_range(source: &str, range: (usize, usize)) -> Option<(usize, usize)> {
     let (start, end) = range;
     if start > end
