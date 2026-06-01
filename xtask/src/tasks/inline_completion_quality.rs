@@ -766,6 +766,18 @@ fn scenarios() -> &'static [Scenario] {
             },
         },
         Scenario {
+            name: "lexical_assignment_uses_visible_scalar",
+            source_name: "syntax",
+            source: "sub copy {\n    my $result = compute();\n    my $copy = <<CURSOR>>\n}",
+            available_modules: &[],
+            hard_zone: false,
+            assertion: ScenarioAssertion::Suggestion {
+                first: Some("$result;"),
+                expected: &["$result;"],
+                not_expected: &["$copy;"],
+            },
+        },
+        Scenario {
             name: "self_receiver_prefers_current_package_methods",
             source_name: "receiver",
             source: "package Other;\nsub external {}\n\npackage Demo;\nsub save {}\nsub display_name {}\nsub caller {\n    my $self = shift;\n    $self-><<CURSOR>>\n}\n",

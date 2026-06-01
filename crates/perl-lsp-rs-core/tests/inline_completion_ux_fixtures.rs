@@ -115,6 +115,13 @@ fn inline_completion_fixture_corpus_returns_expected_ghost_text() -> TestResult 
             not_expected: &["$self) {\n    \n}"],
         },
         SuggestionFixture {
+            name: "lexical_assignment_uses_visible_scalar",
+            source: "sub copy {\n    my $result = compute();\n    my $copy = <<CURSOR>>\n}\n",
+            first: Some("$result;"),
+            expected: &["$result;"],
+            not_expected: &["$copy;"],
+        },
+        SuggestionFixture {
             name: "self_receiver_prefers_current_package_methods",
             source: "package Other;\nsub external {}\n\npackage Demo;\nsub save {}\nsub display_name {}\nsub caller {\n    my $self = shift;\n    $self-><<CURSOR>>\n}\n",
             first: Some("save()"),
@@ -244,6 +251,12 @@ fn inline_completion_fixture_corpus_applies_accepted_edits_without_parse_regress
             source: "sub compute {\n    my $result = build();\n    <<CURSOR>>\n}\n",
             expected_first: "return $result;",
             expected_after: "sub compute {\n    my $result = build();\n    return $result;\n}\n",
+        },
+        AcceptedEditFixture {
+            name: "lexical_assignment_rhs",
+            source: "sub copy {\n    my $result = compute();\n    my $copy = <<CURSOR>>\n}\n",
+            expected_first: "$result;",
+            expected_after: "sub copy {\n    my $result = compute();\n    my $copy = $result;\n}\n",
         },
         AcceptedEditFixture {
             name: "self_receiver_method",

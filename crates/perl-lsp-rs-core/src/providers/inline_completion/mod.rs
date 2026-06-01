@@ -2048,6 +2048,29 @@ impl InlineCandidateSource for SyntaxCandidateSource {
             );
         }
 
+        if let Some(assigned_name) = lexical_assignment_rhs_prefix(prefix)
+            && let Some(variable) = semantic_context
+                .visible_variables
+                .iter()
+                .find(|variable| {
+                    variable.is_scalar()
+                        && !variable.is_scalar_self()
+                        && variable.name != assigned_name
+                })
+                .map(VariableFact::as_perl_variable)
+        {
+            sink.push(
+                Self::SOURCE,
+                0,
+                InlineCompletionItem {
+                    insert_text: format!("{variable};"),
+                    filter_text: Some(variable),
+                    range: None,
+                    command: None,
+                },
+            );
+        }
+
         if ends_with_keyword(prefix, "for ") || ends_with_keyword(prefix, "foreach ") {
             if let Some(binding) = provider.preferred_loop_binding(semantic_context) {
                 sink.push(
@@ -2223,6 +2246,24 @@ fn condition_expression_insert_text(prefix: &str, condition: &str) -> String {
     } else {
         format!("({condition}) {{\n    \n}}")
     }
+}
+
+fn lexical_assignment_rhs_prefix(prefix: &str) -> Option<&str> {
+    let lhs = prefix.trim_end().strip_suffix('=')?.trim_end();
+    let variable_start = lhs.rfind('$')?;
+    let declaration = lhs[..variable_start].trim_end();
+    let variable_name = &lhs[variable_start + 1..];
+
+    match declaration.split_whitespace().last() {
+        Some("my") => {}
+        _ => return None,
+    }
+
+    if variable_name.is_empty() || !variable_name.chars().all(is_identifier_fragment_char) {
+        return None;
+    }
+
+    Some(variable_name)
 }
 
 fn test_statement_filter_text(statement: &str) -> &'static str {
@@ -3443,6 +3484,23 @@ mod tests {
     }
 
     #[test]
+    fn lexical_assignment_rhs_uses_visible_source_scalar() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub copy {\n    my $result = compute();\n    my $copy = ";
+        let line = 2;
+        let character = "    my $copy = ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, line, character);
+
+        assert_eq!(
+            completions.items.first().map(|item| item.insert_text.as_str()),
+            Some("$result;")
+        );
+        assert!(completions.items.iter().all(|item| item.insert_text != "$copy;"));
+        Ok(())
+    }
+
+    #[test]
     fn method_arrow_partial_token_replaces_only_method_fragment()
     -> Result<(), Box<dyn std::error::Error>> {
         let provider = InlineCompletionProvider::new();
@@ -4010,6 +4068,15 @@ mod tests {
             let semantic = provider.semantic_context_for_prepared_context(&prepared);
             assert_eq!(semantic.expected_syntax, expected, "prefix {source:?}");
         }
+        Ok(())
+    }
+
+    #[test]
+    fn lexical_assignment_rhs_prefix_requires_my_declaration()
+    -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(lexical_assignment_rhs_prefix("my $copy = "), Some("copy"));
+        assert_eq!(lexical_assignment_rhs_prefix("dummy $copy = "), None);
+        assert_eq!(lexical_assignment_rhs_prefix("myself $copy = "), None);
         Ok(())
     }
 
