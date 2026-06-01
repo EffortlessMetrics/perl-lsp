@@ -400,6 +400,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-gate-local-wrapper"
+lcov = false
+files = [
+  "scripts/gate-local.sh",
+  "scripts/tests/test-gate-local-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-gate-local-wrapper.sh",
+]
+coverage_filters = [
+  "gate-local-wrapper",
+]
+
+[[pack]]
 id = "patch-coverage-baseline-script"
 lcov = false
 files = [
