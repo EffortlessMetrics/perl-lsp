@@ -287,6 +287,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-clean-tmp-targets"
+lcov = false
+files = [
+  "scripts/clean-tmp-targets.sh",
+  "scripts/tests/test-clean-tmp-targets.sh",
+]
+commands = [
+  "bash scripts/tests/test-clean-tmp-targets.sh",
+]
+coverage_filters = [
+  "clean-tmp-targets",
+]
+
+[[pack]]
 id = "patch-coverage-rust-focused"
 files = [
   "*.rs",
