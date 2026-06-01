@@ -385,6 +385,34 @@ class RouteCodecovPacksTests(unittest.TestCase):
             [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
         )
 
+    def test_generate_badges_wrapper_change_is_non_lcov_focused_proof(self) -> None:
+        packs = [
+            {
+                "id": "patch-coverage-generate-badges-wrapper",
+                "lcov": False,
+                "files": [
+                    "scripts/generate-badges.sh",
+                    "scripts/tests/test-generate-badges-wrapper.sh",
+                ],
+                "commands": ["bash scripts/tests/test-generate-badges-wrapper.sh"],
+                "coverage_filters": ["generate-badges"],
+            },
+            {
+                "id": router.FALLBACK_PACK_ID,
+                "files": ["*.rs"],
+                "commands": ["cargo test --workspace --lib"],
+                "coverage_filters": ["workspace-lib"],
+            },
+        ]
+
+        paths = ["scripts/generate-badges.sh"]
+
+        self.assertEqual([], router.selected_packs(packs, paths))
+        self.assertEqual(
+            ["patch-coverage-generate-badges-wrapper"],
+            [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
+        )
+
     def test_remaining_script_helper_changes_are_non_lcov_focused_proof(self) -> None:
         helper_packs = [
             (

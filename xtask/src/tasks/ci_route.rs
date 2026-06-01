@@ -244,6 +244,11 @@ const QUICK_RECEIPTS_WRAPPER_PACK: ProofPack = ProofPack {
     commands: &["bash scripts/tests/test-quick-receipts-wrapper.sh"],
 };
 
+const GENERATE_BADGES_WRAPPER_PACK: ProofPack = ProofPack {
+    id: "generate-badges-wrapper-focused",
+    commands: &["bash scripts/tests/test-generate-badges-wrapper.sh"],
+};
+
 const CLEAN_TMP_TARGETS_PACK: ProofPack = ProofPack {
     id: "clean-tmp-targets-focused",
     commands: &["bash scripts/tests/test-clean-tmp-targets.sh"],
@@ -585,6 +590,15 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         route.add_surface("quick-receipts-wrapper");
         route.add_pack(QUICK_RECEIPTS_WRAPPER_PACK);
         route.add_coverage_pack("patch-coverage-quick-receipts-wrapper");
+        return;
+    }
+
+    if file == "scripts/generate-badges.sh"
+        || file == "scripts/tests/test-generate-badges-wrapper.sh"
+    {
+        route.add_surface("generate-badges-wrapper");
+        route.add_pack(GENERATE_BADGES_WRAPPER_PACK);
+        route.add_coverage_pack("patch-coverage-generate-badges-wrapper");
         return;
     }
 
@@ -1592,6 +1606,32 @@ mod tests {
     }
 
     #[test]
+    fn ci_route_receipt_maps_generate_badges_wrapper_to_focused_non_lcov_pack() -> Result<()> {
+        let receipt =
+            route_receipt("origin/main", "HEAD", vec!["scripts/generate-badges.sh".to_string()])?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["generate-badges-wrapper"]);
+        assert!(proof_pack_ids(&receipt).contains(&"generate-badges-wrapper-focused"));
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "generate-badges-wrapper-focused"
+                && pack
+                    .commands
+                    .iter()
+                    .any(|command| command == "bash scripts/tests/test-generate-badges-wrapper.sh")
+        }));
+        assert!(receipt.coverage_pack_selector.is_empty());
+        assert!(receipt.coverage_proof_packs.is_empty());
+        assert_eq!(
+            receipt
+                .skipped_by_policy
+                .get("patch-coverage-generate-badges-wrapper")
+                .map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        Ok(())
+    }
+
+    #[test]
     fn ci_route_receipt_maps_completion_provider_to_focused_pack() -> Result<()> {
         let receipt = route_receipt(
             "origin/main",
@@ -1817,6 +1857,7 @@ mod tests {
                 "patch-coverage-update-baseline-script",
                 "patch-coverage-generate-receipt-script",
                 "patch-coverage-quick-receipts-wrapper",
+                "patch-coverage-generate-badges-wrapper",
                 "patch-coverage-clean-tmp-targets",
                 "patch-coverage-swarm-cleanup",
                 "patch-coverage-pre-merge-check",
@@ -1850,6 +1891,7 @@ mod tests {
             "patch-coverage-update-baseline-script",
             "patch-coverage-generate-receipt-script",
             "patch-coverage-quick-receipts-wrapper",
+            "patch-coverage-generate-badges-wrapper",
             "patch-coverage-clean-tmp-targets",
             "patch-coverage-swarm-cleanup",
             "patch-coverage-pre-merge-check",
@@ -1957,6 +1999,10 @@ mod tests {
         );
         assert_eq!(
             skipped.get("patch-coverage-quick-receipts-wrapper").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        assert_eq!(
+            skipped.get("patch-coverage-generate-badges-wrapper").map(String::as_str),
             Some(NON_LCOV_COVERAGE_SKIP_REASON)
         );
         assert_eq!(

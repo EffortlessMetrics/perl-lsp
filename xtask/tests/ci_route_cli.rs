@@ -968,6 +968,49 @@ fn coverage_pack_manifest_declares_quick_receipts_pack_owns_receipt_wrapper() ->
 }
 
 #[test]
+fn coverage_pack_manifest_declares_generate_badges_pack_owns_badges_wrapper() -> Result<()> {
+    let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(PathBuf::from)
+        .ok_or_else(|| anyhow!("xtask manifest path has no parent"))?
+        .join(".ci/coverage-packs.toml");
+    let manifest: toml::Value = toml::from_str(&fs::read_to_string(manifest_path)?)?;
+    let packs = manifest
+        .get("pack")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| anyhow!("coverage pack manifest must contain pack array"))?;
+    let pack = packs
+        .iter()
+        .find(|pack| {
+            pack.get("id").and_then(toml::Value::as_str)
+                == Some("patch-coverage-generate-badges-wrapper")
+        })
+        .ok_or_else(|| anyhow!("missing generate-badges wrapper coverage pack"))?;
+    let files = pack
+        .get("files")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| anyhow!("coverage pack files must be an array"))?;
+    let commands = pack
+        .get("commands")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| anyhow!("coverage pack commands must be an array"))?;
+
+    assert!(
+        files
+            .iter()
+            .filter_map(toml::Value::as_str)
+            .any(|value| value == "scripts/generate-badges.sh")
+    );
+    assert!(
+        commands
+            .iter()
+            .filter_map(toml::Value::as_str)
+            .any(|value| value == "bash scripts/tests/test-generate-badges-wrapper.sh")
+    );
+    Ok(())
+}
+
+#[test]
 fn coverage_pack_manifest_declares_clean_tmp_targets_pack_owns_cleanup_helper() -> Result<()> {
     let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -2517,6 +2560,69 @@ fn ci_route_cli_maps_quick_receipts_wrapper_to_receipt_proof_pack() -> Result<()
     assert!(
         summary.contains(
             "`patch-coverage-quick-receipts-wrapper`: non-LCOV CI policy/routing surface"
+        )
+    );
+    Ok(())
+}
+
+#[test]
+fn ci_route_cli_maps_generate_badges_wrapper_to_badges_proof_pack() -> Result<()> {
+    let temp = TempDir::new()?;
+    let receipt = temp.path().join("ci-route.json");
+    let summary = temp.path().join("ci-route.md");
+
+    cargo_bin_cmd!("xtask")
+        .args([
+            "ci",
+            "route",
+            "--base",
+            "origin/main",
+            "--head",
+            "HEAD",
+            "--receipt",
+            receipt.to_str().ok_or_else(|| anyhow!("invalid ci route receipt path"))?,
+            "--summary",
+            summary.to_str().ok_or_else(|| anyhow!("invalid ci route summary path"))?,
+            "--changed-file",
+            "scripts/generate-badges.sh",
+        ])
+        .assert()
+        .success();
+
+    let route: Value = serde_json::from_str(&std::fs::read_to_string(receipt)?)?;
+    assert_eq!(
+        route.pointer("/changed_surfaces/0").and_then(Value::as_str),
+        Some("generate-badges-wrapper")
+    );
+    assert!(
+        route.get("required_proof_packs").and_then(Value::as_array).is_some_and(|packs| packs
+            .iter()
+            .any(|pack| {
+                pack.get("id").and_then(Value::as_str) == Some("generate-badges-wrapper-focused")
+                    && pack.get("commands").and_then(Value::as_array).is_some_and(|commands| {
+                        commands.iter().any(|command| {
+                            command.as_str()
+                                == Some("bash scripts/tests/test-generate-badges-wrapper.sh")
+                        })
+                    })
+            })),
+        "generate badges wrapper changes must run the focused badge proof"
+    );
+    assert!(
+        route.get("coverage_pack_selector").and_then(Value::as_array).is_some_and(Vec::is_empty),
+        "generate-badges wrapper proof pack is non-LCOV and must not be uploaded as Codecov coverage"
+    );
+    assert_eq!(
+        route
+            .pointer("/skipped_by_policy/patch-coverage-generate-badges-wrapper")
+            .and_then(Value::as_str),
+        Some("non-LCOV CI policy/routing surface; covered by focused CI gates")
+    );
+    let summary = fs::read_to_string(summary)?;
+    assert!(summary.contains("bash scripts/tests/test-generate-badges-wrapper.sh"));
+    assert!(
+        summary.contains(
+            "`patch-coverage-generate-badges-wrapper`: non-LCOV CI policy/routing surface"
         )
     );
     Ok(())

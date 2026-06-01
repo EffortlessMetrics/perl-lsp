@@ -386,6 +386,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-generate-badges-wrapper"
+lcov = false
+files = [
+  "scripts/generate-badges.sh",
+  "scripts/tests/test-generate-badges-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-generate-badges-wrapper.sh",
+]
+coverage_filters = [
+  "generate-badges",
+]
+
+[[pack]]
 id = "patch-coverage-clean-tmp-targets"
 lcov = false
 files = [
