@@ -372,6 +372,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-quick-receipts-wrapper"
+lcov = false
+files = [
+  "scripts/quick-receipts.sh",
+  "scripts/tests/test-quick-receipts-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-quick-receipts-wrapper.sh",
+]
+coverage_filters = [
+  "quick-receipts",
+]
+
+[[pack]]
 id = "patch-coverage-clean-tmp-targets"
 lcov = false
 files = [

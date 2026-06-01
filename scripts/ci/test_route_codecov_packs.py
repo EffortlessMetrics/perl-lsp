@@ -357,6 +357,34 @@ class RouteCodecovPacksTests(unittest.TestCase):
             [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
         )
 
+    def test_quick_receipts_wrapper_change_is_non_lcov_focused_proof(self) -> None:
+        packs = [
+            {
+                "id": "patch-coverage-quick-receipts-wrapper",
+                "lcov": False,
+                "files": [
+                    "scripts/quick-receipts.sh",
+                    "scripts/tests/test-quick-receipts-wrapper.sh",
+                ],
+                "commands": ["bash scripts/tests/test-quick-receipts-wrapper.sh"],
+                "coverage_filters": ["quick-receipts"],
+            },
+            {
+                "id": router.FALLBACK_PACK_ID,
+                "files": ["*.rs"],
+                "commands": ["cargo test --workspace --lib"],
+                "coverage_filters": ["workspace-lib"],
+            },
+        ]
+
+        paths = ["scripts/quick-receipts.sh"]
+
+        self.assertEqual([], router.selected_packs(packs, paths))
+        self.assertEqual(
+            ["patch-coverage-quick-receipts-wrapper"],
+            [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
+        )
+
     def test_remaining_script_helper_changes_are_non_lcov_focused_proof(self) -> None:
         helper_packs = [
             (
