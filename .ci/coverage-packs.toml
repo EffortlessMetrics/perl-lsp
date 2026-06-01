@@ -252,6 +252,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-pr-plan"
+lcov = false
+files = [
+  "scripts/ci/pr_plan.py",
+  "scripts/ci/test_pr_plan.py",
+]
+commands = [
+  "python -m unittest scripts/ci/test_pr_plan.py",
+]
+coverage_filters = [
+  "pr_plan",
+]
+
+[[pack]]
 id = "patch-coverage-rust-focused"
 files = [
   "*.rs",

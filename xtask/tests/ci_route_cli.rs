@@ -635,6 +635,43 @@ fn coverage_pack_manifest_declares_aggregate_lane_history_pack_owns_history_help
 }
 
 #[test]
+fn coverage_pack_manifest_declares_pr_plan_pack_owns_plan_helper() -> Result<()> {
+    let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(PathBuf::from)
+        .ok_or_else(|| anyhow!("xtask manifest path has no parent"))?
+        .join(".ci/coverage-packs.toml");
+    let manifest: toml::Value = toml::from_str(&fs::read_to_string(manifest_path)?)?;
+    let packs = manifest
+        .get("pack")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| anyhow!("coverage pack manifest must contain pack array"))?;
+    let pack = packs
+        .iter()
+        .find(|pack| pack.get("id").and_then(toml::Value::as_str) == Some("patch-coverage-pr-plan"))
+        .ok_or_else(|| anyhow!("missing pr-plan coverage pack"))?;
+    let files = pack
+        .get("files")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| anyhow!("coverage pack files must be an array"))?;
+    let commands = pack
+        .get("commands")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| anyhow!("coverage pack commands must be an array"))?;
+
+    assert!(
+        files.iter().filter_map(toml::Value::as_str).any(|value| value == "scripts/ci/pr_plan.py")
+    );
+    assert!(
+        commands
+            .iter()
+            .filter_map(toml::Value::as_str)
+            .any(|value| value == "python -m unittest scripts/ci/test_pr_plan.py")
+    );
+    Ok(())
+}
+
+#[test]
 fn ci_route_cli_skips_non_lcov_policy_packs_from_codecov_coverage_receipt() -> Result<()> {
     let temp = TempDir::new()?;
     let receipt = temp.path().join("ci-route.json");
@@ -1337,6 +1374,60 @@ fn ci_route_cli_maps_aggregate_lane_history_script_to_history_proof_pack() -> Re
             "`patch-coverage-aggregate-lane-history`: non-LCOV CI policy/routing surface"
         )
     );
+    Ok(())
+}
+
+#[test]
+fn ci_route_cli_maps_pr_plan_script_to_plan_proof_pack() -> Result<()> {
+    let temp = TempDir::new()?;
+    let receipt = temp.path().join("ci-route.json");
+    let summary = temp.path().join("ci-route.md");
+
+    cargo_bin_cmd!("xtask")
+        .args([
+            "ci",
+            "route",
+            "--base",
+            "origin/main",
+            "--head",
+            "HEAD",
+            "--receipt",
+            receipt.to_str().ok_or_else(|| anyhow!("invalid ci route receipt path"))?,
+            "--summary",
+            summary.to_str().ok_or_else(|| anyhow!("invalid ci route summary path"))?,
+            "--changed-file",
+            "scripts/ci/pr_plan.py",
+        ])
+        .assert()
+        .success();
+
+    let route: Value = serde_json::from_str(&std::fs::read_to_string(receipt)?)?;
+    assert_eq!(route.pointer("/changed_surfaces/0").and_then(Value::as_str), Some("pr-plan"));
+    assert!(
+        route.get("required_proof_packs").and_then(Value::as_array).is_some_and(|packs| packs
+            .iter()
+            .any(|pack| {
+                pack.get("id").and_then(Value::as_str) == Some("pr-plan-focused")
+                    && pack.get("commands").and_then(Value::as_array).is_some_and(|commands| {
+                        commands.iter().any(|command| {
+                            command.as_str()
+                                == Some("python -m unittest scripts/ci/test_pr_plan.py")
+                        })
+                    })
+            })),
+        "pr-plan helper changes must run the focused plan proof"
+    );
+    assert!(
+        route.get("coverage_pack_selector").and_then(Value::as_array).is_some_and(Vec::is_empty),
+        "pr-plan proof pack is non-LCOV and must not be uploaded as Codecov coverage"
+    );
+    assert_eq!(
+        route.pointer("/skipped_by_policy/patch-coverage-pr-plan").and_then(Value::as_str),
+        Some("non-LCOV CI policy/routing surface; covered by focused CI gates")
+    );
+    let summary = fs::read_to_string(summary)?;
+    assert!(summary.contains("python -m unittest scripts/ci/test_pr_plan.py"));
+    assert!(summary.contains("`patch-coverage-pr-plan`: non-LCOV CI policy/routing surface"));
     Ok(())
 }
 
