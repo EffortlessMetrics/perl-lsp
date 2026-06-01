@@ -400,6 +400,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-ignored-test-count-wrapper"
+lcov = false
+files = [
+  "scripts/ignored-test-count.sh",
+  "scripts/tests/test-ignored-test-count-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-ignored-test-count-wrapper.sh",
+]
+coverage_filters = [
+  "ignored-test-count",
+]
+
+[[pack]]
 id = "patch-coverage-clean-tmp-targets"
 lcov = false
 files = [
