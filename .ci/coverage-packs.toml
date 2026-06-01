@@ -126,6 +126,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-ripr-summary"
+lcov = false
+files = [
+  "scripts/ci/ripr_summary.py",
+  "scripts/ci/test_ripr_summary.py",
+]
+commands = [
+  "python -m unittest scripts/ci/test_ripr_summary.py",
+]
+coverage_filters = [
+  "ripr_summary",
+]
+
+[[pack]]
 id = "patch-coverage-rust-focused"
 files = [
   "*.rs",
