@@ -386,6 +386,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-run-gates-wrapper"
+lcov = false
+files = [
+  "scripts/run-gates.sh",
+  "scripts/tests/test-run-gates-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-run-gates-wrapper.sh",
+]
+coverage_filters = [
+  "run-gates-wrapper",
+]
+
+[[pack]]
 id = "patch-coverage-baseline-script"
 lcov = false
 files = [
