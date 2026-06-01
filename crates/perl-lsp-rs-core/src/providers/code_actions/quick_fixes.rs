@@ -1964,6 +1964,62 @@ fn parse_printf_format_mismatch(message: &str) -> Option<(usize, String)> {
     specifiers.checked_sub(supplied).filter(|&n| n > 0).map(|n| (n, call_name))
 }
 
+/// Remove the undefined label from a `next LABEL`, `last LABEL`, or `redo LABEL`
+/// statement (PL410).
+///
+/// At runtime, Perl dies with `Label not found for "next LABEL"` when the
+/// target label does not exist. The only automatic fix is to drop the label so
+/// the statement targets the innermost enclosing loop; adding a label would
+/// require editing the surrounding loop structure and is out of scope.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((start, end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let Some(text) = source.get(start..end) else {
+        return Vec::new();
+    };
+
+    // Extract the operator (everything up to the first whitespace).
+    let ws_pos = text.find(|c: char| c.is_whitespace()).unwrap_or(text.len());
+    let op = &text[..ws_pos];
+    if !matches!(op, "next" | "last" | "redo") {
+        return Vec::new();
+    }
+
+    // Find the label — skip leading whitespace after the operator.
+    let after_op = &text[ws_pos..];
+    let label_indent = after_op.len() - after_op.trim_start().len();
+    let label_start_in_text = ws_pos + label_indent;
+    let label_text = &text[label_start_in_text..];
+    let label_len =
+        label_text.find(|c: char| c.is_whitespace() || c == ';').unwrap_or(label_text.len());
+    let label = &label_text[..label_len];
+
+    if label.is_empty() {
+        return Vec::new();
+    }
+
+    // Delete " LABEL" — from the whitespace before the label to its end.
+    let remove_start = start + ws_pos;
+    let remove_end = start + label_start_in_text + label_len;
+
+    vec![CodeAction {
+        title: format!("Remove undefined label '{label}' from '{op}'"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: remove_start, end: remove_end },
+                new_text: String::new(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
 fn diagnostic_line_range(source: &str, range: (usize, usize)) -> Option<(usize, usize)> {
     let (start, end) = valid_diagnostic_range(source, range)?;
     let line_start = source[..start].rfind('\n').map_or(0, |idx| idx + 1);
