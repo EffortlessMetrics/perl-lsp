@@ -152,6 +152,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-learned-estimate"
+lcov = false
+files = [
+  "scripts/ci/learned_estimate.py",
+  "scripts/ci/test_learned_estimate.py",
+]
+commands = [
+  "python -m unittest scripts/ci/test_learned_estimate.py",
+]
+coverage_filters = [
+  "learned_estimate",
+]
+
+[[pack]]
 id = "patch-coverage-rust-focused"
 files = [
   "*.rs",
