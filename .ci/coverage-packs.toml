@@ -344,6 +344,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-install-githooks-wrapper"
+lcov = false
+files = [
+  "scripts/install-githooks.sh",
+  "scripts/tests/test-install-githooks-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-install-githooks-wrapper.sh",
+]
+coverage_filters = [
+  "install-githooks-wrapper",
+]
+
+[[pack]]
 id = "patch-coverage-baseline-script"
 lcov = false
 files = [

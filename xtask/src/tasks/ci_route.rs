@@ -229,6 +229,11 @@ const PREFLIGHT_WRAPPER_PACK: ProofPack = ProofPack {
     commands: &["bash scripts/tests/test-preflight-wrapper.sh"],
 };
 
+const INSTALL_GITHOOKS_WRAPPER_PACK: ProofPack = ProofPack {
+    id: "install-githooks-wrapper-focused",
+    commands: &["bash scripts/tests/test-install-githooks-wrapper.sh"],
+};
+
 const COVERAGE_BASELINE_SCRIPT_PACK: ProofPack = ProofPack {
     id: "coverage-baseline-script-focused",
     commands: &["bash scripts/tests/test-check-coverage-baseline.sh"],
@@ -574,6 +579,15 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         route.add_surface("preflight-wrapper");
         route.add_pack(PREFLIGHT_WRAPPER_PACK);
         route.add_coverage_pack("patch-coverage-preflight-wrapper");
+        return;
+    }
+
+    if file == "scripts/install-githooks.sh"
+        || file == "scripts/tests/test-install-githooks-wrapper.sh"
+    {
+        route.add_surface("install-githooks-wrapper");
+        route.add_pack(INSTALL_GITHOOKS_WRAPPER_PACK);
+        route.add_coverage_pack("patch-coverage-install-githooks-wrapper");
         return;
     }
 
@@ -1547,6 +1561,32 @@ mod tests {
     }
 
     #[test]
+    fn ci_route_receipt_maps_install_githooks_wrapper_to_focused_non_lcov_pack() -> Result<()> {
+        let receipt =
+            route_receipt("origin/main", "HEAD", vec!["scripts/install-githooks.sh".to_string()])?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["install-githooks-wrapper"]);
+        assert!(proof_pack_ids(&receipt).contains(&"install-githooks-wrapper-focused"));
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "install-githooks-wrapper-focused"
+                && pack
+                    .commands
+                    .iter()
+                    .any(|command| command == "bash scripts/tests/test-install-githooks-wrapper.sh")
+        }));
+        assert!(receipt.coverage_pack_selector.is_empty());
+        assert!(receipt.coverage_proof_packs.is_empty());
+        assert_eq!(
+            receipt
+                .skipped_by_policy
+                .get("patch-coverage-install-githooks-wrapper")
+                .map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        Ok(())
+    }
+
+    #[test]
     fn ci_route_receipt_maps_coverage_baseline_script_to_focused_non_lcov_pack() -> Result<()> {
         let receipt = route_receipt(
             "origin/main",
@@ -1931,6 +1971,7 @@ mod tests {
                 "patch-coverage-control-plane-lock",
                 "patch-coverage-agent-preflight",
                 "patch-coverage-preflight-wrapper",
+                "patch-coverage-install-githooks-wrapper",
                 "patch-coverage-baseline-script",
                 "patch-coverage-update-baseline-script",
                 "patch-coverage-generate-receipt-script",
@@ -1967,6 +2008,7 @@ mod tests {
             "patch-coverage-control-plane-lock",
             "patch-coverage-agent-preflight",
             "patch-coverage-preflight-wrapper",
+            "patch-coverage-install-githooks-wrapper",
             "patch-coverage-baseline-script",
             "patch-coverage-update-baseline-script",
             "patch-coverage-generate-receipt-script",
@@ -2068,6 +2110,10 @@ mod tests {
         );
         assert_eq!(
             skipped.get("patch-coverage-preflight-wrapper").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        assert_eq!(
+            skipped.get("patch-coverage-install-githooks-wrapper").map(String::as_str),
             Some(NON_LCOV_COVERAGE_SKIP_REASON)
         );
         assert_eq!(
