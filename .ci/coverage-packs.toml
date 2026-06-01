@@ -358,6 +358,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-generate-receipt-script"
+lcov = false
+files = [
+  "scripts/generate-receipt.sh",
+  "scripts/tests/test-generate-receipt.sh",
+]
+commands = [
+  "bash scripts/tests/test-generate-receipt.sh",
+]
+coverage_filters = [
+  "generate-receipt",
+]
+
+[[pack]]
 id = "patch-coverage-clean-tmp-targets"
 lcov = false
 files = [

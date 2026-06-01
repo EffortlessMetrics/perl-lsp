@@ -234,6 +234,11 @@ const UPDATE_COVERAGE_BASELINE_SCRIPT_PACK: ProofPack = ProofPack {
     commands: &["bash scripts/tests/test-update-coverage-baseline.sh"],
 };
 
+const GENERATE_RECEIPT_SCRIPT_PACK: ProofPack = ProofPack {
+    id: "generate-receipt-script-focused",
+    commands: &["bash scripts/tests/test-generate-receipt.sh"],
+};
+
 const CLEAN_TMP_TARGETS_PACK: ProofPack = ProofPack {
     id: "clean-tmp-targets-focused",
     commands: &["bash scripts/tests/test-clean-tmp-targets.sh"],
@@ -560,6 +565,13 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         route.add_surface("update-coverage-baseline-script");
         route.add_pack(UPDATE_COVERAGE_BASELINE_SCRIPT_PACK);
         route.add_coverage_pack("patch-coverage-update-baseline-script");
+        return;
+    }
+
+    if file == "scripts/generate-receipt.sh" || file == "scripts/tests/test-generate-receipt.sh" {
+        route.add_surface("generate-receipt-script");
+        route.add_pack(GENERATE_RECEIPT_SCRIPT_PACK);
+        route.add_coverage_pack("patch-coverage-generate-receipt-script");
         return;
     }
 
@@ -1515,6 +1527,32 @@ mod tests {
     }
 
     #[test]
+    fn ci_route_receipt_maps_generate_receipt_script_to_focused_non_lcov_pack() -> Result<()> {
+        let receipt =
+            route_receipt("origin/main", "HEAD", vec!["scripts/generate-receipt.sh".to_string()])?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["generate-receipt-script"]);
+        assert!(proof_pack_ids(&receipt).contains(&"generate-receipt-script-focused"));
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "generate-receipt-script-focused"
+                && pack
+                    .commands
+                    .iter()
+                    .any(|command| command == "bash scripts/tests/test-generate-receipt.sh")
+        }));
+        assert!(receipt.coverage_pack_selector.is_empty());
+        assert!(receipt.coverage_proof_packs.is_empty());
+        assert_eq!(
+            receipt
+                .skipped_by_policy
+                .get("patch-coverage-generate-receipt-script")
+                .map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        Ok(())
+    }
+
+    #[test]
     fn ci_route_receipt_maps_completion_provider_to_focused_pack() -> Result<()> {
         let receipt = route_receipt(
             "origin/main",
@@ -1738,6 +1776,7 @@ mod tests {
                 "patch-coverage-agent-preflight",
                 "patch-coverage-baseline-script",
                 "patch-coverage-update-baseline-script",
+                "patch-coverage-generate-receipt-script",
                 "patch-coverage-clean-tmp-targets",
                 "patch-coverage-swarm-cleanup",
                 "patch-coverage-pre-merge-check",
@@ -1769,6 +1808,7 @@ mod tests {
             "patch-coverage-agent-preflight",
             "patch-coverage-baseline-script",
             "patch-coverage-update-baseline-script",
+            "patch-coverage-generate-receipt-script",
             "patch-coverage-clean-tmp-targets",
             "patch-coverage-swarm-cleanup",
             "patch-coverage-pre-merge-check",
@@ -1868,6 +1908,10 @@ mod tests {
         );
         assert_eq!(
             skipped.get("patch-coverage-update-baseline-script").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        assert_eq!(
+            skipped.get("patch-coverage-generate-receipt-script").map(String::as_str),
             Some(NON_LCOV_COVERAGE_SKIP_REASON)
         );
         assert_eq!(

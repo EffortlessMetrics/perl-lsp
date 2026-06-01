@@ -329,6 +329,34 @@ class RouteCodecovPacksTests(unittest.TestCase):
             [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
         )
 
+    def test_generate_receipt_script_change_is_non_lcov_focused_proof(self) -> None:
+        packs = [
+            {
+                "id": "patch-coverage-generate-receipt-script",
+                "lcov": False,
+                "files": [
+                    "scripts/generate-receipt.sh",
+                    "scripts/tests/test-generate-receipt.sh",
+                ],
+                "commands": ["bash scripts/tests/test-generate-receipt.sh"],
+                "coverage_filters": ["generate-receipt"],
+            },
+            {
+                "id": router.FALLBACK_PACK_ID,
+                "files": ["*.rs"],
+                "commands": ["cargo test --workspace --lib"],
+                "coverage_filters": ["workspace-lib"],
+            },
+        ]
+
+        paths = ["scripts/generate-receipt.sh"]
+
+        self.assertEqual([], router.selected_packs(packs, paths))
+        self.assertEqual(
+            ["patch-coverage-generate-receipt-script"],
+            [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
