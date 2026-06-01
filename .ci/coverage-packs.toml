@@ -302,6 +302,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-control-plane-lock"
+lcov = false
+files = [
+  "scripts/control-plane-lock.sh",
+  "scripts/test-control-plane-lock.sh",
+]
+commands = [
+  "bash scripts/test-control-plane-lock.sh",
+]
+coverage_filters = [
+  "control-plane-lock",
+]
+
+[[pack]]
 id = "patch-coverage-clean-tmp-targets"
 lcov = false
 files = [

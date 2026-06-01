@@ -217,6 +217,34 @@ class RouteCodecovPacksTests(unittest.TestCase):
             [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
         )
 
+    def test_control_plane_lock_change_is_non_lcov_focused_proof(self) -> None:
+        packs = [
+            {
+                "id": "patch-coverage-control-plane-lock",
+                "lcov": False,
+                "files": [
+                    "scripts/control-plane-lock.sh",
+                    "scripts/test-control-plane-lock.sh",
+                ],
+                "commands": ["bash scripts/test-control-plane-lock.sh"],
+                "coverage_filters": ["control-plane-lock"],
+            },
+            {
+                "id": router.FALLBACK_PACK_ID,
+                "files": ["*.rs"],
+                "commands": ["cargo test --workspace --lib"],
+                "coverage_filters": ["workspace-lib"],
+            },
+        ]
+
+        paths = ["scripts/control-plane-lock.sh"]
+
+        self.assertEqual([], router.selected_packs(packs, paths))
+        self.assertEqual(
+            ["patch-coverage-control-plane-lock"],
+            [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
