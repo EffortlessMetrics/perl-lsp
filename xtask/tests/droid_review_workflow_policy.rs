@@ -13,8 +13,8 @@ fn droid_review_runs_on_trusted_self_hosted_factory_runner() -> Result<()> {
 
     assert_eq!(
         runs_on,
-        ["self-hosted", "linux", "x64", "em-ci", "trusted-pr", "workflow-nano"],
-        "Droid PR Review must stay on the trusted self-hosted workflow-nano runner"
+        ["self-hosted", "linux", "x64", "em-ci", "trusted-pr", "review-nano", "droid-review"],
+        "Droid PR Review must stay on the trusted self-hosted Droid review runner"
     );
 
     Ok(())

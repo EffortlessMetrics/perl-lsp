@@ -685,6 +685,9 @@ fn normalize_self_hosted_labels(labels: &[Value]) -> Option<String> {
     if label_strs.contains(&"cx43") {
         return Some("self_hosted_cx43".to_string());
     }
+    if label_strs.contains(&"self-hosted") && label_strs.contains(&"droid-review") {
+        return Some("self_hosted_droid_review".to_string());
+    }
     if label_strs.contains(&"self-hosted") && label_strs.contains(&"droid") {
         return Some("self_hosted_droid".to_string());
     }
@@ -965,7 +968,7 @@ mod tests {
     /// Droid's self-hosted label sequence normalizes to the policy token, so
     /// the review workflow stays checked by the lane whitelist.
     #[test]
-    fn runner_droid_sequence_matches_self_hosted_workflow_nano() -> Result<()> {
+    fn runner_droid_sequence_matches_self_hosted_droid_review() -> Result<()> {
         let real_workflows_dir = {
             let root = project_root()?;
             root.join(".github").join("workflows")
@@ -977,7 +980,7 @@ mod tests {
             r#"
             workflow = ".github/workflows/droid-review.yml"
             job = "droid-review"
-            runner = "self_hosted_workflow_nano"
+            runner = "self_hosted_droid_review"
             "#,
         )?;
         let mut issues = Vec::new();
@@ -1157,6 +1160,15 @@ labels: [self-hosted, linux, x64, em-ci, cx43, rust-small]
         let v: Value =
             serde_yaml_ng::from_str("[self-hosted, linux, x64, em-ci, trusted-pr, workflow-nano]")?;
         assert_eq!(normalize_runs_on(&v), Some("self_hosted_workflow_nano".to_string()));
+        Ok(())
+    }
+
+    #[test]
+    fn normalize_droid_review_sequence_form() -> Result<()> {
+        let v: Value = serde_yaml_ng::from_str(
+            "[self-hosted, linux, x64, em-ci, trusted-pr, review-nano, droid-review]",
+        )?;
+        assert_eq!(normalize_runs_on(&v), Some("self_hosted_droid_review".to_string()));
         Ok(())
     }
 

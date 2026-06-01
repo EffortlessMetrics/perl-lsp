@@ -23,7 +23,7 @@ env:
 jobs:
   droid-review:
     if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, linux, x64, em-ci, trusted-pr, workflow-nano]
+    runs-on: [self-hosted, linux, x64, em-ci, trusted-pr, review-nano, droid-review]
     # Advisory lane: do not break PR signal on external-AI-review failures.
     # See docs/ci/perl-lsp-rollout-plan.md PR 14.
     continue-on-error: true

@@ -44,7 +44,7 @@ is decided in PR 15+ once actuals confirm the overlap.
 | `pr-title-check.yml` | `validate-title` | `pull_request` | yes | `ubuntu-24.04` | Real issue ref enforcement | 1 | `pr_title_check` | — | keep |
 | `workflow-policy.yml` | `workflow-policy-lint` | `pull_request`, `workflow_dispatch` | yes | `ubuntu-24.04` | Workflow trigger / policy lint | 2 | _add in PR 11_ | — | keep, extend in PR 11 |
 | `workflow-trigger-lint.yml` | `workflow-trigger-lint` | `pull_request` | yes | `ubuntu-24.04` | Trigger policy lint (legacy) | 1 | _add in PR 11_ | `workflow:workflow-policy` | **decide PR 15** |
-| `droid-review.yml` | `droid` | `pull_request` (opened/ready/reopened) | no | `ubuntu-latest` | External AI review | 4 | `droid_auto_review` | — | tune in PR 14 |
+| `droid-review.yml` | `droid` | `pull_request` (opened/ready/reopened) | no | `self-hosted, linux, x64, em-ci, trusted-pr, review-nano, droid-review` | External AI review | 4 | `droid_auto_review` | — | keep |
 | `pipeline-labels.yml` | `apply-pipeline-labels` | `pull_request`, `pull_request_target` | no | `ubuntu-24.04` | Apply pipeline state labels | 1 | _add in PR 11_ | — | keep |
 | `flake-detection.yml` | `flake-detect` | `pull_request`, `schedule` | no | `ubuntu-24.04` | Detect flaky tests | varies | _add in PR 11_ | — | keep |
 
