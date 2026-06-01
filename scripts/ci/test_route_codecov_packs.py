@@ -87,6 +87,36 @@ class RouteCodecovPacksTests(unittest.TestCase):
         )
         self.assertEqual([], router.lcov_matches_without_source(packs, paths))
 
+    def test_completion_provider_change_selects_completion_pack(self) -> None:
+        packs = [
+            {
+                "id": "patch-coverage-completion-core",
+                "files": [
+                    "crates/perl-lsp-rs-core/src/providers/completion/",
+                ],
+                "commands": [
+                    "cargo test -p perl-lsp-rs-core --lib completion::completion",
+                ],
+                "coverage_filters": ["completion::completion"],
+            },
+            {
+                "id": router.FALLBACK_PACK_ID,
+                "files": ["*.rs"],
+                "commands": ["cargo test --workspace --lib"],
+                "coverage_filters": ["workspace-lib"],
+            },
+        ]
+
+        paths = [
+            "crates/perl-lsp-rs-core/src/providers/completion/completion/import_map/used_modules.rs",
+        ]
+
+        self.assertEqual(
+            ["patch-coverage-completion-core"],
+            [pack["id"] for pack in router.selected_packs(packs, paths)],
+        )
+        self.assertEqual([], router.lcov_matches_without_source(packs, paths))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -114,6 +114,13 @@ const INLINE_CORE_PACK: ProofPack = ProofPack {
     ],
 };
 
+const COMPLETION_CORE_PACK: ProofPack = ProofPack {
+    id: "completion-core",
+    commands: &[
+        "cargo test -p perl-lsp-rs-core --lib --profile agent --locked completion::completion -- --nocapture",
+    ],
+};
+
 const UX_SCENARIO_PACK: ProofPack = ProofPack {
     id: "ux-scenario-focused",
     commands: &[
@@ -283,6 +290,13 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         route.add_surface("inline-core");
         route.add_pack(INLINE_CORE_PACK);
         route.add_coverage_pack("patch-coverage-inline-core");
+        return;
+    }
+
+    if file.starts_with("crates/perl-lsp-rs-core/src/providers/completion/") {
+        route.add_surface("completion-core");
+        route.add_pack(COMPLETION_CORE_PACK);
+        route.add_coverage_pack("patch-coverage-completion-core");
         return;
     }
 
@@ -843,6 +857,33 @@ mod tests {
     }
 
     #[test]
+    fn ci_route_receipt_maps_completion_provider_to_focused_pack() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec![
+                "crates/perl-lsp-rs-core/src/providers/completion/completion/import_map/used_modules.rs"
+                    .to_string(),
+            ],
+        )?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["completion-core"]);
+        assert!(proof_pack_ids(&receipt).contains(&"completion-core"));
+        assert!(
+            receipt
+                .coverage_pack_selector
+                .iter()
+                .any(|pack| pack == "patch-coverage-completion-core")
+        );
+        assert!(receipt.coverage_proof_packs.iter().any(|pack| {
+            pack.id == "patch-coverage-completion-core"
+                && pack.commands.iter().any(|command| command.contains("completion::completion"))
+                && pack.coverage_filters.iter().any(|filter| filter == "completion::completion")
+        }));
+        Ok(())
+    }
+
+    #[test]
     fn ci_route_coverage_proof_pack_receipts_materializes_each_selected_pack() -> Result<()> {
         let selector = vec![
             "patch-coverage-xtask-semantic-inline".to_string(),
@@ -1018,6 +1059,7 @@ mod tests {
                 "patch-coverage-xtask-supported-editor-inline-smoke",
                 "patch-coverage-xtask-semantic-inline",
                 "patch-coverage-inline-core",
+                "patch-coverage-completion-core",
                 "patch-coverage-ux-scenario",
                 "patch-coverage-ci-policy",
                 "patch-coverage-ci-route",
@@ -1030,6 +1072,7 @@ mod tests {
             "patch-coverage-xtask-semantic-inline",
             "patch-coverage-xtask-supported-editor-inline-smoke",
             "patch-coverage-inline-core",
+            "patch-coverage-completion-core",
             "patch-coverage-ux-scenario",
             "patch-coverage-ci-policy",
             "patch-coverage-ci-route",
@@ -1041,6 +1084,8 @@ mod tests {
             "xtask/src/tasks/semantic_inline_receipts.rs".to_string(),
             "xtask/src/tasks/supported_editor_inline_smoke.rs".to_string(),
             "crates/perl-lsp-rs-core/src/providers/inline_completion/engine.rs".to_string(),
+            "crates/perl-lsp-rs-core/src/providers/completion/completion/import_map/used_modules.rs"
+                .to_string(),
             "crates/perl-parser/src/lib.rs".to_string(),
         ];
         let (selected, skipped, proof_packs) = coverage_proof_pack_selection(
@@ -1053,6 +1098,7 @@ mod tests {
                 "patch-coverage-xtask-semantic-inline",
                 "patch-coverage-xtask-supported-editor-inline-smoke",
                 "patch-coverage-inline-core",
+                "patch-coverage-completion-core",
                 "patch-coverage-rust-focused",
             ]
         );
@@ -1091,6 +1137,22 @@ mod tests {
                 .commands
                 .iter()
                 .any(|command| { command.contains("inline-completion-quality") })
+        );
+        let completion_core_pack = proof_packs
+            .iter()
+            .find(|pack| pack.id == "patch-coverage-completion-core")
+            .ok_or_else(|| eyre!("missing completion core coverage pack"))?;
+        assert!(
+            completion_core_pack
+                .files
+                .iter()
+                .any(|file| { file == "crates/perl-lsp-rs-core/src/providers/completion/" })
+        );
+        assert!(
+            completion_core_pack
+                .commands
+                .iter()
+                .any(|command| { command.contains("completion::completion") })
         );
         Ok(())
     }

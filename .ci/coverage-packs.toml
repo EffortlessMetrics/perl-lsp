@@ -52,6 +52,18 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-completion-core"
+files = [
+  "crates/perl-lsp-rs-core/src/providers/completion/",
+]
+commands = [
+  "cargo test -p perl-lsp-rs-core --lib --profile agent --locked completion::completion -- --nocapture",
+]
+coverage_filters = [
+  "completion::completion",
+]
+
+[[pack]]
 id = "patch-coverage-ux-scenario"
 files = [
   "crates/perl-lsp-ux-tests/tests/ux_scenario_",

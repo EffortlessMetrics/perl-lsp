@@ -133,6 +133,46 @@ fn coverage_pack_manifest_declares_supported_editor_pack() -> Result<()> {
 }
 
 #[test]
+fn coverage_pack_manifest_declares_completion_core_pack() -> Result<()> {
+    let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(PathBuf::from)
+        .ok_or_else(|| anyhow!("xtask manifest path has no parent"))?
+        .join(".ci/coverage-packs.toml");
+    let manifest: toml::Value = toml::from_str(&fs::read_to_string(manifest_path)?)?;
+    let packs = manifest
+        .get("pack")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| anyhow!("coverage pack manifest must contain pack array"))?;
+    let pack = packs
+        .iter()
+        .find(|pack| {
+            pack.get("id").and_then(toml::Value::as_str) == Some("patch-coverage-completion-core")
+        })
+        .ok_or_else(|| anyhow!("missing completion core coverage pack"))?;
+    let files = pack
+        .get("files")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| anyhow!("coverage pack files must be an array"))?;
+    let commands = pack
+        .get("commands")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| anyhow!("coverage pack commands must be an array"))?;
+
+    assert!(
+        files
+            .iter()
+            .filter_map(toml::Value::as_str)
+            .any(|value| { value == "crates/perl-lsp-rs-core/src/providers/completion/" })
+    );
+    assert!(commands.iter().filter_map(toml::Value::as_str).any(|value| {
+        value
+            == "cargo test -p perl-lsp-rs-core --lib --profile agent --locked completion::completion -- --nocapture"
+    }));
+    Ok(())
+}
+
+#[test]
 fn coverage_pack_manifest_declares_ci_policy_pack_owns_classifier() -> Result<()> {
     let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -564,6 +604,60 @@ fn ci_route_cli_maps_ripr_summary_script_to_summary_proof_pack() -> Result<()> {
     let summary = fs::read_to_string(summary)?;
     assert!(summary.contains("python -m unittest scripts/ci/test_ripr_summary.py"));
     assert!(summary.contains("`patch-coverage-ripr-summary`: non-LCOV CI policy/routing surface"));
+    Ok(())
+}
+
+#[test]
+fn ci_route_cli_maps_completion_provider_to_completion_proof_pack() -> Result<()> {
+    let temp = TempDir::new()?;
+    let receipt = temp.path().join("ci-route.json");
+    let summary = temp.path().join("ci-route.md");
+
+    cargo_bin_cmd!("xtask")
+        .args([
+            "ci",
+            "route",
+            "--base",
+            "origin/main",
+            "--head",
+            "HEAD",
+            "--receipt",
+            receipt.to_str().ok_or_else(|| anyhow!("invalid ci route receipt path"))?,
+            "--summary",
+            summary.to_str().ok_or_else(|| anyhow!("invalid ci route summary path"))?,
+            "--changed-file",
+            "crates/perl-lsp-rs-core/src/providers/completion/completion/import_map/used_modules.rs",
+        ])
+        .assert()
+        .success();
+
+    let route: Value = serde_json::from_str(&std::fs::read_to_string(receipt)?)?;
+    assert_eq!(
+        route.pointer("/changed_surfaces/0").and_then(Value::as_str),
+        Some("completion-core")
+    );
+    assert_eq!(
+        route.pointer("/coverage_pack_selector/0").and_then(Value::as_str),
+        Some("patch-coverage-completion-core")
+    );
+    assert!(
+        route.get("required_proof_packs").and_then(Value::as_array).is_some_and(|packs| {
+            packs.iter().any(|pack| {
+                pack.get("id").and_then(Value::as_str) == Some("completion-core")
+                    && pack.get("commands").and_then(Value::as_array).is_some_and(|commands| {
+                        commands.iter().any(|command| {
+                            command
+                                .as_str()
+                                .is_some_and(|text| text.contains("completion::completion"))
+                        })
+                    })
+            })
+        }),
+        "completion provider changes must run the focused completion proof"
+    );
+    let summary = fs::read_to_string(summary)?;
+    assert!(summary.contains("patch-coverage-completion-core"));
+    assert!(summary.contains("completion::completion"));
     Ok(())
 }
 
