@@ -358,6 +358,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-e2e-gate-wrapper"
+lcov = false
+files = [
+  "scripts/e2e-gate.sh",
+  "scripts/tests/test-e2e-gate-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-e2e-gate-wrapper.sh",
+]
+coverage_filters = [
+  "e2e-gate-wrapper",
+]
+
+[[pack]]
 id = "patch-coverage-baseline-script"
 lcov = false
 files = [
