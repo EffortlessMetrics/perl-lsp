@@ -243,6 +243,10 @@ fn is_method_receiver_char(ch: char) -> bool {
         || matches!(ch, '_' | '$' | '@' | '%' | ':' | '-' | '>' | '{' | '}' | '[' | ']')
 }
 
+fn next_char_boundary_after(source: &str, index: usize) -> usize {
+    source[index..].chars().next().map_or(source.len(), |ch| index + ch.len_utf8())
+}
+
 impl CompletionProvider {
     /// Create a new completion provider from parsed AST for Perl script analysis
     ///
@@ -710,37 +714,36 @@ impl CompletionProvider {
     fn analyze_context(&self, source: &str, position: usize) -> CompletionContext {
         // Find the word being typed
         // Special handling for method calls: include the -> and the receiver
-        let (word_prefix, prefix_start) =
-            if position >= 2 && &source[position.saturating_sub(2)..position] == "->" {
-                // We're right after ->, find the receiver variable or package name.
-                let receiver_start = method_receiver_start(source, position.saturating_sub(2));
-                (source[receiver_start..position].to_string(), receiver_start)
-            } else if position >= 1
-                && source.as_bytes()[position - 1] == b'-'
-                && (position < 2 || source.as_bytes()[position - 2] != b'-')
-            {
-                // Cursor is right after a lone `-` (not `--`). This fires when `-` is a
-                // trigger character and the user has typed the first char of `->`.
-                // Build the prefix as receiver + `->` so that downstream method-completion
-                // functions see the same shape as the `>` trigger path.
-                let receiver_start = method_receiver_start(source, position.saturating_sub(1));
-                let receiver = &source[receiver_start..position - 1];
-                (format!("{receiver}->"), receiver_start)
-            } else {
-                let word_start = source[..position]
-                    .rfind(|c: char| {
-                        !c.is_alphanumeric()
-                            && c != '_'
-                            && c != ':'
-                            && c != '$'
-                            && c != '@'
-                            && c != '%'
-                            && c != '&'
-                    })
-                    .map(|p| p + 1)
-                    .unwrap_or(0);
-                (source[word_start..position].to_string(), word_start)
-            };
+        let (word_prefix, prefix_start) = if source[..position].ends_with("->") {
+            // We're right after ->, find the receiver variable or package name.
+            let receiver_start = method_receiver_start(source, position.saturating_sub(2));
+            (source[receiver_start..position].to_string(), receiver_start)
+        } else if position >= 1
+            && source.as_bytes()[position - 1] == b'-'
+            && (position < 2 || source.as_bytes()[position - 2] != b'-')
+        {
+            // Cursor is right after a lone `-` (not `--`). This fires when `-` is a
+            // trigger character and the user has typed the first char of `->`.
+            // Build the prefix as receiver + `->` so that downstream method-completion
+            // functions see the same shape as the `>` trigger path.
+            let receiver_start = method_receiver_start(source, position.saturating_sub(1));
+            let receiver = &source[receiver_start..position - 1];
+            (format!("{receiver}->"), receiver_start)
+        } else {
+            let word_start = source[..position]
+                .rfind(|c: char| {
+                    !c.is_alphanumeric()
+                        && c != '_'
+                        && c != ':'
+                        && c != '$'
+                        && c != '@'
+                        && c != '%'
+                        && c != '&'
+                })
+                .map(|p| next_char_boundary_after(source, p))
+                .unwrap_or(0);
+            (source[word_start..position].to_string(), word_start)
+        };
 
         // Detect trigger character (trigger chars are ASCII, so byte access is safe)
         let trigger_character = if position > 0 {
@@ -986,7 +989,7 @@ impl CompletionProvider {
             let receiver = statement[..new_idx].trim_end();
             let receiver_start = receiver
                 .rfind(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != ':' && c != '\'')
-                .map(|idx| idx + 1)
+                .map(|idx| next_char_boundary_after(receiver, idx))
                 .unwrap_or(0);
             let package_name = receiver[receiver_start..].trim();
             if package_name.is_empty()

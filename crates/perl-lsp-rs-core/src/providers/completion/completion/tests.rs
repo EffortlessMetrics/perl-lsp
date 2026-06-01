@@ -53,6 +53,51 @@ proc
 }
 
 #[test]
+fn dash_trigger_after_multibyte_receiver_keeps_char_boundary()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = "# 我-";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let context = provider.analyze_context(code, code.len());
+
+    assert_eq!(context.prefix, "我->");
+    assert_eq!(context.prefix_start, 2);
+    assert_eq!(context.trigger_character, Some('-'));
+    Ok(())
+}
+
+#[test]
+fn word_prefix_after_multibyte_delimiter_keeps_char_boundary()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = "# ”my_func";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let context = provider.analyze_context(code, code.len());
+
+    assert_eq!(context.prefix, "my_func");
+    assert_eq!(&code[context.prefix_start..], "my_func");
+    Ok(())
+}
+
+#[test]
+fn object_pad_constructor_receiver_after_multibyte_delimiter_keeps_char_boundary()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = "# ”Point->new(";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+
+    let package = provider.object_pad_constructor_package(code, code.len());
+
+    assert_eq!(package.as_deref(), Some("Point"));
+    Ok(())
+}
+
+#[test]
 fn test_use_constant_completion_from_visible_symbol_table() {
     let code = r#"
 package My::Config;
