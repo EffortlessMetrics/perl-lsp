@@ -238,6 +238,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-aggregate-lane-history"
+lcov = false
+files = [
+  "scripts/ci/aggregate_lane_history.py",
+  "scripts/ci/test_aggregate_lane_history.py",
+]
+commands = [
+  "python -m unittest scripts/ci/test_aggregate_lane_history.py",
+]
+coverage_filters = [
+  "aggregate_lane_history",
+]
+
+[[pack]]
 id = "patch-coverage-rust-focused"
 files = [
   "*.rs",

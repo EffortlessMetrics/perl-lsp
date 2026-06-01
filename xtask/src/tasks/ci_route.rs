@@ -188,6 +188,11 @@ const CORE_PACKAGE_VALIDATOR_PACK: ProofPack = ProofPack {
     commands: &["python -m unittest scripts/ci/test_check_perl_lsp_rs_core_package.py"],
 };
 
+const AGGREGATE_LANE_HISTORY_PACK: ProofPack = ProofPack {
+    id: "aggregate-lane-history-focused",
+    commands: &["python -m unittest scripts/ci/test_aggregate_lane_history.py"],
+};
+
 const GENERAL_RUST_PACK: ProofPack = ProofPack {
     id: "rust-focused",
     commands: &["cargo check --workspace --all-targets --profile agent --locked"],
@@ -430,6 +435,15 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         route.add_surface("core-package-validator");
         route.add_pack(CORE_PACKAGE_VALIDATOR_PACK);
         route.add_coverage_pack("patch-coverage-core-package-validator");
+        return;
+    }
+
+    if file == "scripts/ci/aggregate_lane_history.py"
+        || file == "scripts/ci/test_aggregate_lane_history.py"
+    {
+        route.add_surface("aggregate-lane-history");
+        route.add_pack(AGGREGATE_LANE_HISTORY_PACK);
+        route.add_coverage_pack("patch-coverage-aggregate-lane-history");
         return;
     }
 
@@ -1100,6 +1114,34 @@ mod tests {
     }
 
     #[test]
+    fn ci_route_receipt_maps_aggregate_lane_history_to_focused_non_lcov_pack() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec!["scripts/ci/aggregate_lane_history.py".to_string()],
+        )?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["aggregate-lane-history"]);
+        assert!(proof_pack_ids(&receipt).contains(&"aggregate-lane-history-focused"));
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "aggregate-lane-history-focused"
+                && pack.commands.iter().any(|command| {
+                    command == "python -m unittest scripts/ci/test_aggregate_lane_history.py"
+                })
+        }));
+        assert!(receipt.coverage_pack_selector.is_empty());
+        assert!(receipt.coverage_proof_packs.is_empty());
+        assert_eq!(
+            receipt
+                .skipped_by_policy
+                .get("patch-coverage-aggregate-lane-history")
+                .map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        Ok(())
+    }
+
+    #[test]
     fn ci_route_receipt_maps_completion_provider_to_focused_pack() -> Result<()> {
         let receipt = route_receipt(
             "origin/main",
@@ -1314,6 +1356,7 @@ mod tests {
                 "patch-coverage-trust-lanes-validator",
                 "patch-coverage-receipts-junit",
                 "patch-coverage-core-package-validator",
+                "patch-coverage-aggregate-lane-history",
                 "patch-coverage-rust-focused",
             ]
         );
@@ -1333,6 +1376,7 @@ mod tests {
             "patch-coverage-trust-lanes-validator",
             "patch-coverage-receipts-junit",
             "patch-coverage-core-package-validator",
+            "patch-coverage-aggregate-lane-history",
             "patch-coverage-rust-focused",
         ];
         let changed_files = vec![
@@ -1395,6 +1439,10 @@ mod tests {
         );
         assert_eq!(
             skipped.get("patch-coverage-core-package-validator").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        assert_eq!(
+            skipped.get("patch-coverage-aggregate-lane-history").map(String::as_str),
             Some(NON_LCOV_COVERAGE_SKIP_REASON)
         );
         assert_eq!(
