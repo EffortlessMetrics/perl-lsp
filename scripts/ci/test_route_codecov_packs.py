@@ -469,6 +469,34 @@ class RouteCodecovPacksTests(unittest.TestCase):
             [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
         )
 
+    def test_forbid_fatal_constructs_wrapper_change_is_non_lcov_focused_proof(self) -> None:
+        packs = [
+            {
+                "id": "patch-coverage-forbid-fatal-constructs-wrapper",
+                "lcov": False,
+                "files": [
+                    "scripts/forbid-fatal-constructs.sh",
+                    "scripts/tests/test-forbid-fatal-constructs-wrapper.sh",
+                ],
+                "commands": ["bash scripts/tests/test-forbid-fatal-constructs-wrapper.sh"],
+                "coverage_filters": ["forbid-fatal-constructs-wrapper"],
+            },
+            {
+                "id": router.FALLBACK_PACK_ID,
+                "files": ["*.rs"],
+                "commands": ["cargo test --workspace --lib"],
+                "coverage_filters": ["workspace-lib"],
+            },
+        ]
+
+        paths = ["scripts/forbid-fatal-constructs.sh"]
+
+        self.assertEqual([], router.selected_packs(packs, paths))
+        self.assertEqual(
+            ["patch-coverage-forbid-fatal-constructs-wrapper"],
+            [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
+        )
+
     def test_coverage_baseline_script_change_is_non_lcov_focused_proof(self) -> None:
         packs = [
             {

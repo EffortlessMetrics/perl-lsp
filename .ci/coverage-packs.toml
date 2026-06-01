@@ -428,6 +428,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-forbid-fatal-constructs-wrapper"
+lcov = false
+files = [
+  "scripts/forbid-fatal-constructs.sh",
+  "scripts/tests/test-forbid-fatal-constructs-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-forbid-fatal-constructs-wrapper.sh",
+]
+coverage_filters = [
+  "forbid-fatal-constructs-wrapper",
+]
+
+[[pack]]
 id = "patch-coverage-baseline-script"
 lcov = false
 files = [
