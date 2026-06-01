@@ -301,6 +301,23 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-swarm-cleanup"
+lcov = false
+files = [
+  "scripts/swarm-clean",
+  "scripts/swarm-doctor",
+  "scripts/tests/test_swarm_clean.sh",
+  "scripts/tests/test_swarm_doctor.sh",
+]
+commands = [
+  "bash scripts/tests/test_swarm_clean.sh",
+  "bash scripts/tests/test_swarm_doctor.sh",
+]
+coverage_filters = [
+  "swarm-cleanup",
+]
+
+[[pack]]
 id = "patch-coverage-rust-focused"
 files = [
   "*.rs",

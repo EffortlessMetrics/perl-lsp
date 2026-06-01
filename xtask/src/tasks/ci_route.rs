@@ -216,6 +216,14 @@ const CLEAN_TMP_TARGETS_PACK: ProofPack = ProofPack {
     commands: &["bash scripts/tests/test-clean-tmp-targets.sh"],
 };
 
+const SWARM_CLEANUP_PACK: ProofPack = ProofPack {
+    id: "swarm-cleanup-focused",
+    commands: &[
+        "bash scripts/tests/test_swarm_clean.sh",
+        "bash scripts/tests/test_swarm_doctor.sh",
+    ],
+};
+
 const GENERAL_RUST_PACK: ProofPack = ProofPack {
     id: "rust-focused",
     commands: &["cargo check --workspace --all-targets --profile agent --locked"],
@@ -492,6 +500,19 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         route.add_surface("clean-tmp-targets");
         route.add_pack(CLEAN_TMP_TARGETS_PACK);
         route.add_coverage_pack("patch-coverage-clean-tmp-targets");
+        return;
+    }
+
+    if matches!(
+        file,
+        "scripts/swarm-clean"
+            | "scripts/swarm-doctor"
+            | "scripts/tests/test_swarm_clean.sh"
+            | "scripts/tests/test_swarm_doctor.sh"
+    ) {
+        route.add_surface("swarm-cleanup");
+        route.add_pack(SWARM_CLEANUP_PACK);
+        route.add_coverage_pack("patch-coverage-swarm-cleanup");
         return;
     }
 
@@ -1236,6 +1257,39 @@ mod tests {
     }
 
     #[test]
+    fn ci_route_receipt_maps_swarm_cleanup_to_focused_non_lcov_pack() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec![
+                "scripts/swarm-clean".to_string(),
+                "scripts/tests/test_swarm_doctor.sh".to_string(),
+            ],
+        )?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["swarm-cleanup"]);
+        assert!(proof_pack_ids(&receipt).contains(&"swarm-cleanup-focused"));
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "swarm-cleanup-focused"
+                && pack
+                    .commands
+                    .iter()
+                    .any(|command| command == "bash scripts/tests/test_swarm_clean.sh")
+                && pack
+                    .commands
+                    .iter()
+                    .any(|command| command == "bash scripts/tests/test_swarm_doctor.sh")
+        }));
+        assert!(receipt.coverage_pack_selector.is_empty());
+        assert!(receipt.coverage_proof_packs.is_empty());
+        assert_eq!(
+            receipt.skipped_by_policy.get("patch-coverage-swarm-cleanup").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        Ok(())
+    }
+
+    #[test]
     fn ci_route_receipt_maps_completion_provider_to_focused_pack() -> Result<()> {
         let receipt = route_receipt(
             "origin/main",
@@ -1455,6 +1509,7 @@ mod tests {
                 "patch-coverage-aggregate-lane-history",
                 "patch-coverage-pr-plan",
                 "patch-coverage-clean-tmp-targets",
+                "patch-coverage-swarm-cleanup",
                 "patch-coverage-rust-focused",
             ]
         );
@@ -1479,6 +1534,7 @@ mod tests {
             "patch-coverage-aggregate-lane-history",
             "patch-coverage-pr-plan",
             "patch-coverage-clean-tmp-targets",
+            "patch-coverage-swarm-cleanup",
             "patch-coverage-rust-focused",
         ];
         let changed_files = vec![
@@ -1556,6 +1612,10 @@ mod tests {
         );
         assert_eq!(
             skipped.get("patch-coverage-clean-tmp-targets").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        assert_eq!(
+            skipped.get("patch-coverage-swarm-cleanup").map(String::as_str),
             Some(NON_LCOV_COVERAGE_SKIP_REASON)
         );
         assert_eq!(
