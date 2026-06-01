@@ -156,7 +156,7 @@ class RouteCodecovPacksTests(unittest.TestCase):
             [pack["id"] for pack in router.selected_packs(packs, paths)],
         )
 
-    def test_inline_quality_change_selects_quality_pack_without_provider_pack(self) -> None:
+    def test_inline_quality_change_is_non_lcov_focused_proof(self) -> None:
         packs = [
             {
                 "id": "patch-coverage-inline-provider-core",
@@ -170,6 +170,7 @@ class RouteCodecovPacksTests(unittest.TestCase):
             },
             {
                 "id": "patch-coverage-xtask-inline-quality",
+                "lcov": False,
                 "files": [
                     "xtask/src/tasks/inline_completion_quality.rs",
                 ],
@@ -182,9 +183,10 @@ class RouteCodecovPacksTests(unittest.TestCase):
 
         paths = ["xtask/src/tasks/inline_completion_quality.rs"]
 
+        self.assertEqual([], router.selected_packs(packs, paths))
         self.assertEqual(
             ["patch-coverage-xtask-inline-quality"],
-            [pack["id"] for pack in router.selected_packs(packs, paths)],
+            [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
         )
 
 

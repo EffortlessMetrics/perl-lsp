@@ -1594,10 +1594,13 @@ mod tests {
                 "patch-coverage-xtask-semantic-inline",
                 "patch-coverage-xtask-supported-editor-inline-smoke",
                 "patch-coverage-inline-provider-core",
-                "patch-coverage-xtask-inline-quality",
                 "patch-coverage-completion-core",
                 "patch-coverage-rust-focused",
             ]
+        );
+        assert_eq!(
+            skipped.get("patch-coverage-xtask-inline-quality").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
         );
         assert_eq!(
             skipped.get("patch-coverage-ci-policy").map(String::as_str),
@@ -1683,21 +1686,8 @@ mod tests {
                 .iter()
                 .any(|command| { command.contains("inline-completion-quality") })
         );
-        let inline_quality_pack = proof_packs
-            .iter()
-            .find(|pack| pack.id == "patch-coverage-xtask-inline-quality")
-            .ok_or_else(|| eyre!("missing inline quality coverage pack"))?;
         assert!(
-            inline_quality_pack
-                .files
-                .iter()
-                .any(|file| { file == "xtask/src/tasks/inline_completion_quality.rs" })
-        );
-        assert!(
-            inline_quality_pack
-                .commands
-                .iter()
-                .any(|command| { command.contains("inline-completion-quality") })
+            !proof_packs.iter().any(|pack| { pack.id == "patch-coverage-xtask-inline-quality" })
         );
         let completion_core_pack = proof_packs
             .iter()
@@ -1738,25 +1728,26 @@ mod tests {
         assert!(proof_pack_ids(&receipt).contains(&"inline-ux-fixtures"));
         assert!(proof_pack_ids(&receipt).contains(&"xtask-inline-completion-quality"));
         assert!(!proof_pack_ids(&receipt).contains(&"rust-focused"));
-        assert_eq!(
-            receipt.coverage_pack_selector,
-            vec!["patch-coverage-inline-provider-core", "patch-coverage-xtask-inline-quality"]
-        );
+        assert_eq!(receipt.coverage_pack_selector, vec!["patch-coverage-inline-provider-core"]);
         assert_eq!(
             receipt.coverage_proof_packs.iter().map(|pack| pack.id.as_str()).collect::<Vec<_>>(),
-            vec!["patch-coverage-inline-provider-core", "patch-coverage-xtask-inline-quality"]
+            vec!["patch-coverage-inline-provider-core"]
         );
         assert_eq!(
             receipt.skipped_by_policy.get("patch-coverage-inline-ux-fixtures").map(String::as_str),
             Some(NON_LCOV_COVERAGE_SKIP_REASON)
         );
-        assert!(
+        assert_eq!(
             receipt
-                .coverage_proof_packs
-                .iter()
-                .flat_map(|pack| pack.commands.iter())
-                .any(|command| command.contains("inline-completion-quality"))
+                .skipped_by_policy
+                .get("patch-coverage-xtask-inline-quality")
+                .map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
         );
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "xtask-inline-completion-quality"
+                && pack.commands.iter().any(|command| command.contains("inline-completion-quality"))
+        }));
         Ok(())
     }
 
@@ -1787,7 +1778,7 @@ mod tests {
     }
 
     #[test]
-    fn ci_route_receipt_maps_inline_quality_to_quality_coverage_pack_only() -> Result<()> {
+    fn ci_route_receipt_maps_inline_quality_to_focused_non_lcov_pack() -> Result<()> {
         let receipt = route_receipt(
             "origin/main",
             "HEAD",
@@ -1795,14 +1786,19 @@ mod tests {
         )?;
 
         assert_eq!(receipt.changed_surfaces, vec!["xtask-inline-completion-quality"]);
-        assert_eq!(receipt.coverage_pack_selector, vec!["patch-coverage-xtask-inline-quality"]);
-        assert!(
+        assert!(receipt.coverage_pack_selector.is_empty());
+        assert!(receipt.coverage_proof_packs.is_empty());
+        assert_eq!(
             receipt
-                .coverage_proof_packs
-                .iter()
-                .flat_map(|pack| pack.commands.iter())
-                .any(|command| command.contains("inline-completion-quality"))
+                .skipped_by_policy
+                .get("patch-coverage-xtask-inline-quality")
+                .map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
         );
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "xtask-inline-completion-quality"
+                && pack.commands.iter().any(|command| command.contains("inline-completion-quality"))
+        }));
         Ok(())
     }
 

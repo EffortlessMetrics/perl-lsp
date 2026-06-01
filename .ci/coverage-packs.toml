@@ -64,6 +64,7 @@ coverage_filters = [
 
 [[pack]]
 id = "patch-coverage-xtask-inline-quality"
+lcov = false
 files = [
   "xtask/src/tasks/inline_completion_quality.rs",
 ]

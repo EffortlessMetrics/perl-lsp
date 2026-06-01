@@ -855,6 +855,74 @@ fn ci_route_cli_skips_non_lcov_policy_packs_from_codecov_coverage_receipt() -> R
 }
 
 #[test]
+fn ci_route_cli_keeps_inline_quality_focused_but_out_of_codecov_lcov() -> Result<()> {
+    let temp = TempDir::new()?;
+    let receipt = temp.path().join("ci-route.json");
+    let summary = temp.path().join("ci-route.md");
+
+    cargo_bin_cmd!("xtask")
+        .args([
+            "ci",
+            "route",
+            "--base",
+            "origin/main",
+            "--head",
+            "HEAD",
+            "--receipt",
+            receipt.to_str().ok_or_else(|| anyhow!("invalid ci route receipt path"))?,
+            "--summary",
+            summary.to_str().ok_or_else(|| anyhow!("invalid ci route summary path"))?,
+            "--changed-file",
+            "xtask/src/tasks/inline_completion_quality.rs",
+        ])
+        .assert()
+        .success();
+
+    let route: Value = serde_json::from_str(&std::fs::read_to_string(receipt)?)?;
+    assert_eq!(
+        route.pointer("/changed_surfaces/0").and_then(Value::as_str),
+        Some("xtask-inline-completion-quality")
+    );
+    assert!(
+        route.get("required_proof_packs").and_then(Value::as_array).is_some_and(|packs| packs
+            .iter()
+            .any(|pack| {
+                pack.get("id").and_then(Value::as_str) == Some("xtask-inline-completion-quality")
+                    && pack.get("commands").and_then(Value::as_array).is_some_and(|commands| {
+                        commands.iter().any(|command| {
+                            command.as_str().is_some_and(|command| {
+                                command.contains("inline-completion-quality")
+                            })
+                        })
+                    })
+            })),
+        "inline quality changes must still require their focused receipt command"
+    );
+    assert!(
+        route.get("coverage_pack_selector").and_then(Value::as_array).is_some_and(Vec::is_empty),
+        "inline quality receipt harness must not select Codecov LCOV proof"
+    );
+    assert!(
+        route.get("coverage_proof_packs").and_then(Value::as_array).is_some_and(Vec::is_empty),
+        "inline quality receipt harness must not appear as a Codecov coverage proof pack"
+    );
+    assert_eq!(
+        route
+            .pointer("/skipped_by_policy/patch-coverage-xtask-inline-quality")
+            .and_then(Value::as_str),
+        Some("non-LCOV CI policy/routing surface; covered by focused CI gates")
+    );
+    let summary = fs::read_to_string(summary)?;
+    assert!(
+        summary
+            .contains("`patch-coverage-xtask-inline-quality`: non-LCOV CI policy/routing surface")
+    );
+    assert!(summary.contains("## Coverage Proof Packs"));
+    assert!(summary.contains("- none"));
+    Ok(())
+}
+
+#[test]
 fn ci_route_cli_maps_codecov_router_script_to_route_proof_pack() -> Result<()> {
     let temp = TempDir::new()?;
     let receipt = temp.path().join("ci-route.json");
