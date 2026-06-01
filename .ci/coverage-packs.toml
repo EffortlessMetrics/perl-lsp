@@ -442,6 +442,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-dead-code-wrapper"
+lcov = false
+files = [
+  "scripts/dead-code-check.sh",
+  "scripts/tests/test-dead-code-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-dead-code-wrapper.sh",
+]
+coverage_filters = [
+  "dead-code-wrapper",
+]
+
+[[pack]]
 id = "patch-coverage-baseline-script"
 lcov = false
 files = [

@@ -1134,6 +1134,48 @@ fn coverage_pack_manifest_declares_forbid_fatal_pack_owns_forbid_fatal_wrapper()
 }
 
 #[test]
+fn coverage_pack_manifest_declares_dead_code_pack_owns_dead_code_wrapper() -> Result<()> {
+    let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(PathBuf::from)
+        .ok_or_else(|| anyhow!("xtask manifest path has no parent"))?
+        .join(".ci/coverage-packs.toml");
+    let manifest: toml::Value = toml::from_str(&fs::read_to_string(manifest_path)?)?;
+    let packs = manifest
+        .get("pack")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| anyhow!("coverage pack manifest must contain pack array"))?;
+    let pack = packs
+        .iter()
+        .find(|pack| {
+            pack.get("id").and_then(toml::Value::as_str) == Some("patch-coverage-dead-code-wrapper")
+        })
+        .ok_or_else(|| anyhow!("missing dead-code wrapper coverage pack"))?;
+    let files = pack
+        .get("files")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| anyhow!("coverage pack files must be an array"))?;
+    let commands = pack
+        .get("commands")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| anyhow!("coverage pack commands must be an array"))?;
+
+    assert!(
+        files
+            .iter()
+            .filter_map(toml::Value::as_str)
+            .any(|value| { value == "scripts/dead-code-check.sh" })
+    );
+    assert!(
+        commands
+            .iter()
+            .filter_map(toml::Value::as_str)
+            .any(|value| { value == "bash scripts/tests/test-dead-code-wrapper.sh" })
+    );
+    Ok(())
+}
+
+#[test]
 fn coverage_pack_manifest_declares_coverage_baseline_pack_owns_baseline_helper() -> Result<()> {
     let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -3184,6 +3226,66 @@ fn ci_route_cli_maps_forbid_fatal_wrapper_to_forbid_fatal_proof_pack() -> Result
     assert!(summary.contains(
         "`patch-coverage-forbid-fatal-constructs-wrapper`: non-LCOV CI policy/routing surface"
     ));
+    Ok(())
+}
+
+#[test]
+fn ci_route_cli_maps_dead_code_wrapper_to_dead_code_proof_pack() -> Result<()> {
+    let temp = TempDir::new()?;
+    let receipt = temp.path().join("ci-route.json");
+    let summary = temp.path().join("ci-route.md");
+
+    cargo_bin_cmd!("xtask")
+        .args([
+            "ci",
+            "route",
+            "--base",
+            "origin/main",
+            "--head",
+            "HEAD",
+            "--receipt",
+            receipt.to_str().ok_or_else(|| anyhow!("invalid ci route receipt path"))?,
+            "--summary",
+            summary.to_str().ok_or_else(|| anyhow!("invalid ci route summary path"))?,
+            "--changed-file",
+            "scripts/dead-code-check.sh",
+        ])
+        .assert()
+        .success();
+
+    let route: Value = serde_json::from_str(&std::fs::read_to_string(receipt)?)?;
+    assert_eq!(
+        route.pointer("/changed_surfaces/0").and_then(Value::as_str),
+        Some("dead-code-wrapper")
+    );
+    assert!(
+        route.get("required_proof_packs").and_then(Value::as_array).is_some_and(|packs| packs
+            .iter()
+            .any(|pack| {
+                pack.get("id").and_then(Value::as_str) == Some("dead-code-wrapper-focused")
+                    && pack.get("commands").and_then(Value::as_array).is_some_and(|commands| {
+                        commands.iter().any(|command| {
+                            command.as_str() == Some("bash scripts/tests/test-dead-code-wrapper.sh")
+                        })
+                    })
+            })),
+        "dead-code wrapper changes must run focused proof"
+    );
+    assert!(
+        route.get("coverage_pack_selector").and_then(Value::as_array).is_some_and(Vec::is_empty),
+        "dead-code wrapper proof pack is non-LCOV and must not be uploaded as Codecov coverage"
+    );
+    assert_eq!(
+        route
+            .pointer("/skipped_by_policy/patch-coverage-dead-code-wrapper")
+            .and_then(Value::as_str),
+        Some("non-LCOV CI policy/routing surface; covered by focused CI gates")
+    );
+    let summary = fs::read_to_string(summary)?;
+    assert!(summary.contains("bash scripts/tests/test-dead-code-wrapper.sh"));
+    assert!(
+        summary.contains("`patch-coverage-dead-code-wrapper`: non-LCOV CI policy/routing surface")
+    );
     Ok(())
 }
 
