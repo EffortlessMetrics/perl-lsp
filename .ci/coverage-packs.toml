@@ -372,6 +372,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-execute-gate-wrapper"
+lcov = false
+files = [
+  "scripts/execute-gate.sh",
+  "scripts/tests/test-execute-gate-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-execute-gate-wrapper.sh",
+]
+coverage_filters = [
+  "execute-gate-wrapper",
+]
+
+[[pack]]
 id = "patch-coverage-baseline-script"
 lcov = false
 files = [

@@ -239,6 +239,11 @@ const E2E_GATE_WRAPPER_PACK: ProofPack = ProofPack {
     commands: &["bash scripts/tests/test-e2e-gate-wrapper.sh"],
 };
 
+const EXECUTE_GATE_WRAPPER_PACK: ProofPack = ProofPack {
+    id: "execute-gate-wrapper-focused",
+    commands: &["bash scripts/tests/test-execute-gate-wrapper.sh"],
+};
+
 const COVERAGE_BASELINE_SCRIPT_PACK: ProofPack = ProofPack {
     id: "coverage-baseline-script-focused",
     commands: &["bash scripts/tests/test-check-coverage-baseline.sh"],
@@ -600,6 +605,13 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         route.add_surface("e2e-gate-wrapper");
         route.add_pack(E2E_GATE_WRAPPER_PACK);
         route.add_coverage_pack("patch-coverage-e2e-gate-wrapper");
+        return;
+    }
+
+    if file == "scripts/execute-gate.sh" || file == "scripts/tests/test-execute-gate-wrapper.sh" {
+        route.add_surface("execute-gate-wrapper");
+        route.add_pack(EXECUTE_GATE_WRAPPER_PACK);
+        route.add_coverage_pack("patch-coverage-execute-gate-wrapper");
         return;
     }
 
@@ -1622,6 +1634,32 @@ mod tests {
     }
 
     #[test]
+    fn ci_route_receipt_maps_execute_gate_wrapper_to_focused_non_lcov_pack() -> Result<()> {
+        let receipt =
+            route_receipt("origin/main", "HEAD", vec!["scripts/execute-gate.sh".to_string()])?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["execute-gate-wrapper"]);
+        assert!(proof_pack_ids(&receipt).contains(&"execute-gate-wrapper-focused"));
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "execute-gate-wrapper-focused"
+                && pack
+                    .commands
+                    .iter()
+                    .any(|command| command == "bash scripts/tests/test-execute-gate-wrapper.sh")
+        }));
+        assert!(receipt.coverage_pack_selector.is_empty());
+        assert!(receipt.coverage_proof_packs.is_empty());
+        assert_eq!(
+            receipt
+                .skipped_by_policy
+                .get("patch-coverage-execute-gate-wrapper")
+                .map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        Ok(())
+    }
+
+    #[test]
     fn ci_route_receipt_maps_coverage_baseline_script_to_focused_non_lcov_pack() -> Result<()> {
         let receipt = route_receipt(
             "origin/main",
@@ -2008,6 +2046,7 @@ mod tests {
                 "patch-coverage-preflight-wrapper",
                 "patch-coverage-install-githooks-wrapper",
                 "patch-coverage-e2e-gate-wrapper",
+                "patch-coverage-execute-gate-wrapper",
                 "patch-coverage-baseline-script",
                 "patch-coverage-update-baseline-script",
                 "patch-coverage-generate-receipt-script",
@@ -2046,6 +2085,7 @@ mod tests {
             "patch-coverage-preflight-wrapper",
             "patch-coverage-install-githooks-wrapper",
             "patch-coverage-e2e-gate-wrapper",
+            "patch-coverage-execute-gate-wrapper",
             "patch-coverage-baseline-script",
             "patch-coverage-update-baseline-script",
             "patch-coverage-generate-receipt-script",
