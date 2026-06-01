@@ -171,6 +171,24 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
     ] {
         assert!(justfile.contains(required), "coverage-proof-routed missing `{required}`");
     }
+    let routed_recipe_start =
+        must_some(justfile.find("coverage-proof-routed base='origin/main' head='HEAD':"));
+    let routed_recipe_end = must_some(justfile.find("# Refresh the checked-in coverage baseline"));
+    let routed_recipe = &justfile[routed_recipe_start..routed_recipe_end];
+    assert_eq!(
+        routed_recipe.matches("cargo xtask coverage-baseline").count(),
+        1,
+        "routed PR coverage proof should generate the coverage receipt once"
+    );
+    assert_eq!(
+        routed_recipe.matches("cargo xtask quality-gate").count(),
+        1,
+        "routed PR coverage proof should evaluate the patch gate once"
+    );
+    assert!(
+        !routed_recipe.contains("--check"),
+        "routed PR coverage proof writes task-owned receipts and should not immediately recheck them"
+    );
     for required in [
         "coverage-proof base='origin/main':",
         "coverage_target=\"${CARGO_TARGET_DIR:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/perl-lsp-swarm-coverage-target}\"",

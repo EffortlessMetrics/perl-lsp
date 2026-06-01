@@ -2035,26 +2035,12 @@ coverage-proof-routed base='origin/main' head='HEAD':
         --codecov codecov.yml \
         --patch-base "{{base}}" \
         --scope routed-coverage-packs
-    cargo xtask coverage-baseline \
-        --lcov target/lcov.info \
-        --receipt target/receipts/quality/coverage-baseline.json \
-        --codecov codecov.yml \
-        --patch-base "{{base}}" \
-        --scope routed-coverage-packs \
-        --check
     cargo xtask quality-gate \
         --mode enforce-patch-coverage \
         --coverage-receipt target/receipts/quality/coverage-baseline.json \
         --codecov codecov.yml \
         --receipt target/receipts/quality/quality-gate-coverage.json \
         --summary target/receipts/quality/quality-gate-coverage.md
-    cargo xtask quality-gate \
-        --mode enforce-patch-coverage \
-        --coverage-receipt target/receipts/quality/coverage-baseline.json \
-        --codecov codecov.yml \
-        --receipt target/receipts/quality/quality-gate-coverage.json \
-        --summary target/receipts/quality/quality-gate-coverage.md \
-        --check
 
 # Refresh the checked-in coverage baseline from a fresh parser coverage snapshot.
 coverage-baseline-refresh:
