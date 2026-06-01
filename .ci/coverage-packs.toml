@@ -318,6 +318,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-pre-merge-check"
+lcov = false
+files = [
+  "scripts/pre-merge-check.sh",
+  "scripts/tests/test-pre-merge-check.sh",
+]
+commands = [
+  "bash scripts/tests/test-pre-merge-check.sh",
+]
+coverage_filters = [
+  "pre-merge-check",
+]
+
+[[pack]]
 id = "patch-coverage-rust-focused"
 files = [
   "*.rs",

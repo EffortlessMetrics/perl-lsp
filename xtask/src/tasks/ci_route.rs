@@ -224,6 +224,11 @@ const SWARM_CLEANUP_PACK: ProofPack = ProofPack {
     ],
 };
 
+const PRE_MERGE_CHECK_PACK: ProofPack = ProofPack {
+    id: "pre-merge-check-focused",
+    commands: &["bash scripts/tests/test-pre-merge-check.sh"],
+};
+
 const GENERAL_RUST_PACK: ProofPack = ProofPack {
     id: "rust-focused",
     commands: &["cargo check --workspace --all-targets --profile agent --locked"],
@@ -513,6 +518,13 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         route.add_surface("swarm-cleanup");
         route.add_pack(SWARM_CLEANUP_PACK);
         route.add_coverage_pack("patch-coverage-swarm-cleanup");
+        return;
+    }
+
+    if file == "scripts/pre-merge-check.sh" || file == "scripts/tests/test-pre-merge-check.sh" {
+        route.add_surface("pre-merge-check");
+        route.add_pack(PRE_MERGE_CHECK_PACK);
+        route.add_coverage_pack("patch-coverage-pre-merge-check");
         return;
     }
 
@@ -1290,6 +1302,29 @@ mod tests {
     }
 
     #[test]
+    fn ci_route_receipt_maps_pre_merge_check_to_focused_non_lcov_pack() -> Result<()> {
+        let receipt =
+            route_receipt("origin/main", "HEAD", vec!["scripts/pre-merge-check.sh".to_string()])?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["pre-merge-check"]);
+        assert!(proof_pack_ids(&receipt).contains(&"pre-merge-check-focused"));
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "pre-merge-check-focused"
+                && pack
+                    .commands
+                    .iter()
+                    .any(|command| command == "bash scripts/tests/test-pre-merge-check.sh")
+        }));
+        assert!(receipt.coverage_pack_selector.is_empty());
+        assert!(receipt.coverage_proof_packs.is_empty());
+        assert_eq!(
+            receipt.skipped_by_policy.get("patch-coverage-pre-merge-check").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        Ok(())
+    }
+
+    #[test]
     fn ci_route_receipt_maps_completion_provider_to_focused_pack() -> Result<()> {
         let receipt = route_receipt(
             "origin/main",
@@ -1510,6 +1545,7 @@ mod tests {
                 "patch-coverage-pr-plan",
                 "patch-coverage-clean-tmp-targets",
                 "patch-coverage-swarm-cleanup",
+                "patch-coverage-pre-merge-check",
                 "patch-coverage-rust-focused",
             ]
         );
@@ -1535,6 +1571,7 @@ mod tests {
             "patch-coverage-pr-plan",
             "patch-coverage-clean-tmp-targets",
             "patch-coverage-swarm-cleanup",
+            "patch-coverage-pre-merge-check",
             "patch-coverage-rust-focused",
         ];
         let changed_files = vec![
@@ -1616,6 +1653,10 @@ mod tests {
         );
         assert_eq!(
             skipped.get("patch-coverage-swarm-cleanup").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        assert_eq!(
+            skipped.get("patch-coverage-pre-merge-check").map(String::as_str),
             Some(NON_LCOV_COVERAGE_SKIP_REASON)
         );
         assert_eq!(
