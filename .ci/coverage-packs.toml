@@ -38,18 +38,39 @@ coverage_filters = [
 ]
 
 [[pack]]
-id = "patch-coverage-inline-core"
+id = "patch-coverage-inline-provider-core"
 files = [
   "crates/perl-lsp-rs-core/src/providers/inline_completion/",
-  "crates/perl-lsp-rs-core/tests/inline_completion_ux_fixtures.rs",
-  "xtask/src/tasks/inline_completion_quality.rs",
 ]
 commands = [
   "cargo test -p perl-lsp-rs-core --lib --profile agent --locked inline_completion -- --nocapture",
-  "cargo run -p xtask --profile agent --locked -- inline-completion-quality --receipt target/receipts/inline-completion-quality.json",
 ]
 coverage_filters = [
   "inline_completion",
+]
+
+[[pack]]
+id = "patch-coverage-inline-ux-fixtures"
+lcov = false
+files = [
+  "crates/perl-lsp-rs-core/tests/inline_completion_ux_fixtures.rs",
+]
+commands = [
+  "cargo test -p perl-lsp-rs-core --test inline_completion_ux_fixtures --profile agent --locked -- --nocapture",
+]
+coverage_filters = [
+  "inline_completion_ux_fixtures",
+]
+
+[[pack]]
+id = "patch-coverage-xtask-inline-quality"
+files = [
+  "xtask/src/tasks/inline_completion_quality.rs",
+]
+commands = [
+  "cargo run -p xtask --profile agent --locked -- inline-completion-quality --receipt target/receipts/inline-completion-quality.json",
+]
+coverage_filters = [
   "inline_completion_quality",
 ]
 

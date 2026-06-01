@@ -110,6 +110,19 @@ const INLINE_CORE_PACK: ProofPack = ProofPack {
     id: "inline-core",
     commands: &[
         "cargo test -p perl-lsp-rs-core --lib --profile agent --locked inline_completion -- --nocapture",
+    ],
+};
+
+const INLINE_UX_FIXTURES_PACK: ProofPack = ProofPack {
+    id: "inline-ux-fixtures",
+    commands: &[
+        "cargo test -p perl-lsp-rs-core --test inline_completion_ux_fixtures --profile agent --locked -- --nocapture",
+    ],
+};
+
+const XTASK_INLINE_COMPLETION_QUALITY_PACK: ProofPack = ProofPack {
+    id: "xtask-inline-completion-quality",
+    commands: &[
         "cargo run -p xtask --profile agent --locked -- inline-completion-quality --receipt target/receipts/inline-completion-quality.json",
     ],
 };
@@ -326,13 +339,24 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         return;
     }
 
-    if file.starts_with("crates/perl-lsp-rs-core/src/providers/inline_completion/")
-        || file == "crates/perl-lsp-rs-core/tests/inline_completion_ux_fixtures.rs"
-        || file == "xtask/src/tasks/inline_completion_quality.rs"
-    {
+    if file.starts_with("crates/perl-lsp-rs-core/src/providers/inline_completion/") {
         route.add_surface("inline-core");
         route.add_pack(INLINE_CORE_PACK);
-        route.add_coverage_pack("patch-coverage-inline-core");
+        route.add_coverage_pack("patch-coverage-inline-provider-core");
+        return;
+    }
+
+    if file == "crates/perl-lsp-rs-core/tests/inline_completion_ux_fixtures.rs" {
+        route.add_surface("inline-ux-fixtures");
+        route.add_pack(INLINE_UX_FIXTURES_PACK);
+        route.add_coverage_pack("patch-coverage-inline-ux-fixtures");
+        return;
+    }
+
+    if file == "xtask/src/tasks/inline_completion_quality.rs" {
+        route.add_surface("xtask-inline-completion-quality");
+        route.add_pack(XTASK_INLINE_COMPLETION_QUALITY_PACK);
+        route.add_coverage_pack("patch-coverage-xtask-inline-quality");
         return;
     }
 
@@ -1378,7 +1402,9 @@ mod tests {
             vec![
                 "patch-coverage-xtask-supported-editor-inline-smoke",
                 "patch-coverage-xtask-semantic-inline",
-                "patch-coverage-inline-core",
+                "patch-coverage-inline-provider-core",
+                "patch-coverage-inline-ux-fixtures",
+                "patch-coverage-xtask-inline-quality",
                 "patch-coverage-completion-core",
                 "patch-coverage-ux-scenario",
                 "patch-coverage-ci-policy",
@@ -1399,7 +1425,9 @@ mod tests {
         let route_selectors = [
             "patch-coverage-xtask-semantic-inline",
             "patch-coverage-xtask-supported-editor-inline-smoke",
-            "patch-coverage-inline-core",
+            "patch-coverage-inline-provider-core",
+            "patch-coverage-inline-ux-fixtures",
+            "patch-coverage-xtask-inline-quality",
             "patch-coverage-completion-core",
             "patch-coverage-ux-scenario",
             "patch-coverage-ci-policy",
@@ -1420,6 +1448,8 @@ mod tests {
             "xtask/src/tasks/semantic_inline_receipts.rs".to_string(),
             "xtask/src/tasks/supported_editor_inline_smoke.rs".to_string(),
             "crates/perl-lsp-rs-core/src/providers/inline_completion/engine.rs".to_string(),
+            "crates/perl-lsp-rs-core/tests/inline_completion_ux_fixtures.rs".to_string(),
+            "xtask/src/tasks/inline_completion_quality.rs".to_string(),
             "crates/perl-lsp-rs-core/src/providers/completion/completion/import_map/used_modules.rs"
                 .to_string(),
             "crates/perl-parser/src/lib.rs".to_string(),
@@ -1433,7 +1463,8 @@ mod tests {
             vec![
                 "patch-coverage-xtask-semantic-inline",
                 "patch-coverage-xtask-supported-editor-inline-smoke",
-                "patch-coverage-inline-core",
+                "patch-coverage-inline-provider-core",
+                "patch-coverage-xtask-inline-quality",
                 "patch-coverage-completion-core",
                 "patch-coverage-rust-focused",
             ]
@@ -1490,27 +1521,38 @@ mod tests {
             skipped.get("patch-coverage-ux-scenario").map(String::as_str),
             Some(NON_SOURCE_LCOV_COVERAGE_SKIP_REASON)
         );
-        let inline_core_pack = proof_packs
+        assert_eq!(
+            skipped.get("patch-coverage-inline-ux-fixtures").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        let inline_provider_pack = proof_packs
             .iter()
-            .find(|pack| pack.id == "patch-coverage-inline-core")
-            .ok_or_else(|| eyre!("missing inline core coverage pack"))?;
+            .find(|pack| pack.id == "patch-coverage-inline-provider-core")
+            .ok_or_else(|| eyre!("missing inline provider coverage pack"))?;
         assert!(
-            inline_core_pack
+            inline_provider_pack
                 .files
                 .iter()
                 .any(|file| { file == "crates/perl-lsp-rs-core/src/providers/inline_completion/" })
         );
-        assert!(inline_core_pack.files.iter().any(|file| {
-            file == "crates/perl-lsp-rs-core/tests/inline_completion_ux_fixtures.rs"
-        }));
         assert!(
-            inline_core_pack
+            !inline_provider_pack
+                .commands
+                .iter()
+                .any(|command| { command.contains("inline-completion-quality") })
+        );
+        let inline_quality_pack = proof_packs
+            .iter()
+            .find(|pack| pack.id == "patch-coverage-xtask-inline-quality")
+            .ok_or_else(|| eyre!("missing inline quality coverage pack"))?;
+        assert!(
+            inline_quality_pack
                 .files
                 .iter()
                 .any(|file| { file == "xtask/src/tasks/inline_completion_quality.rs" })
         );
         assert!(
-            inline_core_pack
+            inline_quality_pack
                 .commands
                 .iter()
                 .any(|command| { command.contains("inline-completion-quality") })
@@ -1535,7 +1577,7 @@ mod tests {
     }
 
     #[test]
-    fn ci_route_receipt_maps_inline_completion_receipt_files_to_inline_core() -> Result<()> {
+    fn ci_route_receipt_splits_inline_completion_receipt_files_by_surface() -> Result<()> {
         let receipt = route_receipt(
             "origin/main",
             "HEAD",
@@ -1546,14 +1588,72 @@ mod tests {
             ],
         )?;
 
-        assert_eq!(receipt.changed_surfaces, vec!["inline-core"]);
+        assert_eq!(
+            receipt.changed_surfaces,
+            vec!["inline-core", "inline-ux-fixtures", "xtask-inline-completion-quality"]
+        );
         assert!(proof_pack_ids(&receipt).contains(&"inline-core"));
+        assert!(proof_pack_ids(&receipt).contains(&"inline-ux-fixtures"));
+        assert!(proof_pack_ids(&receipt).contains(&"xtask-inline-completion-quality"));
         assert!(!proof_pack_ids(&receipt).contains(&"rust-focused"));
-        assert_eq!(receipt.coverage_pack_selector, vec!["patch-coverage-inline-core"]);
+        assert_eq!(
+            receipt.coverage_pack_selector,
+            vec!["patch-coverage-inline-provider-core", "patch-coverage-xtask-inline-quality"]
+        );
         assert_eq!(
             receipt.coverage_proof_packs.iter().map(|pack| pack.id.as_str()).collect::<Vec<_>>(),
-            vec!["patch-coverage-inline-core"]
+            vec!["patch-coverage-inline-provider-core", "patch-coverage-xtask-inline-quality"]
         );
+        assert_eq!(
+            receipt.skipped_by_policy.get("patch-coverage-inline-ux-fixtures").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        assert!(
+            receipt
+                .coverage_proof_packs
+                .iter()
+                .flat_map(|pack| pack.commands.iter())
+                .any(|command| command.contains("inline-completion-quality"))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_receipt_maps_inline_provider_to_provider_coverage_pack_only() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec!["crates/perl-lsp-rs-core/src/providers/inline_completion/mod.rs".to_string()],
+        )?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["inline-core"]);
+        assert_eq!(receipt.coverage_pack_selector, vec!["patch-coverage-inline-provider-core"]);
+        assert!(receipt.coverage_proof_packs.iter().flat_map(|pack| pack.commands.iter()).any(
+            |command| {
+                command
+                    == "cargo test -p perl-lsp-rs-core --lib --profile agent --locked inline_completion -- --nocapture"
+            }
+        ));
+        assert!(
+            !receipt
+                .coverage_proof_packs
+                .iter()
+                .flat_map(|pack| pack.commands.iter())
+                .any(|command| command.contains("inline-completion-quality"))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_receipt_maps_inline_quality_to_quality_coverage_pack_only() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec!["xtask/src/tasks/inline_completion_quality.rs".to_string()],
+        )?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["xtask-inline-completion-quality"]);
+        assert_eq!(receipt.coverage_pack_selector, vec!["patch-coverage-xtask-inline-quality"]);
         assert!(
             receipt
                 .coverage_proof_packs

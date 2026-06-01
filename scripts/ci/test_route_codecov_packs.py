@@ -117,6 +117,76 @@ class RouteCodecovPacksTests(unittest.TestCase):
         )
         self.assertEqual([], router.lcov_matches_without_source(packs, paths))
 
+    def test_inline_provider_change_selects_provider_pack_without_quality_pack(self) -> None:
+        packs = [
+            {
+                "id": "patch-coverage-inline-provider-core",
+                "files": [
+                    "crates/perl-lsp-rs-core/src/providers/inline_completion/",
+                ],
+                "commands": [
+                    "cargo test -p perl-lsp-rs-core --lib inline_completion",
+                ],
+                "coverage_filters": ["inline_completion"],
+            },
+            {
+                "id": "patch-coverage-xtask-inline-quality",
+                "files": [
+                    "xtask/src/tasks/inline_completion_quality.rs",
+                ],
+                "commands": [
+                    "cargo run -p xtask -- inline-completion-quality",
+                ],
+                "coverage_filters": ["inline_completion_quality"],
+            },
+            {
+                "id": router.FALLBACK_PACK_ID,
+                "files": ["*.rs"],
+                "commands": ["cargo test --workspace --lib"],
+                "coverage_filters": ["workspace-lib"],
+            },
+        ]
+
+        paths = [
+            "crates/perl-lsp-rs-core/src/providers/inline_completion/mod.rs",
+        ]
+
+        self.assertEqual(
+            ["patch-coverage-inline-provider-core"],
+            [pack["id"] for pack in router.selected_packs(packs, paths)],
+        )
+
+    def test_inline_quality_change_selects_quality_pack_without_provider_pack(self) -> None:
+        packs = [
+            {
+                "id": "patch-coverage-inline-provider-core",
+                "files": [
+                    "crates/perl-lsp-rs-core/src/providers/inline_completion/",
+                ],
+                "commands": [
+                    "cargo test -p perl-lsp-rs-core --lib inline_completion",
+                ],
+                "coverage_filters": ["inline_completion"],
+            },
+            {
+                "id": "patch-coverage-xtask-inline-quality",
+                "files": [
+                    "xtask/src/tasks/inline_completion_quality.rs",
+                ],
+                "commands": [
+                    "cargo run -p xtask -- inline-completion-quality",
+                ],
+                "coverage_filters": ["inline_completion_quality"],
+            },
+        ]
+
+        paths = ["xtask/src/tasks/inline_completion_quality.rs"]
+
+        self.assertEqual(
+            ["patch-coverage-xtask-inline-quality"],
+            [pack["id"] for pack in router.selected_packs(packs, paths)],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
