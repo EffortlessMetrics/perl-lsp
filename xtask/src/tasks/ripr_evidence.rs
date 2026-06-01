@@ -29,6 +29,7 @@ const ANNOTATIONS_TXT: &str = "target/ripr/review/annotations.txt";
 const PR_SUMMARY_MD: &str = "target/ripr/pr/summary.md";
 const IMPACTED_JSON: &str = "target/xtask/impacted-evidence/latest.json";
 const IMPACTED_MD: &str = "target/xtask/impacted-evidence/latest.md";
+const DEFAULT_RIPR_SUPPRESSIONS: &str = "policy/ripr-suppressions.toml";
 
 pub fn ripr_pr(root: &str, base: &str, head: &str, check: bool) -> Result<()> {
     let repo = repo_root()?;
@@ -639,6 +640,7 @@ fn suppression_matches_seam(rules: &RiprSuppressionRules, seam: &Value) -> bool 
     let Some(path) = ripr_plus_seam_path(seam) else {
         return false;
     };
+    let path = normalize_suppression_match_path(&path);
     rules.path_patterns.iter().any(|pattern| pattern.matches(&path))
 }
 
@@ -660,7 +662,15 @@ fn write_pr_evidence(repo: &Path, options: &PrEvidenceOptions) -> Result<()> {
     let check_json = run_ripr_check(repo, options)?;
     let check_value: Value =
         serde_json::from_str(&check_json).context("ripr check output was not valid JSON")?;
-    let packet = pr_evidence_packet(options, &changed_files, &check_value, &base_sha, &head_sha);
+    let suppressions = read_ripr_suppression_rules(repo, Path::new(DEFAULT_RIPR_SUPPRESSIONS))?;
+    let packet = pr_evidence_packet(
+        options,
+        &changed_files,
+        &check_value,
+        &base_sha,
+        &head_sha,
+        &suppressions,
+    );
     validate_pr_evidence_packet(&packet, options, changed_files.len(), true, &base_sha, &head_sha)?;
     write_text(&repo.join(PR_EVIDENCE_JSON), &format_json(&packet)?)?;
     write_text(&repo.join(PR_EVIDENCE_MD), &render_pr_evidence_markdown(&packet))?;
@@ -705,17 +715,109 @@ fn run_ripr_check(repo: &Path, options: &PrEvidenceOptions) -> Result<String> {
     ])
 }
 
+#[derive(Debug, Default)]
+struct RiprPrSummaryCounts {
+    weakly_exposed: usize,
+    reachable_unrevealed: usize,
+    no_static_path: usize,
+    suppressed_by_policy: usize,
+}
+
+fn ripr_pr_summary_counts(
+    check_value: &Value,
+    check_summary: Option<&Map<String, Value>>,
+    suppressions: &RiprSuppressionRules,
+) -> RiprPrSummaryCounts {
+    let summary_counts = RiprPrSummaryCounts {
+        weakly_exposed: count_field(check_summary, "weakly_exposed"),
+        reachable_unrevealed: count_field(check_summary, "reachable_unrevealed"),
+        no_static_path: count_field(check_summary, "no_static_path"),
+        suppressed_by_policy: 0,
+    };
+    let Some(findings) = check_value.get("findings").and_then(Value::as_array) else {
+        return summary_counts;
+    };
+
+    let mut suppressed = RiprPrSummaryCounts::default();
+    let mut unsuppressed_from_findings = RiprPrSummaryCounts::default();
+    for finding in findings {
+        let classification = finding.get("classification").and_then(Value::as_str);
+        if !matches!(
+            classification,
+            Some("weakly_exposed" | "reachable_unrevealed" | "no_static_path")
+        ) {
+            continue;
+        }
+        let counts = if suppression_matches_finding(suppressions, finding) {
+            suppressed.suppressed_by_policy += 1;
+            &mut suppressed
+        } else {
+            &mut unsuppressed_from_findings
+        };
+        match classification {
+            Some("weakly_exposed") => counts.weakly_exposed += 1,
+            Some("reachable_unrevealed") => counts.reachable_unrevealed += 1,
+            Some("no_static_path") => counts.no_static_path += 1,
+            _ => {}
+        }
+    }
+    if check_summary.is_some() {
+        return RiprPrSummaryCounts {
+            weakly_exposed: summary_counts.weakly_exposed.saturating_sub(suppressed.weakly_exposed),
+            reachable_unrevealed: summary_counts
+                .reachable_unrevealed
+                .saturating_sub(suppressed.reachable_unrevealed),
+            no_static_path: summary_counts.no_static_path.saturating_sub(suppressed.no_static_path),
+            suppressed_by_policy: suppressed.suppressed_by_policy,
+        };
+    }
+    RiprPrSummaryCounts {
+        suppressed_by_policy: suppressed.suppressed_by_policy,
+        ..unsuppressed_from_findings
+    }
+}
+
+fn suppression_matches_finding(rules: &RiprSuppressionRules, finding: &Value) -> bool {
+    let Some(path) = ripr_finding_path(finding) else {
+        return false;
+    };
+    let path = normalize_suppression_match_path(&path);
+    rules.path_patterns.iter().any(|pattern| pattern.matches(&path))
+}
+
+fn ripr_finding_path(finding: &Value) -> Option<String> {
+    ripr_plus_seam_path(finding)
+        .or_else(|| {
+            finding
+                .get("probe")
+                .and_then(|probe| {
+                    ["path", "file"]
+                        .into_iter()
+                        .find_map(|key| probe.get(key).and_then(Value::as_str))
+                })
+                .map(normalize_path_text)
+        })
+        .filter(|path| !path.trim().is_empty())
+}
+
+fn normalize_suppression_match_path(path: &str) -> String {
+    let normalized = normalize_path_text(path);
+    normalized.strip_prefix("./").unwrap_or(&normalized).to_string()
+}
+
 fn pr_evidence_packet(
     options: &PrEvidenceOptions,
     changed_files: &[String],
     check_value: &Value,
     base_sha: &str,
     head_sha: &str,
+    suppressions: &RiprSuppressionRules,
 ) -> Value {
     let check_summary = check_value.get("summary").and_then(Value::as_object);
-    let weakly_exposed = count_field(check_summary, "weakly_exposed");
-    let reachable_unrevealed = count_field(check_summary, "reachable_unrevealed");
-    let no_static_path = count_field(check_summary, "no_static_path");
+    let summary = ripr_pr_summary_counts(check_value, check_summary, suppressions);
+    let weakly_exposed = summary.weakly_exposed;
+    let reachable_unrevealed = summary.reachable_unrevealed;
+    let no_static_path = summary.no_static_path;
     let severe_gaps =
         weakly_exposed.saturating_add(reachable_unrevealed).saturating_add(no_static_path);
     let ripr_severe_gap = severe_gaps > 0;
@@ -750,7 +852,9 @@ fn pr_evidence_packet(
             "severe_gaps": severe_gaps,
             "requires_targeted_mutation": ripr_severe_gap,
             "ripr_severe_gap": ripr_severe_gap,
-            "routing_reason": if ripr_severe_gap { json!("ripr severe gap") } else { Value::Null }
+            "routing_reason": if ripr_severe_gap { json!("ripr severe gap") } else { Value::Null },
+            "suppressed_by_policy": summary.suppressed_by_policy,
+            "suppression_patterns": suppressions.display_patterns.clone(),
         },
         "artifacts": [
             {
@@ -882,6 +986,10 @@ fn render_pr_evidence_markdown(packet: &Value) -> String {
         count_field(summary, "reachable_unrevealed")
     ));
     out.push_str(&format!("- no_static_path: {}\n", count_field(summary, "no_static_path")));
+    out.push_str(&format!(
+        "- suppressed_by_policy: {}\n",
+        count_field(summary, "suppressed_by_policy")
+    ));
     out.push_str(&format!("- severe gaps: {}\n\n", count_field(summary, "severe_gaps")));
     out.push_str("## Targeted Mutation\n\n");
     out.push_str(&format!(
@@ -2322,6 +2430,12 @@ reason = "Archived source is not active workspace behavior."
 [[suppress]]
 id = "ripr-suppress-generated-status-docs"
 paths = ["docs/project/status/**"]
+
+[[suppress]]
+id = "ripr-suppress-ux-receipt-tests"
+kind = "test_receipt_surface"
+paths = ["crates/perl-lsp-ux-tests/tests/**"]
+reason = "UX receipt tests are proof inputs."
 "#,
         )?;
 
@@ -2334,6 +2448,10 @@ paths = ["docs/project/status/**"]
         assert!(suppression_matches_seam(
             &rules,
             &json!({"location": {"path": r"docs\project\status\quality.rs"}})
+        ));
+        assert!(suppression_matches_finding(
+            &rules,
+            &json!({"probe": {"file": r".\crates/perl-lsp-ux-tests/tests/ux_scenario_62_project_test_assertion_inline_completion_quality.rs"}})
         ));
         assert!(!suppression_matches_seam(
             &rules,
@@ -2451,11 +2569,70 @@ paths = ["archive/["]
             &check_value,
             "base-sha",
             "head-sha",
+            &RiprSuppressionRules::default(),
         );
 
         assert_eq!(packet["base_sha"], json!("base-sha"));
         assert_eq!(packet["head_sha"], json!("head-sha"));
         validate_pr_evidence_packet(&packet, &options, 1, true, "base-sha", "head-sha")?;
+        Ok(())
+    }
+
+    #[test]
+    fn pr_evidence_packet_suppresses_non_production_test_receipt_findings() -> Result<()> {
+        let options = PrEvidenceOptions {
+            root: ".".to_string(),
+            base: "origin/main".to_string(),
+            head: "HEAD".to_string(),
+        };
+        let check_value = json!({
+            "summary": {
+                "weakly_exposed": 1,
+                "reachable_unrevealed": 1,
+                "no_static_path": 0
+            },
+            "findings": [
+                {
+                    "classification": "reachable_unrevealed",
+                    "probe": {
+                        "file": r".\crates/perl-lsp-ux-tests/tests/ux_scenario_62_project_test_assertion_inline_completion_quality.rs"
+                    }
+                },
+                {
+                    "classification": "weakly_exposed",
+                    "probe": {
+                        "file": "crates/perl-lsp-rs-core/src/providers/inline_completion/mod.rs"
+                    }
+                }
+            ]
+        });
+        let suppressions = RiprSuppressionRules {
+            display_patterns: vec!["crates/perl-lsp-ux-tests/tests/**".to_string()],
+            path_patterns: vec![Pattern::new("crates/perl-lsp-ux-tests/tests/**")?],
+            invalid_patterns: Vec::new(),
+            suppression_reasons: Vec::new(),
+        };
+
+        let packet = pr_evidence_packet(
+            &options,
+            &[
+                "crates/perl-lsp-ux-tests/tests/ux_scenario_62_project_test_assertion_inline_completion_quality.rs".to_string(),
+                "crates/perl-lsp-rs-core/src/providers/inline_completion/mod.rs".to_string(),
+            ],
+            &check_value,
+            "base-sha",
+            "head-sha",
+            &suppressions,
+        );
+
+        assert_eq!(packet.pointer("/summary/weakly_exposed"), Some(&json!(1)));
+        assert_eq!(packet.pointer("/summary/reachable_unrevealed"), Some(&json!(0)));
+        assert_eq!(packet.pointer("/summary/severe_gaps"), Some(&json!(1)));
+        assert_eq!(packet.pointer("/summary/suppressed_by_policy"), Some(&json!(1)));
+        assert_eq!(
+            packet.pointer("/summary/suppression_patterns/0"),
+            Some(&json!("crates/perl-lsp-ux-tests/tests/**"))
+        );
         Ok(())
     }
 
@@ -2628,6 +2805,7 @@ paths = ["archive/["]
             }),
             &head,
             &head,
+            &RiprSuppressionRules::default(),
         );
         write_text(&repo.join(PR_EVIDENCE_JSON), &format_json(&pr_packet)?)?;
         write_text(&repo.join(PR_EVIDENCE_MD), &render_pr_evidence_markdown(&pr_packet))?;
