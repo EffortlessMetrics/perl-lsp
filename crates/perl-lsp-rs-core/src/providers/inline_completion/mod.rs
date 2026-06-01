@@ -2048,12 +2048,12 @@ impl InlineCandidateSource for SyntaxCandidateSource {
             );
         }
 
-        if let Some(assigned_name) = lexical_assignment_rhs_prefix(prefix)
+        if let Some((assigned_sigil, assigned_name)) = lexical_assignment_rhs_prefix(prefix)
             && let Some(variable) = semantic_context
                 .visible_variables
                 .iter()
                 .find(|variable| {
-                    variable.is_scalar()
+                    variable.sigil == assigned_sigil
                         && !variable.is_scalar_self()
                         && variable.name != assigned_name
                 })
@@ -2248,9 +2248,12 @@ fn condition_expression_insert_text(prefix: &str, condition: &str) -> String {
     }
 }
 
-fn lexical_assignment_rhs_prefix(prefix: &str) -> Option<&str> {
+fn lexical_assignment_rhs_prefix(prefix: &str) -> Option<(VariableSigil, &str)> {
     let lhs = prefix.trim_end().strip_suffix('=')?.trim_end();
-    let variable_start = lhs.rfind('$')?;
+    let (variable_start, sigil) = lhs
+        .char_indices()
+        .rev()
+        .find_map(|(idx, ch)| VariableSigil::from_char(ch).map(|sigil| (idx, sigil)))?;
     let declaration = lhs[..variable_start].trim_end();
     let variable_name = &lhs[variable_start + 1..];
 
@@ -2263,7 +2266,7 @@ fn lexical_assignment_rhs_prefix(prefix: &str) -> Option<&str> {
         return None;
     }
 
-    Some(variable_name)
+    Some((sigil, variable_name))
 }
 
 fn test_statement_filter_text(statement: &str) -> &'static str {
@@ -3501,6 +3504,38 @@ mod tests {
     }
 
     #[test]
+    fn lexical_assignment_rhs_uses_matching_aggregate_sigil()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let array_source = "sub copy {\n    my @users = fetch_users();\n    my @copy = ";
+        let array_line = 2;
+        let array_character = "    my @copy = ".encode_utf16().count() as u32;
+        let array_completions =
+            provider.get_inline_completions(array_source, array_line, array_character);
+
+        assert_eq!(
+            array_completions.items.first().map(|item| item.insert_text.as_str()),
+            Some("@users;")
+        );
+        assert!(array_completions.items.iter().all(|item| item.insert_text != "@copy;"));
+        assert!(array_completions.items.iter().all(|item| item.insert_text != "$users;"));
+
+        let hash_source = "sub copy {\n    my %users_by_id = load_users();\n    my %copy = ";
+        let hash_line = 2;
+        let hash_character = "    my %copy = ".encode_utf16().count() as u32;
+        let hash_completions =
+            provider.get_inline_completions(hash_source, hash_line, hash_character);
+
+        assert_eq!(
+            hash_completions.items.first().map(|item| item.insert_text.as_str()),
+            Some("%users_by_id;")
+        );
+        assert!(hash_completions.items.iter().all(|item| item.insert_text != "%copy;"));
+        assert!(hash_completions.items.iter().all(|item| item.insert_text != "$users_by_id;"));
+        Ok(())
+    }
+
+    #[test]
     fn method_arrow_partial_token_replaces_only_method_fragment()
     -> Result<(), Box<dyn std::error::Error>> {
         let provider = InlineCompletionProvider::new();
@@ -4074,7 +4109,18 @@ mod tests {
     #[test]
     fn lexical_assignment_rhs_prefix_requires_my_declaration()
     -> Result<(), Box<dyn std::error::Error>> {
-        assert_eq!(lexical_assignment_rhs_prefix("my $copy = "), Some("copy"));
+        assert_eq!(
+            lexical_assignment_rhs_prefix("my $copy = "),
+            Some((VariableSigil::Scalar, "copy"))
+        );
+        assert_eq!(
+            lexical_assignment_rhs_prefix("my @copy = "),
+            Some((VariableSigil::Array, "copy"))
+        );
+        assert_eq!(
+            lexical_assignment_rhs_prefix("my %copy = "),
+            Some((VariableSigil::Hash, "copy"))
+        );
         assert_eq!(lexical_assignment_rhs_prefix("dummy $copy = "), None);
         assert_eq!(lexical_assignment_rhs_prefix("myself $copy = "), None);
         Ok(())

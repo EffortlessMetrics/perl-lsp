@@ -778,6 +778,30 @@ fn scenarios() -> &'static [Scenario] {
             },
         },
         Scenario {
+            name: "array_assignment_uses_visible_array",
+            source_name: "syntax",
+            source: "sub copy {\n    my @users = fetch_users();\n    my @copy = <<CURSOR>>\n}",
+            available_modules: &[],
+            hard_zone: false,
+            assertion: ScenarioAssertion::Suggestion {
+                first: Some("@users;"),
+                expected: &["@users;"],
+                not_expected: &["@copy;", "$users;"],
+            },
+        },
+        Scenario {
+            name: "hash_assignment_uses_visible_hash",
+            source_name: "syntax",
+            source: "sub copy {\n    my %users_by_id = load_users();\n    my %copy = <<CURSOR>>\n}",
+            available_modules: &[],
+            hard_zone: false,
+            assertion: ScenarioAssertion::Suggestion {
+                first: Some("%users_by_id;"),
+                expected: &["%users_by_id;"],
+                not_expected: &["%copy;", "$users_by_id;"],
+            },
+        },
+        Scenario {
             name: "self_receiver_prefers_current_package_methods",
             source_name: "receiver",
             source: "package Other;\nsub external {}\n\npackage Demo;\nsub save {}\nsub display_name {}\nsub caller {\n    my $self = shift;\n    $self-><<CURSOR>>\n}\n",

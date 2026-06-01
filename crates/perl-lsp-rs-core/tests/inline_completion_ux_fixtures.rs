@@ -122,6 +122,20 @@ fn inline_completion_fixture_corpus_returns_expected_ghost_text() -> TestResult 
             not_expected: &["$copy;"],
         },
         SuggestionFixture {
+            name: "array_assignment_uses_visible_array",
+            source: "sub copy {\n    my @users = fetch_users();\n    my @copy = <<CURSOR>>\n}\n",
+            first: Some("@users;"),
+            expected: &["@users;"],
+            not_expected: &["@copy;", "$users;"],
+        },
+        SuggestionFixture {
+            name: "hash_assignment_uses_visible_hash",
+            source: "sub copy {\n    my %users_by_id = load_users();\n    my %copy = <<CURSOR>>\n}\n",
+            first: Some("%users_by_id;"),
+            expected: &["%users_by_id;"],
+            not_expected: &["%copy;", "$users_by_id;"],
+        },
+        SuggestionFixture {
             name: "self_receiver_prefers_current_package_methods",
             source: "package Other;\nsub external {}\n\npackage Demo;\nsub save {}\nsub display_name {}\nsub caller {\n    my $self = shift;\n    $self-><<CURSOR>>\n}\n",
             first: Some("save()"),
@@ -257,6 +271,18 @@ fn inline_completion_fixture_corpus_applies_accepted_edits_without_parse_regress
             source: "sub copy {\n    my $result = compute();\n    my $copy = <<CURSOR>>\n}\n",
             expected_first: "$result;",
             expected_after: "sub copy {\n    my $result = compute();\n    my $copy = $result;\n}\n",
+        },
+        AcceptedEditFixture {
+            name: "array_assignment_rhs",
+            source: "sub copy {\n    my @users = fetch_users();\n    my @copy = <<CURSOR>>\n}\n",
+            expected_first: "@users;",
+            expected_after: "sub copy {\n    my @users = fetch_users();\n    my @copy = @users;\n}\n",
+        },
+        AcceptedEditFixture {
+            name: "hash_assignment_rhs",
+            source: "sub copy {\n    my %users_by_id = load_users();\n    my %copy = <<CURSOR>>\n}\n",
+            expected_first: "%users_by_id;",
+            expected_after: "sub copy {\n    my %users_by_id = load_users();\n    my %copy = %users_by_id;\n}\n",
         },
         AcceptedEditFixture {
             name: "self_receiver_method",
