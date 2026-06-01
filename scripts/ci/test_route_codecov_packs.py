@@ -357,6 +357,65 @@ class RouteCodecovPacksTests(unittest.TestCase):
             [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
         )
 
+    def test_remaining_script_helper_changes_are_non_lcov_focused_proof(self) -> None:
+        helper_packs = [
+            (
+                "patch-coverage-clean-tmp-targets",
+                ["scripts/clean-tmp-targets.sh", "scripts/tests/test-clean-tmp-targets.sh"],
+                ["bash scripts/tests/test-clean-tmp-targets.sh"],
+                ["clean-tmp-targets"],
+                "scripts/clean-tmp-targets.sh",
+            ),
+            (
+                "patch-coverage-swarm-cleanup",
+                [
+                    "scripts/swarm-clean",
+                    "scripts/swarm-doctor",
+                    "scripts/tests/test_swarm_clean.sh",
+                    "scripts/tests/test_swarm_doctor.sh",
+                ],
+                [
+                    "bash scripts/tests/test_swarm_clean.sh",
+                    "bash scripts/tests/test_swarm_doctor.sh",
+                ],
+                ["swarm-cleanup"],
+                "scripts/swarm-clean",
+            ),
+            (
+                "patch-coverage-pre-merge-check",
+                ["scripts/pre-merge-check.sh", "scripts/tests/test-pre-merge-check.sh"],
+                ["bash scripts/tests/test-pre-merge-check.sh"],
+                ["pre-merge-check"],
+                "scripts/pre-merge-check.sh",
+            ),
+        ]
+
+        for pack_id, files, commands, coverage_filters, changed_file in helper_packs:
+            with self.subTest(pack_id=pack_id):
+                packs = [
+                    {
+                        "id": pack_id,
+                        "lcov": False,
+                        "files": files,
+                        "commands": commands,
+                        "coverage_filters": coverage_filters,
+                    },
+                    {
+                        "id": router.FALLBACK_PACK_ID,
+                        "files": ["*.rs"],
+                        "commands": ["cargo test --workspace --lib"],
+                        "coverage_filters": ["workspace-lib"],
+                    },
+                ]
+
+                paths = [changed_file]
+
+                self.assertEqual([], router.selected_packs(packs, paths))
+                self.assertEqual(
+                    [pack_id],
+                    [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
