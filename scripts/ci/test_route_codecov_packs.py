@@ -441,6 +441,34 @@ class RouteCodecovPacksTests(unittest.TestCase):
             [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
         )
 
+    def test_list_gates_wrapper_change_is_non_lcov_focused_proof(self) -> None:
+        packs = [
+            {
+                "id": "patch-coverage-list-gates-wrapper",
+                "lcov": False,
+                "files": [
+                    "scripts/list-gates.py",
+                    "scripts/tests/test-list-gates-wrapper.py",
+                ],
+                "commands": ["python scripts/tests/test-list-gates-wrapper.py"],
+                "coverage_filters": ["list-gates-wrapper"],
+            },
+            {
+                "id": router.FALLBACK_PACK_ID,
+                "files": ["*.rs"],
+                "commands": ["cargo test --workspace --lib"],
+                "coverage_filters": ["workspace-lib"],
+            },
+        ]
+
+        paths = ["scripts/list-gates.py"]
+
+        self.assertEqual([], router.selected_packs(packs, paths))
+        self.assertEqual(
+            ["patch-coverage-list-gates-wrapper"],
+            [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
+        )
+
     def test_coverage_baseline_script_change_is_non_lcov_focused_proof(self) -> None:
         packs = [
             {

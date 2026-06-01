@@ -414,6 +414,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-list-gates-wrapper"
+lcov = false
+files = [
+  "scripts/list-gates.py",
+  "scripts/tests/test-list-gates-wrapper.py",
+]
+commands = [
+  "python scripts/tests/test-list-gates-wrapper.py",
+]
+coverage_filters = [
+  "list-gates-wrapper",
+]
+
+[[pack]]
 id = "patch-coverage-baseline-script"
 lcov = false
 files = [
