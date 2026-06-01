@@ -4223,6 +4223,22 @@ fn collect_used_module_names_includes_qw_list() {
 }
 
 #[test]
+fn collect_used_module_names_includes_block_package_use() {
+    let code = "package My::App {\n    use Foo::Thing;\n    use strict;\n}\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let modules = super::import_map::collect_used_module_names(&ast);
+    assert!(
+        modules.contains("Foo::Thing"),
+        "`use Foo::Thing` inside a block-form package should include Foo::Thing; got {modules:?}"
+    );
+    assert!(
+        !modules.contains("strict"),
+        "lowercase pragmas inside block-form packages must stay excluded; got {modules:?}"
+    );
+}
+
+#[test]
 fn collect_used_module_names_excludes_lowercase_pragmas() {
     let code = "use strict;\nuse warnings;\nuse feature 'say';\n";
     let mut parser = Parser::new(code);
@@ -4363,6 +4379,41 @@ sub do_things {
             completions.iter().map(|c| &c.label).collect::<Vec<_>>()
         );
     }
+
+    Ok(())
+}
+
+#[test]
+fn baseline_block_package_imported_package_fallback_hit() -> Result<(), Box<dyn std::error::Error>>
+{
+    let index = build_baseline_workspace()?;
+
+    // Modern block-form package syntax nests the `use Foo;` statement under
+    // NodeKind::Package.block. The bounded fallback should still treat Foo as
+    // visible for an Unknown receiver inside that package.
+    let code = r#"package My::Block {
+    use Foo;
+
+    sub do_things {
+        my ($obj) = @_;
+        $obj->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let bark = must_some(completions.iter().find(|c| c.label == "bark"));
+    let detail = must_some(bark.detail.as_deref());
+    assert!(
+        detail.contains("receiver: unknown, low confidence"),
+        "block-package imported `bark` should carry low-confidence fallback detail; got {detail:?}"
+    );
+
+    assert!(
+        !completions.iter().any(|c| c.label == "quack"),
+        "unrelated `quack` must not leak for block-package imports; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
 
     Ok(())
 }
