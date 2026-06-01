@@ -115,6 +115,13 @@ fn inline_completion_fixture_corpus_returns_expected_ghost_text() -> TestResult 
             not_expected: &["$self) {\n    \n}"],
         },
         SuggestionFixture {
+            name: "next_unless_uses_visible_guard_variable",
+            source: "sub run {\n    my $should_skip = should_skip();\n    next unless <<CURSOR>>\n}\n",
+            first: Some("$should_skip;"),
+            expected: &["$should_skip;"],
+            not_expected: &["$result;", "$self;"],
+        },
+        SuggestionFixture {
             name: "lexical_assignment_uses_visible_scalar",
             source: "sub copy {\n    my $result = compute();\n    my $copy = <<CURSOR>>\n}\n",
             first: Some("$result;"),
@@ -271,6 +278,12 @@ fn inline_completion_fixture_corpus_applies_accepted_edits_without_parse_regress
             source: "sub copy {\n    my $result = compute();\n    my $copy = <<CURSOR>>\n}\n",
             expected_first: "$result;",
             expected_after: "sub copy {\n    my $result = compute();\n    my $copy = $result;\n}\n",
+        },
+        AcceptedEditFixture {
+            name: "next_unless_guard_condition",
+            source: "sub run {\n    my $should_skip = should_skip();\n    next unless <<CURSOR>>\n}\n",
+            expected_first: "$should_skip;",
+            expected_after: "sub run {\n    my $should_skip = should_skip();\n    next unless $should_skip;\n}\n",
         },
         AcceptedEditFixture {
             name: "array_assignment_rhs",

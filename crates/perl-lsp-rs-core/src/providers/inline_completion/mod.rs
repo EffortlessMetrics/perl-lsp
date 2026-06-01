@@ -2224,7 +2224,9 @@ fn is_guard_condition_prefix(prefix: &str) -> bool {
     ends_with_keyword(prefix, "return unless ")
         || ends_with_keyword(prefix, "return if ")
         || ends_with_keyword(prefix, "next if ")
+        || ends_with_keyword(prefix, "next unless ")
         || ends_with_keyword(prefix, "last if ")
+        || ends_with_keyword(prefix, "last unless ")
 }
 
 fn condition_expression_prefix(prefix: &str) -> Option<&'static str> {
@@ -3866,6 +3868,32 @@ mod tests {
         assert_eq!(
             completions.items.first().map(|item| item.insert_text.as_str()),
             Some("$status_ok;")
+        );
+    }
+
+    #[test]
+    fn loop_guard_condition_handles_next_unless_with_visible_scalar() {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub helper {\n    my $should_skip = should_skip();\n    next unless ";
+        let character = "    next unless ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 2, character);
+
+        assert_eq!(
+            completions.items.first().map(|item| item.insert_text.as_str()),
+            Some("$should_skip;")
+        );
+    }
+
+    #[test]
+    fn loop_guard_condition_handles_last_unless_with_visible_scalar() {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub helper {\n    my $has_more = iterator_has_more();\n    last unless ";
+        let character = "    last unless ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 2, character);
+
+        assert_eq!(
+            completions.items.first().map(|item| item.insert_text.as_str()),
+            Some("$has_more;")
         );
     }
 

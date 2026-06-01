@@ -766,6 +766,18 @@ fn scenarios() -> &'static [Scenario] {
             },
         },
         Scenario {
+            name: "next_unless_uses_visible_guard_variable",
+            source_name: "syntax",
+            source: "for my $user (@users) {\n    my $should_skip = should_skip_user($user);\n    next unless <<CURSOR>>\n}",
+            available_modules: &[],
+            hard_zone: false,
+            assertion: ScenarioAssertion::Suggestion {
+                first: Some("$should_skip;"),
+                expected: &["$should_skip;"],
+                not_expected: &["$user;", "$result;"],
+            },
+        },
+        Scenario {
             name: "lexical_assignment_uses_visible_scalar",
             source_name: "syntax",
             source: "sub copy {\n    my $result = compute();\n    my $copy = <<CURSOR>>\n}",
