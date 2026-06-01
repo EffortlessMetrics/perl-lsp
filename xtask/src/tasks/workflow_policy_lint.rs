@@ -665,20 +665,33 @@ fn normalize_runs_on(runs_on: &Value) -> Option<String> {
             // Object form: `runs-on: {group: em-ci-small, labels: [self-hosted, ..., cx53, ...]}`
             let labels = map.get(Value::String("labels".to_string())).and_then(Value::as_sequence);
             if let Some(label_seq) = labels {
-                let label_strs: Vec<&str> = label_seq.iter().filter_map(Value::as_str).collect();
-                if label_strs.contains(&"cx53") {
-                    return Some("self_hosted_cx53".to_string());
-                }
-                if label_strs.contains(&"cx43") {
-                    return Some("self_hosted_cx43".to_string());
-                }
+                return normalize_self_hosted_labels(label_seq);
             }
             // Unknown object form — skip rather than false-positive.
             None
         }
-        // Sequence or other YAML type — skip.
+        // Sequence form is used for self-hosted label lists. Unknown sequences
+        // still skip rather than false-positive.
+        Value::Sequence(seq) => normalize_self_hosted_labels(seq),
         _ => None,
     }
+}
+
+fn normalize_self_hosted_labels(labels: &[Value]) -> Option<String> {
+    let label_strs: Vec<&str> = labels.iter().filter_map(Value::as_str).collect();
+    if label_strs.contains(&"cx53") {
+        return Some("self_hosted_cx53".to_string());
+    }
+    if label_strs.contains(&"cx43") {
+        return Some("self_hosted_cx43".to_string());
+    }
+    if label_strs.contains(&"self-hosted") && label_strs.contains(&"droid") {
+        return Some("self_hosted_droid".to_string());
+    }
+    if label_strs.contains(&"self-hosted") && label_strs.contains(&"workflow-nano") {
+        return Some("self_hosted_workflow_nano".to_string());
+    }
+    None
 }
 
 /// Check 1 — `RUNNER_LABEL_MISMATCH`: for each `[[lane]]` entry that declares
@@ -686,8 +699,8 @@ fn normalize_runs_on(runs_on: &Value) -> Option<String> {
 /// `runs-on:` does not match the whitelist `runner` field.
 ///
 /// "mixed" runner in the whitelist matches any actual runner (matrix jobs).
-/// Object-form `runs-on:` values that don't contain `cx53`/`cx43` are skipped
-/// rather than false-positived.
+/// Object-form `runs-on:` values that don't contain a known self-hosted label
+/// are skipped rather than false-positived.
 fn check_runner_label_mismatch(
     workflows_dir: &Path,
     lane: &toml::Value,
@@ -949,7 +962,35 @@ mod tests {
         Ok(())
     }
 
-    /// "mixed" runner in whitelist → check is skipped entirely, even if actual runner differs.
+    /// Droid's self-hosted label sequence normalizes to the policy token, so
+    /// the review workflow stays checked by the lane whitelist.
+    #[test]
+    fn runner_droid_sequence_matches_self_hosted_workflow_nano() -> Result<()> {
+        let real_workflows_dir = {
+            let root = project_root()?;
+            root.join(".github").join("workflows")
+        };
+        if !real_workflows_dir.join("droid-review.yml").exists() {
+            return Ok(());
+        }
+        let lane: toml::Value = toml::from_str(
+            r#"
+            workflow = ".github/workflows/droid-review.yml"
+            job = "droid-review"
+            runner = "self_hosted_workflow_nano"
+            "#,
+        )?;
+        let mut issues = Vec::new();
+        check_runner_label_mismatch(&real_workflows_dir, &lane, &mut issues)?;
+        assert!(
+            issues.iter().all(|i| i.code != "RUNNER_LABEL_MISMATCH"),
+            "unexpected RUNNER_LABEL_MISMATCH for Droid self-hosted runner: {issues:?}"
+        );
+        Ok(())
+    }
+
+    /// "mixed" runner in whitelist skips the check entirely, even if the actual
+    /// runner differs.
     #[test]
     fn runner_mixed_skips_check() -> Result<()> {
         let workflows_dir = fixture_path("")?;
@@ -1111,6 +1152,14 @@ labels: [self-hosted, linux, x64, em-ci, cx43, rust-small]
         Ok(())
     }
 
+    #[test]
+    fn normalize_workflow_nano_sequence_form() -> Result<()> {
+        let v: Value =
+            serde_yaml_ng::from_str("[self-hosted, linux, x64, em-ci, trusted-pr, workflow-nano]")?;
+        assert_eq!(normalize_runs_on(&v), Some("self_hosted_workflow_nano".to_string()));
+        Ok(())
+    }
+
     // ── Coverage: defensive early-return branches ─────────────────────────────
 
     /// normalize: an unknown plain string passes through unchanged (so it can be
@@ -1130,7 +1179,7 @@ labels: [self-hosted, linux, x64, em-ci, cx43, rust-small]
         Ok(())
     }
 
-    /// normalize: a non-string, non-mapping YAML node (e.g. a sequence) → None.
+    /// normalize: an unrecognized sequence is skipped.
     #[test]
     fn normalize_sequence_returns_none() -> Result<()> {
         let v: Value = serde_yaml_ng::from_str("[ubuntu-latest, windows-latest]")?;

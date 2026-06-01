@@ -1,4 +1,4 @@
-name: Droid Auto Review
+name: Droid PR Review
 
 # External AI reviewer. Advisory: see policy/ci-lane-whitelist.toml entry
 # `droid_auto_review` and docs/ci/labels.md `ai-review`. The job runs on
@@ -11,10 +11,10 @@ name: Droid Auto Review
 
 on:
   pull_request:
-    types: [opened, ready_for_review, reopened]
+    types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: droid-review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 env:
@@ -23,12 +23,13 @@ env:
 jobs:
   droid-review:
     if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, em-ci, trusted-pr, workflow-nano]
     # Advisory lane: do not break PR signal on external-AI-review failures.
     # See docs/ci/perl-lsp-rollout-plan.md PR 14.
     continue-on-error: true
+    timeout-minutes: 20
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
       issues: write
       id-token: write
@@ -37,17 +38,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          fetch-depth: 1
-      - name: Configure MiniMax BYOK for Factory Droid
+          fetch-depth: 0
+      - name: Configure MiniMax M3 for Droid BYOK
         shell: bash
         run: |
-          mkdir -p "$HOME/.factory"
-          cat > "$HOME/.factory/settings.local.json" <<JSON
+          set -euo pipefail
+
+          droid_home="${RUNNER_TEMP}/droid-home"
+          mkdir -p "${droid_home}/.factory"
+
+          cat > "${droid_home}/.factory/settings.local.json" <<JSON
           {
             "customModels": [
               {
-                "displayName": "MiniMax-M2.7",
-                "model": "MiniMax-M2.7",
+                "displayName": "MiniMax-M3",
+                "model": "MiniMax-M3",
                 "baseUrl": "https://api.minimax.io/anthropic",
                 "apiKey": "${MINIMAX_API_KEY}",
                 "provider": "anthropic",
@@ -60,18 +65,42 @@ jobs:
             ]
           }
           JSON
-      - name: Run Droid Auto Review with MiniMax M2.7 BYOK
+      - name: Install GitHub CLI for self-hosted Droid
+        shell: bash
+        env:
+          GH_CLI_VERSION: "2.93.0"
+          GH_CLI_SHA256: 02d1290eba130e0b896f3709ffff22e1c75a51475ddb70476a85abc6b5807af0
+        run: |
+          set -euo pipefail
+
+          if command -v gh >/dev/null 2>&1; then
+            gh --version
+            exit 0
+          fi
+
+          archive="gh_${GH_CLI_VERSION}_linux_amd64.tar.gz"
+          install_dir="${RUNNER_TEMP}/gh-cli"
+          mkdir -p "${install_dir}"
+
+          curl -fsSL \
+            "https://github.com/cli/cli/releases/download/v${GH_CLI_VERSION}/${archive}" \
+            -o "${RUNNER_TEMP}/${archive}"
+          printf '%s  %s\n' "${GH_CLI_SHA256}" "${RUNNER_TEMP}/${archive}" | sha256sum -c -
+
+          tar -xzf "${RUNNER_TEMP}/${archive}" -C "${install_dir}"
+          echo "${install_dir}/gh_${GH_CLI_VERSION}_linux_amd64/bin" >> "${GITHUB_PATH}"
+          "${install_dir}/gh_${GH_CLI_VERSION}_linux_amd64/bin/gh" --version
+      - name: Run Droid Auto Review
         uses: EffortlessMetrics/droid-action-safe@7c1377ccbacddc95560d1570547a5baa51de01ec # based on Factory-AI/droid-action v5; raw debug artifact upload disabled
+        env:
+          HOME: ${{ runner.temp }}/droid-home
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          ANTHROPIC_AUTH_TOKEN: ""
+          ANTHROPIC_BASE_URL: ""
         with:
           factory_api_key: ${{ secrets.FACTORY_API_KEY }}
           upload_debug_artifacts: false
           automatic_review: true
-          automatic_security_review: true
           review_depth: shallow
-          review_model: "custom:MiniMax-M2.7-0"
-          security_model: "custom:MiniMax-M2.7-0"
-          security_severity_threshold: high
-          security_block_on_critical: true
-          security_block_on_high: false
-          include_suggestions: true
-          show_full_output: false
+          review_model: custom:MiniMax-M3-0
+          automatic_security_review: false

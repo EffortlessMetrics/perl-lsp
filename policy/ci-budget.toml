@@ -37,6 +37,7 @@ macos_latest = 10.0
 docker_build = 6.0
 external_ai_review = 4.0
 self_hosted_gpu = 6.0
+self_hosted_workflow_nano = 1.0
 # Composite "matrix" runner: used for lanes whose base_lem is already pre-summed
 # across multiple OS legs (e.g. vscode_smoke_matrix). Multiplier is 1.0 because
 # the per-leg multipliers are already folded into the lane's base_lem.

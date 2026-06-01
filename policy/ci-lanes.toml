@@ -277,7 +277,7 @@ duplicate_of = []
 [lane.droid_auto_review]
 description = "External AI review on credible PRs."
 intent = "advisory review"
-runner = "ubuntu_latest"
+runner = "self_hosted_workflow_nano"
 base_lem = 4
 default_pr = true
 blocking = false

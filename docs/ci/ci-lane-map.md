@@ -26,7 +26,7 @@ and meant to stay in sync with it.
 | `lsp_memory_smoke` | `ci.yml` | `lsp-memory-smoke` | `ubuntu-24.04` | 8 | yes |
 | `windows_guardrails` | `ci.yml` | `windows-guardrails` | `windows-latest` | 20 (10m × 2.0) | yes |
 | `ripr_advisory` | `ripr.yml` | `ripr` | `ubuntu-24.04` | 4 | **no** |
-| `droid_auto_review` | `droid-review.yml` | `droid` | `ubuntu-latest` | 4 | no |
+| `droid_auto_review` | `droid-review.yml` | `droid` | `self-hosted, linux, x64, em-ci, trusted-pr, workflow-nano` | 4 | no |
 
 **Default-PR LEM sum (Linux+Windows weighted):** ≈ 93 LEM today. After PR 17 with
 risk-pack routing, expected ordinary-PR LEM ≈ 30–40.
