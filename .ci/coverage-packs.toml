@@ -344,6 +344,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-update-baseline-script"
+lcov = false
+files = [
+  "scripts/update-coverage-baseline.sh",
+  "scripts/tests/test-update-coverage-baseline.sh",
+]
+commands = [
+  "bash scripts/tests/test-update-coverage-baseline.sh",
+]
+coverage_filters = [
+  "update-coverage-baseline",
+]
+
+[[pack]]
 id = "patch-coverage-clean-tmp-targets"
 lcov = false
 files = [
