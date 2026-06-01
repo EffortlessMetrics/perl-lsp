@@ -166,6 +166,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-risk-packs-validator"
+lcov = false
+files = [
+  "scripts/ci/validate_risk_packs.py",
+  "scripts/ci/test_validate_risk_packs.py",
+]
+commands = [
+  "python -m unittest scripts/ci/test_validate_risk_packs.py",
+]
+coverage_filters = [
+  "validate_risk_packs",
+]
+
+[[pack]]
 id = "patch-coverage-rust-focused"
 files = [
   "*.rs",
