@@ -112,6 +112,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-ci-actuals"
+lcov = false
+files = [
+  "scripts/ci/emit_ci_actuals.py",
+  "scripts/ci/test_emit_ci_actuals.py",
+]
+commands = [
+  "python -m unittest scripts/ci/test_emit_ci_actuals.py",
+]
+coverage_filters = [
+  "emit_ci_actuals",
+]
+
+[[pack]]
 id = "patch-coverage-rust-focused"
 files = [
   "*.rs",

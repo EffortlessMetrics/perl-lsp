@@ -141,6 +141,11 @@ const CI_ROUTE_PACK: ProofPack = ProofPack {
     ],
 };
 
+const CI_ACTUALS_PACK: ProofPack = ProofPack {
+    id: "ci-actuals-focused",
+    commands: &["python -m unittest scripts/ci/test_emit_ci_actuals.py"],
+};
+
 const GENERAL_RUST_PACK: ProofPack = ProofPack {
     id: "rust-focused",
     commands: &["cargo check --workspace --all-targets --profile agent --locked"],
@@ -309,6 +314,13 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         route.add_surface("ci-routing");
         route.add_pack(CI_ROUTE_PACK);
         route.add_coverage_pack("patch-coverage-ci-route");
+        return;
+    }
+
+    if file == "scripts/ci/emit_ci_actuals.py" || file == "scripts/ci/test_emit_ci_actuals.py" {
+        route.add_surface("ci-actuals");
+        route.add_pack(CI_ACTUALS_PACK);
+        route.add_coverage_pack("patch-coverage-ci-actuals");
         return;
     }
 
@@ -771,6 +783,31 @@ mod tests {
     }
 
     #[test]
+    fn ci_route_receipt_maps_ci_actuals_script_to_focused_non_lcov_actuals_pack() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec!["scripts/ci/emit_ci_actuals.py".to_string()],
+        )?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["ci-actuals"]);
+        assert!(proof_pack_ids(&receipt).contains(&"ci-actuals-focused"));
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "ci-actuals-focused"
+                && pack.commands.iter().any(|command| {
+                    command == "python -m unittest scripts/ci/test_emit_ci_actuals.py"
+                })
+        }));
+        assert!(receipt.coverage_pack_selector.is_empty());
+        assert!(receipt.coverage_proof_packs.is_empty());
+        assert_eq!(
+            receipt.skipped_by_policy.get("patch-coverage-ci-actuals").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        Ok(())
+    }
+
+    #[test]
     fn ci_route_coverage_proof_pack_receipts_materializes_each_selected_pack() -> Result<()> {
         let selector = vec![
             "patch-coverage-xtask-semantic-inline".to_string(),
@@ -949,6 +986,7 @@ mod tests {
                 "patch-coverage-ux-scenario",
                 "patch-coverage-ci-policy",
                 "patch-coverage-ci-route",
+                "patch-coverage-ci-actuals",
                 "patch-coverage-rust-focused",
             ]
         );
@@ -959,6 +997,7 @@ mod tests {
             "patch-coverage-ux-scenario",
             "patch-coverage-ci-policy",
             "patch-coverage-ci-route",
+            "patch-coverage-ci-actuals",
             "patch-coverage-rust-focused",
         ];
         let changed_files = vec![
@@ -986,6 +1025,10 @@ mod tests {
         );
         assert_eq!(
             skipped.get("patch-coverage-ci-route").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        assert_eq!(
+            skipped.get("patch-coverage-ci-actuals").map(String::as_str),
             Some(NON_LCOV_COVERAGE_SKIP_REASON)
         );
         assert_eq!(
