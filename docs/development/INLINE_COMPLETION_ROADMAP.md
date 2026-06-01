@@ -425,7 +425,8 @@ without registering an LSP next-edit provider.
 Still future or deliberately gated:
 
 - broader real-project UX receipts for inline quality beyond the current module
-  import, package-boundary receiver, and project test assertion receipts;
+  import, package-boundary receiver, project test assertion, and project
+  control-flow receipts;
 - runtime/editor-visible next-edit suggestions;
 - optional AI candidate boundaries.
 

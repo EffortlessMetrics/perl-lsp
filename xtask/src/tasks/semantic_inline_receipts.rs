@@ -56,6 +56,14 @@ const REQUIRED_SEMANTIC_INLINE_RECEIPTS: &[SemanticInlineRequirement] = &[
         capability: "gated_multiline_constructor",
         workflow_id: "gated_multiline_constructor_inline_completion_quality",
     },
+    SemanticInlineRequirement {
+        capability: "project_test_assertion",
+        workflow_id: "project_test_assertion_inline_completion_quality",
+    },
+    SemanticInlineRequirement {
+        capability: "project_control_flow",
+        workflow_id: "project_control_flow_inline_completion_quality",
+    },
 ];
 
 #[derive(Debug, Clone, Copy)]
