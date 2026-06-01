@@ -100,8 +100,8 @@ use crate::{
     // Import text processing helpers
     util::{
         byte_to_line_col, byte_to_utf16_col, extract_module_reference,
-        extract_module_reference_extended, get_text_around_offset, offset_to_position,
-        position_to_offset,
+        extract_module_reference_extended, get_text_around_offset, get_text_window_around_offset,
+        offset_to_position, position_to_offset,
     },
 };
 use md5;
