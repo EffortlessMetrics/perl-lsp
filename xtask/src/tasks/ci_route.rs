@@ -178,6 +178,11 @@ const TRUST_LANES_VALIDATOR_PACK: ProofPack = ProofPack {
     commands: &["python -m unittest scripts/ci/test_validate_trust_lanes.py"],
 };
 
+const RECEIPTS_JUNIT_PACK: ProofPack = ProofPack {
+    id: "receipts-junit-focused",
+    commands: &["python -m unittest scripts/ci/test_receipts_to_junit.py"],
+};
+
 const GENERAL_RUST_PACK: ProofPack = ProofPack {
     id: "rust-focused",
     commands: &["cargo check --workspace --all-targets --profile agent --locked"],
@@ -404,6 +409,13 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         route.add_surface("trust-lanes-validator");
         route.add_pack(TRUST_LANES_VALIDATOR_PACK);
         route.add_coverage_pack("patch-coverage-trust-lanes-validator");
+        return;
+    }
+
+    if file == "scripts/ci/receipts-to-junit.py" || file == "scripts/ci/test_receipts_to_junit.py" {
+        route.add_surface("receipts-junit");
+        route.add_pack(RECEIPTS_JUNIT_PACK);
+        route.add_coverage_pack("patch-coverage-receipts-junit");
         return;
     }
 
@@ -1020,6 +1032,31 @@ mod tests {
     }
 
     #[test]
+    fn ci_route_receipt_maps_receipts_junit_script_to_focused_non_lcov_pack() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec!["scripts/ci/receipts-to-junit.py".to_string()],
+        )?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["receipts-junit"]);
+        assert!(proof_pack_ids(&receipt).contains(&"receipts-junit-focused"));
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "receipts-junit-focused"
+                && pack.commands.iter().any(|command| {
+                    command == "python -m unittest scripts/ci/test_receipts_to_junit.py"
+                })
+        }));
+        assert!(receipt.coverage_pack_selector.is_empty());
+        assert!(receipt.coverage_proof_packs.is_empty());
+        assert_eq!(
+            receipt.skipped_by_policy.get("patch-coverage-receipts-junit").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        Ok(())
+    }
+
+    #[test]
     fn ci_route_receipt_maps_completion_provider_to_focused_pack() -> Result<()> {
         let receipt = route_receipt(
             "origin/main",
@@ -1232,6 +1269,7 @@ mod tests {
                 "patch-coverage-risk-packs-validator",
                 "patch-coverage-gate-lane-mapping",
                 "patch-coverage-trust-lanes-validator",
+                "patch-coverage-receipts-junit",
                 "patch-coverage-rust-focused",
             ]
         );
@@ -1249,6 +1287,7 @@ mod tests {
             "patch-coverage-risk-packs-validator",
             "patch-coverage-gate-lane-mapping",
             "patch-coverage-trust-lanes-validator",
+            "patch-coverage-receipts-junit",
             "patch-coverage-rust-focused",
         ];
         let changed_files = vec![
@@ -1303,6 +1342,10 @@ mod tests {
         );
         assert_eq!(
             skipped.get("patch-coverage-trust-lanes-validator").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        assert_eq!(
+            skipped.get("patch-coverage-receipts-junit").map(String::as_str),
             Some(NON_LCOV_COVERAGE_SKIP_REASON)
         );
         assert_eq!(

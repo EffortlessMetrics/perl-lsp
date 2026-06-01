@@ -210,6 +210,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-receipts-junit"
+lcov = false
+files = [
+  "scripts/ci/receipts-to-junit.py",
+  "scripts/ci/test_receipts_to_junit.py",
+]
+commands = [
+  "python -m unittest scripts/ci/test_receipts_to_junit.py",
+]
+coverage_filters = [
+  "receipts_to_junit",
+]
+
+[[pack]]
 id = "patch-coverage-rust-focused"
 files = [
   "*.rs",
