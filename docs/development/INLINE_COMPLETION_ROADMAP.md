@@ -393,6 +393,7 @@ Current semantic inline UX receipt inventory:
 | `gated_multiline_constructor_inline_completion_quality` | `ux_scenario_60_gated_multiline_constructor_inline_completion_quality.rs` | Invoked-only multiline constructor ghost text, automatic-trigger suppression, selected-completion conflict suppression, and accepted-edit parse safety. |
 | `package_boundary_receiver_inline_completion_quality` | `ux_scenario_61_package_boundary_receiver_inline_completion_quality.rs` | `$self->` current-package method suggestions stay preferred in a multi-file package-boundary workspace without sibling-package or generic constructor leaks. |
 | `project_test_assertion_inline_completion_quality` | `ux_scenario_62_project_test_assertion_inline_completion_quality.rs` | Test::More and Test2 assertion ghost text stay preferred in CPAN-shaped project test files without return noise, premature `done_testing`, or module-import ghost text. |
+| `project_control_flow_inline_completion_quality` | `ux_scenario_63_project_control_flow_inline_completion_quality.rs` | Loop and guard ghost text in CPAN-shaped project scripts uses visible lexicals and collections without placeholder snippets or module-import noise. |
 
 The machine-readable dashboard for this inventory is:
 
