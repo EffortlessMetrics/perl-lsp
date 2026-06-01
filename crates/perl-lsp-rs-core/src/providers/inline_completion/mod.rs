@@ -1536,9 +1536,11 @@ impl InlineCompletionProvider {
 
         if prefix.is_empty() {
             let mut pushed_test_assertion = false;
+            let mut suppress_return_candidate = false;
             if semantic_context.file_role == FileRole::Test
                 && let Some(assertion) = self.preferred_test_statement(semantic_context)
             {
+                suppress_return_candidate = assertion.starts_with("is(");
                 sink.push(
                     InlineCandidateSourceKind::ContextualFallback,
                     0,
@@ -1552,7 +1554,9 @@ impl InlineCompletionProvider {
                 pushed_test_assertion = true;
             }
 
-            if let Some(variable) = self.preferred_return_variable(semantic_context) {
+            if !suppress_return_candidate
+                && let Some(variable) = self.preferred_return_variable(semantic_context)
+            {
                 sink.push(
                     InlineCandidateSourceKind::ContextualFallback,
                     0,
@@ -5549,6 +5553,50 @@ mod tests {
 
         assert_eq!(normalized[0].insert_text, "is($got, $expected, 'test description');");
         assert_eq!(normalized[1].insert_text, "return $got;");
+        Ok(())
+    }
+
+    #[test]
+    fn test_assertion_context_suppresses_generic_return_candidate()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Test::More;\nmy $got = compute();\nmy $expected = 42;\n\n";
+
+        let completions = provider.get_inline_completions(source, 4, 0);
+
+        assert!(
+            completions
+                .items
+                .iter()
+                .any(|item| item.insert_text == "is($got, $expected, 'test description');")
+        );
+        assert!(
+            completions.items.iter().all(|item| !item.insert_text.starts_with("return ")),
+            "test assertion slots should not include generic return candidates: {:?}",
+            completions.items
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn ok_assertion_context_keeps_generic_return_candidate()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Test::More;\nmy $got = compute();\n\n";
+
+        let completions = provider.get_inline_completions(source, 3, 0);
+
+        assert!(
+            completions
+                .items
+                .iter()
+                .any(|item| item.insert_text == "ok($got, 'test description');")
+        );
+        assert!(
+            completions.items.iter().any(|item| item.insert_text == "return $got;"),
+            "weaker ok(...) assertion slots should keep generic return fallback: {:?}",
+            completions.items
+        );
         Ok(())
     }
 
