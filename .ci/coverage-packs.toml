@@ -41,6 +41,8 @@ coverage_filters = [
 id = "patch-coverage-inline-core"
 files = [
   "crates/perl-lsp-rs-core/src/providers/inline_completion/",
+  "crates/perl-lsp-rs-core/tests/inline_completion_ux_fixtures.rs",
+  "xtask/src/tasks/inline_completion_quality.rs",
 ]
 commands = [
   "cargo test -p perl-lsp-rs-core --lib --profile agent --locked inline_completion -- --nocapture",

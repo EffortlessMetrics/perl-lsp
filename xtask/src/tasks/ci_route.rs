@@ -296,7 +296,10 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         return;
     }
 
-    if file.starts_with("crates/perl-lsp-rs-core/src/providers/inline_completion/") {
+    if file.starts_with("crates/perl-lsp-rs-core/src/providers/inline_completion/")
+        || file == "crates/perl-lsp-rs-core/tests/inline_completion_ux_fixtures.rs"
+        || file == "xtask/src/tasks/inline_completion_quality.rs"
+    {
         route.add_surface("inline-core");
         route.add_pack(INLINE_CORE_PACK);
         route.add_coverage_pack("patch-coverage-inline-core");
@@ -1223,6 +1226,15 @@ mod tests {
                 .iter()
                 .any(|file| { file == "crates/perl-lsp-rs-core/src/providers/inline_completion/" })
         );
+        assert!(inline_core_pack.files.iter().any(|file| {
+            file == "crates/perl-lsp-rs-core/tests/inline_completion_ux_fixtures.rs"
+        }));
+        assert!(
+            inline_core_pack
+                .files
+                .iter()
+                .any(|file| { file == "xtask/src/tasks/inline_completion_quality.rs" })
+        );
         assert!(
             inline_core_pack
                 .commands
@@ -1244,6 +1256,36 @@ mod tests {
                 .commands
                 .iter()
                 .any(|command| { command.contains("completion::completion") })
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_receipt_maps_inline_completion_receipt_files_to_inline_core() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec![
+                "crates/perl-lsp-rs-core/src/providers/inline_completion/mod.rs".to_string(),
+                "crates/perl-lsp-rs-core/tests/inline_completion_ux_fixtures.rs".to_string(),
+                "xtask/src/tasks/inline_completion_quality.rs".to_string(),
+            ],
+        )?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["inline-core"]);
+        assert!(proof_pack_ids(&receipt).contains(&"inline-core"));
+        assert!(!proof_pack_ids(&receipt).contains(&"rust-focused"));
+        assert_eq!(receipt.coverage_pack_selector, vec!["patch-coverage-inline-core"]);
+        assert_eq!(
+            receipt.coverage_proof_packs.iter().map(|pack| pack.id.as_str()).collect::<Vec<_>>(),
+            vec!["patch-coverage-inline-core"]
+        );
+        assert!(
+            receipt
+                .coverage_proof_packs
+                .iter()
+                .flat_map(|pack| pack.commands.iter())
+                .any(|command| command.contains("inline-completion-quality"))
         );
         Ok(())
     }
