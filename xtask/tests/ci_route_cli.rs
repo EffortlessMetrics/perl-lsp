@@ -754,6 +754,48 @@ fn coverage_pack_manifest_declares_control_plane_lock_pack_owns_lock_helper() ->
 }
 
 #[test]
+fn coverage_pack_manifest_declares_agent_preflight_pack_owns_preflight_helper() -> Result<()> {
+    let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(PathBuf::from)
+        .ok_or_else(|| anyhow!("xtask manifest path has no parent"))?
+        .join(".ci/coverage-packs.toml");
+    let manifest: toml::Value = toml::from_str(&fs::read_to_string(manifest_path)?)?;
+    let packs = manifest
+        .get("pack")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| anyhow!("coverage pack manifest must contain pack array"))?;
+    let pack = packs
+        .iter()
+        .find(|pack| {
+            pack.get("id").and_then(toml::Value::as_str) == Some("patch-coverage-agent-preflight")
+        })
+        .ok_or_else(|| anyhow!("missing agent-preflight coverage pack"))?;
+    let files = pack
+        .get("files")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| anyhow!("coverage pack files must be an array"))?;
+    let commands = pack
+        .get("commands")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| anyhow!("coverage pack commands must be an array"))?;
+
+    assert!(
+        files
+            .iter()
+            .filter_map(toml::Value::as_str)
+            .any(|value| value == "scripts/agent-preflight.sh")
+    );
+    assert!(
+        commands
+            .iter()
+            .filter_map(toml::Value::as_str)
+            .any(|value| value == "bash scripts/test-agent-preflight.sh")
+    );
+    Ok(())
+}
+
+#[test]
 fn coverage_pack_manifest_declares_clean_tmp_targets_pack_owns_cleanup_helper() -> Result<()> {
     let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -1998,6 +2040,64 @@ fn ci_route_cli_maps_control_plane_lock_script_to_lock_proof_pack() -> Result<()
     assert!(summary.contains("bash scripts/test-control-plane-lock.sh"));
     assert!(
         summary.contains("`patch-coverage-control-plane-lock`: non-LCOV CI policy/routing surface")
+    );
+    Ok(())
+}
+
+#[test]
+fn ci_route_cli_maps_agent_preflight_script_to_preflight_proof_pack() -> Result<()> {
+    let temp = TempDir::new()?;
+    let receipt = temp.path().join("ci-route.json");
+    let summary = temp.path().join("ci-route.md");
+
+    cargo_bin_cmd!("xtask")
+        .args([
+            "ci",
+            "route",
+            "--base",
+            "origin/main",
+            "--head",
+            "HEAD",
+            "--receipt",
+            receipt.to_str().ok_or_else(|| anyhow!("invalid ci route receipt path"))?,
+            "--summary",
+            summary.to_str().ok_or_else(|| anyhow!("invalid ci route summary path"))?,
+            "--changed-file",
+            "scripts/agent-preflight.sh",
+        ])
+        .assert()
+        .success();
+
+    let route: Value = serde_json::from_str(&std::fs::read_to_string(receipt)?)?;
+    assert_eq!(
+        route.pointer("/changed_surfaces/0").and_then(Value::as_str),
+        Some("agent-preflight")
+    );
+    assert!(
+        route.get("required_proof_packs").and_then(Value::as_array).is_some_and(|packs| packs
+            .iter()
+            .any(|pack| {
+                pack.get("id").and_then(Value::as_str) == Some("agent-preflight-focused")
+                    && pack.get("commands").and_then(Value::as_array).is_some_and(|commands| {
+                        commands.iter().any(|command| {
+                            command.as_str() == Some("bash scripts/test-agent-preflight.sh")
+                        })
+                    })
+            })),
+        "agent preflight helper changes must run the focused preflight proof"
+    );
+    assert!(
+        route.get("coverage_pack_selector").and_then(Value::as_array).is_some_and(Vec::is_empty),
+        "agent-preflight proof pack is non-LCOV and must not be uploaded as Codecov coverage"
+    );
+    assert_eq!(
+        route.pointer("/skipped_by_policy/patch-coverage-agent-preflight").and_then(Value::as_str),
+        Some("non-LCOV CI policy/routing surface; covered by focused CI gates")
+    );
+    let summary = fs::read_to_string(summary)?;
+    assert!(summary.contains("bash scripts/test-agent-preflight.sh"));
+    assert!(
+        summary.contains("`patch-coverage-agent-preflight`: non-LCOV CI policy/routing surface")
     );
     Ok(())
 }

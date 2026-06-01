@@ -316,6 +316,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-agent-preflight"
+lcov = false
+files = [
+  "scripts/agent-preflight.sh",
+  "scripts/test-agent-preflight.sh",
+]
+commands = [
+  "bash scripts/test-agent-preflight.sh",
+]
+coverage_filters = [
+  "agent-preflight",
+]
+
+[[pack]]
 id = "patch-coverage-clean-tmp-targets"
 lcov = false
 files = [

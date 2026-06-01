@@ -219,6 +219,11 @@ const CONTROL_PLANE_LOCK_PACK: ProofPack = ProofPack {
     commands: &["bash scripts/test-control-plane-lock.sh"],
 };
 
+const AGENT_PREFLIGHT_PACK: ProofPack = ProofPack {
+    id: "agent-preflight-focused",
+    commands: &["bash scripts/test-agent-preflight.sh"],
+};
+
 const CLEAN_TMP_TARGETS_PACK: ProofPack = ProofPack {
     id: "clean-tmp-targets-focused",
     commands: &["bash scripts/tests/test-clean-tmp-targets.sh"],
@@ -520,6 +525,13 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         route.add_surface("control-plane-lock");
         route.add_pack(CONTROL_PLANE_LOCK_PACK);
         route.add_coverage_pack("patch-coverage-control-plane-lock");
+        return;
+    }
+
+    if file == "scripts/agent-preflight.sh" || file == "scripts/test-agent-preflight.sh" {
+        route.add_surface("agent-preflight");
+        route.add_pack(AGENT_PREFLIGHT_PACK);
+        route.add_coverage_pack("patch-coverage-agent-preflight");
         return;
     }
 
@@ -1396,6 +1408,29 @@ mod tests {
     }
 
     #[test]
+    fn ci_route_receipt_maps_agent_preflight_to_focused_non_lcov_pack() -> Result<()> {
+        let receipt =
+            route_receipt("origin/main", "HEAD", vec!["scripts/agent-preflight.sh".to_string()])?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["agent-preflight"]);
+        assert!(proof_pack_ids(&receipt).contains(&"agent-preflight-focused"));
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "agent-preflight-focused"
+                && pack
+                    .commands
+                    .iter()
+                    .any(|command| command == "bash scripts/test-agent-preflight.sh")
+        }));
+        assert!(receipt.coverage_pack_selector.is_empty());
+        assert!(receipt.coverage_proof_packs.is_empty());
+        assert_eq!(
+            receipt.skipped_by_policy.get("patch-coverage-agent-preflight").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        Ok(())
+    }
+
+    #[test]
     fn ci_route_receipt_maps_completion_provider_to_focused_pack() -> Result<()> {
         let receipt = route_receipt(
             "origin/main",
@@ -1616,6 +1651,7 @@ mod tests {
                 "patch-coverage-pr-plan",
                 "patch-coverage-pr-overlap",
                 "patch-coverage-control-plane-lock",
+                "patch-coverage-agent-preflight",
                 "patch-coverage-clean-tmp-targets",
                 "patch-coverage-swarm-cleanup",
                 "patch-coverage-pre-merge-check",
@@ -1644,6 +1680,7 @@ mod tests {
             "patch-coverage-pr-plan",
             "patch-coverage-pr-overlap",
             "patch-coverage-control-plane-lock",
+            "patch-coverage-agent-preflight",
             "patch-coverage-clean-tmp-targets",
             "patch-coverage-swarm-cleanup",
             "patch-coverage-pre-merge-check",
@@ -1731,6 +1768,10 @@ mod tests {
         );
         assert_eq!(
             skipped.get("patch-coverage-control-plane-lock").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        assert_eq!(
+            skipped.get("patch-coverage-agent-preflight").map(String::as_str),
             Some(NON_LCOV_COVERAGE_SKIP_REASON)
         );
         assert_eq!(

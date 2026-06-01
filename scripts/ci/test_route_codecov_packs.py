@@ -245,6 +245,34 @@ class RouteCodecovPacksTests(unittest.TestCase):
             [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
         )
 
+    def test_agent_preflight_change_is_non_lcov_focused_proof(self) -> None:
+        packs = [
+            {
+                "id": "patch-coverage-agent-preflight",
+                "lcov": False,
+                "files": [
+                    "scripts/agent-preflight.sh",
+                    "scripts/test-agent-preflight.sh",
+                ],
+                "commands": ["bash scripts/test-agent-preflight.sh"],
+                "coverage_filters": ["agent-preflight"],
+            },
+            {
+                "id": router.FALLBACK_PACK_ID,
+                "files": ["*.rs"],
+                "commands": ["cargo test --workspace --lib"],
+                "coverage_filters": ["workspace-lib"],
+            },
+        ]
+
+        paths = ["scripts/agent-preflight.sh"]
+
+        self.assertEqual([], router.selected_packs(packs, paths))
+        self.assertEqual(
+            ["patch-coverage-agent-preflight"],
+            [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
