@@ -284,6 +284,11 @@ const DEVEX_TARGETED_CHECKS_WRAPPER_PACK: ProofPack = ProofPack {
     commands: &["bash scripts/tests/test-devex-targeted-checks-wrapper.sh"],
 };
 
+const LSP_CANCELLATION_WRAPPER_PACK: ProofPack = ProofPack {
+    id: "lsp-cancellation-wrapper-focused",
+    commands: &["bash scripts/tests/test-lsp-cancellation-wrapper.sh"],
+};
+
 const COVERAGE_BASELINE_SCRIPT_PACK: ProofPack = ProofPack {
     id: "coverage-baseline-script-focused",
     commands: &["bash scripts/tests/test-check-coverage-baseline.sh"],
@@ -714,6 +719,15 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         route.add_surface("devex-targeted-checks-wrapper");
         route.add_pack(DEVEX_TARGETED_CHECKS_WRAPPER_PACK);
         route.add_coverage_pack("patch-coverage-devex-targeted-checks-wrapper");
+        return;
+    }
+
+    if file == "scripts/test-lsp-cancellation.sh"
+        || file == "scripts/tests/test-lsp-cancellation-wrapper.sh"
+    {
+        route.add_surface("lsp-cancellation-wrapper");
+        route.add_pack(LSP_CANCELLATION_WRAPPER_PACK);
+        route.add_coverage_pack("patch-coverage-lsp-cancellation-wrapper");
         return;
     }
 
@@ -1911,6 +1925,35 @@ mod tests {
     }
 
     #[test]
+    fn ci_route_receipt_maps_lsp_cancellation_wrapper_to_focused_non_lcov_pack() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec!["scripts/test-lsp-cancellation.sh".to_string()],
+        )?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["lsp-cancellation-wrapper"]);
+        assert!(proof_pack_ids(&receipt).contains(&"lsp-cancellation-wrapper-focused"));
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "lsp-cancellation-wrapper-focused"
+                && pack
+                    .commands
+                    .iter()
+                    .any(|command| command == "bash scripts/tests/test-lsp-cancellation-wrapper.sh")
+        }));
+        assert!(receipt.coverage_pack_selector.is_empty());
+        assert!(receipt.coverage_proof_packs.is_empty());
+        assert_eq!(
+            receipt
+                .skipped_by_policy
+                .get("patch-coverage-lsp-cancellation-wrapper")
+                .map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        Ok(())
+    }
+
+    #[test]
     fn ci_route_receipt_maps_coverage_baseline_script_to_focused_non_lcov_pack() -> Result<()> {
         let receipt = route_receipt(
             "origin/main",
@@ -2306,6 +2349,7 @@ mod tests {
                 "patch-coverage-check-toolchain-wrapper",
                 "patch-coverage-devex-doctor-wrapper",
                 "patch-coverage-devex-targeted-checks-wrapper",
+                "patch-coverage-lsp-cancellation-wrapper",
                 "patch-coverage-baseline-script",
                 "patch-coverage-update-baseline-script",
                 "patch-coverage-generate-receipt-script",
@@ -2353,6 +2397,7 @@ mod tests {
             "patch-coverage-check-toolchain-wrapper",
             "patch-coverage-devex-doctor-wrapper",
             "patch-coverage-devex-targeted-checks-wrapper",
+            "patch-coverage-lsp-cancellation-wrapper",
             "patch-coverage-baseline-script",
             "patch-coverage-update-baseline-script",
             "patch-coverage-generate-receipt-script",
@@ -2478,6 +2523,10 @@ mod tests {
         );
         assert_eq!(
             skipped.get("patch-coverage-check-toolchain-wrapper").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        assert_eq!(
+            skipped.get("patch-coverage-lsp-cancellation-wrapper").map(String::as_str),
             Some(NON_LCOV_COVERAGE_SKIP_REASON)
         );
         assert_eq!(

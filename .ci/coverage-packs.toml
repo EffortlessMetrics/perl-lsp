@@ -498,6 +498,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-lsp-cancellation-wrapper"
+lcov = false
+files = [
+  "scripts/test-lsp-cancellation.sh",
+  "scripts/tests/test-lsp-cancellation-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-lsp-cancellation-wrapper.sh",
+]
+coverage_filters = [
+  "lsp-cancellation-wrapper",
+]
+
+[[pack]]
 id = "patch-coverage-baseline-script"
 lcov = false
 files = [

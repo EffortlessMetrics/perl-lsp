@@ -609,6 +609,34 @@ class RouteCodecovPacksTests(unittest.TestCase):
             [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
         )
 
+    def test_lsp_cancellation_wrapper_change_is_non_lcov_focused_proof(self) -> None:
+        packs = [
+            {
+                "id": "patch-coverage-lsp-cancellation-wrapper",
+                "lcov": False,
+                "files": [
+                    "scripts/test-lsp-cancellation.sh",
+                    "scripts/tests/test-lsp-cancellation-wrapper.sh",
+                ],
+                "commands": ["bash scripts/tests/test-lsp-cancellation-wrapper.sh"],
+                "coverage_filters": ["lsp-cancellation-wrapper"],
+            },
+            {
+                "id": router.FALLBACK_PACK_ID,
+                "files": ["*.rs"],
+                "commands": ["cargo test --workspace --lib"],
+                "coverage_filters": ["workspace-lib"],
+            },
+        ]
+
+        paths = ["scripts/test-lsp-cancellation.sh"]
+
+        self.assertEqual([], router.selected_packs(packs, paths))
+        self.assertEqual(
+            ["patch-coverage-lsp-cancellation-wrapper"],
+            [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
+        )
+
     def test_coverage_baseline_script_change_is_non_lcov_focused_proof(self) -> None:
         packs = [
             {
