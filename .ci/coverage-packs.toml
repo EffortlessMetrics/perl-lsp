@@ -542,6 +542,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-build-timing-receipt-wrapper"
+lcov = false
+files = [
+  "scripts/build-timing-receipt.sh",
+  "scripts/tests/test-build-timing-receipt-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-build-timing-receipt-wrapper.sh",
+]
+coverage_filters = [
+  "build-timing-receipt-wrapper",
+]
+
+[[pack]]
 id = "patch-coverage-baseline-script"
 lcov = false
 files = [
