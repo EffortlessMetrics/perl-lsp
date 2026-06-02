@@ -696,6 +696,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-workspace-exclusions-wrapper"
+lcov = false
+files = [
+  "scripts/validate-workspace-exclusions.sh",
+  "scripts/tests/test-validate-workspace-exclusions-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-validate-workspace-exclusions-wrapper.sh",
+]
+coverage_filters = [
+  "workspace-exclusions-wrapper",
+]
+
+[[pack]]
 id = "patch-coverage-clean-tmp-targets"
 lcov = false
 files = [

@@ -1001,6 +1001,34 @@ class RouteCodecovPacksTests(unittest.TestCase):
             [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
         )
 
+    def test_workspace_exclusions_wrapper_change_is_non_lcov_focused_proof(self) -> None:
+        packs = [
+            {
+                "id": "patch-coverage-workspace-exclusions-wrapper",
+                "lcov": False,
+                "files": [
+                    "scripts/validate-workspace-exclusions.sh",
+                    "scripts/tests/test-validate-workspace-exclusions-wrapper.sh",
+                ],
+                "commands": ["bash scripts/tests/test-validate-workspace-exclusions-wrapper.sh"],
+                "coverage_filters": ["workspace-exclusions-wrapper"],
+            },
+            {
+                "id": router.FALLBACK_PACK_ID,
+                "files": ["*.rs"],
+                "commands": ["cargo test --workspace --lib"],
+                "coverage_filters": ["workspace-lib"],
+            },
+        ]
+
+        paths = ["scripts/validate-workspace-exclusions.sh"]
+
+        self.assertEqual([], router.selected_packs(packs, paths))
+        self.assertEqual(
+            ["patch-coverage-workspace-exclusions-wrapper"],
+            [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
+        )
+
     def test_remaining_script_helper_changes_are_non_lcov_focused_proof(self) -> None:
         helper_packs = [
             (

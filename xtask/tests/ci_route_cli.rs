@@ -4834,6 +4834,70 @@ fn ci_route_cli_maps_swarm_summary_wrapper_to_summary_proof_pack() -> Result<()>
 }
 
 #[test]
+fn ci_route_cli_maps_workspace_exclusions_wrapper_to_validation_proof_pack() -> Result<()> {
+    let temp = TempDir::new()?;
+    let receipt = temp.path().join("ci-route.json");
+    let summary = temp.path().join("ci-route.md");
+
+    cargo_bin_cmd!("xtask")
+        .args([
+            "ci",
+            "route",
+            "--base",
+            "origin/main",
+            "--head",
+            "HEAD",
+            "--receipt",
+            receipt.to_str().ok_or_else(|| anyhow!("invalid ci route receipt path"))?,
+            "--summary",
+            summary.to_str().ok_or_else(|| anyhow!("invalid ci route summary path"))?,
+            "--changed-file",
+            "scripts/validate-workspace-exclusions.sh",
+        ])
+        .assert()
+        .success();
+
+    let route: Value = serde_json::from_str(&std::fs::read_to_string(receipt)?)?;
+    assert_eq!(
+        route.pointer("/changed_surfaces/0").and_then(Value::as_str),
+        Some("workspace-exclusions-wrapper")
+    );
+    assert!(
+        route.get("required_proof_packs").and_then(Value::as_array).is_some_and(|packs| packs
+            .iter()
+            .any(|pack| {
+                pack.get("id").and_then(Value::as_str)
+                    == Some("workspace-exclusions-wrapper-focused")
+                    && pack.get("commands").and_then(Value::as_array).is_some_and(|commands| {
+                        commands.iter().any(|command| {
+                            command.as_str()
+                                == Some(
+                                    "bash scripts/tests/test-validate-workspace-exclusions-wrapper.sh",
+                                )
+                        })
+                    })
+            })),
+        "workspace exclusions wrapper changes must run focused proof"
+    );
+    assert!(
+        route.get("coverage_pack_selector").and_then(Value::as_array).is_some_and(Vec::is_empty),
+        "workspace exclusions wrapper proof pack is non-LCOV and must not be uploaded as Codecov coverage"
+    );
+    assert_eq!(
+        route
+            .pointer("/skipped_by_policy/patch-coverage-workspace-exclusions-wrapper")
+            .and_then(Value::as_str),
+        Some("non-LCOV CI policy/routing surface; covered by focused CI gates")
+    );
+    let summary = fs::read_to_string(summary)?;
+    assert!(summary.contains("bash scripts/tests/test-validate-workspace-exclusions-wrapper.sh"));
+    assert!(summary.contains(
+        "`patch-coverage-workspace-exclusions-wrapper`: non-LCOV CI policy/routing surface"
+    ));
+    Ok(())
+}
+
+#[test]
 fn ci_route_cli_maps_completion_provider_to_completion_proof_pack() -> Result<()> {
     let temp = TempDir::new()?;
     let receipt = temp.path().join("ci-route.json");

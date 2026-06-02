@@ -356,6 +356,11 @@ const SWARM_SUMMARY_WRAPPER_PACK: ProofPack = ProofPack {
     commands: &["bash scripts/tests/test-swarm-summary-wrapper.sh"],
 };
 
+const WORKSPACE_EXCLUSIONS_WRAPPER_PACK: ProofPack = ProofPack {
+    id: "workspace-exclusions-wrapper-focused",
+    commands: &["bash scripts/tests/test-validate-workspace-exclusions-wrapper.sh"],
+};
+
 const CLEAN_TMP_TARGETS_PACK: ProofPack = ProofPack {
     id: "clean-tmp-targets-focused",
     commands: &["bash scripts/tests/test-clean-tmp-targets.sh"],
@@ -875,6 +880,15 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         route.add_surface("swarm-summary-wrapper");
         route.add_pack(SWARM_SUMMARY_WRAPPER_PACK);
         route.add_coverage_pack("patch-coverage-swarm-summary-wrapper");
+        return;
+    }
+
+    if file == "scripts/validate-workspace-exclusions.sh"
+        || file == "scripts/tests/test-validate-workspace-exclusions-wrapper.sh"
+    {
+        route.add_surface("workspace-exclusions-wrapper");
+        route.add_pack(WORKSPACE_EXCLUSIONS_WRAPPER_PACK);
+        route.add_coverage_pack("patch-coverage-workspace-exclusions-wrapper");
         return;
     }
 
@@ -2616,6 +2630,7 @@ mod tests {
                 "patch-coverage-generate-badges-wrapper",
                 "patch-coverage-ignored-test-count-wrapper",
                 "patch-coverage-swarm-summary-wrapper",
+                "patch-coverage-workspace-exclusions-wrapper",
                 "patch-coverage-clean-tmp-targets",
                 "patch-coverage-swarm-cleanup",
                 "patch-coverage-pre-merge-check",
@@ -2671,6 +2686,7 @@ mod tests {
             "patch-coverage-generate-badges-wrapper",
             "patch-coverage-ignored-test-count-wrapper",
             "patch-coverage-swarm-summary-wrapper",
+            "patch-coverage-workspace-exclusions-wrapper",
             "patch-coverage-clean-tmp-targets",
             "patch-coverage-swarm-cleanup",
             "patch-coverage-pre-merge-check",
@@ -2846,6 +2862,10 @@ mod tests {
         );
         assert_eq!(
             skipped.get("patch-coverage-swarm-summary-wrapper").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        assert_eq!(
+            skipped.get("patch-coverage-workspace-exclusions-wrapper").map(String::as_str),
             Some(NON_LCOV_COVERAGE_SKIP_REASON)
         );
         assert_eq!(
