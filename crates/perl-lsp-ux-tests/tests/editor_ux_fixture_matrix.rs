@@ -42,6 +42,7 @@ const SEMANTIC_INLINE_RECEIPT_IDS: &[&str] = &[
     "project_test_assertion_inline_completion_quality",
     "project_control_flow_inline_completion_quality",
     "project_constructor_inline_completion_quality",
+    "project_dbi_receiver_inline_completion_quality",
 ];
 
 fn workspace_root() -> &'static Path {

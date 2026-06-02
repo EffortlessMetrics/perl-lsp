@@ -400,6 +400,7 @@ Current semantic inline UX receipt inventory:
 | `project_test_assertion_inline_completion_quality` | `ux_scenario_62_project_test_assertion_inline_completion_quality.rs` | Test::More and Test2 assertion ghost text stay preferred in CPAN-shaped project test files without return noise, premature `done_testing`, or module-import ghost text. |
 | `project_control_flow_inline_completion_quality` | `ux_scenario_63_project_control_flow_inline_completion_quality.rs` | Loop and guard ghost text in CPAN-shaped project scripts uses visible lexicals and collections without placeholder snippets or module-import noise. |
 | `project_constructor_inline_completion_quality` | `ux_scenario_64_project_constructor_inline_completion_quality.rs` | Shift-style and signature-style constructor ghost text stays preferred in CPAN-shaped project modules without test assertion, module-import, or guard ghost text. |
+| `project_dbi_receiver_inline_completion_quality` | `ux_scenario_65_project_dbi_receiver_inline_completion_quality.rs` | DBI database-handle and statement-handle ghost text stays preferred in CPAN-shaped project modules without constructor, module-import, test assertion, or visible lexical noise. |
 
 The machine-readable dashboard for this inventory is:
 
@@ -436,7 +437,7 @@ Still future or deliberately gated:
 
 - broader real-project UX receipts for inline quality beyond the current module
   import, package-boundary receiver, project test assertion, project
-  control-flow, and project constructor receipts;
+  control-flow, project constructor, and project DBI receiver receipts;
 - runtime/editor-visible next-edit suggestions;
 - optional AI candidate source/provider behavior beyond the disabled-boundary
   receipt.
