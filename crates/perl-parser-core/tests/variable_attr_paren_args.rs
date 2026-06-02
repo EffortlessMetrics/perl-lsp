@@ -41,15 +41,9 @@ fn my_scalar_attr_arg_captured_in_sexp() {
     // The attribute string including the paren args must appear in the sexp.
     let ast = parse("my $x :custom(arg);");
     let sexp = ast.to_sexp();
-    assert!(
-        !sexp.contains("ERROR"),
-        "Parse of `my $x :custom(arg);` produced ERROR nodes: {sexp}",
-    );
+    assert!(!sexp.contains("ERROR"), "Parse of `my $x :custom(arg);` produced ERROR nodes: {sexp}",);
     // attributes should include "custom(arg)" — the full paren-arg form
-    assert!(
-        sexp.contains("custom(arg)"),
-        "Expected `custom(arg)` in sexp attributes, got: {sexp}",
-    );
+    assert!(sexp.contains("custom(arg)"), "Expected `custom(arg)` in sexp attributes, got: {sexp}",);
 }
 
 #[test]
@@ -61,10 +55,7 @@ fn my_hash_attr_arg_captured_in_sexp() {
         "Parse of `my %h :ATTR(:get<title>);` produced ERROR nodes: {sexp}",
     );
     // The attribute should be captured with its args
-    assert!(
-        sexp.contains("ATTR("),
-        "Expected `ATTR(` in sexp attributes, got: {sexp}",
-    );
+    assert!(sexp.contains("ATTR("), "Expected `ATTR(` in sexp attributes, got: {sexp}",);
 }
 
 // ---------------------------------------------------------------------------

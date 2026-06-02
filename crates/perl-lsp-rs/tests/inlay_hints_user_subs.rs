@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 fn start_server() -> LspServer {
     LspServer::with_output(Arc::new(Mutex::new(
-        Box::new(Cursor::<Vec<u8>>::new(Vec::new())) as Box<dyn Write + Send>,
+        Box::new(Cursor::<Vec<u8>>::new(Vec::new())) as Box<dyn Write + Send>
     )))
 }
 
