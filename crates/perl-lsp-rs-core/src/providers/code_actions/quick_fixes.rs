@@ -1964,6 +1964,64 @@ fn parse_printf_format_mismatch(message: &str) -> Option<(usize, String)> {
     specifiers.checked_sub(supplied).filter(|&n| n > 0).map(|n| (n, call_name))
 }
 
+/// Drop the undefined label from a loop-control statement (PL410).
+///
+/// `next LABEL`, `last LABEL`, and `redo LABEL` where `LABEL` is not defined
+/// anywhere in the current file are runtime-fatal in Perl. The only safe
+/// mechanical fix is to drop the label so the statement targets the innermost
+/// enclosing loop instead.
+///
+/// The diagnostic range covers the full `next LABEL` token span. We replace
+/// that span with just the operator keyword.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((range_start, range_end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+
+    let Some(op) = parse_loop_control_op(&diagnostic.message) else {
+        return Vec::new();
+    };
+
+    if !matches!(op, "next" | "last" | "redo") {
+        return Vec::new();
+    }
+
+    // Sanity-check: the source text at the diagnostic range must start with the operator.
+    let Some(range_text) = source.get(range_start..range_end) else {
+        return Vec::new();
+    };
+    if !range_text.trim_start().starts_with(op) {
+        return Vec::new();
+    }
+
+    vec![CodeAction {
+        title: format!("Drop undefined label: write `{op}` to target innermost loop"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: range_start, end: range_end },
+                new_text: op.to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
+/// Extract the loop-control operator from a PL410 diagnostic message.
+///
+/// Message format: `` `next FOO` references a label that is not defined in this file ``
+/// Returns the first word inside the backtick pair (e.g. `"next"`).
+fn parse_loop_control_op(message: &str) -> Option<&str> {
+    let backtick_start = message.find('`')? + 1;
+    let backtick_end = backtick_start + message[backtick_start..].find('`')?;
+    let inside = message.get(backtick_start..backtick_end)?;
+    inside.split_whitespace().next()
+}
+
 fn diagnostic_line_range(source: &str, range: (usize, usize)) -> Option<(usize, usize)> {
     let (start, end) = valid_diagnostic_range(source, range)?;
     let line_start = source[..start].rfind('\n').map_or(0, |idx| idx + 1);
