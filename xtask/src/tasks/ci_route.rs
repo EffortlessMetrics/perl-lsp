@@ -93,7 +93,9 @@ const XTASK_SEMANTIC_INLINE_PACK: ProofPack = ProofPack {
     id: "xtask-semantic-inline-receipts",
     commands: &[
         "cargo test -p xtask --bin xtask --profile agent --locked semantic_inline_receipts -- --nocapture",
+        "cargo test -p xtask --bin xtask --profile agent --locked semantic_inline_next_edit -- --nocapture",
         "cargo test -p xtask --test semantic_inline_receipts_cli --profile agent --locked -- --nocapture",
+        "cargo test -p xtask --test semantic_inline_next_edit_cli --profile agent --locked -- --nocapture",
     ],
 };
 

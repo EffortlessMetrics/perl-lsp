@@ -155,6 +155,7 @@ struct NextEditScaffoldSummary {
     future_gated: Option<Vec<String>>,
     missing_import_next_action: Option<MissingImportNextActionSummary>,
     test_assertion_next_action: Option<TestAssertionNextActionSummary>,
+    optional_ai_candidate_boundary: Option<OptionalAiCandidateBoundarySummary>,
 }
 
 #[derive(Debug, Serialize)]
@@ -188,6 +189,22 @@ struct TestAssertionNextActionSummary {
     explicit_gate_runtime_unregistered: bool,
     rejection_reasons: BTreeMap<String, u64>,
     parse_stable: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct OptionalAiCandidateBoundarySummary {
+    enabled_by_default: bool,
+    ai_candidate_source_enabled: bool,
+    default_response_suggestions_empty: bool,
+    receipt_only_response_suggestions_empty: bool,
+    explicit_gate_response_suggestions_empty: bool,
+    rejects_ai_enabled_policy: bool,
+    rejects_missing_editor_safe_range: bool,
+    rejects_missing_parse_safety: bool,
+    rejects_missing_selected_completion_compatibility: bool,
+    rejects_nondeterministic_sources: bool,
+    deterministic_sources_only: bool,
 }
 
 pub fn run(receipt: PathBuf, quality_receipt: PathBuf, next_edit_receipt: PathBuf) -> Result<()> {
@@ -269,6 +286,7 @@ fn read_optional_next_edit_scaffold_summary(path: &Path) -> Result<NextEditScaff
             future_gated: None,
             missing_import_next_action: None,
             test_assertion_next_action: None,
+            optional_ai_candidate_boundary: None,
         });
     }
 
@@ -307,6 +325,7 @@ fn read_optional_next_edit_scaffold_summary(path: &Path) -> Result<NextEditScaff
         future_gated: string_array_field(&scaffold, "future_gated")?,
         missing_import_next_action: Some(missing_import_next_action_summary(&scaffold)?),
         test_assertion_next_action: Some(test_assertion_next_action_summary(&scaffold)?),
+        optional_ai_candidate_boundary: Some(optional_ai_candidate_boundary_summary(&scaffold)?),
     };
     validate_next_edit_scaffold_summary(&summary, &scaffold)?;
     Ok(summary)
@@ -409,6 +428,7 @@ fn validate_next_edit_scaffold_summary(
     }
     require_missing_import_next_action(scaffold)?;
     require_test_assertion_next_action(scaffold)?;
+    require_optional_ai_candidate_boundary(scaffold)?;
 
     Ok(())
 }
@@ -509,6 +529,60 @@ fn test_assertion_next_action_summary(scaffold: &Value) -> Result<TestAssertionN
             ],
         )?,
         parse_stable: action.get("parse_stable").and_then(Value::as_bool).unwrap_or(false),
+    })
+}
+
+fn optional_ai_candidate_boundary_summary(
+    scaffold: &Value,
+) -> Result<OptionalAiCandidateBoundarySummary> {
+    let boundary = scaffold.get("optional_ai_candidate_boundary").ok_or_else(|| {
+        eyre!("next-edit scaffold receipt missing optional_ai_candidate_boundary")
+    })?;
+    Ok(OptionalAiCandidateBoundarySummary {
+        enabled_by_default: boundary
+            .get("enabled_by_default")
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+        ai_candidate_source_enabled: boundary
+            .get("ai_candidate_source_enabled")
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+        default_response_suggestions_empty: boundary
+            .get("default_response_suggestions_empty")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        receipt_only_response_suggestions_empty: boundary
+            .get("receipt_only_response_suggestions_empty")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        explicit_gate_response_suggestions_empty: boundary
+            .get("explicit_gate_response_suggestions_empty")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        rejects_ai_enabled_policy: boundary
+            .get("rejects_ai_enabled_policy")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        rejects_missing_editor_safe_range: boundary
+            .get("rejects_missing_editor_safe_range")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        rejects_missing_parse_safety: boundary
+            .get("rejects_missing_parse_safety")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        rejects_missing_selected_completion_compatibility: boundary
+            .get("rejects_missing_selected_completion_compatibility")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        rejects_nondeterministic_sources: boundary
+            .get("rejects_nondeterministic_sources")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        deterministic_sources_only: boundary
+            .get("deterministic_sources_only")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
     })
 }
 
@@ -675,6 +749,40 @@ fn require_test_assertion_next_action(scaffold: &Value) -> Result<()> {
         "test_assertion_next_action/parse_stable",
         true,
     )?;
+    Ok(())
+}
+
+fn require_optional_ai_candidate_boundary(scaffold: &Value) -> Result<()> {
+    let boundary = scaffold.get("optional_ai_candidate_boundary").ok_or_else(|| {
+        eyre!("next-edit scaffold receipt missing optional_ai_candidate_boundary")
+    })?;
+    require_next_edit_bool(
+        boundary.get("enabled_by_default").and_then(Value::as_bool),
+        "optional_ai_candidate_boundary/enabled_by_default",
+        false,
+    )?;
+    require_next_edit_bool(
+        boundary.get("ai_candidate_source_enabled").and_then(Value::as_bool),
+        "optional_ai_candidate_boundary/ai_candidate_source_enabled",
+        false,
+    )?;
+    for field in [
+        "default_response_suggestions_empty",
+        "receipt_only_response_suggestions_empty",
+        "explicit_gate_response_suggestions_empty",
+        "rejects_ai_enabled_policy",
+        "rejects_missing_editor_safe_range",
+        "rejects_missing_parse_safety",
+        "rejects_missing_selected_completion_compatibility",
+        "rejects_nondeterministic_sources",
+        "deterministic_sources_only",
+    ] {
+        require_next_edit_bool(
+            boundary.get(field).and_then(Value::as_bool),
+            &format!("optional_ai_candidate_boundary/{field}"),
+            true,
+        )?;
+    }
     Ok(())
 }
 
@@ -1161,6 +1269,7 @@ mod tests {
             future_gated: None,
             missing_import_next_action: None,
             test_assertion_next_action: None,
+            optional_ai_candidate_boundary: None,
         }
     }
 
@@ -1197,7 +1306,25 @@ mod tests {
                 "optional_ai_candidate_source"
             ],
             "missing_import_next_action": valid_missing_import_next_action_json(),
-            "test_assertion_next_action": valid_test_assertion_next_action_json()
+            "test_assertion_next_action": valid_test_assertion_next_action_json(),
+            "optional_ai_candidate_boundary": valid_optional_ai_candidate_boundary_json()
+        })
+    }
+
+    fn valid_optional_ai_candidate_boundary_json() -> Value {
+        json!({
+            "claim_boundary": "optional AI candidate boundary proof only",
+            "enabled_by_default": false,
+            "ai_candidate_source_enabled": false,
+            "default_response_suggestions_empty": true,
+            "receipt_only_response_suggestions_empty": true,
+            "explicit_gate_response_suggestions_empty": true,
+            "rejects_ai_enabled_policy": true,
+            "rejects_missing_editor_safe_range": true,
+            "rejects_missing_parse_safety": true,
+            "rejects_missing_selected_completion_compatibility": true,
+            "rejects_nondeterministic_sources": true,
+            "deterministic_sources_only": true
         })
     }
 
@@ -1452,6 +1579,21 @@ mod tests {
             test_assertion.rejection_reasons.get("runtime_provider_not_registered").copied(),
             Some(1)
         );
+        let ai_boundary = summary
+            .optional_ai_candidate_boundary
+            .as_ref()
+            .ok_or_else(|| eyre!("optional AI candidate boundary summary missing"))?;
+        assert!(!ai_boundary.enabled_by_default);
+        assert!(!ai_boundary.ai_candidate_source_enabled);
+        assert!(ai_boundary.default_response_suggestions_empty);
+        assert!(ai_boundary.receipt_only_response_suggestions_empty);
+        assert!(ai_boundary.explicit_gate_response_suggestions_empty);
+        assert!(ai_boundary.rejects_ai_enabled_policy);
+        assert!(ai_boundary.rejects_missing_editor_safe_range);
+        assert!(ai_boundary.rejects_missing_parse_safety);
+        assert!(ai_boundary.rejects_missing_selected_completion_compatibility);
+        assert!(ai_boundary.rejects_nondeterministic_sources);
+        assert!(ai_boundary.deterministic_sources_only);
         Ok(())
     }
 
@@ -1573,6 +1715,133 @@ mod tests {
             error.to_string().contains("ai_candidate_source_enabled"),
             "error should identify AI gate drift, got {error}"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_ai_boundary_drift() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold
+            .as_object_mut()
+            .ok_or_else(|| eyre!("test scaffold must be an object"))?
+            .remove("optional_ai_candidate_boundary");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold without optional AI boundary must fail");
+        };
+        assert!(
+            error.to_string().contains("optional_ai_candidate_boundary"),
+            "error should identify missing optional AI boundary, got {error}"
+        );
+
+        scaffold = valid_next_edit_scaffold_json();
+        scaffold["optional_ai_candidate_boundary"]["enabled_by_default"] = json!(true);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold with enabled AI boundary must fail");
+        };
+        assert!(
+            error.to_string().contains("optional_ai_candidate_boundary/enabled_by_default"),
+            "error should identify optional AI default drift, got {error}"
+        );
+
+        scaffold = valid_next_edit_scaffold_json();
+        scaffold["optional_ai_candidate_boundary"]["ai_candidate_source_enabled"] = json!(true);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold with enabled AI candidate source must fail");
+        };
+        assert!(
+            error
+                .to_string()
+                .contains("optional_ai_candidate_boundary/ai_candidate_source_enabled"),
+            "error should identify optional AI source drift, got {error}"
+        );
+
+        scaffold = valid_next_edit_scaffold_json();
+        scaffold["optional_ai_candidate_boundary"]["default_response_suggestions_empty"] =
+            json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold with default AI suggestion drift must fail");
+        };
+        assert!(
+            error.to_string().contains("default_response_suggestions_empty"),
+            "error should identify default AI suggestion drift, got {error}"
+        );
+
+        scaffold = valid_next_edit_scaffold_json();
+        scaffold["optional_ai_candidate_boundary"]["rejects_ai_enabled_policy"] = json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold with weakened AI boundary must fail");
+        };
+        assert!(
+            error.to_string().contains("optional_ai_candidate_boundary/rejects_ai_enabled_policy"),
+            "error should identify optional AI boundary drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["optional_ai_candidate_boundary"]["rejects_missing_parse_safety"] = json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold with weakened AI parse-safety boundary must fail");
+        };
+        assert!(
+            error.to_string().contains("rejects_missing_parse_safety"),
+            "error should identify optional AI parse-safety drift, got {error}"
+        );
+
+        scaffold = valid_next_edit_scaffold_json();
+        scaffold["optional_ai_candidate_boundary"]["rejects_missing_editor_safe_range"] =
+            json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "missing editor-safe range drift must fail");
+        assert!(
+            error.to_string().contains("rejects_missing_editor_safe_range"),
+            "error should identify optional AI editor-safe range drift, got {error}"
+        );
+
+        scaffold = valid_next_edit_scaffold_json();
+        scaffold["optional_ai_candidate_boundary"]["rejects_missing_selected_completion_compatibility"] =
+            json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "selected completion boundary drift must fail");
+        assert!(
+            error.to_string().contains("rejects_missing_selected_completion_compatibility"),
+            "error should identify optional AI selected-completion drift, got {error}"
+        );
+
+        scaffold = valid_next_edit_scaffold_json();
+        scaffold["optional_ai_candidate_boundary"]["rejects_nondeterministic_sources"] =
+            json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "nondeterministic source drift must fail");
+        assert!(
+            error.to_string().contains("rejects_nondeterministic_sources"),
+            "error should identify optional AI source-determinism drift, got {error}"
+        );
+
+        scaffold = valid_next_edit_scaffold_json();
+        scaffold["optional_ai_candidate_boundary"]["deterministic_sources_only"] = json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "deterministic source drift must fail");
+        assert!(
+            error.to_string().contains("deterministic_sources_only"),
+            "error should identify optional AI deterministic-source drift, got {error}"
+        );
+
         Ok(())
     }
 

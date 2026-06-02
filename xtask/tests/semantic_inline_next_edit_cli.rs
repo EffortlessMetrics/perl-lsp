@@ -25,6 +25,56 @@ fn semantic_inline_next_edit_cli_writes_scaffold_receipt() -> Result<()> {
     assert_eq!(scaffold.get("runtime_provider_registered").and_then(Value::as_bool), Some(false));
     assert_eq!(scaffold.get("ai_candidate_source_enabled").and_then(Value::as_bool), Some(false));
     assert_eq!(
+        scaffold
+            .pointer("/optional_ai_candidate_boundary/enabled_by_default")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        scaffold
+            .pointer("/optional_ai_candidate_boundary/ai_candidate_source_enabled")
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        scaffold
+            .pointer("/optional_ai_candidate_boundary/rejects_ai_enabled_policy")
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        scaffold
+            .pointer("/optional_ai_candidate_boundary/rejects_missing_editor_safe_range")
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        scaffold
+            .pointer("/optional_ai_candidate_boundary/rejects_missing_parse_safety")
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        scaffold
+            .pointer(
+                "/optional_ai_candidate_boundary/rejects_missing_selected_completion_compatibility"
+            )
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        scaffold
+            .pointer("/optional_ai_candidate_boundary/rejects_nondeterministic_sources")
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        scaffold
+            .pointer("/optional_ai_candidate_boundary/deterministic_sources_only")
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
         scaffold.pointer("/default_response/status").and_then(Value::as_str),
         Some("disabled")
     );

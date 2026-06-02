@@ -291,6 +291,34 @@ fn semantic_inline_receipts_cli_embeds_quality_counters_when_available() -> Resu
         Some(false)
     );
     assert_eq!(
+        next_edit_scaffold
+            .get("optional_ai_candidate_boundary")
+            .and_then(|boundary| boundary.get("enabled_by_default"))
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("optional_ai_candidate_boundary")
+            .and_then(|boundary| boundary.get("rejects_ai_enabled_policy"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("optional_ai_candidate_boundary")
+            .and_then(|boundary| boundary.get("rejects_missing_parse_safety"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("optional_ai_candidate_boundary")
+            .and_then(|boundary| boundary.get("deterministic_sources_only"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
         next_edit_scaffold.get("explicit_gate_status").and_then(Value::as_str),
         Some("runtime_provider_not_registered")
     );
@@ -675,7 +703,8 @@ fn valid_next_edit_receipt_json() -> Value {
             "optional_ai_candidate_source"
         ],
         "missing_import_next_action": valid_missing_import_next_action_json(),
-        "test_assertion_next_action": valid_test_assertion_next_action_json()
+        "test_assertion_next_action": valid_test_assertion_next_action_json(),
+        "optional_ai_candidate_boundary": valid_optional_ai_candidate_boundary_json()
     })
 }
 
@@ -706,7 +735,25 @@ fn next_edit_receipt_without_candidate_families_json() -> Value {
             "optional_ai_candidate_source"
         ],
         "missing_import_next_action": valid_missing_import_next_action_json(),
-        "test_assertion_next_action": valid_test_assertion_next_action_json()
+        "test_assertion_next_action": valid_test_assertion_next_action_json(),
+        "optional_ai_candidate_boundary": valid_optional_ai_candidate_boundary_json()
+    })
+}
+
+fn valid_optional_ai_candidate_boundary_json() -> Value {
+    json!({
+        "claim_boundary": "optional AI candidate boundary proof only",
+        "enabled_by_default": false,
+        "ai_candidate_source_enabled": false,
+        "default_response_suggestions_empty": true,
+        "receipt_only_response_suggestions_empty": true,
+        "explicit_gate_response_suggestions_empty": true,
+        "rejects_ai_enabled_policy": true,
+        "rejects_missing_editor_safe_range": true,
+        "rejects_missing_parse_safety": true,
+        "rejects_missing_selected_completion_compatibility": true,
+        "rejects_nondeterministic_sources": true,
+        "deterministic_sources_only": true
     })
 }
 

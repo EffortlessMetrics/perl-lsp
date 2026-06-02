@@ -27,6 +27,7 @@ struct SemanticInlineNextEditReceipt {
     explicit_gate_response: NextEditResponse,
     missing_import_next_action: MissingImportNextActionReceipt,
     test_assertion_next_action: TestAssertionNextActionReceipt,
+    optional_ai_candidate_boundary: OptionalAiCandidateBoundaryReceipt,
     future_gated: Vec<&'static str>,
 }
 
@@ -60,6 +61,23 @@ struct TestAssertionNextActionReceipt {
     parse_stable: bool,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct OptionalAiCandidateBoundaryReceipt {
+    claim_boundary: &'static str,
+    enabled_by_default: bool,
+    ai_candidate_source_enabled: bool,
+    default_response_suggestions_empty: bool,
+    receipt_only_response_suggestions_empty: bool,
+    explicit_gate_response_suggestions_empty: bool,
+    rejects_ai_enabled_policy: bool,
+    rejects_missing_editor_safe_range: bool,
+    rejects_missing_parse_safety: bool,
+    rejects_missing_selected_completion_compatibility: bool,
+    rejects_nondeterministic_sources: bool,
+    deterministic_sources_only: bool,
+}
+
 pub fn run(receipt: PathBuf) -> Result<()> {
     let provider = NextEditProvider;
     let context = scaffold_context();
@@ -80,6 +98,12 @@ pub fn run(receipt: PathBuf) -> Result<()> {
     )?;
     let missing_import_next_action = missing_import_next_action_receipt(&provider)?;
     let test_assertion_next_action = test_assertion_next_action_receipt(&provider)?;
+    let optional_ai_candidate_boundary = optional_ai_candidate_boundary_receipt(
+        &default_response,
+        &receipt_only_response,
+        &explicit_gate_response,
+        request.safety_policy,
+    )?;
 
     let receipt_data = SemanticInlineNextEditReceipt {
         schema_version: "semantic-inline-next-edit.v1",
@@ -96,6 +120,7 @@ pub fn run(receipt: PathBuf) -> Result<()> {
         explicit_gate_response,
         missing_import_next_action,
         test_assertion_next_action,
+        optional_ai_candidate_boundary,
         future_gated: vec![
             "runtime_next_edit_provider",
             "editor_visible_next_edit_suggestions",
@@ -303,6 +328,105 @@ fn test_assertion_next_action_receipt(
     };
     validate_test_assertion_next_action(&receipt)?;
     Ok(receipt)
+}
+
+fn optional_ai_candidate_boundary_receipt(
+    default_response: &NextEditResponse,
+    receipt_only_response: &NextEditResponse,
+    explicit_gate_response: &NextEditResponse,
+    base_policy: NextEditSafetyPolicy,
+) -> Result<OptionalAiCandidateBoundaryReceipt> {
+    let mut ai_enabled_policy = base_policy;
+    ai_enabled_policy.ai_source_enabled = true;
+
+    let mut missing_range_policy = base_policy;
+    missing_range_policy.requires_editor_safe_range = false;
+
+    let mut missing_parse_policy = base_policy;
+    missing_parse_policy.requires_parse_safety = false;
+
+    let mut missing_selected_completion_policy = base_policy;
+    missing_selected_completion_policy.requires_selected_completion_compatibility = false;
+
+    let mut nondeterministic_policy = base_policy;
+    nondeterministic_policy.deterministic_sources_only = false;
+
+    let receipt = OptionalAiCandidateBoundaryReceipt {
+        claim_boundary: "optional AI candidate boundary proof only; no AI provider, prompt path, network call, editor-visible next-edit suggestion, source mirror, or release action",
+        enabled_by_default: false,
+        ai_candidate_source_enabled: base_policy.ai_source_enabled,
+        default_response_suggestions_empty: default_response.suggestions.is_empty(),
+        receipt_only_response_suggestions_empty: receipt_only_response.suggestions.is_empty(),
+        explicit_gate_response_suggestions_empty: explicit_gate_response.suggestions.is_empty(),
+        rejects_ai_enabled_policy: validate_scaffold_responses(
+            default_response,
+            receipt_only_response,
+            explicit_gate_response,
+            &ai_enabled_policy,
+        )
+        .is_err(),
+        rejects_missing_editor_safe_range: validate_scaffold_responses(
+            default_response,
+            receipt_only_response,
+            explicit_gate_response,
+            &missing_range_policy,
+        )
+        .is_err(),
+        rejects_missing_parse_safety: validate_scaffold_responses(
+            default_response,
+            receipt_only_response,
+            explicit_gate_response,
+            &missing_parse_policy,
+        )
+        .is_err(),
+        rejects_missing_selected_completion_compatibility: validate_scaffold_responses(
+            default_response,
+            receipt_only_response,
+            explicit_gate_response,
+            &missing_selected_completion_policy,
+        )
+        .is_err(),
+        rejects_nondeterministic_sources: validate_scaffold_responses(
+            default_response,
+            receipt_only_response,
+            explicit_gate_response,
+            &nondeterministic_policy,
+        )
+        .is_err(),
+        deterministic_sources_only: base_policy.deterministic_sources_only,
+    };
+    validate_optional_ai_candidate_boundary(&receipt)?;
+    Ok(receipt)
+}
+
+fn validate_optional_ai_candidate_boundary(
+    receipt: &OptionalAiCandidateBoundaryReceipt,
+) -> Result<()> {
+    if receipt.enabled_by_default || receipt.ai_candidate_source_enabled {
+        bail!("optional AI candidate source must remain disabled by default");
+    }
+    if !receipt.default_response_suggestions_empty
+        || !receipt.receipt_only_response_suggestions_empty
+        || !receipt.explicit_gate_response_suggestions_empty
+    {
+        bail!("optional AI boundary must not emit next-edit suggestions");
+    }
+    if !receipt.rejects_ai_enabled_policy {
+        bail!("optional AI boundary must reject AI-enabled policy drift");
+    }
+    if !receipt.rejects_missing_editor_safe_range {
+        bail!("optional AI boundary must reject missing editor-safe range policy");
+    }
+    if !receipt.rejects_missing_parse_safety {
+        bail!("optional AI boundary must reject missing parse-safety policy");
+    }
+    if !receipt.rejects_missing_selected_completion_compatibility {
+        bail!("optional AI boundary must reject missing selected-completion policy");
+    }
+    if !receipt.rejects_nondeterministic_sources || !receipt.deterministic_sources_only {
+        bail!("optional AI boundary must keep deterministic sources first");
+    }
+    Ok(())
 }
 
 fn parse_succeeds(source: &str) -> bool {
@@ -657,11 +781,130 @@ mod tests {
             value.pointer("/test_assertion_next_action/parse_stable").and_then(Value::as_bool),
             Some(true)
         );
+        assert_eq!(
+            value
+                .pointer("/optional_ai_candidate_boundary/enabled_by_default")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            value
+                .pointer("/optional_ai_candidate_boundary/ai_candidate_source_enabled")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            value
+                .pointer("/optional_ai_candidate_boundary/rejects_ai_enabled_policy")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            value
+                .pointer("/optional_ai_candidate_boundary/rejects_missing_parse_safety")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
         assert!(
             !value
                 .pointer("/test_assertion_next_action/accepted_document_text")
                 .and_then(Value::as_str)
                 .is_some_and(|text| text.contains("done_testing"))
+        );
+
+        Ok(())
+    }
+
+    fn assert_optional_ai_boundary_rejects(
+        mut receipt: OptionalAiCandidateBoundaryReceipt,
+        mutate: impl FnOnce(&mut OptionalAiCandidateBoundaryReceipt),
+        expected: &str,
+    ) {
+        mutate(&mut receipt);
+        let error = must_err(validate_optional_ai_candidate_boundary(&receipt));
+        assert!(
+            error.to_string().contains(expected),
+            "error should contain `{expected}`, got {error}"
+        );
+    }
+
+    #[test]
+    fn semantic_inline_next_edit_optional_ai_candidate_boundary_rejects_safety_drift() -> Result<()>
+    {
+        let response = NextEditResponse::new(NextEditStatus::Disabled, vec![]);
+        let receipt_only = NextEditResponse::new(NextEditStatus::ReceiptOnly, vec![]);
+        let explicit_gate =
+            NextEditResponse::new(NextEditStatus::RuntimeProviderNotRegistered, vec![]);
+
+        let receipt = optional_ai_candidate_boundary_receipt(
+            &response,
+            &receipt_only,
+            &explicit_gate,
+            NextEditSafetyPolicy::default(),
+        )?;
+        assert!(!receipt.enabled_by_default);
+        assert!(!receipt.ai_candidate_source_enabled);
+        assert!(receipt.rejects_ai_enabled_policy);
+        assert!(receipt.rejects_missing_editor_safe_range);
+        assert!(receipt.rejects_missing_parse_safety);
+        assert!(receipt.rejects_missing_selected_completion_compatibility);
+        assert!(receipt.rejects_nondeterministic_sources);
+        assert!(receipt.deterministic_sources_only);
+
+        assert_optional_ai_boundary_rejects(
+            receipt.clone(),
+            |drift| drift.enabled_by_default = true,
+            "disabled by default",
+        );
+        assert_optional_ai_boundary_rejects(
+            receipt.clone(),
+            |drift| drift.ai_candidate_source_enabled = true,
+            "disabled by default",
+        );
+        assert_optional_ai_boundary_rejects(
+            receipt.clone(),
+            |drift| drift.default_response_suggestions_empty = false,
+            "must not emit",
+        );
+        assert_optional_ai_boundary_rejects(
+            receipt.clone(),
+            |drift| drift.receipt_only_response_suggestions_empty = false,
+            "must not emit",
+        );
+        assert_optional_ai_boundary_rejects(
+            receipt.clone(),
+            |drift| drift.explicit_gate_response_suggestions_empty = false,
+            "must not emit",
+        );
+        assert_optional_ai_boundary_rejects(
+            receipt.clone(),
+            |drift| drift.rejects_ai_enabled_policy = false,
+            "AI-enabled policy drift",
+        );
+        assert_optional_ai_boundary_rejects(
+            receipt.clone(),
+            |drift| drift.rejects_missing_editor_safe_range = false,
+            "editor-safe range",
+        );
+        assert_optional_ai_boundary_rejects(
+            receipt.clone(),
+            |drift| drift.rejects_missing_parse_safety = false,
+            "parse-safety",
+        );
+        assert_optional_ai_boundary_rejects(
+            receipt.clone(),
+            |drift| drift.rejects_missing_selected_completion_compatibility = false,
+            "selected-completion",
+        );
+        assert_optional_ai_boundary_rejects(
+            receipt.clone(),
+            |drift| drift.rejects_nondeterministic_sources = false,
+            "deterministic sources",
+        );
+        assert_optional_ai_boundary_rejects(
+            receipt,
+            |drift| drift.deterministic_sources_only = false,
+            "deterministic sources",
         );
 
         Ok(())
