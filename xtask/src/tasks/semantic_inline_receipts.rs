@@ -1345,6 +1345,8 @@ fn validate_quality_counter_summary(summary: &InlineQualityCounterSummary) -> Re
         )?;
     }
 
+    validate_hard_zone_quality_counter_summary(summary)?;
+
     if summary.parse_regressions.unwrap_or(0) != 0 {
         bail!(
             "quality receipt `{}` reported {} parse regression(s)",
@@ -1357,6 +1359,63 @@ fn validate_quality_counter_summary(summary: &InlineQualityCounterSummary) -> Re
         for (source_name, source) in sources {
             let pointer = format!("{}/sources/{source_name}", summary.source);
             validate_source_quality_counter_summary(source, &pointer)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_hard_zone_quality_counter_summary(summary: &InlineQualityCounterSummary) -> Result<()> {
+    let hard_zone_rejections = summary.hard_zone_rejections.ok_or_else(|| {
+        eyre!("quality receipt `{}` missing /checks/hard_zone_rejected", summary.source)
+    })?;
+    if hard_zone_rejections == 0 {
+        bail!("quality receipt `{}` must report at least one hard-zone rejection", summary.source);
+    }
+
+    let suppression_reasons = summary.suppression_reasons.as_ref().ok_or_else(|| {
+        eyre!("quality receipt `{}` missing /checks/suppression_reasons", summary.source)
+    })?;
+    let hard_zone_suppression = suppression_reasons.get("hard_zone").copied().ok_or_else(|| {
+        eyre!("quality receipt `{}` missing /checks/suppression_reasons/hard_zone", summary.source)
+    })?;
+    if hard_zone_suppression != hard_zone_rejections {
+        bail!(
+            "quality receipt `{}` hard-zone suppression count ({hard_zone_suppression}) must match hard-zone rejection count ({hard_zone_rejections})",
+            summary.source
+        );
+    }
+
+    if let Some(sources) = &summary.sources {
+        let hard_zone_source = sources.get("hard_zone").ok_or_else(|| {
+            eyre!("quality receipt `{}` missing /sources/hard_zone", summary.source)
+        })?;
+        if hard_zone_source.expected != hard_zone_rejections {
+            bail!(
+                "quality receipt `{}` /sources/hard_zone expected count ({}) must match hard-zone rejection count ({hard_zone_rejections})",
+                summary.source,
+                hard_zone_source.expected
+            );
+        }
+        if hard_zone_source.returned_items != 0 {
+            bail!(
+                "quality receipt `{}` /sources/hard_zone returned {} item(s); hard-zone source must stay silent",
+                summary.source,
+                hard_zone_source.returned_items
+            );
+        }
+        let source_hard_zone_suppression =
+            hard_zone_source.suppression_reasons.get("hard_zone").copied().ok_or_else(|| {
+                eyre!(
+                    "quality receipt `{}` missing /sources/hard_zone/suppression_reasons/hard_zone",
+                    summary.source
+                )
+            })?;
+        if source_hard_zone_suppression != hard_zone_rejections {
+            bail!(
+                "quality receipt `{}` /sources/hard_zone suppression count ({source_hard_zone_suppression}) must match hard-zone rejection count ({hard_zone_rejections})",
+                summary.source
+            );
         }
     }
 
@@ -1872,6 +1931,8 @@ mod tests {
 
     fn green_quality() -> InlineQualityCounterSummary {
         let mut sources = BTreeMap::new();
+        let mut hard_zone_source_suppression_reasons = BTreeMap::new();
+        hard_zone_source_suppression_reasons.insert("hard_zone".to_string(), 2);
         sources.insert(
             "module".to_string(),
             SourceQualityCounterSummary {
@@ -1884,16 +1945,31 @@ mod tests {
                 suppression_reasons: BTreeMap::new(),
             },
         );
+        sources.insert(
+            "hard_zone".to_string(),
+            SourceQualityCounterSummary {
+                expected: 2,
+                passed: 2,
+                failed: 0,
+                returned_items: 0,
+                edit_application: QualityCountSummary { total: 0, passed: 0, failed: 0 },
+                parse_regressions: 0,
+                suppression_reasons: hard_zone_source_suppression_reasons,
+            },
+        );
+
+        let mut suppression_reasons = BTreeMap::new();
+        suppression_reasons.insert("hard_zone".to_string(), 2);
 
         InlineQualityCounterSummary {
             source: "target/receipts/inline-completion-quality.json".to_string(),
             available: true,
             all_checks_green: Some(true),
-            fixtures_total: Some(2),
-            fixtures_passed: Some(2),
+            fixtures_total: Some(4),
+            fixtures_passed: Some(4),
             edit_application: Some(QualityCountSummary { total: 2, passed: 2, failed: 0 }),
-            hard_zone_rejections: Some(0),
-            suppression_reasons: Some(BTreeMap::new()),
+            hard_zone_rejections: Some(2),
+            suppression_reasons: Some(suppression_reasons),
             parse_regressions: Some(0),
             sources: Some(sources),
         }
@@ -3144,6 +3220,217 @@ mod tests {
         Ok(())
     }
 
+    fn semantic_inline_dashboard_error(quality: InlineQualityCounterSummary) -> Result<String> {
+        let result = summarize_matrix(
+            &complete_matrix(),
+            MATRIX_PATH,
+            quality,
+            unavailable_next_edit_scaffold(),
+        );
+        Ok(result.map(|_| String::new()).unwrap_or_else(|error| error.to_string()))
+    }
+
+    fn hard_zone_quality_counter_error(quality: InlineQualityCounterSummary) -> Result<String> {
+        Ok(validate_hard_zone_quality_counter_summary(&quality)
+            .map(|()| String::new())
+            .unwrap_or_else(|error| error.to_string()))
+    }
+
+    #[test]
+    fn hard_zone_quality_counter_summary_accepts_matching_receipt() -> Result<()> {
+        validate_hard_zone_quality_counter_summary(&green_quality())
+    }
+
+    #[test]
+    fn hard_zone_quality_counter_summary_rejects_missing_counter() -> Result<()> {
+        let mut quality = green_quality();
+        quality.hard_zone_rejections = None;
+
+        let error = hard_zone_quality_counter_error(quality)?;
+        assert!(
+            error.contains("hard_zone_rejected"),
+            "error should identify the missing hard-zone counter, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn hard_zone_quality_counter_summary_rejects_source_suppression_drift() -> Result<()> {
+        let mut quality = green_quality();
+        let sources = quality.sources.as_mut().ok_or_else(|| eyre!("missing sources"))?;
+        let hard_zone =
+            sources.get_mut("hard_zone").ok_or_else(|| eyre!("missing hard_zone source"))?;
+        hard_zone.suppression_reasons.insert("hard_zone".to_string(), 1);
+
+        let error = hard_zone_quality_counter_error(quality)?;
+        assert!(
+            error.contains("/sources/hard_zone suppression count")
+                && error.contains("hard-zone rejection count"),
+            "error should identify hard-zone source suppression drift, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_inline_dashboard_rejects_missing_hard_zone_quality_counter() -> Result<()> {
+        let mut quality = green_quality();
+        quality.hard_zone_rejections = None;
+
+        let error = semantic_inline_dashboard_error(quality)?;
+        assert!(
+            error.contains("hard_zone_rejected"),
+            "error should identify the missing hard-zone counter, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_inline_dashboard_rejects_missing_hard_zone_suppression_map() -> Result<()> {
+        let mut quality = green_quality();
+        quality.suppression_reasons = None;
+
+        let error = semantic_inline_dashboard_error(quality)?;
+        assert!(
+            error.contains("/checks/suppression_reasons"),
+            "error should identify missing hard-zone suppression map, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_inline_dashboard_rejects_missing_hard_zone_suppression_reason() -> Result<()> {
+        let mut quality = green_quality();
+        quality.suppression_reasons = Some(BTreeMap::new());
+
+        let error = semantic_inline_dashboard_error(quality)?;
+        assert!(
+            error.contains("/checks/suppression_reasons/hard_zone"),
+            "error should identify missing hard-zone suppression reason, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_inline_dashboard_rejects_zero_hard_zone_quality_counter() -> Result<()> {
+        let mut quality = green_quality();
+        quality.hard_zone_rejections = Some(0);
+        let suppression_reasons = quality
+            .suppression_reasons
+            .as_mut()
+            .ok_or_else(|| eyre!("missing suppression reasons"))?;
+        suppression_reasons.insert("hard_zone".to_string(), 0);
+        let sources = quality.sources.as_mut().ok_or_else(|| eyre!("missing sources"))?;
+        let hard_zone =
+            sources.get_mut("hard_zone").ok_or_else(|| eyre!("missing hard_zone source"))?;
+        hard_zone.expected = 0;
+        hard_zone.passed = 0;
+        hard_zone.suppression_reasons.insert("hard_zone".to_string(), 0);
+
+        let error = semantic_inline_dashboard_error(quality)?;
+        assert!(
+            error.contains("at least one hard-zone rejection"),
+            "error should identify the missing hard-zone proof, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_inline_dashboard_rejects_hard_zone_suppression_mismatch() -> Result<()> {
+        let mut quality = green_quality();
+        let suppression_reasons = quality
+            .suppression_reasons
+            .as_mut()
+            .ok_or_else(|| eyre!("missing suppression reasons"))?;
+        suppression_reasons.insert("hard_zone".to_string(), 1);
+
+        let error = semantic_inline_dashboard_error(quality)?;
+        assert!(
+            error.contains("suppression count") && error.contains("rejection count"),
+            "error should identify hard-zone suppression drift, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_inline_dashboard_rejects_missing_hard_zone_source_summary() -> Result<()> {
+        let mut quality = green_quality();
+        let sources = quality.sources.as_mut().ok_or_else(|| eyre!("missing sources"))?;
+        sources.remove("hard_zone");
+
+        let error = semantic_inline_dashboard_error(quality)?;
+        assert!(
+            error.contains("/sources/hard_zone"),
+            "error should identify missing hard-zone source summary, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_inline_dashboard_rejects_hard_zone_source_expected_mismatch() -> Result<()> {
+        let mut quality = green_quality();
+        let sources = quality.sources.as_mut().ok_or_else(|| eyre!("missing sources"))?;
+        let hard_zone =
+            sources.get_mut("hard_zone").ok_or_else(|| eyre!("missing hard_zone source"))?;
+        hard_zone.expected = 1;
+        hard_zone.passed = 1;
+
+        let error = semantic_inline_dashboard_error(quality)?;
+        assert!(
+            error.contains("expected count") && error.contains("hard-zone rejection count"),
+            "error should identify hard-zone source count drift, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_inline_dashboard_rejects_hard_zone_source_items() -> Result<()> {
+        let mut quality = green_quality();
+        let sources = quality.sources.as_mut().ok_or_else(|| eyre!("missing sources"))?;
+        let hard_zone =
+            sources.get_mut("hard_zone").ok_or_else(|| eyre!("missing hard_zone source"))?;
+        hard_zone.returned_items = 1;
+
+        let error = semantic_inline_dashboard_error(quality)?;
+        assert!(
+            error.contains("hard-zone source must stay silent"),
+            "error should identify hard-zone returned-item drift, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_inline_dashboard_rejects_missing_hard_zone_source_suppression() -> Result<()> {
+        let mut quality = green_quality();
+        let sources = quality.sources.as_mut().ok_or_else(|| eyre!("missing sources"))?;
+        let hard_zone =
+            sources.get_mut("hard_zone").ok_or_else(|| eyre!("missing hard_zone source"))?;
+        hard_zone.suppression_reasons = BTreeMap::new();
+
+        let error = semantic_inline_dashboard_error(quality)?;
+        assert!(
+            error.contains("/sources/hard_zone/suppression_reasons/hard_zone"),
+            "error should identify missing hard-zone source suppression, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_inline_dashboard_rejects_hard_zone_source_suppression_mismatch() -> Result<()> {
+        let mut quality = green_quality();
+        let sources = quality.sources.as_mut().ok_or_else(|| eyre!("missing sources"))?;
+        let hard_zone =
+            sources.get_mut("hard_zone").ok_or_else(|| eyre!("missing hard_zone source"))?;
+        hard_zone.suppression_reasons.insert("hard_zone".to_string(), 1);
+
+        let error = semantic_inline_dashboard_error(quality)?;
+        assert!(
+            error.contains("/sources/hard_zone suppression count")
+                && error.contains("hard-zone rejection count"),
+            "error should identify hard-zone source suppression drift, got {error}"
+        );
+        Ok(())
+    }
+
     #[test]
     fn dashboard_rejects_failing_quality_counters() -> Result<()> {
         let quality = InlineQualityCounterSummary {
@@ -3236,31 +3523,11 @@ mod tests {
 
     #[test]
     fn dashboard_rejects_failing_source_quality_counters() -> Result<()> {
-        let mut sources = BTreeMap::new();
-        sources.insert(
-            "module".to_string(),
-            SourceQualityCounterSummary {
-                expected: 1,
-                passed: 1,
-                failed: 0,
-                returned_items: 2,
-                edit_application: QualityCountSummary { total: 1, passed: 1, failed: 0 },
-                parse_regressions: 1,
-                suppression_reasons: BTreeMap::new(),
-            },
-        );
-        let quality = InlineQualityCounterSummary {
-            source: "target/receipts/inline-completion-quality.json".to_string(),
-            available: true,
-            all_checks_green: Some(true),
-            fixtures_total: Some(1),
-            fixtures_passed: Some(1),
-            edit_application: Some(QualityCountSummary { total: 1, passed: 1, failed: 0 }),
-            hard_zone_rejections: Some(0),
-            suppression_reasons: Some(BTreeMap::new()),
-            parse_regressions: Some(0),
-            sources: Some(sources),
-        };
+        let mut quality = green_quality();
+        let sources = quality.sources.as_mut().ok_or_else(|| eyre!("missing source summaries"))?;
+        let source =
+            sources.get_mut("module").ok_or_else(|| eyre!("missing module source summary"))?;
+        source.parse_regressions = 1;
 
         let Err(error) = summarize_matrix(
             &complete_matrix(),
