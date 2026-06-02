@@ -413,6 +413,34 @@ class RouteCodecovPacksTests(unittest.TestCase):
             [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
         )
 
+    def test_update_current_status_shim_change_is_non_lcov_focused_proof(self) -> None:
+        packs = [
+            {
+                "id": "patch-coverage-update-current-status-shim",
+                "lcov": False,
+                "files": [
+                    "scripts/update-current-status.py",
+                    "scripts/tests/test-update-current-status-shim.py",
+                ],
+                "commands": ["python scripts/tests/test-update-current-status-shim.py"],
+                "coverage_filters": ["update-current-status-shim"],
+            },
+            {
+                "id": router.FALLBACK_PACK_ID,
+                "files": ["*.rs"],
+                "commands": ["cargo test --workspace --lib"],
+                "coverage_filters": ["workspace-lib"],
+            },
+        ]
+
+        paths = ["scripts/update-current-status.py"]
+
+        self.assertEqual([], router.selected_packs(packs, paths))
+        self.assertEqual(
+            ["patch-coverage-update-current-status-shim"],
+            [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
+        )
+
     def test_preflight_wrapper_change_is_non_lcov_focused_proof(self) -> None:
         packs = [
             {

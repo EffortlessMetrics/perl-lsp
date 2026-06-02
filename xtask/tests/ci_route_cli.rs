@@ -3630,6 +3630,67 @@ fn ci_route_cli_maps_debt_pr_summary_shim_to_focused_proof_pack() -> Result<()> 
 }
 
 #[test]
+fn ci_route_cli_maps_update_current_status_shim_to_focused_proof_pack() -> Result<()> {
+    let temp = TempDir::new()?;
+    let receipt = temp.path().join("ci-route.json");
+    let summary = temp.path().join("ci-route.md");
+
+    cargo_bin_cmd!("xtask")
+        .args([
+            "ci",
+            "route",
+            "--base",
+            "origin/main",
+            "--head",
+            "HEAD",
+            "--receipt",
+            receipt.to_str().ok_or_else(|| anyhow!("invalid ci route receipt path"))?,
+            "--summary",
+            summary.to_str().ok_or_else(|| anyhow!("invalid ci route summary path"))?,
+            "--changed-file",
+            "scripts/update-current-status.py",
+        ])
+        .assert()
+        .success();
+
+    let route: Value = serde_json::from_str(&std::fs::read_to_string(receipt)?)?;
+    assert_eq!(
+        route.pointer("/changed_surfaces/0").and_then(Value::as_str),
+        Some("update-current-status-shim")
+    );
+    assert!(
+        route.get("required_proof_packs").and_then(Value::as_array).is_some_and(|packs| packs
+            .iter()
+            .any(|pack| {
+                pack.get("id").and_then(Value::as_str) == Some("update-current-status-shim-focused")
+                    && pack.get("commands").and_then(Value::as_array).is_some_and(|commands| {
+                        commands.iter().any(|command| {
+                            command.as_str()
+                                == Some("python scripts/tests/test-update-current-status-shim.py")
+                        })
+                    })
+            })),
+        "update-current-status shim changes must run focused proof"
+    );
+    assert!(
+        route.get("coverage_pack_selector").and_then(Value::as_array).is_some_and(Vec::is_empty),
+        "update-current-status shim proof pack is non-LCOV and must not be uploaded as Codecov coverage"
+    );
+    assert_eq!(
+        route
+            .pointer("/skipped_by_policy/patch-coverage-update-current-status-shim")
+            .and_then(Value::as_str),
+        Some("non-LCOV CI policy/routing surface; covered by focused CI gates")
+    );
+    let summary = fs::read_to_string(summary)?;
+    assert!(summary.contains("python scripts/tests/test-update-current-status-shim.py"));
+    assert!(summary.contains(
+        "`patch-coverage-update-current-status-shim`: non-LCOV CI policy/routing surface"
+    ));
+    Ok(())
+}
+
+#[test]
 fn ci_route_cli_maps_preflight_wrapper_to_preflight_proof_pack() -> Result<()> {
     let temp = TempDir::new()?;
     let receipt = temp.path().join("ci-route.json");

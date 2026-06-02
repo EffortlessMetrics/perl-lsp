@@ -402,6 +402,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-update-current-status-shim"
+lcov = false
+files = [
+  "scripts/update-current-status.py",
+  "scripts/tests/test-update-current-status-shim.py",
+]
+commands = [
+  "python scripts/tests/test-update-current-status-shim.py",
+]
+coverage_filters = [
+  "update-current-status-shim",
+]
+
+[[pack]]
 id = "patch-coverage-preflight-wrapper"
 lcov = false
 files = [
