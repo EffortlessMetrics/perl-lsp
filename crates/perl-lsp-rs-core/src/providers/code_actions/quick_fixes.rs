@@ -1983,3 +1983,44 @@ fn valid_diagnostic_range(source: &str, range: (usize, usize)) -> Option<(usize,
     }
     Some((start, end))
 }
+
+/// Drop the undefined label from a `next LABEL`, `last LABEL`, or `redo LABEL`
+/// statement (PL410 / `LoopControlUndefinedLabel`).
+///
+/// Perl dies at runtime when a named label doesn't exist in any enclosing loop.
+/// The only mechanical fix is to drop the label so the statement targets the
+/// innermost loop. A "define the label" alternative requires AST rewriting and
+/// is out of scope.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((start, end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let text = &source[start..end];
+    let Some(operator) = ["next", "last", "redo"]
+        .iter()
+        .copied()
+        .find(|&op| text.starts_with(op))
+    else {
+        return Vec::new();
+    };
+    let after_op = text[operator.len()..].trim_start();
+    let label = match after_op.split_whitespace().next() {
+        Some(l) if !l.is_empty() => l,
+        _ => return Vec::new(),
+    };
+    vec![CodeAction {
+        title: format!("Remove undefined label '{label}' from '{operator} {label}'"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start, end },
+                new_text: operator.to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
