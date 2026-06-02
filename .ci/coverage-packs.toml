@@ -556,6 +556,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-compare-build-timing-wrapper"
+lcov = false
+files = [
+  "scripts/compare-build-timing.sh",
+  "scripts/tests/test-compare-build-timing-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-compare-build-timing-wrapper.sh",
+]
+coverage_filters = [
+  "compare-build-timing-wrapper",
+]
+
+[[pack]]
 id = "patch-coverage-baseline-script"
 lcov = false
 files = [
