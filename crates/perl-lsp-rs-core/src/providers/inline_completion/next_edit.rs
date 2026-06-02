@@ -213,6 +213,14 @@ pub enum NextEditRejectionReason {
     UnsupportedTestFramework,
     /// No suitable visible actual/expected variables were available.
     MissingAssertionVariables,
+    /// The target call name is not a safe Perl subroutine name.
+    InvalidCallTarget,
+    /// No safe visible argument was available for the call-site update.
+    MissingCallArgument,
+    /// The target call already contains the requested argument.
+    DuplicateCallArgument,
+    /// No safe call site was available after the current edit point.
+    MissingCallSite,
     /// The rename source or replacement symbol is not a safe Perl variable.
     InvalidRenameSymbol,
     /// No safe next occurrence was available after the current edit point.
@@ -366,6 +374,77 @@ pub struct TestAssertionNextEditProof {
     /// Candidate when all deterministic gates pass.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub candidate: Option<TestAssertionNextEditCandidate>,
+    /// Reasons the candidate was not prepared.
+    pub rejection_reasons: Vec<NextEditRejectionReason>,
+}
+
+/// Receipt-only request for preparing a call-site update after a signature or
+/// parameter edit.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CallSiteUpdateNextEditRequest {
+    /// Current document text.
+    pub document_text: String,
+    /// Bare subroutine or package-qualified function name to update.
+    pub callee_name: String,
+    /// Visible argument that should be added to the next matching call.
+    pub argument: String,
+    /// Byte offset after the user's current edit.
+    pub cursor_byte: usize,
+    /// Gate used for this receipt-only proof.
+    pub gate: NextEditFeatureGate,
+}
+
+impl CallSiteUpdateNextEditRequest {
+    /// Construct a receipt-only call-site update request.
+    #[must_use]
+    pub fn receipt_only(
+        document_text: impl Into<String>,
+        callee_name: impl Into<String>,
+        argument: impl Into<String>,
+        cursor_byte: usize,
+    ) -> Self {
+        Self {
+            document_text: document_text.into(),
+            callee_name: callee_name.into(),
+            argument: argument.into(),
+            cursor_byte,
+            gate: NextEditFeatureGate::receipt_only(),
+        }
+    }
+}
+
+/// Receipt-only call-site update candidate prepared by the deterministic
+/// next-edit scaffold. It is not editor-visible runtime output.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CallSiteUpdateNextEditCandidate {
+    /// Candidate family.
+    pub family: NextEditCandidateFamily,
+    /// Callee whose call site would be updated.
+    pub callee_name: String,
+    /// Argument the candidate would add.
+    pub argument: String,
+    /// Reason recorded for receipts and debugging.
+    pub reason: String,
+    /// Edit that would update the call site.
+    pub edit: NextEditTextEdit,
+    /// Receipt-only candidates must not be editor-visible runtime suggestions.
+    pub editor_visible: bool,
+}
+
+/// Receipt-only call-site update proof result.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CallSiteUpdateNextEditProof {
+    /// Scaffold status for this proof.
+    pub status: NextEditStatus,
+    /// Candidate when all deterministic gates pass.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub candidate: Option<CallSiteUpdateNextEditCandidate>,
     /// Reasons the candidate was not prepared.
     pub rejection_reasons: Vec<NextEditRejectionReason>,
 }
@@ -646,6 +725,96 @@ impl NextEditProvider {
         }
     }
 
+    /// Prepare a receipt-only call-site update next-edit candidate.
+    ///
+    /// This does not register a runtime provider and does not emit
+    /// editor-visible suggestions. It proves that a deterministic call-site
+    /// follow-up can be prepared only for a safe visible argument on a safe
+    /// same-line Perl call.
+    #[must_use]
+    pub fn prove_call_site_update(
+        &self,
+        request: &CallSiteUpdateNextEditRequest,
+    ) -> CallSiteUpdateNextEditProof {
+        match (request.gate.enabled, request.gate.source) {
+            (_, NextEditGateSource::ReceiptOnly) => {}
+            (false, _) => {
+                return CallSiteUpdateNextEditProof {
+                    status: NextEditStatus::Disabled,
+                    candidate: None,
+                    rejection_reasons: vec![NextEditRejectionReason::GateDisabled],
+                };
+            }
+            (true, _) => {
+                return CallSiteUpdateNextEditProof {
+                    status: NextEditStatus::RuntimeProviderNotRegistered,
+                    candidate: None,
+                    rejection_reasons: vec![NextEditRejectionReason::RuntimeProviderNotRegistered],
+                };
+            }
+        }
+
+        let mut rejection_reasons = Vec::new();
+        if !is_safe_call_target(&request.callee_name) {
+            rejection_reasons.push(NextEditRejectionReason::InvalidCallTarget);
+        }
+        if !is_safe_rename_symbol(&request.argument) {
+            rejection_reasons.push(NextEditRejectionReason::MissingCallArgument);
+        }
+        if !rejection_reasons.is_empty() {
+            return CallSiteUpdateNextEditProof {
+                status: NextEditStatus::ReceiptOnly,
+                candidate: None,
+                rejection_reasons,
+            };
+        }
+
+        let update = next_call_site_update(
+            &request.document_text,
+            &request.callee_name,
+            &request.argument,
+            request.cursor_byte,
+        );
+        match update {
+            CallSiteUpdateSearch::Found { insert_byte, new_text } => CallSiteUpdateNextEditProof {
+                status: NextEditStatus::ReceiptOnly,
+                candidate: Some(CallSiteUpdateNextEditCandidate {
+                    family: NextEditCandidateFamily::CallSiteUpdate,
+                    callee_name: request.callee_name.clone(),
+                    argument: request.argument.clone(),
+                    reason: "visible_argument_call_site_update".to_string(),
+                    edit: NextEditTextEdit::new(insert_byte, insert_byte, new_text),
+                    editor_visible: false,
+                }),
+                rejection_reasons,
+            },
+            CallSiteUpdateSearch::DuplicateArgument => {
+                rejection_reasons.push(NextEditRejectionReason::DuplicateCallArgument);
+                CallSiteUpdateNextEditProof {
+                    status: NextEditStatus::ReceiptOnly,
+                    candidate: None,
+                    rejection_reasons,
+                }
+            }
+            CallSiteUpdateSearch::Missing => {
+                rejection_reasons.push(NextEditRejectionReason::MissingCallSite);
+                CallSiteUpdateNextEditProof {
+                    status: NextEditStatus::ReceiptOnly,
+                    candidate: None,
+                    rejection_reasons,
+                }
+            }
+            CallSiteUpdateSearch::Unsafe => {
+                rejection_reasons.push(NextEditRejectionReason::UnsafeInsertionPoint);
+                CallSiteUpdateNextEditProof {
+                    status: NextEditStatus::ReceiptOnly,
+                    candidate: None,
+                    rejection_reasons,
+                }
+            }
+        }
+    }
+
     /// Prepare a receipt-only rename occurrence next-edit candidate.
     ///
     /// This does not register a runtime provider and does not emit
@@ -826,6 +995,72 @@ enum RenameOccurrenceSearch {
     Found { start: usize, end: usize },
     Missing,
     Unsafe,
+}
+
+enum CallSiteUpdateSearch {
+    Found { insert_byte: usize, new_text: String },
+    DuplicateArgument,
+    Missing,
+    Unsafe,
+}
+
+fn next_call_site_update(
+    document_text: &str,
+    callee_name: &str,
+    argument: &str,
+    cursor_byte: usize,
+) -> CallSiteUpdateSearch {
+    if cursor_byte > document_text.len()
+        || document_text.get(..cursor_byte).is_none()
+        || document_text.get(cursor_byte..).is_none()
+    {
+        return CallSiteUpdateSearch::Unsafe;
+    }
+
+    let needle = format!("{callee_name}(");
+    if let Some(relative) = document_text[cursor_byte..].find(&needle) {
+        let start = cursor_byte + relative;
+        let open_paren = start + callee_name.len();
+        let line_end = document_text[open_paren..]
+            .find('\n')
+            .map_or(document_text.len(), |index| open_paren + index);
+        let Some(close_relative) = document_text[open_paren + 1..line_end].find(')') else {
+            return CallSiteUpdateSearch::Unsafe;
+        };
+        let close_paren = open_paren + 1 + close_relative;
+
+        if !has_call_target_boundaries(document_text, start, open_paren)
+            || !is_safe_rename_occurrence(document_text, start)
+        {
+            return CallSiteUpdateSearch::Unsafe;
+        }
+
+        let arguments = &document_text[open_paren + 1..close_paren];
+        if call_arguments_contain(arguments, argument) {
+            return CallSiteUpdateSearch::DuplicateArgument;
+        }
+        let new_text = if arguments.trim().is_empty() {
+            argument.to_string()
+        } else {
+            format!(", {argument}")
+        };
+        return CallSiteUpdateSearch::Found { insert_byte: close_paren, new_text };
+    }
+    CallSiteUpdateSearch::Missing
+}
+
+fn call_arguments_contain(arguments: &str, argument: &str) -> bool {
+    arguments.split(',').any(|item| item.trim() == argument)
+}
+
+fn has_call_target_boundaries(document_text: &str, start: usize, open_paren: usize) -> bool {
+    let previous = document_text[..start].chars().next_back();
+    let next = document_text[open_paren..].chars().next();
+    previous.is_none_or(|ch| !is_perl_identifier_char(ch)) && matches!(next, Some('('))
+}
+
+fn is_safe_call_target(callee_name: &str) -> bool {
+    !callee_name.is_empty() && callee_name.split("::").all(is_safe_module_segment)
 }
 
 fn next_rename_occurrence(
@@ -1295,6 +1530,135 @@ mod tests {
 
         request.gate = NextEditFeatureGate::explicit_enabled();
         let runtime = provider.prove_test_assertion(&request);
+        assert_eq!(runtime.status, NextEditStatus::RuntimeProviderNotRegistered);
+        assert!(runtime.candidate.is_none());
+        assert_eq!(
+            runtime.rejection_reasons,
+            vec![NextEditRejectionReason::RuntimeProviderNotRegistered]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn call_site_update_receipt_prepares_visible_argument_edit()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = NextEditProvider;
+        let source = "sub build_user ($name, $age) { }\nmy $user = build_user($name);\n";
+        let cursor = source.find("my $user").ok_or("call-site fixture missing call")?;
+        let request =
+            CallSiteUpdateNextEditRequest::receipt_only(source, "build_user", "$age", cursor);
+
+        let proof = provider.prove_call_site_update(&request);
+
+        assert_eq!(proof.status, NextEditStatus::ReceiptOnly);
+        assert!(proof.rejection_reasons.is_empty());
+        let candidate = proof.candidate.ok_or("call-site update candidate not prepared")?;
+        assert_eq!(candidate.family, NextEditCandidateFamily::CallSiteUpdate);
+        assert_eq!(candidate.callee_name, "build_user");
+        assert_eq!(candidate.argument, "$age");
+        assert_eq!(candidate.reason, "visible_argument_call_site_update");
+        assert!(!candidate.editor_visible);
+        assert_eq!(candidate.edit.new_text, ", $age");
+        let edited = candidate.edit.apply_to(source).ok_or("edit did not apply")?;
+        assert_eq!(
+            edited,
+            "sub build_user ($name, $age) { }\nmy $user = build_user($name, $age);\n"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn call_site_update_receipt_rejects_duplicate_and_missing_call_sites()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = NextEditProvider;
+        let duplicate = CallSiteUpdateNextEditRequest::receipt_only(
+            "my $user = build_user($name, $age);\n",
+            "build_user",
+            "$age",
+            0,
+        );
+        let missing = CallSiteUpdateNextEditRequest::receipt_only(
+            "my $user = other_builder($name);\n",
+            "build_user",
+            "$age",
+            0,
+        );
+
+        let duplicate_proof = provider.prove_call_site_update(&duplicate);
+        assert!(duplicate_proof.candidate.is_none());
+        assert_eq!(
+            duplicate_proof.rejection_reasons,
+            vec![NextEditRejectionReason::DuplicateCallArgument]
+        );
+
+        let missing_proof = provider.prove_call_site_update(&missing);
+        assert!(missing_proof.candidate.is_none());
+        assert_eq!(missing_proof.rejection_reasons, vec![NextEditRejectionReason::MissingCallSite]);
+        Ok(())
+    }
+
+    #[test]
+    fn call_site_update_receipt_rejects_unsafe_and_invalid_inputs()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = NextEditProvider;
+        let unsafe_request = CallSiteUpdateNextEditRequest::receipt_only(
+            "# build_user($name)\n",
+            "build_user",
+            "$age",
+            0,
+        );
+        let invalid_target = CallSiteUpdateNextEditRequest::receipt_only(
+            "my $user = build_user($name);\n",
+            "build-user",
+            "$age",
+            0,
+        );
+        let missing_argument = CallSiteUpdateNextEditRequest::receipt_only(
+            "my $user = build_user($name);\n",
+            "build_user",
+            "system($age)",
+            0,
+        );
+
+        let unsafe_proof = provider.prove_call_site_update(&unsafe_request);
+        assert!(unsafe_proof.candidate.is_none());
+        assert_eq!(
+            unsafe_proof.rejection_reasons,
+            vec![NextEditRejectionReason::UnsafeInsertionPoint]
+        );
+
+        let invalid_target_proof = provider.prove_call_site_update(&invalid_target);
+        assert!(invalid_target_proof.candidate.is_none());
+        assert_eq!(
+            invalid_target_proof.rejection_reasons,
+            vec![NextEditRejectionReason::InvalidCallTarget]
+        );
+
+        let missing_argument_proof = provider.prove_call_site_update(&missing_argument);
+        assert!(missing_argument_proof.candidate.is_none());
+        assert_eq!(
+            missing_argument_proof.rejection_reasons,
+            vec![NextEditRejectionReason::MissingCallArgument]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn call_site_update_receipt_does_not_bypass_runtime_gate()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = NextEditProvider;
+        let source = "my $user = build_user($name);\n";
+        let mut request =
+            CallSiteUpdateNextEditRequest::receipt_only(source, "build_user", "$age", 0);
+
+        request.gate = NextEditFeatureGate::default();
+        let disabled = provider.prove_call_site_update(&request);
+        assert_eq!(disabled.status, NextEditStatus::Disabled);
+        assert!(disabled.candidate.is_none());
+        assert_eq!(disabled.rejection_reasons, vec![NextEditRejectionReason::GateDisabled]);
+
+        request.gate = NextEditFeatureGate::explicit_enabled();
+        let runtime = provider.prove_call_site_update(&request);
         assert_eq!(runtime.status, NextEditStatus::RuntimeProviderNotRegistered);
         assert!(runtime.candidate.is_none());
         assert_eq!(

@@ -1,10 +1,10 @@
 use color_eyre::eyre::{Result, bail};
 use perl_lsp_rs_core::providers::inline_completion::{
-    MissingImportNextEditProof, MissingImportNextEditRequest, NextEditCandidateFamily,
-    NextEditFeatureGate, NextEditProvider, NextEditRejectionReason, NextEditRequest,
-    NextEditResponse, NextEditSafetyPolicy, NextEditStatus, PreparedInlineCompletionContext,
-    RenameOccurrenceNextEditProof, RenameOccurrenceNextEditRequest, TestAssertionNextEditProof,
-    TestAssertionNextEditRequest,
+    CallSiteUpdateNextEditProof, CallSiteUpdateNextEditRequest, MissingImportNextEditProof,
+    MissingImportNextEditRequest, NextEditCandidateFamily, NextEditFeatureGate, NextEditProvider,
+    NextEditRejectionReason, NextEditRequest, NextEditResponse, NextEditSafetyPolicy,
+    NextEditStatus, PreparedInlineCompletionContext, RenameOccurrenceNextEditProof,
+    RenameOccurrenceNextEditRequest, TestAssertionNextEditProof, TestAssertionNextEditRequest,
 };
 use perl_parser::Parser;
 use serde::Serialize;
@@ -28,6 +28,7 @@ struct SemanticInlineNextEditReceipt {
     explicit_gate_response: NextEditResponse,
     missing_import_next_action: MissingImportNextActionReceipt,
     test_assertion_next_action: TestAssertionNextActionReceipt,
+    call_site_update_next_action: CallSiteUpdateNextActionReceipt,
     rename_occurrence_next_action: RenameOccurrenceNextActionReceipt,
     optional_ai_candidate_boundary: OptionalAiCandidateBoundaryReceipt,
     future_gated: Vec<&'static str>,
@@ -59,6 +60,22 @@ struct TestAssertionNextActionReceipt {
     missing_variables: TestAssertionNextEditProof,
     default_gate: TestAssertionNextEditProof,
     explicit_gate: TestAssertionNextEditProof,
+    accepted_document_text: String,
+    parse_stable: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct CallSiteUpdateNextActionReceipt {
+    claim_boundary: &'static str,
+    next_call_site_candidate: CallSiteUpdateNextEditProof,
+    duplicate_argument: CallSiteUpdateNextEditProof,
+    missing_call_site: CallSiteUpdateNextEditProof,
+    unsafe_call_site: CallSiteUpdateNextEditProof,
+    invalid_target: CallSiteUpdateNextEditProof,
+    missing_argument: CallSiteUpdateNextEditProof,
+    default_gate: CallSiteUpdateNextEditProof,
+    explicit_gate: CallSiteUpdateNextEditProof,
     accepted_document_text: String,
     parse_stable: bool,
 }
@@ -114,6 +131,7 @@ pub fn run(receipt: PathBuf) -> Result<()> {
     )?;
     let missing_import_next_action = missing_import_next_action_receipt(&provider)?;
     let test_assertion_next_action = test_assertion_next_action_receipt(&provider)?;
+    let call_site_update_next_action = call_site_update_next_action_receipt(&provider)?;
     let rename_occurrence_next_action = rename_occurrence_next_action_receipt(&provider)?;
     let optional_ai_candidate_boundary = optional_ai_candidate_boundary_receipt(
         &default_response,
@@ -137,6 +155,7 @@ pub fn run(receipt: PathBuf) -> Result<()> {
         explicit_gate_response,
         missing_import_next_action,
         test_assertion_next_action,
+        call_site_update_next_action,
         rename_occurrence_next_action,
         optional_ai_candidate_boundary,
         future_gated: vec![
@@ -144,6 +163,7 @@ pub fn run(receipt: PathBuf) -> Result<()> {
             "editor_visible_next_edit_suggestions",
             "missing_import_next_action",
             "test_assertion_next_action",
+            "call_site_update_next_action",
             "rename_occurrence_next_action",
             "optional_ai_candidate_source",
         ],
@@ -346,6 +366,96 @@ fn test_assertion_next_action_receipt(
         parse_stable,
     };
     validate_test_assertion_next_action(&receipt)?;
+    Ok(receipt)
+}
+
+fn call_site_update_next_action_receipt(
+    provider: &NextEditProvider,
+) -> Result<CallSiteUpdateNextActionReceipt> {
+    let source = "sub build_user ($name, $age) { }\nmy $user = build_user($name);\n";
+    let expected = "sub build_user ($name, $age) { }\nmy $user = build_user($name, $age);\n";
+    let cursor = source
+        .find("my $user")
+        .ok_or_else(|| color_eyre::eyre::eyre!("call-site fixture omitted target call"))?;
+    let next_call_site_candidate = provider.prove_call_site_update(
+        &CallSiteUpdateNextEditRequest::receipt_only(source, "build_user", "$age", cursor),
+    );
+    let duplicate_argument =
+        provider.prove_call_site_update(&CallSiteUpdateNextEditRequest::receipt_only(
+            "my $user = build_user($name, $age);\n",
+            "build_user",
+            "$age",
+            0,
+        ));
+    let missing_call_site =
+        provider.prove_call_site_update(&CallSiteUpdateNextEditRequest::receipt_only(
+            "my $user = other_builder($name);\n",
+            "build_user",
+            "$age",
+            0,
+        ));
+    let unsafe_call_site =
+        provider.prove_call_site_update(&CallSiteUpdateNextEditRequest::receipt_only(
+            "# build_user($name)\n",
+            "build_user",
+            "$age",
+            0,
+        ));
+    let invalid_target =
+        provider.prove_call_site_update(&CallSiteUpdateNextEditRequest::receipt_only(
+            "my $user = build_user($name);\n",
+            "build-user",
+            "$age",
+            0,
+        ));
+    let missing_argument =
+        provider.prove_call_site_update(&CallSiteUpdateNextEditRequest::receipt_only(
+            "my $user = build_user($name);\n",
+            "build_user",
+            "system($age)",
+            0,
+        ));
+
+    let mut default_gate =
+        CallSiteUpdateNextEditRequest::receipt_only(source, "build_user", "$age", cursor);
+    default_gate.gate = NextEditFeatureGate::default();
+    let default_gate = provider.prove_call_site_update(&default_gate);
+
+    let mut explicit_gate =
+        CallSiteUpdateNextEditRequest::receipt_only(source, "build_user", "$age", cursor);
+    explicit_gate.gate = NextEditFeatureGate::explicit_enabled();
+    let explicit_gate = provider.prove_call_site_update(&explicit_gate);
+
+    let candidate = next_call_site_candidate
+        .candidate
+        .as_ref()
+        .ok_or_else(|| color_eyre::eyre::eyre!("call-site update proof omitted candidate"))?;
+    let accepted_document_text = candidate
+        .edit
+        .apply_to(source)
+        .ok_or_else(|| color_eyre::eyre::eyre!("call-site update edit did not apply"))?;
+    if accepted_document_text != expected {
+        bail!("call-site update edit produced unexpected document text");
+    }
+    let parse_stable = parse_succeeds(source) && parse_succeeds(&accepted_document_text);
+    if !parse_stable {
+        bail!("call-site update edit did not preserve parse success");
+    }
+
+    let receipt = CallSiteUpdateNextActionReceipt {
+        claim_boundary: "receipt-only call-site update next-action proof; no runtime LSP method, editor-visible next-edit provider, source mirror, release action, or AI behavior",
+        next_call_site_candidate,
+        duplicate_argument,
+        missing_call_site,
+        unsafe_call_site,
+        invalid_target,
+        missing_argument,
+        default_gate,
+        explicit_gate,
+        accepted_document_text,
+        parse_stable,
+    };
+    validate_call_site_update_next_action(&receipt)?;
     Ok(receipt)
 }
 
@@ -568,6 +678,81 @@ fn validate_rename_occurrence_next_action(
     }
     if !receipt.parse_stable {
         bail!("rename occurrence next action must keep local parse state stable");
+    }
+    Ok(())
+}
+
+fn validate_call_site_update_next_action(receipt: &CallSiteUpdateNextActionReceipt) -> Result<()> {
+    let Some(candidate) = receipt.next_call_site_candidate.candidate.as_ref() else {
+        bail!("call-site update proof must prepare a receipt-only candidate");
+    };
+    if receipt.next_call_site_candidate.status != NextEditStatus::ReceiptOnly
+        || candidate.family != NextEditCandidateFamily::CallSiteUpdate
+        || candidate.callee_name != "build_user"
+        || candidate.argument != "$age"
+        || candidate.editor_visible
+        || candidate.edit.new_text != ", $age"
+        || !receipt.next_call_site_candidate.rejection_reasons.is_empty()
+    {
+        bail!("call-site update proof did not satisfy the receipt-only contract");
+    }
+    if receipt.duplicate_argument.candidate.is_some()
+        || !receipt
+            .duplicate_argument
+            .rejection_reasons
+            .contains(&NextEditRejectionReason::DuplicateCallArgument)
+    {
+        bail!("call-site update proof must reject duplicate arguments");
+    }
+    if receipt.missing_call_site.candidate.is_some()
+        || !receipt
+            .missing_call_site
+            .rejection_reasons
+            .contains(&NextEditRejectionReason::MissingCallSite)
+    {
+        bail!("call-site update proof must reject missing call sites");
+    }
+    if receipt.unsafe_call_site.candidate.is_some()
+        || !receipt
+            .unsafe_call_site
+            .rejection_reasons
+            .contains(&NextEditRejectionReason::UnsafeInsertionPoint)
+    {
+        bail!("call-site update proof must reject unsafe call sites");
+    }
+    if receipt.invalid_target.candidate.is_some()
+        || !receipt
+            .invalid_target
+            .rejection_reasons
+            .contains(&NextEditRejectionReason::InvalidCallTarget)
+    {
+        bail!("call-site update proof must reject invalid call targets");
+    }
+    if receipt.missing_argument.candidate.is_some()
+        || !receipt
+            .missing_argument
+            .rejection_reasons
+            .contains(&NextEditRejectionReason::MissingCallArgument)
+    {
+        bail!("call-site update proof must reject missing call arguments");
+    }
+    if receipt.default_gate.status != NextEditStatus::Disabled
+        || receipt.default_gate.candidate.is_some()
+        || !receipt.default_gate.rejection_reasons.contains(&NextEditRejectionReason::GateDisabled)
+    {
+        bail!("call-site update next action must remain disabled by default");
+    }
+    if receipt.explicit_gate.status != NextEditStatus::RuntimeProviderNotRegistered
+        || receipt.explicit_gate.candidate.is_some()
+        || !receipt
+            .explicit_gate
+            .rejection_reasons
+            .contains(&NextEditRejectionReason::RuntimeProviderNotRegistered)
+    {
+        bail!("call-site update next action must not bypass the unregistered runtime provider");
+    }
+    if !receipt.parse_stable {
+        bail!("call-site update next action must keep local parse state stable");
     }
     Ok(())
 }

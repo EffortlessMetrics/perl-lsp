@@ -494,6 +494,125 @@ fn semantic_inline_receipts_cli_embeds_quality_counters_when_available() -> Resu
     );
     assert_eq!(
         next_edit_scaffold
+            .get("call_site_update_next_action")
+            .and_then(|action| action.get("next_call_site_candidate_prepared"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("call_site_update_next_action")
+            .and_then(|action| action.get("next_call_site_candidate_editor_visible"))
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("call_site_update_next_action")
+            .and_then(|action| action.get("next_call_site_candidate_reason"))
+            .and_then(Value::as_str),
+        Some("visible_argument_call_site_update")
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("call_site_update_next_action")
+            .and_then(|action| action.get("duplicate_argument_rejected"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("call_site_update_next_action")
+            .and_then(|action| action.get("missing_call_site_rejected"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("call_site_update_next_action")
+            .and_then(|action| action.get("unsafe_call_site_rejected"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("call_site_update_next_action")
+            .and_then(|action| action.get("invalid_target_rejected"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("call_site_update_next_action")
+            .and_then(|action| action.get("missing_argument_rejected"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("call_site_update_next_action")
+            .and_then(|action| action.get("parse_stable"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("call_site_update_next_action")
+            .and_then(|action| action.get("rejection_reasons"))
+            .and_then(|reasons| reasons.get("duplicate_call_argument"))
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("call_site_update_next_action")
+            .and_then(|action| action.get("rejection_reasons"))
+            .and_then(|reasons| reasons.get("missing_call_site"))
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("call_site_update_next_action")
+            .and_then(|action| action.get("rejection_reasons"))
+            .and_then(|reasons| reasons.get("unsafe_insertion_point"))
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("call_site_update_next_action")
+            .and_then(|action| action.get("rejection_reasons"))
+            .and_then(|reasons| reasons.get("invalid_call_target"))
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("call_site_update_next_action")
+            .and_then(|action| action.get("rejection_reasons"))
+            .and_then(|reasons| reasons.get("missing_call_argument"))
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("call_site_update_next_action")
+            .and_then(|action| action.get("rejection_reasons"))
+            .and_then(|reasons| reasons.get("gate_disabled"))
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("call_site_update_next_action")
+            .and_then(|action| action.get("rejection_reasons"))
+            .and_then(|reasons| reasons.get("runtime_provider_not_registered"))
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        next_edit_scaffold
             .get("rename_occurrence_next_action")
             .and_then(|action| action.get("next_occurrence_candidate_prepared"))
             .and_then(Value::as_bool),
@@ -897,11 +1016,13 @@ fn valid_next_edit_receipt_json() -> Value {
             "editor_visible_next_edit_suggestions",
             "missing_import_next_action",
             "test_assertion_next_action",
+            "call_site_update_next_action",
             "rename_occurrence_next_action",
             "optional_ai_candidate_source"
         ],
         "missing_import_next_action": valid_missing_import_next_action_json(),
         "test_assertion_next_action": valid_test_assertion_next_action_json(),
+        "call_site_update_next_action": valid_call_site_update_next_action_json(),
         "rename_occurrence_next_action": valid_rename_occurrence_next_action_json(),
         "optional_ai_candidate_boundary": valid_optional_ai_candidate_boundary_json()
     })
@@ -931,11 +1052,13 @@ fn next_edit_receipt_without_candidate_families_json() -> Value {
             "editor_visible_next_edit_suggestions",
             "missing_import_next_action",
             "test_assertion_next_action",
+            "call_site_update_next_action",
             "rename_occurrence_next_action",
             "optional_ai_candidate_source"
         ],
         "missing_import_next_action": valid_missing_import_next_action_json(),
         "test_assertion_next_action": valid_test_assertion_next_action_json(),
+        "call_site_update_next_action": valid_call_site_update_next_action_json(),
         "rename_occurrence_next_action": valid_rename_occurrence_next_action_json(),
         "optional_ai_candidate_boundary": valid_optional_ai_candidate_boundary_json()
     })
@@ -1053,6 +1176,58 @@ fn valid_test_assertion_next_action_json() -> Value {
             "rejectionReasons": ["runtime_provider_not_registered"]
         },
         "accepted_document_text": "use Test::More;\nmy $got = compute();\nmy $expected = 42;\nis($got, $expected, 'test description');\n",
+        "parse_stable": true
+    })
+}
+
+fn valid_call_site_update_next_action_json() -> Value {
+    json!({
+        "claim_boundary": "receipt-only call-site update next-action proof",
+        "next_call_site_candidate": {
+            "status": "receipt_only",
+            "candidate": {
+                "family": "call_site_update",
+                "calleeName": "build_user",
+                "argument": "$age",
+                "reason": "visible_argument_call_site_update",
+                "edit": {
+                    "startByte": 63,
+                    "endByte": 63,
+                    "newText": ", $age"
+                },
+                "editorVisible": false
+            },
+            "rejectionReasons": []
+        },
+        "duplicate_argument": {
+            "status": "receipt_only",
+            "rejectionReasons": ["duplicate_call_argument"]
+        },
+        "missing_call_site": {
+            "status": "receipt_only",
+            "rejectionReasons": ["missing_call_site"]
+        },
+        "unsafe_call_site": {
+            "status": "receipt_only",
+            "rejectionReasons": ["unsafe_insertion_point"]
+        },
+        "invalid_target": {
+            "status": "receipt_only",
+            "rejectionReasons": ["invalid_call_target"]
+        },
+        "missing_argument": {
+            "status": "receipt_only",
+            "rejectionReasons": ["missing_call_argument"]
+        },
+        "default_gate": {
+            "status": "disabled",
+            "rejectionReasons": ["gate_disabled"]
+        },
+        "explicit_gate": {
+            "status": "runtime_provider_not_registered",
+            "rejectionReasons": ["runtime_provider_not_registered"]
+        },
+        "accepted_document_text": "sub build_user ($name, $age) { }\nmy $user = build_user($name, $age);\n",
         "parse_stable": true
     })
 }

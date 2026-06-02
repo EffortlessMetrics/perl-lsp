@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod next_edit;
 pub use next_edit::{
+    CallSiteUpdateNextEditCandidate, CallSiteUpdateNextEditProof, CallSiteUpdateNextEditRequest,
     MissingImportNextEditCandidate, MissingImportNextEditProof, MissingImportNextEditRequest,
     NextEditCandidateFamily, NextEditFeatureGate, NextEditGateSource, NextEditProvider,
     NextEditRejectionReason, NextEditRequest, NextEditResponse, NextEditSafetyPolicy,

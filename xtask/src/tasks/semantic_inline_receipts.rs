@@ -155,6 +155,7 @@ struct NextEditScaffoldSummary {
     future_gated: Option<Vec<String>>,
     missing_import_next_action: Option<MissingImportNextActionSummary>,
     test_assertion_next_action: Option<TestAssertionNextActionSummary>,
+    call_site_update_next_action: Option<CallSiteUpdateNextActionSummary>,
     rename_occurrence_next_action: Option<RenameOccurrenceNextActionSummary>,
     optional_ai_candidate_boundary: Option<OptionalAiCandidateBoundarySummary>,
 }
@@ -186,6 +187,23 @@ struct TestAssertionNextActionSummary {
     non_test_file_rejected: bool,
     unsupported_framework_rejected: bool,
     missing_variables_rejected: bool,
+    default_gate_disabled: bool,
+    explicit_gate_runtime_unregistered: bool,
+    rejection_reasons: BTreeMap<String, u64>,
+    parse_stable: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct CallSiteUpdateNextActionSummary {
+    next_call_site_candidate_prepared: bool,
+    next_call_site_candidate_editor_visible: bool,
+    next_call_site_candidate_reason: Option<String>,
+    duplicate_argument_rejected: bool,
+    missing_call_site_rejected: bool,
+    unsafe_call_site_rejected: bool,
+    invalid_target_rejected: bool,
+    missing_argument_rejected: bool,
     default_gate_disabled: bool,
     explicit_gate_runtime_unregistered: bool,
     rejection_reasons: BTreeMap<String, u64>,
@@ -302,6 +320,7 @@ fn read_optional_next_edit_scaffold_summary(path: &Path) -> Result<NextEditScaff
             future_gated: None,
             missing_import_next_action: None,
             test_assertion_next_action: None,
+            call_site_update_next_action: None,
             rename_occurrence_next_action: None,
             optional_ai_candidate_boundary: None,
         });
@@ -342,6 +361,7 @@ fn read_optional_next_edit_scaffold_summary(path: &Path) -> Result<NextEditScaff
         future_gated: string_array_field(&scaffold, "future_gated")?,
         missing_import_next_action: Some(missing_import_next_action_summary(&scaffold)?),
         test_assertion_next_action: Some(test_assertion_next_action_summary(&scaffold)?),
+        call_site_update_next_action: Some(call_site_update_next_action_summary(&scaffold)?),
         rename_occurrence_next_action: Some(rename_occurrence_next_action_summary(&scaffold)?),
         optional_ai_candidate_boundary: Some(optional_ai_candidate_boundary_summary(&scaffold)?),
     };
@@ -438,6 +458,7 @@ fn validate_next_edit_scaffold_summary(
         "editor_visible_next_edit_suggestions",
         "missing_import_next_action",
         "test_assertion_next_action",
+        "call_site_update_next_action",
         "rename_occurrence_next_action",
         "optional_ai_candidate_source",
     ] {
@@ -447,6 +468,7 @@ fn validate_next_edit_scaffold_summary(
     }
     require_missing_import_next_action(scaffold)?;
     require_test_assertion_next_action(scaffold)?;
+    require_call_site_update_next_action(scaffold)?;
     require_rename_occurrence_next_action(scaffold)?;
     require_optional_ai_candidate_boundary(scaffold)?;
 
@@ -544,6 +566,67 @@ fn test_assertion_next_action_summary(scaffold: &Value) -> Result<TestAssertionN
                 "/non_test_file/rejectionReasons",
                 "/unsupported_framework/rejectionReasons",
                 "/missing_variables/rejectionReasons",
+                "/default_gate/rejectionReasons",
+                "/explicit_gate/rejectionReasons",
+            ],
+        )?,
+        parse_stable: action.get("parse_stable").and_then(Value::as_bool).unwrap_or(false),
+    })
+}
+
+fn call_site_update_next_action_summary(
+    scaffold: &Value,
+) -> Result<CallSiteUpdateNextActionSummary> {
+    let action = scaffold
+        .get("call_site_update_next_action")
+        .ok_or_else(|| eyre!("next-edit scaffold receipt missing call_site_update_next_action"))?;
+    let candidate = action.pointer("/next_call_site_candidate/candidate");
+    Ok(CallSiteUpdateNextActionSummary {
+        next_call_site_candidate_prepared: candidate.is_some(),
+        next_call_site_candidate_editor_visible: candidate
+            .and_then(|candidate| candidate.get("editorVisible"))
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+        next_call_site_candidate_reason: candidate_reason(candidate),
+        duplicate_argument_rejected: rejection_reason_present(
+            action,
+            "/duplicate_argument/rejectionReasons",
+            "duplicate_call_argument",
+        )?,
+        missing_call_site_rejected: rejection_reason_present(
+            action,
+            "/missing_call_site/rejectionReasons",
+            "missing_call_site",
+        )?,
+        unsafe_call_site_rejected: rejection_reason_present(
+            action,
+            "/unsafe_call_site/rejectionReasons",
+            "unsafe_insertion_point",
+        )?,
+        invalid_target_rejected: rejection_reason_present(
+            action,
+            "/invalid_target/rejectionReasons",
+            "invalid_call_target",
+        )?,
+        missing_argument_rejected: rejection_reason_present(
+            action,
+            "/missing_argument/rejectionReasons",
+            "missing_call_argument",
+        )?,
+        default_gate_disabled: action.pointer("/default_gate/status").and_then(Value::as_str)
+            == Some("disabled"),
+        explicit_gate_runtime_unregistered: action
+            .pointer("/explicit_gate/status")
+            .and_then(Value::as_str)
+            == Some("runtime_provider_not_registered"),
+        rejection_reasons: rejection_reason_counts(
+            action,
+            &[
+                "/duplicate_argument/rejectionReasons",
+                "/missing_call_site/rejectionReasons",
+                "/unsafe_call_site/rejectionReasons",
+                "/invalid_target/rejectionReasons",
+                "/missing_argument/rejectionReasons",
                 "/default_gate/rejectionReasons",
                 "/explicit_gate/rejectionReasons",
             ],
@@ -816,6 +899,99 @@ fn require_test_assertion_next_action(scaffold: &Value) -> Result<()> {
     require_next_edit_bool(
         action.get("parse_stable").and_then(Value::as_bool),
         "test_assertion_next_action/parse_stable",
+        true,
+    )?;
+    Ok(())
+}
+
+fn require_call_site_update_next_action(scaffold: &Value) -> Result<()> {
+    let action = scaffold
+        .get("call_site_update_next_action")
+        .ok_or_else(|| eyre!("next-edit scaffold receipt missing call_site_update_next_action"))?;
+    require_next_edit_value(
+        action.pointer("/next_call_site_candidate/status").and_then(Value::as_str),
+        "call_site_update_next_action/next_call_site_candidate/status",
+        "receipt_only",
+    )?;
+    require_next_edit_value(
+        action.pointer("/next_call_site_candidate/candidate/family").and_then(Value::as_str),
+        "call_site_update_next_action/next_call_site_candidate/candidate/family",
+        "call_site_update",
+    )?;
+    require_next_edit_value(
+        action.pointer("/next_call_site_candidate/candidate/calleeName").and_then(Value::as_str),
+        "call_site_update_next_action/next_call_site_candidate/candidate/calleeName",
+        "build_user",
+    )?;
+    require_next_edit_value(
+        action.pointer("/next_call_site_candidate/candidate/argument").and_then(Value::as_str),
+        "call_site_update_next_action/next_call_site_candidate/candidate/argument",
+        "$age",
+    )?;
+    require_next_edit_value(
+        action.pointer("/next_call_site_candidate/candidate/edit/newText").and_then(Value::as_str),
+        "call_site_update_next_action/next_call_site_candidate/candidate/edit/newText",
+        ", $age",
+    )?;
+    require_next_edit_bool(
+        action
+            .pointer("/next_call_site_candidate/candidate/editorVisible")
+            .and_then(Value::as_bool),
+        "call_site_update_next_action/next_call_site_candidate/candidate/editorVisible",
+        false,
+    )?;
+    let accepted_text =
+        action.get("accepted_document_text").and_then(Value::as_str).ok_or_else(|| {
+            eyre!("next-edit scaffold receipt missing call-site accepted_document_text")
+        })?;
+    if !accepted_text.contains("build_user($name, $age);") {
+        bail!("call-site update next action accepted document text did not update call site");
+    }
+    if !rejection_reason_present(
+        action,
+        "/duplicate_argument/rejectionReasons",
+        "duplicate_call_argument",
+    )? {
+        bail!("call-site update next action did not reject duplicate argument");
+    }
+    if !rejection_reason_present(
+        action,
+        "/missing_call_site/rejectionReasons",
+        "missing_call_site",
+    )? {
+        bail!("call-site update next action did not reject missing call site");
+    }
+    if !rejection_reason_present(
+        action,
+        "/unsafe_call_site/rejectionReasons",
+        "unsafe_insertion_point",
+    )? {
+        bail!("call-site update next action did not reject unsafe call site");
+    }
+    if !rejection_reason_present(action, "/invalid_target/rejectionReasons", "invalid_call_target")?
+    {
+        bail!("call-site update next action did not reject invalid target");
+    }
+    if !rejection_reason_present(
+        action,
+        "/missing_argument/rejectionReasons",
+        "missing_call_argument",
+    )? {
+        bail!("call-site update next action did not reject missing argument");
+    }
+    require_next_edit_value(
+        action.pointer("/default_gate/status").and_then(Value::as_str),
+        "call_site_update_next_action/default_gate/status",
+        "disabled",
+    )?;
+    require_next_edit_value(
+        action.pointer("/explicit_gate/status").and_then(Value::as_str),
+        "call_site_update_next_action/explicit_gate/status",
+        "runtime_provider_not_registered",
+    )?;
+    require_next_edit_bool(
+        action.get("parse_stable").and_then(Value::as_bool),
+        "call_site_update_next_action/parse_stable",
         true,
     )?;
     Ok(())
@@ -1426,6 +1602,7 @@ mod tests {
             future_gated: None,
             missing_import_next_action: None,
             test_assertion_next_action: None,
+            call_site_update_next_action: None,
             rename_occurrence_next_action: None,
             optional_ai_candidate_boundary: None,
         }
@@ -1461,11 +1638,13 @@ mod tests {
                 "editor_visible_next_edit_suggestions",
                 "missing_import_next_action",
                 "test_assertion_next_action",
+                "call_site_update_next_action",
                 "rename_occurrence_next_action",
                 "optional_ai_candidate_source"
             ],
             "missing_import_next_action": valid_missing_import_next_action_json(),
             "test_assertion_next_action": valid_test_assertion_next_action_json(),
+            "call_site_update_next_action": valid_call_site_update_next_action_json(),
             "rename_occurrence_next_action": valid_rename_occurrence_next_action_json(),
             "optional_ai_candidate_boundary": valid_optional_ai_candidate_boundary_json()
         })
@@ -1583,6 +1762,58 @@ mod tests {
                 "rejectionReasons": ["runtime_provider_not_registered"]
             },
             "accepted_document_text": "use Test::More;\nmy $got = compute();\nmy $expected = 42;\nis($got, $expected, 'test description');\n",
+            "parse_stable": true
+        })
+    }
+
+    fn valid_call_site_update_next_action_json() -> Value {
+        json!({
+            "claim_boundary": "receipt-only call-site update next-action proof",
+            "next_call_site_candidate": {
+                "status": "receipt_only",
+                "candidate": {
+                    "family": "call_site_update",
+                    "calleeName": "build_user",
+                    "argument": "$age",
+                    "reason": "visible_argument_call_site_update",
+                    "edit": {
+                        "startByte": 63,
+                        "endByte": 63,
+                        "newText": ", $age"
+                    },
+                    "editorVisible": false
+                },
+                "rejectionReasons": []
+            },
+            "duplicate_argument": {
+                "status": "receipt_only",
+                "rejectionReasons": ["duplicate_call_argument"]
+            },
+            "missing_call_site": {
+                "status": "receipt_only",
+                "rejectionReasons": ["missing_call_site"]
+            },
+            "unsafe_call_site": {
+                "status": "receipt_only",
+                "rejectionReasons": ["unsafe_insertion_point"]
+            },
+            "invalid_target": {
+                "status": "receipt_only",
+                "rejectionReasons": ["invalid_call_target"]
+            },
+            "missing_argument": {
+                "status": "receipt_only",
+                "rejectionReasons": ["missing_call_argument"]
+            },
+            "default_gate": {
+                "status": "disabled",
+                "rejectionReasons": ["gate_disabled"]
+            },
+            "explicit_gate": {
+                "status": "runtime_provider_not_registered",
+                "rejectionReasons": ["runtime_provider_not_registered"]
+            },
+            "accepted_document_text": "sub build_user ($name, $age) { }\nmy $user = build_user($name, $age);\n",
             "parse_stable": true
         })
     }
@@ -2336,6 +2567,230 @@ mod tests {
         assert!(
             error.to_string().contains("explicit_gate/status"),
             "error should identify explicit gate drift, got {error}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_records_call_site_update_action() -> Result<()> {
+        let scaffold = valid_next_edit_scaffold_json();
+        let summary = call_site_update_next_action_summary(&scaffold)?;
+
+        assert!(summary.next_call_site_candidate_prepared);
+        assert!(!summary.next_call_site_candidate_editor_visible);
+        assert_eq!(
+            summary.next_call_site_candidate_reason.as_deref(),
+            Some("visible_argument_call_site_update")
+        );
+        assert!(summary.duplicate_argument_rejected);
+        assert!(summary.missing_call_site_rejected);
+        assert!(summary.unsafe_call_site_rejected);
+        assert!(summary.invalid_target_rejected);
+        assert!(summary.missing_argument_rejected);
+        assert!(summary.default_gate_disabled);
+        assert!(summary.explicit_gate_runtime_unregistered);
+        assert_eq!(summary.rejection_reasons.get("duplicate_call_argument"), Some(&1));
+        assert_eq!(summary.rejection_reasons.get("missing_call_site"), Some(&1));
+        assert_eq!(summary.rejection_reasons.get("unsafe_insertion_point"), Some(&1));
+        assert_eq!(summary.rejection_reasons.get("invalid_call_target"), Some(&1));
+        assert_eq!(summary.rejection_reasons.get("missing_call_argument"), Some(&1));
+        assert_eq!(summary.rejection_reasons.get("gate_disabled"), Some(&1));
+        assert_eq!(summary.rejection_reasons.get("runtime_provider_not_registered"), Some(&1));
+        assert!(summary.parse_stable);
+
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_call_site_update_field_drift() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["next_call_site_candidate"]["status"] =
+            json!("disabled");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "call-site status drift must fail");
+        assert!(
+            error.to_string().contains("next_call_site_candidate/status"),
+            "error should identify call-site candidate status drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["next_call_site_candidate"]["candidate"]["family"] =
+            json!("missing_import");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "call-site family drift must fail");
+        assert!(
+            error.to_string().contains("candidate/family"),
+            "error should identify call-site candidate family drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["next_call_site_candidate"]["candidate"]["calleeName"] =
+            json!("other_builder");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "call-site callee drift must fail");
+        assert!(
+            error.to_string().contains("candidate/calleeName"),
+            "error should identify call-site callee drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["next_call_site_candidate"]["candidate"]["argument"] =
+            json!("$other");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "call-site argument drift must fail");
+        assert!(
+            error.to_string().contains("candidate/argument"),
+            "error should identify call-site argument drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["next_call_site_candidate"]["candidate"]["edit"]
+            ["newText"] = json!(", $other");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "call-site edit drift must fail");
+        assert!(
+            error.to_string().contains("candidate/edit/newText"),
+            "error should identify call-site edit text drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["next_call_site_candidate"]["candidate"]["editorVisible"] =
+            json!(true);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "editor-visible call-site action must fail");
+        assert!(
+            error.to_string().contains("candidate/editorVisible"),
+            "error should identify call-site editor visibility drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["accepted_document_text"] = Value::Null;
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "missing call-site accepted text must fail");
+        assert!(
+            error.to_string().contains("accepted_document_text"),
+            "error should identify missing call-site accepted text, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["accepted_document_text"] =
+            json!("sub build_user ($name, $age) { }\nmy $user = build_user($name);\n");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "wrong call-site accepted text must fail");
+        assert!(
+            error.to_string().contains("accepted document text"),
+            "error should identify wrong call-site accepted text, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["parse_stable"] = json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "parse-unstable call-site proof must fail");
+        assert!(
+            error.to_string().contains("parse_stable"),
+            "error should identify call-site parse-stability drift, got {error}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_call_site_update_rejection_drift() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["duplicate_argument"]["rejectionReasons"] =
+            json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(
+            &path,
+            "duplicate call-site rejection drift must fail",
+        );
+        assert!(
+            error.to_string().contains("duplicate argument"),
+            "error should identify duplicate call-site rejection drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["missing_call_site"]["rejectionReasons"] =
+            json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "missing call-site rejection drift must fail");
+        assert!(
+            error.to_string().contains("missing call site"),
+            "error should identify missing call-site rejection drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["unsafe_call_site"]["rejectionReasons"] =
+            json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "unsafe call-site rejection drift must fail");
+        assert!(
+            error.to_string().contains("unsafe call site"),
+            "error should identify unsafe call-site rejection drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["invalid_target"]["rejectionReasons"] = json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "invalid call target drift must fail");
+        assert!(
+            error.to_string().contains("invalid target"),
+            "error should identify invalid target drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["missing_argument"]["rejectionReasons"] =
+            json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "missing call argument drift must fail");
+        assert!(
+            error.to_string().contains("missing argument"),
+            "error should identify missing argument drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["default_gate"]["status"] = json!("receipt_only");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "call-site default gate drift must fail");
+        assert!(
+            error.to_string().contains("default_gate/status"),
+            "error should identify call-site default gate drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["explicit_gate"]["status"] = json!("receipt_only");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "call-site explicit gate drift must fail");
+        assert!(
+            error.to_string().contains("explicit_gate/status"),
+            "error should identify call-site explicit gate drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["missing_call_site"]["rejectionReasons"] =
+            json!([42]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "non-string call-site rejection must fail");
+        assert!(
+            error.to_string().contains("must contain strings"),
+            "error should identify non-string call-site rejection reason, got {error}"
         );
 
         Ok(())

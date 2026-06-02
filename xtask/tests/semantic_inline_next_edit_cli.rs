@@ -231,6 +231,94 @@ fn semantic_inline_next_edit_cli_writes_scaffold_receipt() -> Result<()> {
             .and_then(Value::as_str)
             .is_some_and(|text| text.contains("is($got, $expected"))
     );
+    let call_site_update = scaffold
+        .get("call_site_update_next_action")
+        .and_then(Value::as_object)
+        .ok_or_else(|| anyhow!("call_site_update_next_action receipt missing"))?;
+    assert_eq!(
+        call_site_update
+            .get("next_call_site_candidate")
+            .and_then(|proof| proof.get("candidate"))
+            .and_then(|candidate| candidate.get("family"))
+            .and_then(Value::as_str),
+        Some("call_site_update")
+    );
+    assert_eq!(
+        call_site_update
+            .get("next_call_site_candidate")
+            .and_then(|proof| proof.get("candidate"))
+            .and_then(|candidate| candidate.get("calleeName"))
+            .and_then(Value::as_str),
+        Some("build_user")
+    );
+    assert_eq!(
+        call_site_update
+            .get("next_call_site_candidate")
+            .and_then(|proof| proof.get("candidate"))
+            .and_then(|candidate| candidate.get("argument"))
+            .and_then(Value::as_str),
+        Some("$age")
+    );
+    assert_eq!(
+        call_site_update
+            .get("next_call_site_candidate")
+            .and_then(|proof| proof.get("candidate"))
+            .and_then(|candidate| candidate.get("editorVisible"))
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        call_site_update
+            .get("duplicate_argument")
+            .and_then(|proof| proof.get("rejectionReasons"))
+            .and_then(Value::as_array)
+            .and_then(|reasons| reasons.first())
+            .and_then(Value::as_str),
+        Some("duplicate_call_argument")
+    );
+    assert_eq!(
+        call_site_update
+            .get("missing_call_site")
+            .and_then(|proof| proof.get("rejectionReasons"))
+            .and_then(Value::as_array)
+            .and_then(|reasons| reasons.first())
+            .and_then(Value::as_str),
+        Some("missing_call_site")
+    );
+    assert_eq!(
+        call_site_update
+            .get("unsafe_call_site")
+            .and_then(|proof| proof.get("rejectionReasons"))
+            .and_then(Value::as_array)
+            .and_then(|reasons| reasons.first())
+            .and_then(Value::as_str),
+        Some("unsafe_insertion_point")
+    );
+    assert_eq!(
+        call_site_update
+            .get("invalid_target")
+            .and_then(|proof| proof.get("rejectionReasons"))
+            .and_then(Value::as_array)
+            .and_then(|reasons| reasons.first())
+            .and_then(Value::as_str),
+        Some("invalid_call_target")
+    );
+    assert_eq!(
+        call_site_update
+            .get("missing_argument")
+            .and_then(|proof| proof.get("rejectionReasons"))
+            .and_then(Value::as_array)
+            .and_then(|reasons| reasons.first())
+            .and_then(Value::as_str),
+        Some("missing_call_argument")
+    );
+    assert_eq!(call_site_update.get("parse_stable").and_then(Value::as_bool), Some(true));
+    assert!(
+        call_site_update
+            .get("accepted_document_text")
+            .and_then(Value::as_str)
+            .is_some_and(|text| text.contains("build_user($name, $age)"))
+    );
     let rename_occurrence = scaffold
         .get("rename_occurrence_next_action")
         .and_then(Value::as_object)
