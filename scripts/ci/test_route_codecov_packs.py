@@ -273,6 +273,34 @@ class RouteCodecovPacksTests(unittest.TestCase):
             [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
         )
 
+    def test_ci_audit_workflows_shim_change_is_non_lcov_focused_proof(self) -> None:
+        packs = [
+            {
+                "id": "patch-coverage-ci-audit-workflows-shim",
+                "lcov": False,
+                "files": [
+                    "scripts/ci-audit-workflows.py",
+                    "scripts/tests/test-ci-audit-workflows-shim.py",
+                ],
+                "commands": ["python scripts/tests/test-ci-audit-workflows-shim.py"],
+                "coverage_filters": ["ci-audit-workflows-shim"],
+            },
+            {
+                "id": router.FALLBACK_PACK_ID,
+                "files": ["*.rs"],
+                "commands": ["cargo test --workspace --lib"],
+                "coverage_filters": ["workspace-lib"],
+            },
+        ]
+
+        paths = ["scripts/ci-audit-workflows.py"]
+
+        self.assertEqual([], router.selected_packs(packs, paths))
+        self.assertEqual(
+            ["patch-coverage-ci-audit-workflows-shim"],
+            [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
+        )
+
     def test_preflight_wrapper_change_is_non_lcov_focused_proof(self) -> None:
         packs = [
             {

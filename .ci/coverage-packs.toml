@@ -332,6 +332,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-ci-audit-workflows-shim"
+lcov = false
+files = [
+  "scripts/ci-audit-workflows.py",
+  "scripts/tests/test-ci-audit-workflows-shim.py",
+]
+commands = [
+  "python scripts/tests/test-ci-audit-workflows-shim.py",
+]
+coverage_filters = [
+  "ci-audit-workflows-shim",
+]
+
+[[pack]]
 id = "patch-coverage-preflight-wrapper"
 lcov = false
 files = [
