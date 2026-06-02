@@ -124,6 +124,111 @@ fn droid_review_permissions_stay_minimal() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn droid_review_emits_live_run_receipt() -> Result<()> {
+    let (_content, workflow) = droid_review_workflow()?;
+    let job = mapping_value(mapping_value(&workflow, "jobs")?, "droid-review")?;
+    let review_step = named_step(job, "Run Droid Auto Review")?;
+    let receipt_step = named_step(job, "Write Droid live-run receipt")?;
+    let upload_step = named_step(job, "Upload Droid live-run receipt")?;
+
+    assert_eq!(
+        scalar_string(mapping_value(review_step, "id")?)?,
+        "droid_review",
+        "Droid action step must expose an id so the receipt can record action outcome"
+    );
+
+    assert_eq!(
+        scalar_string(mapping_value(receipt_step, "if")?)?,
+        "always()",
+        "Droid live-run receipt must be written even when the advisory review action fails"
+    );
+    let receipt_env = string_map(mapping_value(receipt_step, "env")?)?;
+    assert_eq!(
+        receipt_env.get("DROID_REVIEW_OUTCOME").map(String::as_str),
+        Some("${{ steps.droid_review.outcome }}"),
+        "Droid live-run receipt must derive review_posted from the Droid action outcome"
+    );
+    let receipt_run = scalar_string(mapping_value(receipt_step, "run")?)?;
+    for required in [
+        "receipt_path=\"${receipt_dir}/droid-live-run.json\"",
+        "\"check\": \"droid-live-run\"",
+        "\"schema_version\": \"1\"",
+        "\"event\": \"pull_request\"",
+        "\"verdict\": \"${verdict}\"",
+        "\"workflow\": \"Droid PR Review\"",
+        "\"model\": \"custom:MiniMax-M3-0\"",
+        "\"runner_labels\": [\"self-hosted\", \"linux\", \"x64\", \"em-ci\", \"trusted-pr\", \"review-nano\", \"droid-review\"]",
+        "\"action\": \"EffortlessMetrics/droid-action-safe\"",
+        "\"review_posted\": ${review_posted}",
+        "\"debug_artifacts_uploaded\": false",
+        "\"anthropic_env_cleared\": true",
+    ] {
+        assert!(receipt_run.contains(required), "Droid live-run receipt missing `{required}`");
+    }
+
+    assert_eq!(
+        scalar_string(mapping_value(upload_step, "if")?)?,
+        "always()",
+        "Droid live-run receipt upload must run for advisory failures"
+    );
+    assert_eq!(
+        scalar_string(mapping_value(upload_step, "uses")?)?,
+        "./.github/actions/upload-receipt",
+        "Droid live-run receipt must use the repo-local receipt upload action"
+    );
+    let upload_with = string_map(mapping_value(upload_step, "with")?)?;
+    assert_eq!(
+        upload_with.get("receipt-path").map(String::as_str),
+        Some("${{ runner.temp }}/droid-receipts/droid-live-run.json"),
+        "Droid live-run receipt upload path changed unexpectedly"
+    );
+    assert_eq!(
+        upload_with.get("artifact-name").map(String::as_str),
+        Some("droid-live-run-${{ github.run_id }}-${{ github.run_attempt }}"),
+        "Droid live-run receipt artifact name should identify the workflow run"
+    );
+    assert_eq!(
+        upload_with.get("generate-summary").map(String::as_str),
+        Some("false"),
+        "Droid live-run receipt must not use gate-receipt summary rendering"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn droid_live_run_receipt_schema_is_registered() -> Result<()> {
+    let root = repo_root()?;
+    let registry = fs::read_to_string(root.join(".ci/receipts/registry.toml"))?;
+
+    for required in [
+        "check = \"droid-live-run\"",
+        "schema = \".ci/receipts/schemas/droid-live-run.schema.json\"",
+        "producer = \"Droid PR Review\"",
+        "required_fields = [\"check\", \"schema_version\", \"event\", \"verdict\", \"workflow\", \"model\", \"runner_labels\", \"action\", \"review_posted\", \"debug_artifacts_uploaded\", \"anthropic_env_cleared\"]",
+    ] {
+        assert!(
+            registry.contains(required),
+            "Droid live-run receipt registry missing `{required}`"
+        );
+    }
+
+    let schema_path = root.join(".ci/receipts/schemas/droid-live-run.schema.json");
+    let schema_text = fs::read_to_string(&schema_path)?;
+    let schema: serde_json::Value = serde_json::from_str(&schema_text)?;
+
+    assert_eq!(schema["properties"]["check"]["const"], "droid-live-run");
+    assert_eq!(schema["properties"]["event"]["const"], "pull_request");
+    assert_eq!(schema["properties"]["workflow"]["const"], "Droid PR Review");
+    assert_eq!(schema["properties"]["model"]["const"], "custom:MiniMax-M3-0");
+    assert_eq!(schema["properties"]["action"]["const"], "EffortlessMetrics/droid-action-safe");
+    assert_eq!(schema["properties"]["debug_artifacts_uploaded"]["const"], false);
+    assert_eq!(schema["properties"]["anthropic_env_cleared"]["const"], true);
+
+    Ok(())
+}
+
 fn droid_review_workflow() -> Result<(String, Value)> {
     let path = repo_root()?.join(".github/workflows/droid-review.yml");
     let content = fs::read_to_string(&path)?;
@@ -153,6 +258,24 @@ fn sequence_strings(value: &Value) -> Result<Vec<&str>> {
         .iter()
         .map(scalar_string)
         .collect()
+}
+
+fn sequence_values(value: &Value) -> Result<&[Value]> {
+    value.as_sequence().map(Vec::as_slice).ok_or_else(|| anyhow!("expected YAML sequence"))
+}
+
+fn named_step<'a>(job: &'a Value, name: &str) -> Result<&'a Value> {
+    let steps = sequence_values(mapping_value(job, "steps")?)?;
+
+    for step in steps {
+        if mapping_value(step, "name").ok().and_then(|value| scalar_string(value).ok())
+            == Some(name)
+        {
+            return Ok(step);
+        }
+    }
+
+    Err(anyhow!("missing workflow step `{name}`"))
 }
 
 fn scalar_string(value: &Value) -> Result<&str> {

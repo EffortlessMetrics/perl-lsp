@@ -91,6 +91,7 @@ jobs:
           echo "${install_dir}/gh_${GH_CLI_VERSION}_linux_amd64/bin" >> "${GITHUB_PATH}"
           "${install_dir}/gh_${GH_CLI_VERSION}_linux_amd64/bin/gh" --version
       - name: Run Droid Auto Review
+        id: droid_review
         uses: EffortlessMetrics/droid-action-safe@7c1377ccbacddc95560d1570547a5baa51de01ec # based on Factory-AI/droid-action v5; raw debug artifact upload disabled
         env:
           HOME: ${{ runner.temp }}/droid-home
@@ -104,3 +105,45 @@ jobs:
           review_depth: shallow
           review_model: custom:MiniMax-M3-0
           automatic_security_review: false
+      - name: Write Droid live-run receipt
+        if: always()
+        shell: bash
+        env:
+          DROID_REVIEW_OUTCOME: ${{ steps.droid_review.outcome }}
+        run: |
+          set -euo pipefail
+
+          receipt_dir="${RUNNER_TEMP}/droid-receipts"
+          receipt_path="${receipt_dir}/droid-live-run.json"
+          mkdir -p "${receipt_dir}"
+
+          review_posted=false
+          verdict=warn
+          if [ "${DROID_REVIEW_OUTCOME:-unknown}" = "success" ]; then
+            review_posted=true
+            verdict=pass
+          fi
+
+          cat > "${receipt_path}" <<JSON
+          {
+            "check": "droid-live-run",
+            "schema_version": "1",
+            "event": "pull_request",
+            "verdict": "${verdict}",
+            "workflow": "Droid PR Review",
+            "model": "custom:MiniMax-M3-0",
+            "runner_labels": ["self-hosted", "linux", "x64", "em-ci", "trusted-pr", "review-nano", "droid-review"],
+            "action": "EffortlessMetrics/droid-action-safe",
+            "review_posted": ${review_posted},
+            "debug_artifacts_uploaded": false,
+            "anthropic_env_cleared": true
+          }
+          JSON
+      - name: Upload Droid live-run receipt
+        if: always()
+        uses: ./.github/actions/upload-receipt
+        with:
+          receipt-path: ${{ runner.temp }}/droid-receipts/droid-live-run.json
+          artifact-name: droid-live-run-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: "14"
+          generate-summary: "false"
