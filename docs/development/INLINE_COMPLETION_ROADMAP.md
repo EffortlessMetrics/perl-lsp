@@ -394,6 +394,7 @@ Current semantic inline UX receipt inventory:
 | `package_boundary_receiver_inline_completion_quality` | `ux_scenario_61_package_boundary_receiver_inline_completion_quality.rs` | `$self->` current-package method suggestions stay preferred in a multi-file package-boundary workspace without sibling-package or generic constructor leaks. |
 | `project_test_assertion_inline_completion_quality` | `ux_scenario_62_project_test_assertion_inline_completion_quality.rs` | Test::More and Test2 assertion ghost text stay preferred in CPAN-shaped project test files without return noise, premature `done_testing`, or module-import ghost text. |
 | `project_control_flow_inline_completion_quality` | `ux_scenario_63_project_control_flow_inline_completion_quality.rs` | Loop and guard ghost text in CPAN-shaped project scripts uses visible lexicals and collections without placeholder snippets or module-import noise. |
+| `project_constructor_inline_completion_quality` | `ux_scenario_64_project_constructor_inline_completion_quality.rs` | Shift-style and signature-style constructor ghost text stays preferred in CPAN-shaped project modules without test assertion, module-import, or guard ghost text. |
 
 The machine-readable dashboard for this inventory is:
 
@@ -425,8 +426,8 @@ without registering an LSP next-edit provider.
 Still future or deliberately gated:
 
 - broader real-project UX receipts for inline quality beyond the current module
-  import, package-boundary receiver, project test assertion, and project
-  control-flow receipts;
+  import, package-boundary receiver, project test assertion, project
+  control-flow, and project constructor receipts;
 - runtime/editor-visible next-edit suggestions;
 - optional AI candidate boundaries.
 

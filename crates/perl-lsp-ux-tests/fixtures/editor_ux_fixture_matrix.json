@@ -1810,6 +1810,34 @@
       ]
     },
     {
+      "id": "project_constructor_inline_completion_quality",
+      "scenario_file": "ux_scenario_64_project_constructor_inline_completion_quality.rs",
+      "subsystem_owner": "editor_trust",
+      "ci_tier": "pr",
+      "component": "completion",
+      "instrumentation": {
+        "run_receipt": false,
+        "first_useful_result": false,
+        "protocol_goldens": false
+      },
+      "user_journey": "request inline completion in CPAN-shaped project constructor modules and record local-style constructor ghost text",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "dynamic inline-completion registration is observed for an LSP4IJ-shaped client",
+        "project shift-style constructor keeps the local shift/bless idiom",
+        "project signature-style constructor keeps the local signature/bless idiom",
+        "project constructor inline completions avoid test assertion, module-import, and guard ghost text"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "real_workspace_providers",
       "scenario_file": "ux_scenario_20_real_workspace_providers.rs",
       "subsystem_owner": "editor_intelligence",
