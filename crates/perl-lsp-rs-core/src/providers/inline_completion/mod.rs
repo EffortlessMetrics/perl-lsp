@@ -14,7 +14,8 @@ pub use next_edit::{
     MissingImportNextEditCandidate, MissingImportNextEditProof, MissingImportNextEditRequest,
     NextEditCandidateFamily, NextEditFeatureGate, NextEditGateSource, NextEditProvider,
     NextEditRejectionReason, NextEditRequest, NextEditResponse, NextEditSafetyPolicy,
-    NextEditStatus, NextEditSuggestion, NextEditTextEdit, TestAssertionNextEditCandidate,
+    NextEditStatus, NextEditSuggestion, NextEditTextEdit, RenameOccurrenceNextEditCandidate,
+    RenameOccurrenceNextEditProof, RenameOccurrenceNextEditRequest, TestAssertionNextEditCandidate,
     TestAssertionNextEditFramework, TestAssertionNextEditProof, TestAssertionNextEditRequest,
 };
 

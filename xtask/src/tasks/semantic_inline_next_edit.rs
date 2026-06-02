@@ -3,7 +3,8 @@ use perl_lsp_rs_core::providers::inline_completion::{
     MissingImportNextEditProof, MissingImportNextEditRequest, NextEditCandidateFamily,
     NextEditFeatureGate, NextEditProvider, NextEditRejectionReason, NextEditRequest,
     NextEditResponse, NextEditSafetyPolicy, NextEditStatus, PreparedInlineCompletionContext,
-    TestAssertionNextEditProof, TestAssertionNextEditRequest,
+    RenameOccurrenceNextEditProof, RenameOccurrenceNextEditRequest, TestAssertionNextEditProof,
+    TestAssertionNextEditRequest,
 };
 use perl_parser::Parser;
 use serde::Serialize;
@@ -27,6 +28,7 @@ struct SemanticInlineNextEditReceipt {
     explicit_gate_response: NextEditResponse,
     missing_import_next_action: MissingImportNextActionReceipt,
     test_assertion_next_action: TestAssertionNextActionReceipt,
+    rename_occurrence_next_action: RenameOccurrenceNextActionReceipt,
     optional_ai_candidate_boundary: OptionalAiCandidateBoundaryReceipt,
     future_gated: Vec<&'static str>,
 }
@@ -57,6 +59,20 @@ struct TestAssertionNextActionReceipt {
     missing_variables: TestAssertionNextEditProof,
     default_gate: TestAssertionNextEditProof,
     explicit_gate: TestAssertionNextEditProof,
+    accepted_document_text: String,
+    parse_stable: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct RenameOccurrenceNextActionReceipt {
+    claim_boundary: &'static str,
+    next_occurrence_candidate: RenameOccurrenceNextEditProof,
+    unsafe_occurrence: RenameOccurrenceNextEditProof,
+    missing_occurrence: RenameOccurrenceNextEditProof,
+    invalid_symbol: RenameOccurrenceNextEditProof,
+    default_gate: RenameOccurrenceNextEditProof,
+    explicit_gate: RenameOccurrenceNextEditProof,
     accepted_document_text: String,
     parse_stable: bool,
 }
@@ -98,6 +114,7 @@ pub fn run(receipt: PathBuf) -> Result<()> {
     )?;
     let missing_import_next_action = missing_import_next_action_receipt(&provider)?;
     let test_assertion_next_action = test_assertion_next_action_receipt(&provider)?;
+    let rename_occurrence_next_action = rename_occurrence_next_action_receipt(&provider)?;
     let optional_ai_candidate_boundary = optional_ai_candidate_boundary_receipt(
         &default_response,
         &receipt_only_response,
@@ -120,12 +137,14 @@ pub fn run(receipt: PathBuf) -> Result<()> {
         explicit_gate_response,
         missing_import_next_action,
         test_assertion_next_action,
+        rename_occurrence_next_action,
         optional_ai_candidate_boundary,
         future_gated: vec![
             "runtime_next_edit_provider",
             "editor_visible_next_edit_suggestions",
             "missing_import_next_action",
             "test_assertion_next_action",
+            "rename_occurrence_next_action",
             "optional_ai_candidate_source",
         ],
     };
@@ -330,6 +349,69 @@ fn test_assertion_next_action_receipt(
     Ok(receipt)
 }
 
+fn rename_occurrence_next_action_receipt(
+    provider: &NextEditProvider,
+) -> Result<RenameOccurrenceNextActionReceipt> {
+    let source = "use strict;\nmy $new = compute();\nreturn $old + $old;\n";
+    let expected = "use strict;\nmy $new = compute();\nreturn $new + $old;\n";
+    let cursor = source
+        .find("return")
+        .ok_or_else(|| color_eyre::eyre::eyre!("rename occurrence fixture omitted return"))?;
+    let next_occurrence_candidate = provider.prove_rename_occurrence(
+        &RenameOccurrenceNextEditRequest::receipt_only(source, "$old", "$new", cursor),
+    );
+
+    let unsafe_occurrence = provider.prove_rename_occurrence(
+        &RenameOccurrenceNextEditRequest::receipt_only("# rename $old here\n", "$old", "$new", 0),
+    );
+    let missing_occurrence = provider.prove_rename_occurrence(
+        &RenameOccurrenceNextEditRequest::receipt_only("my $new = compute();\n", "$old", "$new", 0),
+    );
+    let invalid_symbol = provider.prove_rename_occurrence(
+        &RenameOccurrenceNextEditRequest::receipt_only("return $old;\n", "$old; system", "$new", 0),
+    );
+
+    let mut default_gate =
+        RenameOccurrenceNextEditRequest::receipt_only(source, "$old", "$new", cursor);
+    default_gate.gate = NextEditFeatureGate::default();
+    let default_gate = provider.prove_rename_occurrence(&default_gate);
+
+    let mut explicit_gate =
+        RenameOccurrenceNextEditRequest::receipt_only(source, "$old", "$new", cursor);
+    explicit_gate.gate = NextEditFeatureGate::explicit_enabled();
+    let explicit_gate = provider.prove_rename_occurrence(&explicit_gate);
+
+    let candidate = next_occurrence_candidate
+        .candidate
+        .as_ref()
+        .ok_or_else(|| color_eyre::eyre::eyre!("rename occurrence proof omitted candidate"))?;
+    let accepted_document_text = candidate
+        .edit
+        .apply_to(source)
+        .ok_or_else(|| color_eyre::eyre::eyre!("rename occurrence edit did not apply"))?;
+    if accepted_document_text != expected {
+        bail!("rename occurrence edit produced unexpected document text");
+    }
+    let parse_stable = parse_succeeds(source) && parse_succeeds(&accepted_document_text);
+    if !parse_stable {
+        bail!("rename occurrence edit did not preserve parse success");
+    }
+
+    let receipt = RenameOccurrenceNextActionReceipt {
+        claim_boundary: "receipt-only rename-occurrence next-action proof; no runtime LSP method, editor-visible next-edit provider, source mirror, release action, or AI behavior",
+        next_occurrence_candidate,
+        unsafe_occurrence,
+        missing_occurrence,
+        invalid_symbol,
+        default_gate,
+        explicit_gate,
+        accepted_document_text,
+        parse_stable,
+    };
+    validate_rename_occurrence_next_action(&receipt)?;
+    Ok(receipt)
+}
+
 fn optional_ai_candidate_boundary_receipt(
     default_response: &NextEditResponse,
     receipt_only_response: &NextEditResponse,
@@ -425,6 +507,67 @@ fn validate_optional_ai_candidate_boundary(
     }
     if !receipt.rejects_nondeterministic_sources || !receipt.deterministic_sources_only {
         bail!("optional AI boundary must keep deterministic sources first");
+    }
+    Ok(())
+}
+
+fn validate_rename_occurrence_next_action(
+    receipt: &RenameOccurrenceNextActionReceipt,
+) -> Result<()> {
+    let Some(candidate) = receipt.next_occurrence_candidate.candidate.as_ref() else {
+        bail!("rename occurrence proof must prepare a receipt-only candidate");
+    };
+    if receipt.next_occurrence_candidate.status != NextEditStatus::ReceiptOnly
+        || candidate.family != NextEditCandidateFamily::RenameOccurrence
+        || candidate.original_symbol != "$old"
+        || candidate.replacement_symbol != "$new"
+        || candidate.editor_visible
+        || candidate.edit.new_text != "$new"
+        || !receipt.next_occurrence_candidate.rejection_reasons.is_empty()
+    {
+        bail!("rename occurrence proof did not satisfy the receipt-only contract");
+    }
+    if receipt.unsafe_occurrence.candidate.is_some()
+        || !receipt
+            .unsafe_occurrence
+            .rejection_reasons
+            .contains(&NextEditRejectionReason::UnsafeInsertionPoint)
+    {
+        bail!("rename occurrence proof must reject unsafe next occurrences");
+    }
+    if receipt.missing_occurrence.candidate.is_some()
+        || !receipt
+            .missing_occurrence
+            .rejection_reasons
+            .contains(&NextEditRejectionReason::MissingRenameOccurrence)
+    {
+        bail!("rename occurrence proof must reject missing next occurrences");
+    }
+    if receipt.invalid_symbol.candidate.is_some()
+        || !receipt
+            .invalid_symbol
+            .rejection_reasons
+            .contains(&NextEditRejectionReason::InvalidRenameSymbol)
+    {
+        bail!("rename occurrence proof must reject invalid symbols");
+    }
+    if receipt.default_gate.status != NextEditStatus::Disabled
+        || receipt.default_gate.candidate.is_some()
+        || !receipt.default_gate.rejection_reasons.contains(&NextEditRejectionReason::GateDisabled)
+    {
+        bail!("rename occurrence next action must remain disabled by default");
+    }
+    if receipt.explicit_gate.status != NextEditStatus::RuntimeProviderNotRegistered
+        || receipt.explicit_gate.candidate.is_some()
+        || !receipt
+            .explicit_gate
+            .rejection_reasons
+            .contains(&NextEditRejectionReason::RuntimeProviderNotRegistered)
+    {
+        bail!("rename occurrence next action must not bypass the unregistered runtime provider");
+    }
+    if !receipt.parse_stable {
+        bail!("rename occurrence next action must keep local parse state stable");
     }
     Ok(())
 }
@@ -1085,6 +1228,83 @@ mod tests {
         let mut receipt = test_assertion_next_action_receipt(&provider)?;
         receipt.explicit_gate.rejection_reasons.clear();
         let error = must_err(validate_test_assertion_next_action(&receipt));
+        assert!(
+            error.to_string().contains("unregistered runtime provider"),
+            "error should identify explicit-gate drift, got {error}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn rename_occurrence_next_action_validation_rejects_contract_drift() -> Result<()> {
+        let provider = NextEditProvider;
+        let mut receipt = rename_occurrence_next_action_receipt(&provider)?;
+        receipt.next_occurrence_candidate.candidate = None;
+        let error = must_err(validate_rename_occurrence_next_action(&receipt));
+        assert!(
+            error.to_string().contains("receipt-only candidate"),
+            "error should identify missing rename candidate, got {error}"
+        );
+
+        let mut receipt = rename_occurrence_next_action_receipt(&provider)?;
+        let candidate = must_some(receipt.next_occurrence_candidate.candidate.as_mut());
+        candidate.editor_visible = true;
+        let error = must_err(validate_rename_occurrence_next_action(&receipt));
+        assert!(
+            error.to_string().contains("receipt-only contract"),
+            "error should identify rename candidate contract drift, got {error}"
+        );
+
+        let mut receipt = rename_occurrence_next_action_receipt(&provider)?;
+        receipt.parse_stable = false;
+        let error = must_err(validate_rename_occurrence_next_action(&receipt));
+        assert!(
+            error.to_string().contains("parse state stable"),
+            "error should identify parse-stability drift, got {error}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn rename_occurrence_next_action_validation_rejects_rejection_drift() -> Result<()> {
+        let provider = NextEditProvider;
+        let mut receipt = rename_occurrence_next_action_receipt(&provider)?;
+        receipt.unsafe_occurrence.rejection_reasons.clear();
+        let error = must_err(validate_rename_occurrence_next_action(&receipt));
+        assert!(
+            error.to_string().contains("reject unsafe next occurrences"),
+            "error should identify unsafe-occurrence rejection drift, got {error}"
+        );
+
+        let mut receipt = rename_occurrence_next_action_receipt(&provider)?;
+        receipt.missing_occurrence.rejection_reasons.clear();
+        let error = must_err(validate_rename_occurrence_next_action(&receipt));
+        assert!(
+            error.to_string().contains("reject missing next occurrences"),
+            "error should identify missing-occurrence rejection drift, got {error}"
+        );
+
+        let mut receipt = rename_occurrence_next_action_receipt(&provider)?;
+        receipt.invalid_symbol.rejection_reasons.clear();
+        let error = must_err(validate_rename_occurrence_next_action(&receipt));
+        assert!(
+            error.to_string().contains("reject invalid symbols"),
+            "error should identify invalid-symbol rejection drift, got {error}"
+        );
+
+        let mut receipt = rename_occurrence_next_action_receipt(&provider)?;
+        receipt.default_gate.rejection_reasons.clear();
+        let error = must_err(validate_rename_occurrence_next_action(&receipt));
+        assert!(
+            error.to_string().contains("disabled by default"),
+            "error should identify default-gate drift, got {error}"
+        );
+
+        let mut receipt = rename_occurrence_next_action_receipt(&provider)?;
+        receipt.explicit_gate.rejection_reasons.clear();
+        let error = must_err(validate_rename_occurrence_next_action(&receipt));
         assert!(
             error.to_string().contains("unregistered runtime provider"),
             "error should identify explicit-gate drift, got {error}"

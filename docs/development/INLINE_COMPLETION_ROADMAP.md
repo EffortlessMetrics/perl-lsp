@@ -378,9 +378,9 @@ Current completed or substantially implemented phases:
   constructor style, DBI receiver hints, and visible-context loop/guard
   continuations;
 - ranking, parse-safety filtering, and local quality receipts;
-- the gated next-edit scaffold, receipt-only missing-import and test assertion
-  next-action proofs, accepted edit application checks, and optional AI
-  disabled-boundary receipts.
+- the gated next-edit scaffold, receipt-only missing-import, test assertion, and
+  rename-occurrence next-action proofs, accepted edit application checks, and
+  optional AI disabled-boundary receipts.
 
 Current semantic inline UX receipt inventory:
 
@@ -416,13 +416,15 @@ the next-edit scaffold receipt when present, and keeps next-edit runtime behavio
 and optional AI provider behavior explicitly future-gated. It is an inventory
 receipt; it does not run the UX scenarios or promote support status by itself.
 
-The next-edit scaffold now includes receipt-only proofs for the first two
+The next-edit scaffold now includes receipt-only proofs for the first three
 deterministic next-action families:
 
 - missing-import next actions, using effective-`@INC` reachability and duplicate
   import rejection;
 - test assertion body next actions, using Test::More/Test2 imports and visible
-  `$got`/`$expected`-style lexicals.
+  `$got`/`$expected`-style lexicals;
+- rename-occurrence next actions, using safe Perl variable symbols, next
+  occurrence search, hard-zone rejection, and accepted-edit parse stability.
 
 These receipts remain non-runtime and non-editor-visible. They prove candidate
 preparation, gate rejection, accepted edit application, and parse stability

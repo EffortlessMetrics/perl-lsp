@@ -492,6 +492,95 @@ fn semantic_inline_receipts_cli_embeds_quality_counters_when_available() -> Resu
             .and_then(Value::as_u64),
         Some(1)
     );
+    assert_eq!(
+        next_edit_scaffold
+            .get("rename_occurrence_next_action")
+            .and_then(|action| action.get("next_occurrence_candidate_prepared"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("rename_occurrence_next_action")
+            .and_then(|action| action.get("next_occurrence_candidate_editor_visible"))
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("rename_occurrence_next_action")
+            .and_then(|action| action.get("next_occurrence_candidate_reason"))
+            .and_then(Value::as_str),
+        Some("next_safe_rename_occurrence")
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("rename_occurrence_next_action")
+            .and_then(|action| action.get("unsafe_occurrence_rejected"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("rename_occurrence_next_action")
+            .and_then(|action| action.get("missing_occurrence_rejected"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("rename_occurrence_next_action")
+            .and_then(|action| action.get("invalid_symbol_rejected"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("rename_occurrence_next_action")
+            .and_then(|action| action.get("parse_stable"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("rename_occurrence_next_action")
+            .and_then(|action| action.get("rejection_reasons"))
+            .and_then(|reasons| reasons.get("unsafe_insertion_point"))
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("rename_occurrence_next_action")
+            .and_then(|action| action.get("rejection_reasons"))
+            .and_then(|reasons| reasons.get("missing_rename_occurrence"))
+            .and_then(Value::as_u64),
+        Some(2)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("rename_occurrence_next_action")
+            .and_then(|action| action.get("rejection_reasons"))
+            .and_then(|reasons| reasons.get("invalid_rename_symbol"))
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("rename_occurrence_next_action")
+            .and_then(|action| action.get("rejection_reasons"))
+            .and_then(|reasons| reasons.get("gate_disabled"))
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("rename_occurrence_next_action")
+            .and_then(|action| action.get("rejection_reasons"))
+            .and_then(|reasons| reasons.get("runtime_provider_not_registered"))
+            .and_then(Value::as_u64),
+        Some(1)
+    );
 
     Ok(())
 }
@@ -670,6 +759,114 @@ fn semantic_inline_receipts_cli_rejects_test_assertion_runtime_drift() -> Result
     Ok(())
 }
 
+#[test]
+fn semantic_inline_receipts_cli_rejects_rename_occurrence_runtime_drift() -> Result<()> {
+    let temp = TempDir::new()?;
+    let receipt = temp.path().join("semantic-inline-receipts.json");
+    let missing_quality_receipt = temp.path().join("missing-inline-quality.json");
+    let next_edit_receipt = temp.path().join("semantic-inline-next-edit.json");
+    let mut next_edit = valid_next_edit_receipt_json();
+    next_edit["rename_occurrence_next_action"]["next_occurrence_candidate"]["candidate"]["editorVisible"] =
+        json!(true);
+    std::fs::write(&next_edit_receipt, serde_json::to_vec_pretty(&next_edit)?)?;
+
+    let output = cargo_bin_cmd!("xtask")
+        .args([
+            "semantic-inline-receipts",
+            "--receipt",
+            &receipt.display().to_string(),
+            "--quality-receipt",
+            &missing_quality_receipt.display().to_string(),
+            "--next-edit-receipt",
+            &next_edit_receipt.display().to_string(),
+        ])
+        .output()?;
+
+    assert!(
+        !output.status.success(),
+        "dashboard generation should reject editor-visible rename occurrence next actions"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("rename_occurrence_next_action") || stderr.contains("editorVisible"),
+        "error should identify rename occurrence next-action drift, got {stderr}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_inline_receipts_cli_rejects_rename_occurrence_rejection_drift() -> Result<()> {
+    let temp = TempDir::new()?;
+    let receipt = temp.path().join("semantic-inline-receipts.json");
+    let missing_quality_receipt = temp.path().join("missing-inline-quality.json");
+    let next_edit_receipt = temp.path().join("semantic-inline-next-edit.json");
+    let mut next_edit = valid_next_edit_receipt_json();
+    next_edit["rename_occurrence_next_action"]["invalid_symbol"]["rejectionReasons"] = json!([]);
+    std::fs::write(&next_edit_receipt, serde_json::to_vec_pretty(&next_edit)?)?;
+
+    let output = cargo_bin_cmd!("xtask")
+        .args([
+            "semantic-inline-receipts",
+            "--receipt",
+            &receipt.display().to_string(),
+            "--quality-receipt",
+            &missing_quality_receipt.display().to_string(),
+            "--next-edit-receipt",
+            &next_edit_receipt.display().to_string(),
+        ])
+        .output()?;
+
+    assert!(
+        !output.status.success(),
+        "dashboard generation should reject missing rename rejection reasons"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("invalid_symbol")
+            || stderr.contains("invalid_rename_symbol")
+            || stderr.contains("invalid rename symbols"),
+        "error should identify rename rejection drift, got {stderr}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn semantic_inline_receipts_cli_rejects_rename_occurrence_parse_drift() -> Result<()> {
+    let temp = TempDir::new()?;
+    let receipt = temp.path().join("semantic-inline-receipts.json");
+    let missing_quality_receipt = temp.path().join("missing-inline-quality.json");
+    let next_edit_receipt = temp.path().join("semantic-inline-next-edit.json");
+    let mut next_edit = valid_next_edit_receipt_json();
+    next_edit["rename_occurrence_next_action"]["parse_stable"] = json!(false);
+    std::fs::write(&next_edit_receipt, serde_json::to_vec_pretty(&next_edit)?)?;
+
+    let output = cargo_bin_cmd!("xtask")
+        .args([
+            "semantic-inline-receipts",
+            "--receipt",
+            &receipt.display().to_string(),
+            "--quality-receipt",
+            &missing_quality_receipt.display().to_string(),
+            "--next-edit-receipt",
+            &next_edit_receipt.display().to_string(),
+        ])
+        .output()?;
+
+    assert!(
+        !output.status.success(),
+        "dashboard generation should reject rename occurrence parse drift"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("parse_stable") || stderr.contains("parse"),
+        "error should identify rename parse drift, got {stderr}"
+    );
+
+    Ok(())
+}
+
 fn valid_next_edit_receipt_json() -> Value {
     json!({
         "schema_version": "semantic-inline-next-edit.v1",
@@ -700,10 +897,12 @@ fn valid_next_edit_receipt_json() -> Value {
             "editor_visible_next_edit_suggestions",
             "missing_import_next_action",
             "test_assertion_next_action",
+            "rename_occurrence_next_action",
             "optional_ai_candidate_source"
         ],
         "missing_import_next_action": valid_missing_import_next_action_json(),
         "test_assertion_next_action": valid_test_assertion_next_action_json(),
+        "rename_occurrence_next_action": valid_rename_occurrence_next_action_json(),
         "optional_ai_candidate_boundary": valid_optional_ai_candidate_boundary_json()
     })
 }
@@ -732,10 +931,12 @@ fn next_edit_receipt_without_candidate_families_json() -> Value {
             "editor_visible_next_edit_suggestions",
             "missing_import_next_action",
             "test_assertion_next_action",
+            "rename_occurrence_next_action",
             "optional_ai_candidate_source"
         ],
         "missing_import_next_action": valid_missing_import_next_action_json(),
         "test_assertion_next_action": valid_test_assertion_next_action_json(),
+        "rename_occurrence_next_action": valid_rename_occurrence_next_action_json(),
         "optional_ai_candidate_boundary": valid_optional_ai_candidate_boundary_json()
     })
 }
@@ -852,6 +1053,50 @@ fn valid_test_assertion_next_action_json() -> Value {
             "rejectionReasons": ["runtime_provider_not_registered"]
         },
         "accepted_document_text": "use Test::More;\nmy $got = compute();\nmy $expected = 42;\nis($got, $expected, 'test description');\n",
+        "parse_stable": true
+    })
+}
+
+fn valid_rename_occurrence_next_action_json() -> Value {
+    json!({
+        "claim_boundary": "receipt-only rename-occurrence next-action proof",
+        "next_occurrence_candidate": {
+            "status": "receipt_only",
+            "candidate": {
+                "family": "rename_occurrence",
+                "originalSymbol": "$old",
+                "replacementSymbol": "$new",
+                "reason": "next_safe_rename_occurrence",
+                "edit": {
+                    "startByte": 36,
+                    "endByte": 40,
+                    "newText": "$new"
+                },
+                "editorVisible": false
+            },
+            "rejectionReasons": []
+        },
+        "unsafe_occurrence": {
+            "status": "receipt_only",
+            "rejectionReasons": ["unsafe_insertion_point"]
+        },
+        "missing_occurrence": {
+            "status": "receipt_only",
+            "rejectionReasons": ["missing_rename_occurrence"]
+        },
+        "invalid_symbol": {
+            "status": "receipt_only",
+            "rejectionReasons": ["invalid_rename_symbol", "missing_rename_occurrence"]
+        },
+        "default_gate": {
+            "status": "disabled",
+            "rejectionReasons": ["gate_disabled"]
+        },
+        "explicit_gate": {
+            "status": "runtime_provider_not_registered",
+            "rejectionReasons": ["runtime_provider_not_registered"]
+        },
+        "accepted_document_text": "use strict;\nmy $new = compute();\nreturn $new + $old;\n",
         "parse_stable": true
     })
 }

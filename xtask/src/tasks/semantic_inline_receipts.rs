@@ -155,6 +155,7 @@ struct NextEditScaffoldSummary {
     future_gated: Option<Vec<String>>,
     missing_import_next_action: Option<MissingImportNextActionSummary>,
     test_assertion_next_action: Option<TestAssertionNextActionSummary>,
+    rename_occurrence_next_action: Option<RenameOccurrenceNextActionSummary>,
     optional_ai_candidate_boundary: Option<OptionalAiCandidateBoundarySummary>,
 }
 
@@ -185,6 +186,21 @@ struct TestAssertionNextActionSummary {
     non_test_file_rejected: bool,
     unsupported_framework_rejected: bool,
     missing_variables_rejected: bool,
+    default_gate_disabled: bool,
+    explicit_gate_runtime_unregistered: bool,
+    rejection_reasons: BTreeMap<String, u64>,
+    parse_stable: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct RenameOccurrenceNextActionSummary {
+    next_occurrence_candidate_prepared: bool,
+    next_occurrence_candidate_editor_visible: bool,
+    next_occurrence_candidate_reason: Option<String>,
+    unsafe_occurrence_rejected: bool,
+    missing_occurrence_rejected: bool,
+    invalid_symbol_rejected: bool,
     default_gate_disabled: bool,
     explicit_gate_runtime_unregistered: bool,
     rejection_reasons: BTreeMap<String, u64>,
@@ -286,6 +302,7 @@ fn read_optional_next_edit_scaffold_summary(path: &Path) -> Result<NextEditScaff
             future_gated: None,
             missing_import_next_action: None,
             test_assertion_next_action: None,
+            rename_occurrence_next_action: None,
             optional_ai_candidate_boundary: None,
         });
     }
@@ -325,6 +342,7 @@ fn read_optional_next_edit_scaffold_summary(path: &Path) -> Result<NextEditScaff
         future_gated: string_array_field(&scaffold, "future_gated")?,
         missing_import_next_action: Some(missing_import_next_action_summary(&scaffold)?),
         test_assertion_next_action: Some(test_assertion_next_action_summary(&scaffold)?),
+        rename_occurrence_next_action: Some(rename_occurrence_next_action_summary(&scaffold)?),
         optional_ai_candidate_boundary: Some(optional_ai_candidate_boundary_summary(&scaffold)?),
     };
     validate_next_edit_scaffold_summary(&summary, &scaffold)?;
@@ -420,6 +438,7 @@ fn validate_next_edit_scaffold_summary(
         "editor_visible_next_edit_suggestions",
         "missing_import_next_action",
         "test_assertion_next_action",
+        "rename_occurrence_next_action",
         "optional_ai_candidate_source",
     ] {
         if !future_gated.iter().any(|entry| entry == required) {
@@ -428,6 +447,7 @@ fn validate_next_edit_scaffold_summary(
     }
     require_missing_import_next_action(scaffold)?;
     require_test_assertion_next_action(scaffold)?;
+    require_rename_occurrence_next_action(scaffold)?;
     require_optional_ai_candidate_boundary(scaffold)?;
 
     Ok(())
@@ -524,6 +544,55 @@ fn test_assertion_next_action_summary(scaffold: &Value) -> Result<TestAssertionN
                 "/non_test_file/rejectionReasons",
                 "/unsupported_framework/rejectionReasons",
                 "/missing_variables/rejectionReasons",
+                "/default_gate/rejectionReasons",
+                "/explicit_gate/rejectionReasons",
+            ],
+        )?,
+        parse_stable: action.get("parse_stable").and_then(Value::as_bool).unwrap_or(false),
+    })
+}
+
+fn rename_occurrence_next_action_summary(
+    scaffold: &Value,
+) -> Result<RenameOccurrenceNextActionSummary> {
+    let action = scaffold
+        .get("rename_occurrence_next_action")
+        .ok_or_else(|| eyre!("next-edit scaffold receipt missing rename_occurrence_next_action"))?;
+    let candidate = action.pointer("/next_occurrence_candidate/candidate");
+    Ok(RenameOccurrenceNextActionSummary {
+        next_occurrence_candidate_prepared: candidate.is_some(),
+        next_occurrence_candidate_editor_visible: candidate
+            .and_then(|candidate| candidate.get("editorVisible"))
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+        next_occurrence_candidate_reason: candidate_reason(candidate),
+        unsafe_occurrence_rejected: rejection_reason_present(
+            action,
+            "/unsafe_occurrence/rejectionReasons",
+            "unsafe_insertion_point",
+        )?,
+        missing_occurrence_rejected: rejection_reason_present(
+            action,
+            "/missing_occurrence/rejectionReasons",
+            "missing_rename_occurrence",
+        )?,
+        invalid_symbol_rejected: rejection_reason_present(
+            action,
+            "/invalid_symbol/rejectionReasons",
+            "invalid_rename_symbol",
+        )?,
+        default_gate_disabled: action.pointer("/default_gate/status").and_then(Value::as_str)
+            == Some("disabled"),
+        explicit_gate_runtime_unregistered: action
+            .pointer("/explicit_gate/status")
+            .and_then(Value::as_str)
+            == Some("runtime_provider_not_registered"),
+        rejection_reasons: rejection_reason_counts(
+            action,
+            &[
+                "/unsafe_occurrence/rejectionReasons",
+                "/missing_occurrence/rejectionReasons",
+                "/invalid_symbol/rejectionReasons",
                 "/default_gate/rejectionReasons",
                 "/explicit_gate/rejectionReasons",
             ],
@@ -747,6 +816,94 @@ fn require_test_assertion_next_action(scaffold: &Value) -> Result<()> {
     require_next_edit_bool(
         action.get("parse_stable").and_then(Value::as_bool),
         "test_assertion_next_action/parse_stable",
+        true,
+    )?;
+    Ok(())
+}
+
+fn require_rename_occurrence_next_action(scaffold: &Value) -> Result<()> {
+    let action = scaffold
+        .get("rename_occurrence_next_action")
+        .ok_or_else(|| eyre!("next-edit scaffold receipt missing rename_occurrence_next_action"))?;
+    require_next_edit_value(
+        action.pointer("/next_occurrence_candidate/status").and_then(Value::as_str),
+        "rename_occurrence_next_action/next_occurrence_candidate/status",
+        "receipt_only",
+    )?;
+    require_next_edit_value(
+        action.pointer("/next_occurrence_candidate/candidate/family").and_then(Value::as_str),
+        "rename_occurrence_next_action/next_occurrence_candidate/candidate/family",
+        "rename_occurrence",
+    )?;
+    require_next_edit_value(
+        action
+            .pointer("/next_occurrence_candidate/candidate/originalSymbol")
+            .and_then(Value::as_str),
+        "rename_occurrence_next_action/next_occurrence_candidate/candidate/originalSymbol",
+        "$old",
+    )?;
+    require_next_edit_value(
+        action
+            .pointer("/next_occurrence_candidate/candidate/replacementSymbol")
+            .and_then(Value::as_str),
+        "rename_occurrence_next_action/next_occurrence_candidate/candidate/replacementSymbol",
+        "$new",
+    )?;
+    require_next_edit_value(
+        action.pointer("/next_occurrence_candidate/candidate/edit/newText").and_then(Value::as_str),
+        "rename_occurrence_next_action/next_occurrence_candidate/candidate/edit/newText",
+        "$new",
+    )?;
+    require_next_edit_bool(
+        action
+            .pointer("/next_occurrence_candidate/candidate/editorVisible")
+            .and_then(Value::as_bool),
+        "rename_occurrence_next_action/next_occurrence_candidate/candidate/editorVisible",
+        false,
+    )?;
+    let accepted_text =
+        action.get("accepted_document_text").and_then(Value::as_str).ok_or_else(|| {
+            eyre!("next-edit scaffold receipt missing rename occurrence accepted_document_text")
+        })?;
+    if !accepted_text.contains("return $new + $old;") {
+        bail!(
+            "rename occurrence next action accepted document text did not replace next occurrence"
+        );
+    }
+    if !rejection_reason_present(
+        action,
+        "/unsafe_occurrence/rejectionReasons",
+        "unsafe_insertion_point",
+    )? {
+        bail!("rename occurrence next action did not reject unsafe occurrence context");
+    }
+    if !rejection_reason_present(
+        action,
+        "/missing_occurrence/rejectionReasons",
+        "missing_rename_occurrence",
+    )? {
+        bail!("rename occurrence next action did not reject missing occurrence");
+    }
+    if !rejection_reason_present(
+        action,
+        "/invalid_symbol/rejectionReasons",
+        "invalid_rename_symbol",
+    )? {
+        bail!("rename occurrence next action did not reject invalid rename symbols");
+    }
+    require_next_edit_value(
+        action.pointer("/default_gate/status").and_then(Value::as_str),
+        "rename_occurrence_next_action/default_gate/status",
+        "disabled",
+    )?;
+    require_next_edit_value(
+        action.pointer("/explicit_gate/status").and_then(Value::as_str),
+        "rename_occurrence_next_action/explicit_gate/status",
+        "runtime_provider_not_registered",
+    )?;
+    require_next_edit_bool(
+        action.get("parse_stable").and_then(Value::as_bool),
+        "rename_occurrence_next_action/parse_stable",
         true,
     )?;
     Ok(())
@@ -1269,6 +1426,7 @@ mod tests {
             future_gated: None,
             missing_import_next_action: None,
             test_assertion_next_action: None,
+            rename_occurrence_next_action: None,
             optional_ai_candidate_boundary: None,
         }
     }
@@ -1303,10 +1461,12 @@ mod tests {
                 "editor_visible_next_edit_suggestions",
                 "missing_import_next_action",
                 "test_assertion_next_action",
+                "rename_occurrence_next_action",
                 "optional_ai_candidate_source"
             ],
             "missing_import_next_action": valid_missing_import_next_action_json(),
             "test_assertion_next_action": valid_test_assertion_next_action_json(),
+            "rename_occurrence_next_action": valid_rename_occurrence_next_action_json(),
             "optional_ai_candidate_boundary": valid_optional_ai_candidate_boundary_json()
         })
     }
@@ -1423,6 +1583,50 @@ mod tests {
                 "rejectionReasons": ["runtime_provider_not_registered"]
             },
             "accepted_document_text": "use Test::More;\nmy $got = compute();\nmy $expected = 42;\nis($got, $expected, 'test description');\n",
+            "parse_stable": true
+        })
+    }
+
+    fn valid_rename_occurrence_next_action_json() -> Value {
+        json!({
+            "claim_boundary": "receipt-only rename-occurrence next-action proof",
+            "next_occurrence_candidate": {
+                "status": "receipt_only",
+                "candidate": {
+                    "family": "rename_occurrence",
+                    "originalSymbol": "$old",
+                    "replacementSymbol": "$new",
+                    "reason": "next_safe_rename_occurrence",
+                    "edit": {
+                        "startByte": 36,
+                        "endByte": 40,
+                        "newText": "$new"
+                    },
+                    "editorVisible": false
+                },
+                "rejectionReasons": []
+            },
+            "unsafe_occurrence": {
+                "status": "receipt_only",
+                "rejectionReasons": ["unsafe_insertion_point"]
+            },
+            "missing_occurrence": {
+                "status": "receipt_only",
+                "rejectionReasons": ["missing_rename_occurrence"]
+            },
+            "invalid_symbol": {
+                "status": "receipt_only",
+                "rejectionReasons": ["invalid_rename_symbol", "missing_rename_occurrence"]
+            },
+            "default_gate": {
+                "status": "disabled",
+                "rejectionReasons": ["gate_disabled"]
+            },
+            "explicit_gate": {
+                "status": "runtime_provider_not_registered",
+                "rejectionReasons": ["runtime_provider_not_registered"]
+            },
+            "accepted_document_text": "use strict;\nmy $new = compute();\nreturn $new + $old;\n",
             "parse_stable": true
         })
     }
@@ -2132,6 +2336,203 @@ mod tests {
         assert!(
             error.to_string().contains("explicit_gate/status"),
             "error should identify explicit gate drift, got {error}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_records_rename_occurrence_action() -> Result<()> {
+        let scaffold = valid_next_edit_scaffold_json();
+        let summary = rename_occurrence_next_action_summary(&scaffold)?;
+
+        assert!(summary.next_occurrence_candidate_prepared);
+        assert!(!summary.next_occurrence_candidate_editor_visible);
+        assert_eq!(
+            summary.next_occurrence_candidate_reason.as_deref(),
+            Some("next_safe_rename_occurrence")
+        );
+        assert!(summary.unsafe_occurrence_rejected);
+        assert!(summary.missing_occurrence_rejected);
+        assert!(summary.invalid_symbol_rejected);
+        assert!(summary.default_gate_disabled);
+        assert!(summary.explicit_gate_runtime_unregistered);
+        assert_eq!(summary.rejection_reasons.get("unsafe_insertion_point"), Some(&1));
+        assert_eq!(summary.rejection_reasons.get("missing_rename_occurrence"), Some(&2));
+        assert_eq!(summary.rejection_reasons.get("invalid_rename_symbol"), Some(&1));
+        assert_eq!(summary.rejection_reasons.get("gate_disabled"), Some(&1));
+        assert_eq!(summary.rejection_reasons.get("runtime_provider_not_registered"), Some(&1));
+        assert!(summary.parse_stable);
+
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_rename_occurrence_field_drift() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["next_occurrence_candidate"]["status"] =
+            json!("disabled");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "rename status drift must fail");
+        assert!(
+            error.to_string().contains("next_occurrence_candidate/status"),
+            "error should identify rename candidate status drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["next_occurrence_candidate"]["candidate"]["family"] =
+            json!("missing_import");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "rename family drift must fail");
+        assert!(
+            error.to_string().contains("candidate/family"),
+            "error should identify rename candidate family drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["next_occurrence_candidate"]["candidate"]["originalSymbol"] =
+            json!("$other");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "rename original symbol drift must fail");
+        assert!(
+            error.to_string().contains("candidate/originalSymbol"),
+            "error should identify rename original symbol drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["next_occurrence_candidate"]["candidate"]["replacementSymbol"] =
+            json!("$other");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "rename replacement symbol drift must fail");
+        assert!(
+            error.to_string().contains("candidate/replacementSymbol"),
+            "error should identify rename replacement symbol drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["next_occurrence_candidate"]["candidate"]["edit"]
+            ["newText"] = json!("$other");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "rename edit text drift must fail");
+        assert!(
+            error.to_string().contains("candidate/edit/newText"),
+            "error should identify rename edit text drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["next_occurrence_candidate"]["candidate"]["editorVisible"] =
+            json!(true);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "editor-visible rename action must fail");
+        assert!(
+            error.to_string().contains("candidate/editorVisible"),
+            "error should identify rename editor visibility drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["accepted_document_text"] = Value::Null;
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "missing rename accepted text must fail");
+        assert!(
+            error.to_string().contains("accepted_document_text"),
+            "error should identify missing rename accepted text, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["accepted_document_text"] =
+            json!("use strict;\nmy $new = compute();\nreturn $old + $old;\n");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "wrong rename accepted text must fail");
+        assert!(
+            error.to_string().contains("accepted document text"),
+            "error should identify wrong rename accepted text, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["parse_stable"] = json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "parse-unstable rename proof must fail");
+        assert!(
+            error.to_string().contains("parse_stable"),
+            "error should identify rename parse-stability drift, got {error}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_rename_occurrence_rejection_drift() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["unsafe_occurrence"]["rejectionReasons"] =
+            json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "unsafe rename rejection drift must fail");
+        assert!(
+            error.to_string().contains("unsafe occurrence"),
+            "error should identify unsafe rename rejection drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["missing_occurrence"]["rejectionReasons"] =
+            json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "missing rename rejection drift must fail");
+        assert!(
+            error.to_string().contains("missing occurrence"),
+            "error should identify missing rename rejection drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["invalid_symbol"]["rejectionReasons"] = json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "invalid rename rejection drift must fail");
+        assert!(
+            error.to_string().contains("invalid rename symbols"),
+            "error should identify invalid rename rejection drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["default_gate"]["status"] = json!("receipt_only");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "rename default gate drift must fail");
+        assert!(
+            error.to_string().contains("default_gate/status"),
+            "error should identify rename default gate drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["explicit_gate"]["status"] =
+            json!("receipt_only");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "rename explicit gate drift must fail");
+        assert!(
+            error.to_string().contains("explicit_gate/status"),
+            "error should identify rename explicit gate drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["unsafe_occurrence"]["rejectionReasons"] =
+            json!([42]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "non-string rename rejection must fail");
+        assert!(
+            error.to_string().contains("must contain strings"),
+            "error should identify non-string rename rejection reason, got {error}"
         );
 
         Ok(())

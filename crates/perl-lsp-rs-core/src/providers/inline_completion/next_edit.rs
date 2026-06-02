@@ -213,6 +213,10 @@ pub enum NextEditRejectionReason {
     UnsupportedTestFramework,
     /// No suitable visible actual/expected variables were available.
     MissingAssertionVariables,
+    /// The rename source or replacement symbol is not a safe Perl variable.
+    InvalidRenameSymbol,
+    /// No safe next occurrence was available after the current edit point.
+    MissingRenameOccurrence,
 }
 
 /// Receipt-only request for the first deterministic next-edit family:
@@ -362,6 +366,76 @@ pub struct TestAssertionNextEditProof {
     /// Candidate when all deterministic gates pass.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub candidate: Option<TestAssertionNextEditCandidate>,
+    /// Reasons the candidate was not prepared.
+    pub rejection_reasons: Vec<NextEditRejectionReason>,
+}
+
+/// Receipt-only request for preparing the next occurrence in a rename flow.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameOccurrenceNextEditRequest {
+    /// Current document text.
+    pub document_text: String,
+    /// Symbol still needing replacement.
+    pub original_symbol: String,
+    /// Replacement symbol the user already chose.
+    pub replacement_symbol: String,
+    /// Byte offset after the user's current edit.
+    pub cursor_byte: usize,
+    /// Gate used for this receipt-only proof.
+    pub gate: NextEditFeatureGate,
+}
+
+impl RenameOccurrenceNextEditRequest {
+    /// Construct a receipt-only rename occurrence request.
+    #[must_use]
+    pub fn receipt_only(
+        document_text: impl Into<String>,
+        original_symbol: impl Into<String>,
+        replacement_symbol: impl Into<String>,
+        cursor_byte: usize,
+    ) -> Self {
+        Self {
+            document_text: document_text.into(),
+            original_symbol: original_symbol.into(),
+            replacement_symbol: replacement_symbol.into(),
+            cursor_byte,
+            gate: NextEditFeatureGate::receipt_only(),
+        }
+    }
+}
+
+/// Receipt-only rename occurrence candidate prepared by the deterministic
+/// next-edit scaffold. It is not editor-visible runtime output.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameOccurrenceNextEditCandidate {
+    /// Candidate family.
+    pub family: NextEditCandidateFamily,
+    /// Symbol still needing replacement.
+    pub original_symbol: String,
+    /// Replacement symbol the candidate would apply.
+    pub replacement_symbol: String,
+    /// Reason recorded for receipts and debugging.
+    pub reason: String,
+    /// Edit that would replace the next occurrence.
+    pub edit: NextEditTextEdit,
+    /// Receipt-only candidates must not be editor-visible runtime suggestions.
+    pub editor_visible: bool,
+}
+
+/// Receipt-only rename occurrence proof result.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameOccurrenceNextEditProof {
+    /// Scaffold status for this proof.
+    pub status: NextEditStatus,
+    /// Candidate when all deterministic gates pass.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub candidate: Option<RenameOccurrenceNextEditCandidate>,
     /// Reasons the candidate was not prepared.
     pub rejection_reasons: Vec<NextEditRejectionReason>,
 }
@@ -571,6 +645,87 @@ impl NextEditProvider {
             rejection_reasons,
         }
     }
+
+    /// Prepare a receipt-only rename occurrence next-edit candidate.
+    ///
+    /// This does not register a runtime provider and does not emit
+    /// editor-visible suggestions. It proves that a deterministic rename
+    /// follow-up can be prepared only for safe Perl variable occurrences.
+    #[must_use]
+    pub fn prove_rename_occurrence(
+        &self,
+        request: &RenameOccurrenceNextEditRequest,
+    ) -> RenameOccurrenceNextEditProof {
+        match (request.gate.enabled, request.gate.source) {
+            (_, NextEditGateSource::ReceiptOnly) => {}
+            (false, _) => {
+                return RenameOccurrenceNextEditProof {
+                    status: NextEditStatus::Disabled,
+                    candidate: None,
+                    rejection_reasons: vec![NextEditRejectionReason::GateDisabled],
+                };
+            }
+            (true, _) => {
+                return RenameOccurrenceNextEditProof {
+                    status: NextEditStatus::RuntimeProviderNotRegistered,
+                    candidate: None,
+                    rejection_reasons: vec![NextEditRejectionReason::RuntimeProviderNotRegistered],
+                };
+            }
+        }
+
+        let mut rejection_reasons = Vec::new();
+        if !is_safe_rename_symbol(&request.original_symbol)
+            || !is_safe_rename_symbol(&request.replacement_symbol)
+        {
+            rejection_reasons.push(NextEditRejectionReason::InvalidRenameSymbol);
+        }
+
+        let occurrence = next_rename_occurrence(
+            &request.document_text,
+            &request.original_symbol,
+            request.cursor_byte,
+        );
+        match occurrence {
+            RenameOccurrenceSearch::Found { start, end } => {
+                if !rejection_reasons.is_empty() {
+                    return RenameOccurrenceNextEditProof {
+                        status: NextEditStatus::ReceiptOnly,
+                        candidate: None,
+                        rejection_reasons,
+                    };
+                }
+                RenameOccurrenceNextEditProof {
+                    status: NextEditStatus::ReceiptOnly,
+                    candidate: Some(RenameOccurrenceNextEditCandidate {
+                        family: NextEditCandidateFamily::RenameOccurrence,
+                        original_symbol: request.original_symbol.clone(),
+                        replacement_symbol: request.replacement_symbol.clone(),
+                        reason: "next_safe_rename_occurrence".to_string(),
+                        edit: NextEditTextEdit::new(start, end, request.replacement_symbol.clone()),
+                        editor_visible: false,
+                    }),
+                    rejection_reasons,
+                }
+            }
+            RenameOccurrenceSearch::Missing => {
+                rejection_reasons.push(NextEditRejectionReason::MissingRenameOccurrence);
+                RenameOccurrenceNextEditProof {
+                    status: NextEditStatus::ReceiptOnly,
+                    candidate: None,
+                    rejection_reasons,
+                }
+            }
+            RenameOccurrenceSearch::Unsafe => {
+                rejection_reasons.push(NextEditRejectionReason::UnsafeInsertionPoint);
+                RenameOccurrenceNextEditProof {
+                    status: NextEditStatus::ReceiptOnly,
+                    candidate: None,
+                    rejection_reasons,
+                }
+            }
+        }
+    }
 }
 
 fn is_safe_module_name(module: &str) -> bool {
@@ -665,6 +820,81 @@ fn is_safe_next_edit_insertion(document_text: &str, insertion_byte: usize) -> bo
         return false;
     }
     !is_inside_pod(prefix)
+}
+
+enum RenameOccurrenceSearch {
+    Found { start: usize, end: usize },
+    Missing,
+    Unsafe,
+}
+
+fn next_rename_occurrence(
+    document_text: &str,
+    original_symbol: &str,
+    cursor_byte: usize,
+) -> RenameOccurrenceSearch {
+    if cursor_byte > document_text.len()
+        || document_text.get(..cursor_byte).is_none()
+        || document_text.get(cursor_byte..).is_none()
+    {
+        return RenameOccurrenceSearch::Unsafe;
+    }
+
+    let mut search_start = cursor_byte;
+    while let Some(relative) = document_text[search_start..].find(original_symbol) {
+        let start = search_start + relative;
+        let end = start + original_symbol.len();
+        if !has_rename_boundaries(document_text, start, end) {
+            search_start = end;
+            continue;
+        }
+        if !is_safe_rename_occurrence(document_text, start) {
+            return RenameOccurrenceSearch::Unsafe;
+        }
+        return RenameOccurrenceSearch::Found { start, end };
+    }
+    RenameOccurrenceSearch::Missing
+}
+
+fn has_rename_boundaries(document_text: &str, start: usize, end: usize) -> bool {
+    let previous = document_text[..start].chars().next_back();
+    let next = document_text[end..].chars().next();
+    previous.is_none_or(|ch| !is_perl_identifier_char(ch))
+        && next.is_none_or(|ch| !is_perl_identifier_char(ch))
+}
+
+fn is_safe_rename_occurrence(document_text: &str, start: usize) -> bool {
+    if !is_safe_next_edit_insertion(document_text, start) {
+        return false;
+    }
+    let line_start = document_text[..start].rfind('\n').map_or(0, |index| index + 1);
+    let prefix = &document_text[line_start..start];
+    let trimmed = prefix.trim_start();
+    if trimmed.starts_with('#') || prefix.contains('#') {
+        return false;
+    }
+    let single_quotes = prefix.chars().filter(|ch| *ch == '\'').count();
+    let double_quotes = prefix.chars().filter(|ch| *ch == '"').count();
+    single_quotes % 2 == 0 && double_quotes % 2 == 0
+}
+
+fn is_safe_rename_symbol(symbol: &str) -> bool {
+    let mut chars = symbol.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !matches!(first, '$' | '@' | '%') {
+        return false;
+    }
+    let Some(second) = chars.next() else {
+        return false;
+    };
+    (second == '_' || second.is_ascii_alphabetic())
+        && chars.all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
+}
+
+fn is_perl_identifier_char(ch: char) -> bool {
+    ch == '_' || ch.is_ascii_alphanumeric()
 }
 
 fn is_inside_pod(prefix: &str) -> bool {
@@ -1065,6 +1295,118 @@ mod tests {
 
         request.gate = NextEditFeatureGate::explicit_enabled();
         let runtime = provider.prove_test_assertion(&request);
+        assert_eq!(runtime.status, NextEditStatus::RuntimeProviderNotRegistered);
+        assert!(runtime.candidate.is_none());
+        assert_eq!(
+            runtime.rejection_reasons,
+            vec![NextEditRejectionReason::RuntimeProviderNotRegistered]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn rename_occurrence_receipt_prepares_next_safe_variable_edit()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = NextEditProvider;
+        let source = "use strict;\nmy $new = compute();\nreturn $old + $old;\n";
+        let cursor = source.find("return").ok_or("rename fixture missing return")?;
+        let request = RenameOccurrenceNextEditRequest::receipt_only(source, "$old", "$new", cursor);
+
+        let proof = provider.prove_rename_occurrence(&request);
+
+        assert_eq!(proof.status, NextEditStatus::ReceiptOnly);
+        assert!(proof.rejection_reasons.is_empty());
+        let candidate = proof.candidate.ok_or("rename occurrence candidate not prepared")?;
+        assert_eq!(candidate.family, NextEditCandidateFamily::RenameOccurrence);
+        assert_eq!(candidate.original_symbol, "$old");
+        assert_eq!(candidate.replacement_symbol, "$new");
+        assert!(!candidate.editor_visible);
+        assert_eq!(candidate.edit.new_text, "$new");
+        let edited = candidate.edit.apply_to(source).ok_or("edit did not apply")?;
+        assert_eq!(edited, "use strict;\nmy $new = compute();\nreturn $new + $old;\n");
+        Ok(())
+    }
+
+    #[test]
+    fn rename_occurrence_receipt_rejects_unsafe_and_missing_occurrences()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = NextEditProvider;
+        let unsafe_request = RenameOccurrenceNextEditRequest::receipt_only(
+            "# rename $old here\n",
+            "$old",
+            "$new",
+            0,
+        );
+        let missing_request = RenameOccurrenceNextEditRequest::receipt_only(
+            "my $new = compute();\n",
+            "$old",
+            "$new",
+            0,
+        );
+
+        let unsafe_proof = provider.prove_rename_occurrence(&unsafe_request);
+        assert!(unsafe_proof.candidate.is_none());
+        assert_eq!(
+            unsafe_proof.rejection_reasons,
+            vec![NextEditRejectionReason::UnsafeInsertionPoint]
+        );
+
+        let missing_proof = provider.prove_rename_occurrence(&missing_request);
+        assert!(missing_proof.candidate.is_none());
+        assert_eq!(
+            missing_proof.rejection_reasons,
+            vec![NextEditRejectionReason::MissingRenameOccurrence]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn rename_occurrence_receipt_rejects_invalid_symbols_and_partial_matches()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = NextEditProvider;
+        let invalid_request = RenameOccurrenceNextEditRequest::receipt_only(
+            "return $old;\n",
+            "$old; system",
+            "$new",
+            0,
+        );
+        let partial_match_request =
+            RenameOccurrenceNextEditRequest::receipt_only("return $older;\n", "$old", "$new", 0);
+
+        let invalid_proof = provider.prove_rename_occurrence(&invalid_request);
+        assert!(invalid_proof.candidate.is_none());
+        assert_eq!(
+            invalid_proof.rejection_reasons,
+            vec![
+                NextEditRejectionReason::InvalidRenameSymbol,
+                NextEditRejectionReason::MissingRenameOccurrence,
+            ]
+        );
+
+        let partial_match_proof = provider.prove_rename_occurrence(&partial_match_request);
+        assert!(partial_match_proof.candidate.is_none());
+        assert_eq!(
+            partial_match_proof.rejection_reasons,
+            vec![NextEditRejectionReason::MissingRenameOccurrence]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn rename_occurrence_receipt_does_not_bypass_runtime_gate()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = NextEditProvider;
+        let source = "my $new = compute();\nreturn $old;\n";
+        let mut request = RenameOccurrenceNextEditRequest::receipt_only(source, "$old", "$new", 0);
+
+        request.gate = NextEditFeatureGate::default();
+        let disabled = provider.prove_rename_occurrence(&request);
+        assert_eq!(disabled.status, NextEditStatus::Disabled);
+        assert!(disabled.candidate.is_none());
+        assert_eq!(disabled.rejection_reasons, vec![NextEditRejectionReason::GateDisabled]);
+
+        request.gate = NextEditFeatureGate::explicit_enabled();
+        let runtime = provider.prove_rename_occurrence(&request);
         assert_eq!(runtime.status, NextEditStatus::RuntimeProviderNotRegistered);
         assert!(runtime.candidate.is_none());
         assert_eq!(

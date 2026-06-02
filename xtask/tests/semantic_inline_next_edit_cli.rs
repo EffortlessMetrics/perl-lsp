@@ -231,6 +231,60 @@ fn semantic_inline_next_edit_cli_writes_scaffold_receipt() -> Result<()> {
             .and_then(Value::as_str)
             .is_some_and(|text| text.contains("is($got, $expected"))
     );
+    let rename_occurrence = scaffold
+        .get("rename_occurrence_next_action")
+        .and_then(Value::as_object)
+        .ok_or_else(|| anyhow!("rename_occurrence_next_action receipt missing"))?;
+    assert_eq!(
+        rename_occurrence
+            .get("next_occurrence_candidate")
+            .and_then(|proof| proof.get("candidate"))
+            .and_then(|candidate| candidate.get("family"))
+            .and_then(Value::as_str),
+        Some("rename_occurrence")
+    );
+    assert_eq!(
+        rename_occurrence
+            .get("next_occurrence_candidate")
+            .and_then(|proof| proof.get("candidate"))
+            .and_then(|candidate| candidate.get("editorVisible"))
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        rename_occurrence
+            .get("unsafe_occurrence")
+            .and_then(|proof| proof.get("rejectionReasons"))
+            .and_then(Value::as_array)
+            .and_then(|reasons| reasons.first())
+            .and_then(Value::as_str),
+        Some("unsafe_insertion_point")
+    );
+    assert_eq!(
+        rename_occurrence
+            .get("missing_occurrence")
+            .and_then(|proof| proof.get("rejectionReasons"))
+            .and_then(Value::as_array)
+            .and_then(|reasons| reasons.first())
+            .and_then(Value::as_str),
+        Some("missing_rename_occurrence")
+    );
+    assert_eq!(
+        rename_occurrence
+            .get("invalid_symbol")
+            .and_then(|proof| proof.get("rejectionReasons"))
+            .and_then(Value::as_array)
+            .and_then(|reasons| reasons.first())
+            .and_then(Value::as_str),
+        Some("invalid_rename_symbol")
+    );
+    assert_eq!(rename_occurrence.get("parse_stable").and_then(Value::as_bool), Some(true));
+    assert!(
+        rename_occurrence
+            .get("accepted_document_text")
+            .and_then(Value::as_str)
+            .is_some_and(|text| text.contains("return $new + $old"))
+    );
 
     Ok(())
 }
