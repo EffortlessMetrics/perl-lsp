@@ -438,7 +438,8 @@ Still future or deliberately gated:
 
 - broader real-project UX receipts for inline quality beyond the current module
   import, package-boundary receiver, project test assertion, project
-  control-flow, project constructor, and project DBI receiver receipts;
+  control-flow, project constructor, project DBI receiver, and project lexical
+  return receipts;
 - runtime/editor-visible next-edit suggestions;
 - optional AI candidate source/provider behavior beyond the disabled-boundary
   receipt.
