@@ -162,10 +162,12 @@ struct NextEditScaffoldSummary {
 struct MissingImportNextActionSummary {
     reachable_candidate_prepared: bool,
     reachable_candidate_editor_visible: bool,
+    reachable_candidate_reason: Option<String>,
     duplicate_import_rejected: bool,
     unreachable_module_rejected: bool,
     default_gate_disabled: bool,
     explicit_gate_runtime_unregistered: bool,
+    rejection_reasons: BTreeMap<String, u64>,
     parse_stable: bool,
     line_endings_preserved: bool,
 }
@@ -175,13 +177,16 @@ struct MissingImportNextActionSummary {
 struct TestAssertionNextActionSummary {
     test_more_candidate_prepared: bool,
     test_more_candidate_editor_visible: bool,
+    test_more_candidate_reason: Option<String>,
     test2_candidate_prepared: bool,
     test2_candidate_editor_visible: bool,
+    test2_candidate_reason: Option<String>,
     non_test_file_rejected: bool,
     unsupported_framework_rejected: bool,
     missing_variables_rejected: bool,
     default_gate_disabled: bool,
     explicit_gate_runtime_unregistered: bool,
+    rejection_reasons: BTreeMap<String, u64>,
     parse_stable: bool,
 }
 
@@ -419,6 +424,7 @@ fn missing_import_next_action_summary(scaffold: &Value) -> Result<MissingImportN
             .and_then(|candidate| candidate.get("editorVisible"))
             .and_then(Value::as_bool)
             .unwrap_or(true),
+        reachable_candidate_reason: candidate_reason(reachable_candidate),
         duplicate_import_rejected: rejection_reason_present(
             action,
             "/duplicate_import/rejectionReasons",
@@ -435,6 +441,15 @@ fn missing_import_next_action_summary(scaffold: &Value) -> Result<MissingImportN
             .pointer("/explicit_gate/status")
             .and_then(Value::as_str)
             == Some("runtime_provider_not_registered"),
+        rejection_reasons: rejection_reason_counts(
+            action,
+            &[
+                "/duplicate_import/rejectionReasons",
+                "/unreachable_module/rejectionReasons",
+                "/default_gate/rejectionReasons",
+                "/explicit_gate/rejectionReasons",
+            ],
+        )?,
         parse_stable: action.get("parse_stable").and_then(Value::as_bool).unwrap_or(false),
         line_endings_preserved: action
             .get("line_endings_preserved")
@@ -455,11 +470,13 @@ fn test_assertion_next_action_summary(scaffold: &Value) -> Result<TestAssertionN
             .and_then(|candidate| candidate.get("editorVisible"))
             .and_then(Value::as_bool)
             .unwrap_or(true),
+        test_more_candidate_reason: candidate_reason(test_more_candidate),
         test2_candidate_prepared: test2_candidate.is_some(),
         test2_candidate_editor_visible: test2_candidate
             .and_then(|candidate| candidate.get("editorVisible"))
             .and_then(Value::as_bool)
             .unwrap_or(true),
+        test2_candidate_reason: candidate_reason(test2_candidate),
         non_test_file_rejected: rejection_reason_present(
             action,
             "/non_test_file/rejectionReasons",
@@ -481,6 +498,16 @@ fn test_assertion_next_action_summary(scaffold: &Value) -> Result<TestAssertionN
             .pointer("/explicit_gate/status")
             .and_then(Value::as_str)
             == Some("runtime_provider_not_registered"),
+        rejection_reasons: rejection_reason_counts(
+            action,
+            &[
+                "/non_test_file/rejectionReasons",
+                "/unsupported_framework/rejectionReasons",
+                "/missing_variables/rejectionReasons",
+                "/default_gate/rejectionReasons",
+                "/explicit_gate/rejectionReasons",
+            ],
+        )?,
         parse_stable: action.get("parse_stable").and_then(Value::as_bool).unwrap_or(false),
     })
 }
@@ -657,6 +684,30 @@ fn rejection_reason_present(action: &Value, pointer: &str, expected: &str) -> Re
         .and_then(Value::as_array)
         .ok_or_else(|| eyre!("next-edit scaffold receipt `{pointer}` must be an array"))?;
     Ok(reasons.iter().any(|reason| reason.as_str() == Some(expected)))
+}
+
+fn rejection_reason_counts(action: &Value, pointers: &[&str]) -> Result<BTreeMap<String, u64>> {
+    let mut counts = BTreeMap::new();
+    for pointer in pointers {
+        let reasons = action
+            .pointer(pointer)
+            .and_then(Value::as_array)
+            .ok_or_else(|| eyre!("next-edit scaffold receipt `{pointer}` must be an array"))?;
+        for reason in reasons {
+            let reason = reason.as_str().ok_or_else(|| {
+                eyre!("next-edit scaffold receipt `{pointer}` must contain strings")
+            })?;
+            *counts.entry(reason.to_string()).or_default() += 1;
+        }
+    }
+    Ok(counts)
+}
+
+fn candidate_reason(candidate: Option<&Value>) -> Option<String> {
+    candidate
+        .and_then(|candidate| candidate.get("reason"))
+        .and_then(Value::as_str)
+        .map(ToString::to_string)
 }
 
 fn require_next_edit_value(actual: Option<&str>, field: &str, expected: &str) -> Result<()> {
@@ -1359,6 +1410,48 @@ mod tests {
             summary.explicit_gate_status.as_deref(),
             Some("runtime_provider_not_registered")
         );
+        let missing_import = summary
+            .missing_import_next_action
+            .as_ref()
+            .ok_or_else(|| eyre!("missing import next-action summary missing"))?;
+        assert_eq!(
+            missing_import.reachable_candidate_reason.as_deref(),
+            Some("reachable_module_from_effective_inc")
+        );
+        assert_eq!(missing_import.rejection_reasons.get("duplicate_import").copied(), Some(1));
+        assert_eq!(missing_import.rejection_reasons.get("unreachable_module").copied(), Some(1));
+        assert_eq!(missing_import.rejection_reasons.get("gate_disabled").copied(), Some(1));
+        assert_eq!(
+            missing_import.rejection_reasons.get("runtime_provider_not_registered").copied(),
+            Some(1)
+        );
+
+        let test_assertion = summary
+            .test_assertion_next_action
+            .as_ref()
+            .ok_or_else(|| eyre!("test assertion next-action summary missing"))?;
+        assert_eq!(
+            test_assertion.test_more_candidate_reason.as_deref(),
+            Some("visible_lexical_assertion")
+        );
+        assert_eq!(
+            test_assertion.test2_candidate_reason.as_deref(),
+            Some("visible_lexical_assertion")
+        );
+        assert_eq!(test_assertion.rejection_reasons.get("test_file_required").copied(), Some(1));
+        assert_eq!(
+            test_assertion.rejection_reasons.get("unsupported_test_framework").copied(),
+            Some(1)
+        );
+        assert_eq!(
+            test_assertion.rejection_reasons.get("missing_assertion_variables").copied(),
+            Some(1)
+        );
+        assert_eq!(test_assertion.rejection_reasons.get("gate_disabled").copied(), Some(1));
+        assert_eq!(
+            test_assertion.rejection_reasons.get("runtime_provider_not_registered").copied(),
+            Some(1)
+        );
         Ok(())
     }
 
@@ -1650,6 +1743,16 @@ mod tests {
         assert!(
             error.to_string().contains("explicit_gate/status"),
             "error should identify explicit gate status drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["duplicate_import"]["rejectionReasons"] =
+            json!([42]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "non-string rejection must fail");
+        assert!(
+            error.to_string().contains("must contain strings"),
+            "error should identify non-string rejection reason, got {error}"
         );
 
         Ok(())

@@ -311,6 +311,13 @@ fn semantic_inline_receipts_cli_embeds_quality_counters_when_available() -> Resu
     assert_eq!(
         next_edit_scaffold
             .get("missing_import_next_action")
+            .and_then(|action| action.get("reachable_candidate_reason"))
+            .and_then(Value::as_str),
+        Some("reachable_module_from_effective_inc")
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("missing_import_next_action")
             .and_then(|action| action.get("duplicate_import_rejected"))
             .and_then(Value::as_bool),
         Some(true)
@@ -338,6 +345,38 @@ fn semantic_inline_receipts_cli_embeds_quality_counters_when_available() -> Resu
     );
     assert_eq!(
         next_edit_scaffold
+            .get("missing_import_next_action")
+            .and_then(|action| action.get("rejection_reasons"))
+            .and_then(|reasons| reasons.get("duplicate_import"))
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("missing_import_next_action")
+            .and_then(|action| action.get("rejection_reasons"))
+            .and_then(|reasons| reasons.get("unreachable_module"))
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("missing_import_next_action")
+            .and_then(|action| action.get("rejection_reasons"))
+            .and_then(|reasons| reasons.get("gate_disabled"))
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("missing_import_next_action")
+            .and_then(|action| action.get("rejection_reasons"))
+            .and_then(|reasons| reasons.get("runtime_provider_not_registered"))
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        next_edit_scaffold
             .get("test_assertion_next_action")
             .and_then(|action| action.get("test_more_candidate_prepared"))
             .and_then(Value::as_bool),
@@ -353,9 +392,23 @@ fn semantic_inline_receipts_cli_embeds_quality_counters_when_available() -> Resu
     assert_eq!(
         next_edit_scaffold
             .get("test_assertion_next_action")
+            .and_then(|action| action.get("test_more_candidate_reason"))
+            .and_then(Value::as_str),
+        Some("visible_lexical_assertion")
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("test_assertion_next_action")
             .and_then(|action| action.get("test2_candidate_prepared"))
             .and_then(Value::as_bool),
         Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("test_assertion_next_action")
+            .and_then(|action| action.get("test2_candidate_reason"))
+            .and_then(Value::as_str),
+        Some("visible_lexical_assertion")
     );
     assert_eq!(
         next_edit_scaffold
@@ -370,6 +423,46 @@ fn semantic_inline_receipts_cli_embeds_quality_counters_when_available() -> Resu
             .and_then(|action| action.get("parse_stable"))
             .and_then(Value::as_bool),
         Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("test_assertion_next_action")
+            .and_then(|action| action.get("rejection_reasons"))
+            .and_then(|reasons| reasons.get("test_file_required"))
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("test_assertion_next_action")
+            .and_then(|action| action.get("rejection_reasons"))
+            .and_then(|reasons| reasons.get("unsupported_test_framework"))
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("test_assertion_next_action")
+            .and_then(|action| action.get("rejection_reasons"))
+            .and_then(|reasons| reasons.get("missing_assertion_variables"))
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("test_assertion_next_action")
+            .and_then(|action| action.get("rejection_reasons"))
+            .and_then(|reasons| reasons.get("gate_disabled"))
+            .and_then(Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("test_assertion_next_action")
+            .and_then(|action| action.get("rejection_reasons"))
+            .and_then(|reasons| reasons.get("runtime_provider_not_registered"))
+            .and_then(Value::as_u64),
+        Some(1)
     );
 
     Ok(())
