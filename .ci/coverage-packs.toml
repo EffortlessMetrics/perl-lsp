@@ -484,6 +484,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-devex-targeted-checks-wrapper"
+lcov = false
+files = [
+  "scripts/devex-targeted-checks.sh",
+  "scripts/tests/test-devex-targeted-checks-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-devex-targeted-checks-wrapper.sh",
+]
+coverage_filters = [
+  "devex-targeted-checks-wrapper",
+]
+
+[[pack]]
 id = "patch-coverage-baseline-script"
 lcov = false
 files = [
