@@ -10,7 +10,10 @@ permissions:
 
 jobs:
   validate-title:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: em-ci-nano
+      labels: [self-hosted, linux, x64, em-ci, trusted-pr, workflow-nano]
+    timeout-minutes: 5
     steps:
       - name: Check PR title
         uses: actions/github-script@v9
