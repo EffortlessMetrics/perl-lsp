@@ -512,6 +512,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-test-capped-wrapper"
+lcov = false
+files = [
+  "scripts/test-capped.sh",
+  "scripts/tests/test-test-capped-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-test-capped-wrapper.sh",
+]
+coverage_filters = [
+  "test-capped-wrapper",
+]
+
+[[pack]]
 id = "patch-coverage-baseline-script"
 lcov = false
 files = [
