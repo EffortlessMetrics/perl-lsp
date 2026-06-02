@@ -346,6 +346,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-doc-claims-shim"
+lcov = false
+files = [
+  "scripts/check-doc-claims.py",
+  "scripts/tests/test-check-doc-claims-shim.py",
+]
+commands = [
+  "python scripts/tests/test-check-doc-claims-shim.py",
+]
+coverage_filters = [
+  "doc-claims-shim",
+]
+
+[[pack]]
 id = "patch-coverage-preflight-wrapper"
 lcov = false
 files = [
