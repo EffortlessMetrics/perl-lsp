@@ -682,6 +682,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-swarm-summary-wrapper"
+lcov = false
+files = [
+  "scripts/swarm-summary.sh",
+  "scripts/tests/test-swarm-summary-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-swarm-summary-wrapper.sh",
+]
+coverage_filters = [
+  "swarm-summary-wrapper",
+]
+
+[[pack]]
 id = "patch-coverage-clean-tmp-targets"
 lcov = false
 files = [

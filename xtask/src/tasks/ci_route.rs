@@ -351,6 +351,11 @@ const IGNORED_TEST_COUNT_WRAPPER_PACK: ProofPack = ProofPack {
     commands: &["bash scripts/tests/test-ignored-test-count-wrapper.sh"],
 };
 
+const SWARM_SUMMARY_WRAPPER_PACK: ProofPack = ProofPack {
+    id: "swarm-summary-wrapper-focused",
+    commands: &["bash scripts/tests/test-swarm-summary-wrapper.sh"],
+};
+
 const CLEAN_TMP_TARGETS_PACK: ProofPack = ProofPack {
     id: "clean-tmp-targets-focused",
     commands: &["bash scripts/tests/test-clean-tmp-targets.sh"],
@@ -863,6 +868,13 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         route.add_surface("ignored-test-count-wrapper");
         route.add_pack(IGNORED_TEST_COUNT_WRAPPER_PACK);
         route.add_coverage_pack("patch-coverage-ignored-test-count-wrapper");
+        return;
+    }
+
+    if file == "scripts/swarm-summary.sh" || file == "scripts/tests/test-swarm-summary-wrapper.sh" {
+        route.add_surface("swarm-summary-wrapper");
+        route.add_pack(SWARM_SUMMARY_WRAPPER_PACK);
+        route.add_coverage_pack("patch-coverage-swarm-summary-wrapper");
         return;
     }
 
@@ -2603,6 +2615,7 @@ mod tests {
                 "patch-coverage-publish-receipts-wrapper",
                 "patch-coverage-generate-badges-wrapper",
                 "patch-coverage-ignored-test-count-wrapper",
+                "patch-coverage-swarm-summary-wrapper",
                 "patch-coverage-clean-tmp-targets",
                 "patch-coverage-swarm-cleanup",
                 "patch-coverage-pre-merge-check",
@@ -2657,6 +2670,7 @@ mod tests {
             "patch-coverage-publish-receipts-wrapper",
             "patch-coverage-generate-badges-wrapper",
             "patch-coverage-ignored-test-count-wrapper",
+            "patch-coverage-swarm-summary-wrapper",
             "patch-coverage-clean-tmp-targets",
             "patch-coverage-swarm-cleanup",
             "patch-coverage-pre-merge-check",
@@ -2828,6 +2842,10 @@ mod tests {
         );
         assert_eq!(
             skipped.get("patch-coverage-ignored-test-count-wrapper").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        assert_eq!(
+            skipped.get("patch-coverage-swarm-summary-wrapper").map(String::as_str),
             Some(NON_LCOV_COVERAGE_SKIP_REASON)
         );
         assert_eq!(
