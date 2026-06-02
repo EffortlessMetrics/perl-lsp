@@ -374,6 +374,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-debt-report-shim"
+lcov = false
+files = [
+  "scripts/debt-report.py",
+  "scripts/tests/test-debt-report-shim.py",
+]
+commands = [
+  "python scripts/tests/test-debt-report-shim.py",
+]
+coverage_filters = [
+  "debt-report-shim",
+]
+
+[[pack]]
 id = "patch-coverage-preflight-wrapper"
 lcov = false
 files = [
