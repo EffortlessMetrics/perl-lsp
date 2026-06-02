@@ -67,9 +67,11 @@ Current implemented foundations include:
   outcomes, latency, hard-zone suppression, replacement-range checks, and parse
   regressions.
 
-The remaining work is not "make inline completion exist." It is to grow the
-fixture corpus, keep the receipt counters honest, add real-editor/project-shape
-receipts where useful, and only then consider next-edit or optional AI surfaces.
+The remaining work is not "make inline completion exist." It is to keep the
+receipt counters honest, use receipt-only next-action proofs to harden the
+editor-intent substrate, add real-editor/project-shape receipts where useful,
+and keep runtime next-edit or AI provider behavior gated until deterministic
+proof is strong enough.
 
 ## Non-Goals
 
@@ -361,7 +363,7 @@ implemented rails instead of replacing them.
 | 18 | `feat(inline): add local dev counters for inline completion quality` | Local-only counters. |
 | 19 | `ci(inline): emit inline completion quality receipts` | Fixture totals, source counters, latency, parse regressions. |
 | 20 | `feat(inline): add gated next-edit suggestion scaffold` | Feature-gated scaffold only. |
-| 21 | `feat(inline): add guarded AI candidate source boundary` | Optional AI boundary after deterministic path is trusted. |
+| 21 | `feat(inline): add guarded AI candidate source boundary` | Optional AI disabled-boundary proof before any provider/source behavior. |
 
 Current completed or substantially implemented phases:
 
@@ -375,7 +377,10 @@ Current completed or substantially implemented phases:
 - workspace module imports, test assertions, current-package `$self->` methods,
   constructor style, DBI receiver hints, and visible-context loop/guard
   continuations;
-- ranking, parse-safety filtering, and local quality receipts.
+- ranking, parse-safety filtering, and local quality receipts;
+- the gated next-edit scaffold, receipt-only missing-import and test assertion
+  next-action proofs, accepted edit application checks, and optional AI
+  disabled-boundary receipts.
 
 Current semantic inline UX receipt inventory:
 
@@ -408,8 +413,8 @@ cargo xtask semantic-inline-receipts \
 
 That dashboard aggregates the registered semantic inline UX workflows, validates
 the next-edit scaffold receipt when present, and keeps next-edit runtime behavior
-and optional AI explicitly future-gated. It is an inventory receipt; it does not
-run the UX scenarios or promote support status by itself.
+and optional AI provider behavior explicitly future-gated. It is an inventory
+receipt; it does not run the UX scenarios or promote support status by itself.
 
 The next-edit scaffold now includes receipt-only proofs for the first two
 deterministic next-action families:
@@ -429,7 +434,8 @@ Still future or deliberately gated:
   import, package-boundary receiver, project test assertion, project
   control-flow, and project constructor receipts;
 - runtime/editor-visible next-edit suggestions;
-- optional AI candidate boundaries.
+- optional AI candidate source/provider behavior beyond the disabled-boundary
+  receipt.
 
 ## High-Value Perl Wins
 
