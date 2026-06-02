@@ -388,6 +388,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-debt-pr-summary-shim"
+lcov = false
+files = [
+  "scripts/debt-pr-summary.py",
+  "scripts/tests/test-debt-pr-summary-shim.py",
+]
+commands = [
+  "python scripts/tests/test-debt-pr-summary-shim.py",
+]
+coverage_filters = [
+  "debt-pr-summary-shim",
+]
+
+[[pack]]
 id = "patch-coverage-preflight-wrapper"
 lcov = false
 files = [

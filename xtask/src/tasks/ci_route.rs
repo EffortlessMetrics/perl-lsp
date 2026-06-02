@@ -246,6 +246,11 @@ const DEBT_REPORT_SHIM_PACK: ProofPack = ProofPack {
     commands: &["python scripts/tests/test-debt-report-shim.py"],
 };
 
+const DEBT_PR_SUMMARY_SHIM_PACK: ProofPack = ProofPack {
+    id: "debt-pr-summary-shim-focused",
+    commands: &["python scripts/tests/test-debt-pr-summary-shim.py"],
+};
+
 const PREFLIGHT_WRAPPER_PACK: ProofPack = ProofPack {
     id: "preflight-wrapper-focused",
     commands: &["bash scripts/tests/test-preflight-wrapper.sh"],
@@ -733,6 +738,14 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         route.add_surface("debt-report-shim");
         route.add_pack(DEBT_REPORT_SHIM_PACK);
         route.add_coverage_pack("patch-coverage-debt-report-shim");
+        return;
+    }
+
+    if file == "scripts/debt-pr-summary.py" || file == "scripts/tests/test-debt-pr-summary-shim.py"
+    {
+        route.add_surface("debt-pr-summary-shim");
+        route.add_pack(DEBT_PR_SUMMARY_SHIM_PACK);
+        route.add_coverage_pack("patch-coverage-debt-pr-summary-shim");
         return;
     }
 
@@ -2000,6 +2013,32 @@ mod tests {
     }
 
     #[test]
+    fn ci_route_receipt_maps_debt_pr_summary_shim_to_focused_non_lcov_pack() -> Result<()> {
+        let receipt =
+            route_receipt("origin/main", "HEAD", vec!["scripts/debt-pr-summary.py".to_string()])?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["debt-pr-summary-shim"]);
+        assert!(proof_pack_ids(&receipt).contains(&"debt-pr-summary-shim-focused"));
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "debt-pr-summary-shim-focused"
+                && pack
+                    .commands
+                    .iter()
+                    .any(|command| command == "python scripts/tests/test-debt-pr-summary-shim.py")
+        }));
+        assert!(receipt.coverage_pack_selector.is_empty());
+        assert!(receipt.coverage_proof_packs.is_empty());
+        assert_eq!(
+            receipt
+                .skipped_by_policy
+                .get("patch-coverage-debt-pr-summary-shim")
+                .map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        Ok(())
+    }
+
+    #[test]
     fn ci_route_receipt_maps_preflight_wrapper_to_focused_non_lcov_pack() -> Result<()> {
         let receipt =
             route_receipt("origin/main", "HEAD", vec!["scripts/preflight.sh".to_string()])?;
@@ -2820,6 +2859,7 @@ mod tests {
                 "patch-coverage-doc-claims-shim",
                 "patch-coverage-features-invariants-shim",
                 "patch-coverage-debt-report-shim",
+                "patch-coverage-debt-pr-summary-shim",
                 "patch-coverage-preflight-wrapper",
                 "patch-coverage-install-githooks-wrapper",
                 "patch-coverage-e2e-gate-wrapper",
