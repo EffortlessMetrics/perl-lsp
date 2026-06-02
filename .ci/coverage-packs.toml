@@ -626,6 +626,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-publish-receipts-wrapper"
+lcov = false
+files = [
+  "scripts/publish-receipts.sh",
+  "scripts/tests/test-publish-receipts-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-publish-receipts-wrapper.sh",
+]
+coverage_filters = [
+  "publish-receipts-wrapper",
+]
+
+[[pack]]
 id = "patch-coverage-generate-badges-wrapper"
 lcov = false
 files = [
