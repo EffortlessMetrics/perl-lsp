@@ -710,6 +710,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-worktree-cleanup-wrapper"
+lcov = false
+files = [
+  "scripts/cleanup-worktrees.sh",
+  "scripts/tests/test-cleanup-worktrees-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-cleanup-worktrees-wrapper.sh",
+]
+coverage_filters = [
+  "worktree-cleanup-wrapper",
+]
+
+[[pack]]
 id = "patch-coverage-clean-tmp-targets"
 lcov = false
 files = [

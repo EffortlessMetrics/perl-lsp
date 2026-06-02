@@ -1029,6 +1029,34 @@ class RouteCodecovPacksTests(unittest.TestCase):
             [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
         )
 
+    def test_worktree_cleanup_wrapper_change_is_non_lcov_focused_proof(self) -> None:
+        packs = [
+            {
+                "id": "patch-coverage-worktree-cleanup-wrapper",
+                "lcov": False,
+                "files": [
+                    "scripts/cleanup-worktrees.sh",
+                    "scripts/tests/test-cleanup-worktrees-wrapper.sh",
+                ],
+                "commands": ["bash scripts/tests/test-cleanup-worktrees-wrapper.sh"],
+                "coverage_filters": ["worktree-cleanup-wrapper"],
+            },
+            {
+                "id": router.FALLBACK_PACK_ID,
+                "files": ["*.rs"],
+                "commands": ["cargo test --workspace --lib"],
+                "coverage_filters": ["workspace-lib"],
+            },
+        ]
+
+        paths = ["scripts/cleanup-worktrees.sh"]
+
+        self.assertEqual([], router.selected_packs(packs, paths))
+        self.assertEqual(
+            ["patch-coverage-worktree-cleanup-wrapper"],
+            [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
+        )
+
     def test_remaining_script_helper_changes_are_non_lcov_focused_proof(self) -> None:
         helper_packs = [
             (
