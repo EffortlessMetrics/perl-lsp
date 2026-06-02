@@ -1914,6 +1914,51 @@ pub fn fix_printf_format_arity(source: &str, diagnostic: &QuickFixDiagnostic) ->
     }]
 }
 
+/// Drop the undefined label from a loop-control statement (PL410).
+///
+/// `next LABEL`, `last LABEL`, and `redo LABEL` trigger PL410 when the
+/// referenced label does not exist in the enclosing scope.  Removing the
+/// label makes the statement target the innermost enclosing loop — the only
+/// mechanically safe transformation that does not require new code.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((start, end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let Some(text) = source.get(start..end) else {
+        return Vec::new();
+    };
+    let Some(operator) = loop_control_operator(text) else {
+        return Vec::new();
+    };
+
+    vec![CodeAction {
+        title: format!("Remove undefined label (use '{operator}' without label)"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start, end },
+                new_text: operator.to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
+fn loop_control_operator(text: &str) -> Option<&'static str> {
+    for op in ["next", "last", "redo"] {
+        if let Some(rest) = text.strip_prefix(op) {
+            if rest.starts_with(|c: char| c.is_ascii_whitespace()) {
+                return Some(op);
+            }
+        }
+    }
+    None
+}
+
 fn printf_format_insert_position(
     source: &str,
     range_start: usize,
