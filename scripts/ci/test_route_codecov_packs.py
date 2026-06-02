@@ -693,6 +693,34 @@ class RouteCodecovPacksTests(unittest.TestCase):
             [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
         )
 
+    def test_ci_cost_monitor_wrapper_change_is_non_lcov_focused_proof(self) -> None:
+        packs = [
+            {
+                "id": "patch-coverage-ci-cost-monitor-wrapper",
+                "lcov": False,
+                "files": [
+                    "scripts/ci-cost-monitor.sh",
+                    "scripts/tests/test-ci-cost-monitor-wrapper.sh",
+                ],
+                "commands": ["bash scripts/tests/test-ci-cost-monitor-wrapper.sh"],
+                "coverage_filters": ["ci-cost-monitor-wrapper"],
+            },
+            {
+                "id": router.FALLBACK_PACK_ID,
+                "files": ["*.rs"],
+                "commands": ["cargo test --workspace --lib"],
+                "coverage_filters": ["workspace-lib"],
+            },
+        ]
+
+        paths = ["scripts/ci-cost-monitor.sh"]
+
+        self.assertEqual([], router.selected_packs(packs, paths))
+        self.assertEqual(
+            ["patch-coverage-ci-cost-monitor-wrapper"],
+            [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
+        )
+
     def test_build_timing_receipt_wrapper_change_is_non_lcov_focused_proof(self) -> None:
         packs = [
             {

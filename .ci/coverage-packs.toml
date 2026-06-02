@@ -542,6 +542,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-ci-cost-monitor-wrapper"
+lcov = false
+files = [
+  "scripts/ci-cost-monitor.sh",
+  "scripts/tests/test-ci-cost-monitor-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-ci-cost-monitor-wrapper.sh",
+]
+coverage_filters = [
+  "ci-cost-monitor-wrapper",
+]
+
+[[pack]]
 id = "patch-coverage-build-timing-receipt-wrapper"
 lcov = false
 files = [

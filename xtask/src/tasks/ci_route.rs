@@ -301,6 +301,11 @@ const TEST_E2E_CAPPED_WRAPPER_PACK: ProofPack = ProofPack {
     commands: &["bash scripts/tests/test-test-e2e-capped-wrapper.sh"],
 };
 
+const CI_COST_MONITOR_WRAPPER_PACK: ProofPack = ProofPack {
+    id: "ci-cost-monitor-wrapper-focused",
+    commands: &["bash scripts/tests/test-ci-cost-monitor-wrapper.sh"],
+};
+
 const BUILD_TIMING_RECEIPT_WRAPPER_PACK: ProofPack = ProofPack {
     id: "build-timing-receipt-wrapper-focused",
     commands: &["bash scripts/tests/test-build-timing-receipt-wrapper.sh"],
@@ -771,6 +776,15 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         route.add_surface("test-e2e-capped-wrapper");
         route.add_pack(TEST_E2E_CAPPED_WRAPPER_PACK);
         route.add_coverage_pack("patch-coverage-test-e2e-capped-wrapper");
+        return;
+    }
+
+    if file == "scripts/ci-cost-monitor.sh"
+        || file == "scripts/tests/test-ci-cost-monitor-wrapper.sh"
+    {
+        route.add_surface("ci-cost-monitor-wrapper");
+        route.add_pack(CI_COST_MONITOR_WRAPPER_PACK);
+        route.add_coverage_pack("patch-coverage-ci-cost-monitor-wrapper");
         return;
     }
 
@@ -2073,6 +2087,32 @@ mod tests {
     }
 
     #[test]
+    fn ci_route_receipt_maps_ci_cost_monitor_wrapper_to_focused_non_lcov_pack() -> Result<()> {
+        let receipt =
+            route_receipt("origin/main", "HEAD", vec!["scripts/ci-cost-monitor.sh".to_string()])?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["ci-cost-monitor-wrapper"]);
+        assert!(proof_pack_ids(&receipt).contains(&"ci-cost-monitor-wrapper-focused"));
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "ci-cost-monitor-wrapper-focused"
+                && pack
+                    .commands
+                    .iter()
+                    .any(|command| command == "bash scripts/tests/test-ci-cost-monitor-wrapper.sh")
+        }));
+        assert!(receipt.coverage_pack_selector.is_empty());
+        assert!(receipt.coverage_proof_packs.is_empty());
+        assert_eq!(
+            receipt
+                .skipped_by_policy
+                .get("patch-coverage-ci-cost-monitor-wrapper")
+                .map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        Ok(())
+    }
+
+    #[test]
     fn ci_route_receipt_maps_build_timing_receipt_wrapper_to_focused_non_lcov_pack() -> Result<()> {
         let receipt = route_receipt(
             "origin/main",
@@ -2553,6 +2593,7 @@ mod tests {
                 "patch-coverage-lsp-cancellation-wrapper",
                 "patch-coverage-test-capped-wrapper",
                 "patch-coverage-test-e2e-capped-wrapper",
+                "patch-coverage-ci-cost-monitor-wrapper",
                 "patch-coverage-build-timing-receipt-wrapper",
                 "patch-coverage-compare-build-timing-wrapper",
                 "patch-coverage-baseline-script",
@@ -2606,6 +2647,7 @@ mod tests {
             "patch-coverage-lsp-cancellation-wrapper",
             "patch-coverage-test-capped-wrapper",
             "patch-coverage-test-e2e-capped-wrapper",
+            "patch-coverage-ci-cost-monitor-wrapper",
             "patch-coverage-build-timing-receipt-wrapper",
             "patch-coverage-compare-build-timing-wrapper",
             "patch-coverage-baseline-script",
@@ -2746,6 +2788,10 @@ mod tests {
         );
         assert_eq!(
             skipped.get("patch-coverage-test-e2e-capped-wrapper").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        assert_eq!(
+            skipped.get("patch-coverage-ci-cost-monitor-wrapper").map(String::as_str),
             Some(NON_LCOV_COVERAGE_SKIP_REASON)
         );
         assert_eq!(
