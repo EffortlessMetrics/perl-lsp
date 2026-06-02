@@ -236,6 +236,11 @@ const DOC_CLAIMS_SHIM_PACK: ProofPack = ProofPack {
     commands: &["python scripts/tests/test-check-doc-claims-shim.py"],
 };
 
+const FEATURES_INVARIANTS_SHIM_PACK: ProofPack = ProofPack {
+    id: "features-invariants-shim-focused",
+    commands: &["python scripts/tests/test-check-features-invariants-shim.py"],
+};
+
 const PREFLIGHT_WRAPPER_PACK: ProofPack = ProofPack {
     id: "preflight-wrapper-focused",
     commands: &["bash scripts/tests/test-preflight-wrapper.sh"],
@@ -707,6 +712,15 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         route.add_surface("doc-claims-shim");
         route.add_pack(DOC_CLAIMS_SHIM_PACK);
         route.add_coverage_pack("patch-coverage-doc-claims-shim");
+        return;
+    }
+
+    if file == "scripts/check_features_invariants.py"
+        || file == "scripts/tests/test-check-features-invariants-shim.py"
+    {
+        route.add_surface("features-invariants-shim");
+        route.add_pack(FEATURES_INVARIANTS_SHIM_PACK);
+        route.add_coverage_pack("patch-coverage-features-invariants-shim");
         return;
     }
 
@@ -1923,6 +1937,34 @@ mod tests {
     }
 
     #[test]
+    fn ci_route_receipt_maps_features_invariants_shim_to_focused_non_lcov_pack() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec!["scripts/check_features_invariants.py".to_string()],
+        )?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["features-invariants-shim"]);
+        assert!(proof_pack_ids(&receipt).contains(&"features-invariants-shim-focused"));
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "features-invariants-shim-focused"
+                && pack.commands.iter().any(|command| {
+                    command == "python scripts/tests/test-check-features-invariants-shim.py"
+                })
+        }));
+        assert!(receipt.coverage_pack_selector.is_empty());
+        assert!(receipt.coverage_proof_packs.is_empty());
+        assert_eq!(
+            receipt
+                .skipped_by_policy
+                .get("patch-coverage-features-invariants-shim")
+                .map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        Ok(())
+    }
+
+    #[test]
     fn ci_route_receipt_maps_preflight_wrapper_to_focused_non_lcov_pack() -> Result<()> {
         let receipt =
             route_receipt("origin/main", "HEAD", vec!["scripts/preflight.sh".to_string()])?;
@@ -2741,6 +2783,7 @@ mod tests {
                 "patch-coverage-agent-preflight",
                 "patch-coverage-ci-audit-workflows-shim",
                 "patch-coverage-doc-claims-shim",
+                "patch-coverage-features-invariants-shim",
                 "patch-coverage-preflight-wrapper",
                 "patch-coverage-install-githooks-wrapper",
                 "patch-coverage-e2e-gate-wrapper",

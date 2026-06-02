@@ -360,6 +360,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-features-invariants-shim"
+lcov = false
+files = [
+  "scripts/check_features_invariants.py",
+  "scripts/tests/test-check-features-invariants-shim.py",
+]
+commands = [
+  "python scripts/tests/test-check-features-invariants-shim.py",
+]
+coverage_filters = [
+  "features-invariants-shim",
+]
+
+[[pack]]
 id = "patch-coverage-preflight-wrapper"
 lcov = false
 files = [
