@@ -74,7 +74,7 @@ regex.workspace = true
 md5 = "0.8.0"
 parking_lot.workspace = true
 walkdir.workspace = true
-uuid = { version = "1.23.0", features = ["v4"] }
+uuid = { version = "1.23.2", features = ["v4"] }
 
 # Core dependencies for position mapping
 ropey = { version = "1.6.1" }

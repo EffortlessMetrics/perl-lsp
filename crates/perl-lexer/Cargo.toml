@@ -17,7 +17,7 @@ include = ["src/**", "tests/**", "examples/**", "benches/**", "README.md", "LICE
 [dependencies]
 # Core dependencies
 unicode-ident = "1.0.22"
-memchr = "2.7.6"
+memchr = "2.8.1"
 phf = { version = "0.13.1", features = ["macros"] }
 tracing.workspace = true
 
