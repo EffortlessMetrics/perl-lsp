@@ -72,6 +72,10 @@ const REQUIRED_SEMANTIC_INLINE_RECEIPTS: &[SemanticInlineRequirement] = &[
         capability: "project_dbi_receiver",
         workflow_id: "project_dbi_receiver_inline_completion_quality",
     },
+    SemanticInlineRequirement {
+        capability: "project_lexical_return",
+        workflow_id: "project_lexical_return_inline_completion_quality",
+    },
 ];
 
 #[derive(Debug, Clone, Copy)]

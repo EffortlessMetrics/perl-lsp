@@ -1866,6 +1866,34 @@
       ]
     },
     {
+      "id": "project_lexical_return_inline_completion_quality",
+      "scenario_file": "ux_scenario_66_project_lexical_return_inline_completion_quality.rs",
+      "subsystem_owner": "editor_trust",
+      "ci_tier": "pr",
+      "component": "completion",
+      "instrumentation": {
+        "run_receipt": false,
+        "first_useful_result": false,
+        "protocol_goldens": false
+      },
+      "user_journey": "request inline completion on blank return lines in CPAN-shaped project modules and record visible-lexical return ghost text",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "dynamic inline-completion registration is observed for an LSP4IJ-shaped client",
+        "project blank-line return uses the visible $result lexical",
+        "project after-comment return uses the visible $name lexical",
+        "project lexical return inline completions avoid module-import, test assertion, constructor, and unrelated lexical ghost text"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "real_workspace_providers",
       "scenario_file": "ux_scenario_20_real_workspace_providers.rs",
       "subsystem_owner": "editor_intelligence",
