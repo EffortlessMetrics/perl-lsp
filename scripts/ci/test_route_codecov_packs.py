@@ -525,6 +525,34 @@ class RouteCodecovPacksTests(unittest.TestCase):
             [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
         )
 
+    def test_check_toolchain_wrapper_change_is_non_lcov_focused_proof(self) -> None:
+        packs = [
+            {
+                "id": "patch-coverage-check-toolchain-wrapper",
+                "lcov": False,
+                "files": [
+                    "scripts/check-rust-toolchain.sh",
+                    "scripts/tests/test-check-rust-toolchain-wrapper.sh",
+                ],
+                "commands": ["bash scripts/tests/test-check-rust-toolchain-wrapper.sh"],
+                "coverage_filters": ["check-toolchain-wrapper"],
+            },
+            {
+                "id": router.FALLBACK_PACK_ID,
+                "files": ["*.rs"],
+                "commands": ["cargo test --workspace --lib"],
+                "coverage_filters": ["workspace-lib"],
+            },
+        ]
+
+        paths = ["scripts/check-rust-toolchain.sh"]
+
+        self.assertEqual([], router.selected_packs(packs, paths))
+        self.assertEqual(
+            ["patch-coverage-check-toolchain-wrapper"],
+            [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
+        )
+
     def test_coverage_baseline_script_change_is_non_lcov_focused_proof(self) -> None:
         packs = [
             {

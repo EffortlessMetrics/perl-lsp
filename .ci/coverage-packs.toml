@@ -456,6 +456,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-check-toolchain-wrapper"
+lcov = false
+files = [
+  "scripts/check-rust-toolchain.sh",
+  "scripts/tests/test-check-rust-toolchain-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-check-rust-toolchain-wrapper.sh",
+]
+coverage_filters = [
+  "check-toolchain-wrapper",
+]
+
+[[pack]]
 id = "patch-coverage-baseline-script"
 lcov = false
 files = [

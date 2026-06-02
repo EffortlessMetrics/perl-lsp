@@ -269,6 +269,11 @@ const DEAD_CODE_WRAPPER_PACK: ProofPack = ProofPack {
     commands: &["bash scripts/tests/test-dead-code-wrapper.sh"],
 };
 
+const CHECK_TOOLCHAIN_WRAPPER_PACK: ProofPack = ProofPack {
+    id: "check-toolchain-wrapper-focused",
+    commands: &["bash scripts/tests/test-check-rust-toolchain-wrapper.sh"],
+};
+
 const COVERAGE_BASELINE_SCRIPT_PACK: ProofPack = ProofPack {
     id: "coverage-baseline-script-focused",
     commands: &["bash scripts/tests/test-check-coverage-baseline.sh"],
@@ -674,6 +679,15 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         route.add_surface("dead-code-wrapper");
         route.add_pack(DEAD_CODE_WRAPPER_PACK);
         route.add_coverage_pack("patch-coverage-dead-code-wrapper");
+        return;
+    }
+
+    if file == "scripts/check-rust-toolchain.sh"
+        || file == "scripts/tests/test-check-rust-toolchain-wrapper.sh"
+    {
+        route.add_surface("check-toolchain-wrapper");
+        route.add_pack(CHECK_TOOLCHAIN_WRAPPER_PACK);
+        route.add_coverage_pack("patch-coverage-check-toolchain-wrapper");
         return;
     }
 
@@ -1843,6 +1857,34 @@ mod tests {
     }
 
     #[test]
+    fn ci_route_receipt_maps_check_toolchain_wrapper_to_focused_non_lcov_pack() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec!["scripts/check-rust-toolchain.sh".to_string()],
+        )?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["check-toolchain-wrapper"]);
+        assert!(proof_pack_ids(&receipt).contains(&"check-toolchain-wrapper-focused"));
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "check-toolchain-wrapper-focused"
+                && pack.commands.iter().any(|command| {
+                    command == "bash scripts/tests/test-check-rust-toolchain-wrapper.sh"
+                })
+        }));
+        assert!(receipt.coverage_pack_selector.is_empty());
+        assert!(receipt.coverage_proof_packs.is_empty());
+        assert_eq!(
+            receipt
+                .skipped_by_policy
+                .get("patch-coverage-check-toolchain-wrapper")
+                .map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        Ok(())
+    }
+
+    #[test]
     fn ci_route_receipt_maps_coverage_baseline_script_to_focused_non_lcov_pack() -> Result<()> {
         let receipt = route_receipt(
             "origin/main",
@@ -2235,6 +2277,7 @@ mod tests {
                 "patch-coverage-list-gates-wrapper",
                 "patch-coverage-forbid-fatal-constructs-wrapper",
                 "patch-coverage-dead-code-wrapper",
+                "patch-coverage-check-toolchain-wrapper",
                 "patch-coverage-baseline-script",
                 "patch-coverage-update-baseline-script",
                 "patch-coverage-generate-receipt-script",
@@ -2279,6 +2322,7 @@ mod tests {
             "patch-coverage-list-gates-wrapper",
             "patch-coverage-forbid-fatal-constructs-wrapper",
             "patch-coverage-dead-code-wrapper",
+            "patch-coverage-check-toolchain-wrapper",
             "patch-coverage-baseline-script",
             "patch-coverage-update-baseline-script",
             "patch-coverage-generate-receipt-script",
@@ -2400,6 +2444,10 @@ mod tests {
         );
         assert_eq!(
             skipped.get("patch-coverage-dead-code-wrapper").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        assert_eq!(
+            skipped.get("patch-coverage-check-toolchain-wrapper").map(String::as_str),
             Some(NON_LCOV_COVERAGE_SKIP_REASON)
         );
         assert_eq!(
