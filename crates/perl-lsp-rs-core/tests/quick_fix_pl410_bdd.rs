@@ -212,7 +212,9 @@ fn pl410_non_char_boundary_range_produces_no_action() -> Result<(), Box<dyn std:
     let actions = actions_for(source, &[diag]);
 
     assert!(
-        !actions.iter().any(|a| a.title.contains("next") || a.title.contains("last") || a.title.contains("redo")),
+        !actions.iter().any(|a| a.title.contains("next")
+            || a.title.contains("last")
+            || a.title.contains("redo")),
         "expected no PL410 action for invalid range, got: {actions:?}"
     );
 
