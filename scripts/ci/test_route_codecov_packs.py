@@ -553,6 +553,34 @@ class RouteCodecovPacksTests(unittest.TestCase):
             [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
         )
 
+    def test_devex_doctor_wrapper_change_is_non_lcov_focused_proof(self) -> None:
+        packs = [
+            {
+                "id": "patch-coverage-devex-doctor-wrapper",
+                "lcov": False,
+                "files": [
+                    "scripts/devex-doctor.sh",
+                    "scripts/tests/test-devex-doctor-wrapper.sh",
+                ],
+                "commands": ["bash scripts/tests/test-devex-doctor-wrapper.sh"],
+                "coverage_filters": ["devex-doctor-wrapper"],
+            },
+            {
+                "id": router.FALLBACK_PACK_ID,
+                "files": ["*.rs"],
+                "commands": ["cargo test --workspace --lib"],
+                "coverage_filters": ["workspace-lib"],
+            },
+        ]
+
+        paths = ["scripts/devex-doctor.sh"]
+
+        self.assertEqual([], router.selected_packs(packs, paths))
+        self.assertEqual(
+            ["patch-coverage-devex-doctor-wrapper"],
+            [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
+        )
+
     def test_coverage_baseline_script_change_is_non_lcov_focused_proof(self) -> None:
         packs = [
             {

@@ -274,6 +274,11 @@ const CHECK_TOOLCHAIN_WRAPPER_PACK: ProofPack = ProofPack {
     commands: &["bash scripts/tests/test-check-rust-toolchain-wrapper.sh"],
 };
 
+const DEVEX_DOCTOR_WRAPPER_PACK: ProofPack = ProofPack {
+    id: "devex-doctor-wrapper-focused",
+    commands: &["bash scripts/tests/test-devex-doctor-wrapper.sh"],
+};
+
 const COVERAGE_BASELINE_SCRIPT_PACK: ProofPack = ProofPack {
     id: "coverage-baseline-script-focused",
     commands: &["bash scripts/tests/test-check-coverage-baseline.sh"],
@@ -688,6 +693,13 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         route.add_surface("check-toolchain-wrapper");
         route.add_pack(CHECK_TOOLCHAIN_WRAPPER_PACK);
         route.add_coverage_pack("patch-coverage-check-toolchain-wrapper");
+        return;
+    }
+
+    if file == "scripts/devex-doctor.sh" || file == "scripts/tests/test-devex-doctor-wrapper.sh" {
+        route.add_surface("devex-doctor-wrapper");
+        route.add_pack(DEVEX_DOCTOR_WRAPPER_PACK);
+        route.add_coverage_pack("patch-coverage-devex-doctor-wrapper");
         return;
     }
 
@@ -2278,6 +2290,7 @@ mod tests {
                 "patch-coverage-forbid-fatal-constructs-wrapper",
                 "patch-coverage-dead-code-wrapper",
                 "patch-coverage-check-toolchain-wrapper",
+                "patch-coverage-devex-doctor-wrapper",
                 "patch-coverage-baseline-script",
                 "patch-coverage-update-baseline-script",
                 "patch-coverage-generate-receipt-script",
@@ -2323,6 +2336,7 @@ mod tests {
             "patch-coverage-forbid-fatal-constructs-wrapper",
             "patch-coverage-dead-code-wrapper",
             "patch-coverage-check-toolchain-wrapper",
+            "patch-coverage-devex-doctor-wrapper",
             "patch-coverage-baseline-script",
             "patch-coverage-update-baseline-script",
             "patch-coverage-generate-receipt-script",

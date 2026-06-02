@@ -470,6 +470,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-devex-doctor-wrapper"
+lcov = false
+files = [
+  "scripts/devex-doctor.sh",
+  "scripts/tests/test-devex-doctor-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-devex-doctor-wrapper.sh",
+]
+coverage_filters = [
+  "devex-doctor-wrapper",
+]
+
+[[pack]]
 id = "patch-coverage-baseline-script"
 lcov = false
 files = [
