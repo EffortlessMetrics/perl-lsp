@@ -1972,6 +1972,54 @@ fn diagnostic_line_range(source: &str, range: (usize, usize)) -> Option<(usize, 
     Some((line_start, line_end))
 }
 
+/// Drop the undefined label from a `next LABEL`, `last LABEL`, or `redo LABEL`
+/// statement (PL410 / `LoopControlUndefinedLabel`).
+///
+/// The only safe automated fix is to remove the label so the statement
+/// targets the innermost enclosing loop at runtime.  `is_preferred: true`
+/// because there is exactly one sensible mechanical action.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((start, end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+
+    let span = &source[start..end];
+
+    // The span covers the LoopControl node: `next LABEL`, `last LABEL`, or
+    // `redo LABEL`.  Split on the first whitespace to isolate the operator.
+    let mut parts = span.splitn(2, char::is_whitespace);
+    let Some(op) = parts.next() else {
+        return Vec::new();
+    };
+
+    // Only handle the three documented loop-control operators.
+    if !matches!(op, "next" | "last" | "redo") {
+        return Vec::new();
+    }
+
+    // There must be a label part after the operator; bare forms have no label
+    // and are not flagged by PL410.
+    if parts.next().is_none() {
+        return Vec::new();
+    }
+
+    vec![CodeAction {
+        title: format!("Remove label and use bare `{op}`"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start, end },
+                new_text: op.to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
 fn valid_diagnostic_range(source: &str, range: (usize, usize)) -> Option<(usize, usize)> {
     let (start, end) = range;
     if start > end
