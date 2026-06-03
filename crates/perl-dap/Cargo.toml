@@ -196,6 +196,11 @@ path = "tests/dap_e2e_workflow_tests.rs"
 # AC:3486 End-to-end workflow: launch -> breakpoint -> inspect -> step -> continue -> exit
 
 [[test]]
+name = "dap_lifecycle_matrix_tests"
+path = "tests/dap_lifecycle_matrix_tests.rs"
+# DAP lifecycle matrix: full protocol-ordered lifecycle e2e coverage (phase 2)
+
+[[test]]
 name = "dap_scope_filtering_tests"
 path = "tests/dap_scope_filtering_tests.rs"
 # AC:#782 Content-level scope filtering: locals/package/globals with no cross-contamination
