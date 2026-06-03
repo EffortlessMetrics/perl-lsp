@@ -765,3 +765,103 @@ fn test_e2e_scopes_have_no_cross_contamination() -> TestResult {
     session.disconnect()?;
     Ok(())
 }
+
+// ── 5. Lexical variable correctness (issue #950 regression guard) ─────────────
+
+/// The Locals scope at breakpoint line 6 (my $z = $x * $y) must return the
+/// user script's own lexical variables `$x` (value "10") and `$y` (value "15"),
+/// NOT the Perl debugger's internal DB-frame variables (`$self`, `@_`).
+///
+/// This is the regression guard for the bug where `handle_variables` for the
+/// Locals scope returned DB-internal-frame placeholders instead of user lexicals.
+/// Root cause: `V <frame_id> .` treats the numeric frame_id as a package name
+/// (invalid) and the `fallback_scope_variables` lies by returning fake `$self`
+/// and `@_` instead of returning empty / attempting real lexical enumeration.
+///
+/// Fixture (7 lines, BP_LEXICAL at line 6 = `my $z = $x * $y`):
+///   Line 1: use strict;
+///   Line 2: use warnings;
+///   Line 3: (blank)
+///   Line 4: my $x = 10;      <- already executed when stopped at line 6
+///   Line 5: my $y = $x + 5;  <- already executed when stopped at line 6
+///   Line 6: my $z = $x * $y; <- BP_LEXICAL (stopped HERE — $x and $y are set)
+///   Line 7: print "$z\n";
+#[test]
+fn test_e2e_locals_scope_returns_user_lexicals_not_db_internals() -> TestResult {
+    if !perl_available() {
+        return Ok(()); // skip: perl not available
+    }
+
+    let workspace = tempdir()?;
+    let script = workspace.path().join("scope_lexical_regression.pl");
+    // Same 7-line fixture as dap_e2e_workflow_tests.rs; BP at line 6 so $x and $y are set.
+    let content = "use strict;\nuse warnings;\n\nmy $x = 10;\nmy $y = $x + 5;\nmy $z = $x * $y;\nprint \"$z\\n\";\n";
+    write(&script, content)?;
+    let script_str = script.to_str().ok_or("non-UTF-8 script path")?.to_string();
+
+    const BP_LEXICAL: u64 = 6; // my $z = $x * $y — $x and $y are already set here
+
+    let timeout = workflow_timeout();
+    let mut session = DapWorkflowSession::new(timeout)?;
+
+    session.launch(&script_str)?;
+    session.set_breakpoints(&script_str, &[BP_LEXICAL])?;
+    session.configuration_done()?;
+
+    let stopped = session.wait_stopped()?;
+    assert_eq!(stopped.reason, "breakpoint", "must stop at breakpoint on line {BP_LEXICAL}");
+
+    let (frame_id, _, _) = session.stack_trace(stopped.thread_id)?;
+    let locals_ref = session.scopes_locals_ref(frame_id)?;
+    let locals = session.variables(locals_ref)?;
+
+    // Collect variable names from the Locals scope.
+    let local_names: Vec<String> = locals
+        .iter()
+        .filter_map(|v| v.get("name").and_then(Value::as_str))
+        .map(String::from)
+        .collect();
+
+    // PRIMARY ASSERTION (the bug): $x must appear by name in Locals.
+    // Before the fix, locals contained ["$self", "@_"] (DB-internal frame placeholders).
+    // After the fix, locals must contain the user's actual lexicals.
+    assert!(
+        local_names.iter().any(|n| n == "$x"),
+        "Locals scope must contain '$x' (user lexical, value 10) — \
+         got instead: {local_names:?}. \
+         This indicates the adapter is returning DB-internal frame variables \
+         instead of the user script's lexicals. Bug: V <frame_id> . treats the \
+         numeric frame_id as a package name and falls back to fake placeholders."
+    );
+
+    // $y must also be present (it was assigned on line 5, before the breakpoint).
+    assert!(
+        local_names.iter().any(|n| n == "$y"),
+        "Locals scope must contain '$y' (user lexical, value 15) — got: {local_names:?}"
+    );
+
+    // $x must have the correct value "10".
+    let x_var = locals
+        .iter()
+        .find(|v| v.get("name").and_then(Value::as_str) == Some("$x"))
+        .ok_or("$x not found in locals")?;
+    let x_value =
+        x_var.get("value").and_then(Value::as_str).ok_or("$x value missing or not a string")?;
+    assert_eq!(
+        x_value, "10",
+        "$x value must be '10', got '{x_value}'. \
+         Lexical variable inspection is not reading the correct value."
+    );
+
+    // Sanity guard: DB-internal fake placeholders must NOT appear.
+    // `$self` and `@_` are the specific fake vars injected by fallback_scope_variables
+    // for scope_type=1 when no real data is available.
+    assert!(
+        !local_names.iter().any(|n| n == "$self"),
+        "Locals scope must NOT contain '$self' (DB-internal frame placeholder) — \
+         got: {local_names:?}"
+    );
+
+    session.disconnect()?;
+    Ok(())
+}
