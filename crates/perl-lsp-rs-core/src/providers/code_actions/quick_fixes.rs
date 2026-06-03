@@ -1983,3 +1983,42 @@ fn valid_diagnostic_range(source: &str, range: (usize, usize)) -> Option<(usize,
     }
     Some((start, end))
 }
+
+/// Remove the undefined label from a `next LABEL`, `last LABEL`, or `redo LABEL`
+/// statement so it targets the innermost enclosing loop instead (PL410).
+///
+/// The diagnostic range must cover the full `next LABEL` / `last LABEL` /
+/// `redo LABEL` token (including operator and label). The fix replaces the
+/// entire range with the bare operator so no invalid label reference remains.
+///
+/// Returns an empty `Vec` when:
+/// - the byte range is invalid or out of bounds
+/// - the operator extracted from the range is not one of `next`, `last`, `redo`
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((start, end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let snippet = &source[start..end];
+
+    // Extract the leading operator word.
+    let op = snippet.split_whitespace().next().unwrap_or("");
+    if !matches!(op, "next" | "last" | "redo") {
+        return Vec::new();
+    }
+
+    vec![CodeAction {
+        title: format!("Remove undefined label (use bare '{op}')"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start, end },
+                new_text: op.to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
