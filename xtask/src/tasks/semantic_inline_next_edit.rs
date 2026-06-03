@@ -41,6 +41,9 @@ struct MissingImportNextActionReceipt {
     reachable_candidate: MissingImportNextEditProof,
     duplicate_import: MissingImportNextEditProof,
     unreachable_module: MissingImportNextEditProof,
+    comment_target: MissingImportNextEditProof,
+    pod_target: MissingImportNextEditProof,
+    data_target: MissingImportNextEditProof,
     default_gate: MissingImportNextEditProof,
     explicit_gate: MissingImportNextEditProof,
     accepted_document_text: String,
@@ -197,6 +200,32 @@ fn missing_import_next_action_receipt(
         vec!["My::App".to_string()],
         vec!["strict".to_string(), "warnings".to_string()],
     ));
+    let comment_source = "use strict;\n# My::App->new\n";
+    let comment_target =
+        provider.prove_missing_import(&MissingImportNextEditRequest::receipt_only_at(
+            comment_source,
+            "My::App",
+            find_required(comment_source, "My::App")?,
+            vec!["My::App".to_string()],
+            vec!["strict".to_string()],
+        ));
+    let pod_source = "use strict;\n=pod\nMy::App->new\n=cut\n";
+    let pod_target = provider.prove_missing_import(&MissingImportNextEditRequest::receipt_only_at(
+        pod_source,
+        "My::App",
+        find_required(pod_source, "My::App")?,
+        vec!["My::App".to_string()],
+        vec!["strict".to_string()],
+    ));
+    let data_source = "use strict;\n__DATA__\nMy::App->new\n";
+    let data_target =
+        provider.prove_missing_import(&MissingImportNextEditRequest::receipt_only_at(
+            data_source,
+            "My::App",
+            find_required(data_source, "My::App")?,
+            vec!["My::App".to_string()],
+            vec!["strict".to_string()],
+        ));
 
     let mut default_gate = MissingImportNextEditRequest::receipt_only(
         source,
@@ -264,6 +293,9 @@ fn missing_import_next_action_receipt(
         reachable_candidate: reachable,
         duplicate_import: duplicate,
         unreachable_module: unreachable,
+        comment_target,
+        pod_target,
+        data_target,
         default_gate,
         explicit_gate,
         accepted_document_text,
@@ -762,6 +794,10 @@ fn parse_succeeds(source: &str) -> bool {
     parser.parse().is_ok()
 }
 
+fn find_required(source: &str, needle: &str) -> Result<usize> {
+    source.find(needle).ok_or_else(|| color_eyre::eyre::eyre!("fixture omitted `{needle}`"))
+}
+
 fn validate_missing_import_next_action(receipt: &MissingImportNextActionReceipt) -> Result<()> {
     let Some(candidate) = receipt.reachable_candidate.candidate.as_ref() else {
         bail!("reachable missing-import proof must prepare a receipt-only candidate");
@@ -790,6 +826,17 @@ fn validate_missing_import_next_action(receipt: &MissingImportNextActionReceipt)
             .contains(&NextEditRejectionReason::UnreachableModule)
     {
         bail!("unreachable missing-import proof must reject unreachable modules");
+    }
+    for (name, proof) in [
+        ("comment target", &receipt.comment_target),
+        ("POD target", &receipt.pod_target),
+        ("data target", &receipt.data_target),
+    ] {
+        if proof.candidate.is_some()
+            || !proof.rejection_reasons.contains(&NextEditRejectionReason::UnsafeInsertionPoint)
+        {
+            bail!("missing-import next action must reject {name} contexts");
+        }
     }
     if receipt.default_gate.status != NextEditStatus::Disabled
         || receipt.default_gate.candidate.is_some()
@@ -1035,6 +1082,18 @@ mod tests {
                 .and_then(Value::as_str),
             Some("unreachable_module")
         );
+        for field in ["comment_target", "pod_target", "data_target"] {
+            assert_eq!(
+                value
+                    .pointer(&format!("/missing_import_next_action/{field}/rejectionReasons/0"))
+                    .and_then(Value::as_str),
+                Some("unsafe_insertion_point")
+            );
+            assert!(
+                value.pointer(&format!("/missing_import_next_action/{field}/candidate")).is_none(),
+                "{field} must not produce a candidate"
+            );
+        }
         assert_eq!(
             value
                 .pointer("/missing_import_next_action/default_gate/status")

@@ -155,6 +155,22 @@ fn semantic_inline_next_edit_cli_writes_scaffold_receipt() -> Result<()> {
             .and_then(Value::as_str),
         Some("unreachable_module")
     );
+    for field in ["comment_target", "pod_target", "data_target"] {
+        assert_eq!(
+            missing_import
+                .get(field)
+                .and_then(|proof| proof.get("rejectionReasons"))
+                .and_then(Value::as_array)
+                .and_then(|reasons| reasons.first())
+                .and_then(Value::as_str),
+            Some("unsafe_insertion_point"),
+            "{field} must reject unsafe contexts"
+        );
+        assert!(
+            missing_import.get(field).and_then(|proof| proof.get("candidate")).is_none(),
+            "{field} must not emit a candidate"
+        );
+    }
     assert!(
         missing_import
             .get("accepted_document_text")

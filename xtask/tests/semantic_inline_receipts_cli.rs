@@ -371,6 +371,16 @@ fn semantic_inline_receipts_cli_embeds_quality_counters_when_available() -> Resu
             .and_then(Value::as_bool),
         Some(true)
     );
+    for field in ["comment_target_rejected", "pod_target_rejected", "data_target_rejected"] {
+        assert_eq!(
+            next_edit_scaffold
+                .get("missing_import_next_action")
+                .and_then(|action| action.get(field))
+                .and_then(Value::as_bool),
+            Some(true),
+            "{field} must be summarized"
+        );
+    }
     assert_eq!(
         next_edit_scaffold
             .get("missing_import_next_action")
@@ -400,6 +410,14 @@ fn semantic_inline_receipts_cli_embeds_quality_counters_when_available() -> Resu
             .and_then(|reasons| reasons.get("unreachable_module"))
             .and_then(Value::as_u64),
         Some(1)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("missing_import_next_action")
+            .and_then(|action| action.get("rejection_reasons"))
+            .and_then(|reasons| reasons.get("unsafe_insertion_point"))
+            .and_then(Value::as_u64),
+        Some(3)
     );
     assert_eq!(
         next_edit_scaffold
@@ -1120,6 +1138,18 @@ fn valid_missing_import_next_action_json() -> Value {
         "unreachable_module": {
             "status": "receipt_only",
             "rejectionReasons": ["unreachable_module"]
+        },
+        "comment_target": {
+            "status": "receipt_only",
+            "rejectionReasons": ["unsafe_insertion_point"]
+        },
+        "pod_target": {
+            "status": "receipt_only",
+            "rejectionReasons": ["unsafe_insertion_point"]
+        },
+        "data_target": {
+            "status": "receipt_only",
+            "rejectionReasons": ["unsafe_insertion_point"]
         },
         "default_gate": {
             "status": "disabled",
