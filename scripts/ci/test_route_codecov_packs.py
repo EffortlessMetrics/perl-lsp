@@ -482,6 +482,34 @@ class RouteCodecovPacksTests(unittest.TestCase):
             [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
         )
 
+    def test_update_parser_matrix_shim_change_is_non_lcov_focused_proof(self) -> None:
+        packs = [
+            {
+                "id": "patch-coverage-update-parser-matrix-shim",
+                "lcov": False,
+                "files": [
+                    "scripts/update-parser-matrix.py",
+                    "scripts/tests/test-update-parser-matrix-shim.py",
+                ],
+                "commands": ["python scripts/tests/test-update-parser-matrix-shim.py"],
+                "coverage_filters": ["update-parser-matrix-shim"],
+            },
+            {
+                "id": router.FALLBACK_PACK_ID,
+                "files": ["*.rs"],
+                "commands": ["cargo test --workspace --lib"],
+                "coverage_filters": ["workspace-lib"],
+            },
+        ]
+
+        paths = ["scripts/update-parser-matrix.py"]
+
+        self.assertEqual([], router.selected_packs(packs, paths))
+        self.assertEqual(
+            ["patch-coverage-update-parser-matrix-shim"],
+            [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
+        )
+
     def test_preflight_wrapper_change_is_non_lcov_focused_proof(self) -> None:
         packs = [
             {

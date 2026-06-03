@@ -416,6 +416,20 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-update-parser-matrix-shim"
+lcov = false
+files = [
+  "scripts/update-parser-matrix.py",
+  "scripts/tests/test-update-parser-matrix-shim.py",
+]
+commands = [
+  "python scripts/tests/test-update-parser-matrix-shim.py",
+]
+coverage_filters = [
+  "update-parser-matrix-shim",
+]
+
+[[pack]]
 id = "patch-coverage-preflight-wrapper"
 lcov = false
 files = [

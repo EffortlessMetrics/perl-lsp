@@ -256,6 +256,11 @@ const UPDATE_CURRENT_STATUS_SHIM_PACK: ProofPack = ProofPack {
     commands: &["python scripts/tests/test-update-current-status-shim.py"],
 };
 
+const UPDATE_PARSER_MATRIX_SHIM_PACK: ProofPack = ProofPack {
+    id: "update-parser-matrix-shim-focused",
+    commands: &["python scripts/tests/test-update-parser-matrix-shim.py"],
+};
+
 const PREFLIGHT_WRAPPER_PACK: ProofPack = ProofPack {
     id: "preflight-wrapper-focused",
     commands: &["bash scripts/tests/test-preflight-wrapper.sh"],
@@ -760,6 +765,15 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         route.add_surface("update-current-status-shim");
         route.add_pack(UPDATE_CURRENT_STATUS_SHIM_PACK);
         route.add_coverage_pack("patch-coverage-update-current-status-shim");
+        return;
+    }
+
+    if file == "scripts/update-parser-matrix.py"
+        || file == "scripts/tests/test-update-parser-matrix-shim.py"
+    {
+        route.add_surface("update-parser-matrix-shim");
+        route.add_pack(UPDATE_PARSER_MATRIX_SHIM_PACK);
+        route.add_coverage_pack("patch-coverage-update-parser-matrix-shim");
         return;
     }
 
@@ -2081,6 +2095,34 @@ mod tests {
     }
 
     #[test]
+    fn ci_route_receipt_maps_update_parser_matrix_shim_to_focused_non_lcov_pack() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec!["scripts/update-parser-matrix.py".to_string()],
+        )?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["update-parser-matrix-shim"]);
+        assert!(proof_pack_ids(&receipt).contains(&"update-parser-matrix-shim-focused"));
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "update-parser-matrix-shim-focused"
+                && pack.commands.iter().any(|command| {
+                    command == "python scripts/tests/test-update-parser-matrix-shim.py"
+                })
+        }));
+        assert!(receipt.coverage_pack_selector.is_empty());
+        assert!(receipt.coverage_proof_packs.is_empty());
+        assert_eq!(
+            receipt
+                .skipped_by_policy
+                .get("patch-coverage-update-parser-matrix-shim")
+                .map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        Ok(())
+    }
+
+    #[test]
     fn ci_route_receipt_maps_preflight_wrapper_to_focused_non_lcov_pack() -> Result<()> {
         let receipt =
             route_receipt("origin/main", "HEAD", vec!["scripts/preflight.sh".to_string()])?;
@@ -2903,6 +2945,7 @@ mod tests {
                 "patch-coverage-debt-report-shim",
                 "patch-coverage-debt-pr-summary-shim",
                 "patch-coverage-update-current-status-shim",
+                "patch-coverage-update-parser-matrix-shim",
                 "patch-coverage-preflight-wrapper",
                 "patch-coverage-install-githooks-wrapper",
                 "patch-coverage-e2e-gate-wrapper",
@@ -2967,6 +3010,7 @@ mod tests {
             "patch-coverage-debt-report-shim",
             "patch-coverage-debt-pr-summary-shim",
             "patch-coverage-update-current-status-shim",
+            "patch-coverage-update-parser-matrix-shim",
             "patch-coverage-preflight-wrapper",
             "patch-coverage-install-githooks-wrapper",
             "patch-coverage-e2e-gate-wrapper",
@@ -3111,6 +3155,10 @@ mod tests {
         );
         assert_eq!(
             skipped.get("patch-coverage-update-current-status-shim").map(String::as_str),
+            Some(NON_LCOV_COVERAGE_SKIP_REASON)
+        );
+        assert_eq!(
+            skipped.get("patch-coverage-update-parser-matrix-shim").map(String::as_str),
             Some(NON_LCOV_COVERAGE_SKIP_REASON)
         );
         assert_eq!(
