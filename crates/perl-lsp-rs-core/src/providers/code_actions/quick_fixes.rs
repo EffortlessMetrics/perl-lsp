@@ -1983,3 +1983,46 @@ fn valid_diagnostic_range(source: &str, range: (usize, usize)) -> Option<(usize,
     }
     Some((start, end))
 }
+
+/// Remove the undefined label from a `next LABEL`, `last LABEL`, or `redo LABEL`
+/// statement (PL410).
+///
+/// The fix strips the label so the statement targets the innermost enclosing
+/// loop — the only safe mechanical transform when the named label does not exist.
+/// The diagnostic range must point at the `op LABEL` node produced by the parser;
+/// this is verified before any edit is emitted.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((start, end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let Some(text) = source.get(start..end) else {
+        return Vec::new();
+    };
+
+    // Determine which operator is present and validate the range starts there.
+    let op = if text.starts_with("next") && text[4..].starts_with(|c: char| c.is_whitespace()) {
+        "next"
+    } else if text.starts_with("last") && text[4..].starts_with(|c: char| c.is_whitespace()) {
+        "last"
+    } else if text.starts_with("redo") && text[4..].starts_with(|c: char| c.is_whitespace()) {
+        "redo"
+    } else {
+        return Vec::new();
+    };
+
+    vec![CodeAction {
+        title: format!("Remove undefined label (use `{op}` to target innermost loop)"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start, end },
+                new_text: op.to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
