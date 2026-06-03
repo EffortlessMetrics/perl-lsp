@@ -3180,6 +3180,91 @@ fn test_require_statement_triggers_module_completion() -> Result<(), Box<dyn std
 
 #[test]
 fn test_require_statement_skips_file_path() -> Result<(), Box<dyn std::error::Error>> {
+    // Previously, single-quoted require was blocked. Now completion fires for quoted forms
+    // so that `require 'Foo/Ba` gets module-name suggestions as the user types.
+    // This test documents that the open-quote context is now active.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(Url::parse("file:///lib/Utils.pm")?, "package Utils;\n1;\n".to_string())?;
+    // Open-quote context: cursor right after `require '` (no closing quote)
+    let code = "require 'Utils";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+    // Completion should fire for quoted module-path forms (the quote restriction is removed)
+    assert!(
+        completions.iter().any(|c| c.kind == CompletionItemKind::Module),
+        "require 'Utils (open-quote) should trigger module-name completions; got: {:?}",
+        completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn test_require_statement_skips_double_quoted_file_path() -> Result<(), Box<dyn std::error::Error>>
+{
+    // Previously, double-quoted require was blocked. Now completion fires for quoted forms
+    // so that `require "Foo/Ba` gets module-name suggestions as the user types.
+    // This test documents that the open-quote context is now active for double-quoted forms too.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(Url::parse("file:///lib/Utils.pm")?, "package Utils;\n1;\n".to_string())?;
+    // Open-quote context: cursor inside `require "Utils` (no closing quote)
+    let code = r#"require "Utils"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+    // Completion should fire — the double-quote restriction has been removed
+    assert!(
+        completions.iter().any(|c| c.kind == CompletionItemKind::Module),
+        r#"require "Utils (open-quote) should trigger module-name completions; got: {:?}"#,
+        completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn test_require_open_quote_is_require_context() -> Result<(), Box<dyn std::error::Error>> {
+    // Confirms that `require "` (cursor right after the opening quote with nothing typed yet)
+    // is treated as a valid module-name completion context. Previously, the opening quote char
+    // was in the block list, suppressing completion. This regression guard ensures it stays open.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(Url::parse("file:///lib/Foo.pm")?, "package Foo;\n1;\n".to_string())?;
+    // Cursor right after the opening quote — the user is about to type a module path
+    let code = r#"require ""#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+    assert!(
+        completions.iter().any(|c| c.kind == CompletionItemKind::Module),
+        r#"require " (cursor after open-quote) should trigger module-name completions; got: {:?}"#,
+        completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn test_require_closed_quoted_pm_path_skips_module_completion()
+-> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(Url::parse("file:///lib/Utils.pm")?, "package Utils;\n1;\n".to_string())?;
+    let code = r#"require "Utils.pm""#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+    assert!(
+        !completions.iter().any(|c| c.kind == CompletionItemKind::Module),
+        r#"closed require "Utils.pm" should not trigger module-name completions; got: {:?}"#,
+        completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn test_require_quoted_script_path_skips_module_completion()
+-> Result<(), Box<dyn std::error::Error>> {
     let index = Arc::new(WorkspaceIndex::new());
     index.index_file(Url::parse("file:///lib/Utils.pm")?, "package Utils;\n1;\n".to_string())?;
     let code = "require './utils.pl'";
@@ -3196,18 +3281,17 @@ fn test_require_statement_skips_file_path() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
-fn test_require_statement_skips_double_quoted_file_path() -> Result<(), Box<dyn std::error::Error>>
-{
+fn test_require_variable_path_skips_module_completion() -> Result<(), Box<dyn std::error::Error>> {
     let index = Arc::new(WorkspaceIndex::new());
     index.index_file(Url::parse("file:///lib/Utils.pm")?, "package Utils;\n1;\n".to_string())?;
-    let code = r#"require "Utils.pm""#;
+    let code = "require $module";
     let mut parser = Parser::new(code);
     let ast = must(parser.parse());
     let provider = CompletionProvider::new_with_index(&ast, Some(index));
     let completions = provider.get_completions(code, code.len());
     assert!(
         !completions.iter().any(|c| c.kind == CompletionItemKind::Module),
-        r#"require "Utils.pm" should not trigger module-name completions; got: {:?}"#,
+        "require $module should not trigger module-name completions; got: {:?}",
         completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
     );
     Ok(())
