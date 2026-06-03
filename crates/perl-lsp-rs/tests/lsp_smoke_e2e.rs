@@ -250,7 +250,7 @@ print $answer;
 #[test]
 fn lsp_smoke_e2e_stdio_flow() -> Result<(), Box<dyn std::error::Error>> {
     let server = common::start_lsp_server();
-    let timeout = Duration::from_secs(2);
+    let timeout = common::timeout_scaler::TimeoutProfile::Standard.timeout();
     let init_timeout = common::timeout_scaler::TimeoutProfile::Initialization.timeout();
 
     let uri = unique_test_uri("stdio-flow");
@@ -891,6 +891,220 @@ my $value = 42;
 
     let shutdown_response =
         send_request_with_timeout(&server, 104, "shutdown", json!(null), timeout)?;
+    assert!(
+        shutdown_response.get("error").is_none(),
+        "shutdown returned error: {shutdown_response:#}"
+    );
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+            "params": null
+        }),
+    );
+
+    Ok(())
+}
+
+#[test]
+fn lsp_smoke_e2e_will_save_wait_until_request_response() -> Result<(), Box<dyn std::error::Error>> {
+    let server = common::start_lsp_server();
+    // willSaveWaitUntil runs the on-save formatter, which shells out to perltidy
+    // via an OsSubprocessRuntime with a 10s subprocess timeout. On runners where
+    // perltidy is present (e.g. CI's perl-equipped CX lane) a cold/loaded spawn can
+    // take several seconds, so the client timeout must comfortably exceed the
+    // server-side 10s formatter timeout — otherwise the request times out before the
+    // server responds. (Runners without perltidy return [] near-instantly.)
+    let request_timeout = Duration::from_secs(15);
+    let init_timeout = common::timeout_scaler::TimeoutProfile::Initialization.timeout();
+
+    let uri = "file:///tmp/lsp_smoke_e2e_will_save_wait_until.pl";
+    let source = "use strict;\nuse warnings;\n\nmy $x=42;my $y=99;\nsub foo{return 1;}\n";
+
+    // ── Step 1: Initialize ──────────────────────────────────────────────
+    let init_response_result = send_request_with_timeout(
+        &server,
+        101,
+        "initialize",
+        json!({
+            "processId": null,
+            "rootUri": null,
+            "capabilities": {
+                "textDocument": {
+                    "synchronization": {
+                        "willSaveWaitUntil": true
+                    }
+                }
+            }
+        }),
+        init_timeout,
+    );
+    assert!(
+        init_response_result.is_ok(),
+        "initialize response should arrive before timeout: {init_response_result:#?}"
+    );
+    let init_response = init_response_result?;
+    assert!(init_response.get("error").is_none(), "initialize returned error: {init_response:#}");
+
+    // Gap 2 fix: assert server advertises willSaveWaitUntil capability.
+    // Capability lives at textDocumentSync.willSaveWaitUntil, NOT at top-level
+    // willSaveWaitUntilProvider.
+    assert_eq!(
+        init_response.pointer("/result/capabilities/textDocumentSync/willSaveWaitUntil"),
+        Some(&serde_json::Value::Bool(true)),
+        "server must advertise textDocumentSync.willSaveWaitUntil = true in capabilities"
+    );
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "initialized",
+            "params": {}
+        }),
+    );
+
+    // ── Step 2: Open document ───────────────────────────────────────────
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": source
+                }
+            }
+        }),
+    );
+
+    // ── Step 3: Send willSaveWaitUntil request ──────────────────────────
+    let will_save_response_result = send_request_with_timeout(
+        &server,
+        102,
+        "textDocument/willSaveWaitUntil",
+        json!({
+            "textDocument": { "uri": uri },
+            "reason": 1  // TextDocumentSaveReason.Manual
+        }),
+        request_timeout,
+    );
+    let will_save_response_status = if will_save_response_result.is_ok() { "ok" } else { "error" };
+    assert_eq!(
+        will_save_response_status, "ok",
+        "willSaveWaitUntil response should arrive before timeout: {will_save_response_result:#?}"
+    );
+    let will_save_response = will_save_response_result?;
+
+    // ── Step 4: Verify response envelope ────────────────────────────────
+    assert!(
+        will_save_response.get("error").is_none(),
+        "willSaveWaitUntil returned error: {will_save_response:#}"
+    );
+
+    let result = will_save_response
+        .get("result")
+        .ok_or("willSaveWaitUntil result field should be present")?;
+
+    // Gap 1 fix: LSP spec allows TextEdit[] | null; treat null as no-edits.
+    // This implementation always returns an array, but be robust to spec-compliant nulls.
+    assert!(
+        matches!(result, serde_json::Value::Null | serde_json::Value::Array(_)),
+        "willSaveWaitUntil result should be TextEdit[] or null, got: {result}"
+    );
+    let edits: &[serde_json::Value] = match result {
+        serde_json::Value::Null => &[],
+        serde_json::Value::Array(arr) => arr.as_slice(),
+        _ => &[],
+    };
+
+    // If server returns edits, validate they have the required TextEdit structure.
+    // Under default config (test_runner_enabled: true) the formatter runs, so edits
+    // are likely non-empty for this fixture — the loop will execute.
+    for edit in edits {
+        let range = edit.get("range").ok_or("TextEdit should have range field")?;
+        let _new_text = edit
+            .get("newText")
+            .and_then(|v| v.as_str())
+            .ok_or("TextEdit should have newText string field")?;
+
+        let start = range.get("start").ok_or("TextEdit range should have start")?;
+        assert!(
+            start.get("line").and_then(|v| v.as_u64()).is_some(),
+            "TextEdit range.start.line should be a non-negative integer"
+        );
+        assert!(
+            start.get("character").and_then(|v| v.as_u64()).is_some(),
+            "TextEdit range.start.character should be a non-negative integer"
+        );
+
+        let end = range.get("end").ok_or("TextEdit range should have end")?;
+        assert!(
+            end.get("line").and_then(|v| v.as_u64()).is_some(),
+            "TextEdit range.end.line should be a non-negative integer"
+        );
+        assert!(
+            end.get("character").and_then(|v| v.as_u64()).is_some(),
+            "TextEdit range.end.character should be a non-negative integer"
+        );
+    }
+
+    // ── Step 5: Verify server is still responsive ────────────────────────
+    let hover_response_result = send_request_with_timeout(
+        &server,
+        103,
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 3, "character": 5 }
+        }),
+        request_timeout,
+    );
+    let hover_response_status = if hover_response_result.is_ok() { "ok" } else { "error" };
+    assert_eq!(
+        hover_response_status, "ok",
+        "hover response should arrive after willSaveWaitUntil: {hover_response_result:#?}"
+    );
+    let hover_response = hover_response_result?;
+    assert!(
+        hover_response.get("error").is_none(),
+        "server should remain responsive after willSaveWaitUntil: {hover_response:#}"
+    );
+
+    // ── Step 6: Send willSave notification ──────────────────────────────
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/willSave",
+            "params": {
+                "textDocument": { "uri": uri },
+                "reason": 1
+            }
+        }),
+    );
+
+    // ── Step 7: Send didSave to complete lifecycle ──────────────────────
+    // Gap 3 fix: DidSaveTextDocumentParams.textDocument is TextDocumentIdentifier
+    // (uri only — no version field).
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didSave",
+            "params": {
+                "textDocument": { "uri": uri }
+            }
+        }),
+    );
+
+    // ── Step 8: Shutdown ────────────────────────────────────────────────
+    let shutdown_response =
+        send_request_with_timeout(&server, 104, "shutdown", json!(null), request_timeout)?;
     assert!(
         shutdown_response.get("error").is_none(),
         "shutdown returned error: {shutdown_response:#}"
