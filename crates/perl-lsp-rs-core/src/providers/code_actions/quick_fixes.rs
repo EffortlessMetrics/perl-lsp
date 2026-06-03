@@ -1914,6 +1914,47 @@ pub fn fix_printf_format_arity(source: &str, diagnostic: &QuickFixDiagnostic) ->
     }]
 }
 
+/// Fix `next LABEL`/`last LABEL`/`redo LABEL` with an undefined label (PL410).
+///
+/// The only safe mechanical fix is to drop the label so the statement targets
+/// the innermost enclosing loop instead of the nonexistent named one.
+/// `is_preferred: true` — there is exactly one sensible transformation.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((range_start, range_end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+
+    let range_text = &source[range_start..range_end];
+    let op = range_text.split_whitespace().next().unwrap_or("");
+
+    if !matches!(op, "next" | "last" | "redo") {
+        return Vec::new();
+    }
+
+    // Extract label name from the message: "`op LABEL` references a label..."
+    let Some(label) =
+        diagnostic.message.split('`').nth(1).and_then(|s| s.split_whitespace().nth(1))
+    else {
+        return Vec::new();
+    };
+
+    vec![CodeAction {
+        title: format!("Remove undefined label '{label}' from '{op} {label}'"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: range_start, end: range_end },
+                new_text: op.to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
 fn printf_format_insert_position(
     source: &str,
     range_start: usize,
