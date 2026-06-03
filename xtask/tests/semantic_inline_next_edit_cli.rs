@@ -185,6 +185,60 @@ fn semantic_inline_next_edit_cli_writes_scaffold_receipt() -> Result<()> {
             .and_then(Value::as_str)
             .is_some_and(|text| text.contains("use My::App;\r\nmy $value"))
     );
+    let project_shape = missing_import
+        .get("project_shape")
+        .and_then(Value::as_object)
+        .ok_or_else(|| anyhow!("missing_import project_shape receipt missing"))?;
+    assert_eq!(
+        project_shape
+            .get("project_candidate")
+            .and_then(|proof| proof.get("candidate"))
+            .and_then(|candidate| candidate.get("module"))
+            .and_then(Value::as_str),
+        Some("My::App")
+    );
+    assert_eq!(
+        project_shape
+            .get("project_candidate")
+            .and_then(|proof| proof.get("candidate"))
+            .and_then(|candidate| candidate.get("editorVisible"))
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        project_shape
+            .get("duplicate_project_import")
+            .and_then(|proof| proof.get("rejectionReasons"))
+            .and_then(Value::as_array)
+            .and_then(|reasons| reasons.first())
+            .and_then(Value::as_str),
+        Some("duplicate_import")
+    );
+    assert_eq!(
+        project_shape
+            .get("root_only_module")
+            .and_then(|proof| proof.get("rejectionReasons"))
+            .and_then(Value::as_array)
+            .and_then(|reasons| reasons.first())
+            .and_then(Value::as_str),
+        Some("unreachable_module")
+    );
+    assert_eq!(
+        project_shape
+            .get("cancelled_lib_module")
+            .and_then(|proof| proof.get("rejectionReasons"))
+            .and_then(Value::as_array)
+            .and_then(|reasons| reasons.first())
+            .and_then(Value::as_str),
+        Some("unreachable_module")
+    );
+    assert_eq!(project_shape.get("parse_stable").and_then(Value::as_bool), Some(true));
+    assert!(
+        project_shape
+            .get("accepted_document_text")
+            .and_then(Value::as_str)
+            .is_some_and(|text| text.contains("use lib 'lib';\nuse My::App;\nmy $app"))
+    );
     let test_assertion = scaffold
         .get("test_assertion_next_action")
         .and_then(Value::as_object)

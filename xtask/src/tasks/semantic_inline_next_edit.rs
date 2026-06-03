@@ -41,6 +41,7 @@ struct MissingImportNextActionReceipt {
     reachable_candidate: MissingImportNextEditProof,
     duplicate_import: MissingImportNextEditProof,
     unreachable_module: MissingImportNextEditProof,
+    project_shape: ProjectMissingImportNextActionReceipt,
     comment_target: MissingImportNextEditProof,
     pod_target: MissingImportNextEditProof,
     data_target: MissingImportNextEditProof,
@@ -50,6 +51,18 @@ struct MissingImportNextActionReceipt {
     crlf_accepted_document_text: String,
     parse_stable: bool,
     line_endings_preserved: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct ProjectMissingImportNextActionReceipt {
+    claim_boundary: &'static str,
+    project_candidate: MissingImportNextEditProof,
+    duplicate_project_import: MissingImportNextEditProof,
+    root_only_module: MissingImportNextEditProof,
+    cancelled_lib_module: MissingImportNextEditProof,
+    accepted_document_text: String,
+    parse_stable: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -200,6 +213,7 @@ fn missing_import_next_action_receipt(
         vec!["My::App".to_string()],
         vec!["strict".to_string(), "warnings".to_string()],
     ));
+    let project_shape = project_missing_import_next_action_receipt(provider)?;
     let comment_source = "use strict;\n# My::App->new\n";
     let comment_target =
         provider.prove_missing_import(&MissingImportNextEditRequest::receipt_only_at(
@@ -293,6 +307,7 @@ fn missing_import_next_action_receipt(
         reachable_candidate: reachable,
         duplicate_import: duplicate,
         unreachable_module: unreachable,
+        project_shape,
         comment_target,
         pod_target,
         data_target,
@@ -304,6 +319,68 @@ fn missing_import_next_action_receipt(
         line_endings_preserved,
     };
     validate_missing_import_next_action(&receipt)?;
+    Ok(receipt)
+}
+
+fn project_missing_import_next_action_receipt(
+    provider: &NextEditProvider,
+) -> Result<ProjectMissingImportNextActionReceipt> {
+    let project_source = "package App::Script;\nuse strict;\nuse warnings;\nuse lib 'lib';\nmy $app = My::App->new;\n";
+    let project_expected = "package App::Script;\nuse strict;\nuse warnings;\nuse lib 'lib';\nuse My::App;\nmy $app = My::App->new;\n";
+    let project_candidate =
+        provider.prove_missing_import(&MissingImportNextEditRequest::receipt_only(
+            project_source,
+            "My::App",
+            vec!["My::App".to_string(), "My::App::Config".to_string()],
+            vec!["strict".to_string(), "warnings".to_string(), "lib".to_string()],
+        ));
+    let duplicate_project_import =
+        provider.prove_missing_import(&MissingImportNextEditRequest::receipt_only(
+            project_expected,
+            "My::App",
+            vec!["My::App".to_string(), "My::App::Config".to_string()],
+            vec!["strict".to_string(), "warnings".to_string(), "lib".to_string()],
+        ));
+    let root_only_module =
+        provider.prove_missing_import(&MissingImportNextEditRequest::receipt_only(
+            project_source,
+            "My::RootOnly",
+            vec!["My::App".to_string(), "My::App::Config".to_string()],
+            vec!["strict".to_string(), "warnings".to_string(), "lib".to_string()],
+        ));
+    let cancelled_source = "package App::Script;\nuse strict;\nuse warnings;\nuse lib 'lib';\nno lib 'lib';\nmy $app = My::App->new;\n";
+    let cancelled_lib_module =
+        provider.prove_missing_import(&MissingImportNextEditRequest::receipt_only(
+            cancelled_source,
+            "My::App",
+            Vec::new(),
+            vec!["strict".to_string(), "warnings".to_string(), "lib".to_string()],
+        ));
+
+    let candidate = project_candidate.candidate.as_ref().ok_or_else(|| {
+        color_eyre::eyre::eyre!("project-shaped missing-import proof omitted candidate")
+    })?;
+    let accepted_document_text = candidate.edit.apply_to(project_source).ok_or_else(|| {
+        color_eyre::eyre::eyre!("project-shaped missing-import edit did not apply")
+    })?;
+    if accepted_document_text != project_expected {
+        bail!("project-shaped missing-import edit produced unexpected document text");
+    }
+    let parse_stable = parse_succeeds(project_source) && parse_succeeds(&accepted_document_text);
+    if !parse_stable {
+        bail!("project-shaped missing-import edit did not preserve parse success");
+    }
+
+    let receipt = ProjectMissingImportNextActionReceipt {
+        claim_boundary: "receipt-only project-shaped missing-import next-action proof; effective @INC reachability is precomputed and passed explicitly, and no runtime LSP method, editor-visible provider, source mirror, release action, or AI behavior is enabled",
+        project_candidate,
+        duplicate_project_import,
+        root_only_module,
+        cancelled_lib_module,
+        accepted_document_text,
+        parse_stable,
+    };
+    validate_project_missing_import_next_action(&receipt)?;
     Ok(receipt)
 }
 
@@ -827,6 +904,8 @@ fn validate_missing_import_next_action(receipt: &MissingImportNextActionReceipt)
     {
         bail!("unreachable missing-import proof must reject unreachable modules");
     }
+    validate_project_missing_import_next_action(&receipt.project_shape)?;
+    validate_project_missing_import_next_action(&receipt.project_shape)?;
     for (name, proof) in [
         ("comment target", &receipt.comment_target),
         ("POD target", &receipt.pod_target),
@@ -858,6 +937,62 @@ fn validate_missing_import_next_action(receipt: &MissingImportNextActionReceipt)
     }
     if !receipt.line_endings_preserved {
         bail!("missing-import next action must preserve document line endings");
+    }
+    Ok(())
+}
+
+fn validate_project_missing_import_next_action(
+    receipt: &ProjectMissingImportNextActionReceipt,
+) -> Result<()> {
+    let Some(candidate) = receipt.project_candidate.candidate.as_ref() else {
+        bail!("project-shaped missing-import proof must prepare a receipt-only candidate");
+    };
+    if receipt.project_candidate.status != NextEditStatus::ReceiptOnly
+        || candidate.family != NextEditCandidateFamily::MissingImport
+        || candidate.module != "My::App"
+        || candidate.editor_visible
+        || candidate.reason != "reachable_module_from_effective_inc"
+        || candidate.edit.new_text != "use My::App;\n"
+        || !receipt.project_candidate.rejection_reasons.is_empty()
+    {
+        bail!("project-shaped missing-import proof did not satisfy the receipt-only contract");
+    }
+    if !receipt
+        .accepted_document_text
+        .contains("use lib 'lib';\nuse My::App;\nmy $app = My::App->new;")
+    {
+        bail!("project-shaped missing-import accepted text did not keep the import after use lib");
+    }
+    if receipt.duplicate_project_import.candidate.is_some()
+        || !receipt
+            .duplicate_project_import
+            .rejection_reasons
+            .contains(&NextEditRejectionReason::DuplicateImport)
+    {
+        bail!("project-shaped missing-import proof must reject duplicate imports");
+    }
+    if receipt.root_only_module.candidate.is_some()
+        || !receipt
+            .root_only_module
+            .rejection_reasons
+            .contains(&NextEditRejectionReason::UnreachableModule)
+    {
+        bail!(
+            "project-shaped missing-import proof must reject modules omitted from the effective @INC reachability input"
+        );
+    }
+    if receipt.cancelled_lib_module.candidate.is_some()
+        || !receipt
+            .cancelled_lib_module
+            .rejection_reasons
+            .contains(&NextEditRejectionReason::UnreachableModule)
+    {
+        bail!(
+            "project-shaped missing-import proof must reject modules removed from the effective @INC reachability input"
+        );
+    }
+    if !receipt.parse_stable {
+        bail!("project-shaped missing-import proof must keep local parse state stable");
     }
     Ok(())
 }
@@ -1124,6 +1259,58 @@ mod tests {
         );
         assert_eq!(
             value
+                .pointer("/missing_import_next_action/project_shape/project_candidate/status")
+                .and_then(Value::as_str),
+            Some("receipt_only")
+        );
+        assert_eq!(
+            value
+                .pointer(
+                    "/missing_import_next_action/project_shape/project_candidate/candidate/module"
+                )
+                .and_then(Value::as_str),
+            Some("My::App")
+        );
+        assert_eq!(
+            value
+                .pointer("/missing_import_next_action/project_shape/project_candidate/candidate/editorVisible")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            value
+                .pointer("/missing_import_next_action/project_shape/duplicate_project_import/rejectionReasons/0")
+                .and_then(Value::as_str),
+            Some("duplicate_import")
+        );
+        assert_eq!(
+            value
+                .pointer(
+                    "/missing_import_next_action/project_shape/root_only_module/rejectionReasons/0"
+                )
+                .and_then(Value::as_str),
+            Some("unreachable_module")
+        );
+        assert_eq!(
+            value
+                .pointer("/missing_import_next_action/project_shape/cancelled_lib_module/rejectionReasons/0")
+                .and_then(Value::as_str),
+            Some("unreachable_module")
+        );
+        assert_eq!(
+            value
+                .pointer("/missing_import_next_action/project_shape/parse_stable")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert!(
+            value
+                .pointer("/missing_import_next_action/project_shape/accepted_document_text")
+                .and_then(Value::as_str)
+                .is_some_and(|text| text.contains("use lib 'lib';\nuse My::App;\nmy $app"))
+        );
+        assert_eq!(
+            value
                 .pointer("/test_assertion_next_action/test_more_candidate/status")
                 .and_then(Value::as_str),
             Some("receipt_only")
@@ -1333,6 +1520,48 @@ mod tests {
         );
 
         let mut receipt = missing_import_next_action_receipt(&provider)?;
+        receipt.project_shape.project_candidate.candidate = None;
+        let error = validate_missing_import_next_action(&receipt)
+            .expect_err("missing project-shaped candidate must fail validation");
+        assert!(
+            error.to_string().contains("project-shaped"),
+            "error should identify project-shaped candidate drift, got {error}"
+        );
+
+        let mut receipt = missing_import_next_action_receipt(&provider)?;
+        let candidate =
+            receipt.project_shape.project_candidate.candidate.as_mut().ok_or_else(|| {
+                color_eyre::eyre::eyre!("valid project receipt omitted candidate")
+            })?;
+        candidate.editor_visible = true;
+        let error = validate_missing_import_next_action(&receipt)
+            .expect_err("editor-visible project-shaped candidate must fail validation");
+        assert!(
+            error.to_string().contains("receipt-only contract"),
+            "error should identify project-shaped candidate contract drift, got {error}"
+        );
+
+        let mut receipt = missing_import_next_action_receipt(&provider)?;
+        receipt.project_shape.accepted_document_text =
+            "package App::Script;\nuse strict;\nuse warnings;\nuse lib 'lib';\nmy $app = My::App->new;\n"
+                .to_string();
+        let error = validate_missing_import_next_action(&receipt)
+            .expect_err("project-shaped accepted text without import must fail validation");
+        assert!(
+            error.to_string().contains("accepted text"),
+            "error should identify project-shaped accepted-text drift, got {error}"
+        );
+
+        let mut receipt = missing_import_next_action_receipt(&provider)?;
+        receipt.project_shape.parse_stable = false;
+        let error = validate_missing_import_next_action(&receipt)
+            .expect_err("parse-unstable project-shaped action must fail validation");
+        assert!(
+            error.to_string().contains("parse state stable"),
+            "error should identify project-shaped parse-stability drift, got {error}"
+        );
+
+        let mut receipt = missing_import_next_action_receipt(&provider)?;
         receipt.line_endings_preserved = false;
         let error = validate_missing_import_next_action(&receipt)
             .expect_err("line-ending drift must fail validation");
@@ -1363,6 +1592,35 @@ mod tests {
         assert!(
             error.to_string().contains("reject unreachable modules"),
             "error should identify unreachable-module drift, got {error}"
+        );
+
+        let mut receipt = missing_import_next_action_receipt(&provider)?;
+        receipt.project_shape.duplicate_project_import.rejection_reasons.clear();
+        let error = validate_missing_import_next_action(&receipt)
+            .expect_err("project duplicate import without rejection reason must fail validation");
+        assert!(
+            error.to_string().contains("reject duplicate imports"),
+            "error should identify project duplicate-import drift, got {error}"
+        );
+
+        let mut receipt = missing_import_next_action_receipt(&provider)?;
+        receipt.project_shape.root_only_module.rejection_reasons.clear();
+        let error = validate_missing_import_next_action(&receipt).expect_err(
+            "project effective-INC omitted module without rejection reason must fail validation",
+        );
+        assert!(
+            error.to_string().contains("effective @INC"),
+            "error should identify effective-INC project module drift, got {error}"
+        );
+
+        let mut receipt = missing_import_next_action_receipt(&provider)?;
+        receipt.project_shape.cancelled_lib_module.rejection_reasons.clear();
+        let error = validate_missing_import_next_action(&receipt).expect_err(
+            "project effective-INC removed module without rejection reason must fail validation",
+        );
+        assert!(
+            error.to_string().contains("effective @INC"),
+            "error should identify effective-INC removed module drift, got {error}"
         );
 
         let mut receipt = missing_import_next_action_receipt(&provider)?;

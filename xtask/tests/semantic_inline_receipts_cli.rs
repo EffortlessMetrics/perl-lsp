@@ -384,6 +384,55 @@ fn semantic_inline_receipts_cli_embeds_quality_counters_when_available() -> Resu
     assert_eq!(
         next_edit_scaffold
             .get("missing_import_next_action")
+            .and_then(|action| action.get("project_shape_candidate_prepared"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("missing_import_next_action")
+            .and_then(|action| action.get("project_shape_candidate_editor_visible"))
+            .and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("missing_import_next_action")
+            .and_then(|action| action.get("project_shape_candidate_reason"))
+            .and_then(Value::as_str),
+        Some("reachable_module_from_effective_inc")
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("missing_import_next_action")
+            .and_then(|action| action.get("project_shape_duplicate_rejected"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("missing_import_next_action")
+            .and_then(|action| action.get("project_shape_root_only_rejected"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("missing_import_next_action")
+            .and_then(|action| action.get("project_shape_cancelled_lib_rejected"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("missing_import_next_action")
+            .and_then(|action| action.get("project_shape_parse_stable"))
+            .and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        next_edit_scaffold
+            .get("missing_import_next_action")
             .and_then(|action| action.get("parse_stable"))
             .and_then(Value::as_bool),
         Some(true)
@@ -401,7 +450,7 @@ fn semantic_inline_receipts_cli_embeds_quality_counters_when_available() -> Resu
             .and_then(|action| action.get("rejection_reasons"))
             .and_then(|reasons| reasons.get("duplicate_import"))
             .and_then(Value::as_u64),
-        Some(1)
+        Some(2)
     );
     assert_eq!(
         next_edit_scaffold
@@ -409,7 +458,7 @@ fn semantic_inline_receipts_cli_embeds_quality_counters_when_available() -> Resu
             .and_then(|action| action.get("rejection_reasons"))
             .and_then(|reasons| reasons.get("unreachable_module"))
             .and_then(Value::as_u64),
-        Some(1)
+        Some(3)
     );
     assert_eq!(
         next_edit_scaffold
@@ -1138,6 +1187,38 @@ fn valid_missing_import_next_action_json() -> Value {
         "unreachable_module": {
             "status": "receipt_only",
             "rejectionReasons": ["unreachable_module"]
+        },
+        "project_shape": {
+            "claim_boundary": "receipt-only project-shaped missing-import next-action proof; effective @INC reachability is precomputed and passed explicitly",
+            "project_candidate": {
+                "status": "receipt_only",
+                "candidate": {
+                    "family": "missing_import",
+                    "module": "My::App",
+                    "reason": "reachable_module_from_effective_inc",
+                    "edit": {
+                        "startByte": 62,
+                        "endByte": 62,
+                        "newText": "use My::App;\n"
+                    },
+                    "editorVisible": false
+                },
+                "rejectionReasons": []
+            },
+            "duplicate_project_import": {
+                "status": "receipt_only",
+                "rejectionReasons": ["duplicate_import"]
+            },
+            "root_only_module": {
+                "status": "receipt_only",
+                "rejectionReasons": ["unreachable_module"]
+            },
+            "cancelled_lib_module": {
+                "status": "receipt_only",
+                "rejectionReasons": ["unreachable_module"]
+            },
+            "accepted_document_text": "package App::Script;\nuse strict;\nuse warnings;\nuse lib 'lib';\nuse My::App;\nmy $app = My::App->new;\n",
+            "parse_stable": true
         },
         "comment_target": {
             "status": "receipt_only",
