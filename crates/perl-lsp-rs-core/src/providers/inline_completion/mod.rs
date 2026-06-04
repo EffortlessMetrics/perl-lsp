@@ -924,6 +924,14 @@ impl InlineCompletionProvider {
         line: u32,
         character: u32,
     ) -> InlineCompletionList {
+        if let Some(range) = shebang_replacement_range(context.prefix.as_str(), line, character) {
+            for item in &mut list.items {
+                if item.range.is_none() && is_shebang_completion_item(item) {
+                    item.range = Some(range);
+                }
+            }
+        }
+
         let Some(fragment) = replacement_fragment_at_cursor(context.prefix.as_str()) else {
             return list;
         };
@@ -2165,12 +2173,16 @@ impl InlineCandidateSource for ShebangCandidateSource {
         sink: &mut InlineCandidateSink<'_>,
     ) {
         let prefix = context.prefix.as_str();
-        if prefix == "#!" || prefix == "#!/" {
+        let Some(fragment) = shebang_completion_fragment(prefix) else {
+            return;
+        };
+
+        if completion_matches_fragment("perl", SHEBANG_PERL_INTERPRETER, fragment) {
             sink.push(
                 Self::SOURCE,
                 0,
                 InlineCompletionItem {
-                    insert_text: "/usr/bin/env perl".into(),
+                    insert_text: SHEBANG_PERL_INTERPRETER.into(),
                     filter_text: Some("perl".into()),
                     range: None,
                     command: None,
@@ -2217,6 +2229,8 @@ fn is_preferred_guard_condition_name(name: &str) -> bool {
         || name.ends_with("_ok")
 }
 
+const SHEBANG_PERL_INTERPRETER: &str = "/usr/bin/env perl";
+
 fn return_expression_fragment(prefix: &str) -> Option<&str> {
     keyword_tail_fragment(prefix, "return ", is_return_expression_fragment_text)
 }
@@ -2254,6 +2268,32 @@ fn is_variable_fragment_text(fragment: &str) -> bool {
         return false;
     };
     rest.chars().all(is_identifier_fragment_char)
+}
+
+fn shebang_completion_fragment(prefix: &str) -> Option<&str> {
+    prefix.strip_prefix("#!").and_then(|fragment| {
+        (fragment.is_empty()
+            || SHEBANG_PERL_INTERPRETER.starts_with(fragment)
+            || "perl".starts_with(fragment))
+        .then_some(fragment)
+    })
+}
+
+fn is_shebang_completion_item(item: &InlineCompletionItem) -> bool {
+    item.insert_text == SHEBANG_PERL_INTERPRETER
+}
+
+fn shebang_replacement_range(prefix: &str, line: u32, character: u32) -> Option<lsp_types::Range> {
+    let fragment = shebang_completion_fragment(prefix)?;
+    if fragment.is_empty() {
+        return None;
+    }
+
+    let start_character = "#!".encode_utf16().count() as u32;
+    (start_character <= character).then_some(lsp_types::Range {
+        start: lsp_types::Position::new(line, start_character),
+        end: lsp_types::Position::new(line, character),
+    })
 }
 
 fn condition_expression_prefix(prefix: &str) -> Option<&'static str> {
@@ -3069,7 +3109,7 @@ fn cursor_is_inside_line_comment(
 }
 
 fn is_shebang_completion_prefix(prefix: &str, hash_offset: usize) -> bool {
-    hash_offset == 0 && matches!(prefix, "#!" | "#!/")
+    hash_offset == 0 && prefix.starts_with("#!")
 }
 
 fn cursor_is_inside_pod(text: &str, cursor_offset: usize) -> bool {
@@ -3672,6 +3712,26 @@ mod tests {
         let completions = provider.get_inline_completions("#!/", 0, 3);
         assert!(!completions.items.is_empty());
         assert_eq!(completions.items[0].insert_text, "/usr/bin/env perl");
+    }
+
+    #[test]
+    fn shebang_partial_path_replaces_typed_interpreter() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "#!/usr/bin/env p";
+        let character = source.encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 0, character);
+        let item = completions
+            .items
+            .iter()
+            .find(|item| item.insert_text == "/usr/bin/env perl")
+            .ok_or("expected shebang interpreter completion")?;
+        let range = item.range.as_ref().ok_or("shebang completion should replace partial path")?;
+
+        assert_eq!(range.start.line, 0);
+        assert_eq!(range.start.character, "#!".encode_utf16().count() as u32);
+        assert_eq!(range.end.line, 0);
+        assert_eq!(range.end.character, character);
+        Ok(())
     }
 
     #[test]
