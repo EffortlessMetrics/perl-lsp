@@ -769,6 +769,103 @@ fn inline_completion_selected_completion_info_multiline_range_returns_empty() ->
 }
 
 #[test]
+fn inline_completion_crlf_partial_token_returns_wire_range() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_crlf_partial_range.pl";
+    let source = "my $value = 1;\r\nuse str";
+    let character = u32::try_from("use str".encode_utf16().count())?;
+    harness.open(uri, source)?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, uri, 1, character, 1)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+    let strict = item_with_insert_text(items, "strict;")?;
+
+    assert_item_range(strict, 1, 4, 1, character)?;
+    assert!(
+        items.iter().all(|item| item.get("insertText") != Some(&json!("warnings;"))),
+        "CRLF partial use prefix must not return non-matching pragma items"
+    );
+    Ok(())
+}
+
+#[test]
+fn inline_completion_selected_completion_info_missing_text_is_rejected() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_selected_completion_missing_text.pl";
+    harness.open(uri, "use ")?;
+    let response = harness.request_raw(json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "textDocument/inlineCompletion",
+        "params": {
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 4 },
+            "context": {
+                "triggerKind": 1,
+                "selectedCompletionInfo": {
+                    "range": {
+                        "start": { "line": 0, "character": 4 },
+                        "end": { "line": 0, "character": 4 }
+                    }
+                }
+            }
+        }
+    }));
+
+    assert_eq!(response.pointer("/error/code"), Some(&json!(-32602)));
+    assert_eq!(
+        response.pointer("/error/message"),
+        Some(&json!("Missing selectedCompletionInfo.text"))
+    );
+    Ok(())
+}
+
+#[test]
+fn inline_completion_selected_completion_info_invalid_range_is_rejected() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_selected_completion_invalid_range.pl";
+    harness.open(uri, "use ")?;
+    let response = harness.request_raw(json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "textDocument/inlineCompletion",
+        "params": {
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 4 },
+            "context": {
+                "triggerKind": 1,
+                "selectedCompletionInfo": {
+                    "range": { "start": { "line": 0 } },
+                    "text": "strict"
+                }
+            }
+        }
+    }));
+
+    assert_eq!(response.pointer("/error/code"), Some(&json!(-32602)));
+    assert_eq!(
+        response.pointer("/error/message"),
+        Some(&json!("Invalid selectedCompletionInfo.range"))
+    );
+    Ok(())
+}
+
+#[test]
 fn inline_completion_items_do_not_emit_object_form_string_value() -> TestResult {
     let mut harness = LspHarness::new();
     harness.initialize(Some(json!({

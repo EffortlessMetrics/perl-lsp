@@ -5198,6 +5198,40 @@ mod tests {
     }
 
     #[test]
+    fn inline_completion_handles_crlf_use_partial_range() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let provider = InlineCompletionProvider::new();
+        let source = "my $value = 1;\r\nuse str";
+        let character = u32::try_from("use str".encode_utf16().count())?;
+        let completions = provider.get_inline_completions(source, 1, character);
+        let strict = completions
+            .items
+            .iter()
+            .find(|item| item.insert_text == "strict;")
+            .ok_or("expected strict; completion on CRLF line")?;
+        let range = strict.range.as_ref().ok_or("CRLF partial completion must carry range")?;
+
+        assert_eq!(range.start.line, 1);
+        assert_eq!(range.start.character, 4);
+        assert_eq!(range.end.line, 1);
+        assert_eq!(range.end.character, character);
+        assert!(completions.items.iter().all(|item| item.insert_text != "warnings;"));
+        Ok(())
+    }
+
+    #[test]
+    fn inline_completion_suppresses_crlf_comment_then_resumes_next_line() {
+        let provider = InlineCompletionProvider::new();
+        let source = "# use \r\nuse ";
+
+        let comment_completions = provider.get_inline_completions(source, 0, 6);
+        let code_completions = provider.get_inline_completions(source, 1, 4);
+
+        assert!(comment_completions.items.is_empty());
+        assert!(code_completions.items.iter().any(|item| item.insert_text == "strict;"));
+    }
+
+    #[test]
     fn indented_equals_text_is_not_treated_as_pod() {
         let provider = InlineCompletionProvider::new();
         let source = " =pod\nuse ";
