@@ -1436,7 +1436,7 @@ impl InlineCompletionProvider {
         if return_expression_fragment(prefix).is_some() {
             return ExpectedSyntax::ReturnExpression;
         }
-        if is_guard_condition_prefix(prefix) {
+        if guard_condition_fragment(prefix).is_some() {
             return ExpectedSyntax::GuardCondition;
         }
         if condition_expression_prefix(prefix).is_some() {
@@ -2026,8 +2026,9 @@ impl InlineCandidateSource for SyntaxCandidateSource {
             }
         }
 
-        if is_guard_condition_prefix(prefix)
+        if let Some(fragment) = guard_condition_fragment(prefix)
             && let Some(condition) = provider.preferred_guard_condition(semantic_context)
+            && completion_matches_fragment(condition.as_str(), &format!("{condition};"), fragment)
         {
             sink.push(
                 Self::SOURCE,
@@ -2217,22 +2218,42 @@ fn is_preferred_guard_condition_name(name: &str) -> bool {
 }
 
 fn return_expression_fragment(prefix: &str) -> Option<&str> {
-    let return_index = last_keyword_index(prefix, "return ")?;
-    let fragment = &prefix[return_index + 7..];
-    fragment.chars().all(is_return_expression_fragment_char).then_some(fragment)
+    keyword_tail_fragment(prefix, "return ", is_return_expression_fragment_text)
+}
+
+fn is_return_expression_fragment_text(fragment: &str) -> bool {
+    fragment.chars().all(is_return_expression_fragment_char)
 }
 
 fn is_return_expression_fragment_char(ch: char) -> bool {
     is_identifier_fragment_char(ch) || matches!(ch, '$' | '@' | '%')
 }
 
-fn is_guard_condition_prefix(prefix: &str) -> bool {
-    ends_with_keyword(prefix, "return unless ")
-        || ends_with_keyword(prefix, "return if ")
-        || ends_with_keyword(prefix, "next if ")
-        || ends_with_keyword(prefix, "next unless ")
-        || ends_with_keyword(prefix, "last if ")
-        || ends_with_keyword(prefix, "last unless ")
+fn guard_condition_fragment(prefix: &str) -> Option<&str> {
+    ["return unless ", "return if ", "next if ", "next unless ", "last if ", "last unless "]
+        .into_iter()
+        .find_map(|keyword| keyword_tail_fragment(prefix, keyword, is_variable_fragment_text))
+}
+
+fn keyword_tail_fragment<'a>(
+    prefix: &'a str,
+    keyword: &str,
+    is_valid_fragment: fn(&str) -> bool,
+) -> Option<&'a str> {
+    let keyword_index = last_keyword_index(prefix, keyword)?;
+    let fragment = &prefix[keyword_index + keyword.len()..];
+    is_valid_fragment(fragment).then_some(fragment)
+}
+
+fn is_variable_fragment_text(fragment: &str) -> bool {
+    if fragment.is_empty() {
+        return true;
+    }
+
+    let Some(rest) = fragment.strip_prefix('$') else {
+        return false;
+    };
+    rest.chars().all(is_identifier_fragment_char)
 }
 
 fn condition_expression_prefix(prefix: &str) -> Option<&'static str> {
@@ -3777,6 +3798,52 @@ mod tests {
                 "future DBI assignments must not shape current receiver completions: {insert_texts:?}"
             );
         }
+    }
+
+    #[test]
+    fn return_partial_variable_completes_visible_scalar_with_range()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub helper {
+    my $result = compute();
+    return $res";
+        let character = "    return $res".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 2, character);
+        let item = completions
+            .items
+            .iter()
+            .find(|item| item.insert_text == "$result;")
+            .ok_or("expected partial return variable completion")?;
+        let range = item.range.as_ref().ok_or("partial return variable must carry a range")?;
+
+        assert_eq!(range.start.line, 2);
+        assert_eq!(range.start.character, "    return ".encode_utf16().count() as u32);
+        assert_eq!(range.end.line, 2);
+        assert_eq!(range.end.character, character);
+        Ok(())
+    }
+
+    #[test]
+    fn guard_partial_variable_completes_boolean_scalar_with_range()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub helper {
+    my $is_valid = validate();
+    return unless $is";
+        let character = "    return unless $is".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 2, character);
+        let item = completions
+            .items
+            .iter()
+            .find(|item| item.insert_text == "$is_valid;")
+            .ok_or("expected partial guard variable completion")?;
+        let range = item.range.as_ref().ok_or("partial guard variable must carry a range")?;
+
+        assert_eq!(range.start.line, 2);
+        assert_eq!(range.start.character, "    return unless ".encode_utf16().count() as u32);
+        assert_eq!(range.end.line, 2);
+        assert_eq!(range.end.character, character);
+        Ok(())
     }
 
     #[test]
