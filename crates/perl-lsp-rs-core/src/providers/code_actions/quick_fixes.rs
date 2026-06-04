@@ -1983,3 +1983,51 @@ fn valid_diagnostic_range(source: &str, range: (usize, usize)) -> Option<(usize,
     }
     Some((start, end))
 }
+
+/// Drop the undefined label from a `next LABEL`, `last LABEL`, or `redo LABEL`
+/// statement (PL410).
+///
+/// When a loop-control operator references a label that does not exist in the
+/// file, Perl dies at runtime with `Label not found for "next LABEL"`. The
+/// mechanical fix is to drop the label so the operator targets the innermost
+/// enclosing loop instead — identical runtime semantics for the innermost loop,
+/// and safe when the label was simply a typo or dead reference.
+///
+/// The diagnostic range covers exactly the `op LABEL` text emitted by the
+/// `check_loop_control_labels` linter. This function validates the range,
+/// confirms the text starts with one of the three operators, and replaces the
+/// full `op LABEL` span with just `op`.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((range_start, range_end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let Some(text) = source.get(range_start..range_end) else {
+        return Vec::new();
+    };
+    let op = if text.starts_with("next ") {
+        "next"
+    } else if text.starts_with("last ") {
+        "last"
+    } else if text.starts_with("redo ") {
+        "redo"
+    } else {
+        return Vec::new();
+    };
+
+    let display = text.trim();
+    vec![CodeAction {
+        title: format!("Drop label from '{display}' (targets innermost loop)"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: range_start, end: range_end },
+                new_text: op.to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
