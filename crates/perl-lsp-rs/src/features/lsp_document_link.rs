@@ -8,6 +8,16 @@ use lsp_types::{DocumentLink, Position, Range, Uri};
 use std::path::PathBuf;
 use url::Url;
 
+fn line_start_offsets(content: &str) -> Vec<usize> {
+    let mut starts = vec![0];
+    for (idx, ch) in content.char_indices() {
+        if ch == '\n' {
+            starts.push(idx + 1);
+        }
+    }
+    starts
+}
+
 fn to_range(content: &str, start: usize, end: usize) -> Range {
     // Simple byte->(line,col) translator
     let (mut line, mut col, mut i) = (0u32, 0u32, 0usize);
@@ -50,7 +60,10 @@ fn to_range(content: &str, start: usize, end: usize) -> Range {
 pub fn collect_document_links(text: &str, uri: &Url) -> Result<Vec<DocumentLink>, String> {
     let mut links = Vec::new();
 
+    let line_starts = line_start_offsets(text);
+
     for (line_idx, line) in text.lines().enumerate() {
+        let line_start = line_starts.get(line_idx).copied().unwrap_or(text.len());
         // `use Foo::Bar;`
         if let Some(idx) = line.find("use ") {
             let rest = &line[idx + 4..];
@@ -59,8 +72,7 @@ pub fn collect_document_links(text: &str, uri: &Url) -> Result<Vec<DocumentLink>
                 .take_while(|c| c.is_ascii_alphanumeric() || *c == ':' || *c == '_')
                 .collect();
             if !name.is_empty() && name.contains("::") {
-                let s =
-                    text[..].lines().take(line_idx).map(|l| l.len() + 1).sum::<usize>() + idx + 4;
+                let s = line_start + idx + 4;
                 let e = s + name.len();
                 links.push(DocumentLink {
                     range: to_range(text, s, e),
@@ -88,9 +100,7 @@ pub fn collect_document_links(text: &str, uri: &Url) -> Result<Vec<DocumentLink>
                     .take_while(|c| c.is_ascii_alphanumeric() || *c == ':' || *c == '_')
                     .collect();
                 if !name.is_empty() && name.contains("::") {
-                    let s = text[..].lines().take(line_idx).map(|l| l.len() + 1).sum::<usize>()
-                        + idx
-                        + 8;
+                    let s = line_start + idx + 8;
                     let e = s + name.len();
                     links.push(DocumentLink {
                         range: to_range(text, s, e),
@@ -117,10 +127,7 @@ pub fn collect_document_links(text: &str, uri: &Url) -> Result<Vec<DocumentLink>
                 if quote == '\'' || quote == '"' {
                     if let Some(endq) = rest[1..].find(quote) {
                         let path = &rest[1..1 + endq];
-                        let s = text[..].lines().take(line_idx).map(|l| l.len() + 1).sum::<usize>()
-                            + idx
-                            + kw.len()
-                            + 1;
+                        let s = line_start + idx + kw.len() + 1;
                         let e = s + path.len();
                         // Try to resolve relative to current file
                         let target = if PathBuf::from(path).is_absolute() {
@@ -170,4 +177,42 @@ pub fn collect_document_links(text: &str, uri: &Url) -> Result<Vec<DocumentLink>
     }
 
     Ok(links)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{collect_document_links, line_start_offsets};
+    use lsp_types::Position;
+    use url::Url;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    #[test]
+    fn line_start_offsets_preserve_crlf_byte_starts() {
+        let text = "# before\r\nuse Foo::Bar;\r\nrequire Baz::Qux;\r\n";
+
+        assert_eq!(line_start_offsets(text), vec![0, 10, 25, 44]);
+    }
+
+    #[test]
+    fn collect_document_links_uses_crlf_line_starts_for_module_ranges() -> TestResult {
+        let uri = Url::parse("file:///workspace/main.pl")?;
+        let text = "# before\r\nuse Foo::Bar;\r\nrequire Baz::Qux;\r\n";
+
+        let links = collect_document_links(text, &uri)?;
+        let foo = links
+            .iter()
+            .find(|link| link.tooltip.as_deref() == Some("Open Foo::Bar on MetaCPAN"))
+            .ok_or("missing Foo::Bar document link")?;
+        let baz = links
+            .iter()
+            .find(|link| link.tooltip.as_deref() == Some("Open Baz::Qux on MetaCPAN"))
+            .ok_or("missing Baz::Qux document link")?;
+
+        assert_eq!(foo.range.start, Position::new(1, 4));
+        assert_eq!(foo.range.end, Position::new(1, 12));
+        assert_eq!(baz.range.start, Position::new(2, 8));
+        assert_eq!(baz.range.end, Position::new(2, 16));
+        Ok(())
+    }
 }
