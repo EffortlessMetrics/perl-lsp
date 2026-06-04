@@ -188,6 +188,10 @@ fn quick_fixes_for_diagnostic(source: &str, diagnostic: &Diagnostic) -> Vec<Code
         c if c == DiagnosticCode::UnusedImport.as_str() => {
             actions.extend(quick_fixes::fix_unused_import(source, &qf_diag));
         }
+        // PL410: Loop control with undefined label
+        c if c == DiagnosticCode::LoopControlUndefinedLabel.as_str() => {
+            actions.extend(quick_fixes::fix_loop_control_undefined_label(source, &qf_diag));
+        }
         // PL501: Deprecated $[ array base variable
         c if c == DiagnosticCode::DeprecatedArrayBase.as_str() => {
             actions.extend(quick_fixes::fix_deprecated_array_base(source, &qf_diag));

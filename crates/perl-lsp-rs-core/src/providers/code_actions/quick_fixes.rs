@@ -1964,6 +1964,45 @@ fn parse_printf_format_mismatch(message: &str) -> Option<(usize, String)> {
     specifiers.checked_sub(supplied).filter(|&n| n > 0).map(|n| (n, call_name))
 }
 
+/// Remove an undefined label from a `next LABEL` / `last LABEL` / `redo LABEL`
+/// statement (PL410).
+///
+/// When the named label does not exist, Perl dies at runtime with
+/// "Label not found for 'next LABEL'". The mechanical fix is to drop the
+/// label so the statement targets the innermost enclosing loop instead.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((start, end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let Some(text) = source.get(start..end) else {
+        return Vec::new();
+    };
+    let op = match text.split_whitespace().next().unwrap_or("") {
+        op @ ("next" | "last" | "redo") => op,
+        _ => return Vec::new(),
+    };
+    let label = text[op.len()..].trim();
+    if label.is_empty() {
+        return Vec::new();
+    }
+
+    vec![CodeAction {
+        title: format!("Remove label '{label}' from '{op}' (targets innermost loop)"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start, end },
+                new_text: op.to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
 fn diagnostic_line_range(source: &str, range: (usize, usize)) -> Option<(usize, usize)> {
     let (start, end) = valid_diagnostic_range(source, range)?;
     let line_start = source[..start].rfind('\n').map_or(0, |idx| idx + 1);
