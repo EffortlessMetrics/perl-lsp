@@ -27,16 +27,19 @@ Before investigating, verify this isn't already covered.
    ```bash
    gh issue list --state open --search "<your topic keywords>" --limit 10 --json number,title --jq '.[] | "#\(.number) \(.title)"'
    ```
+   > **MCP alternative (web/no-gh sessions):** `mcp__github__search_issues(query:"<your topic keywords> is:open repo:effortlessmetrics/perl-lsp-swarm")`
 
 3. Search open PRs:
    ```bash
    gh pr list --state open --search "<your topic keywords>" --limit 10 --json number,title --jq '.[] | "#\(.number) \(.title)"'
    ```
+   > **MCP alternative (web/no-gh sessions):** `mcp__github__search_pull_requests(query:"<your topic keywords> is:open repo:effortlessmetrics/perl-lsp-swarm")`
 
 4. Search recently closed/merged (might be done):
    ```bash
    gh issue list --state closed --search "<your topic keywords>" --limit 5 --json number,title --jq '.[] | "#\(.number) \(.title)"'
    ```
+   > **MCP alternative (web/no-gh sessions):** `mcp__github__search_issues(query:"<your topic keywords> is:closed repo:effortlessmetrics/perl-lsp-swarm")`
 
 ## Decision
 

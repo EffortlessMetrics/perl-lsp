@@ -8,6 +8,16 @@ use lsp_types::{DocumentLink, Position, Range, Uri};
 use std::path::PathBuf;
 use url::Url;
 
+fn line_start_offsets(content: &str) -> Vec<usize> {
+    let mut starts = vec![0];
+    for (idx, ch) in content.char_indices() {
+        if ch == '\n' {
+            starts.push(idx + 1);
+        }
+    }
+    starts
+}
+
 fn to_range(content: &str, start: usize, end: usize) -> Range {
     // Simple byte->(line,col) translator
     let (mut line, mut col, mut i) = (0u32, 0u32, 0usize);
@@ -50,7 +60,10 @@ fn to_range(content: &str, start: usize, end: usize) -> Range {
 pub fn collect_document_links(text: &str, uri: &Url) -> Result<Vec<DocumentLink>, String> {
     let mut links = Vec::new();
 
+    let line_starts = line_start_offsets(text);
+
     for (line_idx, line) in text.lines().enumerate() {
+        let line_start = line_starts.get(line_idx).copied().unwrap_or(text.len());
         // `use Foo::Bar;`
         if let Some(idx) = line.find("use ") {
             let rest = &line[idx + 4..];
@@ -59,8 +72,7 @@ pub fn collect_document_links(text: &str, uri: &Url) -> Result<Vec<DocumentLink>
                 .take_while(|c| c.is_ascii_alphanumeric() || *c == ':' || *c == '_')
                 .collect();
             if !name.is_empty() && name.contains("::") {
-                let s =
-                    text[..].lines().take(line_idx).map(|l| l.len() + 1).sum::<usize>() + idx + 4;
+                let s = line_start + idx + 4;
                 let e = s + name.len();
                 links.push(DocumentLink {
                     range: to_range(text, s, e),
@@ -88,9 +100,7 @@ pub fn collect_document_links(text: &str, uri: &Url) -> Result<Vec<DocumentLink>
                     .take_while(|c| c.is_ascii_alphanumeric() || *c == ':' || *c == '_')
                     .collect();
                 if !name.is_empty() && name.contains("::") {
-                    let s = text[..].lines().take(line_idx).map(|l| l.len() + 1).sum::<usize>()
-                        + idx
-                        + 8;
+                    let s = line_start + idx + 8;
                     let e = s + name.len();
                     links.push(DocumentLink {
                         range: to_range(text, s, e),
@@ -117,10 +127,7 @@ pub fn collect_document_links(text: &str, uri: &Url) -> Result<Vec<DocumentLink>
                 if quote == '\'' || quote == '"' {
                     if let Some(endq) = rest[1..].find(quote) {
                         let path = &rest[1..1 + endq];
-                        let s = text[..].lines().take(line_idx).map(|l| l.len() + 1).sum::<usize>()
-                            + idx
-                            + kw.len()
-                            + 1;
+                        let s = line_start + idx + kw.len() + 1;
                         let e = s + path.len();
                         // Try to resolve relative to current file
                         let target = if PathBuf::from(path).is_absolute() {
@@ -170,4 +177,140 @@ pub fn collect_document_links(text: &str, uri: &Url) -> Result<Vec<DocumentLink>
     }
 
     Ok(links)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{collect_document_links, line_start_offsets};
+    use lsp_types::{DocumentLink, Position};
+    use std::path::Path;
+    use url::Url;
+
+    type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
+
+    fn temp_file_uri(parts: &[&str]) -> TestResult<Url> {
+        let mut path = std::env::temp_dir().join("perl-lsp-document-link-unit");
+        for part in parts {
+            path.push(part);
+        }
+        file_uri(&path)
+    }
+
+    fn file_uri(path: &Path) -> TestResult<Url> {
+        Url::from_file_path(path)
+            .map_err(|()| format!("failed to build file URI for {}", path.display()).into())
+    }
+
+    fn target_text(link: &DocumentLink) -> TestResult<&str> {
+        Ok(link.target.as_ref().ok_or("document link missing target")?.as_str())
+    }
+
+    #[test]
+    fn line_start_offsets_preserve_crlf_byte_starts() {
+        let text = "# before\r\nuse Foo::Bar;\r\nrequire Baz::Qux;\r\n";
+
+        assert_eq!(line_start_offsets(text), vec![0, 10, 25, 44]);
+    }
+
+    #[test]
+    fn collect_document_links_uses_crlf_line_starts_for_module_ranges() -> TestResult {
+        let uri = Url::parse("file:///workspace/main.pl")?;
+        let text = "# before\r\nuse Foo::Bar;\r\nrequire Baz::Qux;\r\n";
+
+        let links = collect_document_links(text, &uri)?;
+        let foo = links
+            .iter()
+            .find(|link| link.tooltip.as_deref() == Some("Open Foo::Bar on MetaCPAN"))
+            .ok_or("missing Foo::Bar document link")?;
+        let baz = links
+            .iter()
+            .find(|link| link.tooltip.as_deref() == Some("Open Baz::Qux on MetaCPAN"))
+            .ok_or("missing Baz::Qux document link")?;
+
+        assert_eq!(foo.range.start, Position::new(1, 4));
+        assert_eq!(foo.range.end, Position::new(1, 12));
+        assert_eq!(baz.range.start, Position::new(2, 8));
+        assert_eq!(baz.range.end, Position::new(2, 16));
+        Ok(())
+    }
+
+    #[test]
+    fn use_and_require_modules_link_to_metacpan() -> TestResult {
+        let uri = Url::parse("file:///workspace/main.pl")?;
+        let text = "use Local::Thing;\nrequire Remote::Widget;\n";
+
+        let links = collect_document_links(text, &uri)?;
+
+        assert_eq!(links.len(), 2);
+        let use_link = links.first().ok_or("missing use document link")?;
+        assert_eq!(use_link.range.start, Position::new(0, 4));
+        assert_eq!(use_link.range.end, Position::new(0, 16));
+        assert_eq!(target_text(use_link)?, "https://metacpan.org/pod/Local::Thing");
+        assert_eq!(use_link.tooltip.as_deref(), Some("Open Local::Thing on MetaCPAN"));
+
+        let require_link = links.get(1).ok_or("missing require document link")?;
+        assert_eq!(require_link.range.start, Position::new(1, 8));
+        assert_eq!(require_link.range.end, Position::new(1, 22));
+        assert_eq!(target_text(require_link)?, "https://metacpan.org/pod/Remote::Widget");
+        assert_eq!(require_link.tooltip.as_deref(), Some("Open Remote::Widget on MetaCPAN"));
+        Ok(())
+    }
+
+    #[test]
+    fn link_ranges_use_utf16_columns_after_wide_characters() -> TestResult {
+        let uri = Url::parse("file:///workspace/main.pl")?;
+        let text = "my $emoji = '\u{1F642}'; use Foo::Bar;\n";
+
+        let links = collect_document_links(text, &uri)?;
+
+        let link = links.first().ok_or("missing module document link")?;
+        assert_eq!(link.range.start, Position::new(0, 22));
+        assert_eq!(link.range.end, Position::new(0, 30));
+        assert_eq!(target_text(link)?, "https://metacpan.org/pod/Foo::Bar");
+        Ok(())
+    }
+
+    #[test]
+    fn quoted_module_like_require_does_not_create_metacpan_link() -> TestResult {
+        let uri = temp_file_uri(&["script.pl"])?;
+        let text = "require 'Local::Thing';\n";
+
+        let links = collect_document_links(text, &uri)?;
+
+        assert!(
+            links
+                .iter()
+                .all(|link| link.tooltip.as_deref() != Some("Open Local::Thing on MetaCPAN"))
+        );
+        assert!(
+            links
+                .iter()
+                .all(|link| target_text(link).is_ok_and(|target| !target.contains("metacpan.org")))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn non_file_document_uri_keeps_metacpan_links_and_skips_relative_file_links() -> TestResult {
+        let uri = Url::parse("untitled:Untitled-1")?;
+        let text = "use Foo::Bar;\nrequire 'lib/Helper.pm';\n";
+
+        let links = collect_document_links(text, &uri)?;
+
+        assert_eq!(links.len(), 1);
+        let link = links.first().ok_or("missing module document link")?;
+        assert_eq!(target_text(link)?, "https://metacpan.org/pod/Foo::Bar");
+        Ok(())
+    }
+
+    #[test]
+    fn unterminated_quoted_require_is_ignored_without_failing_collection() -> TestResult {
+        let uri = temp_file_uri(&["app.pl"])?;
+        let text = "require 'unterminated;\n";
+
+        let links = collect_document_links(text, &uri)?;
+
+        assert!(links.is_empty());
+        Ok(())
+    }
 }

@@ -1,5 +1,5 @@
 ---
-source: crates/perl-lsp-rs/tests/lsp_capability_snapshot_test.rs
+source: crates/perl-lsp-rs/tests/lsp_cap_snap.rs
 expression: "&legend"
 ---
 tokenModifiers:
@@ -40,3 +40,4 @@ tokenTypes:
   - sql_string
   - sql_heredoc_keyword
   - json_heredoc_key
+  - label

@@ -110,7 +110,7 @@ fn walk_security_node(
                 signal_shadowed
             }
         }
-        NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+        NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
             walk_security_node(condition, diagnostics, signal_shadowed);
             walk_security_node(then_branch, diagnostics, signal_shadowed);
             for (condition, branch) in elsif_branches {

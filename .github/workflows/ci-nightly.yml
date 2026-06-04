@@ -423,7 +423,9 @@ jobs:
     timeout-minutes: 45
     if: |
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && github.event.pull_request.draft != true) ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.draft != true &&
+       github.event.action != 'labeled') ||
       github.event_name == 'schedule'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
@@ -431,13 +433,39 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Emit changed-file coverage route summary
+        id: coverage_route
+        env:
+          BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/receipts/quality
+          base_ref="$BASE_REF"
+          git fetch --no-tags --depth=200 origin "$base_ref" || true
+          python3 scripts/ci/route-codecov-packs.py \
+            --base "origin/$base_ref" \
+            --head HEAD \
+            --manifest .ci/coverage-packs.toml \
+            --receipt target/receipts/quality/ci-route.json \
+            --summary target/receipts/quality/ci-route.md
+          coverage_required="$(python3 -c 'import json; from pathlib import Path; route = json.loads(Path("target/receipts/quality/ci-route.json").read_text(encoding="utf-8")); print("true" if route.get("coverage_proof_packs") else "false")')"
+          echo "coverage_required=$coverage_required" >> "$GITHUB_OUTPUT"
+          if [ "$coverage_required" != "true" ]; then
+            printf '# Patch Coverage Proof\n\n- decision: `skipped-by-policy`\n- reason: changed-file routing selected no LCOV coverage proof packs\n' \
+              > target/receipts/quality/quality-gate-coverage.md
+            printf '{"schema_version":"quality_gate.v1","mode":"enforce-patch-coverage","decision":"skipped-by-policy","reason":"changed-file routing selected no LCOV coverage proof packs"}\n' \
+              > target/receipts/quality/quality-gate-coverage.json
+          fi
+
       - name: Install Rust
+        if: github.event_name != 'pull_request' || steps.coverage_route.outputs.coverage_required == 'true'
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # nightly (master)
         with:
           toolchain: nightly
           components: llvm-tools-preview
 
       - name: Cache cargo dependencies
+        if: github.event_name != 'pull_request' || steps.coverage_route.outputs.coverage_required == 'true'
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
         with:
           key: ${{ runner.os }}-coverage-${{ hashFiles('Cargo.lock') }}
@@ -445,21 +473,36 @@ jobs:
           cache-on-failure: true
 
       - name: Install just
+        if: github.event_name != 'pull_request' || steps.coverage_route.outputs.coverage_required == 'true'
         uses: taiki-e/install-action@d9be7d8cda89035c9c843f78bd44d4f72d8403d4  # v2.79.7
         with:
           tool: just
 
       - name: Install cargo-llvm-cov
+        if: github.event_name != 'pull_request' || steps.coverage_route.outputs.coverage_required == 'true'
         run: rustup run nightly cargo install cargo-llvm-cov --locked
 
       - name: Create legacy LSP fixtures (CI-only)
+        if: github.event_name != 'pull_request' || steps.coverage_route.outputs.coverage_required == 'true'
         run: |
           mkdir -p archive/legacy-tests/test_fixtures
           touch archive/legacy-tests/test_fixtures/main.pl
           touch archive/legacy-tests/test_fixtures/Module.pm
           touch archive/legacy-tests/test_fixtures/test.t
 
+      - name: Run routed PR coverage proof
+        if: github.event_name == 'pull_request' && steps.coverage_route.outputs.coverage_required == 'true'
+        env:
+          BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}
+          RUSTFLAGS: "-Cdebuginfo=0"
+          CARGO_BUILD_JOBS: 1
+        run: |
+          base_ref="$BASE_REF"
+          git fetch --no-tags --depth=200 origin "$base_ref" || true
+          just coverage-proof-routed "origin/$base_ref" "HEAD"
+
       - name: Run workspace coverage proof
+        if: github.event_name != 'pull_request'
         env:
           BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}
           RUSTFLAGS: "-Cdebuginfo=0"
@@ -473,6 +516,12 @@ jobs:
         if: always()
         shell: bash
         run: |
+          if [ -f target/receipts/quality/ci-route.md ]; then
+            cat target/receipts/quality/ci-route.md >> "$GITHUB_STEP_SUMMARY"
+            printf '\n' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No changed-file coverage route summary was produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
           if [ -f target/receipts/quality/quality-gate-coverage.md ]; then
             cat target/receipts/quality/quality-gate-coverage.md >> "$GITHUB_STEP_SUMMARY"
           else
@@ -480,6 +529,7 @@ jobs:
           fi
 
       - name: Upload coverage to Codecov
+        if: github.event_name != 'pull_request' || steps.coverage_route.outputs.coverage_required == 'true'
         uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354  # v6.0.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -494,6 +544,8 @@ jobs:
           name: coverage-proof-${{ github.sha }}
           path: |
             target/lcov.info
+            target/receipts/quality/ci-route.json
+            target/receipts/quality/ci-route.md
             target/receipts/quality/coverage-baseline.json
             target/receipts/quality/quality-gate-coverage.json
             target/receipts/quality/quality-gate-coverage.md

@@ -563,6 +563,27 @@ impl<'a> Parser<'a> {
                 }
             }
 
+            TokenKind::LeftShift => {
+                // `<<>>` — double-diamond operator (Perl 5.22+, perlop "I/O Operators").
+                // Reads from @ARGV but refuses magic/pipe filenames.
+                // The lexer tokenises `<<` as LeftShift when not starting a heredoc.
+                // Only the exact `<<>>` shape is an I/O operator; anything else that
+                // reaches primary with a LeftShift token is not a valid expression
+                // here — return an error so the caller's recovery logic can handle it.
+                let start = self.consume_token()?.start; // consume <<
+                if self.peek_kind() == Some(TokenKind::RightShift) {
+                    self.consume_token()?; // consume >>
+                    let end = self.previous_position();
+                    Ok(Node::new(NodeKind::Diamond, SourceLocation { start, end }))
+                } else {
+                    Err(ParseError::unexpected(
+                        "expression",
+                        TokenKind::LeftShift.display_name(),
+                        start,
+                    ))
+                }
+            }
+
             TokenKind::Less => {
                 // Could be diamond operator <> or <FILEHANDLE>
                 let start = self.consume_token()?.start; // consume <
@@ -603,7 +624,15 @@ impl<'a> Parser<'a> {
                             // Looks like a glob pattern
                             Ok(Node::new(NodeKind::Glob { pattern }, SourceLocation { start, end }))
                         } else if pattern.chars().all(|c| c.is_uppercase() || c == '_') {
-                            // Looks like a filehandle
+                            // Bareword filehandle e.g. <STDIN>, <FH>
+                            Ok(Node::new(
+                                NodeKind::Readline { filehandle: Some(pattern) },
+                                SourceLocation { start, end },
+                            ))
+                        } else if is_simple_scalar_variable(&pattern) {
+                            // Simple scalar variable e.g. <$fh>, <$FH>, <$Foo::bar>.
+                            // Per perlop: the scalar holds the filehandle reference,
+                            // so this is an indirect readline, not a glob.
                             Ok(Node::new(
                                 NodeKind::Readline { filehandle: Some(pattern) },
                                 SourceLocation { start, end },
@@ -1273,4 +1302,47 @@ impl<'a> Parser<'a> {
             }
         }
     }
+}
+
+/// Returns `true` if `pattern` is a *simple scalar variable* of the form
+/// `$identifier` or `$Package::identifier`, with no glob metacharacters,
+/// path separators, hash/array subscripts, or whitespace.
+///
+/// Per perlop, `<$fh>` where `$fh` is a plain scalar variable performs an
+/// indirect filehandle read (Readline), not a filename glob.
+///
+/// Examples that return `true`:  `$fh`, `$FH`, `$pattern`, `$Foo::bar`
+/// Examples that return `false`: `$dir/*` (glob meta), `$h{key}` (subscript),
+///                                `$x.txt` (dot), plain `fh` (no sigil)
+fn is_simple_scalar_variable(pattern: &str) -> bool {
+    let name = match pattern.strip_prefix('$') {
+        Some(n) => n,
+        None => return false,
+    };
+
+    if name.is_empty() {
+        return false;
+    }
+
+    let mut chars = name.chars();
+    let first = match chars.next() {
+        Some(c) => c,
+        None => return false,
+    };
+
+    // First char of the identifier must be alphabetic or underscore.
+    if !first.is_alphabetic() && first != '_' {
+        return false;
+    }
+
+    // Remaining chars: alphanumeric, underscore, or colon (for :: package separators).
+    // Any glob metacharacter, brace, bracket, dot, slash, or whitespace disqualifies.
+    for c in chars {
+        if c.is_alphanumeric() || c == '_' || c == ':' {
+            continue;
+        }
+        return false;
+    }
+
+    true
 }

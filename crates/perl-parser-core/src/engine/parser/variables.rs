@@ -16,12 +16,11 @@ impl<'a> Parser<'a> {
                 let var = self.parse_variable_list_item()?;
 
                 // Parse optional attributes for this specific variable
-                let mut var_attributes = Vec::new();
-                while self.peek_kind() == Some(TokenKind::Colon) {
-                    self.tokens.next()?; // consume colon
-                    let attr_token = self.expect(TokenKind::Identifier)?;
-                    var_attributes.push(attr_token.text.to_string());
-                }
+                let var_attributes = if self.peek_kind() == Some(TokenKind::Colon) {
+                    self.parse_variable_attributes()?
+                } else {
+                    Vec::new()
+                };
 
                 // Create a node that includes both the variable and its attributes
                 let var_with_attrs = if var_attributes.is_empty() {
@@ -101,12 +100,11 @@ impl<'a> Parser<'a> {
             };
 
             // Parse optional attributes
-            let mut attributes = Vec::new();
-            while self.peek_kind() == Some(TokenKind::Colon) {
-                self.tokens.next()?; // consume colon
-                let attr_token = self.expect(TokenKind::Identifier)?;
-                attributes.push(attr_token.text.to_string());
-            }
+            let attributes = if self.peek_kind() == Some(TokenKind::Colon) {
+                self.parse_variable_attributes()?
+            } else {
+                Vec::new()
+            };
 
             // Accept both simple `=` and compound operators (`||=`, `//=`, `.=`, etc.)
             // Perl allows `our $x ||= 0;` and `my $y .= "suffix";`
@@ -443,12 +441,40 @@ impl<'a> Parser<'a> {
                 NodeKind::Typeglob { name: full_name },
                 SourceLocation { start: token.start, end },
             ))
+        } else if matches!(sigil.as_str(), "$" | "@" | "%")
+            && Self::is_unbraced_scalar_deref_name(&full_name)
+        {
+            // Unbraced dereference: $$ref, @$ref, %$ref — equivalent to ${$ref}, @{$ref}, %{$ref}.
+            // The `full_name` here is e.g. "$ref"; strip the leading `$` to get the inner name.
+            let inner_name = full_name[1..].to_string();
+            let inner = Node::new(
+                NodeKind::Variable { sigil: "$".to_string(), name: inner_name },
+                SourceLocation { start: token.start + sigil.len(), end },
+            );
+            let op = format!("{}{{}}", sigil);
+            Ok(Node::new(
+                NodeKind::Unary { op, operand: Box::new(inner) },
+                SourceLocation { start: token.start, end },
+            ))
         } else {
             Ok(Node::new(
                 NodeKind::Variable { sigil, name: full_name },
                 SourceLocation { start: token.start, end },
             ))
         }
+    }
+
+    /// Return `true` when `name` is an unbraced scalar-dereference target:
+    /// a string that starts with `$` followed by at least one identifier
+    /// character (e.g. `"$ref"`, `"$self"`).
+    ///
+    /// Excludes bare `"$"` (which represents the PID special variable `$$`).
+    fn is_unbraced_scalar_deref_name(name: &str) -> bool {
+        let mut chars = name.chars();
+        if chars.next() != Some('$') {
+            return false;
+        }
+        chars.next().is_some_and(|c| c.is_alphanumeric() || c == '_')
     }
 
     fn try_parse_braced_qualified_scalar(&mut self) -> ParseResult<Option<Node>> {
@@ -747,6 +773,22 @@ impl<'a> Parser<'a> {
             Ok(Node::new(NodeKind::FunctionCall { name, args }, SourceLocation { start, end }))
         } else if sigil == "*" {
             Ok(Node::new(NodeKind::Typeglob { name }, SourceLocation { start, end }))
+        } else if matches!(sigil.as_str(), "$" | "@" | "%")
+            && Self::is_unbraced_scalar_deref_name(&name)
+        {
+            // Unbraced dereference arriving via separate sigil token:
+            // `@` + `$ref`, `%` + `$ref`, or `$` (ScalarSigil) + `$ref`.
+            // Equivalent to @{$ref}, %{$ref}, ${$ref}.
+            let inner_name = name[1..].to_string();
+            let inner = Node::new(
+                NodeKind::Variable { sigil: "$".to_string(), name: inner_name },
+                SourceLocation { start: start + sigil.len(), end },
+            );
+            let op = format!("{}{{}}", sigil);
+            Ok(Node::new(
+                NodeKind::Unary { op, operand: Box::new(inner) },
+                SourceLocation { start, end },
+            ))
         } else {
             Ok(Node::new(NodeKind::Variable { sigil, name }, SourceLocation { start, end }))
         }
@@ -940,8 +982,11 @@ impl<'a> Parser<'a> {
         // Check for default value (= expression)
         let default_value = if self.peek_kind() == Some(TokenKind::Assign) {
             self.tokens.next()?; // consume =
-            // Parse a primary expression for default value to avoid parsing too far
-            Some(Box::new(self.parse_primary()?))
+            // Parse a full scalar expression for the default value (perlsub: "any scalar
+            // expression").  parse_ternary covers calls, binops, and ternary expressions
+            // while stopping at the `,` or `)` that delimits signature parameters, since
+            // comma collection only happens in parse_comma (one level above).
+            Some(Box::new(self.parse_ternary()?))
         } else {
             None
         };

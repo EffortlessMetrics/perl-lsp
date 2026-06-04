@@ -325,7 +325,7 @@ impl TestRunner {
     #[allow(dead_code)]
     fn visit_children_for_tests(&self, node: &Node, tests: &mut Vec<TestItem>) {
         match &node.kind {
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
                 self.visit_node_for_tests(condition, tests);
                 self.visit_node_for_tests(then_branch, tests);
                 for (cond, body) in elsif_branches {
@@ -908,6 +908,46 @@ sub test_nested {
         assert_eq!(tests[0].children[0].range.start_character, 0);
         assert_eq!(tests[0].children[0].range.end_line, 3);
         assert_eq!(tests[0].children[0].range.end_character, 1);
+        Ok(())
+    }
+
+    #[test]
+    fn visit_children_for_tests_walks_if_with_keyword_metadata()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let runner = TestRunner::new("is($got, $want);".to_string(), "file:///suite.t".to_string());
+        let string = |value: &str, start| {
+            node(
+                NodeKind::String { value: value.to_string(), interpolated: false },
+                start,
+                start + value.len() + 2,
+            )
+        };
+        let call = |name: &str, start| {
+            node(
+                NodeKind::FunctionCall {
+                    name: name.to_string(),
+                    args: vec![string("case", start + name.len() + 1)],
+                },
+                start,
+                start + name.len() + 8,
+            )
+        };
+        let node = node(
+            NodeKind::If {
+                condition: Box::new(node(NodeKind::Number { value: "1".to_string() }, 0, 1)),
+                then_branch: Box::new(call("is", 2)),
+                elsif_branches: vec![],
+                else_branch: Some(Box::new(call("ok", 12))),
+                keyword: Some("unless".to_string()),
+            },
+            0,
+            20,
+        );
+        let mut tests = Vec::new();
+
+        runner.visit_children_for_tests(&node, &mut tests);
+
+        assert_eq!(tests.len(), 2);
         Ok(())
     }
 

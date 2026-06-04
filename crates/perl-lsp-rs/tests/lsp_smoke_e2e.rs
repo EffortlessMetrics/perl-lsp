@@ -3,7 +3,15 @@
 mod common;
 
 use serde_json::{Value, json};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
+
+static NEXT_URI_ID: AtomicU64 = AtomicU64::new(1);
+
+fn unique_test_uri(test_name: &str) -> String {
+    let id = NEXT_URI_ID.fetch_add(1, Ordering::Relaxed);
+    format!("file:///tmp/perl-lsp-{test_name}-{}-{id}.pl", std::process::id())
+}
 
 fn send_request_with_timeout(
     server: &common::LspServer,
@@ -98,7 +106,7 @@ fn lsp_smoke_e2e_push_diagnostics_clear_after_fix() -> Result<(), Box<dyn std::e
     let request_timeout = Duration::from_secs(3);
     let diagnostics_timeout = Duration::from_secs(5);
     let init_timeout = common::timeout_scaler::TimeoutProfile::Initialization.timeout();
-    let uri = "file:///tmp/lsp_smoke_e2e_diagnostics.pl";
+    let uri = unique_test_uri("push-diagnostics-clear");
 
     let init_response = send_request_with_timeout(
         &server,
@@ -156,7 +164,7 @@ sub broken {
     );
 
     let broken_diagnostics =
-        wait_for_diagnostics_matching(&server, uri, diagnostics_timeout, |diagnostics| {
+        wait_for_diagnostics_matching(&server, &uri, diagnostics_timeout, |diagnostics| {
             diagnostics.iter().any(|diagnostic| {
                 diagnostic.get("source").and_then(Value::as_str) == Some("perl-parser")
                     && diagnostic.get("severity").and_then(Value::as_i64) == Some(1)
@@ -197,7 +205,7 @@ print $answer;
     );
 
     let fixed_diagnostics =
-        wait_for_diagnostics_matching(&server, uri, diagnostics_timeout, |diagnostics| {
+        wait_for_diagnostics_matching(&server, &uri, diagnostics_timeout, |diagnostics| {
             diagnostics.is_empty()
         })?;
     assert_eq!(
@@ -242,10 +250,10 @@ print $answer;
 #[test]
 fn lsp_smoke_e2e_stdio_flow() -> Result<(), Box<dyn std::error::Error>> {
     let server = common::start_lsp_server();
-    let timeout = Duration::from_secs(2);
+    let timeout = common::timeout_scaler::TimeoutProfile::Standard.timeout();
     let init_timeout = common::timeout_scaler::TimeoutProfile::Initialization.timeout();
 
-    let uri = "file:///tmp/lsp_smoke_e2e.pl";
+    let uri = unique_test_uri("stdio-flow");
     let fixture = r#"use strict;
 use warnings;
 
@@ -557,7 +565,7 @@ my $value = gre
         .and_then(Value::as_object)
         .ok_or("rename changes should be an object")?;
     let this_file_edits = rename_changes
-        .get(uri)
+        .get(&uri)
         .and_then(Value::as_array)
         .ok_or("rename should contain edits for opened document")?;
     assert!(
@@ -600,12 +608,172 @@ my $value = gre
 }
 
 #[test]
+fn lsp_smoke_e2e_ignores_stale_did_change_versions() -> Result<(), Box<dyn std::error::Error>> {
+    let server = common::start_lsp_server();
+    let timeout = Duration::from_secs(2);
+    let init_timeout = common::timeout_scaler::TimeoutProfile::Initialization.timeout();
+    let uri = "file:///tmp/lsp_smoke_e2e_stale_change.pl";
+
+    let original_source = r#"use strict;
+use warnings;
+
+sub stable_symbol { return 42; }
+my $value = stable_symbol();
+"#;
+
+    let stale_broken_source = r#"use strict;
+use warnings;
+
+sub stable_symbol { return ;
+my $value = stable_symbol();
+"#;
+
+    let init_response = send_request_with_timeout(
+        &server,
+        201,
+        "initialize",
+        json!({
+            "processId": null,
+            "rootUri": null,
+            "capabilities": {
+                "textDocument": {
+                    "diagnostic": {
+                        "dynamicRegistration": false
+                    },
+                    "hover": {
+                        "contentFormat": ["markdown", "plaintext"]
+                    }
+                }
+            }
+        }),
+        init_timeout,
+    )?;
+    assert!(init_response.get("error").is_none(), "initialize returned error: {init_response:#}");
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "initialized",
+            "params": {}
+        }),
+    );
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 2,
+                    "text": original_source
+                }
+            }
+        }),
+    );
+
+    let initial_diagnostic_response = send_request_with_timeout(
+        &server,
+        202,
+        "textDocument/diagnostic",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+        timeout,
+    )?;
+    assert!(
+        initial_diagnostic_response.get("error").is_none(),
+        "initial diagnostic request returned error: {initial_diagnostic_response:#}"
+    );
+    let initial_messages = diagnostic_messages(diagnostic_items(&initial_diagnostic_response)?);
+    assert!(
+        initial_messages.iter().all(|message| {
+            let lower = message.to_ascii_lowercase();
+            !lower.contains("expected") && !lower.contains("recovered from missingoperand")
+        }),
+        "opened document should not start with parse-error diagnostics: {initial_messages:?}"
+    );
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didChange",
+            "params": {
+                "textDocument": { "uri": uri, "version": 1 },
+                "contentChanges": [{ "text": stale_broken_source }]
+            }
+        }),
+    );
+
+    std::thread::sleep(Duration::from_millis(50));
+
+    let stale_diagnostic_response = send_request_with_timeout(
+        &server,
+        203,
+        "textDocument/diagnostic",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+        timeout,
+    )?;
+    assert!(
+        stale_diagnostic_response.get("error").is_none(),
+        "diagnostic request after stale didChange returned error: {stale_diagnostic_response:#}"
+    );
+    let stale_messages = diagnostic_messages(diagnostic_items(&stale_diagnostic_response)?);
+    assert!(
+        stale_messages.iter().all(|message| {
+            let lower = message.to_ascii_lowercase();
+            !lower.contains("expected") && !lower.contains("recovered from missingoperand")
+        }),
+        "stale didChange must not replace the newer clean document with parse errors: {stale_messages:?}"
+    );
+
+    let (hover_line, hover_col) = line_col(original_source, 4, "stable_symbol")?;
+    let hover_response = send_request_with_timeout(
+        &server,
+        204,
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": hover_line, "character": hover_col }
+        }),
+        timeout,
+    )?;
+    assert!(
+        hover_response.get("error").is_none(),
+        "server should remain responsive after ignoring stale didChange: {hover_response:#}"
+    );
+
+    let shutdown_response =
+        send_request_with_timeout(&server, 205, "shutdown", json!(null), timeout)?;
+    assert!(
+        shutdown_response.get("error").is_none(),
+        "shutdown returned error: {shutdown_response:#}"
+    );
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+            "params": null
+        }),
+    );
+
+    Ok(())
+}
+
+#[test]
 fn lsp_smoke_e2e_pull_diagnostics_refresh_after_change() -> Result<(), Box<dyn std::error::Error>> {
     let server = common::start_lsp_server();
     let timeout = Duration::from_secs(2);
     let init_timeout = common::timeout_scaler::TimeoutProfile::Initialization.timeout();
 
-    let uri = "file:///tmp/lsp_smoke_e2e_diagnostics.pl";
+    let uri = unique_test_uri("pull-diagnostics-refresh");
     let broken_fixture = "use strict;
 use warnings;
 
@@ -723,6 +891,220 @@ my $value = 42;
 
     let shutdown_response =
         send_request_with_timeout(&server, 104, "shutdown", json!(null), timeout)?;
+    assert!(
+        shutdown_response.get("error").is_none(),
+        "shutdown returned error: {shutdown_response:#}"
+    );
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+            "params": null
+        }),
+    );
+
+    Ok(())
+}
+
+#[test]
+fn lsp_smoke_e2e_will_save_wait_until_request_response() -> Result<(), Box<dyn std::error::Error>> {
+    let server = common::start_lsp_server();
+    // willSaveWaitUntil runs the on-save formatter, which shells out to perltidy
+    // via an OsSubprocessRuntime with a 10s subprocess timeout. On runners where
+    // perltidy is present (e.g. CI's perl-equipped CX lane) a cold/loaded spawn can
+    // take several seconds, so the client timeout must comfortably exceed the
+    // server-side 10s formatter timeout — otherwise the request times out before the
+    // server responds. (Runners without perltidy return [] near-instantly.)
+    let request_timeout = Duration::from_secs(15);
+    let init_timeout = common::timeout_scaler::TimeoutProfile::Initialization.timeout();
+
+    let uri = "file:///tmp/lsp_smoke_e2e_will_save_wait_until.pl";
+    let source = "use strict;\nuse warnings;\n\nmy $x=42;my $y=99;\nsub foo{return 1;}\n";
+
+    // ── Step 1: Initialize ──────────────────────────────────────────────
+    let init_response_result = send_request_with_timeout(
+        &server,
+        101,
+        "initialize",
+        json!({
+            "processId": null,
+            "rootUri": null,
+            "capabilities": {
+                "textDocument": {
+                    "synchronization": {
+                        "willSaveWaitUntil": true
+                    }
+                }
+            }
+        }),
+        init_timeout,
+    );
+    assert!(
+        init_response_result.is_ok(),
+        "initialize response should arrive before timeout: {init_response_result:#?}"
+    );
+    let init_response = init_response_result?;
+    assert!(init_response.get("error").is_none(), "initialize returned error: {init_response:#}");
+
+    // Gap 2 fix: assert server advertises willSaveWaitUntil capability.
+    // Capability lives at textDocumentSync.willSaveWaitUntil, NOT at top-level
+    // willSaveWaitUntilProvider.
+    assert_eq!(
+        init_response.pointer("/result/capabilities/textDocumentSync/willSaveWaitUntil"),
+        Some(&serde_json::Value::Bool(true)),
+        "server must advertise textDocumentSync.willSaveWaitUntil = true in capabilities"
+    );
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "initialized",
+            "params": {}
+        }),
+    );
+
+    // ── Step 2: Open document ───────────────────────────────────────────
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": source
+                }
+            }
+        }),
+    );
+
+    // ── Step 3: Send willSaveWaitUntil request ──────────────────────────
+    let will_save_response_result = send_request_with_timeout(
+        &server,
+        102,
+        "textDocument/willSaveWaitUntil",
+        json!({
+            "textDocument": { "uri": uri },
+            "reason": 1  // TextDocumentSaveReason.Manual
+        }),
+        request_timeout,
+    );
+    let will_save_response_status = if will_save_response_result.is_ok() { "ok" } else { "error" };
+    assert_eq!(
+        will_save_response_status, "ok",
+        "willSaveWaitUntil response should arrive before timeout: {will_save_response_result:#?}"
+    );
+    let will_save_response = will_save_response_result?;
+
+    // ── Step 4: Verify response envelope ────────────────────────────────
+    assert!(
+        will_save_response.get("error").is_none(),
+        "willSaveWaitUntil returned error: {will_save_response:#}"
+    );
+
+    let result = will_save_response
+        .get("result")
+        .ok_or("willSaveWaitUntil result field should be present")?;
+
+    // Gap 1 fix: LSP spec allows TextEdit[] | null; treat null as no-edits.
+    // This implementation always returns an array, but be robust to spec-compliant nulls.
+    assert!(
+        matches!(result, serde_json::Value::Null | serde_json::Value::Array(_)),
+        "willSaveWaitUntil result should be TextEdit[] or null, got: {result}"
+    );
+    let edits: &[serde_json::Value] = match result {
+        serde_json::Value::Null => &[],
+        serde_json::Value::Array(arr) => arr.as_slice(),
+        _ => &[],
+    };
+
+    // If server returns edits, validate they have the required TextEdit structure.
+    // Under default config (test_runner_enabled: true) the formatter runs, so edits
+    // are likely non-empty for this fixture — the loop will execute.
+    for edit in edits {
+        let range = edit.get("range").ok_or("TextEdit should have range field")?;
+        let _new_text = edit
+            .get("newText")
+            .and_then(|v| v.as_str())
+            .ok_or("TextEdit should have newText string field")?;
+
+        let start = range.get("start").ok_or("TextEdit range should have start")?;
+        assert!(
+            start.get("line").and_then(|v| v.as_u64()).is_some(),
+            "TextEdit range.start.line should be a non-negative integer"
+        );
+        assert!(
+            start.get("character").and_then(|v| v.as_u64()).is_some(),
+            "TextEdit range.start.character should be a non-negative integer"
+        );
+
+        let end = range.get("end").ok_or("TextEdit range should have end")?;
+        assert!(
+            end.get("line").and_then(|v| v.as_u64()).is_some(),
+            "TextEdit range.end.line should be a non-negative integer"
+        );
+        assert!(
+            end.get("character").and_then(|v| v.as_u64()).is_some(),
+            "TextEdit range.end.character should be a non-negative integer"
+        );
+    }
+
+    // ── Step 5: Verify server is still responsive ────────────────────────
+    let hover_response_result = send_request_with_timeout(
+        &server,
+        103,
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 3, "character": 5 }
+        }),
+        request_timeout,
+    );
+    let hover_response_status = if hover_response_result.is_ok() { "ok" } else { "error" };
+    assert_eq!(
+        hover_response_status, "ok",
+        "hover response should arrive after willSaveWaitUntil: {hover_response_result:#?}"
+    );
+    let hover_response = hover_response_result?;
+    assert!(
+        hover_response.get("error").is_none(),
+        "server should remain responsive after willSaveWaitUntil: {hover_response:#}"
+    );
+
+    // ── Step 6: Send willSave notification ──────────────────────────────
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/willSave",
+            "params": {
+                "textDocument": { "uri": uri },
+                "reason": 1
+            }
+        }),
+    );
+
+    // ── Step 7: Send didSave to complete lifecycle ──────────────────────
+    // Gap 3 fix: DidSaveTextDocumentParams.textDocument is TextDocumentIdentifier
+    // (uri only — no version field).
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didSave",
+            "params": {
+                "textDocument": { "uri": uri }
+            }
+        }),
+    );
+
+    // ── Step 8: Shutdown ────────────────────────────────────────────────
+    let shutdown_response =
+        send_request_with_timeout(&server, 104, "shutdown", json!(null), request_timeout)?;
     assert!(
         shutdown_response.get("error").is_none(),
         "shutdown returned error: {shutdown_response:#}"

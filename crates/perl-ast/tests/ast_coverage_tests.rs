@@ -68,6 +68,7 @@ fn for_each_child_if_with_all_branches() -> Result<(), Box<dyn std::error::Error
                 (Box::new(num("3")), Box::new(block(vec![]))),
             ],
             else_branch: Some(Box::new(block(vec![]))),
+            keyword: None,
         },
         loc(0, 50),
     );
@@ -393,6 +394,7 @@ fn for_each_child_mut_modifies_if_branches() -> Result<(), Box<dyn std::error::E
             then_branch: Box::new(block(vec![])),
             elsif_branches: vec![(Box::new(num("2")), Box::new(block(vec![])))],
             else_branch: Some(Box::new(block(vec![]))),
+            keyword: None,
         },
         loc(0, 50),
     );
@@ -417,6 +419,7 @@ fn children_of_while_with_continue() -> Result<(), Box<dyn std::error::Error>> {
             condition: Box::new(num("1")),
             body: Box::new(block(vec![])),
             continue_block: Some(Box::new(block(vec![]))),
+            keyword: None,
         },
         loc(0, 20),
     );
@@ -433,6 +436,7 @@ fn children_of_while_without_continue() -> Result<(), Box<dyn std::error::Error>
             condition: Box::new(num("1")),
             body: Box::new(block(vec![])),
             continue_block: None,
+            keyword: None,
         },
         loc(0, 15),
     );
@@ -1048,6 +1052,7 @@ fn sexp_while_with_continue() -> Result<(), Box<dyn std::error::Error>> {
             condition: Box::new(num("1")),
             body: Box::new(block(vec![])),
             continue_block: Some(Box::new(block(vec![num("2")]))),
+            keyword: None,
         },
         loc(0, 30),
     );
@@ -1405,6 +1410,7 @@ fn clone_if_is_independent() -> Result<(), Box<dyn std::error::Error>> {
             then_branch: Box::new(block(vec![num("2")])),
             elsif_branches: vec![],
             else_branch: None,
+            keyword: None,
         },
         loc(0, 20),
     );
@@ -1486,12 +1492,14 @@ fn all_kind_names_contains_every_variant() -> Result<(), Box<dyn std::error::Err
             then_branch: Box::new(block(vec![])),
             elsif_branches: vec![],
             else_branch: None,
+            keyword: None,
         },
         NodeKind::LabeledStatement { label: "L".to_string(), statement: Box::new(num("1")) },
         NodeKind::While {
             condition: Box::new(num("1")),
             body: Box::new(block(vec![])),
             continue_block: None,
+            keyword: None,
         },
         NodeKind::Tie {
             variable: Box::new(var("%", "h")),

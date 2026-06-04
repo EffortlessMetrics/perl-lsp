@@ -246,3 +246,101 @@ fn test_if_sexp_fallback() {
     assert!(sexp.starts_with('('), "to_sexp fallback must start with '(', got: {sexp}");
     assert!(sexp.contains("If"), "to_sexp fallback must contain variant name, got: {sexp}");
 }
+
+#[test]
+fn test_all_missing_kind_variants_have_distinct_debug_sexp() {
+    let cases = [
+        (MissingKind::Expression, "Expression"),
+        (MissingKind::Statement, "Statement"),
+        (MissingKind::Identifier, "Identifier"),
+        (MissingKind::Block, "Block"),
+        (MissingKind::ClosingDelimiter('}'), "ClosingDelimiter('}')"),
+        (MissingKind::Semicolon, "Semicolon"),
+        (MissingKind::Condition, "Condition"),
+        (MissingKind::Argument, "Argument"),
+        (MissingKind::Operator, "Operator"),
+    ];
+
+    let mut id_gen = NodeIdGenerator::new();
+    for (kind, expected_debug) in cases {
+        let node = make_node(&mut id_gen, NodeKind::Missing(kind));
+        let sexp = node.to_sexp();
+        assert_eq!(sexp, format!("(MISSING {expected_debug})"));
+    }
+}
+
+#[test]
+fn test_error_sexp_ignores_recovery_metadata_but_equality_keeps_it() {
+    let mut id_gen = NodeIdGenerator::new();
+    let partial = make_node(&mut id_gen, NodeKind::Identifier { name: "partial".into() });
+    let with_partial = make_node(
+        &mut id_gen,
+        NodeKind::Error {
+            message: "Unexpected token".into(),
+            expected: vec!["identifier".into(), "term".into()],
+            partial: Some(Box::new(partial)),
+        },
+    );
+    let without_partial = make_node(
+        &mut id_gen,
+        NodeKind::Error {
+            message: "Unexpected token".into(),
+            expected: vec!["identifier".into()],
+            partial: None,
+        },
+    );
+
+    assert_eq!(with_partial.to_sexp(), "(ERROR Unexpected token)");
+    assert_eq!(without_partial.to_sexp(), "(ERROR Unexpected token)");
+    assert_ne!(with_partial.kind, without_partial.kind);
+}
+
+#[test]
+fn test_variable_declaration_fallback_includes_attributes_and_initializer() {
+    let mut id_gen = NodeIdGenerator::new();
+    let var =
+        make_node(&mut id_gen, NodeKind::Variable { sigil: "$".into(), name: "count".into() });
+    let initializer = make_node(&mut id_gen, NodeKind::Number { value: "1".into() });
+    let node = make_node(
+        &mut id_gen,
+        NodeKind::VariableDeclaration {
+            declarator: "state".into(),
+            variable: Box::new(var),
+            attributes: vec!["shared".into()],
+            initializer: Some(Box::new(initializer)),
+        },
+    );
+
+    let sexp = node.to_sexp();
+    assert!(sexp.contains("VariableDeclaration"), "variant missing from {sexp}");
+    assert!(sexp.contains("state"), "declarator missing from {sexp}");
+    assert!(sexp.contains("shared"), "attribute missing from {sexp}");
+    assert!(sexp.contains("initializer: Some"), "initializer missing from {sexp}");
+}
+
+#[test]
+fn test_if_fallback_includes_elsif_and_else_branches() {
+    let mut id_gen = NodeIdGenerator::new();
+    let condition =
+        make_node(&mut id_gen, NodeKind::Variable { sigil: "$".into(), name: "a".into() });
+    let then_branch = make_node(&mut id_gen, NodeKind::Block { statements: vec![] });
+    let elsif_condition =
+        make_node(&mut id_gen, NodeKind::Variable { sigil: "$".into(), name: "b".into() });
+    let elsif_branch = make_node(&mut id_gen, NodeKind::Block { statements: vec![] });
+    let else_branch = make_node(&mut id_gen, NodeKind::Block { statements: vec![] });
+    let node = make_node(
+        &mut id_gen,
+        NodeKind::If {
+            condition: Box::new(condition),
+            then_branch: Box::new(then_branch),
+            elsif_branches: vec![(elsif_condition, elsif_branch)],
+            else_branch: Some(Box::new(else_branch)),
+        },
+    );
+
+    let sexp = node.to_sexp();
+    assert!(sexp.contains("If"), "variant missing from {sexp}");
+    assert!(sexp.contains("elsif_branches"), "elsif branch field missing from {sexp}");
+    assert!(sexp.contains("else_branch: Some"), "else branch missing from {sexp}");
+    assert!(sexp.contains("name: \"b\""), "elsif condition missing from {sexp}");
+}

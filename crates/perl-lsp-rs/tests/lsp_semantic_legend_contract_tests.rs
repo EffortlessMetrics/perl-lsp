@@ -60,8 +60,40 @@ fn recv_until_id(
     }
 }
 
+fn decoded_semantic_tokens(
+    response: &serde_json::Value,
+) -> Result<Vec<(usize, usize, usize, usize, u32)>, BoxError> {
+    let data = response["result"]["data"]
+        .as_array()
+        .ok_or("semanticTokens response missing data array")?;
+
+    let mut line = 0usize;
+    let mut col = 0usize;
+    let mut decoded = Vec::new();
+    let chunks = data.chunks_exact(5);
+    if !chunks.remainder().is_empty() {
+        return Err("semanticTokens data length must be divisible by 5".into());
+    }
+
+    for chunk in chunks {
+        let [delta_line, delta_start, length, token_type, token_modifiers] = chunk else {
+            continue;
+        };
+        let dl = delta_line.as_u64().ok_or("delta_line not u64")? as usize;
+        let ds = delta_start.as_u64().ok_or("delta_start not u64")? as usize;
+        let len = length.as_u64().ok_or("length not u64")? as usize;
+        let type_idx = token_type.as_u64().ok_or("token_type not u64")? as usize;
+        let mods = token_modifiers.as_u64().ok_or("token_modifiers not u64")? as u32;
+
+        line += dl;
+        col = if dl == 0 { col + ds } else { ds };
+        decoded.push((line, col, len, type_idx, mods));
+    }
+    Ok(decoded)
+}
+
 #[test]
-fn semantic_token_label_type_is_not_advertised_without_provider_support() -> Result<(), BoxError> {
+fn semantic_token_label_type_decodes_for_perl_labels() -> Result<(), BoxError> {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
     let mut child = Command::new(bin)
         .stdin(Stdio::piped())
@@ -87,21 +119,104 @@ fn semantic_token_label_type_is_not_advertised_without_provider_support() -> Res
     send_msg(&mut stdin, &init_req)?;
     let init_resp = recv_until_id(&mut reader, 1)?;
 
-    let advertised_legend = init_resp["result"]["capabilities"]["semanticTokensProvider"]["legend"]
-        ["tokenTypes"]
-        .as_array()
-        .ok_or("semanticTokensProvider.legend.tokenTypes missing from initialize response")?;
+    let advertised_legend: Vec<String> =
+        init_resp["result"]["capabilities"]["semanticTokensProvider"]["legend"]["tokenTypes"]
+            .as_array()
+            .ok_or("semanticTokensProvider.legend.tokenTypes missing from initialize response")?
+            .iter()
+            .map(|v| v.as_str().unwrap_or("").to_string())
+            .collect();
+
+    let label_idx = advertised_legend
+        .iter()
+        .position(|token_type| token_type == "label")
+        .ok_or("SemanticTokenTypes.label must be advertised once provider support exists")?;
+
+    send_msg(
+        &mut stdin,
+        &serde_json::json!({"jsonrpc":"2.0","method":"initialized","params":{}}).to_string(),
+    )?;
+
+    let source = "OUTER: while ($x) { last OUTER; }\n";
+    let did_open = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "textDocument/didOpen",
+        "params": {
+            "textDocument": {
+                "uri": "file:///semantic_label_contract_test.pl",
+                "languageId": "perl",
+                "version": 1,
+                "text": source
+            }
+        }
+    })
+    .to_string();
+    send_msg(&mut stdin, &did_open)?;
+
+    let sem_req = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "textDocument/semanticTokens/full",
+        "params": {
+            "textDocument": { "uri": "file:///semantic_label_contract_test.pl" }
+        }
+    })
+    .to_string();
+    send_msg(&mut stdin, &sem_req)?;
+    let sem_resp = recv_until_id(&mut reader, 2)?;
+
+    let labels = decoded_semantic_tokens(&sem_resp)?
+        .into_iter()
+        .filter_map(|(line, col, len, type_idx, mods)| {
+            (type_idx == label_idx).then_some((line, col, len, mods))
+        })
+        .collect::<Vec<_>>();
 
     assert!(
-        !advertised_legend.iter().any(|token_type| token_type.as_str() == Some("label")),
-        "SemanticTokenTypes.label is an unclaimed LSP 3.18 token type until the provider can emit matching legend indexes: {advertised_legend:?}"
+        labels.contains(&(0, 0, 5, 1)),
+        "labeled statement declaration should decode as label+declaration; labels={labels:?}, response={sem_resp:?}"
+    );
+    assert!(
+        labels.contains(&(0, 25, 5, 0)),
+        "loop-control label reference should decode as label without declaration modifier; labels={labels:?}, response={sem_resp:?}"
+    );
+
+    let range_req = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "textDocument/semanticTokens/range",
+        "params": {
+            "textDocument": { "uri": "file:///semantic_label_contract_test.pl" },
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": 0, "character": 33 }
+            }
+        }
+    })
+    .to_string();
+    send_msg(&mut stdin, &range_req)?;
+    let range_resp = recv_until_id(&mut reader, 3)?;
+    let range_labels = decoded_semantic_tokens(&range_resp)?
+        .into_iter()
+        .filter_map(|(line, col, len, type_idx, mods)| {
+            (type_idx == label_idx).then_some((line, col, len, mods))
+        })
+        .collect::<Vec<_>>();
+
+    assert!(
+        range_labels.contains(&(0, 0, 5, 1)),
+        "range semantic tokens should decode labeled statement declarations through the advertised label index; labels={range_labels:?}, response={range_resp:?}"
+    );
+    assert!(
+        range_labels.contains(&(0, 25, 5, 0)),
+        "range semantic tokens should decode loop-control label references through the advertised label index; labels={range_labels:?}, response={range_resp:?}"
     );
 
     send_msg(
         &mut stdin,
-        &serde_json::json!({"jsonrpc":"2.0","id":2,"method":"shutdown","params":null}).to_string(),
+        &serde_json::json!({"jsonrpc":"2.0","id":4,"method":"shutdown","params":null}).to_string(),
     )?;
-    let _ = recv_until_id(&mut reader, 2)?;
+    let _ = recv_until_id(&mut reader, 4)?;
     send_msg(
         &mut stdin,
         &serde_json::json!({"jsonrpc":"2.0","method":"exit","params":null}).to_string(),
@@ -157,7 +272,7 @@ fn semantic_token_result_indexes_stay_within_advertised_legend_bounds() -> Resul
         &serde_json::json!({"jsonrpc":"2.0","method":"initialized","params":{}}).to_string(),
     )?;
 
-    let source = "my $dbh = undef;\n$dbh->prepare(\"SELECT 1\");\nsub f { return $_; }\n";
+    let source = "my $dbh = undef;\n$dbh->prepare(\"SELECT 1\");\nsub f { return $_; }\nOUTER: while ($x) { last OUTER; }\n";
     let did_open = serde_json::json!({
         "jsonrpc": "2.0",
         "method": "textDocument/didOpen",

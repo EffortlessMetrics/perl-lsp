@@ -320,4 +320,25 @@ mod tests {
         fs::remove_dir_all(&root)?;
         Ok(())
     }
+
+    #[test]
+    fn binary_path_points_at_debug_artifact_named_for_the_package() {
+        use super::{PACKAGE_NAME, binary_path};
+
+        let path = binary_path(Path::new("/tmp/example-root"));
+
+        // Always resolves under <root>/target/debug/.
+        assert!(
+            path.starts_with(Path::new("/tmp/example-root/target/debug")),
+            "binary lives under target/debug: {path:?}"
+        );
+        // The artifact stem is the package name on every platform.
+        assert_eq!(path.file_stem().and_then(|stem| stem.to_str()), Some(PACKAGE_NAME));
+
+        // Windows carries the .exe extension; other platforms carry none.
+        #[cfg(windows)]
+        assert_eq!(path.extension().and_then(|ext| ext.to_str()), Some("exe"));
+        #[cfg(not(windows))]
+        assert!(path.extension().is_none(), "no extension off Windows: {path:?}");
+    }
 }

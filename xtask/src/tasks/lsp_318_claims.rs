@@ -21,6 +21,8 @@ const WINDOW_TEST: &str = "crates/perl-lsp-rs/tests/lsp_window_tests.rs";
 const CLIENT_REQUESTS: &str = "crates/perl-lsp-rs/src/runtime/client_requests.rs";
 const LIFECYCLE_CAPABILITIES: &str = "crates/perl-lsp-rs/src/runtime/lifecycle/capabilities.rs";
 const RUNTIME_LANGUAGE_MISC: &str = "crates/perl-lsp-rs/src/runtime/language/misc.rs";
+const REFACTOR_RUNTIME_RECEIPTS: &str =
+    "crates/perl-lsp-rs/src/runtime/language/refactor_runtime_blocker_receipts.rs";
 const LIFECYCLE_WATCHERS: &str = "crates/perl-lsp-rs/src/runtime/lifecycle/watchers.rs";
 const RUNTIME_REFRESH: &str = "crates/perl-lsp-rs/src/runtime/refresh.rs";
 const STATE_DOCUMENT: &str = "crates/perl-lsp-rs/src/state/document.rs";
@@ -39,6 +41,10 @@ const SPEC_MARKERS: &[RequiredMarker] = &[
         label: "selected-surface claim boundary",
         marker: "This spec may claim that `perl-lsp` has a documented LSP 3.18 selected-surface",
     },
+    RequiredMarker {
+        label: "StringValue object-form non-claim",
+        marker: "object-form `StringValue` inline completion insert text",
+    },
 ];
 
 const MATRIX_MARKERS: &[RequiredMarker] = &[
@@ -52,6 +58,10 @@ const MATRIX_MARKERS: &[RequiredMarker] = &[
         marker: "`workspace/textDocumentContent`",
     },
     RequiredMarker {
+        label: "matrix StringValue object-form row",
+        marker: "Object-form `StringValue` inline insert text",
+    },
+    RequiredMarker {
         label: "matrix negative-gated vocabulary",
         marker: "`negative-gated+documented`",
     },
@@ -59,6 +69,10 @@ const MATRIX_MARKERS: &[RequiredMarker] = &[
 ];
 
 const NEGATIVE_TEST_MARKERS: &[RequiredMarker] = &[
+    RequiredMarker {
+        label: "StringValue object-form negative receipt",
+        marker: "inline_completion_does_not_emit_object_form_string_value",
+    },
     RequiredMarker {
         label: "unsupported capability snapshot assertions",
         marker: "initialize_does_not_advertise_unimplemented_318_capabilities",
@@ -91,6 +105,14 @@ const NEGATIVE_TEST_MARKERS: &[RequiredMarker] = &[
     RequiredMarker {
         label: "WorkspaceEdit metadata absence gate",
         marker: "assert_no_workspace_edit_metadata",
+    },
+    RequiredMarker {
+        label: "ApplyWorkspaceEditParams.metadata positive gate",
+        marker: "apply_workspace_edit_metadata_emitted_when_supported_for_refactor_request",
+    },
+    RequiredMarker {
+        label: "ApplyWorkspaceEditParams.metadata negative gate",
+        marker: "apply_workspace_edit_metadata_absent_without_metadata_support",
     },
     RequiredMarker { label: "SnippetTextEdit gate", marker: "snippet" },
     RequiredMarker {
@@ -172,6 +194,10 @@ const FEATURE_CATALOG_MARKERS: &[RequiredMarker] = &[
         label: "SnippetTextEdit feature catalog row",
         marker: "id = \"lsp.workspace_edit_snippet_text_edit\"",
     },
+    RequiredMarker {
+        label: "ApplyWorkspaceEditParams.metadata feature catalog row",
+        marker: "id = \"lsp.apply_edit_metadata\"",
+    },
 ];
 
 const REFRESH_METHODS_TEST_MARKERS: &[RequiredMarker] = &[RequiredMarker {
@@ -208,8 +234,8 @@ const SCHEMA_VALIDATION_TEST_MARKERS: &[RequiredMarker] = &[
 
 const SEMANTIC_LEGEND_TEST_MARKERS: &[RequiredMarker] = &[
     RequiredMarker {
-        label: "SemanticTokenTypes.label negative receipt",
-        marker: "semantic_token_label_type_is_not_advertised_without_provider_support",
+        label: "SemanticTokenTypes.label positive receipt",
+        marker: "semantic_token_label_type_decodes_for_perl_labels",
     },
     RequiredMarker {
         label: "semantic-token legend bounds receipt",
@@ -319,6 +345,16 @@ const RAW_SNAPSHOT_PATTERNS: &[RawPatternCheck] = &[
     RawPatternCheck { needle: "\"applyKind\"", label: "CompletionList.applyKind JSON snapshot" },
 ];
 
+const MATRIX_TRANSITIONAL_STATUS_PATTERNS: &[RawPatternCheck] = &[
+    RawPatternCheck {
+        needle: "implemented-needs-positive-wire-test",
+        label: "transitional matrix status",
+    },
+    RawPatternCheck { needle: "needs-capability-parser", label: "transitional matrix status" },
+    RawPatternCheck { needle: "needs-compat-test", label: "transitional matrix status" },
+    RawPatternCheck { needle: "planned-needs-negative-gate", label: "transitional matrix status" },
+];
+
 const FEATURE_CATALOG_FORBIDDEN_PATTERNS: &[RawPatternCheck] = &[
     RawPatternCheck {
         needle: "documentRangesFormattingProvider",
@@ -398,6 +434,7 @@ pub fn run() -> Result<()> {
     check_required_markers(&root, CODE_LENS_TEST, CODE_LENS_TEST_MARKERS, &mut violations)?;
     check_required_markers(&root, WINDOW_TEST, WINDOW_TEST_MARKERS, &mut violations)?;
     check_feature_catalog(&root, &mut violations)?;
+    check_matrix_closeout_statuses(&root, &mut violations)?;
     check_capability_snapshots(&root, &mut violations)?;
     check_folding_range_refresh_guard(&root, &mut violations)?;
     check_relative_pattern_guard(&root, &mut violations)?;
@@ -407,6 +444,7 @@ pub fn run() -> Result<()> {
     check_code_action_documentation_guard(&root, &mut violations)?;
     check_code_action_tag_guard(&root, &mut violations)?;
     check_snippet_text_edit_guard(&root, &mut violations)?;
+    check_apply_edit_metadata_guard(&root, &mut violations)?;
     check_message_type_debug_support(&root, &mut violations)?;
 
     if violations.is_empty() {
@@ -455,6 +493,25 @@ fn check_required_markers(
             });
         }
     }
+    Ok(())
+}
+
+fn check_matrix_closeout_statuses(root: &Path, violations: &mut Vec<Violation>) -> Result<()> {
+    let text = read_required(root, MATRIX_PATH)?;
+    for pattern in MATRIX_TRANSITIONAL_STATUS_PATTERNS {
+        if text.contains(pattern.needle) {
+            violations.push(Violation {
+                rel_path: MATRIX_PATH.to_string(),
+                line: line_number_for(&text, pattern.needle),
+                label: pattern.label,
+                detail: format!(
+                    "matrix closeout must classify every row as implemented, negative-gated, or not-applicable: {:?}",
+                    pattern.needle
+                ),
+            });
+        }
+    }
+
     Ok(())
 }
 
@@ -867,6 +924,76 @@ fn check_snippet_text_edit_guard(root: &Path, violations: &mut Vec<Violation>) -
     Ok(())
 }
 
+fn check_apply_edit_metadata_guard(root: &Path, violations: &mut Vec<Violation>) -> Result<()> {
+    let state_document = read_required(root, STATE_DOCUMENT)?;
+    let lifecycle_capabilities = read_required(root, LIFECYCLE_CAPABILITIES)?;
+    let client_requests = read_required(root, CLIENT_REQUESTS)?;
+    let refactor_receipts = read_required(root, REFACTOR_RUNTIME_RECEIPTS)?;
+    let negative_claims = read_required(root, NEGATIVE_CLAIMS_TEST)?;
+
+    require_all(
+        STATE_DOCUMENT,
+        &state_document,
+        &["workspace_apply_edit_support", "workspace_edit_metadata_support"],
+        "ApplyWorkspaceEditParams.metadata capability storage",
+        violations,
+    );
+    require_all(
+        LIFECYCLE_CAPABILITIES,
+        &lifecycle_capabilities,
+        &[
+            "/capabilities/workspace/applyEdit",
+            "/capabilities/workspace/workspaceEdit/metadataSupport",
+            "workspace_apply_edit_support",
+            "workspace_edit_metadata_support",
+            "initialize_parses_apply_edit_metadata_support",
+        ],
+        "ApplyWorkspaceEditParams.metadata capability parser",
+        violations,
+    );
+    require_all(
+        CLIENT_REQUESTS,
+        &client_requests,
+        &[
+            "request_apply_workspace_edit_with_metadata",
+            "request_apply_workspace_edit_with_metadata_call_presence_observer",
+            "request_apply_workspace_edit_with_metadata_boundary_discriminator",
+            "request_apply_workspace_edit_with_metadata_return_value_discriminator",
+            "WORKSPACE_APPLY_EDIT",
+            "\"metadata\"",
+            "\"isRefactoring\"",
+        ],
+        "ApplyWorkspaceEditParams.metadata request helper",
+        violations,
+    );
+    require_all(
+        REFACTOR_RUNTIME_RECEIPTS,
+        &refactor_receipts,
+        &[
+            "request_apply_workspace_edit_with_metadata",
+            "apply_edit_requested",
+            "apply_edit_request",
+        ],
+        "ApplyWorkspaceEditParams.metadata safe-delete apply path",
+        violations,
+    );
+    require_all(
+        NEGATIVE_CLAIMS_TEST,
+        &negative_claims,
+        &[
+            "apply_workspace_edit_metadata_emitted_when_supported_for_refactor_request",
+            "apply_workspace_edit_metadata_absent_without_metadata_support",
+            "metadataSupport",
+            "workspace/applyEdit",
+            "/edit/metadata",
+        ],
+        "ApplyWorkspaceEditParams.metadata wire receipts",
+        violations,
+    );
+
+    Ok(())
+}
+
 fn check_message_type_debug_support(root: &Path, violations: &mut Vec<Violation>) -> Result<()> {
     let window = read_required(root, "crates/perl-lsp-rs/src/runtime/window.rs")?;
     require_all(
@@ -918,6 +1045,15 @@ fn line_number_for_pointer(text: &str, pointer: &str) -> usize {
 mod tests {
     use super::*;
 
+    fn write_matrix_fixture(root: &Path, text: &str) -> Result<()> {
+        let path = root.join(MATRIX_PATH);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(path, text)?;
+        Ok(())
+    }
+
     #[test]
     fn line_number_for_reports_first_matching_line() {
         let text = "one\ntwo marker\nthree marker\n";
@@ -933,5 +1069,39 @@ mod tests {
     fn pointer_line_uses_last_path_segment() {
         let text = "{\n  \"semanticTokensProvider\": {\n    \"delta\": true\n  }\n}\n";
         assert_eq!(line_number_for_pointer(text, "/semanticTokensProvider/full/delta"), 3);
+    }
+
+    #[test]
+    fn matrix_closeout_status_check_accepts_closed_statuses() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        write_matrix_fixture(
+            temp.path(),
+            "| Feature | Status |\n| --- | --- |\n| Inline completion | implemented+tested+documented |\n| Notebook | not-applicable+documented |\n| Delta | negative-gated+documented |\n",
+        )?;
+
+        let mut violations = Vec::new();
+        check_matrix_closeout_statuses(temp.path(), &mut violations)?;
+
+        assert!(violations.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn matrix_closeout_status_check_rejects_transitional_statuses() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        write_matrix_fixture(
+            temp.path(),
+            "| Feature | Status |\n| --- | --- |\n| Folding refresh | implemented-needs-positive-wire-test |\n",
+        )?;
+
+        let mut violations = Vec::new();
+        check_matrix_closeout_statuses(temp.path(), &mut violations)?;
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].rel_path, MATRIX_PATH);
+        assert_eq!(violations[0].line, 3);
+        assert_eq!(violations[0].label, "transitional matrix status");
+        assert!(violations[0].detail.contains("implemented-needs-positive-wire-test"));
+        Ok(())
     }
 }

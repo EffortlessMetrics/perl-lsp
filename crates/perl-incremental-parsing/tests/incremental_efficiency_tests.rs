@@ -41,7 +41,7 @@ fn count_all_nodes(node: &Node) -> usize {
         NodeKind::ExpressionStatement { expression } => {
             count += count_all_nodes(expression);
         }
-        NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+        NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
             count += count_all_nodes(condition);
             count += count_all_nodes(then_branch);
             for (cond, branch) in elsif_branches {

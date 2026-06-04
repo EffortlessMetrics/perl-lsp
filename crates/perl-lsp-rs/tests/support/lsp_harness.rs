@@ -691,6 +691,11 @@ impl LspHarness {
     }
 
     /// Alternative request method that accepts a full JSON-RPC request object with a custom timeout.
+    ///
+    /// The harness assigns a fresh numeric ID before sending so legacy callers do
+    /// not accidentally collide with each other. Use
+    /// [`request_raw_preserving_id_with_timeout`] when a test needs to verify a
+    /// specific JSON-RPC ID shape, such as a string ID.
     pub fn request_raw_with_timeout(&mut self, request: Value, timeout: Duration) -> Value {
         // Handle full JSON-RPC request object
         if request.is_object() && request.get("jsonrpc").is_some() {
@@ -720,6 +725,41 @@ impl LspHarness {
                 }
             })
         }
+    }
+
+    /// Send a complete JSON-RPC request without replacing its ID.
+    ///
+    /// This is intended for protocol-shape tests that need true end-to-end
+    /// coverage of caller-supplied JSON-RPC identifiers. It returns the complete
+    /// response envelope so tests can assert that the server echoed the ID.
+    pub fn request_raw_preserving_id_with_timeout(
+        &mut self,
+        request: Value,
+        timeout: Duration,
+    ) -> Value {
+        if request.is_object() && request.get("jsonrpc").is_some() && request.get("id").is_some() {
+            return self.send_request_with_timeout_full_response(request, timeout).unwrap_or_else(
+                |e| {
+                    json!({
+                        "jsonrpc": "2.0",
+                        "id": null,
+                        "error": {
+                            "code": -32603,
+                            "message": e
+                        }
+                    })
+                },
+            );
+        }
+
+        json!({
+            "jsonrpc": "2.0",
+            "id": request.get("id").cloned().unwrap_or(Value::Null),
+            "error": {
+                "code": -32600,
+                "message": "Invalid request"
+            }
+        })
     }
 
     /// Send a notification (no response expected)
@@ -954,7 +994,7 @@ impl LspHarness {
         timeout: Duration,
     ) -> Result<Value, String> {
         let timeout = self.effective_request_timeout(timeout);
-        let expect_id = request.get("id").and_then(|v| v.as_i64());
+        let expect_id = request.get("id").cloned();
 
         // Format request with Content-Length framing
         let request_str = request.to_string();
@@ -983,7 +1023,7 @@ impl LspHarness {
 
             while let Some(msg_bytes) = self.try_take_one_framed_message() {
                 if let Ok(msg) = serde_json::from_slice::<Value>(&msg_bytes) {
-                    if msg.get("id").and_then(|v| v.as_i64()) == expect_id {
+                    if msg.get("id") == expect_id.as_ref() {
                         if let Some(error) = msg.get("error") {
                             return Err(format!("LSP error: {:?}", error));
                         }
@@ -1017,7 +1057,7 @@ impl LspHarness {
         timeout: Duration,
     ) -> Result<Value, String> {
         let timeout = self.effective_request_timeout(timeout);
-        let expect_id = request.get("id").and_then(|v| v.as_i64());
+        let expect_id = request.get("id").cloned();
 
         // Format request with Content-Length framing
         let request_str = request.to_string();
@@ -1046,7 +1086,7 @@ impl LspHarness {
 
             while let Some(msg_bytes) = self.try_take_one_framed_message() {
                 if let Ok(msg) = serde_json::from_slice::<Value>(&msg_bytes) {
-                    if msg.get("id").and_then(|v| v.as_i64()) == expect_id {
+                    if msg.get("id") == expect_id.as_ref() {
                         // Return the full message for schema validation tests
                         return Ok(msg);
                     } else {

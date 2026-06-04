@@ -58,47 +58,84 @@ pub fn add_variable_completions(
 }
 
 /// Add special Perl variables
+///
+/// Offers a curated set of Perl magic/special variables (from perlvar) as
+/// completion items keyed by sigil. Each entry carries a one-line description
+/// so editors can display a tooltip without requiring the user to consult
+/// the documentation separately.
 pub fn add_special_variables(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
     sigil: &str,
 ) {
-    let special_vars = match sigil {
-        "$" => vec![
-            ("$_", "Default input and pattern-search space"),
-            ("$.", "Current line number"),
-            ("$,", "Output field separator"),
-            ("$/", "Input record separator"),
-            ("$\\", "Output record separator"),
-            ("$!", "Current errno"),
-            ("$@", "Last eval error"),
-            ("$?", "Child process status (exit code)"),
-            ("$$", "Process ID"),
-            ("$0", "Program name"),
-            ("$1", "First capture group"),
-            ("$&", "Last match"),
-            ("$`", "Prematch"),
-            ("$'", "Postmatch"),
-            ("$+", "Last capture group"),
-            ("$^O", "Operating system name"),
-            ("$^V", "Perl version"),
-            ("$^T", "Script start time (epoch seconds)"),
-            ("$^A", "Accumulator for format() output"),
-            ("$^W", "Warning flag (prefer 'use warnings')"),
+    let special_vars: &[(&str, &str)] = match sigil {
+        "$" => &[
+            // Topic / default variable
+            ("$_", "Default input and pattern-search space (topic variable)"),
+            // I/O and formatting
+            ("$.", "Current line number of the last filehandle read"),
+            ("$,", "Output field separator for print"),
+            ("$/", "Input record separator (undef to slurp)"),
+            ("$\\", "Output record separator appended by print"),
+            ("$|", "Output auto-flush: set to 1 to disable buffering"),
+            ("$\"", "List separator for interpolated arrays (default: space)"),
+            ("$;", "Subscript separator for multi-dimensional hashes"),
+            // Error and status
+            ("$!", "Errno / last OS error message (POSIX::strerror)"),
+            ("$@", "Error from the last eval block or do-file"),
+            ("$?", "Child process status (wait status from system/backtick)"),
+            // Process info
+            ("$$", "Process ID of the current Perl process"),
+            ("$0", "Name of the running program (can be assigned)"),
+            // Regex capture groups
+            ("$1", "First regex capture group from last successful match"),
+            ("$2", "Second regex capture group from last successful match"),
+            ("$3", "Third regex capture group from last successful match"),
+            ("$4", "Fourth regex capture group from last successful match"),
+            ("$5", "Fifth regex capture group from last successful match"),
+            ("$6", "Sixth regex capture group from last successful match"),
+            ("$7", "Seventh regex capture group from last successful match"),
+            ("$8", "Eighth regex capture group from last successful match"),
+            ("$9", "Ninth regex capture group from last successful match"),
+            // Regex match strings
+            ("$&", "Entire string matched by the last successful regex"),
+            ("$`", "String preceding the last successful regex match"),
+            ("$'", "String following the last successful regex match"),
+            ("$+", "Last bracket matched by the last successful regex"),
+            // Control variables
+            ("$^O", "Operating system name (e.g. 'linux', 'MSWin32')"),
+            ("$^V", "Perl interpreter version as a v-string"),
+            ("$^T", "Script start time in seconds since the epoch"),
+            ("$^W", "Global warning flag (prefer 'use warnings' instead)"),
+            ("$^A", "Accumulator variable for write/format output"),
+            ("$^I", "In-place edit extension (e.g. '.bak' with -i flag)"),
+            ("$^F", "Maximum system file descriptor (default: 2)"),
+            ("$^X", "Path to the current Perl interpreter executable"),
+            ("$^D", "Debugging flags (numeric, set by -D flag)"),
+            ("$^P", "Internal debugger flag; true when under debugger"),
+            ("$^S", "Current interpreter state: true inside eval"),
+            ("$^E", "OS-specific extended error information"),
+            ("$^H", "Compile-time hints bitmask (internal)"),
+            ("$^M", "Emergency memory pool for out-of-memory handler"),
+            ("$^N", "Most recently matched capture group in the current regex"),
+            ("$^R", "Result of the last successful (?{...}) assertion"),
         ],
-        "@" => vec![
-            ("@_", "Subroutine arguments"),
-            ("@ARGV", "Command line arguments"),
-            ("@INC", "Module search paths"),
-            ("@ISA", "Base classes"),
-            ("@EXPORT", "Exported symbols"),
+        "@" => &[
+            ("@_", "Subroutine arguments (passed by reference)"),
+            ("@ARGV", "Command-line arguments to the script"),
+            ("@INC", "Module search paths (@INC for use/require)"),
+            ("@ISA", "List of base classes for the current package"),
+            ("@EXPORT", "Symbols exported by default from an Exporter module"),
+            ("@EXPORT_OK", "Symbols exported on request from an Exporter module"),
         ],
-        "%" => vec![
-            ("%ENV", "Environment variables"),
-            ("%INC", "Loaded modules"),
-            ("%SIG", "Signal handlers"),
+        "%" => &[
+            ("%ENV", "Environment variables (read/write)"),
+            ("%INC", "Map of loaded module file paths keyed by module name"),
+            ("%SIG", "Signal handlers keyed by signal name"),
+            ("%+", "Named capture buffers from the last successful regex"),
+            ("%-", "All named capture buffers (multi-valued) from last regex"),
         ],
-        _ => vec![],
+        _ => &[],
     };
 
     for (var, description) in special_vars {

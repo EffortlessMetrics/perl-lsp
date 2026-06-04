@@ -69,7 +69,7 @@ fn visit_children<F: FnMut(&Node)>(node: &Node, mut f: F) {
                 f(a);
             }
         }
-        NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+        NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
             f(condition);
             f(then_branch);
             for (cond, body) in elsif_branches {

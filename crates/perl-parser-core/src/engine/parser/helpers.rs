@@ -450,12 +450,22 @@ impl<'a> Parser<'a> {
         Ok(true)
     }
 
+    /// Returns true if `name` is a Perl lvalue builtin — one that can legally
+    /// appear as the target of an assignment:  `pos($s) = 0`,
+    /// `substr($s,0,5) = "x"`, `vec($s,0,8) = 0xFF`.
+    ///
+    /// Non-lvalue builtins such as `length`, `index`, `pack` must NOT be
+    /// listed here; `length($x) = 5` is not valid Perl.
+    pub(crate) fn is_lvalue_builtin(name: &str) -> bool {
+        matches!(name, "pos" | "substr" | "vec")
+    }
+
     fn parse_lvalue_builtin_assignment_tail(
         &mut self,
         func_name: &str,
         expr: Node,
     ) -> ParseResult<Node> {
-        if func_name != "substr" {
+        if !Self::is_lvalue_builtin(func_name) {
             return Ok(expr);
         }
 
@@ -709,10 +719,8 @@ impl<'a> Parser<'a> {
         if self.peek_kind() == Some(TokenKind::Sub) && self.next_token_starts_anonymous_sub() {
             return false;
         }
-        if matches!(
-            self.peek_kind(),
-            Some(TokenKind::My | TokenKind::Our | TokenKind::State)
-        ) && self.next_token_starts_variable_declaration()
+        if matches!(self.peek_kind(), Some(TokenKind::My | TokenKind::Our | TokenKind::State))
+            && self.next_token_starts_variable_declaration()
         {
             return false;
         }
@@ -733,10 +741,7 @@ impl<'a> Parser<'a> {
         // `method` starts a declaration only when the next token is an Identifier
         // (the method name), mirroring parse_statement's disambiguation guard.
         if self.peek_kind() == Some(TokenKind::Method)
-            && !matches!(
-                self.tokens.peek_second().map(|t| t.kind),
-                Ok(TokenKind::Identifier)
-            )
+            && !matches!(self.tokens.peek_second().map(|t| t.kind), Ok(TokenKind::Identifier))
         {
             return false;
         }
@@ -754,10 +759,8 @@ impl<'a> Parser<'a> {
                     | TokenKind::Init
                     | TokenKind::Unitcheck
             )
-        ) && !matches!(
-            self.tokens.peek_second().map(|t| t.kind),
-            Ok(TokenKind::LeftBrace)
-        ) {
+        ) && !matches!(self.tokens.peek_second().map(|t| t.kind), Ok(TokenKind::LeftBrace))
+        {
             return false;
         }
 
@@ -765,10 +768,7 @@ impl<'a> Parser<'a> {
         // when followed by `(expr)`.  Without `(`, treat it as a potential
         // bareword identifier to avoid breaking user-defined `given()` subs.
         if self.peek_kind() == Some(TokenKind::Given)
-            && !matches!(
-                self.tokens.peek_second().map(|t| t.kind),
-                Ok(TokenKind::LeftParen)
-            )
+            && !matches!(self.tokens.peek_second().map(|t| t.kind), Ok(TokenKind::LeftParen))
         {
             return false;
         }
@@ -776,10 +776,7 @@ impl<'a> Parser<'a> {
         // `defer` (Perl 5.36+ experimental) is a block statement when followed
         // by `{`.  Without `{`, it may appear as a hash key or bareword.
         if self.peek_kind() == Some(TokenKind::Defer)
-            && !matches!(
-                self.tokens.peek_second().map(|t| t.kind),
-                Ok(TokenKind::LeftBrace)
-            )
+            && !matches!(self.tokens.peek_second().map(|t| t.kind), Ok(TokenKind::LeftBrace))
         {
             return false;
         }
@@ -1171,8 +1168,9 @@ impl<'a> Parser<'a> {
             return false;
         }
 
-        // Exclude string comparison operators that are TokenKind::Identifier
-        if matches!(name, "eq" | "ne" | "lt" | "le" | "gt" | "ge" | "cmp" | "x" | "ISA") {
+        // Exclude string comparison operators and infix keyword operators that are
+        // TokenKind::Identifier. `isa` is the Perl 5.32+ infix class-check operator.
+        if matches!(name, "eq" | "ne" | "lt" | "le" | "gt" | "ge" | "cmp" | "x" | "ISA" | "isa") {
             return false;
         }
 
@@ -1240,26 +1238,36 @@ impl<'a> Parser<'a> {
                             || third.kind == TokenKind::LeftParen;
                     }
                 }
-                // Builtin functions that take a single sigiled/typeglob argument:
-                // `max values %hash`, `func keys %h`, `func reverse @list`,
-                // `reftype tied *STDOUT`.
-                // These are builtins whose first/only argument is a sigiled
-                // expression or explicit typeglob.
+                // Builtin functions as arguments:
+                //
+                // Pattern A (sigil arg): `func values %hash`, `func keys %h`
+                //   — the builtin's argument starts with a sigil.
+                //
+                // Pattern B (paren call): `func ref($x)`, `func ref(shift) . "y"`
+                //   — the builtin is called with explicit parens.  The result of
+                //   `ref($x)` is a valid argument to the outer function.
+                //   This covers the real-world idiom:
+                //     croak ref(shift) . " is not a valid class"
+                //     confess ref($self) . "::new() is abstract"
+                //
+                // Without the `LeftParen` check, the early-return here prevented
+                // the fallthrough to the general `(` check at the bottom of this
+                // branch, causing `croak ref($x) . "y"` to drop the argument.
                 if Self::is_builtin_function(&next_text) {
                     if let Ok(third) = self.tokens.peek_second() {
                         let third_text: &str = &third.text;
+                        if third.kind == TokenKind::LeftParen {
+                            // builtin(args) — the builtin is called with parens,
+                            // producing a value that is the outer function's argument.
+                            return true;
+                        }
                         return Self::is_sigil_argument_start(third.kind, third_text);
                     }
                 }
                 if next_text.starts_with(|c: char| c.is_ascii_lowercase() || c == '_') {
-                    if self
-                        .tokens
-                        .peek_second()
-                        .ok()
-                        .is_some_and(|third| {
-                            Self::is_sigil_argument_start(third.kind, third.text.as_ref())
-                        })
-                    {
+                    if self.tokens.peek_second().ok().is_some_and(|third| {
+                        Self::is_sigil_argument_start(third.kind, third.text.as_ref())
+                    }) {
                         return true;
                     }
                 }

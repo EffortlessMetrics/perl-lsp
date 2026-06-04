@@ -1,0 +1,26 @@
+[
+  {
+    "name": "CI Gate shard (lsp)",
+    "conclusion": "failure",
+    "required": true,
+    "quarantine": false
+  },
+  {
+    "name": "CI Gate (Merge-Blocking)",
+    "conclusion": "failure",
+    "required": true,
+    "quarantine": false
+  },
+  {
+    "name": "UX Regression Tests",
+    "conclusion": "failure",
+    "required": true,
+    "quarantine": false
+  },
+  {
+    "name": "LSP Memory Smoke",
+    "conclusion": "failure",
+    "required": true,
+    "quarantine": false
+  }
+]

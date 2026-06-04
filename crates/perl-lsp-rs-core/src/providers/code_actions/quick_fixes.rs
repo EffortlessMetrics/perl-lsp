@@ -3,8 +3,10 @@
 //! Provides automated fixes for common Perl issues driven by diagnostic codes.
 
 use super::types::{CodeAction, CodeActionEdit, CodeActionKind, QuickFixDiagnostic};
+use crate::providers::import_management::guess_module_for_function;
 use crate::providers::rename::TextEdit;
 use perl_diagnostics::codes::DiagnosticCode;
+use perl_lexer::is_builtin;
 use perl_parser::ast_utils::{find_declaration_position, get_indent_at};
 use perl_parser_core::SourceLocation;
 
@@ -284,7 +286,7 @@ mod tests {
 
     #[test]
     fn fix_unused_variable_removal_does_not_overrun_end_of_file() {
-        // Source has no trailing newline — delete_end must clamp to source.len().
+        // Source has no trailing newline -- delete_end must clamp to source.len().
         let source = "my $unused = 1;";
         let start = 3;
         let end = 10;
@@ -304,7 +306,7 @@ mod tests {
 
     #[test]
     fn fix_unused_variable_removal_includes_newline_when_present() {
-        // Source has trailing newline — delete_end should include the newline character
+        // Source has trailing newline -- delete_end should include the newline character
         // (line_end + 1) and must still be within source.len().
         let source = "my $unused = 1;\n";
         let start = 3;
@@ -340,7 +342,7 @@ mod tests {
 
         // Line starts after 'use strict;\n' at offset 12
         assert_eq!(edit.location.start, 12);
-        // Line ends at the '\n' after 'my $unused = 1;' — include it: offset 28
+        // Line ends at the '\n' after 'my $unused = 1;' -- include it: offset 28
         assert_eq!(edit.location.end, 28);
         assert!(edit.location.end <= source.len(), "edit end must not exceed source length");
         assert_eq!(edit.new_text, "");
@@ -434,7 +436,7 @@ mod tests {
 
     #[test]
     fn fix_printf_format_arity_too_many_args_returns_no_fix() {
-        // When args > specifiers we don't auto-remove — too destructive.
+        // When args > specifiers we don't auto-remove -- too destructive.
         let source = r#"printf "%s", $a, $b"#;
         let diagnostic = diagnostic_for(
             (0, source.len()),
@@ -810,7 +812,7 @@ pub fn fix_bareword(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAc
             edit: CodeActionEdit {
                 changes: vec![TextEdit {
                     location: SourceLocation { start: insert_pos, end: insert_pos },
-                    new_text: format!("{}open my ${};\n", indent, bareword),
+                    new_text: format!("{}open my ${}; \n", indent, bareword),
                 }],
             },
             is_preferred: false,
@@ -861,7 +863,7 @@ pub fn fix_parse_error(
             if diagnostic.message.to_ascii_lowercase().contains("missing semicolon") =>
         {
             // PL001/PL002 are general parse error codes. When the message indicates a missing
-            // semicolon, apply the same fix — but skip heredoc contexts where insertion is wrong.
+            // semicolon, apply the same fix -- but skip heredoc contexts where insertion is wrong.
             let at_heredoc = source[diagnostic.range.0..].get(..2).is_some_and(|s| s == "<<");
             if !at_heredoc {
                 let line_end = source[diagnostic.range.0..]
@@ -1424,7 +1426,7 @@ fn duplicate_hash_key_rename_text(key_source: &str, key_name: &str) -> String {
     if is_bareword_hash_key(key_source) {
         format!("{key_source}_2")
     } else {
-        format!("'{}_2'", escape_single_quoted_perl(key_name))
+        format!("'{}'", escape_single_quoted_perl(key_name) + "_2")
     }
 }
 
@@ -1982,4 +1984,109 @@ fn valid_diagnostic_range(source: &str, range: (usize, usize)) -> Option<(usize,
         return None;
     }
     Some((start, end))
+}
+
+/// Offer "Import 'Module'" for an unquoted-bareword function call (PL109).
+///
+/// Resolves the symbol name at the diagnostic range against the static
+/// symbol-to-module map ([`guess_module_for_function`]).  Returns a QuickFix
+/// action inserting `use Module;\n` after the last existing `use` / `require`
+/// line when:
+///
+/// - The symbol maps to a known module.
+/// - The symbol is not a Perl built-in function.
+/// - `use Module` (or `use Module qw(...)`) is not already present in source.
+///
+/// Returns an empty `Vec` for builtins, already-imported modules, and symbols
+/// not in the static map.
+pub fn fix_import_for_bareword_function(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let (start, end) = match valid_diagnostic_range(source, diagnostic.range) {
+        Some(r) => r,
+        None => return Vec::new(),
+    };
+
+    let symbol = source[start..end].trim();
+    if symbol.is_empty() {
+        return Vec::new();
+    }
+
+    // Skip Perl built-ins -- they never need an import.
+    if is_builtin(symbol) {
+        return Vec::new();
+    }
+
+    // Resolve to a module using the static map.
+    let module = match guess_module_for_function(symbol) {
+        Some(m) => m,
+        None => return Vec::new(),
+    };
+
+    // Skip when the module is already imported to avoid duplicates.
+    // A simple substring check covers both `use JSON;` and `use JSON qw(...)`.
+    let use_marker = format!("use {}", module);
+    if source.contains(&use_marker) {
+        return Vec::new();
+    }
+
+    // Find the insert position: after the last `use` / `require` line.
+    let insert_pos = import_block_end(source);
+
+    vec![CodeAction {
+        title: format!("Import '{}'", module),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::UnquotedBareword.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: insert_pos, end: insert_pos },
+                new_text: format!("use {};\n", module),
+            }],
+        },
+        is_preferred: false,
+    }]
+}
+
+/// Compute the byte offset at which a new `use` statement should be inserted.
+///
+/// Scans from the top of the file, skipping over:
+/// - A shebang (`#!`) line
+/// - Contiguous `use` and `require` statements (and blank/comment lines between them)
+///
+/// Returns the offset immediately after the last matching line (i.e. the
+/// position at which to insert, so the new line appears *after* existing imports).
+fn import_block_end(source: &str) -> usize {
+    let mut pos = 0;
+    // Skip shebang line if present.
+    if source.starts_with("#!") {
+        pos = source.find('\n').map(|p| p + 1).unwrap_or(source.len());
+    }
+
+    let mut last_use_end = pos;
+    let mut cursor = pos;
+
+    loop {
+        let rest = &source[cursor..];
+        let line_len = rest.find('\n').map(|p| p + 1).unwrap_or(rest.len());
+        if line_len == 0 {
+            break;
+        }
+
+        let line = &rest[..line_len];
+        let trimmed = line.trim();
+
+        if trimmed.starts_with("use ") || trimmed.starts_with("require ") {
+            last_use_end = cursor + line_len;
+        } else if trimmed.is_empty() || trimmed.starts_with('#') {
+            // Allow blank lines and comments within the import block.
+        } else {
+            // First non-import, non-blank, non-comment line: stop.
+            break;
+        }
+
+        cursor += line_len;
+    }
+
+    last_use_end
 }

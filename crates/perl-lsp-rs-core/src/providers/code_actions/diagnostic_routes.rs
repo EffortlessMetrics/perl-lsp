@@ -85,6 +85,8 @@ fn quick_fixes_for_diagnostic(source: &str, diagnostic: &Diagnostic) -> Vec<Code
         // PL109: Unquoted bareword
         c if c == DiagnosticCode::UnquotedBareword.as_str() => {
             actions.extend(quick_fixes::fix_bareword(source, &qf_diag));
+            // Also offer an import action when the bareword resolves to a known module.
+            actions.extend(quick_fixes::fix_import_for_bareword_function(source, &qf_diag));
         }
         // PL001: General parse error (stable code)
         // PL002: Syntax error — same quick-fix routing as PL001

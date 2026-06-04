@@ -1,5 +1,8 @@
 impl<'a> Parser<'a> {
-    fn parse_qualified_name(&mut self, allow_trailing_separator: bool) -> ParseResult<(String, SourceLocation)> {
+    fn parse_qualified_name(
+        &mut self,
+        allow_trailing_separator: bool,
+    ) -> ParseResult<(String, SourceLocation)> {
         // Accept keywords as package names (e.g., `package if;`, `package next;`)
         // Same pattern as parse_subroutine — keywords are valid barewords in Perl
         let first = if self.peek_kind().is_some_and(Self::can_be_sub_name) {
@@ -62,7 +65,8 @@ impl<'a> Parser<'a> {
     /// handler.  Unknown attributes are warned about (pushed to `self.errors`) but do
     /// **not** cause a hard parse failure — custom attribute usage is widespread in
     /// CPAN code (e.g. Moose `:ro`, Catalyst `:Private`).
-    const BUILTIN_SUB_ATTRIBUTES: &'static [&'static str] = &["lvalue", "method", "prototype", "const"];
+    const BUILTIN_SUB_ATTRIBUTES: &'static [&'static str] =
+        &["lvalue", "method", "prototype", "const"];
 
     /// Built-in class-level attributes defined by Perl 5.38+ `use feature 'class'`.
     ///
@@ -70,6 +74,37 @@ impl<'a> Parser<'a> {
     /// warned about when parsing class headers.  `:isa(Parent)` declares inheritance;
     /// `:does(Role)` is reserved for future Perl versions.
     const BUILTIN_CLASS_ATTRIBUTES: &'static [&'static str] = &["isa", "does"];
+
+    /// Built-in variable-level attributes from the Perl 5.38+ `field` feature
+    /// (Object::Pad style) and common pragmas.
+    ///
+    /// `:param`, `:reader`, `:writer`, `:accessor`, `:mutator`, `:predicate`, `:weak` are
+    /// defined by Perl 5.38+ `use feature 'class'` (and the Object::Pad CPAN module).
+    /// `:default` (with optional parenthesized argument) sets a field's default value
+    /// in Object::Pad.  `:builder` designates a builder method for initialization.
+    /// `:isa` constrains the field's type.
+    /// `:shared` is defined by `threads::shared`.
+    ///
+    /// Note: `default` is tokenized as `TokenKind::Default` (a keyword), not
+    /// `TokenKind::Identifier`.  The attribute parser (`parse_declaration_attributes_with_extras`)
+    /// accepts any token that `can_be_sub_name` covers so that keyword-named attributes
+    /// like `:default` do not produce spurious parse errors.
+    ///
+    /// Custom attributes are still allowed (via `Attribute::Handlers` etc.) and
+    /// produce a soft warning, not a hard error.
+    const BUILTIN_VAR_ATTRIBUTES: &'static [&'static str] = &[
+        "param",
+        "reader",
+        "writer",
+        "accessor",
+        "mutator",
+        "predicate",
+        "weak",
+        "shared",
+        "default",
+        "builder",
+        "isa",
+    ];
 
     /// Return `true` if `name` is a known built-in subroutine attribute.
     fn is_builtin_sub_attribute(name: &str) -> bool {
@@ -113,8 +148,16 @@ impl<'a> Parser<'a> {
             let mut parsed_any = false;
 
             loop {
+                // Accept any token that can serve as a bareword attribute name.
+                // Plain `Identifier` and `Method` tokens are the common case.
+                // Keyword tokens are also accepted here because Perl attribute
+                // names are barewords, and some attribute names coincide with
+                // keyword spellings — notably `:default(expr)` used by
+                // Object::Pad / Perl 5.38+ `field` declarations, where `default`
+                // is tokenized as `TokenKind::Default`.  `can_be_sub_name` covers
+                // the full set of keyword token kinds that are valid barewords.
                 let attr_token = match self.peek_kind() {
-                    Some(TokenKind::Identifier | TokenKind::Method) => self.tokens.next()?,
+                    Some(kind) if Self::can_be_sub_name(kind) => self.tokens.next()?,
                     _ if parsed_any => break,
                     _ => {
                         return Err(ParseError::syntax(
@@ -181,6 +224,14 @@ impl<'a> Parser<'a> {
 
                 attributes.push(attr_name);
 
+                // Only continue to the next adjacent attribute name (after the same
+                // `:`) when the token is a plain identifier or `method`.  We do NOT
+                // extend this to all keyword tokens here because statement-modifier
+                // keywords (`if`, `while`, `for`, …) can follow an attribute at
+                // statement level (e.g. `my $x :shared if $cond;`) and must not be
+                // consumed as part of the attribute list.  Keyword-named attributes
+                // (like `:default`) always appear as the sole attr after their own
+                // `:`, so the initial token consumed above is sufficient.
                 match self.peek_kind() {
                     Some(TokenKind::Identifier | TokenKind::Method) => continue,
                     _ => break,
@@ -198,6 +249,15 @@ impl<'a> Parser<'a> {
         self.parse_declaration_attributes_with_extras(&[])
     }
 
+    /// Parse variable declaration attributes (`:shared`, `:param`, `:reader`, etc.).
+    ///
+    /// Delegates to `parse_declaration_attributes_with_extras` with the known
+    /// variable/field attributes whitelisted so they do not trigger the
+    /// "unknown subroutine attribute" soft warning.
+    fn parse_variable_attributes(&mut self) -> ParseResult<Vec<String>> {
+        self.parse_declaration_attributes_with_extras(Self::BUILTIN_VAR_ATTRIBUTES)
+    }
+
     /// Parse subroutine definition
     fn parse_subroutine(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
@@ -211,10 +271,7 @@ impl<'a> Parser<'a> {
                 // sub ::PCDATA or sub ::DB_File::splice
                 let ident_token = self.tokens.next()?;
                 let full_name = format!("::{}", ident_token.text);
-                (
-                    Some(full_name),
-                    Some(SourceLocation { start: name_start, end: ident_token.end }),
-                )
+                (Some(full_name), Some(SourceLocation { start: name_start, end: ident_token.end }))
             } else {
                 // sub :: with no following name — treat as name "::"
                 (
@@ -304,13 +361,51 @@ impl<'a> Parser<'a> {
 
     /// Parse class declaration (Perl 5.38+)
     ///
-    /// Handles the full syntax: `class Name :isa(Parent) :isa(Parent2) { ... }`
+    /// Handles the full syntax:
+    ///   `class Name { ... }`
+    ///   `class Name VERSION { ... }`
+    ///   `class Name :isa(Parent) { ... }`
+    ///   `class Name VERSION :isa(Parent) { ... }`
+    ///
+    /// The optional VERSION is a decimal number (e.g. `1.23`) or a v-string
+    /// (e.g. `v1.2.3`).  It is consumed and ignored since `NodeKind::Class`
+    /// does not currently carry a version field.  This mirrors the way
+    /// `parse_package` silently absorbs a version token.
+    ///
     /// Multiple `:isa(...)` attributes may appear; each contributes a parent class.
     fn parse_class(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'class'
 
         let (name, _) = self.parse_qualified_name(false)?;
+
+        // Consume optional version: `1.23` (Number) or `v1.2.3` (VString).
+        // An Identifier starting with `v` followed by digits is also a v-string
+        // (e.g. `v5` before the lexer coalesces dots) — handle that path too.
+        if self.peek_kind() == Some(TokenKind::Number)
+            || self.peek_kind() == Some(TokenKind::VString)
+        {
+            self.tokens.next()?; // consume and discard version token
+        } else if let Some(TokenKind::Identifier) = self.peek_kind() {
+            if let Ok(token) = self.tokens.peek() {
+                if token.text.starts_with('v') && token.text.len() > 1 {
+                    // v-string identifier like `v5` — consume it and any trailing
+                    // `.N` number tokens that the lexer emits as separate tokens.
+                    self.tokens.next()?;
+                    while let Some(TokenKind::Number) = self.peek_kind() {
+                        if let Ok(num_token) = self.tokens.peek() {
+                            if num_token.text.starts_with('.') {
+                                self.tokens.next()?;
+                            } else {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
 
         // Parse class-level attributes (e.g. `:isa(Parent)`).
         // Pass BUILTIN_CLASS_ATTRIBUTES so `:isa` and `:does` don't produce
@@ -354,7 +449,7 @@ impl<'a> Parser<'a> {
         let name_token = self.expect(TokenKind::Identifier)?;
         let name = name_token.text.to_string();
 
-        let attributes = self.parse_declaration_attributes()?;
+        let mut attributes = self.parse_declaration_attributes()?;
 
         // Parse optional signature
         let signature = if self.peek_kind() == Some(TokenKind::LeftParen) {
@@ -367,6 +462,13 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+
+        // Parse optional trailing attributes after the signature.
+        // Perl/Object::Pad allows `method foo() :public { }` and
+        // `method bar($x) :private { }` — mirror what parse_subroutine does.
+        if self.peek_kind() == Some(TokenKind::Colon) {
+            attributes.extend(self.parse_declaration_attributes()?);
+        }
 
         let body = self.parse_block()?;
 
@@ -504,51 +606,75 @@ impl<'a> Parser<'a> {
             self.peek_kind(),
             Some(TokenKind::Number) | Some(TokenKind::VString)
         ) {
-            // Numeric version like 5.036 or v-string like v5.14, v5.12.0
-            self.consume_token()?.text.to_string()
+            // Numeric version like 5.036 or v-string like v5.14, v5.12.0.
+            // For three-part dotted versions like `5.10.1`, the lexer emits
+            // `5.10` as a Number token, then `Dot` (`.`), then `Number("1")`
+            // as three separate tokens.  Stitch trailing `Dot Number` pairs
+            // so the full version is captured and no segment leaks into the
+            // import-args list.
+            let mut ver = self.consume_token()?.text.to_string();
+            // Consume `Dot Number` pairs: e.g. `.` `1` in `5.10.1`.
+            // Only stitch when the dot is immediately followed by a plain
+            // number (not whitespace-separated or part of a method chain).
+            while self.peek_kind() == Some(TokenKind::Dot)
+                && self.tokens.peek_second().map(|t| t.kind) == Ok(TokenKind::Number)
+            {
+                self.consume_token()?; // consume Dot
+                let num = self.consume_token()?; // consume Number
+                ver.push('.');
+                ver.push_str(&num.text);
+            }
+            ver
         } else {
             let first_token = self.consume_token()?;
 
-            // Check for version strings
-            if first_token.kind == TokenKind::Identifier
-                && first_token.text.starts_with('v')
-                && first_token.text.chars().skip(1).all(|c| c.is_numeric())
-            {
-                // Version identifier like v5 or v536
-                let mut version = first_token.text.to_string();
+                // Check for version strings
+                if first_token.kind == TokenKind::Identifier
+                    && first_token.text.starts_with('v')
+                    && first_token.text.chars().skip(1).all(|c| c.is_numeric())
+                {
+                    // Version identifier like v5 or v536
+                    let mut version = first_token.text.to_string();
 
-                // Check if followed by dot and more numbers (e.g., v5.36)
-                if self.peek_kind() == Some(TokenKind::Unknown) {
-                    if let Ok(dot_token) = self.tokens.peek() {
-                        if dot_token.text.as_ref() == "." {
-                            self.consume_token()?; // consume dot
-                            if self.peek_kind() == Some(TokenKind::Number) {
-                                let num = self.consume_token()?;
-                                version.push('.');
-                                version.push_str(&num.text);
+                    // Check if followed by dot and more numbers (e.g., v5.36)
+                    if self.peek_kind() == Some(TokenKind::Unknown) {
+                        if let Ok(dot_token) = self.tokens.peek() {
+                            if dot_token.text.as_ref() == "." {
+                                self.consume_token()?; // consume dot
+                                if self.peek_kind() == Some(TokenKind::Number) {
+                                    let num = self.consume_token()?;
+                                    version.push('.');
+                                    version.push_str(&num.text);
+                                }
                             }
                         }
                     }
+                    version
+                } else if first_token.text.as_ref() == "v"
+                    && self.peek_kind() == Some(TokenKind::Number)
+                {
+                    // Version string like v5.36 (tokenized as "v" followed by number)
+                    let version = self.expect(TokenKind::Number)?;
+                    format!("v{}", version.text)
+                } else if first_token.kind == TokenKind::Identifier {
+                    first_token.text.to_string()
+                } else if first_token.text.chars().all(|c| c.is_alphanumeric() || c == '_')
+                    && !first_token.text.is_empty()
+                {
+                    // Keyword-named pragmas: `use if COND, MODULE`, `use unless COND, MODULE`, etc.
+                    // The token kind is a keyword (e.g., TokenKind::If) but the text is a valid
+                    // Perl module name (all word chars). Accept it as-is.
+                    first_token.text.to_string()
+                } else {
+                    return Err(ParseError::syntax(
+                        format!(
+                            "Expected module name or version, found {}",
+                            first_token.kind.display_name()
+                        ),
+                        first_token.start,
+                    ));
                 }
-                version
-            } else if first_token.text.as_ref() == "v" && self.peek_kind() == Some(TokenKind::Number) {
-                // Version string like v5.36 (tokenized as "v" followed by number)
-                let version = self.expect(TokenKind::Number)?;
-                format!("v{}", version.text)
-            } else if first_token.kind == TokenKind::Identifier {
-                first_token.text.to_string()
-            } else if first_token.text.chars().all(|c| c.is_alphanumeric() || c == '_') && !first_token.text.is_empty() {
-                // Keyword-named pragmas: `use if COND, MODULE`, `use unless COND, MODULE`, etc.
-                // The token kind is a keyword (e.g., TokenKind::If) but the text is a valid
-                // Perl module name (all word chars). Accept it as-is.
-                first_token.text.to_string()
-            } else {
-                return Err(ParseError::syntax(
-                    format!("Expected module name or version, found {}", first_token.kind.display_name()),
-                    first_token.start,
-                ));
-            }
-        };
+            };
 
         // Handle :: in module names
         // Handle both DoubleColon tokens and separate Colon tokens (in case lexer sends :: as separate colons)
@@ -615,11 +741,7 @@ impl<'a> Parser<'a> {
             let end = self.previous_position();
             let has_filter_risk = Self::is_filter_module(&module);
             return Ok(Node::new(
-                NodeKind::Use {
-                    module,
-                    args: cond_args,
-                    has_filter_risk,
-                },
+                NodeKind::Use { module, args: cond_args, has_filter_risk },
                 SourceLocation { start, end },
             ));
         }
@@ -1013,7 +1135,10 @@ impl<'a> Parser<'a> {
 
         let end = self.previous_position();
         let has_filter_risk = Self::is_filter_module(&module);
-        Ok(Node::new(NodeKind::Use { module, args, has_filter_risk }, SourceLocation { start, end }))
+        Ok(Node::new(
+            NodeKind::Use { module, args, has_filter_risk },
+            SourceLocation { start, end },
+        ))
     }
 
     /// Parse special block (AUTOLOAD, DESTROY, etc.)
@@ -1186,9 +1311,10 @@ impl<'a> Parser<'a> {
         if matches!(
             self.peek_kind(),
             Some(TokenKind::String | TokenKind::Identifier | TokenKind::StringCompare)
-        )
-            && !matches!(self.peek_kind(), Some(TokenKind::Semicolon) | Some(TokenKind::Eof) | None)
-        {
+        ) && !matches!(
+            self.peek_kind(),
+            Some(TokenKind::Semicolon) | Some(TokenKind::Eof) | None
+        ) {
             // Parse bare arguments like: no warnings 'void'
             loop {
                 // Check for qw BEFORE the match to avoid it being consumed as a generic identifier

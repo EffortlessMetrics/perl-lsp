@@ -180,6 +180,7 @@ pub fn legend() -> TokensLegend {
         "sql_string",          // 20 — DBI/SQL string context (Issue #2337)
         "sql_heredoc_keyword", // 21 — SQL keyword inside <<SQL heredoc (Issue #2059)
         "json_heredoc_key",    // 22 — JSON object key inside <<JSON heredoc (Issue #2059)
+        "label",               // 23 — Perl statement/control labels (LSP 3.18)
     ]
     .into_iter()
     .map(|s| s.to_string())
@@ -221,6 +222,10 @@ fn kind_idx(leg: &TokensLegend, k: &str) -> u32 {
     *leg.map.get(k).unwrap_or(&0)
 }
 
+fn is_perl_identifier_continue(c: char) -> bool {
+    c.is_alphanumeric() || c == '_' || c == ':'
+}
+
 fn method_declaration_name_offsets(
     text: &str,
     node_start: usize,
@@ -245,6 +250,52 @@ fn method_declaration_name_offsets(
         return None;
     }
     Some((node_start + relative_start, node_start + relative_end))
+}
+
+fn statement_label_offsets(
+    text: &str,
+    node_start: usize,
+    node_end: usize,
+    label: &str,
+) -> Option<(usize, usize)> {
+    let node_text = text.get(node_start..node_end)?;
+    let relative_start = node_text.find(label)?;
+    let relative_end = relative_start.checked_add(label.len())?;
+    let before = node_text[..relative_start].chars().next_back();
+    if before.is_some_and(is_perl_identifier_continue) {
+        return None;
+    }
+    let after = node_text.get(relative_end..)?;
+    if !after.trim_start().starts_with(':') {
+        return None;
+    }
+    Some((node_start + relative_start, node_start + relative_end))
+}
+
+fn loop_control_label_offsets(
+    text: &str,
+    node_start: usize,
+    node_end: usize,
+    op: &str,
+    label: &str,
+) -> Option<(usize, usize)> {
+    let node_text = text.get(node_start..node_end)?;
+    let op_start = node_text.find(op)?;
+    let mut search_start = op_start.checked_add(op.len())?;
+    while search_start <= node_text.len() {
+        let rel = node_text.get(search_start..)?.find(label)?;
+        let label_start = search_start + rel;
+        let label_end = label_start.checked_add(label.len())?;
+        let before = node_text[..label_start].chars().next_back();
+        let after = node_text[label_end..].chars().next();
+        if before.is_none_or(|ch| !is_perl_identifier_continue(ch))
+            && after.is_none_or(|ch| !is_perl_identifier_continue(ch))
+        {
+            return Some((node_start + label_start, node_start + label_end));
+        }
+        search_start = label_start.checked_add(1)?;
+    }
+    None
 }
 
 // ---------------------------------------------------------------------------
@@ -480,7 +531,9 @@ pub fn collect_semantic_tokens(
                     | "return" | "next" | "last" | "redo" | "goto" | "eval" | "given" | "when"
                     | "default" | "break" | "continue" | "unless" | "no" | "BEGIN" | "END"
                     | "CHECK" | "INIT" | "UNITCHECK" | "class" | "method" | "try" | "catch"
-                    | "finally" | "await" => "keyword",
+                    | "finally" | "await"
+                    // Infix operator keywords (perlop) — `isa` added for Perl 5.32+ (issue #778)
+                    | "isa" | "cmp" => "keyword",
                     _ => continue,
                 }
             }
@@ -694,6 +747,38 @@ pub fn collect_semantic_tokens(
                 let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
                 if len > 0 {
                     ast_tokens.push((sl, sc, len, kind_idx(&leg, "macro"), 0));
+                }
+                return true;
+            }
+            NodeKind::LabeledStatement { label, .. } => {
+                let Some(fallback_end) = node.location.start.checked_add(label.len()) else {
+                    return true;
+                };
+                let (start, end) =
+                    statement_label_offsets(text, node.location.start, node.location.end, label)
+                        .unwrap_or((node.location.start, fallback_end));
+                let (sl, sc) = to_pos16(start);
+                let (el, ec) = to_pos16(end);
+                let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
+                if len > 0 {
+                    ast_tokens.push((sl, sc, len, kind_idx(&leg, "label"), 1 /*declaration*/));
+                }
+                return true;
+            }
+            NodeKind::LoopControl { op, label: Some(label) } => {
+                if let Some((start, end)) = loop_control_label_offsets(
+                    text,
+                    node.location.start,
+                    node.location.end,
+                    op,
+                    label,
+                ) {
+                    let (sl, sc) = to_pos16(start);
+                    let (el, ec) = to_pos16(end);
+                    let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
+                    if len > 0 {
+                        ast_tokens.push((sl, sc, len, kind_idx(&leg, "label"), 0));
+                    }
                 }
                 return true;
             }
@@ -997,6 +1082,85 @@ mod tests {
     // Helper to create token tuple
     fn tok(line: u32, start: u32, len: u32, kind: u32, mods: u32) -> (u32, u32, u32, u32, u32) {
         (line, start, len, kind, mods)
+    }
+
+    fn pos16(source: &str, byte_offset: usize) -> (u32, u32) {
+        let mut line = 0u32;
+        let mut col = 0u32;
+        for (idx, ch) in source.char_indices() {
+            if idx >= byte_offset {
+                break;
+            }
+            if ch == '\n' {
+                line += 1;
+                col = 0;
+            } else {
+                col += ch.len_utf16() as u32;
+            }
+        }
+        (line, col)
+    }
+
+    #[test]
+    fn collect_semantic_tokens_emits_label_for_labeled_statement_and_control_reference()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = "OUTER: while ($x) {\n    last OUTER;\n}\n";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+        let tokens = collect_semantic_tokens(&ast, source, &|offset| pos16(source, offset));
+        let label_idx = *legend().map.get("label").ok_or("label token type missing from legend")?;
+
+        let mut line = 0u32;
+        let mut col = 0u32;
+        let mut labels = Vec::new();
+        for [delta_line, delta_start, length, token_type, modifiers] in tokens {
+            if delta_line == 0 {
+                col = col.saturating_add(delta_start);
+            } else {
+                line = line.saturating_add(delta_line);
+                col = delta_start;
+            }
+            if token_type == label_idx {
+                labels.push((line, col, length, modifiers));
+            }
+        }
+
+        assert!(labels.contains(&(0, 0, 5, 1)));
+        assert!(labels.contains(&(1, 9, 5, 0)));
+        Ok(())
+    }
+
+    #[test]
+    fn statement_label_offsets_rejects_embedded_or_non_label_matches()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let embedded = "MYOUTER: while ($x) {}\n";
+        assert_eq!(statement_label_offsets(embedded, 0, embedded.len(), "OUTER"), None);
+
+        let no_colon = "OUTER while ($x) {}\n";
+        assert_eq!(statement_label_offsets(no_colon, 0, no_colon.len(), "OUTER"), None);
+
+        let whitespace = "OUTER : while ($x) {}\n";
+        assert_eq!(statement_label_offsets(whitespace, 0, whitespace.len(), "OUTER"), Some((0, 5)));
+
+        Ok(())
+    }
+
+    #[test]
+    fn loop_control_label_offsets_skips_embedded_matches() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let source = "last OUTERLY OUTER;\n";
+        assert_eq!(
+            loop_control_label_offsets(source, 0, source.len(), "last", "OUTER"),
+            Some((13, 18))
+        );
+
+        let embedded_only = "last OUTERLY;\n";
+        assert_eq!(
+            loop_control_label_offsets(embedded_only, 0, embedded_only.len(), "last", "OUTER"),
+            None
+        );
+
+        Ok(())
     }
 
     #[test]

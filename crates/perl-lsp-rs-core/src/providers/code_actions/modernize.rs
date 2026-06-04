@@ -543,12 +543,13 @@ fn line_start_offsets(source: &str) -> Vec<usize> {
 fn find_pragma_insert_pos(source: &str) -> usize {
     let mut pos = 0;
 
-    for line in source.lines() {
+    for segment in source.split_inclusive('\n') {
+        let line = segment.trim_end_matches('\n').trim_end_matches('\r');
         let trimmed = line.trim();
         if trimmed.starts_with("#!") || trimmed.is_empty() {
-            pos += line.len() + 1;
+            pos += segment.len();
         } else if trimmed.starts_with("package ") {
-            pos += line.len() + 1;
+            pos += segment.len();
             break;
         } else {
             break;
@@ -651,6 +652,29 @@ mod tests {
     }
 
     #[test]
+    fn test_missing_strict_warnings_crlf_insert_after_package_line()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = "#!/usr/bin/env perl\r\n\r\npackage Foo;\r\nprint 'hello';\r\n";
+        let actions = find_missing_strict_warnings(source);
+        let action = actions
+            .iter()
+            .find(|action| action.title.contains("use strict"))
+            .ok_or("missing strict/warnings modernization action")?;
+        let edit = action.edit.changes.first().ok_or("missing edit")?;
+        let expected_pos = source.find("print 'hello';").ok_or("missing print line")?;
+
+        assert_eq!(edit.location.start, expected_pos);
+        assert_eq!(edit.location.end, expected_pos);
+        assert_eq!(
+            &source[edit.location.start - 2..edit.location.start],
+            "\r\n",
+            "insert must land after the full CRLF terminator"
+        );
+        assert!(edit.new_text.starts_with("use strict;"));
+        Ok(())
+    }
+
+    #[test]
     fn test_all_actions_have_modernize_kind() {
         let source = "require 5.006;\nopen(FILE, \">foo\");\nif (defined(@arr)) {}";
         let actions = get_modernize_actions(source);
@@ -720,6 +744,30 @@ mod tests {
             action.edit.changes.iter().any(|e| e.new_text.contains("use Carp")),
             "One change should insert use Carp"
         );
+    }
+
+    #[test]
+    fn test_die_in_module_crlf_inserts_use_carp_after_package_line()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = "package Foo;\r\ndie \"oops\";\r\n";
+        let actions = find_die_in_module(source);
+        let action = actions.first().ok_or("missing croak action")?;
+        let edit = action
+            .edit
+            .changes
+            .iter()
+            .find(|edit| edit.new_text.contains("use Carp"))
+            .ok_or("missing use Carp edit")?;
+        let expected_pos = source.find("die \"oops\";").ok_or("missing die line")?;
+
+        assert_eq!(edit.location.start, expected_pos);
+        assert_eq!(edit.location.end, expected_pos);
+        assert_eq!(
+            &source[edit.location.start - 2..edit.location.start],
+            "\r\n",
+            "insert must land after the package line CRLF terminator"
+        );
+        Ok(())
     }
 
     #[test]

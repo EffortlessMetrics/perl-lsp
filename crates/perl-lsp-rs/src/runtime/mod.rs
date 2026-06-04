@@ -100,8 +100,8 @@ use crate::{
     // Import text processing helpers
     util::{
         byte_to_line_col, byte_to_utf16_col, extract_module_reference,
-        extract_module_reference_extended, get_text_around_offset, offset_to_position,
-        position_to_offset,
+        extract_module_reference_extended, get_text_around_offset, get_text_window_around_offset,
+        offset_to_position, position_to_offset,
     },
 };
 use md5;
@@ -447,6 +447,35 @@ impl LspServer {
         self.ai_inline_backend.lock().clone()
     }
 
+    /// Runtime feature gate for future next-edit suggestions.
+    ///
+    /// This boundary is intentionally default-off. Even when explicit config
+    /// enables the gate, the current runtime still reports that no editor-visible
+    /// next-edit provider is registered.
+    pub(crate) fn next_edit_feature_gate(
+        &self,
+    ) -> perl_lsp_rs_core::providers::inline_completion::NextEditFeatureGate {
+        if self.config.lock().next_edit.enabled {
+            perl_lsp_rs_core::providers::inline_completion::NextEditFeatureGate::explicit_enabled()
+        } else {
+            perl_lsp_rs_core::providers::inline_completion::NextEditFeatureGate::default()
+        }
+    }
+
+    /// Evaluate the next-edit scaffold against runtime configuration.
+    ///
+    /// The returned response is a boundary proof only; it never produces
+    /// editor-visible suggestions until a future provider is deliberately wired.
+    pub(crate) fn next_edit_scaffold_response(
+        &self,
+        context: perl_lsp_rs_core::providers::inline_completion::PreparedInlineCompletionContext,
+    ) -> perl_lsp_rs_core::providers::inline_completion::NextEditResponse {
+        let mut request =
+            perl_lsp_rs_core::providers::inline_completion::NextEditRequest::receipt_only(context);
+        request.gate = self.next_edit_feature_gate();
+        perl_lsp_rs_core::providers::inline_completion::NextEditProvider.suggest(&request)
+    }
+
     /// Refresh the AI inline-completion backend based on current configuration.
     ///
     /// When `ai_completion.enabled` is `true` and the API key environment variable
@@ -471,12 +500,14 @@ impl LspServer {
             return;
         };
 
-        let provider_config = perl_lsp_rs_core::providers::ai::OpenAiConfig {
-            endpoint: ai_config.endpoint.clone(),
-            model: ai_config.model.clone(),
+        let mut provider_config = perl_lsp_rs_core::providers::ai::OpenAiConfig::new(
+            ai_config.endpoint.clone(),
+            ai_config.model.clone(),
             api_key,
-            timeout_ms: ai_config.timeout_ms,
-        };
+            ai_config.timeout_ms,
+        );
+        provider_config.api_key_header = ai_config.api_key_header.clone();
+        provider_config.api_key_prefix = ai_config.api_key_prefix.clone();
 
         let limiter = Arc::new(perl_lsp_rs_core::providers::ai::RateLimiter::new(
             ai_config.rate_limit_rps,
@@ -1102,6 +1133,53 @@ mod tests {
     use crate::features::formatting::FormatRange;
     use crate::runtime::types::workspace_folder_matches_doc_uri;
     use perl_lsp_rs_core::config::AiCompletionConfig;
+    use perl_lsp_rs_core::providers::inline_completion::{
+        NextEditGateSource, NextEditStatus, PreparedInlineCompletionContext,
+    };
+
+    fn next_edit_test_context() -> PreparedInlineCompletionContext {
+        PreparedInlineCompletionContext {
+            prefix: "use My::".to_string(),
+            current_line: "use My::".to_string(),
+            previous_non_empty_line: Some("use strict;".to_string()),
+            current_function: None,
+            current_package: Some("Demo".to_string()),
+            variables: vec!["$got".to_string()],
+            imports: vec!["strict".to_string(), "warnings".to_string()],
+        }
+    }
+
+    static AI_TEST_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    struct AiTestEnvGuard {
+        key: &'static str,
+        previous: Option<std::ffi::OsString>,
+        _lock: std::sync::MutexGuard<'static, ()>,
+    }
+
+    impl AiTestEnvGuard {
+        // required for std::env::set_var in Rust 2024; the guard serializes and restores test env.
+        #[allow(unsafe_code)]
+        fn set(key: &'static str, value: &str) -> Result<Self, Box<dyn std::error::Error>> {
+            let lock = AI_TEST_ENV_LOCK
+                .lock()
+                .map_err(|_| std::io::Error::other("AI test env lock poisoned"))?;
+            let previous = std::env::var_os(key);
+            unsafe { std::env::set_var(key, value) };
+            Ok(Self { key, previous, _lock: lock })
+        }
+    }
+
+    impl Drop for AiTestEnvGuard {
+        // required for std::env::set_var/remove_var in Rust 2024; restores captured test env.
+        #[allow(unsafe_code)]
+        fn drop(&mut self) {
+            match &self.previous {
+                Some(value) => unsafe { std::env::set_var(self.key, value) },
+                None => unsafe { std::env::remove_var(self.key) },
+            }
+        }
+    }
 
     #[test]
     fn workspace_folder_matching_supports_non_file_uri_schemes() {
@@ -1219,6 +1297,76 @@ mod tests {
             "doc outside all folders must not match any folder",
         );
         assert!(server.config_for_doc(&doc_uri).is_none());
+    }
+
+    #[test]
+    fn next_edit_runtime_boundary_defaults_disabled() {
+        let server = LspServer::new();
+
+        let gate = server.next_edit_feature_gate();
+        assert!(!gate.enabled);
+        assert_eq!(gate.source, NextEditGateSource::DefaultOff);
+
+        let response = server.next_edit_scaffold_response(next_edit_test_context());
+        assert_eq!(response.status, NextEditStatus::Disabled);
+        assert!(response.suggestions.is_empty());
+    }
+
+    #[test]
+    fn next_edit_runtime_boundary_honors_explicit_config_without_provider_registration() {
+        let server = LspServer::new();
+
+        server.handle_did_change_configuration(Some(json!({
+            "settings": {
+                "perl": {
+                    "nextEdit": {
+                        "enabled": true
+                    }
+                }
+            }
+        })));
+
+        let gate = server.next_edit_feature_gate();
+        assert!(gate.enabled);
+        assert_eq!(gate.source, NextEditGateSource::ExplicitConfig);
+
+        let response = server.next_edit_scaffold_response(next_edit_test_context());
+        assert_eq!(response.status, NextEditStatus::RuntimeProviderNotRegistered);
+        assert!(response.suggestions.is_empty());
+    }
+
+    #[test]
+    fn next_edit_runtime_boundary_can_be_disabled_after_explicit_config() {
+        let server = LspServer::new();
+
+        server.handle_did_change_configuration(Some(json!({
+            "settings": {
+                "perl": {
+                    "nextEdit": {
+                        "enabled": true
+                    }
+                }
+            }
+        })));
+        assert!(server.next_edit_feature_gate().enabled);
+
+        server.handle_did_change_configuration(Some(json!({
+            "settings": {
+                "perl": {
+                    "nextEdit": {
+                        "enabled": false
+                    }
+                }
+            }
+        })));
+
+        let gate = server.next_edit_feature_gate();
+        assert!(!gate.enabled);
+        assert_eq!(gate.source, NextEditGateSource::DefaultOff);
+
+        let response = server.next_edit_scaffold_response(next_edit_test_context());
+        assert_eq!(response.status, NextEditStatus::Disabled);
+        assert!(response.suggestions.is_empty());
     }
 
     #[test]
@@ -1404,6 +1552,32 @@ mod tests {
             LspServer::resolve_ai_api_key_with(&config, read_env).as_deref(),
             Some("gemini-key")
         );
+    }
+
+    #[test]
+    fn refresh_ai_backend_installs_connector_auth_backend() -> Result<(), Box<dyn std::error::Error>>
+    {
+        const KEY_ENV: &str = "PERL_LSP_TEST_CONNECTOR_API_KEY";
+        let _env_guard = AiTestEnvGuard::set(KEY_ENV, "connector-key")?;
+
+        let server = LspServer::new();
+        {
+            let mut config = server.config.lock();
+            config.ai_completion = AiCompletionConfig {
+                enabled: true,
+                endpoint: "https://connector.example/v1/chat/completions".to_string(),
+                model: "custom-code-model".to_string(),
+                api_key_env: KEY_ENV.to_string(),
+                api_key_header: "x-api-key".to_string(),
+                api_key_prefix: None,
+                ..AiCompletionConfig::default()
+            };
+        }
+
+        server.refresh_ai_backend();
+
+        assert!(server.ai_backend().is_some());
+        Ok(())
     }
 
     // --- include_paths_for_doc tests ---

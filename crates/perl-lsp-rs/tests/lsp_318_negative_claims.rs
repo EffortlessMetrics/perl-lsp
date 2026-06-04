@@ -149,6 +149,42 @@ fn semantic_tokens_delta_request_returns_method_not_found() -> TestResult {
 }
 
 #[test]
+fn inline_completion_does_not_emit_object_form_string_value() -> TestResult {
+    let mut harness = LspHarness::new_raw();
+    harness.initialize_ready(
+        "file:///workspace",
+        Some(json!({
+            "textDocument": {
+                "inlineCompletion": {
+                    "dynamicRegistration": true
+                }
+            }
+        })),
+    )?;
+    harness.open("file:///inline-string-value.pl", "use ")?;
+
+    let result = harness.request(
+        "textDocument/inlineCompletion",
+        json!({
+            "textDocument": { "uri": "file:///inline-string-value.pl" },
+            "position": { "line": 0, "character": 4 },
+            "context": { "triggerKind": 1 }
+        }),
+    )?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or_else(|| format!("inline completion response missing items: {result}"))?;
+
+    assert!(!items.is_empty(), "test must exercise deterministic inline items: {result}");
+    assert!(
+        items.iter().all(|item| item.get("insertText").is_some_and(Value::is_string)),
+        "object-form StringValue insertText remains unclaimed without implementation proof: {items:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn completion_response_does_not_emit_apply_kind_without_client_support() -> TestResult {
     let mut harness = LspHarness::new_raw();
     harness.initialize_ready("file:///workspace", Some(json!({})))?;
@@ -216,6 +252,151 @@ fn code_action_and_workspace_edit_responses_do_not_emit_optional_318_shapes() ->
 
     assert_no_workspace_edit_metadata(&rename)?;
     assert_no_key(&rename, "snippet")?;
+    Ok(())
+}
+
+#[test]
+fn apply_workspace_edit_metadata_emitted_when_supported_for_refactor_request() -> TestResult {
+    let mut harness = LspHarness::new_raw();
+    harness.initialize_ready(
+        "file:///workspace",
+        Some(json!({
+            "workspace": {
+                "applyEdit": true,
+                "workspaceEdit": {
+                    "metadataSupport": true
+                }
+            }
+        })),
+    )?;
+    harness.drain_server_requests(250);
+
+    let uri = "file:///workspace/lib/ApplyEdit/Pilot.pm";
+    let source = apply_edit_safe_delete_source();
+    harness.open(uri, source)?;
+    let (line, character) = (4_u32, 4_u32);
+    let result = harness.request(
+        "workspace/executeCommand",
+        json!({
+            "command": "perl.safeDeleteSymbol",
+            "arguments": [{
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
+            }]
+        }),
+    )?;
+
+    assert_eq!(
+        result.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(result.get("live_symbol_delete_enabled").and_then(Value::as_bool), Some(true));
+    assert_eq!(result.get("apply_edit_requested").and_then(Value::as_bool), Some(true));
+
+    let requests = harness.drain_server_requests(500);
+    let request = requests
+        .iter()
+        .find(|message| {
+            message.get("method").and_then(Value::as_str) == Some("workspace/applyEdit")
+        })
+        .ok_or_else(|| format!("expected workspace/applyEdit request: {requests:?}"))?;
+    assert_eq!(request.get("jsonrpc").and_then(Value::as_str), Some("2.0"));
+    let id = request
+        .get("id")
+        .and_then(Value::as_i64)
+        .ok_or_else(|| format!("workspace/applyEdit request missing numeric id: {request}"))?;
+    assert!(
+        (1..=i64::from(i32::MAX)).contains(&id),
+        "server-originated request id must be bounded: {request}"
+    );
+
+    let params = request
+        .get("params")
+        .ok_or_else(|| format!("workspace/applyEdit request missing params: {request}"))?;
+    assert_eq!(params.get("label").and_then(Value::as_str), Some("Safe delete reset"));
+    assert!(
+        params.get("edit").is_some(),
+        "workspace/applyEdit params must carry the WorkspaceEdit payload: {request}"
+    );
+    assert_eq!(params.pointer("/metadata/isRefactoring").and_then(Value::as_bool), Some(true));
+    assert_absent(params, "/edit/metadata")?;
+    assert_absent(params, "/metadata/label")?;
+    assert_absent(params, "/metadata/description")?;
+    Ok(())
+}
+
+#[test]
+fn apply_workspace_edit_metadata_absent_without_metadata_support() -> TestResult {
+    let uri = "file:///workspace/lib/ApplyEdit/Pilot.pm";
+    let source = apply_edit_safe_delete_source();
+    let (line, character) = (4_u32, 4_u32);
+
+    let mut harness = LspHarness::new_raw();
+    harness.initialize_ready(
+        "file:///workspace",
+        Some(json!({
+            "workspace": {
+                "applyEdit": true,
+                "workspaceEdit": {}
+            }
+        })),
+    )?;
+    harness.drain_server_requests(250);
+    harness.open(uri, source)?;
+    let result = harness.request(
+        "workspace/executeCommand",
+        json!({
+            "command": "perl.safeDeleteSymbol",
+            "arguments": [{
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
+            }]
+        }),
+    )?;
+    assert_eq!(result.get("live_symbol_delete_enabled").and_then(Value::as_bool), Some(true));
+    assert_absent(&result, "/apply_edit_requested")?;
+    assert!(
+        !harness
+            .drain_server_requests(250)
+            .iter()
+            .any(|message| message.get("method").and_then(Value::as_str)
+                == Some("workspace/applyEdit")),
+        "workspace/applyEdit metadata must not be sent without metadataSupport"
+    );
+
+    let mut harness = LspHarness::new_raw();
+    harness.initialize_ready(
+        "file:///workspace",
+        Some(json!({
+            "workspace": {
+                "workspaceEdit": {
+                    "metadataSupport": true
+                }
+            }
+        })),
+    )?;
+    harness.drain_server_requests(250);
+    harness.open(uri, source)?;
+    let result = harness.request(
+        "workspace/executeCommand",
+        json!({
+            "command": "perl.safeDeleteSymbol",
+            "arguments": [{
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
+            }]
+        }),
+    )?;
+    assert_eq!(result.get("live_symbol_delete_enabled").and_then(Value::as_bool), Some(true));
+    assert_absent(&result, "/apply_edit_requested")?;
+    assert!(
+        !harness
+            .drain_server_requests(250)
+            .iter()
+            .any(|message| message.get("method").and_then(Value::as_str)
+                == Some("workspace/applyEdit")),
+        "workspace/applyEdit metadata must not be sent without workspace.applyEdit"
+    );
     Ok(())
 }
 
@@ -599,6 +780,19 @@ fn markdown_surfaces_do_not_emit_trusted_commands_or_theme_icons_without_support
     }
 
     Ok(())
+}
+
+fn apply_edit_safe_delete_source() -> &'static str {
+    r#"package ApplyEdit::Pilot;
+use strict;
+use warnings;
+
+sub reset {
+    return 1;
+}
+
+1;
+"#
 }
 
 fn assert_absent(value: &Value, pointer: &str) -> TestResult {

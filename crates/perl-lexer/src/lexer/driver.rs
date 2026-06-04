@@ -1,10 +1,12 @@
 use crate::{LexerConfig, LexerMode, PerlLexer, Position};
 
 impl<'a> PerlLexer<'a> {
+    /// Create a new lexer with default configuration.
     pub fn new(input: &'a str) -> Self {
         Self::with_config(input, LexerConfig::default())
     }
 
+    /// Create a new lexer with explicit configuration.
     pub fn with_config(input: &'a str, config: LexerConfig) -> Self {
         Self {
             input,

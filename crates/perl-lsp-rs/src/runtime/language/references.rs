@@ -334,10 +334,10 @@ impl LspServer {
 
                                 // Regex-based fallback for fully-qualified symbols like Package::sub references
                                 let radius = 50;
-                                let text_start = offset.saturating_sub(radius);
-                                let text_around =
-                                    self.get_text_around_offset(&doc.text, offset, radius);
-                                let cursor_in_text = offset - text_start;
+                                let (text_start, text_around) =
+                                    self.get_text_window_around_offset(&doc.text, offset, radius);
+                                let cursor_in_text =
+                                    offset.min(doc.text.len()).saturating_sub(text_start);
 
                                 // Use cached regex to avoid per-request compilation overhead
                                 if let Some(qualified_name_re) = get_qualified_name_regex() {

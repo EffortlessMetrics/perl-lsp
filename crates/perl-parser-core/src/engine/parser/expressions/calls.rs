@@ -369,11 +369,15 @@ impl<'a> Parser<'a> {
         // this parser as an indirect call:
         //   print STDERR => "msg";  — STDERR is object, "msg" is first arg
         //   imported $$obj, $arg    — double-sigil object plus argument list
+        //   imported_fn $$obj, $arg — same but after unbraced-deref fix, object is Unary ${}
         let comma_after_double_sigil_object = self.peek_kind() == Some(TokenKind::Comma)
-            && matches!(
+            && (matches!(
                 &object.kind,
                 NodeKind::Variable { sigil, name } if sigil == "$" && name.starts_with('$')
-            );
+            ) || matches!(
+                &object.kind,
+                NodeKind::Unary { op, .. } if op == "${}"
+            ));
         if self.peek_kind() == Some(TokenKind::FatArrow) || comma_after_double_sigil_object {
             self.tokens.next()?; // consume , or =>
         }

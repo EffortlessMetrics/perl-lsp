@@ -1,0 +1,20 @@
+[
+  {
+    "name": "fmt",
+    "conclusion": "failure",
+    "required": true,
+    "quarantine": false
+  },
+  {
+    "name": "check_conflict_markers",
+    "conclusion": "failure",
+    "required": true,
+    "quarantine": false
+  },
+  {
+    "name": "publish_manifest_check",
+    "conclusion": "failure",
+    "required": true,
+    "quarantine": false
+  }
+]
