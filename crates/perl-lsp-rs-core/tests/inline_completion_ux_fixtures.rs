@@ -199,6 +199,41 @@ fn inline_completion_fixture_corpus_returns_expected_ghost_text() -> TestResult 
             ],
             not_expected: &["my $class = shift;"],
         },
+        SuggestionFixture {
+            name: "lexical_scalar_declaration_suggests_self_shift",
+            source: "sub method {\n    my $<<CURSOR>>\n}",
+            first: Some("self = shift;"),
+            expected: &["self = shift;"],
+            not_expected: &["strict;"],
+        },
+        SuggestionFixture {
+            name: "package_declaration_suggests_module_skeleton",
+            source: "package <<CURSOR>>",
+            first: Some("MyPackage;\n\nuse strict;\nuse warnings;"),
+            expected: &["MyPackage;\n\nuse strict;\nuse warnings;"],
+            not_expected: &["strict;"],
+        },
+        SuggestionFixture {
+            name: "bless_arguments_suggest_self_and_class",
+            source: "sub new {\n    my $class = shift;\n    my $self = {};\n    bless <<CURSOR>>\n}",
+            first: Some("$self, $class;"),
+            expected: &["$self, $class;"],
+            not_expected: &["return $self;"],
+        },
+        SuggestionFixture {
+            name: "constructor_return_prefers_self",
+            source: "sub new {\n    my $class = shift;\n    my $self = bless {}, $class;\n    return <<CURSOR>>\n}",
+            first: Some("$self;"),
+            expected: &["$self;"],
+            not_expected: &["return $self;"],
+        },
+        SuggestionFixture {
+            name: "foreach_hash_uses_key_binding",
+            source: "my %counts = ();\nforeach <<CURSOR>>",
+            first: Some("my $key (keys %counts) {\n    \n}"),
+            expected: &["my $key (keys %counts) {\n    \n}"],
+            not_expected: &["my $count (@counts) {\n    \n}"],
+        },
     ];
 
     for fixture in fixtures {
@@ -327,6 +362,41 @@ fn inline_completion_fixture_corpus_stays_silent_in_reject_zones() -> TestResult
                 completion_texts(&completions)
             )
             .into());
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn inline_completion_fixture_corpus_prefers_workspace_available_modules() -> TestResult {
+    let scenario = InlineCompletionScenario::from_fixture("use My::W<<CURSOR>>")?;
+    let environment = InlineCompletionEnvironment {
+        available_modules: vec![
+            "My::Widget".to_string(),
+            "My::Worker".to_string(),
+            "Other::Widget".to_string(),
+        ],
+    };
+    let completions = scenario.completions_with_environment(&environment);
+    let inserts = completion_texts(&completions);
+
+    if inserts != vec!["My::Widget;", "My::Worker;"] {
+        return Err(format!(
+            "workspace module suggestions should match the typed module fragment, got {inserts:?}"
+        )
+        .into());
+    }
+
+    for item in &completions.items {
+        let range = item.range.as_ref().ok_or_else(|| {
+            format!("{} should replace the typed module fragment", item.insert_text)
+        })?;
+        let replaced = slice_for_range(scenario.text.as_str(), range)?;
+        if replaced != "My::W" {
+            return Err(
+                format!("{} should replace My::W, got {replaced:?}", item.insert_text).into()
+            );
         }
     }
 
