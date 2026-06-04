@@ -156,5 +156,7 @@ Avoid:
 - `AGENTS.md` — the "Lane scope" section references this doc.
 - `CLAUDE.md` — orchestrator routing model; the lane label is one of the
   state labels the orchestrator reads.
+- `docs/reference/ISSUE_DISCOVERY_DOCTRINE.md` — the Issue Discovery / Bug
+  Scout Desk lane: the swarm's radar, upstream of plan review.
 - `docs/articles/CONTINUOUS_REVIEW_PATTERNS.md` — the
   orchestration pattern overview.

@@ -44,7 +44,7 @@ is coherent across all agent commits. Haiku ops merges.
 
 | Agent | Model | Pipeline Stage | Workers it spawns |
 |-------|-------|----------------|-------------------|
-| lead-discovery | sonnet | Find work | scout, accuracy-scout, scout-parser, scout-lsp, scout-dap, plan-reviewer |
+| lead-discovery | sonnet | Find work | scout, accuracy-scout, scout-parser, scout-lsp, scout-dap, scout-find-* (6 discovery scouts), plan-reviewer |
 | lead-build | sonnet | Build from specs | builder |
 | lead-review | sonnet | Review and merge | reviewer, reviewer-deep, ops, wisdom |
 
@@ -53,7 +53,7 @@ session, manage a shared task list, and spawn workers via Agent(). Leads
 never read code or investigate — they only work through subagents.
 disallowedTools (Edit, Write) enforces orchestrator-only role.
 
-## Worker Agents (Agent()) — 26
+## Worker Agents (Agent()) — 32
 
 ### Pipeline Agents (21)
 
@@ -88,6 +88,26 @@ disallowedTools (Edit, Write) enforces orchestrator-only role.
 | scout-parser | haiku | Error buckets, corpus, parser engine |
 | scout-lsp | haiku | features.toml, providers, LSP spec |
 | scout-dap | sonnet | DAP protocol, bridge mode, security |
+
+These file **one builder-ready issue** with a full spec. They differ from
+the discovery scouts below, which file lightweight candidate packets.
+
+### Discovery Scouts (6)
+
+The **Issue Discovery / Bug Scout Desk** — the swarm's radar, upstream of
+plan review. Read-only sweeps that file evidence-backed *candidate packets*
+(label `candidate-issue`), never builder-ready specs. Doctrine:
+[`docs/reference/ISSUE_DISCOVERY_DOCTRINE.md`](../../docs/reference/ISSUE_DISCOVERY_DOCTRINE.md).
+Kick off with `/issue-discovery`.
+
+| Agent | Model | Surface |
+|-------|-------|---------|
+| scout-find-dap-gaps | haiku | DAP stack/scopes/variables/lifecycle/transport |
+| scout-find-lsp-gaps | haiku | document state, URI isolation, completion, hover, code-action, semantic tokens |
+| scout-find-parser-gaps | haiku | parser/AST/NodeKind/recovery/fixtures |
+| scout-find-ci-ops-gaps | haiku | workflow routing, path filters, labels, cleanup, runner capacity |
+| scout-find-robustness-gaps | haiku | panic/DoS/unsafe-indexing/byte-slicing in server paths |
+| scout-find-docs-receipt-drift | haiku | status-doc vs receipt drift and basis conflicts |
 
 ### Utility (2)
 
