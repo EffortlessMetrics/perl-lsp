@@ -182,10 +182,28 @@ pub fn collect_document_links(text: &str, uri: &Url) -> Result<Vec<DocumentLink>
 #[cfg(test)]
 mod tests {
     use super::{collect_document_links, line_start_offsets};
-    use lsp_types::Position;
+    use lsp_types::{DocumentLink, Position};
+    use std::path::Path;
     use url::Url;
 
-    type TestResult = Result<(), Box<dyn std::error::Error>>;
+    type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
+
+    fn temp_file_uri(parts: &[&str]) -> TestResult<Url> {
+        let mut path = std::env::temp_dir().join("perl-lsp-document-link-unit");
+        for part in parts {
+            path.push(part);
+        }
+        file_uri(&path)
+    }
+
+    fn file_uri(path: &Path) -> TestResult<Url> {
+        Url::from_file_path(path)
+            .map_err(|()| format!("failed to build file URI for {}", path.display()).into())
+    }
+
+    fn target_text(link: &DocumentLink) -> TestResult<&str> {
+        Ok(link.target.as_ref().ok_or("document link missing target")?.as_str())
+    }
 
     #[test]
     fn line_start_offsets_preserve_crlf_byte_starts() {
@@ -213,6 +231,86 @@ mod tests {
         assert_eq!(foo.range.end, Position::new(1, 12));
         assert_eq!(baz.range.start, Position::new(2, 8));
         assert_eq!(baz.range.end, Position::new(2, 16));
+        Ok(())
+    }
+
+    #[test]
+    fn use_and_require_modules_link_to_metacpan() -> TestResult {
+        let uri = Url::parse("file:///workspace/main.pl")?;
+        let text = "use Local::Thing;\nrequire Remote::Widget;\n";
+
+        let links = collect_document_links(text, &uri)?;
+
+        assert_eq!(links.len(), 2);
+        let use_link = links.first().ok_or("missing use document link")?;
+        assert_eq!(use_link.range.start, Position::new(0, 4));
+        assert_eq!(use_link.range.end, Position::new(0, 16));
+        assert_eq!(target_text(use_link)?, "https://metacpan.org/pod/Local::Thing");
+        assert_eq!(use_link.tooltip.as_deref(), Some("Open Local::Thing on MetaCPAN"));
+
+        let require_link = links.get(1).ok_or("missing require document link")?;
+        assert_eq!(require_link.range.start, Position::new(1, 8));
+        assert_eq!(require_link.range.end, Position::new(1, 22));
+        assert_eq!(target_text(require_link)?, "https://metacpan.org/pod/Remote::Widget");
+        assert_eq!(require_link.tooltip.as_deref(), Some("Open Remote::Widget on MetaCPAN"));
+        Ok(())
+    }
+
+    #[test]
+    fn link_ranges_use_utf16_columns_after_wide_characters() -> TestResult {
+        let uri = Url::parse("file:///workspace/main.pl")?;
+        let text = "my $emoji = '\u{1F642}'; use Foo::Bar;\n";
+
+        let links = collect_document_links(text, &uri)?;
+
+        let link = links.first().ok_or("missing module document link")?;
+        assert_eq!(link.range.start, Position::new(0, 22));
+        assert_eq!(link.range.end, Position::new(0, 30));
+        assert_eq!(target_text(link)?, "https://metacpan.org/pod/Foo::Bar");
+        Ok(())
+    }
+
+    #[test]
+    fn quoted_module_like_require_does_not_create_metacpan_link() -> TestResult {
+        let uri = temp_file_uri(&["script.pl"])?;
+        let text = "require 'Local::Thing';\n";
+
+        let links = collect_document_links(text, &uri)?;
+
+        assert!(
+            links
+                .iter()
+                .all(|link| link.tooltip.as_deref() != Some("Open Local::Thing on MetaCPAN"))
+        );
+        assert!(
+            links
+                .iter()
+                .all(|link| target_text(link).is_ok_and(|target| !target.contains("metacpan.org")))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn non_file_document_uri_keeps_metacpan_links_and_skips_relative_file_links() -> TestResult {
+        let uri = Url::parse("untitled:Untitled-1")?;
+        let text = "use Foo::Bar;\nrequire 'lib/Helper.pm';\n";
+
+        let links = collect_document_links(text, &uri)?;
+
+        assert_eq!(links.len(), 1);
+        let link = links.first().ok_or("missing module document link")?;
+        assert_eq!(target_text(link)?, "https://metacpan.org/pod/Foo::Bar");
+        Ok(())
+    }
+
+    #[test]
+    fn unterminated_quoted_require_is_ignored_without_failing_collection() -> TestResult {
+        let uri = temp_file_uri(&["app.pl"])?;
+        let text = "require 'unterminated;\n";
+
+        let links = collect_document_links(text, &uri)?;
+
+        assert!(links.is_empty());
         Ok(())
     }
 }
