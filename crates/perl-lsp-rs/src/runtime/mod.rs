@@ -500,12 +500,14 @@ impl LspServer {
             return;
         };
 
-        let provider_config = perl_lsp_rs_core::providers::ai::OpenAiConfig {
-            endpoint: ai_config.endpoint.clone(),
-            model: ai_config.model.clone(),
+        let mut provider_config = perl_lsp_rs_core::providers::ai::OpenAiConfig::new(
+            ai_config.endpoint.clone(),
+            ai_config.model.clone(),
             api_key,
-            timeout_ms: ai_config.timeout_ms,
-        };
+            ai_config.timeout_ms,
+        );
+        provider_config.api_key_header = ai_config.api_key_header.clone();
+        provider_config.api_key_prefix = ai_config.api_key_prefix.clone();
 
         let limiter = Arc::new(perl_lsp_rs_core::providers::ai::RateLimiter::new(
             ai_config.rate_limit_rps,
@@ -1147,6 +1149,38 @@ mod tests {
         }
     }
 
+    static AI_TEST_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    struct AiTestEnvGuard {
+        key: &'static str,
+        previous: Option<std::ffi::OsString>,
+        _lock: std::sync::MutexGuard<'static, ()>,
+    }
+
+    impl AiTestEnvGuard {
+        // required for std::env::set_var in Rust 2024; the guard serializes and restores test env.
+        #[allow(unsafe_code)]
+        fn set(key: &'static str, value: &str) -> Result<Self, Box<dyn std::error::Error>> {
+            let lock = AI_TEST_ENV_LOCK
+                .lock()
+                .map_err(|_| std::io::Error::other("AI test env lock poisoned"))?;
+            let previous = std::env::var_os(key);
+            unsafe { std::env::set_var(key, value) };
+            Ok(Self { key, previous, _lock: lock })
+        }
+    }
+
+    impl Drop for AiTestEnvGuard {
+        // required for std::env::set_var/remove_var in Rust 2024; restores captured test env.
+        #[allow(unsafe_code)]
+        fn drop(&mut self) {
+            match &self.previous {
+                Some(value) => unsafe { std::env::set_var(self.key, value) },
+                None => unsafe { std::env::remove_var(self.key) },
+            }
+        }
+    }
+
     #[test]
     fn workspace_folder_matching_supports_non_file_uri_schemes() {
         let folder = WorkspaceFolderState::new("vscode-remote://ssh-remote+dev/workspace".into());
@@ -1518,6 +1552,32 @@ mod tests {
             LspServer::resolve_ai_api_key_with(&config, read_env).as_deref(),
             Some("gemini-key")
         );
+    }
+
+    #[test]
+    fn refresh_ai_backend_installs_connector_auth_backend() -> Result<(), Box<dyn std::error::Error>>
+    {
+        const KEY_ENV: &str = "PERL_LSP_TEST_CONNECTOR_API_KEY";
+        let _env_guard = AiTestEnvGuard::set(KEY_ENV, "connector-key")?;
+
+        let server = LspServer::new();
+        {
+            let mut config = server.config.lock();
+            config.ai_completion = AiCompletionConfig {
+                enabled: true,
+                endpoint: "https://connector.example/v1/chat/completions".to_string(),
+                model: "custom-code-model".to_string(),
+                api_key_env: KEY_ENV.to_string(),
+                api_key_header: "x-api-key".to_string(),
+                api_key_prefix: None,
+                ..AiCompletionConfig::default()
+            };
+        }
+
+        server.refresh_ai_backend();
+
+        assert!(server.ai_backend().is_some());
+        Ok(())
     }
 
     // --- include_paths_for_doc tests ---

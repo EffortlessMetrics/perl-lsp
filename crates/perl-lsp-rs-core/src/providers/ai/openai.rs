@@ -3,6 +3,10 @@
 use super::prompt::build_fim_prompt;
 use super::rate_limiter::RateLimiter;
 use super::sse::SseParser;
+use crate::config::{
+    DEFAULT_AI_API_KEY_HEADER, DEFAULT_AI_API_KEY_PREFIX, is_safe_http_header_value_part,
+    normalize_ai_api_key_header, normalize_ai_api_key_prefix,
+};
 use crate::providers::inline_completion::{
     BackendError, BackendRequest, InlineCompletionBackend, StreamChunk, StreamControl,
 };
@@ -18,6 +22,10 @@ pub struct OpenAiConfig {
     pub model: String,
     /// API key for authentication.
     pub api_key: String,
+    /// HTTP header that carries the API key.
+    pub api_key_header: String,
+    /// Optional authentication scheme prepended before the API key.
+    pub api_key_prefix: Option<String>,
     /// Global timeout in milliseconds.
     pub timeout_ms: u64,
 }
@@ -28,10 +36,48 @@ pub struct OpenAiProvider {
     limiter: Arc<RateLimiter>,
 }
 
+impl OpenAiConfig {
+    /// Build a default bearer-token configuration for OpenAI-compatible web APIs.
+    pub fn new(endpoint: String, model: String, api_key: String, timeout_ms: u64) -> Self {
+        Self {
+            endpoint,
+            model,
+            api_key,
+            api_key_header: DEFAULT_AI_API_KEY_HEADER.to_string(),
+            api_key_prefix: Some(DEFAULT_AI_API_KEY_PREFIX.to_string()),
+            timeout_ms,
+        }
+    }
+}
+
 impl OpenAiProvider {
     /// Create a new provider with the given config and rate limiter.
     pub fn new(config: OpenAiConfig, limiter: Arc<RateLimiter>) -> Self {
         Self { config, limiter }
+    }
+
+    fn auth_header_name(&self) -> &str {
+        if normalize_ai_api_key_header(&self.config.api_key_header).is_some() {
+            self.config.api_key_header.as_str()
+        } else {
+            DEFAULT_AI_API_KEY_HEADER
+        }
+    }
+
+    fn auth_header_value(&self) -> Result<String, BackendError> {
+        if !is_safe_http_header_value_part(&self.config.api_key) {
+            return Err(BackendError::Auth(
+                "AI API key contains unsupported HTTP header characters".to_string(),
+            ));
+        }
+
+        let prefix =
+            self.config.api_key_prefix.as_deref().and_then(normalize_ai_api_key_prefix).flatten();
+
+        Ok(match prefix.as_deref() {
+            Some(prefix) => format!("{prefix} {}", self.config.api_key),
+            None => self.config.api_key.clone(),
+        })
     }
 
     fn build_request_body(&self, req: &BackendRequest) -> serde_json::Value {
@@ -113,12 +159,12 @@ mod tests {
 
     fn provider_with_endpoint(endpoint: &str) -> OpenAiProvider {
         OpenAiProvider::new(
-            OpenAiConfig {
-                endpoint: endpoint.to_string(),
-                model: "gpt-4o-mini".to_string(),
-                api_key: "test-key".to_string(),
-                timeout_ms: 1000,
-            },
+            OpenAiConfig::new(
+                endpoint.to_string(),
+                "gpt-4o-mini".to_string(),
+                "test-key".to_string(),
+                1000,
+            ),
             Arc::new(RateLimiter::new(1.0, 1)),
         )
     }
@@ -149,6 +195,81 @@ mod tests {
         let data = r#"{"type":"response.completed"}"#;
         assert_eq!(OpenAiProvider::extract_finish_reason(data), Some("stop".to_string()));
     }
+
+    #[test]
+    fn default_config_uses_bearer_authorization_header() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = provider_with_endpoint("https://api.openai.com/v1/chat/completions");
+        assert_eq!(provider.config.api_key_header, "Authorization");
+        assert_eq!(provider.auth_header_name(), "Authorization");
+        assert_eq!(provider.auth_header_value()?, "Bearer test-key");
+        Ok(())
+    }
+
+    #[test]
+    fn custom_web_connector_auth_header_can_send_raw_key() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let mut config = OpenAiConfig::new(
+            "https://example.test/v1/chat/completions".to_string(),
+            "custom-code-model".to_string(),
+            "connector-key".to_string(),
+            1000,
+        );
+        config.api_key_header = "x-api-key".to_string();
+        config.api_key_prefix = None;
+        let provider = OpenAiProvider::new(config, Arc::new(RateLimiter::new(1.0, 1)));
+
+        assert_eq!(provider.config.api_key_header, "x-api-key");
+        assert_eq!(provider.auth_header_name(), "x-api-key");
+        assert_eq!(provider.auth_header_value()?, "connector-key");
+        Ok(())
+    }
+
+    #[test]
+    fn malformed_auth_header_name_falls_back_without_exposing_key()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut config = OpenAiConfig::new(
+            "https://example.test/v1/chat/completions".to_string(),
+            "custom-code-model".to_string(),
+            "connector-key".to_string(),
+            1000,
+        );
+        config.api_key_header = "x-api-key\r\nX-Injected".to_string();
+        let provider = OpenAiProvider::new(config, Arc::new(RateLimiter::new(1.0, 1)));
+
+        assert_eq!(provider.auth_header_name(), "Authorization");
+        assert_eq!(provider.auth_header_value()?, "Bearer connector-key");
+        Ok(())
+    }
+
+    #[test]
+    fn malformed_auth_prefix_and_key_do_not_enter_header_text()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut config = OpenAiConfig::new(
+            "https://example.test/v1/chat/completions".to_string(),
+            "custom-code-model".to_string(),
+            "connector-key".to_string(),
+            1000,
+        );
+        config.api_key_prefix = Some("Token\r\nX-Injected".to_string());
+        let provider = OpenAiProvider::new(config, Arc::new(RateLimiter::new(1.0, 1)));
+        assert_eq!(provider.auth_header_value()?, "connector-key");
+
+        let mut bad_key_config = OpenAiConfig::new(
+            "https://example.test/v1/chat/completions".to_string(),
+            "custom-code-model".to_string(),
+            "connector-key\r\nX-Injected".to_string(),
+            1000,
+        );
+        bad_key_config.api_key_prefix = None;
+        let provider = OpenAiProvider::new(bad_key_config, Arc::new(RateLimiter::new(1.0, 1)));
+        let Err(err) = provider.auth_header_value() else {
+            return Err("invalid key must be rejected".into());
+        };
+        let message = err.to_string();
+        assert!(message.contains("unsupported HTTP header characters"));
+        assert!(!message.contains("connector-key"));
+        Ok(())
+    }
 }
 
 impl InlineCompletionBackend for OpenAiProvider {
@@ -169,7 +290,7 @@ impl InlineCompletionBackend for OpenAiProvider {
 
         let response = agent
             .post(&self.config.endpoint)
-            .header("Authorization", &format!("Bearer {}", self.config.api_key))
+            .header(self.auth_header_name(), self.auth_header_value()?.as_str())
             .header("Content-Type", "application/json")
             .send_json(&body)
             .map_err(|e| {
