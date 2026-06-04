@@ -3866,6 +3866,41 @@ mod tests {
     }
 
     #[test]
+    fn commented_dbi_assignment_does_not_infer_receiver_kind()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "use DBI;\n# my $conn = DBI->connect($dsn);\n$conn->\n";
+        let character = u32::try_from("$conn->".encode_utf16().count())?;
+        let completions = provider.get_inline_completions(source, 2, character);
+        let insert_texts: Vec<&str> =
+            completions.items.iter().map(|item| item.insert_text.as_str()).collect();
+
+        for unexpected in ["prepare()", "do()", "disconnect()"] {
+            assert!(
+                !insert_texts.contains(&unexpected),
+                "commented DBI assignment must not shape receiver completions: {insert_texts:?}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn dbi_assignment_keeps_hash_inside_quoted_dsn_as_code()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source =
+            "use DBI;\nmy $conn = DBI->connect(\"dbi:SQLite:dbname=#scratch\");\n$conn->\n";
+        let character = u32::try_from("$conn->".encode_utf16().count())?;
+        let completions = provider.get_inline_completions(source, 2, character);
+        let insert_texts: Vec<&str> =
+            completions.items.iter().map(|item| item.insert_text.as_str()).collect();
+
+        assert!(insert_texts.contains(&"prepare()"));
+        assert!(insert_texts.contains(&"disconnect()"));
+        Ok(())
+    }
+
+    #[test]
     fn imported_dbi_unrelated_prepare_receiver_does_not_get_statement_methods() {
         let provider = InlineCompletionProvider::new();
         let source = "use DBI;\nmy $query = $builder->prepare($sql);\n$query->f\n";
@@ -3963,6 +3998,42 @@ mod tests {
         let completions = provider.get_inline_completions(source, 2, character);
 
         assert!(completions.items.is_empty());
+    }
+
+    #[test]
+    fn guard_condition_ignores_comment_and_string_decl_lookalikes()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub helper {\n    # my $is_valid = validate();\n    my $message = \"my $ready = 1 # still text\";\n    return unless ";
+        let character = u32::try_from("    return unless ".encode_utf16().count())?;
+        let completions = provider.get_inline_completions(source, 3, character);
+        let insert_texts: Vec<&str> =
+            completions.items.iter().map(|item| item.insert_text.as_str()).collect();
+
+        assert!(
+            !insert_texts.contains(&"$is_valid;"),
+            "commented declaration must not become a guard candidate: {insert_texts:?}"
+        );
+        assert!(
+            !insert_texts.contains(&"$ready;"),
+            "quoted declaration lookalike must not become a guard candidate: {insert_texts:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn guard_condition_ignores_closed_block_locals() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "sub helper {\n    if ($enabled) {\n        my $is_ready = expensive_check();\n    }\n    return unless ";
+        let character = u32::try_from("    return unless ".encode_utf16().count())?;
+        let completions = provider.get_inline_completions(source, 4, character);
+
+        assert!(
+            completions.items.iter().all(|item| item.insert_text != "$is_ready;"),
+            "block-local boolean must not leak into outer guard completions: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+        Ok(())
     }
 
     #[test]
