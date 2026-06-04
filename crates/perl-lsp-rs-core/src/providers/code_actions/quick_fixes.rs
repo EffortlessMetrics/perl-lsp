@@ -1964,6 +1964,54 @@ fn parse_printf_format_mismatch(message: &str) -> Option<(usize, String)> {
     specifiers.checked_sub(supplied).filter(|&n| n > 0).map(|n| (n, call_name))
 }
 
+/// Remove the undefined label from a loop-control statement (PL410).
+///
+/// `next LABEL`, `last LABEL`, and `redo LABEL` that reference a label not
+/// defined in the current file cause a fatal runtime error. The fix drops the
+/// label so the statement targets the innermost enclosing loop instead.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((range_start, range_end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let Some(range_text) = source.get(range_start..range_end) else {
+        return Vec::new();
+    };
+
+    let op = if range_text.starts_with("next") {
+        "next"
+    } else if range_text.starts_with("last") {
+        "last"
+    } else if range_text.starts_with("redo") {
+        "redo"
+    } else {
+        return Vec::new();
+    };
+
+    // Operator must be followed by whitespace to rule out longer barewords.
+    if !range_text[op.len()..].starts_with(|c: char| c.is_whitespace()) {
+        return Vec::new();
+    }
+
+    // Delete the space + label name that follows the operator keyword.
+    let label_start = range_start + op.len();
+
+    vec![CodeAction {
+        title: format!("Remove undefined label from '{op}'"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: label_start, end: range_end },
+                new_text: String::new(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
 fn diagnostic_line_range(source: &str, range: (usize, usize)) -> Option<(usize, usize)> {
     let (start, end) = valid_diagnostic_range(source, range)?;
     let line_start = source[..start].rfind('\n').map_or(0, |idx| idx + 1);
