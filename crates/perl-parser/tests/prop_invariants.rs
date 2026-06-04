@@ -93,7 +93,7 @@ where
                 f(stmt)?;
             }
         }
-        If { condition, then_branch, elsif_branches, else_branch } => {
+        If { condition, then_branch, elsif_branches, else_branch, .. } => {
             f(condition)?;
             f(then_branch)?;
             for (cond, branch) in elsif_branches {

@@ -3889,7 +3889,7 @@ impl IndexVisitor {
                 }
             }
 
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
                 self.visit_node(condition, file_index);
                 self.visit_node(then_branch, file_index);
                 for (cond, branch) in elsif_branches {
@@ -3901,7 +3901,7 @@ impl IndexVisitor {
                 }
             }
 
-            NodeKind::While { condition, body, continue_block } => {
+            NodeKind::While { condition, body, continue_block, .. } => {
                 self.visit_node(condition, file_index);
                 self.visit_node(body, file_index);
                 if let Some(cont) = continue_block {

@@ -571,6 +571,7 @@ fn test_label_inside_package_is_not_package_qualified() -> Result<(), String> {
     let body = Node::new(NodeKind::Block { statements: vec![] }, loc(30, 32));
     let while_node = Node::new(
         NodeKind::While {
+            keyword: None,
             condition: Box::new(Node::new(
                 NodeKind::Number { value: "1".to_string() },
                 loc(25, 26),

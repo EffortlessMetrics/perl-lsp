@@ -263,7 +263,7 @@ fn collect_loop_controls<'a>(node: &'a Node, controls: &mut Vec<&'a Node>) {
                 collect_loop_controls(value, controls);
             }
         }
-        NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+        NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
             collect_loop_controls(condition, controls);
             collect_loop_controls(then_branch, controls);
             for (condition, branch) in elsif_branches {
@@ -275,7 +275,7 @@ fn collect_loop_controls<'a>(node: &'a Node, controls: &mut Vec<&'a Node>) {
             }
         }
         NodeKind::LabeledStatement { statement, .. } => collect_loop_controls(statement, controls),
-        NodeKind::While { condition, body, continue_block } => {
+        NodeKind::While { condition, body, continue_block, .. } => {
             collect_loop_controls(condition, controls);
             collect_loop_controls(body, controls);
             if let Some(continue_block) = continue_block {
