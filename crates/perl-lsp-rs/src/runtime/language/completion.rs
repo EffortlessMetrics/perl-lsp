@@ -14,7 +14,7 @@ use crate::completion::{
     CompletionItemKind, CompletionProvider, add_xs_api_completions_for_prefix,
 };
 use crate::{
-    protocol::{JsonRpcError, JsonRpcId, REQUEST_CANCELLED, req_position, req_uri},
+    protocol::{JsonRpcError, JsonRpcId, REQUEST_CANCELLED, invalid_params, req_position, req_uri},
     runtime::routing::{IndexAccessMode, route_index_access},
     state::{completion_cap, completion_deadline},
 };
@@ -38,6 +38,15 @@ use super::super::LspServer;
 /// global cancellation registry — it exists only as a local handle that the
 /// provider's cancel-check closure can read.
 const UNCANCELLABLE_LOCAL_TOKEN_ID: JsonRpcId = JsonRpcId::Integer(-1);
+
+fn invalid_completion_resolve_params() -> JsonRpcError {
+    invalid_params(
+        "Missing or invalid completionItem/resolve params\n\n\
+         completionItem/resolve expects params to be a CompletionItem object returned by \
+         textDocument/completion.\n\n\
+         Example: {\"label\":\"print\",\"kind\":3,\"data\":{\"source\":\"perl-lsp\"}}",
+    )
+}
 
 static SNIPPET_PLACEHOLDER_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static SNIPPET_SIMPLE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
@@ -1321,8 +1330,11 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         let Some(mut item) = params else {
-            return Ok(None);
+            return Err(invalid_completion_resolve_params());
         };
+        if !item.is_object() {
+            return Err(invalid_completion_resolve_params());
+        }
 
         // Extract the label and kind upfront (clone to avoid borrow issues)
         let label = item.get("label").and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -1921,6 +1933,40 @@ mod tests {
         // Kind should be preserved
         assert_eq!(resolved.get("kind").and_then(|v| v.as_u64()), Some(3));
         Ok(())
+    }
+
+    fn expect_completion_resolve_guidance(err: JsonRpcError) -> Result<(), String> {
+        assert_eq!(err.code, crate::protocol::INVALID_PARAMS);
+        for expected in [
+            "Missing or invalid completionItem/resolve params",
+            "CompletionItem object",
+            "textDocument/completion",
+            "\"label\"",
+            "\"kind\"",
+        ] {
+            if !err.message.contains(expected) {
+                return Err(format!("expected error message to contain {expected:?}; got {err}"));
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn completion_resolve_missing_params_error_includes_shape_guidance() -> Result<(), String> {
+        let server = LspServer::default();
+        match server.handle_completion_resolve(None) {
+            Err(err) => expect_completion_resolve_guidance(err),
+            Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
+        }
+    }
+
+    #[test]
+    fn completion_resolve_non_object_params_error_includes_shape_guidance() -> Result<(), String> {
+        let server = LspServer::default();
+        match server.handle_completion_resolve(Some(json!([]))) {
+            Err(err) => expect_completion_resolve_guidance(err),
+            Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
+        }
     }
 
     #[test]
