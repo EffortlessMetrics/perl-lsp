@@ -838,6 +838,18 @@ fn scenarios() -> &'static [Scenario] {
             },
         },
         Scenario {
+            name: "moose_self_receiver_prefers_attribute_accessors",
+            source_name: "receiver",
+            source: "package Demo;\nuse Moose;\nhas 'enabled' => (is => 'ro');\nsub caller {\n    my $self = shift;\n    $self-><<CURSOR>>\n}\n",
+            available_modules: &[],
+            hard_zone: false,
+            assertion: ScenarioAssertion::Suggestion {
+                first: Some("enabled()"),
+                expected: &["enabled()"],
+                not_expected: &["new()"],
+            },
+        },
+        Scenario {
             name: "plain_has_declaration_does_not_become_accessor",
             source_name: "receiver",
             source: "package Demo;\nhas 'name' => (is => 'ro');\nsub caller {\n    $self-><<CURSOR>>\n}\n",
@@ -847,6 +859,18 @@ fn scenarios() -> &'static [Scenario] {
                 first: None,
                 expected: &[],
                 not_expected: &["name()", "external()", "new()"],
+            },
+        },
+        Scenario {
+            name: "moo_runtime_has_call_does_not_become_accessor",
+            source_name: "receiver",
+            source: "package Demo;\nuse Moo;\nsub caller {\n    has 'temporary' => (is => 'ro');\n    $self-><<CURSOR>>\n}\n",
+            available_modules: &[],
+            hard_zone: false,
+            assertion: ScenarioAssertion::Suggestion {
+                first: None,
+                expected: &[],
+                not_expected: &["temporary()", "new()"],
             },
         },
         Scenario {
@@ -1030,7 +1054,9 @@ mod tests {
         let names: Vec<&str> = scenarios().iter().map(|scenario| scenario.name).collect();
 
         assert!(names.contains(&"moo_self_receiver_prefers_attribute_accessors"));
+        assert!(names.contains(&"moose_self_receiver_prefers_attribute_accessors"));
         assert!(names.contains(&"plain_has_declaration_does_not_become_accessor"));
+        assert!(names.contains(&"moo_runtime_has_call_does_not_become_accessor"));
     }
 
     #[test]
@@ -1067,12 +1093,32 @@ mod tests {
         assert_eq!(parse_regressions, 0);
         assert_eq!(edit_application, EditApplicationOutcome::Passed);
 
+        let moose_accessor = scenarios()
+            .iter()
+            .find(|scenario| scenario.name == "moose_self_receiver_prefers_attribute_accessors")
+            .ok_or_else(|| eyre!("missing Moose accessor inline completion quality scenario"))?;
+        let (item_count, _notes, parse_regressions, edit_application) =
+            run_scenario(&provider, moose_accessor)?;
+        assert!(item_count > 0);
+        assert_eq!(parse_regressions, 0);
+        assert_eq!(edit_application, EditApplicationOutcome::Passed);
+
         let plain_has = scenarios()
             .iter()
             .find(|scenario| scenario.name == "plain_has_declaration_does_not_become_accessor")
             .ok_or_else(|| eyre!("missing plain has false-positive quality scenario"))?;
         let (item_count, _notes, parse_regressions, edit_application) =
             run_scenario(&provider, plain_has)?;
+        assert_eq!(item_count, 0);
+        assert_eq!(parse_regressions, 0);
+        assert_eq!(edit_application, EditApplicationOutcome::NotApplicable);
+
+        let runtime_has = scenarios()
+            .iter()
+            .find(|scenario| scenario.name == "moo_runtime_has_call_does_not_become_accessor")
+            .ok_or_else(|| eyre!("missing runtime has hard-reject quality scenario"))?;
+        let (item_count, _notes, parse_regressions, edit_application) =
+            run_scenario(&provider, runtime_has)?;
         assert_eq!(item_count, 0);
         assert_eq!(parse_regressions, 0);
         assert_eq!(edit_application, EditApplicationOutcome::NotApplicable);
