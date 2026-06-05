@@ -3,6 +3,7 @@
 use std::{
     collections::BTreeSet,
     fs,
+    io::ErrorKind,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -1664,8 +1665,15 @@ fn ripr_review_command(args: &QualityGateArgs, check: bool) -> String {
 }
 
 fn assert_current(path: &Path, expected: &str, label: &str) -> Result<()> {
-    let existing =
-        fs::read_to_string(path).with_context(|| format!("reading {label} {}", path.display()))?;
+    let existing = match fs::read_to_string(path) {
+        Ok(existing) => existing,
+        Err(error) if error.kind() == ErrorKind::NotFound => {
+            bail!("{label} is missing: {}", path.display());
+        }
+        Err(error) => {
+            return Err(error).with_context(|| format!("reading {label} {}", path.display()));
+        }
+    };
     if normalize(&existing) != normalize(expected) {
         bail!("{label} is stale: {}", path.display());
     }
