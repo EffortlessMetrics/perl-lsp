@@ -855,11 +855,7 @@ fn scenarios() -> &'static [Scenario] {
             source: "package Demo;\nhas 'name' => (is => 'ro');\nsub caller {\n    $self-><<CURSOR>>\n}\n",
             available_modules: &[],
             hard_zone: false,
-            assertion: ScenarioAssertion::Suggestion {
-                first: None,
-                expected: &[],
-                not_expected: &["name()", "external()", "new()"],
-            },
+            assertion: ScenarioAssertion::Silent,
         },
         Scenario {
             name: "moo_runtime_has_call_does_not_become_accessor",
@@ -867,11 +863,7 @@ fn scenarios() -> &'static [Scenario] {
             source: "package Demo;\nuse Moo;\nsub caller {\n    has 'temporary' => (is => 'ro');\n    $self-><<CURSOR>>\n}\n",
             available_modules: &[],
             hard_zone: false,
-            assertion: ScenarioAssertion::Suggestion {
-                first: None,
-                expected: &[],
-                not_expected: &["temporary()", "new()"],
-            },
+            assertion: ScenarioAssertion::Silent,
         },
         Scenario {
             name: "dbi_database_handle_prefers_dbi_methods",
