@@ -1075,6 +1075,255 @@ my $value = goo
 }
 
 #[test]
+fn lsp_smoke_e2e_document_intelligence_shapes() -> Result<(), Box<dyn std::error::Error>> {
+    let server = common::start_lsp_server();
+    let timeout = Duration::from_secs(3);
+    let init_timeout = common::timeout_scaler::TimeoutProfile::Initialization.timeout();
+    let uri = unique_test_uri("document-intelligence");
+
+    let fixture = r#"package Smoke::DocumentIntelligence;
+use strict;
+use warnings;
+
+sub compute_total {
+    my ($limit) = @_;
+    my $total = 0;
+    for my $idx (1 .. $limit) {
+        if ($idx % 2 == 0) {
+            $total += $idx;
+        }
+    }
+    return $total;
+}
+
+my $answer = compute_total(10);
+print $answer;
+"#;
+
+    let init_response = send_request_with_timeout(
+        &server,
+        210,
+        "initialize",
+        json!({
+            "processId": null,
+            "rootUri": null,
+            "capabilities": {
+                "textDocument": {
+                    "documentHighlight": { "dynamicRegistration": false },
+                    "foldingRange": { "dynamicRegistration": false },
+                    "selectionRange": { "dynamicRegistration": false },
+                    "semanticTokens": {
+                        "dynamicRegistration": false,
+                        "requests": { "full": true },
+                        "tokenTypes": [
+                            "namespace", "type", "class", "interface", "enum", "enumMember",
+                            "typeParameter", "function", "method", "property", "macro", "variable",
+                            "parameter", "keyword", "modifier", "comment", "string", "number",
+                            "regexp", "operator"
+                        ],
+                        "tokenModifiers": []
+                    },
+                    "inlayHint": { "dynamicRegistration": false }
+                }
+            }
+        }),
+        init_timeout,
+    )?;
+    assert!(init_response.get("error").is_none(), "initialize returned error: {init_response:#}");
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "initialized",
+            "params": {}
+        }),
+    );
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": fixture
+                }
+            }
+        }),
+    );
+
+    let has_lsp_range = |range: &Value| -> bool {
+        range.pointer("/start/line").and_then(Value::as_u64).is_some()
+            && range.pointer("/start/character").and_then(Value::as_u64).is_some()
+            && range.pointer("/end/line").and_then(Value::as_u64).is_some()
+            && range.pointer("/end/character").and_then(Value::as_u64).is_some()
+    };
+
+    let (compute_line, compute_col) = line_col(fixture, 4, "compute_total")?;
+    let highlight_response = send_request_with_timeout(
+        &server,
+        211,
+        "textDocument/documentHighlight",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": compute_line, "character": compute_col }
+        }),
+        timeout,
+    )?;
+    assert!(
+        highlight_response.get("error").is_none(),
+        "documentHighlight returned error: {highlight_response:#}"
+    );
+    if let Some(highlights) = highlight_response["result"].as_array() {
+        assert!(
+            highlights.iter().all(|item| item.get("range").is_some_and(has_lsp_range)),
+            "documentHighlight entries should include valid ranges: {highlight_response:#}"
+        );
+    } else {
+        assert!(
+            highlight_response["result"].is_null(),
+            "documentHighlight result should be an array or null: {highlight_response:#}"
+        );
+    }
+
+    let folding_response = send_request_with_timeout(
+        &server,
+        212,
+        "textDocument/foldingRange",
+        json!({ "textDocument": { "uri": uri } }),
+        timeout,
+    )?;
+    assert!(
+        folding_response.get("error").is_none(),
+        "foldingRange returned error: {folding_response:#}"
+    );
+    let folding_ranges =
+        folding_response["result"].as_array().ok_or("foldingRange result should be an array")?;
+    assert!(
+        folding_ranges.iter().any(|range| {
+            range.get("startLine").and_then(Value::as_u64).is_some()
+                && range.get("endLine").and_then(Value::as_u64).is_some()
+        }),
+        "foldingRange should return at least one range with line fields: {folding_response:#}"
+    );
+
+    let selection_response = send_request_with_timeout(
+        &server,
+        213,
+        "textDocument/selectionRange",
+        json!({
+            "textDocument": { "uri": uri },
+            "positions": [
+                { "line": compute_line, "character": compute_col },
+                { "line": 9, "character": 13 }
+            ]
+        }),
+        timeout,
+    )?;
+    assert!(
+        selection_response.get("error").is_none(),
+        "selectionRange returned error: {selection_response:#}"
+    );
+    let selection_ranges = selection_response["result"]
+        .as_array()
+        .ok_or("selectionRange result should be an array")?;
+    assert_eq!(
+        selection_ranges.len(),
+        2,
+        "selectionRange should return one root range per requested position"
+    );
+    for selection_range in selection_ranges {
+        assert!(
+            selection_range.get("range").is_some_and(has_lsp_range),
+            "selectionRange root entries should include valid ranges: {selection_response:#}"
+        );
+        if let Some(parent) = selection_range.get("parent") {
+            assert!(
+                parent.is_object() && parent.get("range").is_some_and(has_lsp_range),
+                "selectionRange parents should preserve nested range shape: {selection_response:#}"
+            );
+        }
+    }
+
+    let semantic_response = send_request_with_timeout(
+        &server,
+        214,
+        "textDocument/semanticTokens/full",
+        json!({ "textDocument": { "uri": uri } }),
+        timeout,
+    )?;
+    assert!(
+        semantic_response.get("error").is_none(),
+        "semanticTokens/full returned error: {semantic_response:#}"
+    );
+    let semantic_data = semantic_response
+        .pointer("/result/data")
+        .and_then(Value::as_array)
+        .ok_or("semanticTokens/full result should include a data array")?;
+    assert!(
+        !semantic_data.is_empty(),
+        "semanticTokens/full should emit tokens for a non-empty Perl file"
+    );
+    assert_eq!(
+        semantic_data.len() % 5,
+        0,
+        "semanticTokens/full data should be encoded in five-integer chunks"
+    );
+
+    let print_line_index =
+        fixture.lines().position(|line| line == "print $answer;").ok_or("print line missing")?;
+    let print_line_len = fixture.lines().nth(print_line_index).ok_or("print line missing")?.len();
+    let inlay_response = send_request_with_timeout(
+        &server,
+        215,
+        "textDocument/inlayHint",
+        json!({
+            "textDocument": { "uri": uri },
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": print_line_index, "character": print_line_len }
+            }
+        }),
+        timeout,
+    )?;
+    assert!(inlay_response.get("error").is_none(), "inlayHint returned error: {inlay_response:#}");
+    if let Some(inlay_hints) = inlay_response["result"].as_array() {
+        assert!(
+            inlay_hints
+                .iter()
+                .all(|item| item.get("position").is_some() && item.get("label").is_some()),
+            "inlayHint entries should include position and label fields: {inlay_response:#}"
+        );
+    } else {
+        assert!(
+            inlay_response["result"].is_null(),
+            "inlayHint result should be an array or null: {inlay_response:#}"
+        );
+    }
+
+    let shutdown_response =
+        send_request_with_timeout(&server, 216, "shutdown", json!(null), timeout)?;
+    assert!(
+        shutdown_response.get("error").is_none(),
+        "shutdown returned error: {shutdown_response:#}"
+    );
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+            "params": null
+        }),
+    );
+
+    Ok(())
+}
+
+#[test]
 fn lsp_smoke_e2e_pull_diagnostics_refresh_after_change() -> Result<(), Box<dyn std::error::Error>> {
     let server = common::start_lsp_server();
     let timeout = Duration::from_secs(2);
