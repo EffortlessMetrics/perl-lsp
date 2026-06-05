@@ -3151,6 +3151,47 @@ fn refactor_runtime_blocker_ux_safe_delete_live_pilot_returns_source_backed_edit
 }
 
 #[test]
+fn refactor_runtime_blocker_ux_safe_delete_live_pilot_keeps_edit_when_apply_edit_request_fails()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut server = create_server();
+    {
+        let mut caps = server.client_capabilities.lock();
+        caps.workspace_apply_edit_support = true;
+        caps.workspace_edit_metadata_support = true;
+    }
+    let files = open_semantic_real_workspace(&server)?;
+    let base = files.get("lib/RealBaseline/Base.pm").ok_or("missing RealBaseline Base fixture")?;
+    server.outbound = crate::runtime::outbound::closed_sender();
+
+    let (reset_line, reset_character) = position_of(base, "reset {")?;
+    let live_result = server
+        .safe_delete_symbol_live_pilot(Some(json!({
+            "textDocument": {"uri": REAL_BASELINE_BASE_URI},
+            "position": {"line": reset_line, "character": reset_character}
+        })))?
+        .ok_or("missing safe-delete live pilot result")?;
+
+    assert_eq!(live_result.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        live_result.get("provider_action").and_then(Value::as_str),
+        Some("perl.safeDeleteSymbol")
+    );
+    assert_eq!(live_result.get("decision").and_then(Value::as_str), Some("allowed"));
+    assert_eq!(live_result.get("live_symbol_delete_enabled").and_then(Value::as_bool), Some(true));
+    assert_eq!(live_result.get("returned_workspace_edit_count").and_then(Value::as_u64), Some(1));
+    assert!(
+        live_result.get("apply_edit_requested").is_none(),
+        "failed server-originated applyEdit request must not be recorded as requested: {live_result}"
+    );
+
+    let workspace_edit = live_result.get("workspace_edit").ok_or("missing live workspace_edit")?;
+    let live_texts = workspace_edit_texts_for_uri(workspace_edit, REAL_BASELINE_BASE_URI)?;
+    assert_eq!(live_texts, vec![""], "live pilot should still return the reviewable edit");
+
+    Ok(())
+}
+
+#[test]
 fn refactor_runtime_blocker_ux_safe_delete_live_pilot_records_second_project_source_backed_edit()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();
