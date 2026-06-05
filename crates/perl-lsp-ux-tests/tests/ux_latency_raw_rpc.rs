@@ -11,6 +11,8 @@
 //!    notifications, the last completion request still returns successfully.
 //! 6. Dynamic `textDocument/inlineCompletion` returns deterministic items while
 //!    watcher registration stays off in the lean profile.
+//! 7. Document symbols, workspace symbols, and code actions complete over the
+//!    same real-process e2e path.
 //!
 //! These are intentionally "does it work end-to-end" tests, not numeric
 //! latency assertions. CI machine variance makes wallclock budgets
@@ -50,6 +52,21 @@ const CLEAN_SOURCE: &str = r#"use strict;
 use warnings;
 
 sub broken {}
+"#;
+
+const SYMBOL_SOURCE: &str = r#"package Latency::Symbols;
+use strict;
+use warnings;
+
+sub alpha {
+    return 1;
+}
+
+sub beta {
+    return alpha();
+}
+
+1;
 "#;
 
 /// Build an e2e harness config: syntax-only diagnostics, zero debounce, no
@@ -282,6 +299,95 @@ fn ux_latency_inline_completion_dynamic_path_returns_deterministic_items() -> Re
     assert!(
         items.iter().any(|item| item.get("insertText").and_then(Value::as_str) == Some("strict;")),
         "inline completion must include deterministic strict; suggestion, got {items:?}"
+    );
+
+    harness.assert_no_crash();
+    Ok(())
+}
+
+#[test]
+fn ux_latency_document_symbols_returns_real_process_shape() -> Result<()> {
+    if !binary_available() {
+        return Ok(());
+    }
+
+    let harness = UxHarness::new(e2e_config(timeout()))?;
+    harness.open_file("lib/Latency/Symbols.pm", SYMBOL_SOURCE)?;
+
+    let symbols = harness.document_symbols("lib/Latency/Symbols.pm")?;
+    assert!(
+        symbols.iter().any(|symbol| symbol.get("name").and_then(Value::as_str) == Some("alpha")),
+        "documentSymbol must expose the alpha subroutine over the e2e path; got {symbols:?}"
+    );
+
+    harness.assert_no_crash();
+    Ok(())
+}
+
+#[test]
+fn ux_latency_workspace_symbols_sees_open_document_symbols() -> Result<()> {
+    if !binary_available() {
+        return Ok(());
+    }
+
+    let harness = UxHarness::new(e2e_config(timeout()))?;
+    harness.open_file("lib/Latency/Symbols.pm", SYMBOL_SOURCE)?;
+
+    let symbols = harness.wait_for_workspace_symbols(
+        "alpha",
+        Duration::from_secs(5),
+        Duration::from_millis(50),
+        |items| {
+            items.iter().any(|symbol| symbol.get("name").and_then(Value::as_str) == Some("alpha"))
+        },
+    )?;
+    assert!(
+        symbols.iter().any(|symbol| symbol.get("name").and_then(Value::as_str) == Some("alpha")),
+        "workspace/symbol must find alpha from an opened e2e document; got {symbols:?}"
+    );
+
+    harness.assert_no_crash();
+    Ok(())
+}
+
+#[test]
+fn ux_latency_code_action_returns_without_error_for_parse_diagnostic() -> Result<()> {
+    if !binary_available() {
+        return Ok(());
+    }
+
+    let harness = UxHarness::new(e2e_config(timeout()))?;
+    harness.open_file("action.pl", PARSE_ERROR_SOURCE)?;
+    let diagnostics = harness.wait_for_diagnostics("action.pl", Duration::from_secs(5));
+    assert!(
+        !diagnostics.is_empty(),
+        "code action e2e receipt needs a real diagnostic to act on; got {diagnostics:?}"
+    );
+
+    let uri = harness.workspace.uri("action.pl");
+    let response = harness.client.request(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": { "uri": uri },
+            "range": {
+                "start": { "line": 2, "character": 0 },
+                "end": { "line": 3, "character": 0 }
+            },
+            "context": {
+                "diagnostics": diagnostics,
+                "only": ["quickfix", "source"]
+            }
+        }),
+        timeout(),
+    )?;
+
+    assert!(
+        response.get("error").is_none(),
+        "textDocument/codeAction must not return a JSON-RPC error under e2e mode: {response:?}"
+    );
+    assert!(
+        response.get("result").and_then(Value::as_array).is_some() || response["result"].is_null(),
+        "textDocument/codeAction must return an action array or null; got {response:?}"
     );
 
     harness.assert_no_crash();
