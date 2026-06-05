@@ -1,3 +1,6 @@
+// Test receipt emits per-probe status and JSON evidence to stderr for auditability.
+#![allow(clippy::print_stderr)]
+
 //! Scenario 39 - Dancer2 workspace-symbol noise receipt.
 //!
 //! This receipt exercises `workspace/symbol` over the committed Dancer2
@@ -472,6 +475,10 @@ fn scenario_39_dancer2_workspace_symbol_noise_receipt() {
             recorder.check(
                 "workspace-symbol probes returned useful project hits",
                 useful_hit_total > 0,
+            )?;
+            recorder.check(
+                "all workspace-symbol probes returned live symbols",
+                reports.iter().all(|report| report.first_count > 0),
             )?;
             recorder.check(
                 "workspace-symbol entries used valid LSP shapes",
