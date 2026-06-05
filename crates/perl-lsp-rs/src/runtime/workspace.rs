@@ -9,6 +9,7 @@
 //! - **Building/Degraded state**: Open document search only (partial results)
 
 use super::*;
+use crate::protocol::invalid_params;
 #[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
 use crate::runtime::workspace_progress::{
@@ -45,6 +46,17 @@ mod configuration_response;
 mod text_decode;
 
 const WORKSPACE_CONFIGURATION_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
+fn invalid_workspace_symbol_resolve_params() -> JsonRpcError {
+    invalid_params(
+        "Missing or invalid workspaceSymbol/resolve params\n\n\
+         workspaceSymbol/resolve expects params to be a WorkspaceSymbol object returned by \
+         workspace/symbol.\n\n\
+         Example: {\"name\":\"main\",\"kind\":12,\"location\":{\"uri\":\"file:///workspace/main.pl\",\
+         \"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":0,\"character\":8}}}}",
+    )
+}
+
 // Note: WalkDir logic has been extracted to super::file_discovery.
 // These helper functions are retained for potential future use by
 // other workspace operations (e.g., file watcher filtering).
@@ -721,11 +733,7 @@ impl LspServer {
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             // Extract the symbol to resolve
-            let symbol = params.as_object().ok_or_else(|| JsonRpcError {
-                code: -32602,
-                message: "Invalid params".to_string(),
-                data: None,
-            })?;
+            let symbol = params.as_object().ok_or_else(invalid_workspace_symbol_resolve_params)?;
 
             // Get the URI and name from the symbol
             let uri = symbol
@@ -828,7 +836,7 @@ impl LspServer {
             // Return the original symbol if we couldn't enhance it
             Ok(Some(json!(symbol)))
         } else {
-            Err(JsonRpcError { code: -32602, message: "Missing params".to_string(), data: None })
+            Err(invalid_workspace_symbol_resolve_params())
         }
     }
 
@@ -2503,7 +2511,7 @@ pub(super) fn path_to_module_name(uri: &str) -> String {
 mod tests {
     #[cfg(feature = "workspace")]
     use super::read_text_with_encoding_fallback;
-    use super::{LspServer, module_name_appears_in_text};
+    use super::{JsonRpcError, LspServer, module_name_appears_in_text};
     use serde_json::json;
     #[cfg(feature = "workspace")]
     use std::io::Write;
@@ -2558,6 +2566,64 @@ mod tests {
     fn test_module_name_unicode_letter_after_rejected() {
         // Unicode letters still extend identifiers; do not match inside "BaseΔ".
         assert!(!module_name_appears_in_text("use BaseΔ;", "Base"));
+    }
+
+    fn expect_workspace_symbol_resolve_guidance(err: JsonRpcError) -> Result<(), String> {
+        assert_eq!(err.code, crate::protocol::INVALID_PARAMS);
+        for expected in [
+            "Missing or invalid workspaceSymbol/resolve params",
+            "WorkspaceSymbol object",
+            "workspace/symbol",
+            "\"location\"",
+            "\"range\"",
+        ] {
+            if !err.message.contains(expected) {
+                return Err(format!("expected error message to contain {expected:?}; got {err}"));
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn workspace_symbol_resolve_missing_params_error_includes_shape_guidance() -> Result<(), String>
+    {
+        let server = LspServer::new();
+        match server.handle_workspace_symbol_resolve(None) {
+            Err(err) => expect_workspace_symbol_resolve_guidance(err),
+            Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
+        }
+    }
+
+    #[test]
+    fn workspace_symbol_resolve_non_object_params_error_includes_shape_guidance()
+    -> Result<(), String> {
+        let server = LspServer::new();
+        match server.handle_workspace_symbol_resolve(Some(json!([]))) {
+            Err(err) => expect_workspace_symbol_resolve_guidance(err),
+            Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
+        }
+    }
+
+    #[test]
+    fn workspace_symbol_resolve_accepts_workspace_symbol_objects() -> Result<(), String> {
+        let server = LspServer::new();
+        let symbol = json!({
+            "name": "main",
+            "kind": 12,
+            "location": {
+                "uri": "file:///workspace/main.pl",
+                "range": {
+                    "start": {"line": 0, "character": 0},
+                    "end": {"line": 0, "character": 8}
+                }
+            }
+        });
+
+        match server.handle_workspace_symbol_resolve(Some(symbol.clone())) {
+            Ok(Some(resolved)) if resolved == symbol => Ok(()),
+            Ok(result) => Err(format!("expected unresolved symbol echo; got {result:?}")),
+            Err(err) => Err(format!("expected valid WorkspaceSymbol object; got {err}")),
+        }
     }
 
     #[test]
