@@ -85,6 +85,35 @@ fn uri_key_windows_path_missing_separator_via_two_slash_form() {
     assert_eq!(uri_key("file://C:foo"), "file:///c:/foo");
 }
 
+#[test]
+fn uri_key_windows_drive_roots_keep_directory_separator() {
+    // Drive-root inputs force the `path.is_empty()` branch after the drive
+    // prefix is stripped. The canonical key must keep the trailing slash so it
+    // remains distinct from the invalid/relative `C:` form covered above.
+    assert_eq!(uri_key(r"C:\"), "file:///c:/");
+    assert_eq!(uri_key("D:/"), "file:///d:/");
+    assert_eq!(uri_key(r"file://E:\"), "file:///e:/");
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn normalize_uri_windows_drive_roots_keep_directory_separator() {
+    // `normalize_uri` takes the same legacy pre-pass as `uri_key`; lock the
+    // root-drive edge case at the public normalization entry point too.
+    assert_eq!(perl_uri::normalize_uri(r"C:\"), "file:///c:/");
+    assert_eq!(perl_uri::normalize_uri("D:/"), "file:///d:/");
+    assert_eq!(perl_uri::normalize_uri(r"file://E:\"), "file:///e:/");
+}
+
+#[test]
+fn uri_key_loopback_authority_without_path_canonicalizes_to_local_root() {
+    // Local file authorities with no explicit path parse as `/`; after the
+    // authority is stripped they should share the canonical local-root key.
+    assert_eq!(uri_key("file://localhost"), "file:///");
+    assert_eq!(uri_key("file://127.0.0.1"), "file:///");
+    assert_eq!(uri_key("file://[::1]"), "file:///");
+}
+
 // ── lib::windows_rooted_file_uri_to_path (non-Windows stub) ─────────
 //
 // On non-Windows targets the helper at `lib.rs:198-201` is a stub that
