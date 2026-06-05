@@ -348,11 +348,14 @@ describe('serverNotRunningMessage diagnosis cache (#4193)', () => {
     _setLastStartupDiagnosisForTest({
       kind: StartupErrorKind.Unknown,
       hint: 'The Perl Language Server stopped unexpectedly. Check the Output panel for details.',
-      remediation: 'Try restarting the server (Command Palette: "Perl: Restart Server") or run the Health Check.',
+      remediation:
+        'Try restarting the server (Command Palette: "Perl: Restart Server") ' +
+        'or run "Perl: Run Health Check".',
     });
 
     const msg = serverNotRunningMessage();
     expect(msg).toContain('stopped unexpectedly');
     expect(msg).toContain('Restart Server');
+    expect(msg).toContain('Perl: Run Health Check');
   });
 });

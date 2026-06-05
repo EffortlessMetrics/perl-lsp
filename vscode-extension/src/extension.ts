@@ -2912,7 +2912,9 @@ function bindClientState(languageClient: LanguageClient) {
             lastStartupDiagnosis = {
                 kind: StartupErrorKind.Unknown,
                 hint: 'The Perl Language Server stopped unexpectedly. Check the Output panel for details.',
-                remediation: 'Try restarting the server (Command Palette: "Perl: Restart Server") or run the Health Check.',
+                remediation:
+                    'Try restarting the server (Command Palette: "Perl: Restart Server") ' +
+                    'or run "Perl: Run Health Check".',
             };
         }
     });
