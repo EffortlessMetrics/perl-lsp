@@ -81,6 +81,73 @@ fn quality_gate_cli_blocks_new_ripr_gaps_with_actionable_receipt() -> TestResult
 }
 
 #[test]
+fn quality_gate_cli_renders_summary_only_review_guidance_as_repair_packet() -> TestResult {
+    let root = repo_root()?;
+    let dir = tempdir()?;
+    let ripr = dir.path().join("ripr-plus.json");
+    let ripr_pr = dir.path().join("repo-exposure.json");
+    let review = dir.path().join("comments.json");
+    let receipt = dir.path().join("quality-gate.json");
+    let summary = dir.path().join("quality-gate.md");
+    let head = current_head(&root)?;
+
+    write_ripr_plus_receipt(&ripr, &head)?;
+    write_ripr_pr_receipt(&ripr_pr, &head, 1)?;
+    write_summary_only_review_guidance_receipt(&review, &head)?;
+
+    let output =
+        new_ripr_quality_gate_command(&root, &ripr, &ripr_pr, &review, &receipt, &summary)?
+            .output()?;
+    assert!(
+        !output.status.success(),
+        "new RIPR gap enforcement must fail with summary-only guidance"
+    );
+
+    let payload: Value = serde_json::from_str(&fs::read_to_string(&receipt)?)?;
+    assert_eq!(payload.pointer("/review_guidance/status").and_then(Value::as_str), Some("present"));
+    let action = next_action(&payload, "new_ripr_gap")?;
+    assert_eq!(action.pointer("/top_gaps/0/source").and_then(Value::as_str), Some("summary_only"));
+    assert_eq!(
+        action.pointer("/top_gaps/0/gap_id").and_then(Value::as_str),
+        Some("RIPR-SPEC-SUMMARY")
+    );
+    assert_eq!(
+        action.pointer("/top_gaps/0/path").and_then(Value::as_str),
+        Some("xtask/src/tasks/quality_gate.rs")
+    );
+    assert_eq!(action.pointer("/top_gaps/0/line").and_then(Value::as_u64), Some(137));
+    assert_eq!(
+        action.pointer("/top_gaps/0/seam").and_then(Value::as_str),
+        Some("summary renderer")
+    );
+    assert_eq!(
+        action.pointer("/top_gaps/0/reason").and_then(Value::as_str),
+        Some("summary-only guidance still needs a repair packet")
+    );
+    assert_eq!(
+        action.pointer("/top_gaps/0/suggested_test").and_then(Value::as_str),
+        Some("cover summary-only review guidance")
+    );
+    assert_blocking_actions_have_repair_contract(&payload)?;
+
+    let markdown = fs::read_to_string(&summary)?;
+    for required in [
+        "RIPR-SPEC-SUMMARY",
+        "xtask/src/tasks/quality_gate.rs:137",
+        "summary renderer",
+        "summary-only guidance still needs a repair packet",
+        "cover summary-only review guidance",
+    ] {
+        assert!(
+            markdown.contains(required),
+            "summary-only guidance missing `{required}`: {markdown}"
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
 fn quality_gate_cli_passes_when_new_ripr_receipts_are_current_and_zero() -> TestResult {
     let root = repo_root()?;
     let dir = tempdir()?;
@@ -108,6 +175,65 @@ fn quality_gate_cli_passes_when_new_ripr_receipts_are_current_and_zero() -> Test
         .arg("--check")
         .assert()
         .success();
+
+    Ok(())
+}
+
+#[test]
+fn quality_gate_cli_blocks_missing_review_guidance_when_new_gaps_exist() -> TestResult {
+    let root = repo_root()?;
+    let dir = tempdir()?;
+    let ripr = dir.path().join("ripr-plus.json");
+    let ripr_pr = dir.path().join("repo-exposure.json");
+    let review = dir.path().join("missing-comments.json");
+    let receipt = dir.path().join("quality-gate.json");
+    let summary = dir.path().join("quality-gate.md");
+    let head = current_head(&root)?;
+
+    write_ripr_plus_receipt(&ripr, &head)?;
+    write_ripr_pr_receipt(&ripr_pr, &head, 1)?;
+
+    let output =
+        new_ripr_quality_gate_command(&root, &ripr, &ripr_pr, &review, &receipt, &summary)?
+            .output()?;
+    assert!(!output.status.success(), "new RIPR gaps must fail when review guidance is missing");
+    assert_failure_stderr_points_to_receipt_and_summary(
+        &String::from_utf8(output.stderr)?,
+        &receipt,
+        &summary,
+    )?;
+
+    let payload: Value = serde_json::from_str(&fs::read_to_string(&receipt)?)?;
+    assert_eq!(payload.pointer("/ripr_pr/new_unresolved").and_then(Value::as_u64), Some(1));
+    assert_eq!(payload.pointer("/review_guidance/status").and_then(Value::as_str), Some("missing"));
+    let new_gap = next_action(&payload, "new_ripr_gap")?;
+    assert_eq!(new_gap.get("new_unresolved").and_then(Value::as_u64), Some(1));
+    assert!(
+        new_gap.get("top_gaps").and_then(Value::as_array).is_some_and(Vec::is_empty),
+        "missing review guidance must not invent gap repair rows: {new_gap}"
+    );
+    let review_action = next_action(&payload, "ripr_review_receipt_not_current")?;
+    assert_eq!(review_action.get("reason").and_then(Value::as_str), Some("missing"));
+    assert!(!payload.get("next_actions").and_then(Value::as_array).is_some_and(|actions| {
+        actions.iter().any(|action| {
+            action.get("kind").and_then(Value::as_str)
+                == Some("ripr_review_guidance_not_actionable")
+        })
+    }));
+    assert_blocking_actions_have_repair_contract(&payload)?;
+
+    let markdown = fs::read_to_string(&summary)?;
+    for required in [
+        "### new_ripr_gap",
+        "### ripr_review_receipt_not_current",
+        "- repair: `Regenerate and check the RIPR review-guidance receipt for this HEAD",
+        "rtk cargo xtask ripr-review-comments --base origin/HEAD --head HEAD --check",
+    ] {
+        assert!(
+            markdown.contains(required),
+            "missing review guidance summary lacks `{required}`: {markdown}"
+        );
+    }
 
     Ok(())
 }
@@ -747,6 +873,39 @@ fn write_review_guidance_receipt(path: &Path, head: &str) -> TestResult {
                 }
             ],
             "summary_only": [],
+            "suppressed": [],
+            "warnings": []
+        }),
+    )
+}
+
+fn write_summary_only_review_guidance_receipt(path: &Path, head: &str) -> TestResult {
+    write_json(
+        path,
+        json!({
+            "schema_version": "0.1",
+            "tool": "ripr",
+            "status": "advisory",
+            "base": "quality-gate-cli-test-base",
+            "base_sha": "quality-gate-cli-test-base-sha",
+            "head": "HEAD",
+            "head_sha": head,
+            "summary": {
+                "comments": 0,
+                "summary_only": 1,
+                "suppressed": 0
+            },
+            "comments": [],
+            "summary_only": [
+                {
+                    "gap_id": "RIPR-SPEC-SUMMARY",
+                    "file": "xtask/src/tasks/quality_gate.rs",
+                    "line": 137,
+                    "owner": "summary renderer",
+                    "why": "summary-only guidance still needs a repair packet",
+                    "repair": "cover summary-only review guidance"
+                }
+            ],
             "suppressed": [],
             "warnings": []
         }),
