@@ -276,10 +276,9 @@ pub fn transport_error(message: &str) -> JsonRpcError {
 ///
 /// Returns INVALID_PARAMS error if the URI is missing or not a string.
 pub fn req_uri(params: &Value) -> Result<&str, JsonRpcError> {
-    params
-        .pointer("/textDocument/uri")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| invalid_params("Missing required parameter: textDocument.uri"))
+    params.pointer("/textDocument/uri").and_then(|v| v.as_str()).ok_or_else(|| {
+        invalid_text_document_uri_params("Missing required parameter: textDocument.uri")
+    })
 }
 
 /// Extract the required position (line, character) from LSP request params
@@ -289,15 +288,15 @@ pub fn req_position(params: &Value) -> Result<(u32, u32), JsonRpcError> {
     let line_u64 = params
         .pointer("/position/line")
         .and_then(|v| v.as_u64())
-        .ok_or_else(|| invalid_params("Missing required parameter: position.line"))?;
-    let line =
-        u32::try_from(line_u64).map_err(|_| invalid_params("position.line exceeds u32::MAX"))?;
+        .ok_or_else(|| invalid_position_params("Missing required parameter: position.line"))?;
+    let line = u32::try_from(line_u64)
+        .map_err(|_| invalid_position_params("position.line exceeds u32::MAX"))?;
     let character_u64 = params
         .pointer("/position/character")
         .and_then(|v| v.as_u64())
-        .ok_or_else(|| invalid_params("Missing required parameter: position.character"))?;
+        .ok_or_else(|| invalid_position_params("Missing required parameter: position.character"))?;
     let character = u32::try_from(character_u64)
-        .map_err(|_| invalid_params("position.character exceeds u32::MAX"))?;
+        .map_err(|_| invalid_position_params("position.character exceeds u32::MAX"))?;
     Ok((line, character))
 }
 
@@ -309,28 +308,46 @@ pub fn req_range(params: &Value) -> Result<((u32, u32), (u32, u32)), JsonRpcErro
     let start_line_u64 = params
         .pointer("/range/start/line")
         .and_then(|v| v.as_u64())
-        .ok_or_else(|| invalid_params("Missing required parameter: range.start.line"))?;
+        .ok_or_else(|| invalid_range_params("Missing required parameter: range.start.line"))?;
     let start_line = u32::try_from(start_line_u64)
-        .map_err(|_| invalid_params("range.start.line exceeds u32::MAX"))?;
+        .map_err(|_| invalid_range_params("range.start.line exceeds u32::MAX"))?;
     let start_char_u64 = params
         .pointer("/range/start/character")
         .and_then(|v| v.as_u64())
-        .ok_or_else(|| invalid_params("Missing required parameter: range.start.character"))?;
+        .ok_or_else(|| invalid_range_params("Missing required parameter: range.start.character"))?;
     let start_char = u32::try_from(start_char_u64)
-        .map_err(|_| invalid_params("range.start.character exceeds u32::MAX"))?;
+        .map_err(|_| invalid_range_params("range.start.character exceeds u32::MAX"))?;
     let end_line_u64 = params
         .pointer("/range/end/line")
         .and_then(|v| v.as_u64())
-        .ok_or_else(|| invalid_params("Missing required parameter: range.end.line"))?;
+        .ok_or_else(|| invalid_range_params("Missing required parameter: range.end.line"))?;
     let end_line = u32::try_from(end_line_u64)
-        .map_err(|_| invalid_params("range.end.line exceeds u32::MAX"))?;
+        .map_err(|_| invalid_range_params("range.end.line exceeds u32::MAX"))?;
     let end_char_u64 = params
         .pointer("/range/end/character")
         .and_then(|v| v.as_u64())
-        .ok_or_else(|| invalid_params("Missing required parameter: range.end.character"))?;
+        .ok_or_else(|| invalid_range_params("Missing required parameter: range.end.character"))?;
     let end_char = u32::try_from(end_char_u64)
-        .map_err(|_| invalid_params("range.end.character exceeds u32::MAX"))?;
+        .map_err(|_| invalid_range_params("range.end.character exceeds u32::MAX"))?;
     Ok(((start_line, start_char), (end_line, end_char)))
+}
+
+fn invalid_text_document_uri_params(summary: &str) -> JsonRpcError {
+    invalid_params(&format!(
+        "{summary}: expected params.textDocument.uri to be a document URI string, for example {{\"textDocument\":{{\"uri\":\"file:///workspace/lib/Foo.pm\"}}}}"
+    ))
+}
+
+fn invalid_position_params(summary: &str) -> JsonRpcError {
+    invalid_params(&format!(
+        "{summary}: expected params.position to contain zero-based UTF-16 line and character unsigned integers, for example {{\"position\":{{\"line\":0,\"character\":0}}}}"
+    ))
+}
+
+fn invalid_range_params(summary: &str) -> JsonRpcError {
+    invalid_params(&format!(
+        "{summary}: expected params.range.start and params.range.end to contain zero-based UTF-16 line and character unsigned integers, for example {{\"range\":{{\"start\":{{\"line\":0,\"character\":0}},\"end\":{{\"line\":0,\"character\":1}}}}}}"
+    ))
 }
 
 #[cfg(test)]
@@ -635,6 +652,24 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn req_uri_errors_include_request_shape_guidance() -> Result<(), Box<dyn Error>> {
+        let Err(e) = req_uri(&json!({"textDocument": {"uri": 42}})) else {
+            return Err("expected Err".into());
+        };
+        assert_eq!(e.code, INVALID_PARAMS);
+        assert_request_shape_guidance(
+            &e,
+            &[
+                "Missing required parameter: textDocument.uri",
+                "params.textDocument.uri",
+                "document URI string",
+                "file:///workspace/lib/Foo.pm",
+            ],
+        );
+        Ok(())
+    }
+
     // =========================================================================
     // req_position - happy path, missing fields, u32 overflow
     // =========================================================================
@@ -691,6 +726,24 @@ mod tests {
         };
         assert_eq!(e.code, INVALID_PARAMS);
         assert!(e.message.contains("exceeds u32::MAX"), "message was: {}", e.message);
+        Ok(())
+    }
+
+    #[test]
+    fn req_position_errors_include_request_shape_guidance() -> Result<(), Box<dyn Error>> {
+        let Err(e) = req_position(&json!({"position": {"line": 1}})) else {
+            return Err("expected Err".into());
+        };
+        assert_eq!(e.code, INVALID_PARAMS);
+        assert_request_shape_guidance(
+            &e,
+            &[
+                "Missing required parameter: position.character",
+                "params.position",
+                "zero-based UTF-16",
+                "{\"position\":{\"line\":0,\"character\":0}}",
+            ],
+        );
         Ok(())
     }
 
@@ -844,5 +897,41 @@ mod tests {
         assert_eq!(e.code, INVALID_PARAMS);
         assert!(e.message.contains("exceeds u32::MAX"), "message was: {}", e.message);
         Ok(())
+    }
+
+    #[test]
+    fn req_range_errors_include_request_shape_guidance() -> Result<(), Box<dyn Error>> {
+        let params = json!({
+            "range": {
+                "start": {"character": 1},
+                "end":   {"line": 2, "character": 3}
+            }
+        });
+        let Err(e) = req_range(&params) else {
+            return Err("expected Err".into());
+        };
+        assert_eq!(e.code, INVALID_PARAMS);
+        assert_request_shape_guidance(
+            &e,
+            &[
+                "Missing required parameter: range.start.line",
+                "params.range.start",
+                "params.range.end",
+                "zero-based UTF-16",
+                "{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":0,\"character\":1}}}",
+            ],
+        );
+        Ok(())
+    }
+
+    fn assert_request_shape_guidance(error: &JsonRpcError, expected_parts: &[&str]) {
+        assert!(error.data.is_none());
+        for expected in expected_parts {
+            assert!(
+                error.message.contains(expected),
+                "message must contain {expected}; got {}",
+                error.message
+            );
+        }
     }
 }
