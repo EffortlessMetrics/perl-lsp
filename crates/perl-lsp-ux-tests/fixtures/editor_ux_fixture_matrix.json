@@ -189,6 +189,7 @@
       ],
       "expected_outcomes": [
         "cross-file definition request completes without error",
+        "cross-file definition resolves the configured workspace module target",
         "workspace interactions remain stable"
       ],
       "confidence_signals": [
