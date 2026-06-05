@@ -181,11 +181,14 @@ describe('PerlDebugAdapterDescriptorFactory', () => {
     try {
       const result = factory.createDebugAdapterDescriptor({} as any, undefined);
       expect(result).toBeUndefined();
+      const call = vscode.window.showErrorMessage.mock.calls[0];
       expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
         expect.stringContaining('perl-dap'),
         'Reinstall',
         'Open Debugging Guide'
       );
+      expect(call[0]).toContain('Perl: Reinstall Server Binary');
+      expect(call[0]).not.toContain('Perl LSP: Reinstall');
     } finally {
       process.env.PATH = origPath;
       process.env.HOME = origHome;
