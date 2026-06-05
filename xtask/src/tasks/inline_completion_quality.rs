@@ -826,6 +826,30 @@ fn scenarios() -> &'static [Scenario] {
             },
         },
         Scenario {
+            name: "moo_self_receiver_prefers_attribute_accessors",
+            source_name: "receiver",
+            source: "package Other;\nuse Moo;\nhas 'external' => (is => 'ro');\n\npackage Demo;\nuse Moo;\nhas 'name' => (is => 'ro');\nhas \"email\" => (is => 'rw');\nsub caller {\n    my $self = shift;\n    $self-><<CURSOR>>\n}\n",
+            available_modules: &[],
+            hard_zone: false,
+            assertion: ScenarioAssertion::Suggestion {
+                first: Some("name()"),
+                expected: &["name()", "email()"],
+                not_expected: &["external()", "new()"],
+            },
+        },
+        Scenario {
+            name: "plain_has_declaration_does_not_become_accessor",
+            source_name: "receiver",
+            source: "package Demo;\nhas 'name' => (is => 'ro');\nsub caller {\n    $self-><<CURSOR>>\n}\n",
+            available_modules: &[],
+            hard_zone: false,
+            assertion: ScenarioAssertion::Suggestion {
+                first: None,
+                expected: &[],
+                not_expected: &["name()", "external()", "new()"],
+            },
+        },
+        Scenario {
             name: "dbi_database_handle_prefers_dbi_methods",
             source_name: "receiver",
             source: "use DBI;\nmy $dbh = DBI->connect($dsn);\n$dbh-><<CURSOR>>\n",
@@ -1002,6 +1026,14 @@ mod tests {
     }
 
     #[test]
+    fn inline_completion_quality_framework_accessor_scenarios_are_registered() {
+        let names: Vec<&str> = scenarios().iter().map(|scenario| scenario.name).collect();
+
+        assert!(names.contains(&"moo_self_receiver_prefers_attribute_accessors"));
+        assert!(names.contains(&"plain_has_declaration_does_not_become_accessor"));
+    }
+
+    #[test]
     fn inline_completion_quality_guard_condition_scenarios_pass() -> Result<()> {
         let provider = InlineCompletionProvider::new();
 
@@ -1018,6 +1050,32 @@ mod tests {
             assert_eq!(parse_regressions, 0);
             assert_eq!(edit_application, EditApplicationOutcome::Passed);
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn inline_completion_quality_framework_accessor_scenarios_pass() -> Result<()> {
+        let provider = InlineCompletionProvider::new();
+        let accessor = scenarios()
+            .iter()
+            .find(|scenario| scenario.name == "moo_self_receiver_prefers_attribute_accessors")
+            .ok_or_else(|| eyre!("missing Moo accessor inline completion quality scenario"))?;
+        let (item_count, _notes, parse_regressions, edit_application) =
+            run_scenario(&provider, accessor)?;
+        assert!(item_count > 0);
+        assert_eq!(parse_regressions, 0);
+        assert_eq!(edit_application, EditApplicationOutcome::Passed);
+
+        let plain_has = scenarios()
+            .iter()
+            .find(|scenario| scenario.name == "plain_has_declaration_does_not_become_accessor")
+            .ok_or_else(|| eyre!("missing plain has false-positive quality scenario"))?;
+        let (item_count, _notes, parse_regressions, edit_application) =
+            run_scenario(&provider, plain_has)?;
+        assert_eq!(item_count, 0);
+        assert_eq!(parse_regressions, 0);
+        assert_eq!(edit_application, EditApplicationOutcome::NotApplicable);
 
         Ok(())
     }

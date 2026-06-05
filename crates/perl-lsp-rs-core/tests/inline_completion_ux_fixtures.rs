@@ -163,6 +163,20 @@ fn inline_completion_fixture_corpus_returns_expected_ghost_text() -> TestResult 
             not_expected: &["external()", "new()"],
         },
         SuggestionFixture {
+            name: "moo_self_receiver_prefers_attribute_accessors",
+            source: "package Other;\nuse Moo;\nhas 'external' => (is => 'ro');\n\npackage Demo;\nuse Moo;\nhas 'name' => (is => 'ro');\nhas \"email\" => (is => 'rw');\nsub caller {\n    my $self = shift;\n    $self-><<CURSOR>>\n}\n",
+            first: Some("name()"),
+            expected: &["name()", "email()"],
+            not_expected: &["external()", "new()"],
+        },
+        SuggestionFixture {
+            name: "plain_has_declaration_does_not_become_accessor",
+            source: "package Demo;\nhas 'name' => (is => 'ro');\nsub caller {\n    $self-><<CURSOR>>\n}\n",
+            first: None,
+            expected: &[],
+            not_expected: &["name()", "external()", "new()"],
+        },
+        SuggestionFixture {
             name: "constructor_completion_keeps_shift_style",
             source: "sub helper {\n    my $self = shift;\n}\n\nsub new<<CURSOR>>",
             first: Some(
