@@ -622,17 +622,19 @@
       "ci_tier": "pr",
       "component": "diagnostics",
       "instrumentation": {
-        "run_receipt": false,
-        "first_useful_result": false,
+        "run_receipt": true,
+        "first_useful_result": true,
         "protocol_goldens": false
       },
       "user_journey": "fix an undeclared variable during active editing and confirm diagnostics and navigation update",
       "measures": [
         "workflow_pass_rate",
         "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms",
         "cross_file_definition_success_rate"
       ],
       "expected_outcomes": [
+        "receipt records diagnostics refresh and navigation timing after edit",
         "undeclared variable diagnostic appears before edit",
         "go-to-definition remains responsive after didChange"
       ],
