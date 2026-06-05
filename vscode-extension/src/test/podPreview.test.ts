@@ -134,6 +134,20 @@ describe('podToHtml', () => {
     expect(html).toContain('perldoc');
   });
 
+  test('renders labeled L<label|module> links as perldoc URLs', () => {
+    const pod = '=pod\n\nSee L<the test library|Test::More>.\n\n=cut\n';
+    const html = podToHtml(pod);
+    expect(html).toContain('href="https://perldoc.perl.org/Test::More"');
+    expect(html).toContain('>the test library</a>');
+    expect(html).not.toContain('href="#test::more"');
+  });
+
+  test('renders module section links with a perldoc fragment', () => {
+    const pod = '=pod\n\nSee L<open docs|perlfunc/open>.\n\n=cut\n';
+    const html = podToHtml(pod);
+    expect(html).toContain('href="https://perldoc.perl.org/perlfunc#open"');
+  });
+
   test('renders E<lt> as &lt;', () => {
     const pod = '=pod\n\nUse E<lt>tag E<gt> syntax.\n\n=cut\n';
     const html = podToHtml(pod);
