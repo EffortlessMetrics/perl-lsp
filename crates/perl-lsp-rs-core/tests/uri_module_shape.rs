@@ -21,6 +21,21 @@ fn uri_module_parse_uri_handles_windows_paths() {
     assert_eq!(uri.as_str(), input, "parse_uri should preserve Windows paths verbatim");
 }
 
+#[cfg(unix)]
+#[test]
+fn uri_module_parse_uri_accepts_unix_file_paths() -> Result<(), Box<dyn std::error::Error>> {
+    let uri = parse_uri("/tmp/perl-lsp/lib/PlainPath.pm");
+    assert_eq!(uri.as_str(), "file:///tmp/perl-lsp/lib/PlainPath.pm");
+    Ok(())
+}
+
+#[test]
+fn uri_module_parse_uri_accepts_windows_file_paths() -> Result<(), Box<dyn std::error::Error>> {
+    let uri = parse_uri(r"C:\Users\dev\lib\PlainPath.pm");
+    assert_eq!(uri.as_str(), "file:///C:/Users/dev/lib/PlainPath.pm");
+    Ok(())
+}
+
 #[test]
 fn uri_module_parse_uri_handles_invalid_input() {
     // Verify that parse_uri gracefully handles invalid input post-absorption
