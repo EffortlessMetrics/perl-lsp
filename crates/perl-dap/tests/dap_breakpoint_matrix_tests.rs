@@ -318,7 +318,9 @@ fn test_breakpoint_file_not_found() -> Result<()> {
         .message
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Expected breakpoint message"))?;
-    assert!(message.contains("Unable to read"));
+    assert!(message.contains("Unable to read source file"), "message was: {message}");
+    assert!(message.contains("/nonexistent/file.pl"), "message was: {message}");
+    assert!(message.contains("file still exists"), "message was: {message}");
 
     Ok(())
 }
