@@ -14,10 +14,12 @@
 
 use anyhow::Result;
 use perl_lsp_ux_tests::binary_available;
-use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
+use perl_lsp_ux_tests::missing_binary_skip;
+use perl_lsp_ux_tests::{ScenarioConfig, UxCiTier, UxComponent, UxHarness, run_ux_scenario};
 use serde_json::{Value, json};
 use std::time::Duration;
 
+const SCENARIO_FILE: &str = "ux_scenario_27_folding_range.rs";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Multi-block Perl file that exercises every common fold anchor:
@@ -68,218 +70,278 @@ const EMPTY_FIXTURE: &str = "";
 
 const SINGLE_LINE_FIXTURE: &str = "my $x = 42;\n";
 
-#[test]
-fn scenario_27_folding_range_does_not_error() -> Result<()> {
-    if !binary_available() {
-        eprintln!("SKIP scenario_27: perl-lsp binary not found");
-        return Ok(());
-    }
-    let harness =
-        UxHarness::new(ScenarioConfig::default().with_file("processor.pl", FOLDING_FIXTURE))?;
-    harness.open_file("processor.pl", FOLDING_FIXTURE)?;
-    let uri = harness.workspace.uri("processor.pl");
+fn open_fixture(file: &str, source: &str) -> Result<UxHarness> {
+    let harness = UxHarness::new(ScenarioConfig::default().with_file(file, source))?;
+    harness.open_file(file, source)?;
+    Ok(harness)
+}
 
-    let response = harness.client.request(
+fn request_folding_range(harness: &UxHarness, file: &str) -> Result<Value> {
+    let uri = harness.workspace.uri(file);
+    harness.client.request(
         "textDocument/foldingRange",
         json!({ "textDocument": { "uri": uri } }),
         REQUEST_TIMEOUT,
-    )?;
+    )
+}
 
-    assert!(
-        response.get("error").is_none(),
-        "foldingRange MUST NOT return a JSON-RPC error, got: {:?}",
-        response
-    );
+fn response_has_no_error(response: &Value) -> bool {
+    response.get("error").is_none()
+}
 
-    harness.assert_no_crash();
-    Ok(())
+fn folding_result_is_array_or_null(response: &Value) -> bool {
+    response.get("result").is_none_or(|result| result.is_array() || result.is_null())
+}
+
+fn folding_range_has_valid_lines(range: &Value) -> bool {
+    let Some(start_line) = range.get("startLine").and_then(Value::as_u64) else {
+        return false;
+    };
+    let Some(end_line) = range.get("endLine").and_then(Value::as_u64) else {
+        return false;
+    };
+    start_line <= end_line
+}
+
+fn folding_ranges_have_valid_lines(response: &Value) -> bool {
+    response.get("result").is_none_or(|result| {
+        result.is_null()
+            || result
+                .as_array()
+                .is_some_and(|ranges| ranges.iter().all(folding_range_has_valid_lines))
+    })
+}
+
+fn folding_range_count(response: &Value) -> usize {
+    response.get("result").and_then(Value::as_array).map_or(0, Vec::len)
 }
 
 #[test]
-fn scenario_27_folding_range_result_is_array() -> Result<()> {
-    if !binary_available() {
-        eprintln!("SKIP scenario_27: perl-lsp binary not found");
-        return Ok(());
-    }
-    let harness =
-        UxHarness::new(ScenarioConfig::default().with_file("processor.pl", FOLDING_FIXTURE))?;
-    harness.open_file("processor.pl", FOLDING_FIXTURE)?;
-    let uri = harness.workspace.uri("processor.pl");
+fn scenario_27_folding_range_does_not_error() {
+    run_ux_scenario(
+        "folding_range_core",
+        SCENARIO_FILE,
+        "scenario_27_folding_range_does_not_error",
+        UxCiTier::Pr,
+        Some(UxComponent::FoldingRange),
+        |recorder| {
+            if !binary_available() {
+                return Err(missing_binary_skip().into());
+            }
 
-    let response = harness.client.request(
-        "textDocument/foldingRange",
-        json!({ "textDocument": { "uri": uri } }),
-        REQUEST_TIMEOUT,
-    )?;
+            let harness = open_fixture("processor.pl", FOLDING_FIXTURE)?;
+            recorder.mark_request_start("folding_range_processor");
+            let response = request_folding_range(&harness, "processor.pl")?;
+            let no_error = response_has_no_error(&response);
+            if no_error {
+                recorder.mark_first_useful_result("folding_range_processor");
+            }
+            recorder.check("foldingRange does not return a JSON-RPC error", no_error)?;
 
-    assert!(response.get("error").is_none(), "foldingRange returned error: {:?}", response);
-
-    let result = response.get("result").unwrap_or(&Value::Null);
-    assert!(
-        result.is_array() || result.is_null(),
-        "foldingRange result MUST be an array (or null), got: {result:?}"
+            harness.assert_no_crash();
+            Ok(())
+        },
     );
-
-    harness.assert_no_crash();
-    Ok(())
 }
 
 #[test]
-fn scenario_27_folding_ranges_have_valid_line_fields() -> Result<()> {
-    if !binary_available() {
-        eprintln!("SKIP scenario_27: perl-lsp binary not found");
-        return Ok(());
-    }
-    let harness =
-        UxHarness::new(ScenarioConfig::default().with_file("processor.pl", FOLDING_FIXTURE))?;
-    harness.open_file("processor.pl", FOLDING_FIXTURE)?;
-    let uri = harness.workspace.uri("processor.pl");
+fn scenario_27_folding_range_result_is_array() {
+    run_ux_scenario(
+        "folding_range_core",
+        SCENARIO_FILE,
+        "scenario_27_folding_range_result_is_array",
+        UxCiTier::Pr,
+        Some(UxComponent::FoldingRange),
+        |recorder| {
+            if !binary_available() {
+                return Err(missing_binary_skip().into());
+            }
 
-    let response = harness.client.request(
-        "textDocument/foldingRange",
-        json!({ "textDocument": { "uri": uri } }),
-        REQUEST_TIMEOUT,
-    )?;
+            let harness = open_fixture("processor.pl", FOLDING_FIXTURE)?;
+            recorder.mark_request_start("folding_range_result_shape");
+            let response = request_folding_range(&harness, "processor.pl")?;
+            let no_error = response_has_no_error(&response);
+            if no_error && folding_result_is_array_or_null(&response) {
+                recorder.mark_first_useful_result("folding_range_result_shape");
+            }
+            recorder.check("foldingRange does not return a JSON-RPC error", no_error)?;
+            recorder.check(
+                "foldingRange result is an array or null",
+                folding_result_is_array_or_null(&response),
+            )?;
 
-    assert!(response.get("error").is_none(), "foldingRange returned error: {:?}", response);
-
-    let result = response.get("result").unwrap_or(&Value::Null);
-    if let Some(ranges) = result.as_array() {
-        for (i, range) in ranges.iter().enumerate() {
-            let start_line = range.get("startLine").and_then(Value::as_u64).ok_or_else(|| {
-                anyhow::anyhow!("FoldingRange[{i}] MUST have integer 'startLine', got: {range:?}")
-            })?;
-            let end_line = range.get("endLine").and_then(Value::as_u64).ok_or_else(|| {
-                anyhow::anyhow!("FoldingRange[{i}] MUST have integer 'endLine', got: {range:?}")
-            })?;
-            assert!(
-                start_line <= end_line,
-                "FoldingRange[{i}] startLine ({start_line}) MUST be <= endLine ({end_line})"
-            );
-        }
-    }
-
-    harness.assert_no_crash();
-    Ok(())
+            harness.assert_no_crash();
+            Ok(())
+        },
+    );
 }
 
 #[test]
-fn scenario_27_multi_block_file_produces_at_least_one_fold() -> Result<()> {
-    if !binary_available() {
-        eprintln!("SKIP scenario_27: perl-lsp binary not found");
-        return Ok(());
-    }
-    let harness =
-        UxHarness::new(ScenarioConfig::default().with_file("processor.pl", FOLDING_FIXTURE))?;
-    harness.open_file("processor.pl", FOLDING_FIXTURE)?;
-    let uri = harness.workspace.uri("processor.pl");
+fn scenario_27_folding_ranges_have_valid_line_fields() {
+    run_ux_scenario(
+        "folding_range_core",
+        SCENARIO_FILE,
+        "scenario_27_folding_ranges_have_valid_line_fields",
+        UxCiTier::Pr,
+        Some(UxComponent::FoldingRange),
+        |recorder| {
+            if !binary_available() {
+                return Err(missing_binary_skip().into());
+            }
 
-    let response = harness.client.request(
-        "textDocument/foldingRange",
-        json!({ "textDocument": { "uri": uri } }),
-        REQUEST_TIMEOUT,
-    )?;
+            let harness = open_fixture("processor.pl", FOLDING_FIXTURE)?;
+            recorder.mark_request_start("folding_range_line_fields");
+            let response = request_folding_range(&harness, "processor.pl")?;
+            let no_error = response_has_no_error(&response);
+            if no_error && folding_ranges_have_valid_lines(&response) {
+                recorder.mark_first_useful_result("folding_range_line_fields");
+            }
+            recorder.check("foldingRange does not return a JSON-RPC error", no_error)?;
+            recorder.check(
+                "folding ranges include valid startLine and endLine fields when present",
+                folding_ranges_have_valid_lines(&response),
+            )?;
 
-    assert!(response.get("error").is_none(), "foldingRange returned error: {:?}", response);
-
-    let result = response.get("result").unwrap_or(&Value::Null);
-    let range_count = result.as_array().map_or(0, |v| v.len());
-    assert!(
-        range_count >= 1,
-        "A file with multiple sub/if/for/while blocks MUST produce at least one folding range; got {range_count}"
+            harness.assert_no_crash();
+            Ok(())
+        },
     );
-
-    harness.assert_no_crash();
-    Ok(())
 }
 
 #[test]
-fn scenario_27_empty_file_does_not_error() -> Result<()> {
-    if !binary_available() {
-        eprintln!("SKIP scenario_27: perl-lsp binary not found");
-        return Ok(());
-    }
-    let harness = UxHarness::new(ScenarioConfig::default().with_file("empty.pl", EMPTY_FIXTURE))?;
-    harness.open_file("empty.pl", EMPTY_FIXTURE)?;
-    let uri = harness.workspace.uri("empty.pl");
+fn scenario_27_multi_block_file_produces_at_least_one_fold() {
+    run_ux_scenario(
+        "folding_range_core",
+        SCENARIO_FILE,
+        "scenario_27_multi_block_file_produces_at_least_one_fold",
+        UxCiTier::Pr,
+        Some(UxComponent::FoldingRange),
+        |recorder| {
+            if !binary_available() {
+                return Err(missing_binary_skip().into());
+            }
 
-    let response = harness.client.request(
-        "textDocument/foldingRange",
-        json!({ "textDocument": { "uri": uri } }),
-        REQUEST_TIMEOUT,
-    )?;
+            let harness = open_fixture("processor.pl", FOLDING_FIXTURE)?;
+            recorder.mark_request_start("folding_range_nonempty_blocks");
+            let response = request_folding_range(&harness, "processor.pl")?;
+            let range_count = folding_range_count(&response);
+            if response_has_no_error(&response) && range_count >= 1 {
+                recorder.mark_first_useful_result("folding_range_nonempty_blocks");
+            }
+            recorder.check(
+                "foldingRange does not return a JSON-RPC error",
+                response_has_no_error(&response),
+            )?;
+            recorder
+                .check("multi-block file produces at least one folding range", range_count >= 1)?;
 
-    assert!(
-        response.get("error").is_none(),
-        "foldingRange on empty file MUST NOT return JSON-RPC error: {:?}",
-        response
+            harness.assert_no_crash();
+            Ok(())
+        },
     );
-
-    harness.assert_no_crash();
-    Ok(())
 }
 
 #[test]
-fn scenario_27_single_line_file_does_not_error() -> Result<()> {
-    if !binary_available() {
-        eprintln!("SKIP scenario_27: perl-lsp binary not found");
-        return Ok(());
-    }
-    let harness =
-        UxHarness::new(ScenarioConfig::default().with_file("tiny.pl", SINGLE_LINE_FIXTURE))?;
-    harness.open_file("tiny.pl", SINGLE_LINE_FIXTURE)?;
-    let uri = harness.workspace.uri("tiny.pl");
+fn scenario_27_empty_file_does_not_error() {
+    run_ux_scenario(
+        "folding_range_core",
+        SCENARIO_FILE,
+        "scenario_27_empty_file_does_not_error",
+        UxCiTier::Pr,
+        Some(UxComponent::FoldingRange),
+        |recorder| {
+            if !binary_available() {
+                return Err(missing_binary_skip().into());
+            }
 
-    let response = harness.client.request(
-        "textDocument/foldingRange",
-        json!({ "textDocument": { "uri": uri } }),
-        REQUEST_TIMEOUT,
-    )?;
+            let harness = open_fixture("empty.pl", EMPTY_FIXTURE)?;
+            recorder.mark_request_start("folding_range_empty_file");
+            let response = request_folding_range(&harness, "empty.pl")?;
+            let no_error = response_has_no_error(&response);
+            if no_error {
+                recorder.mark_first_useful_result("folding_range_empty_file");
+            }
+            recorder
+                .check("foldingRange on empty file does not return a JSON-RPC error", no_error)?;
 
-    assert!(
-        response.get("error").is_none(),
-        "foldingRange on single-line file MUST NOT return JSON-RPC error: {:?}",
-        response
+            harness.assert_no_crash();
+            Ok(())
+        },
     );
-
-    harness.assert_no_crash();
-    Ok(())
 }
 
 #[test]
-fn scenario_27_folding_range_is_idempotent() -> Result<()> {
-    if !binary_available() {
-        eprintln!("SKIP scenario_27: perl-lsp binary not found");
-        return Ok(());
-    }
-    let harness =
-        UxHarness::new(ScenarioConfig::default().with_file("processor.pl", FOLDING_FIXTURE))?;
-    harness.open_file("processor.pl", FOLDING_FIXTURE)?;
-    let uri = harness.workspace.uri("processor.pl");
+fn scenario_27_single_line_file_does_not_error() {
+    run_ux_scenario(
+        "folding_range_core",
+        SCENARIO_FILE,
+        "scenario_27_single_line_file_does_not_error",
+        UxCiTier::Pr,
+        Some(UxComponent::FoldingRange),
+        |recorder| {
+            if !binary_available() {
+                return Err(missing_binary_skip().into());
+            }
 
-    // Request twice; both requests must succeed without crashing.
-    let first = harness.client.request(
-        "textDocument/foldingRange",
-        json!({ "textDocument": { "uri": uri } }),
-        REQUEST_TIMEOUT,
-    )?;
-    let second = harness.client.request(
-        "textDocument/foldingRange",
-        json!({ "textDocument": { "uri": uri } }),
-        REQUEST_TIMEOUT,
-    )?;
+            let harness = open_fixture("tiny.pl", SINGLE_LINE_FIXTURE)?;
+            recorder.mark_request_start("folding_range_single_line");
+            let response = request_folding_range(&harness, "tiny.pl")?;
+            let no_error = response_has_no_error(&response);
+            if no_error {
+                recorder.mark_first_useful_result("folding_range_single_line");
+            }
+            recorder.check(
+                "foldingRange on single-line file does not return a JSON-RPC error",
+                no_error,
+            )?;
 
-    assert!(first.get("error").is_none(), "foldingRange first request errored: {:?}", first);
-    assert!(second.get("error").is_none(), "foldingRange second request errored: {:?}", second);
-
-    let first_count = first.get("result").and_then(Value::as_array).map_or(0, |v| v.len());
-    let second_count = second.get("result").and_then(Value::as_array).map_or(0, |v| v.len());
-
-    assert_eq!(
-        first_count, second_count,
-        "foldingRange MUST be idempotent: first={first_count}, second={second_count}"
+            harness.assert_no_crash();
+            Ok(())
+        },
     );
+}
 
-    harness.assert_no_crash();
-    Ok(())
+#[test]
+fn scenario_27_folding_range_is_idempotent() {
+    run_ux_scenario(
+        "folding_range_core",
+        SCENARIO_FILE,
+        "scenario_27_folding_range_is_idempotent",
+        UxCiTier::Pr,
+        Some(UxComponent::FoldingRange),
+        |recorder| {
+            if !binary_available() {
+                return Err(missing_binary_skip().into());
+            }
+
+            let harness = open_fixture("processor.pl", FOLDING_FIXTURE)?;
+            recorder.mark_request_start("folding_range_first");
+            let first = request_folding_range(&harness, "processor.pl")?;
+            if response_has_no_error(&first) {
+                recorder.mark_first_useful_result("folding_range_first");
+            }
+            recorder.check(
+                "foldingRange first request does not return a JSON-RPC error",
+                response_has_no_error(&first),
+            )?;
+
+            recorder.mark_request_start("folding_range_second");
+            let second = request_folding_range(&harness, "processor.pl")?;
+            if response_has_no_error(&second) {
+                recorder.mark_first_useful_result("folding_range_second");
+            }
+            recorder.check(
+                "foldingRange second request does not return a JSON-RPC error",
+                response_has_no_error(&second),
+            )?;
+
+            recorder.check(
+                "foldingRange repeated requests return the same range count",
+                folding_range_count(&first) == folding_range_count(&second),
+            )?;
+
+            harness.assert_no_crash();
+            Ok(())
+        },
+    );
 }
