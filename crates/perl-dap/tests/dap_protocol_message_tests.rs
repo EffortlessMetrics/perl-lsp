@@ -53,6 +53,11 @@ fn test_breakpoint_locations_missing_arguments() -> Result<(), Box<dyn std::erro
         err.to_lowercase().contains("missing") || err.to_lowercase().contains("invalid"),
         "error should describe missing/invalid arguments: {err}"
     );
+    assert!(err.contains("source.path"), "error should name the required source path field: {err}");
+    assert!(
+        err.contains("\"line\": 1"),
+        "error should show a breakpointLocations line example: {err}"
+    );
     Ok(())
 }
 
