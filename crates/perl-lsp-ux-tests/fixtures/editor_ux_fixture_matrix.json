@@ -745,6 +745,7 @@
       ],
       "expected_outcomes": [
         "definition and references probes return without JSON-RPC errors",
+        "all navigation probes return at least one result",
         "non-empty navigation results use valid LSP Location or LocationLink shapes",
         "receipt records exact, imported, module-resolution, dynamic-shaped, and declaration-including fallback surfaces"
       ],
