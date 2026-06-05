@@ -318,10 +318,16 @@ fn apply_workspace_edit_metadata_emitted_when_supported_for_refactor_request() -
         params.get("edit").is_some(),
         "workspace/applyEdit params must carry the WorkspaceEdit payload: {request}"
     );
+    assert_eq!(
+        params.pointer("/metadata/label").and_then(Value::as_str),
+        Some("Safe delete reset")
+    );
+    assert_eq!(
+        params.pointer("/metadata/description").and_then(Value::as_str),
+        Some("Review source-backed safe-delete edit for reset before applying.")
+    );
     assert_eq!(params.pointer("/metadata/isRefactoring").and_then(Value::as_bool), Some(true));
     assert_absent(params, "/edit/metadata")?;
-    assert_absent(params, "/metadata/label")?;
-    assert_absent(params, "/metadata/description")?;
     Ok(())
 }
 
