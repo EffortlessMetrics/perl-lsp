@@ -7,7 +7,7 @@ use super::super::*;
 use super::misc::{
     DIAGNOSTIC_EXPLANATION_SCHEMA_VERSION, diagnostic_explanation_payload_from_diagnostics,
 };
-use crate::protocol::{req_range, req_uri};
+use crate::protocol::{invalid_params, req_range, req_uri};
 use std::sync::LazyLock;
 
 static GLOBAL_VAR_ASSIGNMENT_RE: LazyLock<regex::Regex> =
@@ -79,6 +79,16 @@ fn diagnostic_range_intersects_selection(
 
 fn diagnostic_code_is_explainable(code: Option<&str>) -> bool {
     matches!(code, Some("PL701" | "PL109"))
+}
+
+fn invalid_code_action_resolve_params() -> JsonRpcError {
+    invalid_params(
+        "Missing or invalid codeAction/resolve params\n\n\
+         codeAction/resolve expects params to be a CodeAction object returned by \
+         textDocument/codeAction.\n\n\
+         Example: {\"title\":\"Add use strict\",\"kind\":\"quickfix\",\
+         \"data\":{\"uri\":\"file:///workspace/main.pl\",\"pragma\":\"use strict;\"}}",
+    )
 }
 
 /// Byte-offset-agnostic representation of an LSP range used only for
@@ -685,46 +695,46 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        if let Some(mut action) = params {
-            // The action should already have minimal information
-            // We now need to compute the actual edits
+        let mut action = params.ok_or_else(invalid_code_action_resolve_params)?;
+        if !action.is_object() {
+            return Err(invalid_code_action_resolve_params());
+        }
 
-            if let Some(kind) = action.get("kind").and_then(|k| k.as_str()) {
-                if kind == "quickfix" {
-                    // For quickfix actions, compute the workspace edit now
-                    if let Some(data) = action.get("data") {
-                        if let Some(uri) = data.get("uri").and_then(|u| u.as_str()) {
-                            let documents = self.documents_guard();
-                            if self.get_document(&documents, uri).is_some() {
-                                // Example: Add "use strict;" at the beginning
-                                if let Some(pragma) = data.get("pragma").and_then(|p| p.as_str()) {
-                                    let text = format!("{}\n", pragma);
-                                    let edit = json!({
-                                        "changes": {
-                                            uri: [{
-                                                "range": {
-                                                    "start": {"line": 0, "character": 0},
-                                                    "end": {"line": 0, "character": 0}
-                                                },
-                                                "newText": text
-                                            }]
-                                        }
-                                    });
-
-                                    if let Some(obj) = action.as_object_mut() {
-                                        obj.insert("edit".to_string(), edit);
+        // The action should already have minimal information.
+        // We now need to compute the actual edits.
+        if let Some(kind) = action.get("kind").and_then(|k| k.as_str()) {
+            if kind == "quickfix" {
+                // For quickfix actions, compute the workspace edit now.
+                if let Some(data) = action.get("data") {
+                    if let Some(uri) = data.get("uri").and_then(|u| u.as_str()) {
+                        let documents = self.documents_guard();
+                        if self.get_document(&documents, uri).is_some() {
+                            // Example: Add "use strict;" at the beginning.
+                            if let Some(pragma) = data.get("pragma").and_then(|p| p.as_str()) {
+                                let text = format!("{}\n", pragma);
+                                let edit = json!({
+                                    "changes": {
+                                        uri: [{
+                                            "range": {
+                                                "start": {"line": 0, "character": 0},
+                                                "end": {"line": 0, "character": 0}
+                                            },
+                                            "newText": text
+                                        }]
                                     }
+                                });
+
+                                if let Some(obj) = action.as_object_mut() {
+                                    obj.insert("edit".to_string(), edit);
                                 }
                             }
                         }
                     }
                 }
             }
-
-            Ok(Some(action))
-        } else {
-            Ok(None)
         }
+
+        Ok(Some(action))
     }
 }
 
@@ -936,6 +946,60 @@ mod tests {
         let remaining_kinds: Vec<&str> =
             actions.iter().filter_map(|action| action["kind"].as_str()).collect();
         assert_eq!(remaining_kinds, vec!["refactor.rewrite"]);
+    }
+
+    fn expect_code_action_resolve_guidance(err: JsonRpcError) -> Result<(), String> {
+        assert_eq!(err.code, crate::protocol::INVALID_PARAMS);
+        for expected in [
+            "Missing or invalid codeAction/resolve params",
+            "CodeAction object",
+            "textDocument/codeAction",
+            "\"kind\":\"quickfix\"",
+            "\"data\"",
+        ] {
+            if !err.message.contains(expected) {
+                return Err(format!("expected error message to contain {expected:?}; got {err}"));
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn code_action_resolve_missing_params_error_includes_shape_guidance() -> Result<(), String> {
+        let server = LspServer::new();
+        match server.handle_code_action_resolve(None) {
+            Err(err) => expect_code_action_resolve_guidance(err),
+            Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
+        }
+    }
+
+    #[test]
+    fn code_action_resolve_non_object_params_error_includes_shape_guidance() -> Result<(), String> {
+        let server = LspServer::new();
+        match server.handle_code_action_resolve(Some(json!([]))) {
+            Err(err) => expect_code_action_resolve_guidance(err),
+            Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
+        }
+    }
+
+    #[test]
+    fn code_action_resolve_accepts_code_action_objects() -> Result<(), String> {
+        let server = LspServer::new();
+        let action = json!({
+            "title": "Explain this diagnostic",
+            "kind": "quickfix",
+            "command": {
+                "title": "Explain this diagnostic",
+                "command": "perl-lsp.explainDiagnostic",
+                "arguments": []
+            }
+        });
+
+        match server.handle_code_action_resolve(Some(action.clone())) {
+            Ok(Some(resolved)) if resolved == action => Ok(()),
+            Ok(result) => Err(format!("expected unresolved action echo; got {result:?}")),
+            Err(err) => Err(format!("expected valid CodeAction object; got {err}")),
+        }
     }
 
     fn open_test_document(server: &LspServer, uri: &str, text: &str) {
