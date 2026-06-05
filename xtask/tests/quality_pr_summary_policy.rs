@@ -47,6 +47,25 @@ fn quality_gate_summary_names_gates_receipts_and_repair_packets() -> TestResult 
         patch_action.pointer("/top_files/0/sample_uncovered_lines/0").and_then(Value::as_u64),
         Some(212)
     );
+    let project_action = receipt
+        .pointer("/next_actions/1")
+        .ok_or("quality gate receipt missing project coverage action")?;
+    assert_eq!(
+        project_action.get("kind").and_then(Value::as_str),
+        Some("project_coverage_below_target")
+    );
+    assert_eq!(
+        project_action.pointer("/recommended_project_clusters/0/name").and_then(Value::as_str),
+        Some("proof-infrastructure")
+    );
+    let ripr_action = receipt
+        .pointer("/next_actions/2")
+        .ok_or("quality gate receipt missing RIPR total action")?;
+    assert_eq!(ripr_action.get("kind").and_then(Value::as_str), Some("ripr_total_unresolved"));
+    assert_eq!(
+        ripr_action.pointer("/recommended_first_clusters/0/name").and_then(Value::as_str),
+        Some("ci-report-formatting")
+    );
 
     let summary = fs::read_to_string(&paths.summary)?;
     for required in [
@@ -68,6 +87,10 @@ fn quality_gate_summary_names_gates_receipts_and_repair_packets() -> TestResult 
         "project_coverage_below_target",
         "new_ripr_gap",
         "quality_exception_active_final_blocker",
+        "coverage cluster: `proof-infrastructure` (file_count: 2, uncovered_line_count: 37) reason `Coverage proof, quality-gate, workflow, and policy surfaces are owned by this lane.`",
+        "coverage cluster example file: `xtask/src/tasks/quality_baseline.rs`",
+        "ripr cluster: `ci-report-formatting` (score: 5, active_file_count: 3, gap_kind_count: 2) reason `Receipt and report formatting gaps should become agent repair packets.`",
+        "ripr cluster example gap kind: `receipt_missing`",
         "changed coverage file: `xtask/src/tasks/ripr_evidence.rs` sample uncovered lines: 212, 213, 214",
         "coverage file: `xtask/src/tasks/quality_gate.rs` sample uncovered lines: 41, 42, 43",
         "ripr gap: `RIPR-SPEC-ONE` `xtask/src/tasks/quality_gate.rs:77` seam `summary_renderer` reason `summary does not expose repair packet` suggested test `assert repair packet markdown`",
@@ -175,6 +198,18 @@ fn write_coverage_receipt(path: &Path, head: &str, patch: f64, project: f64) -> 
                     "line_coverage": 67.9,
                     "sample_uncovered_lines": [212, 213, 214]
                 }
+            ],
+            "recommended_project_clusters": [
+                {
+                    "name": "proof-infrastructure",
+                    "file_count": 2,
+                    "uncovered_line_count": 37,
+                    "reason": "Coverage proof, quality-gate, workflow, and policy surfaces are owned by this lane.",
+                    "example_files": [
+                        "xtask/src/tasks/quality_baseline.rs",
+                        "xtask/src/tasks/quality_gate.rs"
+                    ]
+                }
             ]
         }),
     )
@@ -204,7 +239,18 @@ fn write_ripr_plus_receipt(path: &Path, head: &str, unresolved: u64) -> TestResu
             "schema_version": 1,
             "kind": "ripr_plus_baseline",
             "head": head,
-            "unresolved": unresolved
+            "unresolved": unresolved,
+            "recommended_first_clusters": [
+                {
+                    "name": "ci-report-formatting",
+                    "score": 5,
+                    "active_file_count": 3,
+                    "gap_kind_count": 2,
+                    "reason": "Receipt and report formatting gaps should become agent repair packets.",
+                    "example_files": ["xtask/src/tasks/quality_gate.rs"],
+                    "example_gap_kinds": ["receipt_missing"]
+                }
+            ]
         }),
     )
 }

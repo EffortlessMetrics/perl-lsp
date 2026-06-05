@@ -159,7 +159,7 @@ fn evaluate_final(head: &str, args: &QualityGateArgs) -> Result<GateEvaluation> 
     if ripr.status == "present" {
         match ripr.unresolved {
             Some(count) if count > 0 => {
-                next_actions.push(ripr_total_unresolved_action(count, args))
+                next_actions.push(ripr_total_unresolved_action(count, &ripr, args))
             }
             None => next_actions.push(ripr_total_unknown_action(args)),
             _ => {}
@@ -212,6 +212,7 @@ fn evaluate_final(head: &str, args: &QualityGateArgs) -> Result<GateEvaluation> 
             "codecov_config": display_path(&args.codecov),
             "codecov_patch_status": codecov_patch_status,
             "codecov_project_status": codecov_project_status,
+            "recommended_project_clusters": coverage.recommended_project_clusters,
         },
         "ripr_plus": {
             "status": ripr.status,
@@ -219,6 +220,7 @@ fn evaluate_final(head: &str, args: &QualityGateArgs) -> Result<GateEvaluation> 
             "receipt_head": ripr.receipt_head,
             "expected_head": head,
             "unresolved": ripr.unresolved,
+            "recommended_first_clusters": ripr.recommended_first_clusters,
         },
         "ripr_pr": {
             "status": ripr_pr.status,
@@ -408,6 +410,7 @@ struct CoverageReceipt {
     scope: Option<String>,
     patch_files: Vec<Value>,
     top_files: Vec<Value>,
+    recommended_project_clusters: Vec<Value>,
 }
 
 #[derive(Debug)]
@@ -415,6 +418,7 @@ struct RiprPlusReceipt {
     status: String,
     receipt_head: Option<String>,
     unresolved: Option<u64>,
+    recommended_first_clusters: Vec<Value>,
 }
 
 #[derive(Debug)]
@@ -695,6 +699,7 @@ fn read_coverage_receipt(path: &Path, expected_head: &str) -> CoverageReceipt {
             scope: None,
             patch_files: Vec::new(),
             top_files: Vec::new(),
+            recommended_project_clusters: Vec::new(),
         };
     };
     let Ok(payload) = serde_json::from_str::<Value>(&raw) else {
@@ -707,6 +712,7 @@ fn read_coverage_receipt(path: &Path, expected_head: &str) -> CoverageReceipt {
             scope: None,
             patch_files: Vec::new(),
             top_files: Vec::new(),
+            recommended_project_clusters: Vec::new(),
         };
     };
 
@@ -726,6 +732,11 @@ fn read_coverage_receipt(path: &Path, expected_head: &str) -> CoverageReceipt {
         .and_then(Value::as_array)
         .map(|items| items.iter().filter_map(actionable_file_gap).take(3).collect::<Vec<_>>())
         .unwrap_or_default();
+    let recommended_project_clusters = payload
+        .get("recommended_project_clusters")
+        .and_then(Value::as_array)
+        .map(|items| items.iter().take(3).cloned().collect::<Vec<_>>())
+        .unwrap_or_default();
 
     CoverageReceipt {
         status: status.to_string(),
@@ -736,6 +747,7 @@ fn read_coverage_receipt(path: &Path, expected_head: &str) -> CoverageReceipt {
         scope,
         patch_files,
         top_files,
+        recommended_project_clusters,
     }
 }
 
@@ -751,20 +763,32 @@ fn read_json_receipt(path: &Path) -> JsonReceipt {
 
 fn read_ripr_plus_receipt(path: &Path, expected_head: &str) -> RiprPlusReceipt {
     match read_json_receipt(path) {
-        JsonReceipt::Missing => {
-            RiprPlusReceipt { status: "missing".to_string(), receipt_head: None, unresolved: None }
-        }
-        JsonReceipt::Invalid => {
-            RiprPlusReceipt { status: "invalid".to_string(), receipt_head: None, unresolved: None }
-        }
+        JsonReceipt::Missing => RiprPlusReceipt {
+            status: "missing".to_string(),
+            receipt_head: None,
+            unresolved: None,
+            recommended_first_clusters: Vec::new(),
+        },
+        JsonReceipt::Invalid => RiprPlusReceipt {
+            status: "invalid".to_string(),
+            receipt_head: None,
+            unresolved: None,
+            recommended_first_clusters: Vec::new(),
+        },
         JsonReceipt::Present(payload) => {
             let receipt_head = payload.get("head").and_then(Value::as_str).map(ToOwned::to_owned);
             let status =
                 if receipt_head.as_deref() == Some(expected_head) { "present" } else { "stale" };
+            let recommended_first_clusters = payload
+                .get("recommended_first_clusters")
+                .and_then(Value::as_array)
+                .map(|items| items.iter().take(3).cloned().collect::<Vec<_>>())
+                .unwrap_or_default();
             RiprPlusReceipt {
                 status: status.to_string(),
                 receipt_head,
                 unresolved: payload.get("unresolved").and_then(Value::as_u64),
+                recommended_first_clusters,
             }
         }
     }
@@ -1106,6 +1130,7 @@ fn project_coverage_below_target_action(
         "current": round2(project),
         "target": PROJECT_TARGET,
         "top_files": coverage.top_files,
+        "recommended_project_clusters": coverage.recommended_project_clusters.clone(),
         "suggested_test": "Prioritize public API boundaries, error handling, config parsing, serialization, cancellation, provider decisions, and report generators.",
         "repair": "Burn down meaningful uncovered behavior until workspace project coverage reaches the final target, then refresh coverage evidence.",
         "verify": quality_gate_command(args, true, args.patch_coverage),
@@ -1255,13 +1280,18 @@ fn ripr_receipt_action(
     })
 }
 
-fn ripr_total_unresolved_action(count: u64, args: &QualityGateArgs) -> Value {
+fn ripr_total_unresolved_action(
+    count: u64,
+    ripr: &RiprPlusReceipt,
+    args: &QualityGateArgs,
+) -> Value {
     json!({
         "kind": "ripr_total_unresolved",
         "blocking": true,
         "path": display_path(&args.ripr_receipt),
         "unresolved": count,
         "reason": "repo-wide RIPR+ unresolved total is above zero",
+        "recommended_first_clusters": ripr.recommended_first_clusters.clone(),
         "repair": "Burn down the remaining repo-wide RIPR+ gap cluster with focused tests, then refresh the RIPR+ receipt.",
         "verify": ripr_plus_command(args, true),
         "receipt": ripr_plus_command(args, false),
@@ -1534,6 +1564,13 @@ fn render_markdown(receipt: &Value, args: &QualityGateArgs) -> Result<String> {
                 ));
             }
         }
+        if let Some(clusters) = action.get("recommended_first_clusters").and_then(Value::as_array) {
+            render_recommended_clusters(&mut markdown, "ripr cluster", clusters);
+        }
+        if let Some(clusters) = action.get("recommended_project_clusters").and_then(Value::as_array)
+        {
+            render_recommended_clusters(&mut markdown, "coverage cluster", clusters);
+        }
         if let Some(gaps) = action.get("top_gaps").and_then(Value::as_array) {
             for gap in gaps {
                 let gap_id = gap.get("gap_id").and_then(Value::as_str).unwrap_or("unknown");
@@ -1554,6 +1591,47 @@ fn render_markdown(receipt: &Value, args: &QualityGateArgs) -> Result<String> {
     }
 
     Ok(markdown)
+}
+
+fn render_recommended_clusters(markdown: &mut String, label: &str, clusters: &[Value]) {
+    for cluster in clusters {
+        let name = cluster.get("name").and_then(Value::as_str).unwrap_or("unknown");
+        let reason = cluster.get("reason").and_then(Value::as_str).unwrap_or("unspecified");
+        let metrics =
+            ["score", "active_file_count", "gap_kind_count", "file_count", "uncovered_line_count"]
+                .iter()
+                .filter_map(|metric| {
+                    cluster
+                        .get(*metric)
+                        .and_then(Value::as_u64)
+                        .map(|value| format!("{metric}: {value}"))
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+        let metrics = if metrics.is_empty() { String::new() } else { format!(" ({metrics})") };
+        markdown.push_str(&format!("- {label}: `{name}`{metrics} reason `{reason}`\n"));
+        render_cluster_examples(markdown, label, "example file", cluster.get("example_files"));
+        render_cluster_examples(
+            markdown,
+            label,
+            "example gap kind",
+            cluster.get("example_gap_kinds"),
+        );
+    }
+}
+
+fn render_cluster_examples(
+    markdown: &mut String,
+    label: &str,
+    example_label: &str,
+    examples: Option<&Value>,
+) {
+    let Some(examples) = examples.and_then(Value::as_array) else {
+        return;
+    };
+    for example in examples.iter().filter_map(Value::as_str) {
+        markdown.push_str(&format!("- {label} {example_label}: `{example}`\n"));
+    }
 }
 
 fn receipt_freshness_summary(receipt: &Value) -> String {
@@ -1716,4 +1794,134 @@ fn display_path(path: &Path) -> String {
 
 fn round2(value: f64) -> f64 {
     (value * 100.0).round() / 100.0
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+    use tempfile::tempdir;
+
+    use super::*;
+
+    #[test]
+    fn coverage_receipt_preserves_recommended_project_clusters() -> Result<()> {
+        let dir = tempdir()?;
+        let path = dir.path().join("coverage-baseline.json");
+        let head = "cluster-head";
+        write_text(
+            &path,
+            &render_json(&json!({
+                "head": head,
+                "scope": "workspace",
+                "coverage": {
+                    "patch": 99.0,
+                    "project": 94.0
+                },
+                "recommended_project_clusters": [
+                    {
+                        "name": "proof-infrastructure",
+                        "file_count": 2,
+                        "uncovered_line_count": 37,
+                        "reason": "Coverage proof, quality-gate, workflow, and policy surfaces are owned by this lane.",
+                        "example_files": ["xtask/src/tasks/quality_gate.rs"]
+                    }
+                ]
+            }))?,
+        )?;
+
+        let receipt = read_coverage_receipt(&path, head);
+
+        assert_eq!(receipt.status, "present");
+        assert_eq!(
+            receipt
+                .recommended_project_clusters
+                .first()
+                .and_then(|cluster| cluster.get("name"))
+                .and_then(Value::as_str),
+            Some("proof-infrastructure")
+        );
+        assert_eq!(
+            receipt
+                .recommended_project_clusters
+                .first()
+                .and_then(|cluster| cluster.get("uncovered_line_count"))
+                .and_then(Value::as_u64),
+            Some(37)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn ripr_plus_receipt_preserves_recommended_first_clusters() -> Result<()> {
+        let dir = tempdir()?;
+        let path = dir.path().join("ripr-plus.json");
+        let head = "cluster-head";
+        write_text(
+            &path,
+            &render_json(&json!({
+                "head": head,
+                "unresolved": 3,
+                "recommended_first_clusters": [
+                    {
+                        "name": "ci-report-formatting",
+                        "score": 5,
+                        "active_file_count": 3,
+                        "gap_kind_count": 2,
+                        "reason": "Receipt and report formatting gaps should become agent repair packets.",
+                        "example_files": ["xtask/src/tasks/quality_gate.rs"],
+                        "example_gap_kinds": ["receipt_missing"]
+                    }
+                ]
+            }))?,
+        )?;
+
+        let receipt = read_ripr_plus_receipt(&path, head);
+
+        assert_eq!(receipt.status, "present");
+        assert_eq!(
+            receipt
+                .recommended_first_clusters
+                .first()
+                .and_then(|cluster| cluster.get("name"))
+                .and_then(Value::as_str),
+            Some("ci-report-formatting")
+        );
+        assert_eq!(
+            receipt
+                .recommended_first_clusters
+                .first()
+                .and_then(|cluster| cluster.get("score"))
+                .and_then(Value::as_u64),
+            Some(5)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn render_recommended_clusters_names_metrics_reasons_and_examples() -> Result<()> {
+        let clusters = vec![json!({
+            "name": "ci-report-formatting",
+            "score": 5,
+            "active_file_count": 3,
+            "gap_kind_count": 2,
+            "reason": "Receipt and report formatting gaps should become agent repair packets.",
+            "example_files": ["xtask/src/tasks/quality_gate.rs"],
+            "example_gap_kinds": ["receipt_missing"]
+        })];
+        let mut markdown = String::new();
+
+        render_recommended_clusters(&mut markdown, "ripr cluster", &clusters);
+
+        for required in [
+            "ripr cluster: `ci-report-formatting` (score: 5, active_file_count: 3, gap_kind_count: 2) reason `Receipt and report formatting gaps should become agent repair packets.`",
+            "ripr cluster example file: `xtask/src/tasks/quality_gate.rs`",
+            "ripr cluster example gap kind: `receipt_missing`",
+        ] {
+            assert!(
+                markdown.contains(required),
+                "cluster markdown missing `{required}`:\n{markdown}"
+            );
+        }
+        Ok(())
+    }
 }
