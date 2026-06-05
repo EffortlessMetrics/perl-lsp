@@ -800,37 +800,39 @@ impl LspServer {
         } else {
             json!({"changes": {}})
         };
-        let apply_edit_metadata_request = if can_return_edit {
-            let apply_edit_label = source_guard_context
-                .as_ref()
-                .map(|(_uri, _line, _character, symbol, _byte_offset)| {
-                    format!("Safe delete {symbol}")
-                })
-                .unwrap_or_else(|| "Safe delete symbol".to_string());
-            match self.request_apply_workspace_edit_with_metadata(
-                &apply_edit_label,
-                workspace_edit.clone(),
-                true,
-            ) {
-                Ok(Some(id)) => Some(json!({
-                    "id": id.as_i32(),
-                    "label": apply_edit_label,
-                    "metadata": {
-                        "isRefactoring": true,
-                    },
-                })),
-                Ok(None) => None,
-                Err(error) => {
-                    tracing::warn!(
-                        error = %error,
-                        "Failed to request workspace/applyEdit with metadata"
-                    );
-                    None
+        let apply_edit_metadata_request = source_guard_context
+            .as_ref()
+            .filter(|_| can_return_edit)
+            .and_then(|(_uri, _line, _character, symbol, _byte_offset)| {
+                let apply_edit_label = format!("Safe delete {symbol}");
+                let apply_edit_description =
+                    format!("Review source-backed safe-delete edit for {symbol} before applying.");
+                match self.request_apply_workspace_edit_with_metadata(
+                    &apply_edit_label,
+                    &apply_edit_description,
+                    workspace_edit.clone(),
+                    true,
+                ) {
+                    Ok(Some(id)) => Some(json!({
+                        "id": id.as_i32(),
+                        "label": &apply_edit_label,
+                        "description": &apply_edit_description,
+                        "metadata": {
+                            "label": &apply_edit_label,
+                            "description": &apply_edit_description,
+                            "isRefactoring": true,
+                        },
+                    })),
+                    Ok(None) => None,
+                    Err(error) => {
+                        tracing::warn!(
+                            error = %error,
+                            "Failed to request workspace/applyEdit with metadata"
+                        );
+                        None
+                    }
                 }
-            }
-        } else {
-            None
-        };
+            });
         let returned_workspace_edit_count = lsp_workspace_edit_count(Some(&workspace_edit));
         let user_message = safe_delete_symbol_live_pilot_message(&receipt, can_return_edit);
 

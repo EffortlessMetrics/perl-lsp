@@ -1162,7 +1162,7 @@ maturity = "ga"
 advertised = true
 counts_in_coverage = false
 tests = ["crates/perl-lsp-rs/tests/lsp_318_negative_claims.rs"]
-description = "Capability-gated ApplyWorkspaceEditParams.metadata on server-originated workspace/applyEdit refactoring requests"
+description = "Capability-gated ApplyWorkspaceEditParams.metadata label, description, and isRefactoring on server-originated workspace/applyEdit refactoring requests"
 
 [[feature]]
 id = "lsp.publish_diagnostics"
