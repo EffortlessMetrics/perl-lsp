@@ -86,15 +86,12 @@ fn build_receipt(root: &Path, args: &CoverageBaselineArgs) -> Result<JsonValue> 
         .as_ref()
         .map(|changed| patch_file_gaps_for_root(Some(root), &lcov, changed))
         .unwrap_or_default();
-    let project_files_below_target = lcov
-        .files
-        .iter()
-        .filter(|file| !file.path.trim().is_empty())
-        .filter(|file| project_file_below_target(file))
-        .filter_map(file_gap_json)
-        .collect::<Vec<_>>();
-    let top_project_files = top_project_file_gaps(Some(root), &lcov, 10);
-    let recommended_project_clusters = recommended_project_clusters(&top_project_files, 10);
+    let project_file_rows = project_file_gaps(Some(root), &lcov);
+    let project_files_below_target =
+        project_file_rows.iter().map(|file| file.gap.clone()).collect::<Vec<_>>();
+    let top_project_files = top_project_file_gaps_from_rows(project_file_rows, 10);
+    let recommended_project_clusters =
+        recommended_project_clusters(&project_files_below_target, 10);
 
     let mut coverage = serde_json::Map::new();
     coverage.insert("project".to_string(), json!(line_coverage));
@@ -388,28 +385,37 @@ fn file_gap_json(file: &FileCoverage) -> Option<JsonValue> {
     }))
 }
 
+#[cfg(test)]
 fn top_project_file_gaps(root: Option<&Path>, lcov: &LcovSummary, limit: usize) -> Vec<JsonValue> {
-    let mut rows = lcov
-        .files
+    top_project_file_gaps_from_rows(project_file_gaps(root, lcov), limit)
+}
+
+fn project_file_gaps(root: Option<&Path>, lcov: &LcovSummary) -> Vec<ProjectFileGap> {
+    lcov.files
         .iter()
         .filter(|file| !file.path.trim().is_empty())
         .filter(|file| project_file_below_target(file))
-        .filter_map(|file| {
-            let mut gap = file_gap_json(file)?;
-            let path = root
-                .and_then(|root| relative_lcov_path(root, &file.path))
-                .unwrap_or_else(|| file.path.clone());
-            if let Some(object) = gap.as_object_mut() {
-                object.insert("path".to_string(), json!(path.clone()));
-            }
-            Some(ProjectFileGap {
-                path,
-                line_coverage: percent(file.line_hit, file.line_found),
-                uncovered_line_count: file.line_found.saturating_sub(file.line_hit),
-                gap,
-            })
-        })
-        .collect::<Vec<_>>();
+        .filter_map(|file| project_file_gap(root, file))
+        .collect()
+}
+
+fn project_file_gap(root: Option<&Path>, file: &FileCoverage) -> Option<ProjectFileGap> {
+    let mut gap = file_gap_json(file)?;
+    let path = root
+        .and_then(|root| relative_lcov_path(root, &file.path))
+        .unwrap_or_else(|| file.path.clone());
+    if let Some(object) = gap.as_object_mut() {
+        object.insert("path".to_string(), json!(path.clone()));
+    }
+    Some(ProjectFileGap {
+        path,
+        line_coverage: percent(file.line_hit, file.line_found),
+        uncovered_line_count: file.line_found.saturating_sub(file.line_hit),
+        gap,
+    })
+}
+
+fn top_project_file_gaps_from_rows(mut rows: Vec<ProjectFileGap>, limit: usize) -> Vec<JsonValue> {
     rows.sort_by(|left, right| {
         right
             .uncovered_line_count
@@ -1024,20 +1030,90 @@ coverage:
         };
 
         let receipt = build_receipt(repo, &args)?;
-        let source_path = repo.join("src/lib.rs").display().to_string().replace('\\', "/");
-
         assert_eq!(receipt["coverage"]["patch"], json!(0.0));
         assert_eq!(receipt["patch_files_below_target"][0]["path"], json!("src/lib.rs"));
         assert_eq!(receipt["patch_files_below_target"][0]["sample_uncovered_lines"], json!([2]));
         assert_eq!(receipt["project_burndown"]["target"], json!(95.0));
         assert_eq!(receipt["project_burndown"]["status"], json!("burn_down_required"));
-        assert_eq!(receipt["project_files_below_target"][0]["path"], json!(source_path));
+        assert_eq!(receipt["project_files_below_target"][0]["path"], json!("src/lib.rs"));
         assert_eq!(receipt["top_project_files"][0]["uncovered_line_count"], json!(1));
         assert_eq!(
             receipt["recommended_project_clusters"][0]["name"],
             json!("project-coverage-inventory")
         );
         assert_eq!(receipt["scope"], json!("workspace-lib-xtask-quality"));
+        Ok(())
+    }
+
+    #[test]
+    fn build_receipt_clusters_all_project_files_below_target() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path();
+        run_git(repo, &["init"])?;
+        run_git(
+            repo,
+            &[
+                "-c",
+                "user.name=test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "--allow-empty",
+                "-m",
+                "head",
+            ],
+        )?;
+        let lcov = repo.join("lcov.info");
+        let mut lcov_body = String::new();
+        for file_index in 0..12 {
+            lcov_body.push_str(&format!(
+                "SF:crates/product-{file_index}/src/lib.rs\nDA:1,0\nDA:2,0\nDA:3,1\nend_of_record\n"
+            ));
+        }
+        lcov_body.push_str("SF:xtask/src/tasks/quality_gate.rs\nDA:1,0\nDA:2,1\nend_of_record\n");
+        fs::write(&lcov, lcov_body)?;
+        let codecov = repo.join("codecov.yml");
+        fs::write(
+            &codecov,
+            "coverage:\n  status:\n    patch:\n      default:\n        target: 95%\n",
+        )?;
+        let args = CoverageBaselineArgs {
+            lcov,
+            receipt: repo.join("target/coverage-baseline.json"),
+            codecov,
+            patch_coverage: None,
+            patch_base: None,
+            scope: Some("routed-coverage-packs".to_string()),
+            check: false,
+        };
+
+        let receipt = build_receipt(repo, &args)?;
+        let top_files = receipt
+            .get("top_project_files")
+            .and_then(JsonValue::as_array)
+            .ok_or("top_project_files must be an array")?;
+        assert!(
+            !top_files.iter().any(|row| {
+                row.get("path").and_then(JsonValue::as_str)
+                    == Some("xtask/src/tasks/quality_gate.rs")
+            }),
+            "xtask proof-infra file should sit below the truncated top_project_files list"
+        );
+        let clusters = receipt
+            .get("recommended_project_clusters")
+            .and_then(JsonValue::as_array)
+            .ok_or("recommended_project_clusters must be an array")?;
+        assert!(
+            clusters.iter().any(|row| {
+                row.get("name").and_then(JsonValue::as_str) == Some("proof-infrastructure")
+                    && row.get("example_files").and_then(JsonValue::as_array).is_some_and(|files| {
+                        files
+                            .iter()
+                            .any(|file| file.as_str() == Some("xtask/src/tasks/quality_gate.rs"))
+                    })
+            }),
+            "cluster recommendations must preserve proof-infra work below the display top list: {clusters:?}"
+        );
         Ok(())
     }
 
