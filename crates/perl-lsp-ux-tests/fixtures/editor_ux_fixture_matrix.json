@@ -1138,7 +1138,7 @@
       "expected_outcomes": [
         "broken content yields at least one diagnostic",
         "fixed content clears parse-like diagnostics after didChange",
-        "hover does not JSON-RPC error after didChange recovery"
+        "hover returns non-empty contents after didChange recovery"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",

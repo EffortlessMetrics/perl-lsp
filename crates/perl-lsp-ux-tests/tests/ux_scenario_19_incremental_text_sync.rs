@@ -3,11 +3,12 @@
 //! BDD workflow:
 //! - Given an open Perl document with a parse error,
 //! - When the user fixes the document and the editor emits didChange,
-//! - Then diagnostics should recover and the server should keep serving requests.
+//! - Then diagnostics should recover and hover should return useful contents.
 
 use anyhow::{Context, Result, ensure};
 use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{LspEvent, ScenarioConfig, UxHarness};
+use serde_json::Value;
 use std::time::{Duration, Instant};
 
 const BROKEN_SOURCE: &str = "\
@@ -38,6 +39,22 @@ fn has_parse_like_diagnostic(diagnostics: &[serde_json::Value]) -> bool {
             || message.contains("unexpected")
             || message.contains("expected")
     })
+}
+
+fn hover_contents_text(contents: &Value) -> String {
+    if let Some(value) = contents.get("value").and_then(Value::as_str) {
+        return value.to_string();
+    }
+
+    if let Some(text) = contents.as_str() {
+        return text.to_string();
+    }
+
+    if let Some(items) = contents.as_array() {
+        return items.iter().map(hover_contents_text).collect::<Vec<_>>().join("\n");
+    }
+
+    String::new()
 }
 
 fn wait_for_any_diagnostics_event(
@@ -106,24 +123,22 @@ fn scenario_19_didchange_recovers_after_parse_error_fix() -> Result<()> {
         "diagnostics after fix are identical to before; didChange had no effect"
     );
 
-    // Hover must not only avoid error but also be wired up (Err, or Ok(None)
-    // when the server cannot reach the symbol index, is an observable
-    // regression for first-session UX — let the test flag it).
-    let hover_result = harness.hover("sync.pl", 4, 2);
+    // Hover must return useful content after the editor fixes the file; a
+    // clean-but-null result would leave the user without feedback after typing.
+    let hover = harness
+        .hover("sync.pl", 4, 8)
+        .context("hover should not JSON-RPC error after didChange recovery")?;
+    let Some(hover) = hover else {
+        anyhow::bail!("hover returned null after didChange recovery");
+    };
+    let contents =
+        hover.get("contents").context("hover after didChange recovery missing contents")?;
+    let contents_text = hover_contents_text(contents);
     ensure!(
-        hover_result.is_ok(),
-        "hover should not JSON-RPC error after didChange recovery: {:?}",
-        hover_result
+        !contents_text.trim().is_empty(),
+        "hover after didChange recovery should return non-empty contents; got: {:?}",
+        contents
     );
-    // Note: we accept Ok(None) with a log but still require the call itself
-    // to be well-formed. Downgrading to None-only would hide a real bug where
-    // hover stops returning anything at all after a didChange.
-    if let Ok(None) = hover_result {
-        tracing::info!(
-            "INFO scenario_19: hover returned null after didChange (degraded \
-             but not a protocol error)"
-        );
-    }
 
     let diagnostics_event = wait_for_any_diagnostics_event(&harness, Duration::from_secs(1));
     ensure!(
