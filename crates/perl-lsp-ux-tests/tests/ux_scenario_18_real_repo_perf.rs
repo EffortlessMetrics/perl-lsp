@@ -6,11 +6,15 @@
 
 use anyhow::{Context, Result, bail};
 use perl_lsp_ux_tests::binary_available;
-use perl_lsp_ux_tests::{LspEvent, ScenarioConfig, UxHarness};
+use perl_lsp_ux_tests::missing_binary_skip;
+use perl_lsp_ux_tests::{
+    LspEvent, ScenarioConfig, UxCiTier, UxComponent, UxHarness, run_ux_scenario,
+};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+const SCENARIO_FILE: &str = "ux_scenario_18_real_repo_perf.rs";
 const FIRST_DIAGNOSTICS_BUDGET: Duration = Duration::from_secs(5);
 const MIN_LINES: usize = 5_000;
 const REAL_WORLD_FIXTURES: &[&str] = &[
@@ -62,49 +66,61 @@ fn load_real_repo_fixture_source() -> Result<String> {
 }
 
 #[test]
-fn scenario_18_first_diagnostics_under_five_seconds_on_real_repo_fixture() -> Result<()> {
-    if !binary_available() {
-        eprintln!("SKIP scenario_18: perl-lsp binary not found");
-        return Ok(());
-    }
-
-    let source = load_real_repo_fixture_source()?;
-    let config = ScenarioConfig { timeout: Duration::from_secs(30), ..Default::default() };
-    let harness = UxHarness::new(config).context("failed to create UX harness")?;
-
-    let relative_path = "lib/MyApp/CatalystLike.pm";
-    let expected_uri = harness.workspace.uri(relative_path);
-
-    let start = Instant::now();
-    harness
-        .open_file(relative_path, &source)
-        .context("didOpen failed for real-repo performance fixture")?;
-
-    let deadline = start + FIRST_DIAGNOSTICS_BUDGET;
-    loop {
-        let events = harness.peek_notifications();
-        for event in &events {
-            if let LspEvent::Diagnostics { uri, .. } = event
-                && uri == &expected_uri
-            {
-                let latency = start.elapsed();
-                assert!(
-                    latency <= FIRST_DIAGNOSTICS_BUDGET,
-                    "first diagnostics for {relative_path} exceeded {:?}: {:?}",
-                    FIRST_DIAGNOSTICS_BUDGET,
-                    latency
-                );
-                harness.assert_no_crash();
-                return Ok(());
+fn scenario_18_first_diagnostics_under_five_seconds_on_real_repo_fixture() {
+    run_ux_scenario(
+        "real_repo_first_diagnostics_budget",
+        SCENARIO_FILE,
+        "scenario_18_first_diagnostics_under_five_seconds_on_real_repo_fixture",
+        UxCiTier::Nightly,
+        Some(UxComponent::Diagnostics),
+        |recorder| {
+            if !binary_available() {
+                return Err(missing_binary_skip().into());
             }
-        }
 
-        if Instant::now() >= deadline {
-            break;
-        }
+            let source = load_real_repo_fixture_source()?;
+            let config = ScenarioConfig { timeout: Duration::from_secs(30), ..Default::default() };
+            let harness = UxHarness::new(config).context("failed to create UX harness")?;
 
-        std::thread::sleep(Duration::from_millis(25));
-    }
+            let relative_path = "lib/MyApp/CatalystLike.pm";
+            let expected_uri = harness.workspace.uri(relative_path);
 
-    bail!("no diagnostics notification for {relative_path} within {:?}", FIRST_DIAGNOSTICS_BUDGET);
+            recorder.mark_request_start("first_publish_diagnostics");
+            let start = Instant::now();
+            harness
+                .open_file(relative_path, &source)
+                .context("didOpen failed for real-repo performance fixture")?;
+
+            let deadline = start + FIRST_DIAGNOSTICS_BUDGET;
+            loop {
+                let events = harness.peek_notifications();
+                for event in &events {
+                    if let LspEvent::Diagnostics { uri, .. } = event
+                        && uri == &expected_uri
+                    {
+                        let latency = start.elapsed();
+                        let within_budget = latency <= FIRST_DIAGNOSTICS_BUDGET;
+                        if within_budget {
+                            recorder.mark_first_useful_result("first_publish_diagnostics");
+                        }
+                        recorder.check(
+                            "first publishDiagnostics arrives within 5 seconds",
+                            within_budget,
+                        )?;
+                        harness.assert_no_crash();
+                        return Ok(());
+                    }
+                }
+
+                if Instant::now() >= deadline {
+                    break;
+                }
+
+                std::thread::sleep(Duration::from_millis(25));
+            }
+
+            recorder.check("first publishDiagnostics arrives within 5 seconds", false)?;
+            Ok(())
+        },
+    );
 }
