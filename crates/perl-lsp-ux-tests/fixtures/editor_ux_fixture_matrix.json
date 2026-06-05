@@ -570,16 +570,18 @@
       "ci_tier": "pr",
       "component": "rename",
       "instrumentation": {
-        "run_receipt": false,
-        "first_useful_result": false,
+        "run_receipt": true,
+        "first_useful_result": true,
         "protocol_goldens": false
       },
       "user_journey": "rename a symbol in a representative file and validate workspace edit output",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
+        "receipt records prepareRename, rename, and workspace edit timing",
         "prepareRename and rename do not error",
         "rename returns clean null or valid workspace edit for the opened file"
       ],
