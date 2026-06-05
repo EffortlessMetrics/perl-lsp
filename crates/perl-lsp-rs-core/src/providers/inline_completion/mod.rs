@@ -1393,29 +1393,67 @@ impl InlineCompletionProvider {
             return Vec::new();
         };
 
-        let mut package_scanner = PackageScopeScanner::new();
+        let mut package_scanner = PackageTopLevelScanner::new();
         let mut methods = Vec::<MethodFact>::new();
+        let framework_accessors_enabled =
+            self.current_package_has_framework_accessors(text, target_package);
         for line in self.normalized_lines(text) {
             package_scanner.advance(line, self.parse_package_name(line));
 
             if package_scanner.current_package() != Some(target_package) {
+                package_scanner.finish_line(line);
                 continue;
             }
 
-            let Some(method_name) = self.parse_sub_name(line) else {
-                continue;
-            };
-            if enclosing_sub == Some(method_name.as_str()) {
-                continue;
-            }
-            if methods.iter().any(|method| method.name == method_name) {
-                continue;
+            if let Some(method_name) = self.parse_sub_name(line)
+                && enclosing_sub != Some(method_name.as_str())
+            {
+                push_unique_method_fact(&mut methods, method_name);
             }
 
-            methods.push(MethodFact { name: method_name });
+            if framework_accessors_enabled
+                && package_scanner.is_current_package_top_level()
+                && let Some(accessor_name) = self.parse_framework_accessor_name(line)
+            {
+                push_unique_method_fact(&mut methods, accessor_name);
+            }
+            package_scanner.finish_line(line);
         }
 
         methods
+    }
+
+    fn current_package_has_framework_accessors(&self, text: &str, target_package: &str) -> bool {
+        let mut package_scanner = PackageTopLevelScanner::new();
+        for line in self.normalized_lines(text) {
+            package_scanner.advance(line, self.parse_package_name(line));
+            if package_scanner.current_package() != Some(target_package) {
+                package_scanner.finish_line(line);
+                continue;
+            }
+            if package_scanner.is_current_package_top_level()
+                && self.parse_use_name(line).as_deref().is_some_and(is_framework_accessor_module)
+            {
+                return true;
+            }
+            package_scanner.finish_line(line);
+        }
+
+        false
+    }
+
+    fn parse_framework_accessor_name(&self, line: &str) -> Option<String> {
+        let rest = code_before_line_comment(line).trim_start().strip_prefix("has ")?;
+        let rest = rest.trim_start();
+        let quote = rest.chars().next()?;
+        if !matches!(quote, '\'' | '"') {
+            return None;
+        }
+
+        let after_quote = &rest[quote.len_utf8()..];
+        let end = after_quote.find(quote)?;
+        let name = &after_quote[..end];
+        is_framework_accessor_name(name).then(|| name.to_string())
     }
 
     fn expected_syntax(&self, context: &PreparedInlineCompletionContext) -> ExpectedSyntax {
@@ -2227,6 +2265,25 @@ fn is_constructor_sub(name: Option<&str>) -> bool {
     matches!(name, Some("new" | "BUILD"))
 }
 
+fn is_framework_accessor_module(module: &str) -> bool {
+    matches!(module, "Moo" | "Moose")
+}
+
+fn is_framework_accessor_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    (first.is_ascii_alphabetic() || first == '_') && chars.all(is_identifier_fragment_char)
+}
+
+fn push_unique_method_fact(methods: &mut Vec<MethodFact>, name: String) {
+    if methods.iter().any(|method| method.name == name) {
+        return;
+    }
+    methods.push(MethodFact { name });
+}
+
 fn is_preferred_guard_condition_name(name: &str) -> bool {
     name == "ok"
         || name == "valid"
@@ -2520,6 +2577,45 @@ impl PackageScopeScanner {
                 self.block_depth = None;
             }
         }
+    }
+}
+
+#[derive(Debug, Default)]
+struct PackageTopLevelScanner {
+    package_scanner: PackageScopeScanner,
+    structural_depth: i32,
+    package_body_depth: Option<i32>,
+}
+
+impl PackageTopLevelScanner {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    fn current_package(&self) -> Option<&str> {
+        self.package_scanner.current_package()
+    }
+
+    fn is_current_package_top_level(&self) -> bool {
+        self.package_body_depth == Some(self.structural_depth)
+    }
+
+    fn advance(&mut self, line: &str, parsed_package: Option<String>) {
+        if parsed_package.is_some() {
+            self.package_body_depth = Some(if package_line_opens_block(line) {
+                self.structural_depth + brace_delta(line)
+            } else {
+                self.structural_depth
+            });
+        }
+        self.package_scanner.advance(line, parsed_package);
+        if self.package_scanner.current_package().is_none() {
+            self.package_body_depth = None;
+        }
+    }
+
+    fn finish_line(&mut self, line: &str) {
+        self.structural_depth += brace_delta(line);
     }
 }
 
@@ -4302,6 +4398,78 @@ mod tests {
     }
 
     #[test]
+    fn semantic_context_source_collects_moo_accessor_methods()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "package Other;\nuse Moo;\nhas 'external' => (is => 'ro');\npackage Demo;\nuse Moo;\nhas 'name' => (is => 'ro');\nhas \"email\" => (is => 'rw');\nsub save {}\nsub caller {\n    $self->\n}\n";
+        let character = "    $self->".encode_utf16().count() as u32;
+        let prepared = provider
+            .prepare_context(source, 9, character)
+            .ok_or("expected prepared inline context")?;
+        let semantic = provider.semantic_context_for_source(source, &prepared);
+
+        let methods: Vec<&str> =
+            semantic.current_package_methods.iter().map(|method| method.name.as_str()).collect();
+        assert_eq!(methods, vec!["name", "email", "save"]);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_context_source_collects_moose_accessor_methods()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "package Demo;\nuse Moose;\nhas 'enabled' => (is => 'ro');\nsub caller {\n    $self->\n}\n";
+        let character = "    $self->".encode_utf16().count() as u32;
+        let prepared = provider
+            .prepare_context(source, 4, character)
+            .ok_or("expected prepared inline context")?;
+        let semantic = provider.semantic_context_for_source(source, &prepared);
+
+        let methods: Vec<&str> =
+            semantic.current_package_methods.iter().map(|method| method.name.as_str()).collect();
+        assert_eq!(methods, vec!["enabled"]);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_context_does_not_promote_has_without_moo_or_moose()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "package Demo;\nhas 'name' => (is => 'ro');\nsub caller {\n    $self->\n}\n";
+        let character = "    $self->".encode_utf16().count() as u32;
+        let prepared = provider
+            .prepare_context(source, 3, character)
+            .ok_or("expected prepared inline context")?;
+        let semantic = provider.semantic_context_for_source(source, &prepared);
+
+        assert!(
+            semantic.current_package_methods.is_empty(),
+            "non-framework has declarations must not become methods: {:?}",
+            semantic.current_package_methods
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_context_does_not_promote_runtime_has_call() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let provider = InlineCompletionProvider::new();
+        let source = "package Demo;\nuse Moo;\nsub caller {\n    has 'temporary' => (is => 'ro');\n    $self->\n}\n";
+        let character = "    $self->".encode_utf16().count() as u32;
+        let prepared = provider
+            .prepare_context(source, 4, character)
+            .ok_or("expected prepared inline context")?;
+        let semantic = provider.semantic_context_for_source(source, &prepared);
+
+        assert!(
+            semantic.current_package_methods.is_empty(),
+            "runtime has calls must not become methods: {:?}",
+            semantic.current_package_methods
+        );
+        Ok(())
+    }
+
+    #[test]
     fn semantic_context_source_resets_after_block_scoped_package()
     -> Result<(), Box<dyn std::error::Error>> {
         let provider = InlineCompletionProvider::new();
@@ -5561,6 +5729,76 @@ mod tests {
             "__PACKAGE__ receiver should use current package methods: {:?}",
             completions.items
         );
+        Ok(())
+    }
+
+    #[test]
+    fn self_receiver_suggests_moo_accessor_methods() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "package Demo::Widget;\nuse Moo;\nhas 'name' => (is => 'ro');\nhas 'email' => (is => 'rw');\nsub caller {\n    my $self = shift;\n    $self->\n}\n";
+        let character = "    $self->".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 6, character);
+
+        assert!(
+            completions.items.iter().any(|item| item.insert_text == "name()"),
+            "Moo accessors should be current-package receiver methods: {:?}",
+            completions.items
+        );
+        assert!(
+            completions.items.iter().any(|item| item.insert_text == "email()"),
+            "Moo accessors should include each quoted has attribute: {:?}",
+            completions.items
+        );
+        assert!(completions.items.iter().all(|item| item.insert_text != "new()"));
+        Ok(())
+    }
+
+    #[test]
+    fn self_receiver_suggests_moose_accessor_methods() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "package Demo::Widget;\nuse Moose;\nhas 'enabled' => (is => 'ro');\nsub caller {\n    my $self = shift;\n    $self->\n}\n";
+        let character = "    $self->".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 5, character);
+
+        assert!(
+            completions.items.iter().any(|item| item.insert_text == "enabled()"),
+            "Moose accessors should be current-package receiver methods: {:?}",
+            completions.items
+        );
+        assert!(completions.items.iter().all(|item| item.insert_text != "new()"));
+        Ok(())
+    }
+
+    #[test]
+    fn self_receiver_does_not_suggest_has_name_without_framework_import()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source =
+            "package Demo::Widget;\nhas 'name' => (is => 'ro');\nsub caller {\n    $self->\n}\n";
+        let character = "    $self->".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 3, character);
+
+        assert!(
+            completions.items.iter().all(|item| item.insert_text != "name()"),
+            "non-framework has declarations must not leak into receiver completions: {:?}",
+            completions.items
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn self_receiver_does_not_suggest_runtime_has_call() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "package Demo::Widget;\nuse Moo;\nsub caller {\n    has 'temporary' => (is => 'ro');\n    $self->\n}\n";
+        let character = "    $self->".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 4, character);
+
+        assert!(
+            completions.items.iter().all(|item| item.insert_text != "temporary()"),
+            "runtime has calls must not leak into receiver completions: {:?}",
+            completions.items
+        );
+        assert!(completions.items.is_empty());
         Ok(())
     }
 
