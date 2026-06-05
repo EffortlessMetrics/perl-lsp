@@ -316,6 +316,7 @@
       ],
       "expected_outcomes": [
         "publishDiagnostics arrives",
+        "strict undeclared-variable diagnostic mentions the missing symbol",
         "diagnostic payload shape stays valid"
       ],
       "confidence_signals": [
