@@ -213,9 +213,9 @@ use Local::VirtualDoc;
 =head1 DESCRIPTION
 
 Local POD served from the workspace module file.
-See also L<Local::Dependency>, L<Local::Dependency>, L<Local::Helper>, and L<Local::VirtualDoc>.
-Core pragma docs L<strict> and L<warnings> should stay navigable.
-Ignore local sections such as L</reset> and labeled targets such as L<helper|Local::Skipped>.
+See also L<Local::Dependency>, L<Local::Dependency>, L<Local::Helper>, L<helper docs|Local::Labeled>, and L<Local::VirtualDoc>.
+Core pragma docs L<strict>, L<warnings>, and L<strict docs|strict> should stay navigable.
+Ignore local sections such as L</reset>, labeled local sections such as L<section docs|/reset>, and malformed labeled targets such as L<helper|Local::>.
 
 =head2 reset
 
@@ -251,7 +251,7 @@ Reset the local virtual document fixture.
     );
     assert!(
         text.contains(
-            "Related virtual perldoc:\n- perldoc://Local::Dependency\n- perldoc://Local::Helper\n- perldoc://strict\n- perldoc://warnings"
+            "Related virtual perldoc:\n- perldoc://Local::Dependency\n- perldoc://Local::Helper\n- perldoc://Local::Labeled\n- perldoc://strict\n- perldoc://warnings"
         ),
         "workspace POD module links should become sorted virtual perldoc links: {text}"
     );
@@ -260,7 +260,7 @@ Reset the local virtual document fixture.
         "workspace POD virtual content should ignore self-links: {text}"
     );
     assert!(
-        !text.contains("perldoc://Local::Skipped") && !text.contains("perldoc:///reset"),
+        !text.contains("perldoc://Local::>") && !text.contains("perldoc:///reset"),
         "workspace POD virtual content should ignore non-simple POD targets: {text}"
     );
     assert!(
@@ -283,8 +283,8 @@ Local::VirtualDoc - source docs
 
 =head1 DESCRIPTION
 
-See L<Local::Dependency>, L<Local::Dependency>, L<Local::Helper>, and L<Local::VirtualDoc>.
-Ignore malformed or non-module targets: L<display|Local::Skipped>, L</section>, L<https://example.invalid>, L<Local::>.
+See L<Local::Dependency>, L<Local::Dependency>, L<helper docs|Local::Helper>, and L<Local::VirtualDoc>.
+Ignore malformed or non-module targets: L<display|Local::>, L</section>, L<section docs|/section>, L<display|https://example.invalid>, L<|Local::EmptyLabel>, L<https://example.invalid>, L<Local::>.
 
 =cut
 
@@ -343,8 +343,8 @@ Helper docs are served from the linked workspace module.
     );
     assert!(
         !source_text.contains("perldoc://Local::VirtualDoc")
-            && !source_text.contains("perldoc://Local::Skipped")
             && !source_text.contains("perldoc:///section")
+            && !source_text.contains("perldoc://Local::EmptyLabel")
             && !source_text.contains("perldoc://Local::>"),
         "source workspace POD should not expose self or non-simple links: {source_text}"
     );
