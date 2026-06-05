@@ -1243,7 +1243,8 @@
       "expected_outcomes": [
         "foldingRange requests do not return JSON-RPC errors",
         "folding ranges include valid start and end line fields when present",
-        "multi-block files produce at least one fold"
+        "multi-block files produce at least one fold",
+        "empty and single-line files return empty folding range arrays"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",
