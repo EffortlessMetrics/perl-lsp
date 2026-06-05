@@ -11,7 +11,8 @@
 
 mod support;
 
-use serde_json::json;
+use perl_lsp::{JsonRpcError, JsonRpcRequest, LspServer};
+use serde_json::{Value, json};
 use std::time::Duration;
 use support::lsp_harness::LspHarness;
 
@@ -22,6 +23,74 @@ fn init_harness() -> Result<LspHarness, String> {
     let mut harness = LspHarness::new();
     harness.initialize(None)?;
     Ok(harness)
+}
+
+fn test_error(message: impl Into<String>) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidData, message.into())
+}
+
+fn initialized_server() -> LspServer {
+    let server = LspServer::new();
+    let _ = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer(1)),
+        method: "initialize".to_string(),
+        params: Some(json!({})),
+    });
+    server
+}
+
+fn streaming_completion_error(
+    params: Option<Value>,
+) -> Result<JsonRpcError, Box<dyn std::error::Error>> {
+    let server = initialized_server();
+    let response = server
+        .handle_request(JsonRpcRequest {
+            _jsonrpc: "2.0".to_string(),
+            id: Some(perl_lsp::protocol::JsonRpcId::Integer(2)),
+            method: "textDocument/perlInlineCompletionStream".to_string(),
+            params,
+        })
+        .ok_or_else(|| test_error("expected streaming completion response"))?;
+
+    response.error.ok_or_else(|| {
+        test_error(format!("expected streaming completion error, got {:?}", response.result)).into()
+    })
+}
+
+fn assert_streaming_completion_shape_guidance(error: &JsonRpcError, summary: &str) {
+    assert_eq!(error.code, -32602);
+    assert!(error.message.contains(summary), "unexpected message: {}", error.message);
+    assert!(
+        error.message.contains("textDocument/perlInlineCompletionStream"),
+        "unexpected message: {}",
+        error.message
+    );
+    assert!(
+        error.message.contains("params.textDocument.uri"),
+        "unexpected message: {}",
+        error.message
+    );
+    assert!(
+        error.message.contains("params.position.line"),
+        "unexpected message: {}",
+        error.message
+    );
+    assert!(
+        error.message.contains("params.position.character"),
+        "unexpected message: {}",
+        error.message
+    );
+    assert!(
+        error.message.contains("params.partialResultToken"),
+        "unexpected message: {}",
+        error.message
+    );
+    assert!(
+        error.message.contains("textDocument/inlineCompletion"),
+        "unexpected message: {}",
+        error.message
+    );
 }
 
 /// Helper: enable AI streaming completion via didChangeConfiguration.
@@ -415,6 +484,20 @@ fn streaming_completion_missing_params_returns_error() -> TestResult {
 
     // Should return an error (missing textDocument.uri).
     assert!(result.is_err(), "streaming request with empty params should error");
+
+    Ok(())
+}
+
+#[test]
+fn streaming_completion_request_shape_errors_include_guidance() -> TestResult {
+    let missing_params = streaming_completion_error(None)?;
+    assert_streaming_completion_shape_guidance(&missing_params, "Missing params");
+
+    let missing_uri = streaming_completion_error(Some(json!({})))?;
+    assert_streaming_completion_shape_guidance(
+        &missing_uri,
+        "Missing required parameter: textDocument.uri",
+    );
 
     Ok(())
 }
