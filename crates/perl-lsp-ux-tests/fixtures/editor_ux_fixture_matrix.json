@@ -475,7 +475,7 @@
         "workflow_stability_rate"
       ],
       "expected_outcomes": [
-        "declaration request returns a location or clean empty result",
+        "declaration request points same-file subroutine calls to their declaration",
         "request does not error"
       ],
       "confidence_signals": [
