@@ -136,7 +136,7 @@ impl DebugAdapter {
                     success: false,
                     command: "scopes".to_string(),
                     body: None,
-                    message: Some("Missing frameId".to_string()),
+                    message: Some(Self::missing_scope_frame_id_message()),
                 };
             }
         };
@@ -181,6 +181,12 @@ impl DebugAdapter {
             message: None,
         }
     }
+
+    fn missing_scope_frame_id_message() -> String {
+        "Missing frameId for scopes request. Request stackTrace first and pass one of the returned \
+         stackFrames[].id values as frameId."
+            .to_string()
+    }
 }
 
 impl DebugAdapter {
@@ -194,5 +200,33 @@ impl DebugAdapter {
             Some(limit) => iter.take(limit).collect(),
             None => iter.collect(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    #[test]
+    fn scopes_missing_frame_id_guides_recovery() -> TestResult {
+        let mut adapter = DebugAdapter::new();
+
+        let response = adapter.handle_request(1, "scopes", None);
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert_eq!(command, "scopes");
+                assert!(!success, "scopes without frameId should fail");
+                let message = message.ok_or("scopes failure should include guidance")?;
+                assert!(message.contains("Missing frameId"));
+                assert!(message.contains("Request stackTrace first"));
+                assert!(message.contains("stackFrames[].id"));
+            }
+            other => return Err(format!("expected scopes response, got {other:?}").into()),
+        }
+
+        Ok(())
     }
 }
