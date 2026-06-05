@@ -1540,6 +1540,23 @@ fn test_semantic_analyzer_cache_separates_document_versions()
 // returns and explicit Err-branch assertions rather than #[should_panic].
 // =========================================================================
 
+fn assert_text_sync_uri_guidance(err: &JsonRpcError, method: &str) {
+    assert!(
+        err.message.contains("Missing required parameter: textDocument.uri"),
+        "error message must preserve missing field summary; got: {}",
+        err.message
+    );
+    for expected in
+        [method, "params.textDocument.uri", "document URI string", "file:///workspace/lib/Foo.pm"]
+    {
+        assert!(
+            err.message.contains(expected),
+            "error message must mention {expected}; got: {}",
+            err.message
+        );
+    }
+}
+
 /// handle_did_close with no textDocument.uri must return INVALID_PARAMS.
 #[test]
 fn handle_did_close_missing_uri_returns_invalid_params() {
@@ -1558,6 +1575,7 @@ fn handle_did_close_missing_uri_returns_invalid_params() {
             "error message must name the missing field; got: {}",
             err.message
         );
+        assert_text_sync_uri_guidance(&err, "textDocument/didClose");
     }
 }
 
@@ -1591,6 +1609,7 @@ fn handle_did_save_missing_uri_returns_invalid_params() {
             "error code must be INVALID_PARAMS; got {}",
             err.code
         );
+        assert_text_sync_uri_guidance(&err, "textDocument/didSave");
     }
 }
 
@@ -1643,6 +1662,7 @@ fn did_open_missing_uri_returns_invalid_params() {
             "error code must be INVALID_PARAMS; got {}",
             err.code
         );
+        assert_text_sync_uri_guidance(&err, "textDocument/didOpen");
     }
 }
 
@@ -1662,6 +1682,7 @@ fn handle_did_change_missing_uri_returns_invalid_params() {
             "error code must be INVALID_PARAMS; got {}",
             err.code
         );
+        assert_text_sync_uri_guidance(&err, "textDocument/didChange");
     }
 }
 

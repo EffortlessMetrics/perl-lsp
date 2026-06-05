@@ -24,6 +24,12 @@ use document_state::{empty_state, minimal_state, minimal_state_from_rope};
 use srp_helpers::build_incremental_edit_set;
 use srp_helpers::{is_embedded_template_uri, is_perl_language_id};
 
+fn missing_text_document_uri_params(method: &str) -> JsonRpcError {
+    invalid_params(&format!(
+        "Missing required parameter: textDocument.uri: {method} expects params.textDocument.uri to be a document URI string, for example {{\"textDocument\":{{\"uri\":\"file:///workspace/lib/Foo.pm\"}}}}"
+    ))
+}
+
 impl LspServer {
     /// Handle textDocument/didOpen notification.
     ///
@@ -47,7 +53,7 @@ impl LspServer {
             let uri = params
                 .pointer("/textDocument/uri")
                 .and_then(|v| v.as_str())
-                .ok_or_else(|| invalid_params("Missing required parameter: textDocument.uri"))?;
+                .ok_or_else(|| missing_text_document_uri_params("textDocument/didOpen"))?;
             let text = params
                 .pointer("/textDocument/text")
                 .and_then(|v| v.as_str())
@@ -375,7 +381,7 @@ impl LspServer {
             let uri = params
                 .pointer("/textDocument/uri")
                 .and_then(|v| v.as_str())
-                .ok_or_else(|| invalid_params("Missing required parameter: textDocument.uri"))?;
+                .ok_or_else(|| missing_text_document_uri_params("textDocument/didChange"))?;
             let incoming_version_i64 =
                 params.pointer("/textDocument/version").and_then(|v| v.as_i64());
             let incoming_version = incoming_version_i64.and_then(|v| i32::try_from(v).ok());
