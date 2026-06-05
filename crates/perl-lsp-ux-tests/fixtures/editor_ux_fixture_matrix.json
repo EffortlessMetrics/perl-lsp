@@ -518,16 +518,18 @@
       "ci_tier": "pr",
       "component": "diagnostics",
       "instrumentation": {
-        "run_receipt": false,
-        "first_useful_result": false,
+        "run_receipt": true,
+        "first_useful_result": true,
         "protocol_goldens": false
       },
       "user_journey": "open a file, edit it, and verify diagnostics republish for the updated content",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
+        "receipt records diagnostics timing before and after full-document edit",
         "didChange full-document edit succeeds",
         "publishDiagnostics republish occurs after edit",
         "updated diagnostic payload remains valid"
