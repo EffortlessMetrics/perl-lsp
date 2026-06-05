@@ -4,6 +4,7 @@
 //! timeout enforced by polling child process state. When the timeout
 //! expires, the child process is terminated.
 
+use std::io::ErrorKind;
 use std::process::{Command, Output, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -14,31 +15,52 @@ use std::time::{Duration, Instant};
 /// `Err(String)` with a human-readable message if it times out or fails
 /// to spawn. A `timeout_secs` value of `0` disables timeout enforcement.
 pub fn run_command_with_timeout(mut cmd: Command, timeout_secs: u64) -> Result<Output, String> {
+    let command_label = cmd.get_program().to_string_lossy().into_owned();
     let timeout = (timeout_secs > 0).then(|| Duration::from_secs(timeout_secs));
     let start = Instant::now();
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
-    let mut child = cmd.spawn().map_err(|error| format!("command failed to start: {error}"))?;
+    let mut child =
+        cmd.spawn().map_err(|error| command_start_error(&command_label, error.kind(), &error))?;
 
     loop {
         // Check completion before the deadline so a process that finishes
         // exactly at the deadline boundary is never reported as timed out.
-        if let Some(_status) =
-            child.try_wait().map_err(|error| format!("failed waiting for command: {error}"))?
+        if let Some(_status) = child
+            .try_wait()
+            .map_err(|error| format!("command `{command_label}` wait failed: {error}"))?
         {
             return child
                 .wait_with_output()
-                .map_err(|error| format!("failed collecting command output: {error}"));
+                .map_err(|error| format!("command `{command_label}` output failed: {error}"));
         }
 
         if timeout.is_some_and(|timeout| start.elapsed() >= timeout) {
             let _ = child.kill();
             let _ = child.wait();
-            return Err(format!("command timed out after {} seconds", timeout_secs));
+            let seconds_label = if timeout_secs == 1 { "second" } else { "seconds" };
+            return Err(format!(
+                "command `{command_label}` timed out after {timeout_secs} {seconds_label}\nhelp: check whether the tool is waiting for input, or increase the relevant timeout setting"
+            ));
         }
 
         thread::sleep(Duration::from_millis(50));
     }
+}
+
+fn command_start_error(command_label: &str, kind: ErrorKind, error: &std::io::Error) -> String {
+    let help = match kind {
+        ErrorKind::NotFound => format!(
+            "help: install `{command_label}`, confirm it is on PATH, or configure an absolute executable path"
+        ),
+        ErrorKind::PermissionDenied => format!(
+            "help: check execute permissions for `{command_label}`, or configure a runnable executable path"
+        ),
+        _ => "help: check the executable path, working directory, and permissions before retrying"
+            .to_string(),
+    };
+
+    format!("command `{command_label}` failed to start: {error}\n{help}")
 }
 
 #[cfg(test)]
@@ -105,6 +127,10 @@ mod tests {
         let elapsed = start.elapsed();
 
         assert!(result.is_err(), "expected timeout error");
+        if let Err(message) = result {
+            assert!(message.contains("timed out after 1 second"));
+            assert!(message.contains("help: check whether the tool is waiting for input"));
+        }
         // Should take approximately 1s, allow up to 4s for slow CI
         assert!(elapsed.as_secs() < 4, "timeout took too long: {}ms", elapsed.as_millis());
     }
@@ -143,7 +169,8 @@ mod tests {
 
         assert!(result.is_err(), "expected spawn error for nonexistent command");
         if let Err(message) = result {
-            assert!(message.contains("command failed to start"));
+            assert!(message.contains("command `__perl_lsp_nonexistent_command__` failed to start"));
+            assert!(message.contains("help: install `__perl_lsp_nonexistent_command__`"));
         }
     }
 }
