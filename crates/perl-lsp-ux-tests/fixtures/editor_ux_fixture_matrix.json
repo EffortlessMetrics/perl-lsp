@@ -1894,6 +1894,35 @@
       ]
     },
     {
+      "id": "code_action_quick_fix_e2e",
+      "scenario_file": "ux_scenario_67_code_action_quick_fix_e2e.rs",
+      "subsystem_owner": "editor_trust",
+      "ci_tier": "pr",
+      "component": "code_actions",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "open a strict Perl script with an undeclared variable, receive diagnostics, and request editor-style quick fixes with diagnostic context",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
+      ],
+      "expected_outcomes": [
+        "undeclared-variable diagnostics are published",
+        "textDocument/codeAction accepts the editor diagnostic context",
+        "declare-with-my and declare-with-our quick fixes are returned with concrete workspace edits",
+        "the server stays responsive and does not crash"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "real_workspace_providers",
       "scenario_file": "ux_scenario_20_real_workspace_providers.rs",
       "subsystem_owner": "editor_intelligence",

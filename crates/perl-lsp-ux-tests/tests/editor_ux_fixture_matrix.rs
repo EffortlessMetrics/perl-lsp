@@ -22,6 +22,7 @@ const VALID_COMPONENTS: &[&str] = &[
     "code_lens",
     "folding_range",
     "semantic_tokens",
+    "code_actions",
     "infra",
     "ai_completion",
 ];
