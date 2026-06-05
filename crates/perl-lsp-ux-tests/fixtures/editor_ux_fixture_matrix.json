@@ -634,7 +634,7 @@
       ],
       "expected_outcomes": [
         "undeclared variable diagnostic appears before edit",
-        "go-to-definition remains responsive after didChange"
+        "go-to-definition resolves the declared variable after didChange"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",
