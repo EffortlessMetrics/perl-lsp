@@ -231,7 +231,10 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-rs/tests/lsp_document_links_test.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_document_links_test.rs",
+  "crates/perl-lsp-rs/tests/lsp_document_links_e2e.rs",
+]
 description = "Document links to modules and docs"
 
 [[feature]]

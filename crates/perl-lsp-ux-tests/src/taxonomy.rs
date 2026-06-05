@@ -86,6 +86,7 @@ pub enum UxComponent {
     CodeLens,
     FoldingRange,
     SemanticTokens,
+    CodeActions,
     Infra,
     AiCompletion,
 }
