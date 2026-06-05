@@ -657,7 +657,7 @@ impl SymbolExtractor {
                 self.table.pop_scope();
             }
 
-            NodeKind::If { condition, then_branch, elsif_branches: _, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches: _, else_branch, .. } => {
                 self.visit_node(condition);
 
                 self.table.push_scope(ScopeKind::Block, then_branch.location);
@@ -671,7 +671,7 @@ impl SymbolExtractor {
                 }
             }
 
-            NodeKind::While { condition, body, continue_block: _ } => {
+            NodeKind::While { condition, body, continue_block: _, .. } => {
                 self.visit_node(condition);
 
                 self.table.push_scope(ScopeKind::Block, body.location);

@@ -1,0 +1,16 @@
+[
+  {
+    "name": "Windows Required",
+    "conclusion": "failure",
+    "required": false,
+    "quarantine": false,
+    "comment": "diff does not touch windows-relevant paths — windows-scope output required=false"
+  },
+  {
+    "name": "some-quarantined-integration-test",
+    "conclusion": "failure",
+    "required": true,
+    "quarantine": true,
+    "comment": "quarantined in gate-policy.yaml — not a coverage/measurement gate"
+  }
+]

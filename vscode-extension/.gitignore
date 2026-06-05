@@ -1,6 +1,7 @@
 out/
 node_modules/
 .vscode-test/
+coverage/
 *.vsix
 bin/
 npm-debug.log*

@@ -62,7 +62,8 @@
     "onLanguage:perl5",
     "onLanguage:gherkin",
     "onWalkthrough:perl-lsp.gettingStarted",
-    "onStartupFinished"
+    "onDebugResolve:perl",
+    "onDebugInitialConfigurations"
   ],
   "contributes": {
     "languages": [

@@ -215,3 +215,58 @@ fn test_windows_program_priority_prefers_real_wrappers_over_extensionless_shims(
             > windows_program_priority(r"C:\Strawberry\perl\bin\perltidy")
     );
 }
+
+// --- Lossy UTF-8 conversion contracts (invalid bytes) ---
+
+#[test]
+fn test_stdout_lossy_replaces_invalid_utf8() {
+    // 0xFF is never valid UTF-8; lossy conversion must substitute U+FFFD and
+    // preserve the valid prefix rather than panic or drop bytes.
+    let output =
+        SubprocessOutput { stdout: vec![b'o', b'k', 0xFF], stderr: Vec::new(), status_code: 0 };
+    let text = output.stdout_lossy();
+    assert!(text.starts_with("ok"), "valid prefix preserved: {text:?}");
+    assert!(text.contains('\u{FFFD}'), "invalid byte replaced with U+FFFD: {text:?}");
+}
+
+#[test]
+fn test_stderr_lossy_replaces_each_invalid_byte() {
+    let output = SubprocessOutput { stdout: Vec::new(), stderr: vec![0xFF, 0xFE], status_code: 1 };
+    // Two independent invalid bytes become two replacement characters.
+    assert_eq!(output.stderr_lossy(), "\u{FFFD}\u{FFFD}");
+}
+
+#[test]
+fn test_lossy_helpers_on_empty_streams_return_empty() {
+    let output = SubprocessOutput { stdout: Vec::new(), stderr: Vec::new(), status_code: 0 };
+    assert_eq!(output.stdout_lossy(), "");
+    assert_eq!(output.stderr_lossy(), "");
+}
+
+// --- MockResponse constructors ---
+
+#[test]
+fn test_mock_response_success_sets_zero_status_and_empty_stderr() {
+    let response = mock::MockResponse::success(b"out".to_vec());
+    assert_eq!(response.stdout, b"out");
+    assert!(response.stderr.is_empty(), "success carries no stderr");
+    assert_eq!(response.status_code, 0);
+}
+
+#[test]
+fn test_mock_response_failure_sets_stderr_and_status_with_empty_stdout() {
+    let response = mock::MockResponse::failure(b"boom".to_vec(), 2);
+    assert!(response.stdout.is_empty(), "failure carries no stdout");
+    assert_eq!(response.stderr, b"boom");
+    assert_eq!(response.status_code, 2);
+}
+
+// --- SubprocessError as a std::error::Error trait object ---
+
+#[test]
+fn test_subprocess_error_usable_as_std_error_trait_object() {
+    let error = SubprocessError::new("disk full");
+    let dyn_error: &dyn std::error::Error = &error;
+    assert_eq!(dyn_error.to_string(), "disk full");
+    assert!(dyn_error.source().is_none(), "leaf error has no source");
+}

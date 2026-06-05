@@ -1,0 +1,23 @@
+[
+  {
+    "method": "initialize",
+    "target": "."
+  },
+  {
+    "method": "textDocument/didOpen",
+    "file": "main.pl",
+    "line_endings": "crlf"
+  },
+  {
+    "method": "textDocument/documentLink",
+    "file": "main.pl"
+  },
+  {
+    "method": "textDocument/definition",
+    "file": "main.pl",
+    "position_marker": "Smoke::CRLF"
+  },
+  {
+    "method": "shutdown"
+  }
+]

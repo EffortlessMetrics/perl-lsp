@@ -25,6 +25,7 @@ have to parse check freshness — you do that and give a clean signal.
    HEAD_SHA=$(gh pr view <number> --json headRefOid --jq .headRefOid)
    gh pr checks <number> --json name,state,headSha --jq '.[] | select(.headSha == "'$HEAD_SHA'") | "\(.name): \(.state)"'
    ```
+   > **MCP alternative (web/no-gh sessions):** `mcp__github__pull_request_read(method:"get", owner, repo, pullNumber:<number>)` → `.headRefOid`; then `mcp__github__pull_request_read(method:"get_check_runs", pullNumber:<number>)` → filter by head_sha matching headRefOid.
    Every check must be `SUCCESS` or `NEUTRAL`. No `PENDING`, `FAILURE`, or missing checks.
 
 2. **No stale checks:** If a check shows green but ran against an older SHA, it doesn't count.
@@ -32,12 +33,16 @@ have to parse check freshness — you do that and give a clean signal.
    # Compare check SHA to PR head SHA
    gh api repos/{owner}/{repo}/commits/$HEAD_SHA/check-runs --jq '.check_runs[] | "\(.name) \(.status) \(.conclusion) \(.head_sha)"'
    ```
+   > **MCP alternative (web/no-gh sessions):** `mcp__github__pull_request_read(method:"get_check_runs", owner, repo, pullNumber:<number>)` — cross-reference the `head_sha` field in each result against the HEAD SHA from step 1. Direct REST call by arbitrary SHA is not available via MCP.
 
 3. **PR is not draft:** `gh pr view <number> --json isDraft --jq .isDraft` must be `false`.
+   > **MCP alternative (web/no-gh sessions):** `mcp__github__pull_request_read(method:"get", owner, repo, pullNumber:<number>)` → `.isDraft` field.
 
 4. **PR is mergeable:** `gh pr view <number> --json mergeable --jq .mergeable` must be `MERGEABLE`.
+   > **MCP alternative (web/no-gh sessions):** `mcp__github__pull_request_read(method:"get", owner, repo, pullNumber:<number>)` → `.mergeable` field.
 
 5. **No merge conflicts:** `gh pr view <number> --json mergeStateStatus --jq .mergeStateStatus` must not be `DIRTY`.
+   > **MCP alternative (web/no-gh sessions):** `mcp__github__pull_request_read(method:"get", owner, repo, pullNumber:<number>)` → `.mergeStateStatus` field.
 
 ## What you do NOT check
 
@@ -57,7 +62,9 @@ Mechanical fixes you handle:
 - `cargo xtask fmt` failures → run formatter, commit
 - Clippy warnings → fix the warning, commit
 - PR title format (`(#NNN)` missing) → `gh pr edit --title`
+  > **MCP alternative (web/no-gh sessions):** `mcp__github__update_pull_request(owner, repo, pullNumber:<number>, title:"<new title>")` — direct substitution.
 - Stale CI → `gh pr update-branch` to trigger re-run
+  > **MCP alternative (web/no-gh sessions):** `mcp__github__update_pull_request_branch(owner, repo, pullNumber:<number>)` — direct substitution.
 
 Bounce back to pr-responder or builder if:
 - Test failures (logic bug, not mechanical)
@@ -71,6 +78,7 @@ Bounce back to pr-responder or builder if:
 - **FIXED** — had mechanical failures, fixed them, CI re-running. Wait for green, then set label.
 - **RED** — non-mechanical, non-INFRA-NOISE failures (includes DEVELOPER-CANCEL: `conclusion: cancelled` with >5s duration). Set `needs-ci-fix` and bounce to pr-responder with details.
 - **STALE** — checks green on old SHA. Run `gh pr update-branch` to trigger fresh CI.
+  > **MCP alternative (web/no-gh sessions):** `mcp__github__update_pull_request_branch(owner, repo, pullNumber:<number>)` — direct substitution.
 - **BLOCKED** — PR is draft, has conflicts, or is not mergeable. List the blockers.
 
 ## Todo list

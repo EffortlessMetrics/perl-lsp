@@ -1,0 +1,16 @@
+[
+  {
+    "name": "draft-pr-check",
+    "conclusion": "failure",
+    "required": true,
+    "quarantine": false,
+    "run_ci": false
+  },
+  {
+    "name": "preflight-latest-check",
+    "conclusion": "failure",
+    "required": true,
+    "quarantine": false,
+    "is_latest": false
+  }
+]

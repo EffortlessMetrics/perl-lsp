@@ -164,7 +164,7 @@ impl IncrementalTree {
                     self.map_node(arg);
                 }
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
                 self.map_node(condition);
                 self.map_node(then_branch);
                 for (cond, branch) in elsif_branches {
@@ -1021,7 +1021,9 @@ impl IncrementalParserV2 {
                 name: name.clone(),
                 args: args.iter().map(|a| self.clone_with_shifted_positions(a, shift)).collect(),
             },
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => NodeKind::If {
+            NodeKind::If {
+                condition, then_branch, elsif_branches, else_branch, keyword, ..
+            } => NodeKind::If {
                 condition: Box::new(self.clone_with_shifted_positions(condition, shift)),
                 then_branch: Box::new(self.clone_with_shifted_positions(then_branch, shift)),
                 elsif_branches: elsif_branches
@@ -1037,6 +1039,7 @@ impl IncrementalParserV2 {
                 else_branch: else_branch
                     .as_ref()
                     .map(|b| Box::new(self.clone_with_shifted_positions(b, shift))),
+                keyword: keyword.clone(),
             },
             _ => node.kind.clone(), // For leaf nodes, just clone
         };
@@ -1224,7 +1227,7 @@ impl IncrementalParserV2 {
                     count += self.count_nodes(arg);
                 }
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
                 count += self.count_nodes(condition);
                 count += self.count_nodes(then_branch);
                 for (cond, branch) in elsif_branches {
@@ -1281,6 +1284,42 @@ mod tests {
         let parser = IncrementalParserV2::new();
         assert_eq!(parser.reused_nodes, 0);
         assert_eq!(parser.reparsed_nodes, 0);
+    }
+
+    #[test]
+    fn clone_with_shifted_positions_preserves_if_keyword_metadata()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let parser = IncrementalParserV2::new();
+        let loc = |start, end| perl_parser_core::ast::SourceLocation { start, end };
+        let number =
+            |start| Node::new(NodeKind::Number { value: "1".to_string() }, loc(start, start + 1));
+        let block = |start, end| {
+            Node::new(NodeKind::Block { statements: vec![number(start + 1)] }, loc(start, end))
+        };
+        let node = Node::new(
+            NodeKind::If {
+                condition: Box::new(number(1)),
+                then_branch: Box::new(block(4, 10)),
+                elsif_branches: vec![(Box::new(number(12)), Box::new(block(14, 20)))],
+                else_branch: Some(Box::new(block(22, 28))),
+                keyword: Some("unless".to_string()),
+            },
+            loc(0, 29),
+        );
+
+        let shifted = parser.clone_with_shifted_positions(&node, 3);
+
+        assert_eq!(shifted.location.start, 3);
+        match shifted.kind {
+            NodeKind::If { keyword, else_branch, .. } => {
+                assert_eq!(keyword.as_deref(), Some("unless"));
+                assert!(else_branch.is_some());
+            }
+            other => {
+                return Err(format!("expected If node, got {}", other.kind_name()).into());
+            }
+        }
+        Ok(())
     }
 
     #[test]

@@ -11,7 +11,10 @@ on:
 jobs:
   auto-label-issues:
     if: github.event_name == 'issues' && github.event.action == 'opened'
-    runs-on: ubuntu-latest
+    runs-on:
+      group: em-ci-nano
+      labels: [self-hosted, linux, x64, em-ci, trusted-pr, workflow-nano]
+    timeout-minutes: 5
     permissions:
       issues: write
     steps:
@@ -33,7 +36,10 @@ jobs:
 
   auto-label-prs:
     if: github.event_name == 'pull_request' && github.event.action == 'ready_for_review'
-    runs-on: ubuntu-latest
+    runs-on:
+      group: em-ci-nano
+      labels: [self-hosted, linux, x64, em-ci, trusted-pr, workflow-nano]
+    timeout-minutes: 5
     permissions:
       issues: write
       pull-requests: write
@@ -56,7 +62,10 @@ jobs:
     if: |
       (github.event_name == 'pull_request_review' && github.event.review.state == 'approved') ||
       (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'reviewed-deep')
-    runs-on: ubuntu-latest
+    runs-on:
+      group: em-ci-nano
+      labels: [self-hosted, linux, x64, em-ci, trusted-pr, workflow-nano]
+    timeout-minutes: 5
     permissions:
       issues: write
       pull-requests: read

@@ -72,6 +72,15 @@ impl LspServer {
                                 )
                             }
                         } else if let Some(module_name) =
+                            Self::find_require_module_at_offset(&doc.text, offset)
+                        {
+                            HoverExtracted::UseModule(
+                                module_name,
+                                doc.text.clone(),
+                                uri.to_string(),
+                                offset,
+                            )
+                        } else if let Some(module_name) =
                             Self::find_with_module_at_offset(ast, offset)
                         {
                             // Check for `with 'Role'` / `extends 'Parent'` at this offset
@@ -892,6 +901,58 @@ impl LspServer {
         None
     }
 
+    /// Find a static `require Module::Name` reference whose module token spans `offset`.
+    fn find_require_module_at_offset(text: &str, offset: usize) -> Option<String> {
+        let cursor = Self::normalize_hover_text_offset(text, offset);
+        let line_start = text[..cursor].rfind('\n').map_or(0, |idx| idx + 1);
+        let line_end = text[cursor..].find('\n').map_or(text.len(), |idx| cursor + idx);
+        let line = &text[line_start..line_end];
+        let cursor_in_line = cursor.saturating_sub(line_start);
+
+        let head = perl_module::import::parse_module_import_head(line)?;
+        if !Self::is_static_require_module(head.kind, head.require_form()) {
+            return None;
+        }
+        if !Self::cursor_spans_module_token(cursor_in_line, head.token_start, head.token_end) {
+            return None;
+        }
+
+        let span = perl_module::token_parser::parse_module_token(line, head.token_start)?;
+        if !Self::module_token_span_matches_head(span.end, head.token_end) {
+            return None;
+        }
+
+        Some(perl_module::name::normalize_package_separator(head.token).into_owned())
+    }
+
+    fn is_static_require_module(
+        kind: perl_module::import::ModuleImportKind,
+        require_form: Option<perl_module::import::RequireForm>,
+    ) -> bool {
+        kind == perl_module::import::ModuleImportKind::Require
+            && require_form == Some(perl_module::import::RequireForm::ModuleName)
+    }
+
+    fn cursor_spans_module_token(
+        cursor_in_line: usize,
+        token_start: usize,
+        token_end: usize,
+    ) -> bool {
+        cursor_in_line >= token_start && cursor_in_line <= token_end
+    }
+
+    fn module_token_span_matches_head(span_end: usize, token_end: usize) -> bool {
+        span_end == token_end
+    }
+
+    fn normalize_hover_text_offset(text: &str, offset: usize) -> usize {
+        let mut normalized = offset.min(text.len());
+        while normalized > 0 && !text.is_char_boundary(normalized) {
+            normalized -= 1;
+        }
+        normalized
+    }
+
     /// Walk the AST to find a `with 'Role'` or `extends 'Parent'` name at `offset`.
     ///
     /// Handles two AST forms produced by the parser:
@@ -1146,6 +1207,8 @@ impl LspServer {
     ) -> Value {
         // MetaCPAN link is included in every branch — compute once up front.
         let metacpan_link = format!("[View on MetaCPAN](https://metacpan.org/pod/{module_name})");
+        let perldoc_virtual_link = Self::perldoc_virtual_link(module_name);
+        let docs_links = format!("{metacpan_link} \u{2022} {perldoc_virtual_link}");
 
         // Try URI resolution (handles open docs + workspace folders)
         if let Some(uri) = self.resolve_module_to_path_with_doc_at_offset(
@@ -1162,7 +1225,7 @@ impl LspServer {
                 "contents": {
                     "kind": "markdown",
                     "value": format!(
-                        "**{module_name}**\n\n`{display_path}`\n\n[Go to module]({uri}) \u{2022} {metacpan_link}{pod_section}"
+                        "**{module_name}**\n\n`{display_path}`\n\n[Go to module]({uri}) \u{2022} {docs_links}{pod_section}"
                     ),
                 },
             });
@@ -1182,7 +1245,7 @@ impl LspServer {
                     "contents": {
                         "kind": "markdown",
                         "value": format!(
-                            "**{module_name}**\n\n`{display}`\n\n[Go to module]({file_uri}) \u{2022} {metacpan_link}{pod_section}"
+                            "**{module_name}**\n\n`{display}`\n\n[Go to module]({file_uri}) \u{2022} {docs_links}{pod_section}"
                         ),
                     },
                 });
@@ -1191,7 +1254,7 @@ impl LspServer {
                 "contents": {
                     "kind": "markdown",
                     "value": format!(
-                        "**{module_name}**\n\n`{display}`\n\n{metacpan_link}{pod_section}"
+                        "**{module_name}**\n\n`{display}`\n\n{docs_links}{pod_section}"
                     ),
                 },
             });
@@ -1223,10 +1286,14 @@ Not found in workspace or configured include paths.
 
 **Next steps**: install `{module_name}` (for example, `cpanm {module_name}`) or add the directory that contains it to `.perl-lsp.toml` `include_paths`.
 
-{metacpan_link}"
+{docs_links}"
                 ),
             },
         })
+    }
+
+    fn perldoc_virtual_link(module_name: &str) -> String {
+        format!("[Open virtual perldoc](perldoc://{module_name})")
     }
 
     fn format_missing_module_search_paths(include_paths: &[String]) -> String {
@@ -1247,14 +1314,16 @@ Not found in workspace or configured include paths.
         let version_line =
             doc.version_required.map(|v| format!("\n\n**Requires**: Perl {v}")).unwrap_or_default();
 
-        let perldoc_link =
+        let perldoc_web_link =
             format!("[perldoc {module_name}](https://perldoc.perl.org/{module_name})");
+        let perldoc_virtual_link = Self::perldoc_virtual_link(module_name);
+        let perldoc_links = format!("{perldoc_web_link} | {perldoc_virtual_link}");
 
         Some(json!({
             "contents": {
                 "kind": "markdown",
                 "value": format!(
-                    "**Pragma: `{module_name}`**\n\n_{summary}_\n\n{description}{version_line}\n\n{perldoc_link}",
+                    "**Pragma: `{module_name}`**\n\n_{summary}_\n\n{description}{version_line}\n\n{perldoc_links}",
                     summary = doc.summary,
                     description = doc.description,
                 ),

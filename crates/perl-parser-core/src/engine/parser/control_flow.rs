@@ -69,6 +69,7 @@ impl<'a> Parser<'a> {
                 then_branch: Box::new(then_branch),
                 elsif_branches,
                 else_branch,
+                keyword: None,
             },
             SourceLocation { start, end },
         ))
@@ -136,6 +137,7 @@ impl<'a> Parser<'a> {
                 then_branch: Box::new(then_branch),
                 elsif_branches,
                 else_branch,
+                keyword: Some("unless".to_string()),
             },
             SourceLocation { start, end },
         ))
@@ -188,6 +190,7 @@ impl<'a> Parser<'a> {
                 condition: Box::new(condition),
                 body: Box::new(body),
                 continue_block,
+                keyword: None,
             },
             SourceLocation { start, end },
         ))
@@ -226,6 +229,7 @@ impl<'a> Parser<'a> {
                 condition: Box::new(negated_condition),
                 body: Box::new(body),
                 continue_block,
+                keyword: Some("until".to_string()),
             },
             SourceLocation { start, end },
         ))
@@ -811,6 +815,7 @@ impl<'a> Parser<'a> {
                 then_branch: Box::new(else_block),
                 elsif_branches: vec![],
                 else_branch: None,
+                keyword: None,
             },
             SourceLocation { start, end },
         ))
@@ -890,6 +895,7 @@ impl<'a> Parser<'a> {
                 then_branch: Box::new(then_branch),
                 elsif_branches,
                 else_branch,
+                keyword: None,
             },
             SourceLocation { start, end },
         ))

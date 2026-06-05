@@ -67,9 +67,11 @@ Current implemented foundations include:
   outcomes, latency, hard-zone suppression, replacement-range checks, and parse
   regressions.
 
-The remaining work is not "make inline completion exist." It is to grow the
-fixture corpus, keep the receipt counters honest, add real-editor/project-shape
-receipts where useful, and only then consider next-edit or optional AI surfaces.
+The remaining work is not "make inline completion exist." It is to keep the
+receipt counters honest, use receipt-only next-action proofs to harden the
+editor-intent substrate, add real-editor/project-shape receipts where useful,
+and keep runtime next-edit or AI provider behavior gated until deterministic
+proof is strong enough.
 
 ## Non-Goals
 
@@ -132,13 +134,38 @@ The pipeline must keep protocol concerns separate from candidate quality:
 Returned ranges must be editor-safe:
 
 - start at the current token or partial expression;
-- stay single-line unless a later explicit multiline contract is added;
+- stay single-line by default, with multiline ghost text allowed only under the
+  explicit policy below;
 - replace the typed prefix rather than duplicating it;
 - use LSP UTF-16 positions on the wire;
 - avoid fighting text typed after the request started.
 
 Bad ranges make ghost text feel like an editor bug. Range correctness should
 land before semantic expansion.
+
+### Multiline Ghost-Text Boundaries
+
+Multiline ghost text is future-gated. The current trusted contract remains
+single-line completion unless a later PR adds a narrow, fixture-backed exception.
+
+Any multiline exception must follow these rules:
+
+- automatic trigger stays single-line unless the case is explicitly whitelisted,
+  high-confidence, parse-safe, and backed by a real editor UX receipt;
+- invoked trigger may return richer multiline text only when the candidate has a
+  compatible replacement range, passes parse-safety, and has both positive and
+  negative fixtures;
+- multiline items must not conflict with `selectedCompletionInfo` or an open
+  completion popup;
+- hard reject zones remain silent regardless of trigger mode;
+- unsupported Perl object systems or constructor idioms should stay silent
+  instead of emitting a generic block.
+
+Good first candidates for future multiline work are narrow and idiomatic, such
+as an invoked-only constructor body in a file that already proves the local
+constructor style. Broad block generation, snippet-like scaffolds, and AI-backed
+multiline suggestions remain out of scope until deterministic receipts make the
+case safe.
 
 ### `selectedCompletionInfo`
 
@@ -336,7 +363,7 @@ implemented rails instead of replacing them.
 | 18 | `feat(inline): add local dev counters for inline completion quality` | Local-only counters. |
 | 19 | `ci(inline): emit inline completion quality receipts` | Fixture totals, source counters, latency, parse regressions. |
 | 20 | `feat(inline): add gated next-edit suggestion scaffold` | Feature-gated scaffold only. |
-| 21 | `feat(inline): add guarded AI candidate source boundary` | Optional AI boundary after deterministic path is trusted. |
+| 21 | `feat(inline): add guarded AI candidate source boundary` | Optional AI disabled-boundary proof before any provider/source behavior. |
 
 Current completed or substantially implemented phases:
 
@@ -350,7 +377,10 @@ Current completed or substantially implemented phases:
 - workspace module imports, test assertions, current-package `$self->` methods,
   constructor style, DBI receiver hints, and visible-context loop/guard
   continuations;
-- ranking, parse-safety filtering, and local quality receipts.
+- ranking, parse-safety filtering, and local quality receipts;
+- the gated next-edit scaffold, receipt-only missing-import, test assertion,
+  call-site update, and rename-occurrence next-action proofs, accepted edit
+  application checks, and optional AI disabled-boundary receipts.
 
 Current semantic inline UX receipt inventory:
 
@@ -365,13 +395,54 @@ Current semantic inline UX receipt inventory:
 | `loop_binding_inline_completion_quality` | `ux_scenario_57_loop_binding_inline_completion_quality.rs` | Visible collection loop bindings, hash key iteration, array preference, and safe singular naming. |
 | `guard_condition_inline_completion_quality` | `ux_scenario_58_guard_condition_inline_completion_quality.rs` | Guard-condition continuations use visible scalar facts without unrelated result or receiver guesses. |
 | `real_workspace_module_import_inline_completion_quality` | `ux_scenario_59_real_workspace_module_import_inline_completion_quality.rs` | Effective `@INC`-aware module-import ghost text, `no lib` suppression, and workspace-root wildcard suppression. |
+| `gated_multiline_constructor_inline_completion_quality` | `ux_scenario_60_gated_multiline_constructor_inline_completion_quality.rs` | Invoked-only multiline constructor ghost text, automatic-trigger suppression, selected-completion conflict suppression, and accepted-edit parse safety. |
+| `package_boundary_receiver_inline_completion_quality` | `ux_scenario_61_package_boundary_receiver_inline_completion_quality.rs` | `$self->` current-package method suggestions stay preferred in a multi-file package-boundary workspace without sibling-package or generic constructor leaks. |
+| `project_test_assertion_inline_completion_quality` | `ux_scenario_62_project_test_assertion_inline_completion_quality.rs` | Test::More and Test2 assertion ghost text stay preferred in CPAN-shaped project test files without return noise, premature `done_testing`, or module-import ghost text. |
+| `project_control_flow_inline_completion_quality` | `ux_scenario_63_project_control_flow_inline_completion_quality.rs` | Loop and guard ghost text in CPAN-shaped project scripts uses visible lexicals and collections without placeholder snippets or module-import noise. |
+| `project_constructor_inline_completion_quality` | `ux_scenario_64_project_constructor_inline_completion_quality.rs` | Shift-style and signature-style constructor ghost text stays preferred in CPAN-shaped project modules without test assertion, module-import, or guard ghost text. |
+| `project_dbi_receiver_inline_completion_quality` | `ux_scenario_65_project_dbi_receiver_inline_completion_quality.rs` | DBI database-handle and statement-handle ghost text stays preferred in CPAN-shaped project modules without constructor, module-import, test assertion, or visible lexical noise. |
+| `project_lexical_return_inline_completion_quality` | `ux_scenario_66_project_lexical_return_inline_completion_quality.rs` | Visible lexical return ghost text stays preferred in CPAN-shaped project modules without module-import, test assertion, constructor, or unrelated lexical noise. |
+
+The machine-readable dashboard for this inventory is:
+
+```bash
+cargo xtask semantic-inline-next-edit \
+  --receipt target/receipts/semantic-inline-next-edit.json
+cargo xtask semantic-inline-receipts \
+  --receipt target/receipts/semantic-inline-receipts.json \
+  --next-edit-receipt target/receipts/semantic-inline-next-edit.json
+```
+
+That dashboard aggregates the registered semantic inline UX workflows, validates
+the next-edit scaffold receipt when present, and keeps next-edit runtime behavior
+and optional AI provider behavior explicitly future-gated. It is an inventory
+receipt; it does not run the UX scenarios or promote support status by itself.
+
+The next-edit scaffold now includes receipt-only proofs for the first four
+deterministic next-action families:
+
+- missing-import next actions, using effective-`@INC` reachability and duplicate
+  import rejection;
+- test assertion body next actions, using Test::More/Test2 imports and visible
+  `$got`/`$expected`-style lexicals;
+- call-site update next actions, using safe same-line Perl calls and visible
+  argument facts without duplicate argument edits;
+- rename-occurrence next actions, using safe Perl variable symbols, next
+  occurrence search, hard-zone rejection, and accepted-edit parse stability.
+
+These receipts remain non-runtime and non-editor-visible. They prove candidate
+preparation, gate rejection, accepted edit application, and parse stability
+without registering an LSP next-edit provider.
 
 Still future or deliberately gated:
 
 - broader real-project UX receipts for inline quality beyond the current module
-  import receipt and existing inventory;
-- next-edit suggestions;
-- optional AI candidate boundaries.
+  import, package-boundary receiver, project test assertion, project
+  control-flow, project constructor, project DBI receiver, and project lexical
+  return receipts;
+- runtime/editor-visible next-edit suggestions;
+- optional AI candidate source/provider behavior beyond the disabled-boundary
+  receipt.
 
 ## High-Value Perl Wins
 

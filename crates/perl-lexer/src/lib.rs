@@ -113,6 +113,7 @@
 //! let ast = parser.parse().expect("should parse");
 //! ```
 
+#![warn(missing_docs)]
 #![allow(
     // Core allows for lexer code
     clippy::too_many_lines,
@@ -1776,10 +1777,14 @@ impl<'a> PerlLexer<'a> {
                     // These keywords introduce an expression, so a following `/` is a
                     // regex, not division.  `return /re/`, `die /re/`, `warn /re/`,
                     // `do /file/`, and `eval /re/` are all valid Perl.
-                    | "return" | "die" | "warn" | "do" | "eval" => {
+                    | "return" | "die" | "warn" | "do" | "eval"
+                    // `given`/`when` (feature 'switch') also introduce an expression;
+                    // `when /re/ { ... }` and `given /re/ { ... }` must lex `/` as
+                    // regex, not division. (#818)
+                    | "given" | "when" => {
                         self.mode = LexerMode::ExpectTerm;
                     }
-                    "sub" => {
+                    "sub" | "method" => {
                         self.after_sub = true;
                         self.mode = LexerMode::ExpectTerm;
                     }

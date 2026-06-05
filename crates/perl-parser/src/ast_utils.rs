@@ -53,7 +53,7 @@ pub fn find_node_at_range(node: &Node, range: (usize, usize)) -> Option<&Node> {
                     }
                 }
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
                 if let Some(result) = find_node_at_range(condition, range) {
                     return Some(result);
                 }

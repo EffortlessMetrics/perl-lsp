@@ -13,6 +13,9 @@
 #
 # Usage:
 #   bash scripts/cleanup-completed-worktrees.sh [--dry-run]
+#
+# Optional:
+#   CLEANUP_BASE_BRANCH=<branch>  branch used for merged/unpushed comparisons
 
 set -euo pipefail
 
@@ -21,11 +24,14 @@ if [[ "${1:-}" == "--dry-run" ]]; then
     DRY_RUN=true
 fi
 
+CLEANUP_BASE_BRANCH="${CLEANUP_BASE_BRANCH:-main}"
+
 # Navigate to the repo root (main worktree)
 REPO_ROOT="$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/.git$||')"
 
 echo "=== Mid-Cycle Worktree Cleanup ==="
 echo "Repo root: $REPO_ROOT"
+echo "Base branch: $CLEANUP_BASE_BRANCH"
 echo "Dry run: $DRY_RUN"
 echo ""
 
@@ -76,9 +82,9 @@ for line in "${WORKTREES[@]}"; do
         continue
     fi
 
-    # Check 1: Is the branch merged to master?
+    # Check 1: Is the branch merged to the configured base branch?
     MERGED=false
-    if git branch --merged master 2>/dev/null | grep -qw "$wt_branch"; then
+    if git branch --merged "$CLEANUP_BASE_BRANCH" 2>/dev/null | grep -qw "$wt_branch"; then
         MERGED=true
     fi
 
@@ -113,8 +119,8 @@ for line in "${WORKTREES[@]}"; do
     # Check if the branch has a remote tracking branch
     REMOTE_BRANCH="$(git config --get "branch.$wt_branch.merge" 2>/dev/null || echo "")"
     if [[ -z "$REMOTE_BRANCH" ]]; then
-        # No tracking branch — check if there are commits beyond master
-        AHEAD="$(git rev-list master.."$wt_branch" --count 2>/dev/null || echo "0")"
+        # No tracking branch — check if there are commits beyond the base branch.
+        AHEAD="$(git rev-list "$CLEANUP_BASE_BRANCH..$wt_branch" --count 2>/dev/null || echo "0")"
         if [[ "$AHEAD" -gt 0 ]]; then
             UNPUSHED=true
         fi

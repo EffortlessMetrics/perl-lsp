@@ -1,0 +1,36 @@
+[
+  {
+    "method": "initialize",
+    "target": "."
+  },
+  {
+    "method": "textDocument/didOpen",
+    "file": "bin/app.pl"
+  },
+  {
+    "method": "textDocument/definition",
+    "file": "bin/app.pl",
+    "position_marker": "Smoke::Greeter"
+  },
+  {
+    "method": "textDocument/definition",
+    "file": "bin/app.pl",
+    "position_marker": "greet"
+  },
+  {
+    "method": "textDocument/completion",
+    "file": "bin/app.pl",
+    "position_marker": "$greeter->"
+  },
+  {
+    "method": "workspace/symbol",
+    "query": "Greeter"
+  },
+  {
+    "method": "textDocument/documentLink",
+    "file": "bin/app.pl"
+  },
+  {
+    "method": "shutdown"
+  }
+]

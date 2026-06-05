@@ -177,6 +177,10 @@ impl LspServer {
                     .and_then(|w| w.get("configuration"))
                     .and_then(|b| b.as_bool())
                     .unwrap_or(false);
+                caps.workspace_apply_edit_support = params
+                    .pointer("/capabilities/workspace/applyEdit")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
                 caps.workspace_folders_support = params
                     .get("capabilities")
                     .and_then(|c| c.get("workspace"))
@@ -236,6 +240,10 @@ impl LspServer {
                     .unwrap_or(false);
                 caps.workspace_edit_snippet_edit_support = params
                     .pointer("/capabilities/workspace/workspaceEdit/snippetEditSupport")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                caps.workspace_edit_metadata_support = params
+                    .pointer("/capabilities/workspace/workspaceEdit/metadataSupport")
                     .and_then(Value::as_bool)
                     .unwrap_or(false);
                 caps.code_action_documentation_support = params
@@ -875,6 +883,45 @@ mod tests {
 
         assert!(server.client_capabilities.lock().workspace_configuration_support);
         assert!(server.client_capabilities.lock().workspace_folders_support);
+    }
+
+    #[test]
+    fn initialize_parses_apply_edit_metadata_support() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "workspace": {
+                    "applyEdit": true,
+                    "workspaceEdit": {
+                        "metadataSupport": true
+                    }
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+        let caps = server.client_capabilities.lock();
+
+        assert!(caps.workspace_apply_edit_support);
+        assert!(caps.workspace_edit_metadata_support);
+    }
+
+    #[test]
+    fn initialize_leaves_apply_edit_metadata_disabled_when_absent() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "workspace": {
+                    "workspaceEdit": {}
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+        let caps = server.client_capabilities.lock();
+
+        assert!(!caps.workspace_apply_edit_support);
+        assert!(!caps.workspace_edit_metadata_support);
     }
 
     #[test]

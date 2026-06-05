@@ -210,7 +210,7 @@ where
         NodeKind::Return { value } => {
             value.as_deref().into_iter().for_each(&mut f);
         }
-        NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+        NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
             f(condition);
             f(then_branch);
             for (cond, branch) in elsif_branches {
@@ -254,5 +254,44 @@ where
             f(else_expr);
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn loc(start: usize, end: usize) -> SourceLocation {
+        SourceLocation { start, end }
+    }
+
+    fn ident(name: &str, start: usize) -> Node {
+        Node::new(NodeKind::Identifier { name: name.to_string() }, loc(start, start + name.len()))
+    }
+
+    #[test]
+    fn visit_children_walks_if_branches_with_keyword_metadata() {
+        let node = Node::new(
+            NodeKind::If {
+                condition: Box::new(ident("cond", 1)),
+                then_branch: Box::new(ident("then_branch", 7)),
+                elsif_branches: vec![(
+                    Box::new(ident("elsif_cond", 20)),
+                    Box::new(ident("elsif_branch", 32)),
+                )],
+                else_branch: Some(Box::new(ident("else_branch", 46))),
+                keyword: Some("unless".to_string()),
+            },
+            loc(0, 57),
+        );
+        let mut names = Vec::new();
+
+        visit_children(&node, |child| {
+            if let NodeKind::Identifier { name } = &child.kind {
+                names.push(name.clone());
+            }
+        });
+
+        assert_eq!(names, vec!["cond", "then_branch", "elsif_cond", "elsif_branch", "else_branch"]);
     }
 }

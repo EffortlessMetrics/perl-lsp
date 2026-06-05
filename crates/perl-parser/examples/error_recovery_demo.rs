@@ -125,7 +125,9 @@ print "Done";
                             count_nodes(init, valid, error, missing);
                         }
                     }
-                    NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+                    NodeKind::If {
+                        condition, then_branch, elsif_branches, else_branch, ..
+                    } => {
                         count_nodes(condition, valid, error, missing);
                         count_nodes(then_branch, valid, error, missing);
                         for (cond, branch) in elsif_branches {

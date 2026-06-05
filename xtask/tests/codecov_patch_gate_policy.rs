@@ -107,9 +107,10 @@ fn coverage_docs_describe_patch_front_door_without_ci_wiring()
         .ok_or("coverage how-to is missing CI Integration section")?;
     assert!(
         ci_section.contains("Patch coverage is the front-door PR coverage gate")
-            && ci_section.contains("Project coverage remains informational during burn-down")
+            && ci_section.contains("Project coverage remains")
+            && ci_section.contains("informational during burn-down")
             && ci_section.contains(
-                "coverage proof workflow now runs the patch coverage quality gate on PRs"
+                "coverage proof workflow now routes PR patch coverage by changed surface"
             ),
         "coverage how-to must describe the transitional Codecov rollout posture"
     );

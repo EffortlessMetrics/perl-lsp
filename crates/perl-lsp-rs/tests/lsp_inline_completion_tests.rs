@@ -48,6 +48,22 @@ fn open_doc(server: &LspServer, uri: &str, text: &str) {
     server.handle_request(request);
 }
 
+fn change_doc(server: &LspServer, uri: &str, version: i32, text: &str) {
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "textDocument/didChange".into(),
+        params: Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "version": version,
+            },
+            "contentChanges": [{ "text": text }]
+        })),
+    };
+    server.handle_request(request);
+}
+
 fn inline_completion(
     server: &LspServer,
     uri: &str,
@@ -290,5 +306,49 @@ fn test_inline_completion_after_comment_keeps_contextual_suggestions()
     assert!(items.iter().any(|item| {
         item["insertText"].as_str().map(|text| text == "return $result;").unwrap_or(false)
     }));
+    Ok(())
+}
+
+#[test]
+fn test_inline_completion_multiline_crlf_doc_line1() -> Result<(), Box<dyn std::error::Error>> {
+    let server = setup_server()?;
+    let uri = "file:///crlf.pl";
+    let text = "use strict;\r\nmy $obj = Package->";
+    open_doc(&server, uri, text);
+
+    let second_line = "my $obj = Package->";
+    let character = second_line.encode_utf16().count() as u32;
+    let result = inline_completion(&server, uri, 1, character)?;
+    let items = result["items"].as_array().ok_or("items array")?;
+
+    assert!(
+        items.iter().any(|item| item["insertText"].as_str() == Some("new()")),
+        "expected method completion on CRLF line 1, got: {items:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_inline_completion_uses_latest_changed_document_text()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = setup_server()?;
+    let uri = "file:///changed.pl";
+    open_doc(&server, uri, "use ");
+
+    let initial = inline_completion(&server, uri, 0, 4)?;
+    let initial_items = initial["items"].as_array().ok_or("initial items array")?;
+    assert!(
+        initial_items.iter().any(|item| item["insertText"].as_str() == Some("strict;")),
+        "expected strict; before document change, got: {initial_items:?}"
+    );
+
+    change_doc(&server, uri, 2, "# use ");
+    let changed = inline_completion(&server, uri, 0, 6)?;
+    let changed_items = changed["items"].as_array().ok_or("changed items array")?;
+
+    assert!(
+        changed_items.is_empty(),
+        "inline completion must use latest document text and stay silent in comments: {changed_items:?}"
+    );
     Ok(())
 }

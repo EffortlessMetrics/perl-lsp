@@ -1,0 +1,389 @@
+#!/usr/bin/env bash
+# scripts/swarm-doctor
+#
+# REPORT ONLY — exits 0 always. Never modifies anything.
+#
+# Reports:
+#   - Disk free (delegates to storage-doctor for the full report)
+#   - Worktree inventory (porcelain listing)
+#   - Per-worktree dirty/clean status
+#   - Stale scratch (lock files whose PID is no longer in /proc)
+#   - Largest /tmp agent target dirs
+#   - Current branch vs main divergence
+#
+# Usage:
+#   bash scripts/swarm-doctor           # human-readable report
+#   bash scripts/swarm-doctor --json    # JSON output
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Allow REPO_ROOT override for testing.
+REPO_ROOT="${REPO_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+
+# ── Argument parsing ──────────────────────────────────────────────────────────
+
+JSON_MODE=0
+for arg in "$@"; do
+    case "$arg" in
+        --json)    JSON_MODE=1 ;;
+        --help|-h)
+            grep '^#' "$0" | grep -v '#!/' | sed 's/^# //' | sed 's/^#//'
+            exit 0
+            ;;
+        *)
+            echo "Unknown flag: $arg" >&2
+            echo "Usage: $0 [--json]" >&2
+            exit 1
+            ;;
+    esac
+done
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+# Check if a PID is alive in /proc.
+pid_alive() {
+    local pid="$1"
+    [[ -n "$pid" ]] && [[ "$pid" =~ ^[0-9]+$ ]] && [[ -d "/proc/$pid" ]]
+}
+
+# Extract a PID from a git worktree lock reason string.
+# Lock reason convention: "claude agent <id> (pid NNN start ...)"
+extract_pid_from_lock_reason() {
+    local reason="$1"
+    # Try "(pid NNN" pattern first (our convention).
+    if [[ "$reason" =~ \(pid[[:space:]]+([0-9]+) ]]; then
+        echo "${BASH_REMATCH[1]}"
+        return
+    fi
+    echo ""
+}
+
+# ── Collect worktree data ─────────────────────────────────────────────────────
+
+collect_worktrees() {
+    local repo_root="$1"
+    # Returns lines: path|branch|is_locked|lock_reason|is_dirty|status_count
+    local wt_path="" wt_head="" wt_branch="" is_locked=0 lock_reason="" is_bare=0
+
+    while IFS= read -r line; do
+        case "$line" in
+            "worktree "*)
+                # Flush previous entry
+                if [[ -n "$wt_path" ]]; then
+                    # Get status
+                    local dirty=0 status_count=0
+                    if [[ -d "$wt_path" ]] && ! [[ "$is_bare" -eq 1 ]]; then
+                        local status_out
+                        status_out="$(git -C "$wt_path" status --porcelain 2>/dev/null || echo "")"
+                        if [[ -n "$status_out" ]]; then
+                            dirty=1
+                            status_count="$(echo "$status_out" | wc -l | tr -d ' ')"
+                        fi
+                    fi
+                    echo "${wt_path}|${wt_branch}|${is_locked}|${lock_reason}|${dirty}|${status_count}"
+                fi
+                wt_path="${line#worktree }"
+                wt_branch=""
+                wt_head=""
+                is_locked=0
+                lock_reason=""
+                is_bare=0
+                ;;
+            "HEAD "*)
+                wt_head="${line#HEAD }"
+                ;;
+            "branch "*)
+                wt_branch="${line#branch }"
+                wt_branch="${wt_branch#refs/heads/}"
+                ;;
+            "bare")
+                is_bare=1
+                ;;
+            "locked"*)
+                is_locked=1
+                lock_reason="${line#locked}"
+                lock_reason="${lock_reason# }"
+                ;;
+            "detached")
+                wt_branch="(detached:${wt_head:0:8})"
+                ;;
+        esac
+    done < <(git -C "$repo_root" worktree list --porcelain 2>/dev/null || true)
+
+    # Flush last entry
+    if [[ -n "$wt_path" ]]; then
+        local dirty=0 status_count=0
+        if [[ -d "$wt_path" ]] && ! [[ "$is_bare" -eq 1 ]]; then
+            local status_out
+            status_out="$(git -C "$wt_path" status --porcelain 2>/dev/null || echo "")"
+            if [[ -n "$status_out" ]]; then
+                dirty=1
+                status_count="$(echo "$status_out" | wc -l | tr -d ' ')"
+            fi
+        fi
+        echo "${wt_path}|${wt_branch}|${is_locked}|${lock_reason}|${dirty}|${status_count}"
+    fi
+}
+
+# ── Compute divergence from main ──────────────────────────────────────────────
+
+compute_divergence() {
+    local repo_root="$1"
+    local current_branch main_branch ahead behind
+
+    current_branch="$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "(unknown)")"
+
+    # Find main/master
+    if git -C "$repo_root" rev-parse --verify main >/dev/null 2>&1; then
+        main_branch="main"
+    elif git -C "$repo_root" rev-parse --verify master >/dev/null 2>&1; then
+        main_branch="master"
+    else
+        echo "current=${current_branch}|main_branch=unknown|ahead=0|behind=0"
+        return
+    fi
+
+    ahead="$(git -C "$repo_root" rev-list "${main_branch}..HEAD" --count 2>/dev/null || echo 0)"
+    behind="$(git -C "$repo_root" rev-list "HEAD..${main_branch}" --count 2>/dev/null || echo 0)"
+
+    echo "current=${current_branch}|main_branch=${main_branch}|ahead=${ahead}|behind=${behind}"
+}
+
+# ── Find largest tmp agent target dirs ───────────────────────────────────────
+
+find_tmp_targets() {
+    local results=()
+    for pattern in "/tmp/agent-*-target" "/tmp/wt-*-target"; do
+        for d in $pattern; do
+            [[ -d "$d" ]] || continue
+            local kb=0
+            kb="$(du -sk "$d" 2>/dev/null | awk '{print $1}' || echo 0)"
+            results+=("${kb}|${d}")
+        done
+    done
+
+    if [[ ${#results[@]} -gt 0 ]]; then
+        printf '%s\n' "${results[@]}" | sort -rn
+    fi
+}
+
+# ── Human-readable output ─────────────────────────────────────────────────────
+
+human_report() {
+    local repo_root="$1"
+
+    echo "=== swarm-doctor ==="
+    echo ""
+
+    # 1. Disk — delegate to storage-doctor for the real detail
+    echo "== storage-doctor (disk, repo targets, cargo env) =="
+    if [[ -x "$SCRIPT_DIR/storage-doctor" ]]; then
+        "$SCRIPT_DIR/storage-doctor" 2>/dev/null || true
+    else
+        echo "  (storage-doctor not found — raw df:)"
+        df -h "$repo_root" 2>/dev/null || true
+    fi
+    echo ""
+
+    # 2. Worktree inventory
+    echo "== worktree inventory =="
+    local wt_lines=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && wt_lines+=("$line")
+    done < <(collect_worktrees "$repo_root")
+
+    if [[ ${#wt_lines[@]} -eq 0 ]]; then
+        echo "  no worktrees found"
+    else
+        printf "  %-55s %-35s %-8s %-10s %s\n" "PATH" "BRANCH" "LOCKED" "STATUS" "LOCK_REASON"
+        printf "  %-55s %-35s %-8s %-10s %s\n" "----" "------" "------" "------" "-----------"
+        for entry in "${wt_lines[@]}"; do
+            IFS='|' read -r wt_path wt_branch is_locked lock_reason dirty status_count <<< "$entry"
+            local lock_col="no"
+            local status_col="clean"
+            local lock_pid="" pid_status=""
+
+            if [[ "$is_locked" -eq 1 ]]; then
+                lock_pid="$(extract_pid_from_lock_reason "$lock_reason")"
+                if pid_alive "$lock_pid"; then
+                    lock_col="yes(live)"
+                    pid_status="pid:${lock_pid} alive"
+                else
+                    lock_col="yes(stale)"
+                    pid_status="pid:${lock_pid:-?} dead"
+                fi
+            fi
+
+            if [[ "$dirty" -eq 1 ]]; then
+                status_col="dirty(${status_count})"
+            fi
+
+            local display_reason="${pid_status:-${lock_reason:0:30}}"
+            printf "  %-55s %-35s %-8s %-10s %s\n" \
+                "$(basename "$wt_path")" \
+                "${wt_branch:0:34}" \
+                "$lock_col" \
+                "$status_col" \
+                "$display_reason"
+        done
+    fi
+    echo ""
+
+    # 3. Stale scratch (locked but pid dead)
+    echo "== stale scratch (locked worktrees with dead PID) =="
+    local stale_count=0
+    for entry in "${wt_lines[@]}"; do
+        IFS='|' read -r wt_path wt_branch is_locked lock_reason dirty status_count <<< "$entry"
+        if [[ "$is_locked" -eq 1 ]]; then
+            local lock_pid
+            lock_pid="$(extract_pid_from_lock_reason "$lock_reason")"
+            if ! pid_alive "$lock_pid"; then
+                echo "  STALE: $(basename "$wt_path")  branch=${wt_branch}  pid=${lock_pid:-unknown}  reason='${lock_reason}'"
+                stale_count=$((stale_count + 1))
+            fi
+        fi
+    done
+    [[ "$stale_count" -eq 0 ]] && echo "  none"
+    echo ""
+
+    # 4. Largest /tmp agent target dirs
+    echo "== largest /tmp agent target dirs =="
+    local tmp_lines=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && tmp_lines+=("$line")
+    done < <(find_tmp_targets)
+
+    if [[ ${#tmp_lines[@]} -eq 0 ]]; then
+        echo "  none found"
+    else
+        local count=0
+        for entry in "${tmp_lines[@]}"; do
+            IFS='|' read -r kb path <<< "$entry"
+            local human_size
+            human_size="$(du -sh "$path" 2>/dev/null | awk '{print $1}' || echo '?')"
+            printf "  %-8s %s\n" "$human_size" "$path"
+            count=$((count + 1))
+            [[ "$count" -ge 10 ]] && break
+        done
+    fi
+    echo ""
+
+    # 5. Branch divergence (current worktree)
+    echo "== branch divergence from main =="
+    local div
+    div="$(compute_divergence "$repo_root")"
+    local cur_branch main_branch ahead behind
+    IFS='|' read -r _cur main_b _ahead _behind <<< "$div"
+    cur_branch="${_cur#current=}"
+    main_branch="${main_b#main_branch=}"
+    ahead="${_ahead#ahead=}"
+    behind="${_behind#behind=}"
+
+    echo "  current: ${cur_branch}"
+    echo "  base:    ${main_branch}"
+    echo "  ahead:   ${ahead} commit(s)"
+    echo "  behind:  ${behind} commit(s)"
+}
+
+# ── JSON output ───────────────────────────────────────────────────────────────
+
+json_report() {
+    local repo_root="$1"
+
+    # Worktrees
+    local wt_json="["
+    local first_wt=1
+    while IFS= read -r entry; do
+        [[ -n "$entry" ]] || continue
+        IFS='|' read -r wt_path wt_branch is_locked lock_reason dirty status_count <<< "$entry"
+        local lock_pid="" pid_status="n/a" classification=""
+
+        if [[ "$is_locked" -eq 1 ]]; then
+            lock_pid="$(extract_pid_from_lock_reason "$lock_reason")"
+            if pid_alive "$lock_pid"; then
+                pid_status="alive"
+            else
+                pid_status="dead"
+            fi
+        fi
+
+        # Classification for JSON (mirrors swarm-clean logic)
+        if [[ "$is_locked" -eq 1 ]] && [[ "$pid_status" == "alive" ]]; then
+            classification="active"
+        elif [[ "$dirty" -eq 1 ]]; then
+            classification="dirty"
+        elif [[ "$is_locked" -eq 1 ]] && [[ "$pid_status" == "dead" ]]; then
+            classification="ambiguous"
+        else
+            classification="unknown"
+        fi
+
+        [[ "$first_wt" -eq 0 ]] && wt_json+=","
+        first_wt=0
+
+        # Escape any double-quotes in string fields
+        local safe_path safe_branch safe_reason safe_class
+        safe_path="${wt_path//\"/\\\"}"
+        safe_branch="${wt_branch//\"/\\\"}"
+        safe_reason="${lock_reason//\"/\\\"}"
+        safe_class="${classification//\"/\\\"}"
+
+        wt_json+="{\"path\":\"${safe_path}\",\"branch\":\"${safe_branch}\","
+        wt_json+="\"locked\":$([ "$is_locked" -eq 1 ] && echo true || echo false),"
+        wt_json+="\"lock_pid\":\"${lock_pid}\",\"pid_status\":\"${pid_status}\","
+        wt_json+="\"lock_reason\":\"${safe_reason}\","
+        wt_json+="\"dirty\":$([ "$dirty" -eq 1 ] && echo true || echo false),"
+        wt_json+="\"dirty_file_count\":${status_count},"
+        wt_json+="\"classification\":\"${safe_class}\"}"
+    done < <(collect_worktrees "$repo_root")
+    wt_json+="]"
+
+    # Divergence
+    local div cur_branch main_branch ahead behind
+    div="$(compute_divergence "$repo_root")"
+    IFS='|' read -r _cur main_b _ahead _behind <<< "$div"
+    cur_branch="${_cur#current=}"
+    main_branch="${main_b#main_branch=}"
+    ahead="${_ahead#ahead=}"
+    behind="${_behind#behind=}"
+
+    # Tmp targets
+    local tmp_json="["
+    local first_tmp=1
+    while IFS= read -r entry; do
+        [[ -n "$entry" ]] || continue
+        IFS='|' read -r kb path <<< "$entry"
+        [[ "$first_tmp" -eq 0 ]] && tmp_json+=","
+        first_tmp=0
+        local human_size
+        human_size="$(du -sh "$path" 2>/dev/null | awk '{print $1}' || echo '?')"
+        local safe_path="${path//\"/\\\"}"
+        tmp_json+="{\"path\":\"${safe_path}\",\"kb\":${kb},\"human\":\"${human_size}\"}"
+    done < <(find_tmp_targets)
+    tmp_json+="]"
+
+    # Disk info
+    local disk_avail disk_use
+    disk_avail="$(df -h "$repo_root" 2>/dev/null | awk 'NR==2{print $4}' || echo '?')"
+    disk_use="$(df -h "$repo_root" 2>/dev/null | awk 'NR==2{print $5}' || echo '?')"
+    local safe_root="${repo_root//\"/\\\"}"
+    local safe_cur="${cur_branch//\"/\\\"}"
+    local safe_main="${main_branch//\"/\\\"}"
+
+    printf '{"repo_root":"%s","disk":{"avail":"%s","use_pct":"%s"},"worktrees":%s,"tmp_targets":%s,"divergence":{"current":"%s","base":"%s","ahead":%s,"behind":%s}}\n' \
+        "$safe_root" "$disk_avail" "$disk_use" \
+        "$wt_json" "$tmp_json" \
+        "$safe_cur" "$safe_main" \
+        "$ahead" "$behind"
+}
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+if [[ "$JSON_MODE" -eq 1 ]]; then
+    json_report "$REPO_ROOT"
+else
+    human_report "$REPO_ROOT"
+fi
+
+exit 0

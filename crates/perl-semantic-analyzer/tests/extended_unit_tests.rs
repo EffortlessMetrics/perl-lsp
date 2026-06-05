@@ -15,6 +15,9 @@
 //! - WorkspaceIndex edge cases
 //! - PerlType Subroutine construction
 
+// Legacy diagnostics coverage intentionally exercises stderr output in this test binary.
+#![allow(clippy::print_stderr)]
+
 use perl_semantic_analyzer::Parser;
 use perl_semantic_analyzer::analysis::declaration::{
     DeclarationProvider, ParentMap, current_package_at, find_node_at_offset, get_node_children,

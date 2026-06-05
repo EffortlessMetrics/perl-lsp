@@ -248,6 +248,50 @@ pub enum ImportSymbols {
     Dynamic,
 }
 
+/// A single `use lib`/`no lib` include-path entry extracted from a Perl file.
+///
+/// Distinct from [`ImportSpec`]: `ImportSpec` is import-site-scoped (what module
+/// is being imported), while `UseLibFact` is path-entry-scoped (what directory
+/// is being added to or removed from `@INC`).
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UseLibFact {
+    /// The literal path string as it appeared in the source (after unquoting).
+    ///
+    /// For `use lib '../lib'`, this is `"../lib"`.
+    /// Dynamic args (`use lib $var`, `use lib @dirs`) are never emitted —
+    /// no fact is created for those cases.
+    pub path: String,
+    /// `true` = added by `use lib`; `false` = removed by `no lib`.
+    ///
+    /// Facts are per-statement, not net state — both facts are emitted when
+    /// `use lib 'x'` is followed by `no lib 'x'`. Callers compute net state
+    /// from the sequence.
+    pub is_active: bool,
+    /// File containing this statement.
+    pub file_id: FileId,
+    /// Anchor of the `use lib`/`no lib` statement.
+    pub anchor_id: Option<AnchorId>,
+    /// `ExactAst` for static literal entries; dynamic args are not emitted.
+    pub provenance: Provenance,
+    /// `High` for static string literals. Dynamic args are never emitted.
+    pub confidence: Confidence,
+}
+
+impl UseLibFact {
+    /// Create a new `UseLibFact`.
+    pub fn new(
+        path: String,
+        is_active: bool,
+        file_id: FileId,
+        anchor_id: Option<AnchorId>,
+        provenance: Provenance,
+        confidence: Confidence,
+    ) -> Self {
+        Self { path, is_active, file_id, anchor_id, provenance, confidence }
+    }
+}
+
 /// One symbol visible at a query point with source attribution.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VisibleSymbol {

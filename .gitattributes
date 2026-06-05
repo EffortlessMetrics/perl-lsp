@@ -3,6 +3,9 @@
 # Parser accuracy span fixture intentionally preserves BOM and mixed newlines.
 crates/perl-corpus/fixtures/parser_accuracy/span_coordinates.pl -text !eol whitespace=-blank-at-eol
 
+# Release UX smoke fixture intentionally preserves CRLF line endings.
+testdata/ux/release_smoke/crlf_links/main.pl -text !eol whitespace=-blank-at-eol
+
 # =============================================================================
 # Image and font files (must not have line endings modified)
 # =============================================================================

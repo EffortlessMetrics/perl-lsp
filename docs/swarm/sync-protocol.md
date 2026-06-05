@@ -22,6 +22,36 @@ curated release sync -> perl-lsp
 emergency release fix -> perl-lsp, then immediate swarm mirror/sync
 ```
 
+## Swarm-First Promotion Policy
+
+Do not mirror every `perl-lsp-swarm` PR into `perl-lsp`.
+
+`perl-lsp-swarm` is the development and proof queue. `perl-lsp` is the release
+surface. Old-repo PRs should be opened only at deliberate promotion points:
+
+- release prep
+- urgent install, setup, docs, or user-facing correction
+- dependency or release blocker
+- security fix
+- settled batch of swarm changes
+- post-release backport or channel repair
+
+Do not open speculative implementation PRs in `perl-lsp`. Do not duplicate
+active swarm work into the old repo while the swarm PR is still the canonical
+review surface.
+
+When the same work appears in both repositories:
+
+1. Pick the canonical swarm PR or issue.
+2. Preserve any useful commits, tests, review notes, or reproduction details by
+   porting them back to the swarm surface when they are still relevant.
+3. Close old-repo duplicates with a pointer to the canonical swarm PR or issue.
+4. Do not treat the old-repo duplicate as a release sync unless it meets one of
+   the deliberate promotion points above.
+
+The goal is a smaller source-of-truth queue, not two queues carrying the same
+development work.
+
 ## Hard Invariant
 
 `perl-lsp/master` must not be ahead of `perl-lsp-swarm/main`.

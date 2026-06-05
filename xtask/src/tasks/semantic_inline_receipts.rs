@@ -1,0 +1,3892 @@
+use color_eyre::eyre::{Context, Result, bail, eyre};
+use serde::Serialize;
+use serde_json::Value;
+use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
+use std::path::{Path, PathBuf};
+
+const MATRIX_PATH: &str = "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json";
+
+const REQUIRED_SEMANTIC_INLINE_RECEIPTS: &[SemanticInlineRequirement] = &[
+    SemanticInlineRequirement {
+        capability: "mojolicious_project_smoke",
+        workflow_id: "mojolicious_inline_completion_quality",
+    },
+    SemanticInlineRequirement {
+        capability: "selected_completion",
+        workflow_id: "mojolicious_inline_completion_quality",
+    },
+    SemanticInlineRequirement {
+        capability: "test_assertion",
+        workflow_id: "test_inline_completion_quality",
+    },
+    SemanticInlineRequirement {
+        capability: "constructor_style",
+        workflow_id: "constructor_inline_completion_quality",
+    },
+    SemanticInlineRequirement {
+        capability: "self_receiver",
+        workflow_id: "self_receiver_inline_completion_quality",
+    },
+    SemanticInlineRequirement {
+        capability: "dbi_receiver",
+        workflow_id: "dbi_receiver_inline_completion_quality",
+    },
+    SemanticInlineRequirement {
+        capability: "lexical_return",
+        workflow_id: "lexical_return_inline_completion_quality",
+    },
+    SemanticInlineRequirement {
+        capability: "loop_binding",
+        workflow_id: "loop_binding_inline_completion_quality",
+    },
+    SemanticInlineRequirement {
+        capability: "guard_condition",
+        workflow_id: "guard_condition_inline_completion_quality",
+    },
+    SemanticInlineRequirement {
+        capability: "project_module_import",
+        workflow_id: "real_workspace_module_import_inline_completion_quality",
+    },
+    SemanticInlineRequirement {
+        capability: "package_boundary_receiver",
+        workflow_id: "package_boundary_receiver_inline_completion_quality",
+    },
+    SemanticInlineRequirement {
+        capability: "gated_multiline_constructor",
+        workflow_id: "gated_multiline_constructor_inline_completion_quality",
+    },
+    SemanticInlineRequirement {
+        capability: "project_test_assertion",
+        workflow_id: "project_test_assertion_inline_completion_quality",
+    },
+    SemanticInlineRequirement {
+        capability: "project_control_flow",
+        workflow_id: "project_control_flow_inline_completion_quality",
+    },
+    SemanticInlineRequirement {
+        capability: "project_constructor_style",
+        workflow_id: "project_constructor_inline_completion_quality",
+    },
+    SemanticInlineRequirement {
+        capability: "project_dbi_receiver",
+        workflow_id: "project_dbi_receiver_inline_completion_quality",
+    },
+    SemanticInlineRequirement {
+        capability: "project_lexical_return",
+        workflow_id: "project_lexical_return_inline_completion_quality",
+    },
+];
+
+#[derive(Debug, Clone, Copy)]
+struct SemanticInlineRequirement {
+    capability: &'static str,
+    workflow_id: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct SemanticInlineReceipt {
+    schema_version: &'static str,
+    provider: &'static str,
+    provider_action: &'static str,
+    claim_boundary: &'static str,
+    matrix_path: &'static str,
+    workflow_count: usize,
+    required_capability_count: usize,
+    all_required_capabilities_registered: bool,
+    semantic_inline: BTreeMap<&'static str, SemanticInlineCapabilityReceipt>,
+    quality_counters: InlineQualityCounterSummary,
+    next_edit_scaffold: NextEditScaffoldSummary,
+    future_gated: BTreeMap<&'static str, &'static str>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct SemanticInlineCapabilityReceipt {
+    status: &'static str,
+    workflow_id: &'static str,
+    scenario_file: String,
+    user_journey: String,
+    expected_outcomes: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct InlineQualityCounterSummary {
+    source: String,
+    available: bool,
+    all_checks_green: Option<bool>,
+    fixtures_total: Option<u64>,
+    fixtures_passed: Option<u64>,
+    edit_application: Option<QualityCountSummary>,
+    hard_zone_rejections: Option<u64>,
+    suppression_reasons: Option<BTreeMap<String, u64>>,
+    parse_regressions: Option<u64>,
+    sources: Option<BTreeMap<String, SourceQualityCounterSummary>>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct SourceQualityCounterSummary {
+    expected: u64,
+    passed: u64,
+    failed: u64,
+    returned_items: u64,
+    edit_application: QualityCountSummary,
+    parse_regressions: u64,
+    suppression_reasons: BTreeMap<String, u64>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct QualityCountSummary {
+    total: u64,
+    passed: u64,
+    failed: u64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct NextEditScaffoldSummary {
+    source: String,
+    available: bool,
+    schema_version: Option<String>,
+    provider_action: Option<String>,
+    enabled_by_default: Option<bool>,
+    runtime_provider_registered: Option<bool>,
+    ai_candidate_source_enabled: Option<bool>,
+    default_status: Option<String>,
+    receipt_only_status: Option<String>,
+    explicit_gate_status: Option<String>,
+    planned_candidate_families: Option<Vec<String>>,
+    future_gated: Option<Vec<String>>,
+    missing_import_next_action: Option<MissingImportNextActionSummary>,
+    test_assertion_next_action: Option<TestAssertionNextActionSummary>,
+    call_site_update_next_action: Option<CallSiteUpdateNextActionSummary>,
+    rename_occurrence_next_action: Option<RenameOccurrenceNextActionSummary>,
+    optional_ai_candidate_boundary: Option<OptionalAiCandidateBoundarySummary>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct MissingImportNextActionSummary {
+    reachable_candidate_prepared: bool,
+    reachable_candidate_editor_visible: bool,
+    reachable_candidate_reason: Option<String>,
+    duplicate_import_rejected: bool,
+    unreachable_module_rejected: bool,
+    project_shape_candidate_prepared: bool,
+    project_shape_candidate_editor_visible: bool,
+    project_shape_candidate_reason: Option<String>,
+    project_shape_duplicate_rejected: bool,
+    project_shape_root_only_rejected: bool,
+    project_shape_cancelled_lib_rejected: bool,
+    project_shape_parse_stable: bool,
+    comment_target_rejected: bool,
+    pod_target_rejected: bool,
+    data_target_rejected: bool,
+    default_gate_disabled: bool,
+    explicit_gate_runtime_unregistered: bool,
+    rejection_reasons: BTreeMap<String, u64>,
+    parse_stable: bool,
+    line_endings_preserved: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct TestAssertionNextActionSummary {
+    test_more_candidate_prepared: bool,
+    test_more_candidate_editor_visible: bool,
+    test_more_candidate_reason: Option<String>,
+    test2_candidate_prepared: bool,
+    test2_candidate_editor_visible: bool,
+    test2_candidate_reason: Option<String>,
+    non_test_file_rejected: bool,
+    unsupported_framework_rejected: bool,
+    missing_variables_rejected: bool,
+    default_gate_disabled: bool,
+    explicit_gate_runtime_unregistered: bool,
+    rejection_reasons: BTreeMap<String, u64>,
+    parse_stable: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct CallSiteUpdateNextActionSummary {
+    next_call_site_candidate_prepared: bool,
+    next_call_site_candidate_editor_visible: bool,
+    next_call_site_candidate_reason: Option<String>,
+    duplicate_argument_rejected: bool,
+    missing_call_site_rejected: bool,
+    unsafe_call_site_rejected: bool,
+    invalid_target_rejected: bool,
+    missing_argument_rejected: bool,
+    default_gate_disabled: bool,
+    explicit_gate_runtime_unregistered: bool,
+    rejection_reasons: BTreeMap<String, u64>,
+    parse_stable: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct RenameOccurrenceNextActionSummary {
+    next_occurrence_candidate_prepared: bool,
+    next_occurrence_candidate_editor_visible: bool,
+    next_occurrence_candidate_reason: Option<String>,
+    unsafe_occurrence_rejected: bool,
+    missing_occurrence_rejected: bool,
+    invalid_symbol_rejected: bool,
+    default_gate_disabled: bool,
+    explicit_gate_runtime_unregistered: bool,
+    rejection_reasons: BTreeMap<String, u64>,
+    parse_stable: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+struct OptionalAiCandidateBoundarySummary {
+    enabled_by_default: bool,
+    ai_candidate_source_enabled: bool,
+    default_response_suggestions_empty: bool,
+    receipt_only_response_suggestions_empty: bool,
+    explicit_gate_response_suggestions_empty: bool,
+    rejects_ai_enabled_policy: bool,
+    rejects_missing_editor_safe_range: bool,
+    rejects_missing_parse_safety: bool,
+    rejects_missing_selected_completion_compatibility: bool,
+    rejects_nondeterministic_sources: bool,
+    deterministic_sources_only: bool,
+}
+
+pub fn run(receipt: PathBuf, quality_receipt: PathBuf, next_edit_receipt: PathBuf) -> Result<()> {
+    let root = crate::utils::project_root()?;
+    let matrix_path = root.join(MATRIX_PATH);
+    let matrix = read_json(&matrix_path)?;
+    let quality = read_optional_quality_counter_summary(&root.join(&quality_receipt))?;
+    let next_edit_scaffold =
+        read_optional_next_edit_scaffold_summary(&root.join(&next_edit_receipt))?;
+    let receipt_data = summarize_matrix(&matrix, MATRIX_PATH, quality, next_edit_scaffold)?;
+
+    write_receipt(&receipt, &receipt_data)?;
+    println!(
+        "semantic inline receipt dashboard OK: {} capabilities, {} workflows, {}",
+        receipt_data.required_capability_count,
+        receipt_data.workflow_count,
+        receipt.display()
+    );
+    Ok(())
+}
+
+fn read_json(path: &Path) -> Result<Value> {
+    let raw = fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    serde_json::from_str(&raw).with_context(|| format!("parsing {}", path.display()))
+}
+
+fn read_optional_quality_counter_summary(path: &Path) -> Result<InlineQualityCounterSummary> {
+    let source = path.display().to_string();
+    if !path.exists() {
+        return Ok(InlineQualityCounterSummary {
+            source,
+            available: false,
+            all_checks_green: None,
+            fixtures_total: None,
+            fixtures_passed: None,
+            edit_application: None,
+            hard_zone_rejections: None,
+            suppression_reasons: None,
+            parse_regressions: None,
+            sources: None,
+        });
+    }
+
+    let quality = read_json(path)?;
+    let suppression_reasons = quality_counter_map(&quality, "/checks/suppression_reasons")?;
+    let edit_application = quality_count_summary(&quality, "/checks/edit_application")?;
+    let sources = quality_source_summaries(&quality)?;
+    let summary = InlineQualityCounterSummary {
+        source,
+        available: true,
+        all_checks_green: Some(true),
+        fixtures_total: quality.get("fixtures_total").and_then(Value::as_u64),
+        fixtures_passed: quality.get("fixtures_passed").and_then(Value::as_u64),
+        edit_application,
+        hard_zone_rejections: quality.pointer("/checks/hard_zone_rejected").and_then(Value::as_u64),
+        suppression_reasons,
+        parse_regressions: quality.pointer("/checks/parse_regressions").and_then(Value::as_u64),
+        sources,
+    };
+    validate_quality_counter_summary(&summary)?;
+    Ok(summary)
+}
+
+fn read_optional_next_edit_scaffold_summary(path: &Path) -> Result<NextEditScaffoldSummary> {
+    let source = path.display().to_string();
+    if !path.exists() {
+        return Ok(NextEditScaffoldSummary {
+            source,
+            available: false,
+            schema_version: None,
+            provider_action: None,
+            enabled_by_default: None,
+            runtime_provider_registered: None,
+            ai_candidate_source_enabled: None,
+            default_status: None,
+            receipt_only_status: None,
+            explicit_gate_status: None,
+            planned_candidate_families: None,
+            future_gated: None,
+            missing_import_next_action: None,
+            test_assertion_next_action: None,
+            call_site_update_next_action: None,
+            rename_occurrence_next_action: None,
+            optional_ai_candidate_boundary: None,
+        });
+    }
+
+    let scaffold = read_json(path)?;
+    let summary = NextEditScaffoldSummary {
+        source,
+        available: true,
+        schema_version: scaffold
+            .get("schema_version")
+            .and_then(Value::as_str)
+            .map(ToString::to_string),
+        provider_action: scaffold
+            .get("provider_action")
+            .and_then(Value::as_str)
+            .map(ToString::to_string),
+        enabled_by_default: scaffold.get("enabled_by_default").and_then(Value::as_bool),
+        runtime_provider_registered: scaffold
+            .get("runtime_provider_registered")
+            .and_then(Value::as_bool),
+        ai_candidate_source_enabled: scaffold
+            .get("ai_candidate_source_enabled")
+            .and_then(Value::as_bool),
+        default_status: scaffold
+            .pointer("/default_response/status")
+            .and_then(Value::as_str)
+            .map(ToString::to_string),
+        receipt_only_status: scaffold
+            .pointer("/receipt_only_response/status")
+            .and_then(Value::as_str)
+            .map(ToString::to_string),
+        explicit_gate_status: scaffold
+            .pointer("/explicit_gate_response/status")
+            .and_then(Value::as_str)
+            .map(ToString::to_string),
+        planned_candidate_families: string_array_field(&scaffold, "planned_candidate_families")?,
+        future_gated: string_array_field(&scaffold, "future_gated")?,
+        missing_import_next_action: Some(missing_import_next_action_summary(&scaffold)?),
+        test_assertion_next_action: Some(test_assertion_next_action_summary(&scaffold)?),
+        call_site_update_next_action: Some(call_site_update_next_action_summary(&scaffold)?),
+        rename_occurrence_next_action: Some(rename_occurrence_next_action_summary(&scaffold)?),
+        optional_ai_candidate_boundary: Some(optional_ai_candidate_boundary_summary(&scaffold)?),
+    };
+    validate_next_edit_scaffold_summary(&summary, &scaffold)?;
+    Ok(summary)
+}
+
+fn string_array_field(value: &Value, field: &str) -> Result<Option<Vec<String>>> {
+    let Some(items) = value.get(field) else {
+        return Ok(None);
+    };
+    let items = items
+        .as_array()
+        .ok_or_else(|| eyre!("next-edit scaffold receipt `{field}` must be an array"))?;
+    let mut result = Vec::with_capacity(items.len());
+    for item in items {
+        result.push(
+            item.as_str()
+                .ok_or_else(|| {
+                    eyre!("next-edit scaffold receipt `{field}` entries must be strings")
+                })?
+                .to_string(),
+        );
+    }
+    Ok(Some(result))
+}
+
+fn validate_next_edit_scaffold_summary(
+    summary: &NextEditScaffoldSummary,
+    scaffold: &Value,
+) -> Result<()> {
+    if !summary.available {
+        return Ok(());
+    }
+
+    require_next_edit_value(
+        summary.schema_version.as_deref(),
+        "schema_version",
+        "semantic-inline-next-edit.v1",
+    )?;
+    require_next_edit_value(
+        summary.provider_action.as_deref(),
+        "provider_action",
+        "next_edit_scaffold",
+    )?;
+    require_next_edit_bool(summary.enabled_by_default, "enabled_by_default", false)?;
+    require_next_edit_bool(
+        summary.runtime_provider_registered,
+        "runtime_provider_registered",
+        false,
+    )?;
+    require_next_edit_bool(
+        summary.ai_candidate_source_enabled,
+        "ai_candidate_source_enabled",
+        false,
+    )?;
+    require_next_edit_value(
+        summary.default_status.as_deref(),
+        "default_response/status",
+        "disabled",
+    )?;
+    require_next_edit_value(
+        summary.receipt_only_status.as_deref(),
+        "receipt_only_response/status",
+        "receipt_only",
+    )?;
+    require_next_edit_value(
+        summary.explicit_gate_status.as_deref(),
+        "explicit_gate_response/status",
+        "runtime_provider_not_registered",
+    )?;
+    require_empty_suggestions(scaffold, "/default_response/suggestions")?;
+    require_empty_suggestions(scaffold, "/receipt_only_response/suggestions")?;
+    require_empty_suggestions(scaffold, "/explicit_gate_response/suggestions")?;
+
+    let planned = summary
+        .planned_candidate_families
+        .as_ref()
+        .ok_or_else(|| eyre!("next-edit scaffold receipt missing planned_candidate_families"))?;
+    for required in
+        ["missing_import", "test_assertion_body", "call_site_update", "rename_occurrence"]
+    {
+        if !planned.iter().any(|family| family == required) {
+            bail!("next-edit scaffold receipt missing planned family `{required}`");
+        }
+    }
+
+    let future_gated = summary
+        .future_gated
+        .as_ref()
+        .ok_or_else(|| eyre!("next-edit scaffold receipt missing future_gated list"))?;
+    for required in [
+        "runtime_next_edit_provider",
+        "editor_visible_next_edit_suggestions",
+        "missing_import_next_action",
+        "test_assertion_next_action",
+        "call_site_update_next_action",
+        "rename_occurrence_next_action",
+        "optional_ai_candidate_source",
+    ] {
+        if !future_gated.iter().any(|entry| entry == required) {
+            bail!("next-edit scaffold receipt missing future-gated item `{required}`");
+        }
+    }
+    require_missing_import_next_action(scaffold)?;
+    require_test_assertion_next_action(scaffold)?;
+    require_call_site_update_next_action(scaffold)?;
+    require_rename_occurrence_next_action(scaffold)?;
+    require_optional_ai_candidate_boundary(scaffold)?;
+
+    Ok(())
+}
+
+fn missing_import_next_action_summary(scaffold: &Value) -> Result<MissingImportNextActionSummary> {
+    let action = scaffold
+        .get("missing_import_next_action")
+        .ok_or_else(|| eyre!("next-edit scaffold receipt missing missing_import_next_action"))?;
+    let reachable_candidate = action.pointer("/reachable_candidate/candidate");
+    let project_shape = action
+        .get("project_shape")
+        .ok_or_else(|| eyre!("next-edit scaffold receipt missing missing_import project_shape"))?;
+    let project_candidate = project_shape.pointer("/project_candidate/candidate");
+    Ok(MissingImportNextActionSummary {
+        reachable_candidate_prepared: reachable_candidate.is_some(),
+        reachable_candidate_editor_visible: reachable_candidate
+            .and_then(|candidate| candidate.get("editorVisible"))
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+        reachable_candidate_reason: candidate_reason(reachable_candidate),
+        duplicate_import_rejected: rejection_reason_present(
+            action,
+            "/duplicate_import/rejectionReasons",
+            "duplicate_import",
+        )?,
+        unreachable_module_rejected: rejection_reason_present(
+            action,
+            "/unreachable_module/rejectionReasons",
+            "unreachable_module",
+        )?,
+        project_shape_candidate_prepared: project_candidate.is_some(),
+        project_shape_candidate_editor_visible: project_candidate
+            .and_then(|candidate| candidate.get("editorVisible"))
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+        project_shape_candidate_reason: candidate_reason(project_candidate),
+        project_shape_duplicate_rejected: rejection_reason_present(
+            project_shape,
+            "/duplicate_project_import/rejectionReasons",
+            "duplicate_import",
+        )?,
+        project_shape_root_only_rejected: rejection_reason_present(
+            project_shape,
+            "/root_only_module/rejectionReasons",
+            "unreachable_module",
+        )?,
+        project_shape_cancelled_lib_rejected: rejection_reason_present(
+            project_shape,
+            "/cancelled_lib_module/rejectionReasons",
+            "unreachable_module",
+        )?,
+        project_shape_parse_stable: project_shape
+            .get("parse_stable")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        comment_target_rejected: rejection_reason_present(
+            action,
+            "/comment_target/rejectionReasons",
+            "unsafe_insertion_point",
+        )?,
+        pod_target_rejected: rejection_reason_present(
+            action,
+            "/pod_target/rejectionReasons",
+            "unsafe_insertion_point",
+        )?,
+        data_target_rejected: rejection_reason_present(
+            action,
+            "/data_target/rejectionReasons",
+            "unsafe_insertion_point",
+        )?,
+        default_gate_disabled: action.pointer("/default_gate/status").and_then(Value::as_str)
+            == Some("disabled"),
+        explicit_gate_runtime_unregistered: action
+            .pointer("/explicit_gate/status")
+            .and_then(Value::as_str)
+            == Some("runtime_provider_not_registered"),
+        rejection_reasons: rejection_reason_counts(
+            action,
+            &[
+                "/duplicate_import/rejectionReasons",
+                "/unreachable_module/rejectionReasons",
+                "/project_shape/duplicate_project_import/rejectionReasons",
+                "/project_shape/root_only_module/rejectionReasons",
+                "/project_shape/cancelled_lib_module/rejectionReasons",
+                "/comment_target/rejectionReasons",
+                "/pod_target/rejectionReasons",
+                "/data_target/rejectionReasons",
+                "/default_gate/rejectionReasons",
+                "/explicit_gate/rejectionReasons",
+            ],
+        )?,
+        parse_stable: action.get("parse_stable").and_then(Value::as_bool).unwrap_or(false),
+        line_endings_preserved: action
+            .get("line_endings_preserved")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+    })
+}
+
+fn test_assertion_next_action_summary(scaffold: &Value) -> Result<TestAssertionNextActionSummary> {
+    let action = scaffold
+        .get("test_assertion_next_action")
+        .ok_or_else(|| eyre!("next-edit scaffold receipt missing test_assertion_next_action"))?;
+    let test_more_candidate = action.pointer("/test_more_candidate/candidate");
+    let test2_candidate = action.pointer("/test2_candidate/candidate");
+    Ok(TestAssertionNextActionSummary {
+        test_more_candidate_prepared: test_more_candidate.is_some(),
+        test_more_candidate_editor_visible: test_more_candidate
+            .and_then(|candidate| candidate.get("editorVisible"))
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+        test_more_candidate_reason: candidate_reason(test_more_candidate),
+        test2_candidate_prepared: test2_candidate.is_some(),
+        test2_candidate_editor_visible: test2_candidate
+            .and_then(|candidate| candidate.get("editorVisible"))
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+        test2_candidate_reason: candidate_reason(test2_candidate),
+        non_test_file_rejected: rejection_reason_present(
+            action,
+            "/non_test_file/rejectionReasons",
+            "test_file_required",
+        )?,
+        unsupported_framework_rejected: rejection_reason_present(
+            action,
+            "/unsupported_framework/rejectionReasons",
+            "unsupported_test_framework",
+        )?,
+        missing_variables_rejected: rejection_reason_present(
+            action,
+            "/missing_variables/rejectionReasons",
+            "missing_assertion_variables",
+        )?,
+        default_gate_disabled: action.pointer("/default_gate/status").and_then(Value::as_str)
+            == Some("disabled"),
+        explicit_gate_runtime_unregistered: action
+            .pointer("/explicit_gate/status")
+            .and_then(Value::as_str)
+            == Some("runtime_provider_not_registered"),
+        rejection_reasons: rejection_reason_counts(
+            action,
+            &[
+                "/non_test_file/rejectionReasons",
+                "/unsupported_framework/rejectionReasons",
+                "/missing_variables/rejectionReasons",
+                "/default_gate/rejectionReasons",
+                "/explicit_gate/rejectionReasons",
+            ],
+        )?,
+        parse_stable: action.get("parse_stable").and_then(Value::as_bool).unwrap_or(false),
+    })
+}
+
+fn call_site_update_next_action_summary(
+    scaffold: &Value,
+) -> Result<CallSiteUpdateNextActionSummary> {
+    let action = scaffold
+        .get("call_site_update_next_action")
+        .ok_or_else(|| eyre!("next-edit scaffold receipt missing call_site_update_next_action"))?;
+    let candidate = action.pointer("/next_call_site_candidate/candidate");
+    Ok(CallSiteUpdateNextActionSummary {
+        next_call_site_candidate_prepared: candidate.is_some(),
+        next_call_site_candidate_editor_visible: candidate
+            .and_then(|candidate| candidate.get("editorVisible"))
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+        next_call_site_candidate_reason: candidate_reason(candidate),
+        duplicate_argument_rejected: rejection_reason_present(
+            action,
+            "/duplicate_argument/rejectionReasons",
+            "duplicate_call_argument",
+        )?,
+        missing_call_site_rejected: rejection_reason_present(
+            action,
+            "/missing_call_site/rejectionReasons",
+            "missing_call_site",
+        )?,
+        unsafe_call_site_rejected: rejection_reason_present(
+            action,
+            "/unsafe_call_site/rejectionReasons",
+            "unsafe_insertion_point",
+        )?,
+        invalid_target_rejected: rejection_reason_present(
+            action,
+            "/invalid_target/rejectionReasons",
+            "invalid_call_target",
+        )?,
+        missing_argument_rejected: rejection_reason_present(
+            action,
+            "/missing_argument/rejectionReasons",
+            "missing_call_argument",
+        )?,
+        default_gate_disabled: action.pointer("/default_gate/status").and_then(Value::as_str)
+            == Some("disabled"),
+        explicit_gate_runtime_unregistered: action
+            .pointer("/explicit_gate/status")
+            .and_then(Value::as_str)
+            == Some("runtime_provider_not_registered"),
+        rejection_reasons: rejection_reason_counts(
+            action,
+            &[
+                "/duplicate_argument/rejectionReasons",
+                "/missing_call_site/rejectionReasons",
+                "/unsafe_call_site/rejectionReasons",
+                "/invalid_target/rejectionReasons",
+                "/missing_argument/rejectionReasons",
+                "/default_gate/rejectionReasons",
+                "/explicit_gate/rejectionReasons",
+            ],
+        )?,
+        parse_stable: action.get("parse_stable").and_then(Value::as_bool).unwrap_or(false),
+    })
+}
+
+fn rename_occurrence_next_action_summary(
+    scaffold: &Value,
+) -> Result<RenameOccurrenceNextActionSummary> {
+    let action = scaffold
+        .get("rename_occurrence_next_action")
+        .ok_or_else(|| eyre!("next-edit scaffold receipt missing rename_occurrence_next_action"))?;
+    let candidate = action.pointer("/next_occurrence_candidate/candidate");
+    Ok(RenameOccurrenceNextActionSummary {
+        next_occurrence_candidate_prepared: candidate.is_some(),
+        next_occurrence_candidate_editor_visible: candidate
+            .and_then(|candidate| candidate.get("editorVisible"))
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+        next_occurrence_candidate_reason: candidate_reason(candidate),
+        unsafe_occurrence_rejected: rejection_reason_present(
+            action,
+            "/unsafe_occurrence/rejectionReasons",
+            "unsafe_insertion_point",
+        )?,
+        missing_occurrence_rejected: rejection_reason_present(
+            action,
+            "/missing_occurrence/rejectionReasons",
+            "missing_rename_occurrence",
+        )?,
+        invalid_symbol_rejected: rejection_reason_present(
+            action,
+            "/invalid_symbol/rejectionReasons",
+            "invalid_rename_symbol",
+        )?,
+        default_gate_disabled: action.pointer("/default_gate/status").and_then(Value::as_str)
+            == Some("disabled"),
+        explicit_gate_runtime_unregistered: action
+            .pointer("/explicit_gate/status")
+            .and_then(Value::as_str)
+            == Some("runtime_provider_not_registered"),
+        rejection_reasons: rejection_reason_counts(
+            action,
+            &[
+                "/unsafe_occurrence/rejectionReasons",
+                "/missing_occurrence/rejectionReasons",
+                "/invalid_symbol/rejectionReasons",
+                "/default_gate/rejectionReasons",
+                "/explicit_gate/rejectionReasons",
+            ],
+        )?,
+        parse_stable: action.get("parse_stable").and_then(Value::as_bool).unwrap_or(false),
+    })
+}
+
+fn optional_ai_candidate_boundary_summary(
+    scaffold: &Value,
+) -> Result<OptionalAiCandidateBoundarySummary> {
+    let boundary = scaffold.get("optional_ai_candidate_boundary").ok_or_else(|| {
+        eyre!("next-edit scaffold receipt missing optional_ai_candidate_boundary")
+    })?;
+    Ok(OptionalAiCandidateBoundarySummary {
+        enabled_by_default: boundary
+            .get("enabled_by_default")
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+        ai_candidate_source_enabled: boundary
+            .get("ai_candidate_source_enabled")
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+        default_response_suggestions_empty: boundary
+            .get("default_response_suggestions_empty")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        receipt_only_response_suggestions_empty: boundary
+            .get("receipt_only_response_suggestions_empty")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        explicit_gate_response_suggestions_empty: boundary
+            .get("explicit_gate_response_suggestions_empty")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        rejects_ai_enabled_policy: boundary
+            .get("rejects_ai_enabled_policy")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        rejects_missing_editor_safe_range: boundary
+            .get("rejects_missing_editor_safe_range")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        rejects_missing_parse_safety: boundary
+            .get("rejects_missing_parse_safety")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        rejects_missing_selected_completion_compatibility: boundary
+            .get("rejects_missing_selected_completion_compatibility")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        rejects_nondeterministic_sources: boundary
+            .get("rejects_nondeterministic_sources")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        deterministic_sources_only: boundary
+            .get("deterministic_sources_only")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+    })
+}
+
+fn require_missing_import_next_action(scaffold: &Value) -> Result<()> {
+    let action = scaffold
+        .get("missing_import_next_action")
+        .ok_or_else(|| eyre!("next-edit scaffold receipt missing missing_import_next_action"))?;
+    require_next_edit_value(
+        action.pointer("/reachable_candidate/status").and_then(Value::as_str),
+        "missing_import_next_action/reachable_candidate/status",
+        "receipt_only",
+    )?;
+    require_next_edit_value(
+        action.pointer("/reachable_candidate/candidate/family").and_then(Value::as_str),
+        "missing_import_next_action/reachable_candidate/candidate/family",
+        "missing_import",
+    )?;
+    require_next_edit_value(
+        action.pointer("/reachable_candidate/candidate/module").and_then(Value::as_str),
+        "missing_import_next_action/reachable_candidate/candidate/module",
+        "My::App",
+    )?;
+    require_next_edit_bool(
+        action.pointer("/reachable_candidate/candidate/editorVisible").and_then(Value::as_bool),
+        "missing_import_next_action/reachable_candidate/candidate/editorVisible",
+        false,
+    )?;
+    require_next_edit_value(
+        action.pointer("/reachable_candidate/candidate/edit/newText").and_then(Value::as_str),
+        "missing_import_next_action/reachable_candidate/candidate/edit/newText",
+        "use My::App;\n",
+    )?;
+    let accepted_text =
+        action.get("accepted_document_text").and_then(Value::as_str).ok_or_else(|| {
+            eyre!("next-edit scaffold receipt missing missing_import accepted_document_text")
+        })?;
+    if !accepted_text.contains("use My::App;\nmy $value = My::App->new;") {
+        bail!("missing-import next action accepted document text did not contain import");
+    }
+    if !rejection_reason_present(action, "/duplicate_import/rejectionReasons", "duplicate_import")?
+    {
+        bail!("missing-import next action did not reject duplicate import");
+    }
+    if !rejection_reason_present(
+        action,
+        "/unreachable_module/rejectionReasons",
+        "unreachable_module",
+    )? {
+        bail!("missing-import next action did not reject unreachable module");
+    }
+    let project_shape = action
+        .get("project_shape")
+        .ok_or_else(|| eyre!("next-edit scaffold receipt missing missing_import project_shape"))?;
+    require_next_edit_value(
+        project_shape.pointer("/project_candidate/status").and_then(Value::as_str),
+        "missing_import_next_action/project_shape/project_candidate/status",
+        "receipt_only",
+    )?;
+    require_next_edit_value(
+        project_shape.pointer("/project_candidate/candidate/family").and_then(Value::as_str),
+        "missing_import_next_action/project_shape/project_candidate/candidate/family",
+        "missing_import",
+    )?;
+    require_next_edit_value(
+        project_shape.pointer("/project_candidate/candidate/module").and_then(Value::as_str),
+        "missing_import_next_action/project_shape/project_candidate/candidate/module",
+        "My::App",
+    )?;
+    require_next_edit_bool(
+        project_shape
+            .pointer("/project_candidate/candidate/editorVisible")
+            .and_then(Value::as_bool),
+        "missing_import_next_action/project_shape/project_candidate/candidate/editorVisible",
+        false,
+    )?;
+    if !rejection_reason_present(
+        project_shape,
+        "/duplicate_project_import/rejectionReasons",
+        "duplicate_import",
+    )? {
+        bail!("project-shaped missing-import next action did not reject duplicate import");
+    }
+    if !rejection_reason_present(
+        project_shape,
+        "/root_only_module/rejectionReasons",
+        "unreachable_module",
+    )? {
+        bail!(
+            "project-shaped missing-import next action did not reject effective-INC omitted module"
+        );
+    }
+    if !rejection_reason_present(
+        project_shape,
+        "/cancelled_lib_module/rejectionReasons",
+        "unreachable_module",
+    )? {
+        bail!(
+            "project-shaped missing-import next action did not reject effective-INC removed module"
+        );
+    }
+    let project_accepted_text =
+        project_shape.get("accepted_document_text").and_then(Value::as_str).ok_or_else(|| {
+            eyre!(
+                "next-edit scaffold receipt missing project missing_import accepted_document_text"
+            )
+        })?;
+    if !project_accepted_text.contains("use lib 'lib';\nuse My::App;\nmy $app = My::App->new;") {
+        bail!("project-shaped missing-import accepted document text did not import after use lib");
+    }
+    require_next_edit_bool(
+        project_shape.get("parse_stable").and_then(Value::as_bool),
+        "missing_import_next_action/project_shape/parse_stable",
+        true,
+    )?;
+    for (name, path) in [
+        ("comment target", "/comment_target/rejectionReasons"),
+        ("POD target", "/pod_target/rejectionReasons"),
+        ("data target", "/data_target/rejectionReasons"),
+    ] {
+        if !rejection_reason_present(action, path, "unsafe_insertion_point")? {
+            bail!("missing-import next action did not reject {name}");
+        }
+    }
+    require_next_edit_value(
+        action.pointer("/default_gate/status").and_then(Value::as_str),
+        "missing_import_next_action/default_gate/status",
+        "disabled",
+    )?;
+    require_next_edit_value(
+        action.pointer("/explicit_gate/status").and_then(Value::as_str),
+        "missing_import_next_action/explicit_gate/status",
+        "runtime_provider_not_registered",
+    )?;
+    require_next_edit_bool(
+        action.get("parse_stable").and_then(Value::as_bool),
+        "missing_import_next_action/parse_stable",
+        true,
+    )?;
+    require_next_edit_bool(
+        action.get("line_endings_preserved").and_then(Value::as_bool),
+        "missing_import_next_action/line_endings_preserved",
+        true,
+    )?;
+    let crlf_accepted_text =
+        action.get("crlf_accepted_document_text").and_then(Value::as_str).ok_or_else(|| {
+            eyre!("next-edit scaffold receipt missing missing_import crlf_accepted_document_text")
+        })?;
+    if !crlf_accepted_text.contains("use My::App;\r\nmy $value = My::App->new;") {
+        bail!(
+            "missing-import next action CRLF accepted document text did not preserve line endings"
+        );
+    }
+    if crlf_accepted_text.contains("use My::App;\nmy $value = My::App->new;") {
+        bail!("missing-import next action CRLF accepted document text mixed LF line endings");
+    }
+    Ok(())
+}
+
+fn require_test_assertion_next_action(scaffold: &Value) -> Result<()> {
+    let action = scaffold
+        .get("test_assertion_next_action")
+        .ok_or_else(|| eyre!("next-edit scaffold receipt missing test_assertion_next_action"))?;
+    require_next_edit_value(
+        action.pointer("/test_more_candidate/status").and_then(Value::as_str),
+        "test_assertion_next_action/test_more_candidate/status",
+        "receipt_only",
+    )?;
+    require_next_edit_value(
+        action.pointer("/test_more_candidate/candidate/family").and_then(Value::as_str),
+        "test_assertion_next_action/test_more_candidate/candidate/family",
+        "test_assertion_body",
+    )?;
+    require_next_edit_value(
+        action.pointer("/test_more_candidate/candidate/edit/newText").and_then(Value::as_str),
+        "test_assertion_next_action/test_more_candidate/candidate/edit/newText",
+        "is($got, $expected, 'test description');\n",
+    )?;
+    require_next_edit_bool(
+        action.pointer("/test_more_candidate/candidate/editorVisible").and_then(Value::as_bool),
+        "test_assertion_next_action/test_more_candidate/candidate/editorVisible",
+        false,
+    )?;
+    require_next_edit_value(
+        action.pointer("/test2_candidate/status").and_then(Value::as_str),
+        "test_assertion_next_action/test2_candidate/status",
+        "receipt_only",
+    )?;
+    require_next_edit_value(
+        action.pointer("/test2_candidate/candidate/framework").and_then(Value::as_str),
+        "test_assertion_next_action/test2_candidate/candidate/framework",
+        "test2_v0",
+    )?;
+    require_next_edit_bool(
+        action.pointer("/test2_candidate/candidate/editorVisible").and_then(Value::as_bool),
+        "test_assertion_next_action/test2_candidate/candidate/editorVisible",
+        false,
+    )?;
+    let accepted_text =
+        action.get("accepted_document_text").and_then(Value::as_str).ok_or_else(|| {
+            eyre!("next-edit scaffold receipt missing test assertion accepted_document_text")
+        })?;
+    if !accepted_text.contains("is($got, $expected, 'test description');") {
+        bail!("test assertion next action accepted document text did not contain assertion");
+    }
+    if accepted_text.contains("done_testing") {
+        bail!("test assertion next action should not emit done_testing");
+    }
+    if !rejection_reason_present(action, "/non_test_file/rejectionReasons", "test_file_required")? {
+        bail!("test assertion next action did not reject non-test file context");
+    }
+    if !rejection_reason_present(
+        action,
+        "/unsupported_framework/rejectionReasons",
+        "unsupported_test_framework",
+    )? {
+        bail!("test assertion next action did not reject unsupported framework");
+    }
+    if !rejection_reason_present(
+        action,
+        "/missing_variables/rejectionReasons",
+        "missing_assertion_variables",
+    )? {
+        bail!("test assertion next action did not reject missing variables");
+    }
+    require_next_edit_value(
+        action.pointer("/default_gate/status").and_then(Value::as_str),
+        "test_assertion_next_action/default_gate/status",
+        "disabled",
+    )?;
+    require_next_edit_value(
+        action.pointer("/explicit_gate/status").and_then(Value::as_str),
+        "test_assertion_next_action/explicit_gate/status",
+        "runtime_provider_not_registered",
+    )?;
+    require_next_edit_bool(
+        action.get("parse_stable").and_then(Value::as_bool),
+        "test_assertion_next_action/parse_stable",
+        true,
+    )?;
+    Ok(())
+}
+
+fn require_call_site_update_next_action(scaffold: &Value) -> Result<()> {
+    let action = scaffold
+        .get("call_site_update_next_action")
+        .ok_or_else(|| eyre!("next-edit scaffold receipt missing call_site_update_next_action"))?;
+    require_next_edit_value(
+        action.pointer("/next_call_site_candidate/status").and_then(Value::as_str),
+        "call_site_update_next_action/next_call_site_candidate/status",
+        "receipt_only",
+    )?;
+    require_next_edit_value(
+        action.pointer("/next_call_site_candidate/candidate/family").and_then(Value::as_str),
+        "call_site_update_next_action/next_call_site_candidate/candidate/family",
+        "call_site_update",
+    )?;
+    require_next_edit_value(
+        action.pointer("/next_call_site_candidate/candidate/calleeName").and_then(Value::as_str),
+        "call_site_update_next_action/next_call_site_candidate/candidate/calleeName",
+        "build_user",
+    )?;
+    require_next_edit_value(
+        action.pointer("/next_call_site_candidate/candidate/argument").and_then(Value::as_str),
+        "call_site_update_next_action/next_call_site_candidate/candidate/argument",
+        "$age",
+    )?;
+    require_next_edit_value(
+        action.pointer("/next_call_site_candidate/candidate/edit/newText").and_then(Value::as_str),
+        "call_site_update_next_action/next_call_site_candidate/candidate/edit/newText",
+        ", $age",
+    )?;
+    require_next_edit_bool(
+        action
+            .pointer("/next_call_site_candidate/candidate/editorVisible")
+            .and_then(Value::as_bool),
+        "call_site_update_next_action/next_call_site_candidate/candidate/editorVisible",
+        false,
+    )?;
+    let accepted_text =
+        action.get("accepted_document_text").and_then(Value::as_str).ok_or_else(|| {
+            eyre!("next-edit scaffold receipt missing call-site accepted_document_text")
+        })?;
+    if !accepted_text.contains("build_user($name, $age);") {
+        bail!("call-site update next action accepted document text did not update call site");
+    }
+    if !rejection_reason_present(
+        action,
+        "/duplicate_argument/rejectionReasons",
+        "duplicate_call_argument",
+    )? {
+        bail!("call-site update next action did not reject duplicate argument");
+    }
+    if !rejection_reason_present(
+        action,
+        "/missing_call_site/rejectionReasons",
+        "missing_call_site",
+    )? {
+        bail!("call-site update next action did not reject missing call site");
+    }
+    if !rejection_reason_present(
+        action,
+        "/unsafe_call_site/rejectionReasons",
+        "unsafe_insertion_point",
+    )? {
+        bail!("call-site update next action did not reject unsafe call site");
+    }
+    if !rejection_reason_present(action, "/invalid_target/rejectionReasons", "invalid_call_target")?
+    {
+        bail!("call-site update next action did not reject invalid target");
+    }
+    if !rejection_reason_present(
+        action,
+        "/missing_argument/rejectionReasons",
+        "missing_call_argument",
+    )? {
+        bail!("call-site update next action did not reject missing argument");
+    }
+    require_next_edit_value(
+        action.pointer("/default_gate/status").and_then(Value::as_str),
+        "call_site_update_next_action/default_gate/status",
+        "disabled",
+    )?;
+    require_next_edit_value(
+        action.pointer("/explicit_gate/status").and_then(Value::as_str),
+        "call_site_update_next_action/explicit_gate/status",
+        "runtime_provider_not_registered",
+    )?;
+    require_next_edit_bool(
+        action.get("parse_stable").and_then(Value::as_bool),
+        "call_site_update_next_action/parse_stable",
+        true,
+    )?;
+    Ok(())
+}
+
+fn require_rename_occurrence_next_action(scaffold: &Value) -> Result<()> {
+    let action = scaffold
+        .get("rename_occurrence_next_action")
+        .ok_or_else(|| eyre!("next-edit scaffold receipt missing rename_occurrence_next_action"))?;
+    require_next_edit_value(
+        action.pointer("/next_occurrence_candidate/status").and_then(Value::as_str),
+        "rename_occurrence_next_action/next_occurrence_candidate/status",
+        "receipt_only",
+    )?;
+    require_next_edit_value(
+        action.pointer("/next_occurrence_candidate/candidate/family").and_then(Value::as_str),
+        "rename_occurrence_next_action/next_occurrence_candidate/candidate/family",
+        "rename_occurrence",
+    )?;
+    require_next_edit_value(
+        action
+            .pointer("/next_occurrence_candidate/candidate/originalSymbol")
+            .and_then(Value::as_str),
+        "rename_occurrence_next_action/next_occurrence_candidate/candidate/originalSymbol",
+        "$old",
+    )?;
+    require_next_edit_value(
+        action
+            .pointer("/next_occurrence_candidate/candidate/replacementSymbol")
+            .and_then(Value::as_str),
+        "rename_occurrence_next_action/next_occurrence_candidate/candidate/replacementSymbol",
+        "$new",
+    )?;
+    require_next_edit_value(
+        action.pointer("/next_occurrence_candidate/candidate/edit/newText").and_then(Value::as_str),
+        "rename_occurrence_next_action/next_occurrence_candidate/candidate/edit/newText",
+        "$new",
+    )?;
+    require_next_edit_bool(
+        action
+            .pointer("/next_occurrence_candidate/candidate/editorVisible")
+            .and_then(Value::as_bool),
+        "rename_occurrence_next_action/next_occurrence_candidate/candidate/editorVisible",
+        false,
+    )?;
+    let accepted_text =
+        action.get("accepted_document_text").and_then(Value::as_str).ok_or_else(|| {
+            eyre!("next-edit scaffold receipt missing rename occurrence accepted_document_text")
+        })?;
+    if !accepted_text.contains("return $new + $old;") {
+        bail!(
+            "rename occurrence next action accepted document text did not replace next occurrence"
+        );
+    }
+    if !rejection_reason_present(
+        action,
+        "/unsafe_occurrence/rejectionReasons",
+        "unsafe_insertion_point",
+    )? {
+        bail!("rename occurrence next action did not reject unsafe occurrence context");
+    }
+    if !rejection_reason_present(
+        action,
+        "/missing_occurrence/rejectionReasons",
+        "missing_rename_occurrence",
+    )? {
+        bail!("rename occurrence next action did not reject missing occurrence");
+    }
+    if !rejection_reason_present(
+        action,
+        "/invalid_symbol/rejectionReasons",
+        "invalid_rename_symbol",
+    )? {
+        bail!("rename occurrence next action did not reject invalid rename symbols");
+    }
+    require_next_edit_value(
+        action.pointer("/default_gate/status").and_then(Value::as_str),
+        "rename_occurrence_next_action/default_gate/status",
+        "disabled",
+    )?;
+    require_next_edit_value(
+        action.pointer("/explicit_gate/status").and_then(Value::as_str),
+        "rename_occurrence_next_action/explicit_gate/status",
+        "runtime_provider_not_registered",
+    )?;
+    require_next_edit_bool(
+        action.get("parse_stable").and_then(Value::as_bool),
+        "rename_occurrence_next_action/parse_stable",
+        true,
+    )?;
+    Ok(())
+}
+
+fn require_optional_ai_candidate_boundary(scaffold: &Value) -> Result<()> {
+    let boundary = scaffold.get("optional_ai_candidate_boundary").ok_or_else(|| {
+        eyre!("next-edit scaffold receipt missing optional_ai_candidate_boundary")
+    })?;
+    require_next_edit_bool(
+        boundary.get("enabled_by_default").and_then(Value::as_bool),
+        "optional_ai_candidate_boundary/enabled_by_default",
+        false,
+    )?;
+    require_next_edit_bool(
+        boundary.get("ai_candidate_source_enabled").and_then(Value::as_bool),
+        "optional_ai_candidate_boundary/ai_candidate_source_enabled",
+        false,
+    )?;
+    for field in [
+        "default_response_suggestions_empty",
+        "receipt_only_response_suggestions_empty",
+        "explicit_gate_response_suggestions_empty",
+        "rejects_ai_enabled_policy",
+        "rejects_missing_editor_safe_range",
+        "rejects_missing_parse_safety",
+        "rejects_missing_selected_completion_compatibility",
+        "rejects_nondeterministic_sources",
+        "deterministic_sources_only",
+    ] {
+        require_next_edit_bool(
+            boundary.get(field).and_then(Value::as_bool),
+            &format!("optional_ai_candidate_boundary/{field}"),
+            true,
+        )?;
+    }
+    Ok(())
+}
+
+fn rejection_reason_present(action: &Value, pointer: &str, expected: &str) -> Result<bool> {
+    let reasons = action
+        .pointer(pointer)
+        .and_then(Value::as_array)
+        .ok_or_else(|| eyre!("next-edit scaffold receipt `{pointer}` must be an array"))?;
+    Ok(reasons.iter().any(|reason| reason.as_str() == Some(expected)))
+}
+
+fn rejection_reason_counts(action: &Value, pointers: &[&str]) -> Result<BTreeMap<String, u64>> {
+    let mut counts = BTreeMap::new();
+    for pointer in pointers {
+        let reasons = action
+            .pointer(pointer)
+            .and_then(Value::as_array)
+            .ok_or_else(|| eyre!("next-edit scaffold receipt `{pointer}` must be an array"))?;
+        for reason in reasons {
+            let reason = reason.as_str().ok_or_else(|| {
+                eyre!("next-edit scaffold receipt `{pointer}` must contain strings")
+            })?;
+            *counts.entry(reason.to_string()).or_default() += 1;
+        }
+    }
+    Ok(counts)
+}
+
+fn candidate_reason(candidate: Option<&Value>) -> Option<String> {
+    candidate
+        .and_then(|candidate| candidate.get("reason"))
+        .and_then(Value::as_str)
+        .map(ToString::to_string)
+}
+
+fn require_next_edit_value(actual: Option<&str>, field: &str, expected: &str) -> Result<()> {
+    if actual != Some(expected) {
+        bail!(
+            "next-edit scaffold receipt `{field}` must be `{expected}`, got `{}`",
+            actual.unwrap_or("<missing>")
+        );
+    }
+    Ok(())
+}
+
+fn require_next_edit_bool(actual: Option<bool>, field: &str, expected: bool) -> Result<()> {
+    if actual != Some(expected) {
+        bail!(
+            "next-edit scaffold receipt `{field}` must be `{expected}`, got `{}`",
+            actual.map_or("<missing>".to_string(), |value| value.to_string())
+        );
+    }
+    Ok(())
+}
+
+fn require_empty_suggestions(scaffold: &Value, pointer: &str) -> Result<()> {
+    let suggestions = scaffold
+        .pointer(pointer)
+        .and_then(Value::as_array)
+        .ok_or_else(|| eyre!("next-edit scaffold receipt `{pointer}` must be an array"))?;
+    if !suggestions.is_empty() {
+        bail!("next-edit scaffold receipt `{pointer}` must remain empty");
+    }
+    Ok(())
+}
+
+fn quality_count_summary(quality: &Value, pointer: &str) -> Result<Option<QualityCountSummary>> {
+    let Some(value) = quality.pointer(pointer) else {
+        return Ok(None);
+    };
+    let object =
+        value.as_object().ok_or_else(|| eyre!("quality receipt `{pointer}` must be an object"))?;
+
+    Ok(Some(QualityCountSummary {
+        total: quality_count_field(object, pointer, "total")?,
+        passed: quality_count_field(object, pointer, "passed")?,
+        failed: quality_count_field(object, pointer, "failed")?,
+    }))
+}
+
+fn quality_count_field(
+    object: &serde_json::Map<String, Value>,
+    pointer: &str,
+    field: &str,
+) -> Result<u64> {
+    object
+        .get(field)
+        .and_then(Value::as_u64)
+        .ok_or_else(|| eyre!("quality receipt `{pointer}/{field}` must be an unsigned count"))
+}
+
+fn quality_counter_map(quality: &Value, pointer: &str) -> Result<Option<BTreeMap<String, u64>>> {
+    let Some(counters) = quality.pointer(pointer) else {
+        return Ok(None);
+    };
+    let counters = counters
+        .as_object()
+        .ok_or_else(|| eyre!("quality receipt `{pointer}` must be an object"))?;
+
+    let mut result = BTreeMap::new();
+    for (name, count) in counters {
+        let count = count
+            .as_u64()
+            .ok_or_else(|| eyre!("quality receipt `{pointer}/{name}` must be an unsigned count"))?;
+        result.insert(name.clone(), count);
+    }
+
+    Ok(Some(result))
+}
+
+fn quality_source_summaries(
+    quality: &Value,
+) -> Result<Option<BTreeMap<String, SourceQualityCounterSummary>>> {
+    let Some(sources) = quality.get("sources") else {
+        return Ok(None);
+    };
+    let sources =
+        sources.as_object().ok_or_else(|| eyre!("quality receipt `/sources` must be an object"))?;
+
+    let mut result = BTreeMap::new();
+    for (source_name, source) in sources {
+        let source = source
+            .as_object()
+            .ok_or_else(|| eyre!("quality receipt `/sources/{source_name}` must be an object"))?;
+        let edit_application = quality_count_summary_object(
+            source,
+            &format!("/sources/{source_name}/edit_application"),
+        )?;
+        let suppression_reasons = required_quality_counter_map(
+            source,
+            &format!("/sources/{source_name}/suppression_reasons"),
+        )?;
+
+        result.insert(
+            source_name.clone(),
+            SourceQualityCounterSummary {
+                expected: quality_count_field(
+                    source,
+                    &format!("/sources/{source_name}"),
+                    "expected",
+                )?,
+                passed: quality_count_field(source, &format!("/sources/{source_name}"), "passed")?,
+                failed: quality_count_field(source, &format!("/sources/{source_name}"), "failed")?,
+                returned_items: quality_count_field(
+                    source,
+                    &format!("/sources/{source_name}"),
+                    "returned_items",
+                )?,
+                edit_application,
+                parse_regressions: quality_count_field(
+                    source,
+                    &format!("/sources/{source_name}"),
+                    "parse_regressions",
+                )?,
+                suppression_reasons,
+            },
+        );
+    }
+
+    Ok(Some(result))
+}
+
+fn quality_count_summary_object(
+    object: &serde_json::Map<String, Value>,
+    pointer: &str,
+) -> Result<QualityCountSummary> {
+    let value = object
+        .get("edit_application")
+        .ok_or_else(|| eyre!("quality receipt `{pointer}` must be an object"))?;
+    let object =
+        value.as_object().ok_or_else(|| eyre!("quality receipt `{pointer}` must be an object"))?;
+
+    Ok(QualityCountSummary {
+        total: quality_count_field(object, pointer, "total")?,
+        passed: quality_count_field(object, pointer, "passed")?,
+        failed: quality_count_field(object, pointer, "failed")?,
+    })
+}
+
+fn required_quality_counter_map(
+    object: &serde_json::Map<String, Value>,
+    pointer: &str,
+) -> Result<BTreeMap<String, u64>> {
+    let counters = object
+        .get("suppression_reasons")
+        .ok_or_else(|| eyre!("quality receipt `{pointer}` must be an object"))?;
+    let counters = counters
+        .as_object()
+        .ok_or_else(|| eyre!("quality receipt `{pointer}` must be an object"))?;
+
+    let mut result = BTreeMap::new();
+    for (name, count) in counters {
+        let count = count
+            .as_u64()
+            .ok_or_else(|| eyre!("quality receipt `{pointer}/{name}` must be an unsigned count"))?;
+        result.insert(name.clone(), count);
+    }
+
+    Ok(result)
+}
+
+fn validate_quality_counter_summary(summary: &InlineQualityCounterSummary) -> Result<()> {
+    if !summary.available {
+        return Ok(());
+    }
+
+    match (summary.fixtures_total, summary.fixtures_passed) {
+        (Some(total), Some(passed)) if total != passed => bail!(
+            "quality receipt `{}` did not pass all fixtures: {passed}/{total}",
+            summary.source
+        ),
+        _ => {}
+    }
+
+    if let Some(edit_application) = &summary.edit_application {
+        validate_count_summary(
+            edit_application,
+            &format!("{}/checks/edit_application", summary.source),
+        )?;
+    }
+
+    validate_hard_zone_quality_counter_summary(summary)?;
+
+    if summary.parse_regressions.unwrap_or(0) != 0 {
+        bail!(
+            "quality receipt `{}` reported {} parse regression(s)",
+            summary.source,
+            summary.parse_regressions.unwrap_or(0)
+        );
+    }
+
+    if let Some(sources) = &summary.sources {
+        for (source_name, source) in sources {
+            let pointer = format!("{}/sources/{source_name}", summary.source);
+            validate_source_quality_counter_summary(source, &pointer)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_hard_zone_quality_counter_summary(summary: &InlineQualityCounterSummary) -> Result<()> {
+    let hard_zone_rejections = summary.hard_zone_rejections.ok_or_else(|| {
+        eyre!("quality receipt `{}` missing /checks/hard_zone_rejected", summary.source)
+    })?;
+    if hard_zone_rejections == 0 {
+        bail!("quality receipt `{}` must report at least one hard-zone rejection", summary.source);
+    }
+
+    let suppression_reasons = summary.suppression_reasons.as_ref().ok_or_else(|| {
+        eyre!("quality receipt `{}` missing /checks/suppression_reasons", summary.source)
+    })?;
+    let hard_zone_suppression = suppression_reasons.get("hard_zone").copied().ok_or_else(|| {
+        eyre!("quality receipt `{}` missing /checks/suppression_reasons/hard_zone", summary.source)
+    })?;
+    if hard_zone_suppression != hard_zone_rejections {
+        bail!(
+            "quality receipt `{}` hard-zone suppression count ({hard_zone_suppression}) must match hard-zone rejection count ({hard_zone_rejections})",
+            summary.source
+        );
+    }
+
+    if let Some(sources) = &summary.sources {
+        let hard_zone_source = sources.get("hard_zone").ok_or_else(|| {
+            eyre!("quality receipt `{}` missing /sources/hard_zone", summary.source)
+        })?;
+        if hard_zone_source.expected != hard_zone_rejections {
+            bail!(
+                "quality receipt `{}` /sources/hard_zone expected count ({}) must match hard-zone rejection count ({hard_zone_rejections})",
+                summary.source,
+                hard_zone_source.expected
+            );
+        }
+        if hard_zone_source.returned_items != 0 {
+            bail!(
+                "quality receipt `{}` /sources/hard_zone returned {} item(s); hard-zone source must stay silent",
+                summary.source,
+                hard_zone_source.returned_items
+            );
+        }
+        let source_hard_zone_suppression =
+            hard_zone_source.suppression_reasons.get("hard_zone").copied().ok_or_else(|| {
+                eyre!(
+                    "quality receipt `{}` missing /sources/hard_zone/suppression_reasons/hard_zone",
+                    summary.source
+                )
+            })?;
+        if source_hard_zone_suppression != hard_zone_rejections {
+            bail!(
+                "quality receipt `{}` /sources/hard_zone suppression count ({source_hard_zone_suppression}) must match hard-zone rejection count ({hard_zone_rejections})",
+                summary.source
+            );
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_source_quality_counter_summary(
+    source: &SourceQualityCounterSummary,
+    pointer: &str,
+) -> Result<()> {
+    if source.expected != source.passed + source.failed {
+        bail!(
+            "quality receipt `{pointer}` expected count must equal passed plus failed, got expected={}, passed={}, failed={}",
+            source.expected,
+            source.passed,
+            source.failed
+        );
+    }
+    if source.failed != 0 {
+        bail!("quality receipt `{pointer}` reported {} failed source fixture(s)", source.failed);
+    }
+    if source.parse_regressions != 0 {
+        bail!(
+            "quality receipt `{pointer}` reported {} source parse regression(s)",
+            source.parse_regressions
+        );
+    }
+    validate_count_summary(&source.edit_application, &format!("{pointer}/edit_application"))
+}
+
+fn validate_count_summary(summary: &QualityCountSummary, pointer: &str) -> Result<()> {
+    if summary.total != summary.passed + summary.failed {
+        bail!(
+            "quality receipt `{pointer}` total must equal passed plus failed, got total={}, passed={}, failed={}",
+            summary.total,
+            summary.passed,
+            summary.failed
+        );
+    }
+    if summary.failed != 0 {
+        bail!("quality receipt `{pointer}` reported {} failed check(s)", summary.failed);
+    }
+    Ok(())
+}
+
+fn summarize_matrix(
+    matrix: &Value,
+    matrix_path: &'static str,
+    quality_counters: InlineQualityCounterSummary,
+    next_edit_scaffold: NextEditScaffoldSummary,
+) -> Result<SemanticInlineReceipt> {
+    validate_quality_counter_summary(&quality_counters)?;
+
+    let workflows = matrix
+        .get("workflows")
+        .and_then(Value::as_array)
+        .ok_or_else(|| eyre!("fixture matrix missing workflows array"))?;
+
+    let mut by_id = BTreeMap::new();
+    for workflow in workflows {
+        let id = workflow
+            .get("id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| eyre!("workflow missing string id"))?;
+        by_id.insert(id, workflow);
+    }
+
+    let mut semantic_inline = BTreeMap::new();
+    let mut missing = Vec::new();
+    for requirement in REQUIRED_SEMANTIC_INLINE_RECEIPTS {
+        let Some(workflow) = by_id.get(requirement.workflow_id) else {
+            missing.push(requirement.workflow_id);
+            continue;
+        };
+        validate_semantic_workflow(requirement.workflow_id, workflow)?;
+        semantic_inline.insert(
+            requirement.capability,
+            SemanticInlineCapabilityReceipt {
+                status: "registered",
+                workflow_id: requirement.workflow_id,
+                scenario_file: workflow_string(workflow, "scenario_file")?,
+                user_journey: workflow_string(workflow, "user_journey")?,
+                expected_outcomes: workflow_string_array(workflow, "expected_outcomes")?,
+            },
+        );
+    }
+
+    if !missing.is_empty() {
+        bail!("semantic inline receipt dashboard missing workflows: {}", missing.join(", "));
+    }
+
+    let future_gated = BTreeMap::from([
+        ("next_edit", "future_gated"),
+        ("optional_ai_candidate_source", "future_gated"),
+    ]);
+
+    Ok(SemanticInlineReceipt {
+        schema_version: "semantic-inline-receipts.v1",
+        provider: "inline_completion",
+        provider_action: "semantic_inline_receipt_dashboard",
+        claim_boundary: "machine-readable semantic inline UX receipt inventory only; does not run UX scenarios, promote support tier, mirror to source, release, or enable AI/next-edit behavior",
+        matrix_path,
+        workflow_count: workflows.len(),
+        required_capability_count: REQUIRED_SEMANTIC_INLINE_RECEIPTS.len(),
+        all_required_capabilities_registered: true,
+        semantic_inline,
+        quality_counters,
+        next_edit_scaffold,
+        future_gated,
+    })
+}
+
+fn validate_semantic_workflow(id: &str, workflow: &Value) -> Result<()> {
+    let component = workflow_string(workflow, "component")?;
+    if component != "completion" {
+        bail!("semantic inline workflow `{id}` must be in completion component, got {component}");
+    }
+
+    let scenario_file = workflow_string(workflow, "scenario_file")?;
+    if !scenario_file.contains("inline_completion_quality") {
+        bail!(
+            "semantic inline workflow `{id}` must point at inline-completion quality scenario, got {scenario_file}"
+        );
+    }
+
+    let measures = workflow_string_array(workflow, "measures")?;
+    let measures = measures.into_iter().collect::<BTreeSet<_>>();
+    if !measures.contains("workflow_pass_rate") || !measures.contains("workflow_stability_rate") {
+        bail!("semantic inline workflow `{id}` must keep pass and stability measures");
+    }
+
+    let confidence_signals = workflow_string_array(workflow, "confidence_signals")?;
+    let confidence_signals = confidence_signals.into_iter().collect::<BTreeSet<_>>();
+    for required_signal in
+        ["first_five_minutes_harness", "manual_editor_smoke", "issue_burndown_regression_guard"]
+    {
+        if !confidence_signals.contains(required_signal) {
+            bail!("semantic inline workflow `{id}` missing confidence signal {required_signal}");
+        }
+    }
+
+    let expected_outcomes = workflow_string_array(workflow, "expected_outcomes")?;
+    if !expected_outcomes.iter().any(|outcome| {
+        outcome.contains("inline completion") || outcome.contains("inline-completion")
+    }) {
+        bail!("semantic inline workflow `{id}` must state an inline completion outcome");
+    }
+
+    Ok(())
+}
+
+fn workflow_string(workflow: &Value, key: &str) -> Result<String> {
+    workflow
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .ok_or_else(|| eyre!("workflow missing string `{key}`"))
+}
+
+fn workflow_string_array(workflow: &Value, key: &str) -> Result<Vec<String>> {
+    let values = workflow
+        .get(key)
+        .and_then(Value::as_array)
+        .ok_or_else(|| eyre!("workflow missing array `{key}`"))?;
+    values
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .map(str::to_string)
+                .ok_or_else(|| eyre!("workflow `{key}` entries must be strings"))
+        })
+        .collect()
+}
+
+fn write_receipt(path: &Path, receipt: &SemanticInlineReceipt) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let json = serde_json::to_string_pretty(receipt)?;
+    fs::write(path, format!("{json}\n"))?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn workflow(id: &'static str) -> Value {
+        json!({
+            "id": id,
+            "scenario_file": format!("ux_scenario_{id}_inline_completion_quality.rs"),
+            "component": "completion",
+            "user_journey": format!("exercise {id} inline completion"),
+            "measures": ["workflow_pass_rate", "workflow_stability_rate"],
+            "expected_outcomes": ["inline completion behavior remains covered"],
+            "confidence_signals": [
+                "first_five_minutes_harness",
+                "manual_editor_smoke",
+                "issue_burndown_regression_guard"
+            ]
+        })
+    }
+
+    fn complete_matrix() -> Value {
+        let workflows = REQUIRED_SEMANTIC_INLINE_RECEIPTS
+            .iter()
+            .map(|requirement| workflow(requirement.workflow_id))
+            .collect::<Vec<_>>();
+        json!({ "workflows": workflows })
+    }
+
+    fn next_edit_scaffold_summary_error(
+        path: &Path,
+        expectation: &'static str,
+    ) -> color_eyre::Report {
+        let result = read_optional_next_edit_scaffold_summary(path);
+        assert!(result.is_err(), "{expectation}");
+        result.err().unwrap_or_else(|| eyre!("{expectation}"))
+    }
+
+    fn unavailable_quality() -> InlineQualityCounterSummary {
+        InlineQualityCounterSummary {
+            source: "target/receipts/inline-completion-quality.json".to_string(),
+            available: false,
+            all_checks_green: None,
+            fixtures_total: None,
+            fixtures_passed: None,
+            edit_application: None,
+            hard_zone_rejections: None,
+            suppression_reasons: None,
+            parse_regressions: None,
+            sources: None,
+        }
+    }
+
+    fn unavailable_next_edit_scaffold() -> NextEditScaffoldSummary {
+        NextEditScaffoldSummary {
+            source: "target/receipts/semantic-inline-next-edit.json".to_string(),
+            available: false,
+            schema_version: None,
+            provider_action: None,
+            enabled_by_default: None,
+            runtime_provider_registered: None,
+            ai_candidate_source_enabled: None,
+            default_status: None,
+            receipt_only_status: None,
+            explicit_gate_status: None,
+            planned_candidate_families: None,
+            future_gated: None,
+            missing_import_next_action: None,
+            test_assertion_next_action: None,
+            call_site_update_next_action: None,
+            rename_occurrence_next_action: None,
+            optional_ai_candidate_boundary: None,
+        }
+    }
+
+    fn valid_next_edit_scaffold_json() -> Value {
+        json!({
+            "schema_version": "semantic-inline-next-edit.v1",
+            "provider_action": "next_edit_scaffold",
+            "enabled_by_default": false,
+            "runtime_provider_registered": false,
+            "ai_candidate_source_enabled": false,
+            "default_response": {
+                "status": "disabled",
+                "suggestions": []
+            },
+            "receipt_only_response": {
+                "status": "receipt_only",
+                "suggestions": []
+            },
+            "explicit_gate_response": {
+                "status": "runtime_provider_not_registered",
+                "suggestions": []
+            },
+            "planned_candidate_families": [
+                "missing_import",
+                "test_assertion_body",
+                "call_site_update",
+                "rename_occurrence"
+            ],
+            "future_gated": [
+                "runtime_next_edit_provider",
+                "editor_visible_next_edit_suggestions",
+                "missing_import_next_action",
+                "test_assertion_next_action",
+                "call_site_update_next_action",
+                "rename_occurrence_next_action",
+                "optional_ai_candidate_source"
+            ],
+            "missing_import_next_action": valid_missing_import_next_action_json(),
+            "test_assertion_next_action": valid_test_assertion_next_action_json(),
+            "call_site_update_next_action": valid_call_site_update_next_action_json(),
+            "rename_occurrence_next_action": valid_rename_occurrence_next_action_json(),
+            "optional_ai_candidate_boundary": valid_optional_ai_candidate_boundary_json()
+        })
+    }
+
+    fn valid_optional_ai_candidate_boundary_json() -> Value {
+        json!({
+            "claim_boundary": "optional AI candidate boundary proof only",
+            "enabled_by_default": false,
+            "ai_candidate_source_enabled": false,
+            "default_response_suggestions_empty": true,
+            "receipt_only_response_suggestions_empty": true,
+            "explicit_gate_response_suggestions_empty": true,
+            "rejects_ai_enabled_policy": true,
+            "rejects_missing_editor_safe_range": true,
+            "rejects_missing_parse_safety": true,
+            "rejects_missing_selected_completion_compatibility": true,
+            "rejects_nondeterministic_sources": true,
+            "deterministic_sources_only": true
+        })
+    }
+
+    fn valid_missing_import_next_action_json() -> Value {
+        json!({
+            "claim_boundary": "receipt-only missing-import next-action proof",
+            "reachable_candidate": {
+                "status": "receipt_only",
+                "candidate": {
+                    "family": "missing_import",
+                    "module": "My::App",
+                    "reason": "reachable_module_from_effective_inc",
+                    "edit": {
+                        "startByte": 26,
+                        "endByte": 26,
+                        "newText": "use My::App;\n"
+                    },
+                    "editorVisible": false
+                },
+                "rejectionReasons": []
+            },
+            "duplicate_import": {
+                "status": "receipt_only",
+                "rejectionReasons": ["duplicate_import"]
+            },
+            "unreachable_module": {
+                "status": "receipt_only",
+                "rejectionReasons": ["unreachable_module"]
+            },
+            "project_shape": {
+                "claim_boundary": "receipt-only project-shaped missing-import next-action proof; effective @INC reachability is precomputed and passed explicitly",
+                "project_candidate": {
+                    "status": "receipt_only",
+                    "candidate": {
+                        "family": "missing_import",
+                        "module": "My::App",
+                        "reason": "reachable_module_from_effective_inc",
+                        "edit": {
+                            "startByte": 62,
+                            "endByte": 62,
+                            "newText": "use My::App;\n"
+                        },
+                        "editorVisible": false
+                    },
+                    "rejectionReasons": []
+                },
+                "duplicate_project_import": {
+                    "status": "receipt_only",
+                    "rejectionReasons": ["duplicate_import"]
+                },
+                "root_only_module": {
+                    "status": "receipt_only",
+                    "rejectionReasons": ["unreachable_module"]
+                },
+                "cancelled_lib_module": {
+                    "status": "receipt_only",
+                    "rejectionReasons": ["unreachable_module"]
+                },
+                "accepted_document_text": "package App::Script;\nuse strict;\nuse warnings;\nuse lib 'lib';\nuse My::App;\nmy $app = My::App->new;\n",
+                "parse_stable": true
+            },
+            "comment_target": {
+                "status": "receipt_only",
+                "rejectionReasons": ["unsafe_insertion_point"]
+            },
+            "pod_target": {
+                "status": "receipt_only",
+                "rejectionReasons": ["unsafe_insertion_point"]
+            },
+            "data_target": {
+                "status": "receipt_only",
+                "rejectionReasons": ["unsafe_insertion_point"]
+            },
+            "default_gate": {
+                "status": "disabled",
+                "rejectionReasons": ["gate_disabled"]
+            },
+            "explicit_gate": {
+                "status": "runtime_provider_not_registered",
+                "rejectionReasons": ["runtime_provider_not_registered"]
+            },
+            "accepted_document_text": "use strict;\nuse warnings;\nuse My::App;\nmy $value = My::App->new;\n",
+            "crlf_accepted_document_text": "package Demo;\r\nuse strict;\r\nuse My::App;\r\nmy $value = My::App->new;\r\n",
+            "parse_stable": true,
+            "line_endings_preserved": true
+        })
+    }
+
+    fn valid_test_assertion_next_action_json() -> Value {
+        json!({
+            "claim_boundary": "receipt-only test assertion next-action proof",
+            "test_more_candidate": {
+                "status": "receipt_only",
+                "candidate": {
+                    "family": "test_assertion_body",
+                    "framework": "test_more",
+                    "reason": "visible_lexical_assertion",
+                    "edit": {
+                        "startByte": 56,
+                        "endByte": 56,
+                        "newText": "is($got, $expected, 'test description');\n"
+                    },
+                    "editorVisible": false
+                },
+                "rejectionReasons": []
+            },
+            "test2_candidate": {
+                "status": "receipt_only",
+                "candidate": {
+                    "family": "test_assertion_body",
+                    "framework": "test2_v0",
+                    "reason": "visible_lexical_assertion",
+                    "edit": {
+                        "startByte": 54,
+                        "endByte": 54,
+                        "newText": "is($result, $want, 'test description');\n"
+                    },
+                    "editorVisible": false
+                },
+                "rejectionReasons": []
+            },
+            "non_test_file": {
+                "status": "receipt_only",
+                "rejectionReasons": ["test_file_required"]
+            },
+            "unsupported_framework": {
+                "status": "receipt_only",
+                "rejectionReasons": ["unsupported_test_framework"]
+            },
+            "missing_variables": {
+                "status": "receipt_only",
+                "rejectionReasons": ["missing_assertion_variables"]
+            },
+            "default_gate": {
+                "status": "disabled",
+                "rejectionReasons": ["gate_disabled"]
+            },
+            "explicit_gate": {
+                "status": "runtime_provider_not_registered",
+                "rejectionReasons": ["runtime_provider_not_registered"]
+            },
+            "accepted_document_text": "use Test::More;\nmy $got = compute();\nmy $expected = 42;\nis($got, $expected, 'test description');\n",
+            "parse_stable": true
+        })
+    }
+
+    fn valid_call_site_update_next_action_json() -> Value {
+        json!({
+            "claim_boundary": "receipt-only call-site update next-action proof",
+            "next_call_site_candidate": {
+                "status": "receipt_only",
+                "candidate": {
+                    "family": "call_site_update",
+                    "calleeName": "build_user",
+                    "argument": "$age",
+                    "reason": "visible_argument_call_site_update",
+                    "edit": {
+                        "startByte": 63,
+                        "endByte": 63,
+                        "newText": ", $age"
+                    },
+                    "editorVisible": false
+                },
+                "rejectionReasons": []
+            },
+            "duplicate_argument": {
+                "status": "receipt_only",
+                "rejectionReasons": ["duplicate_call_argument"]
+            },
+            "missing_call_site": {
+                "status": "receipt_only",
+                "rejectionReasons": ["missing_call_site"]
+            },
+            "unsafe_call_site": {
+                "status": "receipt_only",
+                "rejectionReasons": ["unsafe_insertion_point"]
+            },
+            "invalid_target": {
+                "status": "receipt_only",
+                "rejectionReasons": ["invalid_call_target"]
+            },
+            "missing_argument": {
+                "status": "receipt_only",
+                "rejectionReasons": ["missing_call_argument"]
+            },
+            "default_gate": {
+                "status": "disabled",
+                "rejectionReasons": ["gate_disabled"]
+            },
+            "explicit_gate": {
+                "status": "runtime_provider_not_registered",
+                "rejectionReasons": ["runtime_provider_not_registered"]
+            },
+            "accepted_document_text": "sub build_user ($name, $age) { }\nmy $user = build_user($name, $age);\n",
+            "parse_stable": true
+        })
+    }
+
+    fn valid_rename_occurrence_next_action_json() -> Value {
+        json!({
+            "claim_boundary": "receipt-only rename-occurrence next-action proof",
+            "next_occurrence_candidate": {
+                "status": "receipt_only",
+                "candidate": {
+                    "family": "rename_occurrence",
+                    "originalSymbol": "$old",
+                    "replacementSymbol": "$new",
+                    "reason": "next_safe_rename_occurrence",
+                    "edit": {
+                        "startByte": 36,
+                        "endByte": 40,
+                        "newText": "$new"
+                    },
+                    "editorVisible": false
+                },
+                "rejectionReasons": []
+            },
+            "unsafe_occurrence": {
+                "status": "receipt_only",
+                "rejectionReasons": ["unsafe_insertion_point"]
+            },
+            "missing_occurrence": {
+                "status": "receipt_only",
+                "rejectionReasons": ["missing_rename_occurrence"]
+            },
+            "invalid_symbol": {
+                "status": "receipt_only",
+                "rejectionReasons": ["invalid_rename_symbol", "missing_rename_occurrence"]
+            },
+            "default_gate": {
+                "status": "disabled",
+                "rejectionReasons": ["gate_disabled"]
+            },
+            "explicit_gate": {
+                "status": "runtime_provider_not_registered",
+                "rejectionReasons": ["runtime_provider_not_registered"]
+            },
+            "accepted_document_text": "use strict;\nmy $new = compute();\nreturn $new + $old;\n",
+            "parse_stable": true
+        })
+    }
+
+    fn green_quality() -> InlineQualityCounterSummary {
+        let mut sources = BTreeMap::new();
+        let mut hard_zone_source_suppression_reasons = BTreeMap::new();
+        hard_zone_source_suppression_reasons.insert("hard_zone".to_string(), 2);
+        sources.insert(
+            "module".to_string(),
+            SourceQualityCounterSummary {
+                expected: 2,
+                passed: 2,
+                failed: 0,
+                returned_items: 3,
+                edit_application: QualityCountSummary { total: 2, passed: 2, failed: 0 },
+                parse_regressions: 0,
+                suppression_reasons: BTreeMap::new(),
+            },
+        );
+        sources.insert(
+            "hard_zone".to_string(),
+            SourceQualityCounterSummary {
+                expected: 2,
+                passed: 2,
+                failed: 0,
+                returned_items: 0,
+                edit_application: QualityCountSummary { total: 0, passed: 0, failed: 0 },
+                parse_regressions: 0,
+                suppression_reasons: hard_zone_source_suppression_reasons,
+            },
+        );
+
+        let mut suppression_reasons = BTreeMap::new();
+        suppression_reasons.insert("hard_zone".to_string(), 2);
+
+        InlineQualityCounterSummary {
+            source: "target/receipts/inline-completion-quality.json".to_string(),
+            available: true,
+            all_checks_green: Some(true),
+            fixtures_total: Some(4),
+            fixtures_passed: Some(4),
+            edit_application: Some(QualityCountSummary { total: 2, passed: 2, failed: 0 }),
+            hard_zone_rejections: Some(2),
+            suppression_reasons: Some(suppression_reasons),
+            parse_regressions: Some(0),
+            sources: Some(sources),
+        }
+    }
+
+    #[test]
+    fn dashboard_summarizes_required_semantic_inline_capabilities() -> Result<()> {
+        let receipt = summarize_matrix(
+            &complete_matrix(),
+            MATRIX_PATH,
+            unavailable_quality(),
+            unavailable_next_edit_scaffold(),
+        )?;
+
+        assert!(receipt.all_required_capabilities_registered);
+        assert_eq!(receipt.required_capability_count, REQUIRED_SEMANTIC_INLINE_RECEIPTS.len());
+        for requirement in REQUIRED_SEMANTIC_INLINE_RECEIPTS {
+            let entry = receipt.semantic_inline.get(requirement.capability).ok_or_else(|| {
+                eyre!("missing semantic inline capability {}", requirement.capability)
+            })?;
+            assert_eq!(entry.status, "registered");
+            assert_eq!(entry.workflow_id, requirement.workflow_id);
+            assert_eq!(
+                entry.scenario_file,
+                format!("ux_scenario_{}_inline_completion_quality.rs", requirement.workflow_id)
+            );
+            assert_eq!(
+                entry.user_journey,
+                format!("exercise {} inline completion", requirement.workflow_id)
+            );
+            assert_eq!(
+                entry.expected_outcomes,
+                vec!["inline completion behavior remains covered".to_string()]
+            );
+        }
+        assert_eq!(receipt.future_gated.get("next_edit"), Some(&"future_gated"));
+        assert_eq!(receipt.future_gated.get("optional_ai_candidate_source"), Some(&"future_gated"));
+        assert!(!receipt.next_edit_scaffold.available);
+        Ok(())
+    }
+
+    #[test]
+    fn dashboard_rejects_missing_required_semantic_inline_workflow() -> Result<()> {
+        let mut matrix = complete_matrix();
+        let workflows = matrix
+            .get_mut("workflows")
+            .and_then(Value::as_array_mut)
+            .ok_or_else(|| eyre!("test matrix missing workflows"))?;
+        workflows.retain(|workflow| {
+            workflow.get("id").and_then(Value::as_str)
+                != Some("real_workspace_module_import_inline_completion_quality")
+        });
+
+        let Err(error) = summarize_matrix(
+            &matrix,
+            MATRIX_PATH,
+            unavailable_quality(),
+            unavailable_next_edit_scaffold(),
+        ) else {
+            bail!("missing workflow must fail dashboard generation");
+        };
+        assert!(
+            error.to_string().contains("real_workspace_module_import_inline_completion_quality"),
+            "error should identify missing workflow, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_accepts_disabled_receipt() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+        fs::write(&path, serde_json::to_vec_pretty(&valid_next_edit_scaffold_json())?)?;
+
+        let summary = read_optional_next_edit_scaffold_summary(&path)?;
+
+        assert!(summary.available);
+        assert_eq!(summary.schema_version.as_deref(), Some("semantic-inline-next-edit.v1"));
+        assert_eq!(summary.enabled_by_default, Some(false));
+        assert_eq!(summary.runtime_provider_registered, Some(false));
+        assert_eq!(summary.ai_candidate_source_enabled, Some(false));
+        assert_eq!(summary.default_status.as_deref(), Some("disabled"));
+        assert_eq!(
+            summary.explicit_gate_status.as_deref(),
+            Some("runtime_provider_not_registered")
+        );
+        let missing_import = summary
+            .missing_import_next_action
+            .as_ref()
+            .ok_or_else(|| eyre!("missing import next-action summary missing"))?;
+        assert_eq!(
+            missing_import.reachable_candidate_reason.as_deref(),
+            Some("reachable_module_from_effective_inc")
+        );
+        assert_eq!(missing_import.rejection_reasons.get("duplicate_import").copied(), Some(2));
+        assert_eq!(missing_import.rejection_reasons.get("unreachable_module").copied(), Some(3));
+        assert!(missing_import.comment_target_rejected);
+        assert!(missing_import.pod_target_rejected);
+        assert!(missing_import.data_target_rejected);
+        assert_eq!(
+            missing_import.rejection_reasons.get("unsafe_insertion_point").copied(),
+            Some(3)
+        );
+        assert_eq!(missing_import.rejection_reasons.get("gate_disabled").copied(), Some(1));
+        assert_eq!(
+            missing_import.rejection_reasons.get("runtime_provider_not_registered").copied(),
+            Some(1)
+        );
+
+        let test_assertion = summary
+            .test_assertion_next_action
+            .as_ref()
+            .ok_or_else(|| eyre!("test assertion next-action summary missing"))?;
+        assert_eq!(
+            test_assertion.test_more_candidate_reason.as_deref(),
+            Some("visible_lexical_assertion")
+        );
+        assert_eq!(
+            test_assertion.test2_candidate_reason.as_deref(),
+            Some("visible_lexical_assertion")
+        );
+        assert_eq!(test_assertion.rejection_reasons.get("test_file_required").copied(), Some(1));
+        assert_eq!(
+            test_assertion.rejection_reasons.get("unsupported_test_framework").copied(),
+            Some(1)
+        );
+        assert_eq!(
+            test_assertion.rejection_reasons.get("missing_assertion_variables").copied(),
+            Some(1)
+        );
+        assert_eq!(test_assertion.rejection_reasons.get("gate_disabled").copied(), Some(1));
+        assert_eq!(
+            test_assertion.rejection_reasons.get("runtime_provider_not_registered").copied(),
+            Some(1)
+        );
+        let ai_boundary = summary
+            .optional_ai_candidate_boundary
+            .as_ref()
+            .ok_or_else(|| eyre!("optional AI candidate boundary summary missing"))?;
+        assert!(!ai_boundary.enabled_by_default);
+        assert!(!ai_boundary.ai_candidate_source_enabled);
+        assert!(ai_boundary.default_response_suggestions_empty);
+        assert!(ai_boundary.receipt_only_response_suggestions_empty);
+        assert!(ai_boundary.explicit_gate_response_suggestions_empty);
+        assert!(ai_boundary.rejects_ai_enabled_policy);
+        assert!(ai_boundary.rejects_missing_editor_safe_range);
+        assert!(ai_boundary.rejects_missing_parse_safety);
+        assert!(ai_boundary.rejects_missing_selected_completion_compatibility);
+        assert!(ai_boundary.rejects_nondeterministic_sources);
+        assert!(ai_boundary.deterministic_sources_only);
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_treats_missing_receipt_as_unavailable() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+
+        let summary = read_optional_next_edit_scaffold_summary(&path)?;
+
+        assert!(!summary.available);
+        assert_eq!(summary.schema_version, None);
+        assert_eq!(summary.planned_candidate_families, None);
+        validate_next_edit_scaffold_summary(&summary, &json!({}))?;
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_malformed_candidate_lists() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["planned_candidate_families"] = json!("missing_import");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold with scalar planned families must fail");
+        };
+        assert!(
+            error.to_string().contains("planned_candidate_families"),
+            "error should identify scalar planned families, got {error}"
+        );
+
+        scaffold = valid_next_edit_scaffold_json();
+        scaffold["future_gated"] = json!(["runtime_next_edit_provider", false]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold with non-string future gate must fail");
+        };
+        assert!(
+            error.to_string().contains("future_gated"),
+            "error should identify non-string future gate, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_missing_required_lists() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold
+            .as_object_mut()
+            .ok_or_else(|| eyre!("test scaffold must be an object"))?
+            .remove("planned_candidate_families");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold missing planned families must fail");
+        };
+        assert!(
+            error.to_string().contains("planned_candidate_families"),
+            "error should identify missing planned families, got {error}"
+        );
+
+        scaffold = valid_next_edit_scaffold_json();
+        scaffold
+            .as_object_mut()
+            .ok_or_else(|| eyre!("test scaffold must be an object"))?
+            .remove("future_gated");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold missing future gates must fail");
+        };
+        assert!(
+            error.to_string().contains("future_gated"),
+            "error should identify missing future gates, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_editor_visible_suggestions() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["explicit_gate_response"]["suggestions"] = json!([
+            {
+                "family": "missing_import",
+                "newText": "use My::App;\n"
+            }
+        ]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold with suggestions must fail");
+        };
+        assert!(
+            error.to_string().contains("explicit_gate_response/suggestions"),
+            "error should identify emitted suggestions, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_ai_enabled() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["ai_candidate_source_enabled"] = json!(true);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold with AI enabled must fail");
+        };
+        assert!(
+            error.to_string().contains("ai_candidate_source_enabled"),
+            "error should identify AI gate drift, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_ai_boundary_drift() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold
+            .as_object_mut()
+            .ok_or_else(|| eyre!("test scaffold must be an object"))?
+            .remove("optional_ai_candidate_boundary");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold without optional AI boundary must fail");
+        };
+        assert!(
+            error.to_string().contains("optional_ai_candidate_boundary"),
+            "error should identify missing optional AI boundary, got {error}"
+        );
+
+        scaffold = valid_next_edit_scaffold_json();
+        scaffold["optional_ai_candidate_boundary"]["enabled_by_default"] = json!(true);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold with enabled AI boundary must fail");
+        };
+        assert!(
+            error.to_string().contains("optional_ai_candidate_boundary/enabled_by_default"),
+            "error should identify optional AI default drift, got {error}"
+        );
+
+        scaffold = valid_next_edit_scaffold_json();
+        scaffold["optional_ai_candidate_boundary"]["ai_candidate_source_enabled"] = json!(true);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold with enabled AI candidate source must fail");
+        };
+        assert!(
+            error
+                .to_string()
+                .contains("optional_ai_candidate_boundary/ai_candidate_source_enabled"),
+            "error should identify optional AI source drift, got {error}"
+        );
+
+        scaffold = valid_next_edit_scaffold_json();
+        scaffold["optional_ai_candidate_boundary"]["default_response_suggestions_empty"] =
+            json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold with default AI suggestion drift must fail");
+        };
+        assert!(
+            error.to_string().contains("default_response_suggestions_empty"),
+            "error should identify default AI suggestion drift, got {error}"
+        );
+
+        scaffold = valid_next_edit_scaffold_json();
+        scaffold["optional_ai_candidate_boundary"]["rejects_ai_enabled_policy"] = json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold with weakened AI boundary must fail");
+        };
+        assert!(
+            error.to_string().contains("optional_ai_candidate_boundary/rejects_ai_enabled_policy"),
+            "error should identify optional AI boundary drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["optional_ai_candidate_boundary"]["rejects_missing_parse_safety"] = json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold with weakened AI parse-safety boundary must fail");
+        };
+        assert!(
+            error.to_string().contains("rejects_missing_parse_safety"),
+            "error should identify optional AI parse-safety drift, got {error}"
+        );
+
+        scaffold = valid_next_edit_scaffold_json();
+        scaffold["optional_ai_candidate_boundary"]["rejects_missing_editor_safe_range"] =
+            json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "missing editor-safe range drift must fail");
+        assert!(
+            error.to_string().contains("rejects_missing_editor_safe_range"),
+            "error should identify optional AI editor-safe range drift, got {error}"
+        );
+
+        scaffold = valid_next_edit_scaffold_json();
+        scaffold["optional_ai_candidate_boundary"]["rejects_missing_selected_completion_compatibility"] =
+            json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "selected completion boundary drift must fail");
+        assert!(
+            error.to_string().contains("rejects_missing_selected_completion_compatibility"),
+            "error should identify optional AI selected-completion drift, got {error}"
+        );
+
+        scaffold = valid_next_edit_scaffold_json();
+        scaffold["optional_ai_candidate_boundary"]["rejects_nondeterministic_sources"] =
+            json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "nondeterministic source drift must fail");
+        assert!(
+            error.to_string().contains("rejects_nondeterministic_sources"),
+            "error should identify optional AI source-determinism drift, got {error}"
+        );
+
+        scaffold = valid_next_edit_scaffold_json();
+        scaffold["optional_ai_candidate_boundary"]["deterministic_sources_only"] = json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "deterministic source drift must fail");
+        assert!(
+            error.to_string().contains("deterministic_sources_only"),
+            "error should identify optional AI deterministic-source drift, got {error}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_missing_import_drift() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold
+            .as_object_mut()
+            .ok_or_else(|| eyre!("test scaffold must be an object"))?
+            .remove("missing_import_next_action");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("next-edit scaffold without missing-import proof must fail");
+        };
+        assert!(
+            error.to_string().contains("missing_import_next_action"),
+            "error should identify missing missing-import proof, got {error}"
+        );
+
+        scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["reachable_candidate"]["candidate"]["editorVisible"] =
+            json!(true);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("editor-visible missing-import proof must fail");
+        };
+        assert!(
+            error.to_string().contains("editorVisible"),
+            "error should identify editor-visible missing-import drift, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_missing_import_field_drift() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["reachable_candidate"]["candidate"]["edit"]["newText"] =
+            json!("use Other::Module;\n");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "wrong missing-import edit text must fail");
+        assert!(
+            error.to_string().contains("candidate/edit/newText"),
+            "error should identify missing-import edit text drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["accepted_document_text"] =
+            json!("use strict;\nuse warnings;\nmy $value = My::App->new;\n");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(
+            &path,
+            "accepted text without inserted import must fail",
+        );
+        assert!(
+            error.to_string().contains("accepted document text"),
+            "error should identify missing accepted import drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["parse_stable"] = json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(
+            &path,
+            "parse-unstable missing-import proof must fail",
+        );
+        assert!(
+            error.to_string().contains("parse_stable"),
+            "error should identify parse-stability drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["line_endings_preserved"] = json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "line-ending drift must fail");
+        assert!(
+            error.to_string().contains("line_endings_preserved")
+                || error.to_string().contains("line endings"),
+            "error should identify line-ending drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["crlf_accepted_document_text"] = Value::Null;
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "missing CRLF accepted text must fail");
+        assert!(
+            error.to_string().contains("crlf_accepted_document_text"),
+            "error should identify missing CRLF accepted text, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["crlf_accepted_document_text"] =
+            json!("package Demo;\r\nuse strict;\r\nuse My::App;\nmy $value = My::App->new;\r\n");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "LF-only CRLF accepted text must fail");
+        assert!(
+            error.to_string().contains("preserve line endings"),
+            "error should identify CRLF preservation drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["crlf_accepted_document_text"] = json!(
+            "package Demo;\r\nuse strict;\r\nuse My::App;\r\nmy $value = My::App->new;\r\nuse My::App;\nmy $value = My::App->new;\r\n"
+        );
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "mixed-line-ending accepted text must fail");
+        assert!(
+            error.to_string().contains("mixed LF line endings"),
+            "error should identify mixed LF line endings, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["project_shape"]["project_candidate"]["status"] =
+            json!("disabled");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(
+            &path,
+            "wrong project-shaped missing-import status must fail",
+        );
+        assert!(
+            error.to_string().contains("project_candidate/status"),
+            "error should identify project-shaped status drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["project_shape"]["project_candidate"]["candidate"]
+            ["family"] = json!("test_assertion_body");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(
+            &path,
+            "wrong project-shaped missing-import family must fail",
+        );
+        assert!(
+            error.to_string().contains("project_candidate/candidate/family"),
+            "error should identify project-shaped family drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["project_shape"]["project_candidate"]["candidate"]
+            ["module"] = json!("Other::Module");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(
+            &path,
+            "wrong project-shaped missing-import module must fail",
+        );
+        assert!(
+            error.to_string().contains("project_candidate/candidate/module"),
+            "error should identify project-shaped module drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["project_shape"]["project_candidate"]["candidate"]
+            ["editorVisible"] = json!(true);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(
+            &path,
+            "editor-visible project-shaped missing-import candidate must fail",
+        );
+        assert!(
+            error.to_string().contains("project_candidate/candidate/editorVisible"),
+            "error should identify project-shaped editor-visible drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["project_shape"]["accepted_document_text"] = json!(
+            "package App::Script;\nuse strict;\nuse warnings;\nuse lib 'lib';\nmy $app = My::App->new;\n"
+        );
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(
+            &path,
+            "project-shaped accepted text without import must fail",
+        );
+        assert!(
+            error.to_string().contains("accepted document text"),
+            "error should identify project-shaped accepted-text drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["project_shape"]["parse_stable"] = json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(
+            &path,
+            "project-shaped parse-unstable proof must fail",
+        );
+        assert!(
+            error.to_string().contains("project_shape/parse_stable"),
+            "error should identify project-shaped parse-stability drift, got {error}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_missing_import_rejection_drift() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["duplicate_import"]["rejectionReasons"] = json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("duplicate import without rejection reason must fail");
+        };
+        assert!(
+            error.to_string().contains("duplicate import"),
+            "error should identify duplicate import rejection drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["unreachable_module"]["rejectionReasons"] =
+            json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("unreachable module without rejection reason must fail");
+        };
+        assert!(
+            error.to_string().contains("unreachable module"),
+            "error should identify unreachable module rejection drift, got {error}"
+        );
+
+        for (field, label) in [
+            ("duplicate_project_import", "duplicate import"),
+            ("root_only_module", "effective-INC omitted"),
+            ("cancelled_lib_module", "effective-INC removed"),
+        ] {
+            let mut scaffold = valid_next_edit_scaffold_json();
+            scaffold["missing_import_next_action"]["project_shape"][field]["rejectionReasons"] =
+                json!([]);
+            fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+            let error = next_edit_scaffold_summary_error(
+                &path,
+                "project-shaped missing-import rejection drift must fail",
+            );
+            assert!(
+                error.to_string().contains(label),
+                "error should identify {label} project rejection drift, got {error}"
+            );
+        }
+
+        for (field, label) in [
+            ("comment_target", "comment target"),
+            ("pod_target", "POD target"),
+            ("data_target", "data target"),
+        ] {
+            let mut scaffold = valid_next_edit_scaffold_json();
+            scaffold["missing_import_next_action"][field]["rejectionReasons"] = json!([]);
+            fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+            let error = next_edit_scaffold_summary_error(
+                &path,
+                "unsafe missing-import target without rejection reason must fail",
+            );
+            assert!(
+                error.to_string().contains(label),
+                "error should identify {label} rejection drift, got {error}"
+            );
+        }
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["default_gate"]["status"] = json!("receipt_only");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("default gate status drift must fail");
+        };
+        assert!(
+            error.to_string().contains("default_gate/status"),
+            "error should identify default gate status drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["explicit_gate"]["status"] = json!("receipt_only");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let Err(error) = read_optional_next_edit_scaffold_summary(&path) else {
+            bail!("explicit gate status drift must fail");
+        };
+        assert!(
+            error.to_string().contains("explicit_gate/status"),
+            "error should identify explicit gate status drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["missing_import_next_action"]["duplicate_import"]["rejectionReasons"] =
+            json!([42]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "non-string rejection must fail");
+        assert!(
+            error.to_string().contains("must contain strings"),
+            "error should identify non-string rejection reason, got {error}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_test_assertion_field_drift() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["test_assertion_next_action"]["test_more_candidate"]["candidate"]["edit"]["newText"] =
+            json!("done_testing();\n");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "wrong test assertion edit text must fail");
+        assert!(
+            error.to_string().contains("candidate/edit/newText"),
+            "error should identify test assertion edit text drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["test_assertion_next_action"]["accepted_document_text"] =
+            json!("use Test::More;\nmy $got = compute();\nmy $expected = 42;\n");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(
+            &path,
+            "accepted text without inserted assertion must fail",
+        );
+        assert!(
+            error.to_string().contains("accepted document text"),
+            "error should identify missing accepted assertion drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["test_assertion_next_action"]["accepted_document_text"] = json!(
+            "use Test::More;\nmy $got = compute();\nmy $expected = 42;\nis($got, $expected, 'test description');\ndone_testing();\n"
+        );
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "premature done_testing must fail");
+        assert!(
+            error.to_string().contains("done_testing"),
+            "error should identify done_testing drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["test_assertion_next_action"]["parse_stable"] = json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(
+            &path,
+            "parse-unstable test assertion proof must fail",
+        );
+        assert!(
+            error.to_string().contains("parse_stable"),
+            "error should identify parse-stability drift, got {error}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_test_assertion_rejection_drift() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["test_assertion_next_action"]["non_test_file"]["rejectionReasons"] = json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "non-test rejection drift must fail");
+        assert!(
+            error.to_string().contains("non-test file"),
+            "error should identify non-test rejection drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["test_assertion_next_action"]["unsupported_framework"]["rejectionReasons"] =
+            json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "framework rejection drift must fail");
+        assert!(
+            error.to_string().contains("unsupported framework"),
+            "error should identify framework rejection drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["test_assertion_next_action"]["missing_variables"]["rejectionReasons"] = json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "missing-variable rejection drift must fail");
+        assert!(
+            error.to_string().contains("missing variables"),
+            "error should identify missing-variable rejection drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["test_assertion_next_action"]["default_gate"]["status"] = json!("receipt_only");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "default gate drift must fail");
+        assert!(
+            error.to_string().contains("default_gate/status"),
+            "error should identify default gate drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["test_assertion_next_action"]["explicit_gate"]["status"] = json!("receipt_only");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "explicit gate drift must fail");
+        assert!(
+            error.to_string().contains("explicit_gate/status"),
+            "error should identify explicit gate drift, got {error}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_records_call_site_update_action() -> Result<()> {
+        let scaffold = valid_next_edit_scaffold_json();
+        let summary = call_site_update_next_action_summary(&scaffold)?;
+
+        assert!(summary.next_call_site_candidate_prepared);
+        assert!(!summary.next_call_site_candidate_editor_visible);
+        assert_eq!(
+            summary.next_call_site_candidate_reason.as_deref(),
+            Some("visible_argument_call_site_update")
+        );
+        assert!(summary.duplicate_argument_rejected);
+        assert!(summary.missing_call_site_rejected);
+        assert!(summary.unsafe_call_site_rejected);
+        assert!(summary.invalid_target_rejected);
+        assert!(summary.missing_argument_rejected);
+        assert!(summary.default_gate_disabled);
+        assert!(summary.explicit_gate_runtime_unregistered);
+        assert_eq!(summary.rejection_reasons.get("duplicate_call_argument"), Some(&1));
+        assert_eq!(summary.rejection_reasons.get("missing_call_site"), Some(&1));
+        assert_eq!(summary.rejection_reasons.get("unsafe_insertion_point"), Some(&1));
+        assert_eq!(summary.rejection_reasons.get("invalid_call_target"), Some(&1));
+        assert_eq!(summary.rejection_reasons.get("missing_call_argument"), Some(&1));
+        assert_eq!(summary.rejection_reasons.get("gate_disabled"), Some(&1));
+        assert_eq!(summary.rejection_reasons.get("runtime_provider_not_registered"), Some(&1));
+        assert!(summary.parse_stable);
+
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_call_site_update_field_drift() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["next_call_site_candidate"]["status"] =
+            json!("disabled");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "call-site status drift must fail");
+        assert!(
+            error.to_string().contains("next_call_site_candidate/status"),
+            "error should identify call-site candidate status drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["next_call_site_candidate"]["candidate"]["family"] =
+            json!("missing_import");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "call-site family drift must fail");
+        assert!(
+            error.to_string().contains("candidate/family"),
+            "error should identify call-site candidate family drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["next_call_site_candidate"]["candidate"]["calleeName"] =
+            json!("other_builder");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "call-site callee drift must fail");
+        assert!(
+            error.to_string().contains("candidate/calleeName"),
+            "error should identify call-site callee drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["next_call_site_candidate"]["candidate"]["argument"] =
+            json!("$other");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "call-site argument drift must fail");
+        assert!(
+            error.to_string().contains("candidate/argument"),
+            "error should identify call-site argument drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["next_call_site_candidate"]["candidate"]["edit"]
+            ["newText"] = json!(", $other");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "call-site edit drift must fail");
+        assert!(
+            error.to_string().contains("candidate/edit/newText"),
+            "error should identify call-site edit text drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["next_call_site_candidate"]["candidate"]["editorVisible"] =
+            json!(true);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "editor-visible call-site action must fail");
+        assert!(
+            error.to_string().contains("candidate/editorVisible"),
+            "error should identify call-site editor visibility drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["accepted_document_text"] = Value::Null;
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "missing call-site accepted text must fail");
+        assert!(
+            error.to_string().contains("accepted_document_text"),
+            "error should identify missing call-site accepted text, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["accepted_document_text"] =
+            json!("sub build_user ($name, $age) { }\nmy $user = build_user($name);\n");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "wrong call-site accepted text must fail");
+        assert!(
+            error.to_string().contains("accepted document text"),
+            "error should identify wrong call-site accepted text, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["parse_stable"] = json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "parse-unstable call-site proof must fail");
+        assert!(
+            error.to_string().contains("parse_stable"),
+            "error should identify call-site parse-stability drift, got {error}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_call_site_update_rejection_drift() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["duplicate_argument"]["rejectionReasons"] =
+            json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(
+            &path,
+            "duplicate call-site rejection drift must fail",
+        );
+        assert!(
+            error.to_string().contains("duplicate argument"),
+            "error should identify duplicate call-site rejection drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["missing_call_site"]["rejectionReasons"] =
+            json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "missing call-site rejection drift must fail");
+        assert!(
+            error.to_string().contains("missing call site"),
+            "error should identify missing call-site rejection drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["unsafe_call_site"]["rejectionReasons"] =
+            json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "unsafe call-site rejection drift must fail");
+        assert!(
+            error.to_string().contains("unsafe call site"),
+            "error should identify unsafe call-site rejection drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["invalid_target"]["rejectionReasons"] = json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "invalid call target drift must fail");
+        assert!(
+            error.to_string().contains("invalid target"),
+            "error should identify invalid target drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["missing_argument"]["rejectionReasons"] =
+            json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "missing call argument drift must fail");
+        assert!(
+            error.to_string().contains("missing argument"),
+            "error should identify missing argument drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["default_gate"]["status"] = json!("receipt_only");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "call-site default gate drift must fail");
+        assert!(
+            error.to_string().contains("default_gate/status"),
+            "error should identify call-site default gate drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["explicit_gate"]["status"] = json!("receipt_only");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "call-site explicit gate drift must fail");
+        assert!(
+            error.to_string().contains("explicit_gate/status"),
+            "error should identify call-site explicit gate drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["call_site_update_next_action"]["missing_call_site"]["rejectionReasons"] =
+            json!([42]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "non-string call-site rejection must fail");
+        assert!(
+            error.to_string().contains("must contain strings"),
+            "error should identify non-string call-site rejection reason, got {error}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_records_rename_occurrence_action() -> Result<()> {
+        let scaffold = valid_next_edit_scaffold_json();
+        let summary = rename_occurrence_next_action_summary(&scaffold)?;
+
+        assert!(summary.next_occurrence_candidate_prepared);
+        assert!(!summary.next_occurrence_candidate_editor_visible);
+        assert_eq!(
+            summary.next_occurrence_candidate_reason.as_deref(),
+            Some("next_safe_rename_occurrence")
+        );
+        assert!(summary.unsafe_occurrence_rejected);
+        assert!(summary.missing_occurrence_rejected);
+        assert!(summary.invalid_symbol_rejected);
+        assert!(summary.default_gate_disabled);
+        assert!(summary.explicit_gate_runtime_unregistered);
+        assert_eq!(summary.rejection_reasons.get("unsafe_insertion_point"), Some(&1));
+        assert_eq!(summary.rejection_reasons.get("missing_rename_occurrence"), Some(&2));
+        assert_eq!(summary.rejection_reasons.get("invalid_rename_symbol"), Some(&1));
+        assert_eq!(summary.rejection_reasons.get("gate_disabled"), Some(&1));
+        assert_eq!(summary.rejection_reasons.get("runtime_provider_not_registered"), Some(&1));
+        assert!(summary.parse_stable);
+
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_rename_occurrence_field_drift() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["next_occurrence_candidate"]["status"] =
+            json!("disabled");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "rename status drift must fail");
+        assert!(
+            error.to_string().contains("next_occurrence_candidate/status"),
+            "error should identify rename candidate status drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["next_occurrence_candidate"]["candidate"]["family"] =
+            json!("missing_import");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "rename family drift must fail");
+        assert!(
+            error.to_string().contains("candidate/family"),
+            "error should identify rename candidate family drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["next_occurrence_candidate"]["candidate"]["originalSymbol"] =
+            json!("$other");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "rename original symbol drift must fail");
+        assert!(
+            error.to_string().contains("candidate/originalSymbol"),
+            "error should identify rename original symbol drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["next_occurrence_candidate"]["candidate"]["replacementSymbol"] =
+            json!("$other");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "rename replacement symbol drift must fail");
+        assert!(
+            error.to_string().contains("candidate/replacementSymbol"),
+            "error should identify rename replacement symbol drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["next_occurrence_candidate"]["candidate"]["edit"]
+            ["newText"] = json!("$other");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "rename edit text drift must fail");
+        assert!(
+            error.to_string().contains("candidate/edit/newText"),
+            "error should identify rename edit text drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["next_occurrence_candidate"]["candidate"]["editorVisible"] =
+            json!(true);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "editor-visible rename action must fail");
+        assert!(
+            error.to_string().contains("candidate/editorVisible"),
+            "error should identify rename editor visibility drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["accepted_document_text"] = Value::Null;
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "missing rename accepted text must fail");
+        assert!(
+            error.to_string().contains("accepted_document_text"),
+            "error should identify missing rename accepted text, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["accepted_document_text"] =
+            json!("use strict;\nmy $new = compute();\nreturn $old + $old;\n");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "wrong rename accepted text must fail");
+        assert!(
+            error.to_string().contains("accepted document text"),
+            "error should identify wrong rename accepted text, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["parse_stable"] = json!(false);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "parse-unstable rename proof must fail");
+        assert!(
+            error.to_string().contains("parse_stable"),
+            "error should identify rename parse-stability drift, got {error}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn next_edit_scaffold_summary_rejects_rename_occurrence_rejection_drift() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("semantic-inline-next-edit.json");
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["unsafe_occurrence"]["rejectionReasons"] =
+            json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "unsafe rename rejection drift must fail");
+        assert!(
+            error.to_string().contains("unsafe occurrence"),
+            "error should identify unsafe rename rejection drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["missing_occurrence"]["rejectionReasons"] =
+            json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "missing rename rejection drift must fail");
+        assert!(
+            error.to_string().contains("missing occurrence"),
+            "error should identify missing rename rejection drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["invalid_symbol"]["rejectionReasons"] = json!([]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "invalid rename rejection drift must fail");
+        assert!(
+            error.to_string().contains("invalid rename symbols"),
+            "error should identify invalid rename rejection drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["default_gate"]["status"] = json!("receipt_only");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "rename default gate drift must fail");
+        assert!(
+            error.to_string().contains("default_gate/status"),
+            "error should identify rename default gate drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["explicit_gate"]["status"] =
+            json!("receipt_only");
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error = next_edit_scaffold_summary_error(&path, "rename explicit gate drift must fail");
+        assert!(
+            error.to_string().contains("explicit_gate/status"),
+            "error should identify rename explicit gate drift, got {error}"
+        );
+
+        let mut scaffold = valid_next_edit_scaffold_json();
+        scaffold["rename_occurrence_next_action"]["unsafe_occurrence"]["rejectionReasons"] =
+            json!([42]);
+        fs::write(&path, serde_json::to_vec_pretty(&scaffold)?)?;
+        let error =
+            next_edit_scaffold_summary_error(&path, "non-string rename rejection must fail");
+        assert!(
+            error.to_string().contains("must contain strings"),
+            "error should identify non-string rename rejection reason, got {error}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn quality_counter_map_returns_none_when_counter_is_absent() -> Result<()> {
+        let quality = json!({
+            "fixtures_total": 2,
+            "checks": {
+                "hard_zone_rejected": 1,
+                "parse_regressions": 0
+            }
+        });
+
+        assert!(quality_counter_map(&quality, "/checks/suppression_reasons")?.is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn quality_count_summary_requires_structured_counts() -> Result<()> {
+        let quality = json!({
+            "checks": {
+                "edit_application": {
+                    "total": 3,
+                    "passed": 2,
+                    "failed": 1
+                }
+            }
+        });
+
+        let summary = quality_count_summary(&quality, "/checks/edit_application")?
+            .ok_or_else(|| eyre!("missing edit_application summary"))?;
+        assert_eq!(summary.total, 3);
+        assert_eq!(summary.passed, 2);
+        assert_eq!(summary.failed, 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn quality_source_summaries_embed_source_outcomes() -> Result<()> {
+        let quality = json!({
+            "sources": {
+                "module": {
+                    "expected": 4,
+                    "passed": 4,
+                    "failed": 0,
+                    "returned_items": 6,
+                    "edit_application": {
+                        "total": 4,
+                        "passed": 4,
+                        "failed": 0
+                    },
+                    "parse_regressions": 0,
+                    "suppression_reasons": {}
+                },
+                "hard_zone": {
+                    "expected": 2,
+                    "passed": 2,
+                    "failed": 0,
+                    "returned_items": 0,
+                    "edit_application": {
+                        "total": 0,
+                        "passed": 0,
+                        "failed": 0
+                    },
+                    "parse_regressions": 0,
+                    "suppression_reasons": {
+                        "hard_zone": 2
+                    }
+                }
+            }
+        });
+
+        let sources = quality_source_summaries(&quality)?
+            .ok_or_else(|| eyre!("missing quality source summaries"))?;
+
+        let module = sources.get("module").ok_or_else(|| eyre!("missing module source"))?;
+        assert_eq!(module.expected, 4);
+        assert_eq!(module.returned_items, 6);
+        assert_eq!(module.edit_application.passed, 4);
+
+        let hard_zone =
+            sources.get("hard_zone").ok_or_else(|| eyre!("missing hard_zone source"))?;
+        assert_eq!(hard_zone.returned_items, 0);
+        assert_eq!(hard_zone.suppression_reasons.get("hard_zone").copied(), Some(2));
+        Ok(())
+    }
+
+    #[test]
+    fn quality_source_summaries_require_unsigned_fields() -> Result<()> {
+        let quality = json!({
+            "sources": {
+                "module": {
+                    "expected": "bad",
+                    "passed": 0,
+                    "failed": 0,
+                    "returned_items": 0,
+                    "edit_application": {
+                        "total": 0,
+                        "passed": 0,
+                        "failed": 0
+                    },
+                    "parse_regressions": 0,
+                    "suppression_reasons": {}
+                }
+            }
+        });
+
+        let Err(error) = quality_source_summaries(&quality) else {
+            bail!("invalid source summary must fail");
+        };
+        assert!(
+            error.to_string().contains("/sources/module/expected"),
+            "error should identify invalid source field, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn dashboard_accepts_green_quality_counters() -> Result<()> {
+        let receipt = summarize_matrix(
+            &complete_matrix(),
+            MATRIX_PATH,
+            green_quality(),
+            unavailable_next_edit_scaffold(),
+        )?;
+
+        assert!(receipt.quality_counters.available);
+        assert_eq!(receipt.quality_counters.all_checks_green, Some(true));
+        assert_eq!(
+            receipt.quality_counters.edit_application.as_ref().map(|summary| summary.passed),
+            Some(2)
+        );
+        assert_eq!(
+            receipt
+                .quality_counters
+                .sources
+                .as_ref()
+                .and_then(|sources| sources.get("module"))
+                .map(|source| source.edit_application.passed),
+            Some(2)
+        );
+        Ok(())
+    }
+
+    fn semantic_inline_dashboard_error(quality: InlineQualityCounterSummary) -> Result<String> {
+        let result = summarize_matrix(
+            &complete_matrix(),
+            MATRIX_PATH,
+            quality,
+            unavailable_next_edit_scaffold(),
+        );
+        Ok(result.map(|_| String::new()).unwrap_or_else(|error| error.to_string()))
+    }
+
+    fn hard_zone_quality_counter_error(quality: InlineQualityCounterSummary) -> Result<String> {
+        Ok(validate_hard_zone_quality_counter_summary(&quality)
+            .map(|()| String::new())
+            .unwrap_or_else(|error| error.to_string()))
+    }
+
+    #[test]
+    fn hard_zone_quality_counter_summary_accepts_matching_receipt() -> Result<()> {
+        validate_hard_zone_quality_counter_summary(&green_quality())
+    }
+
+    #[test]
+    fn hard_zone_quality_counter_summary_rejects_missing_counter() -> Result<()> {
+        let mut quality = green_quality();
+        quality.hard_zone_rejections = None;
+
+        let error = hard_zone_quality_counter_error(quality)?;
+        assert!(
+            error.contains("hard_zone_rejected"),
+            "error should identify the missing hard-zone counter, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn hard_zone_quality_counter_summary_rejects_source_suppression_drift() -> Result<()> {
+        let mut quality = green_quality();
+        let sources = quality.sources.as_mut().ok_or_else(|| eyre!("missing sources"))?;
+        let hard_zone =
+            sources.get_mut("hard_zone").ok_or_else(|| eyre!("missing hard_zone source"))?;
+        hard_zone.suppression_reasons.insert("hard_zone".to_string(), 1);
+
+        let error = hard_zone_quality_counter_error(quality)?;
+        assert!(
+            error.contains("/sources/hard_zone suppression count")
+                && error.contains("hard-zone rejection count"),
+            "error should identify hard-zone source suppression drift, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_inline_dashboard_rejects_missing_hard_zone_quality_counter() -> Result<()> {
+        let mut quality = green_quality();
+        quality.hard_zone_rejections = None;
+
+        let error = semantic_inline_dashboard_error(quality)?;
+        assert!(
+            error.contains("hard_zone_rejected"),
+            "error should identify the missing hard-zone counter, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_inline_dashboard_rejects_missing_hard_zone_suppression_map() -> Result<()> {
+        let mut quality = green_quality();
+        quality.suppression_reasons = None;
+
+        let error = semantic_inline_dashboard_error(quality)?;
+        assert!(
+            error.contains("/checks/suppression_reasons"),
+            "error should identify missing hard-zone suppression map, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_inline_dashboard_rejects_missing_hard_zone_suppression_reason() -> Result<()> {
+        let mut quality = green_quality();
+        quality.suppression_reasons = Some(BTreeMap::new());
+
+        let error = semantic_inline_dashboard_error(quality)?;
+        assert!(
+            error.contains("/checks/suppression_reasons/hard_zone"),
+            "error should identify missing hard-zone suppression reason, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_inline_dashboard_rejects_zero_hard_zone_quality_counter() -> Result<()> {
+        let mut quality = green_quality();
+        quality.hard_zone_rejections = Some(0);
+        let suppression_reasons = quality
+            .suppression_reasons
+            .as_mut()
+            .ok_or_else(|| eyre!("missing suppression reasons"))?;
+        suppression_reasons.insert("hard_zone".to_string(), 0);
+        let sources = quality.sources.as_mut().ok_or_else(|| eyre!("missing sources"))?;
+        let hard_zone =
+            sources.get_mut("hard_zone").ok_or_else(|| eyre!("missing hard_zone source"))?;
+        hard_zone.expected = 0;
+        hard_zone.passed = 0;
+        hard_zone.suppression_reasons.insert("hard_zone".to_string(), 0);
+
+        let error = semantic_inline_dashboard_error(quality)?;
+        assert!(
+            error.contains("at least one hard-zone rejection"),
+            "error should identify the missing hard-zone proof, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_inline_dashboard_rejects_hard_zone_suppression_mismatch() -> Result<()> {
+        let mut quality = green_quality();
+        let suppression_reasons = quality
+            .suppression_reasons
+            .as_mut()
+            .ok_or_else(|| eyre!("missing suppression reasons"))?;
+        suppression_reasons.insert("hard_zone".to_string(), 1);
+
+        let error = semantic_inline_dashboard_error(quality)?;
+        assert!(
+            error.contains("suppression count") && error.contains("rejection count"),
+            "error should identify hard-zone suppression drift, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_inline_dashboard_rejects_missing_hard_zone_source_summary() -> Result<()> {
+        let mut quality = green_quality();
+        let sources = quality.sources.as_mut().ok_or_else(|| eyre!("missing sources"))?;
+        sources.remove("hard_zone");
+
+        let error = semantic_inline_dashboard_error(quality)?;
+        assert!(
+            error.contains("/sources/hard_zone"),
+            "error should identify missing hard-zone source summary, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_inline_dashboard_rejects_hard_zone_source_expected_mismatch() -> Result<()> {
+        let mut quality = green_quality();
+        let sources = quality.sources.as_mut().ok_or_else(|| eyre!("missing sources"))?;
+        let hard_zone =
+            sources.get_mut("hard_zone").ok_or_else(|| eyre!("missing hard_zone source"))?;
+        hard_zone.expected = 1;
+        hard_zone.passed = 1;
+
+        let error = semantic_inline_dashboard_error(quality)?;
+        assert!(
+            error.contains("expected count") && error.contains("hard-zone rejection count"),
+            "error should identify hard-zone source count drift, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_inline_dashboard_rejects_hard_zone_source_items() -> Result<()> {
+        let mut quality = green_quality();
+        let sources = quality.sources.as_mut().ok_or_else(|| eyre!("missing sources"))?;
+        let hard_zone =
+            sources.get_mut("hard_zone").ok_or_else(|| eyre!("missing hard_zone source"))?;
+        hard_zone.returned_items = 1;
+
+        let error = semantic_inline_dashboard_error(quality)?;
+        assert!(
+            error.contains("hard-zone source must stay silent"),
+            "error should identify hard-zone returned-item drift, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_inline_dashboard_rejects_missing_hard_zone_source_suppression() -> Result<()> {
+        let mut quality = green_quality();
+        let sources = quality.sources.as_mut().ok_or_else(|| eyre!("missing sources"))?;
+        let hard_zone =
+            sources.get_mut("hard_zone").ok_or_else(|| eyre!("missing hard_zone source"))?;
+        hard_zone.suppression_reasons = BTreeMap::new();
+
+        let error = semantic_inline_dashboard_error(quality)?;
+        assert!(
+            error.contains("/sources/hard_zone/suppression_reasons/hard_zone"),
+            "error should identify missing hard-zone source suppression, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_inline_dashboard_rejects_hard_zone_source_suppression_mismatch() -> Result<()> {
+        let mut quality = green_quality();
+        let sources = quality.sources.as_mut().ok_or_else(|| eyre!("missing sources"))?;
+        let hard_zone =
+            sources.get_mut("hard_zone").ok_or_else(|| eyre!("missing hard_zone source"))?;
+        hard_zone.suppression_reasons.insert("hard_zone".to_string(), 1);
+
+        let error = semantic_inline_dashboard_error(quality)?;
+        assert!(
+            error.contains("/sources/hard_zone suppression count")
+                && error.contains("hard-zone rejection count"),
+            "error should identify hard-zone source suppression drift, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn dashboard_rejects_failing_quality_counters() -> Result<()> {
+        let quality = InlineQualityCounterSummary {
+            source: "target/receipts/inline-completion-quality.json".to_string(),
+            available: true,
+            all_checks_green: Some(true),
+            fixtures_total: Some(2),
+            fixtures_passed: Some(1),
+            edit_application: Some(QualityCountSummary { total: 1, passed: 1, failed: 0 }),
+            hard_zone_rejections: Some(0),
+            suppression_reasons: Some(BTreeMap::new()),
+            parse_regressions: Some(0),
+            sources: Some(BTreeMap::new()),
+        };
+
+        let Err(error) = summarize_matrix(
+            &complete_matrix(),
+            MATRIX_PATH,
+            quality,
+            unavailable_next_edit_scaffold(),
+        ) else {
+            bail!("failing quality counters must fail dashboard generation");
+        };
+        assert!(
+            error.to_string().contains("did not pass all fixtures"),
+            "error should identify failing quality counters, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn dashboard_rejects_parse_regressions() -> Result<()> {
+        let mut quality = green_quality();
+        quality.parse_regressions = Some(1);
+
+        let Err(error) = summarize_matrix(
+            &complete_matrix(),
+            MATRIX_PATH,
+            quality,
+            unavailable_next_edit_scaffold(),
+        ) else {
+            bail!("parse regressions must fail dashboard generation");
+        };
+        assert!(
+            error.to_string().contains("parse regression"),
+            "error should identify parse regressions, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn dashboard_rejects_failing_edit_application_count() -> Result<()> {
+        let mut quality = green_quality();
+        quality.edit_application = Some(QualityCountSummary { total: 2, passed: 1, failed: 0 });
+
+        let Err(error) = summarize_matrix(
+            &complete_matrix(),
+            MATRIX_PATH,
+            quality,
+            unavailable_next_edit_scaffold(),
+        ) else {
+            bail!("invalid edit application total must fail dashboard generation");
+        };
+        assert!(
+            error.to_string().contains("/checks/edit_application"),
+            "error should identify edit application counters, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn dashboard_rejects_failed_edit_application_count() -> Result<()> {
+        let mut quality = green_quality();
+        quality.edit_application = Some(QualityCountSummary { total: 1, passed: 0, failed: 1 });
+
+        let Err(error) = summarize_matrix(
+            &complete_matrix(),
+            MATRIX_PATH,
+            quality,
+            unavailable_next_edit_scaffold(),
+        ) else {
+            bail!("failed edit application count must fail dashboard generation");
+        };
+        assert!(
+            error.to_string().contains("failed check"),
+            "error should identify failed edit application counters, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn dashboard_rejects_failing_source_quality_counters() -> Result<()> {
+        let mut quality = green_quality();
+        let sources = quality.sources.as_mut().ok_or_else(|| eyre!("missing source summaries"))?;
+        let source =
+            sources.get_mut("module").ok_or_else(|| eyre!("missing module source summary"))?;
+        source.parse_regressions = 1;
+
+        let Err(error) = summarize_matrix(
+            &complete_matrix(),
+            MATRIX_PATH,
+            quality,
+            unavailable_next_edit_scaffold(),
+        ) else {
+            bail!("failing source quality counters must fail dashboard generation");
+        };
+        assert!(
+            error.to_string().contains("/sources/module"),
+            "error should identify failing source quality counters, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn dashboard_rejects_source_expected_count_mismatch() -> Result<()> {
+        let mut quality = green_quality();
+        let sources = quality.sources.as_mut().ok_or_else(|| eyre!("missing source summaries"))?;
+        let source =
+            sources.get_mut("module").ok_or_else(|| eyre!("missing module source summary"))?;
+        source.expected = 3;
+
+        let Err(error) = summarize_matrix(
+            &complete_matrix(),
+            MATRIX_PATH,
+            quality,
+            unavailable_next_edit_scaffold(),
+        ) else {
+            bail!("source count mismatch must fail dashboard generation");
+        };
+        assert!(
+            error.to_string().contains("expected count"),
+            "error should identify source count mismatch, got {error}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn dashboard_rejects_failed_source_count() -> Result<()> {
+        let mut quality = green_quality();
+        let sources = quality.sources.as_mut().ok_or_else(|| eyre!("missing source summaries"))?;
+        let source =
+            sources.get_mut("module").ok_or_else(|| eyre!("missing module source summary"))?;
+        source.expected = 3;
+        source.failed = 1;
+
+        let Err(error) = summarize_matrix(
+            &complete_matrix(),
+            MATRIX_PATH,
+            quality,
+            unavailable_next_edit_scaffold(),
+        ) else {
+            bail!("failed source count must fail dashboard generation");
+        };
+        assert!(
+            error.to_string().contains("failed source fixture"),
+            "error should identify failed source counters, got {error}"
+        );
+        Ok(())
+    }
+}

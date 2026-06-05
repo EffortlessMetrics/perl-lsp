@@ -107,6 +107,23 @@ describe('gherkin step definition support', () => {
     expect(result).not.toBe('ambiguous');
   });
 
+  test('does not treat a single char-class quantifier as expensive (no false positive)', () => {
+    // Regression for #859: `[0-9]+` / `[^"]+` are linear-time and safe. The
+    // ReDoS guard previously flagged any character class followed by a
+    // quantifier, misclassifying ordinary step definitions as `ambiguous`.
+    const numericStep = parseGherkinStepLine('Then the total is 19', 1);
+    expect(numericStep).not.toBeNull();
+    expect(classifyStepDefinitionStatus(numericStep!, [
+      'Then qr/^the total is [0-9]+$/, sub { return; };',
+    ])).toBe('defined');
+
+    const quotedStep = parseGherkinStepLine('Then the name is "alice"', 1);
+    expect(quotedStep).not.toBeNull();
+    expect(classifyStepDefinitionStatus(quotedStep!, [
+      'Then qr/^the name is "([^"]+)"$/, sub { return; };',
+    ])).toBe('defined');
+  });
+
   test('suggests a deterministic feature-relative target file', () => {
     expect(
       suggestStepDefinitionPath(

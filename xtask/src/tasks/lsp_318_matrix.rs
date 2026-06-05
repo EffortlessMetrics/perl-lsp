@@ -46,16 +46,16 @@ const ROWS: &[MatrixRow] = &[
         notes: "Returned items must use the same range and extend selected text, or return empty.",
     },
     MatrixRow {
-        feature: "`StringValue` inline insert text",
+        feature: "Object-form `StringValue` inline insert text",
         since_or_flag: "LSP 3.18",
         client_gate: "`textDocument.inlineCompletion`",
-        server_shape: "`InlineCompletionItem.insertText`",
-        method_or_shape: "string value; object-form `StringValue` remains unclaimed",
-        status: "implemented-string-only",
+        server_shape: "`InlineCompletionItem.insertText` object form",
+        method_or_shape: "`InlineCompletionItem.insertText: StringValue`",
+        status: "negative-gated+documented",
         proof: "`lsp_inline_completion_registration_tests`",
         owner: "`crates/perl-lsp-rs/src/runtime/language/misc.rs`; inline-completion provider",
         priority: "P1",
-        notes: "Current deterministic items use strings; do not claim object-form `StringValue` support until a provider returns it with wire proof.",
+        notes: "Standard inline completion currently emits plain string `insertText`; object-form `StringValue` remains unclaimed until a provider returns it with wire proof.",
     },
     MatrixRow {
         feature: "Multi-range formatting",
@@ -79,7 +79,7 @@ const ROWS: &[MatrixRow] = &[
         proof: "`lsp_text_document_content_tests`; `lsp_virtual_content_tests`; `lsp_cap_snap`",
         owner: "`crates/perl-lsp-rs/src/runtime/language/virtual_content.rs`",
         priority: "P0",
-        notes: "`perldoc` is the current advertised virtual-document scheme.",
+        notes: "`perldoc` is the current advertised virtual-document scheme; workspace POD output includes sorted related `perldoc://` links for simple `L<Module::Name>` references and supported core pragmas.",
     },
     MatrixRow {
         feature: "`workspace/textDocumentContent/refresh`",
@@ -135,11 +135,11 @@ const ROWS: &[MatrixRow] = &[
         client_gate: "semantic-token legend negotiation",
         server_shape: "`semanticTokensProvider.legend.tokenTypes`",
         method_or_shape: "token type indexes must stay within legend bounds",
-        status: "negative-gated+documented",
-        proof: "`semantic_token_label_type_is_not_advertised_without_provider_support`; `semantic_token_result_indexes_stay_within_advertised_legend_bounds`; `check-lsp-318-claims`",
+        status: "implemented+tested+documented",
+        proof: "`semantic_token_label_type_decodes_for_perl_labels`; `semantic_token_result_indexes_stay_within_advertised_legend_bounds`; `check-lsp-318-claims`",
         owner: "`crates/perl-lsp-rs-core/src/providers/semantic_tokens/`",
         priority: "P3",
-        notes: "`label` must stay absent until the provider can emit matching legend indexes; emitted token indexes and modifier bits remain bounds-checked.",
+        notes: "`label` is advertised and emitted for deterministic Perl label declarations and loop-control label references; emitted token indexes and modifier bits remain bounds-checked.",
     },
     MatrixRow {
         feature: "`Diagnostic.message` as `MarkupContent`",
@@ -171,11 +171,11 @@ const ROWS: &[MatrixRow] = &[
         client_gate: "`workspace.applyEdit` and `workspace.workspaceEdit.metadataSupport`",
         server_shape: "`ApplyWorkspaceEditParams.metadata` with `WorkspaceEditMetadata.isRefactoring`",
         method_or_shape: "`workspace/applyEdit` server request params",
-        status: "negative-gated+documented",
-        proof: "`lsp_318_negative_claims`; `check-lsp-318-claims`",
-        owner: "server-originated apply-edit helpers",
+        status: "implemented+tested+documented",
+        proof: "`lsp_318_negative_claims`; `features.toml`; `check-lsp-318-claims`",
+        owner: "`crates/perl-lsp-rs/src/runtime/client_requests.rs`",
         priority: "P2",
-        notes: "Upstream 3.18 metadata is on applyEdit params, not `WorkspaceEdit` responses; no server-originated applyEdit metadata path is currently claimed.",
+        notes: "Server-originated refactoring apply-edit requests may include `metadata.isRefactoring` only when `workspace.applyEdit` and `metadataSupport` are both true; ordinary `WorkspaceEdit` responses stay metadata-free.",
     },
     MatrixRow {
         feature: "`SnippetTextEdit` workspace edits",
@@ -311,6 +311,10 @@ const ROWS: &[MatrixRow] = &[
     },
 ];
 
+#[cfg(test)]
+const CLOSED_STATUSES: &[&str] =
+    &["implemented+tested+documented", "negative-gated+documented", "not-applicable+documented"];
+
 pub fn run(check: bool) -> Result<()> {
     let root = project_root()?;
     let path = root.join(MATRIX_PATH);
@@ -341,17 +345,10 @@ fn render_matrix() -> String {
     output.push_str(
         "Boundary spec: [PLSP-SPEC-0029](PLSP-SPEC-0029-lsp-318-conformance-boundary.md)\n\n",
     );
-    output.push_str("This matrix is the working ledger for selected LSP 3.18 coverage. It is not a blanket full-conformance claim and does not imply release readiness. Each row classifies a surface so future PRs can move it from negative-gated or planned to implemented+tested+documented only when capability parsing, runtime behavior, wire tests, snapshots, docs, and editor receipts are present where relevant.\n\n");
+    output.push_str("This matrix is the working ledger for selected LSP 3.18 coverage. It is not a blanket full-conformance claim and does not imply release readiness. Each row classifies a surface as implemented, intentionally absent, or outside the current Perl editor substrate lane. The current closeout state has no unknown or transitional rows.\n\n");
     output.push_str("Status vocabulary:\n\n");
     output.push_str("- `implemented+tested+documented`: implemented, tested over the wire or snapshots, and documented in the current boundary.\n");
-    output.push_str("- `implemented-string-only`: only the string form is claimed; object-form support remains unclaimed.\n");
     output.push_str("- `negative-gated+documented`: intentionally unsupported or absent until a later capability-gated implementation PR.\n");
-    output.push_str("- `implemented-needs-positive-wire-test`: code path exists, but the matrix still requires a positive client-capability receipt before it is locked.\n");
-    output.push_str("- `needs-capability-parser`: existing behavior is adjacent, but 3.18-specific client capability parsing is not yet proven.\n");
-    output.push_str("- `needs-compat-test`: current behavior may be acceptable, but 3.18 compatibility is not explicitly locked.\n");
-    output.push_str(
-        "- `planned-needs-negative-gate`: planned or adjacent to current behavior, but missing a direct absence test.\n",
-    );
     output.push_str(
         "- `not-applicable+documented`: explicitly outside the current Perl editor substrate lane.\n\n",
     );
@@ -403,7 +400,6 @@ mod tests {
         for surface in [
             "Standard inline completion",
             "`selectedCompletionInfo` inline context",
-            "`StringValue` inline insert text",
             "Multi-range formatting",
             "`workspace/textDocumentContent`",
             "`workspace/textDocumentContent/refresh`",
@@ -431,6 +427,34 @@ mod tests {
         let rendered = render_matrix();
         let data_rows = rendered.lines().filter(|line| line.starts_with("| ")).count() - 2;
         assert_eq!(data_rows, ROWS.len());
+    }
+
+    #[test]
+    fn matrix_rows_use_only_closed_statuses() {
+        for row in ROWS {
+            assert!(
+                CLOSED_STATUSES.contains(&row.status),
+                "matrix row {} uses non-closed status {}",
+                row.feature,
+                row.status
+            );
+        }
+    }
+
+    #[test]
+    fn rendered_matrix_has_no_transitional_status_vocabulary() {
+        let rendered = render_matrix();
+        for transitional in [
+            "implemented-needs-positive-wire-test",
+            "needs-capability-parser",
+            "needs-compat-test",
+            "planned-needs-negative-gate",
+        ] {
+            assert!(
+                !rendered.contains(transitional),
+                "rendered matrix still documents transitional status {transitional}"
+            );
+        }
     }
 
     #[test]

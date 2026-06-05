@@ -30,6 +30,24 @@ fn quality_gate_summary_names_gates_receipts_and_repair_packets() -> TestResult 
     let output = final_quality_gate_command(&root, &paths)?.output()?;
     assert!(!output.status.success(), "fixture should fail so the summary includes repairs");
 
+    let receipt: Value = serde_json::from_str(&fs::read_to_string(&paths.receipt)?)?;
+    let patch_action = receipt
+        .pointer("/next_actions/0")
+        .ok_or("quality gate receipt must include patch coverage repair action first")?;
+    assert_eq!(
+        patch_action.get("kind").and_then(Value::as_str),
+        Some("patch_coverage_below_target")
+    );
+    assert_eq!(patch_action.get("file_scope").and_then(Value::as_str), Some("changed_files"));
+    assert_eq!(
+        patch_action.pointer("/top_files/0/path").and_then(Value::as_str),
+        Some("xtask/src/tasks/ripr_evidence.rs")
+    );
+    assert_eq!(
+        patch_action.pointer("/top_files/0/sample_uncovered_lines/0").and_then(Value::as_u64),
+        Some(212)
+    );
+
     let summary = fs::read_to_string(&paths.summary)?;
     for required in [
         "## Quality Gates",
@@ -50,6 +68,7 @@ fn quality_gate_summary_names_gates_receipts_and_repair_packets() -> TestResult 
         "project_coverage_below_target",
         "new_ripr_gap",
         "quality_exception_active_final_blocker",
+        "changed coverage file: `xtask/src/tasks/ripr_evidence.rs` sample uncovered lines: 212, 213, 214",
         "coverage file: `xtask/src/tasks/quality_gate.rs` sample uncovered lines: 41, 42, 43",
         "ripr gap: `RIPR-SPEC-ONE` `xtask/src/tasks/quality_gate.rs:77` seam `summary_renderer` reason `summary does not expose repair packet` suggested test `assert repair packet markdown`",
         "ripr gap: `RIPR-SPEC-TWO` `xtask/src/tasks/quality_gate.rs:88` seam `receipt_freshness` reason `summary does not expose stale receipt` suggested test `assert receipt freshness markdown`",
@@ -66,8 +85,12 @@ fn pull_request_template_has_quality_gate_repair_packet_fields() -> TestResult {
     let template = fs::read_to_string(root.join(".github/PULL_REQUEST_TEMPLATE.md"))?;
 
     for required in [
+        "## Objective",
         "## Quality Gates",
         "target/receipts/quality/quality-gate.md",
+        "## Claim Boundary",
+        "## Non-goals",
+        "## Local Proof Commands",
         "new RIPR gaps:",
         "total RIPR+ gaps:",
         "patch coverage:",
@@ -76,6 +99,9 @@ fn pull_request_template_has_quality_gate_repair_packet_fields() -> TestResult {
         "exception status:",
         "local verify command:",
         "receipt command:",
+        "## RIPR / Coverage Effect",
+        "## Cleanup Performed",
+        "## Remaining Work",
     ] {
         assert!(template.contains(required), "PR template missing `{required}`");
     }
@@ -141,6 +167,13 @@ fn write_coverage_receipt(path: &Path, head: &str, patch: f64, project: f64) -> 
                     "path": "xtask/src/tasks/quality_gate.rs",
                     "line_coverage": 72.0,
                     "sample_uncovered_lines": [41, 42, 43]
+                }
+            ],
+            "patch_files_below_target": [
+                {
+                    "path": "xtask/src/tasks/ripr_evidence.rs",
+                    "line_coverage": 67.9,
+                    "sample_uncovered_lines": [212, 213, 214]
                 }
             ]
         }),
@@ -246,7 +279,7 @@ fn write_review_guidance_receipt(path: &Path, head: &str) -> TestResult {
 fn write_active_exception_policy(path: &Path) -> TestResult {
     write_text(
         path,
-        r#"schema_version = 1
+        r##"schema_version = 1
 policy = "quality-gate-exceptions"
 owner = "EffortlessMetrics"
 status = "active"
@@ -258,7 +291,10 @@ required_active = ["ripr-total-burndown"]
 
 [[exception]]
 id = "ripr-total-burndown"
+kind = "temporary_burndown"
+scope = "ripr_plus_total"
 owner = "proof-lane"
+issue = "#8197"
 reason = "transition burn-down remains active"
 final_target = "repo-wide ripr+ unresolved total = 0"
 evidence = "target/receipts/quality/ripr-plus.json"
@@ -266,7 +302,7 @@ removal_criteria = "remove when RIPR+ total is zero"
 created = "2026-05-28"
 review_after = "2099-01-01"
 expires = "2099-12-31"
-"#,
+"##,
     )
 }
 

@@ -162,6 +162,218 @@ fn text_document_content_perldoc_strict_returns_text_or_explicit_unavailable_err
         .ok_or_else(|| format!("workspace/textDocumentContent missing result.text: {response}"))?;
     assert!(!text.trim().is_empty(), "perldoc text must not be empty");
     assert!(text.to_ascii_lowercase().contains("strict"), "strict perldoc should mention strict");
+    assert!(text.contains("perldoc://warnings"), "strict virtual perldoc should link to warnings");
+    Ok(())
+}
+
+#[test]
+fn text_document_content_perldoc_warnings_links_back_to_strict_or_unavailable() -> TestResult {
+    let response = text_document_content_response(Some(json!({ "uri": "perldoc://warnings" })))?;
+
+    if response.get("error").is_some() {
+        assert_error_code(&response, INVALID_REQUEST)?;
+        let message = response
+            .pointer("/error/message")
+            .and_then(Value::as_str)
+            .ok_or_else(|| format!("missing error message in response: {response}"))?;
+        assert!(
+            message.contains("Unsupported URI scheme or content not found"),
+            "perldoc unavailable path should be explicit, got: {message}"
+        );
+        return Ok(());
+    }
+
+    let text = response
+        .pointer("/result/text")
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("workspace/textDocumentContent missing result.text: {response}"))?;
+    assert!(!text.trim().is_empty(), "perldoc text must not be empty");
+    assert!(
+        text.to_ascii_lowercase().contains("warnings"),
+        "warnings perldoc should mention warnings"
+    );
+    assert!(text.contains("perldoc://strict"), "warnings virtual perldoc should link to strict");
+    Ok(())
+}
+
+#[test]
+fn text_document_content_perldoc_local_module_prefers_workspace_pod() -> TestResult {
+    let (mut harness, _workspace) = LspHarness::with_workspace(&[(
+        "lib/Local/VirtualDoc.pm",
+        r#"package Local::VirtualDoc;
+
+=head1 NAME
+
+Local::VirtualDoc - workspace virtual docs
+
+=head1 SYNOPSIS
+
+use Local::VirtualDoc;
+
+=head1 DESCRIPTION
+
+Local POD served from the workspace module file.
+See also L<Local::Dependency>, L<Local::Dependency>, L<Local::Helper>, and L<Local::VirtualDoc>.
+Core pragma docs L<strict> and L<warnings> should stay navigable.
+Ignore local sections such as L</reset> and labeled targets such as L<helper|Local::Skipped>.
+
+=head2 reset
+
+Reset the local virtual document fixture.
+
+=cut
+
+1;
+"#,
+    )])?;
+
+    let result = harness.request(
+        "workspace/textDocumentContent",
+        json!({ "uri": "perldoc://Local::VirtualDoc" }),
+    )?;
+    let text = result
+        .get("text")
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("workspace/textDocumentContent missing result.text: {result}"))?;
+
+    assert!(
+        text.contains("Workspace virtual perldoc"),
+        "local module should use workspace POD, got: {text}"
+    );
+    assert!(text.contains("Module: Local::VirtualDoc"), "module heading missing: {text}");
+    assert!(
+        text.contains("Local::VirtualDoc - workspace virtual docs"),
+        "NAME POD missing: {text}"
+    );
+    assert!(
+        text.contains("Local POD served from the workspace module file."),
+        "DESCRIPTION POD missing: {text}"
+    );
+    assert!(
+        text.contains(
+            "Related virtual perldoc:\n- perldoc://Local::Dependency\n- perldoc://Local::Helper\n- perldoc://strict\n- perldoc://warnings"
+        ),
+        "workspace POD module links should become sorted virtual perldoc links: {text}"
+    );
+    assert!(
+        !text.contains("perldoc://Local::VirtualDoc"),
+        "workspace POD virtual content should ignore self-links: {text}"
+    );
+    assert!(
+        !text.contains("perldoc://Local::Skipped") && !text.contains("perldoc:///reset"),
+        "workspace POD virtual content should ignore non-simple POD targets: {text}"
+    );
+    assert!(
+        text.contains("METHOD reset\nReset the local virtual document fixture."),
+        "head2 method POD missing: {text}"
+    );
+    Ok(())
+}
+
+#[test]
+fn text_document_content_related_workspace_perldoc_links_resolve() -> TestResult {
+    let (mut harness, _workspace) = LspHarness::with_workspace(&[
+        (
+            "lib/Local/VirtualDoc.pm",
+            r#"package Local::VirtualDoc;
+
+=head1 NAME
+
+Local::VirtualDoc - source docs
+
+=head1 DESCRIPTION
+
+See L<Local::Dependency>, L<Local::Dependency>, L<Local::Helper>, and L<Local::VirtualDoc>.
+Ignore malformed or non-module targets: L<display|Local::Skipped>, L</section>, L<https://example.invalid>, L<Local::>.
+
+=cut
+
+1;
+"#,
+        ),
+        (
+            "lib/Local/Dependency.pm",
+            r#"package Local::Dependency;
+
+=head1 NAME
+
+Local::Dependency - dependency docs
+
+=head1 DESCRIPTION
+
+Dependency docs are served from the linked workspace module.
+
+=cut
+
+1;
+"#,
+        ),
+        (
+            "lib/Local/Helper.pm",
+            r#"package Local::Helper;
+
+=head1 NAME
+
+Local::Helper - helper docs
+
+=head1 DESCRIPTION
+
+Helper docs are served from the linked workspace module.
+
+=cut
+
+1;
+"#,
+        ),
+    ])?;
+
+    let source = harness.request(
+        "workspace/textDocumentContent",
+        json!({ "uri": "perldoc://Local::VirtualDoc" }),
+    )?;
+    let source_text = source.get("text").and_then(Value::as_str).ok_or_else(|| {
+        format!("workspace/textDocumentContent missing source result.text: {source}")
+    })?;
+
+    assert!(
+        source_text.contains(
+            "Related virtual perldoc:\n- perldoc://Local::Dependency\n- perldoc://Local::Helper"
+        ),
+        "source workspace POD should expose sorted related virtual links: {source_text}"
+    );
+    assert!(
+        !source_text.contains("perldoc://Local::VirtualDoc")
+            && !source_text.contains("perldoc://Local::Skipped")
+            && !source_text.contains("perldoc:///section")
+            && !source_text.contains("perldoc://Local::>"),
+        "source workspace POD should not expose self or non-simple links: {source_text}"
+    );
+
+    for (module, name, description) in [
+        (
+            "Local::Dependency",
+            "Local::Dependency - dependency docs",
+            "Dependency docs are served from the linked workspace module.",
+        ),
+        (
+            "Local::Helper",
+            "Local::Helper - helper docs",
+            "Helper docs are served from the linked workspace module.",
+        ),
+    ] {
+        let result = harness.request(
+            "workspace/textDocumentContent",
+            json!({ "uri": format!("perldoc://{module}") }),
+        )?;
+        let text = result.get("text").and_then(Value::as_str).ok_or_else(|| {
+            format!("workspace/textDocumentContent missing linked result.text: {result}")
+        })?;
+
+        assert!(text.contains(&format!("Module: {module}")));
+        assert!(text.contains(name));
+        assert!(text.contains(description));
+    }
+
     Ok(())
 }
 

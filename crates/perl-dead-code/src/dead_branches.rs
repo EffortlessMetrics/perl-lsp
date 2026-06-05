@@ -30,7 +30,14 @@ pub(crate) fn detect_dead_branches(file_path: &Path, text: &str, out: &mut Vec<D
                     Some(c) => c,
                     None => continue,
                 };
-                let after_cond = rest[condition.len() + 2..].trim();
+                // `rest` starts with `(`, condition is `rest[1..idx]`, closing `)` is at
+                // index `idx = condition.len() + 1`.  `after_cond` starts at `idx + 1`.
+                // We use `.get()` for an explicit bounds-safe slice (#791).
+                let after_idx = condition.len() + 2;
+                let after_cond = match rest.get(after_idx..) {
+                    Some(s) => s.trim(),
+                    None => continue,
+                };
                 if !after_cond.starts_with('{') && !after_cond.is_empty() {
                     continue;
                 }
@@ -81,7 +88,9 @@ pub(crate) fn detect_dead_branches(file_path: &Path, text: &str, out: &mut Vec<D
 }
 
 fn is_always_false(condition: &str) -> bool {
-    let c = condition.trim();
+    // Strip outer balanced parentheses iteratively to avoid unbounded recursion
+    // on adversarially-deep inputs like `((((...0...))))` (#795).
+    let c = strip_outer_parens(condition);
     if c == "undef" {
         return true;
     }
@@ -94,11 +103,13 @@ fn is_always_false(condition: &str) -> bool {
     if c.parse::<f64>().is_ok_and(|n| n == 0.0) {
         return true;
     }
-    c.starts_with('(') && c.ends_with(')') && is_always_false(&c[1..c.len() - 1])
+    false
 }
 
 fn is_always_true(condition: &str) -> bool {
-    let c = condition.trim();
+    // Strip outer balanced parentheses iteratively to avoid unbounded recursion
+    // on adversarially-deep inputs (#795).
+    let c = strip_outer_parens(condition);
     if c.parse::<i64>().is_ok_and(|n| n != 0) {
         return true;
     }
@@ -108,7 +119,53 @@ fn is_always_true(condition: &str) -> bool {
     if let Some(inner) = quoted_literal(c) {
         return !inner.is_empty() && inner != "0";
     }
-    c.starts_with('(') && c.ends_with(')') && is_always_true(&c[1..c.len() - 1])
+    false
+}
+
+/// Strip all layers of balanced outer parentheses from `condition`, returning
+/// a reference to the innermost non-paren-wrapped content.
+///
+/// For example `"(((0)))"` → `"0"`, `"( x )"` → `"x"`, `"0"` → `"0"`.
+///
+/// This replaces the previous tail-recursive pattern and avoids stack overflow
+/// on deeply-nested inputs (#795).
+fn strip_outer_parens(condition: &str) -> &str {
+    let mut s = condition.trim();
+    while s.starts_with('(') && s.ends_with(')') && s.len() >= 2 {
+        let inner = &s[1..s.len() - 1];
+        // Only strip if the opening '(' matches the closing ')'.
+        // E.g. `"(a)(b)"` must NOT be stripped — the first '(' closes at the
+        // second character, not at the last ')'.
+        if is_outer_paren_balanced(inner) {
+            s = inner.trim();
+        } else {
+            break;
+        }
+    }
+    s
+}
+
+/// Returns `true` when wrapping `s` with `(` and `)` would form a balanced
+/// pair — i.e., when the first `(` in the parent expression closes at the
+/// very last character.  Equivalently, `inner` has a non-negative paren depth
+/// at every prefix.
+fn is_outer_paren_balanced(inner: &str) -> bool {
+    let mut depth = 0i32;
+    for ch in inner.chars() {
+        match ch {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth < 0 {
+                    // Closed before end — the `(` wrapping `inner` does NOT
+                    // match the trailing `)` we'd strip.
+                    return false;
+                }
+            }
+            _ => {}
+        }
+    }
+    true
 }
 
 fn quoted_literal(condition: &str) -> Option<&str> {
@@ -393,5 +450,88 @@ mod tests {
         let lines = vec!["# preamble", "if (1) {", "    say 'hi';", "}"];
         // start scanning from line 1
         assert_eq!(find_block_end(&lines, 1), 4);
+    }
+
+    // --- strip_outer_parens (#795: depth guard) ---
+
+    #[test]
+    fn strip_outer_parens_no_parens() {
+        assert_eq!(strip_outer_parens("0"), "0");
+    }
+
+    #[test]
+    fn strip_outer_parens_one_level() {
+        assert_eq!(strip_outer_parens("(0)"), "0");
+    }
+
+    #[test]
+    fn strip_outer_parens_with_whitespace() {
+        assert_eq!(strip_outer_parens("( 0 )"), "0");
+    }
+
+    #[test]
+    fn strip_outer_parens_multi_level() {
+        assert_eq!(strip_outer_parens("((0))"), "0");
+        assert_eq!(strip_outer_parens("(((undef)))"), "undef");
+    }
+
+    #[test]
+    fn strip_outer_parens_does_not_strip_sibling_groups() {
+        // "(a)(b)" — outer `(` closes at position 2, not at the trailing `)`;
+        // must not strip.
+        assert_eq!(strip_outer_parens("(a)(b)"), "(a)(b)");
+    }
+
+    #[test]
+    fn strip_outer_parens_empty_parens() {
+        assert_eq!(strip_outer_parens("()"), "");
+    }
+
+    // --- is_always_false depth guard (#795) ---
+
+    #[test]
+    fn always_false_300_levels_deep_zero() {
+        // 300 nested parens around `0`.  This MUST complete without stack
+        // overflow now that strip_outer_parens is iterative.
+        let depth = 300usize;
+        let s = format!("{}0{}", "(".repeat(depth), ")".repeat(depth));
+        assert!(is_always_false(&s));
+    }
+
+    #[test]
+    fn always_false_300_levels_deep_one_is_not_false() {
+        let depth = 300usize;
+        let s = format!("{}1{}", "(".repeat(depth), ")".repeat(depth));
+        assert!(!is_always_false(&s));
+    }
+
+    #[test]
+    fn always_false_300_levels_deep_variable_is_not_false() {
+        let depth = 300usize;
+        let s = format!("{}$x{}", "(".repeat(depth), ")".repeat(depth));
+        assert!(!is_always_false(&s));
+    }
+
+    // --- is_always_true depth guard (#795) ---
+
+    #[test]
+    fn always_true_300_levels_deep_one() {
+        let depth = 300usize;
+        let s = format!("{}1{}", "(".repeat(depth), ")".repeat(depth));
+        assert!(is_always_true(&s));
+    }
+
+    #[test]
+    fn always_true_300_levels_deep_zero_is_not_true() {
+        let depth = 300usize;
+        let s = format!("{}0{}", "(".repeat(depth), ")".repeat(depth));
+        assert!(!is_always_true(&s));
+    }
+
+    #[test]
+    fn always_true_300_levels_deep_variable_is_not_true() {
+        let depth = 300usize;
+        let s = format!("{}$x{}", "(".repeat(depth), ")".repeat(depth));
+        assert!(!is_always_true(&s));
     }
 }

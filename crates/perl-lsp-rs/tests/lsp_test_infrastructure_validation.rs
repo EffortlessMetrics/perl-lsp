@@ -181,6 +181,44 @@ fn test_adaptive_timeout_scaling() {
     }
 }
 
+/// Test that optional notification waits do not consume in-flight responses
+#[test]
+fn test_optional_notification_read_preserves_in_flight_response() -> Result<(), String> {
+    use common::{read_notification_timeout, read_response_matching_i64, send_request_no_wait};
+    use serde_json::json;
+
+    let server = start_lsp_server();
+    let _init_response = initialize_lsp(&server);
+    let request_id = 424_242;
+
+    send_request_no_wait(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "workspace/symbol",
+            "params": { "query": "__unlikely_optional_notification_probe__" }
+        }),
+    );
+
+    let _optional_notification =
+        read_notification_timeout(&server, std::time::Duration::from_millis(250));
+    let response =
+        read_response_matching_i64(&server, request_id, TimeoutProfile::Standard.timeout())
+            .ok_or_else(|| {
+                "workspace/symbol response was consumed while waiting for an optional notification"
+                    .to_string()
+            })?;
+
+    shutdown_and_exit(&server);
+
+    if response.get("error").is_some() {
+        return Err(format!("workspace/symbol returned error: {response:#}"));
+    }
+
+    Ok(())
+}
+
 /// Test error formatting with context
 #[test]
 fn test_error_formatting() {

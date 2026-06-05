@@ -1,0 +1,33 @@
+{
+  "_comment": "Acceptance case (2): COMPLEMENTARY — same file(s), different symbols/tests → sequence-both. Both PRs touch the same source file but add different symbols and change different tests, so they can both land if sequenced.",
+  "prs": [
+    {
+      "id": "201",
+      "files": [
+        "crates/perl-parser/src/parser.rs",
+        "tests/parser_lexer_test.rs"
+      ],
+      "tests": [
+        "tests/parser_lexer_test.rs"
+      ],
+      "symbols": [
+        "Parser::lex_token",
+        "LexResult"
+      ]
+    },
+    {
+      "id": "202",
+      "files": [
+        "crates/perl-parser/src/parser.rs",
+        "tests/parser_heredoc_test.rs"
+      ],
+      "tests": [
+        "tests/parser_heredoc_test.rs"
+      ],
+      "symbols": [
+        "Parser::parse_heredoc",
+        "HeredocNode"
+      ]
+    }
+  ]
+}

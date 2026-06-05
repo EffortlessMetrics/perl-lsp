@@ -10,31 +10,60 @@ pub type Result<T> = std::result::Result<T, LexerError>;
 pub enum LexerError {
     /// Unterminated string literal
     #[error("Unterminated string literal starting at position {position}")]
-    UnterminatedString { position: usize },
+    UnterminatedString {
+        /// Byte offset where the string literal started
+        position: usize,
+    },
 
     /// Unterminated regex
     #[error("Unterminated regex starting at position {position}")]
-    UnterminatedRegex { position: usize },
+    UnterminatedRegex {
+        /// Byte offset where the regex started
+        position: usize,
+    },
 
     /// Invalid escape sequence
     #[error("Invalid escape sequence '\\{char}' at position {position}")]
-    InvalidEscape { char: char, position: usize },
+    InvalidEscape {
+        /// The character following the backslash
+        char: char,
+        /// Byte offset of the backslash
+        position: usize,
+    },
 
     /// Invalid numeric literal
     #[error("Invalid numeric literal at position {position}: {reason}")]
-    InvalidNumber { position: usize, reason: String },
+    InvalidNumber {
+        /// Byte offset of the number token
+        position: usize,
+        /// Human-readable description of why the number is invalid
+        reason: String,
+    },
 
     /// Unexpected character
     #[error("Unexpected character '{char}' at position {position}")]
-    UnexpectedChar { char: char, position: usize },
+    UnexpectedChar {
+        /// The character that was not expected
+        char: char,
+        /// Byte offset of the unexpected character
+        position: usize,
+    },
 
     /// Invalid UTF-8
     #[error("Invalid UTF-8 at position {position}")]
-    InvalidUtf8 { position: usize },
+    InvalidUtf8 {
+        /// Byte offset of the invalid byte sequence
+        position: usize,
+    },
 
     /// Heredoc error
     #[error("Heredoc error at position {position}: {reason}")]
-    HeredocError { position: usize, reason: String },
+    HeredocError {
+        /// Byte offset of the heredoc marker
+        position: usize,
+        /// Human-readable description of the heredoc problem
+        reason: String,
+    },
 
     /// Generic error
     #[error("{0}")]
