@@ -23,10 +23,85 @@
 
 mod support;
 
-use serde_json::json;
+use serde_json::{Value, json};
 use support::lsp_harness::LspHarness;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+fn signature_help_shape_error(
+    harness: &mut LspHarness,
+    params: Option<Value>,
+) -> Result<String, String> {
+    let mut request = json!({
+        "jsonrpc": "2.0",
+        "method": "textDocument/signatureHelp"
+    });
+    if let Some(params) = params {
+        request["params"] = params;
+    }
+
+    let response = harness.request_raw(request);
+    let error =
+        response.get("error").ok_or_else(|| format!("expected error response, got {response}"))?;
+    let code = error
+        .get("code")
+        .and_then(Value::as_i64)
+        .ok_or_else(|| format!("error response missing numeric code: {response}"))?;
+    if code != -32602 {
+        return Err(format!("expected INVALID_PARAMS (-32602), got {code}: {response}"));
+    }
+    let message = error
+        .get("message")
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("error response missing message: {response}"))?;
+    Ok(message.to_string())
+}
+
+fn assert_signature_help_shape_guidance(case: &str, message: &str) -> Result<(), String> {
+    for expected in [
+        "Missing required parameters: textDocument.uri and position",
+        "textDocument/signatureHelp",
+        "params.textDocument.uri",
+        "params.position.line",
+        "params.position.character",
+        "file:///workspace/lib/My/Module.pm",
+    ] {
+        if !message.contains(expected) {
+            return Err(format!(
+                "{case}: expected error message to contain {expected:?}; got {message:?}"
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_signature_help_request_shape_errors_include_payload_guidance() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    for (case, params) in [
+        ("missing params", None),
+        (
+            "missing uri",
+            Some(json!({
+                "position": { "line": 10, "character": 14 }
+            })),
+        ),
+        (
+            "missing position",
+            Some(json!({
+                "textDocument": { "uri": "file:///workspace/lib/My/Module.pm" }
+            })),
+        ),
+    ] {
+        let message = signature_help_shape_error(&mut harness, params)?;
+        assert_signature_help_shape_guidance(case, &message)?;
+    }
+
+    harness.shutdown_gracefully();
+    Ok(())
+}
 
 /// Tests feature spec: signature_help.rs#user-defined-function
 ///

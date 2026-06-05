@@ -1,6 +1,17 @@
 //! Signature help handlers and signature extraction helpers.
 
 use super::*;
+use crate::protocol::invalid_params;
+
+fn invalid_signature_help_params() -> JsonRpcError {
+    invalid_params(
+        "Missing required parameters: textDocument.uri and position\n\n\
+         textDocument/signatureHelp expects params.textDocument.uri plus params.position.line and \
+         params.position.character to identify the call site under the cursor.\n\n\
+         Example: {\"textDocument\":{\"uri\":\"file:///workspace/lib/My/Module.pm\"},\
+         \"position\":{\"line\":10,\"character\":14}}",
+    )
+}
 
 impl LspServer {
     /// Handle textDocument/signatureHelp request for function parameter hints
@@ -26,8 +37,20 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
-            let uri = req_uri(&params)?;
-            let (line, character) = req_position(&params)?;
+            let uri = params
+                .pointer("/textDocument/uri")
+                .and_then(|v| v.as_str())
+                .ok_or_else(invalid_signature_help_params)?;
+            let line = params
+                .pointer("/position/line")
+                .and_then(|v| v.as_u64())
+                .and_then(|n| u32::try_from(n).ok())
+                .ok_or_else(invalid_signature_help_params)?;
+            let character = params
+                .pointer("/position/character")
+                .and_then(|v| v.as_u64())
+                .and_then(|n| u32::try_from(n).ok())
+                .ok_or_else(invalid_signature_help_params)?;
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -129,6 +152,8 @@ impl LspServer {
                     })));
                 }
             }
+        } else {
+            return Err(invalid_signature_help_params());
         }
 
         Ok(None)
