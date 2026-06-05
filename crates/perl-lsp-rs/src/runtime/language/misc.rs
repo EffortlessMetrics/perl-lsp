@@ -1065,12 +1065,22 @@ impl LspServer {
                 let mut inline_values = Vec::new();
 
                 let lines: Vec<&str> = doc.text.lines().collect();
+                let requested_line_count = effective_end
+                    .checked_sub(start_line)
+                    .map_or(0, |line_delta| line_delta.saturating_add(1) as usize);
+
                 let Some(re) = inline_value_regex() else {
                     return Ok(Some(json!([])));
                 };
 
-                for line_num in start_line..=effective_end.min((lines.len() - 1) as u32) {
-                    let line_text = lines[line_num as usize];
+                for (line_num, line_text) in lines
+                    .iter()
+                    .copied()
+                    .enumerate()
+                    .skip(start_line as usize)
+                    .take(requested_line_count)
+                {
+                    let line_num = line_num as u32;
 
                     // Find $scalar, @array, and %hash variables
                     for cap in re.captures_iter(line_text) {
@@ -1736,6 +1746,29 @@ mod tests {
             filtered, include_paths,
             "without a document include context, inline scan roots should remain unchanged"
         );
+    }
+
+    #[test]
+    fn inline_value_empty_document_returns_empty_array() -> Result<(), Box<dyn std::error::Error>> {
+        let server = make_server_with_caps(ClientCapabilities::default());
+        let uri = "file:///inline_value_empty_lib.pl";
+        server.test_apply_did_open(uri, "", 1)?;
+
+        let result = server.handle_inline_value(Some(json!({
+            "textDocument": { "uri": uri },
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": 0, "character": 0 }
+            },
+            "context": {}
+        })))?;
+
+        assert_eq!(
+            result,
+            Some(json!([])),
+            "empty documents should return an empty inline value array"
+        );
+        Ok(())
     }
 
     #[test]
