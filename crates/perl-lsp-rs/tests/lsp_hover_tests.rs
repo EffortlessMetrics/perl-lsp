@@ -381,6 +381,41 @@ fn test_hover_capability_advertised() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn test_hover_use_strict_links_perldoc_virtual_document() -> TestResult {
+    let doc = "use strict;\nuse warnings;\nmy $value = 1;\n";
+
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///pragma_perldoc.pl", doc)?;
+
+    let result = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": "file:///pragma_perldoc.pl"},
+            "position": {"line": 0, "character": 5}
+        }),
+    )?;
+
+    let value = result
+        .get("contents")
+        .and_then(|contents| contents.get("value"))
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| format!("hover response missing markdown value: {result}"))?;
+
+    let expected = "**Pragma: `strict`**\n\n\
+        _Enable strict variable/subroutine/reference checking_\n\n\
+        Restricts unsafe Perl constructs. Enables compile-time errors for undeclared variables \
+        (`vars`), bareword subroutine names (`subs`), and symbolic references (`refs`). Use \
+        `use strict;` to enable all three categories at once, or `use strict 'vars'` for \
+        individual categories.\n\n\
+        **Common usage**: Always include `use strict;` at the top of every Perl file.\n\n\
+        [perldoc strict](https://perldoc.perl.org/strict) | \
+        [Open virtual perldoc](perldoc://strict)";
+    assert_eq!(value, expected);
+    Ok(())
+}
+
 /// Tests feature spec: navigation.rs#hover-builtin-context-sensitive-docs
 ///
 /// Validates that dual-context builtins (gmtime, keys, wantarray, grep, caller)

@@ -671,9 +671,7 @@ export class BinaryDownloader {
             
             // Use appropriate module based on URL protocol
             const isHttps = url.startsWith('https:');
-            const httpModule = isHttps ? https : http;
-            
-            const request = httpModule.get(url, options, (response) => {
+            const request = this.httpGet(isHttps, url, options, (response) => {
                 // Handle redirects
                 if (response.statusCode === 301 || response.statusCode === 302) {
                     clearTimeout(timeout);
@@ -727,6 +725,23 @@ export class BinaryDownloader {
         });
     }
     
+    /**
+     * Transport seam: the actual network GET, extracted so tests can stub it
+     * without mocking Node's `http`/`https` core modules (whose `get` exports
+     * are non-configurable). Behaviour is identical to calling the module's
+     * `get` directly.
+     */
+    private httpGet(
+        isHttps: boolean,
+        url: string,
+        options: https.RequestOptions,
+        callback: (response: http.IncomingMessage) => void,
+    ): http.ClientRequest {
+        return isHttps
+            ? https.get(url, options, callback)
+            : http.get(url, options, callback);
+    }
+
     private async calculateSHA256(filePath: string): Promise<string> {
         return new Promise((resolve, reject) => {
             const hash = crypto.createHash('sha256');

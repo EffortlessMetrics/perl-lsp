@@ -133,6 +133,16 @@ impl LspServer {
         get_text_around_offset(content, offset, radius)
     }
 
+    /// Get text around an offset and return the adjusted byte start.
+    pub(crate) fn get_text_window_around_offset(
+        &self,
+        content: &str,
+        offset: usize,
+        radius: usize,
+    ) -> (usize, String) {
+        get_text_window_around_offset(content, offset, radius)
+    }
+
     /// Extract module reference from text (e.g., from "use Module::Name" or "require Module::Name")
     pub(crate) fn extract_module_reference(&self, text: &str, cursor_pos: usize) -> Option<String> {
         extract_module_reference(text, cursor_pos)

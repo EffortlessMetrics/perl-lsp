@@ -1,0 +1,19 @@
+{
+  "definition": {
+    "Smoke::Greeter": "lib/Smoke/Greeter.pm",
+    "greet": "lib/Smoke/Greeter.pm"
+  },
+  "workspace_symbols": {
+    "query": "Greeter",
+    "must_include_path": "lib/Smoke/Greeter.pm"
+  },
+  "completion": {
+    "position": "$greeter->",
+    "allowed_empty_when_uncertain": true,
+    "must_not_include_unrelated_workspace_noise": true
+  },
+  "document_links": {
+    "allowed_empty": true,
+    "must_have_valid_ranges_when_present": true
+  }
+}

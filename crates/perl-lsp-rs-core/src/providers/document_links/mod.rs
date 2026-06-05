@@ -3,7 +3,7 @@
 //! This crate provides document link detection for Perl source files,
 //! identifying `use`, `require` module statements, and file includes.
 
-use perl_module::import::{ModuleImportKind, parse_module_import_head};
+use perl_module::import::{ModuleImportKind, RequireForm, parse_module_import_head};
 use perl_module::path::module_name_to_path;
 use serde_json::{Value, json};
 use url::Url;
@@ -34,55 +34,55 @@ pub fn compute_links(uri: &str, text: &str, _roots: &[Url]) -> Vec<Value> {
                     }
                 }
                 ModuleImportKind::Require => {
-                    let is_quoted_require = import.token_start > 0
-                        && matches!(
-                            line.as_bytes().get(import.token_start - 1),
-                            Some(b'\'' | b'"')
-                        );
-
-                    if !is_quoted_require
-                        && import.token.contains("::")
-                        && !is_pragma(import.token)
-                        && let Some(link) = make_deferred_module_link(
-                            uri,
-                            i as u32,
-                            import.token,
-                            import.token_start as u32,
-                            import.token_end as u32,
-                        )
-                    {
-                        out.push(link);
+                    match import.require_form() {
+                        Some(RequireForm::FilePath) if import.token.ends_with(".pm") => {
+                            // Quoted .pm require → treat as a module link (Foo/Bar.pm → Foo::Bar)
+                            let module_name = import.token_as_module_name();
+                            if !is_pragma(&module_name) {
+                                if let Some(link) = make_deferred_module_link(
+                                    uri,
+                                    i as u32,
+                                    &module_name,
+                                    import.token_start as u32,
+                                    import.token_end as u32,
+                                ) {
+                                    out.push(link);
+                                }
+                            }
+                        }
+                        Some(RequireForm::FilePath) => {
+                            // Quoted file path that is NOT a .pm (e.g. .pl, extensionless) → file link
+                            out.push(json!({
+                                "range": {
+                                    "start": {"line": i as u32, "character": import.token_start as u32},
+                                    "end":   {"line": i as u32, "character": import.token_end as u32}
+                                },
+                                "tooltip": format!("Open {}", import.token),
+                                "data": {
+                                    "type": "file",
+                                    "path": import.token,
+                                    "baseUri": uri
+                                }
+                            }));
+                        }
+                        Some(RequireForm::ModuleName) | None => {
+                            // Bare module name form — existing behavior
+                            if import.token.contains("::")
+                                && !is_pragma(import.token)
+                                && let Some(link) = make_deferred_module_link(
+                                    uri,
+                                    i as u32,
+                                    import.token,
+                                    import.token_start as u32,
+                                    import.token_end as u32,
+                                )
+                            {
+                                out.push(link);
+                            }
+                        }
                     }
                 }
                 ModuleImportKind::UseParent | ModuleImportKind::UseBase => {}
-            }
-        }
-
-        if let Some(idx) = line.find("require ") {
-            let rest = &line[idx + 8..];
-            if let Some(start) = rest.find('"').or_else(|| rest.find('\'')) {
-                let quote_char = match rest.get(start..).and_then(|s| s.chars().next()) {
-                    Some(c) => c,
-                    None => continue,
-                };
-                let s = start + 1;
-                if let Some(end) = rest[s..].find(quote_char) {
-                    let req = &rest[s..s + end];
-                    let col_start = (idx + 8 + start + 1) as u32;
-                    let col_end = (idx + 8 + start + 1 + end) as u32;
-                    out.push(json!({
-                        "range": {
-                            "start": {"line": i as u32, "character": col_start},
-                            "end":   {"line": i as u32, "character": col_end}
-                        },
-                        "tooltip": format!("Open {}", req),
-                        "data": {
-                            "type": "file",
-                            "path": req,
-                            "baseUri": uri
-                        }
-                    }));
-                }
             }
         }
     }
@@ -272,20 +272,46 @@ mod tests {
 
     #[test]
     fn emits_file_link_for_require_with_double_quoted_string() {
+        // .pm files are normalized to module links (my/file.pm → my::file)
         let links = compute_links(uri(), r#"require "my/file.pm";"#, &[]);
-        assert_eq!(links.len(), 1, "require with file string should emit a file link");
+        assert_eq!(links.len(), 1, "require .pm with double-quotes should emit a module link");
         if let Some(link) = links.first() {
-            assert_eq!(link.pointer("/data/type").and_then(Value::as_str), Some("file"));
-            assert_eq!(link.pointer("/data/path").and_then(Value::as_str), Some("my/file.pm"));
+            assert_eq!(link.pointer("/data/type").and_then(Value::as_str), Some("module"));
+            assert_eq!(link.pointer("/data/module").and_then(Value::as_str), Some("my::file"));
         }
     }
 
     #[test]
     fn emits_file_link_for_require_with_single_quoted_string() {
+        // lib/helper.pm → lib::helper (lib/ prefix is NOT stripped by module_path_to_name)
         let links = compute_links(uri(), "require 'lib/helper.pm';", &[]);
-        assert_eq!(links.len(), 1, "require with single-quoted file should emit a file link");
+        assert_eq!(links.len(), 1, "require .pm with single-quotes should emit a module link");
+        if let Some(link) = links.first() {
+            assert_eq!(link.pointer("/data/type").and_then(Value::as_str), Some("module"));
+            assert_eq!(link.pointer("/data/module").and_then(Value::as_str), Some("lib::helper"));
+        }
+    }
+
+    #[test]
+    fn require_pm_produces_no_duplicate_links() {
+        // The old hardcoded scan was separate from the parsed-require path, producing 2 links.
+        // The new unified path must produce exactly 1 link.
+        let links = compute_links(uri(), r#"require "Foo/Bar.pm";"#, &[]);
+        assert_eq!(links.len(), 1, "require .pm must produce exactly one link, not duplicates");
+        if let Some(link) = links.first() {
+            assert_eq!(link.pointer("/data/type").and_then(Value::as_str), Some("module"));
+            assert_eq!(link.pointer("/data/module").and_then(Value::as_str), Some("Foo::Bar"));
+        }
+    }
+
+    #[test]
+    fn require_pl_produces_file_link() {
+        // .pl files are script includes, not module names — must remain file links
+        let links = compute_links(uri(), r#"require "helper.pl";"#, &[]);
+        assert_eq!(links.len(), 1, "require .pl should emit a file link");
         if let Some(link) = links.first() {
             assert_eq!(link.pointer("/data/type").and_then(Value::as_str), Some("file"));
+            assert_eq!(link.pointer("/data/path").and_then(Value::as_str), Some("helper.pl"));
         }
     }
 

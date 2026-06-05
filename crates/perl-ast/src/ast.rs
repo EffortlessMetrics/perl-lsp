@@ -404,9 +404,10 @@ impl Node {
                 parts.join(" ")
             }
 
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, keyword } => {
+                let kw = keyword.as_deref().unwrap_or("if");
                 let mut parts =
-                    vec![format!("(if {} {})", condition.to_sexp(), then_branch.to_sexp())];
+                    vec![format!("({} {} {})", kw, condition.to_sexp(), then_branch.to_sexp())];
 
                 for (cond, block) in elsif_branches {
                     parts.push(format!("(elsif {} {})", cond.to_sexp(), block.to_sexp()));
@@ -423,8 +424,9 @@ impl Node {
                 format!("(labeled_statement {} {})", label, statement.to_sexp())
             }
 
-            NodeKind::While { condition, body, continue_block } => {
-                let mut s = format!("(while {} {})", condition.to_sexp(), body.to_sexp());
+            NodeKind::While { condition, body, continue_block, keyword } => {
+                let kw = keyword.as_deref().unwrap_or("while");
+                let mut s = format!("({} {} {})", kw, condition.to_sexp(), body.to_sexp());
                 if let Some(cont) = continue_block {
                     s.push_str(&format!(" (continue {})", cont.to_sexp()));
                 }
@@ -1779,6 +1781,8 @@ pub enum NodeKind {
         elsif_branches: Vec<(Box<Node>, Box<Node>)>,
         /// Optional else branch
         else_branch: Option<Box<Node>>,
+        /// Original keyword: None for 'if', Some("unless") for 'unless' block form.
+        keyword: Option<String>,
     },
 
     /// Statement with a label for loop control: `LABEL: while (...)`
@@ -1797,6 +1801,8 @@ pub enum NodeKind {
         body: Box<Node>,
         /// Optional continue block
         continue_block: Option<Box<Node>>,
+        /// Original keyword: None for 'while', Some("until") for 'until' block form.
+        keyword: Option<String>,
     },
 
     /// Tie operation for binding variables to objects: `tie %hash, 'Package', @args`
@@ -2620,12 +2626,14 @@ mod tests {
                 then_branch: Box::new(dummy_node()),
                 elsif_branches: vec![],
                 else_branch: None,
+                keyword: None,
             },
             NodeKind::LabeledStatement { label: String::new(), statement: Box::new(dummy_node()) },
             NodeKind::While {
                 condition: Box::new(dummy_node()),
                 body: Box::new(dummy_node()),
                 continue_block: None,
+                keyword: None,
             },
             NodeKind::Tie {
                 variable: Box::new(dummy_node()),

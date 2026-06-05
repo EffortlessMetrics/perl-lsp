@@ -297,6 +297,10 @@ pub struct ClientCapabilities {
     pub inline_completion_dynamic_registration_support: bool,
     /// Supports `workspace/configuration` reverse requests from server.
     pub workspace_configuration_support: bool,
+    /// Supports server-originated `workspace/applyEdit` requests.
+    ///
+    /// Parsed from `capabilities.workspace.applyEdit`.
+    pub workspace_apply_edit_support: bool,
     /// Supports `workspaceFolders` capability negotiation/events.
     pub workspace_folders_support: bool,
     /// Supports snippet syntax in completion items
@@ -311,6 +315,11 @@ pub struct ClientCapabilities {
     /// Parsed from `capabilities.workspace.workspaceEdit.snippetEditSupport`.
     /// Unsupported clients must keep receiving plain `TextEdit`s.
     pub workspace_edit_snippet_edit_support: bool,
+    /// Supports `ApplyWorkspaceEditParams.metadata` on server-originated edits (LSP 3.18).
+    ///
+    /// Parsed from `capabilities.workspace.workspaceEdit.metadataSupport`.
+    /// Metadata must not be emitted on ordinary `WorkspaceEdit` responses.
+    pub workspace_edit_metadata_support: bool,
     /// Supports `completionItem.commitCharacters` in completion results
     pub completion_commit_characters_support: bool,
     /// Supports markup message content in pull diagnostics (LSP 3.18)

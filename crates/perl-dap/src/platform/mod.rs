@@ -39,11 +39,17 @@ pub enum PerlInterpreterResult {
     /// Perl was found on PATH (the normal case).
     FoundOnPath(PathBuf),
     /// Perl was NOT on PATH but was found at a well-known OS install location.
-    /// Carries the found path and a human-readable label (e.g. "Strawberry Perl").
-    FoundViaFallback { path: PathBuf, label: String },
+    FoundViaFallback {
+        /// Absolute path to the Perl interpreter found at the fallback location.
+        path: PathBuf,
+        /// Human-readable label for the fallback source (e.g. `"Strawberry Perl"`).
+        label: String,
+    },
     /// No Perl interpreter found anywhere.
-    /// Carries the list of locations searched, for use in an error message.
-    NotFound { searched: Vec<String> },
+    NotFound {
+        /// Ordered list of locations that were searched, for use in error messages.
+        searched: Vec<String>,
+    },
 }
 
 static PERL_INTERPRETER_CACHE: LazyLock<Mutex<Option<(String, PerlInterpreterResult)>>> =

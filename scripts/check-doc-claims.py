@@ -3,9 +3,14 @@
 """Compatibility shim for `cargo xtask doc-claims`."""
 
 import subprocess
+import sys
 from pathlib import Path
 
 
-if __name__ == "__main__":
+def main() -> int:
     repo_root = Path(__file__).resolve().parents[1]
-    raise SystemExit(subprocess.call(["cargo", "xtask", "doc-claims"], cwd=repo_root))
+    return subprocess.call(["cargo", "xtask", "doc-claims", *sys.argv[1:]], cwd=repo_root)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

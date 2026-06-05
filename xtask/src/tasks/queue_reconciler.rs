@@ -639,6 +639,8 @@ fn classify_live_ci_state(
         }
 
         let mut passed = false;
+        let mut pending = false;
+        let mut stale = false;
         for check in matching {
             let status = normalize_check_status(&CheckContext {
                 check_name: required,
@@ -651,15 +653,22 @@ fn classify_live_ci_state(
 
             match status {
                 NormalizedCheckStatus::Passed => passed = true,
-                NormalizedCheckStatus::Pending => return CiOutcome::Pending,
+                NormalizedCheckStatus::Pending => pending = true,
                 NormalizedCheckStatus::ExpectedSkip
                 | NormalizedCheckStatus::Failed
-                | NormalizedCheckStatus::UnexpectedSkip
-                | NormalizedCheckStatus::Stale => return CiOutcome::Failure,
+                | NormalizedCheckStatus::UnexpectedSkip => return CiOutcome::Failure,
+                NormalizedCheckStatus::Stale => stale = true,
             }
         }
 
+        if pending {
+            return CiOutcome::Pending;
+        }
+
         if !passed {
+            if stale {
+                return CiOutcome::Failure;
+            }
             return CiOutcome::Pending;
         }
     }
@@ -1066,6 +1075,15 @@ mod tests {
         })
     }
 
+    fn stale_successful_check(name: &str) -> serde_json::Value {
+        serde_json::json!({
+            "name": name,
+            "conclusion": "SUCCESS",
+            "status": "COMPLETED",
+            "headSha": "old-head"
+        })
+    }
+
     // -----------------------------------------------------------------------
     // Required proof context aggregation
     // -----------------------------------------------------------------------
@@ -1177,6 +1195,28 @@ required = false
     }
 
     #[test]
+    fn merge_ready_live_ci_classifier_blocks_stale_required_proof_context() {
+        let checks = vec![
+            successful_check("Perl LSP Rust Small Result"),
+            successful_check("ripr+ New Gap Gate"),
+            stale_successful_check("Codecov / Patch 95"),
+            serde_json::json!({
+                "context": "codecov/patch",
+                "state": "SUCCESS"
+            }),
+        ];
+        let required = required_checks(&[
+            "Perl LSP Rust Small Result",
+            "ripr+ New Gap Gate",
+            "Codecov / Patch 95",
+            "codecov/patch",
+        ]);
+
+        let outcome = classify_live_ci_state(&checks, &required, Some("current-head"));
+        assert_eq!(outcome, CiOutcome::Failure);
+    }
+
+    #[test]
     fn merge_ready_live_ci_classifier_passes_only_when_required_proof_contexts_pass() {
         let checks = vec![
             successful_check("Perl LSP Rust Small Result"),
@@ -1190,6 +1230,29 @@ required = false
                 "name": "advisory-lint",
                 "conclusion": "FAILURE",
                 "status": "COMPLETED"
+            }),
+        ];
+        let required = required_checks(&[
+            "Perl LSP Rust Small Result",
+            "ripr+ New Gap Gate",
+            "Codecov / Patch 95",
+            "codecov/patch",
+        ]);
+
+        let outcome = classify_live_ci_state(&checks, &required, Some("current-head"));
+        assert_eq!(outcome, CiOutcome::Success);
+    }
+
+    #[test]
+    fn merge_ready_live_ci_classifier_uses_current_pass_over_stale_duplicate() {
+        let checks = vec![
+            successful_check("Perl LSP Rust Small Result"),
+            successful_check("ripr+ New Gap Gate"),
+            stale_successful_check("Codecov / Patch 95"),
+            successful_check("Codecov / Patch 95"),
+            serde_json::json!({
+                "context": "codecov/patch",
+                "state": "SUCCESS"
             }),
         ];
         let required = required_checks(&[

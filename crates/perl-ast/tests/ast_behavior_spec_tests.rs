@@ -63,6 +63,7 @@ fn when_calling_children_on_if_with_elsif_and_else_then_all_direct_children_are_
             then_branch: Box::new(block(vec![])),
             elsif_branches: vec![(Box::new(ident("other")), Box::new(block(vec![])))],
             else_branch: Some(Box::new(block(vec![]))),
+            keyword: None,
         },
         loc(0, 30),
     );

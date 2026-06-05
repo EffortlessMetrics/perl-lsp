@@ -19,6 +19,7 @@ git fetch origin master
 ```bash
 gh run list --branch master --limit 5 --json status,conclusion,name,headSha,createdAt
 ```
+> **MCP sessions:** `gh run list` has no MCP equivalent. In MCP sessions, workflow run listing is unavailable — classify master health as UNKNOWN and proceed with caution. Use `mcp__github__pull_request_read(method:"get_status")` on a recently-merged PR against master as a proxy if available.
 
 ### 3. Classify master health
 
@@ -32,11 +33,13 @@ Identify the breaking commit:
 ```bash
 gh run list --branch master --limit 5 --json headSha,conclusion,name,createdAt
 ```
+> **MCP sessions:** `gh run list` has no MCP equivalent. In MCP sessions, workflow run listing is unavailable — treat this step as best-effort.
 
 Check which PR was most recently merged:
 ```bash
 gh pr list --state merged --base master --limit 5 --json number,title,mergedAt,headRefName
 ```
+> **MCP alternative (web/no-gh sessions):** `mcp__github__list_pull_requests(owner, repo, state:"closed", base:"master", perPage:5)` then filter for merged status in agent code (check `.merged_at` field is non-null).
 
 Cross-reference the failing commit SHA with the merged PR to identify the culprit.
 
@@ -44,6 +47,7 @@ Check the failing run's logs:
 ```bash
 gh run view <run-id> --log-failed
 ```
+> **MCP sessions:** `gh run view` has no MCP equivalent. Workflow run log access is unavailable in MCP sessions. Link to the GitHub Actions UI for manual inspection.
 
 ### 5. Report
 

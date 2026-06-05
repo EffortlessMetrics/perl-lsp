@@ -40,13 +40,33 @@ pub enum CheckpointContext {
     /// Normal lexing
     Normal,
     /// Inside a heredoc (tracks the terminator)
-    Heredoc { terminator: String, is_interpolated: bool },
+    Heredoc {
+        /// The terminator label (e.g. `END` in `<<END`)
+        terminator: String,
+        /// Whether the heredoc body is interpolated (double-quoted style)
+        is_interpolated: bool,
+    },
     /// Inside a format body
-    Format { start_position: usize },
+    Format {
+        /// Byte offset where the format body begins
+        start_position: usize,
+    },
     /// Inside a regex or substitution
-    Regex { delimiter: char, flags_position: Option<usize> },
+    Regex {
+        /// The delimiter character (e.g. `/` in `/pattern/`)
+        delimiter: char,
+        /// Byte offset where the flags begin, if already scanned
+        flags_position: Option<usize>,
+    },
     /// Inside a quote-like operator
-    QuoteLike { operator: String, delimiter: char, is_paired: bool },
+    QuoteLike {
+        /// The operator name (e.g. `q`, `qq`, `qw`)
+        operator: String,
+        /// The delimiter character (e.g. `(` in `qw(...)`)
+        delimiter: char,
+        /// Whether the delimiter is a paired bracket (e.g. `(` / `)`)
+        is_paired: bool,
+    },
 }
 
 impl LexerCheckpoint {

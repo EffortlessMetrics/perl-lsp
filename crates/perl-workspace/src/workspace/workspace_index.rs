@@ -1730,6 +1730,8 @@ impl WorkspaceIndex {
         let file_id = Self::hash_uri_to_file_id(&uri_str);
         let import_specs =
             crate::semantic::workspace_import_extractor::extract_import_specs(&ast, file_id);
+        let use_lib_facts =
+            crate::semantic::workspace_import_extractor::extract_use_lib_facts(&ast, file_id);
 
         // Update the index, refresh the global symbol cache, and replace this file's
         // contribution in the global reference index.
@@ -1766,14 +1768,17 @@ impl WorkspaceIndex {
             self.replace_fact_shard_incremental(&key, fact_shard);
         }
 
-        // Update the import/export index with the freshly extracted import specs.
-        // Stale entries for this URI are removed first (incremental re-indexing).
-        // This is done after the main write lock block to follow the established
-        // lock ordering (shards → reference_index → import_export_index).
+        // Update the import/export index with the freshly extracted import specs
+        // and use-lib facts.  Stale entries for this URI are removed first
+        // (incremental re-indexing).  This is done after the main write lock
+        // block to follow the established lock ordering
+        // (shards → reference_index → import_export_index).
         {
             let mut ie_idx = self.semantic_import_export_index.write();
             ie_idx.remove_file_imports(&uri_str);
             ie_idx.add_file_imports(&uri_str, file_id, import_specs);
+            ie_idx.remove_file_use_lib(&uri_str);
+            ie_idx.add_file_use_lib(&uri_str, file_id, use_lib_facts);
         }
 
         Ok(())
@@ -1815,6 +1820,7 @@ impl WorkspaceIndex {
                 let mut ie_idx = self.semantic_import_export_index.write();
                 ie_idx.remove_file_imports(&uri_str);
                 ie_idx.remove_module_exports(&uri_str);
+                ie_idx.remove_file_use_lib(&uri_str);
             }
 
             // Incrementally remove symbols and re-insert any shadowed names.
@@ -2515,8 +2521,8 @@ impl WorkspaceIndex {
             );
 
         // Build the canonical fact shard.
-        // Import specs (for `use`, `require`, `ClassName->import()`) are
-        // populated separately via ImportExportIndex — not passed here.
+        // Import specs (for `use`, `require`, `ClassName->import()`) and
+        // use-lib facts are populated separately via ImportExportIndex — not passed here.
         let mut shard = crate::semantic::facts::build_canonical_fact_shard(
             uri,
             content_hash,
@@ -3376,6 +3382,74 @@ impl WorkspaceIndex {
         members
     }
 
+    /// Names of all packages explicitly declared in a file.
+    ///
+    /// Returns the bare declared name for each `package` statement or block in
+    /// the file (e.g. `"Foo"`, `"Bar"`, `"Foo::Nested"`).  A file with no
+    /// explicit `package` declaration returns an empty vec; there is no implicit
+    /// `"main"` symbol to surface.  A file containing `package main;` explicitly
+    /// WILL appear in results.
+    ///
+    /// # Arguments
+    ///
+    /// * `uri` - File URI to inspect (normalized via `normalize_uri`)
+    ///
+    /// # Returns
+    ///
+    /// Declared package names in declaration order (AST walk order).
+    pub fn file_packages(&self, uri: &str) -> Vec<String> {
+        let normalized = Self::normalize_uri(uri);
+        let key = DocumentStore::uri_key(&normalized);
+        let files = self.files.read();
+        let Some(file) = files.get(&key) else {
+            return Vec::new();
+        };
+
+        let mut packages = Vec::new();
+        for symbol in &file.symbols {
+            if symbol.kind == SymbolKind::Package {
+                packages.push(symbol.name.clone());
+            }
+        }
+        packages
+    }
+
+    /// Symbols declared inside a specific package within a file.
+    ///
+    /// Returns all `WorkspaceSymbol` entries whose `container_name` equals
+    /// `package_name` (bare name match, e.g. `"Bar"` or `"Foo::Nested"`).
+    /// Package declaration symbols themselves are excluded (they carry
+    /// `container_name = None`).
+    ///
+    /// # Arguments
+    ///
+    /// * `uri`          - File URI to inspect
+    /// * `package_name` - Bare package name to filter by (e.g. `"Foo::Bar"`)
+    ///
+    /// # Returns
+    ///
+    /// Symbols belonging to the package, in declaration order.
+    pub fn file_package_symbols(&self, uri: &str, package_name: &str) -> Vec<WorkspaceSymbol> {
+        let normalized = Self::normalize_uri(uri);
+        let key = DocumentStore::uri_key(&normalized);
+        let files = self.files.read();
+        let Some(file) = files.get(&key) else {
+            return Vec::new();
+        };
+
+        let mut symbols = Vec::new();
+        for symbol in &file.symbols {
+            if Self::symbol_belongs_to_package(symbol, package_name) {
+                symbols.push(symbol.clone());
+            }
+        }
+        symbols
+    }
+
+    fn symbol_belongs_to_package(symbol: &WorkspaceSymbol, package_name: &str) -> bool {
+        symbol.container_name.as_ref().is_some_and(|container| package_name.eq(container.as_str()))
+    }
+
     /// Find the definition location for a symbol key during Index/Navigate stages.
     ///
     /// # Arguments
@@ -3815,7 +3889,7 @@ impl IndexVisitor {
                 }
             }
 
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
                 self.visit_node(condition, file_index);
                 self.visit_node(then_branch, file_index);
                 for (cond, branch) in elsif_branches {
@@ -3827,7 +3901,7 @@ impl IndexVisitor {
                 }
             }
 
-            NodeKind::While { condition, body, continue_block } => {
+            NodeKind::While { condition, body, continue_block, .. } => {
                 self.visit_node(condition, file_index);
                 self.visit_node(body, file_index);
                 if let Some(cont) = continue_block {
@@ -4855,6 +4929,66 @@ my $var = 42;
             pkg_sym.container_name, None,
             "Package symbol must not carry a container (was 'main')"
         );
+    }
+
+    #[test]
+    fn test_file_packages_returns_only_package_symbol_names() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///lib/OnlyPackages.pm";
+        let code = "package Foo;\nsub hello { 1 }\npackage Bar { sub greet { 2 } }\n";
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let mut package_names = index.file_packages(uri);
+        package_names.sort();
+        let mut expected_package_names: Vec<String> = index
+            .file_symbols(uri)
+            .into_iter()
+            .filter(|s| s.kind == SymbolKind::Package)
+            .map(|s| s.name)
+            .collect();
+        expected_package_names.sort();
+
+        assert_eq!(package_names, expected_package_names);
+        assert_eq!(package_names, vec!["Bar", "Foo"]);
+        assert!(!package_names.iter().any(|name| name == "hello"));
+        assert!(!package_names.iter().any(|name| name == "greet"));
+    }
+
+    #[test]
+    fn test_file_package_symbols_returns_exact_container_match() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///lib/PackageMembers.pm";
+        let code = "package Foo;\nsub hello { 1 }\npackage Bar;\nsub greet { 2 }\n";
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let all_symbols = index.file_symbols(uri);
+        let package_name = "Bar";
+        let greet_symbol = must_some(all_symbols.iter().find(|s| s.name == "greet"));
+        let bar_package = must_some(
+            all_symbols.iter().find(|s| s.name == "Bar" && s.kind == SymbolKind::Package),
+        );
+        assert!(WorkspaceIndex::symbol_belongs_to_package(greet_symbol, package_name));
+        assert!(!WorkspaceIndex::symbol_belongs_to_package(greet_symbol, "Foo"));
+        assert!(!WorkspaceIndex::symbol_belongs_to_package(bar_package, package_name));
+
+        let mut expected_bar_names: Vec<String> = all_symbols
+            .iter()
+            .filter(|s| s.container_name.as_deref() == Some(package_name))
+            .map(|s| s.name.clone())
+            .collect();
+        expected_bar_names.sort();
+
+        let mut bar_names: Vec<String> =
+            index.file_package_symbols(uri, package_name).into_iter().map(|s| s.name).collect();
+        bar_names.sort();
+        assert_eq!(bar_names, expected_bar_names);
+        assert_eq!(bar_names, vec!["greet"]);
+
+        let mut foo_names: Vec<String> =
+            index.file_package_symbols(uri, "Foo").into_iter().map(|s| s.name).collect();
+        foo_names.sort();
+        assert_eq!(foo_names, vec!["hello"]);
+        assert!(index.file_package_symbols(uri, "Missing").is_empty());
     }
 
     #[test]

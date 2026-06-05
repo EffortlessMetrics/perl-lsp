@@ -1,0 +1,31 @@
+[
+  {
+    "method": "initialize",
+    "target": "."
+  },
+  {
+    "method": "textDocument/didOpen",
+    "file": "script/report.pl"
+  },
+  {
+    "method": "textDocument/definition",
+    "file": "script/report.pl",
+    "position_marker": "Local::Report"
+  },
+  {
+    "method": "textDocument/completion",
+    "file": "script/report.pl",
+    "position_marker": "$report->"
+  },
+  {
+    "method": "workspace/symbol",
+    "query": "Report"
+  },
+  {
+    "method": "textDocument/documentLink",
+    "file": "script/report.pl"
+  },
+  {
+    "method": "shutdown"
+  }
+]

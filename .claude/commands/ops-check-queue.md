@@ -19,12 +19,14 @@ Each one adds latency to every orchestrator dispatch decision.
 ```bash
 gh issue list --label "in-build" --state open --json number,title,updatedAt --jq '.[] | select((now - (.updatedAt | fromdateiso8601)) > (7*86400)) | "#\(.number) \(.title)"'
 ```
+> **MCP alternative (web/no-gh sessions):** `mcp__github__list_issues(owner, repo, labels:["in-build"], state:"OPEN")` → filter by `updatedAt` in agent logic for >7 days stale (the `since` parameter filters issues updated *after* a date, not before — apply the stale-age filter client-side).
 
 For each result, check if a linked open PR exists:
 
 ```bash
 gh pr list --search "closes #<number>" --state open --json number,title
 ```
+> **MCP alternative (web/no-gh sessions):** `mcp__github__search_pull_requests(query:"closes #<number> is:open repo:effortlessmetrics/perl-lsp-swarm")`
 
 Classify and act:
 - **Has open PR**: skip — builder is active.
@@ -34,6 +36,7 @@ Classify and act:
    ```bash
    gh pr list --state open --limit 50 --json number,title,mergeable,mergeStateStatus,isDraft,reviewDecision --jq '.[] | "\(.number)\t\(.mergeable)/\(.mergeStateStatus)\tdraft:\(.isDraft)\treview:\(.reviewDecision)\t\(.title)"'
    ```
+   > **MCP alternative (web/no-gh sessions):** `mcp__github__list_pull_requests(owner, repo, state:"open", perPage:50)` — `mergeable`, `mergeStateStatus`, `isDraft`, `reviewDecision` fields available on each PR object.
 
 2. Filter for merge candidates:
    - **mergeStateStatus = CLEAN** (NOT UNSTABLE, NOT UNKNOWN, NOT DIRTY). UNSTABLE means non-required check failing or in flight — wait, don't merge.
@@ -45,11 +48,13 @@ Classify and act:
    ```bash
    gh pr list --state open --label merge-ready --limit 50 --json number,labels,mergeStateStatus,isDraft -q '[.[] | select(.isDraft | not) | select(.mergeStateStatus == "CLEAN") | select(.labels | map(.name) | (contains(["needs-builder-fix"]) or contains(["needs-ci-fix"]) or contains(["needs-diff-fix"]) or contains(["needs-spec-fix"]) or contains(["needs-red-tdd-fix"])) | not)] | .[].number'
    ```
+   > **MCP alternative (web/no-gh sessions):** `mcp__github__search_pull_requests(query:"is:open is:pr label:merge-ready repo:effortlessmetrics/perl-lsp-swarm")` then filter `needs-*` labels in agent code after fetching.
 
 3. Check CI on each candidate using **latest-per-check filter** (per `feedback_status_check_rollup_stale_entries.md`):
    ```bash
    gh pr view <number> --json statusCheckRollup --jq '.statusCheckRollup | group_by(.name // .context) | map(sort_by(.completedAt // .startedAt) | last) | [.[] | select(.conclusion == "FAILURE") | (.context // .name)]'
    ```
+   > **MCP alternative (web/no-gh sessions):** `mcp__github__pull_request_read(method:"get_check_runs", owner, repo, pullNumber:<number>)` → apply the same group-by-name, sort-by-completedAt, take-last logic in agent code rather than jq.
 
 4. Classify:
    - **MERGE NOW**: CLEAN + latest CI all green + no `needs-*` + `just pre-merge-check <number>` passes

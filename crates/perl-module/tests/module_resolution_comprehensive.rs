@@ -261,6 +261,43 @@ mod uri_open_documents {
         assert_eq!(result, ModuleUriResolution::Resolved(open_doc));
         Ok(())
     }
+
+    #[test]
+    fn open_doc_single_segment_requires_path_boundary() -> Result<(), Box<dyn std::error::Error>> {
+        let open_doc = "file:///workspace/lib/MyCarp.pm".to_string();
+
+        let result = resolve_module_uri(
+            "Carp",
+            std::slice::from_ref(&open_doc),
+            &[],
+            &["lib".to_string()],
+            false,
+            &[],
+            Duration::from_millis(50),
+        );
+
+        assert_eq!(result, ModuleUriResolution::NotFound);
+        Ok(())
+    }
+
+    #[test]
+    fn open_doc_multi_segment_requires_left_path_boundary() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let open_doc = "file:///workspace/lib/MyNet/HTTP.pm".to_string();
+
+        let result = resolve_module_uri(
+            "Net::HTTP",
+            std::slice::from_ref(&open_doc),
+            &[],
+            &["lib".to_string()],
+            false,
+            &[],
+            Duration::from_millis(50),
+        );
+
+        assert_eq!(result, ModuleUriResolution::NotFound);
+        Ok(())
+    }
 }
 
 // ============================================================================

@@ -177,6 +177,208 @@ fn quality_gate_final_enforce_blocks_missing_receipts() -> TestResult {
 }
 
 #[test]
+fn quality_gate_final_exception_policy_action_uses_final_mode_commands() -> TestResult {
+    let root = repo_root()?;
+    let dir = tempdir()?;
+    let paths = FixturePaths::new(dir.path());
+    let head = current_head(&root)?;
+
+    write_coverage_receipt(&paths.coverage, &head, 97.2, 95.4, "workspace")?;
+    write_final_codecov(&paths.codecov)?;
+    write_ripr_plus_receipt(&paths.ripr, &head, 0)?;
+    write_ripr_pr_receipt(&paths.ripr_pr, &head, 0)?;
+    write_empty_review_guidance_receipt(&paths.review, &head)?;
+
+    let output = final_quality_gate_command(&root, &paths)?.output()?;
+    assert!(!output.status.success(), "final enforcement must fail without exception policy");
+
+    let payload: Value = serde_json::from_str(&fs::read_to_string(&paths.receipt)?)?;
+    let action = next_action(&payload, "quality_exception_policy_not_current")?;
+    assert_eq!(action.get("reason").and_then(Value::as_str), Some("missing"));
+    assert_repair_contract(action)?;
+    assert_action_commands_use_quality_gate_mode(action, "enforce")?;
+    for field in ["verify", "receipt"] {
+        let command = action.get(field).and_then(Value::as_str).ok_or("missing command")?;
+        assert!(
+            command.contains("--ripr-receipt") && command.contains("--ripr-pr-receipt"),
+            "final exception policy {field} command must include full final proof inputs: {command}"
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn quality_gate_final_invalid_exception_action_uses_final_mode_commands() -> TestResult {
+    let root = repo_root()?;
+    let dir = tempdir()?;
+    let paths = FixturePaths::new(dir.path());
+    let head = current_head(&root)?;
+
+    write_coverage_receipt(&paths.coverage, &head, 97.2, 95.4, "workspace")?;
+    write_final_codecov(&paths.codecov)?;
+    write_ripr_plus_receipt(&paths.ripr, &head, 0)?;
+    write_ripr_pr_receipt(&paths.ripr_pr, &head, 0)?;
+    write_empty_review_guidance_receipt(&paths.review, &head)?;
+    write_invalid_exception_policy(&paths.exceptions)?;
+
+    let output = final_quality_gate_command(&root, &paths)?.output()?;
+    assert!(!output.status.success(), "final enforcement must fail on invalid exception policy");
+
+    let payload: Value = serde_json::from_str(&fs::read_to_string(&paths.receipt)?)?;
+    let action = next_action(&payload, "quality_exception_invalid")?;
+    assert_eq!(action.get("id").and_then(Value::as_str), Some("ripr-total-burndown"));
+    assert_repair_contract(action)?;
+    assert_action_commands_use_quality_gate_mode(action, "enforce")?;
+    for field in ["verify", "receipt"] {
+        let command = action.get(field).and_then(Value::as_str).ok_or("missing command")?;
+        assert!(
+            command.contains("--coverage-receipt")
+                && command.contains("--ripr-receipt")
+                && command.contains("--ripr-pr-receipt")
+                && command.contains("--review-receipt"),
+            "final invalid exception {field} command must include full final proof inputs: {command}"
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn quality_gate_final_invalid_exception_policy_toml_uses_final_mode_commands() -> TestResult {
+    let root = repo_root()?;
+    let dir = tempdir()?;
+    let paths = FixturePaths::new(dir.path());
+
+    write_complete_final_proof_inputs(&root, &paths)?;
+    write_invalid_toml_exception_policy(&paths.exceptions)?;
+
+    let output = final_quality_gate_command(&root, &paths)?.output()?;
+    assert!(
+        !output.status.success(),
+        "final enforcement must fail when exception policy TOML is invalid"
+    );
+
+    let payload: Value = serde_json::from_str(&fs::read_to_string(&paths.receipt)?)?;
+    let action = next_action(&payload, "quality_exception_policy_not_current")?;
+    assert_eq!(action.get("reason").and_then(Value::as_str), Some("invalid_toml"));
+    assert_repair_contract(action)?;
+    assert_action_commands_use_quality_gate_mode(action, "enforce")?;
+
+    Ok(())
+}
+
+#[test]
+fn quality_gate_final_invalid_exception_policy_header_uses_final_mode_commands() -> TestResult {
+    let root = repo_root()?;
+    let dir = tempdir()?;
+    let paths = FixturePaths::new(dir.path());
+
+    write_complete_final_proof_inputs(&root, &paths)?;
+    write_invalid_header_exception_policy(&paths.exceptions)?;
+
+    let output = final_quality_gate_command(&root, &paths)?.output()?;
+    assert!(
+        !output.status.success(),
+        "final enforcement must fail when exception policy header is invalid"
+    );
+
+    let payload: Value = serde_json::from_str(&fs::read_to_string(&paths.receipt)?)?;
+    let action = next_action(&payload, "quality_exception_policy_not_current")?;
+    assert_eq!(action.get("reason").and_then(Value::as_str), Some("invalid_header"));
+    assert_repair_contract(action)?;
+    assert_action_commands_use_quality_gate_mode(action, "enforce")?;
+
+    Ok(())
+}
+
+#[test]
+fn quality_gate_final_invalid_exception_policy_metadata_uses_final_mode_commands() -> TestResult {
+    let root = repo_root()?;
+    let dir = tempdir()?;
+    let paths = FixturePaths::new(dir.path());
+
+    write_complete_final_proof_inputs(&root, &paths)?;
+    write_invalid_metadata_exception_policy(&paths.exceptions)?;
+
+    let output = final_quality_gate_command(&root, &paths)?.output()?;
+    assert!(
+        !output.status.success(),
+        "final enforcement must fail when exception policy metadata is invalid"
+    );
+
+    let payload: Value = serde_json::from_str(&fs::read_to_string(&paths.receipt)?)?;
+    let action = next_action(&payload, "quality_exception_policy_not_current")?;
+    assert_eq!(action.get("reason").and_then(Value::as_str), Some("invalid_metadata"));
+    assert_repair_contract(action)?;
+    assert_action_commands_use_quality_gate_mode(action, "enforce")?;
+
+    Ok(())
+}
+
+#[test]
+fn quality_gate_final_invalid_exception_dates_use_final_mode_commands() -> TestResult {
+    let root = repo_root()?;
+    let dir = tempdir()?;
+    let paths = FixturePaths::new(dir.path());
+
+    write_complete_final_proof_inputs(&root, &paths)?;
+    write_invalid_date_exception_policy(&paths.exceptions)?;
+
+    let output = final_quality_gate_command(&root, &paths)?.output()?;
+    assert!(
+        !output.status.success(),
+        "final enforcement must fail when exception policy dates are invalid"
+    );
+
+    let payload: Value = serde_json::from_str(&fs::read_to_string(&paths.receipt)?)?;
+    let action = next_action(&payload, "quality_exception_invalid")?;
+    assert_eq!(action.get("id").and_then(Value::as_str), Some("ripr-total-burndown"));
+    let reason = action.get("reason").and_then(Value::as_str).unwrap_or_default();
+    assert!(reason.contains("created, review_after, and expires must use YYYY-MM-DD"), "{reason}");
+    assert_repair_contract(action)?;
+    assert_action_commands_use_quality_gate_mode(action, "enforce")?;
+
+    Ok(())
+}
+
+#[test]
+fn quality_gate_final_enforce_blocks_invalid_receipts() -> TestResult {
+    let root = repo_root()?;
+    let dir = tempdir()?;
+    let paths = FixturePaths::new(dir.path());
+
+    write_final_codecov(&paths.codecov)?;
+    write_empty_exception_policy(&paths.exceptions)?;
+    fs::write(&paths.coverage, "{not-json")?;
+    fs::write(&paths.ripr, "{not-json")?;
+    fs::write(&paths.ripr_pr, "{not-json")?;
+    fs::write(&paths.review, "{not-json")?;
+
+    let output = final_quality_gate_command(&root, &paths)?.output()?;
+    assert!(!output.status.success(), "final enforcement must fail on invalid proof receipts");
+
+    let payload: Value = serde_json::from_str(&fs::read_to_string(&paths.receipt)?)?;
+    assert_eq!(payload.pointer("/coverage/status").and_then(Value::as_str), Some("invalid"));
+    assert_eq!(payload.pointer("/ripr_plus/status").and_then(Value::as_str), Some("invalid"));
+    assert_eq!(payload.pointer("/ripr_pr/status").and_then(Value::as_str), Some("invalid"));
+    assert_eq!(payload.pointer("/review_guidance/status").and_then(Value::as_str), Some("invalid"));
+
+    for kind in [
+        "coverage_receipt_not_current",
+        "ripr_receipt_not_current",
+        "ripr_pr_receipt_not_current",
+        "ripr_review_receipt_not_current",
+    ] {
+        let action = next_action(&payload, kind)?;
+        assert_eq!(action.get("reason").and_then(Value::as_str), Some("invalid"));
+        assert_repair_contract(action)?;
+    }
+
+    Ok(())
+}
+
+#[test]
 fn quality_gate_final_enforce_blocks_advisory_project_policy_and_partial_scope() -> TestResult {
     let root = repo_root()?;
     let dir = tempdir()?;
@@ -273,6 +475,16 @@ fn final_quality_gate_command(root: &Path, paths: &FixturePaths) -> TestResult<C
     command.arg("--receipt").arg(&paths.receipt);
     command.arg("--summary").arg(&paths.summary);
     Ok(command)
+}
+
+fn write_complete_final_proof_inputs(root: &Path, paths: &FixturePaths) -> TestResult {
+    let head = current_head(root)?;
+    write_coverage_receipt(&paths.coverage, &head, 97.2, 95.4, "workspace")?;
+    write_final_codecov(&paths.codecov)?;
+    write_ripr_plus_receipt(&paths.ripr, &head, 0)?;
+    write_ripr_pr_receipt(&paths.ripr_pr, &head, 0)?;
+    write_empty_review_guidance_receipt(&paths.review, &head)?;
+    Ok(())
 }
 
 fn write_coverage_receipt(
@@ -440,7 +652,7 @@ fn write_empty_review_guidance_receipt(path: &Path, head: &str) -> TestResult {
 fn write_empty_exception_policy(path: &Path) -> TestResult {
     write_text(
         path,
-        r#"schema_version = 1
+        r##"schema_version = 1
 policy = "quality-gate-exceptions"
 owner = "EffortlessMetrics"
 status = "active"
@@ -449,14 +661,14 @@ due_review = "fail"
 
 [requirements]
 required_active = []
-"#,
+"##,
     )
 }
 
 fn write_active_exception_policy(path: &Path) -> TestResult {
     write_text(
         path,
-        r#"schema_version = 1
+        r##"schema_version = 1
 policy = "quality-gate-exceptions"
 owner = "EffortlessMetrics"
 status = "active"
@@ -468,6 +680,37 @@ required_active = ["ripr-total-burndown"]
 
 [[exception]]
 id = "ripr-total-burndown"
+kind = "temporary_burndown"
+scope = "ripr_plus_total"
+owner = "proof-lane"
+issue = "#8197"
+reason = "transition burn-down remains active"
+final_target = "repo-wide ripr+ unresolved total = 0"
+evidence = "target/receipts/quality/ripr-plus.json"
+removal_criteria = "remove when RIPR+ total is zero"
+created = "2026-05-28"
+review_after = "2099-01-01"
+expires = "2099-12-31"
+"##,
+    )
+}
+
+fn write_invalid_exception_policy(path: &Path) -> TestResult {
+    write_text(
+        path,
+        r##"schema_version = 1
+policy = "quality-gate-exceptions"
+owner = "EffortlessMetrics"
+status = "active"
+updated = "2026-05-28"
+due_review = "fail"
+
+[requirements]
+required_active = ["ripr-total-burndown"]
+
+[[exception]]
+id = "ripr-total-burndown"
+kind = "permanent_bypass"
 owner = "proof-lane"
 reason = "transition burn-down remains active"
 final_target = "repo-wide ripr+ unresolved total = 0"
@@ -476,7 +719,78 @@ removal_criteria = "remove when RIPR+ total is zero"
 created = "2026-05-28"
 review_after = "2099-01-01"
 expires = "2099-12-31"
-"#,
+"##,
+    )
+}
+
+fn write_invalid_toml_exception_policy(path: &Path) -> TestResult {
+    write_text(
+        path,
+        r##"schema_version =
+policy = "quality-gate-exceptions"
+"##,
+    )
+}
+
+fn write_invalid_header_exception_policy(path: &Path) -> TestResult {
+    write_text(
+        path,
+        r##"schema_version = 2
+policy = "quality-gate-exceptions"
+owner = "EffortlessMetrics"
+status = "active"
+updated = "2026-05-28"
+due_review = "fail"
+
+[requirements]
+required_active = []
+"##,
+    )
+}
+
+fn write_invalid_metadata_exception_policy(path: &Path) -> TestResult {
+    write_text(
+        path,
+        r##"schema_version = 1
+policy = "quality-gate-exceptions"
+owner = ""
+status = "active"
+updated = "2026-05-28"
+due_review = "fail"
+
+[requirements]
+required_active = []
+"##,
+    )
+}
+
+fn write_invalid_date_exception_policy(path: &Path) -> TestResult {
+    write_text(
+        path,
+        r##"schema_version = 1
+policy = "quality-gate-exceptions"
+owner = "EffortlessMetrics"
+status = "active"
+updated = "2026-05-28"
+due_review = "fail"
+
+[requirements]
+required_active = []
+
+[[exception]]
+id = "ripr-total-burndown"
+kind = "temporary_burndown"
+scope = "ripr_plus_total"
+owner = "proof-lane"
+issue = "#8197"
+reason = "transition burn-down remains active"
+final_target = "repo-wide ripr+ unresolved total = 0"
+evidence = "target/receipts/quality/ripr-plus.json"
+removal_criteria = "remove when RIPR+ total is zero"
+created = "2026/05/28"
+review_after = "not-a-date"
+expires = "also-not-a-date"
+"##,
     )
 }
 
@@ -499,6 +813,26 @@ fn assert_repair_contract(action: &Value) -> TestResult {
         assert!(!value.trim().is_empty(), "action {field} must be non-empty: {action}");
         if matches!(field, "verify" | "receipt") {
             assert!(value.starts_with("rtk "), "action {field} must use rtk: {value}");
+        }
+    }
+    Ok(())
+}
+
+fn assert_action_commands_use_quality_gate_mode(action: &Value, mode: &str) -> TestResult {
+    for field in ["verify", "receipt"] {
+        let command = action
+            .get(field)
+            .and_then(Value::as_str)
+            .ok_or_else(|| format!("action missing {field}: {action}"))?;
+        assert!(
+            command.contains(&format!("quality-gate --mode {mode} ")),
+            "action {field} must use active quality-gate mode `{mode}`: {command}"
+        );
+        for other_mode in ["enforce-patch-coverage", "enforce-new-ripr"] {
+            assert!(
+                !command.contains(&format!("--mode {other_mode}")),
+                "action {field} must not use unrelated mode `{other_mode}`: {command}"
+            );
         }
     }
     Ok(())

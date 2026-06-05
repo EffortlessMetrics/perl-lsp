@@ -141,6 +141,8 @@ pub fn deduplicate_and_sort(mut completions: Vec<CompletionItem>) -> Vec<Complet
 #[cfg(test)]
 mod tests {
     use super::{CompletionItem, CompletionItemKind, deduplicate_and_sort};
+    use proptest::prelude::*;
+    use std::collections::{BTreeMap, HashSet};
 
     fn item(label: &str, kind: CompletionItemKind, sort_text: Option<&str>) -> CompletionItem {
         CompletionItem {
@@ -155,6 +157,122 @@ mod tests {
             text_edit_range: None,
             commit_characters: None,
             label_details: None,
+        }
+    }
+
+    fn completion_kind_strategy() -> impl Strategy<Value = CompletionItemKind> {
+        prop_oneof![
+            Just(CompletionItemKind::Variable),
+            Just(CompletionItemKind::Function),
+            Just(CompletionItemKind::Keyword),
+            Just(CompletionItemKind::Module),
+            Just(CompletionItemKind::File),
+            Just(CompletionItemKind::Snippet),
+            Just(CompletionItemKind::Constant),
+            Just(CompletionItemKind::Property),
+        ]
+    }
+
+    fn completion_item_strategy() -> impl Strategy<Value = CompletionItem> {
+        (
+            "[A-Za-z_]{0,10}",
+            completion_kind_strategy(),
+            prop::option::of("[0-9]{0,3}[_A-Za-z]{0,8}"),
+        )
+            .prop_map(|(label, kind, sort_text)| CompletionItem {
+                label,
+                kind,
+                detail: None,
+                documentation: None,
+                insert_text: None,
+                sort_text,
+                filter_text: None,
+                additional_edits: Vec::new(),
+                text_edit_range: None,
+                commit_characters: None,
+                label_details: None,
+            })
+    }
+
+    fn sort_key(item: &CompletionItem) -> (String, CompletionItemKind, String) {
+        (item.sort_text.as_ref().unwrap_or(&item.label).clone(), item.kind, item.label.clone())
+    }
+
+    fn visible_shape(
+        items: &[CompletionItem],
+    ) -> Vec<(String, CompletionItemKind, Option<String>)> {
+        items.iter().map(|item| (item.label.clone(), item.kind, item.sort_text.clone())).collect()
+    }
+
+    proptest! {
+        #[test]
+        fn prop_deduplicate_and_sort_drops_empty_labels_and_keeps_unique_labels(
+            items in prop::collection::vec(completion_item_strategy(), 0..96)
+        ) {
+            let result = deduplicate_and_sort(items);
+            let mut labels = HashSet::new();
+
+            for item in &result {
+                prop_assert!(!item.label.is_empty());
+                prop_assert!(labels.insert(item.label.clone()));
+            }
+        }
+
+        #[test]
+        fn prop_deduplicate_and_sort_orders_by_sort_key_kind_then_label(
+            items in prop::collection::vec(completion_item_strategy(), 0..96)
+        ) {
+            let result = deduplicate_and_sort(items);
+
+            for adjacent in result.windows(2) {
+                let left = &adjacent[0];
+                let right = &adjacent[1];
+                prop_assert!(
+                    sort_key(left) <= sort_key(right),
+                    "completion items must remain sorted: left={left:?}, right={right:?}"
+                );
+            }
+        }
+
+        #[test]
+        fn prop_deduplicate_and_sort_keeps_best_rank_for_each_label(
+            items in prop::collection::vec(completion_item_strategy(), 0..96)
+        ) {
+            let mut best_by_label = BTreeMap::<String, String>::new();
+
+            for item in &items {
+                if item.label.is_empty() {
+                    continue;
+                }
+
+                let rank = item.sort_text.as_ref().unwrap_or(&item.label).clone();
+                best_by_label
+                    .entry(item.label.clone())
+                    .and_modify(|best| {
+                        if rank < *best {
+                            *best = rank.clone();
+                        }
+                    })
+                    .or_insert(rank);
+            }
+
+            let result = deduplicate_and_sort(items);
+
+            for item in &result {
+                let actual_rank = item.sort_text.as_ref().unwrap_or(&item.label);
+                let expected_rank = best_by_label.get(&item.label);
+                prop_assert_eq!(expected_rank, Some(actual_rank));
+            }
+        }
+
+        #[test]
+        fn prop_deduplicate_and_sort_is_idempotent(
+            items in prop::collection::vec(completion_item_strategy(), 0..96)
+        ) {
+            let once = deduplicate_and_sort(items);
+            let twice = deduplicate_and_sort(once.clone());
+
+            prop_assert_eq!(visible_shape(&once), visible_shape(&twice));
         }
     }
 

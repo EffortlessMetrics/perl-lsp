@@ -1,3 +1,5 @@
+//! Configuration for the Perl lexer.
+
 /// Configuration options for the Perl lexer.
 ///
 /// Controls interpolation handling, position tracking, and lookahead limits.

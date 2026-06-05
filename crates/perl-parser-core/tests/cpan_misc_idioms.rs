@@ -325,10 +325,17 @@ mod dollar_dollar_scalar_deref {
 
     #[test]
     fn scalar_deref_keeps_referenced_variable_name() {
+        // $$sv is an unbraced scalar dereference — equivalent to ${$sv}.
+        // After the unbraced-deref fix it produces (unary_${} (variable $ sv)),
+        // NOT the old buggy form (variable $ $sv).
         let sexp = sexp("my $x = $$sv;");
         assert!(
-            sexp.contains("(variable $ $sv)"),
-            "expected $$sv to survive as a scalar-deref target token, got: {sexp}"
+            sexp.contains("(unary_${} (variable $ sv))"),
+            "expected $$sv to parse as unary_${{}} deref, got: {sexp}"
+        );
+        assert!(
+            !sexp.contains("(variable $ $sv)"),
+            "$$sv must NOT produce a variable with name $sv (old buggy form), got: {sexp}"
         );
         assert!(
             !sexp.contains("(my_declaration (variable $ x)(variable $ $))"),
@@ -338,16 +345,17 @@ mod dollar_dollar_scalar_deref {
 
     #[test]
     fn scalar_deref_keyword_named_variable_keeps_name() {
+        // $$default is an unbraced scalar dereference — equivalent to ${$default}.
         let source = "my $x = $$default;";
         assert_clean_parse(source);
         let sexp = sexp(source);
         assert!(
-            sexp.contains("(variable $ $default)"),
-            "expected $$default to survive as a scalar-deref target token, got: {sexp}"
+            sexp.contains("(unary_${} (variable $ default))"),
+            "expected $$default to parse as unary_${{}} deref, got: {sexp}"
         );
         assert!(
-            !sexp.contains("(variable $ $))"),
-            "expected $$default not to collapse to the bare $$ PID variable, got: {sexp}"
+            !sexp.contains("(variable $ $default)"),
+            "$$default must NOT produce a variable with name $default (old buggy form), got: {sexp}"
         );
     }
 
@@ -362,14 +370,19 @@ mod dollar_dollar_scalar_deref {
 
     #[test]
     fn b_terse_pattern_keeps_both_scalar_deref_uses() {
+        // $$sv appears twice; both must parse as unary_${} deref nodes.
         let sexp = sexp(
             r#"
 my $s = sprintf("%s #%d %s", class($sv), $$sv, $specialsv_name[$$sv]);
 "#,
         );
         assert!(
-            sexp.matches("(variable $ $sv)").count() >= 2,
-            "expected both $$sv uses to survive as scalar-deref targets, got: {sexp}"
+            sexp.matches("(unary_${} (variable $ sv))").count() >= 2,
+            "expected both $$sv uses to parse as unary_${{}} deref nodes, got: {sexp}"
+        );
+        assert!(
+            !sexp.contains("(variable $ $sv)"),
+            "neither $$sv use should produce the old buggy Variable form, got: {sexp}"
         );
     }
 }

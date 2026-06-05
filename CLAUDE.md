@@ -7,6 +7,8 @@
 perl-lsp's orchestration is an *Octopus Cluster* — see [docs/reference/OCTOPUS_CLUSTER.md](docs/reference/OCTOPUS_CLUSTER.md) for the umbrella framing.
 
 > For the design rationale and direction behind this orchestration model, see [docs/reference/ORCHESTRATION_DOCTRINE.md](docs/reference/ORCHESTRATION_DOCTRINE.md).
+>
+> For the operating contract a maintainer-agent follows when making consequential PR decisions — work PR by PR, verify from primary artifacts, never destructively batch, choose the workflow from current repo state, and override stale instructions out loud — see [docs/reference/MAINTAINER_AGENT_DOCTRINE.md](docs/reference/MAINTAINER_AGENT_DOCTRINE.md).
 
 The orchestrator routes work to agents, never writes code directly.
 

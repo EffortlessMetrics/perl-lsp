@@ -244,6 +244,36 @@ fn quality_gate_cli_blocks_patch_gate_when_coverage_receipt_is_missing() -> Test
 }
 
 #[test]
+fn quality_gate_cli_blocks_patch_gate_when_coverage_receipt_is_invalid() -> TestResult {
+    let root = repo_root()?;
+    let dir = tempdir()?;
+    let coverage = dir.path().join("coverage-baseline.json");
+    let receipt = dir.path().join("quality-gate.json");
+    let summary = dir.path().join("quality-gate.md");
+
+    fs::write(&coverage, "{not-json")?;
+
+    let output =
+        patch_quality_gate_command(&root, &coverage, &receipt, &summary, None)?.output()?;
+    assert!(!output.status.success(), "invalid coverage receipt must fail the gate");
+    assert_failure_stderr_points_to_receipt_and_summary(
+        &String::from_utf8(output.stderr)?,
+        &receipt,
+        &summary,
+    );
+
+    let payload: Value = serde_json::from_str(&fs::read_to_string(&receipt)?)?;
+    assert_eq!(payload.get("decision").and_then(Value::as_str), Some("fail"));
+    assert_eq!(payload.pointer("/coverage/status").and_then(Value::as_str), Some("invalid"));
+
+    let action = next_action(&payload, "coverage_receipt_not_current")?;
+    assert_eq!(action.get("reason").and_then(Value::as_str), Some("invalid"));
+    assert_repair_contract(action)?;
+
+    Ok(())
+}
+
+#[test]
 fn quality_gate_cli_blocks_patch_gate_when_coverage_receipt_is_stale() -> TestResult {
     let root = repo_root()?;
     let dir = tempdir()?;
@@ -369,6 +399,47 @@ fn quality_gate_cli_blocks_patch_coverage_below_target_with_file_guidance() -> T
     assert!(markdown.contains("xtask/src/tasks/ripr_evidence.rs"), "{markdown}");
     assert!(markdown.contains("sample uncovered lines: 212, 213, 214"), "{markdown}");
     assert!(!markdown.contains("crates/perl-ast-v2/src/lib.rs"), "{markdown}");
+
+    Ok(())
+}
+
+#[test]
+fn quality_gate_cli_labels_project_fallback_when_changed_file_guidance_is_missing() -> TestResult {
+    let root = repo_root()?;
+    let dir = tempdir()?;
+    let coverage = dir.path().join("coverage-baseline.json");
+    let receipt = dir.path().join("quality-gate.json");
+    let summary = dir.path().join("quality-gate.md");
+
+    write_coverage_receipt(&coverage, &current_head(&root)?, Some(94.9), coverage_gap_files())?;
+
+    let output =
+        patch_quality_gate_command(&root, &coverage, &receipt, &summary, None)?.output()?;
+    assert!(
+        !output.status.success(),
+        "patch coverage below 95% must fail even without changed-file guidance"
+    );
+
+    let payload: Value = serde_json::from_str(&fs::read_to_string(&receipt)?)?;
+    let action = next_action(&payload, "patch_coverage_below_target")?;
+    assert_eq!(action.get("file_scope").and_then(Value::as_str), Some("project_fallback"));
+    assert_eq!(
+        action.pointer("/top_files/0/path").and_then(Value::as_str),
+        Some("crates/perl-ast-v2/src/lib.rs")
+    );
+    assert_repair_contract(action)?;
+
+    let markdown = fs::read_to_string(&summary)?;
+    assert!(
+        markdown.contains(
+            "project fallback coverage file: `crates/perl-ast-v2/src/lib.rs` sample uncovered lines: 12, 13, 17"
+        ),
+        "{markdown}"
+    );
+    assert!(
+        !markdown.contains("changed coverage file:"),
+        "summary must not claim changed-file guidance when the receipt lacks patch_files_below_target: {markdown}"
+    );
 
     Ok(())
 }
