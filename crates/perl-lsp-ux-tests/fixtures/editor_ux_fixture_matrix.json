@@ -238,7 +238,7 @@
       ],
       "expected_outcomes": [
         "encoding edge cases do not crash the server",
-        "user workflow remains intact"
+        "hover returns non-empty contents for symbols in encoded files"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",

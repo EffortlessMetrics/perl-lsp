@@ -1,5 +1,5 @@
-// Test infrastructure — allow test-friendly patterns.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+// Test infrastructure allows assertion panics and skip-status stderr.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::print_stderr)]
 
 //! Scenario 09 — BOM and encoding edge cases.
 //!
@@ -9,13 +9,45 @@
 //! Acceptance criteria:
 //! - Server MUST NOT crash for any of these inputs.
 //! - No error-level `window/showMessage` for encoding issues.
-//! - Hover and completion MUST NOT crash (empty results OK).
+//! - Hover on symbols in encoded files returns non-empty contents.
 
 use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
+use serde_json::Value;
+
+fn hover_contents_text(contents: &Value) -> String {
+    if let Some(value) = contents.get("value").and_then(Value::as_str) {
+        return value.to_string();
+    }
+
+    if let Some(text) = contents.as_str() {
+        return text.to_string();
+    }
+
+    if let Some(items) = contents.as_array() {
+        return items.iter().map(hover_contents_text).collect::<Vec<_>>().join("\n");
+    }
+
+    String::new()
+}
+
+fn assert_hover_has_non_empty_contents(harness: &UxHarness, path: &str, line: u32, character: u32) {
+    let hover = harness
+        .hover(path, line, character)
+        .unwrap_or_else(|error| panic!("hover must not error for encoded file {path}: {error:?}"));
+    let hover =
+        hover.unwrap_or_else(|| panic!("hover must not return null for encoded file {path}"));
+    let contents = hover
+        .get("contents")
+        .unwrap_or_else(|| panic!("hover for encoded file {path} missing contents: {hover:?}"));
+    assert!(
+        !hover_contents_text(contents).trim().is_empty(),
+        "hover for encoded file {path} must return non-empty contents; got {contents:?}"
+    );
+}
 
 #[test]
-fn scenario_09_utf8_bom_file_does_not_crash() {
+fn scenario_09_utf8_bom_hover_returns_contents() {
     if !binary_available() {
         eprintln!("SKIP scenario_09: perl-lsp binary not found");
         return;
@@ -27,14 +59,13 @@ fn scenario_09_utf8_bom_file_does_not_crash() {
 
     harness.open_file("bom.pl", &source).expect("didOpen should succeed with UTF-8 BOM");
 
-    let hover = harness.hover("bom.pl", 2, 3);
-    assert!(hover.is_ok(), "hover crashed on UTF-8 BOM file — UX regression: {:?}", hover);
+    assert_hover_has_non_empty_contents(&harness, "bom.pl", 2, 3);
 
     harness.assert_no_crash();
 }
 
 #[test]
-fn scenario_09_unicode_in_strings_does_not_crash() {
+fn scenario_09_unicode_string_hover_returns_contents() {
     if !binary_available() {
         eprintln!("SKIP scenario_09: perl-lsp binary not found");
         return;
@@ -48,14 +79,13 @@ fn scenario_09_unicode_in_strings_does_not_crash() {
 
     harness.open_file("utf8_decl.pl", source).expect("didOpen should succeed with use utf8");
 
-    let hover = harness.hover("utf8_decl.pl", 4, 3);
-    assert!(hover.is_ok(), "hover crashed on use utf8 file — UX regression: {:?}", hover);
+    assert_hover_has_non_empty_contents(&harness, "utf8_decl.pl", 4, 3);
 
     harness.assert_no_crash();
 }
 
 #[test]
-fn scenario_09_high_codepoint_comments_do_not_crash() {
+fn scenario_09_high_codepoint_comment_hover_returns_contents() {
     if !binary_available() {
         eprintln!("SKIP scenario_09: perl-lsp binary not found");
         return;
@@ -71,14 +101,13 @@ fn scenario_09_high_codepoint_comments_do_not_crash() {
 
     harness.open_file("smart_quotes.pl", source).expect("didOpen should succeed");
 
-    let hover = harness.hover("smart_quotes.pl", 4, 5);
-    assert!(hover.is_ok(), "hover crashed on smart-quote comment — UX regression: {:?}", hover);
+    assert_hover_has_non_empty_contents(&harness, "smart_quotes.pl", 4, 5);
 
     harness.assert_no_crash();
 }
 
 #[test]
-fn scenario_09_latin1_extended_chars_in_comment() {
+fn scenario_09_latin1_comment_hover_returns_contents() {
     if !binary_available() {
         eprintln!("SKIP scenario_09: perl-lsp binary not found");
         return;
@@ -90,8 +119,7 @@ fn scenario_09_latin1_extended_chars_in_comment() {
 
     harness.open_file("latin1.pl", source).expect("didOpen should succeed");
 
-    let hover = harness.hover("latin1.pl", 3, 3);
-    assert!(hover.is_ok(), "hover crashed on Latin-1 comment — UX regression: {:?}", hover);
+    assert_hover_has_non_empty_contents(&harness, "latin1.pl", 3, 3);
 
     harness.assert_no_crash();
 }
