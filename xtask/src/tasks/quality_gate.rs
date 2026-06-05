@@ -1795,3 +1795,133 @@ fn display_path(path: &Path) -> String {
 fn round2(value: f64) -> f64 {
     (value * 100.0).round() / 100.0
 }
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+    use tempfile::tempdir;
+
+    use super::*;
+
+    #[test]
+    fn coverage_receipt_preserves_recommended_project_clusters() -> Result<()> {
+        let dir = tempdir()?;
+        let path = dir.path().join("coverage-baseline.json");
+        let head = "cluster-head";
+        write_text(
+            &path,
+            &render_json(&json!({
+                "head": head,
+                "scope": "workspace",
+                "coverage": {
+                    "patch": 99.0,
+                    "project": 94.0
+                },
+                "recommended_project_clusters": [
+                    {
+                        "name": "proof-infrastructure",
+                        "file_count": 2,
+                        "uncovered_line_count": 37,
+                        "reason": "Coverage proof, quality-gate, workflow, and policy surfaces are owned by this lane.",
+                        "example_files": ["xtask/src/tasks/quality_gate.rs"]
+                    }
+                ]
+            }))?,
+        )?;
+
+        let receipt = read_coverage_receipt(&path, head);
+
+        assert_eq!(receipt.status, "present");
+        assert_eq!(
+            receipt
+                .recommended_project_clusters
+                .first()
+                .and_then(|cluster| cluster.get("name"))
+                .and_then(Value::as_str),
+            Some("proof-infrastructure")
+        );
+        assert_eq!(
+            receipt
+                .recommended_project_clusters
+                .first()
+                .and_then(|cluster| cluster.get("uncovered_line_count"))
+                .and_then(Value::as_u64),
+            Some(37)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn ripr_plus_receipt_preserves_recommended_first_clusters() -> Result<()> {
+        let dir = tempdir()?;
+        let path = dir.path().join("ripr-plus.json");
+        let head = "cluster-head";
+        write_text(
+            &path,
+            &render_json(&json!({
+                "head": head,
+                "unresolved": 3,
+                "recommended_first_clusters": [
+                    {
+                        "name": "ci-report-formatting",
+                        "score": 5,
+                        "active_file_count": 3,
+                        "gap_kind_count": 2,
+                        "reason": "Receipt and report formatting gaps should become agent repair packets.",
+                        "example_files": ["xtask/src/tasks/quality_gate.rs"],
+                        "example_gap_kinds": ["receipt_missing"]
+                    }
+                ]
+            }))?,
+        )?;
+
+        let receipt = read_ripr_plus_receipt(&path, head);
+
+        assert_eq!(receipt.status, "present");
+        assert_eq!(
+            receipt
+                .recommended_first_clusters
+                .first()
+                .and_then(|cluster| cluster.get("name"))
+                .and_then(Value::as_str),
+            Some("ci-report-formatting")
+        );
+        assert_eq!(
+            receipt
+                .recommended_first_clusters
+                .first()
+                .and_then(|cluster| cluster.get("score"))
+                .and_then(Value::as_u64),
+            Some(5)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn render_recommended_clusters_names_metrics_reasons_and_examples() -> Result<()> {
+        let clusters = vec![json!({
+            "name": "ci-report-formatting",
+            "score": 5,
+            "active_file_count": 3,
+            "gap_kind_count": 2,
+            "reason": "Receipt and report formatting gaps should become agent repair packets.",
+            "example_files": ["xtask/src/tasks/quality_gate.rs"],
+            "example_gap_kinds": ["receipt_missing"]
+        })];
+        let mut markdown = String::new();
+
+        render_recommended_clusters(&mut markdown, "ripr cluster", &clusters);
+
+        for required in [
+            "ripr cluster: `ci-report-formatting` (score: 5, active_file_count: 3, gap_kind_count: 2) reason `Receipt and report formatting gaps should become agent repair packets.`",
+            "ripr cluster example file: `xtask/src/tasks/quality_gate.rs`",
+            "ripr cluster example gap kind: `receipt_missing`",
+        ] {
+            assert!(
+                markdown.contains(required),
+                "cluster markdown missing `{required}`:\n{markdown}"
+            );
+        }
+        Ok(())
+    }
+}
