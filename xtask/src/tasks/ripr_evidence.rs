@@ -342,7 +342,7 @@ fn ripr_plus_seam_summary(
     let top_files = ripr_plus_top_files(active.iter().copied(), limit);
     let top_gap_kinds = ripr_plus_top_gap_kinds(active.iter().copied(), limit);
     let recommended_first_clusters =
-        ripr_plus_recommended_first_clusters(&top_files, &top_gap_kinds, limit);
+        ripr_plus_recommended_first_clusters_from_seams(active.iter().copied(), limit);
 
     RiprPlusSeamSummary {
         unresolved: active.len(),
@@ -375,6 +375,16 @@ fn ripr_plus_count_rows(values: impl IntoIterator<Item = String>, limit: usize) 
     rows.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
     rows.truncate(limit);
     rows.into_iter().map(|(name, count)| json!({ "name": name, "count": count })).collect()
+}
+
+fn ripr_plus_recommended_first_clusters_from_seams<'a>(
+    seams: impl IntoIterator<Item = &'a Value>,
+    limit: usize,
+) -> Vec<Value> {
+    let seams = seams.into_iter().collect::<Vec<_>>();
+    let file_rows = ripr_plus_top_files(seams.iter().copied(), usize::MAX);
+    let gap_kind_rows = ripr_plus_top_gap_kinds(seams.iter().copied(), usize::MAX);
+    ripr_plus_recommended_first_clusters(&file_rows, &gap_kind_rows, limit)
 }
 
 fn ripr_plus_seam_path(seam: &Value) -> Option<String> {
@@ -2145,6 +2155,44 @@ mod tests {
         assert!(rows.iter().any(|row| row.pointer("/name") == Some(&json!("error-variants"))));
         assert!(
             rows.iter().any(|row| row.pointer("/name") == Some(&json!("active-ripr-inventory")))
+        );
+    }
+
+    #[test]
+    fn ripr_plus_recommended_clusters_keep_proof_infra_when_below_top_files() {
+        let mut seams = Vec::new();
+        for file_index in 0..12 {
+            for _ in 0..3 {
+                seams.push(json!({
+                    "file": format!("crates/product-{file_index}/src/lib.rs"),
+                    "kind": "CallPresence"
+                }));
+            }
+        }
+        seams.push(json!({
+            "file": "xtask/src/tasks/quality_gate.rs",
+            "kind": "CallPresence"
+        }));
+
+        let summary = ripr_plus_seam_summary(&seams, &RiprSuppressionRules::default(), 10);
+
+        assert!(
+            !summary.top_files.iter().any(|row| {
+                row.get("name").and_then(Value::as_str) == Some("xtask/src/tasks/quality_gate.rs")
+            }),
+            "xtask proof-infra file should sit below the truncated top_files list"
+        );
+        assert!(
+            summary.recommended_first_clusters.iter().any(|row| {
+                row.get("name").and_then(Value::as_str) == Some("proof-infrastructure")
+                    && row.get("example_files").and_then(Value::as_array).is_some_and(|files| {
+                        files
+                            .iter()
+                            .any(|file| file.as_str() == Some("xtask/src/tasks/quality_gate.rs"))
+                    })
+            }),
+            "cluster recommendations must preserve proof-infra work below the display top list: {:?}",
+            summary.recommended_first_clusters
         );
     }
 
