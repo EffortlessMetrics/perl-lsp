@@ -636,12 +636,17 @@ mod tests {
     use perl_semantic_facts::{
         AnchorId, Confidence, DefinitionCandidate, DefinitionRank, DefinitionRankReason,
         EntityFact, EntityId, EntityKind, FileId, OccurrenceFact, Provenance, RenamePlan,
-        SafeDeletePlan, ScopeId, VisibleSymbol, VisibleSymbolContext, VisibleSymbolSource,
+        SafeDeletePlan, ScopeId, UseLibFact, VisibleSymbol, VisibleSymbolContext,
+        VisibleSymbolSource,
     };
+    use perl_workspace::Parser;
+    use perl_workspace::semantic::imports::ImportExportIndex;
     use perl_workspace::semantic::queries::{
         DynamicCallableEvidence, QueryContext, SemanticQueries,
     };
+    use perl_workspace::semantic::workspace_import_extractor::extract_use_lib_facts;
     use perl_workspace::semantic_shadow_compare::ShadowCompareVerdict;
+    use perl_workspace::workspace::workspace_index::WorkspaceIndex;
     use std::collections::BTreeMap;
 
     // ── Minimal SemanticQueries stub for testing ──
@@ -844,6 +849,92 @@ mod tests {
     }
 
     // ── Shadow mode tests ──
+
+    #[test]
+    fn completion_route_covers_use_lib_query_contract() -> Result<(), Box<dyn std::error::Error>> {
+        let queries = StubSemanticQueries { visible_result: vec![] };
+        assert!(queries.use_lib_paths(FileId(999)).is_empty());
+
+        let file_id = FileId(7);
+        let mut parser = Parser::new(
+            "use lib 'lib'; use lib \"plain\"; use lib q{quoteop}; use lib q[bracket]; use lib q<angle>; use lib q!bang!; use lib qq{qqplain}; use lib qq{$dynamic}; use lib \"$dynamic\"; 1;",
+        );
+        let ast = parser.parse()?;
+        let facts = extract_use_lib_facts(&ast, file_id);
+        assert_eq!(facts.len(), 7);
+        assert_eq!(facts[0].path, "lib");
+        assert!(facts[0].is_active);
+        assert_eq!(facts[1].path, "plain");
+        assert_eq!(facts[1].provenance, Provenance::ExactAst);
+        assert_eq!(facts[1].confidence, Confidence::High);
+        assert_eq!(facts[2].path, "quoteop");
+        assert_eq!(facts[3].path, "bracket");
+        assert_eq!(facts[4].path, "angle");
+        assert_eq!(facts[5].path, "bang");
+        assert_eq!(facts[6].path, "qqplain");
+
+        let mut no_lib_parser = Parser::new("no lib 'old'; 1;");
+        let no_lib_ast = no_lib_parser.parse()?;
+        let no_lib_facts = extract_use_lib_facts(&no_lib_ast, file_id);
+        assert_eq!(no_lib_facts.len(), 1);
+        assert_eq!(no_lib_facts[0].path, "old");
+        assert!(!no_lib_facts[0].is_active);
+
+        let mut qw_parser = Parser::new("use lib qw(old vendor); 1;");
+        let qw_ast = qw_parser.parse()?;
+        let qw_facts = extract_use_lib_facts(&qw_ast, file_id);
+        assert_eq!(qw_facts.len(), 2);
+        assert_eq!(qw_facts[0].path, "old");
+        assert_eq!(qw_facts[1].path, "vendor");
+
+        let mut import_index = ImportExportIndex::new();
+        let manual_fact = UseLibFact::new(
+            "manual/lib".to_string(),
+            true,
+            file_id,
+            Some(AnchorId(42)),
+            Provenance::ExactAst,
+            Confidence::High,
+        );
+        import_index.add_file_use_lib("file:///manual.pl", file_id, vec![manual_fact.clone()]);
+        let stored = import_index.get_use_lib_for_file(file_id);
+        assert_eq!(stored.len(), 1);
+        assert_eq!(stored[0], manual_fact);
+        import_index.remove_file_use_lib("file:///missing.pl");
+        assert_eq!(import_index.get_use_lib_for_file(file_id).len(), 1);
+        import_index.remove_file_use_lib("file:///manual.pl");
+        assert!(import_index.get_use_lib_for_file(file_id).is_empty());
+
+        let workspace = WorkspaceIndex::new();
+        let uri = "file:///completion_use_lib_contract.pl";
+        workspace
+            .index_file_str(uri, "use lib 'first'; use lib \"plain\"; use lib $dynamic; 1;")?;
+        let indexed = workspace
+            .with_semantic_queries_for_uri(uri, |indexed_file_id, semantic_queries| {
+                semantic_queries.use_lib_paths(indexed_file_id)
+            })
+            .ok_or("indexed file missing")?;
+        assert_eq!(indexed.len(), 2);
+        assert_eq!(indexed[0].path, "first");
+        assert_eq!(indexed[1].path, "plain");
+
+        workspace.index_file_str(uri, "no lib 'first'; use lib 'second'; 1;")?;
+        let reindexed = workspace
+            .with_semantic_queries_for_uri(uri, |indexed_file_id, semantic_queries| {
+                semantic_queries.use_lib_paths(indexed_file_id)
+            })
+            .ok_or("reindexed file missing")?;
+        assert_eq!(reindexed.len(), 2);
+        assert_eq!(reindexed[0].path, "first");
+        assert!(!reindexed[0].is_active);
+        assert_eq!(reindexed[1].path, "second");
+        assert!(reindexed[1].is_active);
+
+        workspace.remove_file(uri);
+        assert!(workspace.file_id_for_uri(uri).is_none());
+
+        Ok(())
+    }
 
     #[test]
     fn shadow_both_empty_yields_same() -> Result<(), Box<dyn std::error::Error>> {

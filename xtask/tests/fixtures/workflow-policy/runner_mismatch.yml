@@ -1,0 +1,11 @@
+name: Runner Mismatch Fixture
+
+on:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: echo ok

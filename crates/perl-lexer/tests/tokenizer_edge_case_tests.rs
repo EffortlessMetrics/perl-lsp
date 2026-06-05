@@ -8,6 +8,8 @@ use perl_parser_core::tokens::token_stream::TokenStream;
 use perl_tdd_support::must;
 use perl_token::TokenKind;
 
+type R = Result<(), Box<dyn std::error::Error>>;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -204,6 +206,97 @@ fn ts_substitution_inside_hash_subscript_not_triggered() -> Result<(), Box<dyn s
         "`s` inside {{...}} must remain a bareword, not a substitution operator; got {:?}",
         kinds
     );
+    Ok(())
+}
+
+#[test]
+fn ts_regex_like_hash_keys_stay_barewords_at_subscript_boundaries() -> R {
+    for src in ["$h{s}", "$h{tr}", "$h{y}", "$h{m}"] {
+        let kinds = collect_kinds(src);
+        assert!(
+            kinds.contains(&TokenKind::Identifier),
+            "{src} should retain a bareword key token, got {kinds:?}"
+        );
+        assert!(
+            !kinds.contains(&TokenKind::Substitution),
+            "{src} must not promote its key to a substitution token: {kinds:?}"
+        );
+        assert!(
+            !kinds.contains(&TokenKind::Transliteration),
+            "{src} must not promote its key to a transliteration token: {kinds:?}"
+        );
+        assert!(
+            !kinds.contains(&TokenKind::Regex),
+            "{src} must not promote its key to a regex token: {kinds:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn ts_q_family_hash_keys_stay_barewords_at_subscript_boundaries() -> R {
+    for src in ["$h{q}", "$h{qq}", "$h{qw}", "$h{qr}", "$h{qx}"] {
+        let kinds = collect_kinds(src);
+        assert!(
+            kinds.contains(&TokenKind::Identifier),
+            "{src} should retain a bareword key token, got {kinds:?}"
+        );
+        assert!(
+            !kinds.contains(&TokenKind::QuoteSingle),
+            "{src} must not promote its key to a q quote token: {kinds:?}"
+        );
+        assert!(
+            !kinds.contains(&TokenKind::QuoteDouble),
+            "{src} must not promote its key to a qq quote token: {kinds:?}"
+        );
+        assert!(
+            !kinds.contains(&TokenKind::QuoteWords),
+            "{src} must not promote its key to a qw quote token: {kinds:?}"
+        );
+        assert!(
+            !kinds.contains(&TokenKind::QuoteCommand),
+            "{src} must not promote its key to a qx quote token: {kinds:?}"
+        );
+        assert!(
+            !kinds.contains(&TokenKind::Regex),
+            "{src} must not promote its key to a qr regex token: {kinds:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn ts_qw_slice_inside_hash_subscript_remains_quote_words() -> R {
+    let kinds = collect_kinds("@h{qw/a b c/}");
+    assert!(
+        kinds.contains(&TokenKind::QuoteWords),
+        "hash slices still need qw// quote parsing inside braces: {kinds:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn ts_regex_like_method_names_after_arrow_stay_identifiers() -> R {
+    for src in ["$obj->s('arg')", "$obj->tr('arg')", "$obj->y('arg')", "$obj->m('arg')"] {
+        let kinds = collect_kinds(src);
+        assert!(kinds.contains(&TokenKind::Arrow), "{src} should contain an arrow: {kinds:?}");
+        assert!(
+            kinds.contains(&TokenKind::Identifier),
+            "{src} should keep the method name as an identifier: {kinds:?}"
+        );
+        assert!(
+            !kinds.contains(&TokenKind::Substitution),
+            "{src} must not parse an arrow method as substitution: {kinds:?}"
+        );
+        assert!(
+            !kinds.contains(&TokenKind::Transliteration),
+            "{src} must not parse an arrow method as transliteration: {kinds:?}"
+        );
+        assert!(
+            !kinds.contains(&TokenKind::Regex),
+            "{src} must not parse an arrow method as regex: {kinds:?}"
+        );
+    }
     Ok(())
 }
 

@@ -3,32 +3,44 @@
 use serde::{Deserialize, Serialize};
 
 /// Stack frame information used by the debug adapter.
+///
+/// Corresponds to the DAP `StackFrame` type in the `stackTrace` response.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct StackFrame {
+    /// Unique numeric identifier for this frame within the current stopped state.
     pub id: i32,
+    /// Human-readable display name for the frame (e.g. `"main::foo"`).
     pub name: String,
+    /// Source file that contains this frame's code.
     pub source: Source,
+    /// 1-based line number of the current instruction in the frame.
     pub line: i32,
+    /// 1-based column number of the current instruction in the frame.
     pub column: i32,
+    /// 1-based end line of the range covered by this frame, if known.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub end_line: Option<i32>,
+    /// 1-based end column of the range covered by this frame, if known.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub end_column: Option<i32>,
 }
 
 impl StackFrame {
+    /// Create a new stack frame at `line` with column defaulting to 1.
     #[must_use]
     pub fn new(id: i32, name: impl Into<String>, source: Source, line: i32) -> Self {
         Self { id, name: name.into(), source, line, column: 1, end_line: None, end_column: None }
     }
 
+    /// Override the column for this frame.
     #[must_use]
     pub fn with_column(mut self, column: i32) -> Self {
         self.column = column;
         self
     }
 
+    /// Set the end position (end line and end column) of this frame's source range.
     #[must_use]
     pub fn with_end(mut self, end_line: i32, end_column: i32) -> Self {
         self.end_line = Some(end_line);
@@ -38,16 +50,22 @@ impl StackFrame {
 }
 
 /// Source file information for stack frames.
+///
+/// Corresponds to the DAP `Source` type used in `stackTrace` and breakpoint responses.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Source {
+    /// Optional display name for the source file (typically the file's base name).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// Absolute or workspace-relative path to the source file.
     pub path: String,
+    /// Optional DAP source reference for sources that have no file path.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_reference: Option<i32>,
 }
 
 impl Source {
+    /// Create a `Source` from a file path, deriving the display name from the final component.
     #[must_use]
     pub fn new(path: impl Into<String>) -> Self {
         let path = path.into();
@@ -66,16 +84,24 @@ impl Source {
 }
 
 /// Variable information returned by the debug adapter.
+///
+/// Corresponds to the DAP `Variable` type in `variables` responses.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Variable {
+    /// The variable's display name (e.g. `"$x"`, `"@arr"`).
     pub name: String,
+    /// The variable's value rendered as a string for display.
     pub value: String,
+    /// Optional type hint for the variable (e.g. `"SCALAR"`, `"ARRAY"`, `"HASH"`).
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     pub type_: Option<String>,
+    /// Reference handle for fetching nested variables; 0 means the variable has no children.
     pub variables_reference: i32,
+    /// Hint for how many named child variables this variable has, if structured.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub named_variables: Option<i32>,
+    /// Hint for how many indexed child variables this variable has, if it is an array.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub indexed_variables: Option<i32>,
 }

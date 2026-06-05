@@ -75,7 +75,7 @@ fn extract_shape_rec(node: &Node, out: &mut Vec<String>) {
                 extract_shape_rec(s, out);
             }
         }
-        If { condition, then_branch, elsif_branches, else_branch } => {
+        If { condition, then_branch, elsif_branches, else_branch, .. } => {
             extract_shape_rec(condition, out);
             extract_shape_rec(then_branch, out);
             for (cond, br) in elsif_branches {
@@ -212,7 +212,7 @@ fn check_spans_rec(node: &Node, source_len: usize, errors: &mut Vec<String>) {
                 check_spans_rec(s, source_len, errors);
             }
         }
-        If { condition, then_branch, elsif_branches, else_branch } => {
+        If { condition, then_branch, elsif_branches, else_branch, .. } => {
             check_spans_rec(condition, source_len, errors);
             check_spans_rec(then_branch, source_len, errors);
             for (cond, br) in elsif_branches {

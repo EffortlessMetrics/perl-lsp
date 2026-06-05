@@ -32,6 +32,9 @@ fn walk(node: &Node, modules: &mut HashSet<String>) {
                 walk(stmt, modules);
             }
         }
+        NodeKind::Package { block: Some(block), .. } => {
+            walk(block, modules);
+        }
         _ => {}
     }
 }

@@ -3,7 +3,9 @@
 //! Covers the full public API surface: `parse_module_import_head`,
 //! `ModuleImportKind`, and `ModuleImportHead`.
 
-use perl_module::import::{ModuleImportHead, ModuleImportKind, parse_module_import_head};
+use perl_module::import::{
+    ModuleImportHead, ModuleImportKind, RequireForm, parse_module_import_head,
+};
 
 // ---------------------------------------------------------------------------
 // Helper: assert a successful parse and validate all fields
@@ -699,6 +701,85 @@ fn batch_invalid_lines_all_reject() -> Result<(), String> {
         if parse_module_import_head(line).is_some() {
             return Err(format!("expected None for: {line:?}"));
         }
+    }
+    Ok(())
+}
+
+// ===========================================================================
+// 16. token_as_module_name — Option B accessor
+// ===========================================================================
+
+#[test]
+fn token_as_module_name_converts_pm_path() -> Result<(), String> {
+    let head = parse_module_import_head(r#"require "Foo/Bar.pm";"#)
+        .ok_or_else(|| "expected Some for quoted require".to_string())?;
+    // Raw token must stay as the file path (token_start/token_end invariant preserved)
+    if head.token != "Foo/Bar.pm" {
+        return Err(format!("token should be raw path, got {:?}", head.token));
+    }
+    // Accessor converts it to module name
+    let name = head.token_as_module_name();
+    if name != "Foo::Bar" {
+        return Err(format!("expected 'Foo::Bar', got {:?}", name));
+    }
+    if head.require_form() != Some(RequireForm::FilePath) {
+        return Err("expected FilePath require_form".into());
+    }
+    Ok(())
+}
+
+#[test]
+fn token_as_module_name_single_segment_pm() -> Result<(), String> {
+    let head = parse_module_import_head(r#"require "warnings.pm";"#)
+        .ok_or_else(|| "expected Some".to_string())?;
+    let name = head.token_as_module_name();
+    if name != "warnings" {
+        return Err(format!("expected 'warnings', got {:?}", name));
+    }
+    Ok(())
+}
+
+#[test]
+fn token_as_module_name_deeply_nested_pm() -> Result<(), String> {
+    let head = parse_module_import_head(r#"require "HTTP/Request/Common.pm";"#)
+        .ok_or_else(|| "expected Some".to_string())?;
+    let name = head.token_as_module_name();
+    if name != "HTTP::Request::Common" {
+        return Err(format!("expected 'HTTP::Request::Common', got {:?}", name));
+    }
+    Ok(())
+}
+
+#[test]
+fn token_as_module_name_does_not_convert_pl_path() -> Result<(), String> {
+    let head = parse_module_import_head(r#"require "foo.pl";"#)
+        .ok_or_else(|| "expected Some".to_string())?;
+    let name = head.token_as_module_name();
+    // .pl files are script includes, not module names — must not convert
+    if name != "foo.pl" {
+        return Err(format!("expected raw 'foo.pl' (no conversion), got {:?}", name));
+    }
+    Ok(())
+}
+
+#[test]
+fn token_as_module_name_does_not_convert_extensionless_path() -> Result<(), String> {
+    let head = parse_module_import_head(r#"require "somelib";"#)
+        .ok_or_else(|| "expected Some".to_string())?;
+    let name = head.token_as_module_name();
+    if name != "somelib" {
+        return Err(format!("expected raw 'somelib', got {:?}", name));
+    }
+    Ok(())
+}
+
+#[test]
+fn token_as_module_name_passthrough_for_module_name_form() -> Result<(), String> {
+    let head =
+        parse_module_import_head("require Foo::Bar;").ok_or_else(|| "expected Some".to_string())?;
+    let name = head.token_as_module_name();
+    if name != "Foo::Bar" {
+        return Err(format!("expected 'Foo::Bar' passthrough, got {:?}", name));
     }
     Ok(())
 }

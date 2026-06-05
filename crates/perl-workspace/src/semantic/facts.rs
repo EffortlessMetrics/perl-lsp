@@ -43,6 +43,12 @@ use std::hash::{Hash, Hasher};
 ///
 /// A fully populated `FileFactShard` with real byte spans, `ExactAst`
 /// provenance, and per-category hashes.
+///
+/// # Note on `use lib` facts
+///
+/// `use lib`/`no lib` path facts are stored in [`ImportExportIndex`] via
+/// `add_file_use_lib` at the indexing call site (in `WorkspaceIndex::index_file`),
+/// not in the returned shard.  Query via `SemanticQueries::use_lib_paths`.
 pub fn build_canonical_fact_shard(
     uri: &str,
     content_hash: u64,

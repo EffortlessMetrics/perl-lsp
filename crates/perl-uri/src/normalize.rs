@@ -59,15 +59,11 @@ pub fn normalize_uri(uri: &str) -> String {
 
     // Try to parse as URL first
     if let Ok(url) = Url::parse(trimmed) {
-        // Canonicalize local file URIs through filesystem conversion so legacy
-        // forms like `file://C:/...` normalize to `file:///c:/...` on Windows
-        // and `file:///tmp/...` on Unix while preserving non-local authorities.
-        if url.scheme() == "file"
-            && crate::classify::is_local_file_authority(url.host_str())
-            && let Some(fs_path) = crate::uri_to_fs_path(trimmed)
-            && let Ok(normalized) = crate::fs_path_to_uri(&fs_path)
-        {
-            return normalized;
+        // Canonicalize local file authorities without filesystem round-trips:
+        // on Windows, `/tmp/...` is root-relative and cannot reliably convert
+        // back through `Url::from_file_path`, but it is already a valid URI key.
+        if should_canonicalize_local_file_authority(&url) {
+            return crate::classify::uri_key(trimmed);
         }
 
         // Already a valid non-file URI, return as-is.
@@ -93,6 +89,11 @@ pub fn normalize_uri(uri: &str) -> String {
     trimmed.to_string()
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn should_canonicalize_local_file_authority(url: &Url) -> bool {
+    url.scheme() == "file" && crate::classify::is_local_file_authority(url.host_str())
+}
+
 /// Normalize a URI to a consistent form (wasm32 version - no filesystem).
 #[cfg(target_arch = "wasm32")]
 pub fn normalize_uri(uri: &str) -> String {
@@ -108,4 +109,26 @@ pub fn normalize_uri(uri: &str) -> String {
 
     // On wasm32, just try to parse as URL or return as-is
     if let Ok(url) = Url::parse(trimmed) { url.to_string() } else { trimmed.to_string() }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn local_file_authority_predicate_boundaries() -> Result<(), Box<dyn std::error::Error>> {
+        let cases = [
+            ("file://127.0.0.1/tmp/module.pm", true, "file:///tmp/module.pm"),
+            ("file://example.com/tmp/module.pm", false, "file://example.com/tmp/module.pm"),
+            ("https://localhost/tmp/module.pm", false, "https://localhost/tmp/module.pm"),
+        ];
+
+        for (input, expected_branch, expected_normalized) in cases {
+            let url = Url::parse(input)?;
+            assert_eq!(should_canonicalize_local_file_authority(&url), expected_branch);
+            assert_eq!(normalize_uri(input), expected_normalized);
+        }
+
+        Ok(())
+    }
 }

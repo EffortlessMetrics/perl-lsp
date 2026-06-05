@@ -888,9 +888,9 @@ impl LspServer {
                 if let Some(doc) = self.get_document(&documents, uri) {
                     let offset = self.pos16_to_offset(doc, line, character);
                     let radius = 50;
-                    let text_start = offset.saturating_sub(radius);
-                    let text_around = self.get_text_around_offset(&doc.text, offset, radius);
-                    let cursor_in_text = offset - text_start;
+                    let (text_start, text_around) =
+                        self.get_text_window_around_offset(&doc.text, offset, radius);
+                    let cursor_in_text = offset.min(doc.text.len()).saturating_sub(text_start);
                     let current_package = doc.ast.as_ref().map_or_else(
                         || "main".to_string(),
                         |ast| crate::declaration::current_package_at(ast, offset).to_string(),
@@ -1033,9 +1033,9 @@ impl LspServer {
             if let Some(doc) = self.get_document(&documents, uri) {
                 let offset = self.pos16_to_offset(doc, line, character);
                 let radius = 50;
-                let text_start = offset.saturating_sub(radius);
-                let text_around = self.get_text_around_offset(&doc.text, offset, radius);
-                let cursor_in_text = offset - text_start;
+                let (text_start, text_around) =
+                    self.get_text_window_around_offset(&doc.text, offset, radius);
+                let cursor_in_text = offset.min(doc.text.len()).saturating_sub(text_start);
 
                 let goto_label_re = get_goto_label_regex()?;
                 for cap in goto_label_re.captures_iter(&text_around) {

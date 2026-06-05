@@ -19,6 +19,7 @@ Merge up to 3 PRs from the candidates identified in step 1.
    ```bash
    gh pr view <number> --json isDraft,mergeable,mergeStateStatus,labels,headRefOid,reviewDecision,statusCheckRollup
    ```
+   > **MCP alternative (web/no-gh sessions):** `mcp__github__pull_request_read(method:"get", owner, repo, pullNumber:<number>)` for isDraft, mergeable, mergeStateStatus, labels, headRefOid, reviewDecision fields; additionally call `mcp__github__pull_request_read(method:"get_check_runs", pullNumber:<number>)` for CI status rollup.
    All of these must be true AT MERGE TIME (not remembered from earlier):
    - Not draft
    - mergeStateStatus = CLEAN (NOT UNSTABLE, NOT UNKNOWN, NOT DIRTY)
@@ -43,6 +44,7 @@ Merge up to 3 PRs from the candidates identified in step 1.
    # Get the PR title and body
    gh pr view <number> --json title,body
    ```
+   > **MCP alternative (web/no-gh sessions):** `mcp__github__pull_request_read(method:"get", owner, repo, pullNumber:<number>)` → `.title`, `.body` fields.
    The squash commit message should be: `<PR title> (#<number>)` as the first line,
    followed by a blank line and a 1-3 sentence summary of WHAT changed and WHY.
    Future readers should understand the change without opening the PR.
@@ -51,6 +53,7 @@ Merge up to 3 PRs from the candidates identified in step 1.
    ```bash
    gh pr merge <number> --squash --subject "<title> (#<number>)" --body "<summary>"
    ```
+   > **MCP alternative (web/no-gh sessions):** `mcp__github__merge_pull_request(owner, repo, pullNumber:<number>, merge_method:"squash", commit_title:"<title> (#<number>)", commit_message:"<summary>")` — full parity including squash and custom commit message.
 
 6. After each merge, verify it landed and clean up labels:
    ```bash
@@ -65,6 +68,7 @@ Merge up to 3 PRs from the candidates identified in step 1.
      gh issue edit "$CLOSING_ISSUE" --remove-label "in-build"
    fi
    ```
+   > **MCP alternative (web/no-gh sessions):** `mcp__github__pull_request_read(method:"get", pullNumber:<number>)` → `.state` for merge verification. For label removal: read current labels with `pull_request_read`, then write back the filtered list with `mcp__github__issue_write(method:"update", issue_number:<number>, labels:[...current minus removed label])`. Note: `issue_write` labels field replaces the full list — always read current labels first before writing.
    Label cleanup prevents stale `merge-ready`, `deep-reviewed`, and `in-build` labels from
    misleading future orchestrator queries.
 
@@ -81,6 +85,7 @@ Merge up to 3 PRs from the candidates identified in step 1.
    ```bash
    gh run list --workflow=CI --branch=master --limit=3 --json conclusion,headSha,event,name
    ```
+   > **MCP sessions:** `gh run list` / `gh run view` have no MCP equivalent. Treat as best-effort: in MCP sessions, workflow run listing is unavailable. Use `mcp__github__pull_request_read(method:"get_status")` on any recently-merged PR against master as a proxy signal, or note the limitation and proceed with caution.
    Required: latest master CI run on the merged SHA = SUCCESS. If master goes red post-merge:
    - Halt the queue immediately
    - Report which merge introduced the regression (compare master CI logs to recent merges)

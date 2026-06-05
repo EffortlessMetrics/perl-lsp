@@ -18,6 +18,8 @@
 //! Follows the inlay hint protocol for range-scoped responses and stable hint
 //! ordering per the LSP specification.
 
+use std::collections::HashMap;
+
 use perl_lexer::create_builtin_signatures;
 use perl_parser_core::ast::{Node, NodeKind};
 use perl_position_tracking::{WirePosition as Position, WireRange as Range};
@@ -205,6 +207,63 @@ pub fn extract_param_names(signature: &str) -> Vec<String> {
     params
 }
 
+/// Collects parameter names from a `Signature` node.
+///
+/// Returns a vector of positional parameter names (without sigil) in declaration
+/// order. Slurpy (`@rest`, `%opts`) parameters are included at their position;
+/// callers may stop emitting hints at the slurpy boundary if desired.
+///
+/// `NamedParameter` and `OptionalParameter` variables are treated the same as
+/// mandatory ones — each contributes one name entry.
+fn param_names_from_signature_node(sig: &Node) -> Vec<String> {
+    let NodeKind::Signature { parameters } = &sig.kind else {
+        return Vec::new();
+    };
+    parameters
+        .iter()
+        .filter_map(|param| match &param.kind {
+            NodeKind::MandatoryParameter { variable }
+            | NodeKind::OptionalParameter { variable, .. }
+            | NodeKind::SlurpyParameter { variable }
+            | NodeKind::NamedParameter { variable } => {
+                if let NodeKind::Variable { name, .. } = &variable.kind {
+                    Some(name.clone())
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// Build a map of user-defined sub name → parameter name list by walking the AST.
+///
+/// Only `Subroutine` nodes with both a name and a `Signature` are included.
+/// `Method` nodes (Object::Pad / `use feature 'class'`) are included when they
+/// have a name and a signature.
+///
+/// When multiple definitions with the same name exist (e.g. multiple `sub foo`
+/// with different signatures), only the **first** definition encountered is kept.
+/// This matches the common case of forward declarations or method overrides.
+fn collect_user_sub_signatures(ast: &Node) -> HashMap<String, Vec<String>> {
+    let mut map: HashMap<String, Vec<String>> = HashMap::new();
+    walk_ast(ast, &mut |node| {
+        match &node.kind {
+            NodeKind::Subroutine { name: Some(sub_name), signature: Some(sig), .. } => {
+                map.entry(sub_name.clone()).or_insert_with(|| param_names_from_signature_node(sig));
+            }
+            NodeKind::Method { name: method_name, signature: Some(sig), .. } => {
+                map.entry(method_name.clone())
+                    .or_insert_with(|| param_names_from_signature_node(sig));
+            }
+            _ => {}
+        }
+        true
+    });
+    map
+}
+
 /// Generates inlay hints for function and method parameters.
 ///
 /// This function traverses the AST and identifies function calls, adding inlay
@@ -227,59 +286,70 @@ pub fn parameter_hints(
     range: Option<Range>,
 ) -> Vec<Value> {
     let sigs = create_builtin_signatures();
+    // Pre-pass: collect user-defined sub signatures from the AST.
+    // This is O(n) over the AST and runs once before the hint-emission walk.
+    let user_sigs = collect_user_sub_signatures(ast);
     let mut out = Vec::new();
     walk_ast(ast, &mut |node| {
-        if let NodeKind::FunctionCall { name, args } = &node.kind
-            && let Some(builtin) = sigs.get(name.as_str())
-        {
-            // Use the first (most complete) signature variant to extract
-            // parameter names, since it lists all possible parameters.
-            if let Some(first_sig) = builtin.signatures.first() {
-                let param_names = extract_param_names(first_sig);
+        if let NodeKind::FunctionCall { name, args } = &node.kind {
+            // Determine param_names and whether this is a builtin.
+            // Builtins take precedence; they are not double-hinted by the user path.
+            let (param_names, is_builtin) = if let Some(builtin) = sigs.get(name.as_str()) {
+                // Builtin path: extract from the first (most complete) signature.
+                let pnames =
+                    builtin.signatures.first().map(|s| extract_param_names(s)).unwrap_or_default();
+                (pnames, true)
+            } else if let Some(user_params) = user_sigs.get(name.as_str()) {
+                // User-defined sub path: use the pre-collected signature params.
+                (user_params.clone(), false)
+            } else {
+                // Unresolved call — skip.
+                return true;
+            };
 
-                // Skip functions with only a single parameter -- hints
-                // for e.g. `chomp($x)` showing `variable:` add noise
-                // rather than clarity.
-                if param_names.len() <= 1 {
-                    return true;
+            // Skip functions with only a single parameter -- hints
+            // for e.g. `chomp($x)` showing `variable:` add noise
+            // rather than clarity.  Same policy applies to user subs.
+            if param_names.len() <= 1 {
+                return true;
+            }
+
+            for (i, arg) in args.iter().enumerate() {
+                if i >= param_names.len() {
+                    break;
+                }
+                let (l, c) = to_pos16(arg.location.start);
+
+                // Filter by range if specified
+                if let Some(filter_range) = range {
+                    let hint_pos = Position::new(l, c);
+                    if !pos_in_range(hint_pos, filter_range) {
+                        continue;
+                    }
                 }
 
-                for (i, arg) in args.iter().enumerate() {
-                    if i >= param_names.len() {
-                        break;
+                // Embed function name and param index in data for
+                // later label.location resolution via inlayHint/resolve.
+                let mut hint = json!({
+                    "position": { "line": l, "character": c },
+                    "label": format!("{}:", param_names[i]),
+                    "kind": 2, // parameter
+                    "paddingLeft": false,
+                    "paddingRight": true,
+                    "data": {
+                        "functionName": name.as_str(),
+                        "paramIndex": i,
                     }
-                    let (l, c) = to_pos16(arg.location.start);
+                });
 
-                    // Filter by range if specified
-                    if let Some(filter_range) = range {
-                        let hint_pos = Position::new(l, c);
-                        if !pos_in_range(hint_pos, filter_range) {
-                            continue;
-                        }
-                    }
-
-                    // Phase 1: embed function name and param index in data for
-                    // later label.location resolution via inlayHint/resolve.
-                    let mut hint = json!({
-                        "position": { "line": l, "character": c },
-                        "label": format!("{}:", param_names[i]),
-                        "kind": 2, // parameter
-                        "paddingLeft": false,
-                        "paddingRight": true,
-                        "data": {
-                            "functionName": name.as_str(),
-                            "paramIndex": i,
-                        }
-                    });
-
-                    // Phase 3: embed perldoc summary for tooltip resolution.
-                    // The resolver will pick this up when the client requests it.
+                // For builtins: embed perldoc summary for tooltip resolution.
+                if is_builtin {
                     if let Some(doc) = builtin_doc_summary(name.as_str(), &param_names[i], i) {
                         hint["data"]["docSummary"] = json!(doc);
                     }
-
-                    out.push(hint);
                 }
+
+                out.push(hint);
             }
         }
         true

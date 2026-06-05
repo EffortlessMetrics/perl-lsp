@@ -105,6 +105,80 @@ fn from_message_returns_parse_error_meta_for_parse_keyword() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
+// from_message phrase-boundary regressions
+// ---------------------------------------------------------------------------
+
+#[test]
+fn from_message_does_not_match_diagnostic_phrases_inside_longer_words() -> TestResult {
+    let non_diagnostics = [
+        "the unused variablex marker is part of a generated identifier",
+        "configuration says never used_by_external_tools during indexing",
+        "the module docs mention ause strictness setting",
+        "phase block does not enable strictness is explanatory prose",
+        "a bareword filehandle_suffix appears in fixture text",
+        "two-argumentative prose should not imply open() style",
+        "prototype mismatchable examples are not Perl diagnostics",
+        "definedness is not a deprecated defined container check",
+    ];
+
+    for message in non_diagnostics {
+        let result = catalog::from_message(message);
+        assert!(result.is_none(), "message should not infer a diagnostic: {message}");
+    }
+
+    Ok(())
+}
+
+#[test]
+fn from_message_matches_real_perl_messages_with_punctuation_boundaries() -> TestResult {
+    let cases = [
+        (
+            "Global symbol \"$x\" requires explicit package name at script.pl line 3.",
+            DiagnosticCode::UndefinedVariable,
+        ),
+        ("Subroutine helper redefined at script.pl line 7.", DiagnosticCode::DuplicateSubroutine),
+        (
+            "Illegal character in prototype for main::run : ! at script.pl line 9.",
+            DiagnosticCode::InvalidPrototype,
+        ),
+        (
+            "Use of uninitialized value $x in concatenation (.) or string at script.pl line 11.",
+            DiagnosticCode::UninitializedVariable,
+        ),
+        (
+            "Bareword \"foo\" not allowed while 'strict subs' in use at script.pl line 13.",
+            DiagnosticCode::UnquotedBareword,
+        ),
+        (
+            "defined(%hash) is deprecated (it's always defined) at script.pl line 15.",
+            DiagnosticCode::DeprecatedDefined,
+        ),
+    ];
+
+    for (message, expected) in cases {
+        let meta = catalog::from_message(message).ok_or("expected diagnostic metadata")?;
+        assert_eq!(meta.code, expected.as_str(), "message should infer {expected:?}: {message}");
+    }
+
+    Ok(())
+}
+
+#[test]
+fn diagnostic_meta_exposes_context_hint_for_pl_codes_but_not_critic_codes() -> TestResult {
+    let parse_meta = catalog::diagnostic_meta(DiagnosticCode::ParseError);
+    let parse_hint = parse_meta.hint.ok_or("PL001 should expose a context hint")?;
+    assert!(
+        parse_hint.contains("could not parse") || parse_hint.contains("syntax"),
+        "parse hint should explain parser context: {parse_hint}"
+    );
+
+    let critic_meta = catalog::diagnostic_meta(DiagnosticCode::CriticSeverity3);
+    assert!(critic_meta.hint.is_none(), "Perl::Critic metadata should not add generic hints");
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // diagnostic_meta generic entry point
 // ---------------------------------------------------------------------------
 

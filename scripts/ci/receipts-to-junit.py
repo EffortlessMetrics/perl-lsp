@@ -294,7 +294,7 @@ Examples:
     tree = ET.ElementTree(root)
     tree.write(args.output, encoding="utf-8", xml_declaration=True)
 
-    print(f"✓ Generated JUnit XML: {args.output}")
+    print(f"Generated JUnit XML: {args.output}")
     print(f"  Suite: {args.suite_name}")
     print(f"  Tests: {total_tests}, Failures: {total_failures}, Errors: {total_errors}, Skipped: {total_skipped}")
 

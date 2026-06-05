@@ -133,13 +133,48 @@ pub fn read_response_only_timeout(server: &LspServer, dur: Duration) -> Option<V
     }
 }
 
-/// Try to receive a notification (message without id) within `dur`. Returns None on timeout or if a response is received.
+/// Try to receive any notification (message without id) within `dur`.
+///
+/// Responses and unrelated traffic are buffered for later reads so tests can
+/// safely wait for optional notifications while requests are in flight.
 pub fn read_notification_timeout(server: &LspServer, dur: Duration) -> Option<Value> {
-    match server.rx.lock().unwrap_or_else(|e| e.into_inner()).recv_timeout(dur) {
-        Ok(val) if val.get("id").is_none() => Some(val),
-        Ok(_) => None,  // Got a response, not a notification
-        Err(_) => None, // Timeout or disconnected
+    // Scan buffered traffic first. Keep responses and other non-matching
+    // messages in order for the request/response helpers.
+    {
+        let mut pending = server.pending.lock().unwrap_or_else(|e| e.into_inner());
+        let len = pending.len();
+        for _ in 0..len {
+            if let Some(msg) = pending.pop_front() {
+                if msg.get("id").is_none() {
+                    return Some(msg);
+                }
+                pending.push_back(msg);
+            }
+        }
     }
+
+    let deadline = Instant::now() + dur;
+    while Instant::now() < deadline {
+        let recv_result = {
+            let rx = server.rx.lock().unwrap_or_else(|e| e.into_inner());
+            rx.recv_timeout(deadline.saturating_duration_since(Instant::now()))
+        };
+        match recv_result {
+            Ok(msg) => {
+                if msg.get("id").is_none() {
+                    return Some(msg);
+                }
+                let mut pending = server.pending.lock().unwrap_or_else(|e| e.into_inner());
+                if pending.len() >= PENDING_CAP {
+                    pending.pop_front();
+                }
+                pending.push_back(msg);
+            }
+            Err(RecvTimeoutError::Timeout) | Err(RecvTimeoutError::Disconnected) => return None,
+        }
+    }
+
+    None
 }
 
 /// Receive the response matching `id` (number or string), buffering other traffic.

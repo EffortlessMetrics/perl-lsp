@@ -173,13 +173,22 @@ fn validate_title(title: &str, no_gh: bool) -> Result<TitleCheckReceipt> {
     // 1. Issue reference present: regex mirrors the GitHub Actions workflow
     //    `.github/workflows/pr-title-check.yml` which uses /\B#(\d+)\b/g
     // ------------------------------------------------------------------
+    // Policy (issue #724): a zero-valued reference (`#0` / `#0000`) is the
+    // sanctioned placeholder for "issue number not yet known". It is
+    // NON-BLOCKING — warn rather than fail — so agents never guess a real
+    // issue number. A title with NO reference at all is still a hard failure.
     let issue_re = Regex::new(r"\B#(\d+)\b").ok();
-    let issue_ref: Option<u64> = issue_re.as_ref().and_then(|re| {
-        re.captures(title).and_then(|cap| cap.get(1)).and_then(|m| m.as_str().parse().ok())
-    });
-
-    // Reject #0 (Codex placeholder), per the workflow.
-    let issue_ref = issue_ref.filter(|&n| n != 0);
+    let refs: Vec<u64> = issue_re
+        .as_ref()
+        .map(|re| {
+            re.captures_iter(title)
+                .filter_map(|cap| cap.get(1))
+                .filter_map(|m| m.as_str().parse::<u64>().ok())
+                .collect()
+        })
+        .unwrap_or_default();
+    let issue_ref: Option<u64> = refs.iter().copied().find(|&n| n != 0);
+    let has_placeholder = refs.iter().any(|&n| n == 0);
 
     if issue_ref.is_some() {
         checks.push(CheckResult {
@@ -187,13 +196,23 @@ fn validate_title(title: &str, no_gh: bool) -> Result<TitleCheckReceipt> {
             status: CheckStatus::Ok,
             message: None,
         });
+    } else if has_placeholder {
+        checks.push(CheckResult {
+            name: "issue-ref-present".into(),
+            status: CheckStatus::Warn,
+            message: Some(
+                "Placeholder issue reference (#0000) accepted — link a real issue \
+                 before merge. Never guess a real issue number."
+                    .into(),
+            ),
+        });
     } else {
         checks.push(CheckResult {
             name: "issue-ref-present".into(),
             status: CheckStatus::Fail,
             message: Some(
-                "Title must contain an issue reference like (#1234). \
-                 Pattern: \\B#\\d+\\b"
+                "Title must contain an issue reference like (#1234), or (#0000) \
+                 if the issue number is not yet known. Pattern: \\B#\\d+\\b"
                     .into(),
             ),
         });
@@ -424,8 +443,9 @@ fn gh_token_present() -> bool {
 /// Query GitHub REST API to check if an issue exists and whether it is open.
 /// Returns `(exists, open)`.
 fn query_issue(issue_number: u64) -> Result<(bool, bool)> {
-    let url =
-        format!("https://api.github.com/repos/EffortlessMetrics/perl-lsp/issues/{issue_number}");
+    let url = format!(
+        "https://api.github.com/repos/EffortlessMetrics/perl-lsp-swarm/issues/{issue_number}"
+    );
     let out = Command::new("gh").args(["api", &url]).output().context("failed to run `gh api`")?;
 
     if !out.status.success() {

@@ -919,6 +919,7 @@ mod false_branch_coverage {
                 then_branch: Box::new(block_of(vec![])),
                 elsif_branches: vec![],
                 else_branch: None,
+                keyword: None,
             },
             loc(),
         );
@@ -981,6 +982,7 @@ mod false_branch_coverage {
                 then_branch: Box::new(block_of(vec![])),
                 elsif_branches: vec![],
                 else_branch: None,
+                keyword: None,
             },
             loc(),
         );
@@ -998,6 +1000,7 @@ mod false_branch_coverage {
                 condition: Box::new(num("1")),
                 body: Box::new(block_of(vec![])),
                 continue_block: None,
+                keyword: None,
             },
             loc(),
         );
@@ -1070,6 +1073,7 @@ mod false_branch_coverage {
                 then_branch: Box::new(block_of(vec![])),
                 elsif_branches: vec![],
                 else_branch: None,
+                keyword: None,
             },
             loc(),
         );
@@ -1084,6 +1088,7 @@ mod false_branch_coverage {
                 condition: Box::new(num("1")),
                 body: Box::new(block_of(vec![])),
                 continue_block: None,
+                keyword: None,
             },
             loc(),
         );

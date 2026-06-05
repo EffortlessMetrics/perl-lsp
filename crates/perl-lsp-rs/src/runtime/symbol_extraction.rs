@@ -356,7 +356,7 @@ impl LspServer {
                 }
             }
 
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
                 count += self.count_references(condition, symbol_name, symbol_kind);
                 count += self.count_references(then_branch, symbol_name, symbol_kind);
                 for (cond, branch) in elsif_branches {
@@ -368,7 +368,7 @@ impl LspServer {
                 }
             }
 
-            NodeKind::While { condition, body, continue_block }
+            NodeKind::While { condition, body, continue_block, .. }
             | NodeKind::For { condition: Some(condition), body, continue_block, .. } => {
                 count += self.count_references(condition, symbol_name, symbol_kind);
                 count += self.count_references(body, symbol_name, symbol_kind);
@@ -458,5 +458,58 @@ impl LspServer {
         }
 
         count
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_parser::ast::{Node, NodeKind, SourceLocation};
+    use std::io::Cursor;
+
+    fn loc(start: usize, end: usize) -> SourceLocation {
+        SourceLocation { start, end }
+    }
+
+    fn call(name: &str, start: usize) -> Node {
+        Node::new(
+            NodeKind::FunctionCall { name: name.to_string(), args: Vec::new() },
+            loc(start, start + name.len() + 2),
+        )
+    }
+
+    fn bool_node(start: usize) -> Node {
+        Node::new(NodeKind::Number { value: "1".to_string() }, loc(start, start + 1))
+    }
+
+    #[test]
+    fn count_references_visits_if_and_while_children_with_keyword_metadata() {
+        let server =
+            LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(Vec::<u8>::new()));
+        let if_node = Node::new(
+            NodeKind::If {
+                condition: Box::new(call("target", 1)),
+                then_branch: Box::new(call("target", 10)),
+                elsif_branches: vec![(Box::new(bool_node(20)), Box::new(call("target", 24)))],
+                else_branch: Some(Box::new(call("target", 34))),
+                keyword: Some("unless".to_string()),
+            },
+            loc(0, 42),
+        );
+        let while_node = Node::new(
+            NodeKind::While {
+                condition: Box::new(call("target", 44)),
+                body: Box::new(call("target", 54)),
+                continue_block: Some(Box::new(call("target", 64))),
+                keyword: Some("until".to_string()),
+            },
+            loc(43, 72),
+        );
+        let root =
+            Node::new(NodeKind::Program { statements: vec![if_node, while_node] }, loc(0, 72));
+
+        let count = server.count_references(&root, "target", "subroutine");
+
+        assert_eq!(count, 7);
     }
 }

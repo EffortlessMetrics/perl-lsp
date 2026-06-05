@@ -1,0 +1,21 @@
+{
+  "diagnostics": {
+    "severity": "none_or_info",
+    "must_not_contain": [
+      "panic",
+      "workspace root required"
+    ]
+  },
+  "document_symbols": {
+    "must_include": [
+      "greet"
+    ]
+  },
+  "completion": {
+    "allowed_empty": true,
+    "must_not_include_unrelated_workspace_symbols": true
+  },
+  "code_actions": {
+    "empty_when_no_diagnostics": true
+  }
+}

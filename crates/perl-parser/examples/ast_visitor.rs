@@ -28,7 +28,7 @@ trait AstVisitor {
             NodeKind::Unary { operand, .. } => {
                 self.visit_node(operand);
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
                 self.visit_node(condition);
                 self.visit_node(then_branch);
                 for (cond, branch) in elsif_branches {
@@ -125,7 +125,7 @@ impl AstVisitor for VariableUsageCollector {
             NodeKind::Unary { operand, .. } => {
                 self.visit_node(operand);
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
                 self.visit_node(condition);
                 self.visit_node(then_branch);
                 for (cond, branch) in elsif_branches {

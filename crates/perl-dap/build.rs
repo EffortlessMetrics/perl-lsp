@@ -1,3 +1,7 @@
+//! Build script for `perl-dap`.
+//!
+//! Generates `dap_feature_catalog.rs` in `OUT_DIR` from `features.toml`,
+//! embedding the set of advertised DAP features at compile time.
 // Build script - panics are acceptable for build failures.
 // Wave Final PR B: perl-feature-catalog absorbed; catalog logic is package-local
 // so crates.io archives build outside the workspace.

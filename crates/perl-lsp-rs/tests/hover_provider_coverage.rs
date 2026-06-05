@@ -1251,6 +1251,84 @@ with 'MyApp::Printable', 'MyApp::Serializable';
 
     // ── DBI method hover documentation (issue #2888) ──────────────────────
 
+    #[test]
+    fn test_hover_on_require_module_links_virtual_perldoc() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let code = "require MyApp::Worker;\nMyApp::Worker->run;\n";
+        let resp = hover_at(code, "file:///require_hover.pl", "MyApp::Worker", 0)?;
+
+        let content = hover_content(&resp).ok_or("expected hover content for require module")?;
+        assert!(
+            content.contains("MyApp::Worker"),
+            "require module hover should contain the module name, got: {content}"
+        );
+        assert!(
+            content.contains("perldoc://MyApp::Worker"),
+            "require module hover should link to virtual perldoc, got: {content}"
+        );
+        assert!(
+            !content.starts_with("**Perl**:"),
+            "require module hover must not use the generic token fallback, got: {content}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_hover_on_dynamic_require_does_not_link_virtual_perldoc()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = "my $module = 'MyApp::Worker';\nrequire $module;\n";
+        let resp = hover_at(code, "file:///dynamic_require_hover.pl", "$module", 1)?;
+
+        if let Some(content) = hover_content(&resp) {
+            assert!(
+                !content.contains("perldoc://MyApp::Worker"),
+                "dynamic require target must not invent a virtual perldoc link, got: {content}"
+            );
+            assert!(
+                !content.starts_with("**MyApp::Worker**"),
+                "dynamic require target must not become a module hover, got: {content}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_hover_on_require_file_path_does_not_link_virtual_perldoc()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = "require \"MyApp/Worker.pm\";\n";
+        let resp = hover_at(code, "file:///require_file_hover.pl", "MyApp", 0)?;
+
+        if let Some(content) = hover_content(&resp) {
+            assert!(
+                !content.contains("perldoc://MyApp::Worker"),
+                "require file path must not be rewritten into virtual perldoc, got: {content}"
+            );
+            assert!(
+                !content.starts_with("**MyApp::Worker**"),
+                "require file path must not become a module hover, got: {content}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_hover_on_utf8_line_without_require_does_not_panic()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = "use utf8;\nuse strict;\nuse warnings;\n\nmy $name = \"世界\";\nprint $name;\n";
+        let resp = hover_at(code, "file:///utf8_hover_no_require.pl", "$name", 4)?;
+
+        let content = hover_content(&resp).ok_or("expected hover content for UTF-8 line")?;
+        assert!(
+            content.contains("$name") || content.contains("Scalar Variable"),
+            "UTF-8 line hover should still return normal hover content, got: {content}"
+        );
+        assert!(
+            !content.contains("perldoc://"),
+            "non-require UTF-8 line hover must not become a module hover, got: {content}"
+        );
+        Ok(())
+    }
+
     /// Helper: extract signature label from a textDocument/signatureHelp JSON-RPC response.
     fn signature_label(resp: &Value) -> Option<String> {
         resp.get("result")?

@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/droid-live-run.schema.json",
+  "title": "Droid Live Run Receipt",
+  "description": "Records the runtime shape of the Droid PR Review lane.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "check",
+    "schema_version",
+    "event",
+    "verdict",
+    "workflow",
+    "model",
+    "runner_labels",
+    "action",
+    "review_posted",
+    "debug_artifacts_uploaded",
+    "anthropic_env_cleared"
+  ],
+  "properties": {
+    "check": {
+      "const": "droid-live-run"
+    },
+    "schema_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "event": {
+      "const": "pull_request"
+    },
+    "verdict": {
+      "enum": ["pass", "warn"]
+    },
+    "workflow": {
+      "const": "Droid PR Review"
+    },
+    "model": {
+      "const": "custom:MiniMax-M3-0"
+    },
+    "runner_labels": {
+      "type": "array",
+      "prefixItems": [
+        { "const": "self-hosted" },
+        { "const": "linux" },
+        { "const": "x64" },
+        { "const": "em-ci" },
+        { "const": "trusted-pr" },
+        { "const": "review-nano" },
+        { "const": "droid-review" }
+      ],
+      "items": false,
+      "minItems": 7,
+      "maxItems": 7
+    },
+    "action": {
+      "const": "EffortlessMetrics/droid-action-safe"
+    },
+    "review_posted": {
+      "type": "boolean"
+    },
+    "debug_artifacts_uploaded": {
+      "const": false
+    },
+    "anthropic_env_cleared": {
+      "const": true
+    }
+  }
+}

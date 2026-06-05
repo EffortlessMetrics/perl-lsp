@@ -464,7 +464,7 @@ impl IncrementalDocument {
                     }
                 }
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
                 if self.update_token_in_tree(condition, source, edit) {
                     return true;
                 }
@@ -565,7 +565,7 @@ impl IncrementalDocument {
                     return true;
                 }
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
                 if self.insert_reusable(condition, reusable) {
                     return true;
                 }
@@ -672,7 +672,7 @@ impl IncrementalDocument {
             NodeKind::ExpressionStatement { expression } => {
                 **expression = self.adjust_node_position(expression, delta)?;
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
                 **condition = self.adjust_node_position(condition, delta)?;
                 **then_branch = self.adjust_node_position(then_branch, delta)?;
                 for (cond, branch) in elsif_branches {
@@ -760,7 +760,7 @@ impl IncrementalDocument {
                         }
                     }
                 }
-                NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+                NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
                     if let Some(found) = self.find_in_node(condition, pos) {
                         return Some(found);
                     }
@@ -849,7 +849,7 @@ impl IncrementalDocument {
             NodeKind::ExpressionStatement { expression } => {
                 self.cache_node(expression);
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
                 self.cache_node(condition);
                 self.cache_node(then_branch);
                 for (cond, branch) in elsif_branches {
@@ -947,7 +947,7 @@ impl IncrementalDocument {
             NodeKind::ExpressionStatement { expression } => {
                 count += self.count_nodes(expression);
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
                 count += self.count_nodes(condition);
                 count += self.count_nodes(then_branch);
                 for (cond, branch) in elsif_branches {
@@ -1297,6 +1297,55 @@ mod tests {
         let edit = IncrementalEdit::new(pos, pos + 1, "10".to_string());
         doc.apply_edit(edit)?;
         assert!(doc.subtree_cache.by_content.len() <= 1);
+
+        Ok(())
+    }
+
+    fn loc(start: usize, end: usize) -> perl_parser_core::ast::SourceLocation {
+        perl_parser_core::ast::SourceLocation { start, end }
+    }
+
+    fn number(start: usize, value: &str) -> Node {
+        Node::new(NodeKind::Number { value: value.to_string() }, loc(start, start + value.len()))
+    }
+
+    fn block(statements: Vec<Node>, start: usize, end: usize) -> Node {
+        Node::new(NodeKind::Block { statements }, loc(start, end))
+    }
+
+    fn if_tree() -> Node {
+        Node::new(
+            NodeKind::If {
+                condition: Box::new(number(1, "1")),
+                then_branch: Box::new(block(vec![number(6, "2")], 5, 9)),
+                elsif_branches: vec![(
+                    Box::new(number(12, "3")),
+                    Box::new(block(vec![number(17, "4")], 16, 20)),
+                )],
+                else_branch: Some(Box::new(block(vec![number(25, "5")], 24, 28))),
+                keyword: Some("unless".to_string()),
+            },
+            loc(0, 29),
+        )
+    }
+
+    #[test]
+    fn if_keyword_metadata_does_not_block_incremental_traversal_helpers() -> ParseResult<()> {
+        let mut doc = IncrementalDocument::new("1".to_string())?;
+        doc.root = Arc::new(if_tree());
+
+        assert_eq!(doc.count_nodes(&doc.root), 9);
+        assert_eq!(doc.find_node_at_position(6).map(|node| node.location.start), Some(6));
+
+        assert_eq!(doc.adjust_node_position(&doc.root, 2).map(|node| node.location.start), Some(2));
+
+        let reusable = Arc::new(number(25, "9"));
+        let mut target = if_tree();
+        assert!(doc.insert_reusable(&mut target, &reusable));
+
+        let mut token_target = if_tree();
+        let edit = IncrementalEdit::new(1, 2, "7".to_string());
+        assert!(doc.update_token_in_children(&mut token_target, " 7", &edit));
 
         Ok(())
     }

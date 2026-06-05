@@ -213,7 +213,7 @@ impl DocumentHighlightProvider {
             }
             NodeKind::FunctionCall { args, .. } => Some(args.iter().collect()),
             NodeKind::Block { statements } => Some(statements.iter().collect()),
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
                 let mut children = vec![condition.as_ref(), then_branch.as_ref()];
                 for (cond, branch) in elsif_branches {
                     children.push(cond.as_ref());
@@ -784,6 +784,44 @@ impl DocumentHighlightProvider {
             }
             _ => DocumentHighlightKind::Read,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn loc(start: usize, end: usize) -> SourceLocation {
+        SourceLocation { start, end }
+    }
+
+    fn ident(name: &str, start: usize) -> Node {
+        Node::new(NodeKind::Identifier { name: name.to_string() }, loc(start, start + name.len()))
+    }
+
+    #[test]
+    fn get_children_preserves_if_branch_traversal_with_keyword_metadata()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let node = Node::new(
+            NodeKind::If {
+                condition: Box::new(ident("cond", 1)),
+                then_branch: Box::new(ident("then_branch", 7)),
+                elsif_branches: vec![(
+                    Box::new(ident("elsif_cond", 20)),
+                    Box::new(ident("elsif_branch", 32)),
+                )],
+                else_branch: Some(Box::new(ident("else_branch", 46))),
+                keyword: Some("unless".to_string()),
+            },
+            loc(0, 57),
+        );
+        let provider = DocumentHighlightProvider::new();
+
+        let children = provider.get_children(&node).ok_or("If nodes should expose children")?;
+
+        assert_eq!(children.len(), 5);
+        assert!(matches!(children[0].kind, NodeKind::Identifier { .. }));
+        Ok(())
     }
 }
 

@@ -873,6 +873,7 @@ fn if_branches_traversed() -> Result<(), Box<dyn std::error::Error>> {
     let else_branch = block(vec![no_node("strict", &["refs"], 45, 60)], 42, 65);
     let if_node = Node {
         kind: NodeKind::If {
+            keyword: None,
             condition: Box::new(dummy_node(10, 15)),
             then_branch: Box::new(then_branch),
             elsif_branches: vec![],
@@ -900,6 +901,7 @@ fn if_elsif_else_branches_restore_state() -> Result<(), Box<dyn std::error::Erro
     let else_branch = block(vec![no_node("strict", &["subs"], 70, 85)], 68, 90);
     let if_node = Node {
         kind: NodeKind::If {
+            keyword: None,
             condition: Box::new(dummy_node(10, 15)),
             then_branch: Box::new(then_branch),
             elsif_branches: vec![(Box::new(dummy_node(41, 42)), Box::new(elsif_branch))],
@@ -931,6 +933,7 @@ fn while_body_traversed() -> Result<(), Box<dyn std::error::Error>> {
     let body = block(vec![use_node("warnings", &[], 20, 35)], 18, 40);
     let while_node = Node {
         kind: NodeKind::While {
+            keyword: None,
             condition: Box::new(dummy_node(10, 15)),
             body: Box::new(body),
             continue_block: None,
@@ -1564,6 +1567,7 @@ fn if_without_else_does_not_panic() -> Result<(), Box<dyn std::error::Error>> {
     let then_branch = block(vec![use_node("warnings", &[], 20, 35)], 18, 40);
     let if_node = Node {
         kind: NodeKind::If {
+            keyword: None,
             condition: Box::new(dummy_node(10, 15)),
             then_branch: Box::new(then_branch),
             elsif_branches: vec![],
@@ -1971,6 +1975,7 @@ fn default_node(body_node: Node, start: usize, end: usize) -> Node {
 fn while_node(body_node: Node, continue_node: Option<Node>, start: usize, end: usize) -> Node {
     Node {
         kind: NodeKind::While {
+            keyword: None,
             condition: Box::new(dummy_node(start + 1, start + 2)),
             body: Box::new(body_node),
             continue_block: continue_node.map(Box::new),
