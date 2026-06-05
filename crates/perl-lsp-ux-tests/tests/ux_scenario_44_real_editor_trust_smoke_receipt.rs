@@ -139,6 +139,19 @@ fn has_pl701(diagnostics: &[Value]) -> bool {
     })
 }
 
+fn setup_hint_codes(report: &Value) -> Vec<String> {
+    report
+        .pointer("/setup_hints/hints")
+        .and_then(Value::as_array)
+        .map(|hints| {
+            hints
+                .iter()
+                .filter_map(|hint| hint.get("code").and_then(Value::as_str).map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn completion_item_has_shape(item: &Value) -> bool {
     item.get("label").and_then(Value::as_str).is_some()
         || item.get("insertText").and_then(Value::as_str).is_some()
@@ -330,10 +343,29 @@ fn scenario_44_real_editor_trust_smoke_receipt() {
                 .get("claim_boundary")
                 .and_then(Value::as_str)
                 .is_some_and(|claim| claim.contains("does not scan files"));
+            let trust_setup_boundary_mentions_no_probe = trust_report
+                .pointer("/setup_hints/claim_boundary")
+                .and_then(Value::as_str)
+                .is_some_and(|claim| {
+                    claim.contains("do not resolve Perl")
+                        && claim.contains("change provider behavior")
+                });
+            let trust_setup_hint_count = trust_report
+                .pointer("/setup_hints/hint_count")
+                .and_then(Value::as_u64)
+                .unwrap_or(0);
+            let trust_setup_hint_codes = setup_hint_codes(&trust_report);
+            let trust_setup_hints_visible =
+                trust_report.pointer("/setup_hints/hints").and_then(Value::as_array).is_some_and(
+                    |hints| u64::try_from(hints.len()).ok() == Some(trust_setup_hint_count),
+                );
             reports.push(TrustSurfaceReport {
                 surface: "workspace_trust_report",
                 decision: "acted".to_string(),
-                reason: format!("schema_version={}", trust_schema.unwrap_or("missing")),
+                reason: format!(
+                    "schema_version={}; setup_hint_count={trust_setup_hint_count}; setup_hint_codes={trust_setup_hint_codes:?}",
+                    trust_schema.unwrap_or("missing")
+                ),
                 fact_source: text("existing_server_state"),
                 confidence: text("bounded_report"),
                 freshness: text("current_runtime_state"),
@@ -430,20 +462,36 @@ fn scenario_44_real_editor_trust_smoke_receipt() {
                 "refused_no_edit_count": refused_no_edit_count,
                 "workspace_trust_report_schema": trust_schema,
                 "workspace_trust_report_no_scan_boundary": trust_boundary_mentions_no_scan,
+                "workspace_trust_report_setup_hint_count": trust_setup_hint_count,
+                "workspace_trust_report_setup_hint_codes": trust_setup_hint_codes,
+                "workspace_trust_report_setup_hints_visible": trust_setup_hints_visible,
+                "workspace_trust_report_setup_no_probe_boundary": trust_setup_boundary_mentions_no_probe,
                 "safe_delete_preview_edits_applied": safe_delete_edits_applied,
                 "explain_provider_decision_copyable_payload": copyable_payload_present,
                 "surfaces": reports,
             });
-            eprintln!(
-                "real_perl_editor_trust_smoke_receipt={}",
-                serde_json::to_string_pretty(&receipt)?,
-            );
+            // UX receipt scenarios print their detailed payload during `--nocapture` runs.
+            #[allow(clippy::print_stderr)]
+            {
+                eprintln!(
+                    "real_perl_editor_trust_smoke_receipt={}",
+                    serde_json::to_string_pretty(&receipt)?,
+                );
+            }
 
             recorder.check("smoke receipt covered six trust surfaces", reports.len() == 6)?;
             recorder.check("at least one provider acted", acted_count > 0)?;
             recorder.check(
                 "workspace trust report kept no-scan boundary visible",
                 trust_boundary_mentions_no_scan,
+            )?;
+            recorder.check(
+                "workspace trust report surfaced setup hint count",
+                trust_setup_hint_count > 0 && trust_setup_hints_visible,
+            )?;
+            recorder.check(
+                "workspace trust report kept setup-hint no-probe boundary visible",
+                trust_setup_boundary_mentions_no_probe,
             )?;
             recorder.check(
                 "safe-delete preview refused helper without applying edits",
