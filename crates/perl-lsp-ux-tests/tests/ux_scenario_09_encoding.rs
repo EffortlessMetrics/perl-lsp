@@ -1,5 +1,7 @@
-// Test infrastructure — allow test-friendly patterns.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+// Test infrastructure needs skip/status messages when the external binary is absent.
+#![allow(clippy::print_stderr)]
+// Test assertions intentionally panic with UX-specific failure messages.
+#![allow(clippy::panic)]
 
 //! Scenario 09 — BOM and encoding edge cases.
 //!
@@ -9,56 +11,78 @@
 //! Acceptance criteria:
 //! - Server MUST NOT crash for any of these inputs.
 //! - No error-level `window/showMessage` for encoding issues.
-//! - Hover and completion MUST NOT crash (empty results OK).
+//! - UTF-8 BOM files MUST still expose normal Perl document symbols.
+//! - Hover MUST NOT crash.
 
+use anyhow::Result;
 use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
+use serde_json::Value;
+use std::time::Duration;
+
+const BOM_SYMBOL_SOURCE: &str = "\
+use strict;\n\
+use warnings;\n\
+\n\
+sub decode_payload {\n\
+    return 1;\n\
+}\n\
+\n\
+decode_payload();\n\
+";
 
 #[test]
-fn scenario_09_utf8_bom_file_does_not_crash() {
+fn scenario_09_utf8_bom_file_preserves_document_symbols() -> Result<()> {
     if !binary_available() {
         eprintln!("SKIP scenario_09: perl-lsp binary not found");
-        return;
+        return Ok(());
     }
 
-    let bom = "\u{FEFF}";
-    let source = format!("{bom}use strict;\nuse warnings;\nmy $x = 1;\n");
-    let harness = UxHarness::new(ScenarioConfig::default()).expect("Failed to create UX harness");
+    let source = format!("\u{FEFF}{BOM_SYMBOL_SOURCE}");
+    let harness = UxHarness::new(ScenarioConfig::default().with_file("bom.pl", &source))?;
 
-    harness.open_file("bom.pl", &source).expect("didOpen should succeed with UTF-8 BOM");
+    harness.open_file("bom.pl", &source)?;
 
-    let hover = harness.hover("bom.pl", 2, 3);
-    assert!(hover.is_ok(), "hover crashed on UTF-8 BOM file — UX regression: {:?}", hover);
+    std::thread::sleep(Duration::from_millis(300));
+
+    let symbols = harness.document_symbols("bom.pl")?;
+    assert!(
+        symbols.iter().any(|symbol| symbol_name_matches(symbol, "decode_payload")),
+        "expected UTF-8 BOM file to expose decode_payload document symbol, got: {symbols:?}"
+    );
+
+    harness.hover("bom.pl", 7, 0)?;
 
     harness.assert_no_crash();
+    Ok(())
 }
 
 #[test]
-fn scenario_09_unicode_in_strings_does_not_crash() {
+fn scenario_09_unicode_in_strings_does_not_crash() -> Result<()> {
     if !binary_available() {
         eprintln!("SKIP scenario_09: perl-lsp binary not found");
-        return;
+        return Ok(());
     }
 
     // Unicode characters in string literals (valid UTF-8, common in i18n Perl code).
     let source = "use utf8;\nuse strict;\nuse warnings;\n\n\
                   my $name = \"\u{4E16}\u{754C}\";\n\
                   print \"Hello, $name\\n\";\n";
-    let harness = UxHarness::new(ScenarioConfig::default()).expect("Failed to create UX harness");
+    let harness = UxHarness::new(ScenarioConfig::default())?;
 
-    harness.open_file("utf8_decl.pl", source).expect("didOpen should succeed with use utf8");
+    harness.open_file("utf8_decl.pl", source)?;
 
-    let hover = harness.hover("utf8_decl.pl", 4, 3);
-    assert!(hover.is_ok(), "hover crashed on use utf8 file — UX regression: {:?}", hover);
+    harness.hover("utf8_decl.pl", 4, 3)?;
 
     harness.assert_no_crash();
+    Ok(())
 }
 
 #[test]
-fn scenario_09_high_codepoint_comments_do_not_crash() {
+fn scenario_09_high_codepoint_comments_do_not_crash() -> Result<()> {
     if !binary_available() {
         eprintln!("SKIP scenario_09: perl-lsp binary not found");
-        return;
+        return Ok(());
     }
 
     // Em-dashes and smart-quotes in comments — common in legacy Perl codebases.
@@ -67,31 +91,35 @@ fn scenario_09_high_codepoint_comments_do_not_crash() {
                   # And \u{201C}smart quotes\u{201D}\n\
                   use strict;\n\
                   my $x = 1; # \u{2013} some note\n";
-    let harness = UxHarness::new(ScenarioConfig::default()).expect("Failed to create UX harness");
+    let harness = UxHarness::new(ScenarioConfig::default())?;
 
-    harness.open_file("smart_quotes.pl", source).expect("didOpen should succeed");
+    harness.open_file("smart_quotes.pl", source)?;
 
-    let hover = harness.hover("smart_quotes.pl", 4, 5);
-    assert!(hover.is_ok(), "hover crashed on smart-quote comment — UX regression: {:?}", hover);
+    harness.hover("smart_quotes.pl", 4, 5)?;
 
     harness.assert_no_crash();
+    Ok(())
 }
 
 #[test]
-fn scenario_09_latin1_extended_chars_in_comment() {
+fn scenario_09_latin1_extended_chars_in_comment() -> Result<()> {
     if !binary_available() {
         eprintln!("SKIP scenario_09: perl-lsp binary not found");
-        return;
+        return Ok(());
     }
 
     // Latin-1 supplemental characters (U+00E0..U+00FF) in a comment.
     let source = "use strict;\nuse warnings;\n# café résumé naïve\nmy $x = 1;\n";
-    let harness = UxHarness::new(ScenarioConfig::default()).expect("Failed to create UX harness");
+    let harness = UxHarness::new(ScenarioConfig::default())?;
 
-    harness.open_file("latin1.pl", source).expect("didOpen should succeed");
+    harness.open_file("latin1.pl", source)?;
 
-    let hover = harness.hover("latin1.pl", 3, 3);
-    assert!(hover.is_ok(), "hover crashed on Latin-1 comment — UX regression: {:?}", hover);
+    harness.hover("latin1.pl", 3, 3)?;
 
     harness.assert_no_crash();
+    Ok(())
+}
+
+fn symbol_name_matches(symbol: &Value, expected: &str) -> bool {
+    symbol.get("name").and_then(Value::as_str) == Some(expected)
 }

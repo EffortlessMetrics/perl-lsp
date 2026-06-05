@@ -238,6 +238,7 @@
       ],
       "expected_outcomes": [
         "encoding edge cases do not crash the server",
+        "UTF-8 BOM files expose normal Perl document symbols",
         "user workflow remains intact"
       ],
       "confidence_signals": [
