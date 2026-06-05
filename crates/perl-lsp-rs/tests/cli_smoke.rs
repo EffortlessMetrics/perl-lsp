@@ -57,7 +57,8 @@ fn check_nonexistent_file() {
         .arg("/nonexistent/path/to/file.pl")
         .assert()
         .failure()
-        .stderr(predicates::str::contains("error reading file"));
+        .stderr(predicates::str::contains("error reading file"))
+        .stderr(predicates::str::contains("help: check the path"));
 }
 
 #[test]
