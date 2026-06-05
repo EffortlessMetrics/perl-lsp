@@ -289,7 +289,7 @@
         "workflow_stability_rate"
       ],
       "expected_outcomes": [
-        "hover request returns useful structure or clean empty result",
+        "hover over a known lexical variable returns useful contents",
         "request does not error"
       ],
       "confidence_signals": [
