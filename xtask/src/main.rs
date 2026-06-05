@@ -213,6 +213,23 @@ enum Commands {
         receipt: PathBuf,
     },
 
+    /// Run release UX smoke fixtures over stdio and optionally write receipts.
+    #[command(name = "lsp-ux-smoke")]
+    LspUxSmoke {
+        /// Fixture root containing manifest.json and scenario directories.
+        #[arg(long, default_value = "testdata/ux/release_smoke")]
+        fixture: PathBuf,
+        /// Write JSON and Markdown receipts under target/receipts/ux.
+        #[arg(long)]
+        receipt: bool,
+        /// Existing perl-lsp binary to run instead of building target/agent/perl-lsp.
+        #[arg(long)]
+        binary: Option<PathBuf>,
+        /// Do not auto-build perl-lsp when --binary is omitted.
+        #[arg(long)]
+        no_build: bool,
+    },
+
     /// Regenerate public Shields endpoint JSON for README badges.
     Badges {
         /// Check committed endpoints for drift without updating badges/.
@@ -2807,6 +2824,14 @@ fn main() -> Result<()> {
         Commands::SemanticInlineNextEdit { receipt } => semantic_inline_next_edit::run(receipt),
         Commands::SupportedEditorInlineSmoke { receipt } => {
             supported_editor_inline_smoke::run(receipt)
+        }
+        Commands::LspUxSmoke { fixture, receipt, binary, no_build } => {
+            lsp_ux_smoke::run(lsp_ux_smoke::LspUxSmokeConfig {
+                fixture_root: fixture,
+                emit_receipt: receipt,
+                binary,
+                no_build,
+            })
         }
         Commands::Badges { check } => badges::run(check),
         Commands::CoverageBaseline {
