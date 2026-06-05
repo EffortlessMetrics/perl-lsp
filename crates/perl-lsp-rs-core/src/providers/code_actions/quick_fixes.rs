@@ -1964,6 +1964,50 @@ fn parse_printf_format_mismatch(message: &str) -> Option<(usize, String)> {
     specifiers.checked_sub(supplied).filter(|&n| n > 0).map(|n| (n, call_name))
 }
 
+/// Remove the undefined label from a `next LABEL`, `last LABEL`, or `redo LABEL`
+/// statement so it targets the innermost enclosing loop instead (PL410).
+///
+/// At runtime Perl dies with `Label not found for "next LABEL"` when the label
+/// is absent. The only safe automated fix is to drop the label entirely, making
+/// the statement target the innermost enclosing loop.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((start, end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let Some(text) = source.get(start..end) else {
+        return Vec::new();
+    };
+
+    let op = text.split_whitespace().next().unwrap_or("");
+    if !matches!(op, "next" | "last" | "redo") {
+        return Vec::new();
+    }
+
+    // Message form: "`next OUTER` references a label that is not defined in this file"
+    let label_name = diagnostic
+        .message
+        .split('`')
+        .nth(1)
+        .and_then(|inner| inner.split_whitespace().nth(1))
+        .unwrap_or("label");
+
+    vec![CodeAction {
+        title: format!("Remove undefined label '{label_name}': target innermost enclosing loop"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start, end },
+                new_text: op.to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
 fn diagnostic_line_range(source: &str, range: (usize, usize)) -> Option<(usize, usize)> {
     let (start, end) = valid_diagnostic_range(source, range)?;
     let line_start = source[..start].rfind('\n').map_or(0, |idx| idx + 1);
