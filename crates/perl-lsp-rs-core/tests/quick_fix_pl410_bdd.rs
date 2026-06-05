@@ -81,8 +81,12 @@ fn pl410_next_undefined_label_produces_drop_action() -> Result<(), Box<dyn std::
 
     // AND the edit replaces `next OUTER` with bare `next`
     let result = edited(source, action);
-    assert!(result.contains("next;") || result.contains("next ") || result == source.replace("next OUTER", "next"),
-        "edit should reduce 'next OUTER' to 'next', got: {result:?}");
+    assert!(
+        result.contains("next;")
+            || result.contains("next ")
+            || result == source.replace("next OUTER", "next"),
+        "edit should reduce 'next OUTER' to 'next', got: {result:?}"
+    );
     assert!(!result.contains("OUTER"), "label should be removed from source, got: {result:?}");
 
     Ok(())
@@ -211,10 +215,7 @@ fn pl410_out_of_bounds_range_returns_no_actions() -> Result<(), Box<dyn std::err
 
     // THEN no drop-label action is produced (guard prevented out-of-bounds access)
     let has_drop = actions.iter().any(|a| a.title.contains("Drop"));
-    assert!(
-        !has_drop,
-        "expected no PL410 action for out-of-bounds range, got: {actions:?}"
-    );
+    assert!(!has_drop, "expected no PL410 action for out-of-bounds range, got: {actions:?}");
 
     Ok(())
 }
@@ -244,7 +245,8 @@ fn pl410_dispatch_smoke_test_handler_is_wired() -> Result<(), Box<dyn std::error
 
     let actions = provider.get_code_actions(&ast, (0, source.len()), &diags);
 
-    let has_pl410_action = actions.iter().any(|a| a.title.contains("Drop") && a.title.contains("GHOST"));
+    let has_pl410_action =
+        actions.iter().any(|a| a.title.contains("Drop") && a.title.contains("GHOST"));
     assert!(
         has_pl410_action,
         "PL410 route not producing action — handler may not be wired; actions: {actions:?}"
