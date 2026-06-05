@@ -1153,16 +1153,18 @@
       "ci_tier": "pr",
       "component": "diagnostics",
       "instrumentation": {
-        "run_receipt": false,
-        "first_useful_result": false,
+        "run_receipt": true,
+        "first_useful_result": true,
         "protocol_goldens": false
       },
       "user_journey": "introduce a syntax error then fix it and verify publishDiagnostics clears",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
+        "receipt records initial diagnostics and post-fix clearing timing",
         "broken content yields diagnostics",
         "fixed content clears diagnostics for the same document"
       ],
