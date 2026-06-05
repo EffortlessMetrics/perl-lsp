@@ -150,8 +150,8 @@
       "ci_tier": "nightly",
       "component": "infra",
       "instrumentation": {
-        "run_receipt": false,
-        "first_useful_result": false,
+        "run_receipt": true,
+        "first_useful_result": true,
         "protocol_goldens": false
       },
       "user_journey": "open a large file and wait for the first useful response",
@@ -162,6 +162,7 @@
         "multi_root_workspace_navigation_success_rate"
       ],
       "expected_outcomes": [
+        "receipt records large-file open to first hover timing",
         "large files do not crash the server",
         "large-file workflow stays within latency budget"
       ],
