@@ -1171,6 +1171,30 @@ required = false
     }
 
     #[test]
+    fn merge_ready_live_ci_classifier_blocks_failed_required_proof_context() {
+        let checks = vec![
+            successful_check("Perl LSP Rust Small Result"),
+            successful_check("ripr+ New Gap Gate"),
+            serde_json::json!({
+                "name": "Codecov / Patch 95",
+                "conclusion": "FAILURE",
+                "status": "COMPLETED",
+                "headSha": "current-head"
+            }),
+            successful_check("codecov/patch"),
+        ];
+        let required = required_checks(&[
+            "Perl LSP Rust Small Result",
+            "ripr+ New Gap Gate",
+            "Codecov / Patch 95",
+            "codecov/patch",
+        ]);
+
+        let outcome = classify_live_ci_state(&checks, &required, Some("current-head"));
+        assert_eq!(outcome, CiOutcome::Failure);
+    }
+
+    #[test]
     fn merge_ready_live_ci_classifier_blocks_skipped_required_proof_context() {
         let checks = vec![
             successful_check("Perl LSP Rust Small Result"),
@@ -1230,6 +1254,46 @@ required = false
                 "name": "advisory-lint",
                 "conclusion": "FAILURE",
                 "status": "COMPLETED"
+            }),
+        ];
+        let required = required_checks(&[
+            "Perl LSP Rust Small Result",
+            "ripr+ New Gap Gate",
+            "Codecov / Patch 95",
+            "codecov/patch",
+        ]);
+
+        let outcome = classify_live_ci_state(&checks, &required, Some("current-head"));
+        assert_eq!(outcome, CiOutcome::Success);
+    }
+
+    #[test]
+    fn merge_ready_live_ci_classifier_ignores_non_required_noisy_contexts() {
+        let checks = vec![
+            successful_check("Perl LSP Rust Small Result"),
+            successful_check("ripr+ New Gap Gate"),
+            successful_check("Codecov / Patch 95"),
+            serde_json::json!({
+                "context": "codecov/patch",
+                "state": "SUCCESS"
+            }),
+            serde_json::json!({
+                "name": "advisory-lint",
+                "conclusion": "FAILURE",
+                "status": "COMPLETED",
+                "headSha": "current-head"
+            }),
+            serde_json::json!({
+                "name": "optional-docs",
+                "conclusion": "",
+                "status": "IN_PROGRESS",
+                "headSha": "current-head"
+            }),
+            serde_json::json!({
+                "name": "optional-skip",
+                "conclusion": "SKIPPED",
+                "status": "COMPLETED",
+                "headSha": "current-head"
             }),
         ];
         let required = required_checks(&[
