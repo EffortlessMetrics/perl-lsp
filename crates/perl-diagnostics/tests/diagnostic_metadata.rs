@@ -1,13 +1,10 @@
-//! Property coverage for the diagnostic code registry and LSP metadata bridge.
+//! Exhaustive coverage for the diagnostic code registry and LSP metadata bridge.
 //!
-//! These tests exercise every known diagnostic variant through generated case
-//! selection so newly added codes must keep parse, URL, hint, and tag metadata
-//! internally consistent.
+//! These tests exercise every known diagnostic variant so newly added codes must
+//! keep parse, URL, hint, and tag metadata internally consistent.
 
 use perl_diagnostics::catalog::diagnostic_meta;
 use perl_diagnostics::codes::{DiagnosticCategory, DiagnosticCode, DiagnosticTag};
-use proptest::prelude::*;
-use proptest::test_runner::{Config, TestRunner};
 
 const DIAGNOSTIC_CODES: &[DiagnosticCode] = &[
     DiagnosticCode::ParseError,
@@ -72,66 +69,56 @@ const DIAGNOSTIC_CODES: &[DiagnosticCode] = &[
     DiagnosticCode::CriticSeverity5,
 ];
 
-fn diagnostic_code_strategy() -> impl Strategy<Value = DiagnosticCode> {
-    prop::sample::select(DIAGNOSTIC_CODES)
-}
-
 fn known_code_string(code: &str) -> bool {
     DiagnosticCode::parse_code(code).is_some()
 }
 
 #[test]
-fn prop_diagnostic_code_registry_round_trips() -> Result<(), Box<dyn std::error::Error>> {
-    let mut runner = TestRunner::new(Config::with_cases(256));
-
-    runner.run(&diagnostic_code_strategy(), |code| {
+fn diagnostic_code_registry_round_trips() -> Result<(), Box<dyn std::error::Error>> {
+    for code in DIAGNOSTIC_CODES {
         let code_string = code.as_str();
 
-        prop_assert_eq!(DiagnosticCode::parse_code(code_string), Some(code));
-        prop_assert!(code_string.len() == 5);
-        prop_assert!(code_string.starts_with("PL") || code_string.starts_with("PC"));
-        prop_assert_eq!(
+        assert_eq!(DiagnosticCode::parse_code(code_string), Some(*code));
+        assert!(code_string.len() == 5);
+        assert!(code_string.starts_with("PL") || code_string.starts_with("PC"));
+        assert_eq!(
             code_string.starts_with("PC"),
             code.category() == DiagnosticCategory::PerlCritic
         );
 
-        let meta = diagnostic_meta(code);
-        prop_assert_eq!(meta.code, serde_json::json!(code_string));
+        let meta = diagnostic_meta(*code);
+        assert_eq!(meta.code, serde_json::json!(code_string));
 
         if code_string.starts_with("PL") {
             let expected_url = format!("https://docs.perl-lsp.org/errors/{code_string}");
-            prop_assert_eq!(code.documentation_url(), Some(expected_url.as_str()));
-            prop_assert_eq!(meta.desc, Some(serde_json::json!({ "href": expected_url })));
-            prop_assert!(meta.hint.is_some());
+            assert_eq!(code.documentation_url(), Some(expected_url.as_str()));
+            assert_eq!(meta.desc, Some(serde_json::json!({ "href": expected_url })));
+            assert!(meta.hint.is_some());
         } else {
-            prop_assert_eq!(code.documentation_url(), None);
-            prop_assert_eq!(meta.desc, None);
-            prop_assert_eq!(meta.hint, None);
+            assert_eq!(code.documentation_url(), None);
+            assert_eq!(meta.desc, None);
+            assert_eq!(meta.hint, None);
         }
-
-        Ok(())
-    })?;
+    }
 
     Ok(())
 }
 
 #[test]
-fn prop_diagnostic_tags_are_lsp_safe_and_deterministic() -> Result<(), Box<dyn std::error::Error>> {
-    let mut runner = TestRunner::new(Config::with_cases(256));
-
-    runner.run(&diagnostic_code_strategy(), |code| {
+fn diagnostic_tags_are_lsp_safe_and_deterministic() -> Result<(), Box<dyn std::error::Error>> {
+    for code in DIAGNOSTIC_CODES {
         let tags = code.tags();
-        prop_assert!(tags.len() <= 1);
+        assert!(tags.len() <= 1);
 
         for tag in tags {
-            prop_assert!(matches!(tag.to_lsp_value(), 1 | 2));
+            assert!(matches!(tag.to_lsp_value(), 1 | 2));
         }
 
-        prop_assert_eq!(
+        assert_eq!(
             tags.contains(&DiagnosticTag::Deprecated),
             matches!(code, DiagnosticCode::DeprecatedDefined | DiagnosticCode::DeprecatedArrayBase)
         );
-        prop_assert_eq!(
+        assert_eq!(
             tags.contains(&DiagnosticTag::Unnecessary),
             matches!(
                 code,
@@ -141,24 +128,28 @@ fn prop_diagnostic_tags_are_lsp_safe_and_deterministic() -> Result<(), Box<dyn s
                     | DiagnosticCode::UnreachableCode
             )
         );
-
-        Ok(())
-    })?;
+    }
 
     Ok(())
 }
 
 #[test]
-fn prop_unknown_formatted_code_strings_do_not_parse() -> Result<(), Box<dyn std::error::Error>> {
-    let candidate = (prop_oneof![Just("PL"), Just("PC"), Just("PX")], 0_u16..1000)
-        .prop_map(|(prefix, number)| format!("{prefix}{number:03}"));
-    let mut runner = TestRunner::new(Config::with_cases(512));
+fn unknown_formatted_code_strings_do_not_parse() -> Result<(), Box<dyn std::error::Error>> {
+    for prefix in ["PL", "PC", "PX"] {
+        for number in 0_u16..1000 {
+            let code_string = format!("{prefix}{number:03}");
 
-    runner.run(&candidate, |code_string| {
-        prop_assume!(!known_code_string(&code_string));
-        prop_assert_eq!(DiagnosticCode::parse_code(&code_string), None);
-        Ok(())
-    })?;
+            if known_code_string(&code_string) {
+                continue;
+            }
+
+            assert_eq!(
+                DiagnosticCode::parse_code(&code_string),
+                None,
+                "{code_string} should not parse as a known diagnostic code"
+            );
+        }
+    }
 
     Ok(())
 }
