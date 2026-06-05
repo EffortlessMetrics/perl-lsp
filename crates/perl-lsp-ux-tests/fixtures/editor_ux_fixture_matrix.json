@@ -286,9 +286,11 @@
       "user_journey": "run hover over names and variables in a representative file",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
+        "receipt records hover timing and shape checks",
         "hover request returns useful structure or clean empty result",
         "request does not error"
       ],
