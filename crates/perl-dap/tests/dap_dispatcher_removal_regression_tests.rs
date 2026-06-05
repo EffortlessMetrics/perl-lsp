@@ -216,7 +216,8 @@ fn set_breakpoints_preserves_request_order_through_dispatch() {
 /// the dispatch handler must reject `arguments: None` with a structured
 /// failure response - never panic, never return success.
 #[test]
-fn set_breakpoints_with_missing_arguments_fails_structured() {
+fn set_breakpoints_with_missing_arguments_fails_structured()
+-> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = DebugAdapter::new();
     let response = adapter.handle_request(1, "setBreakpoints", None);
 
@@ -224,10 +225,46 @@ fn set_breakpoints_with_missing_arguments_fails_structured() {
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success, "missing arguments must produce success=false");
             assert_eq!(command, "setBreakpoints");
-            assert!(message.is_some(), "missing arguments must include an error message");
+            let message = message.ok_or("missing arguments must include an error message")?;
+            assert!(
+                message.contains("source.path"),
+                "missing arguments should name the required source path field: {message}"
+            );
+            assert!(
+                message.contains("\"breakpoints\""),
+                "missing arguments should show the breakpoints array shape: {message}"
+            );
         }
         other => must(Err::<(), _>(format!("expected Response, got {other:?}"))),
     }
+
+    Ok(())
+}
+
+#[test]
+fn set_breakpoints_with_invalid_arguments_guides_request_shape()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut adapter = DebugAdapter::new();
+    let response = adapter.handle_request(1, "setBreakpoints", Some(json!({})));
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "invalid arguments must produce success=false");
+            assert_eq!(command, "setBreakpoints");
+            let message = message.ok_or("invalid arguments must include an error message")?;
+            assert!(
+                message.contains("source.path"),
+                "invalid arguments should name the required source path field: {message}"
+            );
+            assert!(
+                message.contains("\"line\": 1"),
+                "invalid arguments should show a breakpoint line example: {message}"
+            );
+        }
+        other => must(Err::<(), _>(format!("expected Response, got {other:?}"))),
+    }
+
+    Ok(())
 }
 
 // --- inlineValues -------------------------------------------------------------
