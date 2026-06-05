@@ -1205,16 +1205,18 @@
       "ci_tier": "pr",
       "component": "code_lens",
       "instrumentation": {
-        "run_receipt": false,
-        "first_useful_result": false,
+        "run_receipt": true,
+        "first_useful_result": true,
         "protocol_goldens": false
       },
       "user_journey": "request and resolve code lenses for Perl modules and test files",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
+        "receipt records code-lens request and resolve timing",
         "codeLens requests return arrays or null without JSON-RPC errors",
         "returned lenses contain valid ranges",
         "codeLens resolve requests do not crash the server"
