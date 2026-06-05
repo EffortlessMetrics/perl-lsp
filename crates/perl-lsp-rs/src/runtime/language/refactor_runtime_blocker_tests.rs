@@ -117,6 +117,16 @@ fn create_server() -> LspServer {
     LspServer::with_output(output)
 }
 
+fn close_outbound_for_test(server: &mut LspServer) {
+    let outbound =
+        std::mem::replace(&mut server.outbound, crate::runtime::outbound::closed_sender());
+    drop(outbound);
+
+    if let Some(handle) = server.outbound_writer_handle.take() {
+        let _ = handle.join();
+    }
+}
+
 fn open_document(
     server: &LspServer,
     uri: &str,
@@ -3151,7 +3161,7 @@ fn refactor_runtime_blocker_ux_safe_delete_live_pilot_returns_source_backed_edit
 }
 
 #[test]
-fn refactor_runtime_blocker_ux_safe_delete_live_pilot_keeps_edit_when_apply_edit_request_fails()
+fn refactor_runtime_blocker_ux_safe_delete_live_pilot_keeps_edit_when_apply_edit_send_fails()
 -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_server();
     {
@@ -3161,9 +3171,9 @@ fn refactor_runtime_blocker_ux_safe_delete_live_pilot_keeps_edit_when_apply_edit
     }
     let files = open_semantic_real_workspace(&server)?;
     let base = files.get("lib/RealBaseline/Base.pm").ok_or("missing RealBaseline Base fixture")?;
-    server.outbound = crate::runtime::outbound::closed_sender();
-
     let (reset_line, reset_character) = position_of(base, "reset {")?;
+    close_outbound_for_test(&mut server);
+
     let live_result = server
         .safe_delete_symbol_live_pilot(Some(json!({
             "textDocument": {"uri": REAL_BASELINE_BASE_URI},
@@ -3179,14 +3189,15 @@ fn refactor_runtime_blocker_ux_safe_delete_live_pilot_keeps_edit_when_apply_edit
     assert_eq!(live_result.get("decision").and_then(Value::as_str), Some("allowed"));
     assert_eq!(live_result.get("live_symbol_delete_enabled").and_then(Value::as_bool), Some(true));
     assert_eq!(live_result.get("returned_workspace_edit_count").and_then(Value::as_u64), Some(1));
+    assert_eq!(live_result.get("apply_edit_requested").and_then(Value::as_bool), None);
     assert!(
-        live_result.get("apply_edit_requested").is_none(),
-        "failed server-originated applyEdit request must not be recorded as requested: {live_result}"
+        live_result.get("apply_edit_request").is_none(),
+        "failed client request must not be recorded as sent: {live_result}"
     );
 
     let workspace_edit = live_result.get("workspace_edit").ok_or("missing live workspace_edit")?;
     let live_texts = workspace_edit_texts_for_uri(workspace_edit, REAL_BASELINE_BASE_URI)?;
-    assert_eq!(live_texts, vec![""], "live pilot should still return the reviewable edit");
+    assert_eq!(live_texts, vec![""], "live pilot must keep the source-backed delete edit");
 
     Ok(())
 }
