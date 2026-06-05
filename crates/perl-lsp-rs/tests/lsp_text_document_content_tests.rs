@@ -72,6 +72,19 @@ fn assert_error_code(response: &Value, expected_code: i32) -> TestResult {
     Ok(())
 }
 
+fn assert_error_message_contains(response: &Value, expected: &[&str]) -> TestResult {
+    let message = response
+        .pointer("/error/message")
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("missing error message in response: {response}"))?;
+
+    for needle in expected {
+        assert!(message.contains(*needle), "expected `{needle}` in error message: {message}");
+    }
+
+    Ok(())
+}
+
 fn wait_for_method(output: &OutputCapture, method: &str) -> TestResult<Value> {
     let deadline = Instant::now() + Duration::from_millis(250);
     loop {
@@ -108,19 +121,31 @@ fn initialize_advertises_perldoc_text_document_content_scheme() -> TestResult {
 #[test]
 fn text_document_content_missing_params_returns_invalid_params() -> TestResult {
     let response = text_document_content_response(None)?;
-    assert_error_code(&response, INVALID_PARAMS)
+    assert_error_code(&response, INVALID_PARAMS)?;
+    assert_error_message_contains(
+        &response,
+        &["workspace/textDocumentContent expects params.uri", "perldoc://strict"],
+    )
 }
 
 #[test]
 fn text_document_content_missing_uri_returns_invalid_params() -> TestResult {
     let response = text_document_content_response(Some(json!({})))?;
-    assert_error_code(&response, INVALID_PARAMS)
+    assert_error_code(&response, INVALID_PARAMS)?;
+    assert_error_message_contains(
+        &response,
+        &["workspace/textDocumentContent expects params.uri", "perldoc://Module::Name"],
+    )
 }
 
 #[test]
 fn text_document_content_invalid_uri_returns_invalid_params() -> TestResult {
     let response = text_document_content_response(Some(json!({ "uri": "not a uri" })))?;
-    assert_error_code(&response, INVALID_PARAMS)
+    assert_error_code(&response, INVALID_PARAMS)?;
+    assert_error_message_contains(
+        &response,
+        &["Missing or invalid URI", "workspace/textDocumentContent expects params.uri"],
+    )
 }
 
 #[test]
@@ -128,15 +153,14 @@ fn text_document_content_unsupported_scheme_returns_deterministic_error() -> Tes
     let response =
         text_document_content_response(Some(json!({ "uri": "unsupported://some/path" })))?;
     assert_error_code(&response, INVALID_REQUEST)?;
-    let message = response
-        .pointer("/error/message")
-        .and_then(Value::as_str)
-        .ok_or_else(|| format!("missing error message in response: {response}"))?;
-    assert!(
-        message.contains("Unsupported URI scheme or content not found"),
-        "unexpected unsupported-scheme error: {message}"
-    );
-    Ok(())
+    assert_error_message_contains(
+        &response,
+        &[
+            "Unsupported URI scheme or content not found",
+            "help: use a perldoc URI",
+            "perldoc://strict",
+        ],
+    )
 }
 
 #[test]
@@ -145,14 +169,10 @@ fn text_document_content_perldoc_strict_returns_text_or_explicit_unavailable_err
 
     if response.get("error").is_some() {
         assert_error_code(&response, INVALID_REQUEST)?;
-        let message = response
-            .pointer("/error/message")
-            .and_then(Value::as_str)
-            .ok_or_else(|| format!("missing error message in response: {response}"))?;
-        assert!(
-            message.contains("Unsupported URI scheme or content not found"),
-            "perldoc unavailable path should be explicit, got: {message}"
-        );
+        assert_error_message_contains(
+            &response,
+            &["Unsupported URI scheme or content not found", "install perldoc", "module exists"],
+        )?;
         return Ok(());
     }
 

@@ -16,20 +16,20 @@ impl LspServer {
     ) -> Result<Option<Value>, JsonRpcError> {
         let params = params.ok_or_else(|| JsonRpcError {
             code: crate::protocol::INVALID_PARAMS,
-            message: "Missing params".to_string(),
+            message: missing_virtual_content_uri_message("Missing params"),
             data: None,
         })?;
 
         let uri = params.get("uri").and_then(|u| u.as_str()).ok_or_else(|| JsonRpcError {
             code: crate::protocol::INVALID_PARAMS,
-            message: "Missing or invalid URI".to_string(),
+            message: missing_virtual_content_uri_message("Missing or invalid URI"),
             data: None,
         })?;
 
         if !is_valid_virtual_content_uri(uri) {
             return Err(JsonRpcError {
                 code: crate::protocol::INVALID_PARAMS,
-                message: "Missing or invalid URI".to_string(),
+                message: missing_virtual_content_uri_message("Missing or invalid URI"),
                 data: None,
             });
         }
@@ -40,7 +40,7 @@ impl LspServer {
         } else {
             Err(JsonRpcError {
                 code: -32600,
-                message: format!("Unsupported URI scheme or content not found: {}", uri),
+                message: unsupported_virtual_content_uri_message(uri),
                 data: None,
             })
         }
@@ -51,6 +51,18 @@ impl LspServer {
         self.send_request("workspace/textDocumentContent/refresh", json!({ "uri": uri }))
             .map(|_| ())
     }
+}
+
+fn missing_virtual_content_uri_message(summary: &str) -> String {
+    format!(
+        "{summary}: workspace/textDocumentContent expects params.uri such as `perldoc://strict` or `perldoc://Module::Name`"
+    )
+}
+
+fn unsupported_virtual_content_uri_message(uri: &str) -> String {
+    format!(
+        "Unsupported URI scheme or content not found: {uri}\nhelp: use a perldoc URI such as `perldoc://strict`; for perldoc URIs, install perldoc and check that the module exists"
+    )
 }
 
 fn is_valid_virtual_content_uri(uri: &str) -> bool {
@@ -157,6 +169,18 @@ mod tests {
         assert!(!is_valid_virtual_content_uri("perldoc://"));
         assert!(is_valid_virtual_content_uri("perldoc://strict"));
         assert!(is_valid_virtual_content_uri("perldoc://Module::Name"));
+    }
+
+    #[test]
+    fn parser_virtual_content_error_messages_include_perldoc_uri_guidance() {
+        let missing = missing_virtual_content_uri_message("Missing or invalid URI");
+        assert!(missing.contains("workspace/textDocumentContent expects params.uri"));
+        assert!(missing.contains("perldoc://strict"));
+
+        let unsupported = unsupported_virtual_content_uri_message("unsupported://some/path");
+        assert!(unsupported.contains("Unsupported URI scheme or content not found"));
+        assert!(unsupported.contains("help: use a perldoc URI"));
+        assert!(unsupported.contains("install perldoc"));
     }
 
     #[test]
