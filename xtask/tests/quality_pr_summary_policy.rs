@@ -47,12 +47,21 @@ fn quality_gate_summary_names_gates_receipts_and_repair_packets() -> TestResult 
         patch_action.pointer("/top_files/0/sample_uncovered_lines/0").and_then(Value::as_u64),
         Some(212)
     );
-    let project_action = next_action(&receipt, "project_coverage_below_target")?;
+    let project_action = receipt
+        .pointer("/next_actions/1")
+        .ok_or("quality gate receipt missing project coverage action")?;
+    assert_eq!(
+        project_action.get("kind").and_then(Value::as_str),
+        Some("project_coverage_below_target")
+    );
     assert_eq!(
         project_action.pointer("/recommended_project_clusters/0/name").and_then(Value::as_str),
         Some("proof-infrastructure")
     );
-    let ripr_action = next_action(&receipt, "ripr_total_unresolved")?;
+    let ripr_action = receipt
+        .pointer("/next_actions/2")
+        .ok_or("quality gate receipt missing RIPR total action")?;
+    assert_eq!(ripr_action.get("kind").and_then(Value::as_str), Some("ripr_total_unresolved"));
     assert_eq!(
         ripr_action.pointer("/recommended_first_clusters/0/name").and_then(Value::as_str),
         Some("ci-report-formatting")
@@ -368,14 +377,4 @@ fn write_text(path: &Path, value: &str) -> TestResult {
 
 fn write_json(path: &Path, value: Value) -> TestResult {
     write_text(path, &serde_json::to_string_pretty(&value)?)
-}
-
-fn next_action<'a>(receipt: &'a Value, kind: &str) -> TestResult<&'a Value> {
-    receipt
-        .get("next_actions")
-        .and_then(Value::as_array)
-        .and_then(|actions| {
-            actions.iter().find(|action| action.get("kind").and_then(Value::as_str) == Some(kind))
-        })
-        .ok_or_else(|| format!("quality gate receipt missing {kind} action").into())
 }
