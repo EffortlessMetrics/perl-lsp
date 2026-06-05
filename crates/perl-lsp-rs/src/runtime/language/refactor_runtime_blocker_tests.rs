@@ -3084,6 +3084,18 @@ fn refactor_runtime_blocker_ux_safe_delete_live_pilot_returns_source_backed_edit
         Some("Safe delete reset")
     );
     assert_eq!(
+        live_result.pointer("/apply_edit_request/description").and_then(Value::as_str),
+        Some("Review source-backed safe-delete edit for reset before applying.")
+    );
+    assert_eq!(
+        live_result.pointer("/apply_edit_request/metadata/label").and_then(Value::as_str),
+        Some("Safe delete reset")
+    );
+    assert_eq!(
+        live_result.pointer("/apply_edit_request/metadata/description").and_then(Value::as_str),
+        Some("Review source-backed safe-delete edit for reset before applying.")
+    );
+    assert_eq!(
         live_result.pointer("/apply_edit_request/metadata/isRefactoring").and_then(Value::as_bool),
         Some(true)
     );

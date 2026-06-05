@@ -33,6 +33,7 @@ impl LspServer {
     pub(crate) fn request_apply_workspace_edit_with_metadata(
         &self,
         label: &str,
+        description: &str,
         edit: Value,
         is_refactoring: bool,
     ) -> io::Result<Option<ServerRequestId>> {
@@ -46,6 +47,8 @@ impl LspServer {
             "label": label,
             "edit": edit,
             "metadata": {
+                "label": label,
+                "description": description,
                 "isRefactoring": is_refactoring,
             },
         });
@@ -176,6 +179,7 @@ mod tests {
 
         let request_id = server.request_apply_workspace_edit_with_metadata(
             "Safe delete reset",
+            "Review source-backed safe-delete edit for reset before applying.",
             json!({"changes": {"file:///workspace/main.pl": []}}),
             true,
         )?;
@@ -197,6 +201,14 @@ mod tests {
             Some("Safe delete reset")
         );
         assert_eq!(
+            request.pointer("/params/metadata/label").and_then(Value::as_str),
+            Some("Safe delete reset")
+        );
+        assert_eq!(
+            request.pointer("/params/metadata/description").and_then(Value::as_str),
+            Some("Review source-backed safe-delete edit for reset before applying.")
+        );
+        assert_eq!(
             request.pointer("/params/metadata/isRefactoring").and_then(Value::as_bool),
             Some(true)
         );
@@ -213,6 +225,7 @@ mod tests {
         server.client_capabilities.lock().workspace_apply_edit_support = true;
         let request_id = server.request_apply_workspace_edit_with_metadata(
             "Safe delete reset",
+            "Review source-backed safe-delete edit for reset before applying.",
             json!({"changes": {"file:///workspace/main.pl": []}}),
             true,
         )?;
@@ -229,6 +242,7 @@ mod tests {
         server.client_capabilities.lock().workspace_edit_metadata_support = true;
         let request_id = server.request_apply_workspace_edit_with_metadata(
             "Safe delete reset",
+            "Review source-backed safe-delete edit for reset before applying.",
             json!({"changes": {"file:///workspace/main.pl": []}}),
             true,
         )?;
@@ -248,6 +262,7 @@ mod tests {
         let (server, _) = server_with_output_capture();
         let request_id = server.request_apply_workspace_edit_with_metadata(
             "Safe delete reset",
+            "Review source-backed safe-delete edit for reset before applying.",
             json!({"changes": {"file:///workspace/main.pl": []}}),
             true,
         )?;
@@ -260,6 +275,7 @@ mod tests {
         }
         let request_id = server.request_apply_workspace_edit_with_metadata(
             "Safe delete reset",
+            "Review source-backed safe-delete edit for reset before applying.",
             json!({"changes": {"file:///workspace/main.pl": []}}),
             true,
         )?;

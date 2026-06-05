@@ -807,15 +807,27 @@ impl LspServer {
                     format!("Safe delete {symbol}")
                 })
                 .unwrap_or_else(|| "Safe delete symbol".to_string());
+            let apply_edit_description = source_guard_context
+                .as_ref()
+                .map(|(_uri, _line, _character, symbol, _byte_offset)| {
+                    format!("Review source-backed safe-delete edit for {symbol} before applying.")
+                })
+                .unwrap_or_else(|| {
+                    "Review source-backed safe-delete edit before applying.".to_string()
+                });
             match self.request_apply_workspace_edit_with_metadata(
                 &apply_edit_label,
+                &apply_edit_description,
                 workspace_edit.clone(),
                 true,
             ) {
                 Ok(Some(id)) => Some(json!({
                     "id": id.as_i32(),
-                    "label": apply_edit_label,
+                    "label": &apply_edit_label,
+                    "description": &apply_edit_description,
                     "metadata": {
+                        "label": &apply_edit_label,
+                        "description": &apply_edit_description,
                         "isRefactoring": true,
                     },
                 })),
