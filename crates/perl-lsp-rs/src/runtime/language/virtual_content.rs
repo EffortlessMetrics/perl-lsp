@@ -199,11 +199,26 @@ fn collect_simple_pod_module_links(
             break;
         };
         let target = after_open[..end].trim();
-        if is_simple_pod_module_target(target) && target != current_module {
-            modules.insert(target.to_string());
+        if let Some(link_target) = simple_pod_link_target(target) {
+            if link_target != current_module {
+                modules.insert(link_target.to_string());
+            }
         }
         rest = &after_open[end + 1..];
     }
+}
+
+fn simple_pod_link_target(target: &str) -> Option<&str> {
+    let candidate = if let Some((label, link_target)) = target.split_once('|') {
+        if label.trim().is_empty() {
+            return None;
+        }
+        link_target.trim()
+    } else {
+        target
+    };
+
+    if is_simple_pod_module_target(candidate) { Some(candidate) } else { None }
 }
 
 fn is_simple_pod_module_target(target: &str) -> bool {
@@ -544,8 +559,9 @@ Local::Doc - local docs
 =head1 DESCRIPTION
 
 See L<Zoo::Last>, L<Alpha::First>, L<Zoo::Last>, and L<Local::Doc>.
-Core pragma links L<strict> and L<warnings> are valid virtual perldoc targets.
-Ignore L</reset>, L<display|Beta::Skipped>, L<https://example.invalid>, and L<NotAModule>.
+Labeled module links such as L<beta docs|Beta::Labeled> stay navigable.
+Core pragma links L<strict>, L<warnings>, and L<strict docs|strict> are valid virtual perldoc targets.
+Ignore L</reset>, L<section docs|/reset>, L<display|https://example.invalid>, L<|Beta::EmptyLabel>, L<display|Broken::>, and L<NotAModule>.
 
 =cut
 
@@ -560,6 +576,7 @@ my $non_pod = 'L<Code::Reference>';
             links,
             vec![
                 "perldoc://Alpha::First",
+                "perldoc://Beta::Labeled",
                 "perldoc://Zoo::Last",
                 "perldoc://strict",
                 "perldoc://warnings"
