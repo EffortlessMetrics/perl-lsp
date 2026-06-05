@@ -4451,11 +4451,10 @@ mod tests {
     }
 
     #[test]
-    fn semantic_context_does_not_promote_runtime_has_call()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn semantic_context_does_not_promote_runtime_has_call() -> Result<(), Box<dyn std::error::Error>>
+    {
         let provider = InlineCompletionProvider::new();
-        let source =
-            "package Demo;\nuse Moo;\nsub caller {\n    has 'temporary' => (is => 'ro');\n    $self->\n}\n";
+        let source = "package Demo;\nuse Moo;\nsub caller {\n    has 'temporary' => (is => 'ro');\n    $self->\n}\n";
         let character = "    $self->".encode_utf16().count() as u32;
         let prepared = provider
             .prepare_context(source, 4, character)
@@ -5757,8 +5756,7 @@ mod tests {
     #[test]
     fn self_receiver_suggests_moose_accessor_methods() -> Result<(), Box<dyn std::error::Error>> {
         let provider = InlineCompletionProvider::new();
-        let source =
-            "package Demo::Widget;\nuse Moose;\nhas 'enabled' => (is => 'ro');\nsub caller {\n    my $self = shift;\n    $self->\n}\n";
+        let source = "package Demo::Widget;\nuse Moose;\nhas 'enabled' => (is => 'ro');\nsub caller {\n    my $self = shift;\n    $self->\n}\n";
         let character = "    $self->".encode_utf16().count() as u32;
         let completions = provider.get_inline_completions(source, 5, character);
 
@@ -5789,11 +5787,9 @@ mod tests {
     }
 
     #[test]
-    fn self_receiver_does_not_suggest_runtime_has_call()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn self_receiver_does_not_suggest_runtime_has_call() -> Result<(), Box<dyn std::error::Error>> {
         let provider = InlineCompletionProvider::new();
-        let source =
-            "package Demo::Widget;\nuse Moo;\nsub caller {\n    has 'temporary' => (is => 'ro');\n    $self->\n}\n";
+        let source = "package Demo::Widget;\nuse Moo;\nsub caller {\n    has 'temporary' => (is => 'ro');\n    $self->\n}\n";
         let character = "    $self->".encode_utf16().count() as u32;
         let completions = provider.get_inline_completions(source, 4, character);
 
