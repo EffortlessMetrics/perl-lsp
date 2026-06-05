@@ -19,8 +19,9 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        let params =
-            params.ok_or_else(|| invalid_params("Missing missing-module lookup argument"))?;
+        let params = params.ok_or_else(|| {
+            invalid_missing_module_lookup_params("Missing missing-module lookup argument")
+        })?;
         let request = MissingModuleLookupRequest::from_value(&params)?;
 
         let (doc_text, doc_offset, document_open) =
@@ -166,13 +167,20 @@ impl MissingModuleLookupRequest {
             return Ok(Self { module: module.to_string(), doc_uri: None, position: None });
         }
 
-        let module = request_module(value)
-            .ok_or_else(|| invalid_params("Missing module for missing-module lookup"))?;
+        let module = request_module(value).ok_or_else(|| {
+            invalid_missing_module_lookup_params("Missing module for missing-module lookup")
+        })?;
         let doc_uri = request_doc_uri(value);
         let position = request_position(value);
 
         Ok(Self { module, doc_uri, position })
     }
+}
+
+fn invalid_missing_module_lookup_params(summary: &str) -> JsonRpcError {
+    invalid_params(&format!(
+        "{summary}: {EXPLAIN_MISSING_MODULE_LOOKUP_COMMAND} expects either a module string such as \"Missing::Module\" or an object with module, moduleName, or diagnostic.data.module; optionally include textDocument.uri and position or pass a PL701 diagnostic to explain lookup from a document"
+    ))
 }
 
 fn request_module(value: &Value) -> Option<String> {
@@ -480,4 +488,58 @@ fn workspace_root_hash(workspace_roots: &[String]) -> Option<String> {
     let mut roots = workspace_roots.iter().map(|root| root.replace('\\', "/")).collect::<Vec<_>>();
     roots.sort();
     Some(format!("{:x}", md5::compute(roots.join("\n"))))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_tdd_support::must_err;
+    use serde_json::json;
+
+    #[test]
+    fn missing_module_lookup_argument_errors_include_guidance()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+
+        let missing_arg = must_err(server.explain_missing_module_lookup(None));
+        assert_lookup_shape_guidance(&missing_arg, "Missing missing-module lookup argument");
+
+        let missing_module = match MissingModuleLookupRequest::from_value(&json!({})) {
+            Ok(_) => return Err("expected missing module request to fail".into()),
+            Err(error) => error,
+        };
+        assert_lookup_shape_guidance(&missing_module, "Missing module for missing-module lookup");
+
+        Ok(())
+    }
+
+    fn assert_lookup_shape_guidance(error: &JsonRpcError, summary: &str) {
+        assert_eq!(error.code, crate::protocol::INVALID_PARAMS);
+        assert!(error.data.is_none());
+        assert!(
+            error.message.contains(summary),
+            "error message must preserve summary; got {}",
+            error.message
+        );
+        assert!(
+            error.message.contains(EXPLAIN_MISSING_MODULE_LOOKUP_COMMAND),
+            "error message must name command; got {}",
+            error.message
+        );
+        for expected in [
+            "Missing::Module",
+            "module",
+            "moduleName",
+            "diagnostic.data.module",
+            "textDocument.uri",
+            "position",
+            "PL701",
+        ] {
+            assert!(
+                error.message.contains(expected),
+                "error message must mention {expected}; got {}",
+                error.message
+            );
+        }
+    }
 }
