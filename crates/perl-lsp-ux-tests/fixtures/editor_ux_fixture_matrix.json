@@ -411,8 +411,8 @@
       "ci_tier": "pr",
       "component": "workspace_symbols",
       "instrumentation": {
-        "run_receipt": false,
-        "first_useful_result": false,
+        "run_receipt": true,
+        "first_useful_result": true,
         "protocol_goldens": false
       },
       "user_journey": "remove a workspace folder after indexing and re-run workspace symbol search",
@@ -423,6 +423,7 @@
         "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
+        "receipt records before and after workspace-symbol timing around folder removal",
         "removed folder symbols disappear from search results"
       ],
       "confidence_signals": [
