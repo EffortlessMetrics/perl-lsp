@@ -196,6 +196,23 @@ fn quality_gate_final_enforce_blocks_total_ripr_project_coverage_and_active_exce
     );
     assert_repair_contract(exception)?;
 
+    let markdown = fs::read_to_string(&paths.summary)?;
+    assert!(
+        markdown.contains("project coverage: `94.90%` / `95.00%`"),
+        "summary must keep project coverage visible for final burn-down: {markdown}"
+    );
+    assert!(
+        markdown.contains("### project_coverage_below_target")
+            && markdown.contains("### quality_exception_active_final_blocker"),
+        "summary must render both final blockers as repair packets: {markdown}"
+    );
+    assert!(
+        markdown.contains(
+            "exception: `ripr-total-burndown` final target `repo-wide ripr+ unresolved total = 0`"
+        ),
+        "summary must name active temporary exceptions and their final target: {markdown}"
+    );
+
     Ok(())
 }
 
@@ -219,6 +236,27 @@ fn quality_gate_final_enforce_blocks_missing_receipts() -> TestResult {
         "ripr_review_receipt_not_current",
     ] {
         assert_repair_contract(next_action(&payload, kind)?)?;
+    }
+
+    let markdown = fs::read_to_string(&paths.summary)?;
+    for required in [
+        "### coverage_receipt_not_current",
+        "### ripr_receipt_not_current",
+        "### ripr_pr_receipt_not_current",
+        "### ripr_review_receipt_not_current",
+        "- repair: `Refresh the LCOV coverage receipt before running the aggregate quality gate.`",
+        "- verify: `rtk cargo xtask quality-gate --mode enforce",
+        "--check`",
+        "- receipt: `rtk cargo xtask quality-gate --mode enforce",
+        "rtk cargo xtask coverage-baseline",
+        "rtk cargo xtask ripr-plus",
+        "rtk cargo xtask ripr-pr",
+        "rtk cargo xtask ripr-review-comments",
+    ] {
+        assert!(
+            markdown.contains(required),
+            "summary repair packet missing `{required}`: {markdown}"
+        );
     }
 
     Ok(())
