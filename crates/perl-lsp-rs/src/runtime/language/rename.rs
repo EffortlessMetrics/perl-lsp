@@ -37,6 +37,16 @@ fn strip_perl_sigil(name: &str) -> &str {
     }
 }
 
+fn invalid_rename_target(summary: &str) -> JsonRpcError {
+    JsonRpcError {
+        code: -32602,
+        message: format!(
+            "{summary}: textDocument/rename expects newName to be a valid Perl identifier, for example renamed_value, $renamed_value, @renamed_values, or %renamed_values; for variables, keep the current sigil or omit it so perl-lsp preserves the existing sigil"
+        ),
+        data: None,
+    }
+}
+
 fn lexical_declaration_keyword_before(source: &str, symbol_start: usize) -> bool {
     let line_start =
         if symbol_start == 0 { 0 } else { source[..symbol_start].rfind('\n').map_or(0, |p| p + 1) };
@@ -511,11 +521,7 @@ impl LspServer {
         requested_name: &str,
     ) -> Result<String, JsonRpcError> {
         if requested_name.is_empty() {
-            return Err(JsonRpcError {
-                code: -32602,
-                message: "Invalid identifier: empty rename target".to_string(),
-                data: None,
-            });
+            return Err(invalid_rename_target("Invalid identifier: empty rename target"));
         }
 
         let current_sigil =
@@ -528,14 +534,10 @@ impl LspServer {
                 let bare_name = if let Some(first) = requested_first {
                     if is_perl_sigil(first) {
                         if first != sigil {
-                            return Err(JsonRpcError {
-                                code: -32602,
-                                message: format!(
-                                    "Invalid identifier: sigil '{}' does not match '{}'",
-                                    first, sigil
-                                ),
-                                data: None,
-                            });
+                            return Err(invalid_rename_target(&format!(
+                                "Invalid identifier: sigil '{}' does not match '{}'",
+                                first, sigil
+                            )));
                         }
                         requested_chars.collect::<String>()
                     } else {
@@ -546,22 +548,20 @@ impl LspServer {
                 };
 
                 if !self.is_valid_identifier(&bare_name) {
-                    return Err(JsonRpcError {
-                        code: -32602,
-                        message: format!("Invalid identifier: {}", requested_name),
-                        data: None,
-                    });
+                    return Err(invalid_rename_target(&format!(
+                        "Invalid identifier: {}",
+                        requested_name
+                    )));
                 }
 
                 Ok(format!("{}{}", sigil, bare_name))
             }
             None => {
                 if !self.is_valid_identifier(requested_name) {
-                    return Err(JsonRpcError {
-                        code: -32602,
-                        message: format!("Invalid identifier: {}", requested_name),
-                        data: None,
-                    });
+                    return Err(invalid_rename_target(&format!(
+                        "Invalid identifier: {}",
+                        requested_name
+                    )));
                 }
                 Ok(requested_name.to_string())
             }
