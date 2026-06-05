@@ -1,5 +1,5 @@
-// Test infrastructure — allow test-friendly patterns used throughout this module.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+// Test infrastructure allows assertion panics and status stderr throughout this module.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::print_stderr)]
 
 //! Scenario 20 — Real-workspace provider expectations (completion / goto-definition /
 //! hover / diagnostics).
@@ -207,16 +207,11 @@ fn scenario_20_completion_module_prefix_surfaces_real_baseline_app() -> anyhow::
     // We ask for completion at col 17 which is after `use RealBaseline::`.
     let labels = harness.completion_labels("script/real-baseline.pl", 3, 17)?;
 
-    if labels.iter().any(|l| l.contains("RealBaseline") || l.contains("App")) {
-        eprintln!("status: completion/module-prefix: works — RealBaseline module label found");
-    } else {
-        eprintln!(
-            "status: completion/module-prefix: known gap — no RealBaseline label; \
-             got: {labels:?}"
-        );
-    }
+    assert!(
+        labels.iter().any(|label| label == "RealBaseline::App" || label.ends_with("::App")),
+        "module-prefix completion should surface RealBaseline::App; got labels: {labels:?}"
+    );
 
-    // works: the request itself must not produce a JSON-RPC error.
     harness.assert_no_crash();
     Ok(())
 }
