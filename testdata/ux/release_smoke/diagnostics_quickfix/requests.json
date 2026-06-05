@@ -1,0 +1,38 @@
+[
+  {
+    "method": "initialize",
+    "target": "."
+  },
+  {
+    "method": "textDocument/didOpen",
+    "file": "loop_label.pl"
+  },
+  {
+    "method": "diagnostics",
+    "file": "loop_label.pl",
+    "diagnostic_code": "PL410"
+  },
+  {
+    "method": "textDocument/codeAction",
+    "file": "loop_label.pl",
+    "diagnostic_marker": "MISSING_NEXT"
+  },
+  {
+    "method": "textDocument/codeAction",
+    "file": "loop_label.pl",
+    "diagnostic_marker": "MISSING_LAST"
+  },
+  {
+    "method": "textDocument/codeAction",
+    "file": "loop_label.pl",
+    "diagnostic_marker": "MISSING_REDO"
+  },
+  {
+    "method": "textDocument/codeAction",
+    "file": "loop_label.pl",
+    "position_marker": "FOUND"
+  },
+  {
+    "method": "shutdown"
+  }
+]

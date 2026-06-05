@@ -1,0 +1,27 @@
+[
+  {
+    "method": "initialize",
+    "target": "."
+  },
+  {
+    "method": "textDocument/didOpen",
+    "file": "docs.pl"
+  },
+  {
+    "method": "textDocument/hover",
+    "file": "docs.pl",
+    "position_marker": "File::Spec"
+  },
+  {
+    "method": "textDocument/hover",
+    "file": "docs.pl",
+    "position_marker": "JSON::PP"
+  },
+  {
+    "method": "textDocument/documentLink",
+    "file": "docs.pl"
+  },
+  {
+    "method": "shutdown"
+  }
+]

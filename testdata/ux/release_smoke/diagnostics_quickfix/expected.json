@@ -1,0 +1,31 @@
+{
+  "diagnostics": {
+    "code": "PL410",
+    "must_include_labels": [
+      "MISSING_NEXT",
+      "MISSING_LAST",
+      "MISSING_REDO"
+    ],
+    "must_not_include_labels": [
+      "FOUND"
+    ]
+  },
+  "code_actions": {
+    "title": "Remove undefined label",
+    "MISSING_NEXT": {
+      "before": "next MISSING_NEXT",
+      "after": "next"
+    },
+    "MISSING_LAST": {
+      "before": "last MISSING_LAST",
+      "after": "last"
+    },
+    "MISSING_REDO": {
+      "before": "redo MISSING_REDO",
+      "after": "redo"
+    },
+    "FOUND": {
+      "must_not_offer_remove_label": true
+    }
+  }
+}
