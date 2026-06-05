@@ -459,6 +459,173 @@ mod tests {
         let actions = fix_printf_format_arity(source, &diagnostic);
         assert!(actions.is_empty());
     }
+
+    #[test]
+    fn fix_loop_control_undefined_label_removes_only_label_segment() {
+        let source = "while (1) {\n    next MISSING;\n}\n";
+        let start = must_some(source.find("next"));
+        let end = start + "next MISSING;".len();
+        let diagnostic = diagnostic_for(
+            (start, end),
+            "`next MISSING` references a label that is not defined in this file",
+        );
+
+        let actions = fix_loop_control_undefined_label(source, &diagnostic);
+
+        let action = must_some(actions.first());
+        assert_eq!(action.title, "Remove undefined label");
+        assert_eq!(action.kind, CodeActionKind::QuickFix);
+        assert!(action.is_preferred);
+        let edit = &action.edit.changes[0];
+        assert_eq!(&source[edit.location.start..edit.location.end], " MISSING");
+        assert_eq!(edit.new_text, "");
+    }
+
+    #[test]
+    fn fix_loop_control_undefined_label_supports_last_and_redo() {
+        for op in ["last", "redo"] {
+            let source = format!("while (1) {{ {op} MISSING; }}\n");
+            let start = must_some(source.find(op));
+            let end = start + format!("{op} MISSING;").len();
+            let diagnostic = diagnostic_for(
+                (start, end),
+                &format!("`{op} MISSING` references a label that is not defined in this file"),
+            );
+
+            let actions = fix_loop_control_undefined_label(&source, &diagnostic);
+
+            let action = must_some(actions.first());
+            let edit = &action.edit.changes[0];
+            assert_eq!(&source[edit.location.start..edit.location.end], " MISSING");
+            assert_eq!(edit.new_text, "");
+        }
+    }
+
+    #[test]
+    fn fix_loop_control_undefined_label_without_semicolon_deletes_to_range_end() {
+        let source = "while (1) { next MISSING }\n";
+        let start = must_some(source.find("next"));
+        let end = start + "next MISSING".len();
+        let diagnostic = diagnostic_for(
+            (start, end),
+            "`next MISSING` references a label that is not defined in this file",
+        );
+
+        let actions = fix_loop_control_undefined_label(source, &diagnostic);
+
+        let action = must_some(actions.first());
+        let edit = &action.edit.changes[0];
+        assert_eq!(&source[edit.location.start..edit.location.end], " MISSING");
+        assert_eq!(edit.new_text, "");
+    }
+
+    #[test]
+    fn fix_loop_control_undefined_label_rejects_bare_operator() {
+        let source = "while (1) { next; }\n";
+        let start = must_some(source.find("next"));
+        let end = start + "next".len();
+        let diagnostic = diagnostic_for(
+            (start, end),
+            "`next` references a label that is not defined in this file",
+        );
+
+        let actions = fix_loop_control_undefined_label(source, &diagnostic);
+
+        assert_eq!(actions.len(), 0);
+    }
+
+    #[test]
+    fn fix_loop_control_undefined_label_boundary_discriminator_rejects_empty_label_tail() {
+        let source = "while (1) { next   ; }\n";
+        let start = must_some(source.find("next"));
+        let end = start + "next   ".len();
+        let diagnostic = diagnostic_for(
+            (start, end),
+            "`next` references a label that is not defined in this file",
+        );
+
+        let actions = fix_loop_control_undefined_label(source, &diagnostic);
+
+        assert_eq!(actions.len(), 0);
+    }
+
+    #[test]
+    fn fix_loop_control_undefined_label_rejects_non_label_tail() {
+        let source = "while (1) { next MISSING->bad; }\n";
+        let start = must_some(source.find("next"));
+        let end = start + "next MISSING->bad;".len();
+        let diagnostic = diagnostic_for(
+            (start, end),
+            "`next MISSING` references a label that is not defined in this file",
+        );
+
+        let actions = fix_loop_control_undefined_label(source, &diagnostic);
+
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn fix_loop_control_undefined_label_handles_colon_label_with_trailing_space() {
+        let source = "while (1) {\n    redo Some::Label ;\n}\n";
+        let start = must_some(source.find("redo"));
+        let end = start + "redo Some::Label ;".len();
+        let diagnostic = diagnostic_for(
+            (start, end),
+            "`redo Some::Label` references a label that is not defined in this file",
+        );
+
+        let actions = fix_loop_control_undefined_label(source, &diagnostic);
+
+        let action = must_some(actions.first());
+        let edit = &action.edit.changes[0];
+        assert_eq!(&source[edit.location.start..edit.location.end], " Some::Label ");
+        assert_eq!(edit.new_text, "");
+    }
+
+    #[test]
+    fn fix_loop_control_undefined_label_rejects_operator_with_whitespace_only_tail() {
+        let source = "while (1) { next   }\n";
+        let start = must_some(source.find("next"));
+        let end = start + "next   ".len();
+        let diagnostic = diagnostic_for(
+            (start, end),
+            "`next` references a label that is not defined in this file",
+        );
+
+        let actions = fix_loop_control_undefined_label(source, &diagnostic);
+
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn fix_loop_control_undefined_label_rejects_empty_label_before_semicolon() {
+        let source = "while (1) { next ; }\n";
+        let start = must_some(source.find("next"));
+        let end = start + "next ;".len();
+        let diagnostic = diagnostic_for(
+            (start, end),
+            "`next` references a label that is not defined in this file",
+        );
+
+        let actions = fix_loop_control_undefined_label(source, &diagnostic);
+
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn fix_loop_control_undefined_label_rejects_non_loop_control_statement() {
+        let source = "while (1) { return MISSING; }\n";
+        let start = must_some(source.find("return"));
+        let end = start + "return MISSING;".len();
+        let diagnostic = diagnostic_for(
+            (start, end),
+            "`return MISSING` references a label that is not defined in this file",
+        );
+
+        let actions = fix_loop_control_undefined_label(source, &diagnostic);
+
+        assert!(actions.is_empty());
+    }
 }
 
 /// Fix assignment in condition
@@ -1964,6 +2131,80 @@ fn parse_printf_format_mismatch(message: &str) -> Option<(usize, String)> {
     let supplied: usize = after_but.split_whitespace().next()?.parse().ok()?;
 
     specifiers.checked_sub(supplied).filter(|&n| n > 0).map(|n| (n, call_name))
+}
+
+/// Remove an undefined label from a `next`, `last`, or `redo` statement (PL410).
+///
+/// The diagnostic range is expected to cover the loop-control statement. The
+/// edit deletes only the whitespace and label after the operator, leaving the
+/// bare operator to target the innermost enclosing loop.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((range_start, range_end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let Some(range_text) = source.get(range_start..range_end) else {
+        return Vec::new();
+    };
+
+    let Some(op_offset) = first_non_whitespace(range_text) else {
+        return Vec::new();
+    };
+    let statement = &range_text[op_offset..];
+
+    let Some(op) =
+        ["next", "last", "redo"].into_iter().find(|candidate| statement.starts_with(candidate))
+    else {
+        return Vec::new();
+    };
+
+    let after_op = &statement[op.len()..];
+    let whitespace_len = after_op
+        .char_indices()
+        .take_while(|(_, ch)| ch.is_whitespace())
+        .last()
+        .map_or(0, |(idx, ch)| idx + ch.len_utf8());
+    if whitespace_len == 0 {
+        return Vec::new();
+    }
+
+    let label_tail = &after_op[whitespace_len..];
+    let label_tail_trimmed_end = label_tail.trim_end().len();
+    if label_tail_trimmed_end == 0 {
+        return Vec::new();
+    }
+
+    let label_tail_trimmed = &label_tail[..label_tail_trimmed_end];
+    let (label_text, delete_end) =
+        if let Some(before_semicolon) = label_tail_trimmed.strip_suffix(';') {
+            (
+                before_semicolon.trim(),
+                range_start + op_offset + op.len() + whitespace_len + before_semicolon.len(),
+            )
+        } else {
+            (label_tail_trimmed.trim(), range_end)
+        };
+    if label_text.is_empty()
+        || !label_text.chars().all(|ch| ch == '_' || ch == ':' || ch.is_ascii_alphanumeric())
+    {
+        return Vec::new();
+    }
+
+    let delete_start = range_start + op_offset + op.len();
+    vec![CodeAction {
+        title: "Remove undefined label".to_string(),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: delete_start, end: delete_end },
+                new_text: String::new(),
+            }],
+        },
+        is_preferred: true,
+    }]
 }
 
 fn diagnostic_line_range(source: &str, range: (usize, usize)) -> Option<(usize, usize)> {

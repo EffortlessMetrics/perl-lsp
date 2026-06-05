@@ -1,0 +1,18 @@
+{
+  "definition": {
+    "Local::Report": "local/lib/perl5/Local/Report.pm"
+  },
+  "workspace_symbols": {
+    "query": "Report",
+    "must_include_path": "local/lib/perl5/Local/Report.pm"
+  },
+  "diagnostics": {
+    "must_not_report_missing_module": [
+      "Local::Report"
+    ]
+  },
+  "completion": {
+    "position": "$report->",
+    "allowed_empty_when_uncertain": true
+  }
+}
