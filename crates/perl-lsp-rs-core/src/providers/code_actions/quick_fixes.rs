@@ -1472,6 +1472,43 @@ fn is_simple_duplicate_hash_entry_line(line_content: &str) -> bool {
         && !line_content.contains(['(', ')', '[', ']', '{', '}'])
 }
 
+/// Drop an undefined label from a `next LABEL`, `last LABEL`, or `redo LABEL` statement (PL410).
+///
+/// Replaces `next LABEL` / `last LABEL` / `redo LABEL` with the bare form so the
+/// statement targets the innermost enclosing loop instead of the missing label.
+/// Returns no actions when the byte range is invalid or the operator is not one of
+/// the three documented loop-control keywords.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((start, end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+
+    let snippet = &source[start..end];
+    let mut parts = snippet.split_whitespace();
+    let op = parts.next().unwrap_or("");
+    let label = parts.next().unwrap_or("");
+
+    if !matches!(op, "next" | "last" | "redo") || label.is_empty() {
+        return Vec::new();
+    }
+
+    vec![CodeAction {
+        title: format!("Drop label '{label}' — use bare '{op}'"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start, end },
+                new_text: op.to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
 /// Fix missing return statement by adding an explicit `return` before the closing brace
 ///
 /// PL301 fires when a subroutine has no explicit return statement. The diagnostic
