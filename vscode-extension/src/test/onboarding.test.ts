@@ -517,6 +517,9 @@ describe('classifyStartupFailure', () => {
     const msg = classifyStartupFailure(results);
     expect(msg).not.toContain('Install Perl');
     expect(msg).toMatch(/binary|perllsp/i);
+    expect(msg).toContain('Perl: Run Health Check');
+    expect(msg).toContain('perl-lsp.serverPath');
+    expect(msg).toContain('Perl: Reinstall Server Binary');
   });
 
   test('returns generic message when all checks pass (unknown crash)', () => {
