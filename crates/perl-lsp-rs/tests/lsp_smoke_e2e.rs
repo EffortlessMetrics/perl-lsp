@@ -891,6 +891,190 @@ my $value = stable_symbol();
 }
 
 #[test]
+fn lsp_smoke_e2e_reopen_same_uri_replaces_document_symbols() -> TestResult {
+    let server = common::start_lsp_server();
+    let timeout = Duration::from_secs(2);
+    let init_timeout = common::timeout_scaler::TimeoutProfile::Initialization.timeout();
+
+    let uri = unique_test_uri("reopen-lifecycle");
+    let first_fixture = r#"use strict;
+use warnings;
+
+sub greet { return 'hello'; }
+my $value = gre
+"#;
+    let second_fixture = r#"use strict;
+use warnings;
+
+sub goodbye { return 'bye'; }
+my $value = goo
+"#;
+
+    let init_response = send_request_with_timeout(
+        &server,
+        206,
+        "initialize",
+        json!({
+            "processId": null,
+            "rootUri": null,
+            "capabilities": {
+                "textDocument": {
+                    "completion": {
+                        "completionItem": {
+                            "snippetSupport": true
+                        }
+                    }
+                }
+            }
+        }),
+        init_timeout,
+    )?;
+    assert!(init_response.get("error").is_none(), "initialize returned error: {init_response:#}");
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "initialized",
+            "params": {}
+        }),
+    );
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": first_fixture
+                }
+            }
+        }),
+    );
+
+    let first_completion_line = first_fixture
+        .lines()
+        .position(|line| line.contains("my $value = gre"))
+        .ok_or("first completion line missing in fixture")?;
+    let first_completion_col = first_fixture
+        .lines()
+        .nth(first_completion_line)
+        .and_then(|line| line.find("gre"))
+        .map(|idx| idx + 3)
+        .ok_or("first completion token missing in fixture")?;
+    let first_completion_response = send_request_with_timeout(
+        &server,
+        207,
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": first_completion_line, "character": first_completion_col }
+        }),
+        timeout,
+    )?;
+    assert!(
+        first_completion_response.get("error").is_none(),
+        "initial completion returned error: {first_completion_response:#}"
+    );
+    let first_completion_items = first_completion_response["result"]["items"]
+        .as_array()
+        .or_else(|| first_completion_response["result"].as_array())
+        .ok_or("initial completion result missing items array")?;
+    let first_labels = completion_labels(first_completion_items);
+    assert!(
+        first_labels.contains(&"greet"),
+        "initial completion should include symbol from first open, found labels: {first_labels:?}"
+    );
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didClose",
+            "params": {
+                "textDocument": { "uri": uri }
+            }
+        }),
+    );
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": second_fixture
+                }
+            }
+        }),
+    );
+    std::thread::sleep(Duration::from_millis(50));
+
+    let second_completion_line = second_fixture
+        .lines()
+        .position(|line| line.contains("my $value = goo"))
+        .ok_or("second completion line missing in fixture")?;
+    let second_completion_col = second_fixture
+        .lines()
+        .nth(second_completion_line)
+        .and_then(|line| line.find("goo"))
+        .map(|idx| idx + 3)
+        .ok_or("second completion token missing in fixture")?;
+    let second_completion_response = send_request_with_timeout(
+        &server,
+        208,
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": second_completion_line, "character": second_completion_col }
+        }),
+        timeout,
+    )?;
+    assert!(
+        second_completion_response.get("error").is_none(),
+        "completion after reopen returned error: {second_completion_response:#}"
+    );
+    let second_completion_items = second_completion_response["result"]["items"]
+        .as_array()
+        .or_else(|| second_completion_response["result"].as_array())
+        .ok_or("reopened completion result missing items array")?;
+    let second_labels = completion_labels(second_completion_items);
+    assert!(
+        second_labels.contains(&"goodbye"),
+        "completion after reopen should include symbol from replacement document, found labels: {second_labels:?}"
+    );
+    assert!(
+        !second_labels.contains(&"greet"),
+        "completion after didClose + reopen must not leak stale symbols from the prior document: {second_labels:?}"
+    );
+
+    let shutdown_response =
+        send_request_with_timeout(&server, 209, "shutdown", json!(null), timeout)?;
+    assert!(
+        shutdown_response.get("error").is_none(),
+        "shutdown returned error: {shutdown_response:#}"
+    );
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+            "params": null
+        }),
+    );
+
+    Ok(())
+}
+
+#[test]
 fn lsp_smoke_e2e_pull_diagnostics_refresh_after_change() -> Result<(), Box<dyn std::error::Error>> {
     let server = common::start_lsp_server();
     let timeout = Duration::from_secs(2);
