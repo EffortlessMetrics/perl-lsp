@@ -27,11 +27,9 @@ impl LspServer {
         if let Some(p) = params {
             let uri = req_uri(&p)?;
             let documents = self.documents_guard();
-            let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
-                code: INVALID_REQUEST,
-                message: format!("Document not open: {}", uri),
-                data: None,
-            })?;
+            let doc = self
+                .get_document(&documents, uri)
+                .ok_or_else(|| semantic_tokens_document_not_open(uri))?;
             if let Some(ref ast) = doc.ast {
                 let data =
                     crate::semantic_tokens::collect_semantic_tokens(ast, &doc.text, &|off| {
@@ -452,6 +450,16 @@ impl LspServer {
         Ok(Some(json!({
             "data": []
         })))
+    }
+}
+
+fn semantic_tokens_document_not_open(uri: &str) -> JsonRpcError {
+    JsonRpcError {
+        code: INVALID_REQUEST,
+        message: format!(
+            "Document not open: {uri}. textDocument/semanticTokens/full requires the editor to send textDocument/didOpen before requesting tokens; resend after the document is open and synchronized."
+        ),
+        data: None,
     }
 }
 
@@ -1157,4 +1165,42 @@ fn provider_fallback_state_label(state: ProviderFallbackState) -> &'static str {
 
 fn is_subroutine_name_char(ch: char) -> bool {
     ch.is_ascii_alphanumeric() || ch == '_' || ch == ':'
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_tdd_support::must_err;
+    use serde_json::json;
+
+    #[test]
+    fn semantic_tokens_closed_document_error_includes_sync_guidance()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///workspace/lib/Missing.pm";
+
+        let error = must_err(server.handle_semantic_tokens(Some(json!({
+            "textDocument": {
+                "uri": uri,
+            },
+        }))));
+
+        assert_eq!(error.code, crate::protocol::INVALID_REQUEST);
+        assert!(error.data.is_none());
+        for expected in [
+            "Document not open",
+            uri,
+            "textDocument/semanticTokens/full",
+            "textDocument/didOpen",
+            "open and synchronized",
+        ] {
+            assert!(
+                error.message.contains(expected),
+                "error message must mention {expected}; got {}",
+                error.message
+            );
+        }
+
+        Ok(())
+    }
 }
