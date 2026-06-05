@@ -284,23 +284,31 @@ impl AttachConfiguration {
     pub fn validate(&self) -> Result<()> {
         // Verify host is not empty
         if self.host.trim().is_empty() {
-            anyhow::bail!("Host cannot be empty");
+            anyhow::bail!(
+                "Host cannot be empty. Set attach host to a hostname or IP address, for example `localhost`."
+            );
         }
 
         // Port is u16, so it's automatically in range 0-65535
         // But we should reject port 0 as it's not valid for connecting
         if self.port == 0 {
-            anyhow::bail!("Port must be in range 1-65535");
+            anyhow::bail!(
+                "Port must be in range 1-65535. Use the port printed by the Perl debug adapter, usually 13603."
+            );
         }
 
         // Verify timeout is reasonable (if specified)
         if let Some(timeout) = self.timeout_ms {
             if timeout == 0 {
-                anyhow::bail!("Timeout must be greater than 0 milliseconds");
+                anyhow::bail!(
+                    "Timeout must be greater than 0 milliseconds. Use 5000 for the default 5 second wait."
+                );
             }
             if timeout > 300_000 {
                 // 5 minutes max
-                anyhow::bail!("Timeout cannot exceed 300000 milliseconds (5 minutes)");
+                anyhow::bail!(
+                    "Timeout cannot exceed 300000 milliseconds (5 minutes). Omit timeout to use the default 5000ms wait."
+                );
             }
         }
 

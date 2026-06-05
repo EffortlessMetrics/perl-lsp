@@ -137,6 +137,48 @@ fn test_attach_config_validation_no_timeout() {
 }
 
 #[test]
+fn test_attach_config_validation_errors_include_recovery_guidance()
+-> Result<(), Box<dyn std::error::Error>> {
+    let empty_host = AttachConfiguration {
+        host: "".to_string(),
+        port: 13603,
+        timeout_ms: Some(5000),
+        stop_on_entry: None,
+    }
+    .validate()
+    .err()
+    .ok_or("expected empty host error")?
+    .to_string();
+    assert!(empty_host.contains("hostname or IP address"), "message was: {empty_host}");
+
+    let zero_port = AttachConfiguration {
+        host: "localhost".to_string(),
+        port: 0,
+        timeout_ms: Some(5000),
+        stop_on_entry: None,
+    }
+    .validate()
+    .err()
+    .ok_or("expected zero port error")?
+    .to_string();
+    assert!(zero_port.contains("usually 13603"), "message was: {zero_port}");
+
+    let zero_timeout = AttachConfiguration {
+        host: "localhost".to_string(),
+        port: 13603,
+        timeout_ms: Some(0),
+        stop_on_entry: None,
+    }
+    .validate()
+    .err()
+    .ok_or("expected zero timeout error")?
+    .to_string();
+    assert!(zero_timeout.contains("default 5 second wait"), "message was: {zero_timeout}");
+
+    Ok(())
+}
+
+#[test]
 fn test_attach_json_snippet_valid_json() -> Result<(), Box<dyn std::error::Error>> {
     // Test: attach JSON snippet is valid and complete
     let snippet = create_attach_json_snippet();
