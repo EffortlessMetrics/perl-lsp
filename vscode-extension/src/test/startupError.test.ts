@@ -92,6 +92,8 @@ describe('classifyStartupError', () => {
     expect(result.kind).toBe(StartupErrorKind.Unknown);
     expect(result.hint).toBeTruthy();
     expect(result.remediation).toBeTruthy();
+    expect(result.remediation).toContain('Perl: Run Health Check');
+    expect(result.remediation).toContain('Perl: Reinstall Server Binary');
   });
 
   test('returns Unknown for empty stderr', () => {
