@@ -465,16 +465,18 @@
       "ci_tier": "pr",
       "component": "goto_definition",
       "instrumentation": {
-        "run_receipt": false,
-        "first_useful_result": false,
+        "run_receipt": true,
+        "first_useful_result": true,
         "protocol_goldens": false
       },
       "user_journey": "run goto-declaration inside a representative file",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
+        "receipt records declaration request timing and result shape checks",
         "declaration request returns a location or clean empty result",
         "request does not error"
       ],
