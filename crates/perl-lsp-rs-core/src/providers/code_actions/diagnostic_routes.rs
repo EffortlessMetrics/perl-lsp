@@ -204,8 +204,84 @@ fn quick_fixes_for_diagnostic(source: &str, diagnostic: &Diagnostic) -> Vec<Code
         {
             actions.extend(quick_fixes::fix_printf_format_arity(source, &qf_diag));
         }
+        // PL410: loop-control statement targets an undefined label
+        c if c == DiagnosticCode::LoopControlUndefinedLabel.as_str() => {
+            actions.extend(quick_fixes::fix_loop_control_undefined_label(source, &qf_diag));
+        }
         _ => {}
     }
 
     actions
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::types::CodeActionKind;
+    use super::*;
+    use crate::providers::diagnostics::DiagnosticSeverity;
+    use perl_tdd_support::must_some;
+
+    fn diagnostic(code: &str, range: (usize, usize), message: &str) -> Diagnostic {
+        Diagnostic {
+            range,
+            severity: DiagnosticSeverity::Warning,
+            code: Some(code.to_string()),
+            message: message.to_string(),
+            related_information: Vec::new(),
+            tags: Vec::new(),
+            suggestion: None,
+        }
+    }
+
+    #[test]
+    fn routes_pl410_to_loop_control_remove_label_quick_fix() {
+        let source = "while (1) { next MISSING; }\n";
+        let start = must_some(source.find("next"));
+        let end = start + "next MISSING;".len();
+        let diagnostic = diagnostic(
+            DiagnosticCode::LoopControlUndefinedLabel.as_str(),
+            (start, end),
+            "`next MISSING` references a label that is not defined in this file",
+        );
+
+        let actions = quick_fixes_for_diagnostics(source, &[diagnostic]);
+
+        let action =
+            must_some(actions.iter().find(|action| action.title == "Remove undefined label"));
+        assert_eq!(action.kind, CodeActionKind::QuickFix);
+        assert!(action.is_preferred);
+        let edit = &action.edit.changes[0];
+        assert_eq!(&source[edit.location.start..edit.location.end], " MISSING");
+        assert_eq!(edit.new_text, "");
+    }
+
+    #[test]
+    fn routes_pl410_returns_no_action_for_non_loop_control_range() {
+        let source = "my $x = 1;\n";
+        let start = must_some(source.find("$x"));
+        let diagnostic = diagnostic(
+            DiagnosticCode::LoopControlUndefinedLabel.as_str(),
+            (start, start + "$x".len()),
+            "`next MISSING` references a label that is not defined in this file",
+        );
+
+        let actions = quick_fixes_for_diagnostics(source, &[diagnostic]);
+
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn routes_pl410_boundary_discriminator_rejects_other_diagnostic_code() {
+        let source = "while (1) { next MISSING; }\n";
+        let start = must_some(source.find("next"));
+        let diagnostic = diagnostic(
+            DiagnosticCode::AssignmentInCondition.as_str(),
+            (start, start + "next MISSING;".len()),
+            "`next MISSING` references a label that is not defined in this file",
+        );
+
+        let actions = quick_fixes_for_diagnostic(source, &diagnostic);
+
+        assert_eq!(actions.len(), 0);
+    }
 }
