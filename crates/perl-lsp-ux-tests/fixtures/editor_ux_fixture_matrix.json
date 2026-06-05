@@ -263,7 +263,8 @@
         "cross_file_definition_success_rate"
       ],
       "expected_outcomes": [
-        "definition request returns a location or clean empty result",
+        "same-file and cross-file definition requests resolve to source locations",
+        "definition entries use valid LSP location shapes",
         "request does not error"
       ],
       "confidence_signals": [
