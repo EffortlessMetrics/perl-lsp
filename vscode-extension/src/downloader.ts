@@ -316,6 +316,8 @@ export class BinaryDownloader {
                 buttons = ['Install Manually', 'View Logs'];
             }
 
+            buttons = [...buttons, 'Open serverPath Setting'];
+
             vscode.window.showErrorMessage(message, ...buttons).then((choice: string | undefined) => {
                 if (choice === 'Install Manually') {
                     vscode.env.openExternal(vscode.Uri.parse(manualInstallUrl));
@@ -323,6 +325,8 @@ export class BinaryDownloader {
                     vscode.commands.executeCommand('workbench.action.openSettings', 'http.proxy');
                 } else if (choice === 'View Logs') {
                     this.outputChannel.show();
+                } else if (choice === 'Open serverPath Setting') {
+                    vscode.commands.executeCommand('workbench.action.openSettings', 'perl-lsp.serverPath');
                 }
             });
 
