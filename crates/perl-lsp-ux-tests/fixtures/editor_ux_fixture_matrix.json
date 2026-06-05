@@ -1215,9 +1215,9 @@
         "workflow_stability_rate"
       ],
       "expected_outcomes": [
-        "codeLens requests return arrays or null without JSON-RPC errors",
-        "returned lenses contain valid ranges",
-        "codeLens resolve requests do not crash the server"
+        "module codeLens requests return package and subroutine reference lenses",
+        "test file codeLens requests return run-all-tests and run-test commands",
+        "codeLens resolve returns find-references commands for unresolved reference lenses"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",
