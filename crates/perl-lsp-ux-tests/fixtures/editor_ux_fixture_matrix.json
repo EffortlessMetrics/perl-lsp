@@ -1008,6 +1008,35 @@
       ]
     },
     {
+      "id": "dancer2_navigation_quality",
+      "scenario_file": "ux_scenario_51_dancer2_navigation_quality.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "component": "goto_definition",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "request definition and references over the Dancer2 real-workspace fixture and record second-project navigation quality boundaries",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "cross_file_definition_success_rate",
+        "p95_time_to_first_useful_result_ms"
+      ],
+      "expected_outcomes": [
+        "definition and references probes return without JSON-RPC errors",
+        "non-empty navigation results use valid LSP Location or LocationLink shapes",
+        "receipt records module, local, dynamic, coderef, and declaration-including navigation surfaces without provider behavior promotion"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "catalyst_workspace_symbol_noise",
       "scenario_file": "ux_scenario_41_catalyst_workspace_symbol_noise.rs",
       "subsystem_owner": "editor_intelligence",
