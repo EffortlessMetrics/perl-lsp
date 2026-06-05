@@ -1,6 +1,55 @@
 use super::LspServer;
+use crate::protocol::JsonRpcError;
 use perl_tdd_support::must_some;
 use serde_json::json;
+
+fn expect_hover_shape_guidance(err: JsonRpcError) -> Result<(), String> {
+    assert_eq!(err.code, crate::protocol::INVALID_PARAMS);
+    for expected in [
+        "Missing required parameters: textDocument.uri and position",
+        "textDocument/hover",
+        "params.textDocument.uri",
+        "params.position.line",
+        "params.position.character",
+        "file:///workspace/lib/My/Module.pm",
+    ] {
+        if !err.message.contains(expected) {
+            return Err(format!("expected error message to contain {expected:?}; got {err}"));
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn hover_missing_params_error_includes_shape_guidance() -> Result<(), String> {
+    let server = LspServer::new();
+    match server.handle_hover(None) {
+        Err(err) => expect_hover_shape_guidance(err),
+        Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
+    }
+}
+
+#[test]
+fn hover_missing_position_error_includes_shape_guidance() -> Result<(), String> {
+    let server = LspServer::new();
+    match server.handle_hover(Some(json!({
+        "textDocument": { "uri": "file:///workspace/lib/My/Module.pm" }
+    }))) {
+        Err(err) => expect_hover_shape_guidance(err),
+        Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
+    }
+}
+
+#[test]
+fn hover_missing_uri_error_includes_shape_guidance() -> Result<(), String> {
+    let server = LspServer::new();
+    match server.handle_hover(Some(json!({
+        "position": { "line": 10, "character": 4 }
+    }))) {
+        Err(err) => expect_hover_shape_guidance(err),
+        Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
+    }
+}
 
 #[test]
 fn test_internal_pl_sv_yes_hover_from_sigiled_token() {

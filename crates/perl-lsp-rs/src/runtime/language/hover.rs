@@ -4,7 +4,7 @@
 
 use super::super::*;
 use crate::cancellation::RequestCleanupGuard;
-use crate::protocol::{req_position, req_uri};
+use crate::protocol::{invalid_params, req_position, req_uri};
 mod hover_cards;
 mod hover_extracted;
 #[cfg(test)]
@@ -14,6 +14,16 @@ mod regex_hover;
 mod signature_help;
 
 use hover_extracted::HoverExtracted;
+
+fn invalid_hover_params() -> JsonRpcError {
+    invalid_params(
+        "Missing required parameters: textDocument.uri and position\n\n\
+         textDocument/hover expects params.textDocument.uri plus params.position.line and \
+         params.position.character to identify the symbol under the cursor.\n\n\
+         Example: {\"textDocument\":{\"uri\":\"file:///workspace/lib/My/Module.pm\"},\
+         \"position\":{\"line\":10,\"character\":4}}",
+    )
+}
 
 impl LspServer {
     /// Handle textDocument/hover request for symbol information display
@@ -39,8 +49,20 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
-            let uri = req_uri(&params)?;
-            let (line, character) = req_position(&params)?;
+            let uri = params
+                .pointer("/textDocument/uri")
+                .and_then(|v| v.as_str())
+                .ok_or_else(invalid_hover_params)?;
+            let line = params
+                .pointer("/position/line")
+                .and_then(|v| v.as_u64())
+                .and_then(|n| u32::try_from(n).ok())
+                .ok_or_else(invalid_hover_params)?;
+            let character = params
+                .pointer("/position/character")
+                .and_then(|v| v.as_u64())
+                .and_then(|n| u32::try_from(n).ok())
+                .ok_or_else(invalid_hover_params)?;
 
             // Reject stale requests
             let req_version =
@@ -141,6 +163,8 @@ impl LspServer {
                     }
                 }
             }
+        } else {
+            return Err(invalid_hover_params());
         }
 
         Ok(Some(json!(null)))
