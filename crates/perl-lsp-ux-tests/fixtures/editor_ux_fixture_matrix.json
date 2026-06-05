@@ -581,7 +581,7 @@
       ],
       "expected_outcomes": [
         "prepareRename and rename do not error",
-        "rename returns clean null or valid workspace edit for the opened file"
+        "same-file subroutine rename returns edits for the declaration and call sites"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",
