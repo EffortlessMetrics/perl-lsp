@@ -9,9 +9,11 @@ use std::time::Duration;
 
 use anyhow::Result;
 use perl_lsp_ux_tests::binary_available;
-use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
+use perl_lsp_ux_tests::missing_binary_skip;
+use perl_lsp_ux_tests::{ScenarioConfig, UxCiTier, UxComponent, UxHarness, run_ux_scenario};
 use serde_json::{Value, json};
 
+const SCENARIO_FILE: &str = "ux_scenario_25_signature_help.rs";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 const BUILTIN_FIXTURE: &str = r#"use strict;
@@ -42,111 +44,151 @@ fn request_signature_help(harness: &UxHarness, line: u32, character: u32) -> Res
 }
 
 #[test]
-fn scenario_25_builtin_push_does_not_error() -> Result<()> {
-    if !binary_available() {
-        eprintln!("SKIP scenario_25: perl-lsp binary not found");
-        return Ok(());
-    }
-
-    let harness = builtin_harness()?;
-    let response = request_signature_help(&harness, 4, 8)?;
-
-    assert!(
-        response.get("error").is_none(),
-        "signatureHelp on builtin push MUST NOT return a JSON-RPC error: {response:?}"
-    );
-
-    harness.assert_no_crash();
-    Ok(())
-}
-
-#[test]
-fn scenario_25_builtin_join_does_not_error() -> Result<()> {
-    if !binary_available() {
-        eprintln!("SKIP scenario_25: perl-lsp binary not found");
-        return Ok(());
-    }
-
-    let harness = builtin_harness()?;
-    let response = request_signature_help(&harness, 5, 15)?;
-
-    assert!(
-        response.get("error").is_none(),
-        "signatureHelp on builtin join MUST NOT return a JSON-RPC error: {response:?}"
-    );
-
-    harness.assert_no_crash();
-    Ok(())
-}
-
-#[test]
-fn scenario_25_builtin_result_is_well_formed_when_present() -> Result<()> {
-    if !binary_available() {
-        eprintln!("SKIP scenario_25: perl-lsp binary not found");
-        return Ok(());
-    }
-
-    let harness = builtin_harness()?;
-    let response = request_signature_help(&harness, 5, 15)?;
-
-    assert!(
-        response.get("error").is_none(),
-        "signatureHelp on builtin join returned an error: {response:?}"
-    );
-
-    if let Some(result) = response.get("result") {
-        if !result.is_null() {
-            assert_signature_help_structure(result)?;
-        }
-    }
-
-    harness.assert_no_crash();
-    Ok(())
-}
-
-#[test]
-fn scenario_25_builtin_requests_are_idempotent() -> Result<()> {
-    if !binary_available() {
-        eprintln!("SKIP scenario_25: perl-lsp binary not found");
-        return Ok(());
-    }
-
-    let harness = builtin_harness()?;
-    for round in 1..=2 {
-        let response = request_signature_help(&harness, 5, 15)?;
-        assert!(
-            response.get("error").is_none(),
-            "signatureHelp round {round} MUST NOT return a JSON-RPC error: {response:?}"
-        );
-    }
-
-    harness.assert_no_crash();
-    Ok(())
-}
-
-fn assert_signature_help_structure(result: &Value) -> Result<()> {
-    let Some(signatures) = result.get("signatures") else {
-        anyhow::bail!("SignatureHelp result must have a signatures field, got: {result:?}");
-    };
-    assert!(signatures.is_array(), "SignatureHelp.signatures must be an array");
-
-    let sig_array = signatures
-        .as_array()
-        .ok_or_else(|| anyhow::anyhow!("signatures is not an array: {signatures:?}"))?;
-    for (i, sig) in sig_array.iter().enumerate() {
-        assert!(
-            sig.get("label").and_then(Value::as_str).is_some(),
-            "SignatureInformation[{i}] must have a string label, got: {sig:?}"
-        );
-
-        if let Some(params) = sig.get("parameters").and_then(Value::as_array) {
-            for (j, param) in params.iter().enumerate() {
-                assert!(
-                    param.get("label").is_some(),
-                    "ParameterInformation[{i}][{j}] must have a label, got: {param:?}"
-                );
+fn scenario_25_builtin_push_does_not_error() {
+    run_ux_scenario(
+        "signature_help_core",
+        SCENARIO_FILE,
+        "scenario_25_builtin_push_does_not_error",
+        UxCiTier::Pr,
+        Some(UxComponent::SignatureHelp),
+        |recorder| {
+            if !binary_available() {
+                return Err(missing_binary_skip().into());
             }
-        }
-    }
-    Ok(())
+
+            let harness = builtin_harness()?;
+            recorder.mark_request_start("signature_help_push");
+            let response = request_signature_help(&harness, 4, 8)?;
+            let no_error = response.get("error").is_none();
+            if no_error {
+                recorder.mark_first_useful_result("signature_help_push");
+            }
+            recorder.check(
+                "signatureHelp on builtin push does not return a JSON-RPC error",
+                no_error,
+            )?;
+
+            harness.assert_no_crash();
+            Ok(())
+        },
+    );
+}
+
+#[test]
+fn scenario_25_builtin_join_does_not_error() {
+    run_ux_scenario(
+        "signature_help_core",
+        SCENARIO_FILE,
+        "scenario_25_builtin_join_does_not_error",
+        UxCiTier::Pr,
+        Some(UxComponent::SignatureHelp),
+        |recorder| {
+            if !binary_available() {
+                return Err(missing_binary_skip().into());
+            }
+
+            let harness = builtin_harness()?;
+            recorder.mark_request_start("signature_help_join");
+            let response = request_signature_help(&harness, 5, 15)?;
+            let no_error = response.get("error").is_none();
+            if no_error {
+                recorder.mark_first_useful_result("signature_help_join");
+            }
+            recorder.check(
+                "signatureHelp on builtin join does not return a JSON-RPC error",
+                no_error,
+            )?;
+
+            harness.assert_no_crash();
+            Ok(())
+        },
+    );
+}
+
+#[test]
+fn scenario_25_builtin_result_is_well_formed_when_present() {
+    run_ux_scenario(
+        "signature_help_core",
+        SCENARIO_FILE,
+        "scenario_25_builtin_result_is_well_formed_when_present",
+        UxCiTier::Pr,
+        Some(UxComponent::SignatureHelp),
+        |recorder| {
+            if !binary_available() {
+                return Err(missing_binary_skip().into());
+            }
+
+            let harness = builtin_harness()?;
+            recorder.mark_request_start("signature_help_join_shape");
+            let response = request_signature_help(&harness, 5, 15)?;
+            let no_error = response.get("error").is_none();
+            if no_error {
+                recorder.mark_first_useful_result("signature_help_join_shape");
+            }
+            recorder.check(
+                "signatureHelp on builtin join does not return a JSON-RPC error",
+                no_error,
+            )?;
+            recorder.check(
+                "non-null signatureHelp result has valid signature labels",
+                response.get("result").is_none_or(|result| {
+                    result.is_null() || signature_help_structure_is_valid(result)
+                }),
+            )?;
+
+            harness.assert_no_crash();
+            Ok(())
+        },
+    );
+}
+
+#[test]
+fn scenario_25_builtin_requests_are_idempotent() {
+    run_ux_scenario(
+        "signature_help_core",
+        SCENARIO_FILE,
+        "scenario_25_builtin_requests_are_idempotent",
+        UxCiTier::Pr,
+        Some(UxComponent::SignatureHelp),
+        |recorder| {
+            if !binary_available() {
+                return Err(missing_binary_skip().into());
+            }
+
+            let harness = builtin_harness()?;
+            for round in 1..=2 {
+                let request_name = format!("signature_help_join_round_{round}");
+                recorder.mark_request_start(&request_name);
+                let response = request_signature_help(&harness, 5, 15)?;
+                let no_error = response.get("error").is_none();
+                if no_error {
+                    recorder.mark_first_useful_result(&request_name);
+                }
+                recorder.check(
+                    &format!(
+                        "signatureHelp repeated request round {round} does not return a JSON-RPC error"
+                    ),
+                    no_error,
+                )?;
+            }
+
+            harness.assert_no_crash();
+            Ok(())
+        },
+    );
+}
+
+fn signature_help_structure_is_valid(result: &Value) -> bool {
+    let Some(sig_array) = result.get("signatures").and_then(Value::as_array) else {
+        return false;
+    };
+
+    sig_array.iter().all(|signature| {
+        let has_label = signature.get("label").and_then(Value::as_str).is_some();
+        let parameters_are_labeled = signature
+            .get("parameters")
+            .and_then(Value::as_array)
+            .is_none_or(|params| params.iter().all(|param| param.get("label").is_some()));
+        has_label && parameters_are_labeled
+    })
 }

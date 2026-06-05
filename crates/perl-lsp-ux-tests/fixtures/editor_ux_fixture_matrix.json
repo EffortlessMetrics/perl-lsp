@@ -1179,16 +1179,18 @@
       "ci_tier": "pr",
       "component": "signature_help",
       "instrumentation": {
-        "run_receipt": false,
-        "first_useful_result": false,
+        "run_receipt": true,
+        "first_useful_result": true,
         "protocol_goldens": false
       },
       "user_journey": "request signature help at Perl builtin call sites",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
+        "receipt records signature-help request timing and structure checks",
         "builtin signatureHelp requests do not return JSON-RPC errors",
         "non-null builtin signatureHelp responses have valid signature labels",
         "repeated builtin signatureHelp requests do not crash the server"
