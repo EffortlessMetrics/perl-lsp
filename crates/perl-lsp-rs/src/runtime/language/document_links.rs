@@ -77,6 +77,31 @@ fn normalize_document_link_file_path(file_path: &str) -> Cow<'_, str> {
     Cow::Owned(normalized)
 }
 
+fn document_link_resolve_missing_params_message() -> String {
+    "Missing parameters for documentLink/resolve: pass the DocumentLink object returned by textDocument/documentLink; request fresh document links if the link is stale"
+        .to_string()
+}
+
+fn document_link_resolve_data_message(summary: &str) -> String {
+    format!(
+        "{summary}: documentLink/resolve expects a DocumentLink returned by textDocument/documentLink with data.type set to `module`, `file`, or `url`; request fresh document links before retrying"
+    )
+}
+
+fn document_link_resolve_module_data_message() -> String {
+    document_link_resolve_data_message(
+        "Missing module name in data; module links require data.module such as `Data::Dumper`",
+    )
+}
+
+fn document_link_resolve_file_path_message() -> String {
+    document_link_resolve_data_message("Missing file path in data; file links require data.path")
+}
+
+fn document_link_resolve_base_uri_message() -> String {
+    document_link_resolve_data_message("Missing base URI in data; file links require data.baseUri")
+}
+
 impl LspServer {
     /// Handle textDocument/documentLink request
     pub(crate) fn handle_document_links(
@@ -142,7 +167,7 @@ impl LspServer {
                             .and_then(|m| m.as_str())
                             .ok_or_else(|| JsonRpcError {
                                 code: INVALID_PARAMS,
-                                message: "Missing module name in data".into(),
+                                message: document_link_resolve_module_data_message(),
                                 data: None,
                             })?;
 
@@ -161,7 +186,7 @@ impl LspServer {
                             data_obj.get("path").and_then(|p| p.as_str()).ok_or_else(|| {
                                 JsonRpcError {
                                     code: INVALID_PARAMS,
-                                    message: "Missing file path in data".into(),
+                                    message: document_link_resolve_file_path_message(),
                                     data: None,
                                 }
                             })?;
@@ -172,7 +197,7 @@ impl LspServer {
                             .and_then(|u| u.as_str())
                             .ok_or_else(|| JsonRpcError {
                                 code: INVALID_PARAMS,
-                                message: "Missing base URI in data".into(),
+                                message: document_link_resolve_base_uri_message(),
                                 data: None,
                             })?;
 
@@ -192,7 +217,9 @@ impl LspServer {
                         // Unknown link type - return error
                         return Err(JsonRpcError {
                             code: INVALID_PARAMS,
-                            message: "Unknown link type in data field".into(),
+                            message: document_link_resolve_data_message(
+                                "Unknown link type in data field",
+                            ),
                             data: Some(json!({"linkType": link_type})),
                         });
                     }
@@ -203,7 +230,7 @@ impl LspServer {
         } else {
             Err(JsonRpcError {
                 code: INVALID_PARAMS,
-                message: "Missing parameters for documentLink/resolve".into(),
+                message: document_link_resolve_missing_params_message(),
                 data: None,
             })
         }
@@ -245,7 +272,12 @@ impl LspServer {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_document_link_file_path, resolve_file_link_target};
+    use super::{
+        document_link_resolve_base_uri_message, document_link_resolve_data_message,
+        document_link_resolve_file_path_message, document_link_resolve_missing_params_message,
+        document_link_resolve_module_data_message, normalize_document_link_file_path,
+        resolve_file_link_target,
+    };
 
     #[test]
     fn normalize_document_link_file_path_collapses_windows_separators() {
@@ -276,5 +308,28 @@ mod tests {
             "//server/share/lib/Thing.pm",
         );
         assert_eq!(resolved, Some("file://server/share/lib/Thing.pm".to_string()));
+    }
+
+    #[test]
+    fn document_link_resolve_error_messages_include_recovery_guidance() {
+        let missing = document_link_resolve_missing_params_message();
+        assert!(missing.contains("pass the DocumentLink object"));
+        assert!(missing.contains("request fresh document links"));
+
+        let unknown = document_link_resolve_data_message("Unknown link type in data field");
+        assert!(unknown.contains("data.type"));
+        assert!(unknown.contains("module"));
+        assert!(unknown.contains("file"));
+        assert!(unknown.contains("url"));
+
+        let module = document_link_resolve_module_data_message();
+        assert!(module.contains("data.module"));
+        assert!(module.contains("Data::Dumper"));
+
+        let file_path = document_link_resolve_file_path_message();
+        assert!(file_path.contains("data.path"));
+
+        let base_uri = document_link_resolve_base_uri_message();
+        assert!(base_uri.contains("data.baseUri"));
     }
 }
