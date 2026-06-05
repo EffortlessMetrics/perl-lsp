@@ -331,16 +331,18 @@
       "ci_tier": "pr",
       "component": "workspace_symbols",
       "instrumentation": {
-        "run_receipt": false,
-        "first_useful_result": false,
+        "run_receipt": true,
+        "first_useful_result": true,
         "protocol_goldens": false
       },
       "user_journey": "request document symbols for parsable and empty files",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
+        "receipt records document-symbol timing and structure checks",
         "document symbols return valid structure",
         "rich files surface known sub names"
       ],
