@@ -356,8 +356,8 @@
       "ci_tier": "pr",
       "component": "module_resolution",
       "instrumentation": {
-        "run_receipt": false,
-        "first_useful_result": false,
+        "run_receipt": true,
+        "first_useful_result": true,
         "protocol_goldens": false
       },
       "user_journey": "resolve modules across multiple @INC modes and compare hover, goto-definition, and diagnostics",
@@ -368,6 +368,7 @@
         "cross_file_definition_success_rate"
       ],
       "expected_outcomes": [
+        "receipt records @INC consumer consistency timing",
         "PL701, hover, and goto-definition agree across supported modes"
       ],
       "confidence_signals": [
