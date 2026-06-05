@@ -307,6 +307,32 @@ fn test_def_use_parent_does_not_error() -> TestResult {
     Ok(())
 }
 
+/// Regression: definition requests near multibyte UTF-8 must not crash while
+/// building the small fallback text window around the cursor.
+#[test]
+fn test_def_after_multibyte_prefix_does_not_error() -> TestResult {
+    let doc = format!("{}{}\nsub foo {{}}\nfoo();\n", "🦀", "x".repeat(48));
+
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///def_utf8_window.pl", &doc)?;
+
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": "file:///def_utf8_window.pl"},
+            "position": {"line": 1, "character": 0}
+        }),
+    )?;
+
+    assert!(
+        result.is_null() || result.is_object() || result.is_array(),
+        "definition must return a valid LSP result near UTF-8 text, got: {result}"
+    );
+
+    Ok(())
+}
+
 // ----------------------------------------------------------------
 // Go-to-definition: package-qualified call
 // ----------------------------------------------------------------

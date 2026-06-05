@@ -1,0 +1,39 @@
+{
+  "_comment": "Acceptance case (3): SHARED-BASE-BUT-ISOLATED — PRs share a common base commit but touch entirely different files → isolated. Base-commit and diffstat are NOT consulted; only file overlap matters.",
+  "prs": [
+    {
+      "id": "301",
+      "files": [
+        "crates/perl-lexer/src/lib.rs",
+        "crates/perl-lexer/src/token.rs",
+        "tests/lexer_test.rs"
+      ],
+      "tests": [
+        "tests/lexer_test.rs"
+      ],
+      "symbols": [
+        "Lexer::next_token",
+        "Token::kind"
+      ],
+      "base_commit": "abc1234",
+      "diffstat_lines": 120
+    },
+    {
+      "id": "302",
+      "files": [
+        "crates/perl-dap/src/dap_server.rs",
+        "crates/perl-dap/src/protocol.rs",
+        "tests/dap_integration_test.rs"
+      ],
+      "tests": [
+        "tests/dap_integration_test.rs"
+      ],
+      "symbols": [
+        "DapServer::handle_request",
+        "Protocol::decode"
+      ],
+      "base_commit": "abc1234",
+      "diffstat_lines": 85
+    }
+  ]
+}

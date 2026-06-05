@@ -112,6 +112,51 @@ my $result = calculate(10, 20, "add");
     Ok(())
 }
 
+#[test]
+fn test_signature_help_preserves_active_signature_on_retrigger() -> TestResult {
+    let doc = r#"
+sub calculate {
+    my ($x, $y, $op) = @_;
+    return $x + $y;
+}
+
+my $result = calculate(10, 20, "add");
+"#;
+
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///sig_retrigger.pl", doc)?;
+
+    let result = harness.request(
+        "textDocument/signatureHelp",
+        json!({
+            "textDocument": {"uri": "file:///sig_retrigger.pl"},
+            "position": {"line": 6, "character": 28},
+            "context": {
+                "triggerKind": 3,
+                "triggerCharacter": ",",
+                "isRetrigger": true,
+                "activeSignatureHelp": {
+                    "signatures": [
+                        {"label": "calculate($x, $y, $op)"},
+                        {"label": "calculate($x, $y)"}
+                    ],
+                    "activeSignature": 1,
+                    "activeParameter": 0
+                }
+            }
+        }),
+    )?;
+
+    assert_eq!(
+        result.get("activeSignature").and_then(|value| value.as_u64()),
+        Some(1),
+        "signatureHelp retrigger should preserve the client activeSignature context: {result:?}"
+    );
+
+    Ok(())
+}
+
 /// Tests feature spec: signature_help.rs#builtin-function
 ///
 /// Validates that signature help is provided for Perl builtin functions.

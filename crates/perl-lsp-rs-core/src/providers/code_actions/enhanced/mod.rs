@@ -175,7 +175,7 @@ impl EnhancedCodeActionsProvider {
             NodeKind::Subroutine { body, .. } => {
                 self.collect_signature_actions(body, ast_root, range, actions);
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
                 self.collect_signature_actions(condition, ast_root, range, actions);
                 self.collect_signature_actions(then_branch, ast_root, range, actions);
                 for (cond, branch) in elsif_branches {
@@ -282,7 +282,7 @@ impl EnhancedCodeActionsProvider {
             NodeKind::ExpressionStatement { expression } => {
                 self.collect_actions_for_range(expression, range, false, actions, extract_var_seen);
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
                 self.collect_actions_for_range(condition, range, false, actions, extract_var_seen);
                 self.collect_actions_for_range(
                     then_branch,

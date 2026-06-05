@@ -766,7 +766,8 @@ impl<'a> Parser<'a> {
                     );
                 }
                 TokenKind::Identifier => {
-                    if self.tokens.peek()?.text.as_ref() == "ISA" {
+                    let peek_text = self.tokens.peek()?.text.as_ref().to_string();
+                    if peek_text == "ISA" || peek_text == "isa" {
                         let op_token = self.tokens.next()?;
                         let right = if let Some(missing) =
                             self.recover_missing_infix_rhs(op_token.start)
@@ -780,7 +781,7 @@ impl<'a> Parser<'a> {
 
                         expr = Node::new(
                             NodeKind::Binary {
-                                op: "ISA".to_string(),
+                                op: op_token.text.to_string(),
                                 left: Box::new(expr),
                                 right: Box::new(right),
                             },
@@ -975,7 +976,7 @@ impl<'a> Parser<'a> {
                                         t,
                                         "or" | "and" | "not" | "xor"
                                             | "eq" | "ne" | "lt" | "le" | "gt" | "ge"
-                                            | "cmp" | "x"
+                                            | "cmp" | "x" | "isa"
                                     )
                                 }
                             }

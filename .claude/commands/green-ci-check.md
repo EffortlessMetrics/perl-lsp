@@ -14,21 +14,25 @@ Verify CI is genuinely green on the current HEAD.
    HEAD_SHA=$(gh pr view <number> --json headRefOid --jq .headRefOid)
    echo "HEAD: $HEAD_SHA"
    ```
+   > **MCP alternative (web/no-gh sessions):** `mcp__github__pull_request_read(method:"get", pullNumber:<number>)` → read `.headRefOid` field.
 
 2. Check all CI status checks:
    ```bash
    gh pr checks <number>
    ```
+   > **MCP alternative (web/no-gh sessions):** `mcp__github__pull_request_read(method:"get_check_runs", pullNumber:<number>)` → returns name, status, conclusion, started_at, completed_at per check. Per-PR CI status is also available via `mcp__github__pull_request_read(method:"get_status")`.
 
 3. Verify freshness — checks must be on the current SHA:
    ```bash
    gh api repos/{owner}/{repo}/commits/$HEAD_SHA/check-runs --jq '.check_runs[] | "\(.name) | \(.status) | \(.conclusion) | \(.head_sha[0:8])"'
    ```
+   > **MCP alternative (web/no-gh sessions):** `mcp__github__pull_request_read(method:"get_check_runs", pullNumber:<number>)` — same check-run data; cross-reference the `head_sha` field in each result against the HEAD SHA from step 1 to verify freshness. Direct REST call by arbitrary SHA is not available via MCP.
 
 4. Check PR state:
    ```bash
    gh pr view <number> --json isDraft,mergeable,mergeStateStatus --jq '{draft: .isDraft, mergeable: .mergeable, mergeState: .mergeStateStatus}'
    ```
+   > **MCP alternative (web/no-gh sessions):** `mcp__github__pull_request_read(method:"get", pullNumber:<number>)` → read `.isDraft`, `.mergeable`, `.mergeStateStatus` fields.
 
 5a. Classify cancellations — for each check with `conclusion: cancelled`, extract
     `started_at` and `completed_at` from the check-runs API response:

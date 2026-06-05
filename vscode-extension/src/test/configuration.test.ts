@@ -199,6 +199,7 @@ describe('package.json contributes', () => {
     test('uses only lazy activation events required by the extension', () => {
       expect(pkg.activationEvents).toEqual([
         'onLanguage:perl',
+        'onLanguage:perl5',
         'onLanguage:gherkin',
         'onWalkthrough:perl-lsp.gettingStarted',
         'onDebugResolve:perl',

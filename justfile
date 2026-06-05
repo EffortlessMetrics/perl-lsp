@@ -1943,9 +1943,14 @@ coverage-proof base='origin/main':
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask quality_baseline --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask merge_ready --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask queue_reconciler --locked
+    "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask ci_route --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask ripr --locked
+    "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask lsp_318 --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask inline_completion_quality --locked
+    "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask semantic_inline_receipts --locked
+    "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask semantic_inline_next_edit --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --locked \
+        --test ci_route_cli \
         --test codecov_patch_gate_policy \
         --test quality_ci_wiring_policy \
         --test quality_gate_cli_policy \
@@ -1953,6 +1958,8 @@ coverage-proof base='origin/main':
         --test quality_gate_patch_coverage_cli_policy \
         --test quality_gate_ripr_new_gap_cli_policy \
         --test quality_pr_summary_policy \
+        --test semantic_inline_receipts_cli \
+        --test semantic_inline_next_edit_cli \
         --test ripr_new_gap_gate_workflow
     "$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov report --lcov --output-path target/lcov.info \
         --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/'
@@ -1982,6 +1989,58 @@ coverage-proof base='origin/main':
         --receipt target/receipts/quality/quality-gate-coverage.json \
         --summary target/receipts/quality/quality-gate-coverage.md \
         --check
+
+# Generate route-selected coverage for PR patch proof, derive patch coverage from
+# the diff, and enforce the patch gate. Scheduled/manual runs still use
+# `coverage-proof` for the broad workspace receipt.
+coverage-proof-routed base='origin/main' head='HEAD':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    coverage_target="${CARGO_TARGET_DIR:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/perl-lsp-swarm-coverage-target}"
+    mkdir -p target/receipts/quality
+    mkdir -p "$coverage_target"
+    if [[ -f target/receipts/quality/ci-route.json ]] && python3 -c 'import json, sys; from pathlib import Path; receipt = json.loads(Path("target/receipts/quality/ci-route.json").read_text(encoding="utf-8")); sys.exit(0 if receipt.get("base") == "{{base}}" and receipt.get("head") == "{{head}}" else 1)'; then
+        echo "using existing coverage route receipt for {{base}}...{{head}}"
+    else
+        cargo xtask ci route \
+            --base "{{base}}" \
+            --head "{{head}}" \
+            --receipt target/receipts/quality/ci-route.json \
+            --summary target/receipts/quality/ci-route.md
+    fi
+    pack_count="$(python3 -c 'import json; from pathlib import Path; route = json.loads(Path("target/receipts/quality/ci-route.json").read_text(encoding="utf-8")); print(len(route.get("coverage_proof_packs") or []))')"
+    if [[ "$pack_count" == "0" ]]; then
+        printf '# Patch Coverage Proof\n\n- decision: `skipped-by-policy`\n- reason: changed-file routing selected no coverage proof packs\n' \
+            > target/receipts/quality/quality-gate-coverage.md
+        echo "coverage route selected no coverage proof packs; skipping Codecov LCOV generation"
+        exit 0
+    fi
+    if [[ ! -x "$HOME/.cargo/bin/cargo-llvm-cov" ]]; then
+        echo "cargo-llvm-cov not found. Installing..."
+        "$HOME/.cargo/bin/rustup" run nightly cargo install cargo-llvm-cov --locked
+    fi
+    echo "coverage target: $coverage_target"
+    export CARGO_TARGET_DIR="$coverage_target"
+    "$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov clean --workspace
+    coverage_env="$coverage_target/llvm-cov-env.sh"
+    "$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov show-env --sh > "$coverage_env"
+    source "$coverage_env"
+    python3 -c 'import json, shlex; from pathlib import Path; route = json.loads(Path("target/receipts/quality/ci-route.json").read_text(encoding="utf-8")); packs = route.get("coverage_proof_packs") or []; commands = []; seen = set(); pack_ids = []; exec("for pack in packs:\n    pack_ids.append(str(pack.get(\"id\", \"<unknown>\")))\n    for command in pack.get(\"commands\") or []:\n        if command not in seen:\n            seen.add(command)\n            commands.append(command)"); Path("target/receipts/quality/coverage-route-selected-packs.txt").write_text(", ".join(pack_ids) + "\n", encoding="utf-8"); body = "#!/usr/bin/env bash\nset -euo pipefail\n" + "".join("echo " + shlex.quote(">>> routed coverage: " + command) + "\n" + command + "\n" for command in commands); Path("target/receipts/quality/coverage-pack-commands.sh").write_text(body, encoding="utf-8")'
+    bash target/receipts/quality/coverage-pack-commands.sh
+    "$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov report --profile agent --lcov --output-path target/lcov.info \
+        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/'
+    cargo xtask coverage-baseline \
+        --lcov target/lcov.info \
+        --receipt target/receipts/quality/coverage-baseline.json \
+        --codecov codecov.yml \
+        --patch-base "{{base}}" \
+        --scope routed-coverage-packs
+    cargo xtask quality-gate \
+        --mode enforce-patch-coverage \
+        --coverage-receipt target/receipts/quality/coverage-baseline.json \
+        --codecov codecov.yml \
+        --receipt target/receipts/quality/quality-gate-coverage.json \
+        --summary target/receipts/quality/quality-gate-coverage.md
 
 # Refresh the checked-in coverage baseline from a fresh parser coverage snapshot.
 coverage-baseline-refresh:
@@ -2809,11 +2868,15 @@ lsp-tier-c:
 # ============================================================================
 
 # Clean up stale agent worktrees (safe — only removes worktrees with no uncommitted changes and no open PR)
+# Also reaps orphaned /tmp build-target directories to reclaim disk space.
 clean-worktrees:
     #!/usr/bin/env bash
     set -euo pipefail
     repo_name=$(basename "$PWD")
     managed_root="$(dirname "$PWD")/${repo_name}-worktrees"
+    echo "Reaping orphaned /tmp agent build targets (dry-run — pass APPLY=1 to prune)..."
+    bash "$(git rev-parse --show-toplevel)/scripts/clean-tmp-targets.sh" || true
+    echo ""
     echo "Pruning unreferenced worktrees..."
     git worktree prune
     echo "Checking ${managed_root}/ for stale entries..."
@@ -2848,3 +2911,12 @@ clean-worktrees:
 # Query, allocate, release, or clean up reusable worktree slots
 worktree-manager *ARGS:
     python3 scripts/worktree-manager.py {{ARGS}}
+
+# List orphaned agent /tmp build-target directories (dry-run by default).
+# These accumulate from finished/zombie agent sessions and can exhaust disk space.
+# Pass --prune (or set APPLY=1) to delete them.
+# Only touches /tmp/agent-*-target and /tmp/wt-*-target patterns.
+# Never removes a target belonging to a currently registered git worktree.
+# Skips dirs modified within the last 5 minutes (grace period for active builds).
+clean-tmp-targets *ARGS:
+    bash scripts/clean-tmp-targets.sh {{ARGS}}

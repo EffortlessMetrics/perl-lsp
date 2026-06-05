@@ -184,7 +184,7 @@ impl FoldingRangeExtractor {
                 }
             }
 
-            NodeKind::If { condition: _, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition: _, then_branch, elsif_branches, else_branch, .. } => {
                 // If statements with blocks are foldable
                 self.add_range_from_node(node, None);
                 self.visit_node(then_branch);
@@ -196,7 +196,7 @@ impl FoldingRangeExtractor {
                 }
             }
 
-            NodeKind::While { condition: _, body, continue_block } => {
+            NodeKind::While { condition: _, body, continue_block, .. } => {
                 self.add_range_from_node(node, None);
                 self.visit_node(body);
                 if let Some(cont) = continue_block {
@@ -338,5 +338,53 @@ impl FoldingRangeExtractor {
         if end_offset > start_offset + 1 {
             self.ranges.push(FoldingRange { start_offset, end_offset, kind });
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn loc(start: usize, end: usize) -> SourceLocation {
+        SourceLocation { start, end }
+    }
+
+    fn empty_block(start: usize, end: usize) -> Node {
+        Node::new(NodeKind::Block { statements: Vec::new() }, loc(start, end))
+    }
+
+    fn bool_node(start: usize) -> Node {
+        Node::new(NodeKind::Number { value: "1".to_string() }, loc(start, start + 1))
+    }
+
+    #[test]
+    fn extract_visits_if_and_while_with_keyword_metadata() {
+        let if_node = Node::new(
+            NodeKind::If {
+                condition: Box::new(bool_node(1)),
+                then_branch: Box::new(empty_block(4, 12)),
+                elsif_branches: vec![],
+                else_branch: Some(Box::new(empty_block(18, 26))),
+                keyword: Some("unless".to_string()),
+            },
+            loc(0, 27),
+        );
+        let while_node = Node::new(
+            NodeKind::While {
+                condition: Box::new(bool_node(30)),
+                body: Box::new(empty_block(34, 45)),
+                continue_block: Some(Box::new(empty_block(46, 55))),
+                keyword: Some("until".to_string()),
+            },
+            loc(29, 56),
+        );
+        let root =
+            Node::new(NodeKind::Program { statements: vec![if_node, while_node] }, loc(0, 56));
+        let mut extractor = FoldingRangeExtractor::new();
+
+        let ranges = extractor.extract(&root);
+
+        assert!(ranges.iter().any(|range| range.start_offset == 0 && range.end_offset == 27));
+        assert!(ranges.iter().any(|range| range.start_offset == 29 && range.end_offset == 56));
     }
 }

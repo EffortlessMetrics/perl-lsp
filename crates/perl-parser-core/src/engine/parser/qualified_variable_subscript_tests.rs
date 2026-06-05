@@ -182,6 +182,10 @@ mod tests {
 
     #[test]
     fn scalar_ref_hash_slice_preserves_base_target() {
+        // %$href{'a', 'b'} — hash slice on a dereferenced scalar ref.
+        // After the unbraced-deref fix, %$href parses as Unary{"%{}"} wrapping
+        // Variable{sigil:"$", name:"href"}, which is the correct AST shape
+        // (equivalent to %{$href}{'a', 'b'}).
         let code = "%$href{'a', 'b'};";
         assert_no_errors(code);
 
@@ -189,14 +193,28 @@ mod tests {
         match &expr.kind {
             NodeKind::Binary { op, left, right } => {
                 assert_eq!(op, "{}", "Expected {{}} hash-slice operator, got: {op}");
+                // left must be the Unary deref node %{$href}, not a raw Variable
                 match &left.kind {
-                    NodeKind::Variable { sigil, name } => {
-                        assert_eq!(sigil, "%", "Expected % sigil on hash-slice target");
-                        assert_eq!(name, "$href", "Expected scalar-ref hash target, got: {name}");
+                    NodeKind::Unary { op: deref_op, operand } => {
+                        assert_eq!(
+                            deref_op, "%{}",
+                            "Expected %{{}} deref op on hash-slice target, got: {deref_op}"
+                        );
+                        match &operand.kind {
+                            NodeKind::Variable { sigil, name } => {
+                                assert_eq!(sigil, "$", "Inner var should have $ sigil");
+                                assert_eq!(name, "href", "Inner var name should be 'href'");
+                            }
+                            _ => panic!(
+                                "Expected inner Variable in deref, got: {}",
+                                operand.kind.kind_name()
+                            ),
+                        }
                     }
                     _ => panic!(
-                        "Expected Variable node as hash-slice target, got: {}",
-                        left.kind.kind_name()
+                        "Expected Unary deref node as hash-slice target, got: {} (sexp: {})",
+                        left.kind.kind_name(),
+                        expr.to_sexp(),
                     ),
                 }
                 match &right.kind {
@@ -219,6 +237,10 @@ mod tests {
 
     #[test]
     fn scalar_ref_hash_slice_list_preserves_base_target() {
+        // @$href{'a', 'b'} — list (value) hash slice on a dereferenced scalar ref.
+        // After the unbraced-deref fix, @$href parses as Unary{"@{}"} wrapping
+        // Variable{sigil:"$", name:"href"}, which is the correct AST shape
+        // (equivalent to @{$href}{'a', 'b'}).
         let code = "@$href{'a', 'b'};";
         assert_no_errors(code);
 
@@ -226,14 +248,28 @@ mod tests {
         match &expr.kind {
             NodeKind::Binary { op, left, right } => {
                 assert_eq!(op, "{}", "Expected {{}} hash-slice operator, got: {op}");
+                // left must be the Unary deref node @{$href}, not a raw Variable
                 match &left.kind {
-                    NodeKind::Variable { sigil, name } => {
-                        assert_eq!(sigil, "@", "Expected @ sigil on hash-slice target");
-                        assert_eq!(name, "$href", "Expected scalar-ref hash target, got: {name}");
+                    NodeKind::Unary { op: deref_op, operand } => {
+                        assert_eq!(
+                            deref_op, "@{}",
+                            "Expected @{{}} deref op on hash-slice target, got: {deref_op}"
+                        );
+                        match &operand.kind {
+                            NodeKind::Variable { sigil, name } => {
+                                assert_eq!(sigil, "$", "Inner var should have $ sigil");
+                                assert_eq!(name, "href", "Inner var name should be 'href'");
+                            }
+                            _ => panic!(
+                                "Expected inner Variable in deref, got: {}",
+                                operand.kind.kind_name()
+                            ),
+                        }
                     }
                     _ => panic!(
-                        "Expected Variable node as hash-slice target, got: {}",
-                        left.kind.kind_name()
+                        "Expected Unary deref node as hash-slice target, got: {} (sexp: {})",
+                        left.kind.kind_name(),
+                        expr.to_sexp(),
                     ),
                 }
                 match &right.kind {

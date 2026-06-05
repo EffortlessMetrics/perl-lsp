@@ -43,6 +43,10 @@ impl DebugAdapter {
         "terminateThreads",
     ];
 
+    /// Dispatch a DAP request and return the response message.
+    ///
+    /// Emits the `initialized` event automatically when an `initialize` request
+    /// succeeds. This mirrors the behavior expected by DAP-compliant clients.
     pub fn handle_request(
         &mut self,
         request_seq: i64,

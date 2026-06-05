@@ -1039,6 +1039,89 @@ mod tests {
     }
 
     #[test]
+    fn test_get_segments_in_range_returns_only_overlapping_segments_in_order() {
+        let mut cache = TokenCache::new();
+        cache.cache_tokens(30, 40, vec![Token::new(TokenKind::Identifier, "c", 30, 40)]);
+        cache.cache_tokens(0, 10, vec![Token::new(TokenKind::Identifier, "a", 0, 10)]);
+        cache.cache_tokens(15, 25, vec![Token::new(TokenKind::Identifier, "b", 15, 25)]);
+
+        let segments = cache.get_segments_in_range(8, 31);
+
+        assert_eq!(segments.len(), 3, "range should overlap all three segment edges");
+        assert_eq!(segments[0].start, 0, "segments should stay sorted after out-of-order insert");
+        assert_eq!(segments[1].start, 15);
+        assert_eq!(segments[2].start, 30);
+
+        let boundary_only = cache.get_segments_in_range(10, 15);
+        assert!(
+            boundary_only.is_empty(),
+            "half-open ranges touching only segment boundaries must not overlap"
+        );
+    }
+
+    #[test]
+    fn test_add_segment_replaces_overlaps_without_dropping_neighbors() {
+        let mut cache = TokenCache::new();
+        cache.cache_tokens(0, 10, vec![Token::new(TokenKind::Identifier, "a", 0, 10)]);
+        cache.cache_tokens(20, 30, vec![Token::new(TokenKind::Identifier, "b", 20, 30)]);
+        cache.cache_tokens(40, 50, vec![Token::new(TokenKind::Identifier, "c", 40, 50)]);
+
+        cache.add_segment(TokenSegment::new(
+            25,
+            45,
+            vec![Token::new(TokenKind::Identifier, "replacement", 25, 45)],
+        ));
+
+        assert_eq!(cache.segments.len(), 2, "new segment should replace both overlaps");
+        assert_eq!(cache.segments[0].start, 0, "non-overlapping prefix segment should remain");
+        assert_eq!(cache.segments[0].end, 10);
+        assert_eq!(cache.segments[1].start, 25, "replacement should be inserted in order");
+        assert_eq!(cache.segments[1].end, 45);
+    }
+
+    #[test]
+    fn test_cache_tokens_ignores_empty_token_segments() {
+        let mut cache = TokenCache::new();
+
+        cache.cache_tokens(5, 10, Vec::new());
+
+        assert!(cache.segments.is_empty(), "empty token vectors should not create segments");
+        assert!(cache.get_tokens_before(10).is_none());
+        assert!(cache.get_tokens_from(5).is_none());
+    }
+
+    #[test]
+    fn test_token_lookup_and_segment_counts_span_multiple_segments() {
+        let mut cache = TokenCache::new();
+        cache.cache_tokens(
+            0,
+            20,
+            vec![
+                Token::new(TokenKind::Identifier, "a", 0, 5),
+                Token::new(TokenKind::Identifier, "b", 10, 20),
+            ],
+        );
+        cache.cache_tokens(
+            30,
+            50,
+            vec![
+                Token::new(TokenKind::Identifier, "c", 30, 35),
+                Token::new(TokenKind::Identifier, "d", 45, 50),
+            ],
+        );
+
+        let before = must_some(cache.get_tokens_before(35));
+        let after = must_some(cache.get_tokens_from(10));
+
+        assert_eq!(before.len(), 3, "tokens ending at the boundary should be included");
+        assert_eq!(after.len(), 3, "tokens starting at the boundary should be included");
+        assert_eq!(cache.count_segments_with_tokens_before(35), 2);
+        assert_eq!(cache.count_segments_with_tokens_after(10), 2);
+        assert_eq!(cache.count_segments_with_tokens_before(0), 0);
+        assert_eq!(cache.count_segments_with_tokens_after(50), 0);
+    }
+
+    #[test]
     fn test_adjust_positions_shifts_segment_bounds_not_token_coords() {
         // adjust_positions must shift segment.start/end but leave token byte
         // positions in their pre-edit coordinates so Phase-3 byte_shift can

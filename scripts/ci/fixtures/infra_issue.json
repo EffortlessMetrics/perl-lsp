@@ -1,0 +1,14 @@
+[
+  {
+    "name": "CI Gate shard (corpus)",
+    "conclusion": "cancelled",
+    "required": true,
+    "quarantine": false
+  },
+  {
+    "name": "Compile All Targets",
+    "conclusion": "timed_out",
+    "required": true,
+    "quarantine": false
+  }
+]

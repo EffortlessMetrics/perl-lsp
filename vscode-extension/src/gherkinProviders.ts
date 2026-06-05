@@ -62,7 +62,13 @@ const STEP_DEFINITION_EXCLUDE_GLOB = '{**/node_modules/**,**/blib/**,**/.git/**}
 const STEP_DEFINITION_FILE_LIMIT = 1000;
 const MAX_MATCH_REGEX_LENGTH = 256;
 const MAX_MATCH_STEP_TEXT_LENGTH = 512;
-const POTENTIALLY_EXPENSIVE_REGEX_RE = /(?:\([^)]*[+*][^)]*\)|\[[^\]]+\])[+*{]|\\[1-9]|\(\?<[=!]|(\(\?[!=])/;
+// Catastrophic backtracking (ReDoS) requires a *quantified group that itself
+// contains a quantifier* (e.g. `(a+)+`), a backreference, or a lookaround. A
+// single character class followed by one quantifier (`[^"]+`, `[0-9]+`) is
+// linear-time and safe — flagging it produced false negatives that suppressed
+// step-definition links for ordinary `"([^"]+)"` patterns (see #859). Keep this
+// in sync with the identical constant in gherkinStepDefinitions.ts.
+const POTENTIALLY_EXPENSIVE_REGEX_RE = /(?:\([^)]*[+*][^)]*\))[+*{]|\\[1-9]|\(\?<[=!]|(\(\?[!=])/;
 const DELIMITER_PAIRS: Record<string, string> = {
     '{': '}',
     '[': ']',

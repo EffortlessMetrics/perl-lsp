@@ -166,6 +166,7 @@ fn for_each_child_mut_visits_while_continue() {
             condition: Box::new(num_node("1")),
             body: Box::new(block_node(vec![])),
             continue_block: Some(Box::new(block_node(vec![num_node("99")]))),
+            keyword: None,
         },
         loc(0, 20),
     );
@@ -553,6 +554,7 @@ fn count_nodes_if_with_branches() {
                 Box::new(block_node(vec![num_node("4")])),
             )],
             else_branch: Some(Box::new(block_node(vec![num_node("5")]))),
+            keyword: None,
         },
         loc(0, 50),
     );

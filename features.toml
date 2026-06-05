@@ -265,7 +265,7 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 tests = ["crates/perl-lsp-rs/tests/lsp_semantic_tokens.rs"]
-description = "Semantic syntax highlighting via 23 token types (namespace, type, class, interface, enum, enumMember, typeParameter, function, method, property, macro, variable, parameter, keyword, modifier, comment, string, number, regexp, operator, plus sql_string/sql_heredoc_keyword/json_heredoc_key for embedded language context) and 13 modifiers (declaration, definition, readonly, static, deprecated, abstract, async, modification, documentation, defaultLibrary, scalarVariable, arrayVariable, hashVariable). Token pipeline: lexer fast-path classification plus AST overlay for package/subroutine/method/variable nodes, with overlap deduplication (longer token wins) and delta-encoded [u32;5] response format (mandatory LSP wire encoding). Supports full (textDocument/semanticTokens/full) and range (textDocument/semanticTokens/range) requests per LSP 3.16"
+description = "Semantic syntax highlighting via 24 token types (namespace, type, class, interface, enum, enumMember, typeParameter, function, method, property, macro, variable, parameter, keyword, modifier, comment, string, number, regexp, operator, plus sql_string/sql_heredoc_keyword/json_heredoc_key for embedded language context, and label for Perl statement/control labels) and 13 modifiers (declaration, definition, readonly, static, deprecated, abstract, async, modification, documentation, defaultLibrary, scalarVariable, arrayVariable, hashVariable). Token pipeline: lexer fast-path classification plus AST overlay for package/subroutine/method/variable/label nodes, with overlap deduplication (longer token wins) and delta-encoded [u32;5] response format (mandatory LSP wire encoding). Supports full (textDocument/semanticTokens/full) and range (textDocument/semanticTokens/range) requests per LSP 3.16"
 
 [[feature]]
 id = "lsp.inlay_hint"
@@ -1152,6 +1152,16 @@ tests = ["crates/perl-lsp-rs/tests/lsp_workspace_tests.rs"]
 description = "workspace/applyEdit request (server->client)"
 
 [[feature]]
+id = "lsp.apply_edit_metadata"
+spec = "LSP 3.18"
+area = "workspace"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-lsp-rs/tests/lsp_318_negative_claims.rs"]
+description = "Capability-gated ApplyWorkspaceEditParams.metadata on server-originated workspace/applyEdit refactoring requests"
+
+[[feature]]
 id = "lsp.publish_diagnostics"
 spec = "LSP 3.0"
 area = "text_document"
@@ -1238,8 +1248,11 @@ spec = "LSP 3.18"
 area = "workspace"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-rs/tests/lsp_virtual_content_tests.rs"]
-description = "workspace/textDocumentContent request (@proposed)"
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_virtual_content_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_text_document_content_tests.rs",
+]
+description = "workspace/textDocumentContent request for perldoc:// virtual documents, preferring workspace POD for locally resolved modules and falling back to external perldoc (@proposed)"
 
 [[feature]]
 id = "lsp.text_document_content_refresh"

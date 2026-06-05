@@ -14,7 +14,8 @@ env:
 
 jobs:
   droid-security-scan:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, em-ci, trusted-pr, review-nano, droid-review]
+    timeout-minutes: 30
 
     permissions:
       contents: write

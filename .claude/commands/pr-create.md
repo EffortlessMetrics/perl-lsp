@@ -116,11 +116,10 @@ gh pr create --draft --title "<title>" --body "$(cat <<'EOF'
 EOF
 )"
 ```
+> **MCP alternative (web/no-gh sessions):** `mcp__github__create_pull_request(owner, repo, title:"<title>", body:"<body>", head:"<branch>", base:"main", draft:true)` — direct substitution with full parity including draft mode.
 
 > **Note**: PRs always open as draft. They enter the review+improve loop:
 > draft → reviewer improves → deep-reviewer improves → mark ready → CI green → merge.
 > Multiple review passes are expected. Each pass pushes the PR forward.
-
-If gh unavailable, output the title and body for manual creation.
 
 Return the PR URL when done.

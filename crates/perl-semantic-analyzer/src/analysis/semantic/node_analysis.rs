@@ -358,7 +358,7 @@ impl SemanticAnalyzer {
             }
 
             // Control flow keywords
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
                 self.analyze_node(condition, scope_id);
                 self.analyze_node(then_branch, scope_id);
                 for (elsif_cond, elsif_branch) in elsif_branches {
@@ -370,7 +370,7 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::While { condition, body, continue_block: _ } => {
+            NodeKind::While { condition, body, continue_block: _, .. } => {
                 self.analyze_node(condition, scope_id);
                 self.analyze_node(body, scope_id);
             }

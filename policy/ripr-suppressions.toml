@@ -11,7 +11,7 @@ schema_version = 1
 policy = "ripr-suppressions"
 owner = "EffortlessMetrics"
 status = "advisory"
-updated = "2026-05-07"
+updated = "2026-06-01"
 
 # -----------------------------------------------------------------------------
 # Generated status docs: validated through status-generation checks, not
@@ -41,4 +41,18 @@ issue = "#8197"
 reason = "Archived source is retained for historical reference and is excluded from active workspace proof targets; current behavior must be proven in live crates instead."
 created = "2026-05-28"
 review_after = "2026-06-28"
+expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
+# UX receipt tests: executable proof artifacts, not production behavior seams.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-ux-receipt-tests"
+kind = "test_receipt_surface"
+paths = ["crates/perl-lsp-ux-tests/tests/*", "crates/perl-lsp-ux-tests/tests/**"]
+owner = "editor-trust"
+issue = "#8197"
+reason = "Editor UX receipt tests are proof inputs validated by cargo/UX gates and fixture inventory; diff-scoped RIPR should not block on oracle gaps inside newly added receipt tests."
+created = "2026-06-01"
+review_after = "2026-07-01"
 expires = "2026-09-30"

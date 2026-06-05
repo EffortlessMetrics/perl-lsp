@@ -11,6 +11,8 @@ use color_eyre::eyre::{Context, Result, bail};
 use serde_json::{Value as JsonValue, json};
 use serde_yaml_ng::Value as YamlValue;
 
+const COVERAGE_TARGET: f64 = 95.0;
+
 #[derive(Debug)]
 pub struct CoverageBaselineArgs {
     pub lcov: PathBuf,
@@ -84,13 +86,15 @@ fn build_receipt(root: &Path, args: &CoverageBaselineArgs) -> Result<JsonValue> 
         .as_ref()
         .map(|changed| patch_file_gaps_for_root(Some(root), &lcov, changed))
         .unwrap_or_default();
-    let files_below_target = lcov
+    let project_files_below_target = lcov
         .files
         .iter()
         .filter(|file| !file.path.trim().is_empty())
-        .filter(|file| file.line_found > 0 && percent(file.line_hit, file.line_found) < 95.0)
+        .filter(|file| project_file_below_target(file))
         .filter_map(file_gap_json)
         .collect::<Vec<_>>();
+    let top_project_files = top_project_file_gaps(Some(root), &lcov, 10);
+    let recommended_project_clusters = recommended_project_clusters(&top_project_files, 10);
 
     let mut coverage = serde_json::Map::new();
     coverage.insert("project".to_string(), json!(line_coverage));
@@ -115,8 +119,17 @@ fn build_receipt(root: &Path, args: &CoverageBaselineArgs) -> Result<JsonValue> 
             "line_found": lcov.line_found,
             "line_coverage": line_coverage,
         },
+        "project_burndown": {
+            "target": COVERAGE_TARGET,
+            "current": line_coverage,
+            "remaining_percentage_points": round2((COVERAGE_TARGET - line_coverage).max(0.0)),
+            "status": if line_coverage >= COVERAGE_TARGET { "at_target" } else { "burn_down_required" },
+        },
         "patch_files_below_target": patch_files_below_target,
-        "files_below_target": files_below_target,
+        "files_below_target": project_files_below_target.clone(),
+        "project_files_below_target": project_files_below_target,
+        "top_project_files": top_project_files,
+        "recommended_project_clusters": recommended_project_clusters,
     }))
 }
 
@@ -369,9 +382,194 @@ fn file_gap_json(file: &FileCoverage) -> Option<JsonValue> {
         "path": file.path,
         "line_hit": file.line_hit,
         "line_found": file.line_found,
+        "uncovered_line_count": file.line_found.saturating_sub(file.line_hit),
         "line_coverage": percent(file.line_hit, file.line_found),
         "sample_uncovered_lines": samples,
     }))
+}
+
+fn top_project_file_gaps(root: Option<&Path>, lcov: &LcovSummary, limit: usize) -> Vec<JsonValue> {
+    let mut rows = lcov
+        .files
+        .iter()
+        .filter(|file| !file.path.trim().is_empty())
+        .filter(|file| project_file_below_target(file))
+        .filter_map(|file| {
+            let mut gap = file_gap_json(file)?;
+            let path = root
+                .and_then(|root| relative_lcov_path(root, &file.path))
+                .unwrap_or_else(|| file.path.clone());
+            if let Some(object) = gap.as_object_mut() {
+                object.insert("path".to_string(), json!(path.clone()));
+            }
+            Some(ProjectFileGap {
+                path,
+                line_coverage: percent(file.line_hit, file.line_found),
+                uncovered_line_count: file.line_found.saturating_sub(file.line_hit),
+                gap,
+            })
+        })
+        .collect::<Vec<_>>();
+    rows.sort_by(|left, right| {
+        right
+            .uncovered_line_count
+            .cmp(&left.uncovered_line_count)
+            .then_with(|| {
+                left.line_coverage
+                    .partial_cmp(&right.line_coverage)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .then_with(|| left.path.cmp(&right.path))
+    });
+    rows.truncate(limit);
+    rows.into_iter().map(|row| row.gap).collect()
+}
+
+fn project_file_below_target(file: &FileCoverage) -> bool {
+    file.line_found > 0 && percent(file.line_hit, file.line_found) < COVERAGE_TARGET
+}
+
+#[derive(Debug)]
+struct ProjectFileGap {
+    path: String,
+    line_coverage: f64,
+    uncovered_line_count: u64,
+    gap: JsonValue,
+}
+
+fn recommended_project_clusters(top_project_files: &[JsonValue], limit: usize) -> Vec<JsonValue> {
+    let mut clusters = BTreeMap::<String, ProjectClusterRecommendation>::new();
+    for file in top_project_files {
+        let Some(path) = file.get("path").and_then(JsonValue::as_str) else {
+            continue;
+        };
+        let uncovered =
+            file.get("uncovered_line_count").and_then(JsonValue::as_u64).unwrap_or_default();
+        let (name, reason) = project_cluster_for_path(path);
+        clusters
+            .entry(name.to_string())
+            .or_insert_with(|| ProjectClusterRecommendation::new(name, reason))
+            .push_file(path, uncovered);
+    }
+
+    let mut rows = clusters.into_values().collect::<Vec<_>>();
+    rows.sort_by(|left, right| {
+        right
+            .uncovered_line_count
+            .cmp(&left.uncovered_line_count)
+            .then_with(|| left.name.cmp(&right.name))
+    });
+    rows.truncate(limit);
+    rows.into_iter().map(ProjectClusterRecommendation::into_json).collect()
+}
+
+fn project_cluster_for_path(path: &str) -> (&'static str, &'static str) {
+    let normalized = path.replace('\\', "/").to_ascii_lowercase();
+    if normalized.starts_with("xtask/")
+        || normalized.starts_with(".github/")
+        || normalized.starts_with(".ci/")
+        || normalized.starts_with("scripts/")
+        || normalized.starts_with("policy/")
+    {
+        (
+            "proof-infrastructure",
+            "Coverage proof, quality-gate, workflow, and policy surfaces are owned by this lane.",
+        )
+    } else if normalized.contains("quality")
+        || normalized.contains("coverage")
+        || normalized.contains("ripr")
+        || normalized.contains("receipt")
+        || normalized.contains("report")
+        || normalized.contains("summary")
+    {
+        (
+            "cli-report-generation",
+            "Receipt and report generators should be covered with output-contract tests.",
+        )
+    } else if normalized.contains("config") || normalized.contains("toml") {
+        (
+            "config-parsing",
+            "Configuration surfaces should be covered with parse and failure-path tests.",
+        )
+    } else if normalized.contains("serde")
+        || normalized.contains("json")
+        || normalized.contains("serialize")
+        || normalized.contains("deserialize")
+        || normalized.contains("schema")
+    {
+        (
+            "serialization-deserialization",
+            "Structured data surfaces should be covered with schema and round-trip tests.",
+        )
+    } else if normalized.contains("cancel")
+        || normalized.contains("scheduler")
+        || normalized.contains("lifecycle")
+        || normalized.contains("runtime")
+    {
+        (
+            "scheduler-cancellation",
+            "Scheduler, lifecycle, and cancellation paths should be covered with stale-state tests.",
+        )
+    } else if normalized.contains("error")
+        || normalized.contains("diagnostic")
+        || normalized.contains("failure")
+    {
+        ("error-handling", "Error paths should be covered with behavior assertions.")
+    } else if normalized.contains("provider")
+        || normalized.contains("completion")
+        || normalized.contains("hover")
+        || normalized.contains("definition")
+        || normalized.contains("lsp")
+    {
+        (
+            "provider-decision-logic",
+            "Provider decisions should be covered with table-driven behavior tests.",
+        )
+    } else {
+        (
+            "project-coverage-inventory",
+            "Use the top project files to split a focused coverage burn-down PR.",
+        )
+    }
+}
+
+#[derive(Debug)]
+struct ProjectClusterRecommendation {
+    name: String,
+    reason: String,
+    file_count: u64,
+    uncovered_line_count: u64,
+    example_files: BTreeSet<String>,
+}
+
+impl ProjectClusterRecommendation {
+    fn new(name: &str, reason: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            reason: reason.to_string(),
+            file_count: 0,
+            uncovered_line_count: 0,
+            example_files: BTreeSet::new(),
+        }
+    }
+
+    fn push_file(&mut self, path: &str, uncovered_line_count: u64) {
+        self.file_count += 1;
+        self.uncovered_line_count += uncovered_line_count;
+        if self.example_files.len() < 3 {
+            self.example_files.insert(path.to_string());
+        }
+    }
+
+    fn into_json(self) -> JsonValue {
+        json!({
+            "name": self.name,
+            "file_count": self.file_count,
+            "uncovered_line_count": self.uncovered_line_count,
+            "reason": self.reason,
+            "example_files": self.example_files.into_iter().collect::<Vec<_>>(),
+        })
+    }
 }
 
 fn current_head(root: &Path) -> Result<String> {
@@ -571,8 +769,165 @@ end_of_record
         assert_eq!(summary.line_found, 2);
         assert_eq!(summary.line_hit, 1);
         assert_eq!(file.uncovered_lines, vec![3]);
+        assert_eq!(gap["uncovered_line_count"], json!(1));
         assert_eq!(gap["sample_uncovered_lines"], json!([3]));
         Ok(())
+    }
+
+    #[test]
+    fn top_project_files_rank_uncovered_project_surfaces() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let lcov = temp.path().join("lcov.info");
+        fs::write(
+            &lcov,
+            "\
+SF:crates/perl-parser/src/lib.rs
+DA:1,0
+DA:2,0
+DA:3,1
+end_of_record
+SF:xtask/src/tasks/quality_baseline.rs
+DA:1,0
+DA:2,1
+end_of_record
+SF:crates/perl-config/src/lib.rs
+DA:1,0
+DA:2,0
+DA:3,0
+DA:4,1
+end_of_record
+SF:crates/perl-covered/src/lib.rs
+DA:1,1
+DA:2,1
+end_of_record
+SF:crates/perl-empty/src/lib.rs
+end_of_record
+",
+        )?;
+        let summary = parse_lcov(&lcov)?;
+
+        let rows = top_project_file_gaps(None, &summary, 2);
+
+        assert_eq!(rows[0]["path"], json!("crates/perl-config/src/lib.rs"));
+        assert_eq!(rows[0]["uncovered_line_count"], json!(3));
+        assert_eq!(rows[1]["path"], json!("crates/perl-parser/src/lib.rs"));
+        assert_eq!(rows[1]["uncovered_line_count"], json!(2));
+        assert!(!rows.iter().any(|row| row["path"] == json!("crates/perl-empty/src/lib.rs")));
+        Ok(())
+    }
+
+    #[test]
+    fn top_project_files_skip_zero_line_coverage_files() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let lcov = temp.path().join("lcov.info");
+        fs::write(
+            &lcov,
+            "\
+SF:crates/perl-empty/src/lib.rs
+end_of_record
+",
+        )?;
+        let summary = parse_lcov(&lcov)?;
+
+        assert_eq!(summary.files[0].line_found, 0);
+        assert_eq!(percent(summary.files[0].line_hit, summary.files[0].line_found), 0.0);
+        assert!(!project_file_below_target(&summary.files[0]));
+        assert_eq!(top_project_file_gaps(None, &summary, 10), Vec::<JsonValue>::new());
+        Ok(())
+    }
+
+    #[test]
+    fn project_file_below_target_requires_executable_lines() {
+        let zero_line_file = FileCoverage {
+            path: "crates/perl-empty/src/lib.rs".to_string(),
+            line_hit: 0,
+            line_found: 0,
+            lines: Vec::new(),
+            uncovered_lines: Vec::new(),
+        };
+        let low_file = FileCoverage {
+            path: "crates/perl-low/src/lib.rs".to_string(),
+            line_hit: 1,
+            line_found: 2,
+            lines: Vec::new(),
+            uncovered_lines: vec![2],
+        };
+        let covered_file = FileCoverage {
+            path: "crates/perl-covered/src/lib.rs".to_string(),
+            line_hit: 2,
+            line_found: 2,
+            lines: Vec::new(),
+            uncovered_lines: Vec::new(),
+        };
+
+        assert!(!project_file_below_target(&zero_line_file));
+        assert!(project_file_below_target(&low_file));
+        assert!(!project_file_below_target(&covered_file));
+    }
+
+    #[test]
+    fn recommended_project_clusters_group_current_burn_down_buckets() {
+        let top_files = vec![
+            json!({"path": "xtask/src/tasks/quality_baseline.rs", "uncovered_line_count": 20}),
+            json!({"path": "crates/perl-lsp-provider/src/hover.rs", "uncovered_line_count": 18}),
+            json!({"path": "crates/perl-runtime/src/cancellation.rs", "uncovered_line_count": 16}),
+            json!({"path": "crates/perl-config/src/lib.rs", "uncovered_line_count": 14}),
+            json!({"path": "crates/perl-json/src/schema.rs", "uncovered_line_count": 12}),
+            json!({"path": "crates/perl-errors/src/lib.rs", "uncovered_line_count": 10}),
+            json!({"path": "crates/perl-parser/src/lib.rs", "uncovered_line_count": 8}),
+            json!({"uncovered_line_count": 999}),
+        ];
+
+        let rows = recommended_project_clusters(&top_files, 10);
+
+        assert_eq!(rows[0].pointer("/name"), Some(&json!("proof-infrastructure")));
+        assert_eq!(rows[0].pointer("/uncovered_line_count"), Some(&json!(20)));
+        assert!(
+            rows.iter().any(|row| row.pointer("/name") == Some(&json!("provider-decision-logic")))
+        );
+        assert!(
+            rows.iter().any(|row| row.pointer("/name") == Some(&json!("scheduler-cancellation")))
+        );
+        assert!(rows.iter().any(|row| row.pointer("/name") == Some(&json!("config-parsing"))));
+        assert!(
+            rows.iter()
+                .any(|row| row.pointer("/name") == Some(&json!("serialization-deserialization")))
+        );
+        assert!(rows.iter().any(|row| row.pointer("/name") == Some(&json!("error-handling"))));
+        assert!(
+            rows.iter()
+                .any(|row| row.pointer("/name") == Some(&json!("project-coverage-inventory")))
+        );
+    }
+
+    #[test]
+    fn project_cluster_mapping_names_burn_down_surfaces() {
+        assert_eq!(
+            project_cluster_for_path("xtask/src/tasks/quality_baseline.rs").0,
+            "proof-infrastructure"
+        );
+        assert_eq!(
+            project_cluster_for_path("crates/perl-receipt/src/report.rs").0,
+            "cli-report-generation"
+        );
+        assert_eq!(project_cluster_for_path("crates/perl-config/src/lib.rs").0, "config-parsing");
+        assert_eq!(
+            project_cluster_for_path("crates/perl-json/src/schema.rs").0,
+            "serialization-deserialization"
+        );
+        assert_eq!(
+            project_cluster_for_path("crates/perl-runtime/src/cancellation.rs").0,
+            "scheduler-cancellation"
+        );
+        assert_eq!(project_cluster_for_path("crates/perl-errors/src/lib.rs").0, "error-handling");
+        assert_eq!(
+            project_cluster_for_path("crates/perl-lsp-provider/src/hover.rs").0,
+            "provider-decision-logic"
+        );
+        assert_eq!(
+            project_cluster_for_path("crates/perl-parser/src/lib.rs").0,
+            "project-coverage-inventory"
+        );
     }
 
     #[test]
@@ -627,7 +982,8 @@ coverage:
     #[test]
     fn build_receipt_derives_patch_coverage_from_git_diff() -> TestResult {
         let temp = tempfile::tempdir()?;
-        let repo = temp.path();
+        let repo_root = temp.path().join("perl-lsp-swarm-coverage-target");
+        let repo = repo_root.as_path();
         fs::create_dir_all(repo.join("src"))?;
         fs::write(repo.join("src/lib.rs"), "pub fn value() -> bool {\n    true\n}\n")?;
         run_git(repo, &["init"])?;
@@ -668,10 +1024,19 @@ coverage:
         };
 
         let receipt = build_receipt(repo, &args)?;
+        let source_path = repo.join("src/lib.rs").display().to_string().replace('\\', "/");
 
         assert_eq!(receipt["coverage"]["patch"], json!(0.0));
         assert_eq!(receipt["patch_files_below_target"][0]["path"], json!("src/lib.rs"));
         assert_eq!(receipt["patch_files_below_target"][0]["sample_uncovered_lines"], json!([2]));
+        assert_eq!(receipt["project_burndown"]["target"], json!(95.0));
+        assert_eq!(receipt["project_burndown"]["status"], json!("burn_down_required"));
+        assert_eq!(receipt["project_files_below_target"][0]["path"], json!(source_path));
+        assert_eq!(receipt["top_project_files"][0]["uncovered_line_count"], json!(1));
+        assert_eq!(
+            receipt["recommended_project_clusters"][0]["name"],
+            json!("project-coverage-inventory")
+        );
         assert_eq!(receipt["scope"], json!("workspace-lib-xtask-quality"));
         Ok(())
     }

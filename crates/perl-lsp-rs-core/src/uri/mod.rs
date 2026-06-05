@@ -31,6 +31,10 @@ fn fallback_uri() -> Uri {
 pub fn parse_uri(s: &str) -> Uri {
     let sanitized = s.trim_start_matches('\u{feff}').trim();
 
+    if sanitized.is_empty() {
+        return fallback_uri();
+    }
+
     match sanitized.parse::<Uri>() {
         Ok(uri) => uri,
         Err(_) => Url::parse(sanitized)

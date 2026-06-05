@@ -273,16 +273,19 @@ fn is_keyword_boundary(ch: Option<char>) -> bool {
 /// `for (0) {}` iterates once with `$_ = 0`; it is a list iterator, not a
 /// boolean guard, so it is never dead code.
 fn is_always_false(condition: &str) -> bool {
-    let c = condition.trim();
+    // Strip outer balanced parentheses iteratively to avoid unbounded recursion
+    // on adversarially-deep inputs like `((((...0...))))` (#795).
+    let c = strip_outer_parens(condition);
     matches!(c, "0" | "\"\"" | "''" | "undef")
-        || (c.starts_with('(') && c.ends_with(')') && is_always_false(&c[1..c.len() - 1]))
 }
 
 /// Returns `true` if `condition` is a trivially-true constant expression.
 ///
 /// Matches: `1`, `"1"`, `'1'`, any non-zero integer literal, `(1)` etc.
 fn is_always_true(condition: &str) -> bool {
-    let c = condition.trim();
+    // Strip outer balanced parentheses iteratively to avoid unbounded recursion
+    // on adversarially-deep inputs (#795).
+    let c = strip_outer_parens(condition);
     // Non-zero integer literal
     if c.parse::<i64>().is_ok_and(|n| n != 0) {
         return true;
@@ -298,8 +301,51 @@ fn is_always_true(condition: &str) -> bool {
         let inner = &c[1..c.len() - 1];
         return inner != "0";
     }
-    // Parenthesised
-    c.starts_with('(') && c.ends_with(')') && is_always_true(&c[1..c.len() - 1])
+    false
+}
+
+/// Strip all layers of balanced outer parentheses from `condition`, returning
+/// a reference to the innermost non-paren-wrapped content.
+///
+/// For example `"(((0)))"` → `"0"`, `"( x )"` → `"x"`, `"0"` → `"0"`.
+///
+/// This replaces the previous tail-recursive pattern and avoids stack overflow
+/// on deeply-nested inputs (#795).
+fn strip_outer_parens(condition: &str) -> &str {
+    let mut s = condition.trim();
+    while s.starts_with('(') && s.ends_with(')') && s.len() >= 2 {
+        let inner = &s[1..s.len() - 1];
+        // Only strip if the opening '(' matches the closing ')'.
+        // E.g. `"(a)(b)"` must NOT be stripped — the first '(' closes before
+        // the last ')'.
+        if is_outer_paren_balanced(inner) {
+            s = inner.trim();
+        } else {
+            break;
+        }
+    }
+    s
+}
+
+/// Returns `true` when wrapping `s` with `(` and `)` would form a balanced
+/// pair — i.e., when the first `(` in the parent expression closes at the
+/// very last character.  Equivalently, `inner` has a non-negative paren depth
+/// at every prefix.
+fn is_outer_paren_balanced(inner: &str) -> bool {
+    let mut depth = 0i32;
+    for ch in inner.chars() {
+        match ch {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth < 0 {
+                    return false;
+                }
+            }
+            _ => {}
+        }
+    }
+    true
 }
 
 /// Scan `text` for constant-condition dead branches and append `DeadBranch`
@@ -349,7 +395,14 @@ fn detect_dead_branches(file_path: &Path, text: &str, out: &mut Vec<DeadCode>) {
                     Some(c) => c,
                     None => continue,
                 };
-                let after_cond = rest[condition.len() + 2..].trim(); // skip '(' ... ')'
+                // `rest` starts with `(`, condition is `rest[1..idx]`, closing `)` is at
+                // index `idx = condition.len() + 1`.  `after_cond` starts at `idx + 1`.
+                // We use `.get()` for an explicit bounds-safe slice (#791).
+                let after_idx = condition.len() + 2;
+                let after_cond = match rest.get(after_idx..) {
+                    Some(s) => s.trim(),
+                    None => continue,
+                };
                 // Only fire if opening brace is on the same line.
                 if !after_cond.starts_with('{') && !after_cond.is_empty() {
                     continue;
