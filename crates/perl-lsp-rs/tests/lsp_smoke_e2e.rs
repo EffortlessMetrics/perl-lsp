@@ -6,6 +6,8 @@ use serde_json::{Value, json};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 static NEXT_URI_ID: AtomicU64 = AtomicU64::new(1);
 
 fn unique_test_uri(test_name: &str) -> String {
@@ -231,6 +233,127 @@ print $answer;
 
     let shutdown_response =
         send_request_with_timeout(&server, 103, "shutdown", json!(null), request_timeout)?;
+    assert!(
+        shutdown_response.get("error").is_none(),
+        "shutdown returned error: {shutdown_response:#}"
+    );
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+            "params": null
+        }),
+    );
+
+    Ok(())
+}
+
+#[test]
+fn lsp_smoke_e2e_did_close_clears_published_diagnostics() -> TestResult {
+    let server = common::start_lsp_server();
+    let request_timeout = Duration::from_secs(3);
+    let diagnostics_timeout = Duration::from_secs(5);
+    let init_timeout = common::timeout_scaler::TimeoutProfile::Initialization.timeout();
+    let uri = unique_test_uri("didclose-diagnostics");
+
+    let init_response = send_request_with_timeout(
+        &server,
+        201,
+        "initialize",
+        json!({
+            "processId": null,
+            "rootUri": null,
+            "capabilities": {
+                "textDocument": {
+                    "publishDiagnostics": {
+                        "relatedInformation": true,
+                        "versionSupport": true
+                    }
+                }
+            }
+        }),
+        init_timeout,
+    )?;
+    assert!(init_response.get("error").is_none(), "initialize returned error: {init_response:#}");
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "initialized",
+            "params": {}
+        }),
+    );
+
+    let broken_source = r#"use strict;
+use warnings;
+
+sub close_me {
+    if ($_[0] > 10 {
+        return $_[0];
+    }
+}
+"#;
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": broken_source
+                }
+            }
+        }),
+    );
+
+    let broken_diagnostics =
+        wait_for_diagnostics_matching(&server, &uri, diagnostics_timeout, |diagnostics| {
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.get("source").and_then(Value::as_str) == Some("perl-parser")
+                    && diagnostic.get("severity").and_then(Value::as_i64) == Some(1)
+            })
+        })?;
+    let broken_items = broken_diagnostics
+        .pointer("/params/diagnostics")
+        .and_then(Value::as_array)
+        .ok_or("broken diagnostics payload missing diagnostics array")?;
+    assert!(
+        !broken_items.is_empty(),
+        "broken source should publish at least one diagnostic before close: {broken_diagnostics:#}"
+    );
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didClose",
+            "params": {
+                "textDocument": { "uri": uri }
+            }
+        }),
+    );
+
+    let clear_diagnostics =
+        wait_for_diagnostics_matching(&server, &uri, diagnostics_timeout, |diagnostics| {
+            diagnostics.is_empty()
+        })?;
+    let clear_items = clear_diagnostics
+        .pointer("/params/diagnostics")
+        .and_then(Value::as_array)
+        .ok_or("clear diagnostics payload missing diagnostics array")?;
+    assert!(
+        clear_items.is_empty(),
+        "didClose should publish an empty diagnostics array to clear stale editor diagnostics: {clear_diagnostics:#}"
+    );
+
+    let shutdown_response =
+        send_request_with_timeout(&server, 202, "shutdown", json!(null), request_timeout)?;
     assert!(
         shutdown_response.get("error").is_none(),
         "shutdown returned error: {shutdown_response:#}"
