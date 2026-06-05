@@ -11,16 +11,16 @@ pub(super) fn run_check_project(dir: &str) -> i32 {
     let metadata = match root.metadata() {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            eprintln!("{dir}: directory not found");
+            eprintln!("{}", directory_not_found_message(dir));
             return 1;
         }
         Err(error) => {
-            eprintln!("{dir}: cannot access directory: {error}");
+            eprintln!("{}", directory_access_error_message(dir, &error));
             return 1;
         }
     };
     if !metadata.is_dir() {
-        eprintln!("{dir}: not a directory");
+        eprintln!("{}", not_directory_message(dir));
         return 1;
     }
 
@@ -39,6 +39,24 @@ pub(super) fn run_check_project(dir: &str) -> i32 {
     }
 
     emit_report(dir, &results)
+}
+
+fn directory_not_found_message(dir: &str) -> String {
+    format!(
+        "{dir}: directory not found\nhelp: pass an existing project directory, or run `perllsp --check-project .` from your project root"
+    )
+}
+
+fn directory_access_error_message(dir: &str, error: &std::io::Error) -> String {
+    format!(
+        "{dir}: cannot access directory: {error}\nhelp: check directory permissions, then rerun `perllsp --check-project {dir}`"
+    )
+}
+
+fn not_directory_message(dir: &str) -> String {
+    format!(
+        "{dir}: not a directory\nhelp: pass the containing project directory, for example `perllsp --check-project .`"
+    )
 }
 
 #[derive(Default)]
@@ -211,7 +229,10 @@ fn remediation_hint_for_category(category: &str) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{categorize_error, remediation_hint_for_category};
+    use super::{
+        categorize_error, directory_access_error_message, directory_not_found_message,
+        not_directory_message, remediation_hint_for_category,
+    };
 
     #[test]
     fn categorize_error_maps_known_cases() {
@@ -237,5 +258,23 @@ mod tests {
     #[test]
     fn remediation_hints_skip_unknown_categories() {
         assert!(remediation_hint_for_category("Other").is_none());
+    }
+
+    #[test]
+    fn project_root_errors_include_recovery_guidance() -> Result<(), Box<dyn std::error::Error>> {
+        let missing = directory_not_found_message("missing-project");
+        assert!(missing.contains("directory not found"));
+        assert!(missing.contains("perllsp --check-project ."));
+
+        let access_error = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied");
+        let inaccessible = directory_access_error_message("private-project", &access_error);
+        assert!(inaccessible.contains("cannot access directory"));
+        assert!(inaccessible.contains("check directory permissions"));
+
+        let file_path = not_directory_message("script.pl");
+        assert!(file_path.contains("not a directory"));
+        assert!(file_path.contains("pass the containing project directory"));
+
+        Ok(())
     }
 }
