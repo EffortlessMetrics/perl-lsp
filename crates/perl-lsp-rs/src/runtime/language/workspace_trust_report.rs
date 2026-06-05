@@ -127,6 +127,53 @@ fn setup_hints_summary(config: &WorkspaceConfig) -> Value {
     })
 }
 
+fn plural_suffix(count: usize) -> &'static str {
+    if count == 1 { "" } else { "s" }
+}
+
+fn setup_hint_count(setup_hints: &Value) -> usize {
+    setup_hints
+        .get("hint_count")
+        .and_then(Value::as_u64)
+        .and_then(|count| usize::try_from(count).ok())
+        .or_else(|| setup_hints.get("hints").and_then(Value::as_array).map(Vec::len))
+        .unwrap_or(0)
+}
+
+fn setup_hint_severity_count(setup_hints: &Value, severity: &str) -> usize {
+    setup_hints
+        .get("hints")
+        .and_then(Value::as_array)
+        .map(|hints| {
+            hints
+                .iter()
+                .filter(|hint| hint.get("severity").and_then(Value::as_str) == Some(severity))
+                .count()
+        })
+        .unwrap_or(0)
+}
+
+fn workspace_trust_user_message(setup_hints: &Value) -> String {
+    let hint_count = setup_hint_count(setup_hints);
+    if hint_count == 0 {
+        return "Perl LSP workspace trust report generated from current server state. No setup hints were found.".to_string();
+    }
+
+    let warning_count = setup_hint_severity_count(setup_hints, "warning");
+    if warning_count == 0 {
+        return format!(
+            "Perl LSP workspace trust report generated from current server state with {hint_count} setup hint{}. Review `setup_hints` for details.",
+            plural_suffix(hint_count)
+        );
+    }
+
+    format!(
+        "Perl LSP workspace trust report generated from current server state with {hint_count} setup hint{}, including {warning_count} warning{}. Review `setup_hints` for details.",
+        plural_suffix(hint_count),
+        plural_suffix(warning_count)
+    )
+}
+
 fn perldoc_runtime_state(config: &WorkspaceConfig) -> Value {
     json!({
         "status": "oracle_contract_reported_not_run",
@@ -475,7 +522,7 @@ impl LspServer {
         Ok(Some(json!({
             "schema_version": WORKSPACE_TRUST_REPORT_SCHEMA_VERSION,
             "command": "perl.workspaceTrustReport",
-            "user_message": "Perl LSP workspace trust report generated from current server state.",
+            "user_message": workspace_trust_user_message(&setup_hints),
             "claim_boundary": "This report aggregates existing runtime state only. It does not scan files, probe Perl, refresh parser corpus receipts, or promote provider support tiers.",
             "workspace": {
                 "root_path": root_path.as_ref().map(|path| path.display().to_string()),
@@ -500,5 +547,69 @@ impl LspServer {
             },
             "copyable_payload": copyable_payload,
         })))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    #[test]
+    fn workspace_trust_user_message_reports_no_setup_hints() -> TestResult {
+        let setup_hints = json!({
+            "hint_count": 0,
+            "hints": [],
+        });
+
+        assert_eq!(
+            workspace_trust_user_message(&setup_hints),
+            "Perl LSP workspace trust report generated from current server state. No setup hints were found."
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn workspace_trust_user_message_reports_setup_hint_count() -> TestResult {
+        let setup_hints = json!({
+            "hint_count": 1,
+            "hints": [
+                {
+                    "severity": "info",
+                    "message": "No explicit Perl binary is configured."
+                }
+            ],
+        });
+
+        let message = workspace_trust_user_message(&setup_hints);
+        assert!(message.contains("1 setup hint"), "message should name hint count: {message}");
+        assert!(
+            !message.contains("warning"),
+            "info-only message should not imply warnings: {message}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn workspace_trust_user_message_reports_warning_count() -> TestResult {
+        let setup_hints = json!({
+            "hint_count": 2,
+            "hints": [
+                {
+                    "severity": "info",
+                    "message": "No explicit Perl binary is configured."
+                },
+                {
+                    "severity": "warning",
+                    "message": "No workspace include paths are configured."
+                }
+            ],
+        });
+
+        let message = workspace_trust_user_message(&setup_hints);
+        assert!(message.contains("2 setup hints"), "message should name hint count: {message}");
+        assert!(message.contains("1 warning"), "message should name warning count: {message}");
+        Ok(())
     }
 }
