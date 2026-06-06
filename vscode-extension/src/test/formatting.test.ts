@@ -47,10 +47,14 @@ describe('handleFormattingError', () => {
     test('shows Run Health Check button when perltidy is not found', () => {
         const ch = makeOutputChannel();
         handleFormattingError('perltidy not found: /usr/bin/perltidy', ch as any);
+        const call = (vscode.window.showErrorMessage as jest.Mock).mock.calls[0];
         expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
             expect.stringContaining('perltidy, which was not found on PATH'),
             'Run Health Check'
         );
+        expect(call[0]).toContain('cpanm Perl::Tidy');
+        expect(call[0]).toContain('Perl: Run Health Check');
+        expect(call[0]).not.toContain('perl-lsp.perltidyConfig');
     });
 
     test('does not show toast again within 30s cooldown', () => {
