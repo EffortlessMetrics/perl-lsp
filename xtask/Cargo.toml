@@ -30,7 +30,7 @@ perl-workspace = { workspace = true }
 perl-ci-hygiene = { workspace = true }
 indicatif = "0.18.4"
 console = "0.16.2"
-chrono = { version = "0.4.43", features = ["serde"] }
+chrono = { version = "0.4.45", features = ["serde"] }
 perl-parser = { workspace = true, features = ["incremental"] }
 perl-parser-core = { workspace = true }
 perl-corpus = { workspace = true }

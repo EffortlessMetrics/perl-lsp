@@ -55,7 +55,7 @@ name = "parse_c"
 path = "src/bin/parse_c.rs"
 
 [build-dependencies]
-cc = "1.2.62"
+cc = "1.2.63"
 
 [lints]
 workspace = true
