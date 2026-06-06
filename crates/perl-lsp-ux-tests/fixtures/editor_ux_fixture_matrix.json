@@ -805,7 +805,7 @@
         "diagnostic notifications arrive for selected probes",
         "diagnostics use valid LSP payload shape",
         "workspace-present Mojolicious imports do not emit PL701",
-        "missing-module probe emits PL701 without promoting broad diagnostics claims"
+        "missing-module probe emits PL701 with searched @INC context without promoting broad diagnostics claims"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",
