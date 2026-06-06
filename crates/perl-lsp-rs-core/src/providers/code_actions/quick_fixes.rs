@@ -2220,10 +2220,11 @@ pub fn fix_goto_undefined_label(source: &str, diagnostic: &QuickFixDiagnostic) -
 
     let before_label = &source[line_start..range_start];
 
-    // Accept only `<whitespace>goto ` before the label. Anything else on the line
-    // (other statements, closing braces, etc.) means line-deletion would be unsafe.
+    // Accept only `<whitespace>goto<whitespace>` before the label. Anything else
+    // on the line (other statements, closing braces, etc.) means line-deletion would
+    // be unsafe. trim_end() handles both space- and tab-separated goto.
     let before_trimmed = before_label.trim_start();
-    if before_trimmed != "goto " && before_trimmed != "goto" {
+    if before_trimmed.trim_end() != "goto" {
         return Vec::new();
     }
 

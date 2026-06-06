@@ -193,3 +193,30 @@ fn code_action_pl409_goto_on_shared_line_produces_no_action() {
         "goto on a shared line should not offer PL409 quick fix (unsafe deletion), got: {actions:?}"
     );
 }
+
+// --- Scenario 8: goto with tab whitespace before label is offered ---
+
+#[test]
+fn code_action_pl409_goto_with_tab_whitespace_offers_action() {
+    // A tab between goto and the label is valid Perl whitespace.
+    // The guard uses trim_end() so this case is handled correctly.
+    let source = "    goto	MISSING;\n";
+    let label_start = must_some(source.find("MISSING"));
+    let diagnostic = make_diag(
+        label_start,
+        label_start + "MISSING".len(),
+        "PL409",
+        "Goto label 'MISSING' is not defined in this file",
+    );
+
+    let actions = actions_for(source, &[diagnostic]);
+    let pl409 = pl409_actions(&actions);
+
+    assert_eq!(
+        pl409.len(),
+        1,
+        "tab-separated goto should offer PL409 quick fix, got: {actions:?}"
+    );
+    let result = edited(source, pl409[0]);
+    assert_eq!(result, "");
+}
