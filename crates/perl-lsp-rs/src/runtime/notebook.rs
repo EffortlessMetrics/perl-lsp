@@ -224,6 +224,15 @@ impl Default for NotebookStore {
     }
 }
 
+fn missing_notebook_document_uri_params(method: &str) -> JsonRpcError {
+    let message = format!(
+        "Missing required parameter: notebookDocument.uri\n\n\
+         {method} expects params.notebookDocument.uri to identify the notebook document.\n\n\
+         Example: {{\"notebookDocument\":{{\"uri\":\"file:///workspace/notebook.ipynb\"}}}}"
+    );
+    invalid_params(&message)
+}
+
 impl Clone for NotebookStore {
     fn clone(&self) -> Self {
         Self {
@@ -267,13 +276,14 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<(), JsonRpcError> {
-        let params = params.ok_or_else(|| invalid_params("Missing params"))?;
+        let params = params
+            .ok_or_else(|| missing_notebook_document_uri_params("notebookDocument/didOpen"))?;
 
         // Extract notebook document metadata
         let notebook_uri = params
             .pointer("/notebookDocument/uri")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| invalid_params("Missing notebookDocument.uri"))?;
+            .ok_or_else(|| missing_notebook_document_uri_params("notebookDocument/didOpen"))?;
 
         let notebook_type = params
             .pointer("/notebookDocument/notebookType")
@@ -363,12 +373,13 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<(), JsonRpcError> {
-        let params = params.ok_or_else(|| invalid_params("Missing params"))?;
+        let params = params
+            .ok_or_else(|| missing_notebook_document_uri_params("notebookDocument/didChange"))?;
 
         let notebook_uri = params
             .pointer("/notebookDocument/uri")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| invalid_params("Missing notebookDocument.uri"))?;
+            .ok_or_else(|| missing_notebook_document_uri_params("notebookDocument/didChange"))?;
 
         // Update notebook version
         if let Some(version) = params
@@ -564,12 +575,13 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<(), JsonRpcError> {
-        let params = params.ok_or_else(|| invalid_params("Missing params"))?;
+        let params = params
+            .ok_or_else(|| missing_notebook_document_uri_params("notebookDocument/didSave"))?;
 
         let notebook_uri = params
             .pointer("/notebookDocument/uri")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| invalid_params("Missing notebookDocument.uri"))?;
+            .ok_or_else(|| missing_notebook_document_uri_params("notebookDocument/didSave"))?;
 
         tracing::debug!(uri = notebook_uri, "Notebook saved");
 
@@ -584,12 +596,13 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<(), JsonRpcError> {
-        let params = params.ok_or_else(|| invalid_params("Missing params"))?;
+        let params = params
+            .ok_or_else(|| missing_notebook_document_uri_params("notebookDocument/didClose"))?;
 
         let notebook_uri = params
             .pointer("/notebookDocument/uri")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| invalid_params("Missing notebookDocument.uri"))?;
+            .ok_or_else(|| missing_notebook_document_uri_params("notebookDocument/didClose"))?;
 
         // Get cell URIs that need closing
         if let Some(cell_docs) = params.pointer("/cellTextDocuments").and_then(|v| v.as_array()) {
@@ -624,6 +637,57 @@ impl LspServer {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    fn expect_notebook_uri_guidance(err: JsonRpcError, method: &str) -> Result<(), String> {
+        assert_eq!(err.code, crate::protocol::INVALID_PARAMS);
+        for expected in [
+            "Missing required parameter: notebookDocument.uri",
+            method,
+            "params.notebookDocument.uri",
+            "file:///workspace/notebook.ipynb",
+        ] {
+            if !err.message.contains(expected) {
+                return Err(format!("expected error message to contain {expected:?}; got {err}"));
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn notebook_did_open_missing_uri_error_includes_shape_guidance() -> Result<(), String> {
+        let server = LspServer::new();
+        match server.handle_notebook_did_open(Some(json!({}))) {
+            Err(err) => expect_notebook_uri_guidance(err, "notebookDocument/didOpen"),
+            Ok(()) => Err("expected INVALID_PARAMS".to_string()),
+        }
+    }
+
+    #[test]
+    fn notebook_did_change_missing_uri_error_includes_shape_guidance() -> Result<(), String> {
+        let server = LspServer::new();
+        match server.handle_notebook_did_change(Some(json!({}))) {
+            Err(err) => expect_notebook_uri_guidance(err, "notebookDocument/didChange"),
+            Ok(()) => Err("expected INVALID_PARAMS".to_string()),
+        }
+    }
+
+    #[test]
+    fn notebook_did_save_missing_params_error_includes_shape_guidance() -> Result<(), String> {
+        let server = LspServer::new();
+        match server.handle_notebook_did_save(None) {
+            Err(err) => expect_notebook_uri_guidance(err, "notebookDocument/didSave"),
+            Ok(()) => Err("expected INVALID_PARAMS".to_string()),
+        }
+    }
+
+    #[test]
+    fn notebook_did_close_missing_uri_error_includes_shape_guidance() -> Result<(), String> {
+        let server = LspServer::new();
+        match server.handle_notebook_did_close(Some(json!({}))) {
+            Err(err) => expect_notebook_uri_guidance(err, "notebookDocument/didClose"),
+            Ok(()) => Err("expected INVALID_PARAMS".to_string()),
+        }
+    }
 
     #[test]
     fn register_notebook_replaces_stale_cell_mappings() -> Result<(), Box<dyn std::error::Error>> {
