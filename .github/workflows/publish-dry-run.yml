@@ -20,8 +20,8 @@ on:
       - 'Cargo.lock'
       - '.github/workflows/publish-crates.yml'
       - '.github/workflows/publish-dry-run.yml'
-      - 'scripts/cargo-package-workspace-dry-run.sh'
       - 'scripts/ci/check_perl_lsp_rs_core_package.py'
+      - 'scripts/cargo-package-workspace-dry-run.sh'
       - 'scripts/publish-topo.py'
       - 'xtask/src/tasks/publish_manifest_check.rs'
   workflow_dispatch: {}

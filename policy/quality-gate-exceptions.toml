@@ -1,0 +1,46 @@
+# Quality Gate Exceptions
+#
+# Temporary debt ledger for proof-lane burn-down. These entries document why the
+# transition gate can enforce new RIPR gaps and patch coverage before the repo
+# reaches the final ripr+ zero and project coverage targets.
+
+schema_version = 1
+policy = "quality-gate-exceptions"
+owner = "EffortlessMetrics"
+status = "active"
+updated = "2026-05-28"
+due_review = "fail"
+
+[requirements]
+required_active = [
+  "ripr-total-burndown",
+  "project-coverage-burndown",
+]
+
+[[exception]]
+id = "ripr-total-burndown"
+kind = "temporary_burndown"
+scope = "ripr_plus_total"
+owner = "proof-lane"
+issue = "#8197"
+reason = "Existing repo-wide RIPR+ gaps predate the transition gate. New gaps are blocked first while existing clusters are burned down with focused proof PRs."
+final_target = "repo-wide ripr+ unresolved total = 0"
+evidence = "current repo-wide RIPR+ receipt at target/receipts/quality/ripr-plus.json"
+removal_criteria = "quality-gate final mode requires unresolved total = 0 and no active ripr-total-burndown exception"
+created = "2026-05-28"
+review_after = "2026-06-28"
+expires = "2026-09-30"
+
+[[exception]]
+id = "project-coverage-burndown"
+kind = "temporary_burndown"
+scope = "project_coverage"
+owner = "proof-lane"
+issue = "#8197"
+reason = "Project coverage is below the final 95% floor while patch coverage becomes blocking first."
+final_target = "workspace project coverage >= 95%"
+evidence = "current coverage baseline receipt at target/receipts/quality/coverage-baseline.json"
+removal_criteria = "Codecov project status is blocking at 95% and no active project-coverage-burndown exception remains"
+created = "2026-05-28"
+review_after = "2026-06-28"
+expires = "2026-09-30"

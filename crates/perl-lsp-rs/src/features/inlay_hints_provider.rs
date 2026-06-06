@@ -369,7 +369,7 @@ impl InlayHintsProvider {
     /// Visit children nodes
     fn visit_children(&self, node: &Node, hints: &mut Vec<InlayHint>, range: Option<Range>) {
         match &node.kind {
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
                 self.visit_node(condition, hints, range);
                 self.visit_node(then_branch, hints, range);
                 for (cond, body) in elsif_branches {
@@ -555,6 +555,48 @@ print("Hello, World!");
 
             // Test passes if no crash occurs - actual hint behavior is flexible
         }
+    }
+
+    #[test]
+    fn visit_children_walks_if_and_while_with_keyword_metadata() {
+        let provider = InlayHintsProvider::new(String::new());
+        let loc = |start, end| perl_parser::ast::SourceLocation { start, end };
+        let number =
+            |start| Node::new(NodeKind::Number { value: "1".to_string() }, loc(start, start + 1));
+        let call = |name: &str, start| {
+            Node::new(
+                NodeKind::FunctionCall {
+                    name: name.to_string(),
+                    args: vec![number(start + name.len() + 1), number(start + name.len() + 4)],
+                },
+                loc(start, start + name.len() + 2),
+            )
+        };
+        let if_node = Node::new(
+            NodeKind::If {
+                condition: Box::new(number(1)),
+                then_branch: Box::new(call("push", 4)),
+                elsif_branches: vec![],
+                else_branch: Some(Box::new(call("split", 12))),
+                keyword: Some("unless".to_string()),
+            },
+            loc(0, 19),
+        );
+        let while_node = Node::new(
+            NodeKind::While {
+                condition: Box::new(number(21)),
+                body: Box::new(call("substr", 24)),
+                continue_block: None,
+                keyword: Some("until".to_string()),
+            },
+            loc(20, 34),
+        );
+        let root =
+            Node::new(NodeKind::Program { statements: vec![if_node, while_node] }, loc(0, 34));
+
+        let hints = provider.extract(&root);
+
+        assert!(hints.iter().any(|hint| hint.label.contains("ARRAY")));
     }
 
     #[test]

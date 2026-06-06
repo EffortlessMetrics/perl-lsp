@@ -77,11 +77,64 @@ impl DebugAdapter {
                 let mut framed_scope_lines = None;
 
                 // Request fresh scope output from Perl debugger for scope roots only.
+                //
+                // Scope encoding: variables_ref % 10 indicates the scope kind:
+                //   1 = Locals  (lexical `my` variables in the current frame)
+                //   2 = Package (package/`our` variables, fully-qualified names)
+                //   3 = Globals (Perl built-in global variables)
+                //
+                // Frame index (variables_ref / 10) is used only for Package/Globals
+                // lookups where `V <pkg>` is appropriate.  For Locals, the `V` command
+                // is unsuitable because it only shows package-symbol-table entries —
+                // `my` lexicals are NOT in the symbol table.  Instead, we use a
+                // B-module eval that walks the current pad directly.
                 let frame_id = variables_ref / 10;
                 match variables_ref % 10 {
                     1 => {
+                        // Locals scope: enumerate lexical `my` variables in the current
+                        // executing frame's pad using the B introspection module.
+                        //
+                        // Why not `V <frame_id> .`?  The `V` command takes a PACKAGE NAME,
+                        // not a frame number.  Passing a numeric frame_id (e.g. `V 1 .`)
+                        // looks up a package named "1" (which does not exist) and returns
+                        // no output.  The subsequent fallback to `fallback_scope_variables`
+                        // then returns fake DB-internal placeholders (`$self`, `@_`).
+                        //
+                        // The B-module eval approach:
+                        //   1. Gets the current frame's CV via `$DB::sub` (set by perl5db.pl
+                        //      to the sub name when stopped inside a subroutine, undef at
+                        //      file scope) or `B::main_cv()` for the file-scope frame.
+                        //   2. Walks the pad name list and value list in parallel,
+                        //      using `$va[-1]` (the last/innermost pad) so recursive
+                        //      calls show the current-innermost frame, not the outermost.
+                        //   3. Emits one `$name = value` line per lexical variable,
+                        //      which is the same format the `V` command would produce for
+                        //      package variables — fully compatible with `parse_scope_variables_from_lines`.
+                        //
+                        // The outer `eval {}` absorbs any errors (e.g. B not loadable) and
+                        // returns an empty string, so the framed output will be empty and
+                        // the adapter falls through to `parse_scope_variables_from_output`.
                         if let Some(stdin) = session.process.stdin.as_mut() {
-                            let commands = vec![format!("V {} .", frame_id)];
+                            let cmd = concat!(
+                                "p eval { require B; ",
+                                "my $cv=$DB::sub?B::svref_2object(\\&{$DB::sub}):B::main_cv(); ",
+                                "my $pl=$cv->PADLIST; ",
+                                "my @nm=$pl->NAMES->ARRAY; ",
+                                "my @va=$pl->ARRAY; ",
+                                "my @pds=(@va>1)?$va[-1]->ARRAY:(); ",
+                                "my $o=''; ",
+                                "for my $i (0..$#nm) { ",
+                                "  my $n=$nm[$i]; ",
+                                "  next if ref($n) eq 'B::SPECIAL'; ",
+                                "  my $pv=eval{$n->PVX}//''; ",
+                                "  next unless $pv=~/^[\\$\\@%]/; ",
+                                "  my $s=$i<@pds?$pds[$i]:undef; ",
+                                "  next unless defined $s; ",
+                                "  my $v=eval{$s->SV->PV}//eval{$s->SV->IV}//eval{$s->IV}//eval{$s->PV}//'undef'; ",
+                                "  $o.=\"$pv = $v\\n\" ",
+                                "} $o }",
+                            );
+                            let commands = vec![cmd.to_string()];
                             match self.send_framed_debugger_commands(stdin, &commands) {
                                 Ok((begin, end)) => {
                                     framed_scope_lines = self.capture_framed_debugger_output(
@@ -91,10 +144,7 @@ impl DebugAdapter {
                                     );
                                 }
                                 Err(error) => {
-                                    tracing::warn!(%error, "Failed to send framed variables command, falling back");
-                                    let cmd = format!("V {} .\n", frame_id);
-                                    let _ = stdin.write_all(cmd.as_bytes());
-                                    let _ = stdin.flush();
+                                    tracing::warn!(%error, "Failed to send framed locals command, falling back");
                                 }
                             }
                         }

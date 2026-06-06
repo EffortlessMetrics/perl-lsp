@@ -1,0 +1,72 @@
+name: LSP 3.18 Claim Guard
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/lsp-318-claim-guard.yml'
+      - 'policy/ci-lane-whitelist.toml'
+      - 'features.toml'
+      - 'crates/perl-lsp-rs/features_sot.toml'
+      - 'crates/perl-lsp-rs/src/**'
+      - 'crates/perl-lsp-rs-core/src/**'
+      - 'crates/perl-lsp-rs/tests/lsp_318_negative_claims.rs'
+      - 'crates/perl-lsp-rs/tests/lsp_cap_snap.rs'
+      - 'crates/perl-lsp-rs/tests/lsp_caps_contract_shapes.rs'
+      - 'crates/perl-lsp-rs/tests/snapshots/**'
+      - 'docs/specs/PLSP-SPEC-0029-lsp-318-conformance-boundary.md'
+      - 'docs/specs/lsp-318-conformance-matrix.md'
+      - 'xtask/src/main.rs'
+      - 'xtask/src/tasks/mod.rs'
+      - 'xtask/src/tasks/lsp_318_claims.rs'
+      - 'xtask/src/tasks/lsp_318_matrix.rs'
+      - 'xtask/tests/list_commands_cli.rs'
+  push:
+    branches: [main, master]
+    paths:
+      - '.github/workflows/lsp-318-claim-guard.yml'
+      - 'policy/ci-lane-whitelist.toml'
+      - 'features.toml'
+      - 'crates/perl-lsp-rs/features_sot.toml'
+      - 'crates/perl-lsp-rs/src/**'
+      - 'crates/perl-lsp-rs-core/src/**'
+      - 'crates/perl-lsp-rs/tests/lsp_318_negative_claims.rs'
+      - 'crates/perl-lsp-rs/tests/lsp_cap_snap.rs'
+      - 'crates/perl-lsp-rs/tests/lsp_caps_contract_shapes.rs'
+      - 'crates/perl-lsp-rs/tests/snapshots/**'
+      - 'docs/specs/PLSP-SPEC-0029-lsp-318-conformance-boundary.md'
+      - 'docs/specs/lsp-318-conformance-matrix.md'
+      - 'xtask/src/main.rs'
+      - 'xtask/src/tasks/mod.rs'
+      - 'xtask/src/tasks/lsp_318_claims.rs'
+      - 'xtask/src/tasks/lsp_318_matrix.rs'
+      - 'xtask/tests/list_commands_cli.rs'
+  workflow_dispatch: {}
+
+concurrency:
+  group: lsp-318-claim-guard-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}
+
+permissions:
+  contents: read
+
+jobs:
+  claim-guard:
+    name: LSP 3.18 claim guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: stable
+
+      - name: Check LSP 3.18 claim guard
+        run: cargo xtask check-lsp-318-claims
+
+      - name: Check generated LSP 3.18 matrix
+        run: cargo xtask generate-lsp-318-matrix --check

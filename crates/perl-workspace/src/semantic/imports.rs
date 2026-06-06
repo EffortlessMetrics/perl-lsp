@@ -13,7 +13,7 @@
 //! then [`ImportExportIndex::add_file_imports`] /
 //! [`ImportExportIndex::add_module_exports`] to insert fresh ones.
 
-use perl_semantic_facts::{ExportSet, FileId, ImportSpec};
+use perl_semantic_facts::{ExportSet, FileId, ImportSpec, UseLibFact};
 use std::collections::HashMap;
 
 /// Cross-file import/export index backed by two `HashMap`s.
@@ -39,6 +39,13 @@ pub struct ImportExportIndex {
     /// Reverse mapping from module name to the source URI that provided
     /// the export set, enabling removal by URI.
     module_to_source_uri: HashMap<String, String>,
+
+    /// File → `use lib`/`no lib` path facts, in source order.
+    use_lib_by_file: HashMap<FileId, Vec<UseLibFact>>,
+
+    /// Reverse mapping from file URI to `FileId` for use-lib entries,
+    /// enabling [`remove_file_use_lib`](Self::remove_file_use_lib) by URI.
+    use_lib_uri_to_id: HashMap<String, FileId>,
 }
 
 impl ImportExportIndex {
@@ -77,6 +84,34 @@ impl ImportExportIndex {
     /// Look up all import specs for a given file.
     pub fn get_imports_for_file(&self, file_id: FileId) -> &[ImportSpec] {
         self.imports_by_file.get(&file_id).map(Vec::as_slice).unwrap_or_default()
+    }
+
+    // ── UseLib methods ──
+
+    /// Index all `use lib`/`no lib` path facts for a file.
+    ///
+    /// The `source_uri` is stored so that
+    /// [`remove_file_use_lib`](Self::remove_file_use_lib) can locate the
+    /// correct `FileId` by URI.
+    pub fn add_file_use_lib(&mut self, source_uri: &str, file_id: FileId, facts: Vec<UseLibFact>) {
+        self.use_lib_uri_to_id.insert(source_uri.to_string(), file_id);
+        self.use_lib_by_file.insert(file_id, facts);
+    }
+
+    /// Remove all `use lib`/`no lib` entries that originated from the given file URI.
+    ///
+    /// This is the "remove" half of incremental re-indexing for use-lib facts.
+    pub fn remove_file_use_lib(&mut self, source_uri: &str) {
+        let file_id = match self.use_lib_uri_to_id.remove(source_uri) {
+            Some(id) => id,
+            None => return,
+        };
+        self.use_lib_by_file.remove(&file_id);
+    }
+
+    /// Look up all `use lib`/`no lib` path facts for a given file, in source order.
+    pub fn get_use_lib_for_file(&self, file_id: FileId) -> &[UseLibFact] {
+        self.use_lib_by_file.get(&file_id).map(Vec::as_slice).unwrap_or_default()
     }
 
     // ── Export methods ──

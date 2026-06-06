@@ -265,6 +265,77 @@ fn normal_mode_registers_file_watchers_when_client_supports_dynamic_watchers() -
 }
 
 #[test]
+fn relative_pattern_clients_receive_relative_file_watchers() -> TestResult {
+    let mut harness = LspHarness::new_with_tuning(RuntimeTuning::normal_defaults());
+    harness
+        .initialize_with_root("file:///workspace", Some(watcher_relative_pattern_capabilities()))?;
+
+    let requests = harness.drain_server_requests(250);
+    let registration = registration_for_method(&requests, "workspace/didChangeWatchedFiles")
+        .ok_or("normal mode must register file watchers when client supports them")?;
+    let watchers = registration
+        .pointer("/registerOptions/watchers")
+        .and_then(Value::as_array)
+        .ok_or("file watcher registration must include watchers")?;
+
+    assert_eq!(
+        watchers.len(),
+        4,
+        "single-root registration should include one watcher per Perl pattern"
+    );
+    for watcher in watchers {
+        assert_eq!(watcher.get("kind").and_then(Value::as_u64), Some(7));
+        assert_eq!(
+            watcher.pointer("/globPattern/baseUri").and_then(Value::as_str),
+            Some("file:///workspace"),
+            "relative watcher must be rooted at the initialized workspace: {watcher}"
+        );
+        assert!(
+            watcher.pointer("/globPattern/pattern").and_then(Value::as_str).is_some(),
+            "relative watcher must carry a pattern string: {watcher}"
+        );
+    }
+    assert!(
+        watchers.iter().any(|watcher| {
+            watcher.pointer("/globPattern/pattern").and_then(Value::as_str) == Some("**/*.pl")
+        }),
+        "expected .pl watcher in relative-pattern registration: {watchers:?}"
+    );
+    assert!(
+        watchers.iter().any(|watcher| {
+            watcher.pointer("/globPattern/pattern").and_then(Value::as_str) == Some("**/*.pm")
+        }),
+        "expected .pm watcher in relative-pattern registration: {watchers:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn relative_pattern_clients_fall_back_to_string_watchers_without_valid_workspace_uri() -> TestResult
+{
+    let mut harness = LspHarness::new_with_tuning(RuntimeTuning::normal_defaults());
+    harness.initialize_with_root("not a uri", Some(watcher_relative_pattern_capabilities()))?;
+
+    let requests = harness.drain_server_requests(250);
+    let registration = registration_for_method(&requests, "workspace/didChangeWatchedFiles")
+        .ok_or("normal mode must register fallback file watchers when workspace URI is invalid")?;
+    let watchers = registration
+        .pointer("/registerOptions/watchers")
+        .and_then(Value::as_array)
+        .ok_or("file watcher registration must include watchers")?;
+
+    assert!(watchers.iter().any(|watcher| watcher["globPattern"] == json!("**/*.pl")));
+    assert!(watchers.iter().any(|watcher| watcher["globPattern"] == json!("**/*.pm")));
+    for watcher in watchers {
+        assert!(
+            watcher.get("globPattern").is_some_and(Value::is_string),
+            "invalid workspace URI must fall back to string glob patterns: {watcher}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn jetbrains_still_disables_file_watchers_even_if_client_advertises_support() -> TestResult {
     let mut harness = LspHarness::new_with_tuning(RuntimeTuning::normal_defaults());
     let init = harness.request_raw(json!({
@@ -355,6 +426,18 @@ fn watcher_dynamic_capabilities() -> Value {
         "workspace": {
             "didChangeWatchedFiles": {
                 "dynamicRegistration": true
+            }
+        },
+        "textDocument": {}
+    })
+}
+
+fn watcher_relative_pattern_capabilities() -> Value {
+    json!({
+        "workspace": {
+            "didChangeWatchedFiles": {
+                "dynamicRegistration": true,
+                "relativePatternSupport": true
             }
         },
         "textDocument": {}

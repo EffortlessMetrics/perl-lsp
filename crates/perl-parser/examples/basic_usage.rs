@@ -132,7 +132,7 @@ fn count_nodes(node: &perl_parser::Node, stats: &mut AstStats) {
             count_nodes(left, stats);
             count_nodes(right, stats);
         }
-        NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+        NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
             count_nodes(condition, stats);
             count_nodes(then_branch, stats);
             for (cond, branch) in elsif_branches {

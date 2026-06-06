@@ -13,15 +13,26 @@ use handlers::{
 };
 use state::DispatcherState;
 
+/// Result of dispatching a single DAP request through [`DapDispatcher`].
+///
+/// Bundles the response with any protocol events triggered by the request
+/// (e.g. the `initialized` event emitted after a successful `initialize`).
 #[deprecated(
     since = "0.2.0",
     note = "Use DebugAdapter directly; DapDispatcher will be removed in a future release"
 )]
 pub struct DispatchResult {
+    /// The DAP response message to send back to the client.
     pub response: Response,
+    /// Protocol events to deliver to the client alongside the response.
     pub events: Vec<Event>,
 }
 
+/// Legacy DAP message router.
+///
+/// Routes incoming `Request` messages to the appropriate handler and returns
+/// a `Response` plus any side-effect `Event`s. Prefer [`crate::DebugAdapter`]
+/// for new code; this type exists only for backward compatibility.
 #[deprecated(
     since = "0.2.0",
     note = "Use DebugAdapter directly; DapDispatcher will be removed in a future release"
@@ -32,14 +43,17 @@ pub struct DapDispatcher {
 }
 
 impl DapDispatcher {
+    /// Create a new dispatcher with empty initial state.
     pub fn new() -> Self {
         Self { state: DispatcherState::new() }
     }
 
+    /// Dispatch a request and return only the response, discarding any events.
     pub fn dispatch(&self, request: &Request) -> Response {
         self.dispatch_with_events(request).response
     }
 
+    /// Dispatch a request and return the response together with any emitted events.
     pub fn dispatch_with_events(&self, request: &Request) -> DispatchResult {
         let result = self.dispatch_inner(request);
         let success = result.is_ok();

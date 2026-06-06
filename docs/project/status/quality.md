@@ -7,7 +7,7 @@
 ## Quality Metrics
 
 <!-- BEGIN: QUALITY_METRICS_BULLETS -->
-- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing
+- **Quality Metrics**: diagnostics p50 = 53 ms (receipt: `editor_ux.md`); incremental parse median = 37–73 µs (receipt: `parser_performance_scorecard.json`)
 - **UX workflow harness**: 30 scenario files in `perl-lsp-ux-tests`; `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds the integration-only 10k-line large-file case; confidence signals (manual smoke, first-5-minutes coverage, issue-burndown regression guards) are tracked in `docs/project/status/editor_ux.json`
 - **Mutation testing**: mutation data pending first nightly CI run — run `just mutation-subset` locally to populate
 - **Lexer performance scorecard**: `cargo bench -p perl-lexer --bench lexer_benchmarks` writes `benchmarks/results/lexer_scorecard.json` for trend comparisons

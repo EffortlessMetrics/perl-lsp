@@ -151,8 +151,22 @@ pub struct ServerConfig {
     /// Timeout in seconds for perltidy.
     pub perltidy_timeout_secs: u64,
 
+    /// Feature gate for future next-edit suggestions.
+    pub next_edit: NextEditConfig,
+
     /// AI-powered inline completion configuration.
     pub ai_completion: AiCompletionConfig,
+}
+
+/// Configuration for gated next-edit suggestions.
+///
+/// Disabled by default. Enabling this only opens the runtime boundary; no
+/// editor-visible next-edit provider is registered yet.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct NextEditConfig {
+    /// Whether the future next-edit runtime boundary is explicitly enabled.
+    pub enabled: bool,
 }
 
 /// Configuration for AI-powered inline completions.
@@ -172,6 +186,10 @@ pub struct AiCompletionConfig {
     pub model: String,
     /// Environment variable name containing the API key.
     pub api_key_env: String,
+    /// HTTP header used to send the API key. Default: Authorization.
+    pub api_key_header: String,
+    /// Optional auth scheme prepended before the API key. Default: Bearer.
+    pub api_key_prefix: Option<String>,
     /// Request timeout in milliseconds. Default: 1800.
     pub timeout_ms: u64,
     /// Maximum output tokens per request. Default: 64.
@@ -184,6 +202,49 @@ pub struct AiCompletionConfig {
     pub fallback: bool,
     /// Streaming-specific configuration.
     pub streaming: AiStreamingConfig,
+}
+
+pub(crate) const DEFAULT_AI_API_KEY_HEADER: &str = "Authorization";
+pub(crate) const DEFAULT_AI_API_KEY_PREFIX: &str = "Bearer";
+
+pub(crate) fn normalize_ai_api_key_header(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    (!trimmed.is_empty() && trimmed.bytes().all(is_http_header_name_byte))
+        .then(|| trimmed.to_string())
+}
+
+pub(crate) fn normalize_ai_api_key_prefix(value: &str) -> Option<Option<String>> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Some(None);
+    }
+
+    is_safe_http_header_value_part(trimmed).then(|| Some(trimmed.to_string()))
+}
+
+pub(crate) fn is_safe_http_header_value_part(value: &str) -> bool {
+    !value.bytes().any(|byte| byte < 0x20 || byte == 0x7f)
+}
+
+fn is_http_header_name_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric()
+        || matches!(
+            byte,
+            b'!' | b'#'
+                | b'$'
+                | b'%'
+                | b'&'
+                | b'\''
+                | b'*'
+                | b'+'
+                | b'-'
+                | b'.'
+                | b'^'
+                | b'_'
+                | b'`'
+                | b'|'
+                | b'~'
+        )
 }
 
 /// Streaming sub-configuration for AI completions.
@@ -203,6 +264,8 @@ impl Default for AiCompletionConfig {
             endpoint: String::new(),
             model: "gpt-4o-mini".to_string(),
             api_key_env: "OPENAI_API_KEY".to_string(),
+            api_key_header: DEFAULT_AI_API_KEY_HEADER.to_string(),
+            api_key_prefix: Some(DEFAULT_AI_API_KEY_PREFIX.to_string()),
             timeout_ms: 1800,
             max_output_tokens: 64,
             rate_limit_rps: 1.0,
@@ -254,6 +317,7 @@ impl Default for ServerConfig {
             perltidy_block_comment_indentation: Some(0),
             perltidy_extra_args: Vec::new(),
             perltidy_timeout_secs: 10,
+            next_edit: NextEditConfig::default(),
             ai_completion: AiCompletionConfig::default(),
         }
     }
@@ -300,6 +364,12 @@ impl ServerConfig {
             && let Some(enabled) = telemetry.get("enabled").and_then(|v| v.as_bool())
         {
             self.telemetry_enabled = enabled;
+        }
+
+        if let Some(next_edit) = settings.get("nextEdit")
+            && let Some(enabled) = next_edit.get("enabled").and_then(|v| v.as_bool())
+        {
+            self.next_edit.enabled = enabled;
         }
 
         if let Some(critic) = settings.get("perlcritic") {
@@ -405,6 +475,22 @@ impl ServerConfig {
             }
             if let Some(key_env) = ai.get("apiKeyEnv").and_then(|v| v.as_str()) {
                 self.ai_completion.api_key_env = key_env.to_string();
+            }
+            if let Some(key_header) = ai.get("apiKeyHeader").and_then(|v| v.as_str()) {
+                if let Some(header) = normalize_ai_api_key_header(key_header) {
+                    self.ai_completion.api_key_header = header;
+                }
+            }
+            if let Some(key_prefix) = ai.get("apiKeyPrefix") {
+                match key_prefix {
+                    serde_json::Value::Null => self.ai_completion.api_key_prefix = None,
+                    serde_json::Value::String(prefix) => {
+                        if let Some(prefix) = normalize_ai_api_key_prefix(prefix) {
+                            self.ai_completion.api_key_prefix = prefix;
+                        }
+                    }
+                    _ => {}
+                }
             }
             if let Some(timeout) = ai.get("timeoutMs").and_then(|v| v.as_u64()) {
                 self.ai_completion.timeout_ms = timeout;
@@ -859,6 +945,8 @@ pub struct ProjectConfig {
     pub features: ProjectFeaturesConfig,
     /// `[ai_completion]` section: AI completion settings.
     pub ai_completion: ProjectAiCompletionConfig,
+    /// `[next_edit]` section: gated next-edit settings.
+    pub next_edit: ProjectNextEditConfig,
     /// `[formatting]` section: native formatter and legacy adapter configuration.
     pub formatting: ProjectFormattingConfig,
     /// `[critic]` section: native critic and legacy adapter configuration.
@@ -931,6 +1019,19 @@ pub struct ProjectAiCompletionConfig {
     pub model: Option<String>,
     /// Environment variable name for API key.
     pub api_key_env: Option<String>,
+    /// HTTP header used to send the API key.
+    pub api_key_header: Option<String>,
+    /// Optional auth scheme prepended before the API key.
+    pub api_key_prefix: Option<String>,
+}
+
+/// `[next_edit]` section of `.perl-lsp.toml`.
+#[non_exhaustive]
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(default)]
+pub struct ProjectNextEditConfig {
+    /// Whether the future next-edit runtime boundary is explicitly enabled.
+    pub enabled: Option<bool>,
 }
 
 /// `[formatting]` section of `.perl-lsp.toml`.
@@ -1067,6 +1168,19 @@ impl ProjectConfig {
         }
         if let Some(ref key_env) = self.ai_completion.api_key_env {
             config.ai_completion.api_key_env = key_env.clone();
+        }
+        if let Some(ref key_header) = self.ai_completion.api_key_header {
+            if let Some(header) = normalize_ai_api_key_header(key_header) {
+                config.ai_completion.api_key_header = header;
+            }
+        }
+        if let Some(ref key_prefix) = self.ai_completion.api_key_prefix {
+            if let Some(prefix) = normalize_ai_api_key_prefix(key_prefix) {
+                config.ai_completion.api_key_prefix = prefix;
+            }
+        }
+        if let Some(enabled) = self.next_edit.enabled {
+            config.next_edit.enabled = enabled;
         }
 
         // Apply formatting configuration
@@ -1352,6 +1466,29 @@ profile = "recommended"
     }
 
     #[test]
+    fn server_config_update_from_value_applies_next_edit_gate() -> TestResult {
+        let mut config = ServerConfig::default();
+        assert!(!config.next_edit.enabled);
+
+        config.update_from_value(&serde_json::json!({
+            "nextEdit": {
+                "enabled": true
+            }
+        }));
+
+        assert!(config.next_edit.enabled);
+
+        config.update_from_value(&serde_json::json!({
+            "nextEdit": {
+                "enabled": false
+            }
+        }));
+
+        assert!(!config.next_edit.enabled);
+        Ok(())
+    }
+
+    #[test]
     fn server_config_update_from_value_applies_formatting_and_ai_settings() -> TestResult {
         let mut config = ServerConfig::default();
 
@@ -1378,6 +1515,8 @@ profile = "recommended"
                 "endpoint": "http://127.0.0.1:11434/v1",
                 "model": "codellama",
                 "apiKeyEnv": "LOCAL_AI_KEY",
+                "apiKeyHeader": "x-api-key",
+                "apiKeyPrefix": "",
                 "timeoutMs": 2500,
                 "maxOutputTokens": 128,
                 "rateLimitRps": 2.5,
@@ -1409,6 +1548,8 @@ profile = "recommended"
         assert_eq!(config.ai_completion.endpoint, "http://127.0.0.1:11434/v1");
         assert_eq!(config.ai_completion.model, "codellama");
         assert_eq!(config.ai_completion.api_key_env, "LOCAL_AI_KEY");
+        assert_eq!(config.ai_completion.api_key_header, "x-api-key");
+        assert_eq!(config.ai_completion.api_key_prefix, None);
         assert_eq!(config.ai_completion.timeout_ms, 2500);
         assert_eq!(config.ai_completion.max_output_tokens, 128);
         assert_eq!(config.ai_completion.rate_limit_rps, 2.5);
@@ -1576,10 +1717,34 @@ profile = "recommended"
     }
 
     #[test]
+    fn project_config_applies_next_edit_gate() {
+        let mut config = ServerConfig::default();
+        let mut project = ProjectConfig::default();
+        project.next_edit.enabled = Some(true);
+
+        project.apply_to_server_config(&mut config);
+
+        assert!(config.next_edit.enabled);
+    }
+
+    #[test]
+    fn project_config_can_disable_next_edit_gate() {
+        let mut config = ServerConfig::default();
+        config.next_edit.enabled = true;
+        let mut project = ProjectConfig::default();
+        project.next_edit.enabled = Some(false);
+
+        project.apply_to_server_config(&mut config);
+
+        assert!(!config.next_edit.enabled);
+    }
+
+    #[test]
     fn apply_to_server_config_does_not_overwrite_unset_values() {
         let mut config = ServerConfig {
             perlcritic_enabled: true,
             inlay_hints_enabled: true,
+            next_edit: NextEditConfig { enabled: true },
             ..ServerConfig::default()
         };
         let project = ProjectConfig::default();
@@ -1588,6 +1753,7 @@ profile = "recommended"
 
         assert!(config.perlcritic_enabled);
         assert!(config.inlay_hints_enabled);
+        assert!(config.next_edit.enabled);
     }
 
     #[test]
@@ -2039,5 +2205,99 @@ profile = "recommended"
             Some(stable.as_slice()),
             "cache must survive when useSystemInc value does not change",
         );
+    }
+
+    /// JSON `null` for `apiKeyPrefix` must clear the prefix to `None` (raw key, no scheme).
+    /// Empty string was already covered by `server_config_update_from_value_applies_formatting_and_ai_settings`;
+    /// this guards the `Value::Null` code path which follows a distinct branch in `as_str()`.
+    #[test]
+    fn update_from_value_clears_api_key_prefix_on_null() {
+        let mut config = ServerConfig::default();
+        // Default is Some("Bearer") — must be cleared by explicit null.
+        assert_eq!(config.ai_completion.api_key_prefix, Some("Bearer".to_string()));
+
+        config.update_from_value(&serde_json::json!({
+            "aiCompletion": { "apiKeyPrefix": null }
+        }));
+        assert_eq!(
+            config.ai_completion.api_key_prefix, None,
+            "explicit JSON null must produce None (raw key, no scheme)",
+        );
+    }
+
+    /// A non-empty `apiKeyPrefix` value (e.g. `"Token"`) must be stored as `Some`.
+    #[test]
+    fn update_from_value_stores_non_empty_api_key_prefix() {
+        let mut config = ServerConfig::default();
+
+        config.update_from_value(&serde_json::json!({
+            "aiCompletion": { "apiKeyPrefix": "Token" }
+        }));
+        assert_eq!(
+            config.ai_completion.api_key_prefix,
+            Some("Token".to_string()),
+            "non-empty apiKeyPrefix must be stored as Some",
+        );
+    }
+
+    /// Malformed auth header settings must not flow into outbound HTTP header construction.
+    #[test]
+    fn update_from_value_rejects_malformed_ai_auth_header_settings() {
+        let mut config = ServerConfig::default();
+
+        config.update_from_value(&serde_json::json!({
+            "aiCompletion": {
+                "apiKeyHeader": "x-api-key\r\nX-Injected",
+                "apiKeyPrefix": "Token\r\nX-Injected"
+            }
+        }));
+
+        assert_eq!(config.ai_completion.api_key_header, "Authorization");
+        assert_eq!(config.ai_completion.api_key_prefix, Some("Bearer".to_string()));
+    }
+
+    /// `ProjectConfig::apply_to_server_config` must thread `api_key_header` and
+    /// `api_key_prefix` into `ServerConfig`. An empty `api_key_prefix` in the TOML
+    /// struct must clear the prefix to `None` (raw key path).
+    #[test]
+    fn project_config_applies_ai_auth_header_and_prefix() {
+        let mut config = ServerConfig::default();
+        let mut project = ProjectConfig::default();
+        project.ai_completion.api_key_header = Some("x-api-key".to_string());
+        project.ai_completion.api_key_prefix = Some(String::new()); // empty = clear prefix
+
+        project.apply_to_server_config(&mut config);
+
+        assert_eq!(
+            config.ai_completion.api_key_header, "x-api-key",
+            "api_key_header must be applied from project config",
+        );
+        assert_eq!(
+            config.ai_completion.api_key_prefix, None,
+            "empty api_key_prefix in TOML must produce None (raw key)",
+        );
+
+        // Non-empty prefix round-trip.
+        let mut project2 = ProjectConfig::default();
+        project2.ai_completion.api_key_header = Some("Authorization".to_string());
+        project2.ai_completion.api_key_prefix = Some("Token".to_string());
+
+        project2.apply_to_server_config(&mut config);
+
+        assert_eq!(config.ai_completion.api_key_header, "Authorization");
+        assert_eq!(config.ai_completion.api_key_prefix, Some("Token".to_string()));
+    }
+
+    #[test]
+    fn project_config_ignores_malformed_ai_auth_header_settings() {
+        let mut config = ServerConfig::default();
+        let mut project = ProjectConfig::default();
+        project.ai_completion.api_key_header = Some("x-api-key\r\nX-Injected".to_string());
+        project.ai_completion.api_key_prefix = Some("Token\r\nX-Injected".to_string());
+
+        project.apply_to_server_config(&mut config);
+
+        assert_eq!(config.ai_completion.api_key_header, "Authorization");
+        assert_eq!(config.ai_completion.api_key_prefix, Some("Bearer".to_string()));
     }
 }

@@ -9,10 +9,23 @@ use std::path::Path;
 const SPEC_PATH: &str = "docs/specs/PLSP-SPEC-0029-lsp-318-conformance-boundary.md";
 const MATRIX_PATH: &str = "docs/specs/lsp-318-conformance-matrix.md";
 const NEGATIVE_CLAIMS_TEST: &str = "crates/perl-lsp-rs/tests/lsp_318_negative_claims.rs";
+const REGISTRATION_TEST: &str = "crates/perl-lsp-rs/tests/lsp_registration_tests.rs";
+const DIAGNOSTIC_ENRICHMENT_TEST: &str =
+    "crates/perl-lsp-rs/tests/lsp_diagnostic_enrichment_test.rs";
 const REFRESH_METHODS_TEST: &str = "crates/perl-lsp-rs/tests/lsp_refresh_methods_tests.rs";
+const SCHEMA_VALIDATION_TEST: &str = "crates/perl-lsp-rs/tests/lsp_schema_validation.rs";
+const SEMANTIC_LEGEND_TEST: &str = "crates/perl-lsp-rs/tests/lsp_semantic_legend_contract_tests.rs";
+const COMPLETION_TEST: &str = "crates/perl-lsp-rs/tests/lsp_completion_tests.rs";
+const CODE_LENS_TEST: &str = "crates/perl-lsp-rs/tests/lsp_codelens_tests.rs";
+const WINDOW_TEST: &str = "crates/perl-lsp-rs/tests/lsp_window_tests.rs";
 const CLIENT_REQUESTS: &str = "crates/perl-lsp-rs/src/runtime/client_requests.rs";
 const LIFECYCLE_CAPABILITIES: &str = "crates/perl-lsp-rs/src/runtime/lifecycle/capabilities.rs";
+const RUNTIME_LANGUAGE_MISC: &str = "crates/perl-lsp-rs/src/runtime/language/misc.rs";
+const REFACTOR_RUNTIME_RECEIPTS: &str =
+    "crates/perl-lsp-rs/src/runtime/language/refactor_runtime_blocker_receipts.rs";
+const LIFECYCLE_WATCHERS: &str = "crates/perl-lsp-rs/src/runtime/lifecycle/watchers.rs";
 const RUNTIME_REFRESH: &str = "crates/perl-lsp-rs/src/runtime/refresh.rs";
+const STATE_DOCUMENT: &str = "crates/perl-lsp-rs/src/state/document.rs";
 const FEATURE_CATALOG: &str = "features.toml";
 
 const CAPABILITY_SNAPSHOTS: &[&str] = &[
@@ -28,6 +41,10 @@ const SPEC_MARKERS: &[RequiredMarker] = &[
         label: "selected-surface claim boundary",
         marker: "This spec may claim that `perl-lsp` has a documented LSP 3.18 selected-surface",
     },
+    RequiredMarker {
+        label: "StringValue object-form non-claim",
+        marker: "object-form `StringValue` inline completion insert text",
+    },
 ];
 
 const MATRIX_MARKERS: &[RequiredMarker] = &[
@@ -41,6 +58,10 @@ const MATRIX_MARKERS: &[RequiredMarker] = &[
         marker: "`workspace/textDocumentContent`",
     },
     RequiredMarker {
+        label: "matrix StringValue object-form row",
+        marker: "Object-form `StringValue` inline insert text",
+    },
+    RequiredMarker {
         label: "matrix negative-gated vocabulary",
         marker: "`negative-gated+documented`",
     },
@@ -48,6 +69,10 @@ const MATRIX_MARKERS: &[RequiredMarker] = &[
 ];
 
 const NEGATIVE_TEST_MARKERS: &[RequiredMarker] = &[
+    RequiredMarker {
+        label: "StringValue object-form negative receipt",
+        marker: "inline_completion_does_not_emit_object_form_string_value",
+    },
     RequiredMarker {
         label: "unsupported capability snapshot assertions",
         marker: "initialize_does_not_advertise_unimplemented_318_capabilities",
@@ -65,7 +90,30 @@ const NEGATIVE_TEST_MARKERS: &[RequiredMarker] = &[
         label: "CodeAction documentation and tag gates",
         marker: "code_action_and_workspace_edit_responses_do_not_emit_optional_318_shapes",
     },
-    RequiredMarker { label: "WorkspaceEdit metadata gate", marker: "metadata" },
+    RequiredMarker {
+        label: "CodeAction.tags supported-client trust boundary",
+        marker: "code_actions_do_not_emit_llm_generated_tags_for_deterministic_actions",
+    },
+    RequiredMarker {
+        label: "CodeAction.tags resolve echo gate",
+        marker: "code_action_resolve_does_not_echo_tags_without_client_support",
+    },
+    RequiredMarker {
+        label: "CodeAction.documentation positive gate",
+        marker: "code_action_documentation_advertised_when_supported",
+    },
+    RequiredMarker {
+        label: "WorkspaceEdit metadata absence gate",
+        marker: "assert_no_workspace_edit_metadata",
+    },
+    RequiredMarker {
+        label: "ApplyWorkspaceEditParams.metadata positive gate",
+        marker: "apply_workspace_edit_metadata_emitted_when_supported_for_refactor_request",
+    },
+    RequiredMarker {
+        label: "ApplyWorkspaceEditParams.metadata negative gate",
+        marker: "apply_workspace_edit_metadata_absent_without_metadata_support",
+    },
     RequiredMarker { label: "SnippetTextEdit gate", marker: "snippet" },
     RequiredMarker {
         label: "Diagnostic MarkupContent gate",
@@ -80,10 +128,17 @@ const NEGATIVE_TEST_MARKERS: &[RequiredMarker] = &[
         marker: "folding_range_refresh_is_not_sent_without_client_support",
     },
     RequiredMarker {
-        label: "MessageType.Debug gate",
+        label: "normal runtime window messages avoid Debug",
         marker: "window_message_type_does_not_emit_debug_level",
     },
-    RequiredMarker { label: "Command.tooltip gate", marker: "assert_no_command_tooltip" },
+    RequiredMarker {
+        label: "non-CodeLens Command.tooltip gate",
+        marker: "assert_no_command_tooltip",
+    },
+    RequiredMarker {
+        label: "trusted markdown command/theme-icon gate",
+        marker: "markdown_surfaces_do_not_emit_trusted_commands_or_theme_icons_without_support",
+    },
     RequiredMarker {
         label: "experimental inline-completion provider gate",
         marker: "/experimental/inlineCompletionProvider",
@@ -119,12 +174,124 @@ const FEATURE_CATALOG_MARKERS: &[RequiredMarker] = &[
         label: "folding range refresh feature catalog row",
         marker: "id = \"lsp.folding_range_refresh\"",
     },
+    RequiredMarker {
+        label: "CodeLens resolveSupport.properties feature catalog row",
+        marker: "id = \"lsp.code_lens_resolve_support_properties\"",
+    },
+    RequiredMarker {
+        label: "CompletionList.itemDefaults.data feature catalog row",
+        marker: "id = \"lsp.completion_list_item_defaults_data\"",
+    },
+    RequiredMarker {
+        label: "CompletionList.applyKind feature catalog row",
+        marker: "id = \"lsp.completion_list_apply_kind\"",
+    },
+    RequiredMarker {
+        label: "CodeAction.documentation feature catalog row",
+        marker: "id = \"lsp.code_action_documentation\"",
+    },
+    RequiredMarker {
+        label: "SnippetTextEdit feature catalog row",
+        marker: "id = \"lsp.workspace_edit_snippet_text_edit\"",
+    },
+    RequiredMarker {
+        label: "ApplyWorkspaceEditParams.metadata feature catalog row",
+        marker: "id = \"lsp.apply_edit_metadata\"",
+    },
 ];
 
 const REFRESH_METHODS_TEST_MARKERS: &[RequiredMarker] = &[RequiredMarker {
     label: "workspace/foldingRange/refresh positive receipt",
     marker: "lsp_refresh_folding_range_sent_with_client_support",
 }];
+
+const REGISTRATION_TEST_MARKERS: &[RequiredMarker] = &[
+    RequiredMarker {
+        label: "RelativePattern watcher positive receipt",
+        marker: "relative_pattern_clients_receive_relative_file_watchers",
+    },
+    RequiredMarker {
+        label: "RelativePattern watcher fallback receipt",
+        marker: "relative_pattern_clients_fall_back_to_string_watchers_without_valid_workspace_uri",
+    },
+];
+
+const DIAGNOSTIC_ENRICHMENT_TEST_MARKERS: &[RequiredMarker] = &[RequiredMarker {
+    label: "Diagnostic.message MarkupContent positive receipt",
+    marker: "test_markup_message_support_populates_standard_message_markup",
+}];
+
+const SCHEMA_VALIDATION_TEST_MARKERS: &[RequiredMarker] = &[
+    RequiredMarker {
+        label: "SignatureHelp nullable activeParameter compatibility",
+        marker: "signature_help_active_parameter_accepts_lsp_318_null",
+    },
+    RequiredMarker {
+        label: "Diagnostic.message MarkupContent schema compatibility",
+        marker: "diagnostic_message_accepts_lsp_318_markup_content",
+    },
+];
+
+const SEMANTIC_LEGEND_TEST_MARKERS: &[RequiredMarker] = &[
+    RequiredMarker {
+        label: "SemanticTokenTypes.label positive receipt",
+        marker: "semantic_token_label_type_decodes_for_perl_labels",
+    },
+    RequiredMarker {
+        label: "semantic-token legend bounds receipt",
+        marker: "semantic_token_result_indexes_stay_within_advertised_legend_bounds",
+    },
+];
+
+const COMPLETION_TEST_MARKERS: &[RequiredMarker] = &[
+    RequiredMarker {
+        label: "CompletionList.itemDefaults.data positive receipt",
+        marker: "test_completion_list_item_defaults_data_emitted_when_supported",
+    },
+    RequiredMarker {
+        label: "CompletionList.itemDefaults.data negative receipt",
+        marker: "test_completion_list_item_defaults_data_absent_without_support",
+    },
+    RequiredMarker {
+        label: "CompletionList.applyKind positive receipt",
+        marker: "test_completion_list_apply_kind_emitted_when_supported",
+    },
+    RequiredMarker {
+        label: "CompletionList.applyKind fallback receipt",
+        marker: "test_completion_list_apply_kind_absent_without_item_defaults",
+    },
+];
+
+const CODE_LENS_TEST_MARKERS: &[RequiredMarker] = &[
+    RequiredMarker {
+        label: "CodeLens eager fallback without resolve support",
+        marker: "test_codelens_eager_without_resolve_support",
+    },
+    RequiredMarker {
+        label: "CodeLens command resolve support positive gate",
+        marker: "test_codelens_defers_command_when_resolve_support_allows_command",
+    },
+    RequiredMarker {
+        label: "CodeLens command resolve support negative gate",
+        marker: "test_codelens_eager_when_resolve_support_lacks_command",
+    },
+    RequiredMarker {
+        label: "CodeLens Command.tooltip positive receipt",
+        marker: "test_codelens_commands_include_lsp_318_tooltips",
+    },
+    RequiredMarker {
+        label: "CodeLens resolve Command.tooltip positive receipt",
+        marker: "test_codelens_resolve_adds_lsp_318_command_tooltip",
+    },
+];
+
+const WINDOW_TEST_MARKERS: &[RequiredMarker] = &[
+    RequiredMarker { label: "MessageType.Debug discriminant", marker: "MessageType::Debug, 5" },
+    RequiredMarker {
+        label: "MessageType.Debug positive receipt",
+        marker: "lsp_window_debug_message_type_serializes_to_five",
+    },
+];
 
 const CAPABILITY_ABSENCE_CHECKS: &[JsonAbsenceCheck] = &[
     JsonAbsenceCheck {
@@ -145,7 +312,7 @@ const CAPABILITY_ABSENCE_CHECKS: &[JsonAbsenceCheck] = &[
     JsonAbsenceCheck {
         pointer: "/completionProvider/applyKind",
         label: "CompletionList.applyKind",
-        reason: "applyKind must stay absent until applyKindSupport is parsed and tested",
+        reason: "applyKind is a CompletionList response field, not an initialize server capability",
     },
     JsonAbsenceCheck {
         pointer: "/completionProvider/itemDefaults/data",
@@ -155,7 +322,7 @@ const CAPABILITY_ABSENCE_CHECKS: &[JsonAbsenceCheck] = &[
     JsonAbsenceCheck {
         pointer: "/codeActionProvider/documentation",
         label: "CodeAction.documentation",
-        reason: "code action documentation must be client-capability gated before advertisement",
+        reason: "code action documentation is client-capability gated and must stay absent from static snapshots",
     },
     JsonAbsenceCheck {
         pointer: "/workspace/foldingRange",
@@ -178,6 +345,16 @@ const RAW_SNAPSHOT_PATTERNS: &[RawPatternCheck] = &[
     RawPatternCheck { needle: "\"applyKind\"", label: "CompletionList.applyKind JSON snapshot" },
 ];
 
+const MATRIX_TRANSITIONAL_STATUS_PATTERNS: &[RawPatternCheck] = &[
+    RawPatternCheck {
+        needle: "implemented-needs-positive-wire-test",
+        label: "transitional matrix status",
+    },
+    RawPatternCheck { needle: "needs-capability-parser", label: "transitional matrix status" },
+    RawPatternCheck { needle: "needs-compat-test", label: "transitional matrix status" },
+    RawPatternCheck { needle: "planned-needs-negative-gate", label: "transitional matrix status" },
+];
+
 const FEATURE_CATALOG_FORBIDDEN_PATTERNS: &[RawPatternCheck] = &[
     RawPatternCheck {
         needle: "documentRangesFormattingProvider",
@@ -191,23 +368,11 @@ const FEATURE_CATALOG_FORBIDDEN_PATTERNS: &[RawPatternCheck] = &[
         needle: "semanticTokens/full/delta",
         label: "semantic-token delta feature claim",
     },
-    RawPatternCheck { needle: "SnippetTextEdit", label: "SnippetTextEdit feature claim" },
-    RawPatternCheck {
-        needle: "CompletionList.applyKind",
-        label: "CompletionList.applyKind feature claim",
-    },
-    RawPatternCheck {
-        needle: "CompletionList.itemDefaults.data",
-        label: "CompletionList.itemDefaults.data feature claim",
-    },
-    RawPatternCheck {
-        needle: "CodeAction.documentation",
-        label: "CodeAction.documentation feature claim",
-    },
     RawPatternCheck { needle: "CodeAction.tags", label: "CodeAction.tags feature claim" },
-    RawPatternCheck { needle: "MessageType.Debug", label: "MessageType.Debug feature claim" },
     RawPatternCheck { needle: "Command.tooltip", label: "Command.tooltip feature claim" },
     RawPatternCheck { needle: "RelativePattern", label: "RelativePattern feature claim" },
+    RawPatternCheck { needle: "supportThemeIcons", label: "markdown theme-icon feature claim" },
+    RawPatternCheck { needle: "enabledCommands", label: "trusted markdown command feature claim" },
 ];
 
 #[derive(Clone, Copy)]
@@ -250,18 +415,52 @@ pub fn run() -> Result<()> {
         REFRESH_METHODS_TEST_MARKERS,
         &mut violations,
     )?;
+    check_required_markers(&root, REGISTRATION_TEST, REGISTRATION_TEST_MARKERS, &mut violations)?;
+    check_required_markers(
+        &root,
+        DIAGNOSTIC_ENRICHMENT_TEST,
+        DIAGNOSTIC_ENRICHMENT_TEST_MARKERS,
+        &mut violations,
+    )?;
+    check_required_markers(
+        &root,
+        SCHEMA_VALIDATION_TEST,
+        SCHEMA_VALIDATION_TEST_MARKERS,
+        &mut violations,
+    )?;
+    let semantic_legend_markers = SEMANTIC_LEGEND_TEST_MARKERS;
+    check_required_markers(&root, SEMANTIC_LEGEND_TEST, semantic_legend_markers, &mut violations)?;
+    check_required_markers(&root, COMPLETION_TEST, COMPLETION_TEST_MARKERS, &mut violations)?;
+    check_required_markers(&root, CODE_LENS_TEST, CODE_LENS_TEST_MARKERS, &mut violations)?;
+    check_required_markers(&root, WINDOW_TEST, WINDOW_TEST_MARKERS, &mut violations)?;
     check_feature_catalog(&root, &mut violations)?;
+    check_matrix_closeout_statuses(&root, &mut violations)?;
     check_capability_snapshots(&root, &mut violations)?;
     check_folding_range_refresh_guard(&root, &mut violations)?;
-    check_forbidden_source_claims(&root, &mut violations)?;
+    check_relative_pattern_guard(&root, &mut violations)?;
+    check_code_lens_resolve_support_guard(&root, &mut violations)?;
+    check_completion_item_defaults_data_guard(&root, &mut violations)?;
+    check_completion_apply_kind_guard(&root, &mut violations)?;
+    check_code_action_documentation_guard(&root, &mut violations)?;
+    check_code_action_tag_guard(&root, &mut violations)?;
+    check_snippet_text_edit_guard(&root, &mut violations)?;
+    check_apply_edit_metadata_guard(&root, &mut violations)?;
+    check_message_type_debug_support(&root, &mut violations)?;
 
     if violations.is_empty() {
         println!(
-            "LSP 3.18 claim guard OK: {} capability snapshots, {} feature markers, {} negative-test markers, {} positive refresh markers, {} spec markers checked",
+            "LSP 3.18 claim guard OK: {} capability snapshots, {} feature markers, {} negative-test markers, {} positive refresh markers, {} RelativePattern registration markers, {} diagnostic markers, {} schema markers, {} semantic legend markers, {} completion markers, {} CodeLens markers, {} window markers, {} spec markers checked",
             CAPABILITY_SNAPSHOTS.len(),
             FEATURE_CATALOG_MARKERS.len(),
             NEGATIVE_TEST_MARKERS.len(),
             REFRESH_METHODS_TEST_MARKERS.len(),
+            REGISTRATION_TEST_MARKERS.len(),
+            DIAGNOSTIC_ENRICHMENT_TEST_MARKERS.len(),
+            SCHEMA_VALIDATION_TEST_MARKERS.len(),
+            SEMANTIC_LEGEND_TEST_MARKERS.len(),
+            COMPLETION_TEST_MARKERS.len(),
+            CODE_LENS_TEST_MARKERS.len(),
+            WINDOW_TEST_MARKERS.len(),
             SPEC_MARKERS.len()
         );
         return Ok(());
@@ -294,6 +493,25 @@ fn check_required_markers(
             });
         }
     }
+    Ok(())
+}
+
+fn check_matrix_closeout_statuses(root: &Path, violations: &mut Vec<Violation>) -> Result<()> {
+    let text = read_required(root, MATRIX_PATH)?;
+    for pattern in MATRIX_TRANSITIONAL_STATUS_PATTERNS {
+        if text.contains(pattern.needle) {
+            violations.push(Violation {
+                rel_path: MATRIX_PATH.to_string(),
+                line: line_number_for(&text, pattern.needle),
+                label: pattern.label,
+                detail: format!(
+                    "matrix closeout must classify every row as implemented, negative-gated, or not-applicable: {:?}",
+                    pattern.needle
+                ),
+            });
+        }
+    }
+
     Ok(())
 }
 
@@ -394,23 +612,401 @@ fn check_folding_range_refresh_guard(root: &Path, violations: &mut Vec<Violation
     Ok(())
 }
 
-fn check_forbidden_source_claims(root: &Path, violations: &mut Vec<Violation>) -> Result<()> {
+fn check_relative_pattern_guard(root: &Path, violations: &mut Vec<Violation>) -> Result<()> {
+    let state_document = read_required(root, STATE_DOCUMENT)?;
+    let lifecycle_capabilities = read_required(root, LIFECYCLE_CAPABILITIES)?;
+    let lifecycle_watchers = read_required(root, LIFECYCLE_WATCHERS)?;
+    let registration_tests = read_required(root, REGISTRATION_TEST)?;
+
+    require_all(
+        STATE_DOCUMENT,
+        &state_document,
+        &["file_watcher_relative_pattern_support"],
+        "RelativePattern file watcher capability storage",
+        violations,
+    );
+    require_all(
+        LIFECYCLE_CAPABILITIES,
+        &lifecycle_capabilities,
+        &[
+            "/capabilities/workspace/didChangeWatchedFiles/relativePatternSupport",
+            "file_watcher_relative_pattern_support",
+        ],
+        "RelativePattern file watcher capability parser",
+        violations,
+    );
+    require_all(
+        LIFECYCLE_WATCHERS,
+        &lifecycle_watchers,
+        &[
+            "file_watcher_relative_pattern_support",
+            "GlobPattern::Relative",
+            "RelativePattern",
+            "OneOf::Right",
+            "string_file_watchers",
+        ],
+        "RelativePattern file watcher registration gate",
+        violations,
+    );
+    require_all(
+        REGISTRATION_TEST,
+        &registration_tests,
+        &[
+            "relative_pattern_clients_receive_relative_file_watchers",
+            "relative_pattern_clients_fall_back_to_string_watchers_without_valid_workspace_uri",
+            "relativePatternSupport",
+            "baseUri",
+        ],
+        "RelativePattern file watcher wire receipts",
+        violations,
+    );
+
+    Ok(())
+}
+
+fn check_code_lens_resolve_support_guard(
+    root: &Path,
+    violations: &mut Vec<Violation>,
+) -> Result<()> {
+    let state_document = read_required(root, STATE_DOCUMENT)?;
+    let lifecycle_capabilities = read_required(root, LIFECYCLE_CAPABILITIES)?;
+    let runtime_language_misc = read_required(root, RUNTIME_LANGUAGE_MISC)?;
+
+    require_all(
+        STATE_DOCUMENT,
+        &state_document,
+        &["code_lens_resolve_support", "HashSet<String>"],
+        "CodeLens resolveSupport.properties capability storage",
+        violations,
+    );
+    require_all(
+        LIFECYCLE_CAPABILITIES,
+        &lifecycle_capabilities,
+        &["/textDocument/codeLens/resolveSupport/properties", "code_lens_resolve_support"],
+        "CodeLens resolveSupport.properties capability parser",
+        violations,
+    );
+    require_all(
+        RUNTIME_LANGUAGE_MISC,
+        &runtime_language_misc,
+        &[
+            "client_supports_code_lens_command_resolve",
+            "properties.contains(\"command\")",
+            "prepare_code_lenses_for_client",
+        ],
+        "CodeLens command lazy-resolution gate",
+        violations,
+    );
+
+    Ok(())
+}
+
+fn check_completion_item_defaults_data_guard(
+    root: &Path,
+    violations: &mut Vec<Violation>,
+) -> Result<()> {
+    let state_document = read_required(root, STATE_DOCUMENT)?;
+    let lifecycle_capabilities = read_required(root, LIFECYCLE_CAPABILITIES)?;
+    let completion = read_required(root, "crates/perl-lsp-rs/src/runtime/language/completion.rs")?;
+
+    require_all(
+        STATE_DOCUMENT,
+        &state_document,
+        &["completion_list_item_defaults_data_support"],
+        "CompletionList.itemDefaults.data capability storage",
+        violations,
+    );
+    require_all(
+        LIFECYCLE_CAPABILITIES,
+        &lifecycle_capabilities,
+        &[
+            "/capabilities/textDocument/completion/completionList/itemDefaults",
+            "completion_list_item_defaults_data_support",
+            "Some(\"data\")",
+        ],
+        "CompletionList.itemDefaults.data capability parser",
+        violations,
+    );
+    require_all(
+        "crates/perl-lsp-rs/src/runtime/language/completion.rs",
+        &completion,
+        &[
+            "completion_list_default_data",
+            "completion_list_response",
+            "\"itemDefaults\"",
+            "\"data\"",
+        ],
+        "CompletionList.itemDefaults.data response gate",
+        violations,
+    );
+
+    Ok(())
+}
+
+fn check_completion_apply_kind_guard(root: &Path, violations: &mut Vec<Violation>) -> Result<()> {
+    let state_document = read_required(root, STATE_DOCUMENT)?;
+    let lifecycle_capabilities = read_required(root, LIFECYCLE_CAPABILITIES)?;
+    let completion = read_required(root, "crates/perl-lsp-rs/src/runtime/language/completion.rs")?;
+
+    require_all(
+        STATE_DOCUMENT,
+        &state_document,
+        &["completion_list_apply_kind_support"],
+        "CompletionList.applyKind capability storage",
+        violations,
+    );
+    require_all(
+        LIFECYCLE_CAPABILITIES,
+        &lifecycle_capabilities,
+        &[
+            "/capabilities/textDocument/completion/completionList/applyKindSupport",
+            "completion_list_apply_kind_support",
+        ],
+        "CompletionList.applyKind capability parser",
+        violations,
+    );
+    require_all(
+        "crates/perl-lsp-rs/src/runtime/language/completion.rs",
+        &completion,
+        &["completion_list_response", "\"applyKind\"", "\"data\": 2"],
+        "CompletionList.applyKind response gate",
+        violations,
+    );
+
+    Ok(())
+}
+
+fn check_code_action_documentation_guard(
+    root: &Path,
+    violations: &mut Vec<Violation>,
+) -> Result<()> {
+    let state_document = read_required(root, STATE_DOCUMENT)?;
+    let lifecycle_capabilities = read_required(root, LIFECYCLE_CAPABILITIES)?;
+    let negative_claims = read_required(root, NEGATIVE_CLAIMS_TEST)?;
+
+    require_all(
+        STATE_DOCUMENT,
+        &state_document,
+        &["code_action_documentation_support"],
+        "CodeAction.documentation capability storage",
+        violations,
+    );
+    require_all(
+        LIFECYCLE_CAPABILITIES,
+        &lifecycle_capabilities,
+        &[
+            "/capabilities/textDocument/codeAction/documentationSupport",
+            "code_action_documentation_support",
+            "code_action_documentation_entries",
+            "\"documentation\"",
+        ],
+        "CodeAction.documentation capability gate",
+        violations,
+    );
+    require_all(
+        NEGATIVE_CLAIMS_TEST,
+        &negative_claims,
+        &[
+            "/codeActionProvider/documentation",
+            "code_action_documentation_advertised_when_supported",
+            "perl.explainProviderDecision",
+        ],
+        "CodeAction.documentation wire receipts",
+        violations,
+    );
+
+    Ok(())
+}
+
+fn check_code_action_tag_guard(root: &Path, violations: &mut Vec<Violation>) -> Result<()> {
+    let state_document = read_required(root, STATE_DOCUMENT)?;
+    let lifecycle_capabilities = read_required(root, LIFECYCLE_CAPABILITIES)?;
+    let code_actions =
+        read_required(root, "crates/perl-lsp-rs/src/runtime/language/code_actions.rs")?;
+    let negative_claims = read_required(root, NEGATIVE_CLAIMS_TEST)?;
+
+    require_all(
+        STATE_DOCUMENT,
+        &state_document,
+        &["code_action_llm_generated_tag_support"],
+        "CodeAction.tags capability storage",
+        violations,
+    );
+    require_all(
+        LIFECYCLE_CAPABILITIES,
+        &lifecycle_capabilities,
+        &[
+            "/capabilities/textDocument/codeAction/tagSupport/valueSet",
+            "code_action_llm_generated_tag_support",
+            "initialize_parses_code_action_llm_generated_tag_support",
+        ],
+        "CodeAction.tags capability parser",
+        violations,
+    );
+    require_all(
+        "crates/perl-lsp-rs/src/runtime/language/code_actions.rs",
+        &code_actions,
+        &[
+            "CODE_ACTION_TAG_LLM_GENERATED",
+            "enforce_code_action_tag_capability",
+            "code_action_llm_generated_tag_support",
+        ],
+        "CodeAction.tags response gate",
+        violations,
+    );
+    require_all(
+        NEGATIVE_CLAIMS_TEST,
+        &negative_claims,
+        &[
+            "tagSupport",
+            "valueSet",
+            "code_actions_do_not_emit_llm_generated_tags_for_deterministic_actions",
+            "code_action_resolve_does_not_echo_tags_without_client_support",
+        ],
+        "CodeAction.tags wire receipts",
+        violations,
+    );
+
+    Ok(())
+}
+
+fn check_snippet_text_edit_guard(root: &Path, violations: &mut Vec<Violation>) -> Result<()> {
+    let state_document = read_required(root, STATE_DOCUMENT)?;
+    let lifecycle_capabilities = read_required(root, LIFECYCLE_CAPABILITIES)?;
+    let code_actions =
+        read_required(root, "crates/perl-lsp-rs/src/runtime/language/code_actions.rs")?;
+    let negative_claims = read_required(root, NEGATIVE_CLAIMS_TEST)?;
+
+    require_all(
+        STATE_DOCUMENT,
+        &state_document,
+        &["workspace_edit_document_changes_support", "workspace_edit_snippet_edit_support"],
+        "SnippetTextEdit workspace-edit capability storage",
+        violations,
+    );
+    require_all(
+        LIFECYCLE_CAPABILITIES,
+        &lifecycle_capabilities,
+        &[
+            "/capabilities/workspace/workspaceEdit/documentChanges",
+            "/capabilities/workspace/workspaceEdit/snippetEditSupport",
+            "workspace_edit_document_changes_support",
+            "workspace_edit_snippet_edit_support",
+        ],
+        "SnippetTextEdit workspace-edit capability parser",
+        violations,
+    );
+    require_all(
+        "crates/perl-lsp-rs/src/runtime/language/code_actions.rs",
+        &code_actions,
+        &[
+            "supports_workspace_snippet_text_edits",
+            "convert_pragma_quickfix_edits_to_snippet_text_edits",
+            "\"documentChanges\"",
+            "\"snippet\"",
+            "\"kind\": \"snippet\"",
+        ],
+        "SnippetTextEdit response gate",
+        violations,
+    );
+    require_all(
+        NEGATIVE_CLAIMS_TEST,
+        &negative_claims,
+        &[
+            "code_action_pragmas_emit_snippet_text_edits_when_supported",
+            "code_action_pragmas_require_document_changes_for_snippet_text_edits",
+            "snippetEditSupport",
+        ],
+        "SnippetTextEdit wire receipts",
+        violations,
+    );
+
+    Ok(())
+}
+
+fn check_apply_edit_metadata_guard(root: &Path, violations: &mut Vec<Violation>) -> Result<()> {
+    let state_document = read_required(root, STATE_DOCUMENT)?;
+    let lifecycle_capabilities = read_required(root, LIFECYCLE_CAPABILITIES)?;
+    let client_requests = read_required(root, CLIENT_REQUESTS)?;
+    let refactor_receipts = read_required(root, REFACTOR_RUNTIME_RECEIPTS)?;
+    let negative_claims = read_required(root, NEGATIVE_CLAIMS_TEST)?;
+
+    require_all(
+        STATE_DOCUMENT,
+        &state_document,
+        &["workspace_apply_edit_support", "workspace_edit_metadata_support"],
+        "ApplyWorkspaceEditParams.metadata capability storage",
+        violations,
+    );
+    require_all(
+        LIFECYCLE_CAPABILITIES,
+        &lifecycle_capabilities,
+        &[
+            "/capabilities/workspace/applyEdit",
+            "/capabilities/workspace/workspaceEdit/metadataSupport",
+            "workspace_apply_edit_support",
+            "workspace_edit_metadata_support",
+            "initialize_parses_apply_edit_metadata_support",
+        ],
+        "ApplyWorkspaceEditParams.metadata capability parser",
+        violations,
+    );
+    require_all(
+        CLIENT_REQUESTS,
+        &client_requests,
+        &[
+            "request_apply_workspace_edit_with_metadata",
+            "request_apply_workspace_edit_with_metadata_call_presence_observer",
+            "request_apply_workspace_edit_with_metadata_boundary_discriminator",
+            "request_apply_workspace_edit_with_metadata_return_value_discriminator",
+            "WORKSPACE_APPLY_EDIT",
+            "\"metadata\"",
+            "\"label\"",
+            "\"description\"",
+            "\"isRefactoring\"",
+        ],
+        "ApplyWorkspaceEditParams.metadata request helper",
+        violations,
+    );
+    require_all(
+        REFACTOR_RUNTIME_RECEIPTS,
+        &refactor_receipts,
+        &[
+            "request_apply_workspace_edit_with_metadata",
+            "apply_edit_requested",
+            "apply_edit_request",
+        ],
+        "ApplyWorkspaceEditParams.metadata safe-delete apply path",
+        violations,
+    );
+    require_all(
+        NEGATIVE_CLAIMS_TEST,
+        &negative_claims,
+        &[
+            "apply_workspace_edit_metadata_emitted_when_supported_for_refactor_request",
+            "apply_workspace_edit_metadata_absent_without_metadata_support",
+            "metadataSupport",
+            "workspace/applyEdit",
+            "/metadata/label",
+            "/metadata/description",
+            "/edit/metadata",
+        ],
+        "ApplyWorkspaceEditParams.metadata wire receipts",
+        violations,
+    );
+
+    Ok(())
+}
+
+fn check_message_type_debug_support(root: &Path, violations: &mut Vec<Violation>) -> Result<()> {
     let window = read_required(root, "crates/perl-lsp-rs/src/runtime/window.rs")?;
-    for (idx, line) in window.lines().enumerate() {
-        let trimmed = line.trim();
-        if trimmed.contains("MessageType::Debug")
-            || trimmed == "Debug,"
-            || trimmed.starts_with("Debug =")
-        {
-            violations.push(Violation {
-                rel_path: "crates/perl-lsp-rs/src/runtime/window.rs".to_string(),
-                line: idx + 1,
-                label: "MessageType.Debug",
-                detail: "MessageType.Debug is not part of the current selected 3.18 claim"
-                    .to_string(),
-            });
-        }
-    }
+    require_all(
+        "crates/perl-lsp-rs/src/runtime/window.rs",
+        &window,
+        &["Debug = 5"],
+        "MessageType.Debug enum support",
+        violations,
+    );
     Ok(())
 }
 
@@ -453,6 +1049,15 @@ fn line_number_for_pointer(text: &str, pointer: &str) -> usize {
 mod tests {
     use super::*;
 
+    fn write_matrix_fixture(root: &Path, text: &str) -> Result<()> {
+        let path = root.join(MATRIX_PATH);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(path, text)?;
+        Ok(())
+    }
+
     #[test]
     fn line_number_for_reports_first_matching_line() {
         let text = "one\ntwo marker\nthree marker\n";
@@ -468,5 +1073,39 @@ mod tests {
     fn pointer_line_uses_last_path_segment() {
         let text = "{\n  \"semanticTokensProvider\": {\n    \"delta\": true\n  }\n}\n";
         assert_eq!(line_number_for_pointer(text, "/semanticTokensProvider/full/delta"), 3);
+    }
+
+    #[test]
+    fn matrix_closeout_status_check_accepts_closed_statuses() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        write_matrix_fixture(
+            temp.path(),
+            "| Feature | Status |\n| --- | --- |\n| Inline completion | implemented+tested+documented |\n| Notebook | not-applicable+documented |\n| Delta | negative-gated+documented |\n",
+        )?;
+
+        let mut violations = Vec::new();
+        check_matrix_closeout_statuses(temp.path(), &mut violations)?;
+
+        assert!(violations.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn matrix_closeout_status_check_rejects_transitional_statuses() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        write_matrix_fixture(
+            temp.path(),
+            "| Feature | Status |\n| --- | --- |\n| Folding refresh | implemented-needs-positive-wire-test |\n",
+        )?;
+
+        let mut violations = Vec::new();
+        check_matrix_closeout_statuses(temp.path(), &mut violations)?;
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].rel_path, MATRIX_PATH);
+        assert_eq!(violations[0].line, 3);
+        assert_eq!(violations[0].label, "transitional matrix status");
+        assert!(violations[0].detail.contains("implemented-needs-positive-wire-test"));
+        Ok(())
     }
 }

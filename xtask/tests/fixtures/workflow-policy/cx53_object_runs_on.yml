@@ -1,0 +1,13 @@
+name: CX53 Object Runs-On Fixture
+
+on:
+  pull_request:
+
+jobs:
+  rust-small-cx53:
+    runs-on:
+      group: em-ci-small
+      labels: [self-hosted, linux, x64, em-ci, cx53, rust-small, trusted-pr]
+    steps:
+      - uses: actions/checkout@v6
+      - run: echo ok

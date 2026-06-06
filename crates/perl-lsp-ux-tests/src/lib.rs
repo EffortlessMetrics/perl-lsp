@@ -336,13 +336,42 @@ impl UxHarness {
         line: u32,
         character: u32,
     ) -> Result<Vec<Value>> {
+        self.inline_completion_with_trigger_kind(relative_path, line, character, 2)
+    }
+
+    /// Request inline completion at `(line, character)` with an explicit
+    /// LSP `InlineCompletionTriggerKind`.
+    pub fn inline_completion_with_trigger_kind(
+        &self,
+        relative_path: &str,
+        line: u32,
+        character: u32,
+        trigger_kind: u8,
+    ) -> Result<Vec<Value>> {
+        self.inline_completion_with_context(
+            relative_path,
+            line,
+            character,
+            json!({ "triggerKind": trigger_kind }),
+        )
+    }
+
+    /// Request inline completion at `(line, character)` with an explicit LSP
+    /// `InlineCompletionContext` object.
+    pub fn inline_completion_with_context(
+        &self,
+        relative_path: &str,
+        line: u32,
+        character: u32,
+        context: Value,
+    ) -> Result<Vec<Value>> {
         let uri = self.workspace.uri(relative_path);
         let resp = self.client.request(
             "textDocument/inlineCompletion",
             json!({
                 "textDocument": { "uri": uri },
                 "position": { "line": line, "character": character },
-                "context": { "triggerKind": 2 }
+                "context": context
             }),
             self.config.timeout,
         )?;

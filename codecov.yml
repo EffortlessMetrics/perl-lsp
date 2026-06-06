@@ -9,25 +9,31 @@ coverage:
   status:
     project:
       default:
-        target: 70%           # Initial baseline target
-        threshold: 1%         # Allow 1% coverage drop without failing
+        target: 95%           # Final project target, informational during burn-down
+        threshold: 2%         # Temporary burn-down window; removed after project reaches target
         if_ci_failed: error   # Fail if CI failed
+        informational: true   # Patch coverage enforces first; project is promoted later
     patch:
       default:
-        target: 75%           # New code should have higher coverage
-        threshold: 2%         # Allow 2% variance for patch coverage
+        target: 95%           # New code must carry its own proof
+        threshold: 0%         # No patch coverage regression allowance
         if_ci_failed: error
 
 # Files/patterns to exclude from coverage analysis
 ignore:
+  - ".github/**"
+  - ".ci/**"
   - "archive/**"
+  - "codecov.yml"
+  - "docs/**"
   - "crates/tree-sitter-perl-c/**"
   - "crates/*/tests/**"
   - "crates/*/benches/**"
   - "crates/*/examples/**"
   - "crates/*/build.rs"
-  - "xtask/**"
   - "fuzz/**"
+  - "justfile"
+  - "xtask/tests/**"
   - "**/*_generated.rs"
 
 # Per-crate coverage flags for detailed tracking
@@ -35,23 +41,21 @@ flags:
   parser:
     paths:
       - crates/perl-parser/src/
-    target: 75%
+  xtask:
+    paths:
+      - xtask/src/
   lsp:
     paths:
       - crates/perl-lsp-rs/src/
-    target: 70%
   lexer:
     paths:
       - crates/perl-lexer/src/
-    target: 80%
   dap:
     paths:
       - crates/perl-dap/src/
-    target: 65%
   corpus:
     paths:
       - crates/perl-corpus/src/
-    target: 60%
 
 # PR comment configuration
 comment:

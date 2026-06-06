@@ -110,6 +110,8 @@ Run in order for a release. See [CONTRIBUTING.md](../CONTRIBUTING.md#release-wor
 |--------|---------|
 | `agents/` | Agent definition fragments used by the swarm |
 | `agent-preflight.sh` | Agent safety preflight checks |
+| `agent-preflight.ps1` | Windows agent preflight for fixed worktree and Cargo target roots |
+| `agent-cleanup.ps1` | Windows agent cleanup gate for worktree, target, branch, and storage checks |
 | `test-agent-preflight.sh` | Test the preflight script itself |
 | `control-plane-lock.sh` | Advisory single-writer lock for swarm operations |
 | `test-control-plane-lock.sh` | Test the lock implementation |

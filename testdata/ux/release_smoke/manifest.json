@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "claim_boundary": "fixture-data-only",
+  "fixtures": [
+    {
+      "name": "minimal_script",
+      "workspace": "minimal_script",
+      "open": "bin/hello.pl",
+      "primary_methods": [
+        "initialize",
+        "textDocument/didOpen",
+        "textDocument/publishDiagnostics",
+        "textDocument/documentSymbol",
+        "textDocument/completion",
+        "shutdown"
+      ],
+      "expected_summary": "normal single-file startup with no scary noise"
+    },
+    {
+      "name": "lib_project",
+      "workspace": "lib_project",
+      "open": "bin/app.pl",
+      "primary_methods": [
+        "initialize",
+        "textDocument/didOpen",
+        "textDocument/definition",
+        "textDocument/completion",
+        "workspace/symbol",
+        "shutdown"
+      ],
+      "expected_summary": "workspace lib module resolves from the use site"
+    },
+    {
+      "name": "local_lib_project",
+      "workspace": "local_lib_project",
+      "open": "script/report.pl",
+      "primary_methods": [
+        "initialize",
+        "textDocument/didOpen",
+        "textDocument/definition",
+        "textDocument/completion",
+        "workspace/symbol",
+        "shutdown"
+      ],
+      "expected_summary": "local/lib/perl5 module resolves without treating the workspace root as a wildcard include"
+    },
+    {
+      "name": "crlf_links",
+      "workspace": "crlf_links",
+      "open": "main.pl",
+      "primary_methods": [
+        "initialize",
+        "textDocument/didOpen",
+        "textDocument/documentLink",
+        "textDocument/definition",
+        "shutdown"
+      ],
+      "expected_summary": "CRLF-prefixed local links and module links use the real source ranges"
+    },
+    {
+      "name": "diagnostics_quickfix",
+      "workspace": "diagnostics_quickfix",
+      "open": "loop_label.pl",
+      "primary_methods": [
+        "initialize",
+        "textDocument/didOpen",
+        "textDocument/publishDiagnostics",
+        "textDocument/codeAction",
+        "shutdown"
+      ],
+      "expected_summary": "PL410 diagnostics expose safe remove-label quick fixes"
+    },
+    {
+      "name": "perldoc_links",
+      "workspace": "perldoc_links",
+      "open": "docs.pl",
+      "primary_methods": [
+        "initialize",
+        "textDocument/didOpen",
+        "textDocument/hover",
+        "textDocument/documentLink",
+        "shutdown"
+      ],
+      "expected_summary": "module hover and docs links are useful when available and quiet when unavailable"
+    }
+  ]
+}

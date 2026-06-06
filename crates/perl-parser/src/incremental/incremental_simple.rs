@@ -209,7 +209,7 @@ impl SimpleIncrementalParser {
             NodeKind::Unary { operand, .. } => {
                 count += self.count_nodes(operand);
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
                 count += self.count_nodes(condition);
                 count += self.count_nodes(then_branch);
                 for (cond, branch) in elsif_branches {
@@ -277,5 +277,28 @@ mod tests {
         // Should have reused some nodes
         assert!(parser.reused_nodes > 0);
         println!("Reused: {}, Reparsed: {}", parser.reused_nodes, parser.reparsed_nodes);
+    }
+
+    #[test]
+    fn count_nodes_visits_if_children_with_keyword_metadata() {
+        let parser = SimpleIncrementalParser::new();
+        let loc = |start, end| perl_parser_core::ast::SourceLocation { start, end };
+        let number =
+            |start| Node::new(NodeKind::Number { value: "1".to_string() }, loc(start, start + 1));
+        let block = |start, end| {
+            Node::new(NodeKind::Block { statements: vec![number(start + 1)] }, loc(start, end))
+        };
+        let node = Node::new(
+            NodeKind::If {
+                condition: Box::new(number(1)),
+                then_branch: Box::new(block(4, 10)),
+                elsif_branches: vec![(Box::new(number(12)), Box::new(block(14, 20)))],
+                else_branch: Some(Box::new(block(22, 28))),
+                keyword: Some("unless".to_string()),
+            },
+            loc(0, 29),
+        );
+
+        assert_eq!(parser.count_nodes(&node), 9);
     }
 }

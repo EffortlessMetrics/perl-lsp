@@ -1,0 +1,894 @@
+# CI-enforced coverage proof-pack manifest used by Codecov / Patch 95 and
+# `cargo xtask ci route`.
+#
+# This keeps coverage routing tied to changed surfaces instead of test-name
+# accidents.
+
+[[pack]]
+id = "patch-coverage-xtask-supported-editor-inline-smoke"
+files = [
+  "xtask/src/tasks/supported_editor_inline_smoke.rs",
+  "xtask/tests/supported_editor_inline_smoke_cli.rs",
+]
+commands = [
+  "cargo test -p xtask --bin xtask --profile agent --locked supported_editor_inline_smoke -- --nocapture",
+  "cargo test -p xtask --test supported_editor_inline_smoke_cli --profile agent --locked -- --nocapture",
+  "cargo test -p xtask --bin xtask --profile agent --locked semantic_inline_receipts -- --nocapture",
+]
+coverage_filters = [
+  "supported_editor_inline_smoke",
+  "semantic_inline_receipts",
+]
+
+[[pack]]
+id = "patch-coverage-xtask-semantic-inline"
+files = [
+  "xtask/src/tasks/semantic_inline_receipts.rs",
+  "xtask/src/tasks/semantic_inline_next_edit.rs",
+  "xtask/tests/semantic_inline_receipts_cli.rs",
+  "xtask/tests/semantic_inline_next_edit_cli.rs",
+]
+commands = [
+  "cargo test -p xtask --bin xtask --profile agent --locked semantic_inline_receipts -- --nocapture",
+  "cargo test -p xtask --bin xtask --profile agent --locked semantic_inline_next_edit -- --nocapture",
+  "cargo test -p xtask --test semantic_inline_receipts_cli --profile agent --locked -- --nocapture",
+  "cargo test -p xtask --test semantic_inline_next_edit_cli --profile agent --locked -- --nocapture",
+]
+coverage_filters = [
+  "semantic_inline_receipts",
+  "semantic_inline_next_edit",
+]
+
+[[pack]]
+id = "patch-coverage-inline-provider-core"
+files = [
+  "crates/perl-lsp-rs-core/src/providers/inline_completion/",
+]
+commands = [
+  "cargo test -p perl-lsp-rs-core --lib --profile agent --locked inline_completion -- --nocapture",
+]
+coverage_filters = [
+  "inline_completion",
+]
+
+[[pack]]
+id = "patch-coverage-inline-ux-fixtures"
+lcov = false
+files = [
+  "crates/perl-lsp-rs-core/tests/inline_completion_ux_fixtures.rs",
+]
+commands = [
+  "cargo test -p perl-lsp-rs-core --test inline_completion_ux_fixtures --profile agent --locked -- --nocapture",
+]
+coverage_filters = [
+  "inline_completion_ux_fixtures",
+]
+
+[[pack]]
+id = "patch-coverage-xtask-inline-quality"
+lcov = false
+files = [
+  "xtask/src/tasks/inline_completion_quality.rs",
+]
+commands = [
+  "cargo run -p xtask --profile agent --locked -- inline-completion-quality --receipt target/receipts/inline-completion-quality.json",
+]
+coverage_filters = [
+  "inline_completion_quality",
+]
+
+[[pack]]
+id = "patch-coverage-completion-core"
+files = [
+  "crates/perl-lsp-rs-core/src/providers/completion/",
+]
+commands = [
+  "cargo test -p perl-lsp-rs-core --lib --profile agent --locked completion::completion -- --nocapture",
+]
+coverage_filters = [
+  "completion::completion",
+]
+
+[[pack]]
+id = "patch-coverage-ux-scenario"
+files = [
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_",
+]
+commands = [
+  "cargo test -p perl-lsp-ux-tests --profile agent --locked -- --nocapture",
+  "python -m json.tool crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+]
+coverage_filters = [
+  "ux_scenario",
+  "editor_ux_fixture_matrix",
+]
+
+[[pack]]
+id = "patch-coverage-ci-policy"
+lcov = false
+files = [
+  ".github/workflows/",
+  ".ci/",
+  "policy/",
+  "scripts/ci/ci_classify.py",
+  "scripts/ci/test_ci_classify.py",
+  "xtask/tests/codecov_patch_gate_policy.rs",
+  "xtask/tests/quality_ci_wiring_policy.rs",
+  "xtask/tests/quality_gate_patch_coverage_cli_policy.rs",
+]
+commands = [
+  "python -m unittest scripts/ci/test_ci_classify.py",
+  "cargo xtask workflow-trigger-lint --policy .ci/policies/required-checks.toml --receipt target/receipts/workflow-trigger-lint.json",
+  "cargo test -p xtask --test codecov_patch_gate_policy --profile agent --locked -- --nocapture",
+  "cargo test -p xtask --test quality_ci_wiring_policy --profile agent --locked -- --nocapture",
+  "cargo test -p xtask --test quality_gate_patch_coverage_cli_policy --profile agent --locked -- --nocapture",
+]
+coverage_filters = [
+  "codecov_patch_gate_policy",
+  "quality_ci_wiring_policy",
+  "quality_gate_patch_coverage_cli_policy",
+  "workflow_trigger_lint",
+]
+
+[[pack]]
+id = "patch-coverage-ci-route"
+lcov = false
+files = [
+  "scripts/ci/route-codecov-packs.py",
+  "scripts/ci/test_route_codecov_packs.py",
+  "xtask/src/tasks/ci_route.rs",
+  "xtask/tests/ci_route_cli.rs",
+]
+commands = [
+  "python -m unittest scripts/ci/test_route_codecov_packs.py",
+  "cargo test -p xtask --bin xtask --profile agent --locked ci_route -- --nocapture",
+  "cargo test -p xtask --test ci_route_cli --profile agent --locked -- --nocapture",
+  "cargo run -p xtask --profile agent --locked -- ci route --base origin/main --head HEAD --receipt target/receipts/ci-route.json",
+]
+coverage_filters = [
+  "ci_route",
+]
+
+[[pack]]
+id = "patch-coverage-ci-actuals"
+lcov = false
+files = [
+  "scripts/ci/emit_ci_actuals.py",
+  "scripts/ci/test_emit_ci_actuals.py",
+]
+commands = [
+  "python -m unittest scripts/ci/test_emit_ci_actuals.py",
+]
+coverage_filters = [
+  "emit_ci_actuals",
+]
+
+[[pack]]
+id = "patch-coverage-ripr-summary"
+lcov = false
+files = [
+  "scripts/ci/ripr_summary.py",
+  "scripts/ci/test_ripr_summary.py",
+]
+commands = [
+  "python -m unittest scripts/ci/test_ripr_summary.py",
+]
+coverage_filters = [
+  "ripr_summary",
+]
+
+[[pack]]
+id = "patch-coverage-learned-estimate"
+lcov = false
+files = [
+  "scripts/ci/learned_estimate.py",
+  "scripts/ci/test_learned_estimate.py",
+]
+commands = [
+  "python -m unittest scripts/ci/test_learned_estimate.py",
+]
+coverage_filters = [
+  "learned_estimate",
+]
+
+[[pack]]
+id = "patch-coverage-risk-packs-validator"
+lcov = false
+files = [
+  "scripts/ci/validate_risk_packs.py",
+  "scripts/ci/test_validate_risk_packs.py",
+]
+commands = [
+  "python -m unittest scripts/ci/test_validate_risk_packs.py",
+]
+coverage_filters = [
+  "validate_risk_packs",
+]
+
+[[pack]]
+id = "patch-coverage-gate-lane-mapping"
+lcov = false
+files = [
+  "scripts/ci/validate_gate_lane_mapping.py",
+  "scripts/ci/test_validate_gate_lane_mapping.py",
+]
+commands = [
+  "python -m unittest scripts/ci/test_validate_gate_lane_mapping.py",
+]
+coverage_filters = [
+  "validate_gate_lane_mapping",
+]
+
+[[pack]]
+id = "patch-coverage-trust-lanes-validator"
+lcov = false
+files = [
+  "scripts/ci/validate_trust_lanes.py",
+  "scripts/ci/test_validate_trust_lanes.py",
+]
+commands = [
+  "python -m unittest scripts/ci/test_validate_trust_lanes.py",
+]
+coverage_filters = [
+  "validate_trust_lanes",
+]
+
+[[pack]]
+id = "patch-coverage-receipts-junit"
+lcov = false
+files = [
+  "scripts/ci/receipts-to-junit.py",
+  "scripts/ci/test_receipts_to_junit.py",
+]
+commands = [
+  "python -m unittest scripts/ci/test_receipts_to_junit.py",
+]
+coverage_filters = [
+  "receipts_to_junit",
+]
+
+[[pack]]
+id = "patch-coverage-core-package-validator"
+lcov = false
+files = [
+  "scripts/ci/check_perl_lsp_rs_core_package.py",
+  "scripts/ci/test_check_perl_lsp_rs_core_package.py",
+]
+commands = [
+  "python -m unittest scripts/ci/test_check_perl_lsp_rs_core_package.py",
+]
+coverage_filters = [
+  "check_perl_lsp_rs_core_package",
+]
+
+[[pack]]
+id = "patch-coverage-aggregate-lane-history"
+lcov = false
+files = [
+  "scripts/ci/aggregate_lane_history.py",
+  "scripts/ci/test_aggregate_lane_history.py",
+]
+commands = [
+  "python -m unittest scripts/ci/test_aggregate_lane_history.py",
+]
+coverage_filters = [
+  "aggregate_lane_history",
+]
+
+[[pack]]
+id = "patch-coverage-pr-plan"
+lcov = false
+files = [
+  "scripts/ci/pr_plan.py",
+  "scripts/ci/test_pr_plan.py",
+]
+commands = [
+  "python -m unittest scripts/ci/test_pr_plan.py",
+]
+coverage_filters = [
+  "pr_plan",
+]
+
+[[pack]]
+id = "patch-coverage-pr-overlap"
+lcov = false
+files = [
+  "scripts/pr_overlap.py",
+  "scripts/tests/test_pr_overlap.py",
+]
+commands = [
+  "python scripts/tests/test_pr_overlap.py",
+]
+coverage_filters = [
+  "pr_overlap",
+]
+
+[[pack]]
+id = "patch-coverage-control-plane-lock"
+lcov = false
+files = [
+  "scripts/control-plane-lock.sh",
+  "scripts/test-control-plane-lock.sh",
+]
+commands = [
+  "bash scripts/test-control-plane-lock.sh",
+]
+coverage_filters = [
+  "control-plane-lock",
+]
+
+[[pack]]
+id = "patch-coverage-agent-preflight"
+lcov = false
+files = [
+  "scripts/agent-preflight.sh",
+  "scripts/test-agent-preflight.sh",
+]
+commands = [
+  "bash scripts/test-agent-preflight.sh",
+]
+coverage_filters = [
+  "agent-preflight",
+]
+
+[[pack]]
+id = "patch-coverage-ci-audit-workflows-shim"
+lcov = false
+files = [
+  "scripts/ci-audit-workflows.py",
+  "scripts/tests/test-ci-audit-workflows-shim.py",
+]
+commands = [
+  "python scripts/tests/test-ci-audit-workflows-shim.py",
+]
+coverage_filters = [
+  "ci-audit-workflows-shim",
+]
+
+[[pack]]
+id = "patch-coverage-doc-claims-shim"
+lcov = false
+files = [
+  "scripts/check-doc-claims.py",
+  "scripts/tests/test-check-doc-claims-shim.py",
+]
+commands = [
+  "python scripts/tests/test-check-doc-claims-shim.py",
+]
+coverage_filters = [
+  "doc-claims-shim",
+]
+
+[[pack]]
+id = "patch-coverage-features-invariants-shim"
+lcov = false
+files = [
+  "scripts/check_features_invariants.py",
+  "scripts/tests/test-check-features-invariants-shim.py",
+]
+commands = [
+  "python scripts/tests/test-check-features-invariants-shim.py",
+]
+coverage_filters = [
+  "features-invariants-shim",
+]
+
+[[pack]]
+id = "patch-coverage-debt-report-shim"
+lcov = false
+files = [
+  "scripts/debt-report.py",
+  "scripts/tests/test-debt-report-shim.py",
+]
+commands = [
+  "python scripts/tests/test-debt-report-shim.py",
+]
+coverage_filters = [
+  "debt-report-shim",
+]
+
+[[pack]]
+id = "patch-coverage-debt-pr-summary-shim"
+lcov = false
+files = [
+  "scripts/debt-pr-summary.py",
+  "scripts/tests/test-debt-pr-summary-shim.py",
+]
+commands = [
+  "python scripts/tests/test-debt-pr-summary-shim.py",
+]
+coverage_filters = [
+  "debt-pr-summary-shim",
+]
+
+[[pack]]
+id = "patch-coverage-update-current-status-shim"
+lcov = false
+files = [
+  "scripts/update-current-status.py",
+  "scripts/tests/test-update-current-status-shim.py",
+]
+commands = [
+  "python scripts/tests/test-update-current-status-shim.py",
+]
+coverage_filters = [
+  "update-current-status-shim",
+]
+
+[[pack]]
+id = "patch-coverage-update-parser-matrix-shim"
+lcov = false
+files = [
+  "scripts/update-parser-matrix.py",
+  "scripts/tests/test-update-parser-matrix-shim.py",
+]
+commands = [
+  "python scripts/tests/test-update-parser-matrix-shim.py",
+]
+coverage_filters = [
+  "update-parser-matrix-shim",
+]
+
+[[pack]]
+id = "patch-coverage-preflight-wrapper"
+lcov = false
+files = [
+  "scripts/preflight.sh",
+  "scripts/tests/test-preflight-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-preflight-wrapper.sh",
+]
+coverage_filters = [
+  "preflight-wrapper",
+]
+
+[[pack]]
+id = "patch-coverage-install-githooks-wrapper"
+lcov = false
+files = [
+  "scripts/install-githooks.sh",
+  "scripts/tests/test-install-githooks-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-install-githooks-wrapper.sh",
+]
+coverage_filters = [
+  "install-githooks-wrapper",
+]
+
+[[pack]]
+id = "patch-coverage-e2e-gate-wrapper"
+lcov = false
+files = [
+  "scripts/e2e-gate.sh",
+  "scripts/tests/test-e2e-gate-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-e2e-gate-wrapper.sh",
+]
+coverage_filters = [
+  "e2e-gate-wrapper",
+]
+
+[[pack]]
+id = "patch-coverage-execute-gate-wrapper"
+lcov = false
+files = [
+  "scripts/execute-gate.sh",
+  "scripts/tests/test-execute-gate-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-execute-gate-wrapper.sh",
+]
+coverage_filters = [
+  "execute-gate-wrapper",
+]
+
+[[pack]]
+id = "patch-coverage-run-gates-wrapper"
+lcov = false
+files = [
+  "scripts/run-gates.sh",
+  "scripts/tests/test-run-gates-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-run-gates-wrapper.sh",
+]
+coverage_filters = [
+  "run-gates-wrapper",
+]
+
+[[pack]]
+id = "patch-coverage-gate-local-wrapper"
+lcov = false
+files = [
+  "scripts/gate-local.sh",
+  "scripts/tests/test-gate-local-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-gate-local-wrapper.sh",
+]
+coverage_filters = [
+  "gate-local-wrapper",
+]
+
+[[pack]]
+id = "patch-coverage-list-gates-wrapper"
+lcov = false
+files = [
+  "scripts/list-gates.py",
+  "scripts/tests/test-list-gates-wrapper.py",
+]
+commands = [
+  "python scripts/tests/test-list-gates-wrapper.py",
+]
+coverage_filters = [
+  "list-gates-wrapper",
+]
+
+[[pack]]
+id = "patch-coverage-forbid-fatal-constructs-wrapper"
+lcov = false
+files = [
+  "scripts/forbid-fatal-constructs.sh",
+  "scripts/tests/test-forbid-fatal-constructs-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-forbid-fatal-constructs-wrapper.sh",
+]
+coverage_filters = [
+  "forbid-fatal-constructs-wrapper",
+]
+
+[[pack]]
+id = "patch-coverage-dead-code-wrapper"
+lcov = false
+files = [
+  "scripts/dead-code-check.sh",
+  "scripts/tests/test-dead-code-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-dead-code-wrapper.sh",
+]
+coverage_filters = [
+  "dead-code-wrapper",
+]
+
+[[pack]]
+id = "patch-coverage-check-toolchain-wrapper"
+lcov = false
+files = [
+  "scripts/check-rust-toolchain.sh",
+  "scripts/tests/test-check-rust-toolchain-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-check-rust-toolchain-wrapper.sh",
+]
+coverage_filters = [
+  "check-toolchain-wrapper",
+]
+
+[[pack]]
+id = "patch-coverage-devex-doctor-wrapper"
+lcov = false
+files = [
+  "scripts/devex-doctor.sh",
+  "scripts/tests/test-devex-doctor-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-devex-doctor-wrapper.sh",
+]
+coverage_filters = [
+  "devex-doctor-wrapper",
+]
+
+[[pack]]
+id = "patch-coverage-devex-targeted-checks-wrapper"
+lcov = false
+files = [
+  "scripts/devex-targeted-checks.sh",
+  "scripts/tests/test-devex-targeted-checks-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-devex-targeted-checks-wrapper.sh",
+]
+coverage_filters = [
+  "devex-targeted-checks-wrapper",
+]
+
+[[pack]]
+id = "patch-coverage-lsp-cancellation-wrapper"
+lcov = false
+files = [
+  "scripts/test-lsp-cancellation.sh",
+  "scripts/tests/test-lsp-cancellation-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-lsp-cancellation-wrapper.sh",
+]
+coverage_filters = [
+  "lsp-cancellation-wrapper",
+]
+
+[[pack]]
+id = "patch-coverage-test-capped-wrapper"
+lcov = false
+files = [
+  "scripts/test-capped.sh",
+  "scripts/tests/test-test-capped-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-test-capped-wrapper.sh",
+]
+coverage_filters = [
+  "test-capped-wrapper",
+]
+
+[[pack]]
+id = "patch-coverage-test-e2e-capped-wrapper"
+lcov = false
+files = [
+  "scripts/test-e2e-capped.sh",
+  "scripts/tests/test-test-e2e-capped-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-test-e2e-capped-wrapper.sh",
+]
+coverage_filters = [
+  "test-e2e-capped-wrapper",
+]
+
+[[pack]]
+id = "patch-coverage-ci-cost-monitor-wrapper"
+lcov = false
+files = [
+  "scripts/ci-cost-monitor.sh",
+  "scripts/tests/test-ci-cost-monitor-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-ci-cost-monitor-wrapper.sh",
+]
+coverage_filters = [
+  "ci-cost-monitor-wrapper",
+]
+
+[[pack]]
+id = "patch-coverage-build-timing-receipt-wrapper"
+lcov = false
+files = [
+  "scripts/build-timing-receipt.sh",
+  "scripts/tests/test-build-timing-receipt-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-build-timing-receipt-wrapper.sh",
+]
+coverage_filters = [
+  "build-timing-receipt-wrapper",
+]
+
+[[pack]]
+id = "patch-coverage-compare-build-timing-wrapper"
+lcov = false
+files = [
+  "scripts/compare-build-timing.sh",
+  "scripts/tests/test-compare-build-timing-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-compare-build-timing-wrapper.sh",
+]
+coverage_filters = [
+  "compare-build-timing-wrapper",
+]
+
+[[pack]]
+id = "patch-coverage-baseline-script"
+lcov = false
+files = [
+  "scripts/check-coverage-baseline.sh",
+  "scripts/tests/test-check-coverage-baseline.sh",
+]
+commands = [
+  "bash scripts/tests/test-check-coverage-baseline.sh",
+]
+coverage_filters = [
+  "check-coverage-baseline",
+]
+
+[[pack]]
+id = "patch-coverage-update-baseline-script"
+lcov = false
+files = [
+  "scripts/update-coverage-baseline.sh",
+  "scripts/tests/test-update-coverage-baseline.sh",
+]
+commands = [
+  "bash scripts/tests/test-update-coverage-baseline.sh",
+]
+coverage_filters = [
+  "update-coverage-baseline",
+]
+
+[[pack]]
+id = "patch-coverage-generate-receipt-script"
+lcov = false
+files = [
+  "scripts/generate-receipt.sh",
+  "scripts/tests/test-generate-receipt.sh",
+]
+commands = [
+  "bash scripts/tests/test-generate-receipt.sh",
+]
+coverage_filters = [
+  "generate-receipt",
+]
+
+[[pack]]
+id = "patch-coverage-quick-receipts-wrapper"
+lcov = false
+files = [
+  "scripts/quick-receipts.sh",
+  "scripts/tests/test-quick-receipts-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-quick-receipts-wrapper.sh",
+]
+coverage_filters = [
+  "quick-receipts",
+]
+
+[[pack]]
+id = "patch-coverage-publish-receipts-wrapper"
+lcov = false
+files = [
+  "scripts/publish-receipts.sh",
+  "scripts/tests/test-publish-receipts-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-publish-receipts-wrapper.sh",
+]
+coverage_filters = [
+  "publish-receipts-wrapper",
+]
+
+[[pack]]
+id = "patch-coverage-generate-badges-wrapper"
+lcov = false
+files = [
+  "scripts/generate-badges.sh",
+  "scripts/tests/test-generate-badges-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-generate-badges-wrapper.sh",
+]
+coverage_filters = [
+  "generate-badges",
+]
+
+[[pack]]
+id = "patch-coverage-ignored-test-count-wrapper"
+lcov = false
+files = [
+  "scripts/ignored-test-count.sh",
+  "scripts/tests/test-ignored-test-count-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-ignored-test-count-wrapper.sh",
+]
+coverage_filters = [
+  "ignored-test-count",
+]
+
+[[pack]]
+id = "patch-coverage-swarm-summary-wrapper"
+lcov = false
+files = [
+  "scripts/swarm-summary.sh",
+  "scripts/tests/test-swarm-summary-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-swarm-summary-wrapper.sh",
+]
+coverage_filters = [
+  "swarm-summary-wrapper",
+]
+
+[[pack]]
+id = "patch-coverage-workspace-exclusions-wrapper"
+lcov = false
+files = [
+  "scripts/validate-workspace-exclusions.sh",
+  "scripts/tests/test-validate-workspace-exclusions-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-validate-workspace-exclusions-wrapper.sh",
+]
+coverage_filters = [
+  "workspace-exclusions-wrapper",
+]
+
+[[pack]]
+id = "patch-coverage-worktree-cleanup-wrapper"
+lcov = false
+files = [
+  "scripts/cleanup-worktrees.sh",
+  "scripts/tests/test-cleanup-worktrees-wrapper.sh",
+]
+commands = [
+  "bash scripts/tests/test-cleanup-worktrees-wrapper.sh",
+]
+coverage_filters = [
+  "worktree-cleanup-wrapper",
+]
+
+[[pack]]
+id = "patch-coverage-cleanup-completed-worktrees"
+lcov = false
+files = [
+  "scripts/cleanup-completed-worktrees.sh",
+  "scripts/tests/test-cleanup-completed-worktrees.sh",
+]
+commands = [
+  "bash scripts/tests/test-cleanup-completed-worktrees.sh",
+]
+coverage_filters = [
+  "cleanup-completed-worktrees",
+]
+
+[[pack]]
+id = "patch-coverage-clean-tmp-targets"
+lcov = false
+files = [
+  "scripts/clean-tmp-targets.sh",
+  "scripts/tests/test-clean-tmp-targets.sh",
+]
+commands = [
+  "bash scripts/tests/test-clean-tmp-targets.sh",
+]
+coverage_filters = [
+  "clean-tmp-targets",
+]
+
+[[pack]]
+id = "patch-coverage-swarm-cleanup"
+lcov = false
+files = [
+  "scripts/swarm-clean",
+  "scripts/swarm-doctor",
+  "scripts/tests/test_swarm_clean.sh",
+  "scripts/tests/test_swarm_doctor.sh",
+]
+commands = [
+  "bash scripts/tests/test_swarm_clean.sh",
+  "bash scripts/tests/test_swarm_doctor.sh",
+]
+coverage_filters = [
+  "swarm-cleanup",
+]
+
+[[pack]]
+id = "patch-coverage-pre-merge-check"
+lcov = false
+files = [
+  "scripts/pre-merge-check.sh",
+  "scripts/tests/test-pre-merge-check.sh",
+]
+commands = [
+  "bash scripts/tests/test-pre-merge-check.sh",
+]
+coverage_filters = [
+  "pre-merge-check",
+]
+
+[[pack]]
+id = "patch-coverage-rust-focused"
+files = [
+  "*.rs",
+]
+commands = [
+  "cargo test --workspace --lib --profile agent --locked",
+  "cargo check --workspace --all-targets --profile agent --locked",
+]
+coverage_filters = [
+  "workspace-lib",
+]

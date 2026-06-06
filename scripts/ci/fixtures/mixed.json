@@ -1,0 +1,39 @@
+[
+  {
+    "name": "fmt",
+    "conclusion": "failure",
+    "required": true,
+    "quarantine": false
+  },
+  {
+    "name": "CI Gate shard (lsp)",
+    "conclusion": "failure",
+    "required": true,
+    "quarantine": false
+  },
+  {
+    "name": "CI Gate shard (corpus)",
+    "conclusion": "cancelled",
+    "required": true,
+    "quarantine": false
+  },
+  {
+    "name": "security_audit",
+    "conclusion": "failure",
+    "required": true,
+    "quarantine": true
+  },
+  {
+    "name": "draft-pr-check",
+    "conclusion": "failure",
+    "required": true,
+    "quarantine": false,
+    "run_ci": false
+  },
+  {
+    "name": "some-new-experimental-check",
+    "conclusion": "failure",
+    "required": true,
+    "quarantine": false
+  }
+]

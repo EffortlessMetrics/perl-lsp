@@ -1040,6 +1040,19 @@ fn from_message_2_arg_variant() {
 }
 
 #[test]
+fn from_message_matches_undefined_variable_with_phrase_boundaries() -> TestResult {
+    assert_eq!(
+        DiagnosticCode::from_message("Undefined variable: $count"),
+        Some(DiagnosticCode::UndefinedVariable)
+    );
+    assert_eq!(
+        DiagnosticCode::from_message("$name is an undefined variable."),
+        Some(DiagnosticCode::UndefinedVariable)
+    );
+    Ok(())
+}
+
+#[test]
 fn from_message_avoids_undefined_non_variable_false_positives() -> TestResult {
     assert_eq!(DiagnosticCode::from_message("numeric comparison with undefined value"), None);
     assert_eq!(DiagnosticCode::from_message("Undefined subroutine &main::missing called"), None);

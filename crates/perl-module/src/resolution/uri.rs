@@ -130,7 +130,7 @@ pub enum ModuleUriResolution {
 /// Resolve a module name to a `file://` URI using deterministic precedence.
 ///
 /// Search order:
-/// 1. Open document URIs (`ends_with` match on relative module path)
+/// 1. Open document URIs (path-boundary match on relative module path)
 /// 2. Workspace folders + `include_paths` (path-safe filesystem checks)
 /// 3. System `@INC` paths (when `use_system_inc` is true)
 #[must_use]
@@ -209,7 +209,7 @@ pub fn resolve_module_uri_with_effective_inc(
     let relative_path = module_name_to_path(module_name);
 
     for uri in open_document_uris {
-        if uri.ends_with(&relative_path) {
+        if open_document_uri_matches_relative_path(uri, &relative_path) {
             return ModuleUriResolution::Resolved(uri.clone());
         }
     }
@@ -269,6 +269,18 @@ pub fn resolve_module_uri_with_effective_inc(
     }
 
     ModuleUriResolution::NotFound
+}
+
+fn open_document_uri_matches_relative_path(uri: &str, relative_path: &str) -> bool {
+    if relative_path.is_empty() {
+        return false;
+    }
+
+    let normalized_uri = uri.replace('\\', "/");
+    let normalized_relative_path = relative_path.replace('\\', "/");
+    normalized_uri
+        .strip_suffix(&normalized_relative_path)
+        .is_some_and(|prefix| prefix.is_empty() || prefix.ends_with('/'))
 }
 
 fn normalize_inc_path_string(input: &str) -> Option<PathBuf> {
@@ -337,7 +349,7 @@ fn full_path_for_root(
 
 #[cfg(test)]
 mod tests {
-    use super::{IncRootKind, build_effective_inc_roots};
+    use super::{IncRootKind, build_effective_inc_roots, open_document_uri_matches_relative_path};
     use std::path::PathBuf;
 
     #[test]
@@ -398,5 +410,59 @@ mod tests {
         assert_eq!(disabled[0].kind, IncRootKind::WorkspaceRelative);
         assert_eq!(disabled[0].source, "workspace-include-paths");
         assert_eq!(disabled[1].kind, IncRootKind::WorkspaceRelative);
+    }
+
+    #[test]
+    fn open_document_uri_match_rejects_empty_relative_path() {
+        assert!(
+            !open_document_uri_matches_relative_path("file:///workspace/lib/Foo.pm", ""),
+            "empty relative paths must never match an open document"
+        );
+    }
+
+    #[test]
+    fn open_document_uri_match_accepts_exact_relative_path() {
+        let cases = [("Foo/Bar.pm", "Foo/Bar.pm", true), ("Other/Bar.pm", "Foo/Bar.pm", false)];
+
+        for (normalized_uri, normalized_relative_path, expected) in cases {
+            assert_eq!(
+                open_document_uri_matches_relative_path(normalized_uri, normalized_relative_path),
+                expected,
+                "exact relative path equality should decide raw relative inputs"
+            );
+        }
+    }
+
+    #[test]
+    fn open_document_uri_match_accepts_path_bounded_suffix() {
+        assert!(
+            open_document_uri_matches_relative_path(
+                "file:///workspace/local/lib/Foo/Bar.pm",
+                "Foo/Bar.pm"
+            ),
+            "open document URIs may contain editor or workspace prefixes before the module path"
+        );
+    }
+
+    #[test]
+    fn open_document_uri_match_rejects_unbounded_suffix() {
+        assert!(
+            !open_document_uri_matches_relative_path(
+                "file:///workspace/local/lib/MyFoo/Bar.pm",
+                "Foo/Bar.pm"
+            ),
+            "the preceding URI segment must end before the module path starts"
+        );
+    }
+
+    #[test]
+    fn open_document_uri_match_normalizes_windows_separators() {
+        assert!(
+            open_document_uri_matches_relative_path(
+                "file:///workspace\\local\\lib\\Foo\\Bar.pm",
+                "Foo\\Bar.pm"
+            ),
+            "path-boundary matching should not depend on slash direction"
+        );
     }
 }

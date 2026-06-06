@@ -297,7 +297,7 @@ fn extract_shape_rec(node: &Node, out: &mut Vec<String>) {
             }
         }
 
-        If { condition, then_branch, elsif_branches, else_branch } => {
+        If { condition, then_branch, elsif_branches, else_branch, .. } => {
             extract_shape_rec(condition, out);
             extract_shape_rec(then_branch, out);
             for (cond, br) in elsif_branches {

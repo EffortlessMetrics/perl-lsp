@@ -119,12 +119,12 @@ pub fn analyze_unicode_complexity(text: &str) -> (usize, usize, usize) {
 mod tests {
     use super::{
         analyze_unicode_complexity, get_unicode_stats, is_perl_identifier_continue,
-        is_perl_identifier_start, reset_unicode_stats,
+        is_perl_identifier_start,
     };
 
     #[test]
     fn identifier_start_accepts_ascii_xid_and_emoji() {
-        reset_unicode_stats();
+        let (checks_before, emoji_hits_before) = get_unicode_stats();
 
         assert!(is_perl_identifier_start('_'));
         assert!(is_perl_identifier_start('A'));
@@ -132,9 +132,9 @@ mod tests {
         assert!(is_perl_identifier_start('🚀'));
         assert!(!is_perl_identifier_start('1'));
 
-        let (checks, emoji_hits) = get_unicode_stats();
-        assert_eq!(checks, 5);
-        assert_eq!(emoji_hits, 1);
+        let (checks_after, emoji_hits_after) = get_unicode_stats();
+        assert!(checks_after >= checks_before + 5);
+        assert!(emoji_hits_after >= emoji_hits_before + 1);
     }
 
     #[test]

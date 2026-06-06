@@ -412,14 +412,52 @@ pub fn pos_to_offset_bytes(text: &str, line: u32, ch: u32) -> usize {
 pub fn slice_in_range(text: &str, start: (u32, u32), end: (u32, u32)) -> (usize, usize, &str) {
     let s = pos_to_offset_bytes(text, start.0, start.1);
     let e = pos_to_offset_bytes(text, end.0, end.1);
-    (s, e, &text[s.min(text.len())..e.min(text.len())])
+    let (s, e) = char_boundary_range(text, s, e);
+    (s, e, &text[s..e])
 }
 
 /// Get text around an offset position
 pub fn get_text_around_offset(content: &str, offset: usize, radius: usize) -> String {
+    get_text_window_around_offset(content, offset, radius).1
+}
+
+/// Get text around an offset position and return the adjusted byte start.
+pub fn get_text_window_around_offset(
+    content: &str,
+    offset: usize,
+    radius: usize,
+) -> (usize, String) {
+    let offset = offset.min(content.len());
     let start = offset.saturating_sub(radius);
-    let end = (offset + radius).min(content.len());
-    content[start..end].to_string()
+    let end = offset.saturating_add(radius).min(content.len());
+    let (start, end) = char_boundary_range(content, start, end);
+    (start, content[start..end].to_string())
+}
+
+fn char_boundary_range(text: &str, start: usize, end: usize) -> (usize, usize) {
+    let start = start.min(text.len());
+    let end = end.min(text.len());
+    if start > end {
+        let boundary = floor_char_boundary(text, end);
+        return (boundary, boundary);
+    }
+    (floor_char_boundary(text, start), ceil_char_boundary(text, end))
+}
+
+fn floor_char_boundary(text: &str, index: usize) -> usize {
+    let mut index = index.min(text.len());
+    while index > 0 && !text.is_char_boundary(index) {
+        index -= 1;
+    }
+    index
+}
+
+fn ceil_char_boundary(text: &str, index: usize) -> usize {
+    let mut index = index.min(text.len());
+    while index < text.len() && !text.is_char_boundary(index) {
+        index += 1;
+    }
+    index
 }
 
 /// Extract module reference from text (e.g., from "use Module::Name" or "require Module::Name")
@@ -536,7 +574,8 @@ pub fn offset_to_position(content: &str, offset: usize) -> Position {
 mod tests {
     use super::{
         arg_starts_in_call_body, arg_starts_top_level, byte_to_utf16_col, decode_text_bytes,
-        extract_module_reference, find_matching_paren, offset_to_position, position_to_offset,
+        extract_module_reference, find_matching_paren, get_text_around_offset,
+        get_text_window_around_offset, offset_to_position, position_to_offset, slice_in_range,
         slice_until_stmt_end, smart_arg_anchor,
     };
     use lsp_types::Position;
@@ -597,6 +636,54 @@ mod tests {
         let offset = position_to_offset(content, pos_after_emoji.line, pos_after_emoji.character);
         assert_eq!(offset, Some(7));
         assert_eq!(offset_to_position(content, 7), pos_after_emoji);
+    }
+
+    #[test]
+    fn get_text_around_offset_snaps_start_to_utf8_boundary() {
+        let prefix = format!("{}{}\n", "🦀", "x".repeat(48));
+        let content = format!("{prefix}sub foo {{}}");
+        let offset = prefix.len();
+
+        let text_around = get_text_around_offset(&content, offset, 50);
+
+        assert!(text_around.starts_with("🦀"));
+        assert!(text_around.contains("sub foo"));
+    }
+
+    #[test]
+    fn get_text_window_around_offset_reports_adjusted_utf8_start() {
+        let prefix = format!("{}{}\n", "🦀", "x".repeat(48));
+        let content = format!("{prefix}sub foo {{}}");
+        let offset = prefix.len();
+
+        let (start, text_around) = get_text_window_around_offset(&content, offset, 50);
+        let cursor_in_text = offset.saturating_sub(start);
+
+        assert_eq!(start, 0);
+        assert!(text_around.is_char_boundary(cursor_in_text));
+        assert!(text_around[cursor_in_text..].starts_with("sub foo"));
+    }
+
+    #[test]
+    fn slice_in_range_snaps_utf8_cut_points() {
+        let text = "🦀abc";
+
+        let (start, end, slice) = slice_in_range(text, (0, 2), (0, 3));
+
+        assert_eq!(start, 0);
+        assert_eq!(end, "🦀".len());
+        assert_eq!(slice, "🦀");
+    }
+
+    #[test]
+    fn slice_in_range_returns_empty_for_reversed_range() {
+        let text = "🦀abc";
+
+        let (start, end, slice) = slice_in_range(text, (0, 5), (0, 2));
+
+        assert_eq!(start, 0);
+        assert_eq!(end, 0);
+        assert!(slice.is_empty());
     }
 
     #[test]

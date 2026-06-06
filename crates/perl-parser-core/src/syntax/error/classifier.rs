@@ -111,12 +111,36 @@ impl ErrorClassifier {
     ///
     /// Specific error type for targeted recovery during Perl parsing
     pub fn classify(&self, error_node: &Node, source: &str) -> ParseErrorKind {
-        // Get the error text if available based on location
+        // Get the error text if available based on location.
+        //
+        // Both `start` and `end` must sit on char boundaries before we can index
+        // into a `&str`.  Parser locations are stored as byte offsets; if a
+        // multibyte character straddles the window boundary, a raw `source[s..e]`
+        // would panic.  We snap both bounds using `str::is_char_boundary`.
         let error_text = {
-            let start = error_node.location.start;
-            let end = (start + 10).min(source.len()); // Look at next 10 chars
-            if start < source.len() && end <= source.len() && start <= end {
-                &source[start..end]
+            let raw_start = error_node.location.start;
+            // Clamp start to [0, source.len()] and snap forward to the next
+            // char boundary so we never begin inside a multibyte sequence.
+            let start = {
+                let s = raw_start.min(source.len());
+                // Walk forward until we land on a char boundary (or reach the end).
+                let mut s = s;
+                while s < source.len() && !source.is_char_boundary(s) {
+                    s += 1;
+                }
+                s
+            };
+            // Look at up to 10 bytes ahead, but snap end *down* to the nearest
+            // char boundary so we never split a multibyte sequence at the tail.
+            let end = {
+                let mut e = (start + 10).min(source.len());
+                while e > start && !source.is_char_boundary(e) {
+                    e -= 1;
+                }
+                e
+            };
+            if start < source.len() && start <= end {
+                source.get(start..end).unwrap_or("")
             } else {
                 ""
             }
@@ -150,9 +174,25 @@ impl ErrorClassifier {
             }
         }
 
-        // Check context around error
+        // Check context around error.
+        //
+        // `pos` is a byte offset from the parser and may not lie on a char
+        // boundary when the source contains multibyte characters.  We must snap
+        // it before slicing.  `rfind('\n')` and `find('\n')` are safe because
+        // '\n' (0x0A) is always a single-byte sequence and its position is
+        // therefore always a valid char boundary.
         {
-            let pos = error_node.location.start;
+            let raw_pos = error_node.location.start;
+            // Snap pos forward to the nearest char boundary (or source.len()).
+            let pos = {
+                let p = raw_pos.min(source.len());
+                let mut p = p;
+                while p < source.len() && !source.is_char_boundary(p) {
+                    p += 1;
+                }
+                p
+            };
+            // source[..pos] is now safe because pos is on a boundary.
             let line_start = source[..pos].rfind('\n').map(|i| i + 1).unwrap_or(0);
             let line_end = source[pos..].find('\n').map(|i| pos + i).unwrap_or(source.len());
 

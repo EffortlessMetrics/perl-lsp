@@ -233,3 +233,95 @@ fn inline_value_ranges_align_with_variable_columns() -> TestResult {
 
     Ok(())
 }
+
+#[test]
+fn inline_value_uses_latest_document_after_full_change() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    let uri = "file:///inline_value_change.pl";
+    harness.open(uri, "my $before = 1;\nprint $before;\n")?;
+    harness.change_full(uri, 2, "my $after = 2;\nprint $after;\n")?;
+
+    let items = request_inline_values(&mut harness, uri, 0, 1, None)?;
+    for item in &items {
+        assert_inline_value_shape(item);
+    }
+
+    let names = variable_names(&items);
+    assert!(
+        names.contains(&"$after"),
+        "expected inline values to reflect changed document text, got names={names:?}"
+    );
+    assert!(
+        !names.contains(&"$before"),
+        "stale inline values from the opened document should not remain after didChange, got names={names:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn inline_value_closed_document_returns_empty_array() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    let uri = "file:///inline_value_closed.pl";
+    harness.open(uri, "my $gone = 1;\n")?;
+    harness.close(uri)?;
+
+    let items = request_inline_values(&mut harness, uri, 0, 0, None)?;
+    assert!(items.is_empty(), "closed documents should not produce inline values, got {items:?}");
+
+    Ok(())
+}
+
+#[test]
+fn inline_value_empty_document_returns_empty_array() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    let uri = "file:///inline_value_empty.pl";
+    harness.open(uri, "")?;
+
+    let items = request_inline_values(&mut harness, uri, 0, 0, None)?;
+    assert!(items.is_empty(), "empty documents should return an empty inline value array");
+
+    Ok(())
+}
+
+#[test]
+fn inline_value_ranges_use_utf16_columns_after_non_bmp_prefix() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    let uri = "file:///inline_value_utf16.pl";
+    let line = r#"say "🦀"; my $after = 42;"#;
+    harness.open(uri, &format!("{line}\n"))?;
+
+    let items = request_inline_values(&mut harness, uri, 0, 0, None)?;
+    let after_item = must_some(
+        items.iter().find(|i| i.get("variableName").and_then(Value::as_str) == Some("$after")),
+    );
+    assert_inline_value_shape(after_item);
+
+    let range = must_some(after_item.get("range"));
+    let start = must_some(range.get("start"));
+    let end = must_some(range.get("end"));
+    let start_char = must_some(start.get("character").and_then(Value::as_u64));
+    let end_char = must_some(end.get("character").and_then(Value::as_u64));
+
+    let byte_start = must_some(line.find("$after"));
+    let expected_start = line[..byte_start].encode_utf16().count() as u64;
+    assert_eq!(
+        start_char, expected_start,
+        "inline value range start must use UTF-16 units after non-BMP characters"
+    );
+    assert_eq!(
+        end_char,
+        expected_start + "$after".encode_utf16().count() as u64,
+        "inline value range end must use UTF-16 units after non-BMP characters"
+    );
+
+    Ok(())
+}

@@ -1,0 +1,22 @@
+{
+  "hover": {
+    "File::Spec": {
+      "allowed_empty_when_perldoc_unavailable": true,
+      "must_not_emit_warning_when_empty": true
+    },
+    "JSON::PP": {
+      "allowed_empty_when_perldoc_unavailable": true,
+      "must_not_emit_warning_when_empty": true
+    }
+  },
+  "document_links": {
+    "must_include_target_when_supported": "README.md",
+    "must_have_valid_ranges_when_present": true
+  },
+  "diagnostics": {
+    "must_not_report_missing_module": [
+      "File::Spec",
+      "JSON::PP"
+    ]
+  }
+}

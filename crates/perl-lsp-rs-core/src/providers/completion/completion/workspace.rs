@@ -531,6 +531,85 @@ fn normalized_path_key(path: &Path) -> String {
     if cfg!(windows) { key.to_ascii_lowercase() } else { key }
 }
 
+/// Collect module names from include roots using the same bounded directory
+/// scanner and optional short-TTL cache used by completion-list module lookup.
+pub fn collect_module_names_from_roots_with_cache(
+    prefix: &str,
+    include_paths: &[PathBuf],
+    system_inc_paths: &[PathBuf],
+    include_system_inc: bool,
+    scan_cache: Option<&ModuleCompletionScanCache>,
+    is_cancelled: &dyn Fn() -> bool,
+) -> Vec<String> {
+    let mut modules = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+
+    let cache_key = |root: &Path| -> ScanCacheKey {
+        let (scan_dir, _, _) = root_and_leaf_prefix(root, prefix);
+        let prefix_dir = match scan_dir.strip_prefix(root) {
+            Ok(path) => path.to_path_buf(),
+            Err(_) => scan_dir.to_path_buf(),
+        };
+        ScanCacheKey {
+            // Inline completion runs on frequent keystrokes; keep this helper free
+            // of canonicalization I/O and rely on stable include-root paths.
+            canonical_root: root.to_path_buf(),
+            prefix_dir,
+            module_prefix: prefix.to_string(),
+        }
+    };
+
+    let mut add_external_modules = |roots: &[PathBuf]| -> bool {
+        for root in roots.iter().take(MAX_MODULE_SCAN_ROOTS) {
+            if is_cancelled() {
+                return false;
+            }
+
+            let scanned_modules = match scan_cache {
+                Some(cache) => {
+                    let key = cache_key(root);
+                    if let Some(cached) = cache.get(&key) {
+                        if is_cancelled() {
+                            return false;
+                        }
+                        cached
+                    } else {
+                        let scanned = scan_directory_for_modules(root, prefix);
+                        if is_cancelled() {
+                            return false;
+                        }
+                        cache.insert(key, scanned.clone());
+                        scanned
+                    }
+                }
+                None => scan_directory_for_modules(root, prefix),
+            };
+
+            if is_cancelled() {
+                return false;
+            }
+
+            for name in scanned_modules {
+                if !seen.contains(&name) {
+                    seen.insert(name.clone());
+                    modules.push(name);
+                }
+            }
+        }
+
+        true
+    };
+
+    if !add_external_modules(include_paths) {
+        return modules;
+    }
+    if include_system_inc {
+        let _ = add_external_modules(system_inc_paths);
+    }
+
+    modules
+}
+
 /// Add module name completions for `use` and `require` statements.
 ///
 /// Thin backward-compatible wrapper around [`add_use_module_completions_with_cache`]
