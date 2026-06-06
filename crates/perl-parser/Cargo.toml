@@ -98,7 +98,7 @@ insta = { version = "1.47.2", features = ["yaml"] }
 criterion.workspace = true
 perl-uri = { workspace = true }
 regex.workspace = true
-serial_test = "3.4.0"
+serial_test = "3.5.0"
 tempfile.workspace = true
 proptest.workspace = true
 rstest = "0.26.1"
