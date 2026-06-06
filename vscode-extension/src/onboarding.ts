@@ -73,7 +73,8 @@ export function classifyStartupFailure(results: HealthCheckResult[]): string {
     return (
       'Perl Language Server binary (perllsp) not found. ' +
       detailWithPeriod +
-      ' Check the Output panel for download details or reinstall the extension.'
+      ' Run "Perl: Run Health Check" from the Command Palette, set `perl-lsp.serverPath` to a local perllsp binary, ' +
+      'or run "Perl: Reinstall Server Binary" to download the managed binary again.'
     );
   }
 
