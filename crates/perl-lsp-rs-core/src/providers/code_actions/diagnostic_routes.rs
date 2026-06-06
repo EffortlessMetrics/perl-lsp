@@ -204,6 +204,10 @@ fn quick_fixes_for_diagnostic(source: &str, diagnostic: &Diagnostic) -> Vec<Code
         {
             actions.extend(quick_fixes::fix_printf_format_arity(source, &qf_diag));
         }
+        // PL304: Exported subroutine lacks POD documentation
+        c if c == DiagnosticCode::MissingPodCoverage.as_str() => {
+            actions.extend(quick_fixes::fix_missing_pod_coverage(source, &qf_diag));
+        }
         // PL410: loop-control statement targets an undefined label
         c if c == DiagnosticCode::LoopControlUndefinedLabel.as_str() => {
             actions.extend(quick_fixes::fix_loop_control_undefined_label(source, &qf_diag));
