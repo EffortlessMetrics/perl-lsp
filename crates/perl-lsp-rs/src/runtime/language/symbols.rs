@@ -4,7 +4,7 @@
 
 use super::super::{byte_to_utf16_col, *};
 use crate::fallback::text::folding_ranges_from_text;
-use crate::protocol::req_uri;
+use crate::protocol::{invalid_params, req_uri};
 use crate::state::document_symbol_cap;
 use std::sync::OnceLock;
 
@@ -25,6 +25,14 @@ fn get_package_regex() -> Option<&'static regex::Regex> {
 
 fn get_head_regex() -> Option<&'static regex::Regex> {
     HEAD_REGEX.get_or_init(|| regex::Regex::new(r"^=(head[1-4])\s+(.+)$")).as_ref().ok()
+}
+
+fn invalid_folding_range_uri_params() -> JsonRpcError {
+    invalid_params(
+        "Missing required parameter: textDocument.uri\n\n\
+         textDocument/foldingRange expects params.textDocument.uri to identify the document to fold.\n\n\
+         Example: {\"textDocument\":{\"uri\":\"file:///workspace/lib/My/Module.pm\"}}",
+    )
 }
 
 /// Scan source text for POD =head1..=head4 directives and return them as document symbols.
@@ -131,7 +139,10 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
-            let uri = req_uri(&params)?;
+            let uri = params
+                .pointer("/textDocument/uri")
+                .and_then(Value::as_str)
+                .ok_or_else(invalid_folding_range_uri_params)?;
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -210,6 +221,8 @@ impl LspServer {
                     return Ok(Some(json!(folding_ranges_from_text(&doc.text, 1000))));
                 }
             }
+        } else {
+            return Err(invalid_folding_range_uri_params());
         }
 
         Ok(Some(json!([])))
@@ -220,7 +233,10 @@ impl LspServer {
         &self,
         params: serde_json::Value,
     ) -> Result<serde_json::Value, JsonRpcError> {
-        let uri = params.pointer("/textDocument/uri").and_then(|v| v.as_str()).unwrap_or("");
+        let uri = params
+            .pointer("/textDocument/uri")
+            .and_then(|v| v.as_str())
+            .ok_or_else(invalid_folding_range_uri_params)?;
         let text = self.buffer_text(uri).unwrap_or_default();
         let ranges = folding_ranges_from_text(&text, 128);
         Ok(serde_json::to_value(ranges).unwrap_or(serde_json::json!([])))
@@ -393,4 +409,52 @@ fn document_symbols_empty_compiler_receipt(reason: &str) -> Value {
         "reason": reason,
         "fact_source_traces": [],
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn expect_folding_range_uri_guidance(err: JsonRpcError) -> Result<(), String> {
+        assert_eq!(err.code, crate::protocol::INVALID_PARAMS);
+        for expected in [
+            "Missing required parameter: textDocument.uri",
+            "textDocument/foldingRange",
+            "params.textDocument.uri",
+            "file:///workspace/lib/My/Module.pm",
+        ] {
+            if !err.message.contains(expected) {
+                return Err(format!("expected error message to contain {expected:?}; got {err}"));
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn folding_range_missing_params_error_includes_shape_guidance() -> Result<(), String> {
+        let server = LspServer::new();
+        match server.handle_folding_range(None) {
+            Err(err) => expect_folding_range_uri_guidance(err),
+            Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
+        }
+    }
+
+    #[test]
+    fn folding_range_missing_uri_error_includes_shape_guidance() -> Result<(), String> {
+        let server = LspServer::new();
+        match server.handle_folding_range(Some(json!({}))) {
+            Err(err) => expect_folding_range_uri_guidance(err),
+            Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
+        }
+    }
+
+    #[test]
+    fn folding_range_fallback_missing_uri_error_includes_shape_guidance() -> Result<(), String> {
+        let server = LspServer::new();
+        match server.on_folding_range(json!({})) {
+            Err(err) => expect_folding_range_uri_guidance(err),
+            Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
+        }
+    }
 }
