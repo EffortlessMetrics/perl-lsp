@@ -6,6 +6,12 @@
 use super::super::*;
 use super::response::RoutedResponse;
 
+fn unsupported_method_message(method: &str) -> String {
+    format!(
+        "Method '{method}' not found or not supported: check the LSP method spelling and the capabilities returned by initialize; supported examples include textDocument/hover, textDocument/completion, textDocument/formatting, and workspace/executeCommand"
+    )
+}
+
 impl LspServer {
     pub(super) fn route_request(
         &self,
@@ -197,7 +203,7 @@ impl LspServer {
                 // Enhanced error response with comprehensive context
                 Err(enhanced_error(
                     METHOD_NOT_FOUND,
-                    &format!("Method '{}' not found or not supported", method),
+                    &unsupported_method_message(&method),
                     "method_not_found",
                     Some(&method),
                 ))
