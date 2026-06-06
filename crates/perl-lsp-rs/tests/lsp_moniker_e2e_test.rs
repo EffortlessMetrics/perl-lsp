@@ -48,6 +48,50 @@ fn find_moniker_of_kind<'a>(monikers: &'a [Value], kind: &str) -> Option<&'a Val
     monikers.iter().find(|m| m.get("kind").and_then(Value::as_str) == Some(kind))
 }
 
+fn moniker_shape_error(harness: &mut LspHarness, params: Option<Value>) -> Result<String, String> {
+    let mut request = json!({
+        "jsonrpc": "2.0",
+        "method": "textDocument/moniker"
+    });
+    if let Some(params) = params {
+        request["params"] = params;
+    }
+
+    let response = harness.request_raw(request);
+    let error =
+        response.get("error").ok_or_else(|| format!("expected error response, got {response}"))?;
+    let code = error
+        .get("code")
+        .and_then(Value::as_i64)
+        .ok_or_else(|| format!("error response missing numeric code: {response}"))?;
+    if code != -32602 {
+        return Err(format!("expected INVALID_PARAMS (-32602), got {code}: {response}"));
+    }
+    let message = error
+        .get("message")
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("error response missing message: {response}"))?;
+    Ok(message.to_string())
+}
+
+fn assert_moniker_shape_guidance(case: &str, message: &str) -> Result<(), String> {
+    for expected in [
+        "Missing required parameters: textDocument.uri and position",
+        "textDocument/moniker",
+        "params.textDocument.uri",
+        "params.position.line",
+        "params.position.character",
+        "file:///workspace/lib/My/Module.pm",
+    ] {
+        if !message.contains(expected) {
+            return Err(format!(
+                "{case}: expected error message to contain {expected:?}; got {message:?}"
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn assert_moniker_shape(moniker: &Value) {
     assert_eq!(
         moniker.get("scheme").and_then(Value::as_str),
@@ -68,6 +112,34 @@ fn assert_moniker_shape(moniker: &Value) {
         matches!(unique, "document" | "project" | "global" | "scheme"),
         "unique must be a recognized LSP value, got {unique:?}"
     );
+}
+
+#[test]
+fn moniker_request_shape_errors_include_payload_guidance() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    for (case, params) in [
+        ("missing params", None),
+        (
+            "missing uri",
+            Some(json!({
+                "position": { "line": 10, "character": 4 }
+            })),
+        ),
+        (
+            "missing position",
+            Some(json!({
+                "textDocument": { "uri": "file:///workspace/lib/My/Module.pm" }
+            })),
+        ),
+    ] {
+        let message = moniker_shape_error(&mut harness, params)?;
+        assert_moniker_shape_guidance(case, &message)?;
+    }
+
+    harness.shutdown_gracefully();
+    Ok(())
 }
 
 #[test]
