@@ -7,7 +7,7 @@ use super::super::*;
 use super::misc::{
     DIAGNOSTIC_EXPLANATION_SCHEMA_VERSION, diagnostic_explanation_payload_from_diagnostics,
 };
-use crate::protocol::{req_range, req_uri};
+use crate::protocol::{invalid_params, req_range, req_uri};
 use std::sync::LazyLock;
 
 static GLOBAL_VAR_ASSIGNMENT_RE: LazyLock<regex::Regex> =
@@ -15,7 +15,6 @@ static GLOBAL_VAR_ASSIGNMENT_RE: LazyLock<regex::Regex> =
         Ok(re) => re,
         Err(err) => unreachable!("GLOBAL_VAR_ASSIGNMENT_RE is a known-good static pattern: {err}"),
     });
-const CODE_ACTION_TAG_LLM_GENERATED: i64 = 1;
 
 fn requested_code_action_kinds(params: &Value) -> Vec<&str> {
     params
@@ -46,35 +45,6 @@ fn retain_requested_code_action_kinds(code_actions: &mut Vec<Value>, requested_k
                 .any(|requested_kind| code_action_kind_matches_filter(kind, requested_kind))
         })
     });
-}
-
-fn enforce_code_action_tag_capability(
-    code_actions: &mut [Value],
-    supports_llm_generated_tag: bool,
-) {
-    for action in code_actions {
-        let Some(action_object) = action.as_object_mut() else {
-            continue;
-        };
-
-        if !action_object.contains_key("tags") {
-            continue;
-        }
-
-        if !supports_llm_generated_tag {
-            action_object.remove("tags");
-            continue;
-        }
-
-        let Some(tags) = action_object.get_mut("tags").and_then(Value::as_array_mut) else {
-            action_object.remove("tags");
-            continue;
-        };
-        tags.retain(|tag| tag.as_i64() == Some(CODE_ACTION_TAG_LLM_GENERATED));
-        if tags.is_empty() {
-            action_object.remove("tags");
-        }
-    }
 }
 
 fn display_diagnostic_message(diagnostic: &crate::features::diagnostics::Diagnostic) -> String {
@@ -109,6 +79,16 @@ fn diagnostic_range_intersects_selection(
 
 fn diagnostic_code_is_explainable(code: Option<&str>) -> bool {
     matches!(code, Some("PL701" | "PL109"))
+}
+
+fn invalid_code_action_resolve_params() -> JsonRpcError {
+    invalid_params(
+        "Missing or invalid codeAction/resolve params\n\n\
+         codeAction/resolve expects params to be a CodeAction object returned by \
+         textDocument/codeAction.\n\n\
+         Example: {\"title\":\"Add use strict\",\"kind\":\"quickfix\",\
+         \"data\":{\"uri\":\"file:///workspace/main.pl\",\"pragma\":\"use strict;\"}}",
+    )
 }
 
 /// Byte-offset-agnostic representation of an LSP range used only for
@@ -316,82 +296,7 @@ fn build_source_fix_all(code_actions: &[Value], uri: &str) -> Option<Value> {
     Some(action)
 }
 
-fn is_pragma_snippet_action(action: &Value) -> bool {
-    action.get("kind").and_then(Value::as_str) == Some("quickfix")
-        && action.get("title").and_then(Value::as_str).is_some_and(|title| {
-            matches!(
-                title,
-                "Add use strict;" | "Add use warnings;" | "Add 'use strict' and 'use warnings'"
-            )
-        })
-}
-
-fn snippet_text_edits_from_changes(action: &Value, uri: &str) -> Option<Vec<Value>> {
-    let edits = action
-        .pointer("/edit/changes")
-        .and_then(Value::as_object)
-        .and_then(|changes| changes.get(uri))
-        .and_then(Value::as_array)?;
-
-    let mut snippet_edits = Vec::with_capacity(edits.len());
-    for edit in edits {
-        let range = edit.get("range")?.clone();
-        let new_text = edit.get("newText")?.as_str()?;
-        snippet_edits.push(json!({
-            "range": range,
-            "snippet": {
-                "kind": "snippet",
-                "value": new_text,
-            },
-        }));
-    }
-
-    if snippet_edits.is_empty() { None } else { Some(snippet_edits) }
-}
-
-fn convert_pragma_quickfix_edits_to_snippet_text_edits(
-    code_actions: &mut [Value],
-    uri: &str,
-    document_version: i32,
-) {
-    for action in code_actions {
-        if !is_pragma_snippet_action(action) {
-            continue;
-        }
-
-        let Some(snippet_edits) = snippet_text_edits_from_changes(action, uri) else {
-            continue;
-        };
-
-        if let Some(action_object) = action.as_object_mut() {
-            action_object.insert(
-                "edit".to_string(),
-                json!({
-                    "documentChanges": [{
-                        "textDocument": {
-                            "uri": uri,
-                            "version": document_version,
-                        },
-                        "edits": snippet_edits,
-                    }],
-                }),
-            );
-        }
-    }
-}
-
 impl LspServer {
-    fn supports_workspace_snippet_text_edits(&self) -> bool {
-        let caps = self.client_capabilities.lock();
-        caps.workspace_edit_document_changes_support && caps.workspace_edit_snippet_edit_support
-    }
-
-    fn enforce_code_action_tag_capabilities(&self, code_actions: &mut [Value]) {
-        let supports_llm_generated_tag =
-            self.client_capabilities.lock().code_action_llm_generated_tag_support;
-        enforce_code_action_tag_capability(code_actions, supports_llm_generated_tag);
-    }
-
     /// Handle textDocument/codeAction request
     pub(crate) fn handle_code_action(
         &self,
@@ -686,15 +591,6 @@ impl LspServer {
                 code_actions.push(fix_all);
             }
 
-            if self.supports_workspace_snippet_text_edits() {
-                convert_pragma_quickfix_edits_to_snippet_text_edits(
-                    &mut code_actions,
-                    uri,
-                    doc.version,
-                );
-            }
-
-            self.enforce_code_action_tag_capabilities(&mut code_actions);
             retain_requested_code_action_kinds(&mut code_actions, &requested_kinds);
             Ok(Some(json!(code_actions)))
         } else {
@@ -741,14 +637,6 @@ impl LspServer {
                 }));
             }
 
-            if self.supports_workspace_snippet_text_edits() {
-                convert_pragma_quickfix_edits_to_snippet_text_edits(
-                    &mut code_actions,
-                    uri,
-                    doc.version,
-                );
-            }
-
             // Always offer debug actions for files with issues
             code_actions.push(json!({
                 "title": "Add debug print",
@@ -773,7 +661,6 @@ impl LspServer {
                 }));
             }
 
-            self.enforce_code_action_tag_capabilities(&mut code_actions);
             retain_requested_code_action_kinds(&mut code_actions, &requested_kinds);
             Ok(Some(json!(code_actions)))
         }
@@ -808,47 +695,46 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        if let Some(mut action) = params {
-            // The action should already have minimal information
-            // We now need to compute the actual edits
+        let mut action = params.ok_or_else(invalid_code_action_resolve_params)?;
+        if !action.is_object() {
+            return Err(invalid_code_action_resolve_params());
+        }
 
-            if let Some(kind) = action.get("kind").and_then(|k| k.as_str()) {
-                if kind == "quickfix" {
-                    // For quickfix actions, compute the workspace edit now
-                    if let Some(data) = action.get("data") {
-                        if let Some(uri) = data.get("uri").and_then(|u| u.as_str()) {
-                            let documents = self.documents_guard();
-                            if self.get_document(&documents, uri).is_some() {
-                                // Example: Add "use strict;" at the beginning
-                                if let Some(pragma) = data.get("pragma").and_then(|p| p.as_str()) {
-                                    let text = format!("{}\n", pragma);
-                                    let edit = json!({
-                                        "changes": {
-                                            uri: [{
-                                                "range": {
-                                                    "start": {"line": 0, "character": 0},
-                                                    "end": {"line": 0, "character": 0}
-                                                },
-                                                "newText": text
-                                            }]
-                                        }
-                                    });
-
-                                    if let Some(obj) = action.as_object_mut() {
-                                        obj.insert("edit".to_string(), edit);
+        // The action should already have minimal information.
+        // We now need to compute the actual edits.
+        if let Some(kind) = action.get("kind").and_then(|k| k.as_str()) {
+            if kind == "quickfix" {
+                // For quickfix actions, compute the workspace edit now.
+                if let Some(data) = action.get("data") {
+                    if let Some(uri) = data.get("uri").and_then(|u| u.as_str()) {
+                        let documents = self.documents_guard();
+                        if self.get_document(&documents, uri).is_some() {
+                            // Example: Add "use strict;" at the beginning.
+                            if let Some(pragma) = data.get("pragma").and_then(|p| p.as_str()) {
+                                let text = format!("{}\n", pragma);
+                                let edit = json!({
+                                    "changes": {
+                                        uri: [{
+                                            "range": {
+                                                "start": {"line": 0, "character": 0},
+                                                "end": {"line": 0, "character": 0}
+                                            },
+                                            "newText": text
+                                        }]
                                     }
+                                });
+
+                                if let Some(obj) = action.as_object_mut() {
+                                    obj.insert("edit".to_string(), edit);
                                 }
                             }
                         }
                     }
                 }
             }
-
-            self.enforce_code_action_tag_capabilities(std::slice::from_mut(&mut action));
-            Ok(Some(action))
-        } else {
-            Ok(None)
         }
+
+        Ok(Some(action))
     }
 }
 
@@ -1062,61 +948,58 @@ mod tests {
         assert_eq!(remaining_kinds, vec!["refactor.rewrite"]);
     }
 
-    #[test]
-    fn code_action_tag_gate_strips_tags_without_client_support() {
-        let mut actions = vec![json!({
-            "title": "generated",
-            "kind": "quickfix",
-            "tags": [CODE_ACTION_TAG_LLM_GENERATED],
-        })];
-
-        enforce_code_action_tag_capability(&mut actions, false);
-
-        assert!(
-            actions[0].get("tags").is_none(),
-            "unsupported clients must not receive code-action tags: {actions:?}"
-        );
+    fn expect_code_action_resolve_guidance(err: JsonRpcError) -> Result<(), String> {
+        assert_eq!(err.code, crate::protocol::INVALID_PARAMS);
+        for expected in [
+            "Missing or invalid codeAction/resolve params",
+            "CodeAction object",
+            "textDocument/codeAction",
+            "\"kind\":\"quickfix\"",
+            "\"data\"",
+        ] {
+            if !err.message.contains(expected) {
+                return Err(format!("expected error message to contain {expected:?}; got {err}"));
+            }
+        }
+        Ok(())
     }
 
     #[test]
-    fn code_action_tag_gate_keeps_only_supported_llm_generated_tag()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let mut actions = vec![
-            json!({
-                "title": "generated",
-                "kind": "quickfix",
-                "tags": [CODE_ACTION_TAG_LLM_GENERATED, 99],
-            }),
-            json!({
-                "title": "unknown",
-                "kind": "quickfix",
-                "tags": [99],
-            }),
-            json!({
-                "title": "malformed",
-                "kind": "quickfix",
-                "tags": "LLMGenerated",
-            }),
-        ];
+    fn code_action_resolve_missing_params_error_includes_shape_guidance() -> Result<(), String> {
+        let server = LspServer::new();
+        match server.handle_code_action_resolve(None) {
+            Err(err) => expect_code_action_resolve_guidance(err),
+            Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
+        }
+    }
 
-        enforce_code_action_tag_capability(&mut actions, true);
+    #[test]
+    fn code_action_resolve_non_object_params_error_includes_shape_guidance() -> Result<(), String> {
+        let server = LspServer::new();
+        match server.handle_code_action_resolve(Some(json!([]))) {
+            Err(err) => expect_code_action_resolve_guidance(err),
+            Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
+        }
+    }
 
-        assert_eq!(
-            actions[0]
-                .get("tags")
-                .and_then(Value::as_array)
-                .ok_or("expected supported LLMGenerated tag to remain")?,
-            &vec![json!(CODE_ACTION_TAG_LLM_GENERATED)]
-        );
-        assert!(
-            actions[1].get("tags").is_none(),
-            "unsupported tag values should be removed: {actions:?}"
-        );
-        assert!(
-            actions[2].get("tags").is_none(),
-            "malformed tag payloads should be removed: {actions:?}"
-        );
-        Ok(())
+    #[test]
+    fn code_action_resolve_accepts_code_action_objects() -> Result<(), String> {
+        let server = LspServer::new();
+        let action = json!({
+            "title": "Explain this diagnostic",
+            "kind": "quickfix",
+            "command": {
+                "title": "Explain this diagnostic",
+                "command": "perl-lsp.explainDiagnostic",
+                "arguments": []
+            }
+        });
+
+        match server.handle_code_action_resolve(Some(action.clone())) {
+            Ok(Some(resolved)) if resolved == action => Ok(()),
+            Ok(result) => Err(format!("expected unresolved action echo; got {result:?}")),
+            Err(err) => Err(format!("expected valid CodeAction object; got {err}")),
+        }
     }
 
     fn open_test_document(server: &LspServer, uri: &str, text: &str) {
@@ -1252,106 +1135,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn code_action_runtime_emits_snippet_text_edits_when_supported()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let server = LspServer::new();
-        {
-            let mut caps = server.client_capabilities.lock();
-            caps.workspace_edit_document_changes_support = true;
-            caps.workspace_edit_snippet_edit_support = true;
-        }
-
-        let uri = "file:///runtime_snippet.pl";
-        open_test_document(&server, uri, "print 'hello';\n");
-
-        let response = server.handle_code_action(Some(json!({
-            "textDocument": { "uri": uri },
-            "range": {
-                "start": { "line": 0, "character": 0 },
-                "end": { "line": 0, "character": 5 }
-            },
-            "context": { "diagnostics": [] }
-        })))?;
-        let response = response.ok_or("missing code action response")?;
-        let actions = response.as_array().ok_or("code action response must be an array")?;
-        let strict_action = actions
-            .iter()
-            .find(|action| action.get("title").and_then(Value::as_str) == Some("Add use strict;"))
-            .ok_or("missing strict pragma action")?;
-
-        assert_eq!(
-            strict_action
-                .pointer("/edit/documentChanges/0/edits/0/snippet/kind")
-                .and_then(Value::as_str),
-            Some("snippet")
-        );
-        assert_eq!(
-            strict_action
-                .pointer("/edit/documentChanges/0/edits/0/snippet/value")
-                .and_then(Value::as_str),
-            Some("use strict;\n")
-        );
-        assert!(
-            strict_action.pointer("/edit/changes").is_none(),
-            "snippet-capable clients should receive documentChanges: {strict_action}"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn code_action_runtime_emits_snippet_text_edits_without_ast_when_supported()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let server = LspServer::new();
-        {
-            let mut caps = server.client_capabilities.lock();
-            caps.workspace_edit_document_changes_support = true;
-            caps.workspace_edit_snippet_edit_support = true;
-        }
-
-        let uri = "file:///runtime_snippet_no_ast.pl";
-        open_test_document(&server, uri, "print 'hello';\n");
-        {
-            let mut docs = server.documents.lock();
-            let doc = docs.get_mut(uri).ok_or("missing opened document")?;
-            doc.ast = None;
-        }
-
-        let response = server.handle_code_action(Some(json!({
-            "textDocument": { "uri": uri },
-            "range": {
-                "start": { "line": 0, "character": 0 },
-                "end": { "line": 0, "character": 5 }
-            },
-            "context": { "diagnostics": [] }
-        })))?;
-        let response = response.ok_or("missing code action response")?;
-        let actions = response.as_array().ok_or("code action response must be an array")?;
-        let combined_action = actions
-            .iter()
-            .find(|action| {
-                action.get("title").and_then(Value::as_str)
-                    == Some("Add 'use strict' and 'use warnings'")
-            })
-            .ok_or("missing combined pragma action")?;
-
-        assert_eq!(
-            combined_action
-                .pointer("/edit/documentChanges/0/edits/0/snippet/kind")
-                .and_then(Value::as_str),
-            Some("snippet")
-        );
-        assert_eq!(
-            combined_action
-                .pointer("/edit/documentChanges/0/edits/0/snippet/value")
-                .and_then(Value::as_str),
-            Some("use strict;\nuse warnings;\n\n")
-        );
-
-        Ok(())
-    }
-
     /// Build a minimal quickfix action for use in unit tests.  The action has
     /// exactly one edit on the supplied single-line range and a single
     /// associated diagnostic so we can verify diagnostic propagation.
@@ -1438,112 +1221,6 @@ mod tests {
                 "documentChanges": document_changes,
             }
         })
-    }
-
-    #[test]
-    fn snippet_text_edit_conversion_rewrites_pragma_quickfixes()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let uri = "file:///snippet_conversion.pl";
-        let mut actions = vec![
-            make_quickfix(uri, 0, 0, 0, "use strict;\n", "Add use strict;", Some("PL201")),
-            make_quickfix(uri, 1, 0, 0, "use Test2::V0;\n", "Add Test2 import", Some("PL202")),
-        ];
-
-        convert_pragma_quickfix_edits_to_snippet_text_edits(&mut actions, uri, 7);
-
-        assert_eq!(
-            actions[0].pointer("/edit/documentChanges/0/textDocument/uri").and_then(Value::as_str),
-            Some(uri)
-        );
-        assert_eq!(
-            actions[0]
-                .pointer("/edit/documentChanges/0/textDocument/version")
-                .and_then(Value::as_i64),
-            Some(7)
-        );
-        assert_eq!(
-            actions[0]
-                .pointer("/edit/documentChanges/0/edits/0/snippet/kind")
-                .and_then(Value::as_str),
-            Some("snippet")
-        );
-        assert_eq!(
-            actions[0]
-                .pointer("/edit/documentChanges/0/edits/0/snippet/value")
-                .and_then(Value::as_str),
-            Some("use strict;\n")
-        );
-        assert!(
-            actions[0].pointer("/edit/changes").is_none(),
-            "converted action should replace changes with documentChanges: {}",
-            actions[0]
-        );
-        assert!(
-            actions[1].pointer("/edit/documentChanges").is_none(),
-            "non-pragma quickfixes must stay as plain text edits: {}",
-            actions[1]
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn snippet_text_edit_conversion_skips_unsupported_action_shapes() {
-        let uri = "file:///snippet_fallback.pl";
-        let mut actions = vec![
-            json!({
-                "title": "Add use warnings;",
-                "kind": "refactor",
-                "edit": {
-                    "changes": {
-                        uri: [{
-                            "range": {
-                                "start": {"line": 0, "character": 0},
-                                "end": {"line": 0, "character": 0},
-                            },
-                            "newText": "use warnings;\n",
-                        }]
-                    }
-                }
-            }),
-            json!({
-                "title": "Add use warnings;",
-                "kind": "quickfix",
-                "edit": {
-                    "changes": {
-                        uri: [{
-                            "range": {
-                                "start": {"line": 0, "character": 0},
-                                "end": {"line": 0, "character": 0},
-                            }
-                        }]
-                    }
-                }
-            }),
-            json!({
-                "kind": "quickfix",
-                "edit": {
-                    "changes": {
-                        uri: [{
-                            "range": {
-                                "start": {"line": 0, "character": 0},
-                                "end": {"line": 0, "character": 0},
-                            },
-                            "newText": "use warnings;\n",
-                        }]
-                    }
-                }
-            }),
-        ];
-
-        convert_pragma_quickfix_edits_to_snippet_text_edits(&mut actions, uri, 9);
-
-        for action in actions {
-            assert!(
-                action.pointer("/edit/documentChanges").is_none(),
-                "unsupported action shape must not be converted: {action}"
-            );
-        }
     }
 
     #[test]
