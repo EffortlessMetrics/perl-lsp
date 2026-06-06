@@ -47,9 +47,12 @@
 //! clear message.
 
 use perl_lsp_ux_tests::binary_available;
-use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
+use perl_lsp_ux_tests::missing_binary_skip;
+use perl_lsp_ux_tests::{ScenarioConfig, UxCiTier, UxComponent, UxHarness, run_ux_scenario};
 use serde_json::json;
 use std::time::Duration;
+
+const SCENARIO_FILE: &str = "ux_scenario_14_inc_conformance.rs";
 
 /// Diagnostic code for missing module — PL701.
 const PL701: &str = "PL701";
@@ -149,7 +152,7 @@ fn print_conformance(
     def_ok: bool,
     hover_ok: bool,
 ) {
-    eprintln!(
+    tracing::info!(
         "[conformance] mode={} | PL701={} | completion={} | goto-def={} | hover={}",
         mode,
         if pl701_ok { "PASS" } else { "FAIL" },
@@ -171,6 +174,107 @@ fn completion_has_module(items: &[serde_json::Value], module_name: &str) -> bool
         item.get("label").and_then(|label| label.as_str()) == Some(module_name)
             || item.get("insertText").and_then(|text| text.as_str()) == Some(module_name)
     })
+}
+
+#[test]
+fn scenario_14_inc_conformance_receipt_core_modes() {
+    run_ux_scenario(
+        "inc_conformance",
+        SCENARIO_FILE,
+        "scenario_14_inc_conformance_receipt_core_modes",
+        UxCiTier::Pr,
+        Some(UxComponent::ModuleResolution),
+        |recorder| {
+            if !binary_available() {
+                return Err(missing_binary_skip().into());
+            }
+
+            let positive = UxHarness::new(
+                ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
+                    .with_file("fixture.pl", RELATIVE_INCLUDE_SOURCE)
+                    .with_file("lib/GreetModule.pm", RELATIVE_INCLUDE_MODULE),
+            )?;
+            let paths_json = vec![json!("lib")];
+            positive.client.notify(
+                "workspace/didChangeConfiguration",
+                json!({
+                    "settings": {
+                        "perl": {
+                            "workspace": {
+                                "includePaths": paths_json,
+                                "useSystemInc": false
+                            }
+                        }
+                    }
+                }),
+            )?;
+            std::thread::sleep(Duration::from_millis(200));
+
+            recorder.mark_request_start("relative_include_path_consistency");
+            positive.open_file("fixture.pl", RELATIVE_INCLUDE_SOURCE)?;
+            std::thread::sleep(Duration::from_millis(500));
+
+            let positive_diags = wait_diagnostics(&positive, "fixture.pl");
+            let pl701_absent = !has_pl701(&positive_diags);
+            let positive_defs = positive.definition("fixture.pl", 2, 4)?;
+            let def_resolves = !positive_defs.is_empty();
+            let positive_hover = positive.hover("fixture.pl", 2, 4)?;
+            let hover_shape_ok =
+                positive_hover.as_ref().is_none_or(|hover| hover.get("contents").is_some());
+
+            positive.change_file_full("fixture.pl", RELATIVE_INCLUDE_COMPLETION_SOURCE)?;
+            std::thread::sleep(Duration::from_millis(500));
+            let completions = positive.completion("fixture.pl", 2, 7)?;
+            let completion_ok = completion_has_module(&completions, "GreetModule");
+
+            let relative_consistent =
+                pl701_absent && def_resolves && hover_shape_ok && completion_ok;
+            if relative_consistent {
+                recorder.mark_first_useful_result("relative_include_path_consistency");
+            }
+            recorder.check("includePaths fixture does not emit PL701", pl701_absent)?;
+            recorder.check("includePaths fixture resolves goto-definition", def_resolves)?;
+            recorder.check("includePaths hover is null or has contents", hover_shape_ok)?;
+            recorder.check("includePaths completion suggests the module", completion_ok)?;
+            positive.assert_no_crash();
+
+            let negative = UxHarness::new(
+                ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
+                    .with_file("fixture.pl", NO_LIB_CANCEL_SOURCE)
+                    .with_file("lib/GoneModule.pm", GONE_MODULE),
+            )?;
+
+            recorder.mark_request_start("no_lib_cancellation_consistency");
+            negative.open_file("fixture.pl", NO_LIB_CANCEL_SOURCE)?;
+            std::thread::sleep(Duration::from_millis(500));
+
+            let negative_diags = wait_diagnostics(&negative, "fixture.pl");
+            let pl701_fires = has_pl701(&negative_diags);
+            let negative_defs = negative.definition("fixture.pl", 4, 4)?;
+            let def_empty = negative_defs.is_empty();
+            let negative_hover = negative.hover("fixture.pl", 4, 4)?;
+            let hover_not_resolved = hover_is_not_resolved(&negative_hover);
+
+            negative.change_file_full("fixture.pl", NO_LIB_CANCEL_COMPLETION_SOURCE)?;
+            std::thread::sleep(Duration::from_millis(500));
+            let negative_completions = negative.completion("fixture.pl", 4, 8)?;
+            let completion_absent = !completion_has_module(&negative_completions, "GoneModule");
+
+            let negative_consistent =
+                pl701_fires && def_empty && hover_not_resolved && completion_absent;
+            if negative_consistent {
+                recorder.mark_first_useful_result("no_lib_cancellation_consistency");
+            }
+            recorder.check("no lib cancellation emits PL701", pl701_fires)?;
+            recorder.check("no lib cancellation keeps goto-definition empty", def_empty)?;
+            recorder.check("no lib cancellation hover stays unresolved", hover_not_resolved)?;
+            recorder
+                .check("no lib cancellation suppresses completion suggestion", completion_absent)?;
+            negative.assert_no_crash();
+
+            Ok(())
+        },
+    );
 }
 
 // =============================================================================
@@ -212,7 +316,7 @@ use Gre\n\
 #[test]
 fn scenario_14_relative_include_path() {
     if !binary_available() {
-        eprintln!("SKIP scenario_14_relative_include_path: perl-lsp binary not found");
+        tracing::info!("SKIP scenario_14_relative_include_path: perl-lsp binary not found");
         return;
     }
 
@@ -340,7 +444,7 @@ sub compute {\n\
 #[test]
 fn scenario_14_use_lib_lexical() {
     if !binary_available() {
-        eprintln!("SKIP scenario_14_use_lib_lexical: perl-lsp binary not found");
+        tracing::info!("SKIP scenario_14_use_lib_lexical: perl-lsp binary not found");
         return;
     }
 
@@ -437,7 +541,7 @@ sub value {\n\
 #[test]
 fn scenario_14_absolute_include_path() {
     if !binary_available() {
-        eprintln!("SKIP scenario_14_absolute_include_path: perl-lsp binary not found");
+        tracing::info!("SKIP scenario_14_absolute_include_path: perl-lsp binary not found");
         return;
     }
 
@@ -549,7 +653,7 @@ sub gone { return \"I should not be found\" }\n\
 #[test]
 fn scenario_14_no_lib_cancellation() {
     if !binary_available() {
-        eprintln!("SKIP scenario_14_no_lib_cancellation: perl-lsp binary not found");
+        tracing::info!("SKIP scenario_14_no_lib_cancellation: perl-lsp binary not found");
         return;
     }
 
@@ -681,7 +785,7 @@ sub value {\n\
 #[test]
 fn scenario_14_findbin_relative() {
     if !binary_available() {
-        eprintln!("SKIP scenario_14_findbin_relative: perl-lsp binary not found");
+        tracing::info!("SKIP scenario_14_findbin_relative: perl-lsp binary not found");
         return;
     }
 
@@ -730,7 +834,7 @@ fn scenario_14_findbin_relative() {
     if !def_resolves && pl701_absent {
         // Both agree module doesn't resolve — log but don't fail the consistency test.
         // FindBin resolution may be in degraded mode in some environments.
-        eprintln!(
+        tracing::info!(
             "INFO scenario_14_findbin_relative: both consumers agree module does not resolve \
              (def empty + no PL701). FindBin resolution may be in degraded mode."
         );
@@ -786,7 +890,7 @@ use Sys\n\
 #[test]
 fn scenario_14_perl5lib_env() {
     if !binary_available() {
-        eprintln!("SKIP scenario_14_perl5lib_env: perl-lsp binary not found");
+        tracing::info!("SKIP scenario_14_perl5lib_env: perl-lsp binary not found");
         return;
     }
 
@@ -893,7 +997,7 @@ sub answer {\n\
 #[test]
 fn scenario_14_nested_module_relative_include_path() {
     if !binary_available() {
-        eprintln!(
+        tracing::info!(
             "SKIP scenario_14_nested_module_relative_include_path: perl-lsp binary not found"
         );
         return;
@@ -996,7 +1100,7 @@ use MissingFro\n\
 #[test]
 fn scenario_14_include_path_missing_module_consistency() {
     if !binary_available() {
-        eprintln!(
+        tracing::info!(
             "SKIP scenario_14_include_path_missing_module_consistency: perl-lsp binary not found"
         );
         return;
@@ -1068,7 +1172,7 @@ fn scenario_14_include_path_missing_module_consistency() {
 #[test]
 fn scenario_14_include_path_missing_module_completion_consistency() {
     if !binary_available() {
-        eprintln!(
+        tracing::info!(
             "SKIP scenario_14_include_path_missing_module_completion_consistency: perl-lsp binary not found"
         );
         return;
@@ -1168,7 +1272,9 @@ print \"$r\\n\";\n\
 #[test]
 fn scenario_14_perl5lib_completion_gating_matrix() {
     if !binary_available() {
-        eprintln!("SKIP scenario_14_perl5lib_completion_gating_matrix: perl-lsp binary not found");
+        tracing::info!(
+            "SKIP scenario_14_perl5lib_completion_gating_matrix: perl-lsp binary not found"
+        );
         return;
     }
 
@@ -1214,7 +1320,7 @@ fn scenario_14_perl5lib_completion_gating_matrix() {
 #[test]
 fn scenario_14_perl5lib_completion_without_system_inc() {
     if !binary_available() {
-        eprintln!(
+        tracing::info!(
             "SKIP scenario_14_perl5lib_completion_without_system_inc: perl-lsp binary not found"
         );
         return;
@@ -1309,7 +1415,7 @@ fn scenario_14_perl5lib_completion_without_system_inc() {
 #[test]
 fn scenario_14_perl5lib_disabled_ignores_env_even_when_system_inc_enabled() {
     if !binary_available() {
-        eprintln!(
+        tracing::info!(
             "SKIP scenario_14_perl5lib_disabled_ignores_env_even_when_system_inc_enabled: \
              perl-lsp binary not found"
         );
@@ -1374,7 +1480,7 @@ fn scenario_14_perl5lib_disabled_ignores_env_even_when_system_inc_enabled() {
 #[test]
 fn scenario_14_no_lib_cancellation_workspace_index() {
     if !binary_available() {
-        eprintln!(
+        tracing::info!(
             "SKIP scenario_14_no_lib_cancellation_workspace_index: perl-lsp binary not found"
         );
         return;
@@ -1471,7 +1577,7 @@ use Gone\n\
 #[test]
 fn scenario_14_use_lib_with_workspace_index() {
     if !binary_available() {
-        eprintln!("SKIP scenario_14_use_lib_with_workspace_index: perl-lsp binary not found");
+        tracing::info!("SKIP scenario_14_use_lib_with_workspace_index: perl-lsp binary not found");
         return;
     }
 
