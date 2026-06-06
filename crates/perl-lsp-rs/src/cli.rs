@@ -204,6 +204,9 @@ fn run_check(command_name: &str, files: &[String]) -> i32 {
             Ok(s) => s,
             Err(e) => {
                 eprintln!("{path}: error reading file: {e}");
+                if let Some(guidance) = file_read_error_guidance(&e) {
+                    eprintln!("help: {guidance}");
+                }
                 errors += 1;
                 continue;
             }
@@ -230,6 +233,21 @@ fn run_check(command_name: &str, files: &[String]) -> i32 {
     }
 
     if errors > 0 { 1 } else { 0 }
+}
+
+fn file_read_error_guidance(error: &std::io::Error) -> Option<&'static str> {
+    match error.kind() {
+        std::io::ErrorKind::NotFound => {
+            Some("check the path, or use `--check-project <dir>` to scan a project directory")
+        }
+        std::io::ErrorKind::IsADirectory => {
+            Some("`--check` expects files; use `--check-project <dir>` to scan a directory")
+        }
+        std::io::ErrorKind::PermissionDenied => {
+            Some("check file permissions, then rerun with a readable Perl file")
+        }
+        _ => None,
+    }
 }
 
 fn format_parse_error_context(source: &str, error: &perl_parser::ParseError) -> Vec<String> {
@@ -454,9 +472,11 @@ fn print_version(command_name: &str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        format_parse_error_context, invocation_name, render_help_text, render_shell_completion,
+        file_read_error_guidance, format_parse_error_context, invocation_name, render_help_text,
+        render_shell_completion,
     };
     use std::ffi::OsString;
+    use std::io::ErrorKind;
 
     #[test]
     fn invocation_name_uses_file_stem_from_first_arg() {
@@ -497,6 +517,30 @@ mod tests {
         assert!(rendered.contains("_my_perl_lsp"));
         assert!(rendered.contains("my-perl-lsp"));
         assert!(!rendered.contains("complete -F _perl_lsp perl-lsp"));
+    }
+
+    #[test]
+    fn file_read_error_guidance_covers_common_user_actions()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let missing = std::io::Error::from(ErrorKind::NotFound);
+        let directory = std::io::Error::from(ErrorKind::IsADirectory);
+        let denied = std::io::Error::from(ErrorKind::PermissionDenied);
+        let interrupted = std::io::Error::from(ErrorKind::Interrupted);
+
+        assert_eq!(
+            file_read_error_guidance(&missing),
+            Some("check the path, or use `--check-project <dir>` to scan a project directory")
+        );
+        assert_eq!(
+            file_read_error_guidance(&directory),
+            Some("`--check` expects files; use `--check-project <dir>` to scan a directory")
+        );
+        assert_eq!(
+            file_read_error_guidance(&denied),
+            Some("check file permissions, then rerun with a readable Perl file")
+        );
+        assert_eq!(file_read_error_guidance(&interrupted), None);
+        Ok(())
     }
 
     #[test]
