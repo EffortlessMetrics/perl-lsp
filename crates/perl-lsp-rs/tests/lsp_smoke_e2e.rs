@@ -497,7 +497,7 @@ my $value = gre
             "textDocument": { "uri": uri },
             "position": { "line": def_line, "character": def_col }
         }),
-        timeout,
+        common::timeout_scaler::TimeoutProfile::CrossFile.timeout(),
     )?;
     assert!(
         definition_response.get("error").is_none(),
