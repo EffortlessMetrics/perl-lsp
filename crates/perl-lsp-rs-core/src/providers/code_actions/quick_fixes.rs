@@ -1026,11 +1026,11 @@ pub fn fix_parse_error(
                 is_preferred: true,
             });
         }
-        "PL001" | "PL002"
+        "PL001" | "PL002" | "PL003"
             if diagnostic.message.to_ascii_lowercase().contains("missing semicolon") =>
         {
-            // PL001/PL002 are general parse error codes. When the message indicates a missing
-            // semicolon, apply the same fix -- but skip heredoc contexts where insertion is wrong.
+            // PL001/PL002/PL003 parse error codes: when the message indicates a missing
+            // semicolon, apply the same fix — but skip heredoc contexts where insertion is wrong.
             let at_heredoc = source[diagnostic.range.0..].get(..2).is_some_and(|s| s == "<<");
             if !at_heredoc {
                 let line_end = source[diagnostic.range.0..]
@@ -1124,6 +1124,25 @@ pub fn fix_parse_error(
                             end: diagnostic.range.1,
                         },
                         new_text: "}".to_string(),
+                    }],
+                },
+                is_preferred: true,
+            });
+        }
+        // PL003: Unexpected end of file — the most common cause is a missing `}`.
+        // We offer to append a newline + `}` at the end of the source as a
+        // best-effort recovery; when the message already hints at a missing
+        // semicolon the earlier arm fires instead.
+        "PL003" => {
+            let insert_at = source.len();
+            actions.push(CodeAction {
+                title: "Add missing closing brace '}'".to_string(),
+                kind: CodeActionKind::QuickFix,
+                diagnostics: vec![code.to_string()],
+                edit: CodeActionEdit {
+                    changes: vec![TextEdit {
+                        location: SourceLocation { start: insert_at, end: insert_at },
+                        new_text: "\n}".to_string(),
                     }],
                 },
                 is_preferred: true,
