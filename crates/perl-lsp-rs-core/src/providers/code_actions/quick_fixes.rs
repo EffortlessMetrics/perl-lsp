@@ -2192,6 +2192,61 @@ pub fn fix_missing_pod_coverage(source: &str, diagnostic: &QuickFixDiagnostic) -
     }]
 }
 
+/// Remove an entire `goto LABEL` statement when the target label is undefined (PL409).
+///
+/// The diagnostic range covers the label identifier inside the `goto` statement.
+/// Since `goto` without a label target is invalid Perl, the entire statement line
+/// is deleted. The check ensures that `goto` appears on the same line before the
+/// label position and that the label text looks like a valid Perl identifier.
+///
+/// The fix is only offered when the `goto` statement occupies the whole line
+/// (optional leading whitespace, then `goto LABEL`, nothing else before the label).
+/// If other code precedes `goto` on the same line the line-deletion would remove
+/// those statements too, so the action is suppressed in that case.
+pub fn fix_goto_undefined_label(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
+    let Some((range_start, range_end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let Some(label_text) = source.get(range_start..range_end) else {
+        return Vec::new();
+    };
+
+    if label_text.is_empty()
+        || !label_text.chars().all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
+    {
+        return Vec::new();
+    }
+
+    let line_start = source[..range_start].rfind('\n').map_or(0, |idx| idx + 1);
+    let line_end = source[range_end..]
+        .find('\n')
+        .map_or(source.len(), |offset| range_end + offset + 1);
+
+    let before_label = &source[line_start..range_start];
+
+    // Accept only `<whitespace>goto<whitespace>` before the label. Anything else
+    // on the line (other statements, closing braces, etc.) means line-deletion would
+    // be unsafe. trim_end() handles both space- and tab-separated goto.
+    let before_trimmed = before_label.trim_start();
+    if before_trimmed.trim_end() != "goto" {
+        return Vec::new();
+    }
+
+    vec![CodeAction {
+        title: "Remove goto to undefined label".to_string(),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::GotoUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: line_start, end: line_end },
+                new_text: String::new(),
+
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
 /// Remove an undefined label from a `next`, `last`, or `redo` statement (PL410).
 ///
 /// The diagnostic range is expected to cover the loop-control statement. The
