@@ -529,13 +529,35 @@ jobs:
           fi
 
       - name: Upload coverage to Codecov
-        if: github.event_name != 'pull_request' || steps.coverage_route.outputs.coverage_required == 'true'
+        id: codecov_upload
+        # Non-fatal telemetry: the job verdict comes from the local quality-gate
+        # receipt produced above (just coverage-proof-routed / quality-gate step).
+        # An upload failure (flake, rate-limit, empty token on re-run) must never
+        # fail this required check when the gate passed.
+        # Token wiring: CODECOV_TOKEN is set in env so the action can read it via
+        # both the `with: token:` path AND the env-var fallback that Codecov v6
+        # uses internally. The `env.CODECOV_TOKEN != ''` guard skips the upload
+        # entirely when secrets are unavailable (fork PRs, certain re-run contexts).
+        if: |
+          env.CODECOV_TOKEN != '' &&
+          (github.event_name != 'pull_request' || steps.coverage_route.outputs.coverage_required == 'true')
+        continue-on-error: true
         uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354  # v6.0.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: target/lcov.info
           name: workspace-patch-coverage
-          fail_ci_if_error: true
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Warn on Codecov upload failure
+        if: always() && steps.codecov_upload.outcome == 'failure'
+        shell: bash
+        run: |
+          printf '> [!WARNING]\n> Codecov telemetry upload failed. The job verdict is determined by the\n> local quality-gate receipt above, not by this upload. Upload failures\n> (flake, rate-limit, empty token on re-run) are non-fatal.\n' \
+            >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning::Codecov telemetry upload failed. Verdict comes from local quality-gate receipt — this is non-fatal."
 
       - name: Upload coverage proof artifacts
         if: always()
