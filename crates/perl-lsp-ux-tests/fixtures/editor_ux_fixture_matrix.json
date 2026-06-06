@@ -834,6 +834,7 @@
       ],
       "expected_outcomes": [
         "workspace-symbol probes return without JSON-RPC errors",
+        "all workspace-symbol probes return live symbols",
         "returned symbols use valid LSP WorkspaceSymbol shapes",
         "receipt records useful hits, unrelated/noisy hits, generated candidate gating, dynamic-boundary-shaped names, and edit freshness"
       ],
