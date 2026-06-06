@@ -9,7 +9,7 @@
 //! - **Building/Degraded state**: Same-file semantic analysis + open document scan
 
 use super::super::{byte_to_utf16_col, *};
-use crate::protocol::{req_position, req_uri};
+use crate::protocol::{invalid_params, req_position, req_uri};
 use crate::state::{reference_search_deadline, references_cap};
 use crate::util::{is_word_boundary, token_under_cursor};
 use std::sync::OnceLock;
@@ -33,6 +33,16 @@ fn lsp_location_count(value: Option<&Value>) -> usize {
         Some(Value::Object(obj)) if obj.contains_key("uri") || obj.contains_key("targetUri") => 1,
         _ => 0,
     }
+}
+
+fn invalid_references_params() -> JsonRpcError {
+    invalid_params(
+        "Missing required parameters: textDocument.uri and position\n\n\
+         textDocument/references expects params.textDocument.uri plus params.position.line and \
+         params.position.character to identify the symbol under the cursor.\n\n\
+         Example: {\"textDocument\":{\"uri\":\"file:///workspace/lib/My/Module.pm\"},\
+         \"position\":{\"line\":10,\"character\":4},\"context\":{\"includeDeclaration\":true}}",
+    )
 }
 
 #[derive(Debug)]
@@ -898,10 +908,18 @@ impl LspServer {
         &self,
         params: serde_json::Value,
     ) -> Result<serde_json::Value, JsonRpcError> {
-        let uri = params.pointer("/textDocument/uri").and_then(|v| v.as_str()).unwrap_or("");
-        let line = params.pointer("/position/line").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-        let ch =
-            params.pointer("/position/character").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let uri = params
+            .pointer("/textDocument/uri")
+            .and_then(|v| v.as_str())
+            .ok_or_else(invalid_references_params)?;
+        let line = params
+            .pointer("/position/line")
+            .and_then(|v| v.as_u64())
+            .ok_or_else(invalid_references_params)? as usize;
+        let ch = params
+            .pointer("/position/character")
+            .and_then(|v| v.as_u64())
+            .ok_or_else(invalid_references_params)? as usize;
 
         let text = self.buffer_text(uri).unwrap_or_default();
         let needle = token_under_cursor(&text, line, ch).unwrap_or_default();
@@ -946,5 +964,64 @@ impl LspServer {
         out.dedup();
 
         Ok(serde_json::Value::Array(out))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn expect_references_shape_guidance(err: JsonRpcError) -> Result<(), String> {
+        assert_eq!(err.code, crate::protocol::INVALID_PARAMS);
+        for expected in [
+            "Missing required parameters: textDocument.uri and position",
+            "textDocument/references",
+            "params.textDocument.uri",
+            "params.position.line",
+            "params.position.character",
+            "includeDeclaration",
+            "file:///workspace/lib/My/Module.pm",
+        ] {
+            if !err.message.contains(expected) {
+                return Err(format!("expected error message to contain {expected:?}; got {err}"));
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn references_fallback_missing_uri_error_includes_shape_guidance() -> Result<(), String> {
+        let server = LspServer::new();
+        match server.on_references(json!({})) {
+            Err(err) => expect_references_shape_guidance(err),
+            Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
+        }
+    }
+
+    #[test]
+    fn references_fallback_missing_position_error_includes_shape_guidance() -> Result<(), String> {
+        let server = LspServer::new();
+        match server.on_references(json!({
+            "textDocument": { "uri": "file:///workspace/lib/My/Module.pm" }
+        })) {
+            Err(err) => expect_references_shape_guidance(err),
+            Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
+        }
+    }
+
+    #[test]
+    fn references_fallback_valid_unknown_document_still_returns_empty_result() -> Result<(), String>
+    {
+        let server = LspServer::new();
+        let result = server
+            .on_references(json!({
+                "textDocument": { "uri": "file:///workspace/lib/Missing.pm" },
+                "position": { "line": 10, "character": 4 },
+                "context": { "includeDeclaration": true }
+            }))
+            .map_err(|err| format!("expected empty references result; got {err}"))?;
+        assert_eq!(result, json!([]));
+        Ok(())
     }
 }
