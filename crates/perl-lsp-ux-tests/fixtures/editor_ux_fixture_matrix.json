@@ -1194,7 +1194,7 @@
       ],
       "expected_outcomes": [
         "builtin signatureHelp requests do not return JSON-RPC errors",
-        "non-null builtin signatureHelp responses have valid signature labels",
+        "builtin signatureHelp responses include push and join labels",
         "repeated builtin signatureHelp requests do not crash the server"
       ],
       "confidence_signals": [
