@@ -204,7 +204,7 @@ allow = [
 
 # Workspace-level package metadata
 [workspace.package]
-version = "0.15.0"
+version = "0.16.0"
 edition = "2024"
 rust-version = "1.95"
 authors = ["Steven Zimmerman, CPA <git@effortlesssteven.com>"]
@@ -214,26 +214,26 @@ repository = "https://github.com/EffortlessMetrics/perl-lsp"
 homepage = "https://github.com/EffortlessMetrics/perl-lsp"
 
 [workspace.dependencies]
-perl-ast-v2 = { path = "crates/perl-ast-v2", version = "0.15.0" }
+perl-ast-v2 = { path = "crates/perl-ast-v2", version = "0.16.0" }
 # Tier 1: Leaf crates (no internal dependencies)
-perl-token = { path = "crates/perl-token", version = "0.15.0" }
-perl-regex = { path = "crates/perl-regex", version = "0.15.0" }
-perl-pragma = { path = "crates/perl-pragma", version = "0.15.0" }
-perl-lexer = { path = "crates/perl-lexer", version = "0.15.0" }
-perl-ast = { path = "crates/perl-ast", version = "0.15.0" }
+perl-token = { path = "crates/perl-token", version = "0.16.0" }
+perl-regex = { path = "crates/perl-regex", version = "0.16.0" }
+perl-pragma = { path = "crates/perl-pragma", version = "0.16.0" }
+perl-lexer = { path = "crates/perl-lexer", version = "0.16.0" }
+perl-ast = { path = "crates/perl-ast", version = "0.16.0" }
 # Wave D absorbed (internal modules in perl-parser/src/):
 #   perl-heredoc-anti-patterns → perl-parser::heredoc_anti_patterns
 # Wave D absorbed (internal modules in perl-parser-core/src/syntax/):
 #   perl-quote, perl-heredoc, perl-error, perl-edit
-perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.15.0" }
-perl-symbol = { path = "crates/perl-symbol", version = "0.15.0" }
-perl-module = { path = 'crates/perl-module', version = "0.15.0" }
+perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.16.0" }
+perl-symbol = { path = "crates/perl-symbol", version = "0.16.0" }
+perl-module = { path = 'crates/perl-module', version = "0.16.0" }
 # Wave D absorbed: perl-qualified-name → perl-parser::qualified_name
-perl-line-index = { path = "crates/perl-line-index", version = "0.15.0" }
+perl-line-index = { path = "crates/perl-line-index", version = "0.16.0" }
 # Wave D absorbed: perl-source-file → perl-parser::source_file
 # Wave D absorbed: perl-text-line → perl-parser-core::text_line
 # (perl-content-length-framing absorbed into perl-lsp-rs-core::transport::framing — Wave Final PR B)
-perl-subprocess-runtime = { path = "crates/perl-subprocess-runtime", version = "0.15.0" }
+perl-subprocess-runtime = { path = "crates/perl-subprocess-runtime", version = "0.16.0" }
 # (perl-lsp-document-highlight absorbed into perl-lsp-rs-core::providers — Wave G1a)
 # (perl-lsp-document-links absorbed into perl-lsp-rs-core::providers — Wave G1a)
 # (perl-lsp-performance absorbed into perl-lsp-rs-core::tooling::performance — Wave G3 step 5)
@@ -241,31 +241,31 @@ perl-subprocess-runtime = { path = "crates/perl-subprocess-runtime", version = "
 # Wave D absorbed: perl-ast-utils → perl-parser::ast_utils
 # (perl-lsp-input-validation absorbed into perl-lsp-rs-core::runtime::input_validation — Wave G2)
 # (perl-lsp-text-utils absorbed into perl-lsp-rs-core::runtime::text_utils — Wave G2)
-perl-uri = { path = "crates/perl-uri", version = "0.15.0" }
+perl-uri = { path = "crates/perl-uri", version = "0.16.0" }
 # Wave D absorbed: perl-percentile → perl-parser::percentile
 # (perl-lsp-import-management absorbed into perl-lsp-rs-core::providers — Wave G1a)
 # (perl-lsp-critic-parser absorbed into perl-lsp-rs-core::critic_parser — Wave G3 step 7)
 # (perl-lsp-protocol absorbed into perl-lsp-rs-core::protocol — Wave G3 step 2)
 # Wave D absorbed: perl-path-normalize → perl-parser-core::path_normalize
 # Wave D absorbed: perl-path-security → perl-parser-core::path_security
-perl-lsp-rs-core = { path = "crates/perl-lsp-rs-core", version = "0.15.0" }
-perl-ci-hygiene = { path = "crates/perl-ci-hygiene", version = "0.15.0" }
-perl-pod = { path = "crates/perl-pod", version = "0.15.0" }
-perl-corpus = { path = "crates/perl-corpus", version = "0.15.0" }
-perl-dap = { path = "crates/perl-dap", version = "0.15.0" }
-perl-dead-code = { path = "crates/perl-dead-code", version = "0.15.0" }
+perl-lsp-rs-core = { path = "crates/perl-lsp-rs-core", version = "0.16.0" }
+perl-ci-hygiene = { path = "crates/perl-ci-hygiene", version = "0.16.0" }
+perl-pod = { path = "crates/perl-pod", version = "0.16.0" }
+perl-corpus = { path = "crates/perl-corpus", version = "0.16.0" }
+perl-dap = { path = "crates/perl-dap", version = "0.16.0" }
+perl-dead-code = { path = "crates/perl-dead-code", version = "0.16.0" }
 # (perl-feature-catalog absorbed into perl-lsp-rs-core::feature_catalog — Wave Final PR B)
 # Tier 2: Single-level dependencies
-perl-parser-core = { path = "crates/perl-parser-core", version = "0.15.0" }
+perl-parser-core = { path = "crates/perl-parser-core", version = "0.16.0" }
 # (perl-lsp-transport absorbed into perl-lsp-rs-core::transport — Wave G3 step 4)
 # (perl-lsp-tooling absorbed into perl-lsp-rs-core::tooling — Wave G3 step 6)
-perl-lsp-perltidy = { path = "crates/perl-lsp-perltidy", version = "0.15.0" }
+perl-lsp-perltidy = { path = "crates/perl-lsp-perltidy", version = "0.16.0" }
 # (perl-lsp-on-type-formatting absorbed into perl-lsp-rs-core::providers — Wave G1a)
 # (perl-lsp-formatting-types absorbed into perl-lsp-rs-core::providers — Wave G1a)
 # (perl-lsp-formatting absorbed into perl-lsp-rs-core::providers::formatting — Wave G1b)
-perl-tdd-support = { path = "crates/perl-tdd-support", version = "0.15.0" }
-perl-test-must = { path = "crates/perl-test-must", version = "0.15.0" }
-perl-test-generators = { path = "crates/perl-test-generators", version = "0.15.0" }
+perl-tdd-support = { path = "crates/perl-tdd-support", version = "0.16.0" }
+perl-test-must = { path = "crates/perl-test-must", version = "0.16.0" }
+perl-test-generators = { path = "crates/perl-test-generators", version = "0.16.0" }
 # (perl-lsp-diagnostics absorbed into perl-lsp-rs-core::providers::diagnostics — Wave G1b)
 # (perl-lsp-semantic-tokens absorbed into perl-lsp-rs-core::providers::semantic_tokens — Wave G1b)
 # (perl-lsp-inlay-hints absorbed into perl-lsp-rs-core::providers — Wave G1a)
@@ -289,28 +289,28 @@ perl-test-generators = { path = "crates/perl-test-generators", version = "0.15.0
 # (perl-lsp-code-actions absorbed into perl-lsp-rs-core::providers::code_actions — Wave G1b)
 # (perl-lsp-folding absorbed into perl-lsp-rs-core::providers — Wave G1a)
 # (perl-lsp-selection-range absorbed into perl-lsp-rs-core::providers — Wave G1a)
-perl-diagnostics = { path = "crates/perl-diagnostics", version = "0.15.0" }
+perl-diagnostics = { path = "crates/perl-diagnostics", version = "0.16.0" }
 # Tier 3: Two-level dependencies
-perl-workspace = { path = "crates/perl-workspace", version = "0.15.0" }
-perl-incremental-parsing = { path = "crates/perl-incremental-parsing", version = "0.15.0" }
-perl-refactoring = { path = "crates/perl-refactoring", version = "0.15.0" }
+perl-workspace = { path = "crates/perl-workspace", version = "0.16.0" }
+perl-incremental-parsing = { path = "crates/perl-incremental-parsing", version = "0.16.0" }
+perl-refactoring = { path = "crates/perl-refactoring", version = "0.16.0" }
 
 # Tier 4: Three-level dependencies
-perl-semantic-analyzer = { path = "crates/perl-semantic-analyzer", version = "0.15.0" }
-perl-semantic-facts = { path = "crates/perl-semantic-facts", version = "0.15.0" }
+perl-semantic-analyzer = { path = "crates/perl-semantic-analyzer", version = "0.16.0" }
+perl-semantic-facts = { path = "crates/perl-semantic-facts", version = "0.16.0" }
 # (perl-lsp-providers absorbed into perl-lsp-rs-core::providers::lsp_compat — Wave G1b)
 
 # Tier 5: Application crates
-perl-parser = { path = "crates/perl-parser", version = "0.15.0" }
-perl-lsp-rs = { path = "crates/perl-lsp-rs", version = "0.15.0" }
-perl-lsp-ux-tests = { path = "crates/perl-lsp-ux-tests", version = "0.15.0" }
+perl-parser = { path = "crates/perl-parser", version = "0.16.0" }
+perl-lsp-rs = { path = "crates/perl-lsp-rs", version = "0.16.0" }
+perl-lsp-ux-tests = { path = "crates/perl-lsp-ux-tests", version = "0.16.0" }
 
 # Legacy/Compatibility crates
-perl-parser-pest = { path = "crates/perl-parser-pest", version = "0.15.0" }
+perl-parser-pest = { path = "crates/perl-parser-pest", version = "0.16.0" }
 
 # External dependencies
-tree-sitter-perl-c = { path = "crates/tree-sitter-perl-c", version = "0.15.0" }
-tree-sitter-perl-rs = { path = "crates/tree-sitter-perl-rs", version = "0.15.0" }
+tree-sitter-perl-c = { path = "crates/tree-sitter-perl-c", version = "0.16.0" }
+tree-sitter-perl-rs = { path = "crates/tree-sitter-perl-rs", version = "0.16.0" }
 tree-sitter = "0.26.9"
 ropey = "1.6.1"
 serde = { version = "1.0.228", features = ["derive"] }
