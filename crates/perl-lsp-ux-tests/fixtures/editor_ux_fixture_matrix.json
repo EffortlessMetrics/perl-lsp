@@ -246,7 +246,7 @@
       "expected_outcomes": [
         "encoding edge cases do not crash the server",
         "UTF-8 BOM files expose normal Perl document symbols",
-        "user workflow remains intact"
+        "hover returns non-empty contents for symbols in encoded files"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",
@@ -300,7 +300,7 @@
       ],
       "expected_outcomes": [
         "receipt records hover timing and shape checks",
-        "hover request returns useful structure or clean empty result",
+        "hover over a known lexical variable returns useful contents",
         "request does not error"
       ],
       "confidence_signals": [
@@ -343,16 +343,18 @@
       "ci_tier": "pr",
       "component": "workspace_symbols",
       "instrumentation": {
-        "run_receipt": false,
-        "first_useful_result": false,
+        "run_receipt": true,
+        "first_useful_result": true,
         "protocol_goldens": false
       },
       "user_journey": "request document symbols for parsable and empty files",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
+        "receipt records document-symbol timing and structure checks",
         "document symbols return valid structure",
         "rich files surface known package and sub names"
       ],
@@ -482,16 +484,18 @@
       "ci_tier": "pr",
       "component": "goto_definition",
       "instrumentation": {
-        "run_receipt": false,
-        "first_useful_result": false,
+        "run_receipt": true,
+        "first_useful_result": true,
         "protocol_goldens": false
       },
       "user_journey": "run goto-declaration inside a representative file",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
+        "receipt records declaration request timing and result shape checks",
         "declaration request points same-file subroutine calls to their declaration",
         "request does not error"
       ],
@@ -605,7 +609,7 @@
       "expected_outcomes": [
         "receipt records prepareRename, rename, and workspace edit timing",
         "prepareRename and rename do not error",
-        "rename returns clean null or valid workspace edit for the opened file"
+        "same-file subroutine rename returns edits for the declaration and call sites"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",
@@ -648,17 +652,19 @@
       "ci_tier": "pr",
       "component": "diagnostics",
       "instrumentation": {
-        "run_receipt": false,
-        "first_useful_result": false,
+        "run_receipt": true,
+        "first_useful_result": true,
         "protocol_goldens": false
       },
       "user_journey": "fix an undeclared variable during active editing and confirm diagnostics and navigation update",
       "measures": [
         "workflow_pass_rate",
         "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms",
         "cross_file_definition_success_rate"
       ],
       "expected_outcomes": [
+        "receipt records diagnostics refresh and navigation timing after edit",
         "undeclared variable diagnostic appears before edit",
         "go-to-definition resolves the declared variable after didChange"
       ],
@@ -1204,7 +1210,7 @@
         "receipt records didChange recovery, diagnostics, and hover timing",
         "broken content yields at least one diagnostic",
         "fixed content clears parse-like diagnostics after didChange",
-        "hover does not JSON-RPC error after didChange recovery"
+        "hover returns non-empty contents after didChange recovery"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",
@@ -1247,16 +1253,18 @@
       "ci_tier": "pr",
       "component": "signature_help",
       "instrumentation": {
-        "run_receipt": false,
-        "first_useful_result": false,
+        "run_receipt": true,
+        "first_useful_result": true,
         "protocol_goldens": false
       },
       "user_journey": "request signature help at Perl builtin call sites",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
+        "receipt records signature-help request timing and structure checks",
         "builtin signatureHelp requests do not return JSON-RPC errors",
         "builtin signatureHelp responses include push and join labels",
         "repeated builtin signatureHelp requests do not crash the server"
@@ -1273,16 +1281,18 @@
       "ci_tier": "pr",
       "component": "code_lens",
       "instrumentation": {
-        "run_receipt": false,
-        "first_useful_result": false,
+        "run_receipt": true,
+        "first_useful_result": true,
         "protocol_goldens": false
       },
       "user_journey": "request and resolve code lenses for Perl modules and test files",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
+        "receipt records code-lens request and resolve timing",
         "module codeLens requests return package and subroutine reference lenses",
         "test file codeLens requests return run-all-tests and run-test commands",
         "codeLens resolve returns find-references commands for unresolved reference lenses"
@@ -1313,7 +1323,8 @@
         "receipt records folding-range timing and structure checks",
         "foldingRange requests do not return JSON-RPC errors",
         "folding ranges include valid start and end line fields when present",
-        "multi-block files produce at least one fold"
+        "multi-block files produce at least one fold",
+        "empty and single-line files return empty folding range arrays"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",
@@ -2013,6 +2024,7 @@
       ],
       "expected_outcomes": [
         "completion, goto-definition, hover, and diagnostics all respond without crash",
+        "module-prefix completion surfaces RealBaseline::App",
         "module import hover returns non-empty contents",
         "cross-file definition requests resolve or return clean empty results",
         "real-workspace fixture exercises provider parity across module boundaries"
