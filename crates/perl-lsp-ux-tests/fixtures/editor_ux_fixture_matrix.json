@@ -214,7 +214,8 @@
         "workflow_stability_rate"
       ],
       "expected_outcomes": [
-        "languageId-perl files without extensions still behave like Perl"
+        "languageId-perl files without extensions still behave like Perl",
+        "shebang files without extensions expose Perl document symbols"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",
