@@ -5,6 +5,9 @@
 //! coverage belongs in a separate runtime follow-up because that path currently
 //! times out under the real stdio harness.
 
+// Binary skip messages are visible only in integration-test output.
+#![allow(clippy::print_stderr)]
+
 use std::time::Duration;
 
 use anyhow::Result;
@@ -42,7 +45,7 @@ fn request_signature_help(harness: &UxHarness, line: u32, character: u32) -> Res
 }
 
 #[test]
-fn scenario_25_builtin_push_does_not_error() -> Result<()> {
+fn scenario_25_builtin_push_returns_signature_label() -> Result<()> {
     if !binary_available() {
         eprintln!("SKIP scenario_25: perl-lsp binary not found");
         return Ok(());
@@ -51,17 +54,14 @@ fn scenario_25_builtin_push_does_not_error() -> Result<()> {
     let harness = builtin_harness()?;
     let response = request_signature_help(&harness, 4, 8)?;
 
-    assert!(
-        response.get("error").is_none(),
-        "signatureHelp on builtin push MUST NOT return a JSON-RPC error: {response:?}"
-    );
+    assert_builtin_signature_label(&response, "push ARRAY, LIST")?;
 
     harness.assert_no_crash();
     Ok(())
 }
 
 #[test]
-fn scenario_25_builtin_join_does_not_error() -> Result<()> {
+fn scenario_25_builtin_join_returns_signature_label() -> Result<()> {
     if !binary_available() {
         eprintln!("SKIP scenario_25: perl-lsp binary not found");
         return Ok(());
@@ -70,17 +70,14 @@ fn scenario_25_builtin_join_does_not_error() -> Result<()> {
     let harness = builtin_harness()?;
     let response = request_signature_help(&harness, 5, 15)?;
 
-    assert!(
-        response.get("error").is_none(),
-        "signatureHelp on builtin join MUST NOT return a JSON-RPC error: {response:?}"
-    );
+    assert_builtin_signature_label(&response, "join EXPR, LIST")?;
 
     harness.assert_no_crash();
     Ok(())
 }
 
 #[test]
-fn scenario_25_builtin_result_is_well_formed_when_present() -> Result<()> {
+fn scenario_25_builtin_result_is_well_formed() -> Result<()> {
     if !binary_available() {
         eprintln!("SKIP scenario_25: perl-lsp binary not found");
         return Ok(());
@@ -89,16 +86,8 @@ fn scenario_25_builtin_result_is_well_formed_when_present() -> Result<()> {
     let harness = builtin_harness()?;
     let response = request_signature_help(&harness, 5, 15)?;
 
-    assert!(
-        response.get("error").is_none(),
-        "signatureHelp on builtin join returned an error: {response:?}"
-    );
-
-    if let Some(result) = response.get("result") {
-        if !result.is_null() {
-            assert_signature_help_structure(result)?;
-        }
-    }
+    let result = non_null_signature_help_result(&response)?;
+    assert_signature_help_structure(result)?;
 
     harness.assert_no_crash();
     Ok(())
@@ -114,14 +103,45 @@ fn scenario_25_builtin_requests_are_idempotent() -> Result<()> {
     let harness = builtin_harness()?;
     for round in 1..=2 {
         let response = request_signature_help(&harness, 5, 15)?;
-        assert!(
-            response.get("error").is_none(),
-            "signatureHelp round {round} MUST NOT return a JSON-RPC error: {response:?}"
-        );
+        assert_builtin_signature_label(&response, "join EXPR, LIST")
+            .map_err(|error| anyhow::anyhow!("signatureHelp round {round}: {error}"))?;
     }
 
     harness.assert_no_crash();
     Ok(())
+}
+
+fn assert_builtin_signature_label(response: &Value, expected_label: &str) -> Result<()> {
+    let result = non_null_signature_help_result(response)?;
+    assert_signature_help_structure(result)?;
+    let labels = signature_labels(result)?;
+    assert!(
+        labels.contains(&expected_label),
+        "SignatureHelp must include builtin label `{expected_label}`, got: {labels:?}"
+    );
+    Ok(())
+}
+
+fn non_null_signature_help_result(response: &Value) -> Result<&Value> {
+    if let Some(error) = response.get("error") {
+        anyhow::bail!("signatureHelp returned a JSON-RPC error: {error}");
+    }
+
+    let Some(result) = response.get("result") else {
+        anyhow::bail!("signatureHelp response must include result, got: {response:?}");
+    };
+    if result.is_null() {
+        anyhow::bail!("signatureHelp result must be non-null for builtin call sites");
+    }
+    Ok(result)
+}
+
+fn signature_labels(result: &Value) -> Result<Vec<&str>> {
+    let signatures = result
+        .get("signatures")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow::anyhow!("SignatureHelp.signatures must be an array"))?;
+    Ok(signatures.iter().filter_map(|sig| sig.get("label").and_then(Value::as_str)).collect())
 }
 
 fn assert_signature_help_structure(result: &Value) -> Result<()> {
@@ -133,6 +153,7 @@ fn assert_signature_help_structure(result: &Value) -> Result<()> {
     let sig_array = signatures
         .as_array()
         .ok_or_else(|| anyhow::anyhow!("signatures is not an array: {signatures:?}"))?;
+    assert!(!sig_array.is_empty(), "SignatureHelp.signatures must not be empty");
     for (i, sig) in sig_array.iter().enumerate() {
         assert!(
             sig.get("label").and_then(Value::as_str).is_some(),

@@ -1,6 +1,3 @@
-// Test infrastructure — allow test-friendly patterns.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-
 //! Scenario 06 — Large file.
 //!
 //! Opens a 10 000-line Perl file and verifies that the server handles it without
@@ -11,8 +8,11 @@
 //! reduced 1k-line version) so CI always exercises the code path.
 
 use perl_lsp_ux_tests::binary_available;
-use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
+use perl_lsp_ux_tests::missing_binary_skip;
+use perl_lsp_ux_tests::{ScenarioConfig, UxCiTier, UxComponent, UxHarness, run_ux_scenario};
 use std::time::Duration;
+
+const SCENARIO_FILE: &str = "ux_scenario_06_large_file.rs";
 
 fn generate_source(line_count: usize) -> String {
     let mut buf = String::with_capacity(line_count * 40);
@@ -23,48 +23,55 @@ fn generate_source(line_count: usize) -> String {
     buf
 }
 
+fn run_large_file_workflow(test_name: &str, file_name: &str, line_count: usize, timeout: Duration) {
+    run_ux_scenario(
+        "large_file_open",
+        SCENARIO_FILE,
+        test_name,
+        UxCiTier::Nightly,
+        Some(UxComponent::Infra),
+        |recorder| {
+            if !binary_available() {
+                return Err(missing_binary_skip().into());
+            }
+
+            let source = generate_source(line_count);
+            let harness = UxHarness::new(ScenarioConfig { timeout, ..Default::default() })?;
+
+            recorder.mark_request_start("open_then_hover");
+            harness.open_file(file_name, &source)?;
+
+            let hover = harness.hover(file_name, 5, 5);
+            let hover_ok = hover.is_ok();
+            if hover_ok {
+                recorder.mark_first_useful_result("open_then_hover");
+            }
+            recorder.check("hover after large-file open does not error", hover_ok)?;
+
+            harness.assert_no_crash();
+            Ok(())
+        },
+    );
+}
+
 #[test]
 fn scenario_06_medium_file_open_and_hover() {
     // Always runs — 1k lines is fast enough for PR gate.
-    if !binary_available() {
-        eprintln!("SKIP scenario_06: perl-lsp binary not found");
-        return;
-    }
-
-    let source = generate_source(1_000);
-    let harness =
-        UxHarness::new(ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() })
-            .expect("Failed to create UX harness");
-
-    harness.open_file("medium.pl", &source).expect("didOpen should succeed for 1k-line file");
-
-    let hover = harness.hover("medium.pl", 5, 5);
-    assert!(hover.is_ok(), "Server hung or crashed on 1k-line file — UX regression: {:?}", hover);
-
-    harness.assert_no_crash();
+    run_large_file_workflow(
+        "scenario_06_medium_file_open_and_hover",
+        "medium.pl",
+        1_000,
+        Duration::from_secs(20),
+    );
 }
 
 #[cfg(feature = "integration-test")]
 #[test]
 fn scenario_06_large_file_open_does_not_hang() {
-    if !binary_available() {
-        eprintln!("SKIP scenario_06 (large): perl-lsp binary not found");
-        return;
-    }
-
-    let source = generate_source(10_000);
-    let harness =
-        UxHarness::new(ScenarioConfig { timeout: Duration::from_secs(30), ..Default::default() })
-            .expect("Failed to create UX harness for large file");
-
-    harness.open_file("large.pl", &source).expect("didOpen should accept a 10k-line file");
-
-    let hover = harness.hover("large.pl", 5, 5);
-    assert!(
-        hover.is_ok(),
-        "Server hung or crashed after opening large file — UX regression: {:?}",
-        hover
+    run_large_file_workflow(
+        "scenario_06_large_file_open_does_not_hang",
+        "large.pl",
+        10_000,
+        Duration::from_secs(30),
     );
-
-    harness.assert_no_crash();
 }

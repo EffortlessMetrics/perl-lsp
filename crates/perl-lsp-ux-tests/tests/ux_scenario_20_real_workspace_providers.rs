@@ -1,5 +1,5 @@
-// Test infrastructure — allow test-friendly patterns used throughout this module.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+// Test infrastructure allows assertion panics and status stderr throughout this module.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::print_stderr)]
 
 //! Scenario 20 — Real-workspace provider expectations (completion / goto-definition /
 //! hover / diagnostics).
@@ -160,6 +160,22 @@ fn is_lsp_location_shape(entry: &serde_json::Value) -> bool {
 
 fn entry_uri(entry: &serde_json::Value) -> Option<&str> {
     entry.get("uri").or_else(|| entry.get("targetUri")).and_then(serde_json::Value::as_str)
+}
+
+fn hover_contents_text(contents: &serde_json::Value) -> String {
+    if let Some(value) = contents.get("value").and_then(serde_json::Value::as_str) {
+        return value.to_string();
+    }
+
+    if let Some(text) = contents.as_str() {
+        return text.to_string();
+    }
+
+    if let Some(items) = contents.as_array() {
+        return items.iter().map(hover_contents_text).collect::<Vec<_>>().join("\n");
+    }
+
+    String::new()
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -586,9 +602,9 @@ fn scenario_20_hover_sub_shared_in_base_pm_does_not_error() -> anyhow::Result<()
     Ok(())
 }
 
-/// works — hover on `RealBaseline::Util` import in App.pm must not crash.
+/// works — hover on `RealBaseline::Util` import in App.pm returns useful contents.
 #[test]
-fn scenario_20_hover_module_import_in_app_pm_does_not_crash() -> anyhow::Result<()> {
+fn scenario_20_hover_module_import_in_app_pm_returns_contents() -> anyhow::Result<()> {
     if !binary_available() {
         eprintln!("SKIP scenario_20: perl-lsp binary not found");
         return Ok(());
@@ -601,21 +617,17 @@ fn scenario_20_hover_module_import_in_app_pm_does_not_crash() -> anyhow::Result<
 
     // Line 4 (0-indexed): `use RealBaseline::Util qw(helper alias);`
     // cursor at col 4, inside `RealBaseline`.
-    let result = harness.hover("lib/RealBaseline/App.pm", 4, 4);
-    assert!(result.is_ok(), "hover on module import must not return JSON-RPC error: {result:?}");
-
-    match result {
-        Ok(Some(_)) => {
-            eprintln!("status: hover/module-import: works — hover result returned");
-        }
-        Ok(None) => {
-            eprintln!(
-                "status: hover/module-import: known gap — hover returned null for \
-                 cross-file module import (degraded mode)"
-            );
-        }
-        Err(_) => unreachable!(),
-    }
+    let hover = harness.hover("lib/RealBaseline/App.pm", 4, 4)?;
+    let Some(hover) = hover else {
+        anyhow::bail!("hover on RealBaseline::Util import must not return null");
+    };
+    let contents = hover
+        .get("contents")
+        .ok_or_else(|| anyhow::anyhow!("hover on RealBaseline::Util import missing contents"))?;
+    anyhow::ensure!(
+        !hover_contents_text(contents).trim().is_empty(),
+        "hover on RealBaseline::Util import should return non-empty contents; got: {contents:?}"
+    );
 
     harness.assert_no_crash();
     Ok(())

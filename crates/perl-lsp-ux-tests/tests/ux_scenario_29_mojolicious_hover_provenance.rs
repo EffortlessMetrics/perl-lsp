@@ -1,3 +1,6 @@
+// Test receipt emits per-probe status and JSON evidence to stderr for auditability.
+#![allow(clippy::print_stderr)]
+
 //! Scenario 29 - Mojolicious hover provenance receipt.
 //!
 //! This receipt exercises hover over the committed Mojolicious skeleton
@@ -352,7 +355,7 @@ fn scenario_29_mojolicious_hover_provenance_receipt() {
                         "module_resolution",
                     ]),
             )?;
-            recorder.check("at least one hover probe returned content", content_count > 0)?;
+            recorder.check("all hover probes returned content", content_count == probes.len())?;
             recorder.check(
                 "hover receipt recorded at least one expected text hit",
                 expected_hit_total > 0,

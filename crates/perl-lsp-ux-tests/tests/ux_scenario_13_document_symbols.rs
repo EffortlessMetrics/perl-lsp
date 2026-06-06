@@ -1,5 +1,5 @@
-// Test infrastructure — allow test-friendly patterns.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+// Binary skip messages are visible only in integration-test output.
+#![allow(clippy::print_stderr)]
 
 //! Scenario 13 — Document symbols feature grid coverage.
 //!
@@ -9,15 +9,16 @@
 //! Acceptance criteria:
 //! - `textDocument/documentSymbol` MUST NOT return a JSON-RPC error.
 //! - When symbols are returned they MUST have at least a `name` field.
-//! - A file with named subs and packages SHOULD return at least one symbol.
-//! - An empty result is acceptable for degraded-mode servers.
+//! - A file with named subs and packages MUST return those source-backed symbols.
 //! - No crash signatures after the request.
 
+use anyhow::Result;
 use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
+use serde_json::Value;
 use std::time::Duration;
 
-/// Source with two named subs and a package declaration — rich symbol table.
+/// Source with three named subs and a package declaration — rich symbol table.
 const SYMBOLS_SOURCE: &str = "\
 package Greeter;\n\
 use strict;\n\
@@ -42,19 +43,18 @@ sub farewell {\n\
 ";
 
 #[test]
-fn scenario_13_document_symbol_does_not_error() {
+fn scenario_13_document_symbol_does_not_error() -> Result<()> {
     if !binary_available() {
         eprintln!("SKIP scenario_13: perl-lsp binary not found");
-        return;
+        return Ok(());
     }
 
     let harness = UxHarness::new(
         ScenarioConfig { timeout: Duration::from_secs(15), ..Default::default() }
             .with_file("Greeter.pm", SYMBOLS_SOURCE),
-    )
-    .expect("Failed to create UX harness");
+    )?;
 
-    harness.open_file("Greeter.pm", SYMBOLS_SOURCE).expect("didOpen should succeed");
+    harness.open_file("Greeter.pm", SYMBOLS_SOURCE)?;
 
     std::thread::sleep(Duration::from_millis(300));
 
@@ -67,33 +67,35 @@ fn scenario_13_document_symbol_does_not_error() {
     );
 
     harness.assert_no_crash();
+    Ok(())
 }
 
 #[test]
-fn scenario_13_returned_symbols_have_valid_shape() {
+fn scenario_13_returned_symbols_have_valid_shape() -> Result<()> {
     if !binary_available() {
         eprintln!("SKIP scenario_13: perl-lsp binary not found");
-        return;
+        return Ok(());
     }
 
     let harness = UxHarness::new(
         ScenarioConfig { timeout: Duration::from_secs(15), ..Default::default() }
             .with_file("Greeter.pm", SYMBOLS_SOURCE),
-    )
-    .expect("Failed to create UX harness");
+    )?;
 
-    harness.open_file("Greeter.pm", SYMBOLS_SOURCE).expect("didOpen should succeed");
+    harness.open_file("Greeter.pm", SYMBOLS_SOURCE)?;
 
     std::thread::sleep(Duration::from_millis(300));
 
-    let symbols = harness.document_symbols("Greeter.pm").expect("documentSymbol must not error");
+    let symbols = harness.document_symbols("Greeter.pm")?;
 
     for sym in &symbols {
         assert!(sym.get("name").is_some(), "Each symbol must have a 'name' field, got: {:?}", sym);
         // kind is required by the LSP spec (1-26 SymbolKind enum).
         if let Some(kind) = sym.get("kind") {
-            let k = kind.as_u64().unwrap_or(0);
-            assert!((1..=26).contains(&k), "Symbol 'kind' must be 1-26, got: {}", k);
+            assert!(
+                kind.as_u64().is_some_and(|k| (1..=26).contains(&k)),
+                "Symbol 'kind' must be 1-26, got: {kind}"
+            );
         }
         // DocumentSymbol has 'range'; SymbolInformation has 'location'.
         // Either is acceptable.
@@ -108,69 +110,78 @@ fn scenario_13_returned_symbols_have_valid_shape() {
     }
 
     harness.assert_no_crash();
+    Ok(())
 }
 
 #[test]
-fn scenario_13_rich_file_returns_known_sub_names() {
+fn scenario_13_rich_file_returns_known_package_and_sub_names() -> Result<()> {
     if !binary_available() {
         eprintln!("SKIP scenario_13: perl-lsp binary not found");
-        return;
+        return Ok(());
     }
 
     let harness = UxHarness::new(
         ScenarioConfig { timeout: Duration::from_secs(15), ..Default::default() }
             .with_file("Greeter.pm", SYMBOLS_SOURCE),
-    )
-    .expect("Failed to create UX harness");
+    )?;
 
-    harness.open_file("Greeter.pm", SYMBOLS_SOURCE).expect("didOpen should succeed");
+    harness.open_file("Greeter.pm", SYMBOLS_SOURCE)?;
 
     std::thread::sleep(Duration::from_millis(300));
 
-    let symbols = harness.document_symbols("Greeter.pm").expect("documentSymbol must not error");
+    let symbols = harness.document_symbols("Greeter.pm")?;
+    let names = symbol_names(&symbols);
 
-    if symbols.is_empty() {
-        eprintln!(
-            "INFO scenario_13: documentSymbol returned empty list \
-             (degraded mode acceptable — sub-symbol extraction may not be implemented yet)"
+    for expected in ["Greeter", "new", "greet", "farewell"] {
+        assert!(
+            names.iter().any(|actual| actual == expected),
+            "Expected source-backed document symbol `{expected}` in Greeter.pm, got: {names:?}"
         );
-        harness.assert_no_crash();
-        return;
     }
 
-    let names: Vec<&str> = symbols.iter().filter_map(|s| s["name"].as_str()).collect();
-
-    // At least one of our three subs should appear.
-    let found_any = names.iter().any(|n| ["new", "greet", "farewell"].contains(n));
-    assert!(
-        found_any,
-        "Expected at least one of [new, greet, farewell] in document symbols, \
-         got: {:?}",
-        names
-    );
-
     harness.assert_no_crash();
+    Ok(())
 }
 
 #[test]
-fn scenario_13_empty_file_returns_empty_or_null() {
+fn scenario_13_empty_file_returns_empty_or_null() -> Result<()> {
     if !binary_available() {
         eprintln!("SKIP scenario_13: perl-lsp binary not found");
-        return;
+        return Ok(());
     }
 
     let source = "# empty file\n";
-    let harness = UxHarness::new(ScenarioConfig::default().with_file("empty.pl", source))
-        .expect("Failed to create UX harness");
+    let harness = UxHarness::new(ScenarioConfig::default().with_file("empty.pl", source))?;
 
-    harness.open_file("empty.pl", source).expect("didOpen should succeed");
+    harness.open_file("empty.pl", source)?;
 
-    let symbols =
-        harness.document_symbols("empty.pl").expect("documentSymbol on empty file must not error");
+    let symbols = harness.document_symbols("empty.pl")?;
 
     // Empty list is the correct response for a file with no symbols.
     // We just verify no crash.
     let _ = symbols;
 
     harness.assert_no_crash();
+    Ok(())
+}
+
+fn symbol_names(symbols: &[Value]) -> Vec<String> {
+    let mut names = Vec::new();
+    for symbol in symbols {
+        collect_symbol_names(symbol, &mut names);
+    }
+    names.sort();
+    names.dedup();
+    names
+}
+
+fn collect_symbol_names(symbol: &Value, names: &mut Vec<String>) {
+    if let Some(name) = symbol.get("name").and_then(Value::as_str) {
+        names.push(name.to_string());
+    }
+    if let Some(children) = symbol.get("children").and_then(Value::as_array) {
+        for child in children {
+            collect_symbol_names(child, names);
+        }
+    }
 }

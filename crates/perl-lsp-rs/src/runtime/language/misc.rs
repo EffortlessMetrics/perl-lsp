@@ -1305,6 +1305,12 @@ impl LspServer {
         Ok(Some(json!([])))
     }
 
+    fn execute_command_request_shape_message(summary: &str) -> String {
+        format!(
+            "{summary}: workspace/executeCommand expects params.command plus params.arguments, for example {{\"command\":\"perl.runFile\",\"arguments\":[\"file:///path/to/script.pl\"]}}; include \"arguments\": [] when the command takes no arguments"
+        )
+    }
+
     /// Handle execute command request
     pub(crate) fn handle_execute_command(
         &self,
@@ -1313,16 +1319,19 @@ impl LspServer {
         use crate::execute_command::ExecuteCommandProvider;
 
         if let Some(params) = params {
-            let command = params["command"]
-                .as_str()
-                .ok_or_else(|| invalid_params("Missing required parameter: command"))?;
+            let command = params["command"].as_str().ok_or_else(|| {
+                invalid_params(&Self::execute_command_request_shape_message(
+                    "Missing required parameter: command",
+                ))
+            })?;
 
             // LSP 3.17 compliance: arguments field is required even if empty
             if !params.as_object().unwrap_or(&serde_json::Map::new()).contains_key("arguments") {
                 return Err(JsonRpcError {
                     code: -32602, // InvalidParams
-                    message: "Missing required 'arguments' field in executeCommand request"
-                        .to_string(),
+                    message: Self::execute_command_request_shape_message(
+                        "Missing required 'arguments' field in executeCommand request",
+                    ),
                     data: Some(json!({
                         "command": command,
                         "errorType": "executeCommand",
@@ -1554,7 +1563,9 @@ impl LspServer {
         // Missing params entirely
         Err(JsonRpcError {
             code: -32602, // InvalidParams
-            message: "Missing parameters for executeCommand request".to_string(),
+            message: Self::execute_command_request_shape_message(
+                "Missing parameters for executeCommand request",
+            ),
             data: Some(json!({
                 "errorType": "executeCommand",
                 "originalError": "Missing params"

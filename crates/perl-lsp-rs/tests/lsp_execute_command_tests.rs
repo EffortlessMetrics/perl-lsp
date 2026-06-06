@@ -1,5 +1,5 @@
 //! Tests for LSP execute command functionality
-use perl_lsp::{JsonRpcRequest, LspServer};
+use perl_lsp::{JsonRpcError, JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
 use std::fs;
 use tempfile::TempDir;
@@ -36,6 +36,33 @@ fn setup_server(root_path: Option<String>) -> LspServer {
 
 fn test_error(message: impl Into<String>) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::InvalidData, message.into())
+}
+
+fn execute_command_error(
+    params: Option<Value>,
+) -> Result<JsonRpcError, Box<dyn std::error::Error>> {
+    let server = setup_server(None);
+    let response = server
+        .handle_request(JsonRpcRequest {
+            _jsonrpc: "2.0".to_string(),
+            method: "workspace/executeCommand".to_string(),
+            params,
+            id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        })
+        .ok_or_else(|| test_error("expected executeCommand response"))?;
+
+    response.error.ok_or_else(|| {
+        test_error(format!("expected executeCommand error, got {:?}", response.result)).into()
+    })
+}
+
+fn assert_execute_command_shape_guidance(error: &JsonRpcError, summary: &str) {
+    assert_eq!(error.code, -32602);
+    assert!(error.message.contains(summary), "unexpected message: {}", error.message);
+    assert!(error.message.contains("params.command"), "unexpected message: {}", error.message);
+    assert!(error.message.contains("params.arguments"), "unexpected message: {}", error.message);
+    assert!(error.message.contains("perl.runFile"), "unexpected message: {}", error.message);
+    assert!(error.message.contains("\"arguments\": []"), "unexpected message: {}", error.message);
 }
 
 fn sorted_object_keys_at(
@@ -267,6 +294,39 @@ fn test_execute_command_unknown() -> Result<(), Box<dyn std::error::Error>> {
     assert!(response.is_some());
     let response = response.ok_or("Expected a response for unknown command")?;
     assert!(response.error.is_some());
+
+    Ok(())
+}
+
+#[test]
+fn test_execute_command_request_shape_errors_include_guidance()
+-> Result<(), Box<dyn std::error::Error>> {
+    let missing_params = execute_command_error(None)?;
+    assert_execute_command_shape_guidance(
+        &missing_params,
+        "Missing parameters for executeCommand request",
+    );
+
+    let missing_command = execute_command_error(Some(json!({
+        "arguments": []
+    })))?;
+    assert_execute_command_shape_guidance(&missing_command, "Missing required parameter: command");
+
+    let missing_arguments = execute_command_error(Some(json!({
+        "command": "perl.runCritic"
+    })))?;
+    assert_execute_command_shape_guidance(
+        &missing_arguments,
+        "Missing required 'arguments' field in executeCommand request",
+    );
+    assert_eq!(
+        missing_arguments
+            .data
+            .as_ref()
+            .and_then(|data| data.pointer("/command"))
+            .and_then(Value::as_str),
+        Some("perl.runCritic")
+    );
 
     Ok(())
 }

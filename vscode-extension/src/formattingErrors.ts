@@ -39,7 +39,7 @@ export function handleFormattingError(
     const label = isNotFound ? 'Run Health Check' : 'Show Output';
     const msg = isNotFound
         ? `Perl formatting requires perltidy, which was not found on PATH. ` +
-          `Install it via: cpan Perl::Tidy  (or set perl-lsp.perltidyConfig to your config path)`
+          `Install it via: cpanm Perl::Tidy. Run "Perl: Run Health Check" if formatting is still unavailable.`
         : `Perl formatting failed: ${truncated}`;
 
     vscode.window.showErrorMessage(msg, label).then(sel => {

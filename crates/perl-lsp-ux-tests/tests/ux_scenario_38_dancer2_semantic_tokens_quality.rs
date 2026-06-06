@@ -1,3 +1,6 @@
+// Test receipt emits per-probe status and JSON evidence to stderr for auditability.
+#![allow(clippy::print_stderr)]
+
 //! Scenario 38 - Dancer2 semantic-token quality receipt.
 //!
 //! This receipt exercises `textDocument/semanticTokens/full` over the committed
@@ -613,6 +616,10 @@ fn scenario_38_dancer2_semantic_tokens_quality_receipt() {
                     ]),
             )?;
             recorder.check("semantic-token probes returned live tokens", token_total > 0)?;
+            recorder.check(
+                "all semantic-token probes returned live tokens",
+                fallback_or_empty_count == 0,
+            )?;
             recorder.check(
                 "semantic-token data used valid 5-tuple encoding",
                 invalid_tuple_total == 0,

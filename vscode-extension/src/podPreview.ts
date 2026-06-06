@@ -299,25 +299,42 @@ function renderLinkCode(inner: string): string {
     if (pipeIdx !== -1) {
         const label = inner.slice(0, pipeIdx).trim();
         const target = inner.slice(pipeIdx + 1).trim();
-        if (/^https?:\/\//.test(target)) {
-            return `<a href="${escapeAttr(target)}">${escapeHtml(label)}</a>`;
-        }
-        return `<a href="#${escapeAttr(target.replace(/\s+/g, '-').toLowerCase())}">${escapeHtml(label)}</a>`;
+        return `<a href="${podLinkHref(target)}">${escapeHtml(label)}</a>`;
     }
 
-    if (/^https?:\/\//.test(inner)) {
-        return `<a href="${escapeAttr(inner)}">${escapeHtml(inner)}</a>`;
+    return `<a href="${podLinkHref(inner)}">${escapeHtml(inner)}</a>`;
+}
+
+function podLinkHref(target: string): string {
+    const trimmed = target.trim();
+    if (trimmed === '') {
+        return '#';
     }
 
-    // Module/manpage reference
-    const slashIdx = inner.indexOf('/');
+    if (/^https?:\/\//.test(trimmed)) {
+        return escapeAttr(trimmed);
+    }
+
+    if (trimmed.startsWith('/')) {
+        return `#${escapeAttr(sectionFragment(trimmed.slice(1)))}`;
+    }
+
+    const slashIdx = trimmed.indexOf('/');
     if (slashIdx !== -1) {
-        const mod = inner.slice(0, slashIdx);
-        const section = inner.slice(slashIdx + 1);
-        return `<a href="https://perldoc.perl.org/${escapeAttr(mod)}">${escapeHtml(mod)}/${escapeHtml(section)}</a>`;
+        const mod = trimmed.slice(0, slashIdx).trim();
+        const section = trimmed.slice(slashIdx + 1).trim();
+        if (mod === '') {
+            return `#${escapeAttr(sectionFragment(section))}`;
+        }
+        const fragment = section ? `#${escapeAttr(sectionFragment(section))}` : '';
+        return `https://perldoc.perl.org/${escapeAttr(mod)}${fragment}`;
     }
 
-    return `<a href="https://perldoc.perl.org/${escapeAttr(inner)}">${escapeHtml(inner)}</a>`;
+    return `https://perldoc.perl.org/${escapeAttr(trimmed)}`;
+}
+
+function sectionFragment(section: string): string {
+    return section.replace(/\s+/g, '-').toLowerCase();
 }
 
 function renderEscapeCode(name: string): string {

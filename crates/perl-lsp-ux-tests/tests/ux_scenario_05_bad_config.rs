@@ -1,5 +1,7 @@
 // Test infrastructure — allow test-friendly patterns.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+// UX receipt scenarios print skip markers during `--nocapture` runs.
+#![allow(clippy::print_stderr)]
 
 //! Scenario 05 — Bad configuration.
 //!
@@ -10,13 +12,29 @@
 //! - Error messages MUST NOT contain raw Rust panic traces.
 //! - Server MUST remain responsive after the config error.
 
+use anyhow::Result;
+use perl_lsp_ux_tests::LspEvent;
 use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
+use std::time::Duration;
 
 fn config_with_bad_tool_paths() -> ScenarioConfig {
     ScenarioConfig::default()
         .env("PERLTIDY_PATH", "/nonexistent/path/to/perltidy")
         .env("PERLCRITIC_PATH", "/nonexistent/path/to/perlcritic")
+}
+
+fn config_with_invalid_project_toml() -> ScenarioConfig {
+    ScenarioConfig::default().with_file(".perl-lsp.toml", "[perl\ninclude_paths = [\"lib\"]")
+}
+
+fn message_text(event: &LspEvent) -> Option<&str> {
+    match event {
+        LspEvent::WindowMessage { message, .. } | LspEvent::LogMessage { message, .. } => {
+            Some(message.as_str())
+        }
+        _ => None,
+    }
 }
 
 #[test]
@@ -95,4 +113,45 @@ fn scenario_05_format_with_bad_perltidy_path_returns_graceful_error() {
             );
         }
     }
+}
+
+#[test]
+fn scenario_05_invalid_project_config_warning_is_actionable() -> Result<()> {
+    if !binary_available() {
+        eprintln!("SKIP scenario_05: perl-lsp binary not found");
+        return Ok(());
+    }
+
+    let source = "my $x = 1;\n";
+    let harness = UxHarness::new(config_with_invalid_project_toml())?;
+
+    harness.open_file("invalid_config.pl", source)?;
+    std::thread::sleep(Duration::from_millis(500));
+
+    let events = harness.peek_notifications();
+    let warning = events
+        .iter()
+        .filter_map(message_text)
+        .find(|message| message.contains(".perl-lsp.toml") && message.contains("syntax error"));
+    let Some(warning) = warning else {
+        anyhow::bail!(
+            "invalid .perl-lsp.toml should emit actionable syntax warning; events={events:?}"
+        );
+    };
+
+    assert!(
+        warning.contains("Fix the error in .perl-lsp.toml"),
+        "config warning should tell the user what to fix: {warning}"
+    );
+    assert!(
+        warning.contains("reload the window"),
+        "config warning should tell the user how to apply the fix: {warning}"
+    );
+    assert!(
+        !warning.contains("panicked at") && !warning.contains("SIGABRT"),
+        "config warning should not expose crash text: {warning}"
+    );
+
+    harness.assert_no_crash();
+    Ok(())
 }

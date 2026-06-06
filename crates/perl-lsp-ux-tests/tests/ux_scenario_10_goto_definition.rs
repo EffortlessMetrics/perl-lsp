@@ -1,3 +1,6 @@
+// Test infrastructure emits skip status to stderr when the local LSP binary is absent.
+#![allow(clippy::print_stderr)]
+
 //! Scenario 10 — Go-to-definition UX workflow coverage.
 //!
 //! Focus area: `textDocument/definition` behavior for first-editing-session UX.
@@ -144,9 +147,14 @@ fn scenario_10_definition_cross_file_module_symbol_points_to_module() -> Result<
     // When go-to-definition is requested on `increment` in `Counter->increment`.
     let definitions = scenario.when_requesting_definition_with_retry("main.pl", 5, 23)?;
 
-    // Then results are shape-valid. Cross-file module resolution may degrade
-    // if `use lib` handling is incomplete; keep the empty path tolerated but
-    // log it so we notice when it happens in CI.
+    // Then the cross-file definition must resolve. `Counter.pm` is opened in
+    // the same workspace and imported via `use lib`, so an empty result would
+    // be a regression in the editor navigation path.
+    assert!(
+        !definitions.is_empty(),
+        "expected cross-file definition for `Counter->increment` to resolve to Counter.pm, \
+         got empty list after retries"
+    );
     for entry in &definitions {
         assert!(
             is_lsp_location_shape(entry),
@@ -154,32 +162,24 @@ fn scenario_10_definition_cross_file_module_symbol_points_to_module() -> Result<
         );
     }
 
-    if definitions.is_empty() {
-        eprintln!(
-            "INFO scenario_10: cross-file definition returned empty — tolerated \
-             degraded path (cross-file indexing may not have settled)"
-        );
-    } else {
-        let points_to_module = definitions
-            .iter()
-            .any(|entry| entry_uri(entry).map(|uri| uri.ends_with("Counter.pm")).unwrap_or(false));
-        assert!(
-            points_to_module,
-            "non-empty cross-file definition results must include Counter.pm but did not: \
-             {definitions:?}"
-        );
-        // And they must never resolve to an unrelated file (e.g. leaking the
-        // call-site file as the definition would be a real regression).
-        let resolves_outside_workspace = definitions.iter().any(|entry| {
-            entry_uri(entry)
-                .map(|uri| !uri.ends_with("Counter.pm") && !uri.ends_with("main.pl"))
-                .unwrap_or(false)
-        });
-        assert!(
-            !resolves_outside_workspace,
-            "cross-file definition resolved to an unrelated file: {definitions:?}"
-        );
-    }
+    let points_to_module = definitions
+        .iter()
+        .any(|entry| entry_uri(entry).map(|uri| uri.ends_with("Counter.pm")).unwrap_or(false));
+    assert!(
+        points_to_module,
+        "cross-file definition results must include Counter.pm but did not: {definitions:?}"
+    );
+    // And they must never resolve to an unrelated file (e.g. leaking the
+    // call-site file as the definition would be a real regression).
+    let resolves_outside_workspace = definitions.iter().any(|entry| {
+        entry_uri(entry)
+            .map(|uri| !uri.ends_with("Counter.pm") && !uri.ends_with("main.pl"))
+            .unwrap_or(false)
+    });
+    assert!(
+        !resolves_outside_workspace,
+        "cross-file definition resolved to an unrelated file: {definitions:?}"
+    );
 
     scenario.then_no_crash_signals_exist();
     Ok(())

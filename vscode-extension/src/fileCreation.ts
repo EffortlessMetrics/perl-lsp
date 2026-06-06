@@ -61,7 +61,7 @@ export function generateBoilerplate(filePath: string): BoilerplateResult | null 
     }
 
     if (ext === '.t') {
-        const content = `use strict;\nuse warnings;\nuse Test::More;\n\n\n\ndone_testing;\n`;
+        const content = `use strict;\nuse warnings;\nuse lib 'lib';\nuse Test::More;\n\n\n\ndone_testing;\n`;
         return { kind: FileKind.Test, content };
     }
 
