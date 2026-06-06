@@ -2194,6 +2194,11 @@ pub fn fix_missing_pod_coverage(source: &str, diagnostic: &QuickFixDiagnostic) -
 /// Since `goto` without a label target is invalid Perl, the entire statement line
 /// is deleted. The check ensures that `goto` appears on the same line before the
 /// label position and that the label text looks like a valid Perl identifier.
+///
+/// The fix is only offered when the `goto` statement occupies the whole line
+/// (optional leading whitespace, then `goto LABEL`, nothing else before the label).
+/// If other code precedes `goto` on the same line the line-deletion would remove
+/// those statements too, so the action is suppressed in that case.
 pub fn fix_goto_undefined_label(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
     let Some((range_start, range_end)) = valid_diagnostic_range(source, diagnostic.range) else {
         return Vec::new();
@@ -2214,7 +2219,11 @@ pub fn fix_goto_undefined_label(source: &str, diagnostic: &QuickFixDiagnostic) -
         .map_or(source.len(), |offset| range_end + offset + 1);
 
     let before_label = &source[line_start..range_start];
-    if !before_label.contains("goto") {
+
+    // Accept only `<whitespace>goto ` before the label. Anything else on the line
+    // (other statements, closing braces, etc.) means line-deletion would be unsafe.
+    let before_trimmed = before_label.trim_start();
+    if before_trimmed != "goto " && before_trimmed != "goto" {
         return Vec::new();
     }
 

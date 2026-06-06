@@ -69,7 +69,7 @@ fn first_pl409(source: &str) -> Option<Diagnostic> {
 
 #[test]
 fn code_action_pl409_goto_missing_label_offers_remove_statement_action() {
-    let source = "sub foo { goto MISSING; }\n";
+    let source = "sub foo {\n    goto MISSING;\n}\n";
     let diagnostic = must_some(first_pl409(source));
 
     let actions = actions_for(source, &[diagnostic]);
@@ -167,5 +167,29 @@ fn code_action_pl409_wrong_diagnostic_code_produces_no_remove_goto_action() {
     assert!(
         pl409_actions(&actions).is_empty(),
         "PL410 diagnostic code should not produce 'Remove goto to undefined label' action, got: {actions:?}"
+    );
+}
+
+// --- Scenario 7: goto on a line shared with other statements is not offered ---
+
+#[test]
+fn code_action_pl409_goto_on_shared_line_produces_no_action() {
+    // When goto shares a line with other code (e.g. inside a one-liner sub body),
+    // line-deletion would remove the surrounding statements too. The fix must be
+    // suppressed in that case to avoid data loss.
+    let source = "sub foo { goto MISSING; }\n";
+    let label_start = must_some(source.find("MISSING"));
+    let diagnostic = make_diag(
+        label_start,
+        label_start + "MISSING".len(),
+        "PL409",
+        "Goto label 'MISSING' is not defined in this file",
+    );
+
+    let actions = actions_for(source, &[diagnostic]);
+
+    assert!(
+        pl409_actions(&actions).is_empty(),
+        "goto on a shared line should not offer PL409 quick fix (unsafe deletion), got: {actions:?}"
     );
 }
