@@ -136,6 +136,7 @@
       ],
       "expected_outcomes": [
         "invalid config does not crash the server",
+        "invalid .perl-lsp.toml emits actionable fix and reload guidance",
         "user-visible feedback is actionable"
       ],
       "confidence_signals": [
