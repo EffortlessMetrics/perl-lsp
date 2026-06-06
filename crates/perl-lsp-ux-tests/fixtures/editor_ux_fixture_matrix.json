@@ -86,6 +86,7 @@
       ],
       "expected_outcomes": [
         "server starts in degraded mode",
+        "missing-PATH Perl setup emits actionable fallback or install guidance",
         "hover or completion remain available where possible"
       ],
       "confidence_signals": [
