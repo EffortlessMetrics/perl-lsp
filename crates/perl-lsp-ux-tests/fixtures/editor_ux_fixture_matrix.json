@@ -112,6 +112,7 @@
       ],
       "expected_outcomes": [
         "diagnostics degrade gracefully",
+        "external perlcritic mode emits an actionable missing-tool warning",
         "no crash or panic-style messaging"
       ],
       "confidence_signals": [
