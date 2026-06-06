@@ -265,7 +265,7 @@ async function createStepDefinitionFromFeature(args: CreateStepDefinitionArgs): 
     const workspaceFolder = vscode.workspace.getWorkspaceFolder(featureUri);
     if (!workspaceFolder) {
         void vscode.window.showWarningMessage(
-            'Step definition generation requires an open workspace folder.'
+            'Step definition generation requires an open workspace folder. Open this .feature file from a folder or workspace, then run the action again.'
         );
         return;
     }

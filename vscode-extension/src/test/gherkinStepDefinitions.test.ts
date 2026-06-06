@@ -25,6 +25,23 @@ describe('gherkin step definition support', () => {
     ]);
   });
 
+  test('explains how to recover when creating a step without a workspace folder', async () => {
+    registerGherkinStepDefinitionSupport();
+    (vscode.workspace.openTextDocument as jest.Mock).mockResolvedValueOnce({
+      lineAt: jest.fn(() => ({ text: 'Given a user exists' })),
+    });
+    (vscode.workspace as any).getWorkspaceFolder = jest.fn(() => undefined);
+
+    await vscode.commands.executeCommand('perl-lsp.createGherkinStepDefinition', {
+      featureUri: 'file:///tmp/checkout.feature',
+      line: 0,
+    });
+
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining('Open this .feature file from a folder or workspace')
+    );
+  });
+
   test('parses Given/When/Then step lines and skips non-step lines', () => {
     expect(parseGherkinStepLine('    Given a signed-in user', 4)).toEqual({
       keyword: 'Given',
