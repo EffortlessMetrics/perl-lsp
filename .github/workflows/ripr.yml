@@ -199,7 +199,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ci-disk-guard /mnt/ci-scratch 100
+          # Self-heal: remove orphaned ripr-* scratch dirs older than 24 h that were
+          # left by killed or timed-out runs whose cleanup step never executed.
+          # Scope is intentionally narrow (ripr-* only); other lanes' dirs are out
+          # of scope and belong to issue #978 for workspace-wide scratch governance.
+          find /mnt/ci-scratch -maxdepth 1 -name 'ripr-*' -mmin +1440 -exec rm -rf {} + 2>/dev/null || true
+          # ripr needs at most an xtask debug build (~5-8 GB) plus small JSON
+          # analysis artifacts (<1 GB).  20 GB gives 2-3x headroom without
+          # requiring the full 100 GB reserved for the complete Rust CI build.
+          ci-disk-guard /mnt/ci-scratch 20
           ci-disk-guard /mnt/ci-cache 20
           df -h /mnt/ci-scratch /mnt/ci-cache || true
           mkdir -p "$TMPDIR" "$CARGO_TARGET_DIR" "$CARGO_HOME" "$SCCACHE_DIR"
@@ -392,7 +400,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ci-disk-guard /mnt/ci-scratch 80
+          # Self-heal: remove orphaned ripr-* scratch dirs older than 24 h that were
+          # left by killed or timed-out runs whose cleanup step never executed.
+          # Scope is intentionally narrow (ripr-* only); other lanes' dirs are out
+          # of scope and belong to issue #978 for workspace-wide scratch governance.
+          find /mnt/ci-scratch -maxdepth 1 -name 'ripr-*' -mmin +1440 -exec rm -rf {} + 2>/dev/null || true
+          # ripr needs at most an xtask debug build (~5-8 GB) plus small JSON
+          # analysis artifacts (<1 GB).  20 GB gives 2-3x headroom without
+          # requiring the full 80 GB reserved for the complete Rust CI build.
+          # CX43 had 32 GB free when the 80 GB guard fired (run 27074596917) --
+          # 32 GB > 20 GB, so this guard will pass on a reasonably maintained host.
+          ci-disk-guard /mnt/ci-scratch 20
           ci-disk-guard /mnt/ci-cache 15
           df -h /mnt/ci-scratch /mnt/ci-cache || true
           mkdir -p "$TMPDIR" "$CARGO_TARGET_DIR" "$CARGO_HOME" "$SCCACHE_DIR"
