@@ -311,6 +311,26 @@ fn test_dap_set_function_breakpoints_validation() -> TestResult {
             assert_eq!(breakpoints[1].get("verified").and_then(|v| v.as_bool()), Some(true));
             assert_eq!(breakpoints[2].get("verified").and_then(|v| v.as_bool()), Some(false));
             assert_eq!(breakpoints[3].get("verified").and_then(|v| v.as_bool()), Some(false));
+            let invalid_name_message = breakpoints[2]
+                .get("message")
+                .and_then(|v| v.as_str())
+                .ok_or("Invalid function breakpoint should include a message")?;
+            assert!(
+                invalid_name_message.contains("main::run"),
+                "invalid function breakpoint should suggest a package-qualified example"
+            );
+            assert!(
+                invalid_name_message.contains("Foo::bar"),
+                "invalid function breakpoint should suggest a common package method example"
+            );
+            let newline_message = breakpoints[3]
+                .get("message")
+                .and_then(|v| v.as_str())
+                .ok_or("Newline function breakpoint should include a message")?;
+            assert!(
+                newline_message.contains("My::Package::handler"),
+                "newline function breakpoint should still include recovery guidance"
+            );
         }
         _ => must(Err::<(), _>("Expected response message")),
     }
@@ -507,7 +527,9 @@ fn test_dap_scopes_missing_frame() {
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success);
             assert_eq!(command, "scopes");
-            assert_eq!(must_some(message), "Missing frameId");
+            let msg = must_some(message);
+            assert!(msg.contains("Missing frameId"), "got: {msg}");
+            assert!(msg.contains("Request stackTrace first"), "got: {msg}");
         }
         _ => must(Err::<(), _>("Expected response message")),
     }

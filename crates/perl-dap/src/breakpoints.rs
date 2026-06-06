@@ -147,6 +147,30 @@ fn evaluate_hit_condition(raw: Option<&str>, hit_count: u64) -> Option<bool> {
     parse_hit_condition_operand(expr).map(|n| hit_count == n)
 }
 
+fn format_source_read_error(source_path: &str, error: &std::io::Error) -> String {
+    let mut message = format!("Unable to read source file '{source_path}': {error}");
+    if let Some(guidance) = source_read_error_guidance(error) {
+        message.push_str(". ");
+        message.push_str(guidance);
+    }
+    message
+}
+
+fn source_read_error_guidance(error: &std::io::Error) -> Option<&'static str> {
+    match error.kind() {
+        std::io::ErrorKind::NotFound => {
+            Some("Check that the file still exists, then set the breakpoint again.")
+        }
+        std::io::ErrorKind::PermissionDenied => {
+            Some("Check file permissions before setting breakpoints.")
+        }
+        std::io::ErrorKind::IsADirectory => {
+            Some("Breakpoints can only be set in Perl script files.")
+        }
+        _ => None,
+    }
+}
+
 fn file_paths_match(stored: &str, observed: &str) -> bool {
     if stored == observed {
         return true;
@@ -233,10 +257,9 @@ impl BreakpointStore {
         let source_breakpoints = args.breakpoints.as_deref().unwrap_or(&[]);
 
         // Read source file and parse once for AST validation (AC7).
-        let source_content = std::fs::read_to_string(&source_path).ok();
-        let validator = source_content
-            .as_ref()
-            .map(|content| AstBreakpointValidator::new(content).map_err(|e| e.to_string()));
+        let validator = std::fs::read_to_string(&source_path)
+            .map_err(|error| format_source_read_error(&source_path, &error))
+            .and_then(|content| AstBreakpointValidator::new(&content).map_err(|e| e.to_string()));
         let mut validation_cache: HashMap<(i64, Option<i64>), (bool, i64, Option<String>)> =
             HashMap::new();
 
@@ -331,15 +354,11 @@ impl BreakpointStore {
                     cached.clone()
                 } else {
                     let computed = match &validator {
-                        Some(Ok(v)) => {
+                        Ok(v) => {
                             let result = v.validate_with_column(bp.line, bp.column);
                             (result.verified, result.line, result.message)
                         }
-                        Some(Err(error)) => (false, bp.line, Some(error.clone())),
-                        None => {
-                            // Can't read file - mark as unverified but still create breakpoint.
-                            (false, bp.line, Some("Unable to read source file".to_string()))
-                        }
+                        Err(error) => (false, bp.line, Some(error.clone())),
                     };
                     validation_cache.insert((bp.line, bp.column), computed.clone());
                     computed
@@ -348,7 +367,7 @@ impl BreakpointStore {
             let mut verified = verified;
             let message = if verified
                 && bp.condition.is_some()
-                && let Some(Ok(v)) = &validator
+                && let Ok(v) = &validator
                 && let Some(condition) = bp.condition.as_deref()
             {
                 let condition_validation = v.validate_condition(resolved_line, condition);
@@ -525,7 +544,7 @@ mod tests {
     use super::*;
     use crate::protocol::{SetBreakpointsArguments, Source, SourceBreakpoint};
     use perl_tdd_support::must;
-    use std::io::Write;
+    use std::io::{Error as IoError, ErrorKind, Write};
     use tempfile::NamedTempFile;
 
     /// Create a temp file with valid Perl code for testing breakpoints.
@@ -1171,5 +1190,45 @@ EOF
             records[1].message.as_deref().unwrap_or("").contains("newline"),
             "stored record must carry the newline-rejection message"
         );
+    }
+
+    #[test]
+    fn source_read_error_message_keeps_path_error_and_guidance()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let error = IoError::from(ErrorKind::NotFound);
+
+        let message = format_source_read_error("/workspace/missing.pl", &error);
+
+        assert!(
+            message.contains("Unable to read source file '/workspace/missing.pl'"),
+            "expected path in message, got: {message}"
+        );
+        assert!(
+            message.contains("No such file") || message.contains("not found"),
+            "expected OS error detail in message, got: {message}"
+        );
+        assert!(
+            message.contains("file still exists"),
+            "expected recovery guidance in message, got: {message}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn source_read_error_message_keeps_unknown_errors_unembellished()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let error = IoError::from(ErrorKind::Interrupted);
+
+        let message = format_source_read_error("/workspace/script.pl", &error);
+
+        assert!(
+            message.contains("Unable to read source file '/workspace/script.pl'"),
+            "expected path in message, got: {message}"
+        );
+        assert!(
+            !message.contains("file still exists") && !message.contains("file permissions"),
+            "unexpected guidance for unknown error kind, got: {message}"
+        );
+        Ok(())
     }
 }

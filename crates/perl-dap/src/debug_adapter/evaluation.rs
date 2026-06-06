@@ -121,7 +121,7 @@ impl DebugAdapter {
                     success: false,
                     command: "evaluate".to_string(),
                     body: None,
-                    message: Some("No debugger session active".to_string()),
+                    message: Some(Self::no_debugger_session_message("evaluate")),
                 };
             }
         } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
@@ -143,7 +143,7 @@ impl DebugAdapter {
                 success: false,
                 command: "evaluate".to_string(),
                 body: None,
-                message: Some("No debugger session".to_string()),
+                message: Some(Self::no_debugger_session_message("evaluate")),
             };
         };
 
@@ -302,7 +302,7 @@ impl DebugAdapter {
                     success: false,
                     command: "setExpression".to_string(),
                     body: None,
-                    message: Some("No debugger session active".to_string()),
+                    message: Some(Self::no_debugger_session_message("setExpression")),
                 };
             }
         } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
@@ -324,7 +324,7 @@ impl DebugAdapter {
                 success: false,
                 command: "setExpression".to_string(),
                 body: None,
-                message: Some("No debugger session".to_string()),
+                message: Some(Self::no_debugger_session_message("setExpression")),
             };
         };
 
@@ -474,5 +474,59 @@ impl DebugAdapter {
             body: serde_json::to_value(&body).ok(),
             message: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    #[test]
+    fn evaluate_without_session_guides_recovery() -> TestResult {
+        let mut adapter = DebugAdapter::new();
+
+        let response =
+            adapter.handle_request(1, "evaluate", Some(json!({ "expression": "$valid_var" })));
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert_eq!(command, "evaluate");
+                assert!(!success, "evaluate without a session should fail");
+                let message = message.ok_or("evaluate failure should include guidance")?;
+                assert!(message.contains("No debugger session is active"));
+                assert!(message.contains("Start a launch or attach request"));
+                assert!(message.contains("retry evaluate"));
+            }
+            other => return Err(format!("expected evaluate response, got {other:?}").into()),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn set_expression_without_session_guides_recovery() -> TestResult {
+        let mut adapter = DebugAdapter::new();
+
+        let response = adapter.handle_request(
+            1,
+            "setExpression",
+            Some(json!({ "expression": "$valid_var", "value": "42" })),
+        );
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert_eq!(command, "setExpression");
+                assert!(!success, "setExpression without a session should fail");
+                let message = message.ok_or("setExpression failure should include guidance")?;
+                assert!(message.contains("No debugger session is active"));
+                assert!(message.contains("Start a launch or attach request"));
+                assert!(message.contains("retry setExpression"));
+            }
+            other => return Err(format!("expected setExpression response, got {other:?}").into()),
+        }
+
+        Ok(())
     }
 }

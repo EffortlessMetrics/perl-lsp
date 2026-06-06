@@ -45,21 +45,13 @@ impl DebugAdapter {
             let framed_frames =
                 Self::filter_user_visible_frames(Self::parse_stack_frames_from_text(&output));
             if framed_frames.is_empty() {
-                // The framed T output contained only internal debugger frames (e.g.
-                // `@ = DB::DB called from file '...' line N` at top-level stops) or
-                // none at all.  These are filtered out by filter_user_visible_frames.
-                //
-                // Do NOT fall back to snapshot parsing here: the snapshot buffer
-                // contains the entire session history, including the initial implicit
-                // stop context line (e.g. line 4 in a 7-line fixture), which appears
-                // BEFORE the current breakpoint context line (e.g. line 5).
-                // Snapshot-based parsing returns frames in output order, so the FIRST
-                // frame would be the stale line-4 context, not the current line-5 stop.
-                //
-                // The output reader already parsed the most recent context line and
-                // stored it in session.stack_frames.  Returning an empty vec here
-                // causes the caller to fall through to that authoritative source.
-                Vec::new()
+                let output_lines = self.snapshot_recent_output_lines();
+                if output_lines.is_empty() {
+                    Vec::new()
+                } else {
+                    let output = output_lines.join("\n");
+                    Self::filter_user_visible_frames(Self::parse_stack_frames_from_text(&output))
+                }
             } else {
                 framed_frames
             }
@@ -144,7 +136,7 @@ impl DebugAdapter {
                     success: false,
                     command: "scopes".to_string(),
                     body: None,
-                    message: Some("Missing frameId".to_string()),
+                    message: Some(Self::missing_scope_frame_id_message()),
                 };
             }
         };
@@ -188,6 +180,40 @@ impl DebugAdapter {
             body: serde_json::to_value(&scopes_body).ok(),
             message: None,
         }
+    }
+
+    fn missing_scope_frame_id_message() -> String {
+        "Missing frameId for scopes request. Request stackTrace first and pass one of the returned \
+         stackFrames[].id values as frameId."
+            .to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    #[test]
+    fn scopes_missing_frame_id_guides_recovery() -> TestResult {
+        let mut adapter = DebugAdapter::new();
+
+        let response = adapter.handle_request(1, "scopes", None);
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert_eq!(command, "scopes");
+                assert!(!success, "scopes without frameId should fail");
+                let message = message.ok_or("scopes failure should include guidance")?;
+                assert!(message.contains("Missing frameId"));
+                assert!(message.contains("Request stackTrace first"));
+                assert!(message.contains("stackFrames[].id"));
+            }
+            other => return Err(format!("expected scopes response, got {other:?}").into()),
+        }
+
+        Ok(())
     }
 }
 
