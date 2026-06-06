@@ -88,6 +88,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added the proactive CI integrity guards rail ([`docs/development/RUST_1_95_PROACTIVE_GUARDS.md`](docs/development/RUST_1_95_PROACTIVE_GUARDS.md)) as a sibling rollout. Six guard PRs (PG-1 through PG-6) covering label enforcement, risk-pack referential integrity, lane mapping with matrix expansion, net-new workflow-allowlist ledger, CI Actuals emitter + subscription coverage check, and broad-glob justification tightening. Each row mirrors a sibling-repo proven shape.
 - Consolidated the remaining Rust 1.95 → 0.14.0 work into a single canonical roadmap: rewrote [`docs/development/RUST_1_95_ROLLOUT.md`](docs/development/RUST_1_95_ROLLOUT.md) into a post-landing source of truth (already landed / remaining implementation ladder / per-rail acceptance contracts / Claude-Codex operating contract); slimmed [`docs/ci/perl-lsp-rust-1.95-rollout.md`](docs/ci/perl-lsp-rust-1.95-rollout.md) to a historical pointer; added [`docs/ci/test-evidence-lanes.md`](docs/ci/test-evidence-lanes.md) defining the five evidence-lane shapes (PR-fast required / PR-targeted / nightly cron / release-only / advisory) with risk-pack auto-routing, skipped-by-policy receipts, and LEM cost framing. Umbrella tracking: **#8663**.
 
+## [0.15.2] - 2026-05-26
+
+Release notes: [v0.15.2](docs/releases/v0.15.2.md)
+
+Crates.io packaging hotfix for the `cargo install` path.
+
+### Fixed
+
+- **`perl-lsp-rs-core` crate now self-contained on crates.io.** `build_catalog.rs`
+  is now included in the published package so the crate is self-contained after
+  extraction. This fixes the `0.15.1` crates.io install failure for `perllsp`
+  and `perl-dap`. (#9613)
+
+### Added
+
+- **Package-content gate for `perl-lsp-rs-core`** — CI now checks the `.crate`
+  file list, extracts the archive, and verifies the unpacked crate with
+  `cargo check --locked`. (#9613)
+
+## [0.15.1] - 2026-05-26
+
+Release notes: [v0.15.1](docs/releases/v0.15.1.md)
+
+Patch release focused on LSP4IJ inline completion and lean editor-mode hardening.
+Includes the Neovim interactive-latency improvements (generation-aware stale-read
+cancellation, `--runtime-mode e2e`, `--diagnostic-mode syntax-only`).
+
+### Added
+
+- **Neovim / lean-editor latency rail** — `--runtime-mode e2e` /
+  `PERL_LSP_E2E=1` profile: zero diagnostic debounce, syntax-only diagnostics,
+  no eager workspace indexing, no file watchers by default.
+- **Generation-aware stale-read cancellation** — hover, completion, definition,
+  declaration, typeDefinition, implementation, and references are cancelled with
+  `RequestCancelled` when the document generation advances between ingress and
+  dispatch.
+- **`perl.explainProviderDecision` execute-command surface** — returns the
+  structured provider decision explanation payload; reports a low-confidence
+  fallback when no provider-specific receipt is attached.
+- Raw-RPC latency receipts in `perl-lsp-ux-tests::ux_latency_raw_rpc` and a
+  Neovim lean smoke script at `scripts/ux/neovim_lean_smoke.sh`.
+
+### Fixed
+
+- **LSP4IJ inline completion registration** — static clients receive top-level
+  `inlineCompletionProvider`; dynamic-capable clients receive
+  `client/registerCapability`; `experimental.inlineCompletionProvider` is never
+  emitted.
+- **Lean editor mode watcher gate** — `--file-watchers=false` is now honoured
+  during dynamic watcher registration while feature-specific registrations
+  (inline completion) remain available.
+- **Semantic tokens no longer advertise delta support** until the
+  result-id/delta path is implemented.
+
+### Notes
+
+- This release does not implement true incremental AST reuse. Latency
+  improvements come from skipping avoidable background work and cancelling
+  stale reads earlier.
+
 ## [0.15.0] - 2026-05-22
 
 Release notes: [v0.15.0](docs/releases/v0.15.0.md)
@@ -1585,5 +1645,7 @@ For the full cross-channel release history, see [RELEASE_HISTORY.md](RELEASE_HIS
 [0.9.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.8.5...v0.9.0
 [0.8.8]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.8.5...v0.8.8
 [0.13.0-rc1]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.4...v0.13.0-rc1
-[Unreleased]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.2...HEAD
+[Unreleased]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.15.2...HEAD
+[0.15.2]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.15.1...v0.15.2
+[0.15.1]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.14.0...v0.15.0

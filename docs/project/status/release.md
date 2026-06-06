@@ -5,16 +5,37 @@
 
 ## Current Release Call
 
-**Current release train**: `v0.14.0` public-alpha channel closeout
-**Workspace version line**: `v0.14.0`
+**Current release train**: `v0.15.2` hotfix — shipped 2026-05-26
+**Workspace version line**: `v0.15.0` (Cargo.toml workspace.package.version)
 **Published crate surface**: 31 crates
-**Release target**: channel verification across GitHub Releases, crates.io, Docker, VS Code Marketplace, Open VSX, and the owned Homebrew tap
-**Ship readiness**: GitHub Release and crates.io surfaces show `v0.14.0` live; release closeout remains pending until the full channel ledger and install receipts are reconciled.
+**Release target**: `v0.16.0` is the next planned train
+**Ship readiness**: `v0.15.0` (2026-05-22), `v0.15.1` (2026-05-26), and `v0.15.2` (2026-05-26) are tagged; channel receipts (crates.io, VS Code Marketplace, Docker) are pending reconciliation.
 
 ## Active Blockers
 
-- No known install-surface blocker after the Homebrew, GNU/musl, installer, and VS Code managed-binary guards landed
-- Remaining work is operational: reconcile `v0.14.0` channel receipts across release history, notes, Docker, editor marketplaces, and Homebrew
+- Channel receipt reconciliation for v0.15.x (crates.io, Marketplace, Docker)
+- `docs/releases/v0.15.1.md` status is draft; channel receipts remain pending
+
+## 0.15.2 Hotfix Receipts (2026-05-26)
+
+- Release notes file: `docs/releases/v0.15.2.md`
+- Changelog entry: `CHANGELOG.md` `[0.15.2]`
+- Fix: `build_catalog.rs` included in published `perl-lsp-rs-core` package; `cargo install perllsp` restored
+- Package-content gate added to CI
+- Tag commit: `746edcb78`
+
+## 0.15.1 Receipts (2026-05-26)
+
+- Release notes file: `docs/releases/v0.15.1.md`
+- Changelog entry: `CHANGELOG.md` `[0.15.1]`
+- Highlights: LSP4IJ inline completion hardening, lean editor mode watcher fix, generation-aware stale-read cancellation (`--runtime-mode e2e`), `perl.explainProviderDecision` execute-command
+- Tag commit: `15cbe7e6`
+
+## 0.15.0 Receipts (2026-05-22)
+
+- Release notes file: `docs/releases/v0.15.0.md`
+- Changelog entry: `CHANGELOG.md` `[0.15.0]`
+- Highlights: JSON-RPC type safety (`JsonRpcId`, `ServerRequestId`), LSP4IJ file-watcher crash fix
 
 ## 0.14.0 Prep and Live Receipts (2026-05-12 to 2026-05-19)
 
@@ -94,4 +115,4 @@ Native + Bridge preview. Harden preview flows is active work.
 
 ---
 
-*Last Updated: 2026-05-12*
+*Last Updated: 2026-06-05*
