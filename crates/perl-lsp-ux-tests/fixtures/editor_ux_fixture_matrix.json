@@ -669,9 +669,11 @@
       "user_journey": "request completion for builtins and in-file symbols in a representative editor session",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
+        "receipt records completion request timing and shape checks",
         "completion request returns without JSON-RPC errors",
         "completion items include user-visible labels",
         "builtin completion includes print for pri prefix"
