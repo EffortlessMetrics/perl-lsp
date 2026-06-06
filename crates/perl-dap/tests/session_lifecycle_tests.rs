@@ -779,8 +779,42 @@ fn test_session_lifecycle_inline_values_missing_arguments() {
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success, "inlineValues should fail without arguments");
             assert_eq!(command, "inlineValues");
-            assert!(message.is_some());
-            assert!(must_some(message).contains("Missing arguments"));
+            let message = must_some(message);
+            assert!(message.contains("Missing arguments"));
+            assert!(
+                message.contains("startLine") && message.contains("endLine"),
+                "inlineValues missing-arguments guidance should include the line range fields: {message}"
+            );
+            assert!(
+                message.contains("source.path"),
+                "inlineValues missing-arguments guidance should include source.path: {message}"
+            );
+        }
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
+    }
+}
+
+#[test]
+// AC:5.5
+fn test_session_lifecycle_inline_values_invalid_arguments_guidance() {
+    let (mut adapter, _rx) = create_test_adapter();
+
+    let response = adapter.handle_request(1, "inlineValues", Some(json!({})));
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "inlineValues should fail with malformed arguments");
+            assert_eq!(command, "inlineValues");
+            let message = must_some(message);
+            assert!(message.contains("Invalid arguments"));
+            assert!(
+                message.contains("source.path"),
+                "inlineValues invalid-arguments guidance should include source.path: {message}"
+            );
+            assert!(
+                message.contains("\"startLine\": 1"),
+                "inlineValues invalid-arguments guidance should include a request example: {message}"
+            );
         }
         _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
@@ -803,8 +837,12 @@ fn test_session_lifecycle_inline_values_missing_source_path() {
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success, "inlineValues should fail without source.path");
             assert_eq!(command, "inlineValues");
-            assert!(message.is_some());
-            assert!(must_some(message).contains("source.path"));
+            let message = must_some(message);
+            assert!(message.contains("source.path"));
+            assert!(
+                message.contains("startLine") && message.contains("endLine"),
+                "inlineValues source.path error should keep the request-shape guidance: {message}"
+            );
         }
         _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
@@ -827,8 +865,12 @@ fn test_session_lifecycle_inline_values_invalid_line_range() {
         DapMessage::Response { success, command, message, .. } => {
             assert!(!success, "inlineValues should reject non-positive line numbers");
             assert_eq!(command, "inlineValues");
-            assert!(message.is_some());
-            assert!(must_some(message).contains("startLine/endLine"));
+            let message = must_some(message);
+            assert!(message.contains("startLine/endLine"));
+            assert!(
+                message.contains("source.path"),
+                "inlineValues line-range error should keep the request-shape guidance: {message}"
+            );
         }
         _ => must(Err::<(), _>("Expected Response message".to_string())),
     }

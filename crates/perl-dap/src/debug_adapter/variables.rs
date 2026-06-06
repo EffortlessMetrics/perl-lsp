@@ -393,7 +393,7 @@ impl DebugAdapter {
                     success: false,
                     command: "setVariable".to_string(),
                     body: None,
-                    message: Some("No debugger session active".to_string()),
+                    message: Some(Self::no_debugger_session_message("setVariable")),
                 };
             }
         } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
@@ -415,7 +415,7 @@ impl DebugAdapter {
                 success: false,
                 command: "setVariable".to_string(),
                 body: None,
-                message: Some("No debugger session".to_string()),
+                message: Some(Self::no_debugger_session_message("setVariable")),
             };
         };
 
@@ -524,4 +524,40 @@ fn is_numeric_literal(value: &str) -> bool {
         .all(|ch| ch.is_ascii_digit() || matches!(ch, '+' | '-' | '.' | 'e' | 'E'));
 
     has_digit && allowed_chars && normalized.parse::<f64>().is_ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    #[test]
+    fn set_variable_without_session_guides_recovery() -> TestResult {
+        let mut adapter = DebugAdapter::new();
+
+        let response = adapter.handle_request(
+            1,
+            "setVariable",
+            Some(json!({
+                "variablesReference": 11,
+                "name": "$x",
+                "value": "2"
+            })),
+        );
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert_eq!(command, "setVariable");
+                assert!(!success, "setVariable without a session should fail");
+                let message = message.ok_or("setVariable failure should include guidance")?;
+                assert!(message.contains("No debugger session is active"));
+                assert!(message.contains("Start a launch or attach request"));
+                assert!(message.contains("retry setVariable"));
+            }
+            other => return Err(format!("expected setVariable response, got {other:?}").into()),
+        }
+
+        Ok(())
+    }
 }

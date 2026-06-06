@@ -2,6 +2,9 @@
 
 use super::*;
 
+const INLINE_VALUES_ARGUMENTS_GUIDANCE: &str = "Send `source.path`, `startLine`, and `endLine`, \
+    for example `{ \"source\": { \"path\": \"script.pl\" }, \"startLine\": 1, \"endLine\": 3 }`.";
+
 impl DebugAdapter {
     /// Handle inlineValues request (custom)
     ///
@@ -20,7 +23,7 @@ impl DebugAdapter {
                 success: false,
                 command: "inlineValues".to_string(),
                 body: None,
-                message: Some("Missing arguments".to_string()),
+                message: Some(format!("Missing arguments. {INLINE_VALUES_ARGUMENTS_GUIDANCE}")),
             };
         };
 
@@ -33,7 +36,9 @@ impl DebugAdapter {
                     success: false,
                     command: "inlineValues".to_string(),
                     body: None,
-                    message: Some(format!("Invalid arguments: {}", e)),
+                    message: Some(format!(
+                        "Invalid arguments: {e}. {INLINE_VALUES_ARGUMENTS_GUIDANCE}"
+                    )),
                 };
             }
         };
@@ -45,7 +50,9 @@ impl DebugAdapter {
                 success: false,
                 command: "inlineValues".to_string(),
                 body: None,
-                message: Some("inlineValues requires source.path".to_string()),
+                message: Some(format!(
+                    "inlineValues requires source.path. {INLINE_VALUES_ARGUMENTS_GUIDANCE}"
+                )),
             };
         };
 
@@ -56,7 +63,9 @@ impl DebugAdapter {
                 success: false,
                 command: "inlineValues".to_string(),
                 body: None,
-                message: Some("inlineValues requires positive startLine/endLine".to_string()),
+                message: Some(format!(
+                    "inlineValues requires positive startLine/endLine. {INLINE_VALUES_ARGUMENTS_GUIDANCE}"
+                )),
             };
         }
 

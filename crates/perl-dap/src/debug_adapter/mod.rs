@@ -403,6 +403,17 @@ impl DebugAdapter {
         let mut output = lock_or_recover(&self.recent_output, "debug_adapter.push_recent_output");
         Self::append_recent_output_line_locked(&mut output, line);
     }
+
+    /// Shared message for handlers that require an active debugger session.
+    ///
+    /// Used by evaluate, setExpression, setVariable, and any other handler that
+    /// cannot proceed without a live `launch` or `attach` session.
+    fn no_debugger_session_message(command: &str) -> String {
+        format!(
+            "No debugger session is active. Start a launch or attach request first, wait for the \
+             debugger to stop at a breakpoint, then retry {command}."
+        )
+    }
 }
 #[cfg(test)]
 mod tests {

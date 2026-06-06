@@ -43,10 +43,6 @@ impl DebugAdapter {
         "terminateThreads",
     ];
 
-    /// Dispatch a DAP request and return the response message.
-    ///
-    /// Emits the `initialized` event automatically when an `initialize` request
-    /// succeeds. This mirrors the behavior expected by DAP-compliant clients.
     pub fn handle_request(
         &mut self,
         request_seq: i64,
@@ -148,10 +144,7 @@ impl DebugAdapter {
         if let Some(suggestion) = Self::suggested_command(command) {
             format!("Unknown command: {command}. Did you mean '{suggestion}'?")
         } else {
-            format!(
-                "Unknown command: {command}. Supported commands: {}",
-                Self::SUPPORTED_COMMANDS.join(", ")
-            )
+            format!("Unknown command: {command}")
         }
     }
 
