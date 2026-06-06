@@ -443,17 +443,19 @@
       "ci_tier": "pr",
       "component": "workspace_symbols",
       "instrumentation": {
-        "run_receipt": false,
-        "first_useful_result": false,
+        "run_receipt": true,
+        "first_useful_result": true,
         "protocol_goldens": false
       },
       "user_journey": "delete a module file after indexing and verify stale symbol and definition results are evicted",
       "measures": [
         "workflow_pass_rate",
         "workflow_stability_rate",
-        "cross_file_definition_success_rate"
+        "cross_file_definition_success_rate",
+        "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
+        "receipt records workspace-symbol and definition timing around file deletion",
         "deleted symbols disappear from workspace/symbol",
         "definition no longer resolves to deleted targets"
       ],
