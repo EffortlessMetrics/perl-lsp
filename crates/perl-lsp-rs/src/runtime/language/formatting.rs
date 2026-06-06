@@ -33,6 +33,24 @@ fn document_not_open_error(uri: &str) -> JsonRpcError {
     }
 }
 
+fn ranges_formatting_request_shape_message(summary: &str) -> String {
+    format!(
+        concat!(
+            "{}: textDocument/rangesFormatting expects params.textDocument.uri and ",
+            "params.ranges as an array of LSP Range objects; each range must include ",
+            "start.line, start.character, end.line, and end.character as non-negative integers, ",
+            "for example {{\"textDocument\":{{\"uri\":\"file:///path/to/script.pl\"}},",
+            "\"ranges\":[{{\"start\":{{\"line\":0,\"character\":0}},",
+            "\"end\":{{\"line\":1,\"character\":0}}}}]}}"
+        ),
+        summary
+    )
+}
+
+fn invalid_ranges_formatting_params(summary: &str) -> JsonRpcError {
+    invalid_params(&ranges_formatting_request_shape_message(summary))
+}
+
 impl LspServer {
     /// Build a `PerlTidyConfig` from the current server configuration.
     fn build_perltidy_config(&self) -> PerlTidyConfig {
@@ -249,10 +267,10 @@ impl LspServer {
                 });
 
             // Parse ranges array
-            let ranges_array = params
-                .get("ranges")
-                .and_then(|r| r.as_array())
-                .ok_or_else(|| invalid_params("Missing required parameter: ranges"))?;
+            let ranges_array =
+                params.get("ranges").and_then(|r| r.as_array()).ok_or_else(|| {
+                    invalid_ranges_formatting_params("Missing required parameter: ranges")
+                })?;
 
             if ranges_array.is_empty() {
                 return Ok(Some(json!([])));
@@ -271,34 +289,62 @@ impl LspServer {
             for (idx, range_val) in ranges_array.iter().enumerate() {
                 let start_line_u64 =
                     range_val.pointer("/start/line").and_then(|v| v.as_u64()).ok_or_else(|| {
-                        invalid_params(&format!("Missing ranges[{}].start.line", idx))
+                        invalid_ranges_formatting_params(&format!(
+                            "Missing ranges[{}].start.line",
+                            idx
+                        ))
                     })?;
                 let start_line = u32::try_from(start_line_u64).map_err(|_| {
-                    invalid_params(&format!("ranges[{}].start.line exceeds u32::MAX", idx))
+                    invalid_ranges_formatting_params(&format!(
+                        "ranges[{}].start.line exceeds u32::MAX",
+                        idx
+                    ))
                 })?;
 
-                let start_char_u64 =
-                    range_val.pointer("/start/character").and_then(|v| v.as_u64()).ok_or_else(
-                        || invalid_params(&format!("Missing ranges[{}].start.character", idx)),
-                    )?;
-                let start_char = u32::try_from(start_char_u64).map_err(|_| {
-                    invalid_params(&format!("ranges[{}].start.character exceeds u32::MAX", idx))
-                })?;
-
-                let end_line_u64 = range_val
-                    .pointer("/end/line")
+                let start_char_u64 = range_val
+                    .pointer("/start/character")
                     .and_then(|v| v.as_u64())
-                    .ok_or_else(|| invalid_params(&format!("Missing ranges[{}].end.line", idx)))?;
-                let end_line = u32::try_from(end_line_u64).map_err(|_| {
-                    invalid_params(&format!("ranges[{}].end.line exceeds u32::MAX", idx))
+                    .ok_or_else(|| {
+                        invalid_ranges_formatting_params(&format!(
+                            "Missing ranges[{}].start.character",
+                            idx
+                        ))
+                    })?;
+                let start_char = u32::try_from(start_char_u64).map_err(|_| {
+                    invalid_ranges_formatting_params(&format!(
+                        "ranges[{}].start.character exceeds u32::MAX",
+                        idx
+                    ))
                 })?;
 
-                let end_char_u64 =
-                    range_val.pointer("/end/character").and_then(|v| v.as_u64()).ok_or_else(
-                        || invalid_params(&format!("Missing ranges[{}].end.character", idx)),
-                    )?;
+                let end_line_u64 =
+                    range_val.pointer("/end/line").and_then(|v| v.as_u64()).ok_or_else(|| {
+                        invalid_ranges_formatting_params(&format!(
+                            "Missing ranges[{}].end.line",
+                            idx
+                        ))
+                    })?;
+                let end_line = u32::try_from(end_line_u64).map_err(|_| {
+                    invalid_ranges_formatting_params(&format!(
+                        "ranges[{}].end.line exceeds u32::MAX",
+                        idx
+                    ))
+                })?;
+
+                let end_char_u64 = range_val
+                    .pointer("/end/character")
+                    .and_then(|v| v.as_u64())
+                    .ok_or_else(|| {
+                        invalid_ranges_formatting_params(&format!(
+                            "Missing ranges[{}].end.character",
+                            idx
+                        ))
+                    })?;
                 let end_char = u32::try_from(end_char_u64).map_err(|_| {
-                    invalid_params(&format!("ranges[{}].end.character exceeds u32::MAX", idx))
+                    invalid_ranges_formatting_params(&format!(
+                        "ranges[{}].end.character exceeds u32::MAX",
+                        idx
+                    ))
                 })?;
 
                 let range = WireRange::new(
@@ -350,7 +396,38 @@ impl LspServer {
 mod tests {
     use super::*;
     use crate::features::formatting::FormattingError;
-    use perl_tdd_support::must_some;
+    use perl_tdd_support::{must, must_err, must_some};
+    use serde_json::json;
+
+    fn assert_ranges_formatting_request_shape_guidance(error: &JsonRpcError, summary: &str) {
+        assert_eq!(error.code, -32602);
+        assert!(error.message.contains(summary), "unexpected message: {}", error.message);
+        assert!(
+            error.message.contains("textDocument/rangesFormatting"),
+            "unexpected message: {}",
+            error.message
+        );
+        assert!(
+            error.message.contains("params.textDocument.uri"),
+            "unexpected message: {}",
+            error.message
+        );
+        assert!(error.message.contains("params.ranges"), "unexpected message: {}", error.message);
+        assert!(error.message.contains("start.line"), "unexpected message: {}", error.message);
+        assert!(error.message.contains("start.character"), "unexpected message: {}", error.message);
+        assert!(error.message.contains("end.line"), "unexpected message: {}", error.message);
+        assert!(error.message.contains("end.character"), "unexpected message: {}", error.message);
+        assert!(
+            error.message.contains("non-negative integers"),
+            "unexpected message: {}",
+            error.message
+        );
+        assert!(
+            error.message.contains("file:///path/to/script.pl"),
+            "unexpected message: {}",
+            error.message
+        );
+    }
 
     #[test]
     fn formatting_error_to_rpc_not_found_has_data_field() {
@@ -410,5 +487,48 @@ mod tests {
         assert_eq!(rpc.code, INVALID_REQUEST);
         assert_eq!(rpc.message, format!("Document not open: {uri}"));
         assert!(rpc.data.is_none(), "document-not-open error should not include data");
+    }
+
+    #[test]
+    fn ranges_formatting_request_shape_errors_include_guidance() {
+        let server = LspServer::new();
+        let uri = "file:///range_shape.pl";
+
+        let missing_ranges = must_err(server.handle_ranges_formatting(Some(json!({
+            "textDocument": { "uri": uri },
+            "options": { "tabSize": 4, "insertSpaces": true }
+        }))));
+        assert_ranges_formatting_request_shape_guidance(
+            &missing_ranges,
+            "Missing required parameter: ranges",
+        );
+
+        must(server.test_apply_did_open(uri, "sub messy{my$x=1;return$x;}\n", 1));
+
+        let missing_start_character = must_err(server.handle_ranges_formatting(Some(json!({
+            "textDocument": { "uri": uri },
+            "ranges": [{
+                "start": { "line": 0 },
+                "end": { "line": 0, "character": 28 }
+            }],
+            "options": { "tabSize": 4, "insertSpaces": true }
+        }))));
+        assert_ranges_formatting_request_shape_guidance(
+            &missing_start_character,
+            "Missing ranges[0].start.character",
+        );
+
+        let line_overflow = must_err(server.handle_ranges_formatting(Some(json!({
+            "textDocument": { "uri": uri },
+            "ranges": [{
+                "start": { "line": 4294967296_u64, "character": 0 },
+                "end": { "line": 0, "character": 28 }
+            }],
+            "options": { "tabSize": 4, "insertSpaces": true }
+        }))));
+        assert_ranges_formatting_request_shape_guidance(
+            &line_overflow,
+            "ranges[0].start.line exceeds u32::MAX",
+        );
     }
 }
