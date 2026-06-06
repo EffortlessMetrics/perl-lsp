@@ -346,7 +346,7 @@
       ],
       "expected_outcomes": [
         "document symbols return valid structure",
-        "rich files surface known sub names"
+        "rich files surface known package and sub names"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",
