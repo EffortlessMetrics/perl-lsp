@@ -269,6 +269,19 @@ describe('markdownToHtml', () => {
         expect(html).toContain('<code>perltidy</code>');
     });
 
+    test('converts http markdown links to anchors', () => {
+        const html = markdownToHtml('Read the [release notes](https://example.com/notes)');
+        expect(html).toContain(
+            '<a href="https://example.com/notes" rel="noopener noreferrer">release notes</a>',
+        );
+    });
+
+    test('leaves non-http markdown links as text', () => {
+        const html = markdownToHtml('Avoid [unsafe](javascript:alert(1)) links');
+        expect(html).not.toContain('<a href=');
+        expect(html).toContain('[unsafe](javascript:alert(1))');
+    });
+
     test('escapes HTML special characters', () => {
         const html = markdownToHtml('Use <br> & "quotes"');
         expect(html).not.toContain('<br>');
