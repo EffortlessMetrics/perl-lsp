@@ -19,6 +19,11 @@ use super::editor_ux::count_ux_scenarios;
 use super::flaky::{collect_flaky_test_summary, format_flaky_tests_section};
 use super::{replace_block, run_cmd_merged};
 
+static DIAGNOSTICS_P50_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^\|\s*diagnostics\s*\|\s*([0-9]+(?:\.[0-9]+)?)\s*\|")
+        .expect("diagnostics-p50 regex is valid")
+});
+
 static RUNNING_TEST_BINARY_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"Running unittests[^\(]*\([^\)]*deps[/\\]([a-zA-Z0-9_-]+)-[0-9a-f]+(?:\.exe)?\)")
         .expect("running-test regex is valid")
@@ -86,6 +91,78 @@ fn parse_per_crate_test_counts(output: &str) -> BTreeMap<String, usize> {
     by_crate
 }
 
+/// Read `docs/project/status/editor_ux.md` and return the diagnostics p50 latency in ms,
+/// or `None` when the receipt file is absent or the table row is not found.
+pub(super) fn read_diagnostics_p50_ms(root: &Path) -> Option<f64> {
+    let path = root.join("docs/project/status/editor_ux.md");
+    let text = fs::read_to_string(&path).ok()?;
+    for line in text.lines() {
+        if let Some(caps) = DIAGNOSTICS_P50_RE.captures(line) {
+            return caps[1].parse::<f64>().ok();
+        }
+    }
+    None
+}
+
+/// Read `docs/project/status/parser_performance_scorecard.json` and return the
+/// `(incremental_multiple_edits median_ns, incremental_small_edit median_ns)` pair,
+/// or `None` when the file is absent or the fields are missing.
+pub(super) fn read_incremental_parse_range_ns(root: &Path) -> Option<(u64, u64)> {
+    let path = root.join("docs/project/status/parser_performance_scorecard.json");
+    let text = fs::read_to_string(&path).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&text).ok()?;
+    let metrics = v.get("metrics")?;
+    let small = metrics.get("incremental_small_edit")?.get("median_ns")?.as_u64()?;
+    let multi = metrics.get("incremental_multiple_edits")?.get("median_ns")?.as_u64()?;
+    // Return (lower, upper) — multiple_edits median is typically lower than small_edit.
+    let lower = multi.min(small);
+    let upper = multi.max(small);
+    Some((lower, upper))
+}
+
+/// Build the Quality Metrics bullet string from receipts, falling back to
+/// "unmeasured" text for any value not found in the receipt files.
+///
+/// Sources:
+/// - Diagnostics p50: `docs/project/status/editor_ux.md` latency table
+/// - Incremental parse: `docs/project/status/parser_performance_scorecard.json`
+pub(super) fn format_quality_metrics_bullet(root: &Path) -> String {
+    let diag_p50 = read_diagnostics_p50_ms(root);
+    let parse_range = read_incremental_parse_range_ns(root);
+
+    match (diag_p50, parse_range) {
+        (Some(p50), Some((lower_ns, upper_ns))) => {
+            // Round ns to µs (nearest), matching the receipt-backed values in PR #1192:
+            // 36733 ns → 37 µs, 73307 ns → 73 µs.
+            let lower_us = (lower_ns + 500) / 1_000;
+            let upper_us = (upper_ns + 500) / 1_000;
+            format!(
+                "diagnostics p50 = {p50:.0} ms (receipt: `editor_ux.md`); \
+                 incremental parse median = {lower_us}–{upper_us} µs \
+                 (receipt: `parser_performance_scorecard.json`)"
+            )
+        }
+        (Some(p50), None) => {
+            format!(
+                "diagnostics p50 = {p50:.0} ms (receipt: `editor_ux.md`); \
+                 incremental parse median = unmeasured"
+            )
+        }
+        (None, Some((lower_ns, upper_ns))) => {
+            let lower_us = (lower_ns + 500) / 1_000;
+            let upper_us = (upper_ns + 500) / 1_000;
+            format!(
+                "diagnostics p50 = unmeasured; \
+                 incremental parse median = {lower_us}–{upper_us} µs \
+                 (receipt: `parser_performance_scorecard.json`)"
+            )
+        }
+        (None, None) => "performance metrics unmeasured — run `just ux-tests` and \
+                         `cargo bench -p perl-parser` to populate receipts"
+            .to_string(),
+    }
+}
+
 /// Format a per-crate markdown table showing mutation count and test count.
 pub(super) fn format_crate_quality_table(
     mutation: &BTreeMap<String, usize>,
@@ -132,8 +209,9 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
         "per-crate data from `mutants.out/mutants.json` (written by nightly CI `cargo mutants` run)"
     };
 
+    let quality_metrics = format_quality_metrics_bullet(root);
     let bullets = format!(
-        "- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing\n\
+        "- **Quality Metrics**: {quality_metrics}\n\
          - **UX workflow harness**: {ux_scenarios} scenario files in `perl-lsp-ux-tests`; \
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
            the integration-only 10k-line large-file case; confidence signals (manual smoke, \
@@ -300,5 +378,124 @@ mod tests {
         assert_eq!(counts.get("perl-parser-core"), Some(&2));
         assert_eq!(counts.get("perl-lexer"), Some(&1));
         assert_eq!(counts.len(), 2);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Receipt-reading tests
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn test_read_diagnostics_p50_ms_parses_editor_ux_md() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let status_dir = dir.path().join("docs/project/status");
+        fs::create_dir_all(&status_dir)?;
+        let md = "# Editor UX Scorecard\n\n\
+            ## Latency (ms)\n\n\
+            | Request class | p50 | p50 baseline | p95 | p95 baseline |\n\
+            |---|---:|---:|---:|---:|\n\
+            | completion | 27.00 | 27.00 | 35.00 | 35.00 |\n\
+            | diagnostics | 53.00 | 53.00 | 66.00 | 66.00 |\n\
+            | hover | 24.00 | 24.00 | 31.00 | 31.00 |\n";
+        fs::write(status_dir.join("editor_ux.md"), md)?;
+        let p50 = read_diagnostics_p50_ms(dir.path());
+        assert_eq!(p50, Some(53.0));
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_diagnostics_p50_ms_returns_none_when_file_missing() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let result = read_diagnostics_p50_ms(dir.path());
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_read_diagnostics_p50_ms_returns_none_when_row_absent() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let status_dir = dir.path().join("docs/project/status");
+        fs::create_dir_all(&status_dir)?;
+        fs::write(status_dir.join("editor_ux.md"), "# no latency table here\n")?;
+        let result = read_diagnostics_p50_ms(dir.path());
+        assert!(result.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_incremental_parse_range_ns_parses_scorecard_json() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let status_dir = dir.path().join("docs/project/status");
+        fs::create_dir_all(&status_dir)?;
+        let json = r#"{
+            "schema_version": 1,
+            "generated_at_epoch_s": 1234567890,
+            "metrics": {
+                "incremental_small_edit": {"iterations": 35, "median_ns": 73307, "p95_ns": 148249, "mean_ns": 78530},
+                "incremental_multiple_edits": {"iterations": 35, "median_ns": 36733, "p95_ns": 182845, "mean_ns": 50285}
+            }
+        }"#;
+        fs::write(status_dir.join("parser_performance_scorecard.json"), json)?;
+        let range = read_incremental_parse_range_ns(dir.path());
+        // 36733 is lower, 73307 is upper
+        assert_eq!(range, Some((36733, 73307)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_incremental_parse_range_ns_returns_none_when_file_missing() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let result = read_incremental_parse_range_ns(dir.path());
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_read_incremental_parse_range_ns_returns_none_on_invalid_json() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let status_dir = dir.path().join("docs/project/status");
+        fs::create_dir_all(&status_dir)?;
+        fs::write(status_dir.join("parser_performance_scorecard.json"), "{bad}")?;
+        let result = read_incremental_parse_range_ns(dir.path());
+        assert!(result.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn test_format_quality_metrics_bullet_with_both_receipts() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let status_dir = dir.path().join("docs/project/status");
+        fs::create_dir_all(&status_dir)?;
+        // Write mock editor_ux.md
+        let md = "# Editor UX Scorecard\n\
+            ## Latency (ms)\n\
+            | Request class | p50 | p50 baseline | p95 | p95 baseline |\n\
+            |---|---:|---:|---:|---:|\n\
+            | diagnostics | 53.00 | 53.00 | 66.00 | 66.00 |\n";
+        fs::write(status_dir.join("editor_ux.md"), md)?;
+        // Write mock parser_performance_scorecard.json
+        let json = r#"{
+            "schema_version": 1,
+            "generated_at_epoch_s": 1234567890,
+            "metrics": {
+                "incremental_small_edit": {"iterations": 35, "median_ns": 73307, "p95_ns": 148249, "mean_ns": 78530},
+                "incremental_multiple_edits": {"iterations": 35, "median_ns": 36733, "p95_ns": 182845, "mean_ns": 50285}
+            }
+        }"#;
+        fs::write(status_dir.join("parser_performance_scorecard.json"), json)?;
+        let bullet = format_quality_metrics_bullet(dir.path());
+        // Must match the exact format PR #1192 writes into quality.md
+        assert_eq!(
+            bullet,
+            "diagnostics p50 = 53 ms (receipt: `editor_ux.md`); \
+             incremental parse median = 37–73 µs (receipt: `parser_performance_scorecard.json`)"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_format_quality_metrics_bullet_fallback_when_receipts_missing() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let bullet = format_quality_metrics_bullet(dir.path());
+        assert!(bullet.contains("unmeasured"));
+        assert!(!bullet.contains("931ns"));
+        assert!(!bullet.contains("<50ms"));
     }
 }

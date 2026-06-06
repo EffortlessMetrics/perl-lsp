@@ -271,7 +271,7 @@ impl AdvancedReuseAnalyzer {
                     self.analyze_node_recursive(arg, analysis, depth + 1, config);
                 }
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
                 self.analyze_node_recursive(condition, analysis, depth + 1, config);
                 self.analyze_node_recursive(then_branch, analysis, depth + 1, config);
                 for (cond, branch) in elsif_branches {
@@ -842,7 +842,7 @@ impl AdvancedReuseAnalyzer {
                     count += self.count_nodes(arg);
                 }
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
                 count += self.count_nodes(condition);
                 count += self.count_nodes(then_branch);
                 for (cond, branch) in elsif_branches {

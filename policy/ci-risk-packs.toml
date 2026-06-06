@@ -79,6 +79,7 @@ paths = [
   "crates/perl-lsp-rs-core/src/providers/inline_completion/**",
   "crates/perl-lsp-rs-core/src/providers/lsp_compat/inline_completions.rs",
   "crates/perl-lsp-rs/tests/support/client_caps.rs",
+  "xtask/src/tasks/inline_completion_quality.rs",
   "xtask/src/tasks/inline_completion_smoke.rs",
 ]
 lanes = ["pr_smoke", "merge_gate_shards", "ux_tests"]

@@ -12,10 +12,15 @@
 
 use super::super::*;
 use crate::protocol::{invalid_params, req_position, req_uri};
+#[cfg(feature = "workspace")]
+use crate::runtime::routing::{IndexAccessMode, route_index_access};
 use crate::state::{code_lens_cap, code_lens_resolve_deadline, inlay_hints_cap};
+use perl_lsp_rs_core::providers::completion::collect_module_names_from_roots_with_cache;
+use perl_lsp_rs_core::providers::inline_completion::InlineCompletionEnvironment;
 use perl_lsp_rs_core::providers::normalize_provider_decision_receipt;
 use perl_parser_core::source_file::is_perl_source_uri;
-use std::time::Instant;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 mod debug_launch;
 mod inline_values;
@@ -55,6 +60,27 @@ enum InlineCompletionTriggerKind {
     Invoked,
     Automatic,
     LegacyNoContext,
+}
+
+#[cfg(feature = "workspace")]
+fn is_inline_workspace_module_symbol(symbol: &crate::workspace_index::WorkspaceSymbol) -> bool {
+    matches!(
+        symbol.kind,
+        crate::workspace_index::SymbolKind::Package
+            | crate::workspace_index::SymbolKind::Class
+            | crate::workspace_index::SymbolKind::Role
+    )
+}
+
+#[cfg(feature = "workspace")]
+fn inline_workspace_module_name(symbol: &crate::workspace_index::WorkspaceSymbol) -> String {
+    symbol
+        .qualified_name
+        .clone()
+        .or_else(|| {
+            symbol.container_name.as_ref().map(|container| format!("{container}::{}", symbol.name))
+        })
+        .unwrap_or_else(|| symbol.name.clone())
 }
 
 fn inline_completion_trigger_kind(
@@ -138,10 +164,38 @@ fn apply_inline_completion_trigger_policy(
     trigger_kind: InlineCompletionTriggerKind,
 ) -> perl_lsp_rs_core::providers::inline_completion::InlineCompletionList {
     if trigger_kind == InlineCompletionTriggerKind::Automatic {
+        list.items.retain(is_safe_automatic_inline_item);
         list.items.truncate(1);
     }
 
     list
+}
+
+fn is_safe_automatic_inline_item(
+    item: &perl_lsp_rs_core::providers::inline_completion::InlineCompletionItem,
+) -> bool {
+    let text = item.insert_text.trim();
+    !text.is_empty()
+        && text.chars().count() <= 80
+        && text.ends_with(';')
+        && !text.contains(['\r', '\n', '$', '@', '%', '{', '}', '[', ']', '(', ')'])
+        && !text.contains("...")
+}
+
+fn inline_use_module_fragment(prefix: &str) -> Option<&str> {
+    let current_line = prefix.rsplit(['\n', '\r']).next()?;
+    let use_index = current_line.rfind("use ")?;
+    let fragment = &current_line[use_index + 4..];
+    fragment
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, ':' | '_'))
+        .then_some(fragment)
+}
+
+fn should_collect_inline_modules(fragment: &str) -> bool {
+    !fragment.is_empty()
+        && (fragment.contains("::")
+            || fragment.chars().next().is_some_and(|ch| ch.is_ascii_uppercase()))
 }
 
 impl LspServer {
@@ -543,13 +597,17 @@ impl LspServer {
             return Err(crate::protocol::method_not_advertised());
         }
 
-        let cap = code_lens_cap();
-
         if let Some(params) = params {
             let uri = req_uri(&params)?;
+            let cap = code_lens_cap();
+            let doc_snapshot = {
+                let documents = self.documents_guard();
+                self.get_document(&documents, uri).cloned()
+            };
 
-            let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
+            if let Some(doc) = doc_snapshot {
+                let start = Instant::now();
+                let deadline = code_lens_resolve_deadline();
                 if let Some(ref ast) = doc.ast {
                     let provider = CodeLensProvider::with_source(doc.text.clone())
                         .with_file_path(uri.to_string());
@@ -566,6 +624,7 @@ impl LspServer {
                         lenses.truncate(cap);
                     }
 
+                    let lenses = self.prepare_code_lenses_for_client(lenses, start, deadline);
                     return Ok(Some(json!(lenses)));
                 } else {
                     // Text-based fallback when AST is not available
@@ -581,12 +640,98 @@ impl LspServer {
                         );
                         text_lenses.truncate(cap);
                     }
+                    let text_lenses =
+                        self.prepare_code_lenses_for_client(text_lenses, start, deadline);
                     return Ok(Some(json!(text_lenses)));
                 }
             }
         }
 
         Ok(Some(json!([])))
+    }
+
+    fn client_supports_code_lens_command_resolve(&self) -> bool {
+        self.client_capabilities
+            .lock()
+            .code_lens_resolve_support
+            .as_ref()
+            .is_some_and(|properties| properties.contains("command"))
+    }
+
+    fn prepare_code_lenses_for_client(
+        &self,
+        lenses: Vec<crate::code_lens_provider::CodeLens>,
+        start: Instant,
+        deadline: Duration,
+    ) -> Vec<crate::code_lens_provider::CodeLens> {
+        if self.client_supports_code_lens_command_resolve() {
+            return lenses;
+        }
+
+        lenses
+            .into_iter()
+            .map(|lens| self.resolve_code_lens_for_client(lens, start, deadline))
+            .collect()
+    }
+
+    fn resolve_code_lens_for_client(
+        &self,
+        lens: crate::code_lens_provider::CodeLens,
+        start: Instant,
+        deadline: Duration,
+    ) -> crate::code_lens_provider::CodeLens {
+        if lens.command.is_some() || lens.data.is_none() {
+            return lens;
+        }
+
+        let symbol_name =
+            lens.data.as_ref().and_then(|d| d.get("name")).and_then(|n| n.as_str()).unwrap_or("");
+        let symbol_kind = lens
+            .data
+            .as_ref()
+            .and_then(|d| d.get("kind"))
+            .and_then(|k| k.as_str())
+            .unwrap_or("unknown");
+        let reference_count =
+            self.count_code_lens_references(symbol_name, symbol_kind, start, deadline);
+        resolve_code_lens(lens, reference_count)
+    }
+
+    fn count_code_lens_references(
+        &self,
+        symbol_name: &str,
+        symbol_kind: &str,
+        start: Instant,
+        deadline: Duration,
+    ) -> usize {
+        #[cfg(feature = "workspace")]
+        let index_count = self.coordinator().map(|coord| coord.index().count_usages(symbol_name));
+        #[cfg(not(feature = "workspace"))]
+        let index_count: Option<usize> = None;
+
+        if let Some(count) = index_count {
+            return count;
+        }
+
+        let snapshot = self.documents_scan_snapshot();
+        let mut count = 0;
+        for (scanned_docs, view) in snapshot.iter().enumerate() {
+            if scanned_docs % 10 == 0 && start.elapsed() >= deadline {
+                tracing::debug!(
+                    scanned = scanned_docs,
+                    count,
+                    "CodeLensResolve: deadline exceeded, returning partial"
+                );
+                break;
+            }
+
+            if let Some(ref ast) = view.ast {
+                count += self.count_references(ast, symbol_name, symbol_kind);
+            } else {
+                count += self.count_references_text_based(&view.text, symbol_name, symbol_kind);
+            }
+        }
+        count
     }
 
     /// Handle codeLens/resolve request
@@ -623,43 +768,8 @@ impl LspServer {
                     .and_then(|k| k.as_str())
                     .unwrap_or("unknown");
 
-                // Fast path: use workspace index if available (more accurate,
-                // excludes references in comments/strings)
-                #[cfg(feature = "workspace")]
-                let index_count =
-                    self.coordinator().map(|coord| coord.index().count_usages(symbol_name));
-                #[cfg(not(feature = "workspace"))]
-                let index_count: Option<usize> = None;
-
-                let total_references = if let Some(count) = index_count {
-                    count
-                } else {
-                    // Slow path: scan all documents with AST/text fallback
-                    let snapshot = self.documents_scan_snapshot();
-                    let mut count = 0;
-                    for (scanned_docs, view) in snapshot.iter().enumerate() {
-                        // Check deadline periodically (every 10 documents)
-                        if scanned_docs % 10 == 0 && start.elapsed() >= deadline {
-                            tracing::debug!(
-                                scanned = scanned_docs,
-                                count,
-                                "CodeLensResolve: deadline exceeded, returning partial"
-                            );
-                            break;
-                        }
-
-                        if let Some(ref ast) = view.ast {
-                            count += self.count_references(ast, symbol_name, symbol_kind);
-                        } else {
-                            count += self.count_references_text_based(
-                                &view.text,
-                                symbol_name,
-                                symbol_kind,
-                            );
-                        }
-                    }
-                    count
-                };
+                let total_references =
+                    self.count_code_lens_references(symbol_name, symbol_kind, start, deadline);
 
                 let resolved = resolve_code_lens(lens, total_references);
                 return Ok(Some(json!(resolved)));
@@ -750,8 +860,25 @@ impl LspServer {
             }
 
             // Deterministic fallback
+            let environment = provider
+                .prepare_context(&text, line, character)
+                .map(|context| {
+                    self.inline_completion_environment_for_context(
+                        uri,
+                        text.as_str(),
+                        line,
+                        character,
+                        &context,
+                    )
+                })
+                .unwrap_or_default();
             let completions = constrain_inline_completions_to_selected_info(
-                provider.get_inline_completions(&text, line, character),
+                provider.get_inline_completions_with_environment(
+                    &text,
+                    line,
+                    character,
+                    &environment,
+                ),
                 selected_completion.as_ref(),
                 line,
                 character,
@@ -766,6 +893,106 @@ impl LspServer {
         }
 
         Ok(Some(json!({ "items": [] })))
+    }
+
+    fn inline_completion_environment_for_context(
+        &self,
+        uri: &str,
+        text: &str,
+        line: u32,
+        character: u32,
+        context: &perl_lsp_rs_core::providers::inline_completion::PreparedInlineCompletionContext,
+    ) -> InlineCompletionEnvironment {
+        let Some(fragment) = inline_use_module_fragment(context.prefix.as_str()) else {
+            return InlineCompletionEnvironment::default();
+        };
+        if !should_collect_inline_modules(fragment) {
+            return InlineCompletionEnvironment::default();
+        }
+        let Some(cursor_offset) = position_to_offset(text, line, character) else {
+            return InlineCompletionEnvironment::default();
+        };
+
+        let (include_paths, system_inc_paths, include_system_inc) =
+            self.module_completion_roots_for_doc(uri, text, cursor_offset);
+        let include_paths = self.inline_module_scan_roots(uri, text, cursor_offset, include_paths);
+        let mut available_modules = collect_module_names_from_roots_with_cache(
+            fragment,
+            &include_paths,
+            &system_inc_paths,
+            include_system_inc,
+            Some(&self.module_scan_cache),
+            &|| false,
+        );
+        self.add_workspace_index_inline_modules(
+            fragment,
+            uri,
+            text,
+            cursor_offset,
+            &mut available_modules,
+        );
+        available_modules.sort();
+        available_modules.dedup();
+
+        InlineCompletionEnvironment { available_modules }
+    }
+
+    fn inline_module_scan_roots(
+        &self,
+        uri: &str,
+        text: &str,
+        cursor_offset: usize,
+        include_paths: Vec<PathBuf>,
+    ) -> Vec<PathBuf> {
+        let Some(context) =
+            self.effective_inc_context_for_doc(Some(uri), Some(text), Some(cursor_offset))
+        else {
+            return include_paths;
+        };
+
+        filter_workspace_root_from_inline_module_scan_roots(&context.root, include_paths)
+    }
+
+    fn add_workspace_index_inline_modules(
+        &self,
+        fragment: &str,
+        uri: &str,
+        text: &str,
+        cursor_offset: usize,
+        available_modules: &mut Vec<String>,
+    ) {
+        #[cfg(feature = "workspace")]
+        {
+            let IndexAccessMode::Full(coordinator) = route_index_access(self.coordinator()) else {
+                return;
+            };
+            let inc_context =
+                self.effective_inc_context_for_doc(Some(uri), Some(text), Some(cursor_offset));
+            let mut seen: std::collections::HashSet<String> =
+                available_modules.iter().cloned().collect();
+
+            for symbol in coordinator.index().find_symbols(fragment) {
+                if !is_inline_workspace_module_symbol(&symbol) {
+                    continue;
+                }
+                if let Some(ref context) = inc_context {
+                    if !context.symbol_uri_reachable(&symbol.uri) {
+                        continue;
+                    }
+                }
+
+                let module_name = inline_workspace_module_name(&symbol);
+                if !module_name.starts_with(fragment) {
+                    continue;
+                }
+                if seen.insert(module_name.clone()) {
+                    available_modules.push(module_name);
+                }
+            }
+        }
+
+        #[cfg(not(feature = "workspace"))]
+        let _ = (fragment, uri, text, cursor_offset, available_modules);
     }
 
     /// Attempt AI-backed inline completion.
@@ -838,12 +1065,22 @@ impl LspServer {
                 let mut inline_values = Vec::new();
 
                 let lines: Vec<&str> = doc.text.lines().collect();
+                let requested_line_count = effective_end
+                    .checked_sub(start_line)
+                    .map_or(0, |line_delta| line_delta.saturating_add(1) as usize);
+
                 let Some(re) = inline_value_regex() else {
                     return Ok(Some(json!([])));
                 };
 
-                for line_num in start_line..=effective_end.min((lines.len() - 1) as u32) {
-                    let line_text = lines[line_num as usize];
+                for (line_num, line_text) in lines
+                    .iter()
+                    .copied()
+                    .enumerate()
+                    .skip(start_line as usize)
+                    .take(requested_line_count)
+                {
+                    let line_num = line_num as u32;
 
                     // Find $scalar, @array, and %hash variables
                     for cap in re.captures_iter(line_text) {
@@ -1412,13 +1649,39 @@ impl LspServer {
     }
 }
 
+fn filter_workspace_root_from_inline_module_scan_roots(
+    workspace_root: &Path,
+    include_paths: Vec<PathBuf>,
+) -> Vec<PathBuf> {
+    include_paths
+        .into_iter()
+        .filter(|path| {
+            // The default workspace `.` root is valid for resolution, but
+            // inline import ghost text should not scan the whole project as
+            // if every root-level package path were deliberately reachable.
+            lexical_path_key(&workspace_root.join(path)) != lexical_path_key(workspace_root)
+        })
+        .collect()
+}
+
+fn lexical_path_key(path: &Path) -> String {
+    path.to_string_lossy()
+        .replace('\\', "/")
+        .replace("/./", "/")
+        .trim_end_matches("/.")
+        .trim_end_matches('/')
+        .to_string()
+}
+
 #[cfg(test)]
 mod tests {
+    use super::{filter_workspace_root_from_inline_module_scan_roots, lexical_path_key};
     use crate::LspServer;
     use crate::state::ClientCapabilities;
     use serde_json::json;
     use std::collections::HashSet;
     use std::io::Cursor;
+    use std::path::PathBuf;
 
     /// Build a minimal test server with custom capabilities applied.
     fn make_server_with_caps(caps: ClientCapabilities) -> LspServer {
@@ -1426,6 +1689,139 @@ mod tests {
             LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(Vec::<u8>::new()));
         *server.client_capabilities.lock() = caps;
         server
+    }
+
+    #[test]
+    fn lexical_path_key_normalizes_current_dir_components() {
+        assert_eq!(
+            lexical_path_key(std::path::Path::new("workspace/./lib")),
+            lexical_path_key(std::path::Path::new("workspace/lib")),
+            "current-directory components should not change lexical path keys"
+        );
+        assert_ne!(
+            lexical_path_key(std::path::Path::new("workspace/./lib")),
+            lexical_path_key(std::path::Path::new("workspace/t/lib")),
+            "different lexical paths must stay different after current-directory normalization"
+        );
+    }
+
+    #[test]
+    fn inline_module_scan_roots_excludes_workspace_root() {
+        let workspace = PathBuf::from("/workspace");
+        let lib = workspace.join("lib");
+        let local_lib = workspace.join("local").join("lib").join("perl5");
+        let external = PathBuf::from("/opt/perl5/lib");
+
+        let filtered = filter_workspace_root_from_inline_module_scan_roots(
+            &workspace,
+            vec![
+                workspace.clone(),
+                workspace.join("."),
+                lib.clone(),
+                local_lib.clone(),
+                external.clone(),
+            ],
+        );
+
+        assert_eq!(
+            filtered,
+            vec![lib, local_lib, external],
+            "inline module scan roots must drop workspace-root wildcards while preserving explicit include roots"
+        );
+    }
+
+    #[test]
+    fn inline_module_scan_roots_preserves_paths_without_context() {
+        let server = LspServer::default();
+        let include_paths = vec![PathBuf::from("/workspace"), PathBuf::from("/workspace/lib")];
+
+        let filtered = server.inline_module_scan_roots(
+            "file:///outside.pl",
+            "use My::",
+            "use My::".len(),
+            include_paths.clone(),
+        );
+
+        assert_eq!(
+            filtered, include_paths,
+            "without a document include context, inline scan roots should remain unchanged"
+        );
+    }
+
+    #[test]
+    fn inline_value_empty_document_returns_empty_array() -> Result<(), Box<dyn std::error::Error>> {
+        let server = make_server_with_caps(ClientCapabilities::default());
+        let uri = "file:///inline_value_empty_lib.pl";
+        server.test_apply_did_open(uri, "", 1)?;
+
+        let result = server.handle_inline_value(Some(json!({
+            "textDocument": { "uri": uri },
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": 0, "character": 0 }
+            },
+            "context": {}
+        })))?;
+
+        assert_eq!(
+            result,
+            Some(json!([])),
+            "empty documents should return an empty inline value array"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn inline_completion_environment_filters_workspace_root_scan_candidates()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::runtime::workspace_folder::WorkspaceFolderState;
+        use perl_lsp_rs_core::providers::inline_completion::InlineCompletionProvider;
+        use tempfile::TempDir;
+        use url::Url;
+
+        let temp = TempDir::new()?;
+        let workspace = temp.path().join("workspace");
+        let lib_module = workspace.join("lib").join("My").join("App.pm");
+        let root_only_module = workspace.join("My").join("RootOnly.pm");
+        std::fs::create_dir_all(lib_module.parent().ok_or("missing lib parent")?)?;
+        std::fs::create_dir_all(root_only_module.parent().ok_or("missing root parent")?)?;
+        std::fs::write(&lib_module, "package My::App;\n1;\n")?;
+        std::fs::write(&root_only_module, "package My::RootOnly;\n1;\n")?;
+
+        let doc_path = workspace.join("script.pl");
+        let doc_text = "use lib 'lib';\nuse My::";
+        std::fs::write(&doc_path, doc_text)?;
+
+        let workspace_uri =
+            Url::from_file_path(&workspace).map_err(|()| "failed workspace URI")?.to_string();
+        let doc_uri =
+            Url::from_file_path(&doc_path).map_err(|()| "failed document URI")?.to_string();
+
+        let server = LspServer::default();
+        let folder = WorkspaceFolderState::new(workspace_uri).with_path(workspace.clone());
+        server.workspace_folders.lock().push(folder);
+        assert_eq!(
+            server.workspace_folders.lock().len(),
+            1,
+            "test setup should register one workspace folder"
+        );
+
+        let provider = InlineCompletionProvider::new();
+        let context = provider.prepare_context(doc_text, 1, 8).ok_or("expected inline context")?;
+        let environment =
+            server.inline_completion_environment_for_context(&doc_uri, doc_text, 1, 8, &context);
+
+        assert!(
+            environment.available_modules.contains(&"My::App".to_string()),
+            "explicit use lib module should be available; got {:?}",
+            environment.available_modules
+        );
+        assert!(
+            !environment.available_modules.contains(&"My::RootOnly".to_string()),
+            "workspace-root-only module must not leak through scan roots; got {:?}",
+            environment.available_modules
+        );
+        Ok(())
     }
 
     /// When the client declares "label.location" in resolveSupport.properties,

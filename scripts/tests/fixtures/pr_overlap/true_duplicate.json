@@ -1,0 +1,41 @@
+{
+  "_comment": "Acceptance case (1): TRUE duplicate — same files, same tests, same symbols → likely-duplicate",
+  "prs": [
+    {
+      "id": "101",
+      "files": [
+        "crates/perl-parser/src/parser.rs",
+        "crates/perl-parser/src/ast.rs",
+        "tests/parser_test.rs",
+        "tests/ast_test.rs"
+      ],
+      "tests": [
+        "tests/parser_test.rs",
+        "tests/ast_test.rs"
+      ],
+      "symbols": [
+        "Parser::parse",
+        "Ast::new",
+        "Ast::children"
+      ]
+    },
+    {
+      "id": "102",
+      "files": [
+        "crates/perl-parser/src/parser.rs",
+        "crates/perl-parser/src/ast.rs",
+        "tests/parser_test.rs",
+        "tests/ast_test.rs"
+      ],
+      "tests": [
+        "tests/parser_test.rs",
+        "tests/ast_test.rs"
+      ],
+      "symbols": [
+        "Parser::parse",
+        "Ast::new",
+        "Ast::children"
+      ]
+    }
+  ]
+}

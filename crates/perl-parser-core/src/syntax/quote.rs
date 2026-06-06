@@ -486,9 +486,8 @@ pub fn extract_transliteration_parts_strict(
         return Err(TransliterationError::MissingClosingDelimiter);
     }
 
-    if search.is_empty() {
-        return Err(TransliterationError::MissingSearch);
-    }
+    // Note: an empty search list is valid Perl — `tr///` counts characters
+    // (the "$count = ($str =~ tr///)" idiom). Do not reject empty search.
 
     // Validate transliteration modifiers strictly.
     let mut modifiers = String::new();

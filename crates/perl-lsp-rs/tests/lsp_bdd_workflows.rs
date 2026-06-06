@@ -442,6 +442,22 @@ fn setup_workspace(files: &[(&str, &str)]) -> Result<(LspHarness, TempWorkspace)
     Ok((harness, workspace))
 }
 
+fn setup_workspace_with_capabilities(
+    files: &[(&str, &str)],
+    capabilities: Value,
+) -> Result<(LspHarness, TempWorkspace), String> {
+    let workspace = TempWorkspace::new()?;
+    for (path, content) in files {
+        workspace.write(path, content)?;
+    }
+
+    let mut harness = LspHarness::new_raw();
+    harness.initialize_ready(&workspace.root_uri, Some(capabilities))?;
+    harness.barrier();
+
+    Ok((harness, workspace))
+}
+
 fn prepare_call_hierarchy_item(
     harness: &mut LspHarness,
     uri: &str,
@@ -2801,7 +2817,18 @@ subtest "math block" => sub {
 done_testing();
 "#;
 
-    let (mut harness, workspace) = setup_workspace(&[("t/math.t", test_file)])?;
+    let (mut harness, workspace) = setup_workspace_with_capabilities(
+        &[("t/math.t", test_file)],
+        json!({
+            "textDocument": {
+                "codeLens": {
+                    "resolveSupport": {
+                        "properties": ["command"]
+                    }
+                }
+            }
+        }),
+    )?;
     let uri = workspace.uri("t/math.t");
     harness.open(&uri, test_file)?;
     harness.barrier();

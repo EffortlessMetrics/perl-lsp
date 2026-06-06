@@ -31,7 +31,7 @@ use perl_semantic_facts::{
     AnchorFact, AnchorId, Confidence, DefinitionCandidate, DefinitionRank, DefinitionRankReason,
     EntityFact, EntityId, EntityKind, FileId, OccurrenceFact, OccurrenceKind, PlanBlocker,
     PlanBlockerReason, PlanWarning, PlannedEdit, PlannedEditCategory, Provenance, RenamePlan,
-    SafeDeletePlan, ScopeId, ValueShape, VisibleSymbol, VisibleSymbolSource,
+    SafeDeletePlan, ScopeId, UseLibFact, ValueShape, VisibleSymbol, VisibleSymbolSource,
 };
 
 use super::imports::ImportExportIndex;
@@ -131,6 +131,20 @@ pub trait SemanticQueries {
         byte_offset: u32,
         scope_id: Option<ScopeId>,
     ) -> Vec<VisibleSymbol>;
+
+    /// Return include-path entries declared by `use lib`/`no lib` in the given
+    /// file, in source order.
+    ///
+    /// Entries with `is_active = false` were cancelled by `no lib`. Facts are
+    /// per-statement, not net state — callers compute the effective `@INC` by
+    /// walking the returned slice in order.
+    ///
+    /// Path strings are the literal unquoted values as written in source.
+    /// Callers must resolve them relative to the file's directory for filesystem
+    /// lookup; this function returns raw fact data only.
+    fn use_lib_paths(&self, _file_id: FileId) -> Vec<UseLibFact> {
+        Vec::new()
+    }
 
     /// Return method candidates for a receiver type and method name.
     ///
@@ -563,6 +577,10 @@ impl<'a> SemanticQueries for WorkspaceSemanticQueries<'a> {
             ),
             None => Vec::new(),
         }
+    }
+
+    fn use_lib_paths(&self, file_id: FileId) -> Vec<UseLibFact> {
+        self.import_export_index.get_use_lib_for_file(file_id).to_vec()
     }
 
     fn method_candidates(
@@ -5043,6 +5061,8 @@ mod tests {
 /// The benchmarks also wire latency measurements into scorecard reporting
 /// (Req 19.5, 11.7) and flag any threshold violations.
 #[cfg(test)]
+// Latency benchmark tests intentionally report threshold details to stderr.
+#[allow(clippy::print_stderr)]
 mod latency_benchmarks {
     use super::*;
     use crate::semantic::imports::ImportExportIndex;
@@ -5243,12 +5263,6 @@ mod latency_benchmarks {
             LatencyThresholds::SYMBOL_AT_MICROS,
         );
 
-        // Log the measurement for visibility.
-        eprintln!(
-            "symbol_at: p95={} µs, threshold={} µs, exceeded={}",
-            measurement.p95_micros, measurement.threshold_micros, measurement.exceeded
-        );
-
         // The test verifies the measurement was collected, not that it passes
         // the threshold (CI environments vary). Threshold violations are
         // flagged in the scorecard report.
@@ -5269,11 +5283,6 @@ mod latency_benchmarks {
             LatencyThresholds::DEFINITIONS_MICROS,
         );
 
-        eprintln!(
-            "definitions: p95={} µs, threshold={} µs, exceeded={}",
-            measurement.p95_micros, measurement.threshold_micros, measurement.exceeded
-        );
-
         assert_eq!(measurement.sample_count, SAMPLE_COUNT);
         assert_eq!(measurement.query_name, "definitions");
         Ok(())
@@ -5291,11 +5300,6 @@ mod latency_benchmarks {
             LatencyThresholds::REFERENCES_MICROS,
         );
 
-        eprintln!(
-            "references: p95={} µs, threshold={} µs, exceeded={}",
-            measurement.p95_micros, measurement.threshold_micros, measurement.exceeded
-        );
-
         assert_eq!(measurement.sample_count, SAMPLE_COUNT);
         assert_eq!(measurement.query_name, "references");
         Ok(())
@@ -5311,11 +5315,6 @@ mod latency_benchmarks {
             "visible_symbols_at",
             &mut samples,
             LatencyThresholds::VISIBLE_SYMBOLS_AT_MICROS,
-        );
-
-        eprintln!(
-            "visible_symbols_at: p95={} µs, threshold={} µs, exceeded={}",
-            measurement.p95_micros, measurement.threshold_micros, measurement.exceeded
         );
 
         assert_eq!(measurement.sample_count, SAMPLE_COUNT);
@@ -5393,23 +5392,6 @@ mod latency_benchmarks {
             assert!(m.exceeded, "violation query {} should be exceeded", violation.query_name);
             assert_eq!(violation.p95_micros, m.p95_micros);
             assert_eq!(violation.threshold_micros, m.threshold_micros);
-        }
-
-        // Log summary for visibility.
-        eprintln!("=== Scorecard Latency Report ===");
-        for (name, m) in &report.latency {
-            eprintln!(
-                "  {}: p95={} µs (threshold={} µs) {}",
-                name,
-                m.p95_micros,
-                m.threshold_micros,
-                if m.exceeded { "⚠ EXCEEDED" } else { "✓" }
-            );
-        }
-        if report.latency_violations.is_empty() {
-            eprintln!("  No threshold violations.");
-        } else {
-            eprintln!("  {} threshold violation(s) flagged.", report.latency_violations.len());
         }
 
         Ok(())

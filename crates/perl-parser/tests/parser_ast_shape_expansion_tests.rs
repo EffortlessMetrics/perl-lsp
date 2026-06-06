@@ -198,3 +198,593 @@ fn phase_defer_and_data_section_cover_compile_time_and_tail_constructs() -> Resu
 
     Ok(())
 }
+
+fn variable_initializer<'a>(node: &'a Node, expected_declarator: &str) -> Result<&'a Node, String> {
+    match &node.kind {
+        NodeKind::VariableDeclaration { declarator, initializer, .. } => {
+            assert_eq!(declarator, expected_declarator);
+            initializer.as_deref().ok_or("missing variable initializer".to_string())
+        }
+        other => Err(format!("expected VariableDeclaration node, got {other:?}")),
+    }
+}
+
+fn collect_loop_controls<'a>(node: &'a Node, controls: &mut Vec<&'a Node>) {
+    if matches!(node.kind, NodeKind::LoopControl { .. }) {
+        controls.push(node);
+    }
+
+    match &node.kind {
+        NodeKind::Program { statements } | NodeKind::Block { statements } => {
+            for statement in statements {
+                collect_loop_controls(statement, controls);
+            }
+        }
+        NodeKind::ExpressionStatement { expression }
+        | NodeKind::Unary { operand: expression, .. }
+        | NodeKind::Goto { target: expression }
+        | NodeKind::Eval { block: expression }
+        | NodeKind::Do { block: expression }
+        | NodeKind::Defer { block: expression } => collect_loop_controls(expression, controls),
+        NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            collect_loop_controls(variable, controls);
+            if let Some(initializer) = initializer {
+                collect_loop_controls(initializer, controls);
+            }
+        }
+        NodeKind::VariableListDeclaration { variables, initializer, .. } => {
+            for variable in variables {
+                collect_loop_controls(variable, controls);
+            }
+            if let Some(initializer) = initializer {
+                collect_loop_controls(initializer, controls);
+            }
+        }
+        NodeKind::VariableWithAttributes { variable, .. } => {
+            collect_loop_controls(variable, controls)
+        }
+        NodeKind::Assignment { lhs, rhs, .. } | NodeKind::Binary { left: lhs, right: rhs, .. } => {
+            collect_loop_controls(lhs, controls);
+            collect_loop_controls(rhs, controls);
+        }
+        NodeKind::Ternary { condition, then_expr, else_expr } => {
+            collect_loop_controls(condition, controls);
+            collect_loop_controls(then_expr, controls);
+            collect_loop_controls(else_expr, controls);
+        }
+        NodeKind::ArrayLiteral { elements } => {
+            for element in elements {
+                collect_loop_controls(element, controls);
+            }
+        }
+        NodeKind::HashLiteral { pairs } => {
+            for (key, value) in pairs {
+                collect_loop_controls(key, controls);
+                collect_loop_controls(value, controls);
+            }
+        }
+        NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
+            collect_loop_controls(condition, controls);
+            collect_loop_controls(then_branch, controls);
+            for (condition, branch) in elsif_branches {
+                collect_loop_controls(condition, controls);
+                collect_loop_controls(branch, controls);
+            }
+            if let Some(else_branch) = else_branch {
+                collect_loop_controls(else_branch, controls);
+            }
+        }
+        NodeKind::LabeledStatement { statement, .. } => collect_loop_controls(statement, controls),
+        NodeKind::While { condition, body, continue_block, .. } => {
+            collect_loop_controls(condition, controls);
+            collect_loop_controls(body, controls);
+            if let Some(continue_block) = continue_block {
+                collect_loop_controls(continue_block, controls);
+            }
+        }
+        NodeKind::For { init, condition, update, body, continue_block } => {
+            for node in
+                [init.as_deref(), condition.as_deref(), update.as_deref()].into_iter().flatten()
+            {
+                collect_loop_controls(node, controls);
+            }
+            collect_loop_controls(body, controls);
+            if let Some(continue_block) = continue_block {
+                collect_loop_controls(continue_block, controls);
+            }
+        }
+        NodeKind::Foreach { variable, list, body, continue_block } => {
+            collect_loop_controls(variable, controls);
+            collect_loop_controls(list, controls);
+            collect_loop_controls(body, controls);
+            if let Some(continue_block) = continue_block {
+                collect_loop_controls(continue_block, controls);
+            }
+        }
+        NodeKind::Given { expr, body } => {
+            collect_loop_controls(expr, controls);
+            collect_loop_controls(body, controls);
+        }
+        NodeKind::When { condition, body } => {
+            collect_loop_controls(condition, controls);
+            collect_loop_controls(body, controls);
+        }
+        NodeKind::Default { body }
+        | NodeKind::Subroutine { body, .. }
+        | NodeKind::Method { body, .. }
+        | NodeKind::Class { body, .. }
+        | NodeKind::PhaseBlock { block: body, .. } => collect_loop_controls(body, controls),
+        NodeKind::Signature { parameters } => {
+            for parameter in parameters {
+                collect_loop_controls(parameter, controls);
+            }
+        }
+        NodeKind::MandatoryParameter { variable }
+        | NodeKind::SlurpyParameter { variable }
+        | NodeKind::NamedParameter { variable } => collect_loop_controls(variable, controls),
+        NodeKind::OptionalParameter { variable, default_value } => {
+            collect_loop_controls(variable, controls);
+            collect_loop_controls(default_value, controls);
+        }
+        NodeKind::Return { value: Some(value) } => collect_loop_controls(value, controls),
+        NodeKind::MethodCall { object, args, .. } => {
+            collect_loop_controls(object, controls);
+            for arg in args {
+                collect_loop_controls(arg, controls);
+            }
+        }
+        NodeKind::FunctionCall { args, .. } => {
+            for arg in args {
+                collect_loop_controls(arg, controls);
+            }
+        }
+        NodeKind::IndirectCall { object, args, .. } => {
+            collect_loop_controls(object, controls);
+            for arg in args {
+                collect_loop_controls(arg, controls);
+            }
+        }
+        NodeKind::Tie { variable, package, args } => {
+            collect_loop_controls(variable, controls);
+            collect_loop_controls(package, controls);
+            for arg in args {
+                collect_loop_controls(arg, controls);
+            }
+        }
+        NodeKind::Untie { variable } => collect_loop_controls(variable, controls),
+        NodeKind::Package { block: Some(block), .. } => collect_loop_controls(block, controls),
+        NodeKind::StatementModifier { statement, condition, .. } => {
+            collect_loop_controls(statement, controls);
+            collect_loop_controls(condition, controls);
+        }
+        NodeKind::Match { expr, .. }
+        | NodeKind::Substitution { expr, .. }
+        | NodeKind::Transliteration { expr, .. } => collect_loop_controls(expr, controls),
+        _ => {}
+    }
+}
+
+#[test]
+fn do_and_eval_initializers_preserve_distinct_ast_shapes() -> Result<(), String> {
+    let ast = parse_without_errors(
+        r#"my $value = do { my $tmp = compute(); $tmp + 1 };
+my $ok = eval { risky(); 1; };"#,
+    )?;
+    let statements = program_statements(&ast)?;
+    assert_eq!(statements.len(), 2);
+
+    match &variable_initializer(&statements[0], "my")?.kind {
+        NodeKind::Do { block } => assert_eq!(block_statements(block)?.len(), 2),
+        other => return Err(format!("expected Do initializer, got {other:?}")),
+    }
+
+    match &variable_initializer(&statements[1], "my")?.kind {
+        NodeKind::Eval { block } => assert_eq!(block_statements(block)?.len(), 2),
+        other => return Err(format!("expected Eval initializer, got {other:?}")),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn while_and_foreach_continue_blocks_stay_attached_to_loops() -> Result<(), String> {
+    let ast = parse_without_errors(
+        r#"while (my $line = <$fh>) { process($line); } continue { $line_count++; }
+for my $item (@items) { process_item($item); } continue { $seen{$item}++; }"#,
+    )?;
+    let statements = program_statements(&ast)?;
+    assert_eq!(statements.len(), 2);
+
+    match &statements[0].kind {
+        NodeKind::While { continue_block, body, .. } => {
+            assert_eq!(block_statements(body)?.len(), 1);
+            let continue_block = continue_block.as_ref().ok_or("missing while continue block")?;
+            assert_eq!(block_statements(continue_block)?.len(), 1);
+        }
+        other => return Err(format!("expected While node, got {other:?}")),
+    }
+
+    match &statements[1].kind {
+        NodeKind::Foreach { continue_block, body, .. } => {
+            assert_eq!(block_statements(body)?.len(), 1);
+            let continue_block = continue_block.as_ref().ok_or("missing foreach continue block")?;
+            assert_eq!(block_statements(continue_block)?.len(), 1);
+        }
+        other => return Err(format!("expected Foreach node, got {other:?}")),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn labeled_loop_control_labels_survive_statement_modifiers() -> Result<(), String> {
+    let ast = parse_without_errors(
+        r#"OUTER: while ($running) {
+    next OUTER if should_skip();
+    last OUTER if should_stop();
+    redo OUTER if should_retry();
+}"#,
+    )?;
+    let statements = program_statements(&ast)?;
+    assert_eq!(statements.len(), 1);
+
+    match &statements[0].kind {
+        NodeKind::LabeledStatement { label, statement } => {
+            assert_eq!(label, "OUTER");
+            assert!(matches!(statement.kind, NodeKind::While { .. }));
+        }
+        other => return Err(format!("expected LabeledStatement node, got {other:?}")),
+    }
+
+    let mut controls = Vec::new();
+    collect_loop_controls(&statements[0], &mut controls);
+    assert_eq!(controls.len(), 3);
+
+    let mut ops = Vec::new();
+    let mut labels = Vec::new();
+    for control in controls {
+        match &control.kind {
+            NodeKind::LoopControl { op, label } => {
+                ops.push(op.as_str());
+                labels.push(label.as_deref());
+            }
+            other => return Err(format!("expected LoopControl node, got {other:?}")),
+        }
+    }
+
+    assert_eq!(ops, vec!["next", "last", "redo"]);
+    assert_eq!(labels, vec![Some("OUTER"), Some("OUTER"), Some("OUTER")]);
+    Ok(())
+}
+
+#[test]
+fn use_and_no_pragmas_preserve_import_args_and_filter_risk() -> Result<(), String> {
+    let ast = parse_without_errors(
+        "use Filter::Simple;\nuse List::Util qw(first max);\nno warnings 'experimental';",
+    )?;
+    let statements = program_statements(&ast)?;
+    assert_eq!(statements.len(), 3);
+
+    match &statements[0].kind {
+        NodeKind::Use { module, args, has_filter_risk } => {
+            assert_eq!(module, "Filter::Simple");
+            assert!(args.is_empty());
+            assert!(*has_filter_risk);
+        }
+        other => return Err(format!("expected filter Use node, got {other:?}")),
+    }
+
+    match &statements[1].kind {
+        NodeKind::Use { module, args, has_filter_risk } => {
+            assert_eq!(module, "List::Util");
+            assert_eq!(args, &["qw(first max)".to_string()]);
+            assert!(!has_filter_risk);
+        }
+        other => return Err(format!("expected import Use node, got {other:?}")),
+    }
+
+    match &statements[2].kind {
+        NodeKind::No { module, args, has_filter_risk } => {
+            assert_eq!(module, "warnings");
+            assert_eq!(args, &["'experimental'".to_string()]);
+            assert!(!has_filter_risk);
+        }
+        other => return Err(format!("expected No node, got {other:?}")),
+    }
+
+    Ok(())
+}
+
+fn find_first<'a>(node: &'a Node, predicate: &impl Fn(&NodeKind) -> bool) -> Option<&'a Node> {
+    if predicate(&node.kind) {
+        return Some(node);
+    }
+
+    let mut found = None;
+    node.for_each_child(|child| {
+        if found.is_none() {
+            found = find_first(child, predicate);
+        }
+    });
+    found
+}
+
+fn find_all<'a>(node: &'a Node, predicate: &impl Fn(&NodeKind) -> bool, out: &mut Vec<&'a Node>) {
+    if predicate(&node.kind) {
+        out.push(node);
+    }
+    node.for_each_child(|child| find_all(child, predicate, out));
+}
+
+#[test]
+fn tie_untie_eval_and_statement_modifier_shapes_are_preserved() -> Result<(), String> {
+    let source =
+        r#"eval { tie %db, 'DB_File', 'data.db', 0644; untie %db; }; warn "tie failed" if $@;"#;
+    let ast = parse_without_errors(source)?;
+
+    let eval_node = find_first(&ast, &|kind| matches!(kind, NodeKind::Eval { .. }))
+        .ok_or("missing eval node")?;
+    match &eval_node.kind {
+        NodeKind::Eval { block } => assert_eq!(block_statements(block)?.len(), 2),
+        other => return Err(format!("expected Eval node, got {other:?}")),
+    }
+
+    let tie_node =
+        find_first(&ast, &|kind| matches!(kind, NodeKind::Tie { .. })).ok_or("missing tie node")?;
+    match &tie_node.kind {
+        NodeKind::Tie { variable, package, args } => {
+            assert_eq!(variable_name(variable)?, "%db");
+            match &package.kind {
+                NodeKind::String { value, interpolated } => {
+                    assert_eq!(value, "'DB_File'");
+                    assert!(!interpolated);
+                }
+                other => return Err(format!("expected tie package string, got {other:?}")),
+            }
+            assert_eq!(args.len(), 2);
+        }
+        other => return Err(format!("expected Tie node, got {other:?}")),
+    }
+
+    let untie_node = find_first(&ast, &|kind| matches!(kind, NodeKind::Untie { .. }))
+        .ok_or("missing untie node")?;
+    match &untie_node.kind {
+        NodeKind::Untie { variable } => assert_eq!(variable_name(variable)?, "%db"),
+        other => return Err(format!("expected Untie node, got {other:?}")),
+    }
+
+    let modifier_node =
+        find_first(&ast, &|kind| matches!(kind, NodeKind::StatementModifier { .. }))
+            .ok_or("missing statement modifier")?;
+    match &modifier_node.kind {
+        NodeKind::StatementModifier { statement, modifier, condition } => {
+            assert_eq!(modifier, "if");
+            assert!(matches!(statement.kind, NodeKind::ExpressionStatement { .. }));
+            assert_eq!(variable_name(condition)?, "$@");
+        }
+        other => return Err(format!("expected StatementModifier node, got {other:?}")),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn labeled_loop_control_and_goto_targets_are_preserved() -> Result<(), String> {
+    let ast = parse_without_errors(
+        r#"OUTER: while ($ok) { next OUTER; goto DONE; } DONE: print "done";"#,
+    )?;
+
+    let mut labels = Vec::new();
+    find_all(&ast, &|kind| matches!(kind, NodeKind::LabeledStatement { .. }), &mut labels);
+    let label_names: Vec<&str> = labels
+        .iter()
+        .filter_map(|node| match &node.kind {
+            NodeKind::LabeledStatement { label, .. } => Some(label.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(label_names, vec!["OUTER", "DONE"]);
+
+    let loop_control = find_first(&ast, &|kind| {
+        matches!(kind, NodeKind::LoopControl { op, label } if op == "next" && label.as_deref() == Some("OUTER"))
+    })
+    .ok_or("missing labeled next")?;
+    assert!(matches!(loop_control.kind, NodeKind::LoopControl { .. }));
+
+    let goto_node =
+        find_first(&ast, &|kind| matches!(kind, NodeKind::Goto { .. })).ok_or("missing goto")?;
+    match &goto_node.kind {
+        NodeKind::Goto { target } => match &target.kind {
+            NodeKind::Identifier { name } => assert_eq!(name, "DONE"),
+            other => return Err(format!("expected identifier goto target, got {other:?}")),
+        },
+        other => return Err(format!("expected Goto node, got {other:?}")),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn diamond_readline_glob_and_typeglob_expression_shapes_are_preserved() -> Result<(), String> {
+    let ast = parse_without_errors(
+        r#"while (<>) { my $line = <STDIN>; my @files = <*.pl>; *alias = *STDOUT; }"#,
+    )?;
+
+    let diamond = find_first(&ast, &|kind| matches!(kind, NodeKind::Diamond))
+        .ok_or("missing diamond operator")?;
+    assert!(matches!(diamond.kind, NodeKind::Diamond));
+
+    let readline = find_first(&ast, &|kind| {
+        matches!(kind, NodeKind::Readline { filehandle } if filehandle.as_deref() == Some("STDIN"))
+    })
+    .ok_or("missing readline filehandle")?;
+    assert!(matches!(readline.kind, NodeKind::Readline { .. }));
+
+    let glob =
+        find_first(&ast, &|kind| matches!(kind, NodeKind::Glob { pattern } if pattern == "*.pl"))
+            .ok_or("missing glob pattern")?;
+    assert!(matches!(glob.kind, NodeKind::Glob { .. }));
+
+    let mut typeglobs = Vec::new();
+    find_all(&ast, &|kind| matches!(kind, NodeKind::Typeglob { .. }), &mut typeglobs);
+    let names: Vec<&str> = typeglobs
+        .iter()
+        .filter_map(|node| match &node.kind {
+            NodeKind::Typeglob { name } => Some(name.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(names, vec!["alias", "STDOUT"]);
+
+    Ok(())
+}
+
+fn expression_node(statement: &Node) -> Result<&Node, String> {
+    match &statement.kind {
+        NodeKind::ExpressionStatement { expression } => Ok(expression),
+        other => Err(format!("expected ExpressionStatement node, got {other:?}")),
+    }
+}
+
+#[test]
+fn angle_bracket_io_forms_keep_distinct_ast_nodes() -> Result<(), String> {
+    let ast = parse_without_errors("<>; <STDIN>; <*.pm>;")?;
+    let statements = program_statements(&ast)?;
+    assert_eq!(statements.len(), 3);
+
+    assert!(matches!(expression_node(&statements[0])?.kind, NodeKind::Diamond));
+
+    match &expression_node(&statements[1])?.kind {
+        NodeKind::Readline { filehandle } => assert_eq!(filehandle.as_deref(), Some("STDIN")),
+        other => return Err(format!("expected Readline node, got {other:?}")),
+    }
+
+    match &expression_node(&statements[2])?.kind {
+        NodeKind::Glob { pattern } => assert_eq!(pattern, "*.pm"),
+        other => return Err(format!("expected Glob node, got {other:?}")),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn tie_and_untie_preserve_bound_variable_package_and_args() -> Result<(), String> {
+    let ast = parse_without_errors("tie %cache, 'Local::TieHash', $seed, @rest; untie %cache;")?;
+    let statements = program_statements(&ast)?;
+    assert_eq!(statements.len(), 2);
+
+    match &expression_node(&statements[0])?.kind {
+        NodeKind::Tie { variable, package, args } => {
+            assert_eq!(variable_name(variable)?, "%cache");
+            match &package.kind {
+                NodeKind::String { value, interpolated } => {
+                    assert_eq!(value, "'Local::TieHash'");
+                    assert!(!interpolated);
+                }
+                other => return Err(format!("expected tie package string, got {other:?}")),
+            }
+            assert_eq!(args.len(), 2);
+            assert_eq!(variable_name(&args[0])?, "$seed");
+            assert_eq!(variable_name(&args[1])?, "@rest");
+        }
+        other => return Err(format!("expected Tie node, got {other:?}")),
+    }
+
+    match &expression_node(&statements[1])?.kind {
+        NodeKind::Untie { variable } => assert_eq!(variable_name(variable)?, "%cache"),
+        other => return Err(format!("expected Untie node, got {other:?}")),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn labeled_loop_control_modifiers_and_goto_keep_targets() -> Result<(), String> {
+    let ast = parse_without_errors(
+        r#"LINE: while ($line = <STDIN>) {
+    next LINE if $line =~ /^#/;
+    last LINE if done($line);
+    redo LINE if retry($line);
+    goto FINISH;
+}"#,
+    )?;
+    let statements = program_statements(&ast)?;
+    assert_eq!(statements.len(), 1);
+
+    let NodeKind::LabeledStatement { label, statement } = &statements[0].kind else {
+        return Err(format!("expected LabeledStatement node, got {:?}", statements[0].kind));
+    };
+    assert_eq!(label, "LINE");
+
+    let NodeKind::While { body, .. } = &statement.kind else {
+        return Err(format!("expected While node, got {:?}", statement.kind));
+    };
+    let body_statements = block_statements(body)?;
+    assert_eq!(body_statements.len(), 4);
+
+    for (statement, expected_op) in body_statements.iter().take(3).zip(["next", "last", "redo"]) {
+        let NodeKind::StatementModifier { statement, modifier, .. } = &statement.kind else {
+            return Err(format!("expected StatementModifier node, got {:?}", statement.kind));
+        };
+        assert_eq!(modifier, "if");
+        match &statement.kind {
+            NodeKind::LoopControl { op, label } => {
+                assert_eq!(op, expected_op);
+                assert_eq!(label.as_deref(), Some("LINE"));
+            }
+            other => return Err(format!("expected LoopControl node, got {other:?}")),
+        }
+    }
+
+    match &body_statements[3].kind {
+        NodeKind::Goto { target } => match &target.kind {
+            NodeKind::Identifier { name } => assert_eq!(name, "FINISH"),
+            other => return Err(format!("expected goto target identifier, got {other:?}")),
+        },
+        other => return Err(format!("expected Goto node, got {other:?}")),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn regex_binding_forms_preserve_negation_and_modifiers() -> Result<(), String> {
+    let ast = parse_without_errors(
+        r#"$text =~ /foo/i;
+$text !~ s/foo/bar/g;
+$text =~ tr/a-z/A-Z/r;"#,
+    )?;
+    let statements = program_statements(&ast)?;
+    assert_eq!(statements.len(), 3);
+
+    match &expression_node(&statements[0])?.kind {
+        NodeKind::Match { pattern, modifiers, negated, .. } => {
+            assert_eq!(pattern, "/foo/");
+            assert_eq!(modifiers, "i");
+            assert!(!negated);
+        }
+        other => return Err(format!("expected Match node, got {other:?}")),
+    }
+
+    match &expression_node(&statements[1])?.kind {
+        NodeKind::Substitution { pattern, replacement, modifiers, negated, .. } => {
+            assert_eq!(pattern, "foo");
+            assert_eq!(replacement, "bar");
+            assert_eq!(modifiers, "g");
+            assert!(*negated);
+        }
+        other => return Err(format!("expected Substitution node, got {other:?}")),
+    }
+
+    match &expression_node(&statements[2])?.kind {
+        NodeKind::Transliteration { search, replace, modifiers, negated, .. } => {
+            assert_eq!(search, "a-z");
+            assert_eq!(replace, "A-Z");
+            assert_eq!(modifiers, "r");
+            assert!(!negated);
+        }
+        other => return Err(format!("expected Transliteration node, got {other:?}")),
+    }
+
+    Ok(())
+}

@@ -218,16 +218,17 @@ fn test_workspace_diagnostic_data_populated() -> Result<(), Box<dyn std::error::
     Ok(())
 }
 
-// Test 6: messageMarkup populated when client advertises markupMessageSupport (LSP 3.18)
+// Test 6: Diagnostic.message is MarkupContent when client advertises markupMessageSupport (LSP 3.18)
 #[test]
-fn test_markup_message_support_populates_message_markup() -> Result<(), Box<dyn std::error::Error>>
-{
+fn test_markup_message_support_populates_standard_message_markup()
+-> Result<(), Box<dyn std::error::Error>> {
     let uri = "file:///test_markup_message.pl";
     // Missing 'use strict' triggers PL100 — a coded diagnostic that exercises
-    // the messageMarkup path in the with-code branch of handle_document_diagnostic.
+    // the messageMarkup path in the with-code branch of pull diagnostics.
     let content = "print 'hello';\n";
 
-    // Initialize with markupMessageSupport: true so the server populates messageMarkup
+    // Initialize with markupMessageSupport: true so pull diagnostics may emit
+    // the standard LSP 3.18 Diagnostic.message MarkupContent shape.
     let server = LspServer::new();
     let _ = server.handle_request(JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -266,7 +267,9 @@ fn test_markup_message_support_populates_message_markup() -> Result<(), Box<dyn 
 
     let items = get_diagnostics(&server, uri)?;
 
-    // PL100 (MissingStrict) must fire and carry messageMarkup in its data object
+    // PL100 (MissingStrict) must fire and carry MarkupContent in the standard
+    // Diagnostic.message field. The data.messageMarkup extension remains as
+    // compatibility metadata for existing enrichment consumers.
     let pl100 = items
         .iter()
         .find(|d| d["code"].as_str() == Some("PL100"))
@@ -293,13 +296,31 @@ fn test_markup_message_support_populates_message_markup() -> Result<(), Box<dyn 
         value
     );
 
-    // The same path must NOT set messageMarkup when the client omits the capability
+    let message = &pl100["message"];
+    assert!(
+        message.is_object(),
+        "Diagnostic.message must be MarkupContent when client sends markupMessageSupport: true, got: {}",
+        message
+    );
+    assert_eq!(message["kind"], "markdown", "Diagnostic.message.kind must be 'markdown'");
+    assert_eq!(
+        message["value"], markup["value"],
+        "Diagnostic.message must reuse the enriched messageMarkup payload"
+    );
+
+    // The same path must keep string Diagnostic.message and omit messageMarkup
+    // when the client omits the capability.
     let server_no_markup = open_document("file:///test_no_markup.pl", content);
     let items_no_markup = get_diagnostics(&server_no_markup, "file:///test_no_markup.pl")?;
     let pl100_no_markup = items_no_markup
         .iter()
         .find(|d| d["code"].as_str() == Some("PL100"))
         .ok_or("Expected PL100 in the no-markupMessageSupport server too")?;
+    assert!(
+        pl100_no_markup["message"].is_string(),
+        "Diagnostic.message must remain a string without markupMessageSupport; got: {}",
+        pl100_no_markup["message"]
+    );
     assert!(
         pl100_no_markup["data"]["messageMarkup"].is_null(),
         "messageMarkup must be absent when client does not advertise markupMessageSupport; got: {}",

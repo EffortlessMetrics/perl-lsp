@@ -1614,6 +1614,16 @@ fn run_single_gate(
         });
     }
 
+    if command
+        == "cargo xtask inline-completion-quality --receipt target/receipts/inline-completion-quality.json"
+    {
+        return run_internal_xtask_gate(gate, &log_path, command, start, || {
+            super::inline_completion_quality::run(PathBuf::from(
+                "target/receipts/inline-completion-quality.json",
+            ))
+        });
+    }
+
     let execution = run_shell_command_with_timeout(command, &log_path, timeout_secs);
     let duration_ms = start.elapsed().as_millis() as u64;
 

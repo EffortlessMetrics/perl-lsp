@@ -42,6 +42,7 @@ GATE_TO_LANE_MAP: dict[str, dict[str, Any]] = {
     "unit_scoped": {"lanes": ["pr_smoke"]},
     "check_tests_scoped": {"lanes": ["pr_smoke"]},
     "inline_completion_contract": {"lanes": ["pr_smoke"]},
+    "inline_completion_quality_receipt": {"lanes": ["pr_smoke"]},
 
     # core / foundation gates roll up under merge_gate_shards
     "clippy_core": {"lanes": ["merge_gate_shards"]},

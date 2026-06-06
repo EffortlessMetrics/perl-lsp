@@ -702,6 +702,7 @@ impl LspServer {
         text: &str,
         line_starts: &perl_parser::position::LineStartsCache,
         rope: &ropey::Rope,
+        markup_message_support: bool,
     ) -> Vec<Value> {
         let pos16 = |offset: usize| line_starts.offset_to_position_rope(rope, offset);
         parse_errors
@@ -746,7 +747,11 @@ impl LspServer {
                     "severity": 1, // Error
                     "code": DiagnosticCode::ParseError.as_str(),
                     "source": "perl-parser",
-                    "message": message,
+                    "message": Self::diagnostic_message_value(
+                        &message,
+                        None,
+                        markup_message_support,
+                    ),
                 })
             })
             .collect()
@@ -779,7 +784,7 @@ impl LspServer {
         };
 
         let lsp_diagnostics =
-            Self::syntax_only_lsp_diagnostics(&parse_errors, &text, &line_starts, &rope);
+            Self::syntax_only_lsp_diagnostics(&parse_errors, &text, &line_starts, &rope, false);
 
         // Generation-aware staleness guard mirrors the full path.
         if generation.load(Ordering::SeqCst) != gen_at_snapshot {
@@ -969,11 +974,14 @@ impl LspServer {
                     self.get_document(&documents, uri_str).cloned()
                 };
                 if let Some(doc) = doc_snapshot {
+                    let markup_message_support =
+                        self.client_capabilities.lock().markup_message_support;
                     let items = Self::syntax_only_lsp_diagnostics(
                         &doc.parse_errors,
                         &doc.text,
                         &doc.line_starts,
                         &doc.rope,
+                        markup_message_support,
                     );
                     return Ok(Some(json!({
                         "kind": "full",
@@ -1030,6 +1038,32 @@ impl LspServer {
         })))
     }
 
+    fn diagnostic_message_value(
+        message: &str,
+        message_data: Option<&Value>,
+        markup_message_support: bool,
+    ) -> Value {
+        if !markup_message_support {
+            return json!(message);
+        }
+
+        if let Some(markup) = message_data.and_then(|data| data.get("messageMarkup")) {
+            if Self::is_markup_content_value(markup) {
+                return markup.clone();
+            }
+        }
+
+        json!({
+            "kind": "markdown",
+            "value": message,
+        })
+    }
+
+    fn is_markup_content_value(value: &Value) -> bool {
+        matches!(value.get("kind").and_then(Value::as_str), Some("markdown" | "plaintext"))
+            && value.get("value").and_then(Value::as_str).is_some()
+    }
+
     /// Convert DocumentDiagnosticReport to JSON, merging perlcritic diagnostics.
     fn document_report_to_json(
         &self,
@@ -1042,16 +1076,22 @@ impl LspServer {
 
         match report {
             DocumentDiagnosticReport::Full(full) => {
+                let markup_message_support = self.client_capabilities.lock().markup_message_support;
                 let mut items: Vec<Value> = full
                     .full_document_diagnostic_report
                     .items
                     .iter()
-                    .map(|d| self.lsp_diagnostic_to_json(d, doc, uri))
+                    .map(|d| self.lsp_diagnostic_to_json(d, doc, uri, markup_message_support))
                     .collect();
 
                 // Add perlcritic diagnostics
                 for d in perlcritic_diags {
-                    items.push(self.internal_diagnostic_to_json(d, doc, uri));
+                    items.push(self.internal_diagnostic_to_json(
+                        d,
+                        doc,
+                        uri,
+                        markup_message_support,
+                    ));
                 }
 
                 json!({
@@ -1075,6 +1115,7 @@ impl LspServer {
         d: &lsp_types::Diagnostic,
         _doc: &crate::state::DocumentState,
         _uri: &str,
+        markup_message_support: bool,
     ) -> Value {
         let start_line = d.range.start.line;
         let start_char = d.range.start.character;
@@ -1098,7 +1139,11 @@ impl LspServer {
                 lsp_types::NumberOrString::Number(n) => json!(n),
             }),
             "source": d.source,
-            "message": d.message,
+            "message": Self::diagnostic_message_value(
+                &d.message,
+                d.data.as_ref(),
+                markup_message_support,
+            ),
         });
 
         if let Some(ref tags) = d.tags {
@@ -1141,6 +1186,7 @@ impl LspServer {
         d: &InternalDiagnostic,
         doc: &crate::state::DocumentState,
         uri: &str,
+        markup_message_support: bool,
     ) -> Value {
         let start_pos = doc.line_starts.offset_to_position_rope(&doc.rope, d.range.0);
         let end_pos = doc.line_starts.offset_to_position_rope(&doc.rope, d.range.1);
@@ -1158,7 +1204,7 @@ impl LspServer {
             },
             "code": d.code,
             "source": diagnostic_source(d.code.as_deref()),
-            "message": d.message,
+            "message": Self::diagnostic_message_value(&d.message, None, markup_message_support),
         });
 
         if !d.tags.is_empty() {
@@ -1260,6 +1306,7 @@ impl LspServer {
         };
 
         let mut items = Vec::new();
+        let markup_message_support = self.client_capabilities.lock().markup_message_support;
 
         // Collect document snapshots without holding lock
         let docs_snapshot: Vec<(String, DocumentState)> = {
@@ -1410,7 +1457,11 @@ impl LspServer {
                                     },
                                     "code": d.code.clone(),
                                     "source": diagnostic_source(d.code.as_deref()),
-                                    "message": message,
+                                    "message": Self::diagnostic_message_value(
+                                        &message,
+                                        None,
+                                        markup_message_support,
+                                    ),
                                 });
                                 if !d.tags.is_empty() {
                                     diag["tags"] = json!(Self::diagnostic_tags_to_lsp(&d.tags));
@@ -1501,7 +1552,11 @@ impl LspServer {
                                 },
                                 "code": d.code.clone(),
                                 "source": diagnostic_source(d.code.as_deref()),
-                                "message": message,
+                                "message": Self::diagnostic_message_value(
+                                    &message,
+                                    None,
+                                    markup_message_support,
+                                ),
                             });
                             if !d.tags.is_empty() {
                                 diag["tags"] = json!(Self::diagnostic_tags_to_lsp(&d.tags));

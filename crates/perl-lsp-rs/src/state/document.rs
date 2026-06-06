@@ -286,23 +286,59 @@ pub struct ClientCapabilities {
     /// capability fields; this flag is deliberately forced off for some
     /// clients without disabling unrelated dynamic registrations.
     pub dynamic_registration_support: bool,
+    /// Supports `RelativePattern` objects in dynamic file watcher registrations.
+    ///
+    /// Parsed from `capabilities.workspace.didChangeWatchedFiles.relativePatternSupport`.
+    /// When false, watcher registrations must keep the existing string glob shape.
+    pub file_watcher_relative_pattern_support: bool,
     /// Client declared textDocument/inlineCompletion capability
     pub inline_completion_support: bool,
     /// Supports dynamic registration for textDocument/inlineCompletion
     pub inline_completion_dynamic_registration_support: bool,
     /// Supports `workspace/configuration` reverse requests from server.
     pub workspace_configuration_support: bool,
+    /// Supports server-originated `workspace/applyEdit` requests.
+    ///
+    /// Parsed from `capabilities.workspace.applyEdit`.
+    pub workspace_apply_edit_support: bool,
     /// Supports `workspaceFolders` capability negotiation/events.
     pub workspace_folders_support: bool,
     /// Supports snippet syntax in completion items
     pub snippet_support: bool,
+    /// Supports versioned document edits in `WorkspaceEdit`s.
+    ///
+    /// Parsed from `capabilities.workspace.workspaceEdit.documentChanges`.
+    /// `SnippetTextEdit` can only be emitted inside document changes.
+    pub workspace_edit_document_changes_support: bool,
+    /// Supports `SnippetTextEdit` workspace edits (LSP 3.18).
+    ///
+    /// Parsed from `capabilities.workspace.workspaceEdit.snippetEditSupport`.
+    /// Unsupported clients must keep receiving plain `TextEdit`s.
+    pub workspace_edit_snippet_edit_support: bool,
+    /// Supports `ApplyWorkspaceEditParams.metadata` on server-originated edits (LSP 3.18).
+    ///
+    /// Parsed from `capabilities.workspace.workspaceEdit.metadataSupport`.
+    /// Metadata must not be emitted on ordinary `WorkspaceEdit` responses.
+    pub workspace_edit_metadata_support: bool,
     /// Supports `completionItem.commitCharacters` in completion results
     pub completion_commit_characters_support: bool,
-    /// Supports markdown message content in diagnostics (LSP 3.18)
+    /// Supports markup message content in pull diagnostics (LSP 3.18)
     ///
-    /// When true, the server can provide rich markdown formatting in diagnostic
-    /// messages via the `data.messageMarkup` field in pull diagnostics responses.
+    /// When true, the server can provide `Diagnostic.message` as
+    /// `MarkupContent` in pull diagnostics responses.
     pub markup_message_support: bool,
+    /// Supports static documentation for classes of code actions (LSP 3.18).
+    ///
+    /// Parsed from `capabilities.textDocument.codeAction.documentationSupport`.
+    /// When true, the server may advertise `CodeActionOptions.documentation` in
+    /// `codeActionProvider`.
+    pub code_action_documentation_support: bool,
+    /// Supports the LSP 3.18 `CodeActionTag.LLMGenerated` tag.
+    ///
+    /// Parsed from `capabilities.textDocument.codeAction.tagSupport.valueSet`.
+    /// Deterministic actions must remain untagged; generated actions may only
+    /// emit `tags: [1]` when this is true.
+    pub code_action_llm_generated_tag_support: bool,
     /// Supports workspace/codeLens/refresh request
     pub code_lens_refresh_support: bool,
     /// Supports workspace/semanticTokens/refresh request
@@ -311,6 +347,12 @@ pub struct ClientCapabilities {
     pub inlay_hint_refresh_support: bool,
     /// Client declared textDocument/inlayHint capability
     pub inlay_hint_support: bool,
+    /// Properties the client can resolve via codeLens/resolve
+    ///
+    /// Parsed from `capabilities.textDocument.codeLens.resolveSupport.properties`.
+    /// The server must only defer CodeLens properties that appear here. A `None`
+    /// value means the client sent no CodeLens `resolveSupport` entry.
+    pub code_lens_resolve_support: Option<std::collections::HashSet<String>>,
     /// Supports workspace/inlineValue/refresh request
     pub inline_value_refresh_support: bool,
     /// Supports workspace/diagnostic/refresh request
@@ -333,4 +375,16 @@ pub struct ClientCapabilities {
     /// When true the server may include a `labelDetails` object in completion
     /// items and in `completionItem/resolve` responses.
     pub label_details_support: bool,
+    /// Client supports `CompletionList.itemDefaults.data` (LSP 3.18).
+    ///
+    /// Parsed from `capabilities.textDocument.completion.completionList.itemDefaults`.
+    /// When true, completion responses may include shared `itemDefaults.data`
+    /// for clients that understand completion-list default item data.
+    pub completion_list_item_defaults_data_support: bool,
+    /// Client supports `CompletionList.applyKind` (LSP 3.18).
+    ///
+    /// Parsed from `capabilities.textDocument.completion.completionList.applyKindSupport`.
+    /// When true, completion responses may describe how supported item defaults
+    /// combine with per-item fields.
+    pub completion_list_apply_kind_support: bool,
 }

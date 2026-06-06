@@ -287,6 +287,68 @@ mod tests {
     }
 
     #[test]
+    fn collect_all_with_no_pending_docs_returns_empty_result_at_start_offset() {
+        let pending_docs = VecDeque::new();
+
+        let result = collect_all(b"content that should not be scanned", 7, pending_docs);
+
+        assert!(result.contents.is_empty());
+        assert!(result.terminators_found.is_empty());
+        assert_eq!(result.next_offset, 7);
+    }
+
+    #[test]
+    fn collect_all_accepts_standalone_cr_line_endings() -> TestResult {
+        let src = b"alpha\rbeta\rEOF\rafter";
+        let mut pending_docs = VecDeque::new();
+        pending_docs.push_back(pending("EOF", false));
+
+        let result = collect_all(src, 0, pending_docs);
+        let content = &result.contents[0];
+
+        assert_eq!(result.terminators_found, vec![true]);
+        assert_eq!(content.segments.len(), 2);
+        assert_eq!(slice(src, content.segments[0])?, "alpha");
+        assert_eq!(slice(src, content.segments[1])?, "beta");
+        assert_eq!(result.next_offset, 15);
+
+        Ok(())
+    }
+
+    #[test]
+    fn collect_all_strips_only_shared_indent_prefix() -> TestResult {
+        let src = b"\tpartial-tab\n  spaces-only\n\t  full-prefix\n\t  EOF\nafter";
+        let mut pending_docs = VecDeque::new();
+        pending_docs.push_back(pending("EOF", true));
+
+        let result = collect_all(src, 0, pending_docs);
+        let content = &result.contents[0];
+
+        assert_eq!(result.terminators_found, vec![true]);
+        assert_eq!(content.segments.len(), 3);
+        assert_eq!(slice(src, content.segments[0])?, "partial-tab");
+        assert_eq!(slice(src, content.segments[1])?, "  spaces-only");
+        assert_eq!(slice(src, content.segments[2])?, "full-prefix");
+
+        Ok(())
+    }
+
+    #[test]
+    fn collect_all_reports_empty_unterminated_heredoc_at_eof() {
+        let mut pending_docs = VecDeque::new();
+        pending_docs.push_back(pending("EOF", false));
+
+        let result = collect_all(b"", 0, pending_docs);
+        let content = &result.contents[0];
+
+        assert_eq!(result.terminators_found, vec![false]);
+        assert!(!content.terminated);
+        assert!(content.segments.is_empty());
+        assert_eq!(content.full_span, ByteSpan { start: 0, end: 0 });
+        assert_eq!(result.next_offset, 0);
+    }
+
+    #[test]
     fn collect_all_preserves_spaces_when_indent_is_not_allowed() -> TestResult {
         let src = b"  content\nEOF\n";
         let mut pending_docs = VecDeque::new();

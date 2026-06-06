@@ -32,7 +32,9 @@ permissions:
 jobs:
   validate:
     name: Validate CI policy ledgers
-    runs-on: ubuntu-24.04
+    runs-on:
+      group: em-ci-nano
+      labels: [self-hosted, linux, x64, em-ci, trusted-pr, workflow-nano]
     timeout-minutes: 5
     steps:
       - name: Checkout
@@ -40,11 +42,9 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
-        with:
-          python-version: "3.12"
-
+      # System python3 on the self-hosted runner (Ubuntu ships >=3.11 with
+      # tomllib). actions/setup-python has no tool-cache build for this
+      # runner's OS, and the validators are stdlib-only, so no setup needed.
       - name: Validate risk packs
         run: |
           python3 scripts/ci/validate_risk_packs.py --strict

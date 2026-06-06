@@ -430,7 +430,7 @@ impl CallHierarchyProvider {
                     return Some(result);
                 }
             }
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
                 if let Some(result) = f(condition) {
                     return Some(result);
                 }
@@ -832,6 +832,42 @@ sub target_func {
                 assert_eq!(caller2.from_ranges.len(), 2);
             }
         }
+    }
+
+    #[test]
+    fn visit_children_walks_if_branches_with_keyword_metadata() {
+        let provider = CallHierarchyProvider::new(String::new(), "file:///test.pl".to_string());
+        let loc = |start, end| SourceLocation { start, end };
+        let ident = |name: &str, start| {
+            Node::new(
+                NodeKind::Identifier { name: name.to_string() },
+                loc(start, start + name.len()),
+            )
+        };
+        let node = Node::new(
+            NodeKind::If {
+                condition: Box::new(ident("cond", 1)),
+                then_branch: Box::new(ident("then_branch", 7)),
+                elsif_branches: vec![(
+                    Box::new(ident("elsif_cond", 20)),
+                    Box::new(ident("elsif_branch", 32)),
+                )],
+                else_branch: Some(Box::new(ident("else_branch", 46))),
+                keyword: Some("unless".to_string()),
+            },
+            loc(0, 57),
+        );
+        let mut names = Vec::new();
+
+        let result = provider.visit_children(&node, |child| {
+            if let NodeKind::Identifier { name } = &child.kind {
+                names.push(name.clone());
+            }
+            None::<()>
+        });
+
+        assert!(result.is_none());
+        assert_eq!(names, vec!["cond", "then_branch", "elsif_cond", "elsif_branch", "else_branch"]);
     }
 
     #[test]

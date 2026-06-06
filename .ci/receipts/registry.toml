@@ -71,3 +71,10 @@ check = "review-projection"
 schema = ".ci/receipts/schemas/review-projection.schema.json"
 description = "Reviewer-emitted current-SHA receipt used by reconciler to project review labels."
 required_fields = ["sha", "verdict", "review_depth", "fix_forward_applied", "blocking_findings", "labels_projected"]
+
+[[receipt]]
+check = "droid-live-run"
+schema = ".ci/receipts/schemas/droid-live-run.schema.json"
+description = "Records the Droid review lane runtime shape for live-run evidence."
+producer = "Droid PR Review"
+required_fields = ["check", "schema_version", "event", "verdict", "workflow", "model", "runner_labels", "action", "review_posted", "debug_artifacts_uploaded", "anthropic_env_cleared"]

@@ -9,54 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added LSP 3.18 claim-boundary guards, text-document-content contract tests,
-  and the `xtask lsp-318-claims` check so unsupported protocol surfaces stay
-  explicit instead of accidentally documented as supported.
-- Added the semantic inline-completion roadmap for deterministic, parse-safe,
-  context-aware ghost text before any optional AI expansion.
-
-### Fixed
-
-- Inline completion now treats automatic trigger requests conservatively by
-  returning only the top deterministic candidate, while explicit invoked
-  requests keep the richer deterministic candidate set.
-- Inline completion now returns explicit single-line UTF-16 replacement ranges
-  for matching partial tokens such as `use str` and `$obj->n`, preventing ghost
-  text from duplicating text the user already typed.
-
-### Planned
-
-- Documented the Rust 1.95 / 0.14.0 rollout sequence before implementation: compatibility spike first, then MSRV/toolchain, lint, no-panic, file-policy, CI routing, and release-prep lanes.
-- Added the proactive CI integrity guards rail ([`docs/development/RUST_1_95_PROACTIVE_GUARDS.md`](docs/development/RUST_1_95_PROACTIVE_GUARDS.md)) as a sibling rollout. Six guard PRs (PG-1 through PG-6) covering label enforcement, risk-pack referential integrity, lane mapping with matrix expansion, net-new workflow-allowlist ledger, CI Actuals emitter + subscription coverage check, and broad-glob justification tightening. Each row mirrors a sibling-repo proven shape.
-- Consolidated the remaining Rust 1.95 → 0.14.0 work into a single canonical roadmap: rewrote [`docs/development/RUST_1_95_ROLLOUT.md`](docs/development/RUST_1_95_ROLLOUT.md) into a post-landing source of truth (already landed / remaining implementation ladder / per-rail acceptance contracts / Claude-Codex operating contract); slimmed [`docs/ci/perl-lsp-rust-1.95-rollout.md`](docs/ci/perl-lsp-rust-1.95-rollout.md) to a historical pointer; added [`docs/ci/test-evidence-lanes.md`](docs/ci/test-evidence-lanes.md) defining the five evidence-lane shapes (PR-fast required / PR-targeted / nightly cron / release-only / advisory) with risk-pack auto-routing, skipped-by-policy receipts, and LEM cost framing. Umbrella tracking: **#8663**.
-
-## [0.15.2] - 2026-05-26
-
-Release notes: [v0.15.2](docs/releases/v0.15.2.md)
-
-Crates.io packaging hotfix for the `cargo install` path.
-
-### Fixed
-
-- Included `build_catalog.rs` in the published `perl-lsp-rs-core` crate
-  package so the crate is self-contained after extraction. This fixes the
-  `0.15.1` crates.io install failure for `perllsp` and `perl-dap`.
-
-### Added
-
-- Added a package-content gate for `perl-lsp-rs-core` that checks the `.crate`
-  file list, extracts the archive, and verifies the unpacked crate with
-  `cargo check --locked`.
-
-## [0.15.1] - 2026-05-26
-
-Release notes: [v0.15.1](docs/releases/v0.15.1.md)
-
-Patch release focused on LSP4IJ inline completion and lean editor-mode
-hardening.
-
-### Added
-
 - 0.15.1 Neovim latency lane:
   - `--runtime-mode e2e` / `PERL_LSP_E2E=1` for latency-focused editor
     harnesses. Defaults: zero diagnostic debounce, syntax-only
@@ -98,6 +50,12 @@ hardening.
   dynamic LSP4IJ-shaped client receives deterministic suggestions, including
   `strict;` for a `use ` prefix. Disabling `lsp.inline_completion` suppresses
   advertisement, registration, and execution.
+- Inline completion now treats automatic trigger requests conservatively by
+  returning only the top deterministic candidate, while explicit invoked
+  requests keep the richer deterministic candidate set.
+- Inline completion now returns explicit single-line UTF-16 replacement ranges
+  for matching partial tokens such as `use str` and `$obj->n`, preventing ghost
+  text from duplicating text the user already typed.
 - Lean editor mode now honors `--file-watchers=false` during dynamic watcher
   registration while leaving feature-specific dynamic registrations, such as
   inline completion, available. Semantic tokens advertise full-only support
@@ -108,6 +66,9 @@ hardening.
 - Updated JetBrains/LSP4IJ setup docs to prefer the upstream LSP4IJ `perl-lsp`
   integration when available, with manual `perllsp --stdio` registration
   moved to separate fallback and development guidance.
+- Added the semantic inline-completion roadmap, defining deterministic
+  project-aware ghost text as the lane goal while keeping AI optional and
+  gated behind parse-safety, ranking, and fixture receipts.
 
 ### Notes (0.15.1)
 
@@ -120,6 +81,72 @@ hardening.
   --diagnostic-debounce-ms 0`, disable file watchers, and disable
   semantic tokens at the client unless you are explicitly testing
   semantic highlighting.
+
+### Planned
+
+- Documented the Rust 1.95 / 0.14.0 rollout sequence before implementation: compatibility spike first, then MSRV/toolchain, lint, no-panic, file-policy, CI routing, and release-prep lanes.
+- Added the proactive CI integrity guards rail ([`docs/development/RUST_1_95_PROACTIVE_GUARDS.md`](docs/development/RUST_1_95_PROACTIVE_GUARDS.md)) as a sibling rollout. Six guard PRs (PG-1 through PG-6) covering label enforcement, risk-pack referential integrity, lane mapping with matrix expansion, net-new workflow-allowlist ledger, CI Actuals emitter + subscription coverage check, and broad-glob justification tightening. Each row mirrors a sibling-repo proven shape.
+- Consolidated the remaining Rust 1.95 → 0.14.0 work into a single canonical roadmap: rewrote [`docs/development/RUST_1_95_ROLLOUT.md`](docs/development/RUST_1_95_ROLLOUT.md) into a post-landing source of truth (already landed / remaining implementation ladder / per-rail acceptance contracts / Claude-Codex operating contract); slimmed [`docs/ci/perl-lsp-rust-1.95-rollout.md`](docs/ci/perl-lsp-rust-1.95-rollout.md) to a historical pointer; added [`docs/ci/test-evidence-lanes.md`](docs/ci/test-evidence-lanes.md) defining the five evidence-lane shapes (PR-fast required / PR-targeted / nightly cron / release-only / advisory) with risk-pack auto-routing, skipped-by-policy receipts, and LEM cost framing. Umbrella tracking: **#8663**.
+
+## [0.15.2] - 2026-05-26
+
+Release notes: [v0.15.2](docs/releases/v0.15.2.md)
+
+Crates.io packaging hotfix for the `cargo install` path.
+
+### Fixed
+
+- **`perl-lsp-rs-core` crate now self-contained on crates.io.** `build_catalog.rs`
+  is now included in the published package so the crate is self-contained after
+  extraction. This fixes the `0.15.1` crates.io install failure for `perllsp`
+  and `perl-dap`. (#9613)
+
+### Added
+
+- **Package-content gate for `perl-lsp-rs-core`** — CI now checks the `.crate`
+  file list, extracts the archive, and verifies the unpacked crate with
+  `cargo check --locked`. (#9613)
+
+## [0.15.1] - 2026-05-26
+
+Release notes: [v0.15.1](docs/releases/v0.15.1.md)
+
+Patch release focused on LSP4IJ inline completion and lean editor-mode hardening.
+Includes the Neovim interactive-latency improvements (generation-aware stale-read
+cancellation, `--runtime-mode e2e`, `--diagnostic-mode syntax-only`).
+
+### Added
+
+- **Neovim / lean-editor latency rail** — `--runtime-mode e2e` /
+  `PERL_LSP_E2E=1` profile: zero diagnostic debounce, syntax-only diagnostics,
+  no eager workspace indexing, no file watchers by default.
+- **Generation-aware stale-read cancellation** — hover, completion, definition,
+  declaration, typeDefinition, implementation, and references are cancelled with
+  `RequestCancelled` when the document generation advances between ingress and
+  dispatch.
+- **`perl.explainProviderDecision` execute-command surface** — returns the
+  structured provider decision explanation payload; reports a low-confidence
+  fallback when no provider-specific receipt is attached.
+- Raw-RPC latency receipts in `perl-lsp-ux-tests::ux_latency_raw_rpc` and a
+  Neovim lean smoke script at `scripts/ux/neovim_lean_smoke.sh`.
+
+### Fixed
+
+- **LSP4IJ inline completion registration** — static clients receive top-level
+  `inlineCompletionProvider`; dynamic-capable clients receive
+  `client/registerCapability`; `experimental.inlineCompletionProvider` is never
+  emitted.
+- **Lean editor mode watcher gate** — `--file-watchers=false` is now honoured
+  during dynamic watcher registration while feature-specific registrations
+  (inline completion) remain available.
+- **Semantic tokens no longer advertise delta support** until the
+  result-id/delta path is implemented.
+
+### Notes
+
+- This release does not implement true incremental AST reuse. Latency
+  improvements come from skipping avoidable background work and cancelling
+  stale reads earlier.
 
 ## [0.15.0] - 2026-05-22
 

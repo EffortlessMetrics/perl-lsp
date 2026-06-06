@@ -800,6 +800,39 @@ impl LspServer {
         } else {
             json!({"changes": {}})
         };
+        let apply_edit_metadata_request = source_guard_context
+            .as_ref()
+            .filter(|_| can_return_edit)
+            .and_then(|(_uri, _line, _character, symbol, _byte_offset)| {
+                let apply_edit_label = format!("Safe delete {symbol}");
+                let apply_edit_description =
+                    format!("Review source-backed safe-delete edit for {symbol} before applying.");
+                match self.request_apply_workspace_edit_with_metadata(
+                    &apply_edit_label,
+                    &apply_edit_description,
+                    workspace_edit.clone(),
+                    true,
+                ) {
+                    Ok(Some(id)) => Some(json!({
+                        "id": id.as_i32(),
+                        "label": &apply_edit_label,
+                        "description": &apply_edit_description,
+                        "metadata": {
+                            "label": &apply_edit_label,
+                            "description": &apply_edit_description,
+                            "isRefactoring": true,
+                        },
+                    })),
+                    Ok(None) => None,
+                    Err(error) => {
+                        tracing::warn!(
+                            error = %error,
+                            "Failed to request workspace/applyEdit with metadata"
+                        );
+                        None
+                    }
+                }
+            });
         let returned_workspace_edit_count = lsp_workspace_edit_count(Some(&workspace_edit));
         let user_message = safe_delete_symbol_live_pilot_message(&receipt, can_return_edit);
 
@@ -856,6 +889,10 @@ impl LspServer {
             object
                 .insert("workspace_reference_count".to_string(), json!(workspace_reference_count));
             object.insert("workspace_edit".to_string(), workspace_edit);
+            if let Some(request) = apply_edit_metadata_request {
+                object.insert("apply_edit_requested".to_string(), json!(true));
+                object.insert("apply_edit_request".to_string(), request);
+            }
             object.insert("user_message".to_string(), json!(user_message));
             object.insert(
                 "claim_boundary".to_string(),

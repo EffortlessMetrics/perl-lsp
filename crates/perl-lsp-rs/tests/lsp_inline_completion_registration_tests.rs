@@ -1,6 +1,7 @@
 mod support;
 
 use serde_json::{Value, json};
+use std::time::Duration;
 use support::lsp_harness::LspHarness;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -169,6 +170,66 @@ fn inline_completion_automatic_trigger_returns_one_conservative_item() -> TestRe
 }
 
 #[test]
+fn inline_completion_automatic_trigger_suppresses_multiline_constructor_template() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_automatic_constructor.pl";
+    harness.open(uri, "sub new")?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, uri, 0, 7, 2)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+
+    assert!(items.is_empty(), "automatic trigger must stay silent for constructor templates");
+    Ok(())
+}
+
+#[test]
+fn inline_completion_automatic_trigger_suppresses_package_template() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_automatic_package.pl";
+    harness.open(uri, "package ")?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, uri, 0, 8, 2)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+
+    assert!(items.is_empty(), "automatic trigger must stay silent for package templates");
+    Ok(())
+}
+
+#[test]
+fn inline_completion_automatic_trigger_suppresses_generic_method_guess() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_automatic_method_guess.pl";
+    harness.open(uri, "$obj->n")?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, uri, 0, 7, 2)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+
+    assert!(items.is_empty(), "automatic trigger must not show generic method guesses");
+    Ok(())
+}
+
+#[test]
 fn inline_completion_invoked_trigger_returns_deterministic_items() -> TestResult {
     let mut harness = LspHarness::new();
     harness.initialize(Some(json!({
@@ -191,6 +252,223 @@ fn inline_completion_invoked_trigger_returns_deterministic_items() -> TestResult
     assert!(
         insert_texts.contains(&"feature ':5.36';"),
         "expected feature pragma item, got: {items:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn inline_completion_invoked_trigger_keeps_constructor_template() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_invoked_constructor.pl";
+    harness.open(uri, "sub new")?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, uri, 0, 7, 1)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+
+    assert!(
+        items.iter().any(|item| {
+            item.get("insertText")
+                .and_then(Value::as_str)
+                .is_some_and(|text| text.contains("bless") && text.contains("my $class = shift"))
+        }),
+        "invoked trigger must keep richer constructor template, got: {items:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn inline_completion_invoked_trigger_keeps_package_template() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_invoked_package.pl";
+    harness.open(uri, "package ")?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, uri, 0, 8, 1)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+
+    assert!(
+        items.iter().any(|item| {
+            item.get("insertText")
+                .and_then(Value::as_str)
+                .is_some_and(|text| text.contains("MyPackage;") && text.contains("use strict;"))
+        }),
+        "invoked trigger must keep richer package template, got: {items:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn inline_completion_use_namespace_returns_reachable_workspace_module() -> TestResult {
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    workspace.write("lib/My/App.pm", "package My::App;\n1;\n")?;
+    workspace.write("lib/Other/Tool.pm", "package Other::Tool;\n1;\n")?;
+
+    let mut harness = LspHarness::new_raw();
+    harness.initialize_ready(
+        &workspace.root_uri,
+        Some(json!({
+            "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+        })),
+    )?;
+
+    let uri = workspace.uri("script.pl");
+    harness.open(&uri, "use My::")?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, &uri, 0, 8, 1)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+    let module = item_with_insert_text(items, "My::App;")?;
+
+    assert_eq!(module.pointer("/range/start/line"), Some(&json!(0)));
+    assert_eq!(module.pointer("/range/start/character"), Some(&json!(4)));
+    assert_eq!(module.pointer("/range/end/line"), Some(&json!(0)));
+    assert_eq!(module.pointer("/range/end/character"), Some(&json!(8)));
+    assert!(
+        items.iter().all(|item| item.get("insertText") != Some(&json!("Other::Tool;"))),
+        "inline module completion must stay within the typed namespace, got: {items:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn inline_completion_use_namespace_returns_file_local_use_lib_module() -> TestResult {
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    workspace.write("t/lib/My/FromTestLib.pm", "package My::FromTestLib;\n1;\n")?;
+
+    let mut harness = LspHarness::new_raw();
+    harness.initialize_ready(
+        &workspace.root_uri,
+        Some(json!({
+            "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+        })),
+    )?;
+
+    let uri = workspace.uri("script.pl");
+    harness.open(&uri, "use lib 't/lib';\nuse My::")?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, &uri, 1, 8, 1)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+    let module = item_with_insert_text(items, "My::FromTestLib;")?;
+
+    assert_eq!(module.pointer("/range/start/line"), Some(&json!(1)));
+    assert_eq!(module.pointer("/range/start/character"), Some(&json!(4)));
+    assert_eq!(module.pointer("/range/end/line"), Some(&json!(1)));
+    assert_eq!(module.pointer("/range/end/character"), Some(&json!(8)));
+    Ok(())
+}
+
+#[test]
+fn inline_completion_use_namespace_returns_indexed_open_workspace_module() -> TestResult {
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+
+    let mut harness = LspHarness::new_raw();
+    harness.initialize_ready(
+        &workspace.root_uri,
+        Some(json!({
+            "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+        })),
+    )?;
+
+    let module_uri = workspace.uri("lib/My/Live.pm");
+    harness.open(&module_uri, "package My::Live;\n1;\n")?;
+    harness.wait_for_symbol("My::Live", Some(&module_uri), Duration::from_secs(2))?;
+
+    let script_uri = workspace.uri("script.pl");
+    harness.open(&script_uri, "use My::")?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, &script_uri, 0, 8, 1)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+    let module = item_with_insert_text(items, "My::Live;")?;
+
+    assert_eq!(module.pointer("/range/start/line"), Some(&json!(0)));
+    assert_eq!(module.pointer("/range/start/character"), Some(&json!(4)));
+    assert_eq!(module.pointer("/range/end/line"), Some(&json!(0)));
+    assert_eq!(module.pointer("/range/end/character"), Some(&json!(8)));
+    Ok(())
+}
+
+#[test]
+fn inline_completion_use_namespace_suppresses_indexed_module_after_no_lib() -> TestResult {
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+
+    let mut harness = LspHarness::new_raw();
+    harness.initialize_ready(
+        &workspace.root_uri,
+        Some(json!({
+            "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+        })),
+    )?;
+
+    let module_uri = workspace.uri("lib/My/Cancelled.pm");
+    harness.open(&module_uri, "package My::Cancelled;\n1;\n")?;
+    harness.wait_for_symbol("My::Cancelled", Some(&module_uri), Duration::from_secs(2))?;
+
+    let script_uri = workspace.uri("script.pl");
+    harness.open(&script_uri, "use lib 'lib';\nno lib 'lib';\nuse My::")?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, &script_uri, 2, 8, 1)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+
+    assert!(
+        items.iter().all(|item| item.get("insertText") != Some(&json!("My::Cancelled;"))),
+        "inline module completion must respect no lib cancellations, got: {items:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn inline_completion_use_namespace_suppresses_indexed_module_outside_inc_roots() -> TestResult {
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+
+    let mut harness = LspHarness::new_raw();
+    harness.initialize_ready(
+        &workspace.root_uri,
+        Some(json!({
+            "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+        })),
+    )?;
+
+    let module_uri = workspace.uri("t/My/Hidden.pm");
+    harness.open(&module_uri, "package My::Hidden;\n1;\n")?;
+    harness.wait_for_symbol("My::Hidden", Some(&module_uri), Duration::from_secs(2))?;
+
+    let script_uri = workspace.uri("script.pl");
+    harness.open(&script_uri, "use My::")?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, &script_uri, 0, 8, 1)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+
+    assert!(
+        items.iter().all(|item| item.get("insertText") != Some(&json!("My::Hidden;"))),
+        "inline module completion must not leak indexed modules outside effective @INC, got: \
+         {items:?}"
     );
     Ok(())
 }
@@ -310,6 +588,82 @@ fn inline_completion_selected_completion_info_matching_text_returns_same_range()
 }
 
 #[test]
+fn inline_completion_selected_completion_info_use_partial_token_returns_replacement_range()
+-> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_selected_completion_use_partial_range.pl";
+    harness.open(uri, "use str")?;
+
+    let selected_range = json!({
+        "start": { "line": 0, "character": 4 },
+        "end": { "line": 0, "character": 7 }
+    });
+    let result = request_inline_completion_with_context(
+        &mut harness,
+        uri,
+        0,
+        7,
+        json!({
+            "triggerKind": 1,
+            "selectedCompletionInfo": {
+                "range": selected_range,
+                "text": "strict"
+            }
+        }),
+    )?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+    let strict = item_with_insert_text(items, "strict;")?;
+
+    assert_item_range(strict, 0, 4, 0, 7)?;
+    Ok(())
+}
+
+#[test]
+fn inline_completion_selected_completion_info_method_partial_token_returns_replacement_range()
+-> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_selected_completion_method_partial_range.pl";
+    harness.open(uri, "$obj->n")?;
+
+    let selected_range = json!({
+        "start": { "line": 0, "character": 6 },
+        "end": { "line": 0, "character": 7 }
+    });
+    let result = request_inline_completion_with_context(
+        &mut harness,
+        uri,
+        0,
+        7,
+        json!({
+            "triggerKind": 1,
+            "selectedCompletionInfo": {
+                "range": selected_range,
+                "text": "new"
+            }
+        }),
+    )?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+    let new_method = item_with_insert_text(items, "new()")?;
+
+    assert_item_range(new_method, 0, 6, 0, 7)?;
+    Ok(())
+}
+
+#[test]
 fn inline_completion_selected_completion_info_text_mismatch_returns_empty() -> TestResult {
     let mut harness = LspHarness::new();
     harness.initialize(Some(json!({
@@ -415,7 +769,104 @@ fn inline_completion_selected_completion_info_multiline_range_returns_empty() ->
 }
 
 #[test]
-fn inline_completion_items_use_string_insert_text() -> TestResult {
+fn inline_completion_crlf_partial_token_returns_wire_range() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_crlf_partial_range.pl";
+    let source = "my $value = 1;\r\nuse str";
+    let character = u32::try_from("use str".encode_utf16().count())?;
+    harness.open(uri, source)?;
+
+    let result = request_inline_completion_with_trigger_kind(&mut harness, uri, 1, character, 1)?;
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("inline completion result must contain items array")?;
+    let strict = item_with_insert_text(items, "strict;")?;
+
+    assert_item_range(strict, 1, 4, 1, character)?;
+    assert!(
+        items.iter().all(|item| item.get("insertText") != Some(&json!("warnings;"))),
+        "CRLF partial use prefix must not return non-matching pragma items"
+    );
+    Ok(())
+}
+
+#[test]
+fn inline_completion_selected_completion_info_missing_text_is_rejected() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_selected_completion_missing_text.pl";
+    harness.open(uri, "use ")?;
+    let response = harness.request_raw(json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "textDocument/inlineCompletion",
+        "params": {
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 4 },
+            "context": {
+                "triggerKind": 1,
+                "selectedCompletionInfo": {
+                    "range": {
+                        "start": { "line": 0, "character": 4 },
+                        "end": { "line": 0, "character": 4 }
+                    }
+                }
+            }
+        }
+    }));
+
+    assert_eq!(response.pointer("/error/code"), Some(&json!(-32602)));
+    assert_eq!(
+        response.pointer("/error/message"),
+        Some(&json!("Missing selectedCompletionInfo.text"))
+    );
+    Ok(())
+}
+
+#[test]
+fn inline_completion_selected_completion_info_invalid_range_is_rejected() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
+    })))?;
+
+    let uri = "file:///inline_selected_completion_invalid_range.pl";
+    harness.open(uri, "use ")?;
+    let response = harness.request_raw(json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "textDocument/inlineCompletion",
+        "params": {
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 4 },
+            "context": {
+                "triggerKind": 1,
+                "selectedCompletionInfo": {
+                    "range": { "start": { "line": 0 } },
+                    "text": "strict"
+                }
+            }
+        }
+    }));
+
+    assert_eq!(response.pointer("/error/code"), Some(&json!(-32602)));
+    assert_eq!(
+        response.pointer("/error/message"),
+        Some(&json!("Invalid selectedCompletionInfo.range"))
+    );
+    Ok(())
+}
+
+#[test]
+fn inline_completion_items_do_not_emit_object_form_string_value() -> TestResult {
     let mut harness = LspHarness::new();
     harness.initialize(Some(json!({
         "textDocument": { "inlineCompletion": { "dynamicRegistration": true } }
@@ -433,7 +884,7 @@ fn inline_completion_items_use_string_insert_text() -> TestResult {
     assert!(!items.is_empty(), "expected deterministic inline completion items");
     assert!(
         items.iter().all(|item| item.get("insertText").is_some_and(Value::is_string)),
-        "InlineCompletionItem.insertText must be a string or valid StringValue object"
+        "object-form StringValue insertText is unclaimed; current inline items must use plain strings"
     );
     Ok(())
 }

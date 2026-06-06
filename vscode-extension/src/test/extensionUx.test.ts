@@ -19,6 +19,7 @@ jest.mock('vscode-languageclient/node', () => ({
 }));
 import {
   copyProviderDecisionReceiptCommand,
+  diagnoseConfiguredServerPath,
   explainDiagnosticCommand,
   explainMissingModuleLookupCommand,
   explainProviderDecisionCommand,
@@ -48,6 +49,35 @@ function makeContext(version = '0.12.3'): any {
     },
   };
 }
+
+describe('diagnoseConfiguredServerPath (perl-lsp.serverPath validation)', () => {
+  function makeChannel(): any {
+    return { appendLine: jest.fn() };
+  }
+
+  test('flags a configured serverPath that does not exist and logs a diagnostic', () => {
+    const channel = makeChannel();
+    const result = diagnoseConfiguredServerPath('/nonexistent/perllsp', false, channel);
+    expect(result).toBe('/nonexistent/perllsp');
+    expect(channel.appendLine).toHaveBeenCalledTimes(1);
+    expect(channel.appendLine.mock.calls[0][0]).toContain('/nonexistent/perllsp');
+    expect(channel.appendLine.mock.calls[0][0]).toContain('does not exist');
+  });
+
+  test('returns null and stays silent when the configured serverPath exists', () => {
+    const channel = makeChannel();
+    const result = diagnoseConfiguredServerPath('/usr/local/bin/perllsp', true, channel);
+    expect(result).toBeNull();
+    expect(channel.appendLine).not.toHaveBeenCalled();
+  });
+
+  test('returns null and stays silent when no serverPath is configured', () => {
+    const channel = makeChannel();
+    expect(diagnoseConfiguredServerPath(undefined, false, channel)).toBeNull();
+    expect(diagnoseConfiguredServerPath('', false, channel)).toBeNull();
+    expect(channel.appendLine).not.toHaveBeenCalled();
+  });
+});
 
 describe('extension UX warnings', () => {
   afterEach(() => {
@@ -133,8 +163,9 @@ describe('extension UX warnings', () => {
     };
 
     const getConfiguration = vscode.workspace.getConfiguration as jest.Mock;
+    // Both paths are explicit (not built-in defaults), so both are creatable.
     getConfiguration.mockImplementation(() => ({
-      get: jest.fn(() => ['lib', 'vendor/perl']),
+      get: jest.fn(() => ['t/lib', 'vendor/perl']),
     }));
 
     (vscode.workspace as any).workspaceFolders = [
@@ -152,7 +183,7 @@ describe('extension UX warnings', () => {
 
     await validateIncludePaths(context);
 
-    expect(fs.existsSync(path.join(workspaceDir, 'lib'))).toBe(true);
+    expect(fs.existsSync(path.join(workspaceDir, 't/lib'))).toBe(true);
     expect(fs.existsSync(path.join(workspaceDir, 'vendor/perl'))).toBe(true);
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
       expect.stringContaining('Created 2 include directories')
@@ -375,6 +406,144 @@ describe('extension UX warnings', () => {
     expect(fs.existsSync(path.resolve(workspaceDir, '../outside-lib'))).toBe(false);
   });
 
+  // --- Origin-aware include-path validation -------------------------------
+  //
+  // Built-in default include paths (e.g. "lib", "local/lib/perl5") are
+  // optional search hints: missing ones must NOT produce a user-facing
+  // warning. Only explicitly-configured paths are expectations worth warning
+  // about. See the include-path warning policy fix.
+
+  // A configuration mock whose effective value is `paths` and whose built-in
+  // default (via inspect) is the package.json default ["lib", "local/lib/perl5"].
+  function mockIncludePathConfig(paths: string[]): void {
+    (vscode.workspace.getConfiguration as jest.Mock).mockImplementation(() => ({
+      get: jest.fn(() => paths),
+      inspect: jest.fn(() => ({
+        key: 'perl-lsp.includePaths',
+        defaultValue: ['lib', 'local/lib/perl5'],
+      })),
+    }));
+  }
+
+  function setSingleWorkspace(workspaceDir: string): void {
+    (vscode.workspace as any).workspaceFolders = [
+      {
+        name: 'workspace',
+        uri: {
+          fsPath: workspaceDir,
+          toString: () => `file://${workspaceDir}`,
+        },
+      },
+    ];
+  }
+
+  test('default_missing_lib_is_not_reported', async () => {
+    const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-default-lib-'));
+    const context = makeContext();
+    mockIncludePathConfig(['lib']);
+    setSingleWorkspace(workspaceDir);
+
+    const showWarningMessage = vscode.window.showWarningMessage as jest.Mock;
+    showWarningMessage.mockResolvedValue(undefined);
+
+    await validateIncludePaths(context);
+
+    expect(showWarningMessage).not.toHaveBeenCalled();
+  });
+
+  test('default_missing_local_lib_perl5_is_not_reported', async () => {
+    const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-default-local-'));
+    const context = makeContext();
+    mockIncludePathConfig(['local/lib/perl5']);
+    setSingleWorkspace(workspaceDir);
+
+    const showWarningMessage = vscode.window.showWarningMessage as jest.Mock;
+    showWarningMessage.mockResolvedValue(undefined);
+
+    await validateIncludePaths(context);
+
+    expect(showWarningMessage).not.toHaveBeenCalled();
+  });
+
+  test('explicit_missing_include_path_is_reported', async () => {
+    const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-explicit-'));
+    const context = makeContext();
+    mockIncludePathConfig(['vendor/lib']);
+    setSingleWorkspace(workspaceDir);
+
+    const showWarningMessage = vscode.window.showWarningMessage as jest.Mock;
+    showWarningMessage.mockResolvedValue(undefined);
+
+    await validateIncludePaths(context);
+
+    expect(showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining('vendor/lib'),
+      'Open Settings',
+      'Create Missing Directories'
+    );
+  });
+
+  test('mixed_default_and_explicit_reports_only_explicit', async () => {
+    const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-mixed-'));
+    const context = makeContext();
+    // Neither path exists on disk; "lib" is a default hint, "vendor/lib" is explicit.
+    mockIncludePathConfig(['lib', 'vendor/lib']);
+    setSingleWorkspace(workspaceDir);
+
+    const showWarningMessage = vscode.window.showWarningMessage as jest.Mock;
+    showWarningMessage.mockResolvedValue(undefined);
+
+    await validateIncludePaths(context);
+
+    expect(showWarningMessage).toHaveBeenCalledTimes(1);
+    const [message] = showWarningMessage.mock.calls[0];
+    expect(message).toContain('vendor/lib');
+    expect(message).not.toContain('"lib"');
+    // The suppressed default must not inflate the missing-path count.
+    expect(message).not.toContain('include paths are missing');
+  });
+
+  test('create_missing_directories_creates_only_explicit_paths', async () => {
+    const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-create-explicit-only-'));
+    const context = makeContext();
+    mockIncludePathConfig(['lib', 'vendor/lib', 'local/lib/perl5']);
+    setSingleWorkspace(workspaceDir);
+
+    const showWarningMessage = vscode.window.showWarningMessage as jest.Mock;
+    showWarningMessage.mockResolvedValue('Create Missing Directories');
+
+    await validateIncludePaths(context);
+
+    expect(showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining('vendor/lib'),
+      'Open Settings',
+      'Create Missing Directories'
+    );
+    expect(fs.existsSync(path.join(workspaceDir, 'vendor/lib'))).toBe(true);
+    expect(fs.existsSync(path.join(workspaceDir, 'lib'))).toBe(false);
+    expect(fs.existsSync(path.join(workspaceDir, 'local/lib/perl5'))).toBe(false);
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      expect.stringContaining('Created 1 include directory: vendor/lib.')
+    );
+  });
+
+  test('existing_default_path_is_still_used', async () => {
+    const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-existing-default-'));
+    fs.mkdirSync(path.join(workspaceDir, 'lib'), { recursive: true });
+    const context = makeContext();
+    mockIncludePathConfig(['lib']);
+    setSingleWorkspace(workspaceDir);
+
+    const showWarningMessage = vscode.window.showWarningMessage as jest.Mock;
+    showWarningMessage.mockResolvedValue(undefined);
+
+    await validateIncludePaths(context);
+
+    // Present default path: no warning, and the directory is left untouched
+    // so the server keeps resolving modules through it.
+    expect(showWarningMessage).not.toHaveBeenCalled();
+    expect(fs.existsSync(path.join(workspaceDir, 'lib'))).toBe(true);
+  });
 
   test('syncs perlcritic settings to the server', async () => {
     const sendNotification = jest.fn();

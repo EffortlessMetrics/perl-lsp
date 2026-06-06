@@ -1,0 +1,161 @@
+name: Candidate Issue (Discovery Desk)
+description: A lightweight, evidence-backed candidate found by the Issue Discovery / Bug Scout Desk — upstream of plan review, not yet builder-ready
+labels: ["candidate-issue", "swarm-discovered"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Candidate Issue Packet
+        Filed by the **Issue Discovery / Bug Scout Desk** (see
+        `docs/reference/ISSUE_DISCOVERY_DOCTRINE.md`). This is a *candidate* —
+        enough evidence that the plan-review desk can verify it without
+        starting from zero. Do **not** overbuild it; the next desk does the
+        full builder-ready plan.
+
+        File only **high-confidence** findings here. Medium-confidence
+        findings become `needs-research`. Low-confidence findings stay in the
+        scout report. Never apply `builder-ready` — that belongs to plan review.
+
+  - type: textarea
+    id: finding
+    attributes:
+      label: "Finding"
+      description: One-sentence description of what's wrong or risky.
+      placeholder: |
+        DAP `variables` request returns values against a stale variableReference
+        after a `continue`, so the editor shows the previous stop's locals.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: "Evidence"
+      description: |
+        The source surface and artifacts that make this real — not a hunch.
+        Include exact file:line references.
+      placeholder: |
+        - Source: crates/perl-dap/src/handlers/variables.rs:88 (ref looked up
+          before the new stop event is processed)
+        - Test / fixture: crates/perl-dap/tests/e2e_evaluate.rs has no assertion
+          that variableReference is reissued after continue
+        - Receipt / CI / docs: target/receipts/dap-e2e.json shows only happy-path
+        - Related issues / PRs: #767 (evaluate e2e), #927 (stop-state)
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: "Impact"
+      description: Who sees this — user, maintainer, CI, or tooling — and how?
+      placeholder: |
+        User-visible: after stepping/continuing, the Variables pane shows stale
+        locals until the next manual refresh. Looks like a debugger correctness bug.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: "Minimal reproduction / sequence"
+      description: |
+        A command, Perl snippet, LSP request sequence, DAP request sequence, or
+        workflow case. Concrete enough to replay.
+      placeholder: |
+        DAP sequence:
+        initialize → launch → setBreakpoints → configurationDone → stopped
+        → scopes → variables (ref=1001) → continue → stopped
+        → variables (ref=1001 reused?) ← should be a fresh ref
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: suspected_area
+    attributes:
+      label: "Suspected root area"
+      description: Where the fix likely lives. Best guess is fine — plan-review verifies.
+      placeholder: |
+        - File: crates/perl-dap/src/handlers/variables.rs
+        - Function / type: VariablesHandler::resolve_reference
+        - Boundary: stop-event → variableReference lifecycle
+    validations:
+      required: true
+
+  - type: textarea
+    id: dedupe
+    attributes:
+      label: "Why this is not already covered"
+      description: |
+        Dedupe by **failure mode**, not file/theme overlap. Record what you checked.
+      placeholder: |
+        Checked:
+        - open issues: searched "variableReference" / "stale" — no open match
+        - recent merged PRs: #767 covers evaluate, not variable lifetime
+        - tests: e2e_evaluate.rs asserts value, not ref reissue
+        Same file as #767 but a different failure mode → sequence, not duplicate.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      description: Which discovery scout surface does this belong to?
+      options:
+        - dap
+        - lsp
+        - parser
+        - workspace-facts
+        - ux
+        - ci-ops
+        - robustness
+        - test-quality
+        - docs-receipt
+    validations:
+      required: true
+
+  - type: dropdown
+    id: classification
+    attributes:
+      label: Classification
+      options:
+        - bug
+        - missing coverage / test-gap
+        - stale docs / docs-drift
+        - wrong abstraction
+        - unsafe fallback / robustness
+        - protocol mismatch
+        - test weakness
+        - CI policy gap / ci-ops
+        - tooling gap
+    validations:
+      required: true
+
+  - type: dropdown
+    id: next_workflow
+    attributes:
+      label: Suggested next workflow
+      description: Where should this candidate go after triage?
+      options:
+        - needs-plan-review
+        - needs-research
+        - needs-repro
+        - needs-source-grounding
+        - needs-architecture-review
+        - direct small builder candidate
+        - discard if disproven
+    validations:
+      required: true
+
+  - type: dropdown
+    id: confidence
+    attributes:
+      label: Confidence
+      description: Only `high` should be filed directly. `medium` → needs-research. `low` → keep in scout report, do not file.
+      options:
+        - high
+        - medium
+    validations:
+      required: true

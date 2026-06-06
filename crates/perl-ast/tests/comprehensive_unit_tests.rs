@@ -189,6 +189,7 @@ fn if_with_elsif_and_else() -> Result<(), Box<dyn std::error::Error>> {
                 Box::new(block_node(vec![num_node("2")])),
             )],
             else_branch: Some(Box::new(block_node(vec![num_node("3")]))),
+            keyword: None,
         },
         loc(0, 50),
     );
@@ -203,6 +204,7 @@ fn while_with_continue() -> Result<(), Box<dyn std::error::Error>> {
             condition: Box::new(num_node("1")),
             body: Box::new(block_node(vec![])),
             continue_block: Some(Box::new(block_node(vec![]))),
+            keyword: None,
         },
         loc(0, 20),
     );
@@ -472,6 +474,7 @@ fn sexp_if_elsif_else() -> Result<(), Box<dyn std::error::Error>> {
             then_branch: Box::new(block_node(vec![])),
             elsif_branches: vec![(Box::new(var_node("$", "d")), Box::new(block_node(vec![])))],
             else_branch: Some(Box::new(block_node(vec![]))),
+            keyword: None,
         },
         loc(0, 50),
     );
@@ -489,6 +492,7 @@ fn sexp_while() -> Result<(), Box<dyn std::error::Error>> {
             condition: Box::new(num_node("1")),
             body: Box::new(block_node(vec![])),
             continue_block: None,
+            keyword: None,
         },
         loc(0, 15),
     );
@@ -504,6 +508,7 @@ fn sexp_while_with_continue() -> Result<(), Box<dyn std::error::Error>> {
             condition: Box::new(num_node("1")),
             body: Box::new(block_node(vec![])),
             continue_block: Some(Box::new(block_node(vec![]))),
+            keyword: None,
         },
         loc(0, 25),
     );
@@ -932,6 +937,7 @@ fn sexp_labeled_statement() -> Result<(), Box<dyn std::error::Error>> {
                     condition: Box::new(num_node("1")),
                     body: Box::new(block_node(vec![])),
                     continue_block: None,
+                    keyword: None,
                 },
                 loc(0, 15),
             )),
@@ -1239,6 +1245,7 @@ fn children_of_if_with_branches() -> Result<(), Box<dyn std::error::Error>> {
             then_branch: Box::new(block_node(vec![])),
             elsif_branches: vec![(Box::new(num_node("2")), Box::new(block_node(vec![])))],
             else_branch: Some(Box::new(block_node(vec![]))),
+            keyword: None,
         },
         loc(0, 30),
     );

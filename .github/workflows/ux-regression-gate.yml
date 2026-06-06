@@ -373,3 +373,73 @@ jobs:
       - name: Fail UX regression gate on test failures
         if: steps.harness_check.outputs.harness_available == 'true' && steps.ux_tests.outcome == 'failure'
         run: exit 1
+
+  # ---------------------------------------------------------------------------
+  # Extension Jest gate
+  #
+  # The Rust UX harness above does NOT exercise the VS Code extension's own
+  # TypeScript test suite. Before this job existed, a `vscode-extension/**`
+  # change could merge with its Jest suite never running in PR CI — which is
+  # exactly how the activation-events regression (#860) reached master while
+  # the guard test sat green-because-never-run. This job closes that hole:
+  # lint -> typecheck -> jest, on every PR that touches extension paths.
+  #
+  # This is a BLOCKING gate: lint, typecheck, and jest must pass. The suite was
+  # de-flaked (network transport stubbed in tests) and confirmed deterministically
+  # green before enforcement was enabled (#932).
+  # ---------------------------------------------------------------------------
+  extension-jest:
+    name: Extension Jest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: vscode-extension/package-lock.json
+
+      - name: Install dependencies (npm ci)
+        working-directory: vscode-extension
+        run: npm ci
+
+      - name: Lint (eslint)
+        working-directory: vscode-extension
+        run: npm run lint
+
+      - name: Typecheck (tsc)
+        working-directory: vscode-extension
+        run: npm run compile
+
+      - name: Unit tests (jest --ci)
+        id: jest
+        working-directory: vscode-extension
+        run: npm run test:ci
+
+      - name: Report extension Jest result (ci/extension-jest)
+        if: always()
+        uses: actions/github-script@v9
+        with:
+          script: |
+            // Blocking gate: the commit status reflects the real jest outcome.
+            const jest = '${{ steps.jest.outcome }}';
+            const state = jest === 'success' ? 'success' : 'failure';
+            const description = state === 'success'
+              ? 'extension lint + typecheck + jest all green'
+              : 'extension jest failed — run: cd vscode-extension && npm run test:ci';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state,
+              context: 'ci/extension-jest',
+              description,
+              target_url: `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
+            });

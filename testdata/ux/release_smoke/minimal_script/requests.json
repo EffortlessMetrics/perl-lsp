@@ -1,0 +1,27 @@
+[
+  {
+    "method": "initialize",
+    "target": "."
+  },
+  {
+    "method": "textDocument/didOpen",
+    "file": "bin/hello.pl"
+  },
+  {
+    "method": "textDocument/documentSymbol",
+    "file": "bin/hello.pl"
+  },
+  {
+    "method": "textDocument/completion",
+    "file": "bin/hello.pl",
+    "position_marker": "$message"
+  },
+  {
+    "method": "textDocument/codeAction",
+    "file": "bin/hello.pl",
+    "diagnostic_source": "none"
+  },
+  {
+    "method": "shutdown"
+  }
+]

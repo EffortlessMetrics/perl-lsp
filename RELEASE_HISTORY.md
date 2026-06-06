@@ -14,8 +14,8 @@ Tag commit timestamps may differ from release dates.
 
 | Version | Tag | GitHub Release | Released | Tag commit | Compare | Assets | crates.io | VS Code Marketplace | Notes file |
 |---------|-----|----------------|----------|------------|---------|--------|-----------|---------------------|------------|
-| [0.15.2] | `v0.15.2` | [yes][gh-0.15.2] | 2026-05-26 | `746edcb7` | [v0.15.1...v0.15.2] | 10 (7 binaries, VSIX, SHA256SUMS, SBOM) | 0.15.2 install smoke passed for `perllsp` and `perl-dap` | [perl-lsp-rs][vsce] 0.15.2 | [v0.15.2][n-0.15.2] |
-| [0.15.1] | `v0.15.1` | pending | pending | `pending` | [v0.15.0...v0.15.1] | pending | superseded by 0.15.2 for cargo install users | pending | [v0.15.1][n-0.15.1] |
+| [0.15.2] | `v0.15.2` | pending | 2026-05-26 | `746edcb7` | [v0.15.1...v0.15.2] | pending | pending | pending | [v0.15.2][n-0.15.2] |
+| [0.15.1] | `v0.15.1` | pending | 2026-05-26 | `15cbe7e6` | [v0.15.0...v0.15.1] | pending | pending | pending | [v0.15.1][n-0.15.1] |
 | [0.15.0] | `v0.15.0` | pending | pending | `pending` | [v0.14.0...v0.15.0] | pending | pending | pending | [v0.15.0][n-0.15.0] |
 | [0.14.0] | `v0.14.0` | [yes][gh-0.14.0] | 2026-05-12 | `82e64200` | [v0.13.4...v0.14.0] | 1 VSIX | 0.14.0 primary packages visible; full receipt pending | pending | [v0.14.0][n-0.14.0] |
 | [0.13.4] | `v0.13.4` | pending | pending | `pending` | [v0.13.3...v0.13.4] | 10 (7 binaries, VSIX, SHA256SUMS, SBOM) | pending | pending | [v0.13.4][n-0.13.4] |
@@ -107,8 +107,6 @@ Tag commit timestamps may differ from release dates.
 [0.8.3]: docs/releases/v0.8.3.md
 
 <!-- GitHub Releases -->
-[gh-0.15.2]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.15.2
-[gh-0.15.1]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.15.1
 [gh-0.15.0]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.15.0
 [gh-0.14.0]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.14.0
 [gh-0.13.4]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.13.4

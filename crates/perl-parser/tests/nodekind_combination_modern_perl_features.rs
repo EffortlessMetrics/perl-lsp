@@ -514,7 +514,7 @@ where
             find_nodes_recursive(then_expr, predicate, results);
             find_nodes_recursive(else_expr, predicate, results);
         }
-        NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+        NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
             find_nodes_recursive(condition, predicate, results);
             find_nodes_recursive(then_branch, predicate, results);
             for (_, branch) in elsif_branches {
@@ -524,7 +524,7 @@ where
                 find_nodes_recursive(else_branch, predicate, results);
             }
         }
-        NodeKind::While { condition, body, continue_block } => {
+        NodeKind::While { condition, body, continue_block, .. } => {
             find_nodes_recursive(condition, predicate, results);
             find_nodes_recursive(body, predicate, results);
             if let Some(cont) = continue_block {

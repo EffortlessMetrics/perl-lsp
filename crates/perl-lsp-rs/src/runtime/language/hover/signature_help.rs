@@ -28,6 +28,7 @@ impl LspServer {
         if let Some(params) = params {
             let uri = req_uri(&params)?;
             let (line, character) = req_position(&params)?;
+            let active_signature = active_signature_from_context(&params);
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -44,7 +45,7 @@ impl LspServer {
                         {
                             return Ok(Some(json!({
                                 "signatures": [signature],
-                                "activeSignature": 0,
+                                "activeSignature": active_signature,
                                 "activeParameter": active_param
                             })));
                         }
@@ -54,7 +55,7 @@ impl LspServer {
                     if let Some(signature) = self.get_builtin_function_signature(&function_name) {
                         return Ok(Some(json!({
                             "signatures": [signature],
-                            "activeSignature": 0,
+                            "activeSignature": active_signature,
                             "activeParameter": active_param
                         })));
                     }
@@ -109,7 +110,7 @@ impl LspServer {
                                             "documentation": desc,
                                             "parameters": []
                                         })],
-                                        "activeSignature": 0,
+                                        "activeSignature": active_signature,
                                         "activeParameter": active_param
                                     })));
                                 }
@@ -124,7 +125,7 @@ impl LspServer {
                             "documentation": null,
                             "parameters": []
                         })],
-                        "activeSignature": 0,
+                        "activeSignature": active_signature,
                         "activeParameter": active_param
                     })));
                 }
@@ -745,4 +746,16 @@ impl LspServer {
             None
         }
     }
+}
+
+fn active_signature_from_context(params: &Value) -> u64 {
+    let Some(context) = params.get("context") else {
+        return 0;
+    };
+
+    if context.get("isRetrigger").and_then(Value::as_bool) != Some(true) {
+        return 0;
+    }
+
+    context.pointer("/activeSignatureHelp/activeSignature").and_then(Value::as_u64).unwrap_or(0)
 }

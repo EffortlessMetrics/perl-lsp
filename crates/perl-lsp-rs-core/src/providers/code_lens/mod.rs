@@ -50,6 +50,9 @@ pub struct Command {
     pub title: String,
     /// The identifier of the command to execute
     pub command: String,
+    /// Plain text tooltip shown by clients that support LSP 3.18 command tooltips.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tooltip: Option<String>,
     /// Arguments to the command
     #[serde(skip_serializing_if = "Option::is_none")]
     pub arguments: Option<Vec<Value>>,
@@ -103,6 +106,7 @@ impl CodeLensProvider {
                 command: Some(Command {
                     title: "\u{25b6} Run All Tests".to_string(),
                     command: "perl.runTestFile".to_string(),
+                    tooltip: Some("Run all Perl tests in this file".to_string()),
                     arguments: self.file_path.as_ref().map(|p| vec![json!(p)]),
                 }),
                 data: None,
@@ -193,6 +197,7 @@ impl CodeLensProvider {
             command: Some(Command {
                 title: "\u{25b6} Run Test".to_string(),
                 command: "perl.runTest".to_string(),
+                tooltip: Some(format!("Run Perl test subroutine {name}")),
                 arguments: Some(vec![json!(test_id)]),
             }),
             data: None,
@@ -202,6 +207,7 @@ impl CodeLensProvider {
             command: Some(Command {
                 title: "\u{1f41e} Debug Test".to_string(),
                 command: "perl.debugTest".to_string(),
+                tooltip: Some(format!("Debug Perl test subroutine {name}")),
                 arguments: Some(vec![json!(test_id)]),
             }),
             data: None,
@@ -226,6 +232,7 @@ impl CodeLensProvider {
             command: Some(Command {
                 title: format!("\u{25b6} Run Subtest: {name}"),
                 command: "perl.runSubtest".to_string(),
+                tooltip: Some(format!("Run Perl subtest {name}")),
                 arguments: Some(vec![json!(name)]),
             }),
             data: None,
@@ -270,6 +277,7 @@ impl CodeLensProvider {
                     command: Some(Command {
                         title: format!("\u{25b6} Run Subtest: {label}"),
                         command: "perl.runSubtest".to_string(),
+                        tooltip: Some(format!("Run Perl subtest {label}")),
                         arguments: Some(vec![json!(label)]),
                     }),
                     data: None,
@@ -316,6 +324,7 @@ pub fn resolve_code_lens(lens: CodeLens, reference_count: usize) -> CodeLens {
                     if reference_count == 1 { "" } else { "s" }
                 ),
                 command: "editor.action.findReferences".to_string(),
+                tooltip: Some("Show references for this Perl symbol".to_string()),
                 arguments: Some(vec![json!(range.start.line), json!(range.start.character)]),
             }),
             data: lens.data,
@@ -333,6 +342,7 @@ pub fn get_shebang_lens(source: &str) -> Option<CodeLens> {
             command: Some(Command {
                 title: "\u{25b6} Run Script".to_string(),
                 command: "perl.runScript".to_string(),
+                tooltip: Some("Run this Perl script".to_string()),
                 arguments: None,
             }),
             data: None,
@@ -385,6 +395,7 @@ mod tests {
             assert!(cmd_opt.is_some(), "expected command in shebang lens");
             if let Some(cmd) = cmd_opt {
                 assert_eq!(cmd.title, "\u{25b6} Run Script");
+                assert_eq!(cmd.tooltip.as_deref(), Some("Run this Perl script"));
             }
         }
         let source = "use strict;\nprint 'hello';\n";
@@ -404,6 +415,7 @@ mod tests {
         assert!(cmd_opt.is_some(), "expected command in resolved lens");
         if let Some(cmd) = cmd_opt {
             assert_eq!(cmd.title, "3 references");
+            assert_eq!(cmd.tooltip.as_deref(), Some("Show references for this Perl symbol"));
         }
     }
 

@@ -1,18 +1,37 @@
 use serde_json::Value;
 
-/// DAP event from TCP attach session
+/// DAP event received from a TCP attach session.
 #[derive(Debug, Clone)]
 pub enum DapEvent {
-    /// Output event from debugger
-    Output { category: String, output: String },
-    /// Stopped event (breakpoint hit, step, etc.)
-    Stopped { reason: String, thread_id: i32 },
-    /// Continued event (execution resumed)
-    Continued { thread_id: i32 },
-    /// Terminated event (debugger exited)
-    Terminated { reason: String },
-    /// Error event
-    Error { message: String },
+    /// Output event from the debugger (stdout, stderr, or console messages).
+    Output {
+        /// Output category: `"stdout"`, `"stderr"`, or `"console"`.
+        category: String,
+        /// The text produced by the debugger.
+        output: String,
+    },
+    /// Stopped event indicating execution has paused (breakpoint hit, step complete, etc.).
+    Stopped {
+        /// Reason the debugger stopped (e.g. `"breakpoint"`, `"step"`, `"exception"`).
+        reason: String,
+        /// ID of the thread that stopped.
+        thread_id: i32,
+    },
+    /// Continued event indicating execution has resumed.
+    Continued {
+        /// ID of the thread that resumed.
+        thread_id: i32,
+    },
+    /// Terminated event indicating the debugger process has exited.
+    Terminated {
+        /// Reason for termination, if provided.
+        reason: String,
+    },
+    /// Error event from the TCP attach layer.
+    Error {
+        /// Human-readable description of the error.
+        message: String,
+    },
 }
 
 pub(crate) fn dap_event_from_value(value: &Value) -> Option<DapEvent> {

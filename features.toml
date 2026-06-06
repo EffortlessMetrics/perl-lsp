@@ -22,6 +22,32 @@ tests = [
 description = "Code completion with 150+ built-in functions, DBI type inference (db/st handle methods), Moo option-key completion, file-path completion, method completion from workspace symbols, auto-import suggestions, XS API completion, and test helper (Test::More) completions"
 
 [[feature]]
+id = "lsp.completion_list_item_defaults_data"
+spec = "LSP 3.18"
+area = "text_document"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_completion_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_318_negative_claims.rs",
+]
+description = "Capability-gated CompletionList.itemDefaults.data shared completion-list context"
+
+[[feature]]
+id = "lsp.completion_list_apply_kind"
+spec = "LSP 3.18"
+area = "text_document"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_completion_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_318_negative_claims.rs",
+]
+description = "Capability-gated CompletionList.applyKind merge semantics for supported completion-list defaults"
+
+[[feature]]
 id = "lsp.hover"
 spec = "LSP 3.0"
 area = "text_document"
@@ -102,6 +128,18 @@ maturity = "ga"
 advertised = true
 tests = ["crates/perl-lsp-rs/tests/lsp_code_actions_tests.rs"]
 description = "Code actions with 9 action kinds: QuickFix (diagnostic fixes for undefined/unused variables, missing strict/warnings, deprecated patterns), Refactor, RefactorExtract (extract variable/subroutine), RefactorInline, RefactorRewrite (C-style for to foreach, postfix if conversion), Source, SourceOrganizeImports, SourceFixAll, SourceModernize (legacy pattern modernization)"
+
+[[feature]]
+id = "lsp.code_action_documentation"
+spec = "LSP 3.18"
+area = "text_document"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_318_negative_claims.rs",
+]
+description = "Capability-gated CodeActionOptions.documentation entries for documented code-action kinds"
 
 [[feature]]
 id = "lsp.code_lens"
@@ -193,7 +231,10 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-rs/tests/lsp_document_links_test.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_document_links_test.rs",
+  "crates/perl-lsp-rs/tests/lsp_document_links_e2e.rs",
+]
 description = "Document links to modules and docs"
 
 [[feature]]
@@ -227,7 +268,7 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 tests = ["crates/perl-lsp-rs/tests/lsp_semantic_tokens.rs"]
-description = "Semantic syntax highlighting via 23 token types (namespace, type, class, interface, enum, enumMember, typeParameter, function, method, property, macro, variable, parameter, keyword, modifier, comment, string, number, regexp, operator, plus sql_string/sql_heredoc_keyword/json_heredoc_key for embedded language context) and 13 modifiers (declaration, definition, readonly, static, deprecated, abstract, async, modification, documentation, defaultLibrary, scalarVariable, arrayVariable, hashVariable). Token pipeline: lexer fast-path classification plus AST overlay for package/subroutine/method/variable nodes, with overlap deduplication (longer token wins) and delta-encoded [u32;5] response format (mandatory LSP wire encoding). Supports full (textDocument/semanticTokens/full) and range (textDocument/semanticTokens/range) requests per LSP 3.16"
+description = "Semantic syntax highlighting via 24 token types (namespace, type, class, interface, enum, enumMember, typeParameter, function, method, property, macro, variable, parameter, keyword, modifier, comment, string, number, regexp, operator, plus sql_string/sql_heredoc_keyword/json_heredoc_key for embedded language context, and label for Perl statement/control labels) and 13 modifiers (declaration, definition, readonly, static, deprecated, abstract, async, modification, documentation, defaultLibrary, scalarVariable, arrayVariable, hashVariable). Token pipeline: lexer fast-path classification plus AST overlay for package/subroutine/method/variable/label nodes, with overlap deduplication (longer token wins) and delta-encoded [u32;5] response format (mandatory LSP wire encoding). Supports full (textDocument/semanticTokens/full) and range (textDocument/semanticTokens/range) requests per LSP 3.16"
 
 [[feature]]
 id = "lsp.inlay_hint"
@@ -434,6 +475,18 @@ maturity = "ga"
 advertised = true
 tests = ["crates/perl-lsp-rs/tests/lsp_workspace_file_ops_tests.rs"]
 description = "Apply workspace-wide edits"
+
+[[feature]]
+id = "lsp.workspace_edit_snippet_text_edit"
+spec = "LSP 3.18"
+area = "workspace"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_318_negative_claims.rs",
+]
+description = "Capability-gated SnippetTextEdit workspace edits for pragma quick fixes"
 
 [[feature]]
 id = "lsp.moniker"
@@ -950,10 +1003,25 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 tests = [
+  "crates/perl-lsp-rs/tests/lsp_codelens_tests.rs",
   "crates/perl-lsp-rs/tests/lsp_code_lens_tests.rs",
   "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
 ]
 description = "Resolve code lens command"
+
+[[feature]]
+id = "lsp.code_lens_resolve_support_properties"
+spec = "LSP 3.18"
+area = "text_document"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_codelens_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_code_lens_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+]
+description = "Gate lazy CodeLens command resolution on textDocument.codeLens.resolveSupport.properties"
 
 [[feature]]
 id = "lsp.document_link_resolve"
@@ -1087,6 +1155,16 @@ tests = ["crates/perl-lsp-rs/tests/lsp_workspace_tests.rs"]
 description = "workspace/applyEdit request (server->client)"
 
 [[feature]]
+id = "lsp.apply_edit_metadata"
+spec = "LSP 3.18"
+area = "workspace"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-lsp-rs/tests/lsp_318_negative_claims.rs"]
+description = "Capability-gated ApplyWorkspaceEditParams.metadata label, description, and isRefactoring on server-originated workspace/applyEdit refactoring requests"
+
+[[feature]]
 id = "lsp.publish_diagnostics"
 spec = "LSP 3.0"
 area = "text_document"
@@ -1161,8 +1239,11 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp-rs/tests/lsp_diagnostic_enrichment_test.rs"]
-description = "Markdown-formatted diagnostic messages (textDocument.diagnostic.markupMessageSupport) — server includes messageMarkup in diagnostic data when client opts in"
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_diagnostic_enrichment_test.rs",
+  "crates/perl-lsp-rs/tests/lsp_318_negative_claims.rs",
+]
+description = "Markdown-formatted pull diagnostic messages (textDocument.diagnostic.markupMessageSupport) - server emits standard Diagnostic.message MarkupContent and compatibility messageMarkup data only when the client opts in"
 
 [[feature]]
 id = "lsp.text_document_content"
@@ -1170,8 +1251,11 @@ spec = "LSP 3.18"
 area = "workspace"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-rs/tests/lsp_virtual_content_tests.rs"]
-description = "workspace/textDocumentContent request (@proposed)"
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_virtual_content_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_text_document_content_tests.rs",
+]
+description = "workspace/textDocumentContent request for perldoc:// virtual documents, preferring workspace POD for locally resolved modules, exposing bare/labeled POD module links, and falling back to external perldoc (@proposed)"
 
 [[feature]]
 id = "lsp.text_document_content_refresh"

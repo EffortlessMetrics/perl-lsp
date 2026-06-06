@@ -25,11 +25,11 @@
 
 | Metric | Value | Source |
 | --- | --- | --- |
-| **Workspace version line** | `v0.14.0` | [`Cargo.toml`](../../Cargo.toml) |
-| **Current release train** | `v0.14.0` public-alpha patch prep | [docs/releases/v0.14.0.md](../releases/v0.14.0.md) |
+| **Workspace version line** | `v0.15.0` | [`Cargo.toml`](../../Cargo.toml) |
+| **Current release train** | `v0.15.2` latest (2026-05-26); `v0.16.0` is next | [CHANGELOG.md](../../CHANGELOG.md) |
 | **Published crate surface** | 31 crates | [`[workspace.metadata.publish.allow]`](../../Cargo.toml) |
 | **Release history** | [RELEASE_HISTORY.md](../../RELEASE_HISTORY.md) | Canonical cross-channel ledger |
-| **Active milestone** | `v0.14.0` release proof and channel prep | [status/index.md](status/index.md) |
+| **Active milestone** | `v0.16.0` planning | [status/index.md](status/index.md) |
 | **Merge gate** | `nix develop -c just ci-gate` | [protocols/verification.md](protocols/verification.md) |
 | **LSP Coverage** | See [status/lsp.md](status/lsp.md) | Generated per-merge |
 | **Test counts** | See [status/tests.md](status/tests.md) | Generated per-merge |

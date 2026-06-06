@@ -175,9 +175,134 @@ enum Commands {
         binary: PathBuf,
     },
 
+    /// Emit a deterministic inline-completion quality receipt.
+    #[command(name = "inline-completion-quality")]
+    InlineCompletionQuality {
+        /// Receipt JSON path to write.
+        #[arg(long, default_value = "target/receipts/inline-completion-quality.json")]
+        receipt: PathBuf,
+    },
+
+    /// Emit a semantic inline-completion UX receipt dashboard.
+    #[command(name = "semantic-inline-receipts")]
+    SemanticInlineReceipts {
+        /// Receipt JSON path to write.
+        #[arg(long, default_value = "target/receipts/semantic-inline-receipts.json")]
+        receipt: PathBuf,
+        /// Optional deterministic quality receipt to summarize when present.
+        #[arg(long, default_value = "target/receipts/inline-completion-quality.json")]
+        quality_receipt: PathBuf,
+        /// Optional next-edit scaffold receipt to validate and summarize when present.
+        #[arg(long, default_value = "target/receipts/semantic-inline-next-edit.json")]
+        next_edit_receipt: PathBuf,
+    },
+
+    /// Emit a semantic inline-completion next-edit scaffold receipt.
+    #[command(name = "semantic-inline-next-edit")]
+    SemanticInlineNextEdit {
+        /// Receipt JSON path to write.
+        #[arg(long, default_value = "target/receipts/semantic-inline-next-edit.json")]
+        receipt: PathBuf,
+    },
+
+    /// Emit a supported-editor inline-completion smoke receipt bundle.
+    #[command(name = "supported-editor-inline-smoke")]
+    SupportedEditorInlineSmoke {
+        /// Receipt JSON path to write.
+        #[arg(long, default_value = "target/receipts/supported-editor-inline-smoke.json")]
+        receipt: PathBuf,
+    },
+
+    /// Run release UX smoke fixtures over stdio and optionally write receipts.
+    #[command(name = "lsp-ux-smoke")]
+    LspUxSmoke {
+        /// Fixture root containing manifest.json and scenario directories.
+        #[arg(long, default_value = "testdata/ux/release_smoke")]
+        fixture: PathBuf,
+        /// Write JSON and Markdown receipts under target/receipts/ux.
+        #[arg(long)]
+        receipt: bool,
+        /// Existing perl-lsp binary to run instead of building target/agent/perl-lsp.
+        #[arg(long)]
+        binary: Option<PathBuf>,
+        /// Do not auto-build perl-lsp when --binary is omitted.
+        #[arg(long)]
+        no_build: bool,
+    },
+
     /// Regenerate public Shields endpoint JSON for README badges.
     Badges {
         /// Check committed endpoints for drift without updating badges/.
+        #[arg(long)]
+        check: bool,
+    },
+
+    /// Generate or check a coverage baseline receipt for the quality lane.
+    #[command(name = "coverage-baseline")]
+    CoverageBaseline {
+        /// LCOV input path.
+        #[arg(long, default_value = "target/lcov.info")]
+        lcov: PathBuf,
+        /// Coverage receipt JSON path.
+        #[arg(long, default_value = "target/receipts/quality/coverage-baseline.json")]
+        receipt: PathBuf,
+        /// Codecov configuration path.
+        #[arg(long, default_value = "codecov.yml")]
+        codecov: PathBuf,
+        /// Patch coverage percentage from Codecov for this PR.
+        #[arg(long)]
+        patch_coverage: Option<f64>,
+        /// Compute patch coverage from executable lines changed since this git base.
+        #[arg(long)]
+        patch_base: Option<String>,
+        /// Coverage scope recorded in the receipt.
+        #[arg(long)]
+        scope: Option<String>,
+        /// Validate the existing receipt instead of rewriting it.
+        #[arg(long)]
+        check: bool,
+    },
+
+    /// Evaluate coverage and RIPR proof receipts for local and CI gates.
+    #[command(name = "quality-gate")]
+    QualityGate {
+        /// Gate mode to evaluate.
+        #[arg(long, value_enum)]
+        mode: tasks::quality_gate::QualityGateMode,
+        /// Temporary quality exception policy path.
+        #[arg(long, default_value = "policy/quality-gate-exceptions.toml")]
+        exception_policy: PathBuf,
+        /// Repo-wide RIPR+ receipt JSON path.
+        #[arg(long, default_value = "target/receipts/quality/ripr-plus.json")]
+        ripr_receipt: PathBuf,
+        /// Diff-scoped RIPR PR evidence JSON path.
+        #[arg(long, default_value = "target/ripr/pr/repo-exposure.json")]
+        ripr_pr_receipt: PathBuf,
+        /// RIPR review-guidance receipt JSON path.
+        #[arg(long, default_value = "target/ripr/review/comments.json")]
+        review_receipt: PathBuf,
+        /// Coverage receipt JSON path.
+        #[arg(long, default_value = "target/receipts/quality/coverage-baseline.json")]
+        coverage_receipt: PathBuf,
+        /// Codecov configuration path.
+        #[arg(long, default_value = "codecov.yml")]
+        codecov: PathBuf,
+        /// Patch coverage percentage from Codecov for this PR.
+        #[arg(long)]
+        patch_coverage: Option<f64>,
+        /// Base revision used for diff-scoped RIPR receipt commands.
+        #[arg(long, default_value = "origin/HEAD")]
+        ripr_base: String,
+        /// Head revision used for diff-scoped RIPR receipt commands.
+        #[arg(long, default_value = "HEAD")]
+        ripr_head: String,
+        /// Quality-gate JSON receipt path.
+        #[arg(long, default_value = "target/receipts/quality/quality-gate.json")]
+        receipt: PathBuf,
+        /// Quality-gate Markdown summary path.
+        #[arg(long, default_value = "target/receipts/quality/quality-gate.md")]
+        summary: PathBuf,
+        /// Validate existing quality-gate outputs instead of rewriting them.
         #[arg(long)]
         check: bool,
     },
@@ -194,6 +319,22 @@ enum Commands {
         #[arg(long, default_value = "HEAD")]
         head: String,
         /// Validate existing target/ripr/pr artifacts instead of regenerating.
+        #[arg(long)]
+        check: bool,
+    },
+
+    /// Emit a repo-wide RIPR+ baseline receipt for the quality lane.
+    RiprPlus {
+        /// Root passed to RIPR. Defaults to the repository root.
+        #[arg(long, default_value = ".")]
+        root: String,
+        /// Receipt JSON path.
+        #[arg(long, default_value = "target/receipts/quality/ripr-plus.json")]
+        receipt: PathBuf,
+        /// RIPR suppression policy path.
+        #[arg(long, default_value = "policy/ripr-suppressions.toml")]
+        suppressions: PathBuf,
+        /// Validate the existing receipt instead of rewriting it.
         #[arg(long)]
         check: bool,
     },
@@ -2389,6 +2530,29 @@ enum NativeToolingCommand {
 enum CiSubcommand {
     /// Run local/CI parity diagnostic: toolchain pin, components, git state, fmt drift, Perl, binary.
     Doctor,
+
+    /// Emit an advisory changed-file proof-pack route receipt.
+    Route {
+        /// Git base ref used for changed-file detection.
+        #[arg(long, default_value = "origin/main")]
+        base: String,
+
+        /// Git head ref used for changed-file detection.
+        #[arg(long, default_value = "HEAD")]
+        head: String,
+
+        /// Output path for the route receipt.
+        #[arg(long, default_value = "target/receipts/ci-route.json")]
+        receipt: PathBuf,
+
+        /// Output path for the Markdown route summary.
+        #[arg(long, default_value = "target/receipts/ci-route.md")]
+        summary: PathBuf,
+
+        /// Explicit changed file path. Repeat for tests or disconnected runs; when omitted, git diff is used.
+        #[arg(long = "changed-file")]
+        changed_file: Vec<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -2594,6 +2758,15 @@ fn main() -> Result<()> {
         Commands::Ci { command } => match command {
             None => ci::run(),
             Some(CiSubcommand::Doctor) => ci_doctor::run(),
+            Some(CiSubcommand::Route { base, head, receipt, summary, changed_file }) => {
+                ci_route::run(ci_route::CiRouteArgs {
+                    base,
+                    head,
+                    receipt,
+                    summary,
+                    changed_files: changed_file,
+                })
+            }
         },
         Commands::CheckOnly => ci::check_only(),
         Commands::CheckLintPolicy => check_lint_policy::run(),
@@ -2644,9 +2817,74 @@ fn main() -> Result<()> {
             SmokeCommand::InlineCompletion { binary } => inline_completion_smoke::run(binary),
         },
         Commands::InlineCompletionSmoke { binary } => inline_completion_smoke::run(binary),
+        Commands::InlineCompletionQuality { receipt } => inline_completion_quality::run(receipt),
+        Commands::SemanticInlineReceipts { receipt, quality_receipt, next_edit_receipt } => {
+            semantic_inline_receipts::run(receipt, quality_receipt, next_edit_receipt)
+        }
+        Commands::SemanticInlineNextEdit { receipt } => semantic_inline_next_edit::run(receipt),
+        Commands::SupportedEditorInlineSmoke { receipt } => {
+            supported_editor_inline_smoke::run(receipt)
+        }
+        Commands::LspUxSmoke { fixture, receipt, binary, no_build } => {
+            lsp_ux_smoke::run(lsp_ux_smoke::LspUxSmokeConfig {
+                fixture_root: fixture,
+                emit_receipt: receipt,
+                binary,
+                no_build,
+            })
+        }
         Commands::Badges { check } => badges::run(check),
+        Commands::CoverageBaseline {
+            lcov,
+            receipt,
+            codecov,
+            patch_coverage,
+            patch_base,
+            scope,
+            check,
+        } => quality_baseline::run(quality_baseline::CoverageBaselineArgs {
+            lcov,
+            receipt,
+            codecov,
+            patch_coverage,
+            patch_base,
+            scope,
+            check,
+        }),
+        Commands::QualityGate {
+            mode,
+            exception_policy,
+            ripr_receipt,
+            ripr_pr_receipt,
+            review_receipt,
+            coverage_receipt,
+            codecov,
+            patch_coverage,
+            ripr_base,
+            ripr_head,
+            receipt,
+            summary,
+            check,
+        } => quality_gate::run(quality_gate::QualityGateArgs {
+            mode,
+            exception_policy,
+            ripr_receipt,
+            ripr_pr_receipt,
+            review_receipt,
+            coverage_receipt,
+            codecov,
+            patch_coverage,
+            ripr_base,
+            ripr_head,
+            receipt,
+            summary,
+            check,
+        }),
         Commands::RiprPr { root, base, head, check } => {
             ripr_evidence::ripr_pr(&root, &base, &head, check)
+        }
+        Commands::RiprPlus { root, receipt, suppressions, check } => {
+            ripr_evidence::ripr_plus(&root, &receipt, &suppressions, check)
         }
         Commands::RiprReviewComments { root, base, head, timeout_seconds, check } => {
             ripr_evidence::ripr_review_comments(&root, &base, &head, timeout_seconds, check)

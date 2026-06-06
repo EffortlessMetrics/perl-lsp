@@ -3,7 +3,7 @@
 //! This module exposes the generated debug-feature catalog from `features.toml`.
 
 /// Auto-generated DAP feature catalog from `features.toml`.
-#[allow(dead_code, clippy::all)]
+#[allow(dead_code, clippy::all, missing_docs)]
 pub mod catalog {
     include!(concat!(env!("OUT_DIR"), "/dap_feature_catalog.rs"));
 }

@@ -1,0 +1,13 @@
+{
+  "line_endings": {
+    "main.pl": "crlf"
+  },
+  "document_links": {
+    "must_include_target": "notes/todo.txt",
+    "range_must_match_quoted_text": "notes/todo.txt",
+    "must_not_shift_for_crlf": true
+  },
+  "definition": {
+    "Smoke::CRLF": "lib/Smoke/CRLF.pm"
+  }
+}
