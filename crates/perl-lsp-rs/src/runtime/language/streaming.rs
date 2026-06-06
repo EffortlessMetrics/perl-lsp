@@ -9,6 +9,16 @@ use super::super::*;
 use crate::protocol::{invalid_params, req_position, req_uri};
 use crate::runtime::stream_session::SessionKey;
 
+fn streaming_inline_completion_request_shape_message(summary: &str) -> String {
+    format!(
+        "{summary}: textDocument/perlInlineCompletionStream expects params.textDocument.uri plus params.position.line and params.position.character; include params.partialResultToken to receive $/progress chunks, otherwise use textDocument/inlineCompletion for one-shot results"
+    )
+}
+
+fn invalid_streaming_inline_completion_params(summary: &str) -> JsonRpcError {
+    invalid_params(&streaming_inline_completion_request_shape_message(summary))
+}
+
 impl LspServer {
     /// Handle `textDocument/perlInlineCompletionStream` custom request.
     ///
@@ -21,10 +31,13 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        let params = params.ok_or_else(|| invalid_params("missing params"))?;
+        let params =
+            params.ok_or_else(|| invalid_streaming_inline_completion_params("Missing params"))?;
 
-        let uri = req_uri(&params)?;
-        let (line, character) = req_position(&params)?;
+        let uri = req_uri(&params)
+            .map_err(|error| invalid_streaming_inline_completion_params(&error.message))?;
+        let (line, character) = req_position(&params)
+            .map_err(|error| invalid_streaming_inline_completion_params(&error.message))?;
         let partial_result_token =
             params.get("partialResultToken").and_then(|v| v.as_str()).map(|s| s.to_string());
         let document_version = params
