@@ -1251,16 +1251,18 @@
       "ci_tier": "pr",
       "component": "folding_range",
       "instrumentation": {
-        "run_receipt": false,
-        "first_useful_result": false,
+        "run_receipt": true,
+        "first_useful_result": true,
         "protocol_goldens": false
       },
       "user_journey": "request folding ranges for nested Perl blocks and small edge-case files",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
+        "receipt records folding-range timing and structure checks",
         "foldingRange requests do not return JSON-RPC errors",
         "folding ranges include valid start and end line fields when present",
         "multi-block files produce at least one fold"
