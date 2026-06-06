@@ -1146,16 +1146,18 @@
       "ci_tier": "pr",
       "component": "infra",
       "instrumentation": {
-        "run_receipt": false,
-        "first_useful_result": false,
+        "run_receipt": true,
+        "first_useful_result": true,
         "protocol_goldens": false
       },
       "user_journey": "fix a parse error via didChange full-text sync and verify diagnostics recover and hover remains responsive",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
+        "receipt records didChange recovery, diagnostics, and hover timing",
         "broken content yields at least one diagnostic",
         "fixed content clears parse-like diagnostics after didChange",
         "hover does not JSON-RPC error after didChange recovery"
