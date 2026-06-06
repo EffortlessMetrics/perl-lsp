@@ -61,6 +61,7 @@
       ],
       "expected_outcomes": [
         "format request degrades gracefully",
+        "external-perltidy mode returns an actionable missing-tool error with remediation data",
         "server stays responsive"
       ],
       "confidence_signals": [
