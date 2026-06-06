@@ -9,6 +9,7 @@ use crate::features::diagnostics::{
     Diagnostic as InternalDiagnostic, DiagnosticTag as InternalDiagnosticTag,
     PullDiagnosticsContext,
 };
+use crate::protocol::invalid_params;
 use perl_diagnostics::codes::DiagnosticCode;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -61,6 +62,14 @@ fn find_workspace_perlcritic_profile(
         dir = current.parent().map(|p| p.to_path_buf());
     }
     None
+}
+
+fn invalid_document_diagnostic_uri_params() -> JsonRpcError {
+    invalid_params(
+        "Missing required parameter: textDocument.uri\n\n\
+         textDocument/diagnostic expects params.textDocument.uri to identify the document to diagnose.\n\n\
+         Example: {\"textDocument\":{\"uri\":\"file:///workspace/lib/My/Module.pm\"}}",
+    )
 }
 
 /// Orchestrator for pull diagnostics operations.
@@ -950,18 +959,16 @@ impl LspServer {
         use lsp_types::Uri;
 
         if let Some(params) = params {
-            let uri_str = params["textDocument"]["uri"].as_str().unwrap_or("");
+            let uri_str = params
+                .pointer("/textDocument/uri")
+                .and_then(Value::as_str)
+                .ok_or_else(invalid_document_diagnostic_uri_params)?;
             let previous_result_id = params["previousResultId"].as_str().map(|s| s.to_string());
 
             // Parse URI
             let uri: Uri = match uri_str.parse() {
-                Ok(u) => u,
-                Err(_) => {
-                    return Ok(Some(json!({
-                        "kind": "full",
-                        "items": []
-                    })));
-                }
+                Ok(uri) => uri,
+                Err(_) => return Err(invalid_document_diagnostic_uri_params()),
             };
 
             // Syntax-only short-circuit for pull diagnostics. Mirrors the
@@ -1029,9 +1036,11 @@ impl LspServer {
                     &perlcritic_diags,
                 )));
             }
+        } else {
+            return Err(invalid_document_diagnostic_uri_params());
         }
 
-        // Return empty diagnostics if document not found
+        // Return empty diagnostics if document not found.
         Ok(Some(json!({
             "kind": "full",
             "items": []
@@ -2022,6 +2031,50 @@ mod tests {
         let server =
             LspServer::with_io(Box::new(std::io::Cursor::new(Vec::<u8>::new())), Box::new(writer));
         (server, buf)
+    }
+
+    fn expect_document_diagnostic_uri_guidance(err: JsonRpcError) -> Result<(), String> {
+        assert_eq!(err.code, crate::protocol::INVALID_PARAMS);
+        for expected in [
+            "Missing required parameter: textDocument.uri",
+            "textDocument/diagnostic",
+            "params.textDocument.uri",
+            "file:///workspace/lib/My/Module.pm",
+        ] {
+            if !err.message.contains(expected) {
+                return Err(format!("expected error message to contain {expected:?}; got {err}"));
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn document_diagnostic_missing_params_error_includes_shape_guidance() -> Result<(), String> {
+        let server = LspServer::new();
+        match server.test_handle_document_diagnostic(None) {
+            Err(err) => expect_document_diagnostic_uri_guidance(err),
+            Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
+        }
+    }
+
+    #[test]
+    fn document_diagnostic_missing_uri_error_includes_shape_guidance() -> Result<(), String> {
+        let server = LspServer::new();
+        match server.test_handle_document_diagnostic(Some(json!({}))) {
+            Err(err) => expect_document_diagnostic_uri_guidance(err),
+            Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
+        }
+    }
+
+    #[test]
+    fn document_diagnostic_invalid_uri_error_includes_shape_guidance() -> Result<(), String> {
+        let server = LspServer::new();
+        match server.test_handle_document_diagnostic(Some(json!({
+            "textDocument": { "uri": "file:// bad uri" }
+        }))) {
+            Err(err) => expect_document_diagnostic_uri_guidance(err),
+            Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
+        }
     }
 
     /// Positive case: when no concurrent change arrives during diagnostic computation,

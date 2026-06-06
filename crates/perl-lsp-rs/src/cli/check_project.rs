@@ -168,7 +168,12 @@ fn emit_category_section(category_counts: &HashMap<String, usize>) {
 }
 
 fn categorize_error(msg: &str) -> String {
-    if msg.contains("Unexpected end of input") {
+    let normalized = msg.to_ascii_lowercase();
+    if normalized.contains("end of input")
+        || normalized.contains("unexpected eof")
+        || normalized.contains("found eof")
+        || normalized.contains("reached eof")
+    {
         "Unexpected EOF".to_string()
     } else if msg.contains("expected") && msg.contains("found") {
         "Unexpected token".to_string()
@@ -216,6 +221,11 @@ mod tests {
     #[test]
     fn categorize_error_maps_known_cases() {
         assert_eq!(categorize_error("Unexpected end of input while parsing"), "Unexpected EOF");
+        assert_eq!(
+            categorize_error("Unclosed block: expected '}' but reached end of input"),
+            "Unexpected EOF"
+        );
+        assert_eq!(categorize_error("expected expression, found EOF"), "Unexpected EOF");
         assert_eq!(categorize_error("expected ; but found }"), "Unexpected token");
         assert_eq!(categorize_error("Invalid syntax near token"), "Syntax error");
         assert_eq!(categorize_error("Lexer error: invalid byte"), "Lexer error");

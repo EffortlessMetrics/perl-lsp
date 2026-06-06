@@ -3,10 +3,47 @@
 //! Tests the deferred resolution pattern where initial documentLink returns
 //! links with data fields, and documentLink/resolve fills in the target.
 
-use perl_lsp::{JsonRpcRequest, LspServer};
-use serde_json::json;
+use perl_lsp::{JsonRpcError, JsonRpcRequest, LspServer};
+use serde_json::{Value, json};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+fn initialized_server() -> LspServer {
+    let server = LspServer::new();
+
+    let init_params = json!({
+        "capabilities": {},
+        "rootUri": "file:///workspace"
+    });
+    let _ = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((1) as i64)),
+        method: "initialize".to_string(),
+        params: Some(init_params),
+    });
+
+    let _ = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: None,
+        method: "initialized".to_string(),
+        params: Some(json!({})),
+    });
+
+    server
+}
+
+fn document_link_resolve_error(params: Option<Value>) -> Result<JsonRpcError, String> {
+    let server = initialized_server();
+    let response = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: Some(perl_lsp::protocol::JsonRpcId::Integer((2) as i64)),
+        method: "documentLink/resolve".to_string(),
+        params,
+    });
+
+    let resp = response.ok_or_else(|| "Expected response from documentLink/resolve".to_string())?;
+    resp.error.ok_or_else(|| format!("Expected error field in response: {:?}", resp.result))
+}
 
 /// Test that documentLink/resolve returns target for deferred module links
 #[test]
@@ -240,6 +277,57 @@ fn test_document_link_resolve_invalid_data() -> TestResult {
     assert!(resp.error.is_some());
     let error = resp.error.ok_or("Expected error field in response")?;
     assert_eq!(error.code, -32602); // INVALID_PARAMS
+    assert!(error.message.contains("data.type"), "unexpected message: {}", error.message);
+    assert!(error.message.contains("module"), "unexpected message: {}", error.message);
+    assert!(error.message.contains("file"), "unexpected message: {}", error.message);
+    assert!(error.message.contains("url"), "unexpected message: {}", error.message);
+
+    Ok(())
+}
+
+#[test]
+fn test_document_link_resolve_missing_data_fields_include_guidance() -> TestResult {
+    let missing_module = document_link_resolve_error(Some(json!({
+        "range": {
+            "start": {"line": 0, "character": 4},
+            "end": {"line": 0, "character": 16}
+        },
+        "data": {
+            "type": "module"
+        }
+    })))?;
+    assert_eq!(missing_module.code, -32602);
+    assert!(missing_module.message.contains("data.module"));
+    assert!(missing_module.message.contains("Data::Dumper"));
+    assert!(missing_module.message.contains("request fresh document links"));
+
+    let missing_path = document_link_resolve_error(Some(json!({
+        "range": {
+            "start": {"line": 0, "character": 4},
+            "end": {"line": 0, "character": 16}
+        },
+        "data": {
+            "type": "file",
+            "baseUri": "file:///workspace/script.pl"
+        }
+    })))?;
+    assert_eq!(missing_path.code, -32602);
+    assert!(missing_path.message.contains("data.path"));
+    assert!(missing_path.message.contains("request fresh document links"));
+
+    let missing_base_uri = document_link_resolve_error(Some(json!({
+        "range": {
+            "start": {"line": 0, "character": 4},
+            "end": {"line": 0, "character": 16}
+        },
+        "data": {
+            "type": "file",
+            "path": "lib/Foo.pm"
+        }
+    })))?;
+    assert_eq!(missing_base_uri.code, -32602);
+    assert!(missing_base_uri.message.contains("data.baseUri"));
+    assert!(missing_base_uri.message.contains("request fresh document links"));
 
     Ok(())
 }
@@ -283,6 +371,8 @@ fn test_document_link_resolve_missing_params() -> TestResult {
     assert!(resp.error.is_some());
     let error = resp.error.ok_or("Expected error field in response")?;
     assert_eq!(error.code, -32602); // INVALID_PARAMS
+    assert!(error.message.contains("pass the DocumentLink object"));
+    assert!(error.message.contains("request fresh document links"));
 
     Ok(())
 }
