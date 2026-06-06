@@ -1964,6 +1964,44 @@ fn parse_printf_format_mismatch(message: &str) -> Option<(usize, String)> {
     specifiers.checked_sub(supplied).filter(|&n| n > 0).map(|n| (n, call_name))
 }
 
+/// Drop the undefined label from a `next LABEL`, `last LABEL`, or `redo LABEL`
+/// statement (PL410 / `LoopControlUndefinedLabel`).
+///
+/// A labelled loop-control whose target label is not defined anywhere in the
+/// file is a runtime-fatal error in Perl.  Dropping the label converts the
+/// statement to its bare form (`next`, `last`, or `redo`), which targets the
+/// innermost enclosing loop — the most conservative safe fix.
+pub fn fix_loop_control_undefined_label(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some((range_start, range_end)) = valid_diagnostic_range(source, diagnostic.range) else {
+        return Vec::new();
+    };
+    let Some(text) = source.get(range_start..range_end) else {
+        return Vec::new();
+    };
+
+    // The operator is the first whitespace-delimited token in the range.
+    let op = text.split_ascii_whitespace().next().unwrap_or("");
+    if !matches!(op, "next" | "last" | "redo") {
+        return Vec::new();
+    }
+
+    vec![CodeAction {
+        title: format!("Drop undefined label — replace `{text}` with bare `{op}`"),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::LoopControlUndefinedLabel.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: range_start, end: range_end },
+                new_text: op.to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
 fn diagnostic_line_range(source: &str, range: (usize, usize)) -> Option<(usize, usize)> {
     let (start, end) = valid_diagnostic_range(source, range)?;
     let line_start = source[..start].rfind('\n').map_or(0, |idx| idx + 1);
