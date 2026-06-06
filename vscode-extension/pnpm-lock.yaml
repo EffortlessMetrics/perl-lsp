@@ -39,8 +39,8 @@ importers:
         specifier: ^7.0.87
         version: 7.0.87
       '@types/vscode':
-        specifier: 1.118.0
-        version: 1.118.0
+        specifier: 1.120.0
+        version: 1.120.0
       '@typescript-eslint/eslint-plugin':
         specifier: ^8.59.4
         version: 8.59.4(@typescript-eslint/parser@8.59.4(eslint@10.4.0)(typescript@6.0.3))(eslint@10.4.0)(typescript@6.0.3)
@@ -640,8 +640,8 @@ packages:
     resolution: {integrity: sha512-3IxNBV8LeY5oi2ZFpvAhOtW1+mHswkzM7BuisVrwJgPv67GBO2rkLPQlEKtzfHuLdhDDczhkCZeT+RuizMay4A==}
     deprecated: This is a stub types definition. tar provides its own type definitions, so you do not need this installed.
 
-  '@types/vscode@1.118.0':
-    resolution: {integrity: sha512-Ah6eTlqDcwIMELEVwQMO++rJAFBRz/oLluLD/vWdYrH1KuI9kfpaM+7pg0OvvascgcJy+ghLCERAYouM4QbzGw==}
+  '@types/vscode@1.120.0':
+    resolution: {integrity: sha512-feaT4Rst+FkTch5zz/ZbNCxoIvo55YU80Be2kiL7OJcod4+CUYf2lUBPdIJzozNnSEMq1VRTGrWEcCGFB3fBmA==}
 
   '@types/yargs-parser@21.0.3':
     resolution: {integrity: sha512-I4q9QU9MQv4oEOz4tAHJtNz1cwuLxn2F3xcc2iV5WdqLPpUnj30aUuxt1mAxYTG+oe8CZMV/+6rU4S4gRDzqtQ==}
@@ -2340,8 +2340,8 @@ packages:
   react-is@18.3.1:
     resolution: {integrity: sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg==}
 
-  react-is@19.2.6:
-    resolution: {integrity: sha512-XjBR15BhXuylgWGuslhDKqlSayuqvqBX91BP8pauG8kd1zY8kotkNWbXksTCNRarse4kuGbe2kIY05ARtwNIvw==}
+  react-is@19.2.7:
+    resolution: {integrity: sha512-kZFnouyVv7eP/Phmrlo9FK+zcAdriZJvzxXHF1Sl1P377WSGe2G/JxVolhTrB/jeV47lKImhNUsijjHAAbcl/A==}
 
   read-pkg@9.0.1:
     resolution: {integrity: sha512-9viLL4/n1BJUCT1NXVTdS1jtm80yDEgR5T4yCelII49Mbj0v1rZdKqj7zCiYdbB0CuCgdrvHcNogAKTFPBocFA==}
@@ -3663,7 +3663,7 @@ snapshots:
     dependencies:
       tar: 7.5.15
 
-  '@types/vscode@1.118.0': {}
+  '@types/vscode@1.120.0': {}
 
   '@types/yargs-parser@21.0.3': {}
 
@@ -5590,7 +5590,7 @@ snapshots:
       '@jest/schemas': 30.4.1
       ansi-styles: 5.2.0
       react-is-18: react-is@18.3.1
-      react-is-19: react-is@19.2.6
+      react-is-19: react-is@19.2.7
 
   process-nextick-args@2.0.1: {}
 
@@ -5631,7 +5631,7 @@ snapshots:
 
   react-is@18.3.1: {}
 
-  react-is@19.2.6: {}
+  react-is@19.2.7: {}
 
   read-pkg@9.0.1:
     dependencies:
