@@ -35,7 +35,7 @@
       ],
       "expected_outcomes": [
         "server starts cleanly",
-        "hover returns useful structure or empty without crashing",
+        "hover returns non-empty contents for a lexical variable",
         "completion request succeeds"
       ],
       "confidence_signals": [
