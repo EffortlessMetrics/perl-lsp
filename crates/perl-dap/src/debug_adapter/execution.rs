@@ -172,6 +172,7 @@ impl DebugAdapter {
         arguments: Option<Value>,
     ) -> DapMessage {
         let _args: Option<PauseArguments> = arguments.and_then(|v| serde_json::from_value(v).ok());
+        let mut failure_message = None;
         let success = if let Some(ref mut session) =
             *lock_or_recover(&self.session, "debug_adapter.session")
         {
@@ -183,6 +184,7 @@ impl DebugAdapter {
             self.send_interrupt_signal(pid)
         } else {
             tracing::warn!("No active debug session to pause");
+            failure_message = Some(Self::no_active_debug_session_message("pause"));
             false
         };
 
@@ -192,7 +194,11 @@ impl DebugAdapter {
             success,
             command: "pause".to_string(),
             body: None,
-            message: if !success { Some("Failed to pause debugger".to_string()) } else { None },
+            message: if success {
+                None
+            } else {
+                failure_message.or_else(|| Some("Failed to pause debugger".to_string()))
+            },
         }
     }
 
@@ -384,7 +390,7 @@ impl DebugAdapter {
                 success: false,
                 command: "goto".to_string(),
                 body: None,
-                message: Some("No active debug session".to_string()),
+                message: Some(Self::no_active_debug_session_message("goto")),
             }
         }
     }
@@ -513,5 +519,66 @@ impl DebugAdapter {
                     .to_string(),
             ),
         }
+    }
+
+    fn no_active_debug_session_message(action: &str) -> String {
+        format!(
+            "Cannot {action} because no Perl debug session is active. Start a launch or attach \
+             request first, wait for the debug session to start, then retry {action}."
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    #[test]
+    fn pause_without_session_guides_recovery() -> TestResult {
+        let mut adapter = DebugAdapter::new();
+
+        let response = adapter.handle_request(1, "pause", None);
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert_eq!(command, "pause");
+                assert!(!success, "pause without a session should fail");
+                let message = message.ok_or("pause failure should include guidance")?;
+                assert!(message.contains("no Perl debug session is active"));
+                assert!(message.contains("Start a launch or attach request"));
+                assert!(message.contains("retry pause"));
+            }
+            other => return Err(format!("expected pause response, got {other:?}").into()),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn goto_without_session_guides_recovery_after_target_lookup() -> TestResult {
+        let mut adapter = DebugAdapter::new();
+        {
+            let mut goto_targets = lock_or_recover(&adapter.goto_targets, "test.goto_targets");
+            goto_targets.insert(42, ("script.pl".to_string(), 12));
+        }
+
+        let response =
+            adapter.handle_request(1, "goto", Some(json!({ "threadId": 1, "targetId": 42 })));
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert_eq!(command, "goto");
+                assert!(!success, "goto without a session should fail");
+                let message = message.ok_or("goto failure should include guidance")?;
+                assert!(message.contains("no Perl debug session is active"));
+                assert!(message.contains("Start a launch or attach request"));
+                assert!(message.contains("retry goto"));
+            }
+            other => return Err(format!("expected goto response, got {other:?}").into()),
+        }
+
+        Ok(())
     }
 }
