@@ -46,10 +46,10 @@ export interface HealthCheckResult {
  * immediately knows the root cause and what to do.
  */
 export const PERL_MISSING_MESSAGE =
-  'Perl interpreter not found. ' +
+  'Perl interpreter not found on PATH. ' +
   'Install Perl 5.10+ (Windows: Strawberry Perl at https://strawberryperl.com/, macOS: `brew install perl`, Linux: use your distro package manager) ' +
   'and reload the window. ' +
-  'Alternatively, set the `perl-lsp.perl.path` setting to an existing Perl executable.';
+  'For module resolution, you can also configure include paths in `.perl-lsp.toml` under `[perl] include_paths`.';
 
 /**
  * Given the results of a health check, return a specific user-facing error
