@@ -739,6 +739,7 @@
       ],
       "expected_outcomes": [
         "hover probes return without JSON-RPC errors",
+        "all hover probes return content",
         "receipt records exact, imported, generated, dynamic-shaped, and fallback/module-resolution surfaces",
         "receipt records source, provenance, confidence, freshness, generated, dynamic, and fallback labels when exposed"
       ],
