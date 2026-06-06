@@ -4,7 +4,7 @@
 //! prepareCallHierarchy, callHierarchy/incomingCalls, and callHierarchy/outgoingCalls.
 
 use super::super::*;
-use crate::protocol::{req_position, req_uri};
+use crate::protocol::{invalid_params, req_position, req_uri};
 #[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
 #[cfg(feature = "workspace")]
@@ -26,6 +26,29 @@ fn get_package_regex() -> Option<&'static regex::Regex> {
         .get_or_init(|| regex::Regex::new(r"\bpackage\s+([a-zA-Z_][\w:]*)\b"))
         .as_ref()
         .ok()
+}
+
+fn invalid_call_hierarchy_item_params(method: &str) -> JsonRpcError {
+    let message = format!(
+        "Missing or invalid required parameter: item\n\n\
+         {method} expects params.item to be the CallHierarchyItem returned by \
+         textDocument/prepareCallHierarchy.\n\n\
+         Example: {{\"item\":{{\"name\":\"main\",\"kind\":12,\"uri\":\"file:///workspace/main.pl\",\
+         \"range\":{{\"start\":{{\"line\":0,\"character\":0}},\"end\":{{\"line\":0,\"character\":10}}}},\
+         \"selectionRange\":{{\"start\":{{\"line\":0,\"character\":4}},\
+         \"end\":{{\"line\":0,\"character\":8}}}}}}}}"
+    );
+    invalid_params(&message)
+}
+
+fn call_hierarchy_item_param<'a>(
+    params: &'a Value,
+    method: &str,
+) -> Result<&'a Value, JsonRpcError> {
+    params
+        .get("item")
+        .filter(|item| item.is_object())
+        .ok_or_else(|| invalid_call_hierarchy_item_params(method))
 }
 
 #[cfg(feature = "workspace")]
@@ -595,7 +618,7 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
-            let item = &params["item"];
+            let item = call_hierarchy_item_param(&params, "callHierarchy/incomingCalls")?;
             let target_name = item["name"].as_str().unwrap_or("");
 
             tracing::debug!(target = target_name, "Getting incoming calls");
@@ -667,7 +690,7 @@ impl LspServer {
             return Ok(Some(json!(json_calls)));
         }
 
-        Ok(Some(json!([])))
+        Err(invalid_call_hierarchy_item_params("callHierarchy/incomingCalls"))
     }
 
     /// Handle outgoing calls request
@@ -679,7 +702,7 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
-            let item = &params["item"];
+            let item = call_hierarchy_item_param(&params, "callHierarchy/outgoingCalls")?;
             let uri = item["uri"].as_str().unwrap_or("");
             let ch_item = self.json_to_call_hierarchy_item(item)?;
 
@@ -764,7 +787,7 @@ impl LspServer {
             return Ok(Some(json!(json_calls)));
         }
 
-        Ok(Some(json!([])))
+        Err(invalid_call_hierarchy_item_params("callHierarchy/outgoingCalls"))
     }
 
     /// Convert JSON to CallHierarchyItem
@@ -819,5 +842,45 @@ impl LspServer {
             package_name,
             qualified_name,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn expect_item_guidance(err: JsonRpcError, method: &str) -> Result<(), String> {
+        assert_eq!(err.code, crate::protocol::INVALID_PARAMS);
+        for expected in [
+            "Missing or invalid required parameter: item",
+            method,
+            "params.item",
+            "textDocument/prepareCallHierarchy",
+            "\"selectionRange\"",
+        ] {
+            if !err.message.contains(expected) {
+                return Err(format!("expected error message to contain {expected:?}; got {err}"));
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn incoming_calls_missing_item_error_includes_shape_guidance() -> Result<(), String> {
+        let server = LspServer::new();
+        match server.handle_incoming_calls(Some(json!({}))) {
+            Err(err) => expect_item_guidance(err, "callHierarchy/incomingCalls"),
+            Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
+        }
+    }
+
+    #[test]
+    fn outgoing_calls_missing_item_error_includes_shape_guidance() -> Result<(), String> {
+        let server = LspServer::new();
+        match server.handle_outgoing_calls(Some(json!({}))) {
+            Err(err) => expect_item_guidance(err, "callHierarchy/outgoingCalls"),
+            Ok(result) => Err(format!("expected INVALID_PARAMS; got {result:?}")),
+        }
     }
 }
