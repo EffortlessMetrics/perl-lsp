@@ -21,26 +21,60 @@ import { StreamingCompletionController } from '../streamingCompletion';
 import { LanguageClient } from 'vscode-languageclient/node';
 
 /** Create a mock LanguageClient with the methods needed by StreamingCompletionController. */
-function createMockClient(): LanguageClient {
+function createMockClient(captureProgress?: (handler: (value: unknown) => void) => void): LanguageClient {
     return {
-        onProgress: jest.fn(() => ({ dispose: jest.fn() })),
+        onProgress: jest.fn((_type, _token, handler: (value: unknown) => void) => {
+            captureProgress?.(handler);
+            return { dispose: jest.fn() };
+        }),
         sendRequest: jest.fn(async () => ({})),
         sendNotification: jest.fn(),
     } as unknown as LanguageClient;
 }
 
+function makeDocument(uri: string, version: number): vscode.TextDocument {
+    return {
+        uri: { toString: () => uri },
+        version,
+    } as unknown as vscode.TextDocument;
+}
+
+type InlineProvider = {
+    provideInlineCompletionItems: (
+        document: vscode.TextDocument,
+        position: vscode.Position,
+        context: vscode.InlineCompletionContext,
+        token: vscode.CancellationToken
+    ) => vscode.InlineCompletionItem[] | undefined;
+};
+
+function registeredProvider(): InlineProvider {
+    const call = (vscode.languages.registerInlineCompletionItemProvider as jest.Mock).mock.calls[0];
+    return call[1] as InlineProvider;
+}
+
 describe('StreamingCompletionController', () => {
     let mockClient: LanguageClient;
     let controller: StreamingCompletionController;
+    let progressHandler: ((value: unknown) => void) | undefined;
 
     beforeEach(() => {
         jest.clearAllMocks();
+        progressHandler = undefined;
         // Extend mock with needed symbols for inline completions
         (vscode as Record<string, unknown>).Position = class {
             constructor(public line: number, public character: number) {}
         };
+        (vscode as Record<string, unknown>).Range = class {
+            constructor(public start: unknown, public end: unknown) {}
+        };
         (vscode as Record<string, unknown>).InlineCompletionItem = class {
             constructor(public insertText: string, public range?: unknown) {}
+        };
+        (vscode as Record<string, unknown>).CancellationTokenSource = class {
+            token = { isCancellationRequested: false };
+            cancel = jest.fn();
+            dispose = jest.fn();
         };
         (vscode.languages as Record<string, unknown>).registerInlineCompletionItemProvider = jest.fn(() => ({
             dispose: jest.fn(),
@@ -51,8 +85,21 @@ describe('StreamingCompletionController', () => {
         (vscode.workspace as Record<string, unknown>).onDidChangeTextDocument = jest.fn(() => ({
             dispose: jest.fn(),
         }));
+        (vscode.workspace.getConfiguration as jest.Mock).mockReturnValue({
+            get: jest.fn((key: string, defaultValue?: boolean) => {
+                if (key === 'aiCompletion.enabled') {
+                    return true;
+                }
+                if (key === 'aiCompletion.streaming.enabled') {
+                    return true;
+                }
+                return defaultValue;
+            }),
+        });
 
-        mockClient = createMockClient();
+        mockClient = createMockClient(handler => {
+            progressHandler = handler;
+        });
         controller = new StreamingCompletionController(mockClient);
     });
 
@@ -109,6 +156,97 @@ describe('StreamingCompletionController', () => {
             'perl/didShowInlineCompletion',
             { sessionId: 'session-2' }
         );
+    });
+
+    test('returns cached stream candidates for the matching document version', () => {
+        const provider = registeredProvider();
+        const document = makeDocument('file:///workspace/lib/App.pm', 4);
+        const position = new vscode.Position(10, 8);
+
+        const initial = provider.provideInlineCompletionItems(
+            document,
+            position,
+            {} as vscode.InlineCompletionContext,
+            { isCancellationRequested: false } as vscode.CancellationToken
+        );
+        expect(initial).toBeUndefined();
+
+        progressHandler?.({
+            kind: 'perlInlineCompletionStream',
+            sessionId: 'session-1',
+            sequence: 1,
+            isFinal: false,
+            items: [{ insertText: '->find_user($id)' }],
+        });
+
+        const cached = provider.provideInlineCompletionItems(
+            document,
+            position,
+            {} as vscode.InlineCompletionContext,
+            { isCancellationRequested: false } as vscode.CancellationToken
+        );
+
+        expect(cached?.[0]?.insertText).toBe('->find_user($id)');
+        expect(mockClient.sendRequest as jest.Mock).toHaveBeenCalledTimes(1);
+    });
+
+    test('does not show cached stream candidates in another document', () => {
+        const provider = registeredProvider();
+        const position = new vscode.Position(10, 8);
+
+        provider.provideInlineCompletionItems(
+            makeDocument('file:///workspace/lib/App.pm', 4),
+            position,
+            {} as vscode.InlineCompletionContext,
+            { isCancellationRequested: false } as vscode.CancellationToken
+        );
+        progressHandler?.({
+            kind: 'perlInlineCompletionStream',
+            sessionId: 'session-1',
+            sequence: 1,
+            isFinal: false,
+            items: [{ insertText: '->find_user($id)' }],
+        });
+
+        const otherDocumentResult = provider.provideInlineCompletionItems(
+            makeDocument('file:///workspace/lib/Other.pm', 4),
+            position,
+            {} as vscode.InlineCompletionContext,
+            { isCancellationRequested: false } as vscode.CancellationToken
+        );
+
+        expect(otherDocumentResult).toBeUndefined();
+        expect(mockClient.sendRequest as jest.Mock).toHaveBeenCalledTimes(2);
+    });
+
+    test('does not show cached stream candidates after the document version changes', () => {
+        const provider = registeredProvider();
+        const uri = 'file:///workspace/lib/App.pm';
+        const position = new vscode.Position(10, 8);
+
+        provider.provideInlineCompletionItems(
+            makeDocument(uri, 4),
+            position,
+            {} as vscode.InlineCompletionContext,
+            { isCancellationRequested: false } as vscode.CancellationToken
+        );
+        progressHandler?.({
+            kind: 'perlInlineCompletionStream',
+            sessionId: 'session-1',
+            sequence: 1,
+            isFinal: false,
+            items: [{ insertText: '->find_user($id)' }],
+        });
+
+        const newVersionResult = provider.provideInlineCompletionItems(
+            makeDocument(uri, 5),
+            position,
+            {} as vscode.InlineCompletionContext,
+            { isCancellationRequested: false } as vscode.CancellationToken
+        );
+
+        expect(newVersionResult).toBeUndefined();
+        expect(mockClient.sendRequest as jest.Mock).toHaveBeenCalledTimes(2);
     });
 });
 
