@@ -503,17 +503,19 @@
       "ci_tier": "pr",
       "component": "goto_definition",
       "instrumentation": {
-        "run_receipt": false,
-        "first_useful_result": false,
+        "run_receipt": true,
+        "first_useful_result": true,
         "protocol_goldens": false
       },
       "user_journey": "open a template file in html mode and continue navigating in neighboring Perl files",
       "measures": [
         "workflow_pass_rate",
         "workflow_stability_rate",
-        "cross_file_definition_success_rate"
+        "cross_file_definition_success_rate",
+        "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
+        "receipt records template diagnostics and neighboring Perl navigation timing",
         "template-like html mode file does not emit Perl parse diagnostics",
         "goto-definition in adjacent Perl files remains functional"
       ],
