@@ -2,6 +2,17 @@
 #
 # Badges are repo-scoped public state. This workflow produces diff-scoped PR
 # evidence under target/ripr/ and mutation-routing receipts under target/xtask/.
+#
+# Runner routing: large diffs (27-PR merge trains, 487-file syncs) OOM on the
+# GitHub-hosted ubuntu-24.04 runner (~7 GB). This workflow mirrors the routing
+# pattern from em-ci-routed-rust.yml: prefer CX53 (28 GB, 14 cores), fall back
+# to CX43 (16 GB, 8 cores), and use GitHub-hosted only for fork PRs or when no
+# self-hosted runner is idle.  Evidence: runs 27069450554, 27053186621 (x2),
+# killed at 2 m 21 s with exit 143 (SIGTERM / OOM eviction).
+#
+# The required-check name "ripr+ New Gap Gate" is owned by the result
+# aggregator job at the bottom of this file, matching the branch-protection
+# entry in .ci/policies/required-checks.toml.
 
 name: ripr
 
@@ -19,11 +30,523 @@ permissions:
   contents: read
 
 jobs:
-  ripr:
-    name: ripr+ New Gap Gate
+  # -------------------------------------------------------------------------
+  # 1. Router -- picks the target runner for this PR run.
+  # -------------------------------------------------------------------------
+  route-ripr:
+    name: Route ripr runner
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event.pull_request.draft != true || github.event_name == 'workflow_dispatch'
+    outputs:
+      target: ${{ steps.route.outputs.target }}
+      reason: ${{ steps.route.outputs.reason }}
+      fallback_allowed: ${{ steps.route.outputs.fallback_allowed }}
+    steps:
+      - name: Decide target runner
+        id: route
+        env:
+          GH_TOKEN: ${{ secrets.EM_RUNNER_READ_TOKEN }}
+          ORG: EffortlessMetrics
+          IS_FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+          PR_AUTHOR_LOGIN: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login || '' }}
+          PR_AUTHOR_TYPE: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.type || '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          emit() {
+            local target="$1" reason="$2" fallback_allowed="$3"
+            echo "router_target=$target"
+            echo "router_reason=$reason"
+            echo "router_fallback_allowed=$fallback_allowed"
+            {
+              echo "target=$target"
+              echo "reason=$reason"
+              echo "fallback_allowed=$fallback_allowed"
+            } >> "$GITHUB_OUTPUT"
+            {
+              echo "### ripr Runner Route"
+              echo ""
+              echo "- router_target: \`$target\`"
+              echo "- router_reason: \`$reason\`"
+              echo "- router_fallback_allowed: \`$fallback_allowed\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+          }
+
+          # Fork PRs cannot access self-hosted runners -- GitHub blocks secrets.
+          if [ "$IS_FORK_PR" = "true" ]; then
+            emit "github" "fork_pr" "true"
+            exit 0
+          fi
+
+          # Bot PRs (Dependabot, etc.) run on GitHub-hosted to avoid tying up
+          # self-hosted capacity.
+          pr_author_login_lc="$(printf '%s' "${PR_AUTHOR_LOGIN:-}" | tr '[:upper:]' '[:lower:]')"
+          pr_author_type_lc="$(printf '%s' "${PR_AUTHOR_TYPE:-}" | tr '[:upper:]' '[:lower:]')"
+          is_bot_pr="false"
+          case "$pr_author_login_lc" in
+            dependabot*|app/*|*\[bot\]) is_bot_pr="true" ;;
+          esac
+          if [ "$pr_author_type_lc" = "bot" ]; then is_bot_pr="true"; fi
+          if [ "$is_bot_pr" = "true" ]; then
+            emit "github" "bot_pr_github_hosted" "true"
+            exit 0
+          fi
+
+          # No runner token -- cannot query availability; fall back safely.
+          if [ -z "${GH_TOKEN:-}" ]; then
+            emit "github" "runner_token_missing" "true"
+            exit 0
+          fi
+
+          response="$(mktemp)"
+          status="$(curl -sS -w '%{http_code}' -o "$response" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/orgs/$ORG/actions/runners?per_page=100" || true)"
+
+          if [ "$status" != "200" ]; then
+            echo "::warning::runner API returned HTTP $status; falling back to GitHub-hosted"
+            emit "github" "runner_api_failed" "true"
+            exit 0
+          fi
+
+          idle_runner_count() {
+            local runner_label="$1"
+            jq --arg runner_label "$runner_label" '
+              [ .runners[]?
+                | select(.status == "online")
+                | select(.busy == false)
+                | ([.labels[].name | ascii_downcase] // []) as $have
+                | select(
+                    ($have | index("em-ci")) and
+                    ($have | index($runner_label)) and
+                    ($have | index("rust-small")) and
+                    ($have | index("trusted-pr"))
+                  )
+              ] | length
+            ' "$response"
+          }
+
+          idle_cx53="$(idle_runner_count "cx53")"
+          idle_cx43="$(idle_runner_count "cx43")"
+
+          echo "idle_cx53=${idle_cx53:-0}"
+          echo "idle_cx43=${idle_cx43:-0}"
+
+          if [ "${idle_cx53:-0}" -gt 0 ]; then
+            emit "cx53" "cx53_idle" "false"
+          elif [ "${idle_cx43:-0}" -gt 0 ]; then
+            emit "cx43" "cx43_idle" "false"
+          else
+            # No self-hosted runner idle -- fall back to GitHub-hosted.
+            # ripr analysis on large diffs may OOM, but small/medium PRs pass.
+            emit "github" "no_idle_runner" "true"
+          fi
+
+  # -------------------------------------------------------------------------
+  # 2a. ripr on CX53 (28 GB, 14 cores) -- preferred self-hosted lane.
+  #
+  # All cargo/ripr commands run inside the em-ci-rust:1.95 Docker image,
+  # matching em-ci-routed-rust.yml exactly. The host runner does not have
+  # the Rust toolchain on PATH -- it is only available inside the container.
+  # ripr is installed into /cargo-home/bin (= /mnt/ci-cache/cargo-home/bin
+  # on the host) so subsequent runs skip the install if the version matches.
+  # -------------------------------------------------------------------------
+  ripr-cx53:
+    name: ripr+ on CX53
+    needs: route-ripr
+    if: >-
+      needs.route-ripr.result == 'success' &&
+      needs.route-ripr.outputs.target == 'cx53'
+    runs-on:
+      group: em-ci-small
+      labels: [self-hosted, linux, x64, em-ci, cx53, rust-small, trusted-pr]
+    timeout-minutes: 60
+    env:
+      RIPR_VERSION: "0.5.0"
+      BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}
+      PR_LABELS: ${{ github.event_name == 'pull_request' && join(github.event.pull_request.labels.*.name, ',') || '' }}
+      CARGO_HOME: /mnt/ci-cache/cargo-home
+      SCCACHE_DIR: /mnt/ci-cache/sccache
+      SCCACHE_CACHE_SIZE: 60G
+      CARGO_BUILD_JOBS: "12"
+      CARGO_INCREMENTAL: "0"
+      CARGO_TARGET_DIR: /mnt/ci-scratch/perl-lsp-swarm/ripr-${{ github.run_id }}-${{ github.run_attempt }}
+      TMPDIR: /mnt/ci-scratch/tmp/ripr-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Fix workspace ownership (pre-checkout)
+        shell: bash
+        run: |
+          # Docker writes workspace files as root. If a previous run left root-owned
+          # files behind (e.g. cleanup step missed), actions/checkout@v6 fails with
+          # EACCES when it tries to 'git clean'. Use Docker to chown them back before
+          # checkout runs.
+          set +e
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            em-ci-rust:1.95 \
+            bash -c "chown -R $(id -u):$(id -g) /workspace/target 2>/dev/null || true" || true
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Preflight disk
+        shell: bash
+        run: |
+          set -euo pipefail
+          ci-disk-guard /mnt/ci-scratch 100
+          ci-disk-guard /mnt/ci-cache 20
+          df -h /mnt/ci-scratch /mnt/ci-cache || true
+          mkdir -p "$TMPDIR" "$CARGO_TARGET_DIR" "$CARGO_HOME" "$SCCACHE_DIR"
+
+      - name: Run ripr evidence and gate (Docker)
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --cpus="14" \
+            --memory="28g" \
+            -e RIPR_VERSION="$RIPR_VERSION" \
+            -e BASE_REF="$BASE_REF" \
+            -e PR_LABELS="$PR_LABELS" \
+            -e CARGO_HOME=/cargo-home \
+            -e SCCACHE_DIR=/sccache \
+            -e SCCACHE_CACHE_SIZE="$SCCACHE_CACHE_SIZE" \
+            -e RUSTC_WRAPPER=/usr/local/cargo/bin/sccache \
+            -e CARGO_INCREMENTAL="$CARGO_INCREMENTAL" \
+            -e CARGO_BUILD_JOBS="$CARGO_BUILD_JOBS" \
+            -e CARGO_TARGET_DIR=/target \
+            -e RUST_BACKTRACE=1 \
+            -e CARGO_TERM_COLOR=always \
+            -e TMPDIR=/tmp/jobtmp \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -v "$CARGO_HOME:/cargo-home" \
+            -v "$SCCACHE_DIR:/sccache" \
+            -v "$CARGO_TARGET_DIR:/target" \
+            -v "$TMPDIR:/tmp/jobtmp" \
+            -w /workspace \
+            em-ci-rust:1.95 \
+            bash -eu -o pipefail -c '
+              # The workspace is checked out by the host runner user; the container
+              # runs as a different UID. Mark it safe so git commands work.
+              git config --global --add safe.directory /workspace
+
+              rustc --version
+              cargo --version
+              sccache --version || true
+
+              # Install ripr into the cached cargo-home so subsequent runs skip this.
+              cargo install ripr --version "$RIPR_VERSION" --locked
+
+              /cargo-home/bin/ripr doctor
+
+              # Generation phase: keep going on individual failures so we can
+              # still upload whatever artifacts were produced.
+              cargo xtask ripr-pr --base "origin/$BASE_REF" --head HEAD || RIPR_FAILED=1
+              cargo xtask ripr-plus --receipt target/receipts/quality/ripr-plus.json || RIPR_FAILED=1
+              cargo xtask ripr-review-comments --base "origin/$BASE_REF" --head HEAD --timeout-seconds 210 || RIPR_FAILED=1
+              cargo xtask impacted-evidence --labels-csv "$PR_LABELS" || RIPR_FAILED=1
+              cargo xtask ripr-pr-summary || RIPR_FAILED=1
+              cargo xtask ripr-annotations || RIPR_FAILED=1
+
+              # Validation phase.
+              cargo xtask ripr-pr --base "origin/$BASE_REF" --head HEAD --check
+              cargo xtask ripr-plus --receipt target/receipts/quality/ripr-plus.json --check
+              cargo xtask ripr-review-comments --base "origin/$BASE_REF" --head HEAD --check
+              cargo xtask impacted-evidence --labels-csv "$PR_LABELS" --check
+              cargo xtask ripr-pr-summary --check
+              cargo xtask ripr-annotations --check
+
+              # Quality gate.
+              cargo xtask quality-gate \
+                --mode enforce-new-ripr \
+                --ripr-receipt target/receipts/quality/ripr-plus.json \
+                --ripr-pr-receipt target/ripr/pr/repo-exposure.json \
+                --review-receipt target/ripr/review/comments.json \
+                --ripr-base "origin/$BASE_REF" \
+                --ripr-head HEAD \
+                --receipt target/receipts/quality/quality-gate-ripr.json \
+                --summary target/receipts/quality/quality-gate-ripr.md
+              cargo xtask quality-gate \
+                --mode enforce-new-ripr \
+                --ripr-receipt target/receipts/quality/ripr-plus.json \
+                --ripr-pr-receipt target/ripr/pr/repo-exposure.json \
+                --review-receipt target/ripr/review/comments.json \
+                --ripr-base "origin/$BASE_REF" \
+                --ripr-head HEAD \
+                --receipt target/receipts/quality/quality-gate-ripr.json \
+                --summary target/receipts/quality/quality-gate-ripr.md \
+                --check
+
+              sccache --show-stats || true
+
+              # Propagate any generation-phase failure after all steps ran.
+              if [ "${RIPR_FAILED:-0}" = "1" ]; then exit 1; fi
+            '
+
+      - name: Append PR evidence summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f target/ripr/pr/summary.md ]; then
+            cat target/ripr/pr/summary.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No RIPR PR evidence summary was produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f target/receipts/quality/quality-gate-ripr.md ]; then
+            printf '\n' >> "$GITHUB_STEP_SUMMARY"
+            cat target/receipts/quality/quality-gate-ripr.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No RIPR quality-gate summary was produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f target/ripr/review/annotations.txt ]; then
+            cat target/ripr/review/annotations.txt
+          fi
+
+      - name: Upload ripr PR evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ripr-pr-evidence
+          path: |
+            target/ripr/pr/**
+            target/ripr/review/**
+            target/xtask/impacted-evidence/**
+            target/receipts/quality/ripr-plus.json
+            target/receipts/quality/quality-gate-ripr.json
+            target/receipts/quality/quality-gate-ripr.md
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Cleanup scratch
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          # Fix ownership of workspace target/ dirs written by root inside Docker.
+          # Without this the next run's checkout action cannot clean them (EACCES).
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            em-ci-rust:1.95 \
+            bash -c "chown -R $(id -u):$(id -g) /workspace/target/ripr /workspace/target/xtask /workspace/target/receipts 2>/dev/null || true" || true
+          # Clean the scratch dirs (Docker-owned files removed by Docker).
+          docker run --rm \
+            -v "$TMPDIR:/tmpdir" \
+            -v "$CARGO_TARGET_DIR:/target" \
+            em-ci-rust:1.95 \
+            bash -c 'find /tmpdir /target -mindepth 1 -delete 2>/dev/null || true' || true
+          rmdir "$TMPDIR" "$CARGO_TARGET_DIR" 2>/dev/null || true
+          df -h /mnt/ci-scratch /mnt/ci-cache || true
+
+  # -------------------------------------------------------------------------
+  # 2b. ripr on CX43 (16 GB, 8 cores) -- secondary self-hosted lane.
+  #
+  # Same Docker pattern as CX53; --cpus/--memory adjusted for CX43 hardware.
+  # -------------------------------------------------------------------------
+  ripr-cx43:
+    name: ripr+ on CX43
+    needs: route-ripr
+    if: >-
+      needs.route-ripr.result == 'success' &&
+      needs.route-ripr.outputs.target == 'cx43'
+    runs-on:
+      group: em-ci-small
+      labels: [self-hosted, linux, x64, em-ci, cx43, rust-small, trusted-pr]
+    timeout-minutes: 75
+    env:
+      RIPR_VERSION: "0.5.0"
+      BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}
+      PR_LABELS: ${{ github.event_name == 'pull_request' && join(github.event.pull_request.labels.*.name, ',') || '' }}
+      CARGO_HOME: /mnt/ci-cache/cargo-home
+      SCCACHE_DIR: /mnt/ci-cache/sccache
+      SCCACHE_CACHE_SIZE: 30G
+      CARGO_BUILD_JOBS: "8"
+      CARGO_INCREMENTAL: "0"
+      CARGO_TARGET_DIR: /mnt/ci-scratch/perl-lsp-swarm/ripr-${{ github.run_id }}-${{ github.run_attempt }}
+      TMPDIR: /mnt/ci-scratch/tmp/ripr-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Fix workspace ownership (pre-checkout)
+        shell: bash
+        run: |
+          # Docker writes workspace files as root. If a previous run left root-owned
+          # files behind (e.g. cleanup step missed), actions/checkout@v6 fails with
+          # EACCES when it tries to 'git clean'. Use Docker to chown them back before
+          # checkout runs.
+          set +e
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            em-ci-rust:1.95 \
+            bash -c "chown -R $(id -u):$(id -g) /workspace/target 2>/dev/null || true" || true
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Preflight disk
+        shell: bash
+        run: |
+          set -euo pipefail
+          ci-disk-guard /mnt/ci-scratch 80
+          ci-disk-guard /mnt/ci-cache 15
+          df -h /mnt/ci-scratch /mnt/ci-cache || true
+          mkdir -p "$TMPDIR" "$CARGO_TARGET_DIR" "$CARGO_HOME" "$SCCACHE_DIR"
+
+      - name: Run ripr evidence and gate (Docker)
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --cpus="8" \
+            --memory="16g" \
+            -e RIPR_VERSION="$RIPR_VERSION" \
+            -e BASE_REF="$BASE_REF" \
+            -e PR_LABELS="$PR_LABELS" \
+            -e CARGO_HOME=/cargo-home \
+            -e SCCACHE_DIR=/sccache \
+            -e SCCACHE_CACHE_SIZE="$SCCACHE_CACHE_SIZE" \
+            -e RUSTC_WRAPPER=/usr/local/cargo/bin/sccache \
+            -e CARGO_INCREMENTAL="$CARGO_INCREMENTAL" \
+            -e CARGO_BUILD_JOBS="$CARGO_BUILD_JOBS" \
+            -e CARGO_TARGET_DIR=/target \
+            -e RUST_BACKTRACE=1 \
+            -e CARGO_TERM_COLOR=always \
+            -e TMPDIR=/tmp/jobtmp \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -v "$CARGO_HOME:/cargo-home" \
+            -v "$SCCACHE_DIR:/sccache" \
+            -v "$CARGO_TARGET_DIR:/target" \
+            -v "$TMPDIR:/tmp/jobtmp" \
+            -w /workspace \
+            em-ci-rust:1.95 \
+            bash -eu -o pipefail -c '
+              # The workspace is checked out by the host runner user; the container
+              # runs as a different UID. Mark it safe so git commands work.
+              git config --global --add safe.directory /workspace
+
+              rustc --version
+              cargo --version
+              sccache --version || true
+
+              # Install ripr into the cached cargo-home so subsequent runs skip this.
+              cargo install ripr --version "$RIPR_VERSION" --locked
+
+              /cargo-home/bin/ripr doctor
+
+              # Generation phase: keep going on individual failures so we can
+              # still upload whatever artifacts were produced.
+              cargo xtask ripr-pr --base "origin/$BASE_REF" --head HEAD || RIPR_FAILED=1
+              cargo xtask ripr-plus --receipt target/receipts/quality/ripr-plus.json || RIPR_FAILED=1
+              cargo xtask ripr-review-comments --base "origin/$BASE_REF" --head HEAD --timeout-seconds 210 || RIPR_FAILED=1
+              cargo xtask impacted-evidence --labels-csv "$PR_LABELS" || RIPR_FAILED=1
+              cargo xtask ripr-pr-summary || RIPR_FAILED=1
+              cargo xtask ripr-annotations || RIPR_FAILED=1
+
+              # Validation phase.
+              cargo xtask ripr-pr --base "origin/$BASE_REF" --head HEAD --check
+              cargo xtask ripr-plus --receipt target/receipts/quality/ripr-plus.json --check
+              cargo xtask ripr-review-comments --base "origin/$BASE_REF" --head HEAD --check
+              cargo xtask impacted-evidence --labels-csv "$PR_LABELS" --check
+              cargo xtask ripr-pr-summary --check
+              cargo xtask ripr-annotations --check
+
+              # Quality gate.
+              cargo xtask quality-gate \
+                --mode enforce-new-ripr \
+                --ripr-receipt target/receipts/quality/ripr-plus.json \
+                --ripr-pr-receipt target/ripr/pr/repo-exposure.json \
+                --review-receipt target/ripr/review/comments.json \
+                --ripr-base "origin/$BASE_REF" \
+                --ripr-head HEAD \
+                --receipt target/receipts/quality/quality-gate-ripr.json \
+                --summary target/receipts/quality/quality-gate-ripr.md
+              cargo xtask quality-gate \
+                --mode enforce-new-ripr \
+                --ripr-receipt target/receipts/quality/ripr-plus.json \
+                --ripr-pr-receipt target/ripr/pr/repo-exposure.json \
+                --review-receipt target/ripr/review/comments.json \
+                --ripr-base "origin/$BASE_REF" \
+                --ripr-head HEAD \
+                --receipt target/receipts/quality/quality-gate-ripr.json \
+                --summary target/receipts/quality/quality-gate-ripr.md \
+                --check
+
+              sccache --show-stats || true
+
+              # Propagate any generation-phase failure after all steps ran.
+              if [ "${RIPR_FAILED:-0}" = "1" ]; then exit 1; fi
+            '
+
+      - name: Append PR evidence summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f target/ripr/pr/summary.md ]; then
+            cat target/ripr/pr/summary.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No RIPR PR evidence summary was produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f target/receipts/quality/quality-gate-ripr.md ]; then
+            printf '\n' >> "$GITHUB_STEP_SUMMARY"
+            cat target/receipts/quality/quality-gate-ripr.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No RIPR quality-gate summary was produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f target/ripr/review/annotations.txt ]; then
+            cat target/ripr/review/annotations.txt
+          fi
+
+      - name: Upload ripr PR evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ripr-pr-evidence
+          path: |
+            target/ripr/pr/**
+            target/ripr/review/**
+            target/xtask/impacted-evidence/**
+            target/receipts/quality/ripr-plus.json
+            target/receipts/quality/quality-gate-ripr.json
+            target/receipts/quality/quality-gate-ripr.md
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Cleanup scratch
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          # Fix ownership of workspace target/ dirs written by root inside Docker.
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            em-ci-rust:1.95 \
+            bash -c "chown -R $(id -u):$(id -g) /workspace/target/ripr /workspace/target/xtask /workspace/target/receipts 2>/dev/null || true" || true
+          # Clean the scratch dirs (Docker-owned files removed by Docker).
+          docker run --rm \
+            -v "$TMPDIR:/tmpdir" \
+            -v "$CARGO_TARGET_DIR:/target" \
+            em-ci-rust:1.95 \
+            bash -c 'find /tmpdir /target -mindepth 1 -delete 2>/dev/null || true' || true
+          rmdir "$TMPDIR" "$CARGO_TARGET_DIR" 2>/dev/null || true
+          df -h /mnt/ci-scratch /mnt/ci-cache || true
+
+  # -------------------------------------------------------------------------
+  # 2c. ripr on GitHub-hosted -- fork PRs, bots, and no-idle-runner fallback.
+  # -------------------------------------------------------------------------
+  ripr-github:
+    name: ripr+ on GitHub Hosted
+    needs: route-ripr
+    if: >-
+      needs.route-ripr.result == 'success' &&
+      needs.route-ripr.outputs.target == 'github' &&
+      needs.route-ripr.outputs.fallback_allowed == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
-    if: github.event.pull_request.draft != true
     env:
       RIPR_VERSION: "0.5.0"
       BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}
@@ -140,3 +663,79 @@ jobs:
             target/receipts/quality/quality-gate-ripr.md
           retention-days: 14
           if-no-files-found: error
+
+  # -------------------------------------------------------------------------
+  # 3. Result aggregator -- owns the "ripr+ New Gap Gate" required-check name.
+  # -------------------------------------------------------------------------
+  ripr:
+    name: ripr+ New Gap Gate
+    needs:
+      - route-ripr
+      - ripr-cx53
+      - ripr-cx43
+      - ripr-github
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Evaluate routed result
+        shell: bash
+        env:
+          ROUTE_RESULT: ${{ needs.route-ripr.result }}
+          ROUTER_TARGET: ${{ needs.route-ripr.outputs.target }}
+          ROUTER_REASON: ${{ needs.route-ripr.outputs.reason }}
+          CX53_RESULT: ${{ needs.ripr-cx53.result }}
+          CX43_RESULT: ${{ needs.ripr-cx43.result }}
+          GITHUB_RESULT: ${{ needs.ripr-github.result }}
+        run: |
+          set -euo pipefail
+
+          echo "route_result=${ROUTE_RESULT:-}"
+          echo "router_target=${ROUTER_TARGET:-}"
+          echo "router_reason=${ROUTER_REASON:-}"
+          echo "cx53_result=${CX53_RESULT:-}"
+          echo "cx43_result=${CX43_RESULT:-}"
+          echo "github_result=${GITHUB_RESULT:-}"
+
+          {
+            echo "### ripr+ New Gap Gate Result"
+            echo ""
+            echo "- route_result: \`${ROUTE_RESULT:-}\`"
+            echo "- router_target: \`${ROUTER_TARGET:-}\`"
+            echo "- router_reason: \`${ROUTER_REASON:-}\`"
+            echo "- cx53_result: \`${CX53_RESULT:-}\`"
+            echo "- cx43_result: \`${CX43_RESULT:-}\`"
+            echo "- github_result: \`${GITHUB_RESULT:-}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$ROUTE_RESULT" != "success" ]; then
+            echo "::error::ripr router did not complete successfully: $ROUTE_RESULT"
+            exit 1
+          fi
+
+          case "${ROUTER_TARGET:-}" in
+            cx53)
+              if [ "$CX53_RESULT" != "success" ]; then
+                echo "::error::ripr on CX53 did not succeed: $CX53_RESULT"
+                exit 1
+              fi
+              ;;
+            cx43)
+              if [ "$CX43_RESULT" != "success" ]; then
+                echo "::error::ripr on CX43 did not succeed: $CX43_RESULT"
+                exit 1
+              fi
+              ;;
+            github)
+              if [ "$GITHUB_RESULT" != "success" ]; then
+                echo "::error::ripr on GitHub-hosted did not succeed: $GITHUB_RESULT"
+                exit 1
+              fi
+              ;;
+            *)
+              echo "::error::Unknown router target: ${ROUTER_TARGET:-<empty>}"
+              exit 1
+              ;;
+          esac
+
+          echo "ripr+ New Gap Gate: success (runner: ${ROUTER_TARGET:-unknown}, reason: ${ROUTER_REASON:-unknown})"

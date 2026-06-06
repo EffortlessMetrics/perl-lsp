@@ -187,6 +187,19 @@ jobs:
       RUST_TEST_THREADS: "2"
       TMPDIR: /mnt/ci-scratch/tmp/${{ github.run_id }}-${{ github.run_attempt }}
     steps:
+      - name: Fix workspace ownership (pre-checkout)
+        shell: bash
+        run: |
+          # ripr.yml (and any other Docker-on-CX job) may leave root-owned files
+          # in the workspace target/ dir. actions/checkout@v6 cannot clean them
+          # (EACCES). Chown back to the host runner user before checkout so the
+          # workspace is always in a cleanable state.
+          set +e
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            em-ci-rust:1.95 \
+            bash -c "chown -R $(id -u):$(id -g) /workspace/target 2>/dev/null || true" || true
+
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
@@ -271,6 +284,19 @@ jobs:
       RUST_TEST_THREADS: "2"
       TMPDIR: /mnt/ci-scratch/tmp/${{ github.run_id }}-${{ github.run_attempt }}
     steps:
+      - name: Fix workspace ownership (pre-checkout)
+        shell: bash
+        run: |
+          # ripr.yml (and any other Docker-on-CX job) may leave root-owned files
+          # in the workspace target/ dir. actions/checkout@v6 cannot clean them
+          # (EACCES). Chown back to the host runner user before checkout so the
+          # workspace is always in a cleanable state.
+          set +e
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            em-ci-rust:1.95 \
+            bash -c "chown -R $(id -u):$(id -g) /workspace/target 2>/dev/null || true" || true
+
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
