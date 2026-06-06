@@ -7,86 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-06-06
+
+Release notes: [v0.16.0](docs/releases/v0.16.0.md)
+
+Minor release. Perldoc virtual-document links, inline completion hardening,
+LSP 3.18 applyEdit metadata and receipt locks, DAP improvements, quality and
+proof infrastructure.
+
 ### Added
 
-- 0.15.1 Neovim latency lane:
-  - `--runtime-mode e2e` / `PERL_LSP_E2E=1` for latency-focused editor
-    harnesses. Defaults: zero diagnostic debounce, syntax-only
-    diagnostics, no eager workspace indexing, no file watchers.
-  - `--diagnostic-mode syntax-only` /
-    `PERL_LSP_DIAGNOSTIC_MODE=syntax-only` restricts diagnostics to
-    parse errors only; skips semantic / native critic / external
-    perlcritic / module-resolution / workspace dead-code passes. Both
-    push and pull diagnostic paths honour the gate.
-  - `--diagnostic-debounce-ms <ms>` /
-    `PERL_LSP_DIAGNOSTIC_DEBOUNCE_MS=<ms>` configurable diagnostic
-    publish debounce window. `0` bypasses the debouncer entirely.
-  - E2E startup gate: `initialized` no longer kicks off eager workspace
-    indexing under e2e mode (override with `--eager-workspace-indexing
-    true`).
-  - Generation-aware stale read cancellation in the scheduler. Hover,
-    completion, definition, declaration, typeDefinition, implementation,
-    and references are cancelled with `RequestCancelled` when the
-    document generation advances between ingress and dispatch. Turns
-    typing storms into "latest request wins" instead of "every cursor
-    position gets its own work item."
-  - Raw-RPC latency receipts in `perl-lsp-ux-tests::ux_latency_raw_rpc`
-    and a Neovim lean smoke script at
-    `scripts/ux/neovim_lean_smoke.sh`.
-- Added the conservative `perl.explainProviderDecision` LSP execute-command
-  surface. It returns the structured provider decision explanation payload and
-  reports a low-confidence `missing_fact` / `no_result` fallback when no
-  provider-specific receipt is attached, avoiding false certainty while the
-  live provider receipt wiring lands.
+- **Perldoc / POD virtual documents** — `perldoc://` document links now resolve
+  to POD content from the workspace. Labels in `=head2` and `=item` sections are
+  linked targets within the virtual document; module links prefer workspace-local
+  POD before falling back to external `perldoc`. (`workspace/textDocumentContent`
+  extended with labeled-target link generation.) (#1186)
+- **LSP 3.18 applyEdit metadata** — `workspace/applyEdit` requests from the
+  server now include `metadata` (`label`, `description`, `isRefactoring`) when
+  the client advertises support, providing editors with descriptive undo labels
+  for server-originated refactors. (#1184)
+- **LSP 3.18 receipt locks** — New negative-claim and contract-lock tests verify
+  that capability-gated LSP 3.18 fields (`CompletionList.itemDefaults.data`,
+  `CompletionList.applyKind`, `CodeActionOptions.documentation`,
+  `SnippetTextEdit` workspace edits, `ApplyWorkspaceEditParams.metadata`,
+  `textDocument.codeLens.resolveSupport.properties`) are only emitted when the
+  client advertises the relevant capability. Accidental emission is now a test
+  failure. (#9628)
+- **Semantic tokens: label token type** — Perl statement and control labels
+  (`LOOP:`, `BLOCK:`) are now classified with a `label` token type. The semantic
+  token type count grows from 23 to 24.
+- **Quality gate enforce-new-RIPR+** — The transition gate now blocks new RIPR+
+  gaps on every PR. Existing gaps are tracked under a burndown exception
+  (expires 2026-09-30). New gaps are hard-blocked immediately. (#8197)
+- **Product smoke harness** — 30 UX fixture files and a 40-request smoke script
+  provide a deterministic release-readiness check. 6 fixtures / 40 requests
+  pass at the RC freeze commit.
+- **`perl.explainProviderDecision` execute-command** — Returns the structured
+  provider decision explanation payload; reports a low-confidence fallback when
+  no provider-specific receipt is attached.
 
 ### Fixed
 
-- LSP4IJ inline completion now follows the LSP 3.18 registration model:
-  static clients receive top-level `inlineCompletionProvider`, dynamic-capable
-  clients receive `client/registerCapability` for
-  `textDocument/inlineCompletion`, and `experimental.inlineCompletionProvider`
-  is never emitted.
-- `textDocument/inlineCompletion` has a runtime JSON-RPC receipt proving a
-  dynamic LSP4IJ-shaped client receives deterministic suggestions, including
-  `strict;` for a `use ` prefix. Disabling `lsp.inline_completion` suppresses
-  advertisement, registration, and execution.
-- Inline completion now treats automatic trigger requests conservatively by
-  returning only the top deterministic candidate, while explicit invoked
-  requests keep the richer deterministic candidate set.
-- Inline completion now returns explicit single-line UTF-16 replacement ranges
-  for matching partial tokens such as `use str` and `$obj->n`, preventing ghost
-  text from duplicating text the user already typed.
-- Lean editor mode now honors `--file-watchers=false` during dynamic watcher
-  registration while leaving feature-specific dynamic registrations, such as
-  inline completion, available. Semantic tokens advertise full-only support
-  until the delta/result-id path is implemented.
+- **Inline completion hard reject zones** — The server now returns an empty
+  result for positions inside string literals, comments, heredoc bodies, and
+  regex literals, preventing spurious suggestions in non-code contexts. (#9631)
+- **Inline completion replacement range safety** — Replacement ranges are now
+  clamped to the current line and validated against the document length before
+  being emitted, preventing out-of-range positions from reaching the client.
+  (#9626)
+- **Inline completion trigger-kind policy** — Automatic trigger requests receive
+  only the single top deterministic candidate; explicit invoked requests keep the
+  richer set. This matches the LSP 3.18 `triggerKind` intent. (#9621)
+- **Inline completion LSP 3.18 registration** — Static clients receive top-level
+  `inlineCompletionProvider`; dynamic-capable clients receive
+  `client/registerCapability`; `experimental.inlineCompletionProvider` is never
+  emitted.
+- **Folding range refresh receipt** — The server correctly handles
+  `workspace/foldingRange/refresh` round-trips in the test harness. (#9633)
+- **vscode-extension: Perl-missing remediation message** — The extension now
+  shows a corrected message when the `perl` executable is not found.
 
 ### Documentation
 
 - Updated JetBrains/LSP4IJ setup docs to prefer the upstream LSP4IJ `perl-lsp`
-  integration when available, with manual `perllsp --stdio` registration
-  moved to separate fallback and development guidance.
-- Added the semantic inline-completion roadmap, defining deterministic
-  project-aware ghost text as the lane goal while keeping AI optional and
-  gated behind parse-safety, ranking, and fixture receipts.
-
-### Notes (0.15.1)
-
-- This release does not implement true incremental AST reuse. The live
-  LSP path still full-parses after text changes; latency improvements
-  come from skipping avoidable background work and cancelling stale
-  reads earlier.
-- For latency testing, use a release binary with
-  `--runtime-mode e2e --diagnostic-mode syntax-only
-  --diagnostic-debounce-ms 0`, disable file watchers, and disable
-  semantic tokens at the client unless you are explicitly testing
-  semantic highlighting.
-
-### Planned
-
-- Documented the Rust 1.95 / 0.14.0 rollout sequence before implementation: compatibility spike first, then MSRV/toolchain, lint, no-panic, file-policy, CI routing, and release-prep lanes.
-- Added the proactive CI integrity guards rail ([`docs/development/RUST_1_95_PROACTIVE_GUARDS.md`](docs/development/RUST_1_95_PROACTIVE_GUARDS.md)) as a sibling rollout. Six guard PRs (PG-1 through PG-6) covering label enforcement, risk-pack referential integrity, lane mapping with matrix expansion, net-new workflow-allowlist ledger, CI Actuals emitter + subscription coverage check, and broad-glob justification tightening. Each row mirrors a sibling-repo proven shape.
-- Consolidated the remaining Rust 1.95 → 0.14.0 work into a single canonical roadmap: rewrote [`docs/development/RUST_1_95_ROLLOUT.md`](docs/development/RUST_1_95_ROLLOUT.md) into a post-landing source of truth (already landed / remaining implementation ladder / per-rail acceptance contracts / Claude-Codex operating contract); slimmed [`docs/ci/perl-lsp-rust-1.95-rollout.md`](docs/ci/perl-lsp-rust-1.95-rollout.md) to a historical pointer; added [`docs/ci/test-evidence-lanes.md`](docs/ci/test-evidence-lanes.md) defining the five evidence-lane shapes (PR-fast required / PR-targeted / nightly cron / release-only / advisory) with risk-pack auto-routing, skipped-by-policy receipts, and LEM cost framing. Umbrella tracking: **#8663**.
+  integration when available.
+- Added the semantic inline-completion roadmap (deterministic project-aware
+  ghost text as the lane goal; AI optional and gated).
 
 ## [0.15.2] - 2026-05-26
 
