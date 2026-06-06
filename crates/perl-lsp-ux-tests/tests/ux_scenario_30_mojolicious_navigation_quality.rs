@@ -1,3 +1,6 @@
+// Test receipt emits per-probe status and JSON evidence to stderr for auditability.
+#![allow(clippy::print_stderr)]
+
 //! Scenario 30 - Mojolicious navigation quality receipt.
 //!
 //! This receipt exercises the committed Mojolicious skeleton workspace and
@@ -354,6 +357,10 @@ fn scenario_30_mojolicious_navigation_quality_receipt() {
             recorder.check(
                 "all non-empty navigation results used valid LSP shapes",
                 invalid_shape_total == 0,
+            )?;
+            recorder.check(
+                "all navigation probes returned at least one result",
+                fallback_or_empty_count == 0,
             )?;
             recorder.check(
                 "navigation receipt recorded at least one expected workspace target",
