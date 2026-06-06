@@ -177,8 +177,8 @@
       "ci_tier": "pr",
       "component": "workspace_symbols",
       "instrumentation": {
-        "run_receipt": false,
-        "first_useful_result": false,
+        "run_receipt": true,
+        "first_useful_result": true,
         "protocol_goldens": false
       },
       "user_journey": "open multiple files in a workspace and navigate across them",
@@ -402,6 +402,7 @@
         "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
+        "receipt records multi-root workspace/symbol timing",
         "workspace/symbol returns same-named symbols from multiple roots",
         "results include workspaceFolderUri"
       ],
