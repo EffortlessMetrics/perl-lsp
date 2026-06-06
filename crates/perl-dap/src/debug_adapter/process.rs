@@ -237,6 +237,13 @@ impl DebugAdapter {
             );
         }
 
+        if has_surrounding_quotes(program) {
+            return Err(format!(
+                "The launch.json 'program' value includes surrounding quotes: {program}. \
+                 Remove the extra quotes so it is just the script path."
+            ));
+        }
+
         // Validate that the program is a regular file (not a directory, device, etc.)
         // Using metadata().is_file() is more robust than exists() because:
         // - exists() returns true for directories
@@ -1680,10 +1687,17 @@ impl DebugAdapter {
     }
 }
 
+fn has_surrounding_quotes(value: &str) -> bool {
+    value.len() >= 2
+        && ((value.starts_with('"') && value.ends_with('"'))
+            || (value.starts_with('\'') && value.ends_with('\'')))
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        DebugAdapter, detect_perl_info, format_perl_spawn_error, is_valid_perl_interpreter,
+        DebugAdapter, detect_perl_info, format_perl_spawn_error, has_surrounding_quotes,
+        is_valid_perl_interpreter,
     };
 
     #[test]
@@ -1720,6 +1734,40 @@ mod tests {
         assert!(message.contains("Module Some::Missing::Module not found"));
         assert!(message.contains("cpan Some::Missing::Module"));
         assert!(message.contains("metacpan.org/pod/Some::Missing::Module"));
+    }
+
+    #[test]
+    fn detects_surrounding_program_quotes() -> Result<(), Box<dyn std::error::Error>> {
+        assert!(has_surrounding_quotes("\"script.pl\""));
+        assert!(has_surrounding_quotes("'script.pl'"));
+        assert!(!has_surrounding_quotes("script.pl"));
+        assert!(!has_surrounding_quotes("\"script.pl"));
+        assert!(!has_surrounding_quotes("script.pl\""));
+        Ok(())
+    }
+
+    #[test]
+    fn launch_debugger_rejects_quoted_program_path_with_guidance()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::collections::HashMap;
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+
+        let mut tmp = NamedTempFile::new()?;
+        writeln!(tmp, "# placeholder")?;
+        let tmp_path = tmp.path().to_str().ok_or("temp path is not valid UTF-8")?;
+        let quoted = format!("\"{tmp_path}\"");
+
+        let mut adapter = DebugAdapter::new();
+        let error = adapter
+            .launch_debugger(&quoted, "perl", Vec::new(), false, HashMap::new())
+            .err()
+            .ok_or("expected quoted program path to be rejected")?;
+
+        assert!(error.contains("surrounding quotes"), "message was: {error}");
+        assert!(error.contains("launch.json 'program'"), "message was: {error}");
+        assert!(error.contains("Remove the extra quotes"), "message was: {error}");
+        Ok(())
     }
 
     /// Verify that `detect_perl_info()` runs without panicking.
