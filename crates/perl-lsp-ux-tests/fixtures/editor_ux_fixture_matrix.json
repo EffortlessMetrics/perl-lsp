@@ -1310,7 +1310,8 @@
       ],
       "expected_outcomes": [
         "completion, definition, diagnostics, workspace trust report, safe-delete preview, and provider explanation requests do not crash",
-        "workspace trust report keeps the no-scan setup boundary visible",
+        "workspace trust report keeps no-scan and setup-hint no-probe boundaries visible",
+        "workspace trust report surfaces a visible setup hint count and hint list",
         "safe-delete preview refuses a referenced helper without applying edits",
         "provider explanation includes a copyable payload for issue reports"
       ],
