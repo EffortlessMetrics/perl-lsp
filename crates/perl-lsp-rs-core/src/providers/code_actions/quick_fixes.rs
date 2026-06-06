@@ -2186,6 +2186,10 @@ pub fn fix_missing_pod_coverage(source: &str, diagnostic: &QuickFixDiagnostic) -
             changes: vec![TextEdit {
                 location: SourceLocation { start: insert_pos, end: insert_pos },
                 new_text: pod_stub,
+            }],
+        },
+        is_preferred: true,
+    }]
 }
 
 /// Remove an entire `goto LABEL` statement when the target label is undefined (PL409).
