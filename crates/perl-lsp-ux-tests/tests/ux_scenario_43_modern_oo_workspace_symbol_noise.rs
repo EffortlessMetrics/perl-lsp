@@ -13,6 +13,9 @@
 //! - role/delegation/modifier boundary shapes observed separately from exact symbols
 //! - stale/fresh query behavior after editing an open document
 
+// Test receipt emits per-probe status and JSON evidence to stderr for auditability.
+#![allow(clippy::print_stderr)]
+
 use anyhow::{Context, Result};
 use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::missing_binary_skip;
@@ -661,6 +664,10 @@ fn scenario_43_modern_oo_workspace_symbol_noise_receipt() {
             recorder.check(
                 "all workspace-symbol probes produced reports",
                 reports.len() == probes.len(),
+            )?;
+            recorder.check(
+                "all workspace-symbol probes returned live symbols",
+                reports.iter().all(|report| report.first_count > 0),
             )?;
             recorder.check(
                 "workspace-symbol probes covered intended Modern OO receipt categories",

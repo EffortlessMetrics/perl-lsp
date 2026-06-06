@@ -1062,6 +1062,7 @@
       ],
       "expected_outcomes": [
         "workspace-symbol requests return valid LSP shapes without JSON-RPC errors",
+        "all workspace-symbol probes return live symbols",
         "receipt records useful Modern OO hits, labeled generated symbols, generated exact-name gating, and edit freshness",
         "broader generated/dynamic workspace-symbol candidates remain bounded without provider behavior promotion"
       ],
