@@ -209,7 +209,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ci-disk-guard /mnt/ci-scratch 100
+          # Self-heal: remove orphaned Rust Small scratch dirs older than 24 h whose
+          # cleanup step never ran (killed runs, OOM evictions, timeouts).
+          # Pattern [0-9]*-[0-9]* matches bare run_id-attempt dirs only; ripr-* dirs
+          # are handled by ripr.yml and intentionally excluded here.
+          find /mnt/ci-scratch/perl-lsp-swarm -maxdepth 1 -name '[0-9]*-[0-9]*' -mmin +1440 -exec rm -rf {} + 2>/dev/null || true
+          find /mnt/ci-scratch/tmp -maxdepth 1 -name '[0-9]*-[0-9]*' -mmin +1440 -exec rm -rf {} + 2>/dev/null || true
+          # The Rust Small lane runs cargo check --workspace + two targeted tests.
+          # Cold build (no sccache): ~10-15 GB of incremental artifacts.
+          # Warm build (sccache hit): ~1 GB. 40 GB gives 3-4x cold-build headroom
+          # and fits on both CX53 (301 GB volume, ~140 GB free) and CX43 (150 GB
+          # volume) after self-clean of orphaned dirs.
+          ci-disk-guard /mnt/ci-scratch 40
           ci-disk-guard /mnt/docker 20
           ci-disk-guard /mnt/ci-cache 20
           df -h /mnt/ci-scratch /mnt/docker /mnt/ci-cache || true
@@ -306,7 +317,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ci-disk-guard /mnt/ci-scratch 80
+          # Self-heal: remove orphaned Rust Small scratch dirs older than 24 h whose
+          # cleanup step never ran (killed runs, OOM evictions, timeouts).
+          # Pattern [0-9]*-[0-9]* matches bare run_id-attempt dirs only; ripr-* dirs
+          # are handled by ripr.yml and intentionally excluded here.
+          find /mnt/ci-scratch/perl-lsp-swarm -maxdepth 1 -name '[0-9]*-[0-9]*' -mmin +1440 -exec rm -rf {} + 2>/dev/null || true
+          find /mnt/ci-scratch/tmp -maxdepth 1 -name '[0-9]*-[0-9]*' -mmin +1440 -exec rm -rf {} + 2>/dev/null || true
+          # The Rust Small lane runs cargo check --workspace + two targeted tests.
+          # Cold build (no sccache): ~10-15 GB of incremental artifacts.
+          # Warm build (sccache hit): ~1 GB. 40 GB gives 3-4x cold-build headroom.
+          # CX43 had 64 GB free when the 80 GB guard fired (PR #1228 evidence) --
+          # 64 GB > 40 GB, so this guard will pass on a reasonably maintained host.
+          ci-disk-guard /mnt/ci-scratch 40
           ci-disk-guard /mnt/docker 15
           ci-disk-guard /mnt/ci-cache 15
           df -h /mnt/ci-scratch /mnt/docker /mnt/ci-cache || true
