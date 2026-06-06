@@ -41,7 +41,7 @@ jobs:
           shared-key: flake-detection-${{ hashFiles('Cargo.lock') }}
 
       - name: Install just
-        uses: taiki-e/install-action@d9be7d8cda89035c9c843f78bd44d4f72d8403d4  # v2.79.7
+        uses: taiki-e/install-action@59012be0884e296ca2da49b530610e72c49039ad  # v2.81.6
         with:
           tool: just
 
