@@ -11,6 +11,9 @@
 //! - The server MUST stay stable after requesting lenses on the same file twice
 //!   (idempotency guard).
 
+// Binary skip messages are visible only in integration-test output.
+#![allow(clippy::print_stderr)]
+
 use anyhow::Result;
 use perl_lsp_ux_tests::binary_available;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
@@ -51,6 +54,8 @@ print "Result: $sum\n";
 1;
 "#;
 
+const EXPECTED_REFERENCE_LENS_NAMES: &[&str] = &["MyCalc", "new", "add", "subtract", "multiply"];
+
 /// A minimal test file so the code-lens provider can detect `Test::*` subs.
 const TEST_FIXTURE: &str = r#"use strict;
 use warnings;
@@ -69,27 +74,59 @@ test_subtraction();
 done_testing();
 "#;
 
-#[test]
-fn scenario_26_code_lens_does_not_error() -> Result<()> {
-    if !binary_available() {
-        eprintln!("SKIP scenario_26: perl-lsp binary not found");
-        return Ok(());
-    }
+fn module_harness() -> Result<UxHarness> {
     let harness =
         UxHarness::new(ScenarioConfig::default().with_file("mycalc.pl", CODELENS_FIXTURE))?;
     harness.open_file("mycalc.pl", CODELENS_FIXTURE)?;
-    let uri = harness.workspace.uri("mycalc.pl");
+    Ok(harness)
+}
 
+fn test_harness() -> Result<UxHarness> {
+    let harness = UxHarness::new(ScenarioConfig::default().with_file("mytest.t", TEST_FIXTURE))?;
+    harness.open_file("mytest.t", TEST_FIXTURE)?;
+    Ok(harness)
+}
+
+fn request_code_lenses(harness: &UxHarness, path: &str) -> Result<Vec<Value>> {
+    let uri = harness.workspace.uri(path);
     let response = harness.client.request(
         "textDocument/codeLens",
         json!({ "textDocument": { "uri": uri } }),
         REQUEST_TIMEOUT,
     )?;
 
+    if let Some(error) = response.get("error") {
+        anyhow::bail!("codeLens returned a JSON-RPC error: {error}");
+    }
+
+    response
+        .get("result")
+        .and_then(Value::as_array)
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("codeLens result MUST be an array, got: {response:?}"))
+}
+
+fn lens_data_name(lens: &Value) -> Option<&str> {
+    lens.pointer("/data/name").and_then(Value::as_str)
+}
+
+fn command_name(lens: &Value) -> Option<&str> {
+    lens.pointer("/command/command").and_then(Value::as_str)
+}
+
+#[test]
+fn scenario_26_code_lens_does_not_error() -> Result<()> {
+    if !binary_available() {
+        eprintln!("SKIP scenario_26: perl-lsp binary not found");
+        return Ok(());
+    }
+
+    let harness = module_harness()?;
+    let lenses = request_code_lenses(&harness, "mycalc.pl")?;
+
     assert!(
-        response.get("error").is_none(),
-        "codeLens MUST NOT return a JSON-RPC error, got: {:?}",
-        response
+        !lenses.is_empty(),
+        "codeLens on a module with a package and subroutines MUST return useful lenses"
     );
 
     harness.assert_no_crash();
@@ -102,23 +139,13 @@ fn scenario_26_code_lens_result_is_array() -> Result<()> {
         eprintln!("SKIP scenario_26: perl-lsp binary not found");
         return Ok(());
     }
-    let harness =
-        UxHarness::new(ScenarioConfig::default().with_file("mycalc.pl", CODELENS_FIXTURE))?;
-    harness.open_file("mycalc.pl", CODELENS_FIXTURE)?;
-    let uri = harness.workspace.uri("mycalc.pl");
 
-    let response = harness.client.request(
-        "textDocument/codeLens",
-        json!({ "textDocument": { "uri": uri } }),
-        REQUEST_TIMEOUT,
-    )?;
+    let harness = module_harness()?;
+    let lenses = request_code_lenses(&harness, "mycalc.pl")?;
 
-    assert!(response.get("error").is_none(), "codeLens returned error: {:?}", response);
-
-    let result = response.get("result").unwrap_or(&Value::Null);
     assert!(
-        result.is_array() || result.is_null(),
-        "codeLens result MUST be an array (or null for no lenses), got: {result:?}"
+        !lenses.is_empty(),
+        "codeLens result MUST be a non-empty array for a module with package/sub declarations"
     );
 
     harness.assert_no_crash();
@@ -131,36 +158,21 @@ fn scenario_26_code_lens_items_have_valid_ranges() -> Result<()> {
         eprintln!("SKIP scenario_26: perl-lsp binary not found");
         return Ok(());
     }
-    let harness =
-        UxHarness::new(ScenarioConfig::default().with_file("mycalc.pl", CODELENS_FIXTURE))?;
-    harness.open_file("mycalc.pl", CODELENS_FIXTURE)?;
-    let uri = harness.workspace.uri("mycalc.pl");
 
-    let response = harness.client.request(
-        "textDocument/codeLens",
-        json!({ "textDocument": { "uri": uri } }),
-        REQUEST_TIMEOUT,
-    )?;
+    let harness = module_harness()?;
+    let lenses = request_code_lenses(&harness, "mycalc.pl")?;
 
-    assert!(response.get("error").is_none(), "codeLens returned error: {:?}", response);
-
-    let result = response.get("result").unwrap_or(&Value::Null);
-    if let Some(lenses) = result.as_array() {
-        for (i, lens) in lenses.iter().enumerate() {
-            assert!(
-                lens.get("range").is_some(),
-                "CodeLens[{i}] MUST have a 'range' field, got: {lens:?}"
-            );
-            let Some(range) = lens.get("range") else { continue };
-            assert!(
-                range.get("start").is_some(),
-                "CodeLens[{i}].range MUST have 'start', got: {range:?}"
-            );
-            assert!(
-                range.get("end").is_some(),
-                "CodeLens[{i}].range MUST have 'end', got: {range:?}"
-            );
-        }
+    for (i, lens) in lenses.iter().enumerate() {
+        assert!(
+            lens.get("range").is_some(),
+            "CodeLens[{i}] MUST have a 'range' field, got: {lens:?}"
+        );
+        let Some(range) = lens.get("range") else { continue };
+        assert!(
+            range.get("start").is_some(),
+            "CodeLens[{i}].range MUST have 'start', got: {range:?}"
+        );
+        assert!(range.get("end").is_some(), "CodeLens[{i}].range MUST have 'end', got: {range:?}");
     }
 
     harness.assert_no_crash();
@@ -173,23 +185,21 @@ fn scenario_26_code_lens_is_idempotent() -> Result<()> {
         eprintln!("SKIP scenario_26: perl-lsp binary not found");
         return Ok(());
     }
-    let harness =
-        UxHarness::new(ScenarioConfig::default().with_file("mycalc.pl", CODELENS_FIXTURE))?;
-    harness.open_file("mycalc.pl", CODELENS_FIXTURE)?;
-    let uri = harness.workspace.uri("mycalc.pl");
+
+    let harness = module_harness()?;
 
     // Two identical requests in sequence must succeed without crash.
+    let mut previous_count = None;
     for round in 1u8..=2 {
-        let response = harness.client.request(
-            "textDocument/codeLens",
-            json!({ "textDocument": { "uri": uri } }),
-            REQUEST_TIMEOUT,
-        )?;
+        let lenses = request_code_lenses(&harness, "mycalc.pl")?;
         assert!(
-            response.get("error").is_none(),
-            "codeLens round {round} MUST NOT return error: {:?}",
-            response
+            !lenses.is_empty(),
+            "codeLens round {round} MUST return module lenses for a package/sub fixture"
         );
+        if let Some(count) = previous_count {
+            assert_eq!(lenses.len(), count, "codeLens MUST be idempotent for repeated requests");
+        }
+        previous_count = Some(lenses.len());
     }
 
     harness.assert_no_crash();
@@ -202,20 +212,17 @@ fn scenario_26_code_lens_on_test_file_does_not_error() -> Result<()> {
         eprintln!("SKIP scenario_26: perl-lsp binary not found");
         return Ok(());
     }
-    let harness = UxHarness::new(ScenarioConfig::default().with_file("mytest.t", TEST_FIXTURE))?;
-    harness.open_file("mytest.t", TEST_FIXTURE)?;
-    let uri = harness.workspace.uri("mytest.t");
 
-    let response = harness.client.request(
-        "textDocument/codeLens",
-        json!({ "textDocument": { "uri": uri } }),
-        REQUEST_TIMEOUT,
-    )?;
+    let harness = test_harness()?;
+    let lenses = request_code_lenses(&harness, "mytest.t")?;
 
     assert!(
-        response.get("error").is_none(),
-        "codeLens on .t test file MUST NOT return JSON-RPC error: {:?}",
-        response
+        lenses.iter().any(|lens| command_name(lens) == Some("perl.runTestFile")),
+        "codeLens on .t files MUST include a run-all-tests command, got: {lenses:?}"
+    );
+    assert!(
+        lenses.iter().any(|lens| command_name(lens) == Some("perl.runTest")),
+        "codeLens on named test subs MUST include run-test commands, got: {lenses:?}"
     );
 
     harness.assert_no_crash();
@@ -228,40 +235,34 @@ fn scenario_26_code_lens_resolve_does_not_error() -> Result<()> {
         eprintln!("SKIP scenario_26: perl-lsp binary not found");
         return Ok(());
     }
-    let harness =
-        UxHarness::new(ScenarioConfig::default().with_file("mycalc.pl", CODELENS_FIXTURE))?;
-    harness.open_file("mycalc.pl", CODELENS_FIXTURE)?;
-    let uri = harness.workspace.uri("mycalc.pl");
 
-    // Fetch lenses first so we can resolve the first one (if any exist).
-    let lens_response = harness.client.request(
-        "textDocument/codeLens",
-        json!({ "textDocument": { "uri": uri } }),
-        REQUEST_TIMEOUT,
-    )?;
-    assert!(
-        lens_response.get("error").is_none(),
-        "codeLens initial fetch returned error: {:?}",
-        lens_response
-    );
+    let harness = module_harness()?;
+    let lenses = request_code_lenses(&harness, "mycalc.pl")?;
 
-    let lenses = match lens_response.get("result").and_then(Value::as_array) {
-        Some(arr) if !arr.is_empty() => arr.clone(),
-        // No lenses returned; skip resolve check (not an error).
-        _ => {
-            harness.assert_no_crash();
-            return Ok(());
-        }
-    };
+    for expected in EXPECTED_REFERENCE_LENS_NAMES {
+        assert!(
+            lenses.iter().any(|lens| lens_data_name(lens) == Some(*expected)),
+            "codeLens MUST include an unresolved reference lens for `{expected}`, got: {lenses:?}"
+        );
+    }
 
-    let first_lens = &lenses[0];
+    let reference_lens = lenses
+        .iter()
+        .find(|lens| lens.get("data").is_some())
+        .ok_or_else(|| anyhow::anyhow!("expected at least one unresolved reference lens"))?;
     let resolve_response =
-        harness.client.request("codeLens/resolve", first_lens.clone(), REQUEST_TIMEOUT)?;
+        harness.client.request("codeLens/resolve", reference_lens.clone(), REQUEST_TIMEOUT)?;
 
-    assert!(
-        resolve_response.get("error").is_none(),
-        "codeLens/resolve MUST NOT return JSON-RPC error: {:?}",
-        resolve_response
+    if let Some(error) = resolve_response.get("error") {
+        anyhow::bail!("codeLens/resolve returned a JSON-RPC error: {error}");
+    }
+    let resolved = resolve_response
+        .get("result")
+        .ok_or_else(|| anyhow::anyhow!("codeLens/resolve must return a result"))?;
+    assert_eq!(
+        command_name(resolved),
+        Some("editor.action.findReferences"),
+        "codeLens/resolve MUST turn unresolved reference lenses into find-references commands"
     );
 
     harness.assert_no_crash();
