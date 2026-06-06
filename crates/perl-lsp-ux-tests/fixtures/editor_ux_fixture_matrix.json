@@ -1005,6 +1005,7 @@
       ],
       "expected_outcomes": [
         "workspace-symbol requests return valid LSP shapes without JSON-RPC errors",
+        "all workspace-symbol probes return live symbols",
         "receipt records useful project hits, noisy hit counts, generated/dynamic candidate boundaries, and edit freshness",
         "compiler-backed workspace-symbol candidates remain shadowed without provider behavior promotion"
       ],
