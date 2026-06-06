@@ -557,8 +557,8 @@
       "ci_tier": "nightly",
       "component": "diagnostics",
       "instrumentation": {
-        "run_receipt": false,
-        "first_useful_result": false,
+        "run_receipt": true,
+        "first_useful_result": true,
         "protocol_goldens": false
       },
       "user_journey": "open a representative 5000+ line Catalyst-like app fixture and observe first diagnostics latency",
@@ -568,6 +568,7 @@
         "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
+        "receipt records real-repo open to first diagnostics timing",
         "first publishDiagnostics arrives within 5 seconds",
         "real-repo fixture parsing remains crash-free"
       ],
