@@ -862,6 +862,7 @@
       ],
       "expected_outcomes": [
         "semantic-token requests return valid 5-tuple data without JSON-RPC errors",
+        "all semantic-token probes return live tokens",
         "decoded token spans do not overlap and map back to source text",
         "receipt records expected source-backed tokens, dynamic-boundary-shaped strings, and edit freshness"
       ],
