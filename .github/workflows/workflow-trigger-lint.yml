@@ -28,21 +28,15 @@ jobs:
         with:
           toolchain: stable
 
-      - name: Run workflow trigger lint (advisory)
+      - name: Run workflow trigger lint
         id: lint
         shell: bash
         run: |
-          set +e
           cargo xtask workflow-trigger-lint \
             --policy .ci/policies/required-checks.toml \
             --receipt target/receipts/workflow-trigger-lint.json \
             --format json
-          status=$?
-          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
-          if [ "$status" -ne 0 ]; then
-            echo "Workflow trigger lint is currently advisory; violations are reported but do not fail this workflow." >&2
-          fi
-          exit 0
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
 
       - name: Upload receipt
         if: always()
@@ -58,6 +52,6 @@ jobs:
           if [ "${{ steps.lint.outputs.exit_code }}" = "0" ]; then
             echo "## Workflow trigger lint passed" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "## Workflow trigger lint (advisory) found violations" >> "$GITHUB_STEP_SUMMARY"
-            echo "Conventional required-check policy in .ci/policies/required-checks.toml is enforced in advisory mode until ruleset required checks are configured." >> "$GITHUB_STEP_SUMMARY"
+            echo "## Workflow trigger lint found violations" >> "$GITHUB_STEP_SUMMARY"
+            echo "Required-check policy in .ci/policies/required-checks.toml is enforced. Fix violations before merging." >> "$GITHUB_STEP_SUMMARY"
           fi
