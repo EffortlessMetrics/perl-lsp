@@ -1,6 +1,3 @@
-// Test infrastructure — allow test-friendly patterns.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-
 //! Scenario 16 — workspace folder removal updates workspace-symbol results.
 //!
 //! Verifies that removing a folder via `workspace/didChangeWorkspaceFolders`
@@ -8,9 +5,12 @@
 //! cross-folder state behind.
 
 use perl_lsp_ux_tests::binary_available;
-use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
+use perl_lsp_ux_tests::missing_binary_skip;
+use perl_lsp_ux_tests::{ScenarioConfig, UxCiTier, UxComponent, UxHarness, run_ux_scenario};
 use serde_json::Value;
 use std::time::{Duration, Instant};
+
+const SCENARIO_FILE: &str = "ux_scenario_16_workspace_folder_removal.rs";
 
 const MODULE_A: &str = "\
 package ModuleA;\n\
@@ -44,75 +44,77 @@ fn contains_symbol_in_folder(symbols: &[Value], symbol_name: &str, folder_fragme
 
 #[test]
 fn scenario_16_removed_workspace_folder_symbols_disappear() {
-    if !binary_available() {
-        eprintln!("SKIP scenario_16: perl-lsp binary not found");
-        return;
-    }
+    run_ux_scenario(
+        "workspace_folder_removal_freshness",
+        SCENARIO_FILE,
+        "scenario_16_removed_workspace_folder_symbols_disappear",
+        UxCiTier::Pr,
+        Some(UxComponent::WorkspaceSymbols),
+        |recorder| {
+            if !binary_available() {
+                return Err(missing_binary_skip().into());
+            }
 
-    let harness = UxHarness::new(
-        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
-            .env("PERL_LSP_WORKSPACE", "1")
-            .with_workspace_folder("svc-a", "svc-a")
-            .with_workspace_folder("svc-b", "svc-b")
-            .with_file("svc-a/lib/ModuleA.pm", MODULE_A)
-            .with_file("svc-b/lib/ModuleB.pm", MODULE_B),
-    )
-    .expect("Failed to create UX harness");
+            let harness = UxHarness::new(
+                ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
+                    .env("PERL_LSP_WORKSPACE", "1")
+                    .with_workspace_folder("svc-a", "svc-a")
+                    .with_workspace_folder("svc-b", "svc-b")
+                    .with_file("svc-a/lib/ModuleA.pm", MODULE_A)
+                    .with_file("svc-b/lib/ModuleB.pm", MODULE_B),
+            )?;
 
-    let before_deadline = Instant::now() + Duration::from_secs(10);
-    let mut symbols_before = Vec::new();
-    while Instant::now() < before_deadline {
-        symbols_before = harness
-            .workspace_symbols("Module")
-            .expect("workspace/symbol must not error before folder removal");
-        if contains_symbol_in_folder(&symbols_before, "ModuleA", "/svc-a/")
-            && contains_symbol_in_folder(&symbols_before, "ModuleB", "/svc-b/")
-        {
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(200));
-    }
+            recorder.mark_request_start("workspace_symbols_before_removal");
+            let before_deadline = Instant::now() + Duration::from_secs(10);
+            let mut symbols_before = Vec::new();
+            while Instant::now() < before_deadline {
+                symbols_before = harness.workspace_symbols("Module")?;
+                if contains_symbol_in_folder(&symbols_before, "ModuleA", "/svc-a/")
+                    && contains_symbol_in_folder(&symbols_before, "ModuleB", "/svc-b/")
+                {
+                    recorder.mark_first_useful_result("workspace_symbols_before_removal");
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(200));
+            }
 
-    assert!(
-        contains_symbol_in_folder(&symbols_before, "ModuleA", "/svc-a/"),
-        "Expected ModuleA to be present before folder removal, got: {:?}",
-        symbols_before
+            recorder.check(
+                "workspace/symbol returned remaining folder symbol before removal",
+                contains_symbol_in_folder(&symbols_before, "ModuleA", "/svc-a/"),
+            )?;
+            recorder.check(
+                "workspace/symbol returned removable folder symbol before removal",
+                contains_symbol_in_folder(&symbols_before, "ModuleB", "/svc-b/"),
+            )?;
+
+            harness.change_workspace_folders(&[], &[("svc-b", "svc-b")])?;
+
+            recorder.mark_request_start("workspace_symbols_after_removal");
+            let after_deadline = Instant::now() + Duration::from_secs(10);
+            let mut symbols_after = Vec::new();
+            while Instant::now() < after_deadline {
+                symbols_after = harness.workspace_symbols("Module")?;
+
+                if contains_symbol_in_folder(&symbols_after, "ModuleA", "/svc-a/")
+                    && !contains_symbol_in_folder(&symbols_after, "ModuleB", "/svc-b/")
+                {
+                    recorder.mark_first_useful_result("workspace_symbols_after_removal");
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(200));
+            }
+
+            recorder.check(
+                "workspace/symbol kept remaining folder symbol after removal",
+                contains_symbol_in_folder(&symbols_after, "ModuleA", "/svc-a/"),
+            )?;
+            recorder.check(
+                "workspace/symbol removed deleted folder symbol after removal",
+                !contains_symbol_in_folder(&symbols_after, "ModuleB", "/svc-b/"),
+            )?;
+
+            harness.assert_no_crash();
+            Ok(())
+        },
     );
-    assert!(
-        contains_symbol_in_folder(&symbols_before, "ModuleB", "/svc-b/"),
-        "Expected ModuleB to be present before folder removal, got: {:?}",
-        symbols_before
-    );
-
-    harness
-        .change_workspace_folders(&[], &[("svc-b", "svc-b")])
-        .expect("workspace folder removal notification must not fail");
-
-    let after_deadline = Instant::now() + Duration::from_secs(10);
-    let mut symbols_after = Vec::new();
-    while Instant::now() < after_deadline {
-        symbols_after = harness
-            .workspace_symbols("Module")
-            .expect("workspace/symbol must not error after folder removal");
-
-        if contains_symbol_in_folder(&symbols_after, "ModuleA", "/svc-a/")
-            && !contains_symbol_in_folder(&symbols_after, "ModuleB", "/svc-b/")
-        {
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(200));
-    }
-
-    assert!(
-        contains_symbol_in_folder(&symbols_after, "ModuleA", "/svc-a/"),
-        "Expected ModuleA to remain after removing svc-b, got: {:?}",
-        symbols_after
-    );
-    assert!(
-        !contains_symbol_in_folder(&symbols_after, "ModuleB", "/svc-b/"),
-        "Expected ModuleB symbols to disappear after removing svc-b, got: {:?}",
-        symbols_after
-    );
-
-    harness.assert_no_crash();
 }
