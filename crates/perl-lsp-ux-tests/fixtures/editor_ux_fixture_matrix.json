@@ -603,17 +603,19 @@
       "ci_tier": "pr",
       "component": "workspace_symbols",
       "instrumentation": {
-        "run_receipt": false,
-        "first_useful_result": false,
+        "run_receipt": true,
+        "first_useful_result": true,
         "protocol_goldens": false
       },
       "user_journey": "add a workspace folder after initialize and re-run workspace symbol search",
       "measures": [
         "workflow_pass_rate",
         "workflow_stability_rate",
-        "multi_root_workspace_navigation_success_rate"
+        "multi_root_workspace_navigation_success_rate",
+        "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
+        "receipt records workspace-symbol timing before and after folder addition",
         "added folder symbols appear in search results without restart"
       ],
       "confidence_signals": [
