@@ -113,6 +113,10 @@ impl DebugAdapter {
                 end_column: None,
             }]
         };
+        // Capture full depth before pagination so totalFrames reports the real
+        // stack depth, not the size of the paginated window (DAP spec §StackTraceResponse:
+        // "totalFrames: The total number of frames available in the stack").
+        let total_frames = stack_frames.len();
         let stack_frames = Self::paginate_stack_frames(stack_frames, start_frame, requested_count);
 
         DapMessage::Response {
@@ -122,7 +126,7 @@ impl DebugAdapter {
             command: "stackTrace".to_string(),
             body: Some(json!({
                 "stackFrames": stack_frames,
-                "totalFrames": stack_frames.len()
+                "totalFrames": total_frames
             })),
             message: None,
         }
@@ -202,5 +206,74 @@ impl DebugAdapter {
             Some(limit) => iter.take(limit).collect(),
             None => iter.collect(),
         }
+    }
+}
+
+#[cfg(test)]
+mod pagination_tests {
+    use super::*;
+
+    fn make_frame(id: i32, name: &str) -> StackFrame {
+        StackFrame {
+            id,
+            name: name.to_string(),
+            source: Source {
+                name: Some("test.pl".to_string()),
+                path: "/tmp/test.pl".to_string(),
+                source_reference: None,
+            },
+            line: id,
+            column: 1,
+            end_line: None,
+            end_column: None,
+        }
+    }
+
+    /// Regression: paginate_stack_frames used to be called BEFORE capturing the
+    /// full depth, so totalFrames reported the slice length instead of the full
+    /// stack depth.  This unit test locks the correct invariant:
+    ///   totalFrames == pre-pagination length >= paginated-window length
+    #[test]
+    fn total_frames_is_pre_pagination_length() -> Result<(), Box<dyn std::error::Error>> {
+        let all_frames: Vec<StackFrame> = (1..=5).map(|i| make_frame(i, "main::step")).collect();
+        let total_before = all_frames.len();
+
+        // Paginate to window of 2, starting at offset 0.
+        let paginated = DebugAdapter::paginate_stack_frames(all_frames, 0, Some(2));
+
+        assert_eq!(paginated.len(), 2, "paginated window should be 2");
+        assert_eq!(total_before, 5, "total_frames must be full depth (5)");
+        assert!(
+            total_before >= paginated.len(),
+            "total_frames ({total_before}) must be >= paginated len ({})",
+            paginated.len()
+        );
+        Ok(())
+    }
+
+    /// startFrame beyond the stack depth: paginated slice is empty, but the
+    /// pre-pagination total is still the real depth.
+    #[test]
+    fn total_frames_with_start_frame_beyond_depth() -> Result<(), Box<dyn std::error::Error>> {
+        let all_frames: Vec<StackFrame> = (1..=3).map(|i| make_frame(i, "main::step")).collect();
+        let total_before = all_frames.len();
+
+        let paginated = DebugAdapter::paginate_stack_frames(all_frames, 10, Some(2));
+
+        assert_eq!(paginated.len(), 0, "paginated slice beyond depth should be empty");
+        assert_eq!(total_before, 3, "total_frames must still report full depth when start > depth");
+        Ok(())
+    }
+
+    /// No pagination (None levels): total_frames == paginated length (no difference).
+    #[test]
+    fn total_frames_no_pagination_unchanged() -> Result<(), Box<dyn std::error::Error>> {
+        let all_frames: Vec<StackFrame> = (1..=4).map(|i| make_frame(i, "main::step")).collect();
+        let total_before = all_frames.len();
+
+        let paginated = DebugAdapter::paginate_stack_frames(all_frames, 0, None);
+
+        assert_eq!(paginated.len(), total_before, "no pagination: total == paginated");
+        Ok(())
     }
 }
