@@ -144,7 +144,8 @@ impl DebugAdapter {
         if let Some(suggestion) = Self::suggested_command(command) {
             format!("Unknown command: {command}. Did you mean '{suggestion}'?")
         } else {
-            format!("Unknown command: {command}")
+            let supported = Self::SUPPORTED_COMMANDS.join(", ");
+            format!("Unknown command: {command}. Supported commands: {supported}")
         }
     }
 

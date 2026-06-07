@@ -366,6 +366,32 @@ fn unknown_command_returns_unknown_command_prefix() {
     }
 }
 
+/// When the unknown command name is not a close typo of any supported command,
+/// the error message must include the supported command list so users know what
+/// commands are available without consulting external docs.
+#[test]
+fn unknown_command_includes_supported_commands_when_no_suggestion() {
+    let mut adapter = DebugAdapter::new();
+    let response = adapter.handle_request(43, "totallyMadeUpCommandXYZ123", None);
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success);
+            assert_eq!(command, "totallyMadeUpCommandXYZ123");
+            let message = must_some(message);
+            assert!(
+                message.contains("Supported commands:"),
+                "expected supported-commands list in message, got: {message}"
+            );
+            // Spot-check a few well-known commands appear in the list
+            assert!(message.contains("initialize"), "expected 'initialize' in supported list");
+            assert!(message.contains("launch"), "expected 'launch' in supported list");
+            assert!(message.contains("evaluate"), "expected 'evaluate' in supported list");
+        }
+        other => must(Err::<(), _>(format!("expected Response, got {other:?}"))),
+    }
+}
+
 // --- sequence numbers ---------------------------------------------------------
 
 /// Mirrors `dispatcher::tests::test_response_sequence_numbers` /
