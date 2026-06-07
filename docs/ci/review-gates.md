@@ -110,3 +110,64 @@ The ub-review integration ships as a three-PR program:
 Promotion from advisory to a required gate requires evidence from real PR runs,
 calibration of false-positive rates, and a scope decision on which unsafe
 surfaces warrant blocking.
+
+---
+
+## Program plan and calibration (ub-review)
+
+### 8-PR sequence
+
+| PR | Scope | Status |
+|----|-------|--------|
+| PR 1 | Advisory workflow scaffold, fork-policy gate, router, lane whitelist, docs ([#1234](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1234)) | Merged |
+| PR 2 | Runner-size profiles and perl-lsp-specific review profile | Pending — calibration first |
+| PR 3 | Unsafe-review sensor policy and per-tool thresholds for this repo's actual unsafe surface | Pending |
+| PR 4–8 | Scope defined after PR 3 calibration evidence is in | Not yet scoped |
+
+**Before PR 2**: classify PR runs from the calibration period as one of:
+- **True-positive (TP)** — finding is real, actionable, would have been missed by human review.
+- **Expected-quiet** — no unsafe surface changed; silent run is correct behaviour.
+- **False-positive (FP)** — finding is noise; sensor fired on safe code without safety-contract evidence.
+- **Infra-excluded** — job failed for runner/secret/build reasons, not sensor signal.
+
+### Calibration ledger (running)
+
+| PR | Finding | Classification | Confidence |
+|----|---------|----------------|------------|
+| [#1243](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1243) | Fabricated-arithmetic catch | TP | High |
+| [#1247](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1247) | Test-gap identified | TP | Medium |
+| Pre-[#1245](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1245)/[#1248](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1248) CX failures | Runner/workspace recovery failures | Infra-excluded | — |
+
+Update this ledger with each new run before PR 2 begins. The ledger is the
+evidence base for the PR-2 scope decision on sensor thresholds.
+
+### Upstream tool loop
+
+`ub-review` bundles these tools. Track upstream release cadence when planning
+PRs 2 and 3:
+
+| Tool | Purpose | Upstream |
+|------|---------|---------|
+| `ub-review` | Orchestrator + model lanes | EffortlessMetrics/ub-review |
+| `unsafe-review` | Reviewability sensor | EffortlessMetrics/unsafe-review |
+| `ripr` | Test-oracle gap sensor | EffortlessMetrics/ripr |
+| `cargo-allow` | Exception ledger drift | EffortlessMetrics/cargo-allow |
+| `tokmd` | LLM-ready diff context | EffortlessMetrics/tokmd |
+
+### PR-3 conclusion shape
+
+Advisory findings in PR 3 must produce **neutral conclusions** — not FAILURE —
+when the route policy says the finding is advisory. The pattern:
+
+- Blocking finding (route says required): conclusion = FAILURE, with evidence.
+- Advisory finding (route says advisory): conclusion = neutral summary + receipt
+  posted as PR Review comment, not as a check conclusion that blocks merge.
+
+This keeps the advisory/required boundary explicit and prevents advisory drift
+into de-facto blocking behaviour.
+
+Note: ub-review reviewing this PR ([docs(project): convergence-to-release plan +
+queue doctrine + review-gates program]) is the program reviewing its own plan.
+The run result — whether it fires on doc-only changes, stays quiet, or produces
+an infra-excluded result — is a calibration datum for the docs-claims sensor
+surface.
