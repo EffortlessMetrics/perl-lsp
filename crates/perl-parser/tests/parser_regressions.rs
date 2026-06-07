@@ -122,6 +122,98 @@ fn print_scalar_vs_indirect_object() {
     assert_parses(r#"print $fh "text", "more";"#);
 }
 
+/// Regression #974: print $hash{key} / print $array[i] must parse as argument
+/// expressions, not as indirect-object (filehandle + arg) syntax.
+#[test]
+fn print_hash_subscript_not_indirect_object() -> Result<(), Box<dyn std::error::Error>> {
+    // Hash subscript: $hash{key} must never be treated as a filehandle
+    let mut parser = Parser::new("print $config{host};");
+    let ast = parser.parse()?;
+    let sexp = ast.to_sexp();
+    assert!(
+        !sexp.contains("indirect_call"),
+        "print $config{{host}} must NOT be indirect_call, got: {sexp}"
+    );
+
+    // Array subscript: $array[i] must never be treated as a filehandle
+    let mut parser2 = Parser::new("print $array[0];");
+    let ast2 = parser2.parse()?;
+    let sexp2 = ast2.to_sexp();
+    assert!(
+        !sexp2.contains("indirect_call"),
+        "print $array[0] must NOT be indirect_call, got: {sexp2}"
+    );
+
+    // Named-capture variable $+{name} must never be treated as a filehandle
+    let mut parser3 = Parser::new("say $+{year};");
+    let ast3 = parser3.parse()?;
+    let sexp3 = ast3.to_sexp();
+    assert!(
+        !sexp3.contains("indirect_call"),
+        "say $+{{year}} must NOT be indirect_call, got: {sexp3}"
+    );
+
+    // say with hash subscript — same code path as print
+    let mut parser4 = Parser::new("say $hash{key};");
+    let ast4 = parser4.parse()?;
+    let sexp4 = ast4.to_sexp();
+    assert!(
+        !sexp4.contains("indirect_call"),
+        "say $hash{{key}} must NOT be indirect_call, got: {sexp4}"
+    );
+
+    // printf with hash subscript
+    let mut parser5 = Parser::new(r#"printf $hash{fmt}, $val;"#);
+    let ast5 = parser5.parse()?;
+    let sexp5 = ast5.to_sexp();
+    assert!(
+        !sexp5.contains("indirect_call"),
+        "printf $hash{{fmt}}, $val must NOT be indirect_call, got: {sexp5}"
+    );
+
+    // Regression: legitimate indirect-object (filehandle + string) must still work
+    let mut parser6 = Parser::new(r#"print $fh "text";"#);
+    let ast6 = parser6.parse()?;
+    let sexp6 = ast6.to_sexp();
+    assert!(
+        sexp6.contains("indirect_call"),
+        "print $fh \"text\" MUST be indirect_call, got: {sexp6}"
+    );
+
+    // Regression: print $fh $x (variable) must still be indirect-object
+    let mut parser7 = Parser::new("print $fh $x;");
+    let ast7 = parser7.parse()?;
+    let sexp7 = ast7.to_sexp();
+    assert!(sexp7.contains("indirect_call"), "print $fh $x MUST be indirect_call, got: {sexp7}");
+
+    Ok(())
+}
+
+/// Regression #974: arrow-chained subscripts must also parse as argument
+/// expressions, not indirect-object syntax.
+#[test]
+fn print_arrow_chain_not_indirect_object() -> Result<(), Box<dyn std::error::Error>> {
+    // $obj->{key} is an arrow dereference chain, not a filehandle
+    let mut parser = Parser::new("print $self->{output};");
+    let ast = parser.parse()?;
+    let sexp = ast.to_sexp();
+    assert!(
+        !sexp.contains("indirect_call"),
+        "print $self->{{output}} must NOT be indirect_call, got: {sexp}"
+    );
+
+    // $obj->[0] arrow-indexed array dereference, not a filehandle
+    let mut parser2 = Parser::new("print $self->[0];");
+    let ast2 = parser2.parse()?;
+    let sexp2 = ast2.to_sexp();
+    assert!(
+        !sexp2.contains("indirect_call"),
+        "print $self->[0] must NOT be indirect_call, got: {sexp2}"
+    );
+
+    Ok(())
+}
+
 #[test]
 fn new_constructor_pattern() {
     assert_parses("new Class");
