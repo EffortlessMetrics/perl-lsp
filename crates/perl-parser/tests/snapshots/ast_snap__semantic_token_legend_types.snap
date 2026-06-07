@@ -25,3 +25,4 @@ operator
 sql_string
 sql_heredoc_keyword
 json_heredoc_key
+label
