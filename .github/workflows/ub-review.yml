@@ -1,0 +1,435 @@
+# ub-review - unsafe/native-boundary advisory review
+#
+# Builds a UB/native-boundary evidence packet for every same-repo PR and posts
+# one grouped advisory Pull Request Review (continue-on-error; never blocks CI).
+#
+# Security posture:
+#   - Same-repo PRs only. Fork PRs get a skipped-by-policy metadata job — never
+#     pull_request_target with an untrusted checkout.
+#   - MINIMAX_API_KEY and OPENCODE are confirmed org-level secrets.
+#   - Secret preflight step fails clearly if MINIMAX_API_KEY is absent before any
+#     model calls. Values are never echoed.
+#
+# Runner routing: mirrors ripr.yml — CX53 primary, CX43 secondary, ubuntu-24.04
+# GitHub-hosted fallback. Each target gets its own job so runs-on is static.
+#
+# Advisory status: continue-on-error on every work job. Not a required check.
+# See policy/ci-lane-whitelist.toml entry `ub_review_advisory` and
+# docs/ci/review-gates.md.
+#
+# Install note: EffortlessMetrics/ub-review has no public release asset yet.
+# install-mode=auto in the action falls back to a source build. The Cargo cache
+# can be warmed by Swatinem/rust-cache if needed (PR 2 scope).
+#
+# Action pin:
+#   EffortlessMetrics/ub-review@804d198b5a15a0df94bb4f43750dba71165916cd
+#   README-documented known-good SHA; verified by EffortlessSteven/bun#49
+#   (successful evidence packet, terminal state `sufficient`, verifier pass).
+#   Update only after ub-review's own verifier passes on a downstream consumer.
+
+name: UB Review
+
+on:
+  pull_request:
+    branches: [master, main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ub-review-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 0. Fork-PR policy gate.
+  #    Fork PRs cannot access org secrets and must not run on self-hosted
+  #    runners. Emit a clear policy record instead of silently skipping.
+  # ---------------------------------------------------------------------------
+  fork-policy:
+    name: UB Review (fork policy — skipped)
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Skipped by policy
+        shell: bash
+        run: |
+          echo "ub-review skipped: fork PRs cannot access org secrets."
+          echo "Evidence collection requires trusted checkout and MINIMAX_API_KEY."
+          echo "This is expected policy — not a CI failure."
+
+  # ---------------------------------------------------------------------------
+  # 1. Router — picks the target runner for same-repo PRs.
+  #    Mirrors the ripr.yml routing pattern exactly.
+  # ---------------------------------------------------------------------------
+  route-ub-review:
+    name: Route UB review runner
+    if: >-
+      github.event.pull_request.draft != true &&
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      target: ${{ steps.route.outputs.target }}
+      reason: ${{ steps.route.outputs.reason }}
+      fallback_allowed: ${{ steps.route.outputs.fallback_allowed }}
+    steps:
+      - name: Decide target runner
+        id: route
+        env:
+          GH_TOKEN: ${{ secrets.EM_RUNNER_READ_TOKEN }}
+          ORG: EffortlessMetrics
+          PR_AUTHOR_LOGIN: ${{ github.event.pull_request.user.login || '' }}
+          PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type || '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          emit() {
+            local target="$1" reason="$2" fallback_allowed="$3"
+            echo "router_target=$target"
+            echo "router_reason=$reason"
+            echo "router_fallback_allowed=$fallback_allowed"
+            {
+              echo "target=$target"
+              echo "reason=$reason"
+              echo "fallback_allowed=$fallback_allowed"
+            } >> "$GITHUB_OUTPUT"
+            {
+              echo "### UB Review Runner Route"
+              echo ""
+              echo "- router_target: \`$target\`"
+              echo "- router_reason: \`$reason\`"
+              echo "- router_fallback_allowed: \`$fallback_allowed\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+          }
+
+          # Bot PRs use GitHub-hosted to preserve self-hosted capacity.
+          pr_author_login_lc="$(printf '%s' "${PR_AUTHOR_LOGIN:-}" | tr '[:upper:]' '[:lower:]')"
+          pr_author_type_lc="$(printf '%s' "${PR_AUTHOR_TYPE:-}" | tr '[:upper:]' '[:lower:]')"
+          is_bot_pr="false"
+          case "$pr_author_login_lc" in
+            dependabot*|app/*|*\[bot\]) is_bot_pr="true" ;;
+          esac
+          if [ "$pr_author_type_lc" = "bot" ]; then is_bot_pr="true"; fi
+          if [ "$is_bot_pr" = "true" ]; then
+            emit "github" "bot_pr_github_hosted" "true"
+            exit 0
+          fi
+
+          # No runner token — fall back safely without blocking.
+          if [ -z "${GH_TOKEN:-}" ]; then
+            emit "github" "runner_token_missing" "true"
+            exit 0
+          fi
+
+          response="$(mktemp)"
+          status="$(curl -sS -w '%{http_code}' -o "$response" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/orgs/$ORG/actions/runners?per_page=100" || true)"
+
+          if [ "$status" != "200" ]; then
+            echo "::warning::runner API returned HTTP $status; falling back to GitHub-hosted"
+            emit "github" "runner_api_failed" "true"
+            exit 0
+          fi
+
+          idle_runner_count() {
+            local runner_label="$1"
+            jq --arg runner_label "$runner_label" '
+              [ .runners[]?
+                | select(.status == "online")
+                | select(.busy == false)
+                | ([.labels[].name | ascii_downcase] // []) as $have
+                | select(
+                    ($have | index("em-ci")) and
+                    ($have | index($runner_label)) and
+                    ($have | index("rust-small")) and
+                    ($have | index("trusted-pr"))
+                  )
+              ] | length
+            ' "$response"
+          }
+
+          idle_cx53="$(idle_runner_count "cx53")"
+          idle_cx43="$(idle_runner_count "cx43")"
+
+          echo "idle_cx53=${idle_cx53:-0}"
+          echo "idle_cx43=${idle_cx43:-0}"
+
+          if [ "${idle_cx53:-0}" -gt 0 ]; then
+            emit "cx53" "cx53_idle" "false"
+          elif [ "${idle_cx43:-0}" -gt 0 ]; then
+            emit "cx43" "cx43_idle" "false"
+          else
+            emit "github" "no_idle_runner" "true"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # 2a. UB review on CX53 (primary self-hosted).
+  # ---------------------------------------------------------------------------
+  ub-review-cx53:
+    name: UB Review Advisory on CX53
+    needs: route-ub-review
+    if: >-
+      needs.route-ub-review.result == 'success' &&
+      needs.route-ub-review.outputs.target == 'cx53'
+    runs-on:
+      group: em-ci-small
+      labels: [self-hosted, linux, x64, em-ci, cx53, rust-small, trusted-pr]
+    timeout-minutes: 45
+    # Advisory: do not block PR merge signal on ub-review failures.
+    continue-on-error: true
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      UB_REVIEW_RUNNER_SOURCE: cx53
+      UB_REVIEW_RUNNER_CLASS: self-hosted
+      UB_REVIEW_RUNNER_SIZE: large
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Fetch PR base ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin \
+            "+refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+      - name: Secret preflight
+        shell: bash
+        env:
+          _HAVE_MINIMAX: ${{ secrets.MINIMAX_API_KEY != '' && 'yes' || '' }}
+          _HAVE_OPENCODE: ${{ secrets.OPENCODE != '' && 'yes' || '' }}
+        run: |
+          set -euo pipefail
+          if [ -z "${_HAVE_MINIMAX:-}" ]; then
+            echo "::error::MINIMAX_API_KEY is empty or missing; ub-review requires it for model review lanes."
+            exit 1
+          fi
+          echo "MINIMAX_API_KEY: present"
+          if [ -z "${_HAVE_OPENCODE:-}" ]; then
+            echo "::warning::OPENCODE is empty or missing; OpenCode fallback lanes will be unavailable."
+          else
+            echo "OPENCODE: present"
+          fi
+      - name: Build UB review packet
+        id: ub-review
+        uses: EffortlessMetrics/ub-review@804d198b5a15a0df94bb4f43750dba71165916cd
+        with:
+          config: policy/ub-review.toml
+          profile: gh-runner
+          root: .
+          base: origin/${{ github.base_ref }}
+          head: HEAD
+          out: target/ub-review
+          install-tools: 'true'
+          tool-bundle: core
+          posting: review
+          mode: review-byok
+          fail-on-gate: 'false'
+          fail-on-post-error: 'false'
+          allow-heavy: 'false'
+          github-token: ${{ github.token }}
+          minimax-api-key: ${{ secrets.MINIMAX_API_KEY }}
+          minimax-provider-kind: anthropic
+          model-mode: auto
+          provider-policy: minimax-only
+          opencode-api-key: ${{ secrets.OPENCODE }}
+          lane-width: '6'
+          model-timeout-sec: '300'
+          max-inline-comments: '6'
+          model-concurrency: '6'
+          max-model-calls: '10'
+          github-summary: 'true'
+      - name: Upload UB review packet
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ub-review-packet-${{ github.event.pull_request.number || github.run_id }}
+          path: target/ub-review
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # 2b. UB review on CX43 (secondary self-hosted).
+  # ---------------------------------------------------------------------------
+  ub-review-cx43:
+    name: UB Review Advisory on CX43
+    needs: route-ub-review
+    if: >-
+      needs.route-ub-review.result == 'success' &&
+      needs.route-ub-review.outputs.target == 'cx43'
+    runs-on:
+      group: em-ci-small
+      labels: [self-hosted, linux, x64, em-ci, cx43, rust-small, trusted-pr]
+    timeout-minutes: 45
+    continue-on-error: true
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      UB_REVIEW_RUNNER_SOURCE: cx43
+      UB_REVIEW_RUNNER_CLASS: self-hosted
+      UB_REVIEW_RUNNER_SIZE: medium
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Fetch PR base ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin \
+            "+refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+      - name: Secret preflight
+        shell: bash
+        env:
+          _HAVE_MINIMAX: ${{ secrets.MINIMAX_API_KEY != '' && 'yes' || '' }}
+          _HAVE_OPENCODE: ${{ secrets.OPENCODE != '' && 'yes' || '' }}
+        run: |
+          set -euo pipefail
+          if [ -z "${_HAVE_MINIMAX:-}" ]; then
+            echo "::error::MINIMAX_API_KEY is empty or missing; ub-review requires it for model review lanes."
+            exit 1
+          fi
+          echo "MINIMAX_API_KEY: present"
+          if [ -z "${_HAVE_OPENCODE:-}" ]; then
+            echo "::warning::OPENCODE is empty or missing; OpenCode fallback lanes will be unavailable."
+          else
+            echo "OPENCODE: present"
+          fi
+      - name: Build UB review packet
+        id: ub-review
+        uses: EffortlessMetrics/ub-review@804d198b5a15a0df94bb4f43750dba71165916cd
+        with:
+          config: policy/ub-review.toml
+          profile: gh-runner
+          root: .
+          base: origin/${{ github.base_ref }}
+          head: HEAD
+          out: target/ub-review
+          install-tools: 'true'
+          tool-bundle: core
+          posting: review
+          mode: review-byok
+          fail-on-gate: 'false'
+          fail-on-post-error: 'false'
+          allow-heavy: 'false'
+          github-token: ${{ github.token }}
+          minimax-api-key: ${{ secrets.MINIMAX_API_KEY }}
+          minimax-provider-kind: anthropic
+          model-mode: auto
+          provider-policy: minimax-only
+          opencode-api-key: ${{ secrets.OPENCODE }}
+          lane-width: '6'
+          model-timeout-sec: '300'
+          max-inline-comments: '6'
+          model-concurrency: '6'
+          max-model-calls: '10'
+          github-summary: 'true'
+      - name: Upload UB review packet
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ub-review-packet-${{ github.event.pull_request.number || github.run_id }}
+          path: target/ub-review
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # 2c. UB review on GitHub-hosted ubuntu-24.04 (fallback).
+  #    Used for: no idle self-hosted runner, bot PRs, runner token missing.
+  # ---------------------------------------------------------------------------
+  ub-review-github:
+    name: UB Review Advisory on GitHub Hosted
+    needs: route-ub-review
+    if: >-
+      needs.route-ub-review.result == 'success' &&
+      needs.route-ub-review.outputs.target == 'github' &&
+      needs.route-ub-review.outputs.fallback_allowed == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    continue-on-error: true
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      UB_REVIEW_RUNNER_SOURCE: github
+      UB_REVIEW_RUNNER_CLASS: github-hosted
+      UB_REVIEW_RUNNER_SIZE: standard
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Fetch PR base ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin \
+            "+refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+      - name: Secret preflight
+        shell: bash
+        env:
+          _HAVE_MINIMAX: ${{ secrets.MINIMAX_API_KEY != '' && 'yes' || '' }}
+          _HAVE_OPENCODE: ${{ secrets.OPENCODE != '' && 'yes' || '' }}
+        run: |
+          set -euo pipefail
+          if [ -z "${_HAVE_MINIMAX:-}" ]; then
+            echo "::error::MINIMAX_API_KEY is empty or missing; ub-review requires it for model review lanes."
+            exit 1
+          fi
+          echo "MINIMAX_API_KEY: present"
+          if [ -z "${_HAVE_OPENCODE:-}" ]; then
+            echo "::warning::OPENCODE is empty or missing; OpenCode fallback lanes will be unavailable."
+          else
+            echo "OPENCODE: present"
+          fi
+      - name: Build UB review packet
+        id: ub-review
+        uses: EffortlessMetrics/ub-review@804d198b5a15a0df94bb4f43750dba71165916cd
+        with:
+          config: policy/ub-review.toml
+          profile: gh-runner
+          root: .
+          base: origin/${{ github.base_ref }}
+          head: HEAD
+          out: target/ub-review
+          install-tools: 'true'
+          tool-bundle: core
+          posting: review
+          mode: review-byok
+          fail-on-gate: 'false'
+          fail-on-post-error: 'false'
+          allow-heavy: 'false'
+          github-token: ${{ github.token }}
+          minimax-api-key: ${{ secrets.MINIMAX_API_KEY }}
+          minimax-provider-kind: anthropic
+          model-mode: auto
+          provider-policy: minimax-only
+          opencode-api-key: ${{ secrets.OPENCODE }}
+          lane-width: '6'
+          model-timeout-sec: '300'
+          max-inline-comments: '6'
+          model-concurrency: '6'
+          max-model-calls: '10'
+          github-summary: 'true'
+      - name: Upload UB review packet
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ub-review-packet-${{ github.event.pull_request.number || github.run_id }}
+          path: target/ub-review
+          if-no-files-found: warn
+          retention-days: 14
