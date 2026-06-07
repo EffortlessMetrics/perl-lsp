@@ -4,24 +4,24 @@
       "name": "manual_editor_smoke",
       "owner": "perl-lsp-ux-tests",
       "state": "tracked",
-      "workflow_count": 29
+      "workflow_count": 70
     },
     {
       "name": "first_five_minutes_harness",
       "owner": "perl-lsp-ux-tests",
       "state": "tracked",
-      "workflow_count": 28
+      "workflow_count": 69
     },
     {
       "name": "issue_burndown_regression_guard",
       "owner": "perl-lsp-ux-tests",
       "state": "tracked",
-      "workflow_count": 17
+      "workflow_count": 58
     }
   ],
   "harness": {
     "crate": "crates/perl-lsp-ux-tests",
-    "scenario_count": 30,
+    "scenario_count": 71,
     "scenario_files": [
       "crates/perl-lsp-ux-tests/tests/ux_scenario_01_simple_file.rs",
       "crates/perl-lsp-ux-tests/tests/ux_scenario_02_missing_perltidy.rs",
@@ -47,12 +47,53 @@
       "crates/perl-lsp-ux-tests/tests/ux_scenario_19_diagnostics_lifecycle.rs",
       "crates/perl-lsp-ux-tests/tests/ux_scenario_19_incremental_text_sync.rs",
       "crates/perl-lsp-ux-tests/tests/ux_scenario_19_workspace_folder_addition.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_20_real_workspace_providers.rs",
       "crates/perl-lsp-ux-tests/tests/ux_scenario_22_template_language_mode.rs",
       "crates/perl-lsp-ux-tests/tests/ux_scenario_23_rename_workflow.rs",
       "crates/perl-lsp-ux-tests/tests/ux_scenario_24_live_edit_feedback.rs",
       "crates/perl-lsp-ux-tests/tests/ux_scenario_25_signature_help.rs",
       "crates/perl-lsp-ux-tests/tests/ux_scenario_26_code_lens.rs",
-      "crates/perl-lsp-ux-tests/tests/ux_scenario_27_folding_range.rs"
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_27_folding_range.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_28_mojolicious_completion_ranking.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_29_mojolicious_hover_provenance.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_30_mojolicious_navigation_quality.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_31_mojolicious_diagnostics_quality.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_32_mojolicious_document_symbols_quality.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_33_mojolicious_workspace_symbol_noise.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_34_mojolicious_semantic_tokens_quality.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_35_mojolicious_rename_unsafe_edit.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_36_mojolicious_safe_delete_warning.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_37_dancer2_rename_unsafe_edit.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_38_dancer2_semantic_tokens_quality.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_39_dancer2_workspace_symbol_noise.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_40_dancer2_diagnostics_quality.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_41_catalyst_workspace_symbol_noise.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_42_catalyst_semantic_tokens_false_exact_freshness.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_43_modern_oo_workspace_symbol_noise.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_44_real_editor_trust_smoke_receipt.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_45_safe_delete_referenced_source_blocker.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_46_receiver_real_workspace_quality.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_47_receiver_method_accessor_fallback.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_48_receiver_bless_confidence.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_49_receiver_array_index_fallback.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_50_receiver_self_this_quality.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_51_mojolicious_inline_completion_quality.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_52_test_inline_completion_quality.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_53_constructor_inline_completion_quality.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_54_self_receiver_inline_completion_quality.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_55_dbi_receiver_inline_completion_quality.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_56_lexical_return_inline_completion_quality.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_57_loop_binding_inline_completion_quality.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_58_guard_condition_inline_completion_quality.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_59_real_workspace_module_import_inline_completion_quality.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_60_gated_multiline_constructor_inline_completion_quality.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_61_package_boundary_receiver_inline_completion_quality.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_62_project_test_assertion_inline_completion_quality.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_63_project_control_flow_inline_completion_quality.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_64_project_constructor_inline_completion_quality.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_65_project_dbi_receiver_inline_completion_quality.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_66_project_lexical_return_inline_completion_quality.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_67_code_action_quick_fix_e2e.rs"
     ]
   },
   "integration_points": {
