@@ -394,58 +394,74 @@ impl LspServer {
     }
 
     fn token_span_at(content: &str, offset: usize) -> Option<(usize, usize)> {
-        let chars: Vec<char> = content.chars().collect();
-        if chars.is_empty() {
+        // Build (byte_offset, char) pairs so all index arithmetic stays in byte space.
+        // Callers receive a byte offset from pos16_to_offset and the returned
+        // (start, end) are passed to offset_to_pos16, which also expects byte offsets.
+        let pairs: Vec<(usize, char)> = content.char_indices().collect();
+        if pairs.is_empty() {
             return None;
         }
 
         let is_ident_char = |ch: char| ch.is_alphanumeric() || ch == '_';
         let is_sigil = |ch: char| ch == '$' || ch == '@' || ch == '%';
 
+        // Map the byte offset to a char-index in pairs via binary search.
+        // partition_point returns the first index where byte_offset >= offset.
+        let ci = pairs.partition_point(|(b, _)| *b < offset);
+        // Clamp to last valid index.
+        let ci = ci.min(pairs.len().saturating_sub(1));
+
         // Allow cursor-at-end and cursor-next-to-token positions by probing the
         // previous character when needed.
-        let mut probe = offset.min(chars.len().saturating_sub(1));
-        if offset == chars.len()
-            || (!is_ident_char(chars[probe])
-                && !is_sigil(chars[probe])
+        let mut probe = ci;
+        let at_logical_end = offset >= content.len()
+            || (ci == pairs.len().saturating_sub(1) && offset > pairs[ci].0);
+        if at_logical_end
+            || (!is_ident_char(pairs[probe].1)
+                && !is_sigil(pairs[probe].1)
                 && probe > 0
-                && (is_ident_char(chars[probe - 1]) || is_sigil(chars[probe - 1])))
+                && (is_ident_char(pairs[probe - 1].1) || is_sigil(pairs[probe - 1].1)))
         {
             probe = probe.saturating_sub(1);
         }
 
-        if !is_ident_char(chars[probe]) && !is_sigil(chars[probe]) {
+        if !is_ident_char(pairs[probe].1) && !is_sigil(pairs[probe].1) {
             return None;
         }
 
         // Skip from sigil to identifier body when the cursor is on sigil.
         let mut start = probe;
-        if is_sigil(chars[start]) && start + 1 < chars.len() && is_ident_char(chars[start + 1]) {
+        if is_sigil(pairs[start].1) && start + 1 < pairs.len() && is_ident_char(pairs[start + 1].1)
+        {
             start += 1;
         }
 
-        while start > 0 && is_ident_char(chars[start - 1]) {
+        while start > 0 && is_ident_char(pairs[start - 1].1) {
             start -= 1;
         }
-        if start > 0 && is_sigil(chars[start - 1]) {
+        if start > 0 && is_sigil(pairs[start - 1].1) {
             start -= 1;
         }
 
         let mut end = start;
-        if is_sigil(chars[end]) {
+        if is_sigil(pairs[end].1) {
             end += 1;
         }
-        while end < chars.len() && is_ident_char(chars[end]) {
+        while end < pairs.len() && is_ident_char(pairs[end].1) {
             end += 1;
         }
 
         // Require at least one identifier character so we don't rename standalone sigils.
-        let body_start = if is_sigil(chars[start]) { start + 1 } else { start };
+        let body_start = if is_sigil(pairs[start].1) { start + 1 } else { start };
         if body_start >= end {
             return None;
         }
 
-        Some((start, end))
+        // Convert char indices back to byte offsets for the return value.
+        let start_byte = pairs[start].0;
+        let end_byte = if end < pairs.len() { pairs[end].0 } else { content.len() };
+
+        Some((start_byte, end_byte))
     }
 
     fn offset_is_inside_quoted_string(content: &str, offset: usize) -> bool {
@@ -987,20 +1003,21 @@ impl LspServer {
 
     /// Get token at position (simple implementation)
     pub(crate) fn get_token_at_position(&self, content: &str, offset: usize) -> String {
-        let chars: Vec<char> = content.chars().collect();
-        if chars.is_empty() || offset > chars.len() {
+        if content.is_empty() || offset > content.len() {
             return String::new();
         }
         match Self::token_span_at(content, offset) {
-            Some((start, end)) => chars[start..end].iter().collect(),
+            Some((start, end)) => content[start..end].to_string(),
             None => String::new(),
         }
     }
 
-    /// Get the bounds of the token at the given position
+    /// Get the bounds of the token at the given position.
+    ///
+    /// Returns byte offsets `(start, end)` into `content`, suitable for
+    /// passing directly to `offset_to_pos16`.
     pub(crate) fn get_token_bounds(&self, content: &str, offset: usize) -> (usize, usize) {
-        let chars: Vec<char> = content.chars().collect();
-        if chars.is_empty() || offset > chars.len() {
+        if content.is_empty() || offset > content.len() {
             return (offset, offset);
         }
         Self::token_span_at(content, offset).unwrap_or((offset, offset))
@@ -1021,10 +1038,8 @@ mod tests {
         let (start, end) = server.get_token_bounds(text, offset);
 
         assert_eq!(token, "$value");
-        assert_eq!(
-            &text.chars().collect::<Vec<_>>()[start..end].iter().collect::<String>(),
-            "$value"
-        );
+        // bounds are byte offsets; slice with &text[start..end]
+        assert_eq!(&text[start..end], "$value");
         Ok(())
     }
 
@@ -1038,10 +1053,24 @@ mod tests {
         let (start, end) = server.get_token_bounds(text, offset);
 
         assert_eq!(token, "$value");
-        assert_eq!(
-            &text.chars().collect::<Vec<_>>()[start..end].iter().collect::<String>(),
-            "$value"
-        );
+        // bounds are byte offsets; slice with &text[start..end]
+        assert_eq!(&text[start..end], "$value");
+        Ok(())
+    }
+
+    #[test]
+    fn token_helpers_work_with_non_ascii_prefix() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::default();
+        // "# café\n" — 'é' (U+00E9) is 2 UTF-8 bytes; the line is 9 bytes, 8 chars.
+        // Byte offset of '$' on line 2 = 9 + 3 = 12 (after "# café\nmy ").
+        let text = "# café\nmy $foo = 1;";
+        let dollar_offset = text.find('$').ok_or("missing sigil")?; // byte 12
+
+        let token = server.get_token_at_position(text, dollar_offset);
+        assert_eq!(token, "$foo", "byte offset must not be treated as char index");
+
+        let (start, end) = server.get_token_bounds(text, dollar_offset);
+        assert_eq!(&text[start..end], "$foo");
         Ok(())
     }
 

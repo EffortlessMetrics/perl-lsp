@@ -715,29 +715,54 @@ impl LspServer {
     }
 
     /// Get a token using the same simple fallback as rename, without requiring `&self`.
+    ///
+    /// Operates in byte space: `offset` is a byte offset into `content`, and the
+    /// returned string slice is extracted via `content[start..end]` where both
+    /// bounds are also byte offsets. This avoids the byte-as-char-index bug that
+    /// occurs when indexing `Vec<char>` with a value from `pos16_to_offset`.
     fn get_token_at_position_static(content: &str, offset: usize) -> String {
-        let chars: Vec<char> = content.chars().collect();
-        if offset >= chars.len() {
+        if offset > content.len() {
             return String::new();
         }
 
-        let mut start = offset;
-        while start > 0
-            && (chars[start - 1].is_alphanumeric()
-                || chars[start - 1] == '_'
-                || chars[start - 1] == '$'
-                || chars[start - 1] == '@'
-                || chars[start - 1] == '%')
-        {
+        let is_sigil = |ch: char| ch == '$' || ch == '@' || ch == '%';
+        let is_ident = |ch: char| ch.is_alphanumeric() || ch == '_';
+        let is_token_char = |ch: char| is_ident(ch) || is_sigil(ch);
+
+        // Build (byte_offset, char) pairs to navigate in byte space.
+        let pairs: Vec<(usize, char)> = content.char_indices().collect();
+        if pairs.is_empty() {
+            return String::new();
+        }
+
+        // Find the char at or just before the byte offset.
+        let ci = pairs.partition_point(|(b, _)| *b < offset);
+        let ci = ci.min(pairs.len().saturating_sub(1));
+
+        if !is_token_char(pairs[ci].1) {
+            return String::new();
+        }
+
+        // Scan left for the start of the token (sigils included).
+        let mut start = ci;
+        while start > 0 && is_token_char(pairs[start - 1].1) {
             start -= 1;
         }
 
-        let mut end = offset;
-        while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_') {
+        // Scan right for the end (ident chars only; sigil at ci.1 is the token head).
+        let mut end = ci;
+        // Include sigil at head
+        if is_sigil(pairs[end].1) {
+            end += 1;
+        }
+        while end < pairs.len() && is_ident(pairs[end].1) {
             end += 1;
         }
 
-        chars[start..end].iter().collect()
+        let start_byte = pairs[start].0;
+        let end_byte = if end < pairs.len() { pairs[end].0 } else { content.len() };
+
+        content[start_byte..end_byte].to_string()
     }
 
     /// Extract a package name at `offset`, spanning `::` separators.

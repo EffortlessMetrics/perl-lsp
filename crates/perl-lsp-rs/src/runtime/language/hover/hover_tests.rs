@@ -325,3 +325,17 @@ fn missing_module_search_paths_reports_empty_configuration() {
 
     assert_eq!(paths, "- No include paths configured");
 }
+
+#[test]
+fn hover_token_extraction_works_with_non_ascii_prefix() {
+    // "# café\n" — 'é' (U+00E9) is 2 UTF-8 bytes; line is 9 bytes, 8 chars.
+    // Byte offset of '$' on line 2: "# café\nmy $bar = 2;" -> find('$') = 12.
+    // Bug: using byte offset 12 as char index into Vec<char> would yield the wrong character.
+    let text = "# café\nmy $bar = 2;";
+    let dollar_offset = must_some(text.find('$'));
+    let token = LspServer::get_token_at_position_static(text, dollar_offset);
+    assert_eq!(
+        token, "$bar",
+        "byte offset must not be used as char index in hover token extraction"
+    );
+}
