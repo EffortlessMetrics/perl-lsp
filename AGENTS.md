@@ -18,6 +18,8 @@ The orchestrator reads `CLAUDE.md`. This file is for you.
 | `docs/project/FRICTION_LOG.md` | Platform quirks and known workarounds |
 | `docs/articles/CONTINUOUS_REVIEW_PATTERNS.md` | The orchestration pattern used here |
 | `docs/articles/ORCHESTRATION_COUNTERINTUITIONS.md` | Lessons where the obvious rule was wrong |
+| `docs/agents/ORCHESTRATION_ROLES.md` | Role taxonomy: model tier, constraints, output schema per role |
+| `docs/agents/CLOSE_PROOF_POLICY.md` | Mandatory proof artifacts before closing any issue as superseded/landed |
 
 **Before starting:** check the latest upstream commits so you do not re-implement
 already-merged work.
