@@ -26,6 +26,12 @@ The orchestrator reads `CLAUDE.md`. This file is for you.
 | `docs/agents/EVIDENCE_STANDARD.md` | Evidence ban-list and required-artifact table by claim type |
 | `docs/agents/CLEANUP_CHECKLIST.md` | Post-wave cleanup checklist: worktrees, branches, target dirs, stale processes, storage doctor |
 | `docs/agents/pr-ledger.schema.json` | JSON Schema for PR reconciliation ledger rows (used by pr-classifier and source-swarm-reconciliation workflows) |
+| `docs/agents/workflow-outcome.schema.json` | JSON Schema for workflow outcome ledger rows (used by all workflow types to record run outcomes) |
+| `docs/agents/ledgers/workflow-outcomes.jsonl` | Append-only ledger of workflow execution outcomes (seed rows: 2026-06-05–07 convergence) |
+| `docs/agents/ledgers/ub-review-calibration.jsonl` | Append-only ub-review calibration ledger: TP/FP/expected-quiet/infra-excluded rows per PR run |
+| `docs/ci/ub-review-adoption-notes.md` | ub-review adoption log (5 datums), gap-category taxonomy, and PR-3 recommendation (neutral conclusions) |
+| `docs/workflows/release-readiness.md` | What the release-readiness workflow checks, how to invoke it, human-approval boundary, 0.16.0-cycle lessons |
+| `.claude/workflows/release-readiness.js` | Executable adversarial release-readiness workflow (6 phases: ancestry, consistency, receipts, smoke, claims, verdict) |
 
 **Before starting:** check the latest upstream commits so you do not re-implement
 already-merged work.
