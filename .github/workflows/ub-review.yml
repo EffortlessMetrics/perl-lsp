@@ -195,6 +195,21 @@ jobs:
       UB_REVIEW_RUNNER_CLASS: self-hosted
       UB_REVIEW_RUNNER_SIZE: large
     steps:
+      - name: Fix workspace ownership (pre-checkout)
+        shell: bash
+        run: |
+          # Other CX jobs (ripr, rust-small) run Docker containers that write
+          # workspace files as root. If a previous run left root-owned files
+          # behind, actions/checkout@v6 fails with "Unable to clean or reset
+          # the repository" (exit 128). Chown back to the host runner user
+          # before checkout so the workspace is always in a cleanable state.
+          # Evidence: PR #1242 run 27084969856 job 79937532087 (ub-review
+          # adoption datum #2 — first live CX43 run, 9s failure at checkout).
+          set +e
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            em-ci-rust:1.95 \
+            bash -c "chown -R $(id -u):$(id -g) /workspace/target 2>/dev/null || true" || true
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
@@ -282,6 +297,17 @@ jobs:
       UB_REVIEW_RUNNER_CLASS: self-hosted
       UB_REVIEW_RUNNER_SIZE: medium
     steps:
+      - name: Fix workspace ownership (pre-checkout)
+        shell: bash
+        run: |
+          # Same root-owned-workspace recovery as CX53 above.
+          # Evidence: PR #1242 run 27084969856 job 79937532087 — CX43 died at
+          # checkout in 9s with "Unable to clean or reset the repository".
+          set +e
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            em-ci-rust:1.95 \
+            bash -c "chown -R $(id -u):$(id -g) /workspace/target 2>/dev/null || true" || true
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
