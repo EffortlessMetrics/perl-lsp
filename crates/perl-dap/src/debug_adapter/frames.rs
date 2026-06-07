@@ -45,13 +45,21 @@ impl DebugAdapter {
             let framed_frames =
                 Self::filter_user_visible_frames(Self::parse_stack_frames_from_text(&output));
             if framed_frames.is_empty() {
-                let output_lines = self.snapshot_recent_output_lines();
-                if output_lines.is_empty() {
-                    Vec::new()
-                } else {
-                    let output = output_lines.join("\n");
-                    Self::filter_user_visible_frames(Self::parse_stack_frames_from_text(&output))
-                }
+                // The framed T output contained only internal debugger frames (e.g.
+                // `@ = DB::DB called from file '...' line N` at top-level stops) or
+                // none at all.  These are filtered out by filter_user_visible_frames.
+                //
+                // Do NOT fall back to snapshot parsing here: the snapshot buffer
+                // contains the entire session history, including the initial implicit
+                // stop context line (e.g. line 4 in a 7-line fixture), which appears
+                // BEFORE the current breakpoint context line (e.g. line 5).
+                // Snapshot-based parsing returns frames in output order, so the FIRST
+                // frame would be the stale line-4 context, not the current line-5 stop.
+                //
+                // The output reader already parsed the most recent context line and
+                // stored it in session.stack_frames.  Returning an empty vec here
+                // causes the caller to fall through to that authoritative source.
+                Vec::new()
             } else {
                 framed_frames
             }
