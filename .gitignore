@@ -201,6 +201,8 @@ agents/
 !.claude/agents/*.md
 !docs/agents/
 !docs/agents/*.md
+!docs/agents/*.json
+target/reconciliation/
 
 # Old review/planning artifacts
 review/

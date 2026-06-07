@@ -20,6 +20,12 @@ The orchestrator reads `CLAUDE.md`. This file is for you.
 | `docs/articles/ORCHESTRATION_COUNTERINTUITIONS.md` | Lessons where the obvious rule was wrong |
 | `docs/agents/ORCHESTRATION_ROLES.md` | Role taxonomy: model tier, constraints, output schema per role |
 | `docs/agents/CLOSE_PROOF_POLICY.md` | Mandatory proof artifacts before closing any issue as superseded/landed |
+| `docs/agents/SCOUT_PROMPTS.md` | Ready-to-paste haiku scout prompt templates (7 templates: classify-PR, verify-duplicate, verify-reachability, read-CI-failure, audit-docs-claim, classify-issue, classify-release-blocker) |
+| `docs/agents/BUILDER_BRIEF_TEMPLATE.md` | Sonnet builder brief template with all required fields + known-gotchas appendix |
+| `docs/agents/WORKFLOW_TEMPLATES.md` | Outline-level templates for the six queue-processing workflows (pr-classifier, issue-triage, source-swarm-reconciliation, release-readiness, ci-failure-cluster, ub-review-calibration) |
+| `docs/agents/EVIDENCE_STANDARD.md` | Evidence ban-list and required-artifact table by claim type |
+| `docs/agents/CLEANUP_CHECKLIST.md` | Post-wave cleanup checklist: worktrees, branches, target dirs, stale processes, storage doctor |
+| `docs/agents/pr-ledger.schema.json` | JSON Schema for PR reconciliation ledger rows (used by pr-classifier and source-swarm-reconciliation workflows) |
 
 **Before starting:** check the latest upstream commits so you do not re-implement
 already-merged work.
