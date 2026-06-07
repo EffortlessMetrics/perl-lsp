@@ -2,7 +2,7 @@ name: tokmd PR Review
 
 on:
   pull_request:
-    branches: [master]
+    branches: [main, master]
     types: [opened, synchronize, reopened, ready_for_review, labeled]
   workflow_dispatch: {}
 

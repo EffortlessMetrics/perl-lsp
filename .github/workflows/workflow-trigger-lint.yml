@@ -2,11 +2,11 @@ name: Workflow Trigger Lint
 
 on:
   pull_request:
-    branches: [master]
+    branches: [main, master]
   merge_group:
     types: [checks_requested]
   push:
-    branches: [master]
+    branches: [main, master]
 
 concurrency:
   group: workflow-trigger-lint-${{ github.ref }}

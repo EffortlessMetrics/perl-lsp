@@ -1,6 +1,6 @@
 name: Post-Merge Status Regeneration
 
-# Automatically regenerates docs/project/status/*.md after every merge to master.
+# Automatically regenerates docs/project/status/*.md after every merge to main.
 # This eliminates the #1 merge friction point: PRs no longer need to edit CURRENT_STATUS.md
 # themselves, ending the cascade of merge conflicts on that hot shared file.
 #
@@ -13,7 +13,9 @@ name: Post-Merge Status Regeneration
 on:
   push:
     branches:
+      - main
       - master
+  workflow_dispatch: {}
 
 # Only one regeneration at a time; cancel stale runs if a new push lands.
 concurrency:

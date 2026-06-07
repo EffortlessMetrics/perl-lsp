@@ -6,6 +6,7 @@ on:
     - cron: '*/15 * * * *'
   push:
     branches:
+      - main
       - master
   pull_request:
     # Deliberately exclude `labeled` / `unlabeled` — the reconciler itself
