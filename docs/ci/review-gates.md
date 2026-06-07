@@ -59,6 +59,14 @@ source build from the action repository. No public release asset exists for
 the current pinned SHA (`804d198b5a15a0df94bb4f43750dba71165916cd`), so first
 runs perform a source build. This is slower (~5 min extra) but deterministic.
 
+**Runner routing (temporary):** The router currently forces GitHub-hosted
+runners for all ub-review jobs. Self-hosted CX runners are Docker-only
+(no host-level Rust), so `install-mode=auto`'s source-build fallback fails
+with "cargo is unavailable and rustup is not installed" (evidence: PR #1218,
+run 27086277244, adoption datum #3). The CX job YAML is preserved in the
+workflow for a 3-line revert once EffortlessMetrics/ub-review#343 ships a
+release artifact.
+
 ### Secrets
 
 `MINIMAX_API_KEY` is required for model review lanes. `OPENCODE` is an optional

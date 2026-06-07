@@ -158,6 +158,25 @@ jobs:
             ' "$response"
           }
 
+          # TEMPORARY: CX self-hosted runners are Docker-only — they have no
+          # host-level Rust toolchain. The ub-review action's install-mode=auto
+          # falls back to a cargo source-build when no release artifact exists
+          # (upstream EffortlessMetrics/ub-review#343), but cargo is unavailable
+          # on CX hosts outside a Docker container. The composite action cannot
+          # be trivially Docker-wrapped (it uses actions/checkout, node steps,
+          # and artifact uploads internally).
+          #
+          # Evidence: PR #1218 run 27086277244 — CX53 job failed at "Build UB
+          # review packet" with "cargo is unavailable and rustup is not installed"
+          # (~07:44). Adoption datum #3.
+          #
+          # Workaround: always prefer GitHub-hosted until upstream ships a
+          # release artifact. Revert by deleting these 5 lines and restoring
+          # the cx53/cx43 emit calls below.
+          emit "github" "pending_upstream_artifact_ub_review_343" "true"
+          exit 0
+
+          # --- BEGIN temporarily dead code (preserved for easy revert) ---
           idle_cx53="$(idle_runner_count "cx53")"
           idle_cx43="$(idle_runner_count "cx43")"
 
@@ -171,6 +190,7 @@ jobs:
           else
             emit "github" "no_idle_runner" "true"
           fi
+          # --- END temporarily dead code ---
 
   # ---------------------------------------------------------------------------
   # 2a. UB review on CX53 (primary self-hosted).
