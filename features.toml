@@ -3,7 +3,7 @@
 # Used to generate capabilities, documentation, and compliance reports
 
 [meta]
-version = "0.15.0"
+version = "0.16.0"
 lsp_version = "3.18"
 compliance_percent = 100  # 125 total features (101 LSP-area + 24 DAP, all GA), 124/125 advertised
 
