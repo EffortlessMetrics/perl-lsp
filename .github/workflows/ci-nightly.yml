@@ -445,6 +445,8 @@ jobs:
           BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref || github.event.repository.default_branch }}
         run: |
           set -euo pipefail
+          # merge_group.base_ref is a full ref ("refs/heads/main"); strip prefix.
+          BASE_REF="${BASE_REF#refs/heads/}"
           mkdir -p target/receipts/quality
           base_ref="$BASE_REF"
           git fetch --no-tags --depth=200 origin "$base_ref" || true
@@ -520,6 +522,8 @@ jobs:
           RUSTFLAGS: "-Cdebuginfo=0"
           CARGO_BUILD_JOBS: 1
         run: |
+          # merge_group.base_ref is a full ref ("refs/heads/main"); strip prefix.
+          BASE_REF="${BASE_REF#refs/heads/}"
           base_ref="$BASE_REF"
           git fetch --no-tags --depth=200 origin "$base_ref" || true
           just coverage-proof-routed "origin/$base_ref" "HEAD"
@@ -531,6 +535,8 @@ jobs:
           RUSTFLAGS: "-Cdebuginfo=0"
           CARGO_BUILD_JOBS: 1
         run: |
+          # merge_group.base_ref is a full ref ("refs/heads/main"); strip prefix.
+          BASE_REF="${BASE_REF#refs/heads/}"
           base_ref="$BASE_REF"
           git fetch --no-tags --depth=200 origin "$base_ref" || true
           just coverage-proof "origin/$base_ref"

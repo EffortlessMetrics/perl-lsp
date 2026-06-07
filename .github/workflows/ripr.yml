@@ -254,6 +254,10 @@ jobs:
               # runs as a different UID. Mark it safe so git commands work.
               git config --global --add safe.directory /workspace
 
+              # merge_group.base_ref is a full ref ("refs/heads/main"); strip prefix
+              # so git diff/fetch use just the branch name (e.g. "main").
+              BASE_REF="${BASE_REF#refs/heads/}"
+
               rustc --version
               cargo --version
               sccache --version || true
@@ -457,6 +461,10 @@ jobs:
               # runs as a different UID. Mark it safe so git commands work.
               git config --global --add safe.directory /workspace
 
+              # merge_group.base_ref is a full ref ("refs/heads/main"); strip prefix
+              # so git diff/fetch use just the branch name (e.g. "main").
+              BASE_REF="${BASE_REF#refs/heads/}"
+
               rustc --version
               cargo --version
               sccache --version || true
@@ -587,6 +595,14 @@ jobs:
 
       - name: Toolchain (rust-toolchain.toml pins 1.95.0)
         run: rustc --version
+
+      - name: Normalize base ref
+        shell: bash
+        run: |
+          # merge_group.base_ref is a full ref ("refs/heads/main"); strip prefix
+          # so subsequent steps that use $BASE_REF pass just the branch name.
+          stripped="${BASE_REF#refs/heads/}"
+          echo "BASE_REF=$stripped" >> "$GITHUB_ENV"
 
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
