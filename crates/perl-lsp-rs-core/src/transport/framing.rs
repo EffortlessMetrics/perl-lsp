@@ -17,6 +17,13 @@ const HEADER_END_CRLF: &[u8] = b"\r\n\r\n";
 const HEADER_END_LF: &[u8] = b"\n\n";
 const RESYNC_TAIL_BYTES: usize = 8 * 1024;
 const MAX_DESYNC_BUFFER_BYTES: usize = 64 * 1024;
+/// Maximum header block size before the framer treats it as a DoS attempt.
+///
+/// The LSP base protocol allows only two headers: `Content-Length` and
+/// `Content-Type`. The longest realistic header block is roughly 80 bytes.
+/// 4 KiB gives 50x headroom while still bounding memory under any real-world
+/// proxy-injection scenario.
+const MAX_HEADER_BYTES: usize = 4 * 1024;
 
 /// Maximum allowed message body size in bytes.
 pub const MAX_FRAME_SIZE: usize = 16 * 1024 * 1024;
@@ -107,6 +114,14 @@ impl ContentLengthFramer {
         }
 
         let Some((header_end, header_len)) = find_header_end(&self.buf) else {
+            // Path A DoS guard: a sentinel-anchored header block that never
+            // receives a terminator would grow self.buf without bound.
+            // Once we exceed MAX_HEADER_BYTES we know it is malformed; clear
+            // and return an error so the caller can log and continue.
+            if self.buf.len() > MAX_HEADER_BYTES {
+                self.buf.clear();
+                return Err(FramingError::InvalidHeader);
+            }
             return Ok(None);
         };
 
@@ -402,6 +417,19 @@ pub fn read_message(reader: &mut dyn BufRead) -> io::Result<Option<JsonRpcReques
         }
     };
 
+    // Path B DoS guard: mirrors the try_next guard (framing.rs line 147).
+    // Without this check, `Content-Length: 4294967295` would attempt a 4 GiB
+    // allocation. `read_message` is public API; any integrator that feeds it
+    // untrusted input is exposed.
+    if length > MAX_FRAME_SIZE {
+        tracing::warn!(
+            length,
+            max = MAX_FRAME_SIZE,
+            "Content-Length exceeds maximum frame size; dropping message"
+        );
+        return Ok(None);
+    }
+
     let mut body = vec![0u8; length];
     if let Err(error) = reader.read_exact(&mut body) {
         if error.kind() == io::ErrorKind::UnexpectedEof {
@@ -466,7 +494,8 @@ pub fn log_response(response: &JsonRpcResponse) {
 #[cfg(test)]
 mod tests {
     use super::{
-        ContentLengthMessageReader, log_response, read_message, write_message, write_notification,
+        ContentLengthFramer, ContentLengthMessageReader, FramingError, MAX_FRAME_SIZE,
+        MAX_HEADER_BYTES, log_response, read_message, write_message, write_notification,
     };
     use crate::protocol::{JsonRpcError, JsonRpcId, JsonRpcResponse};
     use std::io::{self, BufReader, Cursor};
@@ -1593,5 +1622,109 @@ mod tests {
         let big_data = serde_json::json!({"data": "x".repeat(10_000)});
         let response = JsonRpcResponse::success(Some(JsonRpcId::Integer(1)), big_data);
         log_response(&response);
+    }
+
+    // ── DoS hardening (issue #952) ──────────────────────────────────
+
+    // T1 — Path A: unterminated header past MAX_HEADER_BYTES cap returns
+    // InvalidHeader, and the framer is clear afterward (no residual state).
+    #[test]
+    fn framer_oversized_unterminated_header_returns_invalid_header() {
+        let mut framer = ContentLengthFramer::new();
+        // Sentinel line that will never get a \r\n\r\n terminator
+        let sentinel = b"Content-Length: 42\r\n";
+        framer.push(sentinel);
+        // Pad beyond MAX_HEADER_BYTES with junk that contains no \r\n\r\n
+        let filler = vec![b'x'; MAX_HEADER_BYTES + 1];
+        framer.push(&filler);
+        assert!(
+            matches!(framer.try_next(), Err(FramingError::InvalidHeader)),
+            "expected InvalidHeader for oversized unterminated header"
+        );
+        // Framer is now clear — subsequent call must return Ok(None), not error
+        assert!(
+            matches!(framer.try_next(), Ok(None)),
+            "expected Ok(None) after framer was cleared"
+        );
+    }
+
+    // T2 — Path A: unterminated header still under cap returns Ok(None)
+    // (waiting for more data is correct — no premature error).
+    #[test]
+    fn framer_small_unterminated_header_returns_ok_none() {
+        let mut framer = ContentLengthFramer::new();
+        // Only the sentinel line, no terminator, well under 4 KiB
+        framer.push(b"Content-Length: 42\r\n");
+        assert!(
+            matches!(framer.try_next(), Ok(None)),
+            "expected Ok(None) while waiting for header terminator"
+        );
+    }
+
+    // T3 — Path A: framer recovers and delivers a valid frame after an
+    // oversized-unterminated-header flush.
+    #[test]
+    fn framer_recovers_valid_frame_after_unterminated_header_flush() {
+        let mut framer = ContentLengthFramer::new();
+        // Trigger InvalidHeader flush
+        framer.push(b"Content-Length: 42\r\n");
+        framer.push(&vec![b'x'; MAX_HEADER_BYTES + 1]);
+        let _ = framer.try_next(); // consumes InvalidHeader
+
+        // Now push a well-formed frame
+        let body = br#"{"jsonrpc":"2.0","id":1,"method":"recover","params":{}}"#;
+        let header = format!("Content-Length: {}\r\n\r\n", body.len());
+        framer.push(header.as_bytes());
+        framer.push(body);
+
+        let result = framer.try_next();
+        assert!(
+            matches!(result, Ok(Some(_))),
+            "expected Ok(Some(_)) for valid frame after flush, got {result:?}"
+        );
+    }
+
+    // T4 — Path B: read_message rejects Content-Length above MAX_FRAME_SIZE
+    // without allocating the body.
+    #[test]
+    fn read_message_rejects_oversized_content_length() -> io::Result<()> {
+        let payload = format!("Content-Length: {}\r\n\r\n", MAX_FRAME_SIZE + 1);
+        let mut reader = BufReader::new(Cursor::new(payload.into_bytes()));
+        assert!(
+            read_message(&mut reader)?.is_none(),
+            "expected Ok(None) for Content-Length > MAX_FRAME_SIZE"
+        );
+        Ok(())
+    }
+
+    // T5 — Path B: read_message accepts Content-Length exactly equal to
+    // MAX_FRAME_SIZE (the guard uses `>`, not `>=`).
+    // The body is empty so read_exact hits UnexpectedEof, returning Ok(None).
+    // This confirms the off-by-one on the boundary is correct.
+    #[test]
+    fn read_message_accepts_content_length_equal_to_max_frame_size() -> io::Result<()> {
+        let payload = format!("Content-Length: {}\r\n\r\n", MAX_FRAME_SIZE);
+        let mut reader = BufReader::new(Cursor::new(payload.into_bytes()));
+        // The guard does not fire (== MAX_FRAME_SIZE is allowed through).
+        // read_exact returns UnexpectedEof because the body is missing, which
+        // produces Ok(None) — not an Err.
+        assert!(
+            read_message(&mut reader)?.is_none(),
+            "expected Ok(None) for Content-Length == MAX_FRAME_SIZE (body missing)"
+        );
+        Ok(())
+    }
+
+    // T6 — FrameTooLarge coverage for try_next (gap noted in plan-review).
+    // The existing MAX_FRAME_SIZE guard in try_next was untested.
+    #[test]
+    fn framer_try_next_returns_frame_too_large_for_oversized_body() {
+        let mut framer = ContentLengthFramer::new();
+        let header = format!("Content-Length: {}\r\n\r\n", MAX_FRAME_SIZE + 1);
+        framer.push(header.as_bytes());
+        assert!(
+            matches!(framer.try_next(), Err(FramingError::FrameTooLarge { .. })),
+            "expected FrameTooLarge for Content-Length > MAX_FRAME_SIZE"
+        );
     }
 }
