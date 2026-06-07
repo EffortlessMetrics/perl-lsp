@@ -482,8 +482,25 @@ impl LspServer {
                     Self::qualified_variable_workspace_symbols(index, &prefix);
                 let replace_prefix_range = (offset.saturating_sub(prefix.len()), offset);
                 let qualified_variable_context = qualified_variable_symbols.is_some();
-                let workspace_symbols =
-                    qualified_variable_symbols.unwrap_or_else(|| index.find_symbols(&prefix));
+                let prefix_lower = prefix.to_lowercase();
+                let workspace_symbols = qualified_variable_symbols.unwrap_or_else(|| {
+                    // Completion requires prefix (starts_with) matching, not the
+                    // substring (contains) matching that find_symbols uses for
+                    // workspace/symbol queries.  Filter here so callers typing
+                    // `bar` don't see `foobar` in their completion list.
+                    index
+                        .find_symbols(&prefix)
+                        .into_iter()
+                        .filter(|s| {
+                            let name_lower = s.name.to_lowercase();
+                            name_lower.starts_with(&prefix_lower)
+                                || s.qualified_name
+                                    .as_ref()
+                                    .map(|qn| qn.to_lowercase().starts_with(&prefix_lower))
+                                    .unwrap_or(false)
+                        })
+                        .collect()
+                });
                 use std::collections::HashSet;
                 let mut seen: HashSet<String> =
                     completions.iter().map(|completion| completion.label.clone()).collect();
