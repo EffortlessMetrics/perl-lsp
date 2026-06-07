@@ -447,7 +447,7 @@ evidence = [
   "target/ripr/review/annotations.txt",
   "target/xtask/impacted-evidence/latest.json",
 ]
-allowed_triggers = ["pull_request", "workflow_dispatch"]
+allowed_triggers = ["pull_request", "merge_group", "workflow_dispatch"]
 labels = ["ripr", "full-ci"]
 expensive = false
 blocking_promotion_allowed = false
@@ -493,11 +493,11 @@ default_pr = false
 runner = "ubuntu_24_04"
 base_lem = 45
 owner = "testing"
-intent = "Measure execution surface."
+intent = "Measure execution surface; also provides the required Codecov / Patch 95 check on merge_group runs."
 failure_mode = "Coverage drops or important code becomes unexecuted."
 proof_obligation = "Run cargo-llvm-cov and upload report."
 evidence = ["lcov.info", "Codecov"]
-allowed_triggers = ["schedule", "workflow_dispatch", "pull_request:labeled"]
+allowed_triggers = ["schedule", "workflow_dispatch", "pull_request:labeled", "merge_group", "pull_request"]
 labels = ["ci:coverage", "coverage", "full-ci"]
 expensive = true
 duplicate_of = []
