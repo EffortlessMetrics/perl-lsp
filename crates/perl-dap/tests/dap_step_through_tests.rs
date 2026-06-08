@@ -714,8 +714,8 @@ fn test_stack_trace_available_after_step_operations() -> Result<(), Box<dyn std:
                 .get("stackFrames")
                 .and_then(|v| v.as_array())
                 .ok_or("stackTrace body must have a stackFrames array")?;
-            // Without a session, a placeholder frame is returned
-            assert!(!frames.is_empty(), "expected at least one stack frame");
+            // Without a session, an honest empty list is returned
+            assert!(frames.is_empty(), "no session after step ops: stackFrames must be empty");
         }
         _ => return Err("Expected Response for stackTrace".into()),
     }

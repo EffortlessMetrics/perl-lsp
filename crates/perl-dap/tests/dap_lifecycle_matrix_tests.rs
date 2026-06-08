@@ -14,6 +14,8 @@
 mod common;
 
 use common::{DapWorkflowSession, perl_available, workflow_timeout};
+use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
+use serde_json::json;
 use std::fs::write;
 use tempfile::tempdir;
 
@@ -508,5 +510,26 @@ fn test_lifecycle_variables_non_empty_at_stop() -> TestResult {
     let _ = session.drain_until_event("terminated");
     session.disconnect()?;
 
+    Ok(())
+}
+
+/// No active session: stackTrace returns honest empty list, not a fabricated frame.
+/// Regression guard: pre-fix returned main::hello @ /tmp/hello.pl:10.
+/// This test requires no `perl` on PATH — pure unit isolation.
+#[test]
+fn test_stacktrace_no_session_returns_empty() -> Result<(), Box<dyn std::error::Error>> {
+    let mut adapter = DebugAdapter::new();
+    let response = adapter.handle_request(1, "stackTrace", Some(json!({"threadId": 1})));
+    let DapMessage::Response { success, command, body, .. } = response else {
+        return Err("Expected Response".into());
+    };
+    assert!(success, "stackTrace should succeed even without a session");
+    assert_eq!(command, "stackTrace");
+    let body = body.ok_or("Expected body")?;
+    let frames =
+        body.get("stackFrames").and_then(|v| v.as_array()).ok_or("Expected stackFrames array")?;
+    assert_eq!(frames.len(), 0, "no session must return stackFrames: [] (not a fabricated frame)");
+    let total = body.get("totalFrames").and_then(|v| v.as_u64()).ok_or("Expected totalFrames")?;
+    assert_eq!(total, 0, "totalFrames must be 0 when stackFrames is empty");
     Ok(())
 }

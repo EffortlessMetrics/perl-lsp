@@ -21,8 +21,9 @@ fn create_test_adapter() -> DebugAdapter {
 }
 
 #[test]
-// AC:8.2.4
-fn test_stack_trace_placeholder_frame() -> Result<(), Box<dyn std::error::Error>> {
+// AC:8.2.4 — No active session returns honest empty list, not a fabricated frame.
+// Regression guard: pre-fix returned main::hello @ /tmp/hello.pl:10.
+fn test_stack_trace_no_session_returns_empty() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = create_test_adapter();
     let response = adapter.handle_request(1, "stackTrace", None);
 
@@ -38,15 +39,8 @@ fn test_stack_trace_placeholder_frame() -> Result<(), Box<dyn std::error::Error>
         .as_array()
         .ok_or("Expected array")?;
 
-    // Should have placeholder frame
-    assert_eq!(frames.len(), 1);
-    let frame = &frames[0];
-    assert_eq!(frame.get("name").and_then(|v| v.as_str()), Some("main::hello"));
-    assert_eq!(frame.get("line").and_then(|v| v.as_i64()), Some(10));
-
-    let source = frame.get("source").ok_or("Expected source")?;
-    let path = source.get("path").and_then(|v| v.as_str()).ok_or("Expected path")?;
-    assert!(path.contains("hello.pl"));
+    // No session must return stackFrames: []
+    assert_eq!(frames.len(), 0, "no session must return stackFrames: []");
 
     Ok(())
 }
@@ -72,7 +66,7 @@ fn test_stack_trace_filtering_logic() -> Result<(), Box<dyn std::error::Error>> 
     // - test_stack_frame_filtering_empty_input
     //
     // This integration test verifies the response format is correct when no
-    // session exists (placeholder mode).
+    // session exists (empty frames — no fabricated placeholder).
 
     let mut adapter = create_test_adapter();
     let response = adapter.handle_request(1, "stackTrace", None);

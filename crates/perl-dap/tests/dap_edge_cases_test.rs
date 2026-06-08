@@ -217,11 +217,11 @@ fn test_dap_stack_trace_edge_cases() -> TestResult {
                         .get("stackFrames")
                         .and_then(|f| f.as_array())
                         .ok_or("Expected frames array")?;
-                    let expected_len = if i == 1 { 0 } else { 1 };
+                    // No session: pagination of an empty list is always empty
                     assert_eq!(
                         frames.len(),
-                        expected_len,
-                        "Should honor stackTrace pagination for case: {}",
+                        0,
+                        "no session: stackFrames must be empty (case {})",
                         i
                     );
                 }
@@ -407,7 +407,7 @@ fn test_dap_stack_trace_zero_levels_returns_remaining_frames() -> TestResult {
                 .get("stackFrames")
                 .and_then(|f| f.as_array())
                 .ok_or("Expected frames array")?;
-            assert_eq!(frames.len(), 1);
+            assert_eq!(frames.len(), 0, "no session: zero levels with no frames returns empty");
         }
         _ => return Err("Expected stackTrace response".into()),
     }

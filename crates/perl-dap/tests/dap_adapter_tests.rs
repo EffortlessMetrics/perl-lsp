@@ -188,7 +188,11 @@ mod dap_phase2_tests {
             .get("stackFrames")
             .and_then(Value::as_array)
             .ok_or_else(|| anyhow::anyhow!("stackFrames missing"))?;
-        assert!(!stack_frames.is_empty(), "expected at least one stack frame");
+        // No active session: stackTrace returns empty list per DAP spec (no fabricated frame)
+        assert!(
+            stack_frames.is_empty(),
+            "no session: expected empty stack frames, not a fabricated frame"
+        );
 
         let scopes = adapter.handle_request(2, "scopes", Some(json!({ "frameId": 1 })));
         let scope_body = expect_response(scopes, "scopes", true)

@@ -98,20 +98,8 @@ impl DebugAdapter {
                 end_column: None,
             }]
         } else {
-            // No session - return placeholder frame for testing
-            vec![StackFrame {
-                id: 1,
-                name: "main::hello".to_string(),
-                source: Source {
-                    name: Some("hello.pl".to_string()),
-                    path: "/tmp/hello.pl".to_string(),
-                    source_reference: None,
-                },
-                line: 10,
-                column: 1,
-                end_line: None,
-                end_column: None,
-            }]
+            // No active session — return honest empty list per DAP spec
+            Vec::new()
         };
         // Capture full depth before pagination so totalFrames reports the real
         // stack depth, not the size of the paginated window (DAP spec §StackTraceResponse:

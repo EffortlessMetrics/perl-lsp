@@ -391,9 +391,8 @@ fn test_dap_stacktrace_no_session() {
             let body = must_some(body);
             let frames = must_some(body.get("stackFrames").and_then(|f| f.as_array()));
 
-            // Should return placeholder frame without session
-            assert_eq!(frames.len(), 1);
-            assert_eq!(must_some(frames[0].get("name").and_then(|n| n.as_str())), "main::hello");
+            // No session must return empty stackFrames per DAP spec
+            assert_eq!(frames.len(), 0, "no session must return empty stackFrames");
         }
         _ => must(Err::<(), _>("Expected response message")),
     }
