@@ -1382,5 +1382,124 @@ class RouteCodecovPacksTests(unittest.TestCase):
                 )
 
 
+class IntegrationTestAugmentationTests(unittest.TestCase):
+    """Regression guard for PR #1212 / #1217.
+
+    DAP-style crates prove patch coverage through integration tests, not
+    lib tests.  The rust-focused fallback pack must include a per-crate
+    ``--tests`` command for every crate that owns a changed source file.
+    """
+
+    def _fallback_pack(self) -> dict:
+        return {
+            "id": router.FALLBACK_PACK_ID,
+            "files": ["*.rs"],
+            "commands": [
+                "cargo test --workspace --lib --profile agent --locked",
+                "cargo check --workspace --all-targets --profile agent --locked",
+            ],
+            "coverage_filters": ["workspace-lib"],
+        }
+
+    def test_dap_src_change_injects_per_crate_tests_command(self) -> None:
+        """Regression: PR #1212 — frames.rs change → 0 % because only --lib ran."""
+        packs = [self._fallback_pack()]
+        paths = [
+            "crates/perl-dap/src/debug_adapter/frames.rs",
+            "crates/perl-dap/tests/dap_adapter_tests.rs",
+        ]
+
+        selected = router.selected_packs(packs, paths)
+        self.assertEqual([router.FALLBACK_PACK_ID], [p["id"] for p in selected])
+
+        normalized = [router.normalize_pack(p, paths) for p in selected]
+        rust_pack = normalized[0]
+
+        # Must include per-crate integration-test invocation.
+        integration_cmds = [
+            cmd for cmd in rust_pack["commands"]
+            if "cargo test -p perl-dap" in cmd and "--tests" in cmd
+        ]
+        self.assertTrue(
+            integration_cmds,
+            f"Expected a 'cargo test -p perl-dap --tests' command; got: {rust_pack['commands']}",
+        )
+
+        # Original lib command must not be removed.
+        lib_cmds = [cmd for cmd in rust_pack["commands"] if "--lib" in cmd]
+        self.assertTrue(
+            lib_cmds,
+            f"lib command must remain; got: {rust_pack['commands']}",
+        )
+
+    def test_multiple_changed_crates_each_get_integration_test_command(self) -> None:
+        packs = [self._fallback_pack()]
+        paths = [
+            "crates/perl-dap/src/debug_adapter/frames.rs",
+            "crates/perl-parser/src/lib.rs",
+        ]
+
+        selected = router.selected_packs(packs, paths)
+        normalized = [router.normalize_pack(p, paths) for p in selected]
+        rust_pack = normalized[0]
+
+        dap_cmds = [
+            cmd for cmd in rust_pack["commands"]
+            if "cargo test -p perl-dap" in cmd and "--tests" in cmd
+        ]
+        parser_cmds = [
+            cmd for cmd in rust_pack["commands"]
+            if "cargo test -p perl-parser" in cmd and "--tests" in cmd
+        ]
+        self.assertTrue(dap_cmds, f"expected perl-dap --tests command; got: {rust_pack['commands']}")
+        self.assertTrue(parser_cmds, f"expected perl-parser --tests command; got: {rust_pack['commands']}")
+
+    def test_integration_test_command_not_duplicated(self) -> None:
+        packs = [self._fallback_pack()]
+        paths = [
+            "crates/perl-dap/src/debug_adapter/frames.rs",
+            "crates/perl-dap/src/debug_adapter/variables.rs",
+        ]
+
+        selected = router.selected_packs(packs, paths)
+        normalized = [router.normalize_pack(p, paths) for p in selected]
+        rust_pack = normalized[0]
+
+        dap_cmds = [
+            cmd for cmd in rust_pack["commands"]
+            if "cargo test -p perl-dap" in cmd and "--tests" in cmd
+        ]
+        # Only one command for perl-dap even if multiple files changed.
+        self.assertEqual(1, len(dap_cmds), f"expected exactly one perl-dap --tests command; got: {dap_cmds}")
+
+    def test_no_crate_injection_for_xtask_src_change(self) -> None:
+        """xtask/src/ changes have no crates/ crate; no --tests injection."""
+        packs = [self._fallback_pack()]
+        paths = ["xtask/src/tasks/ci_route.rs"]
+
+        selected = router.selected_packs(packs, paths)
+        normalized = [router.normalize_pack(p, paths) for p in selected]
+        if normalized:
+            rust_pack = normalized[0]
+            spurious = [
+                cmd for cmd in rust_pack["commands"]
+                if "-p xtask --tests" in cmd
+            ]
+            self.assertEqual(
+                [], spurious,
+                f"xtask is not a crates/ crate; must not inject --tests; got: {spurious}"
+            )
+
+    def test_crate_name_from_source_path(self) -> None:
+        self.assertEqual("perl-dap", router.crate_name_from_source_path(
+            "crates/perl-dap/src/debug_adapter/frames.rs"
+        ))
+        self.assertEqual("perl-parser", router.crate_name_from_source_path(
+            "crates/perl-parser/src/lib.rs"
+        ))
+        self.assertIsNone(router.crate_name_from_source_path("xtask/src/tasks/ci_route.rs"))
+        self.assertIsNone(router.crate_name_from_source_path("docs/reference/API.md"))
+
+
 if __name__ == "__main__":
     unittest.main()

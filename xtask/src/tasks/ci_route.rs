@@ -74,6 +74,7 @@ const NON_LCOV_COVERAGE_SKIP_REASON: &str =
     "non-LCOV CI policy/routing surface; covered by focused CI gates";
 const NON_SOURCE_LCOV_COVERAGE_SKIP_REASON: &str =
     "LCOV coverage pack matched only non-source files; covered by focused CI gates";
+const RUST_FOCUSED_PACK_ID: &str = "patch-coverage-rust-focused";
 
 const PREFLIGHT_PACK: ProofPack = ProofPack {
     id: "preflight",
@@ -1213,6 +1214,28 @@ fn coverage_proof_pack_receipts(selector: &[String]) -> Result<Vec<CoverageProof
     Ok(proof_packs)
 }
 
+/// Build the command list for the rust-focused pack, appending per-crate
+/// integration-test runs for every crate that owns a changed source file.
+///
+/// The static pack command `cargo test --workspace --lib` only covers unit
+/// tests inside `src/lib.rs`.  DAP-style crates (e.g. `perl-dap`) prove
+/// production-code coverage exclusively through integration tests in `tests/`.
+/// Without the extra `--tests` invocations those lines show 0 % patch
+/// coverage even though the tests exist and pass.
+fn augment_rust_focused_commands(
+    base_commands: &[String],
+    changed_files: &[String],
+) -> Vec<String> {
+    let mut commands = base_commands.to_vec();
+    for crate_name in changed_crates(changed_files) {
+        let cmd = format!("cargo test -p {crate_name} --tests --profile agent --locked");
+        if !commands.contains(&cmd) {
+            commands.push(cmd);
+        }
+    }
+    commands
+}
+
 fn coverage_proof_pack_selection(
     selector: &[String],
     changed_files: &[String],
@@ -1236,10 +1259,15 @@ fn coverage_proof_pack_selection(
             continue;
         }
         selected.push(pack_id.clone());
+        let commands = if pack.id == RUST_FOCUSED_PACK_ID {
+            augment_rust_focused_commands(&pack.commands, changed_files)
+        } else {
+            pack.commands.clone()
+        };
         proof_packs.push(CoverageProofPackReceipt {
             id: pack.id.clone(),
             files: pack.files.clone(),
-            commands: pack.commands.clone(),
+            commands,
             coverage_filters: pack.coverage_filters.clone(),
         });
     }
@@ -1258,6 +1286,30 @@ fn is_lcov_source_path(path: &str) -> bool {
         && !path.starts_with("xtask/tests/")
         && !path.contains("/tests/")
         && (path.starts_with("xtask/src/") || path.starts_with("crates/"))
+}
+
+/// Extract the crate directory name from a path like `crates/<name>/src/...`.
+/// Returns `None` for non-crate paths (xtask, docs, etc.).
+fn crate_name_from_source_path(path: &str) -> Option<&str> {
+    let rest = path.strip_prefix("crates/")?;
+    let slash = rest.find('/')?;
+    Some(&rest[..slash])
+}
+
+/// Collect unique crate names that own changed LCOV source files.
+fn changed_crates(paths: &[String]) -> Vec<String> {
+    let mut seen = BTreeSet::new();
+    let mut crates = Vec::new();
+    for path in paths {
+        if is_lcov_source_path(path) {
+            if let Some(name) = crate_name_from_source_path(path) {
+                if seen.insert(name.to_string()) {
+                    crates.push(name.to_string());
+                }
+            }
+        }
+    }
+    crates
 }
 
 fn matches_coverage_pattern(path: &str, pattern: &str) -> bool {
@@ -3497,6 +3549,75 @@ mod tests {
         assert!(
             summary.contains("--changed-file xtask/src/tasks/supported_editor_inline_smoke.rs")
         );
+        Ok(())
+    }
+
+    /// Regression guard for PR #1212 / #1217: DAP-style crates prove their
+    /// patch coverage through integration tests, not lib tests.  The
+    /// rust-focused pack must include a per-crate `--tests` command for every
+    /// crate that owns a changed source file.
+    #[test]
+    fn ci_route_rust_focused_pack_includes_integration_tests_for_changed_crate() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec![
+                "crates/perl-dap/src/debug_adapter/frames.rs".to_string(),
+                "crates/perl-dap/tests/dap_adapter_tests.rs".to_string(),
+            ],
+        )?;
+
+        let rust_pack = receipt
+            .coverage_proof_packs
+            .iter()
+            .find(|pack| pack.id == "patch-coverage-rust-focused")
+            .ok_or_else(|| color_eyre::eyre::eyre!("patch-coverage-rust-focused not selected"))?;
+
+        // Must include per-crate integration-test invocation.
+        assert!(
+            rust_pack
+                .commands
+                .iter()
+                .any(|cmd| cmd.contains("cargo test -p perl-dap") && cmd.contains("--tests")),
+            "expected a `cargo test -p perl-dap --tests` command; got: {:?}",
+            rust_pack.commands
+        );
+
+        // Original lib command must still be present (lib-test coverage is not regressed).
+        assert!(
+            rust_pack.commands.iter().any(|cmd| cmd.contains("--lib")),
+            "lib command must remain; got: {:?}",
+            rust_pack.commands
+        );
+
+        Ok(())
+    }
+
+    /// Only lib-test crates (no integration tests directory, no crates/ source changes)
+    /// should not have spurious `--tests` commands injected.
+    #[test]
+    fn ci_route_rust_focused_pack_lib_only_when_no_src_crate_change() -> Result<()> {
+        // xtask/src/ change — crate_name_from_source_path returns None.
+        let receipt =
+            route_receipt("origin/main", "HEAD", vec!["xtask/src/tasks/ci_route.rs".to_string()])?;
+
+        // rust-focused pack selected (xtask/src/ is an lcov source path).
+        let rust_pack = receipt
+            .coverage_proof_packs
+            .iter()
+            .find(|pack| pack.id == "patch-coverage-rust-focused");
+
+        // If selected, must not have a spurious `-p <crate> --tests` line
+        // (xtask changes don't belong to a crates/ crate).
+        if let Some(pack) = rust_pack {
+            for cmd in &pack.commands {
+                assert!(
+                    !cmd.contains("-p xtask --tests"),
+                    "xtask is not a crates/ crate; must not inject --tests; got: {cmd}"
+                );
+            }
+        }
+
         Ok(())
     }
 
