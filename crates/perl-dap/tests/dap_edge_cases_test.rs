@@ -283,6 +283,88 @@ fn test_dap_scopes_edge_cases() -> TestResult {
 }
 
 #[test]
+fn test_dap_scopes_overflow_boundary() -> TestResult {
+    let mut adapter = DebugAdapter::new();
+
+    // Overflow threshold: frameId >= 214_748_365 makes frame_id * 10 exceed i32::MAX.
+    // With saturation: i64_to_i32_saturating(214_748_365) = 214_748_365 (fits i32),
+    // then saturating_mul(10) = i32::MAX (overflows, saturates), saturating_add(1) = i32::MAX.
+    let overflow_cases: &[(i64, &str)] = &[
+        (214_748_365, "exact overflow threshold"),
+        (i32::MAX as i64, "i32::MAX as frameId"),
+        (i32::MAX as i64 + 1, "i32::MAX + 1 as frameId"),
+        (i64::MAX, "i64::MAX as frameId"),
+        (i64::MIN, "i64::MIN as frameId — saturates to i32::MIN"),
+        (-(i32::MAX as i64) - 2, "large negative — saturates to i32::MIN"),
+    ];
+
+    for (frame_id, label) in overflow_cases {
+        let scope_args = json!({ "frameId": frame_id });
+        let response = adapter.handle_request(1, "scopes", Some(scope_args));
+        match response {
+            DapMessage::Response { command, .. } => {
+                assert_eq!(command, "scopes", "wrong command for case: {label}");
+                // Must not panic — reaching here proves no overflow panic in debug builds
+            }
+            _ => return Err(format!("Expected Response for case: {label}").into()),
+        }
+    }
+
+    // Verify exact variablesReference values for a normal frameId (roundtrip check)
+    let normal_args = json!({ "frameId": 5 });
+    let response = adapter.handle_request(2, "scopes", Some(normal_args));
+    if let DapMessage::Response { success: true, body: Some(body), .. } = response {
+        let scopes = body.get("scopes").and_then(|s| s.as_array()).ok_or("Expected scopes array")?;
+        assert_eq!(scopes.len(), 3, "Expected 3 scopes for frameId=5");
+        let locals_ref = scopes[0]
+            .get("variablesReference")
+            .and_then(|v| v.as_i64())
+            .ok_or("Expected variablesReference")?;
+        let package_ref = scopes[1]
+            .get("variablesReference")
+            .and_then(|v| v.as_i64())
+            .ok_or("Expected variablesReference")?;
+        let globals_ref = scopes[2]
+            .get("variablesReference")
+            .and_then(|v| v.as_i64())
+            .ok_or("Expected variablesReference")?;
+        assert_eq!(locals_ref, 51, "locals_ref for frameId=5 should be 51");
+        assert_eq!(package_ref, 52, "package_ref for frameId=5 should be 52");
+        assert_eq!(globals_ref, 53, "globals_ref for frameId=5 should be 53");
+    } else {
+        return Err("Expected successful scopes response for frameId=5".into());
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_dap_variables_overflow_boundary() -> TestResult {
+    let mut adapter = DebugAdapter::new();
+
+    // Overflow cases: variablesReference values that would truncate under `as i32`
+    let overflow_cases: &[(i64, &str)] = &[
+        (i32::MAX as i64 + 1, "i32::MAX + 1"),
+        (i64::MAX, "i64::MAX"),
+        (i64::MIN, "i64::MIN"),
+    ];
+
+    for (variables_reference, label) in overflow_cases {
+        let args = json!({ "variablesReference": variables_reference });
+        let response = adapter.handle_request(1, "variables", Some(args));
+        match response {
+            DapMessage::Response { command, .. } => {
+                assert_eq!(command, "variables", "wrong command for case: {label}");
+                // Must not panic — reaching here is the safety assertion
+            }
+            _ => return Err(format!("Expected Response for case: {label}").into()),
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_dap_pause_without_session() -> TestResult {
     let mut adapter = DebugAdapter::new();
 

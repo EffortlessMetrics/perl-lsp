@@ -47,7 +47,7 @@ impl DebugAdapter {
             };
         }
 
-        let variables_ref = args.variables_reference as i32;
+        let variables_ref = Self::i64_to_i32_saturating(args.variables_reference);
         let start = args.start.unwrap_or(0) as usize;
         let count = args.count.map(|v| v as usize).unwrap_or(256).clamp(1, 1024);
 

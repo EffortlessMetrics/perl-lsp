@@ -141,13 +141,13 @@ impl DebugAdapter {
             }
         };
 
-        let frame_id = args.frame_id as i32;
+        let frame_id = Self::i64_to_i32_saturating(args.frame_id);
 
         // AC8.3: Hierarchical scope inspection
         // Use bit-shifting or offsets to distinguish between scope types for the same frame
-        let locals_ref = frame_id * 10 + 1;
-        let package_ref = frame_id * 10 + 2;
-        let globals_ref = frame_id * 10 + 3;
+        let locals_ref = frame_id.saturating_mul(10).saturating_add(1);
+        let package_ref = frame_id.saturating_mul(10).saturating_add(2);
+        let globals_ref = frame_id.saturating_mul(10).saturating_add(3);
 
         let scopes_body = ScopesResponseBody {
             scopes: vec![
