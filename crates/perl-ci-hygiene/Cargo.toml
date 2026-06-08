@@ -13,7 +13,7 @@ publish = false
 [dependencies]
 clap = { workspace = true }
 color-eyre = "0.6.5"
-chrono = "0.4.42"
+chrono = "0.4.45"
 regex.workspace = true
 serde_json.workspace = true
 walkdir.workspace = true
