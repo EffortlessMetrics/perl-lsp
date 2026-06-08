@@ -21,6 +21,46 @@ NON_LCOV_SKIP_REASON = "non-LCOV CI policy/routing surface; covered by focused C
 NON_SOURCE_LCOV_SKIP_REASON = "LCOV coverage pack matched only non-source files; covered by focused CI gates"
 
 
+def crate_name_from_source_path(path: str) -> str | None:
+    """Extract the crate directory name from a `crates/<name>/src/...` path."""
+    if not path.startswith("crates/"):
+        return None
+    rest = path[len("crates/"):]
+    slash = rest.find("/")
+    if slash == -1:
+        return None
+    return rest[:slash]
+
+
+def changed_crates(paths: list[str]) -> list[str]:
+    """Return unique crate names owning changed LCOV source files, in order."""
+    seen: set[str] = set()
+    result: list[str] = []
+    for path in paths:
+        if is_lcov_source_path(path):
+            name = crate_name_from_source_path(path)
+            if name and name not in seen:
+                seen.add(name)
+                result.append(name)
+    return result
+
+
+def augment_rust_focused_commands(base_commands: list[str], paths: list[str]) -> list[str]:
+    """Append per-crate integration-test commands to the rust-focused pack.
+
+    The static pack command only runs ``--lib`` tests.  DAP-style crates
+    (e.g. ``perl-dap``) prove patch coverage exclusively through integration
+    tests in ``tests/``.  Without the extra ``--tests`` invocations those
+    lines show 0 % patch coverage even though the tests exist and pass.
+    """
+    commands = list(base_commands)
+    for crate_name in changed_crates(paths):
+        cmd = f"cargo test -p {crate_name} --tests --profile agent --locked"
+        if cmd not in commands:
+            commands.append(cmd)
+    return commands
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Route changed files to Codecov coverage proof packs."
@@ -132,11 +172,16 @@ def selected_packs(packs: list[dict[str, object]], paths: list[str]) -> list[dic
     return []
 
 
-def normalize_pack(pack: dict[str, object]) -> dict[str, object]:
+def normalize_pack(
+    pack: dict[str, object], paths: list[str] | None = None
+) -> dict[str, object]:
+    commands: list[str] = list(pack.get("commands") or [])
+    if pack.get("id") == FALLBACK_PACK_ID and paths is not None:
+        commands = augment_rust_focused_commands(commands, paths)
     return {
         "id": str(pack.get("id", "")),
         "files": list(pack.get("files") or []),
-        "commands": list(pack.get("commands") or []),
+        "commands": commands,
         "coverage_filters": list(pack.get("coverage_filters") or []),
     }
 
@@ -167,7 +212,7 @@ def main() -> int:
     manifest = tomllib.loads(Path(args.manifest).read_text(encoding="utf-8"))
     packs = [pack for pack in manifest.get("pack", []) if isinstance(pack, dict)]
     paths = changed_files(args.base, args.head)
-    coverage_packs = [normalize_pack(pack) for pack in selected_packs(packs, paths)]
+    coverage_packs = [normalize_pack(pack, paths) for pack in selected_packs(packs, paths)]
     coverage_pack_ids = [pack["id"] for pack in coverage_packs]
     skipped_by_policy = {
         str(pack.get("id", "")): NON_LCOV_SKIP_REASON for pack in non_lcov_matches(packs, paths)
