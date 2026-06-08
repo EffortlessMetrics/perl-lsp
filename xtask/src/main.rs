@@ -119,6 +119,13 @@ enum Commands {
         command: PrSubcommand,
     },
 
+    /// PR reconciliation ledger commands.
+    #[command(name = "pr-ledger")]
+    PrLedger {
+        #[command(subcommand)]
+        command: PrLedgerCommand,
+    },
+
     /// Build project with various configurations
     Build {
         /// Build in release mode
@@ -2581,6 +2588,26 @@ enum PrSubcommand {
 }
 
 #[derive(Subcommand)]
+enum PrLedgerCommand {
+    /// Generate skeleton reconciliation ledger rows from open GitHub PRs.
+    ///
+    /// Shells to `gh pr list --json ...` for each repo, emits skeleton rows
+    /// with classification:"unclassified" and evidence:[] for scout fill-in,
+    /// and writes a combined pr-ledger.md summary table.
+    Generate {
+        /// One or more repositories (owner/name). Repeatable.
+        #[arg(long = "repo", required = true)]
+        repos: Vec<String>,
+        /// Output directory for generated artifacts.
+        #[arg(long, default_value = "target/reconciliation")]
+        out: PathBuf,
+        /// Optional fixture JSON (for testing without live gh).
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
 enum DevexCommand {
     /// Plan the cheapest correct local proof commands for the current diff.
     Plan {
@@ -2805,6 +2832,11 @@ fn main() -> Result<()> {
                     strict,
                     no_gh,
                 })
+            }
+        },
+        Commands::PrLedger { command } => match command {
+            PrLedgerCommand::Generate { repos, out, fixture } => {
+                tasks::pr_ledger::generate(tasks::pr_ledger::GenerateConfig { repos, out, fixture })
             }
         },
         Commands::Build { release, features, c_scanner, rust_scanner } => {

@@ -90,6 +90,7 @@ pub mod parser_matrix;
 pub mod parser_ratchet;
 pub mod populate_book;
 pub mod pr;
+pub mod pr_ledger;
 pub mod prep_crates_io_launch;
 pub mod provider_confidence_matrix;
 pub mod provider_promotion_ledger;
