@@ -2,6 +2,7 @@
 
 pub mod active_goal_manifest;
 pub mod agent_lease;
+pub mod agent_ledgers;
 pub mod agent_receipt;
 pub mod aggregate_receipts;
 pub mod badges;
