@@ -76,6 +76,9 @@ tempfile.workspace = true
 
 perl-tdd-support = { workspace = true }
 
+# Serial test execution for env-mutating tests (prevents races on PLENV_*, PERLBREW_*, PATH)
+serial_test = "3.5.0"
+
 [build-dependencies]
 # Wave Final PR B: perl-feature-catalog absorbed; build.rs uses inline catalog via include!()
 serde = { workspace = true, features = ["derive"] }

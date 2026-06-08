@@ -1529,6 +1529,7 @@ dependencies = [
  "ropey",
  "serde",
  "serde_json",
+ "serial_test",
  "tempfile",
  "thiserror",
  "tokio",
