@@ -1222,13 +1222,22 @@ fn coverage_proof_pack_receipts(selector: &[String]) -> Result<Vec<CoverageProof
 /// production-code coverage exclusively through integration tests in `tests/`.
 /// Without the extra `--tests` invocations those lines show 0 % patch
 /// coverage even though the tests exist and pass.
+///
+/// `-- --test-threads=1` forces serial execution within the test binary.
+/// Integration tests in this workspace mutate global/process state (env vars,
+/// auto-ID counters, plenv PATH) without `#[serial]` guards.  Coverage does
+/// not benefit from parallelism — deterministic instrumentation is more
+/// important.  Single-threaded execution makes all parallel-unsafe tests pass
+/// reliably while genuinely-broken tests still fail deterministically.
 fn augment_rust_focused_commands(
     base_commands: &[String],
     changed_files: &[String],
 ) -> Vec<String> {
     let mut commands = base_commands.to_vec();
     for crate_name in changed_crates(changed_files) {
-        let cmd = format!("cargo test -p {crate_name} --tests --profile agent --locked");
+        let cmd = format!(
+            "cargo test -p {crate_name} --tests --profile agent --locked -- --test-threads=1"
+        );
         if !commands.contains(&cmd) {
             commands.push(cmd);
         }
@@ -3556,6 +3565,11 @@ mod tests {
     /// patch coverage through integration tests, not lib tests.  The
     /// rust-focused pack must include a per-crate `--tests` command for every
     /// crate that owns a changed source file.
+    ///
+    /// The command must also carry `-- --test-threads=1` (fix for #1232 /
+    /// coverage-lane-single-threaded): integration tests in this workspace
+    /// mutate global/process state and race when the coverage lane runs them
+    /// in parallel.  Single-threaded execution is the whole-class fix.
     #[test]
     fn ci_route_rust_focused_pack_includes_integration_tests_for_changed_crate() -> Result<()> {
         let receipt = route_receipt(
@@ -3573,15 +3587,23 @@ mod tests {
             .find(|pack| pack.id == "patch-coverage-rust-focused")
             .ok_or_else(|| color_eyre::eyre::eyre!("patch-coverage-rust-focused not selected"))?;
 
-        // Must include per-crate integration-test invocation.
+        // Must include per-crate integration-test invocation with single-threaded flag.
+        let integration_cmds: Vec<&String> = rust_pack
+            .commands
+            .iter()
+            .filter(|cmd| cmd.contains("cargo test -p perl-dap") && cmd.contains("--tests"))
+            .collect();
         assert!(
-            rust_pack
-                .commands
-                .iter()
-                .any(|cmd| cmd.contains("cargo test -p perl-dap") && cmd.contains("--tests")),
+            !integration_cmds.is_empty(),
             "expected a `cargo test -p perl-dap --tests` command; got: {:?}",
             rust_pack.commands
         );
+        for cmd in &integration_cmds {
+            assert!(
+                cmd.contains("--test-threads=1"),
+                "coverage-lane integration test must be single-threaded; got: {cmd}"
+            );
+        }
 
         // Original lib command must still be present (lib-test coverage is not regressed).
         assert!(
