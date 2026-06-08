@@ -52,10 +52,17 @@ def augment_rust_focused_commands(base_commands: list[str], paths: list[str]) ->
     (e.g. ``perl-dap``) prove patch coverage exclusively through integration
     tests in ``tests/``.  Without the extra ``--tests`` invocations those
     lines show 0 % patch coverage even though the tests exist and pass.
+
+    ``-- --test-threads=1`` forces serial execution within the test binary.
+    Integration tests in this workspace mutate global/process state (env vars,
+    auto-ID counters, plenv PATH) without ``#[serial]`` guards.  Coverage does
+    not benefit from parallelism — deterministic instrumentation is more
+    important.  Single-threaded execution makes all parallel-unsafe tests pass
+    reliably while genuinely-broken tests still fail deterministically.
     """
     commands = list(base_commands)
     for crate_name in changed_crates(paths):
-        cmd = f"cargo test -p {crate_name} --tests --profile agent --locked"
+        cmd = f"cargo test -p {crate_name} --tests --profile agent --locked -- --test-threads=1"
         if cmd not in commands:
             commands.append(cmd)
     return commands

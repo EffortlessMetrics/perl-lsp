@@ -1415,7 +1415,8 @@ class IntegrationTestAugmentationTests(unittest.TestCase):
         normalized = [router.normalize_pack(p, paths) for p in selected]
         rust_pack = normalized[0]
 
-        # Must include per-crate integration-test invocation.
+        # Must include per-crate integration-test invocation with single-threaded flag.
+        # --test-threads=1 prevents parallel-unsafe tests from flaking in the coverage lane.
         integration_cmds = [
             cmd for cmd in rust_pack["commands"]
             if "cargo test -p perl-dap" in cmd and "--tests" in cmd
@@ -1424,6 +1425,13 @@ class IntegrationTestAugmentationTests(unittest.TestCase):
             integration_cmds,
             f"Expected a 'cargo test -p perl-dap --tests' command; got: {rust_pack['commands']}",
         )
+        # Every integration-test command must carry --test-threads=1.
+        for cmd in integration_cmds:
+            self.assertIn(
+                "--test-threads=1",
+                cmd,
+                f"coverage-lane integration test must be single-threaded; got: {cmd}",
+            )
 
         # Original lib command must not be removed.
         lib_cmds = [cmd for cmd in rust_pack["commands"] if "--lib" in cmd]
@@ -1453,6 +1461,13 @@ class IntegrationTestAugmentationTests(unittest.TestCase):
         ]
         self.assertTrue(dap_cmds, f"expected perl-dap --tests command; got: {rust_pack['commands']}")
         self.assertTrue(parser_cmds, f"expected perl-parser --tests command; got: {rust_pack['commands']}")
+        # All injected integration-test commands must be single-threaded.
+        for cmd in dap_cmds + parser_cmds:
+            self.assertIn(
+                "--test-threads=1",
+                cmd,
+                f"coverage-lane integration test must be single-threaded; got: {cmd}",
+            )
 
     def test_integration_test_command_not_duplicated(self) -> None:
         packs = [self._fallback_pack()]
@@ -1471,6 +1486,12 @@ class IntegrationTestAugmentationTests(unittest.TestCase):
         ]
         # Only one command for perl-dap even if multiple files changed.
         self.assertEqual(1, len(dap_cmds), f"expected exactly one perl-dap --tests command; got: {dap_cmds}")
+        # The deduplicated command must be single-threaded.
+        self.assertIn(
+            "--test-threads=1",
+            dap_cmds[0],
+            f"coverage-lane integration test must be single-threaded; got: {dap_cmds[0]}",
+        )
 
     def test_no_crate_injection_for_xtask_src_change(self) -> None:
         """xtask/src/ changes have no crates/ crate; no --tests injection."""
