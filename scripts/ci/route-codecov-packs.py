@@ -56,9 +56,17 @@ def augment_rust_focused_commands(base_commands: list[str], paths: list[str]) ->
     ``-- --test-threads=1`` forces serial execution within the test binary.
     Integration tests in this workspace mutate global/process state (env vars,
     auto-ID counters, plenv PATH) without ``#[serial]`` guards.  Coverage does
-    not benefit from parallelism — deterministic instrumentation is more
-    important.  Single-threaded execution makes all parallel-unsafe tests pass
-    reliably while genuinely-broken tests still fail deterministically.
+    not benefit from parallelism -- deterministic instrumentation is more
+    important.
+
+    IMPORTANT: these commands are executed NON-FATALLY by
+    ``generate-coverage-pack-commands.py`` (invoked from the
+    ``coverage-proof-routed`` justfile recipe).  Assertion failures in
+    integration tests do NOT abort the coverage lane -- the instrumented binary
+    still writes LLVM coverage data before exiting, so ``cargo-llvm-cov``
+    collects coverage regardless.  The quality-gate verdict is the patch
+    coverage NUMBER, not test pass/fail.  Pre-existing test-debt (tracked in
+    #1269) can no longer block PRs by surfacing in this lane.
     """
     commands = list(base_commands)
     for crate_name in changed_crates(paths):

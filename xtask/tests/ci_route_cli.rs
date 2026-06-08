@@ -2320,6 +2320,83 @@ fn ci_route_cli_maps_codecov_router_script_to_route_proof_pack() -> Result<()> {
 }
 
 #[test]
+fn ci_route_cli_maps_generate_coverage_pack_commands_to_route_proof_pack() -> Result<()> {
+    // Regression guard: generate-coverage-pack-commands.py is part of the
+    // coverage-lane machinery and must route to ci-routing just like
+    // route-codecov-packs.py does.  If this file changes, the ci-route
+    // proof pack must run.
+    let temp = TempDir::new()?;
+    let receipt = temp.path().join("ci-route.json");
+    let summary = temp.path().join("ci-route.md");
+
+    cargo_bin_cmd!("xtask")
+        .args([
+            "ci",
+            "route",
+            "--base",
+            "origin/main",
+            "--head",
+            "HEAD",
+            "--receipt",
+            receipt.to_str().ok_or_else(|| anyhow!("invalid ci route receipt path"))?,
+            "--summary",
+            summary.to_str().ok_or_else(|| anyhow!("invalid ci route summary path"))?,
+            "--changed-file",
+            "scripts/ci/generate-coverage-pack-commands.py",
+        ])
+        .assert()
+        .success();
+
+    let route: Value = serde_json::from_str(&std::fs::read_to_string(receipt)?)?;
+    assert_eq!(
+        route.pointer("/changed_surfaces/0").and_then(Value::as_str),
+        Some("ci-routing"),
+        "generate-coverage-pack-commands.py must route to the ci-routing surface"
+    );
+    assert!(
+        route.get("required_proof_packs").and_then(Value::as_array).is_some_and(|packs| packs
+            .iter()
+            .any(|pack| { pack.get("id").and_then(Value::as_str) == Some("ci-route-receipt") })),
+        "generate-coverage-pack-commands.py changes must run the focused ci-route proof pack"
+    );
+    Ok(())
+}
+
+#[test]
+fn ci_route_cli_maps_test_generate_coverage_pack_commands_to_route_proof_pack() -> Result<()> {
+    // Test file for generate-coverage-pack-commands.py must also route to ci-routing.
+    let temp = TempDir::new()?;
+    let receipt = temp.path().join("ci-route.json");
+    let summary = temp.path().join("ci-route.md");
+
+    cargo_bin_cmd!("xtask")
+        .args([
+            "ci",
+            "route",
+            "--base",
+            "origin/main",
+            "--head",
+            "HEAD",
+            "--receipt",
+            receipt.to_str().ok_or_else(|| anyhow!("invalid ci route receipt path"))?,
+            "--summary",
+            summary.to_str().ok_or_else(|| anyhow!("invalid ci route summary path"))?,
+            "--changed-file",
+            "scripts/ci/test_generate_coverage_pack_commands.py",
+        ])
+        .assert()
+        .success();
+
+    let route: Value = serde_json::from_str(&std::fs::read_to_string(receipt)?)?;
+    assert_eq!(
+        route.pointer("/changed_surfaces/0").and_then(Value::as_str),
+        Some("ci-routing"),
+        "test_generate_coverage_pack_commands.py must route to the ci-routing surface"
+    );
+    Ok(())
+}
+
+#[test]
 fn ci_route_cli_maps_ci_classifier_script_to_policy_proof_pack() -> Result<()> {
     let temp = TempDir::new()?;
     let receipt = temp.path().join("ci-route.json");
