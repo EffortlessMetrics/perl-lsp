@@ -75,6 +75,44 @@ review_after = "2026-07-10"
 expires = "2026-09-30"
 
 # -----------------------------------------------------------------------------
+# parse_qw_arg_list predicate seams — infection untraceable via string-parsing.
+#
+# Two `weakly_exposed` predicate seams at crates/perl-module/src/import/mod.rs
+# (parse_qw_arg_list):
+#   (A) `if delimiter.is_ascii_alphanumeric() || delimiter == '_'` (line ~667)
+#   (B) `if inner_start > inner_end || !after_operator.ends_with(closing)` (line ~681)
+#
+# Strong boundary tests exist for both seams in both inline mod tests and the
+# external seam-proof file (parse_qw_arg_list_direct_digit_delimiter, etc.).
+# The function is `pub` and directly callable from external test files.
+#
+# However, RIPR's static predicate-infection analysis cannot trace the delimiter
+# character from string arguments (e.g. "qw9abc") through `.chars().next()` to
+# determine that delimiter = '9' and '9'.is_ascii_alphanumeric() = true.
+# Similarly, it cannot trace `inner_start`/`inner_end` arithmetic from test
+# string lengths.
+#
+# This is a ripr#1429 static-analysis limitation for predicate seams with
+# string-parsing arguments (distinct from return_value seams which are provable
+# with assert_eq!(..., None) oracles). The tests ARE discriminating; RIPR just
+# can't verify it statically through the parsing call chain.
+#
+# Remove this suppression once ripr#1429 (predicate-infection via parsed-string
+# arguments) is fixed upstream.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-parse-qw-arg-list-predicate-seams"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-module/src/import/mod.rs"]
+classification = ["static_unknown", "no_static_path"]
+owner = "proof-lane"
+issue = "#1205"
+reason = "parse_qw_arg_list predicate seams (alphanumeric-guard and inner-bounds-guard) are covered by direct exact-equality tests in both mod tests and the seam-proof file (parse_qw_arg_list_direct_digit_delimiter, parse_qw_arg_list_direct_underscore_delimiter, parse_qw_arg_list_direct_unclosed_bracket, parse_qw_arg_list_direct_mismatched_closing). RIPR cannot trace the delimiter character from string arguments through .chars().next() to verify predicate infection — a ripr#1429 class limitation for predicate seams with string-parsing arguments. Suppression is minimal (file-scoped) and non-weakly_exposed-labeled. Remove when ripr#1429 is fixed."
+created = "2026-06-10"
+review_after = "2026-07-10"
+expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
 # parse_qw_content: end < start arithmetic boundary in perl-semantic-analyzer.
 # RIPR cannot statically trace rfind(close) vs open.len_utf8() arithmetic
 # to determine that end < start is possible; this is the static-arithmetic
