@@ -398,7 +398,10 @@ impl<'a> Parser<'a> {
                         },
                     )?;
 
-                let has_embedded_code = self.analyze_regex_body_for_ast(&pattern, token.start)?;
+                // The `e`/`ee` modifier evaluates the replacement as Perl code — equivalent to
+                // eval — so it counts as embedded code regardless of the pattern body (#975).
+                let has_embedded_code = self.analyze_regex_body_for_ast(&pattern, token.start)?
+                    || modifiers.contains('e');
 
                 // Substitution as a standalone expression (will be used with =~ later)
                 Ok(Node::new(
