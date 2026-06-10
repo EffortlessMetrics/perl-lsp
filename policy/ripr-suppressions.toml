@@ -56,3 +56,20 @@ reason = "Editor UX receipt tests are proof inputs validated by cargo/UX gates a
 created = "2026-06-01"
 review_after = "2026-07-01"
 expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
+# Seam-proof test files: diff-scoped RIPR harness plumbing, not production seams.
+# Tracks EffortlessMetrics/ripr#1428 (RIPR flags test-harness plumbing in newly
+# added test files as production seams). Remove this suppression once #1428 lands.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-seam-proof-tests"
+kind = "test_receipt_surface"
+paths = ["crates/**/tests/ripr_seam_proof_*.rs"]
+classification = ["call_deletion", "return_value", "error_path"]
+owner = "proof-lane"
+issue = "#1289"
+reason = "Seam-proof test files (ripr_seam_proof_*.rs) are diff-scoped proof harnesses whose internal plumbing — Ok(()) returns, .contains() calls, ? operators — must not be treated as new production seams by diff-scoped RIPR analysis. This is the same class as ripr-suppress-ux-receipt-tests. Tracks EffortlessMetrics/ripr#1428; remove when fixed upstream."
+created = "2026-06-10"
+review_after = "2026-07-10"
+expires = "2026-09-30"
