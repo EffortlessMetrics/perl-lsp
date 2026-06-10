@@ -201,8 +201,11 @@ impl WorkspaceIndex {
         if unquoted.is_empty() { Vec::new() } else { vec![unquoted.to_string()] }
     }
 
-    fn parse_qw_content(arg: &str) -> Option<&str> {
-        let rest = arg.strip_prefix("qw")?;
+    pub(crate) fn parse_qw_content(arg: &str) -> Option<&str> {
+        // Perl allows whitespace between `qw` and its opening delimiter
+        // (e.g. `qw [Foo::Bar]`); trim it so the delimiter is read correctly
+        // rather than treating the space as the delimiter.
+        let rest = arg.strip_prefix("qw")?.trim_start();
         let mut chars = rest.chars();
         let open = chars.next()?;
         let close = match open {
@@ -214,7 +217,13 @@ impl WorkspaceIndex {
         };
         let start = open.len_utf8();
         let end = rest.rfind(close)?;
-        (end >= start).then_some(&rest[start..end])
+        // Guard the bounds explicitly: constructing `&rest[start..end]` when
+        // `end < start` would panic (e.g. a bareword like `qwfoo` where the
+        // delimiter char is also the first content char). Return `None` first.
+        if end < start {
+            return None;
+        }
+        Some(&rest[start..end])
     }
 
     /// Find all definitions of a symbol by name
@@ -261,6 +270,76 @@ mod tests {
     use super::*;
     use crate::SourceLocation;
     use crate::symbol::Symbol;
+
+    /// Regression: `use parent qw [..]` with whitespace before the delimiter
+    /// must extract each base module as a dependency. Previously the leading
+    /// space was treated as the `qw` delimiter, so `parse_qw_content` returned
+    /// garbage and the whole `qw [..]` token was recorded as a single bogus
+    /// dependency. See `parse_qw_content`.
+    #[test]
+    fn parent_qw_space_before_delimiter_extracts_each_base() -> Result<(), String> {
+        let index = WorkspaceIndex::new();
+        index.index_file_str("file:///c.pl", "use parent qw [Foo::Base Bar::Base];\n1;\n")?;
+        let deps = index.file_dependencies("file:///c.pl");
+        assert!(deps.contains("Foo::Base"), "deps: {deps:?}");
+        assert!(deps.contains("Bar::Base"), "deps: {deps:?}");
+        assert!(
+            !deps.iter().any(|d| d.contains("qw")),
+            "no bogus qw-prefixed dependency should be recorded, got {deps:?}"
+        );
+        Ok(())
+    }
+
+    /// `parse_qw_content` unit coverage: whitespace before the delimiter is
+    /// tolerated; compact form still works.
+    /// Covers space, tab, and newline — all `trim_start` whitespace variants.
+    #[test]
+    fn parse_qw_content_tolerates_leading_space() {
+        // Space before delimiter.
+        assert_eq!(WorkspaceIndex::parse_qw_content("qw [a b]"), Some("a b"));
+        assert_eq!(WorkspaceIndex::parse_qw_content("qw(a b)"), Some("a b"));
+        assert_eq!(WorkspaceIndex::parse_qw_content("qw/a b/"), Some("a b"));
+        // Tab before delimiter.
+        assert_eq!(WorkspaceIndex::parse_qw_content("qw\t[a b]"), Some("a b"));
+        assert_eq!(WorkspaceIndex::parse_qw_content("qw\t(a b)"), Some("a b"));
+        // Newline before delimiter.
+        assert_eq!(WorkspaceIndex::parse_qw_content("qw\n[a b]"), Some("a b"));
+        // Multiple mixed whitespace.
+        assert_eq!(WorkspaceIndex::parse_qw_content("qw  \t [a b]"), Some("a b"));
+        // A bareword directly after qw is not a valid delimiter.
+        assert_eq!(WorkspaceIndex::parse_qw_content("qwfoo"), None);
+    }
+
+    /// Direct boundary test for the `end < start` guard in `parse_qw_content`.
+    ///
+    /// `rfind(close)` can land at index 0 when the opening character is also
+    /// the only occurrence of `close` in `rest` (e.g. `qwf` where `f` is both
+    /// open and close for the symmetric-delimiter arm).  In that case
+    /// `end (= 0) < start (= open.len_utf8() = 1)`, and the guard must return
+    /// `None` without constructing the invalid slice `&rest[1..0]`.
+    ///
+    /// This test is a RIPR seam anchor: it asserts the exact discriminating
+    /// input that sits on the `end < start` boundary so that any mutation
+    /// removing that guard is caught immediately.
+    #[test]
+    fn parse_qw_content_end_lt_start_guard_fires() {
+        // "qwf" → rest = "f", open = 'f', close = 'f' (symmetric),
+        // start = 1, rfind('f') = 0 → end = 0 < start = 1 → None.
+        assert_eq!(
+            WorkspaceIndex::parse_qw_content("qwf"),
+            None,
+            "end < start boundary: single-char symmetric delimiter must return None, not panic"
+        );
+        // Longer bareword: same logic, rfind finds the *last* occurrence of
+        // 'f' at index 2, which is still < start = 1? No — "qwfoo":
+        // rest = "foo", open = 'f', close = 'f', rfind('f') in "foo" = 0
+        // → end = 0 < start = 1 → None.
+        assert_eq!(
+            WorkspaceIndex::parse_qw_content("qwfoo"),
+            None,
+            "end < start boundary: bareword after qw must return None"
+        );
+    }
 
     #[test]
     fn test_workspace_index() {

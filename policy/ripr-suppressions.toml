@@ -73,3 +73,27 @@ reason = "Seam-proof test files (ripr_seam_proof_*.rs) are diff-scoped proof har
 created = "2026-06-10"
 review_after = "2026-07-10"
 expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
+# parse_qw_content: end < start arithmetic boundary in perl-semantic-analyzer.
+# RIPR cannot statically trace rfind(close) vs open.len_utf8() arithmetic
+# to determine that end < start is possible; this is the static-arithmetic
+# limitation tracked in EffortlessMetrics/ripr#1429.
+#
+# Discriminating tests ARE present: parse_qw_content_end_lt_start_guard_fires
+# (added in PR #1203) exercises "qwf" → end=0 < start=1 → None, and the
+# existing parse_qw_content_tolerates_leading_space covers "qwfoo" → None.
+# The boundary is genuinely tested; the gap is a RIPR static-analysis blind
+# spot, not a missing discriminator.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-parse-qw-content-end-lt-start"
+kind = "static_arithmetic_unknown"
+paths = ["crates/perl-semantic-analyzer/src/analysis/index.rs"]
+classification = ["static_unknown", "no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "RIPR cannot statically resolve rfind(close)/open.len_utf8() arithmetic to confirm that end < start is reachable. Discriminating tests are present (parse_qw_content_end_lt_start_guard_fires added in #1203). This is the static-arithmetic limitation tracked in EffortlessMetrics/ripr#1429; remove this suppression when ripr#1429 is fixed upstream."
+created = "2026-06-10"
+review_after = "2026-07-10"
+expires = "2026-09-30"
