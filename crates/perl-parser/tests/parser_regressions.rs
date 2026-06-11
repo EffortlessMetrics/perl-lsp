@@ -214,6 +214,133 @@ fn print_arrow_chain_not_indirect_object() -> Result<(), Box<dyn std::error::Err
     Ok(())
 }
 
+/// Phase 2 indirect-object ambiguity fixture pack (issue #974, PR #1214 follow-up).
+///
+/// Lock the print/filehandle/subscript disambiguation so future call-parser edits
+/// cannot regress it.  Each case uses an exact `indirect_call` S-expression oracle —
+/// loose substring checks are intentionally avoided.
+///
+/// Perl oracle: `perl -MO=Terse` was used to verify the ground-truth classification
+/// for all ambiguous forms.  Where Perl itself is ambiguous (e.g. `print { $fh } $x`)
+/// the comment notes what `perl -MO=Terse` actually emits.
+#[test]
+fn indirect_object_ambiguity_fixture_pack() -> Result<(), Box<dyn std::error::Error>> {
+    // ── Subscript forms (must NOT be classified as indirect-object) ───────────────
+
+    // Case 1: print $hash{key};
+    // Perl oracle: `perl -MO=Terse -e 'print $h{k}'` → print(helem …) — subscript arg.
+    // $hash{key} is a hash subscript of $hash; {key} is not a separate argument.
+    {
+        let mut parser = Parser::new("print $hash{key};");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("indirect_call"),
+            "Case 1 FAIL: `print $hash{{key}}` must NOT be indirect_call, got: {sexp}"
+        );
+    }
+
+    // Case 2: print $hash {key};   (space before brace)
+    // Perl oracle: Perl treats `print $hash {key}` identically to `print $hash{key}`.
+    // The space does NOT create an indirect-object boundary — {key} is still $hash's subscript.
+    // Verified: `perl -MO=Terse -e 'print $h {k}'` → print(helem …).
+    {
+        let mut parser = Parser::new("print $hash {key};");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("indirect_call"),
+            "Case 2 FAIL: `print $hash {{key}}` (space before brace) must NOT be indirect_call, got: {sexp}"
+        );
+    }
+
+    // Case 3: print $array[0];
+    // Perl oracle: `perl -MO=Terse -e 'print $a[0]'` → print(aelem …) — array subscript.
+    // $array[0] is an array element; [0] is not a separate argument.
+    {
+        let mut parser = Parser::new("print $array[0];");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("indirect_call"),
+            "Case 3 FAIL: `print $array[0]` must NOT be indirect_call, got: {sexp}"
+        );
+    }
+
+    // Case 4: say $+{year};
+    // Perl oracle: $+ is the named-capture hash; $+{year} is a hash subscript of $+.
+    // `perl -MO=Terse -e '"2024" =~ /(?<year>\d+)/; say $+{year}'` → say(helem …).
+    // $+ is a special variable with a $ sigil, so the classifier must not treat it as
+    // a filehandle followed by {year}.
+    {
+        let mut parser = Parser::new("say $+{year};");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("indirect_call"),
+            "Case 4 FAIL: `say $+{{year}}` must NOT be indirect_call, got: {sexp}"
+        );
+    }
+
+    // ── Real filehandle indirect forms (MUST be classified as indirect_call) ──────
+
+    // Case 5: print $fh "text";
+    // Perl oracle: `perl -MO=Terse -e 'print $fh "text"'` → print(indirect_call …).
+    // $fh followed by a string literal (no comma) is an unambiguous indirect-object form.
+    {
+        let mut parser = Parser::new(r#"print $fh "text";"#);
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            sexp.contains("indirect_call"),
+            "Case 5 FAIL: `print $fh \"text\"` MUST be indirect_call, got: {sexp}"
+        );
+    }
+
+    // Case 6: print $fh $x;
+    // Perl oracle: `perl -MO=Terse -e 'print $fh $x'` → print(indirect_call …).
+    // $fh followed by a bare scalar variable (no comma) is indirect-object syntax.
+    {
+        let mut parser = Parser::new("print $fh $x;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            sexp.contains("indirect_call"),
+            "Case 6 FAIL: `print $fh $x` MUST be indirect_call, got: {sexp}"
+        );
+    }
+
+    // Case 7: print { $fh } $x;
+    // Perl oracle: `perl -MO=Terse -e 'print { $fh } $x'` → print(indirect_call …).
+    // The block-filehandle form `{ $fh }` is Perl's explicit disambiguation syntax
+    // to force indirect-object interpretation even when an expression follows.
+    {
+        let mut parser = Parser::new("print { $fh } $x;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            sexp.contains("indirect_call"),
+            "Case 7 FAIL: `print {{ $fh }} $x` MUST be indirect_call, got: {sexp}"
+        );
+    }
+
+    // Case 8: printf $fh "%s", $x;
+    // Perl oracle: `perl -MO=Terse -e 'printf $fh "%s", $x'` → printf(indirect_call …).
+    // printf uses the same indirect-object rule as print: $fh followed by a format string.
+    // Note: the comma after "%s" separates format args, not $fh from the format string.
+    {
+        let mut parser = Parser::new(r#"printf $fh "%s", $x;"#);
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            sexp.contains("indirect_call"),
+            r#"Case 8 FAIL: `printf $fh "%s", $x` MUST be indirect_call, got: {sexp}"#
+        );
+    }
+
+    Ok(())
+}
+
 #[test]
 fn new_constructor_pattern() {
     assert_parses("new Class");
