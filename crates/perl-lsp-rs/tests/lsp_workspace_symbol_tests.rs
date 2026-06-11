@@ -406,6 +406,106 @@ fn test_workspace_symbol_finds_native_class_and_method() -> TestResult {
     Ok(())
 }
 
+/// Test that workspace/symbol finds `our $VERSION` and other `our` package variables.
+///
+/// `our` declarations are package-interface variables that should be searchable
+/// workspace-wide.  The WorkspaceSymbolsProvider indexes them via SymbolExtractor,
+/// which sets declaration="our" and kind=Variable(Scalar/Array/Hash).
+#[test]
+fn test_workspace_symbol_finds_our_variable() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let doc_uri = "file:///our_vars_ws.pl";
+    harness.open(
+        doc_uri,
+        r#"package Acme::Widget;
+
+our $VERSION = '1.00';
+our @EXPORT  = ('new');
+our %CONFIG  = (debug => 0);
+
+sub new { return bless {}, shift; }
+
+1;
+"#,
+    )?;
+
+    // Search for "VERSION" — must find $VERSION
+    let response = harness
+        .request("workspace/symbol", json!({ "query": "VERSION" }))
+        .map_err(|e| format!("workspace/symbol request failed: {e}"))?;
+
+    assert!(response.is_array(), "workspace/symbol should return an array, got: {:?}", response);
+
+    let symbols = response.as_array().ok_or("response is not an array")?;
+    let names: Vec<&str> = symbols.iter().filter_map(|s| s["name"].as_str()).collect();
+
+    assert!(
+        names.iter().any(|n| n.contains("VERSION")),
+        "workspace/symbol should find '$VERSION' when querying 'VERSION'; got: {:?}",
+        names
+    );
+
+    // The found symbol must have Variable kind (13)
+    for sym in symbols {
+        if let Some(name) = sym["name"].as_str() {
+            if name.contains("VERSION") {
+                assert_eq!(
+                    sym["kind"].as_u64(),
+                    Some(13),
+                    "'$VERSION' should have LSP kind 13 (Variable); got: {:?}",
+                    sym["kind"]
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Test that workspace/symbol finds Moo/Moose `has` attribute declarations.
+///
+/// The WorkspaceSymbolsProvider uses SymbolExtractor which synthesizes attribute
+/// symbols with declaration="has" and kind=Variable(Scalar).  They must be
+/// reachable by workspace symbol search.
+#[test]
+fn test_workspace_symbol_finds_moo_has_attribute() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let doc_uri = "file:///moo_has_ws.pl";
+    harness.open(
+        doc_uri,
+        r#"package Demo::User;
+use Moo;
+has 'username' => (is => 'ro', isa => 'Str', required => 1);
+
+sub greet { return "hello"; }
+
+1;
+"#,
+    )?;
+
+    // Search for "username" — should find the Moo attribute
+    let response = harness
+        .request("workspace/symbol", json!({ "query": "username" }))
+        .map_err(|e| format!("workspace/symbol request failed: {e}"))?;
+
+    assert!(response.is_array(), "workspace/symbol should return an array, got: {:?}", response);
+
+    let symbols = response.as_array().ok_or("response is not an array")?;
+    let names: Vec<&str> = symbols.iter().filter_map(|s| s["name"].as_str()).collect();
+
+    assert!(
+        names.iter().any(|n| *n == "username" || n.contains("username")),
+        "workspace/symbol should find 'username' Moo attribute; got: {:?}",
+        names
+    );
+
+    Ok(())
+}
+
 /// Test that workspace/symbol uses perl-lsp-workspace-symbols provider.
 ///
 /// Verifies that a method declared inside a named package receives a
