@@ -148,7 +148,7 @@ jobs:
               --label testing \
               --label flake \
               --label chore \
-              --base master
+              --base main
           fi
         env:
           GH_TOKEN: ${{ github.token }}

@@ -8,7 +8,7 @@ Reads:
   policy/trust-lanes.toml
 
 Inputs:
-  --base, --head     git refs (defaults: origin/master, HEAD)
+  --base, --head     git refs (defaults: origin/main, HEAD)
   --labels-json      JSON array of label strings (e.g. github PR labels)
   --json-out         path to write ci-plan.json
   --summary          path to GITHUB_STEP_SUMMARY (optional; written if set)
@@ -643,7 +643,7 @@ def render_summary(plan: dict[str, Any]) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--base", default=os.environ.get("BASE_SHA", "origin/master"))
+    parser.add_argument("--base", default=os.environ.get("BASE_SHA", "origin/main"))
     parser.add_argument("--head", default=os.environ.get("HEAD_SHA", "HEAD"))
     parser.add_argument("--labels-json", default="[]")
     parser.add_argument("--budget", type=Path, default=Path("policy/ci-budget.toml"))

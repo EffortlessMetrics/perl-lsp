@@ -320,7 +320,7 @@ enum Commands {
         #[arg(long, default_value = ".")]
         root: String,
         /// Base revision for the PR diff.
-        #[arg(long, default_value = "origin/master")]
+        #[arg(long, default_value = "origin/main")]
         base: String,
         /// Head revision for the PR diff.
         #[arg(long, default_value = "HEAD")]
@@ -352,7 +352,7 @@ enum Commands {
         #[arg(long, default_value = ".")]
         root: String,
         /// Base revision for the PR diff.
-        #[arg(long, default_value = "origin/master")]
+        #[arg(long, default_value = "origin/main")]
         base: String,
         /// Head revision for the PR diff.
         #[arg(long, default_value = "HEAD")]
@@ -741,10 +741,10 @@ enum Commands {
     /// **Claim boundary**: dry-run only. GitHub sticky-comment posting is
     /// a follow-up to issue #4825.
     ///
-    /// Example: `cargo xtask ci pr-summary --base origin/master --dry-run`
+    /// Example: `cargo xtask ci pr-summary --base origin/main --dry-run`
     CiPrSummary {
-        /// Base git reference to diff against (e.g. `origin/master`).
-        #[arg(long, default_value = "origin/master")]
+        /// Base git reference to diff against (e.g. `origin/main`).
+        #[arg(long, default_value = "origin/main")]
         base: String,
 
         /// Emit markdown to stdout only; do not post to GitHub.
@@ -791,7 +791,7 @@ enum Commands {
     /// Warn when a diff adds retained-state owner patterns without inventory updates.
     CheckMemoryRetainedOwnerDrift {
         /// Git base ref used for diffing changed files.
-        #[arg(long, default_value = "origin/master")]
+        #[arg(long, default_value = "origin/main")]
         base: String,
 
         /// Warn instead of fail when drift appears in existing retained-owner paths.
@@ -1768,15 +1768,15 @@ enum Commands {
         root: Option<PathBuf>,
     },
 
-    /// Check whether the current checkout is behind origin/master.
+    /// Check whether the current checkout is behind origin/main.
     ///
     /// Emits a JSON receipt (schema_version 1) with staleness metadata.
     /// Use --mode block to fail when stale; default is warn (exit 0 always).
     ///
-    /// Example: `cargo xtask freshness-check --base origin/master --mode block`
+    /// Example: `cargo xtask freshness-check --base origin/main --mode block`
     FreshnessCheck {
         /// Base git reference to compare HEAD against.
-        #[arg(long, default_value = "origin/master")]
+        #[arg(long, default_value = "origin/main")]
         base: String,
 
         /// Operating mode: warn (default, exit 0) or block (exit 1 when stale).

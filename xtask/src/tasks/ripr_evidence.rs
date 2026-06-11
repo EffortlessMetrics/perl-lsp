@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 static RIPR_BIN_OVERRIDE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
 const DEFAULT_ROOT: &str = ".";
-const DEFAULT_BASE: &str = "origin/master";
+const DEFAULT_BASE: &str = "origin/main";
 const DEFAULT_HEAD: &str = "HEAD";
 const PR_EVIDENCE_JSON: &str = "target/ripr/pr/repo-exposure.json";
 const PR_EVIDENCE_MD: &str = "target/ripr/pr/repo-exposure.md";
@@ -3355,10 +3355,10 @@ esac
 
     #[test]
     fn merge_base_guidance_suggests_fetch_for_non_shallow() {
-        let message = merge_base_failure_guidance("origin/master", "HEAD", false);
+        let message = merge_base_failure_guidance("origin/main", "HEAD", false);
         assert!(message.contains("no merge base"), "diagnosis: {message}");
         assert!(!message.contains("shallow"), "must not blame shallow: {message}");
-        assert!(message.contains("git fetch origin origin/master"), "fetch remedy: {message}");
+        assert!(message.contains("git fetch origin origin/main"), "fetch remedy: {message}");
     }
 
     #[test]
