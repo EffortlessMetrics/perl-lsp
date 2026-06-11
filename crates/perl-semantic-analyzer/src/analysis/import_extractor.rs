@@ -677,14 +677,53 @@ impl ImportExtractor {
         false
     }
 
-    /// Extract the inner content of a `qw(...)` string.
+    /// Extract the inner content of a `qw<delim>...</delim>` string.
     ///
-    /// Returns `Some("a b c")` for `"qw(a b c)"`, `None` otherwise.
+    /// Handles all Perl-legal qw delimiters: `qw(a b)`, `qw[a b]`, `qw{a b}`,
+    /// `qw<a b>`, `qw/a b/`, and the space-before-delimiter forms such as
+    /// `qw (a b)`, `qw [a b]`, etc.
+    ///
+    /// Returns `Some("a b c")` for any valid qw form, `None` otherwise.
+    /// Rejects `qwfoo` (alphanumeric or underscore immediately after `qw`).
     fn parse_qw_content(s: &str) -> Option<&str> {
-        let rest = s.strip_prefix("qw")?;
-        // The parser normalises all qw delimiters to parentheses.
-        let inner = rest.strip_prefix('(')?.strip_suffix(')')?;
-        Some(inner)
+        Self::parse_quote_operator_content(s, "qw")
+    }
+
+    /// Generic quote-operator content extractor.
+    ///
+    /// Strips `operator`, skips optional leading whitespace, reads the opening
+    /// delimiter, maps it to the paired closing delimiter (`( { [ <` pairs;
+    /// all others self-close), and returns the slice between the delimiters.
+    /// Rejects forms where the character immediately after the operator and
+    /// whitespace is alphanumeric or underscore (e.g. `qwfoo`).
+    fn parse_quote_operator_content<'a>(s: &'a str, operator: &str) -> Option<&'a str> {
+        // Perl allows whitespace between a quote-like operator and its opening
+        // delimiter, e.g. `qw [a b]` or `qw (x)`. Trim before reading the
+        // delimiter so space-before-delimiter is handled identically to the
+        // compact form.  (Mirrors `perl_parser_core::hir::model::parse_qw_content`
+        // and `perl_workspace::semantic::workspace_import_extractor`.)
+        let rest = s.strip_prefix(operator)?.trim_start();
+        let mut chars = rest.chars();
+        let open = chars.next()?;
+        if open.is_ascii_alphanumeric() || open == '_' {
+            return None;
+        }
+        let close = match open {
+            '(' => ')',
+            '{' => '}',
+            '[' => ']',
+            '<' => '>',
+            other => other,
+        };
+        if !rest.ends_with(close) {
+            return None;
+        }
+        let start = open.len_utf8();
+        let end = rest.len().checked_sub(close.len_utf8())?;
+        if end < start {
+            return None;
+        }
+        Some(&rest[start..end])
     }
 
     /// Remove surrounding single or double quotes from a string.
@@ -1322,5 +1361,111 @@ require $dynamic;
             "variable-class import without require must not produce standalone Dynamic spec"
         );
         Ok(())
+    }
+
+    // ── parse_quote_operator_content seam-proof unit tests ─────────────
+    //
+    // These tests provide direct static evidence for RIPR activation analysis
+    // of the `parse_quote_operator_content` function.  Each test pins ONE
+    // decision boundary so that a single-line mutation causes exactly that
+    // test to fail.
+
+    #[test]
+    fn parse_quote_operator_content_compact_paren() {
+        // Boundary: '(' => ')' arm in the match
+        assert_eq!(
+            ImportExtractor::parse_quote_operator_content("qw(foo bar)", "qw"),
+            Some("foo bar")
+        );
+    }
+
+    #[test]
+    fn parse_quote_operator_content_compact_bracket() {
+        // Boundary: '[' => ']' arm in the match
+        assert_eq!(
+            ImportExtractor::parse_quote_operator_content("qw[foo bar]", "qw"),
+            Some("foo bar")
+        );
+    }
+
+    #[test]
+    fn parse_quote_operator_content_compact_brace() {
+        // Boundary: '{' => '}' arm in the match
+        assert_eq!(
+            ImportExtractor::parse_quote_operator_content("qw{foo bar}", "qw"),
+            Some("foo bar")
+        );
+    }
+
+    #[test]
+    fn parse_quote_operator_content_compact_slash() {
+        // Boundary: other => other self-close arm
+        assert_eq!(
+            ImportExtractor::parse_quote_operator_content("qw/foo bar/", "qw"),
+            Some("foo bar")
+        );
+    }
+
+    #[test]
+    fn parse_quote_operator_content_space_before_paren() {
+        // Boundary: trim_start() handles leading whitespace
+        assert_eq!(
+            ImportExtractor::parse_quote_operator_content("qw (foo bar)", "qw"),
+            Some("foo bar")
+        );
+    }
+
+    #[test]
+    fn parse_quote_operator_content_space_before_bracket() {
+        // Boundary: trim_start() + '[' => ']' mapping
+        assert_eq!(
+            ImportExtractor::parse_quote_operator_content("qw [foo bar]", "qw"),
+            Some("foo bar")
+        );
+    }
+
+    #[test]
+    fn parse_quote_operator_content_space_before_slash() {
+        // Boundary: trim_start() + self-close
+        assert_eq!(
+            ImportExtractor::parse_quote_operator_content("qw /foo bar/", "qw"),
+            Some("foo bar")
+        );
+    }
+
+    #[test]
+    fn parse_quote_operator_content_alphanumeric_delimiter_rejected() {
+        // Boundary: alphanumeric guard — `qwfoo` must be rejected
+        assert_eq!(
+            ImportExtractor::parse_quote_operator_content("qwfoo", "qw"),
+            None
+        );
+    }
+
+    #[test]
+    fn parse_quote_operator_content_underscore_delimiter_rejected() {
+        // Boundary: underscore guard — `qw_foo_` must be rejected
+        assert_eq!(
+            ImportExtractor::parse_quote_operator_content("qw_foo_", "qw"),
+            None
+        );
+    }
+
+    #[test]
+    fn parse_quote_operator_content_wrong_operator_returns_none() {
+        // Boundary: strip_prefix — wrong operator prefix returns None
+        assert_eq!(
+            ImportExtractor::parse_quote_operator_content("qq(foo bar)", "qw"),
+            None
+        );
+    }
+
+    #[test]
+    fn parse_quote_operator_content_mismatched_close_returns_none() {
+        // Boundary: ends_with(close) check — mismatched close returns None
+        assert_eq!(
+            ImportExtractor::parse_quote_operator_content("qw(foo bar]", "qw"),
+            None
+        );
     }
 }

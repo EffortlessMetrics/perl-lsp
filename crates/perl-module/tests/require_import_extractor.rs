@@ -310,3 +310,111 @@ fn require_without_import_produces_no_entries() -> Result<(), String> {
     }
     Ok(())
 }
+
+// ── Quote-operator whitespace conformance matrix ──────────────────────────────
+//
+// Shared case matrix (defined once, applied to this consumer and mirrored in
+// perl-semantic-analyzer and perl-workspace):
+//
+//   qw(foo bar)    → ["foo", "bar"]          compact paren
+//   qw (foo bar)   → ["foo", "bar"]          space before paren
+//   qw[foo bar]    → ["foo", "bar"]          compact bracket
+//   qw [foo bar]   → ["foo", "bar"]          space before bracket
+//   qw/foo bar/    → ["foo", "bar"]          compact slash
+//   qw /foo bar/   → ["foo", "bar"]          space before slash
+//   qw{foo bar}    → ["foo", "bar"]          compact brace
+//   qw {foo bar}   → ["foo", "bar"]          space before brace
+//   qwfoo          → REJECTED (no entries)   bareword, not a delimiter
+//
+// This consumer is text-level (no AST).  `q {text}` and `qq [text]` are not
+// valid import-call arguments for `require Foo; Foo->import(...)` so they are
+// not included in this consumer's matrix.
+//
+// Invariant: leading-space forms must produce the SAME symbols as compact forms.
+
+#[test]
+fn conformance_matrix_qw_all_delimiters_compact() -> Result<(), String> {
+    // Compact forms — no whitespace between qw and delimiter.
+    let cases: &[(&str, &[&str])] = &[
+        ("Foo->import(qw(foo bar));", &["foo", "bar"]),
+        ("Foo->import(qw[foo bar]);", &["foo", "bar"]),
+        ("Foo->import(qw/foo bar/);", &["foo", "bar"]),
+        ("Foo->import(qw{foo bar});", &["foo", "bar"]),
+    ];
+
+    for (import_line, expected) in cases {
+        let source = format!("require Foo;\n{import_line}\n");
+        let entries = extract_require_import_symbols(&source);
+        let got: Vec<&str> = entries.iter().map(|e| e.symbol.as_str()).collect();
+        assert_eq!(
+            got, *expected,
+            "compact form {import_line:?}: expected {expected:?}, got {got:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn conformance_matrix_qw_all_delimiters_with_leading_space() -> Result<(), String> {
+    // Space-before-delimiter forms — must yield the same symbols as compact forms.
+    let cases: &[(&str, &[&str])] = &[
+        ("Foo->import(qw (foo bar));", &["foo", "bar"]),
+        ("Foo->import(qw [foo bar]);", &["foo", "bar"]),
+        ("Foo->import(qw /foo bar/);", &["foo", "bar"]),
+        ("Foo->import(qw {foo bar});", &["foo", "bar"]),
+    ];
+
+    for (import_line, expected) in cases {
+        let source = format!("require Foo;\n{import_line}\n");
+        let entries = extract_require_import_symbols(&source);
+        let got: Vec<&str> = entries.iter().map(|e| e.symbol.as_str()).collect();
+        assert_eq!(
+            got, *expected,
+            "space-before-delimiter form {import_line:?}: expected {expected:?}, got {got:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn conformance_matrix_qw_space_and_compact_forms_are_identical() -> Result<(), String> {
+    // Exact parity check: compact and space-before-delimiter must produce the same symbols.
+    let pairs: &[(&str, &str)] = &[
+        ("Foo->import(qw(foo bar));", "Foo->import(qw (foo bar));"),
+        ("Foo->import(qw[foo bar]);", "Foo->import(qw [foo bar]);"),
+        ("Foo->import(qw/foo bar/);", "Foo->import(qw /foo bar/);"),
+        ("Foo->import(qw{foo bar});", "Foo->import(qw {foo bar});"),
+    ];
+
+    for (compact_line, spaced_line) in pairs {
+        let compact_src = format!("require Foo;\n{compact_line}\n");
+        let spaced_src = format!("require Foo;\n{spaced_line}\n");
+
+        let compact_syms: Vec<String> =
+            extract_require_import_symbols(&compact_src).into_iter().map(|e| e.symbol).collect();
+        let spaced_syms: Vec<String> =
+            extract_require_import_symbols(&spaced_src).into_iter().map(|e| e.symbol).collect();
+
+        assert_eq!(
+            compact_syms, spaced_syms,
+            "parity: compact {compact_line:?} vs spaced {spaced_line:?}: \
+             compact={compact_syms:?}, spaced={spaced_syms:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn conformance_matrix_qwfoo_bareword_is_rejected() -> Result<(), String> {
+    // `qwfoo` is NOT a valid qw operator — it is a bareword.  The import call
+    // `Foo->import(qwfoo)` does not match any literal arg form, so the extractor
+    // must produce no entries.
+    let source = "require Foo;\nFoo->import(qwfoo);\n";
+    let entries = extract_require_import_symbols(source);
+    assert_eq!(
+        entries.len(),
+        0,
+        "qwfoo bareword in import must produce no entries, got {entries:?}"
+    );
+    Ok(())
+}
