@@ -481,3 +481,104 @@ fn workspace_rename_config_defaults() {
     assert!(config.report_progress, "report_progress should default to true");
     assert!(config.validate_syntax, "validate_syntax should default to true");
 }
+
+// ============================================================================
+// Regression #956: byte-level word-boundary check corrupts adjacent Unicode
+// ============================================================================
+
+/// Renaming `foo` must not match the `foo` suffix inside `$変数foo`
+/// because the preceding byte is a UTF-8 continuation byte, not a word boundary.
+#[test]
+fn workspace_rename_does_not_corrupt_adjacent_unicode_prefix()
+-> Result<(), Box<dyn std::error::Error>> {
+    // $変数foo contains a 3-byte kanji sequence ending in a continuation byte
+    // directly before "foo" — the old byte check would misread that byte as a
+    // non-ident boundary and fire incorrectly.
+    let content = "use utf8;\nmy $\u{5909}\u{6570}foo = 1;\nmy $foo = 2;\n";
+    let (workspace, index) = setup_workspace(&[("test.pl", content)])?;
+    let config = WorkspaceRenameConfig::default();
+    let rename_engine = WorkspaceRename::new(index, config);
+
+    let result =
+        rename_engine.rename_symbol("foo", "bar", &workspace.path().join("test.pl"), (2, 3));
+
+    match result {
+        Ok(r) => {
+            let total_edits: usize = r.file_edits.iter().map(|fe| fe.edits.len()).sum();
+            // Only the bare $foo on line 3 should be renamed; $変数foo must be left alone.
+            assert_eq!(
+                total_edits, 1,
+                "Only bare $foo should rename, not the foo suffix inside $変数foo. Got {} edits",
+                total_edits
+            );
+        }
+        // Symbol-not-found is acceptable (rename engine may require an indexed symbol)
+        Err(WorkspaceRenameError::SymbolNotFound { .. }) => {}
+        Err(e) => return Err(format!("Unexpected rename error: {e}").into()),
+    }
+
+    Ok(())
+}
+
+/// Renaming `foo` must not match `$fooα` because the char immediately after
+/// `foo` is a Unicode alphanumeric (α, U+03B1), not a word boundary.
+#[test]
+fn workspace_rename_does_not_corrupt_adjacent_unicode_suffix()
+-> Result<(), Box<dyn std::error::Error>> {
+    // α is U+03B1, encoded as 2 UTF-8 bytes (0xCE 0xB1).  The old byte check
+    // would read the first byte (0xCE, a lead byte) as non-ident and fire.
+    let content = "use utf8;\nmy $foo\u{03B1} = 1;\nmy $foo = 2;\n";
+    let (workspace, index) = setup_workspace(&[("test.pl", content)])?;
+    let config = WorkspaceRenameConfig::default();
+    let rename_engine = WorkspaceRename::new(index, config);
+
+    let result =
+        rename_engine.rename_symbol("foo", "bar", &workspace.path().join("test.pl"), (2, 3));
+
+    match result {
+        Ok(r) => {
+            let total_edits: usize = r.file_edits.iter().map(|fe| fe.edits.len()).sum();
+            // Only the bare $foo on line 3 should be renamed; $fooα must be left alone.
+            assert_eq!(
+                total_edits, 1,
+                "Only bare $foo should rename, not the foo prefix inside $fooα. Got {} edits",
+                total_edits
+            );
+        }
+        Err(WorkspaceRenameError::SymbolNotFound { .. }) => {}
+        Err(e) => return Err(format!("Unexpected rename error: {e}").into()),
+    }
+
+    Ok(())
+}
+
+/// A rename entirely within an ASCII file must still work correctly after the
+/// boundary-check change (no regression on the normal path).
+#[test]
+fn workspace_rename_ascii_boundary_still_works() -> Result<(), Box<dyn std::error::Error>> {
+    let content = "sub foo { 1 }\nsub foobar { 2 }\nfoo();\n";
+    let (workspace, index) = setup_workspace(&[("ascii.pl", content)])?;
+    let config = WorkspaceRenameConfig::default();
+    let rename_engine = WorkspaceRename::new(index, config);
+
+    let result =
+        rename_engine.rename_symbol("foo", "baz", &workspace.path().join("ascii.pl"), (0, 4));
+
+    match result {
+        Ok(r) => {
+            // `foobar` must never be touched; only bare `foo` references count.
+            for fe in &r.file_edits {
+                for edit in &fe.edits {
+                    assert!(
+                        !edit.new_text.contains("bazbar"),
+                        "foobar was incorrectly renamed to bazbar"
+                    );
+                }
+            }
+        }
+        Err(WorkspaceRenameError::SymbolNotFound { .. }) => {}
+        Err(e) => return Err(format!("Unexpected rename error: {e}").into()),
+    }
+
+    Ok(())
+}

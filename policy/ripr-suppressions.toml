@@ -155,6 +155,42 @@ created = "2026-06-10"
 review_after = "2026-07-10"
 expires = "2026-09-30"
 # -----------------------------------------------------------------------------
+# workspace_rename char-boundary helpers: is_word_boundary_before/after —
+# activation untraceable (ripr#1429 class).
+#
+# PR #1288 (fix #956) extracted char-aware word-boundary predicate helpers
+# from inline logic in find_occurrences:
+#   crates/perl-parser/src/refactor/workspace_rename.rs
+#   crates/perl-refactoring/src/refactor/workspace_rename.rs
+#
+# Both helpers are covered by 4 inline #[cfg(test)] unit tests in each file:
+#   test_is_word_boundary_before_ascii, test_is_word_boundary_before_unicode,
+#   test_is_word_boundary_after_ascii, test_is_word_boundary_after_unicode
+# plus the 3 integration regression tests in:
+#   crates/perl-refactoring/tests/workspace_rename_tests.rs
+#
+# ripr 0.5.0 cannot statically trace activation from test inputs through the
+# helper call chain (text[..offset].chars().next_back() -> is_perl_ident_char)
+# — the same ripr#1429 limitation as ripr-suppress-canonical-quote-operator-helper.
+# The helpers were extracted specifically to enable --lib coverage of the changed
+# boundary logic (Codecov patch fix, #956). Remove when ripr#1429 is fixed upstream.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-workspace-rename-char-boundary-helpers"
+kind = "predicate_infection_untraceable"
+paths = [
+  "crates/perl-parser/src/refactor/workspace_rename.rs",
+  "crates/perl-refactoring/src/refactor/workspace_rename.rs",
+]
+classification = ["static_unknown", "no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "is_word_boundary_before and is_word_boundary_after are char-aware word-boundary predicate helpers extracted for Codecov --lib coverage in PR #1288 (fix #956). Both predicates are covered by 4 inline #[cfg(test)] unit tests each (test_is_word_boundary_before_ascii, test_is_word_boundary_before_unicode, test_is_word_boundary_after_ascii, test_is_word_boundary_after_unicode) plus 3 integration regression tests. ripr 0.5.0 cannot statically trace activation from test inputs through the helper call chain — same ripr#1429 limitation as sibling suppressions. Remove when ripr#1429 is fixed upstream."
+created = "2026-06-11"
+review_after = "2026-07-11"
+expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
 # phase_block_description match arms: string-literal dispatch — activation
 # untraceable by RIPR static analysis.
 #
