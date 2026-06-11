@@ -339,3 +339,259 @@ fn hover_token_extraction_works_with_non_ascii_prefix() {
         "byte offset must not be used as char index in hover token extraction"
     );
 }
+
+// -- Phase-block hover: strong-oracle unit tests ----------------------------------
+//
+// These tests assert exact content for every match arm in `phase_block_description`
+// and exact Option discriminants for every code path in `find_phase_block_at_offset`,
+// so that ripr static analysis can confirm each seam has an oracle-killing test.
+// The existing integration tests in hover_provider_coverage.rs use broad `contains`
+// checks; these unit tests provide the precise assertions the gap gate requires.
+
+#[test]
+fn phase_block_hover_begin_returns_compile_time_timing() {
+    let hover = must_some(super::hover_cards::phase_block_hover("BEGIN"));
+    let value = must_some(hover["contents"]["value"].as_str());
+    assert_eq!(
+        hover["contents"]["kind"].as_str(),
+        Some("markdown"),
+        "phase block hover must be markdown kind"
+    );
+    assert!(
+        value.starts_with("**Phase Block: `BEGIN`**"),
+        "BEGIN hover must open with the phase block header: {value}"
+    );
+    assert!(
+        value.contains("_Compile-time execution_"),
+        "BEGIN hover must contain exact timing label: {value}"
+    );
+    assert!(
+        value.contains("as soon as the block is fully parsed"),
+        "BEGIN hover must mention compile-time parse order: {value}"
+    );
+    assert!(value.contains("FIFO"), "BEGIN hover must mention FIFO ordering: {value}");
+    assert!(value.contains("perlmod"), "BEGIN hover must link to perlmod: {value}");
+}
+
+#[test]
+fn phase_block_hover_end_returns_program_exit_timing() {
+    let hover = must_some(super::hover_cards::phase_block_hover("END"));
+    let value = must_some(hover["contents"]["value"].as_str());
+    assert!(
+        value.starts_with("**Phase Block: `END`**"),
+        "END hover must open with the phase block header: {value}"
+    );
+    assert!(
+        value.contains("_Program-exit cleanup_"),
+        "END hover must contain exact timing label: {value}"
+    );
+    assert!(value.contains("program exit"), "END hover must mention program exit: {value}");
+    assert!(value.contains("LIFO"), "END hover must mention LIFO ordering: {value}");
+}
+
+#[test]
+fn phase_block_hover_init_returns_post_compile_timing() {
+    let hover = must_some(super::hover_cards::phase_block_hover("INIT"));
+    let value = must_some(hover["contents"]["value"].as_str());
+    assert!(
+        value.starts_with("**Phase Block: `INIT`**"),
+        "INIT hover must open with the phase block header: {value}"
+    );
+    assert!(
+        value.contains("_Post-compile, pre-runtime startup_"),
+        "INIT hover must contain exact timing label: {value}"
+    );
+    assert!(
+        value.contains("start of runtime"),
+        "INIT hover must mention start of runtime: {value}"
+    );
+    assert!(value.contains("FIFO"), "INIT hover must mention FIFO ordering: {value}");
+}
+
+#[test]
+fn phase_block_hover_check_returns_end_of_compilation_timing() {
+    let hover = must_some(super::hover_cards::phase_block_hover("CHECK"));
+    let value = must_some(hover["contents"]["value"].as_str());
+    assert!(
+        value.starts_with("**Phase Block: `CHECK`**"),
+        "CHECK hover must open with the phase block header: {value}"
+    );
+    assert!(
+        value.contains("_End-of-compilation hook_"),
+        "CHECK hover must contain exact timing label: {value}"
+    );
+    assert!(
+        value.contains("end of compilation"),
+        "CHECK hover must mention end of compilation: {value}"
+    );
+    assert!(value.contains("LIFO"), "CHECK hover must mention LIFO ordering: {value}");
+}
+
+#[test]
+fn phase_block_hover_unitcheck_returns_compilation_unit_timing() {
+    let hover = must_some(super::hover_cards::phase_block_hover("UNITCHECK"));
+    let value = must_some(hover["contents"]["value"].as_str());
+    assert!(
+        value.starts_with("**Phase Block: `UNITCHECK`**"),
+        "UNITCHECK hover must open with the phase block header: {value}"
+    );
+    assert!(
+        value.contains("_End-of-compilation-unit hook_"),
+        "UNITCHECK hover must contain exact timing label: {value}"
+    );
+    assert!(
+        value.contains("compilation unit"),
+        "UNITCHECK hover must mention compilation unit: {value}"
+    );
+    assert!(value.contains("LIFO"), "UNITCHECK hover must mention LIFO ordering: {value}");
+}
+
+#[test]
+fn phase_block_hover_unknown_returns_none() {
+    assert_eq!(
+        super::hover_cards::phase_block_hover("UNKNOWN"),
+        None,
+        "unrecognised phase name must return None"
+    );
+    assert_eq!(super::hover_cards::phase_block_hover(""), None, "empty string must return None");
+    assert_eq!(
+        super::hover_cards::phase_block_hover("begin"),
+        None,
+        "lowercase phase name must return None (case-sensitive match)"
+    );
+}
+
+#[test]
+fn find_phase_block_at_offset_returns_none_when_offset_out_of_node_range() {
+    use perl_parser::{Node, NodeKind, SourceLocation};
+
+    // A PhaseBlock node spanning [10, 30].
+    let block =
+        Node::new(NodeKind::Block { statements: vec![] }, SourceLocation { start: 11, end: 29 });
+    let node = Node::new(
+        NodeKind::PhaseBlock {
+            phase: "BEGIN".to_string(),
+            phase_span: None,
+            block: Box::new(block),
+        },
+        SourceLocation { start: 10, end: 30 },
+    );
+
+    assert_eq!(
+        LspServer::find_phase_block_at_offset(&node, 9),
+        None,
+        "offset before node span must return None"
+    );
+    assert_eq!(
+        LspServer::find_phase_block_at_offset(&node, 31),
+        None,
+        "offset after node span must return None"
+    );
+}
+
+#[test]
+fn find_phase_block_at_offset_returns_phase_name_when_offset_in_node_and_no_phase_span() {
+    use perl_parser::{Node, NodeKind, SourceLocation};
+
+    // No phase_span: any offset within [10, 30] must return the phase name.
+    let block =
+        Node::new(NodeKind::Block { statements: vec![] }, SourceLocation { start: 11, end: 29 });
+    let node = Node::new(
+        NodeKind::PhaseBlock {
+            phase: "BEGIN".to_string(),
+            phase_span: None,
+            block: Box::new(block),
+        },
+        SourceLocation { start: 10, end: 30 },
+    );
+
+    assert_eq!(
+        LspServer::find_phase_block_at_offset(&node, 10).as_deref(),
+        Some("BEGIN"),
+        "offset at node start must return phase name when no phase_span"
+    );
+    assert_eq!(
+        LspServer::find_phase_block_at_offset(&node, 20).as_deref(),
+        Some("BEGIN"),
+        "offset in node middle must return phase name when no phase_span"
+    );
+    assert_eq!(
+        LspServer::find_phase_block_at_offset(&node, 30).as_deref(),
+        Some("BEGIN"),
+        "offset at node end must return phase name when no phase_span"
+    );
+}
+
+#[test]
+fn find_phase_block_at_offset_respects_phase_span_boundary() {
+    use perl_parser::{Node, NodeKind, SourceLocation};
+
+    // phase_span = [10, 14] (just "BEGIN"), whole node = [10, 30].
+    let block =
+        Node::new(NodeKind::Block { statements: vec![] }, SourceLocation { start: 16, end: 29 });
+    let node = Node::new(
+        NodeKind::PhaseBlock {
+            phase: "BEGIN".to_string(),
+            phase_span: Some(SourceLocation { start: 10, end: 14 }),
+            block: Box::new(block),
+        },
+        SourceLocation { start: 10, end: 30 },
+    );
+
+    // Inside phase_span: returns Some.
+    assert_eq!(
+        LspServer::find_phase_block_at_offset(&node, 10).as_deref(),
+        Some("BEGIN"),
+        "offset at phase_span start must return phase name"
+    );
+    assert_eq!(
+        LspServer::find_phase_block_at_offset(&node, 14).as_deref(),
+        Some("BEGIN"),
+        "offset at phase_span end must return phase name"
+    );
+    // Outside phase_span but inside node: must return None (phase_span present, not matched).
+    assert_eq!(
+        LspServer::find_phase_block_at_offset(&node, 15),
+        None,
+        "offset after phase_span end (but inside node) must return None when phase_span present"
+    );
+    assert_eq!(
+        LspServer::find_phase_block_at_offset(&node, 20),
+        None,
+        "offset in block area must return None when phase_span present and not matched"
+    );
+}
+
+#[test]
+fn find_phase_block_at_offset_recurses_through_program_to_find_phase_block() {
+    use perl_parser::{Node, NodeKind, SourceLocation};
+
+    // Program { statements: [PhaseBlock { "END", [40,50] }] } spanning [0, 60].
+    let block_inner =
+        Node::new(NodeKind::Block { statements: vec![] }, SourceLocation { start: 45, end: 49 });
+    let phase_node = Node::new(
+        NodeKind::PhaseBlock {
+            phase: "END".to_string(),
+            phase_span: None,
+            block: Box::new(block_inner),
+        },
+        SourceLocation { start: 40, end: 50 },
+    );
+    let program = Node::new(
+        NodeKind::Program { statements: vec![phase_node] },
+        SourceLocation { start: 0, end: 60 },
+    );
+
+    // Offset inside the nested phase block: must find it.
+    assert_eq!(
+        LspServer::find_phase_block_at_offset(&program, 45).as_deref(),
+        Some("END"),
+        "recursion through Program must find nested PhaseBlock"
+    );
+    // Offset outside the nested phase block but inside program: must return None.
+    assert_eq!(
+        LspServer::find_phase_block_at_offset(&program, 35),
+        None,
+        "offset not in any PhaseBlock must return None even when inside Program"
+    );
+}

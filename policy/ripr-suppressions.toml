@@ -154,3 +154,64 @@ reason = "Test helper functions (extract_explicit_symbols in require_import_reso
 created = "2026-06-10"
 review_after = "2026-07-10"
 expires = "2026-09-30"
+# -----------------------------------------------------------------------------
+# phase_block_description match arms: string-literal dispatch — activation
+# untraceable by RIPR static analysis.
+#
+# hover_cards.rs lines 41/48/55/62/68/69/70 are the closing `)),` and `_ => None`
+# of each match arm in phase_block_description (BEGIN/END/INIT/CHECK/UNITCHECK).
+# Line 63 is the UNITCHECK arm opening (`"UNITCHECK" => Some((`).
+#
+# All 5 phase names and the wildcard arm are covered by dedicated unit tests in
+# hover_tests.rs (phase_block_hover_begin_returns_compile_time_timing,
+# phase_block_hover_end_returns_program_exit_timing, etc. plus
+# phase_block_hover_unknown_returns_none for the `_ => None` arm). Each test
+# uses exact string assertions — strong oracles — against the returned markdown.
+#
+# RIPR cannot statically trace that calling phase_block_hover("BEGIN") exercises
+# the "BEGIN" arm because activation flows through a string-literal match: the
+# same ripr#1429 predicate-infection-untraceable class that suppresses
+# parse_quote_operator_content. Remove when ripr#1429 is fixed upstream.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-phase-block-description-match-arms"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-lsp-rs/src/runtime/language/hover/hover_cards.rs"]
+classification = ["no_static_path", "weakly_exposed"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "phase_block_description match arms (BEGIN/END/INIT/CHECK/UNITCHECK/wildcard) are ripr#1429-class no_static_path seams: RIPR cannot trace activation from string-literal call sites through the str match dispatch. All arms are covered by dedicated unit tests in hover_tests.rs with exact (strong-oracle) string assertions. Suppression is minimal (single production file, only hover_cards.rs). Remove when ripr#1429 is fixed upstream."
+created = "2026-06-11"
+review_after = "2026-07-11"
+expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
+# find_phase_block_at_offset boundary predicates: ripr reports weakly_exposed
+# despite strong oracles present.
+#
+# hover.rs lines 944 and 953:
+#   944: `if offset < node.location.start || offset > node.location.end {`
+#   953: `phase_span.as_ref().map(|s| offset >= s.start && offset <= s.end).unwrap_or(true)`
+#
+# ripr's own discriminate field reports "Strong oracle found: exact value or
+# pattern assertion" for both seams, yet classifies them weakly_exposed because
+# the propagation path from the predicate branch to the test's assert_eq! is a
+# call-chain ripr cannot statically traverse. Four unit tests in hover_tests.rs
+# cover both predicates at their exact boundaries:
+#   - find_phase_block_at_offset_returns_none_when_offset_out_of_node_range
+#   - find_phase_block_at_offset_returns_phase_name_when_offset_in_node_and_no_phase_span
+#   - find_phase_block_at_offset_respects_phase_span_boundary
+#   - find_phase_block_at_offset_recurses_through_program_to_find_phase_block
+# This is the same ripr#1429 propagation-path class. Remove when fixed upstream.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-find-phase-block-at-offset-predicates"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-lsp-rs/src/runtime/language/hover.rs"]
+classification = ["weakly_exposed"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "Two boundary predicates in find_phase_block_at_offset (hover.rs:944 offset-range guard, hover.rs:953 phase_span boundary) are classified weakly_exposed despite ripr's own discriminate field reporting 'Strong oracle found: exact value or pattern assertion'. RIPR cannot statically trace propagation from the predicate branch through the recursive call chain to the test assertion. All four code paths are covered by exact-equality unit tests in hover_tests.rs. Suppression is minimal (single production file, only hover.rs). Remove when ripr#1429 is fixed upstream."
+created = "2026-06-11"
+review_after = "2026-07-11"
+expires = "2026-09-30"

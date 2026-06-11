@@ -170,6 +170,16 @@ impl LspServer {
             return HoverExtracted::Complete(xs_hover);
         }
 
+        // Phase block hover: BEGIN/END/INIT/CHECK/UNITCHECK get phase-specific timing
+        // semantics.  Check BEFORE find_definition because the semantic analyzer
+        // classifies phase block names as Subroutine symbols, which would otherwise
+        // produce the misleading "**Subroutine** `sub BEGIN`" card.
+        if let Some(phase_name) = Self::find_phase_block_at_offset(ast, offset) {
+            if let Some(phase_hover) = hover_cards::phase_block_hover(&phase_name) {
+                return HoverExtracted::Complete(phase_hover);
+            }
+        }
+
         let analyzer = self.get_or_build_analyzer(uri, text, ast);
 
         if let Some(symbol_info) =
@@ -919,6 +929,49 @@ impl LspServer {
                 if let Some(m) = Self::find_use_module_at_offset(block, offset) {
                     return Some(m);
                 }
+            }
+            _ => {}
+        }
+
+        None
+    }
+
+    /// Walk the AST to find a `PhaseBlock` node whose phase keyword spans `offset`.
+    ///
+    /// Returns the phase name (e.g. `"BEGIN"`) when the cursor is positioned on the
+    /// keyword token of a phase block, or `None` otherwise.
+    fn find_phase_block_at_offset(node: &Node, offset: usize) -> Option<String> {
+        if offset < node.location.start || offset > node.location.end {
+            return None;
+        }
+
+        if let NodeKind::PhaseBlock { phase, phase_span, .. } = &node.kind {
+            // If the parser recorded a precise span for the phase keyword, use it;
+            // fall back to the whole node span so hover still works if phase_span
+            // is absent (e.g. in hand-constructed test ASTs).
+            let in_phase_span =
+                phase_span.as_ref().map(|s| offset >= s.start && offset <= s.end).unwrap_or(true);
+            if in_phase_span {
+                return Some(phase.clone());
+            }
+        }
+
+        // Recurse into container nodes
+        match &node.kind {
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                for stmt in statements {
+                    if let Some(p) = Self::find_phase_block_at_offset(stmt, offset) {
+                        return Some(p);
+                    }
+                }
+            }
+            NodeKind::Package { block, .. } => {
+                if let Some(b) = block {
+                    return Self::find_phase_block_at_offset(b, offset);
+                }
+            }
+            NodeKind::PhaseBlock { block, .. } => {
+                return Self::find_phase_block_at_offset(block, offset);
             }
             _ => {}
         }
