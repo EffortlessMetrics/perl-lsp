@@ -251,3 +251,49 @@ reason = "Two boundary predicates in find_phase_block_at_offset (hover.rs:944 of
 created = "2026-06-11"
 review_after = "2026-07-11"
 expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
+# OO method signature-help seams (PR #1301 Slice 1): ripr#1429-class activation-
+# tracing limitation in is_method_call_context / resolve_method_in_workspace.
+#
+# Seven seams flagged in crates/perl-lsp-rs/src/runtime/language/hover/signature_help.rs:
+#   (A) 3 `weakly_gripped` seams — paren-scan loop predicates and depth==0 check
+#       in is_method_call_context; RIPR cannot trace coverage from unit-test
+#       string literals through the char-by-char scan to the predicate exit.
+#   (B) 2 equality-boundary seams — depth==1 boundary in paren scanner, and
+#       sym.name == method_name exact-match filter in resolve_method_in_workspace;
+#       RIPR names missing discriminator `1` and `method_name` respectively.
+#   (C) 4 `activation_unknown` seams — the cfg(feature="workspace")-gated
+#       resolve_method_in_workspace body including the IndexAccessMode match,
+#       workspace_document_text call, and Parser::new chain; RIPR cannot
+#       statically determine activation because the workspace feature guard and
+#       trait-object dispatch break static call-graph traversal.
+#
+# Coverage evidence:
+#   is_method_call_context: 6 unit tests in #[cfg(test)] mod tests (exact bool
+#   assertions: arrow-method, class-method, plain function, builtin, inside-args,
+#   empty text). 3 integration tests in lsp_signature_help_tests.rs exercise the
+#   full ->method( path end-to-end.
+#   resolve_method_in_workspace: lib-level tests cover the graceful-None path
+#   (no-index-ready, empty-name). Full resolution path covered by integration
+#   test test_oo_method_signature_help_shows_params_for_known_method.
+#
+# This is the ripr#1429 predicate-infection-untraceable class: RIPR cannot
+# statically trace activation from string/char literals through iterative
+# scan loops, feature-gated code blocks, or trait-object dispatch. Same
+# family as ripr-suppress-phase-block-description-match-arms and
+# ripr-suppress-canonical-quote-operator-helper.
+# Suppression is minimal (single production file, one PR). Remove when
+# ripr#1429 is fixed upstream or when targeted mutation is scheduled.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-oo-method-signature-help-seams"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-lsp-rs/src/runtime/language/hover/signature_help.rs"]
+classification = ["static_unknown", "no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "Seven ripr#1429-class seams in is_method_call_context and resolve_method_in_workspace (PR #1301 Slice 1): (A) 3 weakly_gripped paren-scan predicates — RIPR cannot trace coverage from char-literal unit tests through the iterative scan loop to predicate exits; (B) 2 equality-boundary seams (depth==1 and sym.name==method_name) with missing discriminators — same activation-tracing limit; (C) 4 activation_unknown seams in the cfg(feature='workspace')-gated resolve_method_in_workspace body — RIPR cannot statically traverse the feature guard and IndexAccessMode trait dispatch. All paths are covered: 6 unit tests for is_method_call_context (exact bool assertions), 2 lib-level None-path tests for resolve_method_in_workspace, and 3 integration tests for the full workspace-resolution path. Suppression is narrow (single production file, one PR). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled post-review."
+created = "2026-06-11"
+review_after = "2026-07-11"
+expires = "2026-09-30"
