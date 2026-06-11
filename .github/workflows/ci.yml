@@ -153,7 +153,7 @@ jobs:
         run: |
           set +e
           echo "PR-fast timeout policy: GitHub job 35m, outer runner watchdog 30m, per-gate timeouts recorded in target/receipts/receipt.json"
-          timeout --signal=TERM --kill-after=60s 1800s ./target/debug/xtask gates --tier pr-fast --base origin/master --receipt
+          timeout --signal=TERM --kill-after=60s 1800s ./target/debug/xtask gates --tier pr-fast --base origin/main --receipt
           status=$?
           case "$status" in
             124)
@@ -781,14 +781,14 @@ jobs:
             exit 0
           fi
 
-          # Diff against the PR base; fall back to origin/master.
+          # Diff against the PR base; fall back to origin/main.
           base_ref="${{ github.event.pull_request.base.ref }}"
           if [ -n "$base_ref" ]; then
             git fetch --no-tags --depth=200 origin "$base_ref" || true
             base="origin/$base_ref"
           else
-            git fetch --no-tags --depth=200 origin master || true
-            base="origin/master"
+            git fetch --no-tags --depth=200 origin main || true
+            base="origin/main"
           fi
 
           changed="$(git diff --name-only "$base"...HEAD || true)"
