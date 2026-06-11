@@ -933,3 +933,85 @@ pub fn validate_substitution_modifiers(modifiers_str: &str) -> Result<String, ch
 
     Ok(valid_modifiers)
 }
+
+// ============================================================================
+// Canonical qw / q / qq operator content extractor (Wave D centralization)
+// ============================================================================
+
+/// Extract the inner content of a Perl quote-like operator expression.
+///
+/// This is the **canonical shared implementation** for all qw/q/qq delimiter
+/// parsing in the workspace. Every consumer crate (perl-semantic-analyzer,
+/// perl-workspace, perl-module, and this crate's own HIR model) delegates here.
+///
+/// # Behaviour
+///
+/// Strips `operator` from the start of `s`, trims any optional whitespace
+/// between the operator and its opening delimiter (Perl allows `qw (a b)`),
+/// reads the opening delimiter, maps it to its paired closing delimiter
+/// (`(` → `)`, `{` → `}`, `[` → `]`, `<` → `>`; all others self-close),
+/// rejects an alphanumeric or underscore character in delimiter position
+/// (i.e. `qwfoo` → `None`), verifies the string ends with the closing
+/// delimiter, and returns the interior slice.
+///
+/// # Examples
+///
+/// ```ignore
+/// // Basic qw
+/// assert_eq!(parse_quote_operator_content("qw(foo bar)", "qw"), Some("foo bar"));
+/// // Space before delimiter
+/// assert_eq!(parse_quote_operator_content("qw (foo bar)", "qw"), Some("foo bar"));
+/// // Self-closing delimiter
+/// assert_eq!(parse_quote_operator_content("qw/foo bar/", "qw"), Some("foo bar"));
+/// // Bareword — rejected
+/// assert_eq!(parse_quote_operator_content("qwfoo", "qw"), None);
+/// ```
+pub fn parse_quote_operator_content<'a>(s: &'a str, operator: &str) -> Option<&'a str> {
+    // Perl allows whitespace between a quote-like operator and its opening
+    // delimiter, e.g. `qw [a b]` or `q (x)`.  Trim it before reading the
+    // delimiter so the space-before-delimiter form is handled the same as the
+    // compact form.
+    let rest = s.strip_prefix(operator)?.trim_start();
+    let mut chars = rest.chars();
+    let open = chars.next()?;
+    // Reject bareword: `qwfoo` where the char after qw is alphanumeric/underscore.
+    if open.is_ascii_alphanumeric() || open == '_' {
+        return None;
+    }
+    let close = match open {
+        '(' => ')',
+        '{' => '}',
+        '[' => ']',
+        '<' => '>',
+        other => other,
+    };
+    if !rest.ends_with(close) {
+        return None;
+    }
+    let start = open.len_utf8();
+    let end = rest.len().checked_sub(close.len_utf8())?;
+    if end < start {
+        return None;
+    }
+    Some(&rest[start..end])
+}
+
+/// Parse a `qw(...)` expression and return the whitespace-split word list.
+///
+/// This is a convenience wrapper around [`parse_quote_operator_content`] that
+/// additionally splits the inner content on whitespace. Returns `None` when
+/// the input is not a valid `qw` expression.
+///
+/// # Examples
+///
+/// ```ignore
+/// assert_eq!(
+///     parse_qw_words("qw(Foo Bar Baz)"),
+///     Some(vec!["Foo".to_string(), "Bar".to_string(), "Baz".to_string()])
+/// );
+/// assert_eq!(parse_qw_words("qwfoo"), None);
+/// ```
+pub fn parse_qw_words(s: &str) -> Option<Vec<String>> {
+    let inner = parse_quote_operator_content(s, "qw")?;
+    Some(inner.split_whitespace().map(str::to_string).collect())
+}

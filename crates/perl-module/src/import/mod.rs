@@ -658,33 +658,7 @@ fn parse_literal_arg_list(args: &str) -> Option<Vec<String>> {
 }
 
 pub fn parse_qw_arg_list(trimmed: &str) -> Option<Vec<String>> {
-    // Perl allows whitespace between `qw` and its opening delimiter, e.g.
-    // `qw [a b]`.  Trim it so the delimiter is read correctly rather than
-    // treated as the delimiter itself.  Indexing is done against `after_operator`
-    // (a suffix of `trimmed`) so offsets stay aligned after trimming.
-    let after_operator = trimmed.strip_prefix("qw")?.trim_start();
-    let delimiter = after_operator.chars().next()?;
-    if delimiter.is_ascii_alphanumeric() || delimiter == '_' {
-        return None;
-    }
-
-    let closing = match delimiter {
-        '(' => ')',
-        '[' => ']',
-        '{' => '}',
-        '<' => '>',
-        other => other,
-    };
-
-    let inner_start = delimiter.len_utf8();
-    let inner_end = after_operator.len().checked_sub(closing.len_utf8())?;
-    if inner_start > inner_end || !after_operator.ends_with(closing) {
-        return None;
-    }
-
-    let inner = &after_operator[inner_start..inner_end];
-    // `split_whitespace` already skips empty tokens, so no extra filter is needed.
-    Some(inner.split_whitespace().map(str::to_string).collect())
+    perl_parser_core::parse_qw_words(trimmed)
 }
 
 /// Return true when `line` indicates a new statement boundary that should stop

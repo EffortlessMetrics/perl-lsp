@@ -202,28 +202,7 @@ impl WorkspaceIndex {
     }
 
     pub(crate) fn parse_qw_content(arg: &str) -> Option<&str> {
-        // Perl allows whitespace between `qw` and its opening delimiter
-        // (e.g. `qw [Foo::Bar]`); trim it so the delimiter is read correctly
-        // rather than treating the space as the delimiter.
-        let rest = arg.strip_prefix("qw")?.trim_start();
-        let mut chars = rest.chars();
-        let open = chars.next()?;
-        let close = match open {
-            '(' => ')',
-            '{' => '}',
-            '[' => ']',
-            '<' => '>',
-            delimiter => delimiter,
-        };
-        let start = open.len_utf8();
-        let end = rest.rfind(close)?;
-        // Guard the bounds explicitly: constructing `&rest[start..end]` when
-        // `end < start` would panic (e.g. a bareword like `qwfoo` where the
-        // delimiter char is also the first content char). Return `None` first.
-        if end < start {
-            return None;
-        }
-        Some(&rest[start..end])
+        perl_parser_core::parse_quote_operator_content(arg, "qw")
     }
 
     /// Find all definitions of a symbol by name

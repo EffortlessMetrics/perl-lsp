@@ -75,116 +75,43 @@ review_after = "2026-07-10"
 expires = "2026-09-30"
 
 # -----------------------------------------------------------------------------
-# parse_qw_arg_list predicate seams — infection untraceable via string-parsing.
+# parse_quote_operator_content: canonical shared helper — activation untraceable.
 #
-# Two `weakly_exposed` predicate seams at crates/perl-module/src/import/mod.rs
-# (parse_qw_arg_list):
-#   (A) `if delimiter.is_ascii_alphanumeric() || delimiter == '_'` (line ~667)
-#   (B) `if inner_start > inner_end || !after_operator.ends_with(closing)` (line ~681)
+# PR refactor/centralize-qw-parsing merged the per-consumer copies of this
+# function (previously in perl-semantic-analyzer/src/analysis/index.rs,
+# import_extractor.rs, and perl-module/src/import/mod.rs) into a single
+# canonical implementation at:
+#   crates/perl-parser-core/src/syntax/quote.rs
 #
-# Strong boundary tests exist for both seams in both inline mod tests and the
-# external seam-proof file (parse_qw_arg_list_direct_digit_delimiter, etc.).
-# The function is `pub` and directly callable from external test files.
+# The three per-consumer suppressions (ripr-suppress-parse-qw-content-end-lt-start,
+# ripr-suppress-import-extractor-quote-operator-activation, and
+# ripr-suppress-parse-qw-arg-list-predicate-seams) have been REMOVED because
+# those files no longer contain the parsing seams — they delegate to the canonical.
 #
-# However, RIPR's static predicate-infection analysis cannot trace the delimiter
-# character from string arguments (e.g. "qw9abc") through `.chars().next()` to
-# determine that delimiter = '9' and '9'.is_ascii_alphanumeric() = true.
-# Similarly, it cannot trace `inner_start`/`inner_end` arithmetic from test
-# string lengths.
-#
-# This is a ripr#1429 static-analysis limitation for predicate seams with
-# string-parsing arguments (distinct from return_value seams which are provable
-# with assert_eq!(..., None) oracles). The tests ARE discriminating; RIPR just
-# can't verify it statically through the parsing call chain.
-#
-# Remove this suppression once ripr#1429 (predicate-infection via parsed-string
-# arguments) is fixed upstream.
-# -----------------------------------------------------------------------------
-[[suppress]]
-id = "ripr-suppress-parse-qw-arg-list-predicate-seams"
-kind = "predicate_infection_untraceable"
-paths = ["crates/perl-module/src/import/mod.rs"]
-classification = ["static_unknown", "no_static_path"]
-owner = "proof-lane"
-issue = "#1205"
-reason = "parse_qw_arg_list predicate seams (alphanumeric-guard and inner-bounds-guard) are covered by direct exact-equality tests in both mod tests and the seam-proof file (parse_qw_arg_list_direct_digit_delimiter, parse_qw_arg_list_direct_underscore_delimiter, parse_qw_arg_list_direct_unclosed_bracket, parse_qw_arg_list_direct_mismatched_closing). RIPR cannot trace the delimiter character from string arguments through .chars().next() to verify predicate infection — a ripr#1429 class limitation for predicate seams with string-parsing arguments. Suppression is minimal (file-scoped) and non-weakly_exposed-labeled. Remove when ripr#1429 is fixed."
-created = "2026-06-10"
-review_after = "2026-07-10"
-expires = "2026-09-30"
-
-# -----------------------------------------------------------------------------
-# parse_qw_content: end < start arithmetic boundary in perl-semantic-analyzer.
-# RIPR cannot statically trace rfind(close) vs open.len_utf8() arithmetic
-# to determine that end < start is possible; this is the static-arithmetic
-# limitation tracked in EffortlessMetrics/ripr#1429.
-#
-# Discriminating tests ARE present: parse_qw_content_end_lt_start_guard_fires
-# (added in PR #1203) exercises "qwf" → end=0 < start=1 → None, and the
-# existing parse_qw_content_tolerates_leading_space covers "qwfoo" → None.
-# The boundary is genuinely tested; the gap is a RIPR static-analysis blind
-# spot, not a missing discriminator.
-# -----------------------------------------------------------------------------
-[[suppress]]
-id = "ripr-suppress-parse-qw-content-end-lt-start"
-kind = "static_arithmetic_unknown"
-paths = ["crates/perl-semantic-analyzer/src/analysis/index.rs"]
-classification = ["static_unknown", "no_static_path"]
-owner = "proof-lane"
-issue = "EffortlessMetrics/ripr#1429"
-reason = "RIPR cannot statically resolve rfind(close)/open.len_utf8() arithmetic to confirm that end < start is reachable. Discriminating tests are present (parse_qw_content_end_lt_start_guard_fires added in #1203). This is the static-arithmetic limitation tracked in EffortlessMetrics/ripr#1429; remove this suppression when ripr#1429 is fixed upstream."
-created = "2026-06-10"
-review_after = "2026-07-10"
-expires = "2026-09-30"
-
-# -----------------------------------------------------------------------------
-# parse_quote_operator_content: activation untraceable through string-parsing.
-#
-# Four `weakly_exposed` seams in parse_quote_operator_content at:
-# crates/perl-semantic-analyzer/src/analysis/import_extractor.rs
-#
-#   (A) s.strip_prefix(operator)? — strip_prefix call returns None on prefix miss
-#   (B) chars.next()?             — chars() iterator: None on empty rest-string
+# Four `weakly_exposed` seams remain in the canonical helper at quote.rs:
+#   (A) s.strip_prefix(operator)? — None on prefix miss
+#   (B) chars.next()?             — None on empty rest-string
 #   (C) open.is_ascii_alphanumeric() || open == '_' — alphanumeric-guard predicate
 #   (D) rest.len().checked_sub(close.len_utf8())?   — arithmetic boundary (end<start)
 #
-# All four seams are exercised by the inline seam-proof tests committed in
-# PR #1292:
-#   parse_quote_operator_content_wrong_operator_returns_none  → covers (A)
-#   parse_quote_operator_content_compact_paren (empty rest impossible via API,
-#     but strip_prefix coverage is exercised through the wrong-operator test)  → (B)
-#   parse_quote_operator_content_alphanumeric_delimiter_rejected  → covers (C)
-#   parse_quote_operator_content_underscore_delimiter_rejected    → covers (C)
-#   parse_quote_operator_content_mismatched_close_returns_none    → covers (D)
+# The existing seam-proof tests from PR #1292 continue to cover all four seams.
+# RIPR cannot statically trace activation from test inputs through
+# s.strip_prefix → .trim_start() → .chars() → .next() — the same ripr#1429
+# class limitation. Remove when ripr#1429 is fixed upstream.
 #
-# RIPR cannot statically trace activation from test inputs (e.g. "qwfoo") through
-# s.strip_prefix → .trim_start() → .chars() → .next() to determine which seam
-# fires. This is the same static-tracing limitation as ripr#1429 (predicate-
-# infection via parsed-string arguments); the tests ARE discriminating but RIPR
-# cannot verify it statically through the string-parsing call chain.
-#
-# Note on `activation_unknown` (task description) vs receipt `weakly_exposed`:
-# The RIPR receipt at artifacts/ripr/pr/repo-exposure.json reports these 4 seams
-# as `weakly_exposed` (the receipt bucket), not a sub-type named `activation_unknown`.
-# `activation_unknown` is not a RIPR classification string in this codebase; the
-# task description appears to have used an informal label for the family of seams
-# where activation cannot be statically traced. The `classification` field here is
-# documentation metadata (not functionally used for suppression matching, which is
-# path-only). We use `["static_unknown", "no_static_path"]` to match the established
-# project convention for ripr#1429-class limitations.
-#
-# Remove this suppression once ripr#1429 (predicate-infection via parsed-string
-# arguments / static activation tracing) is fixed upstream.
+# Net suppression change: 3 removed (per-consumer), 1 added (canonical home).
+# Cites ripr#1429 and #1289 per project convention.
 # -----------------------------------------------------------------------------
 [[suppress]]
-id = "ripr-suppress-import-extractor-quote-operator-activation"
+id = "ripr-suppress-canonical-quote-operator-helper"
 kind = "predicate_infection_untraceable"
-paths = ["crates/perl-semantic-analyzer/src/analysis/import_extractor.rs"]
+paths = ["crates/perl-parser-core/src/syntax/quote.rs"]
 classification = ["static_unknown", "no_static_path"]
 owner = "proof-lane"
 issue = "EffortlessMetrics/ripr#1429"
-reason = "parse_quote_operator_content seams (strip_prefix, chars.next, alphanumeric-guard, and arithmetic-boundary) are covered by inline seam-proof tests in PR #1292 (parse_quote_operator_content_wrong_operator_returns_none, parse_quote_operator_content_alphanumeric_delimiter_rejected, parse_quote_operator_content_underscore_delimiter_rejected, parse_quote_operator_content_mismatched_close_returns_none, plus all compact/space delimiter variants). RIPR cannot statically trace activation from string literals (e.g. 'qwfoo') through .strip_prefix -> .trim_start -> .chars -> .next to verify predicate infection — the same ripr#1429 class limitation as the sibling parse_qw_arg_list and parse_qw_content suppressions. Suppression is file-scoped (not weakly_exposed-broad). Remove when ripr#1429 is fixed upstream."
-created = "2026-06-10"
-review_after = "2026-07-10"
+reason = "Canonical parse_quote_operator_content helper (centralized in #1289 refactor) has 4 ripr#1429-class seams: strip_prefix (A), chars.next (B), alphanumeric-guard predicate (C), checked_sub arithmetic (D). All seams are covered by inline seam-proof tests from PR #1292 (parse_quote_operator_content_wrong_operator_returns_none, _alphanumeric_delimiter_rejected, _underscore_delimiter_rejected, _mismatched_close_returns_none, etc.). RIPR cannot statically trace activation from string literals through the string-parsing call chain — same ripr#1429 limitation as removed per-consumer suppressions. Net reduction: 3 suppressions removed, 1 canonical suppression added. Remove when ripr#1429 is fixed upstream."
+created = "2026-06-11"
+review_after = "2026-07-11"
 expires = "2026-09-30"
 
 # -----------------------------------------------------------------------------

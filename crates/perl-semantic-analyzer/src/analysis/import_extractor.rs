@@ -691,39 +691,10 @@ impl ImportExtractor {
 
     /// Generic quote-operator content extractor.
     ///
-    /// Strips `operator`, skips optional leading whitespace, reads the opening
-    /// delimiter, maps it to the paired closing delimiter (`( { [ <` pairs;
-    /// all others self-close), and returns the slice between the delimiters.
-    /// Rejects forms where the character immediately after the operator and
-    /// whitespace is alphanumeric or underscore (e.g. `qwfoo`).
+    /// Delegates to the canonical implementation in
+    /// `perl_parser_core::parse_quote_operator_content`.
     fn parse_quote_operator_content<'a>(s: &'a str, operator: &str) -> Option<&'a str> {
-        // Perl allows whitespace between a quote-like operator and its opening
-        // delimiter, e.g. `qw [a b]` or `qw (x)`. Trim before reading the
-        // delimiter so space-before-delimiter is handled identically to the
-        // compact form.  (Mirrors `perl_parser_core::hir::model::parse_qw_content`
-        // and `perl_workspace::semantic::workspace_import_extractor`.)
-        let rest = s.strip_prefix(operator)?.trim_start();
-        let mut chars = rest.chars();
-        let open = chars.next()?;
-        if open.is_ascii_alphanumeric() || open == '_' {
-            return None;
-        }
-        let close = match open {
-            '(' => ')',
-            '{' => '}',
-            '[' => ']',
-            '<' => '>',
-            other => other,
-        };
-        if !rest.ends_with(close) {
-            return None;
-        }
-        let start = open.len_utf8();
-        let end = rest.len().checked_sub(close.len_utf8())?;
-        if end < start {
-            return None;
-        }
-        Some(&rest[start..end])
+        perl_parser_core::parse_quote_operator_content(s, operator)
     }
 
     /// Remove surrounding single or double quotes from a string.
@@ -1436,36 +1407,24 @@ require $dynamic;
     #[test]
     fn parse_quote_operator_content_alphanumeric_delimiter_rejected() {
         // Boundary: alphanumeric guard — `qwfoo` must be rejected
-        assert_eq!(
-            ImportExtractor::parse_quote_operator_content("qwfoo", "qw"),
-            None
-        );
+        assert_eq!(ImportExtractor::parse_quote_operator_content("qwfoo", "qw"), None);
     }
 
     #[test]
     fn parse_quote_operator_content_underscore_delimiter_rejected() {
         // Boundary: underscore guard — `qw_foo_` must be rejected
-        assert_eq!(
-            ImportExtractor::parse_quote_operator_content("qw_foo_", "qw"),
-            None
-        );
+        assert_eq!(ImportExtractor::parse_quote_operator_content("qw_foo_", "qw"), None);
     }
 
     #[test]
     fn parse_quote_operator_content_wrong_operator_returns_none() {
         // Boundary: strip_prefix — wrong operator prefix returns None
-        assert_eq!(
-            ImportExtractor::parse_quote_operator_content("qq(foo bar)", "qw"),
-            None
-        );
+        assert_eq!(ImportExtractor::parse_quote_operator_content("qq(foo bar)", "qw"), None);
     }
 
     #[test]
     fn parse_quote_operator_content_mismatched_close_returns_none() {
         // Boundary: ends_with(close) check — mismatched close returns None
-        assert_eq!(
-            ImportExtractor::parse_quote_operator_content("qw(foo bar]", "qw"),
-            None
-        );
+        assert_eq!(ImportExtractor::parse_quote_operator_content("qw(foo bar]", "qw"), None);
     }
 }

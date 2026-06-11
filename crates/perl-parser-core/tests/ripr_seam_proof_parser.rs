@@ -730,14 +730,8 @@ fn seam4_all_deref_forms_parse_cleanly() {
 #[test]
 fn seam5_primary_e_modifier_emits_risk_code_marker() {
     let s = sexp(r#"$s =~ s/a/b/e;"#);
-    assert!(
-        s.contains("(risk:code)"),
-        "s///e must emit (risk:code) in sexp; got: {s}"
-    );
-    assert!(
-        s.contains("(substitution"),
-        "must produce a substitution node; got: {s}"
-    );
+    assert!(s.contains("(risk:code)"), "s///e must emit (risk:code) in sexp; got: {s}");
+    assert!(s.contains("(substitution"), "must produce a substitution node; got: {s}");
 }
 
 /// `$s =~ s/a/b/ee` — double-eval form must also emit `(risk:code)`.
@@ -745,10 +739,7 @@ fn seam5_primary_e_modifier_emits_risk_code_marker() {
 #[test]
 fn seam5_primary_ee_modifier_emits_risk_code_marker() {
     let s = sexp(r#"$s =~ s/a/b/ee;"#);
-    assert!(
-        s.contains("(risk:code)"),
-        "s///ee must emit (risk:code) in sexp; got: {s}"
-    );
+    assert!(s.contains("(risk:code)"), "s///ee must emit (risk:code) in sexp; got: {s}");
 }
 
 // ── BOUNDARY B: Site 1 (primary.rs) — no e modifier → risk:code absent ───────
@@ -759,14 +750,8 @@ fn seam5_primary_ee_modifier_emits_risk_code_marker() {
 #[test]
 fn seam5_primary_no_e_modifier_no_risk_code_marker() {
     let s = sexp(r#"$s =~ s/a/b/g;"#);
-    assert!(
-        !s.contains("(risk:code)"),
-        "s///g must NOT emit (risk:code) in sexp; got: {s}"
-    );
-    assert!(
-        s.contains("(substitution"),
-        "must still produce a substitution node; got: {s}"
-    );
+    assert!(!s.contains("(risk:code)"), "s///g must NOT emit (risk:code) in sexp; got: {s}");
+    assert!(s.contains("(substitution"), "must still produce a substitution node; got: {s}");
 }
 
 // ── BOUNDARY C: Site 2 (quotes.rs) — e modifier → risk:code present ──────────
@@ -778,24 +763,15 @@ fn seam5_primary_no_e_modifier_no_risk_code_marker() {
 #[test]
 fn seam5_quotes_e_modifier_emits_risk_code_marker() {
     let s = sexp(r#"s{a}{b}e;"#);
-    assert!(
-        s.contains("(risk:code)"),
-        "s{{}}{{}}e must emit (risk:code) in sexp; got: {s}"
-    );
-    assert!(
-        s.contains("(substitution"),
-        "must produce a substitution node; got: {s}"
-    );
+    assert!(s.contains("(risk:code)"), "s{{}}{{}}e must emit (risk:code) in sexp; got: {s}");
+    assert!(s.contains("(substitution"), "must produce a substitution node; got: {s}");
 }
 
 /// `s{a}{b}ee` — brace-delimited double-eval form must emit `(risk:code)`.
 #[test]
 fn seam5_quotes_ee_modifier_emits_risk_code_marker() {
     let s = sexp(r#"s{a}{b}ee;"#);
-    assert!(
-        s.contains("(risk:code)"),
-        "s{{}}{{}}ee must emit (risk:code) in sexp; got: {s}"
-    );
+    assert!(s.contains("(risk:code)"), "s{{}}{{}}ee must emit (risk:code) in sexp; got: {s}");
 }
 
 // ── BOUNDARY D: Site 2 (quotes.rs) — no e modifier → risk:code absent ────────
@@ -805,10 +781,7 @@ fn seam5_quotes_ee_modifier_emits_risk_code_marker() {
 #[test]
 fn seam5_quotes_no_e_modifier_no_risk_code_marker() {
     let s = sexp(r#"s{a}{b}g;"#);
-    assert!(
-        !s.contains("(risk:code)"),
-        "s{{}}{{}}g must NOT emit (risk:code) in sexp; got: {s}"
-    );
+    assert!(!s.contains("(risk:code)"), "s{{}}{{}}g must NOT emit (risk:code) in sexp; got: {s}");
 }
 
 // ── BOUNDARY E: pattern-body `(?{...})` path unchanged ───────────────────────
