@@ -1195,8 +1195,11 @@ fn test_completion_scope_distance_ranking() -> Result<(), Box<dyn std::error::Er
 }
 
 /// Test completion with incremental typing
+///
+/// Verifies that after a `textDocument/didChange` narrows the typed prefix,
+/// the completion provider returns the correct prefix-filtered candidates
+/// drawn from the updated document text.
 #[test]
-#[ignore = "incremental completion returns all completions instead of filtered set; tracked in debt-ledger.yaml"]
 fn test_incremental_completion() -> Result<(), Box<dyn std::error::Error>> {
     let server = start_lsp_server();
     initialize_lsp(&server);
@@ -1341,11 +1344,16 @@ $prefi"#
         .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
         .collect::<Result<_, _>>()?;
 
-    // The two `prefi`-prefixed variables remain candidates. Whether the server
-    // pre-filters out `$preliminary` (which does not start with `prefi`) is a
-    // server-design choice; clients filter by prefix per LSP spec.
+    // The two `prefi`-prefixed variables must be present.
     assert!(labels3.contains(&"$prefix".to_string()), "labels: {labels3:?}");
     assert!(labels3.contains(&"$prefixed_var".to_string()), "labels: {labels3:?}");
+    // The server applies prefix filtering: `$preliminary` starts with `prelim`, not
+    // `prefi`, so it must NOT appear in the results after the prefix is narrowed.
+    assert!(
+        !labels3.contains(&"$preliminary".to_string()),
+        "$preliminary must not appear for prefix '$prefi' — server-side prefix filter is broken; \
+         labels: {labels3:?}"
+    );
 
     Ok(())
 }
