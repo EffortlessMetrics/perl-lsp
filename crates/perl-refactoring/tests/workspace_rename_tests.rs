@@ -552,6 +552,82 @@ fn workspace_rename_does_not_corrupt_adjacent_unicode_suffix()
     Ok(())
 }
 
+// ============================================================================
+// Deref and string-interpolation rename coverage
+// ============================================================================
+
+/// Renaming a variable must cover occurrences inside double-quoted string
+/// interpolation (`"$var"`, `"${var}"`, `"@arr"`) while leaving literal text
+/// inside strings (`"hello var text"`) and single-quoted strings unchanged.
+#[test]
+fn workspace_rename_covers_double_quote_interpolation() -> Result<(), Box<dyn std::error::Error>> {
+    let content = concat!(
+        "my $tgt = 1;\n",               // code — rename
+        "print $tgt;\n",                // code — rename
+        "my $a = \"val: $tgt end\";\n", // dq interpolation $tgt — rename
+        "my $b = \"${tgt} done\";\n",   // dq braced interpolation — rename
+        "my $c = '@tgt array';\n",      // single-quoted — no rename
+        "my $d = \"bare tgt text\";\n", // bare text in dq — no rename
+    );
+    let (workspace, index) = setup_workspace(&[("interp.pl", content)])?;
+
+    let config = WorkspaceRenameConfig { create_backups: false, ..Default::default() };
+    let rename_engine = WorkspaceRename::new(index, config);
+    let result = rename_engine.rename_symbol(
+        "tgt",
+        "renamed",
+        &workspace.path().join("interp.pl"),
+        (0, 3),
+    )?;
+
+    // Expected renames: $tgt decl, print $tgt, $tgt in dq, ${tgt} braced = 4
+    assert_eq!(
+        result.statistics.total_changes, 4,
+        "expected 4 renames (2 code + 2 interpolated), got {}",
+        result.statistics.total_changes
+    );
+
+    rename_engine.apply_edits(&result)?;
+    let after = std::fs::read_to_string(workspace.path().join("interp.pl"))?;
+
+    assert!(after.contains("\"val: $renamed end\""), "dq $tgt must be renamed");
+    assert!(after.contains("\"${renamed} done\""), "dq braced ${{tgt}} must be renamed");
+    assert!(after.contains("'@tgt array'"), "single-quoted must be unchanged");
+    assert!(after.contains("\"bare tgt text\""), "bare text in dq must be unchanged");
+
+    Ok(())
+}
+
+/// Renaming a variable must NOT touch occurrences inside single-quoted strings.
+/// This is a non-regression guard: single-quoted strings never interpolate in Perl.
+#[test]
+fn workspace_rename_does_not_touch_single_quoted_strings() -> Result<(), Box<dyn std::error::Error>>
+{
+    let content = concat!(
+        "my $nope = 1;\n",
+        "my $x = '$nope in single quotes';\n", // single-quoted — must not rename
+        "$nope += 2;\n",                       // code — must rename
+    );
+    let (workspace, index) = setup_workspace(&[("sq.pl", content)])?;
+    let config = WorkspaceRenameConfig { create_backups: false, ..Default::default() };
+    let rename_engine = WorkspaceRename::new(index, config);
+
+    let result =
+        rename_engine.rename_symbol("nope", "yes", &workspace.path().join("sq.pl"), (0, 3))?;
+
+    assert_eq!(
+        result.statistics.total_changes, 2,
+        "expected 2 code renames, got {}",
+        result.statistics.total_changes
+    );
+
+    rename_engine.apply_edits(&result)?;
+    let after = std::fs::read_to_string(workspace.path().join("sq.pl"))?;
+    assert!(after.contains("'$nope in single quotes'"), "single-quoted must be unchanged");
+
+    Ok(())
+}
+
 /// A rename entirely within an ASCII file must still work correctly after the
 /// boundary-check change (no regression on the normal path).
 #[test]

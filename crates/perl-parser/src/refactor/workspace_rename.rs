@@ -491,7 +491,15 @@ impl WorkspaceRename {
                 let is_word_start = is_word_boundary_before(text, match_start);
                 let is_word_end = is_word_boundary_after(text, match_end);
 
-                if is_word_start && is_word_end {
+                // Allow the match if it is either in plain code or is an
+                // interpolated variable reference inside a double-quoted string.
+                // The second condition catches `"$var"`, `"${var}"`, `"@arr"` etc.
+                // while correctly skipping bare literal text like `"hello var"`.
+                if is_word_start
+                    && is_word_end
+                    && (is_rename_code_position(text, match_start)
+                        || is_interpolated_in_double_quote(text, match_start))
+                {
                     // AC:AC4 - Scope check: if we have a package context, verify this reference
                     // is in the correct scope
                     let in_scope = if let Some(ref pkg) = scope_package {
@@ -808,6 +816,102 @@ impl WorkspaceRename {
     }
 }
 
+/// Perl string context at a given byte offset.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum StringContext {
+    /// Executable code (rename allowed).
+    Code,
+    /// Inside a `'...'` single-quoted string (no interpolation).
+    SingleQuoted,
+    /// Inside a `"..."` double-quoted string (interpolation allowed for sigil-preceded names).
+    DoubleQuoted,
+    /// Inside a `# ...` line comment (never rename).
+    LineComment,
+}
+
+/// Scan `text` up to `offset` and return the Perl string context at that position.
+fn scan_string_context(text: &str, offset: usize) -> StringContext {
+    let mut state = StringContext::Code;
+    let mut escaped = false;
+
+    for (idx, byte) in text.bytes().enumerate() {
+        if idx >= offset {
+            return state;
+        }
+
+        match state {
+            StringContext::Code => match byte {
+                b'\'' => state = StringContext::SingleQuoted,
+                b'"' => state = StringContext::DoubleQuoted,
+                b'#' => state = StringContext::LineComment,
+                _ => {}
+            },
+            StringContext::SingleQuoted => {
+                if escaped {
+                    escaped = false;
+                } else if byte == b'\\' {
+                    escaped = true;
+                } else if byte == b'\'' {
+                    state = StringContext::Code;
+                }
+            }
+            StringContext::DoubleQuoted => {
+                if escaped {
+                    escaped = false;
+                } else if byte == b'\\' {
+                    escaped = true;
+                } else if byte == b'"' {
+                    state = StringContext::Code;
+                }
+            }
+            StringContext::LineComment => {
+                if byte == b'\n' {
+                    state = StringContext::Code;
+                }
+            }
+        }
+    }
+
+    state
+}
+
+/// Check whether a byte offset is in executable Perl code rather than trivia.
+fn is_rename_code_position(text: &str, offset: usize) -> bool {
+    scan_string_context(text, offset) == StringContext::Code
+}
+
+/// Returns `true` when `offset` is inside a double-quoted Perl string AND the
+/// token at `offset` is immediately preceded by a Perl interpolation sigil
+/// (`$`, `@`, `%`) or by `{` that is itself preceded by a sigil (covering
+/// `"${var}"`, `"@{arr}"`, etc.).
+fn is_interpolated_in_double_quote(text: &str, offset: usize) -> bool {
+    if scan_string_context(text, offset) != StringContext::DoubleQuoted {
+        return false;
+    }
+
+    if offset == 0 {
+        return false;
+    }
+
+    let before = &text[..offset];
+    let last_char = match before.chars().next_back() {
+        Some(c) => c,
+        None => return false,
+    };
+
+    if matches!(last_char, '$' | '@' | '%') {
+        return true;
+    }
+
+    if last_char == '{' {
+        let before_brace = &before[..before.len() - 1];
+        let sigil = before_brace.chars().next_back();
+        return matches!(sigil, Some('$') | Some('@') | Some('%'));
+    }
+
+    false
+}
+
 /// Check if a char is a valid Perl identifier character.
 /// Operates on chars (not bytes) so UTF-8 continuation bytes are handled correctly (#956).
 fn is_perl_ident_char(c: char) -> bool {
@@ -964,5 +1068,97 @@ mod tests {
 
         // "foo " — byte 3 is space — boundary
         assert!(is_word_boundary_after("foo ", 3));
+    }
+
+    // -------------------------------------------------------------------------
+    // String-interpolation helpers — lib-level coverage for Codecov patch gate
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_scan_string_context_code_positions() {
+        let text = "sub foo { foo(); }\n";
+        let foo_pos = text.find("foo").unwrap_or(0);
+        assert_eq!(scan_string_context(text, foo_pos), StringContext::Code);
+        assert_eq!(scan_string_context(text, text.len()), StringContext::Code);
+    }
+
+    #[test]
+    fn test_scan_string_context_single_quoted() {
+        let text = "my $x = 'hello';";
+        let h_pos = text.find("hello").unwrap_or(0);
+        assert_eq!(scan_string_context(text, h_pos), StringContext::SingleQuoted);
+    }
+
+    #[test]
+    fn test_scan_string_context_double_quoted() {
+        let text = "my $x = \"hello\";";
+        let h_pos = text.find("hello").unwrap_or(0);
+        assert_eq!(scan_string_context(text, h_pos), StringContext::DoubleQuoted);
+    }
+
+    #[test]
+    fn test_scan_string_context_line_comment() {
+        let text = "foo(); # bar in comment\n";
+        let bar_pos = text.find("bar").unwrap_or(0);
+        assert_eq!(scan_string_context(text, bar_pos), StringContext::LineComment);
+    }
+
+    #[test]
+    fn test_is_interpolated_direct_sigils() {
+        let dollar = "\"$var\"";
+        let v_pos = dollar.find("var").unwrap_or(0);
+        assert!(is_interpolated_in_double_quote(dollar, v_pos), "$var must be interpolated");
+
+        let at = "\"@arr\"";
+        let a_pos = at.find("arr").unwrap_or(0);
+        assert!(is_interpolated_in_double_quote(at, a_pos), "@arr must be interpolated");
+
+        let percent = "\"%hash\"";
+        let h_pos = percent.find("hash").unwrap_or(0);
+        assert!(is_interpolated_in_double_quote(percent, h_pos), "%hash must be interpolated");
+    }
+
+    #[test]
+    fn test_is_interpolated_braced_sigils() {
+        let braced_dollar = "\"${var}\"";
+        let v_pos = braced_dollar.find("var").unwrap_or(0);
+        assert!(
+            is_interpolated_in_double_quote(braced_dollar, v_pos),
+            "${{var}} must be interpolated"
+        );
+
+        let braced_at = "\"@{arr}\"";
+        let a_pos = braced_at.find("arr").unwrap_or(0);
+        assert!(is_interpolated_in_double_quote(braced_at, a_pos), "@{{arr}} must be interpolated");
+    }
+
+    #[test]
+    fn test_is_interpolated_bare_text_in_string_not_interpolated() {
+        let text = "\"hello var text\"";
+        let var_pos = text.find("var").unwrap_or(0);
+        assert!(
+            !is_interpolated_in_double_quote(text, var_pos),
+            "bare text in string must NOT be treated as interpolated"
+        );
+    }
+
+    #[test]
+    fn test_is_interpolated_not_in_string_returns_false() {
+        let text = "my $foo = 1;";
+        let foo_pos = text.find("foo").unwrap_or(0);
+        assert!(
+            !is_interpolated_in_double_quote(text, foo_pos),
+            "code position must NOT be treated as interpolated"
+        );
+    }
+
+    #[test]
+    fn test_is_interpolated_single_quoted_returns_false() {
+        let text = "my $x = '$foo';";
+        let foo_pos = text.find("foo").unwrap_or(0);
+        assert!(
+            !is_interpolated_in_double_quote(text, foo_pos),
+            "single-quoted string must never be treated as interpolated"
+        );
     }
 }
