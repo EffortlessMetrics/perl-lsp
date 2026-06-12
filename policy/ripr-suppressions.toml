@@ -343,6 +343,86 @@ review_after = "2026-07-12"
 expires = "2026-09-30"
 
 # -----------------------------------------------------------------------------
+# uri/mod.rs file_path_uri + windows_file_path_uri: Option<Uri> chain predicates
+# — activation untraceable by RIPR static analysis (ripr#1429 class).
+#
+# PR #1206 adds two private helper functions to the URI module:
+#   file_path_uri(s: &str) -> Option<Uri>
+#     — Url::from_file_path().ok()? and url.as_str().parse().ok()
+#   windows_file_path_uri(s: &str) -> Option<Uri>
+#     — chars().next()? guards, separator check, Url::parse().ok()? chain
+#
+# ripr cannot statically trace activation from string-literal test inputs
+# through the Option-chain `?` operators in the path-detection helpers — the same
+# ripr#1429 predicate-infection-untraceable class that suppresses
+# parse_quote_operator_content, is_method_call_context, etc.
+#
+# Coverage evidence:
+#   8 inline #[cfg(test)] unit tests in the same file:
+#     windows_file_path_uri_rejects_empty_string (empty guard)
+#     windows_file_path_uri_rejects_single_char_string (single-char guard)
+#     windows_file_path_uri_rejects_two_char_string (two-char guard)
+#     windows_file_path_uri_accepts_backslash_path (backslash success path)
+#     windows_file_path_uri_accepts_forward_slash_path (forward-slash success path)
+#     file_path_uri_accepts_unix_absolute_path (Unix happy path, cfg(unix))
+#     parse_uri_routes_windows_path_through_file_path_detection (Windows route)
+#     parse_uri_routes_unix_path_through_file_path_detection (Unix route, cfg(unix))
+#   2 integration tests in crates/perl-lsp-rs-core/tests/uri_module_shape.rs
+#
+# Suppression is narrow (single production file, one PR). Remove when ripr#1429
+# is fixed upstream or when targeted mutation is scheduled per #1289.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-uri-file-path-helpers"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-lsp-rs-core/src/uri/mod.rs"]
+classification = ["weakly_exposed", "no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "Two ripr#1429-class seams in PR #1206 URI helpers: file_path_uri and windows_file_path_uri are Option<Uri>-chain helpers whose internal ? guards (Url::from_file_path().ok()?, chars().next()?, separator check, Url::parse().ok()?) cannot be traced by ripr from string-literal test inputs. All predicate branches are covered by 8 inline #[cfg(test)] unit tests covering both None-return guards and happy paths (Windows backslash, Windows forward-slash, Unix absolute path). Same ripr#1429 class as parse_quote_operator_content and is_method_call_context. Suppression is narrow (single production file). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+created = "2026-06-12"
+review_after = "2026-07-12"
+expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
+# semantic_tokens_document_not_open: format! helper — weakly_exposed despite
+# direct unit test coverage (ripr#1429 class).
+#
+# PR #1206 extracts the inline error construction in handle_semantic_tokens into
+# a named helper:
+#   fn semantic_tokens_document_not_open(uri: &str) -> JsonRpcError { ... }
+#
+# ripr classifies this as weakly_exposed because the call path from the
+# inline #[cfg(test)] unit test (semantic_tokens_closed_document_error_includes_
+# sync_guidance) flows through server.handle_semantic_tokens → get_document →
+# ok_or_else closure → semantic_tokens_document_not_open. RIPR cannot statically
+# trace the call chain through the ok_or_else closure to the helper — the same
+# ripr#1429 propagation-path limitation that suppresses
+# find_phase_block_at_offset (hover.rs).
+#
+# Coverage evidence:
+#   1 inline #[cfg(test)] unit test verifies all 5 guidance strings:
+#     semantic_tokens_closed_document_error_includes_sync_guidance
+#   Assertions check: code == INVALID_REQUEST, data.is_none(),
+#   and message.contains for "Document not open", uri, "textDocument/semanticTokens/full",
+#   "textDocument/didOpen", "open and synchronized".
+#
+# Suppression is narrow (single production file, one PR). Remove when ripr#1429
+# is fixed upstream or targeted mutation is scheduled per #1289.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-semantic-tokens-document-not-open-helper"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-lsp-rs/src/runtime/language/semantic_tokens.rs"]
+classification = ["weakly_exposed"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "semantic_tokens_document_not_open is a ripr#1429-class seam in PR #1206: RIPR cannot statically trace activation from the inline #[cfg(test)] unit test (semantic_tokens_closed_document_error_includes_sync_guidance) through server.handle_semantic_tokens → get_document → ok_or_else closure → semantic_tokens_document_not_open. Same propagation-path limitation as find_phase_block_at_offset (hover.rs). The function is covered by a dedicated unit test with 5 exact message-content assertions. Suppression is narrow (single production file). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+created = "2026-06-12"
+review_after = "2026-07-12"
+expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
 # DAP stack-frame lifecycle seams (fixes #964 + #933): Mutex-guard and
 # branch-predicate activation untraceable by ripr 0.9.0 (ripr#1429 class)
 # across three changed debug_adapter files.
