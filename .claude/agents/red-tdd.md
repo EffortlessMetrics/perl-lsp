@@ -53,7 +53,7 @@ git checkout impl/<issue#>-<specslug>
 
 If the spec planner didn't run (e.g., simple issue), create the branch yourself:
 ```bash
-git checkout -b impl/<issue#>-<specslug> origin/master
+git checkout -b impl/<issue#>-<specslug> origin/main
 ```
 
 ## What to write

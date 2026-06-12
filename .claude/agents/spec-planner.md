@@ -53,7 +53,7 @@ Issues can have multiple implementation runs. The slug disambiguates.
 Derive the short description from the issue title (lowercase, hyphens, no special chars).
 
 1. **Branch name:** `impl/<issue#>-<specslug>` (e.g., `impl/4264-hash-key-completion`)
-2. **Create from master:** `git checkout -b impl/<issue#>-<specslug> origin/master`
+2. **Create from master:** `git checkout -b impl/<issue#>-<specslug> origin/main`
 3. **Write spec files on the branch:**
    - `.spec/<issue#>-<specslug>/checklist.md` — ordered implementation steps with exact file paths, signatures, and verify commands
    - `.spec/<issue#>-<specslug>/acceptance.md` — acceptance criteria extracted from the issue, one per line, checkboxable

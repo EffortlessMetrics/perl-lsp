@@ -172,6 +172,17 @@ coding-standards, health-check, status-drift, rebase-pr, worktree-pr
 parser-fix, parser-scout, corpus-ratchet, dep-check, dep-clean,
 security-scout, dap-scout, changelog
 
+## Campaign Guardrails (learned from 2026-06 autonomous campaign)
+
+These are cross-cutting rules encoded in individual agent defs. Listed here for visibility:
+
+- **Duplicate-issue/PR prevention:** Scouts and builders run `gh issue list --search` + `gh pr list --search` before filing or opening. Issue #964 accumulated four near-identical PRs from skipping this. See each agent def for the exact command.
+- **In-build tracking:** When a builder opens a PR, the source issue is labeled `in-build`. Issues without this label appear unstarted to discovery scouts.
+- **Base ref is `origin/main`:** All `git diff origin/...` calls, branch creation, and merge-base checks use `origin/main` (not `origin/master`). A stale master ref caused a ~2h CI stall (#1310).
+- **RIPR via CI receipt only:** CI pins `RIPR_VERSION=0.5.0` (`ripr.yml`). Local installs may differ. Always verify from the `ripr+ New Gap Gate` CI receipt.
+- **Three required checks:** `Perl LSP Rust Small Result`, `ripr+ New Gap Gate`, `Codecov / Patch 95`. "Skipping" = satisfied. Advisory checks failing alone never block merge.
+- **PR body must match the diff.** See `docs/agents/SPEC_UPDATE_CHECKLIST.md` — every product PR answers it before publishing.
+
 ## Design Principles
 
 1. **Two interfaces, two agent types.** Workers via Agent() (worktree-isolated, one task, exit). Pipeline leads via TeamCreate (long-running, manage workers).

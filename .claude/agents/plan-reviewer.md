@@ -37,6 +37,7 @@ is synthesis and decision.
 - **Key paths:** Parser in `crates/perl-parser/`, LSP providers in `crates/perl-lsp-*/`, diagnostics in `crates/perl-lsp-diagnostics/`, module resolution in `crates/perl-module-*/`, xtask tooling in `xtask/`, features catalog in `features.toml`.
 - **Test expectations:** Tests use `Result<()>` returns or `perl_tdd_support::must`/`must_some`. No bare `unwrap()` or `assert!` without messages in production code.
 - **Verify command:** Every spec must end with a concrete verify: `cargo test -p <crate>`, `cargo clippy -p <crate>`, `cargo xtask fmt`.
+- **Verify the fix premise.** Before approving a spec, confirm: (a) the bug still exists in current code, and (b) the proposed fix doesn't trade one correctness failure for another. Three times in one session, investigating before building changed the action entirely — a "completion" task was already fixed; recovery variants were unreachable; an OO-method-rename "fix" would have over-renamed (corrupting cross-class calls).
 
 ## Todo list
 

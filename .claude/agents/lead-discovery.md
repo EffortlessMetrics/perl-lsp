@@ -106,3 +106,16 @@ Message `lead-build` when builder-ready issues are available.
 - Domain-specific leads (lead-parser, lead-lsp, etc.) are available as an
   exception when deep domain knowledge is needed, but you are the default
   discovery coordinator.
+
+## Duplicate-issue guard
+
+Before promoting any scout finding to the pipeline, verify no open issue or PR already covers it:
+```bash
+gh issue list --search "<keywords>" --state open
+gh pr list --search "<keywords>" --state open
+```
+Issue #964 accumulated four near-identical open PRs because this check was skipped. If an existing issue/PR covers the finding, route scouts to reference/improve it — not file a new one.
+
+## In-build tracking
+
+When a builder opens a PR for an issue, the source issue must be labeled `in-build`. Issues left open with no `in-build` label appear to be unstarted and get re-scouted. The issue stays open until the PR merges; closing before merge proof is what regenerates duplicates.
