@@ -1,0 +1,71 @@
+{
+  "advisory_limits": [
+    "RIPR evidence is static and advisory by default.",
+    "This packet does not post review comments or execute mutation.",
+    "Public badge state must not be derived from this diff-scoped packet."
+  ],
+  "artifacts": [
+    {
+      "available": true,
+      "kind": "json",
+      "label": "PR evidence JSON",
+      "path": "target/ripr/pr/repo-exposure.json",
+      "required": true,
+      "scope": "diff"
+    },
+    {
+      "available": true,
+      "kind": "markdown",
+      "label": "PR evidence Markdown",
+      "path": "target/ripr/pr/repo-exposure.md",
+      "scope": "diff"
+    },
+    {
+      "available": true,
+      "kind": "other",
+      "label": "Analyzed PR diff",
+      "path": "target/ripr/pr/pr.diff",
+      "scope": "diff"
+    }
+  ],
+  "base": "origin/main",
+  "base_sha": "9f3bc590b135cf6df1fc7dc980fb064dfe1b0b6a",
+  "head": "HEAD",
+  "head_sha": "145a0eabb89a025f14ef6ac4c15ad4527dc9e95f",
+  "kind": "pr_evidence",
+  "root": ".",
+  "schema_version": "0.1",
+  "scope": "diff",
+  "status": "advisory",
+  "summary": {
+    "changed_files": 5,
+    "comments": 0,
+    "no_static_path": 0,
+    "reachable_unrevealed": 0,
+    "requires_targeted_mutation": true,
+    "ripr_severe_gap": true,
+    "routing_reason": "ripr severe gap",
+    "severe_gaps": 2,
+    "summary_only": 0,
+    "suppressed": 0,
+    "suppressed_by_policy": 0,
+    "suppression_patterns": [
+      "docs/project/status/**",
+      "archive/**",
+      "crates/perl-lsp-ux-tests/tests/*",
+      "crates/perl-lsp-ux-tests/tests/**",
+      "crates/**/tests/ripr_seam_proof_*.rs",
+      "crates/perl-parser-core/src/syntax/quote.rs",
+      "crates/perl-semantic-analyzer/tests/require_import_resolution.rs",
+      "crates/perl-workspace/tests/use_lib_fact_tests.rs",
+      "crates/perl-parser/src/refactor/workspace_rename.rs",
+      "crates/perl-refactoring/src/refactor/workspace_rename.rs",
+      "crates/perl-lsp-rs/src/runtime/language/hover/hover_cards.rs",
+      "crates/perl-lsp-rs/src/runtime/language/hover.rs",
+      "crates/perl-lsp-rs/src/runtime/language/hover/signature_help.rs"
+    ],
+    "weakly_exposed": 2
+  },
+  "tool": "ripr",
+  "warnings": []
+}

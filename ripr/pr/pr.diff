@@ -1,0 +1,391 @@
+diff --git a/crates/perl-lsp-rs-core/src/uri/mod.rs b/crates/perl-lsp-rs-core/src/uri/mod.rs
+index 0cdac7355..a08f792b7 100644
+--- a/crates/perl-lsp-rs-core/src/uri/mod.rs
++++ b/crates/perl-lsp-rs-core/src/uri/mod.rs
+@@ -4,6 +4,7 @@
+ //! `perl-lsp-rs-core::uri` in Wave G3 (#4535).
+ 
+ use lsp_types::Uri;
++use std::path::Path;
+ use url::Url;
+ 
+ fn fallback_uri() -> Uri {
+@@ -24,9 +25,39 @@ fn fallback_uri() -> Uri {
+     }
+ }
+ 
++/// Convert a Unix/POSIX absolute file path to a `file://` URI.
++///
++/// Returns `None` if the path is not recognized as an absolute path by
++/// [`Url::from_file_path`].
++fn file_path_uri(s: &str) -> Option<Uri> {
++    let url = Url::from_file_path(Path::new(s)).ok()?;
++    url.as_str().parse::<Uri>().ok()
++}
++
++/// Convert a Windows absolute file path (e.g. `C:\foo\bar.pm`) to a `file://` URI.
++///
++/// Accepts both backslash and forward-slash separators. Returns `None` if the
++/// input does not look like a Windows drive-letter path.
++fn windows_file_path_uri(s: &str) -> Option<Uri> {
++    let mut chars = s.chars();
++    let drive = chars.next()?;
++    if !drive.is_ascii_alphabetic() || chars.next()? != ':' {
++        return None;
++    }
++    let separator = chars.next()?;
++    if separator != '\\' && separator != '/' {
++        return None;
++    }
++
++    let normalized = s.replace('\\', "/");
++    let url = Url::parse(&format!("file:///{normalized}")).ok()?;
++    url.as_str().parse::<Uri>().ok()
++}
++
+ /// Parse a URI string into [`lsp_types::Uri`].
+ ///
+-/// Falls back to a guaranteed-valid URI if parsing fails.
++/// Accepts valid URI strings and absolute local file paths (both Unix and
++/// Windows styles). Falls back to a guaranteed-valid URI if parsing fails.
+ #[must_use]
+ pub fn parse_uri(s: &str) -> Uri {
+     let sanitized = s.trim_start_matches('\u{feff}').trim();
+@@ -35,6 +66,10 @@ pub fn parse_uri(s: &str) -> Uri {
+         return fallback_uri();
+     }
+ 
++    if let Some(uri) = file_path_uri(sanitized).or_else(|| windows_file_path_uri(sanitized)) {
++        return uri;
++    }
++
+     match sanitized.parse::<Uri>() {
+         Ok(uri) => uri,
+         Err(_) => Url::parse(sanitized)
+@@ -43,3 +78,47 @@ pub fn parse_uri(s: &str) -> Uri {
+             .unwrap_or_else(fallback_uri),
+     }
+ }
++
++#[cfg(test)]
++mod uri_path_helpers_tests {
++    use super::{file_path_uri, windows_file_path_uri};
++
++    /// `windows_file_path_uri` rejects drive-relative paths (drive + colon but no
++    /// separator), e.g. `C:relative` — these are NOT absolute Windows paths.
++    /// Covers the `separator != '\' && separator != '/'` early-return branch.
++    #[test]
++    fn windows_file_path_uri_rejects_drive_relative_path() {
++        // `C:relative` has the drive+colon prefix but the third character is not
++        // a separator, so the function must return None.
++        assert!(
++            windows_file_path_uri("C:relative").is_none(),
++            "drive-relative path must not be accepted as an absolute Windows URI"
++        );
++    }
++
++    /// `windows_file_path_uri` rejects strings whose first character is not
++    /// ASCII-alphabetic (e.g. a digit, punctuation, or a Unix-path `/`).
++    /// Covers the `!drive.is_ascii_alphabetic()` branch of the early-return guard.
++    #[test]
++    fn windows_file_path_uri_rejects_non_alpha_first_char() {
++        assert!(
++            windows_file_path_uri("1:/foo").is_none(),
++            "digit-prefixed string must not be accepted as a Windows URI"
++        );
++        assert!(
++            windows_file_path_uri("/etc/passwd").is_none(),
++            "Unix-path starting with '/' must not be accepted as a Windows URI"
++        );
++    }
++
++    /// `file_path_uri` returns None for paths that are not recognized as absolute
++    /// by `Url::from_file_path` (e.g. relative paths and Windows drive-relative
++    /// paths on Unix).
++    #[test]
++    fn file_path_uri_returns_none_for_non_absolute_path() {
++        assert!(
++            file_path_uri("relative/path.pm").is_none(),
++            "relative path must not produce a file:// URI"
++        );
++    }
++}
+diff --git a/crates/perl-lsp-rs-core/tests/uri_module_shape.rs b/crates/perl-lsp-rs-core/tests/uri_module_shape.rs
+index 16ee58ea0..c1d122222 100644
+--- a/crates/perl-lsp-rs-core/tests/uri_module_shape.rs
++++ b/crates/perl-lsp-rs-core/tests/uri_module_shape.rs
+@@ -13,6 +13,29 @@ fn uri_module_exposes_parse_uri_function() {
+     );
+ }
+ 
++/// Ported from EffortlessMetrics/perl-lsp#9903.
++///
++/// Unix bare file paths must be converted to `file://` URIs automatically.
++/// Only runs on Unix because `Url::from_file_path` requires POSIX path semantics.
++#[cfg(unix)]
++#[test]
++fn uri_module_parse_uri_accepts_unix_file_paths() -> Result<(), Box<dyn std::error::Error>> {
++    let uri = parse_uri("/tmp/perl-lsp/lib/PlainPath.pm");
++    assert_eq!(uri.as_str(), "file:///tmp/perl-lsp/lib/PlainPath.pm");
++    Ok(())
++}
++
++/// Ported from EffortlessMetrics/perl-lsp#9903.
++///
++/// Windows bare file paths (drive-letter + backslash) must be normalised to
++/// `file:///DRIVE:/...` URIs automatically — even on non-Windows hosts.
++#[test]
++fn uri_module_parse_uri_accepts_windows_file_paths() -> Result<(), Box<dyn std::error::Error>> {
++    let uri = parse_uri(r"C:\Users\dev\lib\PlainPath.pm");
++    assert_eq!(uri.as_str(), "file:///C:/Users/dev/lib/PlainPath.pm");
++    Ok(())
++}
++
+ #[test]
+ fn uri_module_parse_uri_handles_windows_paths() {
+     // Verify that parse_uri handles Windows paths correctly post-absorption
+diff --git a/crates/perl-lsp-rs/src/runtime/language/hover/signature_help.rs b/crates/perl-lsp-rs/src/runtime/language/hover/signature_help.rs
+index 8d44c6128..cf72bacda 100644
+--- a/crates/perl-lsp-rs/src/runtime/language/hover/signature_help.rs
++++ b/crates/perl-lsp-rs/src/runtime/language/hover/signature_help.rs
+@@ -2,6 +2,19 @@
+ 
+ use super::*;
+ 
++/// Build an actionable INVALID_PARAMS error for malformed signatureHelp requests.
++///
++/// Ported from EffortlessMetrics/perl-lsp#9898.
++fn invalid_signature_help_params() -> JsonRpcError {
++    crate::protocol::invalid_params(
++        "Missing required parameters: textDocument.uri and position\n\n\
++         textDocument/signatureHelp expects params.textDocument.uri plus params.position.line and \
++         params.position.character to identify the call site under the cursor.\n\n\
++         Example: {\"textDocument\":{\"uri\":\"file:///workspace/lib/My/Module.pm\"},\
++         \"position\":{\"line\":10,\"character\":14}}",
++    )
++}
++
+ impl LspServer {
+     /// Handle textDocument/signatureHelp request for function parameter hints
+     ///
+@@ -26,8 +39,20 @@ impl LspServer {
+         params: Option<Value>,
+     ) -> Result<Option<Value>, JsonRpcError> {
+         if let Some(params) = params {
+-            let uri = req_uri(&params)?;
+-            let (line, character) = req_position(&params)?;
++            let uri = params
++                .pointer("/textDocument/uri")
++                .and_then(|v| v.as_str())
++                .ok_or_else(invalid_signature_help_params)?;
++            let line = params
++                .pointer("/position/line")
++                .and_then(|v| v.as_u64())
++                .and_then(|n| u32::try_from(n).ok())
++                .ok_or_else(invalid_signature_help_params)?;
++            let character = params
++                .pointer("/position/character")
++                .and_then(|v| v.as_u64())
++                .and_then(|n| u32::try_from(n).ok())
++                .ok_or_else(invalid_signature_help_params)?;
+             let active_signature = active_signature_from_context(&params);
+ 
+             let documents = self.documents_guard();
+@@ -147,6 +172,8 @@ impl LspServer {
+                     })));
+                 }
+             }
++        } else {
++            return Err(invalid_signature_help_params());
+         }
+ 
+         Ok(None)
+diff --git a/crates/perl-lsp-rs/src/runtime/language/semantic_tokens.rs b/crates/perl-lsp-rs/src/runtime/language/semantic_tokens.rs
+index f35fec211..62f79f67d 100644
+--- a/crates/perl-lsp-rs/src/runtime/language/semantic_tokens.rs
++++ b/crates/perl-lsp-rs/src/runtime/language/semantic_tokens.rs
+@@ -27,11 +27,9 @@ impl LspServer {
+         if let Some(p) = params {
+             let uri = req_uri(&p)?;
+             let documents = self.documents_guard();
+-            let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
+-                code: INVALID_REQUEST,
+-                message: format!("Document not open: {}", uri),
+-                data: None,
+-            })?;
++            let doc = self
++                .get_document(&documents, uri)
++                .ok_or_else(|| semantic_tokens_document_not_open(uri))?;
+             if let Some(ref ast) = doc.ast {
+                 let data =
+                     crate::semantic_tokens::collect_semantic_tokens(ast, &doc.text, &|off| {
+@@ -1283,3 +1281,65 @@ fn provider_fallback_state_label(state: ProviderFallbackState) -> &'static str {
+ fn is_subroutine_name_char(ch: char) -> bool {
+     ch.is_ascii_alphanumeric() || ch == '_' || ch == ':'
+ }
++
++/// Build an actionable INVALID_REQUEST error for semantic-token requests on
++/// documents that have not been opened/synchronized yet.
++///
++/// The expanded message guides the editor developer to send
++/// `textDocument/didOpen` before requesting tokens.
++///
++/// Ported from EffortlessMetrics/perl-lsp#9868.
++fn semantic_tokens_document_not_open(uri: &str) -> JsonRpcError {
++    JsonRpcError {
++        code: INVALID_REQUEST,
++        message: format!(
++            "Document not open: {uri}. \
++             textDocument/semanticTokens/full requires the editor to send \
++             textDocument/didOpen before requesting tokens; \
++             resend after the document is open and synchronized."
++        ),
++        data: None,
++    }
++}
++
++#[cfg(test)]
++mod semantic_tokens_guidance_tests {
++    use super::*;
++    use perl_tdd_support::must_err;
++    use serde_json::json;
++
++    /// A semantic-token request on an un-opened document must return an
++    /// INVALID_REQUEST error whose message contains sync-guidance strings.
++    ///
++    /// Ported from EffortlessMetrics/perl-lsp#9868.
++    #[test]
++    fn semantic_tokens_closed_document_error_includes_sync_guidance()
++    -> Result<(), Box<dyn std::error::Error>> {
++        let server = LspServer::new();
++        let uri = "file:///workspace/lib/Missing.pm";
++
++        let error = must_err(server.handle_semantic_tokens(Some(json!({
++            "textDocument": {
++                "uri": uri,
++            },
++        }))));
++
++        assert_eq!(error.code, INVALID_REQUEST);
++        assert!(error.data.is_none());
++        for expected in [
++            "Document not open",
++            uri,
++            "textDocument/semanticTokens/full",
++            "textDocument/didOpen",
++            "open and synchronized",
++        ] {
++            assert!(
++                error.message.contains(expected),
++                "error message must mention {expected:?}; got {:?}",
++                error.message
++            );
++        }
++
++        Ok(())
++    }
++}
+diff --git a/crates/perl-lsp-rs/tests/lsp_signature_help_tests.rs b/crates/perl-lsp-rs/tests/lsp_signature_help_tests.rs
+index 0da9c6d57..39766a3d5 100644
+--- a/crates/perl-lsp-rs/tests/lsp_signature_help_tests.rs
++++ b/crates/perl-lsp-rs/tests/lsp_signature_help_tests.rs
+@@ -23,11 +23,98 @@
+ 
+ mod support;
+ 
+-use serde_json::json;
++use serde_json::{Value, json};
+ use support::lsp_harness::LspHarness;
+ 
+ type TestResult = Result<(), Box<dyn std::error::Error>>;
+ 
++// ============================================================================
++// Shape-error guidance tests — ported from EffortlessMetrics/perl-lsp#9898
++// ============================================================================
++
++/// Send a raw `textDocument/signatureHelp` request and assert that the response
++/// is an error with code -32602 (INVALID_PARAMS). Returns the error message so
++/// the caller can verify the guidance strings it contains.
++fn signature_help_shape_error(
++    harness: &mut LspHarness,
++    params: Option<Value>,
++) -> Result<String, String> {
++    let mut request = json!({
++        "jsonrpc": "2.0",
++        "method": "textDocument/signatureHelp"
++    });
++    if let Some(params) = params {
++        request["params"] = params;
++    }
++
++    let response = harness.request_raw(request);
++    let error =
++        response.get("error").ok_or_else(|| format!("expected error response, got {response}"))?;
++    let code = error
++        .get("code")
++        .and_then(Value::as_i64)
++        .ok_or_else(|| format!("error response missing numeric code: {response}"))?;
++    if code != -32602 {
++        return Err(format!("expected INVALID_PARAMS (-32602), got {code}: {response}"));
++    }
++    let message = error
++        .get("message")
++        .and_then(Value::as_str)
++        .ok_or_else(|| format!("error response missing message: {response}"))?;
++    Ok(message.to_string())
++}
++
++/// Assert that the error message contains all expected guidance substrings.
++fn assert_signature_help_shape_guidance(case: &str, message: &str) -> Result<(), String> {
++    for expected in [
++        "Missing required parameters: textDocument.uri and position",
++        "textDocument/signatureHelp",
++        "params.textDocument.uri",
++        "params.position.line",
++        "params.position.character",
++        "file:///workspace/lib/My/Module.pm",
++    ] {
++        if !message.contains(expected) {
++            return Err(format!(
++                "{case}: expected error message to contain {expected:?}; got {message:?}"
++            ));
++        }
++    }
++    Ok(())
++}
++
++/// Missing params / missing uri / missing position all produce INVALID_PARAMS
++/// (-32602) with an actionable guidance message.
++#[test]
++fn test_signature_help_request_shape_errors_include_payload_guidance() -> TestResult {
++    let mut harness = LspHarness::new();
++    harness.initialize(None)?;
++
++    for (case, params) in [
++        ("missing params", None),
++        (
++            "missing uri",
++            Some(json!({
++                "position": { "line": 10, "character": 14 }
++            })),
++        ),
++        (
++            "missing position",
++            Some(json!({
++                "textDocument": { "uri": "file:///workspace/lib/My/Module.pm" }
++            })),
++        ),
++    ] {
++        let message =
++            signature_help_shape_error(&mut harness, params).map_err(|e| format!("{case}: {e}"))?;
++        assert_signature_help_shape_guidance(case, &message)
++            .map_err(|e| Box::<dyn std::error::Error>::from(e))?;
++    }
++
++    harness.shutdown_gracefully();
++    Ok(())
++}
++
+ /// Tests feature spec: signature_help.rs#user-defined-function
+ ///
+ /// Validates that signature help is provided when the cursor is inside

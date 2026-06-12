@@ -439,10 +439,12 @@ impl DebugAdapter {
             };
         };
 
+        let variables_reference =
+            self.allocate_evaluate_result_ref(name, &rendered_value, &rendered_type);
         let set_var_body = SetVariableResponseBody {
             value: rendered_value,
             type_: Some(rendered_type),
-            variables_reference: 0,
+            variables_reference,
         };
 
         DapMessage::Response {

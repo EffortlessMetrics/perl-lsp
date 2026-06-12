@@ -398,8 +398,10 @@ impl DebugAdapter {
         })
     }
 
-    #[cfg(test)]
-    fn push_recent_output_line_for_test(&self, line: &str) {
+    /// Push a line into the recent-output buffer for testing parser paths.
+    ///
+    /// Only for use in tests; not part of the public API contract.
+    pub fn push_recent_output_line_for_test(&self, line: &str) {
         let mut output = lock_or_recover(&self.recent_output, "debug_adapter.push_recent_output");
         Self::append_recent_output_line_locked(&mut output, line);
     }
