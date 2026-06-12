@@ -10,6 +10,10 @@ migrations.
 This document is kept factual and citable. Claims without a primary artifact
 (file path, test name, merged PR) are not made.
 
+**Related**: For repo-specific incidents motivating scanner and coverage contracts, see
+[docs/learnings/README.md](../learnings/README.md) (especially 2026-06-coverage-gate-measurement.md,
+2026-06-ripr-output-schema-break.md). For portable patterns, see [docs/concepts/](../concepts/).
+
 ---
 
 ## 1. Quote-Like Operators — Canonical Parser

@@ -32,6 +32,8 @@ The pipeline is organized into **7 gates** (coarse stages) with multiple agents 
 
 **Learning is captured continuously** by every agent in every gate. Gate 7 is the dedicated consolidation layer — it shapes captured artifacts into durable memory, doctrine, and follow-up work.
 
+**Gate-7 capture loop**: Every deep-review fix or observable incident => one  entry (YAML frontmatter with tags + search_terms, links the PR# and the  pattern) + a spec/contract follow-up in  or  if the class is recurring.
+
 See [docs/reference/PIPELINE_GATES.md](docs/reference/PIPELINE_GATES.md) for the full gate model: skip criteria, within-gate ordering, three-axis triangulation in Gate 4, and worked examples.
 
 ### Pipeline: Scout → Accuracy-Scout → Plan-Review → Build → Review → Green → Merge → Wisdom
@@ -387,6 +389,8 @@ Invoke `/coding-standards` for full detail.
 ## Documentation
 
 [Status Overview](docs/project/status/index.md) | [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) (stub) | [ROADMAP.md](docs/project/ROADMAP.md) | [COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md) | [LSP_IMPLEMENTATION_GUIDE.md](docs/reference/LSP_IMPLEMENTATION_GUIDE.md) | [FAILURE_MODES.md](docs/reference/FAILURE_MODES.md) | [CI_ARCHITECTURE.md](docs/reference/CI_ARCHITECTURE.md) | [features.toml](features.toml)
+
+**Learnings**: [docs/learnings/README.md](docs/learnings/README.md) (repo-specific incidents, greppable by symbol/PR/hazard-class/tag) | [docs/concepts/](docs/concepts/) (portable patterns: shift-left-ladder, cache-aware-agent-lanes, hazard-class-invariants, multi-angle-haiku-early-spec, serialize-merges-and-cancellation, re-create-over-untangle)
 
 **SDLC positioning**: [DISTRIBUTED_ENGINEERING_LINEAGE.md](docs/reference/DISTRIBUTED_ENGINEERING_LINEAGE.md) — situates the Octopus Cluster in classical engineering practice (Kanban, code review, trunk-health, CI/CD, SRE) with Beowulf contrast and SDLC-mapping table.
 
