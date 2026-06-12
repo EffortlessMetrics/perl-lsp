@@ -751,23 +751,36 @@ fn ripr_pr_summary_counts(
     let mut suppressed = RiprPrSummaryCounts::default();
     let mut unsuppressed_from_findings = RiprPrSummaryCounts::default();
     for finding in findings {
-        let classification = finding.get("classification").and_then(Value::as_str);
-        if !matches!(
-            classification,
-            Some("weakly_exposed" | "reachable_unrevealed" | "no_static_path")
-        ) {
+        // ripr 0.5.x: "classification" field, values "weakly_exposed" | "reachable_unrevealed" | "no_static_path".
+        // ripr 0.9.x: "grip_class" field, values "weakly_gripped" | "reachable_unrevealed" | "no_static_path".
+        //   "weakly_gripped" findings are counted in summary.reachable_unrevealed in 0.9.x.
+        // Accept both so suppression policy applies across ripr versions.
+        let raw_class = finding
+            .get("classification")
+            .and_then(Value::as_str)
+            .or_else(|| finding.get("grip_class").and_then(Value::as_str));
+        // Map to the canonical summary-counter name for correct bucket subtraction.
+        let canonical: Option<&str> = match raw_class {
+            Some("weakly_exposed") => Some("weakly_exposed"),
+            // ripr 0.9.x: weakly_gripped is reported under summary.reachable_unrevealed
+            Some("weakly_gripped") => Some("reachable_unrevealed"),
+            Some("reachable_unrevealed") => Some("reachable_unrevealed"),
+            Some("no_static_path") => Some("no_static_path"),
+            _ => None,
+        };
+        let Some(canonical) = canonical else {
             continue;
-        }
+        };
         let counts = if suppression_matches_finding(suppressions, finding) {
             suppressed.suppressed_by_policy += 1;
             &mut suppressed
         } else {
             &mut unsuppressed_from_findings
         };
-        match classification {
-            Some("weakly_exposed") => counts.weakly_exposed += 1,
-            Some("reachable_unrevealed") => counts.reachable_unrevealed += 1,
-            Some("no_static_path") => counts.no_static_path += 1,
+        match canonical {
+            "weakly_exposed" => counts.weakly_exposed += 1,
+            "reachable_unrevealed" => counts.reachable_unrevealed += 1,
+            "no_static_path" => counts.no_static_path += 1,
             _ => {}
         }
     }
@@ -806,12 +819,25 @@ fn suppression_directory_pattern_matches(pattern: &str, path: &str) -> bool {
 }
 
 fn ripr_finding_path(finding: &Value) -> Option<String> {
+    // ripr 0.5.x: path lives under finding["probe"]["path"] or finding["probe"]["file"].
+    // ripr 0.9.x: path lives under finding["seam"]["file"] (and probe may be absent).
+    // Accept both so suppression policy applies across ripr versions.
     finding
         .get("probe")
         .and_then(|probe| {
             ["path", "file"].into_iter().find_map(|key| probe.get(key).and_then(Value::as_str))
         })
         .map(normalize_path_text)
+        .or_else(|| {
+            finding
+                .get("seam")
+                .and_then(|seam| {
+                    ["file", "path"]
+                        .into_iter()
+                        .find_map(|key| seam.get(key).and_then(Value::as_str))
+                })
+                .map(normalize_path_text)
+        })
         .or_else(|| ripr_plus_seam_path(finding))
         .filter(|path| !path.trim().is_empty())
 }
@@ -2807,6 +2833,138 @@ paths = ["archive/["]
         });
 
         assert!(suppression_matches_finding(&rules, &finding));
+        Ok(())
+    }
+
+    #[test]
+    fn ripr_0_9_x_grip_class_seam_file_suppressed_by_policy() -> Result<()> {
+        // ripr 0.9.x uses "grip_class" (not "classification") and "seam.file" (not "probe.file").
+        // Verify that the suppression machinery handles both field shapes so that
+        // path-scoped suppressions in policy/ripr-suppressions.toml fire under 0.9.x.
+        let options = PrEvidenceOptions {
+            root: ".".to_string(),
+            base: "origin/main".to_string(),
+            head: "HEAD".to_string(),
+        };
+        // Simulate ripr 0.9.x check output: summary.reachable_unrevealed=3, findings use grip_class+seam.
+        let check_value = json!({
+            "summary": {
+                "weakly_exposed": 0,
+                "reachable_unrevealed": 3,
+                "no_static_path": 0
+            },
+            "findings": [
+                {
+                    "grip_class": "weakly_gripped",
+                    "kind": "call_presence",
+                    "seam": {
+                        "file": "crates/perl-dap/src/debug_adapter/execution.rs",
+                        "line": 22
+                    }
+                },
+                {
+                    "grip_class": "weakly_gripped",
+                    "kind": "call_presence",
+                    "seam": {
+                        "file": "crates/perl-dap/src/debug_adapter/execution.rs",
+                        "line": 28
+                    }
+                },
+                {
+                    "grip_class": "weakly_gripped",
+                    "kind": "call_presence",
+                    "seam": {
+                        "file": "crates/perl-dap/src/debug_adapter/execution.rs",
+                        "line": 30
+                    }
+                }
+            ]
+        });
+        let suppressions = RiprSuppressionRules {
+            display_patterns: vec!["crates/perl-dap/src/debug_adapter/execution.rs".to_string()],
+            path_patterns: vec![Pattern::new("crates/perl-dap/src/debug_adapter/execution.rs")?],
+            invalid_patterns: Vec::new(),
+            suppression_reasons: Vec::new(),
+        };
+
+        let packet = pr_evidence_packet(
+            &options,
+            &["crates/perl-dap/src/debug_adapter/execution.rs".to_string()],
+            &check_value,
+            "base-sha",
+            "head-sha",
+            &suppressions,
+        );
+
+        // All 3 weakly_gripped findings are in the suppressed path and map to reachable_unrevealed.
+        // After suppression: reachable_unrevealed = 3 - 3 = 0, severe_gaps = 0.
+        assert_eq!(packet.pointer("/summary/reachable_unrevealed"), Some(&json!(0)));
+        assert_eq!(packet.pointer("/summary/weakly_exposed"), Some(&json!(0)));
+        assert_eq!(packet.pointer("/summary/severe_gaps"), Some(&json!(0)));
+        assert_eq!(packet.pointer("/summary/suppressed_by_policy"), Some(&json!(3)));
+        Ok(())
+    }
+
+    #[test]
+    fn ripr_0_9_x_unsuppressed_grip_class_produces_severe_gaps() -> Result<()> {
+        // Gate teeth: a ripr 0.9.x weakly_gripped finding on a path NOT covered by any
+        // suppression rule must produce severe_gaps > 0, causing the quality gate to FAIL.
+        // Before the grip_class fix, the gate silently skipped such findings because
+        // grip_class was not recognized, so severe_gaps stayed 0 — the gate had no teeth.
+        let options = PrEvidenceOptions {
+            root: ".".to_string(),
+            base: "origin/main".to_string(),
+            head: "HEAD".to_string(),
+        };
+        // ripr 0.9.x output: 2 weakly_gripped findings on a file not in any suppression.
+        let check_value = json!({
+            "summary": {
+                "weakly_exposed": 0,
+                "reachable_unrevealed": 2,
+                "no_static_path": 0
+            },
+            "findings": [
+                {
+                    "grip_class": "weakly_gripped",
+                    "kind": "call_presence",
+                    "seam": {
+                        "file": "crates/perl-lsp-rs/src/some_new_file.rs",
+                        "line": 10
+                    }
+                },
+                {
+                    "grip_class": "weakly_gripped",
+                    "kind": "call_presence",
+                    "seam": {
+                        "file": "crates/perl-lsp-rs/src/some_new_file.rs",
+                        "line": 20
+                    }
+                }
+            ]
+        });
+        // Suppression only covers the DAP execution.rs — the LSP file is NOT suppressed.
+        let suppressions = RiprSuppressionRules {
+            display_patterns: vec!["crates/perl-dap/src/debug_adapter/execution.rs".to_string()],
+            path_patterns: vec![Pattern::new("crates/perl-dap/src/debug_adapter/execution.rs")?],
+            invalid_patterns: Vec::new(),
+            suppression_reasons: Vec::new(),
+        };
+
+        let packet = pr_evidence_packet(
+            &options,
+            &["crates/perl-lsp-rs/src/some_new_file.rs".to_string()],
+            &check_value,
+            "base-sha",
+            "head-sha",
+            &suppressions,
+        );
+
+        // The 2 unsuppressed weakly_gripped findings map to reachable_unrevealed bucket.
+        // severe_gaps must be 2 (> 0) so the quality gate rejects this PR.
+        assert_eq!(packet.pointer("/summary/reachable_unrevealed"), Some(&json!(2)));
+        assert_eq!(packet.pointer("/summary/severe_gaps"), Some(&json!(2)));
+        assert_eq!(packet.pointer("/summary/suppressed_by_policy"), Some(&json!(0)));
+        assert_eq!(packet.pointer("/summary/ripr_severe_gap"), Some(&json!(true)));
         Ok(())
     }
 
