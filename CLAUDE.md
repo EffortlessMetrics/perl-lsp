@@ -365,6 +365,7 @@ Metrics are **computed, not hand-edited**:
 - Test output and CI receipts are evidence for all claims
 - `README.md` must not contain volatile metrics -- link to `docs/project/status/index.md`
 - `.ci/blockers.yaml` is manually maintained — verify counts against `parser-corpus-baseline.json` before trusting `affected_files` values
+- `docs/reference/PARSER_CONTRACTS.md` is the durable contract index for parser behavioral invariants (quote-like, indirect-object, embedded-code, NodeKind classification, recovery nodes, formatting gates)
 
 ## Coding Standards
 
