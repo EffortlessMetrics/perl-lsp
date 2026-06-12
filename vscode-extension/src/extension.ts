@@ -2001,6 +2001,19 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
     return true;
 }
 
+export function buildDisabledFeaturesFromConfig(
+    config: { get<T>(key: string, defaultValue: T): T }
+): string[] {
+    const base = config.get<string[]>('disabledFeatures', []).slice();
+    if (!config.get<boolean>('enableSemanticTokens', true) && !base.includes('lsp.semantic_tokens')) {
+        base.push('lsp.semantic_tokens');
+    }
+    if (!config.get<boolean>('enableFormatting', true) && !base.includes('lsp.formatting')) {
+        base.push('lsp.formatting');
+    }
+    return base;
+}
+
 function createLanguageClient(serverPath: string): LanguageClient {
     const serverOptions: ServerOptions = {
         run: {
@@ -2015,8 +2028,9 @@ function createLanguageClient(serverPath: string): LanguageClient {
         }
     };
 
-    const disabledFeatures = vscode.workspace.getConfiguration('perl-lsp')
-        .get<string[]>('disabledFeatures', []);
+    const disabledFeatures = buildDisabledFeaturesFromConfig(
+        vscode.workspace.getConfiguration('perl-lsp')
+    );
 
     const clientOptions: LanguageClientOptions = {
         documentSelector: [
@@ -2983,6 +2997,8 @@ function requiresClientRefresh(event: vscode.ConfigurationChangeEvent): boolean 
         'perl-lsp.versionTag',
         'perl-lsp.downloadBaseUrl',
         'perl-lsp.featureProfile',
+        'perl-lsp.enableSemanticTokens',
+        'perl-lsp.enableFormatting',
     ].some(setting => event.affectsConfiguration(setting));
 }
 

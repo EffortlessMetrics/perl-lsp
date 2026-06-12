@@ -274,14 +274,6 @@
             "description": "Additional library paths (like use lib) to search for Perl modules. Set this if you see \"Can't locate Foo/Bar.pm\" style module lookup errors. Relative paths resolve from the workspace root.",
             "markdownDescription": "Additional library paths (like `use lib`) to search for Perl modules. Set this if you see `Can't locate Foo/Bar.pm` style module lookup errors. Relative paths resolve from the workspace root."
           },
-          "perl-lsp.enableDiagnostics": {
-            "type": "boolean",
-            "default": true,
-            "scope": "resource",
-            "order": 40,
-            "description": "Enable real-time syntax diagnostics. When disabled, the server will not publish diagnostic errors and warnings.",
-            "markdownDescription": "Enable real-time syntax diagnostics. When disabled, the server will not publish diagnostic errors and warnings."
-          },
           "perl-lsp.enableSemanticTokens": {
             "type": "boolean",
             "default": true,
@@ -364,14 +356,6 @@
             "order": 43,
             "description": "Optional display theme label for PerlCritic settings. Reserved for editor-facing UI organization.",
             "markdownDescription": "Optional display theme label for PerlCritic settings. Reserved for editor-facing UI organization."
-          },
-          "perl-lsp.enableRefactoring": {
-            "type": "boolean",
-            "default": true,
-            "scope": "resource",
-            "order": 50,
-            "description": "Enable refactoring-related code actions (extract variable, extract method) when supported by the connected perllsp server.",
-            "markdownDescription": "Enable refactoring-related code actions (extract variable, extract method) when supported by the connected `perllsp` server."
           },
           "perl-lsp.enableTestIntegration": {
             "type": "boolean",
