@@ -403,6 +403,72 @@ impl DebugAdapter {
         let mut output = lock_or_recover(&self.recent_output, "debug_adapter.push_recent_output");
         Self::append_recent_output_line_locked(&mut output, line);
     }
+
+    #[cfg(test)]
+    fn seed_session_for_test(&self) {
+        // Spawn a cheap no-op subprocess so we have a real Child (no unsafe zeroed memory).
+        let child = Self::spawn_noop_child_for_test();
+        let mut session = lock_or_recover(&self.session, "debug_adapter.seed_session");
+        *session = Some(DebugSession {
+            process: child,
+            state: DebugState::Stopped,
+            stack_frames: Vec::new(),
+            variable_cache: VariableCache::default(),
+            thread_id: 1,
+            last_resume_mode: ResumeMode::Unknown,
+        });
+    }
+
+    /// Spawn the cheapest available no-op child process for use in unit tests.
+    /// Tries perl first, then a platform-native no-op.  The test panics if no
+    /// subprocess can be spawned at all — that indicates a broken CI environment.
+    #[cfg(test)]
+    fn spawn_noop_child_for_test() -> std::process::Child {
+        use std::process::{Command, Stdio};
+        // perl -e 1 exits immediately with no output.
+        if let Ok(c) = Command::new("perl")
+            .arg("-e")
+            .arg("1")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+        {
+            return c;
+        }
+        // Platform-native fallback when perl is not on PATH.
+        #[cfg(windows)]
+        let (prog, args): (&str, &[&str]) = ("cmd", &["/c", "exit", "0"]);
+        #[cfg(not(windows))]
+        let (prog, args): (&str, &[&str]) = ("true", &[]);
+        // SAFETY NOTE: no unsafe — uses only std::process::Command.
+        // The panic here is intentional: if *neither* perl nor the OS no-op
+        // binary is available the test environment is fundamentally broken and
+        // proceeding would produce meaningless results.
+        Command::new(prog)
+            .args(args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap_or_else(|e| {
+                panic!("seed_session_for_test: cannot spawn any noop subprocess ({prog}): {e}")
+            })
+    }
+
+    #[cfg(test)]
+    fn inject_stack_frames_for_test(&self, frames: Vec<StackFrame>) {
+        let mut session = lock_or_recover(&self.session, "debug_adapter.inject_frames");
+        if let Some(ref mut sess) = *session {
+            sess.stack_frames = frames;
+        }
+    }
+
+    #[cfg(test)]
+    fn stack_frames_snapshot_for_test(&self) -> Vec<StackFrame> {
+        let session = lock_or_recover(&self.session, "debug_adapter.snapshot_frames");
+        session.as_ref().map(|s| s.stack_frames.clone()).unwrap_or_default()
+    }
 }
 #[cfg(test)]
 mod tests {
@@ -1621,5 +1687,141 @@ print "result: $final\n";
         // "/path/file.pl:42" should yield file="/path/file.pl", line="42".
         let result = apply_context_re("main::(/path/file.pl:42):");
         assert_eq!(result, Some(("/path/file.pl".to_string(), "42".to_string())));
+    }
+
+    // Helper to create a test stack frame for #964 and #933 tests
+    fn make_test_frame(line_num: i32) -> StackFrame {
+        StackFrame::new(
+            line_num,
+            format!("test_func::{}", line_num),
+            Source::new(format!("/test/file{}.pl", line_num)),
+            line_num,
+        )
+    }
+
+    #[test]
+    fn test_handle_continue_clears_stack_frames() -> Result<(), Box<dyn std::error::Error>> {
+        let adapter = DebugAdapter::new();
+        adapter.seed_session_for_test();
+        adapter.inject_stack_frames_for_test(vec![make_test_frame(1), make_test_frame(2)]);
+
+        // Precondition: frames are present
+        assert_eq!(
+            adapter.stack_frames_snapshot_for_test().len(),
+            2,
+            "precondition: should have 2 frames before continue"
+        );
+
+        // Call the handler (this should clear stack_frames)
+        let _response = adapter.handle_continue(1, 1, None);
+
+        // Assert: frames are now cleared (FAILS if fix not implemented)
+        assert_eq!(
+            adapter.stack_frames_snapshot_for_test().len(),
+            0,
+            "handle_continue must clear stack_frames after resume"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_handle_next_clears_stack_frames() -> Result<(), Box<dyn std::error::Error>> {
+        let adapter = DebugAdapter::new();
+        adapter.seed_session_for_test();
+        adapter.inject_stack_frames_for_test(vec![make_test_frame(1), make_test_frame(2)]);
+
+        assert_eq!(adapter.stack_frames_snapshot_for_test().len(), 2);
+        let _response = adapter.handle_next(1, 1, None);
+        assert_eq!(
+            adapter.stack_frames_snapshot_for_test().len(),
+            0,
+            "handle_next must clear stack_frames after resume"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_handle_step_in_clears_stack_frames() -> Result<(), Box<dyn std::error::Error>> {
+        let adapter = DebugAdapter::new();
+        adapter.seed_session_for_test();
+        adapter.inject_stack_frames_for_test(vec![make_test_frame(1), make_test_frame(2)]);
+
+        assert_eq!(adapter.stack_frames_snapshot_for_test().len(), 2);
+        let _response = adapter.handle_step_in(1, 1, None);
+        assert_eq!(
+            adapter.stack_frames_snapshot_for_test().len(),
+            0,
+            "handle_step_in must clear stack_frames after resume"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_handle_step_out_clears_stack_frames() -> Result<(), Box<dyn std::error::Error>> {
+        let adapter = DebugAdapter::new();
+        adapter.seed_session_for_test();
+        adapter.inject_stack_frames_for_test(vec![make_test_frame(1), make_test_frame(2)]);
+
+        assert_eq!(adapter.stack_frames_snapshot_for_test().len(), 2);
+        let _response = adapter.handle_step_out(1, 1, None);
+        assert_eq!(
+            adapter.stack_frames_snapshot_for_test().len(),
+            0,
+            "handle_step_out must clear stack_frames after resume"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_handle_pause_clears_stack_frames() -> Result<(), Box<dyn std::error::Error>> {
+        let adapter = DebugAdapter::new();
+        adapter.seed_session_for_test();
+        adapter.inject_stack_frames_for_test(vec![make_test_frame(1), make_test_frame(2)]);
+
+        assert_eq!(adapter.stack_frames_snapshot_for_test().len(), 2);
+        let _response = adapter.handle_pause(1, 1, None);
+        assert_eq!(
+            adapter.stack_frames_snapshot_for_test().len(),
+            0,
+            "handle_pause must clear stack_frames after pause"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_handle_goto_clears_stack_frames() -> Result<(), Box<dyn std::error::Error>> {
+        // #964: handle_goto is the 6th resume handler that must clear stack_frames.
+        // It clears inside the `if let Some(session) && stdin` arm, so a seeded session
+        // and a resolvable goto target are both required to exercise the clear path.
+        let adapter = DebugAdapter::new();
+        adapter.seed_session_for_test();
+        adapter.inject_stack_frames_for_test(vec![make_test_frame(1), make_test_frame(2)]);
+
+        // Precondition: stale frames are present
+        assert_eq!(
+            adapter.stack_frames_snapshot_for_test().len(),
+            2,
+            "precondition: should have 2 frames before goto"
+        );
+
+        // Seed a goto target so handle_goto resolves it (otherwise returns early with
+        // "Unknown goto target" before reaching the clear).
+        {
+            let mut goto_map =
+                lock_or_recover(&adapter.goto_targets, "test.handle_goto_clears_stack_frames");
+            goto_map.insert(1, ("/tmp/test_goto.pl".to_string(), 5));
+        }
+
+        // Call handle_goto -- writes commands to the noop child's stdin (bytes are
+        // discarded by the no-op process); stack_frames.clear() must still fire.
+        let _response = adapter.handle_goto(1, 1, Some(json!({"threadId": 1, "targetId": 1})));
+
+        // Assert: frames cleared (FAILS if handle_goto does not call stack_frames.clear())
+        assert_eq!(
+            adapter.stack_frames_snapshot_for_test().len(),
+            0,
+            "handle_goto must clear stack_frames after resume"
+        );
+        Ok(())
     }
 }

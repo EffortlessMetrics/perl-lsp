@@ -314,7 +314,8 @@ fn test_dap_scopes_overflow_boundary() -> TestResult {
     let normal_args = json!({ "frameId": 5 });
     let response = adapter.handle_request(2, "scopes", Some(normal_args));
     if let DapMessage::Response { success: true, body: Some(body), .. } = response {
-        let scopes = body.get("scopes").and_then(|s| s.as_array()).ok_or("Expected scopes array")?;
+        let scopes =
+            body.get("scopes").and_then(|s| s.as_array()).ok_or("Expected scopes array")?;
         assert_eq!(scopes.len(), 3, "Expected 3 scopes for frameId=5");
         let locals_ref = scopes[0]
             .get("variablesReference")
@@ -343,11 +344,8 @@ fn test_dap_variables_overflow_boundary() -> TestResult {
     let mut adapter = DebugAdapter::new();
 
     // Overflow cases: variablesReference values that would truncate under `as i32`
-    let overflow_cases: &[(i64, &str)] = &[
-        (i32::MAX as i64 + 1, "i32::MAX + 1"),
-        (i64::MAX, "i64::MAX"),
-        (i64::MIN, "i64::MIN"),
-    ];
+    let overflow_cases: &[(i64, &str)] =
+        &[(i32::MAX as i64 + 1, "i32::MAX + 1"), (i64::MAX, "i64::MAX"), (i64::MIN, "i64::MIN")];
 
     for (variables_reference, label) in overflow_cases {
         let args = json!({ "variablesReference": variables_reference });

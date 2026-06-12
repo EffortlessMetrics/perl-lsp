@@ -64,13 +64,13 @@ impl DebugAdapter {
                 framed_frames
             }
         } else {
-            let output_lines = self.snapshot_recent_output_lines();
-            if output_lines.is_empty() {
-                Vec::new()
-            } else {
-                let output = output_lines.join("\n");
-                Self::filter_user_visible_frames(Self::parse_stack_frames_from_text(&output))
-            }
+            // Snapshot buffer is unreliable when framed transport fails: it holds
+            // the full session history so snapshot-based parsing returns frames in
+            // buffer order — the stale pre-stop context line appears before the
+            // current stop line, producing a wrong first frame.  Return empty so
+            // the caller falls through to session.stack_frames, which the output
+            // reader populates with the authoritative current-stop frame.
+            Vec::new()
         };
 
         let stack_frames = if !parsed_frames.is_empty() {

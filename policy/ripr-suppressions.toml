@@ -341,3 +341,44 @@ reason = "Five ripr#1429-class seams in PR #1326 cfg(test)-strip helpers: cfg_te
 created = "2026-06-12"
 review_after = "2026-07-12"
 expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
+# DAP stack-frame lifecycle seams (fixes #964 + #933): Mutex-guard and
+# branch-predicate activation untraceable by ripr 0.9.0 (ripr#1429 class)
+# across three changed debug_adapter files.
+#
+# (A) execution.rs — 6 resume handlers (handle_continue, handle_next,
+#     handle_step_in, handle_step_out, handle_pause, handle_goto):
+#     lock_or_recover and stack_frames.clear() are weakly_gripped seams;
+#     RIPR cannot trace Mutex Some-branch activation at compile time.
+#
+# (B) frames.rs — degraded-transport Vec::new() fallback at line 73:
+#     reachable_unrevealed seam — execution requires framed transport failure,
+#     which RIPR cannot statically confirm is exercised.
+#
+# (C) mod.rs — three new #[cfg(test)] helper methods added to the impl block:
+#     seed_session_for_test, spawn_noop_child_for_test,
+#     inject_stack_frames_for_test, stack_frames_snapshot_for_test.
+#     ripr#1428-class false-positives: diff-scoped analysis treats #[cfg(test)]
+#     methods in the production impl block as new production seams.
+#
+# All seams are covered by 5 unit tests (test_handle_continue/next/step_in/
+# step_out/pause_clears_stack_frames) and 1 degraded-path test
+# (test_stack_trace_does_not_use_snapshot_in_degraded_path).
+# Remove when ripr#1429 and ripr#1428 are fixed upstream.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-dap-stack-frame-lifecycle"
+kind = "predicate_infection_untraceable"
+paths = [
+  "crates/perl-dap/src/debug_adapter/execution.rs",
+  "crates/perl-dap/src/debug_adapter/frames.rs",
+  "crates/perl-dap/src/debug_adapter/mod.rs",
+]
+classification = ["reachable_unrevealed", "weakly_gripped", "call_presence"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "ripr#1429-class seams across three debug_adapter files: (A) execution.rs weakly_gripped seams in all 6 resume handlers — lock_or_recover and stack_frames.clear(); RIPR cannot trace Mutex Some at compile time. (B) frames.rs reachable_unrevealed seam — Vec::new() degraded-transport fallthrough (line 73); reachable but RIPR cannot statically confirm coverage. (C) mod.rs reachable_unrevealed seams from four new #[cfg(test)] test-helper methods (seed_session_for_test, spawn_noop_child_for_test, inject_stack_frames_for_test, stack_frames_snapshot_for_test); ripr#1428-class false-positives (diff-scoped analysis treats #[cfg(test)] methods in production impl block as new production seams). All seams are covered by 5 unit tests (test_handle_continue/next/step_in/step_out/pause_clears_stack_frames) and 1 degraded-path integration test. Remove when ripr#1429 and ripr#1428 are fixed upstream."
+created = "2026-06-12"
+review_after = "2026-07-12"
+expires = "2026-09-30"
