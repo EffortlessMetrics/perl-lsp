@@ -2171,13 +2171,35 @@ pub enum NodeKind {
         partial: Option<Box<Node>>,
     },
 
-    /// Missing expression where one was expected
+    /// Missing expression where one was expected.
+    ///
+    /// Emitted by `recover_missing_infix_rhs` when a binary operator has no
+    /// right-hand-side (e.g. `1 +` at end of input). This is the **only**
+    /// `Missing*` variant currently emitted by the production parser.
     MissingExpression,
-    /// Missing statement where one was expected
+
+    /// RESERVED — not currently emitted by the parser.
+    ///
+    /// Retained for API symmetry and future error-recovery work. If recovery
+    /// starts emitting this variant, add real parser fixture tests before
+    /// shipping. Do not pattern-match on this variant expecting it to appear
+    /// in normal parse output.
     MissingStatement,
-    /// Missing identifier where one was expected
+
+    /// RESERVED — not currently emitted by the parser.
+    ///
+    /// Retained for API symmetry and future error-recovery work. If recovery
+    /// starts emitting this variant, add real parser fixture tests before
+    /// shipping. Do not pattern-match on this variant expecting it to appear
+    /// in normal parse output.
     MissingIdentifier,
-    /// Missing block where one was expected
+
+    /// RESERVED — not currently emitted by the parser.
+    ///
+    /// Retained for API symmetry and future error-recovery work. If recovery
+    /// starts emitting this variant, add real parser fixture tests before
+    /// shipping. Do not pattern-match on this variant expecting it to appear
+    /// in normal parse output.
     MissingBlock,
 
     /// Lexer budget exceeded marker preserving partial parse results
