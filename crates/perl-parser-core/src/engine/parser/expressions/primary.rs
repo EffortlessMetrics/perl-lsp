@@ -1349,3 +1349,197 @@ fn is_simple_scalar_variable(pattern: &str) -> bool {
 
     true
 }
+
+// ============================================================================
+// balanced_segment_conformance — inline tests for consume_balanced_in_interpolated_string
+//
+// This test block is one of TWO that together form the conformance matrix for
+// balanced-segment consumption across the workspace (#1323).
+//
+// The same input set (is_balanced contract) is tested in:
+//   - crates/perl-lexer/src/lexer/helpers/balanced_segments.rs
+//     (consume_balanced_segment and consume_balanced_segment_in_string)
+//
+// Normalized contract:
+//   - is_balanced: does the segment have a matching close before the boundary?
+//   - end_offset: NOT exposed by this impl (returns bool only; see lexer for offsets)
+//
+// Adapter: consume_balanced_in_interpolated_string(bytes, start, open, close, quote_end)
+//   true  => balanced
+//   false => not balanced
+//
+// `quote_end` is the exclusive scan boundary (analogous to the lexer's EOF
+// or the `_in_string` variant's terminator stop). Setting quote_end = bytes.len()
+// covers the full input.
+//
+// DIVERGENCE SUMMARY (no semantic divergence found for the shared input set):
+//   - Structural: parser-core uses a quote_end *byte index* as boundary;
+//     lexer uses char-level advance or a terminator char. Same semantic effect.
+//   - Structural: backslash-at-EOF — parser-core does i.saturating_add(2),
+//     which overshoots to quote_end safely. Lexer checks current_char().is_some()
+//     before the second advance. Both correctly return unbalanced.
+//   - Verdict: AGREE on all inputs in the shared matrix. Safe to centralize
+//     once a follow-up refactor PR is scoped.
+// ============================================================================
+#[cfg(test)]
+mod balanced_segment_conformance {
+    use super::Parser;
+
+    /// Normalize `consume_balanced_in_interpolated_string` to `is_balanced`.
+    /// `quote_end` = bytes.len() scans the full input.
+    fn is_balanced(input: &[u8], start: usize, open: u8, close: u8) -> bool {
+        Parser::consume_balanced_in_interpolated_string(input, start, open, close, input.len())
+    }
+
+    /// Normalize with an explicit quote_end (for string-boundary cases).
+    fn is_balanced_bounded(input: &[u8], start: usize, open: u8, close: u8, bound: usize) -> bool {
+        Parser::consume_balanced_in_interpolated_string(input, start, open, close, bound)
+    }
+
+    // -----------------------------------------------------------------------
+    // Simple balanced cases — both impls must agree: is_balanced = true
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn simple_parens_balanced() {
+        // "(a b c)" — one level, no escapes
+        assert!(is_balanced(b"(a b c)", 0, b'(', b')'), "parser-core: '(a b c)' should be balanced");
+    }
+
+    #[test]
+    fn simple_braces_balanced() {
+        // "{x}" — curly braces
+        assert!(is_balanced(b"{x}", 0, b'{', b'}'), "parser-core: '{{x}}' should be balanced");
+    }
+
+    #[test]
+    fn simple_brackets_balanced() {
+        // "[1]" — square brackets
+        assert!(is_balanced(b"[1]", 0, b'[', b']'), "parser-core: '[1]' should be balanced");
+    }
+
+    // -----------------------------------------------------------------------
+    // Nested balanced cases
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn nested_parens_balanced() {
+        // "(a (b) c)" — depth 2 then back to 1 then 0
+        assert!(is_balanced(b"(a (b) c)", 0, b'(', b')'), "parser-core: '(a (b) c)' should be balanced");
+    }
+
+    #[test]
+    fn nested_braces_balanced() {
+        // "{ {x} {y} }" — two inner braces
+        assert!(is_balanced(b"{ {x} {y} }", 0, b'{', b'}'), "parser-core: '{{ {{x}} {{y}} }}' should be balanced");
+    }
+
+    // -----------------------------------------------------------------------
+    // Escaped delimiter cases
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn escaped_close_in_middle_balanced() {
+        // "(a \) b)" — \) is escaped, real close is at end
+        assert!(is_balanced(b"(a \\) b)", 0, b'(', b')'), "parser-core: escaped close '\\\\)' does not close; ')' at end closes");
+    }
+
+    #[test]
+    fn escaped_open_in_middle_balanced() {
+        // "(a \( b)" — \( is escaped so depth does NOT increase
+        assert!(is_balanced(b"(a \\( b)", 0, b'(', b')'), "parser-core: escaped open '\\\\(' does not nest; one close suffices");
+    }
+
+    // -----------------------------------------------------------------------
+    // Backslash at/near end — trailing backslash; result is unbalanced
+    //
+    // DIVERGENCE (structural, not semantic):
+    //   Parser-core: i.saturating_add(2) overshoots to quote_end; loop exits.
+    //   Lexer: checks current_char().is_some() before second advance; loop exits.
+    //   Both correctly return unbalanced.
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn backslash_at_eof_unbalanced() {
+        // "(a \" — backslash is the last byte; nothing to escape; never closes
+        assert!(!is_balanced(b"(a \\", 0, b'(', b')'), "parser-core: trailing backslash at EOF → unbalanced");
+    }
+
+    #[test]
+    fn escaped_close_only_unbalanced() {
+        // "(\)" — the ')' is escaped, so the segment never receives a real close
+        assert!(!is_balanced(b"(\\)", 0, b'(', b')'), "parser-core: '(\\\\)' has only an escaped close → unbalanced");
+    }
+
+    // -----------------------------------------------------------------------
+    // Unbalanced / never-closed cases
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn unbalanced_open_only_no_close() {
+        // "(a b c" — no closing paren anywhere
+        assert!(!is_balanced(b"(a b c", 0, b'(', b')'), "parser-core: '(a b c' (no close) → unbalanced");
+    }
+
+    // -----------------------------------------------------------------------
+    // Empty balanced pair
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn empty_pair_balanced() {
+        // "()" — open immediately followed by close; depth goes 1→0
+        assert!(is_balanced(b"()", 0, b'(', b')'), "parser-core: '()' should be balanced");
+    }
+
+    // -----------------------------------------------------------------------
+    // String-boundary variant: quote_end acts as the scan boundary
+    //
+    // DIVERGENCE (structural, not semantic):
+    //   Parser-core uses a quote_end *byte index* as exclusive upper bound.
+    //   Lexer _in_string uses a terminator *char*; returns None on first hit.
+    //   Both return "not balanced" when the relevant boundary is reached.
+    //   Correct Perl behavior: unmatched delimiter within a double-quoted
+    //   string is an error; the outer string parser handles recovery.
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn stops_at_quote_end_boundary_unbalanced() {
+        // "(foo)" embedded in a "...(foo)"..." — quote_end cuts before the ')'
+        // Simulates: the '(' is inside a double-quoted string but the closing
+        // quote appears before the matching ')' can be found.
+        // Input bytes: (foo"  (indices 0-4), quote_end = 4 (before ')')
+        let input = b"(foo)";
+        assert!(
+            !is_balanced_bounded(input, 0, b'(', b')', 4),
+            "parser-core: quote_end before ')' → unbalanced (boundary stops scan)"
+        );
+    }
+
+    #[test]
+    fn balanced_within_quote_end_boundary() {
+        // "(foo)" — quote_end encompasses the full segment; balanced
+        let input = b"(foo)";
+        assert!(
+            is_balanced_bounded(input, 0, b'(', b')', 5),
+            "parser-core: quote_end at or after ')' → balanced"
+        );
+    }
+
+    #[test]
+    fn escaped_terminator_keeps_scanning() {
+        // "(a\\\"b)" — bytes: ( a \ " b )
+        // The \" is treated as an escape sequence (\ + "); scan continues to ')'
+        // quote_end = full length; no early boundary cut
+        let input = b"(a\\\"b)";
+        assert!(
+            is_balanced(input, 0, b'(', b')'),
+            "parser-core: escaped '\\\\\"' skipped by backslash; ')' closes"
+        );
+    }
+
+    #[test]
+    fn nested_balanced_within_boundary() {
+        // "(a(b)c)" — nested, fully balanced
+        assert!(is_balanced(b"(a(b)c)", 0, b'(', b')'), "parser-core: nested '(a(b)c)' balanced");
+    }
+}
