@@ -297,3 +297,47 @@ reason = "Seven ripr#1429-class seams in is_method_call_context and resolve_meth
 created = "2026-06-11"
 review_after = "2026-07-11"
 expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
+# quality_baseline.rs cfg(test) line-scanner predicates: string/line-scanning
+# — activation untraceable by ripr 0.5.0 (ripr#1429 class).
+#
+# PR #1326 adds five helper functions to xtask/src/tasks/quality_baseline.rs:
+#   cfg_test_line_numbers   — scans source text for #[cfg(test)] spans
+#   structural_brace_delta  — counts structural braces in a line of Rust source
+#   is_cfg_test_attr        — predicate: does a line contain #[cfg(test)]?
+#   strip_cfg_test_lines    — strips test-block lines from LcovSummary
+#   resolve_source_path     — resolves an LCOV SF: path to a filesystem path
+#
+# ripr 0.5.0 cannot statically trace activation from string-literal test inputs
+# through the line-by-line scanning loops in cfg_test_line_numbers and
+# structural_brace_delta to their internal predicate branches. The same
+# ripr#1429 predicate-infection-untraceable class as sibling suppressions
+# (parse_quote_operator_content, is_method_call_context, etc.).
+#
+# Coverage evidence: 10 inline #[cfg(test)] unit tests in quality_baseline.rs:
+#   cfg_test_line_numbers_detects_inline_test_module
+#   cfg_test_line_numbers_empty_file_returns_empty_set
+#   cfg_test_line_numbers_handles_multiple_test_blocks
+#   strip_cfg_test_lines_removes_test_block_lines_from_lcov
+#   strip_cfg_test_lines_does_not_affect_production_hit_count
+#   strip_cfg_test_lines_patch_coverage_full_for_test_only_pr
+#   structural_brace_delta_counts_only_structural_braces
+#   structural_brace_delta_skips_char_literals
+#   structural_brace_delta_skips_single_line_string_literals
+#   structural_brace_delta_balances_nested_blocks
+#
+# Suppression is narrow (single xtask file, one PR). Remove when ripr#1429 is
+# fixed upstream or when targeted mutation is scheduled per #1289.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-quality-baseline-cfg-test-scanner"
+kind = "predicate_infection_untraceable"
+paths = ["xtask/src/tasks/quality_baseline.rs"]
+classification = ["weakly_exposed", "no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "Five ripr#1429-class seams in PR #1326 cfg(test)-strip helpers: cfg_test_line_numbers, structural_brace_delta, is_cfg_test_attr, strip_cfg_test_lines, resolve_source_path. RIPR cannot statically trace activation from string-literal test inputs through the line-by-line scanning loops to internal predicate branches (same class as parse_quote_operator_content and is_method_call_context). All seams are covered by 10 inline #[cfg(test)] unit tests: 3 for cfg_test_line_numbers (inline_test_module, empty_file, multiple_blocks), 3 for strip_cfg_test_lines (removes_test_block_lines, does_not_affect_production_hit_count, patch_coverage_full_for_test_only_pr), and 4 for structural_brace_delta edge cases added by the deep-review correctness fix. Retirement tracked in #1289. Remove when ripr#1429 is fixed upstream or when targeted mutation is scheduled."
+created = "2026-06-12"
+review_after = "2026-07-12"
+expires = "2026-09-30"
