@@ -401,6 +401,9 @@ pub mod var_ref {
     pub use crate::debug_adapter::var_ref::{ScopeKind, VariableReference, VariableReferenceError};
 }
 
+// Re-export codec types at crate root for ergonomic use in tests and consumer crates.
+pub use debug_adapter::var_ref::{ScopeKind, VariableReference, VariableReferenceError};
+
 // Re-export Phase 1 public types
 pub use bridge_adapter::{BridgeAdapter, DapBridgeEnvConfig};
 pub use configuration::{

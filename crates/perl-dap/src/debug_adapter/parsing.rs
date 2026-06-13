@@ -121,7 +121,18 @@ impl DebugAdapter {
         start: usize,
         count: usize,
     ) -> (Vec<Variable>, HashMap<i32, Vec<Variable>>) {
-        let scope_type = variables_ref % 10;
+        use crate::debug_adapter::var_ref::{ScopeKind, VariableReference};
+        // Decode the scope kind from the variablesReference using the codec.
+        // scope_variables::parse_assignments still expects i32 discriminant (1/2/3).
+        // Invalid (non-Scope or None) refs return empty results — no crash.
+        let scope_type = match VariableReference::decode(variables_ref) {
+            Some(VariableReference::Scope { kind, .. }) => match kind {
+                ScopeKind::Locals => 1_i32,
+                ScopeKind::Package => 2_i32,
+                ScopeKind::Globals => 3_i32,
+            },
+            _ => return (Vec::new(), HashMap::new()),
+        };
         let parsed = scope_variables::parse_assignments(lines, scope_type);
         let page = scope_variables::sort_and_paginate(parsed, start, count);
 
@@ -225,42 +236,46 @@ impl DebugAdapter {
         start: usize,
         count: usize,
     ) -> Vec<Variable> {
-        let variables = match variables_ref % 10 {
-            1 => vec![
-                Variable {
-                    name: "$self".to_string(),
-                    value: "blessed(My::Module)".to_string(),
-                    type_: Some("hash".to_string()),
-                    variables_reference: variables_ref.saturating_mul(100) + 2,
-                    named_variables: Some(5),
-                    indexed_variables: None,
-                },
-                Variable {
-                    name: "@_".to_string(),
-                    value: "array(size=0)".to_string(),
-                    type_: Some("array".to_string()),
-                    variables_reference: variables_ref.saturating_mul(100) + 1,
+        use crate::debug_adapter::var_ref::{ScopeKind, VariableReference};
+        // Decode scope kind via codec; None/non-Scope → empty fallback (no crash).
+        let variables = match VariableReference::decode(variables_ref) {
+            Some(VariableReference::Scope { kind, .. }) => match kind {
+                ScopeKind::Locals => vec![
+                    Variable {
+                        name: "$self".to_string(),
+                        value: "blessed(My::Module)".to_string(),
+                        type_: Some("hash".to_string()),
+                        variables_reference: variables_ref.saturating_mul(100) + 2,
+                        named_variables: Some(5),
+                        indexed_variables: None,
+                    },
+                    Variable {
+                        name: "@_".to_string(),
+                        value: "array(size=0)".to_string(),
+                        type_: Some("array".to_string()),
+                        variables_reference: variables_ref.saturating_mul(100) + 1,
+                        named_variables: None,
+                        indexed_variables: Some(0),
+                    },
+                ],
+                ScopeKind::Package => vec![Variable {
+                    name: "$VERSION".to_string(),
+                    value: "\"1.0.0\"".to_string(),
+                    type_: Some("scalar".to_string()),
+                    variables_reference: 0,
                     named_variables: None,
-                    indexed_variables: Some(0),
-                },
-            ],
-            2 => vec![Variable {
-                name: "$VERSION".to_string(),
-                value: "\"1.0.0\"".to_string(),
-                type_: Some("scalar".to_string()),
-                variables_reference: 0,
-                named_variables: None,
-                indexed_variables: None,
-            }],
-            3 => vec![Variable {
-                name: "$_".to_string(),
-                value: "undef".to_string(),
-                type_: Some("scalar".to_string()),
-                variables_reference: 0,
-                named_variables: None,
-                indexed_variables: None,
-            }],
-            _ => Vec::new(),
+                    indexed_variables: None,
+                }],
+                ScopeKind::Globals => vec![Variable {
+                    name: "$_".to_string(),
+                    value: "undef".to_string(),
+                    type_: Some("scalar".to_string()),
+                    variables_reference: 0,
+                    named_variables: None,
+                    indexed_variables: None,
+                }],
+            },
+            _ => Vec::new(), // Invalid or non-Scope varref → honest empty fallback
         };
 
         variables.into_iter().skip(start).take(count).collect()

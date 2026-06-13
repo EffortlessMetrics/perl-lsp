@@ -121,7 +121,7 @@ impl DebugAdapter {
     }
 
     /// Handle scopes request
-    pub(super) fn handle_scopes(
+    pub fn handle_scopes(
         &self,
         seq: i64,
         request_seq: i64,
@@ -144,10 +144,14 @@ impl DebugAdapter {
         let frame_id = Self::i64_to_i32_saturating(args.frame_id);
 
         // AC8.3: Hierarchical scope inspection
-        // Use bit-shifting or offsets to distinguish between scope types for the same frame
-        let locals_ref = frame_id.saturating_mul(10).saturating_add(1);
-        let package_ref = frame_id.saturating_mul(10).saturating_add(2);
-        let globals_ref = frame_id.saturating_mul(10).saturating_add(3);
+        // Use VariableReference codec to encode scope refs into disjoint wire bands.
+        use crate::debug_adapter::var_ref::{ScopeKind, VariableReference};
+        let locals_ref =
+            VariableReference::Scope { frame_id, kind: ScopeKind::Locals }.encode().unwrap_or(0);
+        let package_ref =
+            VariableReference::Scope { frame_id, kind: ScopeKind::Package }.encode().unwrap_or(0);
+        let globals_ref =
+            VariableReference::Scope { frame_id, kind: ScopeKind::Globals }.encode().unwrap_or(0);
 
         let scopes_body = ScopesResponseBody {
             scopes: vec![

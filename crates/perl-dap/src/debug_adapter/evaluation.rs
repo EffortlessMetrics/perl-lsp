@@ -1,4 +1,4 @@
-﻿//! REPL and expression evaluation: evaluate, set expression, completions.
+//! REPL and expression evaluation: evaluate, set expression, completions.
 
 use super::*;
 use std::sync::LazyLock;
@@ -565,8 +565,10 @@ impl DebugAdapter {
             *lock_or_recover(&self.session, "debug_adapter.allocate_evaluate_result_ref")
         {
             let raw_counter = self.debugger_output_marker.fetch_add(1, Ordering::Relaxed);
-            let eval_ref =
-                1_000_000_i32.saturating_add(Self::i64_to_i32_saturating(raw_counter as i64));
+            let counter = Self::i64_to_i32_saturating(raw_counter as i64);
+            let eval_ref = crate::debug_adapter::var_ref::VariableReference::EvalResult { counter }
+                .encode()
+                .unwrap_or(0);
             let placeholder = Variable {
                 name: expression.to_string(),
                 value: result.to_string(),

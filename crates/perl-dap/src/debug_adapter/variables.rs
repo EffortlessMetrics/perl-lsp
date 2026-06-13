@@ -4,7 +4,7 @@ use super::*;
 
 impl DebugAdapter {
     /// Handle variables request
-    pub(super) fn handle_variables(
+    pub fn handle_variables(
         &self,
         seq: i64,
         request_seq: i64,
@@ -107,19 +107,17 @@ impl DebugAdapter {
 
                 // Request fresh scope output from Perl debugger for scope roots only.
                 //
-                // Scope encoding: variables_ref % 10 indicates the scope kind:
-                //   1 = Locals  (lexical `my` variables in the current frame)
-                //   2 = Package (package/`our` variables, fully-qualified names)
-                //   3 = Globals (Perl built-in global variables)
-                //
-                // Frame index (variables_ref / 10) is used only for Package/Globals
-                // lookups where `V <pkg>` is appropriate.  For Locals, the `V` command
-                // is unsuitable because it only shows package-symbol-table entries —
-                // `my` lexicals are NOT in the symbol table.  Instead, we use a
-                // B-module eval that walks the current pad directly.
-                let frame_id = variables_ref / 10;
-                match variables_ref % 10 {
-                    1 => {
+                // Decode the variablesReference using the VariableReference codec.
+                // Scope variants map to their kind (Locals/Package/Globals) and frame_id.
+                // Non-Scope variants and invalid refs skip the framed output fetch;
+                // EvalResult cache hits were already served above.
+                use crate::debug_adapter::var_ref::{ScopeKind, VariableReference};
+                let (scope_frame_id, scope_kind) = match VariableReference::decode(variables_ref) {
+                    Some(VariableReference::Scope { frame_id, kind }) => (frame_id, Some(kind)),
+                    _ => (0, None),
+                };
+                match scope_kind {
+                    Some(ScopeKind::Locals) => {
                         // Locals scope: enumerate lexical `my` variables in the current
                         // executing frame's pad using the B introspection module.
                         //
@@ -178,9 +176,9 @@ impl DebugAdapter {
                             }
                         }
                     }
-                    2 => {
+                    Some(ScopeKind::Package) => {
                         if let Some(stdin) = session.process.stdin.as_mut() {
-                            let commands = vec![format!("V {} ::", frame_id)];
+                            let commands = vec![format!("V {} ::", scope_frame_id)];
                             match self.send_framed_debugger_commands(stdin, &commands) {
                                 Ok((begin, end)) => {
                                     framed_scope_lines = self.capture_framed_debugger_output(
@@ -191,16 +189,16 @@ impl DebugAdapter {
                                 }
                                 Err(error) => {
                                     tracing::warn!(%error, "Failed to send framed variables command, falling back");
-                                    let cmd = format!("V {} ::\n", frame_id);
+                                    let cmd = format!("V {} ::\n", scope_frame_id);
                                     let _ = stdin.write_all(cmd.as_bytes());
                                     let _ = stdin.flush();
                                 }
                             }
                         }
                     }
-                    3 => {
+                    Some(ScopeKind::Globals) => {
                         if let Some(stdin) = session.process.stdin.as_mut() {
-                            let commands = vec![format!("V {} *", frame_id)];
+                            let commands = vec![format!("V {} *", scope_frame_id)];
                             match self.send_framed_debugger_commands(stdin, &commands) {
                                 Ok((begin, end)) => {
                                     framed_scope_lines = self.capture_framed_debugger_output(
@@ -211,14 +209,18 @@ impl DebugAdapter {
                                 }
                                 Err(error) => {
                                     tracing::warn!(%error, "Failed to send framed variables command, falling back");
-                                    let cmd = format!("V {} *\n", frame_id);
+                                    let cmd = format!("V {} *\n", scope_frame_id);
                                     let _ = stdin.write_all(cmd.as_bytes());
                                     let _ = stdin.flush();
                                 }
                             }
                         }
                     }
-                    _ => {}
+                    None => {
+                        // Invalid or non-Scope variablesReference — no framed output to fetch.
+                        // EvalResult/Child cache hits were already served above;
+                        // unknown refs produce an honest empty list.
+                    }
                 }
 
                 let (full_roots, child_cache) = if let Some(lines) = framed_scope_lines.as_ref() {
