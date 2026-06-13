@@ -61,6 +61,7 @@ perl-semantic-facts = { workspace = true }
 perl-symbol = { workspace = true }
 perl-module = { workspace = true }
 perl-pod = { workspace = true }
+perl-ast = { workspace = true }
 perl-parser-core = { workspace = true }
 perl-workspace = { workspace = true }
 perl-lexer = { workspace = true }

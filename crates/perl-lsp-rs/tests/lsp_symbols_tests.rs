@@ -243,6 +243,168 @@ sub compute {
     Ok(())
 }
 
+/// Test that `our $VAR` package variables appear as document symbols with kind 13 (Variable).
+///
+/// The SymbolExtractor has always handled `our` declarators; this test pins that
+/// `our $VERSION` is emitted with the correct sigil-prefixed name and Variable kind.
+#[test]
+fn test_document_symbol_our_variable() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let doc_uri = "file:///test_our_vars.pl";
+    harness.open(
+        doc_uri,
+        r#"package Acme::Widget;
+
+our $VERSION = '1.00';
+our @EXPORT = ('new');
+our %CONFIG = (debug => 0);
+
+sub new {
+    my $class = shift;
+    return bless {}, $class;
+}
+"#,
+    )?;
+
+    let response = harness.request(
+        "textDocument/documentSymbol",
+        json!({
+            "textDocument": { "uri": doc_uri }
+        }),
+    )?;
+
+    let symbols = response.as_array().ok_or("documentSymbol should return an array")?;
+
+    // Collect all symbol names for diagnostics
+    let names: Vec<&str> = symbols.iter().filter_map(|s| s["name"].as_str()).collect();
+
+    // $VERSION should appear as a Variable (kind 13)
+    let version_sym = symbols.iter().find(|s| s["name"].as_str() == Some("$VERSION"));
+    assert!(
+        version_sym.is_some(),
+        "should find '$VERSION' document symbol; got names: {:?}",
+        names
+    );
+    if let Some(v) = version_sym {
+        assert_eq!(v["kind"], 13, "$VERSION should have kind 13 (Variable)");
+    }
+
+    // @EXPORT should appear as an Array (kind 18)
+    let export_sym = symbols.iter().find(|s| s["name"].as_str() == Some("@EXPORT"));
+    assert!(export_sym.is_some(), "should find '@EXPORT' document symbol; got names: {:?}", names);
+    if let Some(e) = export_sym {
+        assert_eq!(e["kind"], 18, "@EXPORT should have kind 18 (Array)");
+    }
+
+    Ok(())
+}
+
+/// Test that Moo `has 'attr'` declarations appear as document symbols with kind 7 (Property).
+///
+/// The SymbolExtractor synthesizes a Symbol with declaration="has" and kind=Variable(Scalar)
+/// for each Moo/Moose attribute.  The provider maps declaration="has" to LSP kind 7 (Property)
+/// and drops the sigil from the displayed name.
+#[test]
+fn test_document_symbol_moo_has_attributes() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let doc_uri = "file:///moo_has_test.pl";
+    harness.open(
+        doc_uri,
+        r#"package Demo::User;
+use Moo;
+has 'name' => (is => 'ro', isa => 'Str', default => sub { 'anon' });
+
+sub greet {
+    my $self = shift;
+    return $self->name;
+}
+"#,
+    )?;
+
+    let response = harness.request(
+        "textDocument/documentSymbol",
+        json!({
+            "textDocument": { "uri": doc_uri }
+        }),
+    )?;
+
+    let symbols = response.as_array().ok_or("documentSymbol should return an array")?;
+    let names: Vec<&str> = symbols.iter().filter_map(|s| s["name"].as_str()).collect();
+
+    // `has 'name'` should produce a symbol named "name" (no sigil) with kind 7 (Property)
+    let name_sym = symbols.iter().find(|s| s["name"].as_str() == Some("name"));
+    assert!(
+        name_sym.is_some(),
+        "should find 'name' attribute as document symbol (kind 7); got names: {:?}",
+        names
+    );
+    if let Some(ns) = name_sym {
+        assert_eq!(
+            ns["kind"], 7,
+            "'name' Moo attribute should have LSP kind 7 (Property); got: {:?}",
+            ns["kind"]
+        );
+    }
+
+    Ok(())
+}
+
+/// Test that Moose `has 'attr'` declarations appear as document symbols with kind 7 (Property).
+#[test]
+fn test_document_symbol_moose_has_attributes() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let doc_uri = "file:///moose_has_test.pl";
+    harness.open(
+        doc_uri,
+        r#"package Demo::MooseUser;
+use Moose;
+has 'email' => (
+    is => 'rw',
+    isa => 'Str',
+    default => sub { 'user@example.com' },
+);
+
+sub run {
+    my $self = shift;
+    return $self->email;
+}
+"#,
+    )?;
+
+    let response = harness.request(
+        "textDocument/documentSymbol",
+        json!({
+            "textDocument": { "uri": doc_uri }
+        }),
+    )?;
+
+    let symbols = response.as_array().ok_or("documentSymbol should return an array")?;
+    let names: Vec<&str> = symbols.iter().filter_map(|s| s["name"].as_str()).collect();
+
+    // `has 'email'` should produce a symbol named "email" with kind 7 (Property)
+    let email_sym = symbols.iter().find(|s| s["name"].as_str() == Some("email"));
+    assert!(
+        email_sym.is_some(),
+        "should find 'email' Moose attribute as document symbol (kind 7); got names: {:?}",
+        names
+    );
+    if let Some(es) = email_sym {
+        assert_eq!(
+            es["kind"], 7,
+            "'email' Moose attribute should have LSP kind 7 (Property); got: {:?}",
+            es["kind"]
+        );
+    }
+
+    Ok(())
+}
+
 /// Test document symbols for a file with mixed content including comments
 #[test]
 fn test_document_symbol_mixed_content() -> TestResult {

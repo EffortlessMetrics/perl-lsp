@@ -36,7 +36,9 @@ mod dap_performance {
                 adapter.handle_request(i + 1, "next", Some(json!({ "threadId": 1 })))
             };
             match response {
-                DapMessage::Response { success, .. } => assert!(success),
+                // #898: no-session path returns success: false with guidance.
+                // The latency bound still applies: fast error, not slow error.
+                DapMessage::Response { .. } => {}
                 _ => anyhow::bail!("expected response"),
             }
             samples.push(start.elapsed());

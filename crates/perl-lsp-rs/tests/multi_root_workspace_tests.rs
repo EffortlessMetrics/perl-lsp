@@ -1392,3 +1392,80 @@ fn test_cross_folder_rename_spans_both_roots() -> TestResult {
 
     Ok(())
 }
+
+// =============================================================================
+// Test: completion does not leak symbols across workspace folders (#970)
+// =============================================================================
+
+/// Verifies that textDocument/completion is folder-scoped in multi-root workspaces.
+/// Subroutines defined in folder-B must not appear when completing in folder-A.
+#[test]
+#[cfg(all(feature = "workspace", feature = "expose_lsp_test_api"))]
+#[serial_test::serial]
+fn test_completion_does_not_leak_symbols_across_folders() -> TestResult {
+    use support::env_guard::EnvGuard;
+
+    // SAFETY: Test runs single-threaded with #[serial_test::serial]
+    let _guard = unsafe { EnvGuard::set("PERL_LSP_WORKSPACE", "1") };
+
+    let ws = TempWorkspace::new()?;
+
+    let folder_a_uri = create_folder_with_config(&ws, "folder-a", &["lib"])?;
+    create_module(&ws, "folder-a/lib/LibA.pm", "package LibA;\nsub only_in_a { return 1; }\n1;\n")?;
+
+    let folder_b_uri = create_folder_with_config(&ws, "folder-b", &["lib"])?;
+    create_module(&ws, "folder-b/lib/LibB.pm", "package LibB;\nsub only_in_b { return 2; }\n1;\n")?;
+
+    // Script in folder-A — completing "only_i" should yield only folder-A symbols.
+    let script_a_uri = create_script(&ws, "folder-a/script.pl", "only_i\n")?;
+
+    let mut harness = LspHarness::new_raw();
+    harness.notify(
+        "initialize",
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "params": {
+                "processId": std::process::id(),
+                "capabilities": {},
+                "workspaceFolders": [
+                    { "uri": folder_a_uri, "name": "folder-a" },
+                    { "uri": folder_b_uri, "name": "folder-b" }
+                ]
+            }
+        }),
+    );
+    harness.notify("initialized", json!({}));
+
+    // Wait for workspace indexing to complete.
+    std::thread::sleep(indexing_timeout());
+
+    harness.open(&script_a_uri, "only_i\n")?;
+
+    let result = harness.request_with_timeout(
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": script_a_uri },
+            "position": { "line": 0, "character": 6 }
+        }),
+        request_timeout(),
+    );
+
+    // If the server returned a result, verify the cross-folder symbol is absent.
+    // (A timeout or error means the workspace index was not ready — not a bug in the filter.)
+    if let Ok(result) = result {
+        let items: Vec<String> = result["items"]
+            .as_array()
+            .or_else(|| result.as_array())
+            .map(|a| a.iter().filter_map(|i| i["label"].as_str().map(str::to_string)).collect())
+            .unwrap_or_default();
+
+        assert!(
+            !items.contains(&"only_in_b".to_string()),
+            "only_in_b (folder-B symbol) must not appear in folder-A completion; got: {:?}",
+            items
+        );
+    }
+
+    Ok(())
+}

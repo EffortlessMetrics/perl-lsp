@@ -498,6 +498,82 @@ fn collect_literal_import_entries(
 mod tests {
     use super::*;
 
+    /// Regression: `Module->import(qw [..])` with whitespace before the `qw`
+    /// delimiter must extract each symbol the same as the compact `qw(..)` form.
+    /// Previously the leading space was treated as the delimiter, so the list
+    /// failed to parse and no symbols were extracted. See `parse_qw_arg_list`.
+    #[test]
+    fn import_qw_list_space_before_delimiter_extracts_symbols() -> Result<(), String> {
+        let src = "require Foo::Bar;\nFoo::Bar->import(qw [alpha beta]);\n";
+        let syms: Vec<String> =
+            extract_require_import_symbols(src).into_iter().map(|e| e.symbol).collect();
+        assert!(syms.contains(&"alpha".to_string()), "syms: {syms:?}");
+        assert!(syms.contains(&"beta".to_string()), "syms: {syms:?}");
+        Ok(())
+    }
+
+    /// `parse_qw_arg_list` unit coverage: leading whitespace before the
+    /// delimiter is tolerated; the compact form still works; a word character
+    /// after `qw` is still rejected (not a delimiter).
+    /// Covers space, tab, and newline — all `trim_start` whitespace variants.
+    #[test]
+    fn parse_qw_arg_list_tolerates_leading_space() -> Result<(), String> {
+        // Space before delimiter (original fix).
+        assert_eq!(parse_qw_arg_list("qw [a b]"), Some(vec!["a".to_string(), "b".to_string()]));
+        assert_eq!(parse_qw_arg_list("qw(a b)"), Some(vec!["a".to_string(), "b".to_string()]));
+        // Tab before delimiter.
+        assert_eq!(parse_qw_arg_list("qw\t[a b]"), Some(vec!["a".to_string(), "b".to_string()]));
+        assert_eq!(parse_qw_arg_list("qw\t(a b)"), Some(vec!["a".to_string(), "b".to_string()]));
+        // Newline before delimiter (Perl allows this in multi-line source).
+        assert_eq!(parse_qw_arg_list("qw\n[a b]"), Some(vec!["a".to_string(), "b".to_string()]));
+        // Multiple mixed whitespace.
+        assert_eq!(parse_qw_arg_list("qw  \t [a b]"), Some(vec!["a".to_string(), "b".to_string()]));
+        // Bareword directly after qw is not a valid delimiter — must return None.
+        assert_eq!(parse_qw_arg_list("qwfoo"), None);
+        Ok(())
+    }
+
+    // ── Seam A: `delimiter.is_ascii_alphanumeric() || delimiter == '_'` (line 626) ──
+    //
+    // RIPR weakly_exposed seam.  A mutation that removes `delimiter.is_ascii_alphanumeric()`
+    // would let `qwfoo` produce Some([]) or garbled output.
+    // A mutation removing `delimiter == '_'` would let `qw_foo` treat `_` as a
+    // delimiter and parse `foo)` as an inner list.
+    // Each sub-condition is pinned by a separate assertion below.
+    #[test]
+    fn parse_qw_arg_list_alphanumeric_delimiter_is_rejected() {
+        // Digit after qw — covers `is_ascii_alphanumeric()` for numeric chars.
+        assert_eq!(parse_qw_arg_list("qw9abc"), None, "digit delimiter must be None");
+        // Underscore after qw — covers `delimiter == '_'`.
+        assert_eq!(parse_qw_arg_list("qw_foo"), None, "underscore delimiter must be None");
+    }
+
+    // ── Seam B: `inner_start > inner_end || !after_operator.ends_with(closing)` (line 640) ──
+    //
+    // RIPR weakly_exposed seam.  A mutation removing `inner_start > inner_end` would
+    // produce a zero-length (or inverted) inner slice, causing panics or empty vecs.
+    // A mutation removing `!after_operator.ends_with(closing)` would accept mismatched
+    // delimiters.  Each sub-condition is pinned separately.
+    #[test]
+    fn parse_qw_arg_list_opening_only_returns_none() {
+        // `qw[` — inner_start (1) > inner_end (0) → None.
+        assert_eq!(parse_qw_arg_list("qw["), None, "qw[ (no closing) must be None");
+        // `qw(` — same guard, paren variant.
+        assert_eq!(parse_qw_arg_list("qw("), None, "qw( (no closing) must be None");
+        // `qw [` — after trim_start still no closing bracket.
+        assert_eq!(parse_qw_arg_list("qw ["), None, "qw [ (space, no closing) must be None");
+    }
+
+    #[test]
+    fn parse_qw_arg_list_mismatched_closing_returns_none() {
+        // Opens with `(` but closes with `]` → ends_with guard fires.
+        assert_eq!(parse_qw_arg_list("qw(abc]"), None, "qw(abc] must be None (mismatched)");
+        // Opens with `[` but closes with `)`.
+        assert_eq!(parse_qw_arg_list("qw[abc)"), None, "qw[abc) must be None (mismatched)");
+        // With leading whitespace before `(`.
+        assert_eq!(parse_qw_arg_list("qw (abc]"), None, "qw (abc] must be None (mismatched)");
+    }
+
     #[test]
     fn token_as_module_name_keeps_non_pm_require_tokens() -> Result<(), String> {
         let bare = parse_module_import_head("require Local::Util;")
@@ -581,29 +657,8 @@ fn parse_literal_arg_list(args: &str) -> Option<Vec<String>> {
     Some(symbols)
 }
 
-fn parse_qw_arg_list(trimmed: &str) -> Option<Vec<String>> {
-    let after_operator = trimmed.strip_prefix("qw")?;
-    let delimiter = after_operator.chars().next()?;
-    if delimiter.is_ascii_alphanumeric() || delimiter == '_' || delimiter.is_whitespace() {
-        return None;
-    }
-
-    let closing = match delimiter {
-        '(' => ')',
-        '[' => ']',
-        '{' => '}',
-        '<' => '>',
-        other => other,
-    };
-
-    let inner_start = "qw".len() + delimiter.len_utf8();
-    let inner_end = trimmed.len().checked_sub(closing.len_utf8())?;
-    if inner_start > inner_end || !trimmed.ends_with(closing) {
-        return None;
-    }
-
-    let inner = &trimmed[inner_start..inner_end];
-    Some(inner.split_whitespace().filter(|word| !word.is_empty()).map(str::to_string).collect())
+pub fn parse_qw_arg_list(trimmed: &str) -> Option<Vec<String>> {
+    perl_parser_core::parse_qw_words(trimmed)
 }
 
 /// Return true when `line` indicates a new statement boundary that should stop

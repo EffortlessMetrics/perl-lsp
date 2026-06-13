@@ -64,13 +64,13 @@ impl DebugAdapter {
                 framed_frames
             }
         } else {
-            let output_lines = self.snapshot_recent_output_lines();
-            if output_lines.is_empty() {
-                Vec::new()
-            } else {
-                let output = output_lines.join("\n");
-                Self::filter_user_visible_frames(Self::parse_stack_frames_from_text(&output))
-            }
+            // Snapshot buffer is unreliable when framed transport fails: it holds
+            // the full session history so snapshot-based parsing returns frames in
+            // buffer order — the stale pre-stop context line appears before the
+            // current stop line, producing a wrong first frame.  Return empty so
+            // the caller falls through to session.stack_frames, which the output
+            // reader populates with the authoritative current-stop frame.
+            Vec::new()
         };
 
         let stack_frames = if !parsed_frames.is_empty() {
@@ -98,20 +98,8 @@ impl DebugAdapter {
                 end_column: None,
             }]
         } else {
-            // No session - return placeholder frame for testing
-            vec![StackFrame {
-                id: 1,
-                name: "main::hello".to_string(),
-                source: Source {
-                    name: Some("hello.pl".to_string()),
-                    path: "/tmp/hello.pl".to_string(),
-                    source_reference: None,
-                },
-                line: 10,
-                column: 1,
-                end_line: None,
-                end_column: None,
-            }]
+            // No active session — return honest empty list per DAP spec
+            Vec::new()
         };
         // Capture full depth before pagination so totalFrames reports the real
         // stack depth, not the size of the paginated window (DAP spec §StackTraceResponse:
@@ -153,13 +141,13 @@ impl DebugAdapter {
             }
         };
 
-        let frame_id = args.frame_id as i32;
+        let frame_id = Self::i64_to_i32_saturating(args.frame_id);
 
         // AC8.3: Hierarchical scope inspection
         // Use bit-shifting or offsets to distinguish between scope types for the same frame
-        let locals_ref = frame_id * 10 + 1;
-        let package_ref = frame_id * 10 + 2;
-        let globals_ref = frame_id * 10 + 3;
+        let locals_ref = frame_id.saturating_mul(10).saturating_add(1);
+        let package_ref = frame_id.saturating_mul(10).saturating_add(2);
+        let globals_ref = frame_id.saturating_mul(10).saturating_add(3);
 
         let scopes_body = ScopesResponseBody {
             scopes: vec![

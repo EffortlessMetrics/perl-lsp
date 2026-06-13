@@ -154,9 +154,122 @@ pub fn get_mod_spec(operator: &str) -> Option<&'static ModSpec> {
     }
 }
 
+// ============================================================================
+// paired_delimiter_conformance — inline tests for paired_close
+//
+// This test block is one of THREE that together form the conformance matrix
+// for paired-delimiter implementations across the workspace (#1320).
+//
+// The same input set is tested in:
+//   - crates/perl-parser-core/src/syntax/quote.rs        (get_closing_delimiter)
+//   - crates/perl-dap/src/inline_values/code_mask.rs     (matching_delimiter)
+//
+// Normalized contract: each impl maps to (close_char: char, is_paired: bool).
+//   - This impl: paired_close(c) → Some(cl) ⇒ (cl, true); None ⇒ (c, false)
+// ============================================================================
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The shared conformance matrix.
+    /// Each entry is `(open_char, expected_close, expected_is_paired)`.
+    const MATRIX: &[(char, char, bool)] = &[
+        // --- Paired openers -------------------------------------------
+        ('(', ')', true),
+        ('[', ']', true),
+        ('{', '}', true),
+        ('<', '>', true),
+        // --- Self-delimiting: common punctuation ----------------------
+        ('/', '/', false),
+        ('#', '#', false),
+        ('|', '|', false),
+        ('!', '!', false),
+        (',', ',', false),
+        ('%', '%', false),
+        ('~', '~', false),
+        ('.', '.', false),
+        (':', ':', false),
+        (';', ';', false),
+        // --- Self-delimiting: quote-adjacent chars --------------------
+        ('\'', '\'', false),
+        ('"', '"', false),
+        // --- Self-delimiting: less-common punctuation ----------------
+        ('@', '@', false),
+        ('$', '$', false),
+        ('^', '^', false),
+        ('&', '&', false),
+        ('*', '*', false),
+        ('+', '+', false),
+        ('-', '-', false),
+        ('=', '=', false),
+        ('?', '?', false),
+        // --- Closing chars used as openers (not paired) --------------
+        // Note: Perl does NOT auto-pair ) ] } > as openers.
+        (')', ')', false),
+        (']', ']', false),
+        ('}', '}', false),
+        ('>', '>', false),
+    ];
+
+    /// Normalize `paired_close` to the shared `(close_char, is_paired)` shape.
+    fn normalize(open: char) -> (char, bool) {
+        match paired_close(open) {
+            Some(close) => (close, true),
+            None => (open, false),
+        }
+    }
+
+    #[test]
+    fn paired_close_agrees_with_conformance_matrix() {
+        for &(open, expected_close, expected_paired) in MATRIX {
+            let (got_close, got_paired) = normalize(open);
+            assert_eq!(
+                got_close, expected_close,
+                "perl-lexer paired_close({open:?}): close char mismatch \
+                 (got {got_close:?}, expected {expected_close:?})"
+            );
+            assert_eq!(
+                got_paired, expected_paired,
+                "perl-lexer paired_close({open:?}): is_paired mismatch \
+                 (got {got_paired}, expected {expected_paired})"
+            );
+        }
+    }
+
+    #[test]
+    fn paired_close_paired_openers_return_some() {
+        // The four Perl auto-paired delimiters must all return Some.
+        for open in ['(', '[', '{', '<'] {
+            assert!(
+                paired_close(open).is_some(),
+                "paired_close({open:?}) should be Some for a paired opener"
+            );
+        }
+    }
+
+    #[test]
+    fn paired_close_self_delimiters_return_none() {
+        // Self-delimiting chars that appear in Perl quote-like operators.
+        let self_delims = ['/', '#', '|', '!', ',', '%', '~', '.', ':', ';', '\'', '"', '@'];
+        for open in self_delims {
+            assert!(
+                paired_close(open).is_none(),
+                "paired_close({open:?}) should be None for a self-delimiting char"
+            );
+        }
+    }
+
+    #[test]
+    fn paired_close_closing_chars_used_as_openers_return_none() {
+        // Perl only auto-pairs the opener chars; the closer chars are NOT themselves
+        // auto-paired when used as an opener.
+        for close in [')', ']', '}', '>'] {
+            assert!(
+                paired_close(close).is_none(),
+                "paired_close({close:?}) should be None — closing chars are not themselves paired openers"
+            );
+        }
+    }
 
     #[test]
     fn paired_close_handles_balanced_and_unbalanced_delimiters() {

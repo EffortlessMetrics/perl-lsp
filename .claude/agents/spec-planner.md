@@ -53,10 +53,23 @@ Issues can have multiple implementation runs. The slug disambiguates.
 Derive the short description from the issue title (lowercase, hyphens, no special chars).
 
 1. **Branch name:** `impl/<issue#>-<specslug>` (e.g., `impl/4264-hash-key-completion`)
-2. **Create from master:** `git checkout -b impl/<issue#>-<specslug> origin/master`
+2. **Create from master:** `git checkout -b impl/<issue#>-<specslug> origin/main`
 3. **Write spec files on the branch:**
    - `.spec/<issue#>-<specslug>/checklist.md` — ordered implementation steps with exact file paths, signatures, and verify commands
-   - `.spec/<issue#>-<specslug>/acceptance.md` — acceptance criteria extracted from the issue, one per line, checkboxable
+   - `.spec/<issue#>-<specslug>/acceptance.md` — acceptance criteria extracted from the issue, one per line, checkboxable.
+     **Hazard-class invariants:** Before finalizing `acceptance.md`, check whether the change touches any of the
+     following surfaces. For each that applies, add an explicit acceptance row naming the invariant AND the
+     adversarial test that proves it (red-tdd will write that test):
+     - **ID/ref-space collision** — newly allocated numeric range (DAP refs, scope IDs, frame IDs): enumerate existing ranges, assert disjointness.
+     - **Bounds/overflow** — client-supplied indices/IDs: checked/saturating arithmetic, out-of-range → safe result, test the invalid path.
+     - **Protocol-safety** — external message handlers (LSP, DAP, stdin): malformed/unknown input → honest empty/error, never crash, test it.
+     - **Scanner literal/comment blindness** — byte/char scanners (brace counting, delimiter matching, LCOV range stripping): must skip strings/chars/comments/raw-strings, test each context.
+     - **Test-encodes-the-bug** — modifying an existing test assertion: confirm old assertion was correct behavior, not the defect.
+     - **Coverage/measurement integrity** — coverage transforms: must not drop production lines, test that a representative line survives.
+     See `docs/agents/SPEC_UPDATE_CHECKLIST.md §8` for the full class table.
+     **When the issue's subsystem is known (DAP, Parser, LSP, or Coverage/CI):** also consult
+     `docs/reference/SUBSYSTEM_HAZARD_DEFAULTS.md` for pre-populated hazard rows specific to
+     that subsystem — copy the applicable rows verbatim into `acceptance.md` and fill in the `Surface` field.
    - `.spec/<issue#>-<specslug>/context.md` — key decisions, alternatives rejected, and why (from plan-review and oppositional comments)
 4. **Commit:** `git add .spec/ && git commit -m "plan(<crate>): add implementation spec for #<issue>"`
 5. **Push:** `git push -u origin impl/<issue#>-<specslug>`

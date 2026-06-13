@@ -66,3 +66,15 @@ Message `lead-discovery` when the builder-ready queue is running low.
 - Your only tools are: spawning builders, checking queues, messaging leads.
 - Domain-specific leads are available as an exception when deep domain
   knowledge is needed, but you are the default build coordinator.
+
+## Duplicate-PR guard
+
+Before spawning a builder for issue #NNN, verify no open PR already exists:
+```bash
+gh pr list --search "#NNN" --state open
+```
+If one exists, spawn a builder to continue/improve that PR (using `/builder-read-pr`), not open a new one. Issue #964 accumulated four near-identical PRs from this gap.
+
+## In-build tracking
+
+After a builder opens a PR, confirm the source issue is labeled `in-build`. Without this label the issue looks unstarted to discovery scouts and gets re-scouted. The issue stays open until the PR merges.

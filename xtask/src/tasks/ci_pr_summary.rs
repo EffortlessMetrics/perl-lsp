@@ -18,7 +18,7 @@
 //!
 //! # Example
 //! ```text
-//! cargo xtask ci pr-summary --base origin/master --dry-run
+//! cargo xtask ci pr-summary --base origin/main --dry-run
 //! ```
 
 use color_eyre::eyre::{Context, Result};
@@ -32,7 +32,7 @@ use std::process::{Command, Stdio};
 
 /// Configuration for the `ci pr-summary` subcommand.
 pub struct CiPrSummaryConfig {
-    /// Base git reference to diff against (e.g. `origin/master`).
+    /// Base git reference to diff against (e.g. `origin/main`).
     pub base: String,
     /// When true, emit markdown to stdout only; do not post to GitHub.
     /// Currently the only supported mode — `false` is reserved for a future

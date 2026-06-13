@@ -481,3 +481,180 @@ fn workspace_rename_config_defaults() {
     assert!(config.report_progress, "report_progress should default to true");
     assert!(config.validate_syntax, "validate_syntax should default to true");
 }
+
+// ============================================================================
+// Regression #956: byte-level word-boundary check corrupts adjacent Unicode
+// ============================================================================
+
+/// Renaming `foo` must not match the `foo` suffix inside `$変数foo`
+/// because the preceding byte is a UTF-8 continuation byte, not a word boundary.
+#[test]
+fn workspace_rename_does_not_corrupt_adjacent_unicode_prefix()
+-> Result<(), Box<dyn std::error::Error>> {
+    // $変数foo contains a 3-byte kanji sequence ending in a continuation byte
+    // directly before "foo" — the old byte check would misread that byte as a
+    // non-ident boundary and fire incorrectly.
+    let content = "use utf8;\nmy $\u{5909}\u{6570}foo = 1;\nmy $foo = 2;\n";
+    let (workspace, index) = setup_workspace(&[("test.pl", content)])?;
+    let config = WorkspaceRenameConfig::default();
+    let rename_engine = WorkspaceRename::new(index, config);
+
+    let result =
+        rename_engine.rename_symbol("foo", "bar", &workspace.path().join("test.pl"), (2, 3));
+
+    match result {
+        Ok(r) => {
+            let total_edits: usize = r.file_edits.iter().map(|fe| fe.edits.len()).sum();
+            // Only the bare $foo on line 3 should be renamed; $変数foo must be left alone.
+            assert_eq!(
+                total_edits, 1,
+                "Only bare $foo should rename, not the foo suffix inside $変数foo. Got {} edits",
+                total_edits
+            );
+        }
+        // Symbol-not-found is acceptable (rename engine may require an indexed symbol)
+        Err(WorkspaceRenameError::SymbolNotFound { .. }) => {}
+        Err(e) => return Err(format!("Unexpected rename error: {e}").into()),
+    }
+
+    Ok(())
+}
+
+/// Renaming `foo` must not match `$fooα` because the char immediately after
+/// `foo` is a Unicode alphanumeric (α, U+03B1), not a word boundary.
+#[test]
+fn workspace_rename_does_not_corrupt_adjacent_unicode_suffix()
+-> Result<(), Box<dyn std::error::Error>> {
+    // α is U+03B1, encoded as 2 UTF-8 bytes (0xCE 0xB1).  The old byte check
+    // would read the first byte (0xCE, a lead byte) as non-ident and fire.
+    let content = "use utf8;\nmy $foo\u{03B1} = 1;\nmy $foo = 2;\n";
+    let (workspace, index) = setup_workspace(&[("test.pl", content)])?;
+    let config = WorkspaceRenameConfig::default();
+    let rename_engine = WorkspaceRename::new(index, config);
+
+    let result =
+        rename_engine.rename_symbol("foo", "bar", &workspace.path().join("test.pl"), (2, 3));
+
+    match result {
+        Ok(r) => {
+            let total_edits: usize = r.file_edits.iter().map(|fe| fe.edits.len()).sum();
+            // Only the bare $foo on line 3 should be renamed; $fooα must be left alone.
+            assert_eq!(
+                total_edits, 1,
+                "Only bare $foo should rename, not the foo prefix inside $fooα. Got {} edits",
+                total_edits
+            );
+        }
+        Err(WorkspaceRenameError::SymbolNotFound { .. }) => {}
+        Err(e) => return Err(format!("Unexpected rename error: {e}").into()),
+    }
+
+    Ok(())
+}
+
+// ============================================================================
+// Deref and string-interpolation rename coverage
+// ============================================================================
+
+/// Renaming a variable must cover occurrences inside double-quoted string
+/// interpolation (`"$var"`, `"${var}"`, `"@arr"`) while leaving literal text
+/// inside strings (`"hello var text"`) and single-quoted strings unchanged.
+#[test]
+fn workspace_rename_covers_double_quote_interpolation() -> Result<(), Box<dyn std::error::Error>> {
+    let content = concat!(
+        "my $tgt = 1;\n",               // code — rename
+        "print $tgt;\n",                // code — rename
+        "my $a = \"val: $tgt end\";\n", // dq interpolation $tgt — rename
+        "my $b = \"${tgt} done\";\n",   // dq braced interpolation — rename
+        "my $c = '@tgt array';\n",      // single-quoted — no rename
+        "my $d = \"bare tgt text\";\n", // bare text in dq — no rename
+    );
+    let (workspace, index) = setup_workspace(&[("interp.pl", content)])?;
+
+    let config = WorkspaceRenameConfig { create_backups: false, ..Default::default() };
+    let rename_engine = WorkspaceRename::new(index, config);
+    let result = rename_engine.rename_symbol(
+        "tgt",
+        "renamed",
+        &workspace.path().join("interp.pl"),
+        (0, 3),
+    )?;
+
+    // Expected renames: $tgt decl, print $tgt, $tgt in dq, ${tgt} braced = 4
+    assert_eq!(
+        result.statistics.total_changes, 4,
+        "expected 4 renames (2 code + 2 interpolated), got {}",
+        result.statistics.total_changes
+    );
+
+    rename_engine.apply_edits(&result)?;
+    let after = std::fs::read_to_string(workspace.path().join("interp.pl"))?;
+
+    assert!(after.contains("\"val: $renamed end\""), "dq $tgt must be renamed");
+    assert!(after.contains("\"${renamed} done\""), "dq braced ${{tgt}} must be renamed");
+    assert!(after.contains("'@tgt array'"), "single-quoted must be unchanged");
+    assert!(after.contains("\"bare tgt text\""), "bare text in dq must be unchanged");
+
+    Ok(())
+}
+
+/// Renaming a variable must NOT touch occurrences inside single-quoted strings.
+/// This is a non-regression guard: single-quoted strings never interpolate in Perl.
+#[test]
+fn workspace_rename_does_not_touch_single_quoted_strings() -> Result<(), Box<dyn std::error::Error>>
+{
+    let content = concat!(
+        "my $nope = 1;\n",
+        "my $x = '$nope in single quotes';\n", // single-quoted — must not rename
+        "$nope += 2;\n",                       // code — must rename
+    );
+    let (workspace, index) = setup_workspace(&[("sq.pl", content)])?;
+    let config = WorkspaceRenameConfig { create_backups: false, ..Default::default() };
+    let rename_engine = WorkspaceRename::new(index, config);
+
+    let result =
+        rename_engine.rename_symbol("nope", "yes", &workspace.path().join("sq.pl"), (0, 3))?;
+
+    assert_eq!(
+        result.statistics.total_changes, 2,
+        "expected 2 code renames, got {}",
+        result.statistics.total_changes
+    );
+
+    rename_engine.apply_edits(&result)?;
+    let after = std::fs::read_to_string(workspace.path().join("sq.pl"))?;
+    assert!(after.contains("'$nope in single quotes'"), "single-quoted must be unchanged");
+
+    Ok(())
+}
+
+/// A rename entirely within an ASCII file must still work correctly after the
+/// boundary-check change (no regression on the normal path).
+#[test]
+fn workspace_rename_ascii_boundary_still_works() -> Result<(), Box<dyn std::error::Error>> {
+    let content = "sub foo { 1 }\nsub foobar { 2 }\nfoo();\n";
+    let (workspace, index) = setup_workspace(&[("ascii.pl", content)])?;
+    let config = WorkspaceRenameConfig::default();
+    let rename_engine = WorkspaceRename::new(index, config);
+
+    let result =
+        rename_engine.rename_symbol("foo", "baz", &workspace.path().join("ascii.pl"), (0, 4));
+
+    match result {
+        Ok(r) => {
+            // `foobar` must never be touched; only bare `foo` references count.
+            for fe in &r.file_edits {
+                for edit in &fe.edits {
+                    assert!(
+                        !edit.new_text.contains("bazbar"),
+                        "foobar was incorrectly renamed to bazbar"
+                    );
+                }
+            }
+        }
+        Err(WorkspaceRenameError::SymbolNotFound { .. }) => {}
+        Err(e) => return Err(format!("Unexpected rename error: {e}").into()),
+    }
+
+    Ok(())
+}

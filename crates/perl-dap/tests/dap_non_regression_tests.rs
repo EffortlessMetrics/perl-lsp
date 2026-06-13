@@ -694,15 +694,16 @@ fn test_completions_response_has_targets_array() -> Result<(), Box<dyn std::erro
 }
 
 #[test]
-// AC:17 — continue response has 'allThreadsContinued' field
+// AC:17 / #898 — continue response shape with no session
 fn test_continue_response_has_all_threads_continued() -> Result<(), Box<dyn std::error::Error>> {
+    // #898: continue without a session returns success: false, body: None, message: Some(_).
+    // The 'allThreadsContinued' body field is only present on the success path (live session).
     let mut adapter = new_adapter();
     let args = json!({"threadId": 1});
-    let body = assert_ok(adapter.handle_request(1, "continue", Some(args)), "continue")
-        .ok_or("continue must return a body")?;
+    let msg = assert_err(adapter.handle_request(1, "continue", Some(args)), "continue");
     assert!(
-        body.get("allThreadsContinued").is_some(),
-        "continue body must include 'allThreadsContinued'"
+        msg.contains("no Perl debug session is active"),
+        "error must indicate no session: {msg}"
     );
     Ok(())
 }

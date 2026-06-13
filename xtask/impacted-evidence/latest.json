@@ -1,0 +1,49 @@
+{
+  "advisory_limits": [
+    "Impacted evidence routes mutation; it does not execute mutation.",
+    "Full-owner mutation requires an explicit mutation/full-owner label."
+  ],
+  "artifacts": [
+    {
+      "available": true,
+      "kind": "json",
+      "label": "impacted evidence JSON",
+      "path": "target/xtask/impacted-evidence/latest.json",
+      "required": true,
+      "scope": "diff"
+    },
+    {
+      "available": true,
+      "kind": "markdown",
+      "label": "impacted evidence Markdown",
+      "path": "target/xtask/impacted-evidence/latest.md",
+      "scope": "diff"
+    },
+    {
+      "available": true,
+      "kind": "json",
+      "label": "PR evidence JSON",
+      "path": "target/ripr/pr/repo-exposure.json",
+      "scope": "diff"
+    }
+  ],
+  "inputs": {
+    "labels": [
+      "in-review"
+    ],
+    "pr_evidence": "target/ripr/pr/repo-exposure.json"
+  },
+  "kind": "impacted_evidence",
+  "schema_version": "0.1",
+  "scope": "diff",
+  "status": "advisory",
+  "summary": {
+    "mutation_mode": "targeted",
+    "requires_full_owner_mutation": false,
+    "requires_targeted_mutation": true,
+    "ripr_severe_gap": true,
+    "routing_reason": "ripr severe gap"
+  },
+  "tool": "ripr",
+  "warnings": []
+}

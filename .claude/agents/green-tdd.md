@@ -55,7 +55,7 @@ The builder already pushed to the `impl/<issue#>-<specslug>` branch.
 You check out that branch and add your tests on top.
 
 1. **Check out:** `git checkout impl/<issue#>-<specslug>`
-2. **Read the diff:** `git diff origin/master..HEAD` to see what the builder changed
+2. **Read the diff:** `git diff origin/main..HEAD` to see what the builder changed
 3. **Read the spec:** `.spec/<issue#>-<specslug>/acceptance.md` and `context.md` for edge cases
 4. **Read oppositional comments:** check the issue for objections that should have test coverage
 5. **Write additional tests** on this branch
@@ -70,6 +70,7 @@ You check out that branch and add your tests on top.
 - **All tests must pass.** You're adding green tests, not red ones. If a new test fails, that's a bug in the builder's implementation — comment on the issue and flag it for the reviewer.
 - **Match existing patterns.** Same imports, naming, helpers as the crate's existing tests.
 - **Be additive.** Never modify the builder's tests or implementation. Only add new test functions.
+- **Codecov false-low recipe.** Patch coverage (`Codecov / Patch 95`) counts only `--lib` profdata; integration tests in `tests/` don't count toward patch coverage. If the builder missed inline `#[cfg(test)]` lib tests for new code paths, add them here. `LCOV_EXCL_LINE`/`LCOV_EXCL_START/STOP` only for GENUINELY-unreachable defensive branches.
 
 ## Todo list
 

@@ -53,7 +53,7 @@ git checkout impl/<issue#>-<specslug>
 
 If the spec planner didn't run (e.g., simple issue), create the branch yourself:
 ```bash
-git checkout -b impl/<issue#>-<specslug> origin/master
+git checkout -b impl/<issue#>-<specslug> origin/main
 ```
 
 ## What to write
@@ -68,6 +68,25 @@ For each acceptance criterion in the spec:
 Also write:
 - **Edge case tests** identified by the spec, oppositional planner, or plan reviewer
 - **Regression guard** if the spec mentions a specific bug scenario
+- **Adversarial tests for each hazard-class invariant** named in `acceptance.md`. These must be red before the
+  builder starts — not left to green-tdd or deep-review. For each applicable class:
+  - **ID/ref-space collision**: construct both ID types with representative values and assert they never collide.
+    Test the boundary values of the new range. (Motivating case: #1219 — base 50_000 collided with `frame_id*10+scope_type`.)
+  - **Bounds/overflow**: pass an out-of-range input (0, `u32::MAX`, `usize::MAX as u64`) and assert the result is
+    safe — empty response, clamped value, or `Err` — not a panic or silent wrap.
+  - **Protocol-safety**: send a malformed/empty/unknown message through the handler and assert it returns an honest
+    response without panicking. Prefer `Result`-returning paths over `std::panic::catch_unwind`.
+  - **Scanner literal/comment blindness**: feed the scanner an input where the trigger delimiter appears inside a
+    string literal, a char literal, a line comment, and a block comment. Assert all four are ignored.
+    (Motivating case: #1327 — brace scanner stripped production LCOV lines inside string literals.)
+  - **Test-encodes-the-bug**: if an existing test assertion is being changed, add a comment explaining what the old
+    assertion was and why it was incorrect. The new assertion must characterize the correct behavior.
+    (Motivating case: #1337 — pre-existing test was asserting the defect as expected output.)
+  - **Coverage/measurement integrity**: construct a representative production-code line, pass it through the
+    transform, and assert it is present in the output unchanged.
+
+  If `acceptance.md` has no hazard-class rows, confirm the change touches none of those surfaces. Document the
+  confirmation in a comment in the test file or on the issue — do not silently skip.
 
 ## What NOT to write
 

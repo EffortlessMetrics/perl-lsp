@@ -42,6 +42,17 @@ confidently wrong wastes the entire pipeline.
 - **Scope to the microcrate architecture.** If your fix touches 6+ crates, reconsider — the right fix is usually narrower. One crate, one concern.
 - **Check if already fixed.** ~42% of issues reaching builders turn out to be already done. Run `git log --oneline --grep="keyword"` and check recent PRs before filing.
 
+## Duplicate-issue preflight (REQUIRED before filing)
+
+Issue #964 accumulated four near-identical open PRs because scouts filed without checking. Before filing any issue:
+
+```bash
+gh issue list --search "<keywords>" --state open
+gh pr list --search "<keywords>" --state open
+```
+
+If an open issue or PR already covers the same defect, **do NOT file a duplicate**. Instead, reference or comment on the existing one. Only file when neither search returns a relevant hit.
+
 ## Todo list
 
 ```

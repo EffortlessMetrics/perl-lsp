@@ -43,7 +43,7 @@ If an `impl/<issue#>-<specslug>` branch exists (created by spec-planner + red-td
 4. Make the red tests green, then run the full verify
 
 If no impl branch exists (simple issue, skipped spec-planner):
-1. Create your own branch: `git checkout -b impl/<issue#>-<specslug> origin/master`
+1. Create your own branch: `git checkout -b impl/<issue#>-<specslug> origin/main`
 2. Follow the issue spec directly
 
 ## Environment setup
@@ -52,6 +52,28 @@ Before running any cargo commands, set CARGO_TARGET_DIR to prevent shared build 
 ```bash
 export CARGO_TARGET_DIR="/tmp/agent-$(git branch --show-current | tr '/' '-')-target"
 ```
+
+## Guardrails (learned from 2026-06 campaign)
+
+**Duplicate-PR check (REQUIRED before opening a PR).** Issue #964 accumulated four near-identical open PRs. Before `gh pr create`, run:
+```bash
+gh pr list --search "#<issue>" --state open
+```
+If a PR for this issue already exists, improve it — do NOT open a parallel one.
+
+**Label `in-build` immediately.** After opening your PR, apply the `in-build` label to the source issue. The issue stays open until the PR merges (close-on-merge or with merge proof). Open issues with no `in-build` label get re-scouted.
+
+**Verify the fix premise before implementing.** Confirm the bug still exists (`git log`, tests, code read) AND that the proposed fix doesn't trade one correctness failure for another (e.g., under-coverage → over-rename across class boundaries). Three times in one session, investigating before building changed the action entirely.
+
+**Base ref is `origin/main`, not `origin/master`.** This repo's default branch is `main`. A `origin/master` base ref caused a ~2h CI stall (#1310). All `git diff origin/...` calls, `git merge-base`, and branch-creation use `origin/main`.
+
+**RIPR: trust CI, not local.** CI pins `RIPR_VERSION=0.5.0` (`.github/workflows/ripr.yml`). Local installs may differ (0.9.0 reports "0 seams" where 0.5.0 flags gaps). Verify ripr compliance from the `ripr+ New Gap Gate` / `ripr-pr-evidence` CI receipt AFTER push — never from local output. For genuinely-unreachable code that ripr flags, use a narrow time-boxed suppression (cite ripr#1429: can't trace string/predicate/closure seams).
+
+**Codecov false-low recipe.** Patch coverage counts only `--lib` profdata; integration tests in `tests/` don't count. If patch coverage is below 95%: add inline `#[cfg(test)]` lib tests that cover the new code paths (NOT padding). `LCOV_EXCL_LINE`/`LCOV_EXCL_START/STOP` only for GENUINELY-unreachable defensive branches.
+
+**Three required checks, everything else advisory.** Branch-protection required checks: `Perl LSP Rust Small Result`, `ripr+ New Gap Gate`, `Codecov / Patch 95`. A "skipping" status on a required check = SATISFIED. Never block on advisory checks.
+
+**PR body must match the diff.** `docs/agents/SPEC_UPDATE_CHECKLIST.md` — answer it before publishing.
 
 ## Todo list
 

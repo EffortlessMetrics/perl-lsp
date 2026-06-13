@@ -633,37 +633,11 @@ fn is_version_pragma(module: &str) -> bool {
 }
 
 fn parse_qw_content(s: &str) -> Option<&str> {
-    parse_quote_operator_content(s, "qw")
+    perl_parser_core::parse_quote_operator_content(s, "qw")
 }
 
 fn parse_quote_operator_content<'a>(s: &'a str, operator: &str) -> Option<&'a str> {
-    // Perl allows whitespace between a quote-like operator and its opening
-    // delimiter, e.g. `qw [a b]` or `q (x)`.  Trim it before reading the
-    // delimiter so the space-before-delimiter form is handled the same as the
-    // compact form.  (Mirrors `perl_parser_core::hir::model::parse_qw_content`,
-    // which already trims, and the `WorkspaceIndex` constant/module extractors.)
-    let rest = s.strip_prefix(operator)?.trim_start();
-    let mut chars = rest.chars();
-    let open = chars.next()?;
-    if open.is_ascii_alphanumeric() || open == '_' {
-        return None;
-    }
-    let close = match open {
-        '(' => ')',
-        '{' => '}',
-        '[' => ']',
-        '<' => '>',
-        other => other,
-    };
-    if !rest.ends_with(close) {
-        return None;
-    }
-    let start = open.len_utf8();
-    let end = rest.len().checked_sub(close.len_utf8())?;
-    if end < start {
-        return None;
-    }
-    Some(&rest[start..end])
+    perl_parser_core::parse_quote_operator_content(s, operator)
 }
 
 fn unquote(s: &str) -> &str {

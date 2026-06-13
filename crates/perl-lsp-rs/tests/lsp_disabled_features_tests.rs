@@ -142,6 +142,27 @@ fn test_disabled_features_range_formatting_suppresses_ranges_support() -> TestRe
     Ok(())
 }
 
+/// Disabling `lsp.formatting` must remove documentFormattingProvider from the
+/// server capabilities response. This corresponds to the client-side
+/// `enableFormatting=false` setting wired via `buildDisabledFeaturesFromConfig`.
+#[test]
+fn test_disabled_features_formatting_suppresses_document_formatting() -> TestResult {
+    let mut harness = LspHarness::new_raw();
+    let result = harness.initialize_with_init_options(
+        Some(json!({})),
+        json!({ "disabledFeatures": ["lsp.formatting"] }),
+    )?;
+    let caps = &result["capabilities"];
+
+    assert!(
+        caps.get("documentFormattingProvider").is_none()
+            || caps["documentFormattingProvider"].is_null(),
+        "documentFormattingProvider must be absent when lsp.formatting is disabled, got: {:?}",
+        caps.get("documentFormattingProvider")
+    );
+    Ok(())
+}
+
 /// When `initializationOptions` is absent entirely, capabilities must be identical to
 /// a normal initialization (no regression for non-VSCode clients).
 #[test]
