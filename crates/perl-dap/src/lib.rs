@@ -396,6 +396,11 @@ pub mod tcp_attach;
 // See #454: Implement control flow handlers (AC9)
 // See #455: Implement safe evaluation (AC10)
 
+/// Type-safe variablesReference codec — retiring the #1219 ID/ref-space collision class.
+pub mod var_ref {
+    pub use crate::debug_adapter::var_ref::{ScopeKind, VariableReference, VariableReferenceError};
+}
+
 // Re-export Phase 1 public types
 pub use bridge_adapter::{BridgeAdapter, DapBridgeEnvConfig};
 pub use configuration::{

@@ -20,6 +20,7 @@ pub(crate) mod safe_eval;
 mod session;
 mod sync_utils;
 mod transport;
+pub mod var_ref;
 mod variable_cache;
 
 use crate::breakpoint::{AstBreakpointValidator, BreakpointValidator};
