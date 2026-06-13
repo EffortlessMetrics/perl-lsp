@@ -283,7 +283,10 @@ mod dap_phase2_tests {
                 assert_eq!(command, "pause");
                 assert!(!success, "pause should fail when no active debug session exists");
                 let msg = message.ok_or_else(|| anyhow::anyhow!("pause should return message"))?;
-                assert!(msg.contains("no Perl debug session is active"), "pause must use no-session message: {msg}");
+                assert!(
+                    msg.contains("no Perl debug session is active"),
+                    "pause must use no-session message: {msg}"
+                );
             }
             _ => anyhow::bail!("expected pause response"),
         }
