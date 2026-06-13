@@ -2022,14 +2022,20 @@ coverage-proof-routed base='origin/main' head='HEAD':
     echo "coverage target: $coverage_target"
     export CARGO_TARGET_DIR="$coverage_target"
     "$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov clean --workspace
-    coverage_env="$coverage_target/llvm-cov-env.sh"
-    "$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov show-env --sh > "$coverage_env"
-    source "$coverage_env"
-    # Generate coverage-pack-commands.sh.  Integration-test commands
-    # (--tests) are wrapped non-fatally: failing assertions still produce
-    # LLVM coverage data, so the numeric gate still measures real coverage.
-    # This decouples coverage measurement from pre-existing test-debt
-    # (perl-dap tests/); see #1269 for the long-term correctness lane.
+    # Generate coverage-pack-commands.sh.  Integration-test commands (--tests)
+    # are wrapped non-fatally: failing assertions still produce LLVM coverage
+    # data, so the numeric gate still measures real coverage.  This decouples
+    # coverage measurement from pre-existing test-debt (perl-dap tests/); see
+    # #1269 for the long-term correctness lane.
+    #
+    # IMPORTANT (#1282): commands use `cargo llvm-cov test --no-report` (NOT
+    # plain `cargo test`).  Do NOT source `cargo llvm-cov show-env` before
+    # executing coverage-pack-commands.sh -- cargo-llvm-cov warns that its
+    # subcommands other than `report` and `clean` may not work correctly when
+    # show-env environment variables are already set in the shell (double-wrapper
+    # conflict).  `cargo llvm-cov test --no-report` handles LLVM instrumentation
+    # and binary registration internally without needing show-env.
+    # `cargo llvm-cov report` at the end then symbolises all registered profdata.
     python3 scripts/ci/generate-coverage-pack-commands.py
     bash target/receipts/quality/coverage-pack-commands.sh
     "$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov report --profile agent --lcov --output-path target/lcov.info \

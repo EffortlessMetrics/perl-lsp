@@ -886,9 +886,9 @@ files = [
   "*.rs",
 ]
 commands = [
-  "cargo test --workspace --lib --profile agent --locked",
+  "cargo llvm-cov test --no-report --workspace --lib --profile agent --locked",
   "cargo check --workspace --all-targets --profile agent --locked",
 ]
 coverage_filters = [
-  "workspace-lib",
+  "workspace-lib-and-integration",
 ]

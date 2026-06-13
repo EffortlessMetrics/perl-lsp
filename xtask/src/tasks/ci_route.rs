@@ -1219,11 +1219,17 @@ fn coverage_proof_pack_receipts(selector: &[String]) -> Result<Vec<CoverageProof
 /// Build the command list for the rust-focused pack, appending per-crate
 /// integration-test runs for every crate that owns a changed source file.
 ///
-/// The static pack command `cargo test --workspace --lib` only covers unit
-/// tests inside `src/lib.rs`.  DAP-style crates (e.g. `perl-dap`) prove
-/// production-code coverage exclusively through integration tests in `tests/`.
-/// Without the extra `--tests` invocations those lines show 0 % patch
-/// coverage even though the tests exist and pass.
+/// The static pack command only covers unit tests inside `src/lib.rs`.
+/// DAP-style crates (e.g. `perl-dap`) prove production-code coverage
+/// exclusively through integration tests in `tests/`.  Without the extra
+/// `--tests` invocations those lines show 0 % patch coverage even though
+/// the tests exist and pass.
+///
+/// IMPORTANT (#1282): these commands use `cargo llvm-cov test --no-report`
+/// instead of plain `cargo test`.  Without `--no-report`, cargo-llvm-cov does
+/// NOT register the integration-test binary in its tracking file, so
+/// `cargo llvm-cov report` cannot symbolise the profdata and integration-
+/// test-covered source lines appear uncovered (false-low patch %).
 ///
 /// `-- --test-threads=1` forces serial execution within the test binary.
 /// Integration tests in this workspace mutate global/process state (env vars,
@@ -1246,7 +1252,7 @@ fn augment_rust_focused_commands(
     let mut commands = base_commands.to_vec();
     for crate_name in changed_crates(changed_files) {
         let cmd = format!(
-            "cargo test -p {crate_name} --tests --profile agent --locked -- --test-threads=1"
+            "cargo llvm-cov test --no-report -p {crate_name} --tests --profile agent --locked -- --test-threads=1"
         );
         if !commands.contains(&cmd) {
             commands.push(cmd);
@@ -3597,15 +3603,21 @@ mod tests {
             .find(|pack| pack.id == "patch-coverage-rust-focused")
             .ok_or_else(|| color_eyre::eyre::eyre!("patch-coverage-rust-focused not selected"))?;
 
-        // Must include per-crate integration-test invocation with single-threaded flag.
+        // Must include per-crate integration-test invocation using cargo-llvm-cov
+        // (fixes #1282: plain `cargo test` doesn't register binaries with
+        // cargo-llvm-cov's tracking file, so `cargo llvm-cov report` silently
+        // drops integration-test profdata → false-low patch %).
         let integration_cmds: Vec<&String> = rust_pack
             .commands
             .iter()
-            .filter(|cmd| cmd.contains("cargo test -p perl-dap") && cmd.contains("--tests"))
+            .filter(|cmd| {
+                cmd.contains("cargo llvm-cov test --no-report -p perl-dap")
+                    && cmd.contains("--tests")
+            })
             .collect();
         assert!(
             !integration_cmds.is_empty(),
-            "expected a `cargo test -p perl-dap --tests` command; got: {:?}",
+            "expected a `cargo llvm-cov test --no-report -p perl-dap --tests` command; got: {:?}",
             rust_pack.commands
         );
         for cmd in &integration_cmds {
@@ -3615,10 +3627,13 @@ mod tests {
             );
         }
 
-        // Original lib command must still be present (lib-test coverage is not regressed).
+        // Static lib command must use cargo-llvm-cov so its binary is registered.
         assert!(
-            rust_pack.commands.iter().any(|cmd| cmd.contains("--lib")),
-            "lib command must remain; got: {:?}",
+            rust_pack
+                .commands
+                .iter()
+                .any(|cmd| cmd.contains("cargo llvm-cov test --no-report") && cmd.contains("--lib")),
+            "lib command must use cargo llvm-cov test --no-report; got: {:?}",
             rust_pack.commands
         );
 

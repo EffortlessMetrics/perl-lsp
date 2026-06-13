@@ -1395,10 +1395,10 @@ class IntegrationTestAugmentationTests(unittest.TestCase):
             "id": router.FALLBACK_PACK_ID,
             "files": ["*.rs"],
             "commands": [
-                "cargo test --workspace --lib --profile agent --locked",
+                "cargo llvm-cov test --no-report --workspace --lib --profile agent --locked",
                 "cargo check --workspace --all-targets --profile agent --locked",
             ],
-            "coverage_filters": ["workspace-lib"],
+            "coverage_filters": ["workspace-lib-and-integration"],
         }
 
     def test_dap_src_change_injects_per_crate_tests_command(self) -> None:
@@ -1415,15 +1415,16 @@ class IntegrationTestAugmentationTests(unittest.TestCase):
         normalized = [router.normalize_pack(p, paths) for p in selected]
         rust_pack = normalized[0]
 
-        # Must include per-crate integration-test invocation with single-threaded flag.
+        # Must include per-crate integration-test invocation using cargo-llvm-cov
+        # (fixes #1282: plain `cargo test` doesn't register binaries with cargo-llvm-cov).
         # --test-threads=1 prevents parallel-unsafe tests from flaking in the coverage lane.
         integration_cmds = [
             cmd for cmd in rust_pack["commands"]
-            if "cargo test -p perl-dap" in cmd and "--tests" in cmd
+            if "cargo llvm-cov test --no-report -p perl-dap" in cmd and "--tests" in cmd
         ]
         self.assertTrue(
             integration_cmds,
-            f"Expected a 'cargo test -p perl-dap --tests' command; got: {rust_pack['commands']}",
+            f"Expected a 'cargo llvm-cov test --no-report -p perl-dap --tests' command; got: {rust_pack['commands']}",
         )
         # Every integration-test command must carry --test-threads=1.
         for cmd in integration_cmds:
@@ -1433,11 +1434,14 @@ class IntegrationTestAugmentationTests(unittest.TestCase):
                 f"coverage-lane integration test must be single-threaded; got: {cmd}",
             )
 
-        # Original lib command must not be removed.
-        lib_cmds = [cmd for cmd in rust_pack["commands"] if "--lib" in cmd]
+        # Static lib command must use cargo-llvm-cov so the binary is registered (#1282).
+        lib_cmds = [
+            cmd for cmd in rust_pack["commands"]
+            if "cargo llvm-cov test --no-report" in cmd and "--lib" in cmd
+        ]
         self.assertTrue(
             lib_cmds,
-            f"lib command must remain; got: {rust_pack['commands']}",
+            f"lib command must use cargo llvm-cov test --no-report; got: {rust_pack['commands']}",
         )
 
     def test_multiple_changed_crates_each_get_integration_test_command(self) -> None:
@@ -1453,11 +1457,11 @@ class IntegrationTestAugmentationTests(unittest.TestCase):
 
         dap_cmds = [
             cmd for cmd in rust_pack["commands"]
-            if "cargo test -p perl-dap" in cmd and "--tests" in cmd
+            if "cargo llvm-cov test --no-report -p perl-dap" in cmd and "--tests" in cmd
         ]
         parser_cmds = [
             cmd for cmd in rust_pack["commands"]
-            if "cargo test -p perl-parser" in cmd and "--tests" in cmd
+            if "cargo llvm-cov test --no-report -p perl-parser" in cmd and "--tests" in cmd
         ]
         self.assertTrue(dap_cmds, f"expected perl-dap --tests command; got: {rust_pack['commands']}")
         self.assertTrue(parser_cmds, f"expected perl-parser --tests command; got: {rust_pack['commands']}")
@@ -1482,7 +1486,7 @@ class IntegrationTestAugmentationTests(unittest.TestCase):
 
         dap_cmds = [
             cmd for cmd in rust_pack["commands"]
-            if "cargo test -p perl-dap" in cmd and "--tests" in cmd
+            if "cargo llvm-cov test --no-report -p perl-dap" in cmd and "--tests" in cmd
         ]
         # Only one command for perl-dap even if multiple files changed.
         self.assertEqual(1, len(dap_cmds), f"expected exactly one perl-dap --tests command; got: {dap_cmds}")
