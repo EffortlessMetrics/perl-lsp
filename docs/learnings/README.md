@@ -28,6 +28,10 @@ To add a new incident: copy [TEMPLATE.md](TEMPLATE.md) and fill in all sections.
 | [2026-06-merge-cancellation-cascade.md](2026-06-merge-cancellation-cascade.md) | Concurrent merges triggered Codecov upload cancellation cascade | ci, serialization, codecov | #1206, #1230 |
 | [2026-06-codecov-false-low.md](2026-06-codecov-false-low.md) | Codecov false-low: --lib profdata only; integration-test lines undercounted | coverage-integrity, codecov | #1282, #1263 |
 | [2026-06-shift-left-validated.md](2026-06-shift-left-validated.md) | Shift-left validated: 0-fix deep-review after hazard invariants front-loaded | shift-left, validation | #1246, #1340 |
+| [2026-06-ripr-suppression-application-gap.md](2026-06-ripr-suppression-application-gap.md) | ripr suppression-application gap: path-check skipped before `continue` on unrecognized classification | coverage-integrity, ripr, gate-logic, suppression | #1346, #1349 |
+| [2026-06-deep-review-net-for-novel-gate-logic.md](2026-06-deep-review-net-for-novel-gate-logic.md) | Deep-review remains the net for novel gate/infra logic even after shift-left | coverage-integrity, ripr, deep-review, gate-logic | #1349 |
+| [2026-06-merged-before-review-fix-forward.md](2026-06-merged-before-review-fix-forward.md) | PR merged on 3-green before in-flight deep-review completed; fix landed as fix-forward | multi-agent, dap, deep-review, fix-forward | #1240, #1363, #1364 |
+| [2026-06-serialize-merges-misframe.md](2026-06-serialize-merges-misframe.md) | "Hold main still" misframe: parallel velocity + rebase-robustness is the correct doctrine | multi-agent, ci, serialization, merge-velocity | #1206, #1230 |
 
 ---
 
@@ -48,3 +52,8 @@ To add a new incident: copy [TEMPLATE.md](TEMPLATE.md) and fill in all sections.
 | dap | Debug Adapter Protocol |
 | ripr | ripr gap-gate tool |
 | codecov | Codecov patch-coverage gate |
+| gate-logic | Gate evaluation loop ordering / cross-cutting policy application |
+| suppression | Policy suppression matching |
+| deep-review | Deep-review as correctness net |
+| fix-forward | Fix-forward recovery after merged-before-review |
+| merge-velocity | Merge pacing / rebase-robustness |
