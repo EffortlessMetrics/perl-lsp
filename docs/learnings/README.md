@@ -6,7 +6,10 @@ search. Future agents: grep for the exact symbol, error string, PR number, or ha
 class you are investigating.
 
 For the portable, repo-agnostic patterns behind these incidents, see
-[docs/concepts/](../concepts/).
+[docs/concepts/](../concepts/). The 2026-06-11→13 campaign's meta-orchestration
+learnings (substrate-model, model-conformance, human-corrects-substrate, paced-merges,
+lane-relevance, spawn-guards) are distilled into three new concept docs:
+`orchestrator-substrate-model.md`, `model-conformance.md`, `human-corrects-substrate.md`.
 
 For spec contracts and hazard-class acceptance criteria, see
 [docs/reference/PARSER_CONTRACTS.md](../reference/PARSER_CONTRACTS.md) and

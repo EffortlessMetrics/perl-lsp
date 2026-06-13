@@ -514,6 +514,33 @@ impl DebugAdapter {
         let session = lock_or_recover(&self.session, "debug_adapter.snapshot_frames");
         session.as_ref().map(|s| s.stack_frames.clone()).unwrap_or_default()
     }
+
+    /// Seed a stopped DebugSession with a given set of stack frames for testing
+    /// frameId validation paths in handle_evaluate.
+    ///
+    /// Only for use in tests; not part of the public API contract.
+    pub fn seed_stopped_session_with_frames_for_test(&self, frames: Vec<crate::types::StackFrame>) {
+        use std::process::{Command, Stdio};
+        let Ok(child) = Command::new("perl")
+            .arg("-e")
+            .arg("1")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+        else {
+            return;
+        };
+        let mut session = lock_or_recover(&self.session, "debug_adapter.seed_stopped_session");
+        *session = Some(DebugSession {
+            process: child,
+            state: DebugState::Stopped,
+            stack_frames: frames,
+            variable_cache: VariableCache::default(),
+            thread_id: 1,
+            last_resume_mode: ResumeMode::Unknown,
+        });
+    }
 }
 #[cfg(test)]
 mod tests {

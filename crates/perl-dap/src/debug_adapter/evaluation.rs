@@ -31,6 +31,54 @@ impl DebugAdapter {
             }
         };
 
+        // Validate frameId when provided: the frame must exist in the current session and
+        // the session must be stopped.  frameId = None means "no frame context" — skip.
+        if let Some(requested_frame_id) = args.frame_id {
+            let session_guard = lock_or_recover(&self.session, "debug_adapter.session");
+            match *session_guard {
+                None => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "evaluate".to_string(),
+                        body: None,
+                        message: Some("No debugger session".to_string()),
+                    };
+                }
+                Some(ref session) => {
+                    if session.state != DebugState::Stopped {
+                        return DapMessage::Response {
+                            seq,
+                            request_seq,
+                            success: false,
+                            command: "evaluate".to_string(),
+                            body: None,
+                            message: Some(
+                                "Cannot evaluate in frame context: session is not stopped"
+                                    .to_string(),
+                            ),
+                        };
+                    }
+                    let frame_found =
+                        session.stack_frames.iter().any(|f| i64::from(f.id) == requested_frame_id);
+                    if !frame_found {
+                        return DapMessage::Response {
+                            seq,
+                            request_seq,
+                            success: false,
+                            command: "evaluate".to_string(),
+                            body: None,
+                            message: Some(format!(
+                                "Frame not found: frameId {requested_frame_id} does not match any \
+                                 current stack frame"
+                            )),
+                        };
+                    }
+                }
+            }
+        }
+
         {
             let expression = &args.expression;
 
