@@ -35,6 +35,7 @@ To add a new incident: copy [TEMPLATE.md](TEMPLATE.md) and fill in all sections.
 | [2026-06-deep-review-net-for-novel-gate-logic.md](2026-06-deep-review-net-for-novel-gate-logic.md) | Deep-review remains the net for novel gate/infra logic even after shift-left | coverage-integrity, ripr, deep-review, gate-logic | #1349 |
 | [2026-06-merged-before-review-fix-forward.md](2026-06-merged-before-review-fix-forward.md) | PR merged on 3-green before in-flight deep-review completed; fix landed as fix-forward | multi-agent, dap, deep-review, fix-forward | #1240, #1363, #1364 |
 | [2026-06-serialize-merges-misframe.md](2026-06-serialize-merges-misframe.md) | "Hold main still" misframe: parallel velocity + rebase-robustness is the correct doctrine | multi-agent, ci, serialization, merge-velocity | #1206, #1230 |
+| [2026-06-tagged-range-codec-band-overflow.md](2026-06-tagged-range-codec-band-overflow.md) | Type-enum promotion re-introduced ID-collision through the wire codec (band-overflow, residue-disambiguation) | id-collision, bounds, dap, codec, band-overflow | #1219, #1351, #1430 |
 
 ---
 
@@ -60,3 +61,6 @@ To add a new incident: copy [TEMPLATE.md](TEMPLATE.md) and fill in all sections.
 | deep-review | Deep-review as correctness net |
 | fix-forward | Fix-forward recovery after merged-before-review |
 | merge-velocity | Merge pacing / rebase-robustness |
+| codec | Wire/serialization codec correctness |
+| band-overflow | Encoded value crosses its declared wire band |
+| tagged-range | Tagged-range codec with disjoint-band design |
