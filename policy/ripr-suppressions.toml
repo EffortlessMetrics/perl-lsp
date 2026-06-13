@@ -623,6 +623,35 @@ created = "2026-06-13"
 review_after = "2026-07-13"
 expires = "2026-09-30"
 
+# Panic-guard test files (PR #1372): ripr#1428-class false-positives in newly
+# added test files. Tracks EffortlessMetrics/ripr#1428 (RIPR flags test-harness
+# plumbing in newly added test files as production seams).
+#
+# PR #1372 adds two new test files:
+#   crates/perl-parser/tests/red_tdd_panic_on_user_input.rs
+#   crates/perl-parser/tests/nodekind_combination_error_handling_edge_cases.rs
+#
+# These are pure test files with test functions exercising parser panic-guard
+# coverage. RIPR's diff-scoped analysis flags the test function scaffolding
+# (test setup, assertions) as new production seams. This is the same ripr#1428
+# class as ripr-suppress-ux-receipt-tests and ripr-suppress-seam-proof-tests.
+#
+# Remove when ripr#1428 is fixed upstream.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-panic-guard-test-files"
+kind = "test_receipt_surface"
+paths = [
+  "crates/perl-parser/tests/red_tdd_panic_on_user_input.rs",
+  "crates/perl-parser/tests/nodekind_combination_error_handling_edge_cases.rs",
+]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1428"
+reason = "Two newly added test files in PR #1372 are flagged as new production seams by diff-scoped RIPR analysis: red_tdd_panic_on_user_input.rs and nodekind_combination_error_handling_edge_cases.rs. Test-function scaffolding (test setup, assertions) is classified as production seams. This is the same ripr#1428 class as ripr-suppress-ux-receipt-tests and ripr-suppress-seam-proof-tests (test-harness plumbing falsely classified as production seams when added to a test file). Both files contain pure test coverage for parser panic guards (issue #1372). Remove when ripr#1428 is fixed upstream."
+created = "2026-06-13"
+review_after = "2026-07-13"
+expires = "2026-09-30"
+
 # agent_ledgers.rs validate_line string-dispatch predicates: field-name matching
 # and classification/confidence enum dispatch — activation untraceable by ripr
 # (ripr#1429 class).
