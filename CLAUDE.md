@@ -396,7 +396,7 @@ Invoke `/coding-standards` for full detail.
 
 **Spec system**: [SPEC_TEMPLATE.md](docs/reference/SPEC_TEMPLATE.md) — canonical `.spec/<issue#>-<slug>/` structure (checklist.md / acceptance.md with §Behavior §Hazards §Contracts §API-Shape §Test-Grid §Blast-Radius / context.md) with three worked shapes (parser-fix, LSP-feature, test-only). The [spec-builder workflow](.claude/workflows/spec-builder.js) populates the rich acceptance.md sections via six parallel haiku angles; spec-planner invokes it for non-trivial issues.
 
-**SDLC positioning**: [DISTRIBUTED_ENGINEERING_LINEAGE.md](docs/reference/DISTRIBUTED_ENGINEERING_LINEAGE.md) — situates the Octopus Cluster in classical engineering practice (Kanban, code review, trunk-health, CI/CD, SRE) with Beowulf contrast and SDLC-mapping table.
+**SDLC positioning**: [DISTRIBUTED_ENGINEERING_LINEAGE.md](docs/reference/DISTRIBUTED_ENGINEERING_LINEAGE.md) — situates the Octopus Cluster in classical engineering practice (Kanban, code review, trunk-health, CI/CD, SRE) with Beowulf contrast and SDLC-mapping table. | **Campaign narrative**: [docs/writeups/2026-06-agentic-maintenance-field-notes.md](docs/writeups/2026-06-agentic-maintenance-field-notes.md) — article-grade field notes from the June 2026 autonomous campaign (concrete incidents, isomorphic failure modes, shift-left evidence, instrument-is-the-bug recursion).
 
 ## Contributing
 

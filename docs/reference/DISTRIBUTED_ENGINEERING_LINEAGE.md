@@ -130,3 +130,4 @@ The primitive needed for multi-box coordination is a **claim/lease protocol** â€
 | [GLOSSARY.md](GLOSSARY.md) | Vocabulary index: all terms defined consistently across the orchestration reference docs |
 | [ADR-0044](../adr/0044-octopus-cluster-orchestration.md) | Architecture record: formal decision log for the Octopus Cluster orchestration architecture |
 | `docs/articles/OCTOPUS_CLUSTER.md` | Historical context: the research-era article where the Beowulf contrast first appeared â€” the control-plane observation there has since been refined (see above) |
+| [docs/writeups/2026-06-agentic-maintenance-field-notes.md](../writeups/2026-06-agentic-maintenance-field-notes.md) | June 2026 campaign field notes: article-grade narrative with concrete incidents illustrating isomorphic failure modes, shift-left evidence, and the instrument-is-the-bug recursion |
