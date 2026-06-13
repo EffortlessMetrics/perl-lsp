@@ -67,6 +67,9 @@ Derive the short description from the issue title (lowercase, hyphens, no specia
      - **Test-encodes-the-bug** — modifying an existing test assertion: confirm old assertion was correct behavior, not the defect.
      - **Coverage/measurement integrity** — coverage transforms: must not drop production lines, test that a representative line survives.
      See `docs/agents/SPEC_UPDATE_CHECKLIST.md §8` for the full class table.
+     **When the issue's subsystem is known (DAP, Parser, LSP, or Coverage/CI):** also consult
+     `docs/reference/SUBSYSTEM_HAZARD_DEFAULTS.md` for pre-populated hazard rows specific to
+     that subsystem — copy the applicable rows verbatim into `acceptance.md` and fill in the `Surface` field.
    - `.spec/<issue#>-<specslug>/context.md` — key decisions, alternatives rejected, and why (from plan-review and oppositional comments)
 4. **Commit:** `git add .spec/ && git commit -m "plan(<crate>): add implementation spec for #<issue>"`
 5. **Push:** `git push -u origin impl/<issue#>-<specslug>`

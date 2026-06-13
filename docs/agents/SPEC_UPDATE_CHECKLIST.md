@@ -68,6 +68,12 @@ per applicable class is the minimum.
 Absence of a required invariant row is a reviewable finding at architecture-reviewer (pre-build, cheap haiku pass)
 and again at reviewer-deep (post-build confirmation net).
 
+**Subsystem-specific defaults**: For DAP, Parser, LSP, and Coverage/CI changes, consult
+[docs/reference/SUBSYSTEM_HAZARD_DEFAULTS.md](../reference/SUBSYSTEM_HAZARD_DEFAULTS.md)
+for the pre-populated hazard rows that should appear by default in `acceptance.md` for
+each subsystem. Each row includes the invariant, trigger condition, and required adversarial
+test obligation — copy applicable rows verbatim and fill in the `Surface` field.
+
 ---
 
 > **See also**: [docs/learnings/README.md](../learnings/README.md) for repo-specific

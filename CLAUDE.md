@@ -392,6 +392,8 @@ Invoke `/coding-standards` for full detail.
 
 **Learnings**: [docs/learnings/README.md](docs/learnings/README.md) (repo-specific incidents, greppable by symbol/PR/hazard-class/tag) | [docs/concepts/](docs/concepts/) (portable patterns: shift-left-ladder, cache-aware-agent-lanes, hazard-class-invariants, multi-angle-haiku-early-spec, serialize-merges-and-cancellation, re-create-over-untangle)
 
+**Spec hazard defaults**: [SUBSYSTEM_HAZARD_DEFAULTS.md](docs/reference/SUBSYSTEM_HAZARD_DEFAULTS.md) — per-subsystem hazard rows (DAP, Parser, LSP, Coverage/CI) that spec-planner should seed into `acceptance.md`; extends SPEC_UPDATE_CHECKLIST §8 with subsystem-specific invariants and adversarial test obligations.
+
 **SDLC positioning**: [DISTRIBUTED_ENGINEERING_LINEAGE.md](docs/reference/DISTRIBUTED_ENGINEERING_LINEAGE.md) — situates the Octopus Cluster in classical engineering practice (Kanban, code review, trunk-health, CI/CD, SRE) with Beowulf contrast and SDLC-mapping table.
 
 ## Contributing
