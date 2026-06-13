@@ -539,6 +539,38 @@ review_after = "2026-07-13"
 expires = "2026-09-30"
 
 # -----------------------------------------------------------------------------
+# LSP smoke-envelope tests: newly added test file with test-harness plumbing.
+# Tracks EffortlessMetrics/ripr#1428 (RIPR flags test-harness internal logic in
+# newly added test files as production seams). The lsp_smoke_e2e.rs test file
+# adds two new end-to-end tests for codeAction and inlineCompletion coverage
+# (#949). The test functions use request/response helper scaffolding and assertions
+# that RIPR's diff-scoped analyzer classifies as new production seams.
+#
+# Coverage evidence: Both new test functions exercise the real JSON-RPC/stdio
+# transport path for codeAction (lsp_smoke_e2e_code_action_envelope) and
+# inlineCompletion (lsp_smoke_e2e_inline_completion_envelope). The test setup
+# helpers (send_request_with_timeout, unique_test_uri) are shared with the
+# existing smoke tests in the same file (lsp_smoke_e2e_document_intelligence_shapes,
+# lsp_smoke_e2e_will_save_wait_until_request_response, etc.); RIPR treats the
+# newly added test helper calls in the new test functions as new production seams.
+#
+# This is the same class as ripr-suppress-ux-receipt-tests and
+# ripr-suppress-quote-operator-conformance-test-helpers (ripr#1428: test-harness
+# plumbing falsely classified as production seams when added to a test file).
+# Remove when ripr#1428 is fixed upstream.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-lsp-smoke-envelope-tests"
+kind = "test_receipt_surface"
+paths = ["crates/perl-lsp-rs/tests/lsp_smoke_e2e.rs"]
+classification = ["call_presence", "weakly_exposed", "static_unknown"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1428"
+reason = "Two ripr#1428-class false-positives in PR #1283 lsp_smoke_e2e.rs: lsp_smoke_e2e_code_action_envelope and lsp_smoke_e2e_inline_completion_envelope are new end-to-end tests for codeAction and inlineCompletion envelope coverage (#949). The test functions call send_request_with_timeout and shared helpers to exercise the real JSON-RPC/stdio transport path. RIPR's diff-scoped analyzer treats the newly added test-helper calls as new production seams. All seams exercised are production handlers (codeAction and inlineCompletion request/response envelope shapes, capability advertisement) exercised via real transport. This is the same ripr#1428 class as ripr-suppress-ux-receipt-tests and ripr-suppress-quote-operator-conformance-test-helpers (test-harness plumbing falsely classified as production seams). Suppression is minimal (single test file, test-only additions to the existing lsp_smoke_e2e.rs harness). Remove when ripr#1428 is fixed upstream."
+created = "2026-06-13"
+review_after = "2026-07-13"
+expires = "2026-09-30"
+
 # agent_ledgers.rs validate_line string-dispatch predicates: field-name matching
 # and classification/confidence enum dispatch — activation untraceable by ripr
 # (ripr#1429 class).
