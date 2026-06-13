@@ -67,9 +67,54 @@ re-opening. Completion events should trigger the next step, not a cold re-spawn.
 Batching related tasks that share context into a single agent session — rather than spawning
 a new agent for each task — is the primary lever for cost reduction in high-volume pipelines.
 
+## Two independent optimizers converging on the same answer
+
+Token-cache economics and bug-catch economics are independent cost models. But both
+converge on the same structural recommendation: **front-load**.
+
+- **Token economics**: warm the lane early; subsequent invocations cost ~10x less than
+  cold spawns. The work that shares context should be sequenced together, close in time,
+  so the cache stays warm.
+- **Bug-catch economics**: running spec/hazard checks cheaply before the builder starts
+  is far cheaper than catching the same bugs in deep-review after code exists. Earlier
+  passes over the same context find more per token than later passes.
+
+When two orthogonal optimizers agree on the same structure, the principle is real.
+Front-loading — both for cost efficiency (warm cache) and for correctness (cheap early
+catches) — is not a heuristic. It is the convergence point of independent optimizations.
+
+## Lane relevance: re-check staleness on resume
+
+A long-running lane that is re-fed across multiple tasks faces a hazard the cache
+TTL caution does not cover: **the task may no longer be relevant**.
+
+If a lane is resumed after a pause, a re-feed from a queue, or a sequential batch,
+the world may have changed:
+
+- The issue the lane was addressing may have been fixed by a concurrent agent
+- The branch the lane was targeting may have been merged or closed
+- The spec the lane was executing may have been revised by a plan-reviewer
+
+A lane that finishes its resumed task without checking relevance delivers stale work
+into a changed world. This is distinct from an idle lane that lost its cache (a cost
+problem) — this is a correctness problem.
+
+**Guard**: on every resume or re-feed, before executing the next task, a lane agent
+should verify:
+
+- Is the issue/PR still open and in the expected state?
+- Has the branch changed since the lane last touched it?
+- Has the spec been revised since the lane last read it?
+
+A relevance check takes a few seconds and a few tokens; delivering stale work costs
+the full build and review cycle over again.
+
 ## Relation to other patterns
 
 - **Serialize merges** (`serialize-merges-and-cancellation.md`) — independent concern;
   serialization prevents CI cancellation cascades, not a cost optimization.
 - **Multi-angle early spec** (`multi-angle-haiku-early-spec.md`) — a fan-out pattern applied
   to spec construction; each angle is independent so fan-out is correct there.
+- **Orchestrator substrate model** (`orchestrator-substrate-model.md`) — the cache
+  TTL and warm/cold cost ratio are substrate facts; a wrong model of these produces
+  over-spend on cold spawns and missed savings on warm lanes.
