@@ -437,6 +437,18 @@ impl DebugAdapter {
         }
     }
 
+    /// Seed `attached_pid` with the given PID for testing.
+    ///
+    /// Use a PID that is guaranteed not to exist (e.g. `999_999`) to drive the
+    /// "session present, signal delivery failed" path in `handle_pause`.
+    ///
+    /// Only for use in tests; not part of the public API contract.
+    pub fn seed_attached_pid_for_test(&self, pid: u32) {
+        if let Ok(mut guard) = self.attached_pid.lock() {
+            *guard = Some(pid);
+        }
+    }
+
     #[cfg(test)]
     fn seed_session_for_test(&self) {
         // Spawn a cheap no-op subprocess so we have a real Child (no unsafe zeroed memory).

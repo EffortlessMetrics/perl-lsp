@@ -247,7 +247,25 @@ impl DebugAdapter {
         arguments: Option<Value>,
     ) -> DapMessage {
         let _args: Option<PauseArguments> = arguments.and_then(|v| serde_json::from_value(v).ok());
-        let has_session = if let Some(ref mut session) =
+
+        // Check session presence first: "no session" and "signal failed" are distinct errors.
+        // "No session" gets the actionable guidance message; "signal failed" gets the signal
+        // failure message (the session exists, the interrupt delivery failed).
+        let session_present = lock_or_recover(&self.session, "debug_adapter.session").is_some()
+            || lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid").is_some();
+
+        if !session_present {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "pause".to_string(),
+                body: None,
+                message: Some(Self::no_active_debug_session_message("pause")),
+            };
+        }
+
+        let signal_sent = if let Some(ref mut session) =
             *lock_or_recover(&self.session, "debug_adapter.session")
         {
             let pid = session.process.id();
@@ -261,24 +279,13 @@ impl DebugAdapter {
             false
         };
 
-        if !has_session {
-            return DapMessage::Response {
-                seq,
-                request_seq,
-                success: false,
-                command: "pause".to_string(),
-                body: None,
-                message: Some(Self::no_active_debug_session_message("pause")),
-            };
-        }
-
         DapMessage::Response {
             seq,
             request_seq,
-            success: true,
+            success: signal_sent,
             command: "pause".to_string(),
             body: None,
-            message: None,
+            message: if signal_sent { None } else { Some("Failed to pause debugger".to_string()) },
         }
     }
 

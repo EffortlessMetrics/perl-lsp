@@ -409,7 +409,10 @@ fn test_dap_pause_no_session() {
             assert!(!success);
             assert_eq!(command, "pause");
             let msg = must_some(message);
-            assert!(msg.contains("no Perl debug session is active"), "pause must use no-session message: {msg}");
+            assert!(
+                msg.contains("no Perl debug session is active"),
+                "pause must use no-session message: {msg}"
+            );
         }
         _ => must(Err::<(), _>("Expected response message")),
     }
