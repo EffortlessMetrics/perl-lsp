@@ -119,6 +119,30 @@ enum Commands {
         command: PrSubcommand,
     },
 
+    /// Verify merge-base ancestry proof before closing a PR.
+    ///
+    /// Implements CLOSE_PROOF_POLICY.md Rule 1: runs
+    /// `git merge-base --is-ancestor <commit> <canonical-main>` and emits
+    /// a structured receipt.
+    ///
+    /// Exit 0 = reachable (safe to close), exit 2 = not reachable (do not close),
+    /// exit 1 = error (git failed).
+    #[command(name = "pr-close-proof")]
+    PrCloseProof {
+        /// Commit SHA to verify.
+        #[arg(long)]
+        commit: String,
+        /// Canonical main ref (e.g. origin/main).
+        #[arg(long, default_value = "origin/main")]
+        canonical_main: String,
+        /// Optional distinctive string to grep in canonical-main (Rule 3 substance check).
+        #[arg(long)]
+        substance_grep: Option<String>,
+        /// Output format: `human` (default) or `json`.
+        #[arg(long, default_value = "human")]
+        format: String,
+    },
+
     /// PR reconciliation ledger commands.
     #[command(name = "pr-ledger")]
     PrLedger {
@@ -2852,6 +2876,25 @@ fn main() -> Result<()> {
                 })
             }
         },
+        Commands::PrCloseProof { commit, canonical_main, substance_grep, format } => {
+            let fmt = if format == "json" {
+                tasks::pr_close_proof::CloseProofFormat::Json
+            } else {
+                tasks::pr_close_proof::CloseProofFormat::Human
+            };
+            let reachable = tasks::pr_close_proof::run(tasks::pr_close_proof::CloseProofConfig {
+                commit,
+                canonical_main,
+                substance_grep,
+                format: fmt,
+            })?;
+            if !reachable {
+                // Exit 2: not ancestor — distinct from 1 (error).
+                // CLOSE_PROOF_POLICY.md: do not close if not reachable.
+                std::process::exit(2);
+            }
+            Ok(())
+        }
         Commands::PrLedger { command } => match command {
             PrLedgerCommand::Generate { repos, out, fixture } => {
                 tasks::pr_ledger::generate(tasks::pr_ledger::GenerateConfig { repos, out, fixture })

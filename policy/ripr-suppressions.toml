@@ -538,3 +538,36 @@ reason = "Two ripr#1429-class seams in PR #1260 agent_ledgers.rs: (A) validate_l
 created = "2026-06-13"
 review_after = "2026-07-13"
 expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
+# pr_close_proof.rs validate_sha_format char-predicate and exit-code match arms:
+# string/predicate-chain activation untraceable by ripr (ripr#1429 class).
+#
+# PR #1264 adds xtask/src/tasks/pr_close_proof.rs with one ripr#1429-class seam
+# flagged as weakly_exposed:
+#   validate_sha_format — four predicate branches (empty-string guard,
+#   whitespace-contains guard, chars().all(is_ascii_hexdigit) predicate,
+#   len < 7 bound): RIPR cannot statically trace that calling validate_sha_format
+#   with a specific string-literal activates the correct predicate branch, because
+#   activation flows through .chars().all() — a closure-based iterator predicate
+#   identical in class to parse_quote_operator_content's char-scan seams.
+#
+# Coverage evidence: 6 inline #[cfg(test)] unit tests in pr_close_proof.rs cover
+# every guard and boundary: test_validate_sha_empty_fails, _with_spaces_fails,
+# _non_hex_fails, _too_short_fails, _valid_short (Ok path), _valid_full (Ok path).
+# All branches (empty, whitespace, non-hex, too-short, valid) are asserted.
+#
+# Suppression is narrow (single xtask file, one PR). Remove when ripr#1429 is
+# fixed upstream or when targeted mutation is scheduled per #1289.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-pr-close-proof-sha-predicates"
+kind = "predicate_infection_untraceable"
+paths = ["xtask/src/tasks/pr_close_proof.rs"]
+classification = ["weakly_exposed", "no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "One ripr#1429-class seam in PR #1264 pr_close_proof.rs: validate_sha_format has four predicate branches (empty-string guard, whitespace-contains, chars().all(is_ascii_hexdigit), len < 7 bound) that ripr cannot statically trace from string-literal test inputs through the closure-based iterator predicate — same class as parse_quote_operator_content's char-scan seams and quality_baseline's line-scanner predicates. All 6 inline #[cfg(test)] unit tests cover every predicate branch and boundary (test_validate_sha_empty_fails, _with_spaces_fails, _non_hex_fails, _too_short_fails, _valid_short, _valid_full). Suppression is narrow (single xtask file, one PR #1264). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+created = "2026-06-13"
+review_after = "2026-07-13"
+expires = "2026-09-30"
