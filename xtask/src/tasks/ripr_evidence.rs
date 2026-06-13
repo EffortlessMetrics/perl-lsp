@@ -3768,8 +3768,8 @@ esac
     }
 
     #[test]
-    fn ripr_no_summary_mixed_recognized_gap_and_suppressed_unclassified_does_not_over_subtract(
-    ) -> Result<()> {
+    fn ripr_no_summary_mixed_recognized_gap_and_suppressed_unclassified_does_not_over_subtract()
+    -> Result<()> {
         // Regression test for Path B (no summary object) over-subtract risk:
         // if a findings-only payload has both a real recognized unsuppressed gap AND
         // unclassified suppressed findings, suppressed_unclassified must NOT be subtracted

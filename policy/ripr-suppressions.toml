@@ -299,6 +299,58 @@ review_after = "2026-07-11"
 expires = "2026-09-30"
 
 # -----------------------------------------------------------------------------
+# OO method inlay hints (PR #1302 Slice 2): ripr#1429-class activation-
+# untraceable seams in two production files.
+#
+# File 1 — impl_inlay_hints.rs: the new NodeKind::MethodCall arm in
+# parameter_hints_with_resolver (lines ~400-462). Six seam classes:
+#   (A) user_sigs HashMap lookup + clone inside if-let chain
+#   (B) method_resolver closure dispatch (dyn Fn call through trait object)
+#   (C) resolver(method.as_str()) return: Some(names) vs None arm
+#   (D) all_param_names.is_empty() predicate (true → &[] slice)
+#   (E) param_names.len() <= 1 predicate (true → noise suppression)
+#   (F) range filter inside arg loop (pos_in_range predicate)
+# RIPR cannot statically trace: closure dispatch through &dyn Fn, AST walk
+# callback (walk_ast visitor), and predicate branch propagation through the
+# recursive walk chain — same ripr#1429 limit as all sibling suppressions.
+# 6 inline #[cfg(test)] lib tests in impl_inlay_hints::tests exercise all
+# branches directly (tests A–F above) and run under cargo test --lib.
+#
+# File 2 — misc.rs: the ws_resolver closure (lines ~357-369) gated on
+# #[cfg(feature = "workspace")]. Seam classes:
+#   (G) #[cfg(feature="workspace")] feature guard — RIPR cannot traverse
+#   (H) sig.get("parameters")?.as_array()?   — chained Option short-circuits
+#   (I) p.get("label")?.as_str()             — Option short-circuit in filter_map
+#   (J) names.is_empty()                     — empty-names guard predicate
+#   (K) LspServer method dispatch (resolve_method_in_workspace trait call)
+#
+# Coverage evidence:
+#   impl_inlay_hints.rs seams: 6 inline lib tests (A–F) in tests mod plus
+#   15 integration tests in tests/inlay_hints_user_subs_unit.rs.
+#   misc.rs seams: the 6 inline lib tests exercise the resolver protocol via
+#   parameter_hints_with_resolver; integration test
+#   test_method_call_workspace_resolver_provides_hints covers the mock-resolver
+#   path; full workspace resolution covered by #1301's integration tests.
+#
+# Suppression is narrow: exactly two production files, one PR (#1302 Slice 2).
+# Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-oo-method-inlay-hints-ws-resolver"
+kind = "predicate_infection_untraceable"
+paths = [
+  "crates/perl-lsp-rs-core/src/providers/inlay_hints/impl_inlay_hints.rs",
+  "crates/perl-lsp-rs/src/runtime/language/misc.rs",
+]
+classification = ["static_unknown", "no_static_path", "activation_unknown", "weakly_exposed"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "Two ripr#1429-class files from PR #1302 Slice 2 (OO method inlay hints). impl_inlay_hints.rs: the new NodeKind::MethodCall arm in parameter_hints_with_resolver — RIPR cannot trace the dyn Fn resolver dispatch, walk_ast visitor callback chain, or predicate branch propagation (if-let chains, is_empty(), len()<=1, pos_in_range). All 6 branch paths are covered by inline #[cfg(test)] lib tests in impl_inlay_hints::tests plus 15 integration tests in inlay_hints_user_subs_unit.rs. misc.rs: the ws_resolver closure is gated on #[cfg(feature='workspace')], dispatches through LspServer trait, and contains JSON ? chains — same class as ripr-suppress-oo-method-signature-help-seams (PR #1301). Coverage: 6 inline lib tests exercise the resolver protocol; integration tests cover the mock-resolver path. Suppression is minimal: exactly two production files, one PR. Remove when ripr#1429 is fixed upstream."
+created = "2026-06-11"
+review_after = "2026-07-11"
+expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
 # quality_baseline.rs cfg(test) line-scanner predicates: string/line-scanning
 # — activation untraceable by ripr 0.5.0 (ripr#1429 class).
 #

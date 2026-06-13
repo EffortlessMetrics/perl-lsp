@@ -71,17 +71,13 @@ fn structural_brace_delta(line: &str) -> i32 {
         }
 
         // Raw byte string `br#"..."#` — must be checked before `b"..."`.
-        if ch == 'b'
-            && i + 1 < n
-            && chars[i + 1] == 'r'
-            && {
-                let mut k = i + 2;
-                while k < n && chars[k] == '#' {
-                    k += 1;
-                }
-                k < n && chars[k] == '"'
+        if ch == 'b' && i + 1 < n && chars[i + 1] == 'r' && {
+            let mut k = i + 2;
+            while k < n && chars[k] == '#' {
+                k += 1;
             }
-        {
+            k < n && chars[k] == '"'
+        } {
             let mut hash_count = 0usize;
             let mut k = i + 2;
             while k < n && chars[k] == '#' {
@@ -111,15 +107,13 @@ fn structural_brace_delta(line: &str) -> i32 {
         }
 
         // Raw string literal `r#"..."#`.
-        if ch == 'r'
-            && {
-                let mut k = i + 1;
-                while k < n && chars[k] == '#' {
-                    k += 1;
-                }
-                k < n && chars[k] == '"'
+        if ch == 'r' && {
+            let mut k = i + 1;
+            while k < n && chars[k] == '#' {
+                k += 1;
             }
-        {
+            k < n && chars[k] == '"'
+        } {
             let mut hash_count = 0usize;
             let mut k = i + 1;
             while k < n && chars[k] == '#' {
@@ -202,9 +196,8 @@ fn structural_brace_delta(line: &str) -> i32 {
         if ch == '\'' {
             // Lifetime or label heuristic: `'` followed by an identifier char
             // with no closing `'` after the identifier means it is a lifetime.
-            let is_lifetime = i + 1 < n
-                && (chars[i + 1].is_ascii_alphabetic() || chars[i + 1] == '_')
-                && {
+            let is_lifetime =
+                i + 1 < n && (chars[i + 1].is_ascii_alphabetic() || chars[i + 1] == '_') && {
                     let mut k = i + 1;
                     while k < n && (chars[k].is_ascii_alphanumeric() || chars[k] == '_') {
                         k += 1;
@@ -1606,19 +1599,13 @@ coverage:
     fn structural_brace_delta_skips_char_literal_open_brace() {
         // The classic dangerous pattern: assert!(s.starts_with('{'));
         // The '{' is a char literal; net structural delta must be 0, not +1.
-        assert_eq!(
-            structural_brace_delta("        assert!(s.starts_with('{'));"),
-            0
-        );
+        assert_eq!(structural_brace_delta("        assert!(s.starts_with('{'));"), 0);
     }
 
     #[test]
     fn structural_brace_delta_skips_char_literal_close_brace() {
         // A '}' char literal must not decrement depth.
-        assert_eq!(
-            structural_brace_delta("        assert!(s.ends_with('}'));"),
-            0
-        );
+        assert_eq!(structural_brace_delta("        assert!(s.ends_with('}'));"), 0);
     }
 
     #[test]
@@ -1657,10 +1644,7 @@ coverage:
         // Lifetime annotations ('a, 'static) must not suppress the next
         // structural brace.
         assert_eq!(structural_brace_delta("    fn t<'a>() {"), 1);
-        assert_eq!(
-            structural_brace_delta("        let _: &'static str = \"hi\";"),
-            0
-        );
+        assert_eq!(structural_brace_delta("        let _: &'static str = \"hi\";"), 0);
     }
 
     // ------------------------------------------------------------------
@@ -1677,47 +1661,35 @@ coverage:
         // With `structural_brace_delta` the char literal is skipped, so the
         // module correctly closes at the real `}` on line 10.
         let source = [
-            "pub fn prod() -> bool { true }\n", // 1
-            "\n",                               // 2
-            "#[cfg(test)]\n",                   // 3
-            "mod tests {\n",                    // 4
-            "    #[test]\n",                    // 5
-            "    fn t() {\n",                   // 6
-            "        let s = \"{\";\n",       // 7
+            "pub fn prod() -> bool { true }\n",       // 1
+            "\n",                                     // 2
+            "#[cfg(test)]\n",                         // 3
+            "mod tests {\n",                          // 4
+            "    #[test]\n",                          // 5
+            "    fn t() {\n",                         // 6
+            "        let s = \"{\";\n",               // 7
             "        assert!(s.starts_with('{'));\n", // 8 char literal {
-            "    }\n",                          // 9
-            "}\n",                              // 10 real module close
-            "\n",                               // 11
-            "pub fn prod_after() -> bool {\n",  // 12 must NOT be in set
-            "    false\n",                      // 13
-            "}\n",                              // 14
+            "    }\n",                                // 9
+            "}\n",                                    // 10 real module close
+            "\n",                                     // 11
+            "pub fn prod_after() -> bool {\n",        // 12 must NOT be in set
+            "    false\n",                            // 13
+            "}\n",                                    // 14
         ]
         .concat();
 
         let test_lines = cfg_test_line_numbers(&source);
 
-        assert!(
-            !test_lines.contains(&1),
-            "prod fn before must not be in test set"
-        );
+        assert!(!test_lines.contains(&1), "prod fn before must not be in test set");
         assert!(
             !test_lines.contains(&12),
             "prod fn after must not be in test set (naive scanner bug)"
         );
-        assert!(
-            !test_lines.contains(&13),
-            "prod fn body must not be in test set"
-        );
-        assert!(
-            !test_lines.contains(&14),
-            "prod fn close must not be in test set"
-        );
+        assert!(!test_lines.contains(&13), "prod fn body must not be in test set");
+        assert!(!test_lines.contains(&14), "prod fn close must not be in test set");
         assert!(test_lines.contains(&3), "cfg(test) attr must be in test set");
         assert!(test_lines.contains(&4), "mod tests open must be in test set");
-        assert!(
-            test_lines.contains(&8),
-            "assert! line with char literal must be in test set"
-        );
+        assert!(test_lines.contains(&8), "assert! line with char literal must be in test set");
         assert!(test_lines.contains(&10), "mod tests close must be in test set");
     }
 
@@ -1743,10 +1715,7 @@ coverage:
             !test_lines.contains(&7),
             "prod after must not be in test set (comment brace regression)"
         );
-        assert!(
-            test_lines.contains(&6),
-            "real module close must be in test set"
-        );
+        assert!(test_lines.contains(&6), "real module close must be in test set");
     }
 
     // ------------------------------------------------------------------
