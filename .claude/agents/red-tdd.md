@@ -39,8 +39,10 @@ an empty plan commit. You check out that branch and add your tests on top.
 1. **Check out:** `git checkout impl/<issue#>-<specslug>` (branch already exists and is pushed)
 2. **Write tests** on this branch
 3. **Commit message:** `test(<crate>): add failing tests for #<issue> (red TDD)`
-4. **Push:** `git push origin impl/<issue#>-<specslug>`
-5. **Comment on issue:** Include test file path, test names, and what each test asserts.
+4. **Stage by explicit path, not `git add -A`.** After any merge, `git add -A` sweeps in `.merge_file_*` temp artifacts. Always: `git add <file1> <file2>` (explicit paths only).
+5. **Verify branch before push:** `git branch --show-current` must show YOUR branch. (#682 / #1432: wrong branch push sent 4350 lines of another agent's changes.)
+6. **Push:** `git push origin impl/<issue#>-<specslug>`
+7. **Comment on issue:** Include test file path, test names, and what each test asserts.
 
 The builder will later:
 ```bash

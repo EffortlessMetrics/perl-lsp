@@ -93,6 +93,16 @@ Any change touching `crates/perl-dap/`, `crates/perl-dap-*/`, or the DAP bridge
 | **Required action** | Decision documented in `acceptance.md` before builder starts. CI receipt from `ripr+ New Gap Gate` is the verification artifact — not local ripr output (local may run a different ripr version; CI pins `RIPR_VERSION=0.5.0`). |
 | **Ref** | [ripr#1428](https://github.com/nickel-lang/ripr/issues/1428), [ripr#1429](https://github.com/nickel-lang/ripr/issues/1429), xtask gap #1346; RIPR pin in `.github/workflows/ripr.yml` |
 
+### DAP-8: tagged-range ID-space codec (variablesReference wire-band)
+
+| Field | Value |
+|---|---|
+| **Invariant** | Any new `variablesReference`-like ID space in the DAP layer MUST use (a) **pairwise-disjoint wire bands** with named constant boundaries, (b) **fallible encode** (`-> Option<i32>`) that returns `None` rather than producing a wire value outside the declared band, and (c) **pure-range decode** with no residue or modulo-based disambiguation between bands. An allocation convention ("we never put those values there") is NOT enforcement. |
+| **Trigger** | Any change that introduces a new numeric reference type, a new allocator for an existing reference type, or any arithmetic on `variablesReference` / `frameId` / scope-ID integers outside the codec module (`var_ref.rs`) |
+| **Required adversarial test** | For each band boundary: (1) encode at the exact maximum of band N and assert `Some`; (2) encode one step beyond and assert `None`; (3) decode a wire value from band N and assert the correct variant; (4) decode a wire value of 0 and assert `None`. |
+| **Motivating incidents** | Three band-overflow bugs in PR #1430 / #1444 (green-tdd caught bug 1: residue overlap between EvalResult counter=1 and Scope; deep-review caught bugs 2 and 3: counter overflow into Child band and negative parent into EvalResult band). Issue #1445 tracks one surviving unmigrated site. |
+| **Ref** | [docs/reference/DAP_CONTRACTS.md §1](DAP_CONTRACTS.md), [docs/concepts/type-level-id-space-promotion.md](../concepts/type-level-id-space-promotion.md), [docs/learnings/2026-06-tagged-range-codec-band-overflow.md](../learnings/2026-06-tagged-range-codec-band-overflow.md) |
+
 ---
 
 ## Parser / scanner subsystem
@@ -216,6 +226,16 @@ transform (`coverage-filter`, `lcov.info` post-processors, ripr configuration, t
 | **Trigger** | Any change that adds `#[cfg(test)]` blocks to production source files in a crate whose ripr gate is currently green |
 | **Required action** | Pre-declare the handling strategy in `acceptance.md`. CI receipt from `ripr+ New Gap Gate` (not local ripr output) is the verification artifact — local ripr installs may differ from the CI-pinned `RIPR_VERSION=0.5.0`. |
 | **Ref** | [ripr#1428](https://github.com/nickel-lang/ripr/issues/1428), [ripr#1429](https://github.com/nickel-lang/ripr/issues/1429), xtask gap #1346; incident: [docs/learnings/2026-06-ripr-output-schema-break.md](../learnings/2026-06-ripr-output-schema-break.md) |
+
+### COV-5: Coverage-integrity (integration-test gap is a measurement problem, not a coverage problem)
+
+| Field | Value |
+|---|---|
+| **Invariant** | Patch coverage MUST count the coverage contributed by integration tests (`crates/*/tests/`). The `Codecov / Patch 95` gate is currently satisfied by `--lib` profdata only; integration tests do not count toward patch coverage. Satisfying the patch gate by adding inline `#[cfg(test)]` tests in `src/` (or by adding a ripr suppression) when the real gap is in integration-test measurement is a MEASUREMENT WORKAROUND — it does not improve the correctness guarantee. Fix the measurement, then fix the gap. |
+| **Trigger** | Any PR where the builder adds inline `#[cfg(test)]` blocks primarily to satisfy Codecov patch coverage (rather than to improve correctness assurance), or any PR that proposes lowering a coverage threshold |
+| **Required action** | If patch coverage is below 95% for a new code path: (1) first check whether the path is exercised by integration tests whose coverage is not counted; (2) if so, the correct fix is to fix the measurement (see issue #1282); (3) inline lib tests are acceptable only when they add genuine correctness value — document that reasoning in `acceptance.md` rather than treating them as a coverage-padding workaround. |
+| **Motivating incident** | Issue #1282 — patch coverage was satisfied by inline `#[cfg(test)]` tests + a ripr suppression, but the new code paths were already exercised by integration tests that were not counted. The padding improved the measurement, not the coverage. |
+| **Ref** | [docs/learnings/2026-06-codecov-false-low.md](../learnings/2026-06-codecov-false-low.md) |
 
 ---
 

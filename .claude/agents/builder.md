@@ -75,6 +75,10 @@ If a PR for this issue already exists, improve it — do NOT open a parallel one
 
 **PR body must match the diff.** `docs/agents/SPEC_UPDATE_CHECKLIST.md` — answer it before publishing.
 
+**Contamination guard (from #682 / #1432 incidents).** Two hard rules after any `git merge`:
+1. **Never `git add -A` after a merge.** `git merge` leaves `.merge_file_*` temp artifacts in the tree; `git add -A` sweeps them into your commit. Always stage by explicit path: `git add <file1> <file2>`.
+2. **Verify branch identity before `git push`.** Before pushing, run `git branch --show-current` and confirm it is YOUR branch — not another agent's branch that your worktree resolved to. The #682 incident pushed 4350 lines of an unrelated agent's changes onto `impl/1432` because the push target was wrong.
+
 ## Todo list
 
 ```

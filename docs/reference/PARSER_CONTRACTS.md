@@ -13,6 +13,8 @@ This document is kept factual and citable. Claims without a primary artifact
 **Related**: For repo-specific incidents motivating scanner and coverage contracts, see
 [docs/learnings/README.md](../learnings/README.md) (especially 2026-06-coverage-gate-measurement.md,
 2026-06-ripr-output-schema-break.md). For portable patterns, see [docs/concepts/](../concepts/).
+For the parallel DAP wire-protocol contract index (variablesReference wire-band codec), see
+[docs/reference/DAP_CONTRACTS.md](DAP_CONTRACTS.md).
 
 ---
 
@@ -527,3 +529,6 @@ that span line boundaries.
 | NodeKind classification | `perl-ast` | `crates/perl-ast/tests/classification_tests.rs` | #1295 |
 | Recovery node decision | `perl-ast` | (not fixture-coverable — never emitted) | open #915 |
 | Formatting preserve gates | `perl-lsp-perltidy` | `crates/perl-lsp-perltidy/tests/native_formatter_parse_gate_tests.rs` | #1314 |
+
+**DAP contracts** are in a separate index: [docs/reference/DAP_CONTRACTS.md](DAP_CONTRACTS.md)
+(variablesReference wire-band codec, governing PRs #1430 / #1444, open #1445).

@@ -124,3 +124,28 @@ regardless.
   starvation and the rebase treadmill are substrate failure modes caused by a wrong
   model of CI timing and branch-protection semantics; the config tension above is the
   substrate-level diagnosis.
+
+---
+
+## Current repo state: merge-queue available, strict-up-to-date relaxed (2026-06-13)
+
+As of 2026-06-13, the rebase treadmill described above was broken by relaxing the
+strict-up-to-date branch-protection rule on `main`. The current configuration:
+
+- **`strict-up-to-date` is OFF.** PRs may merge when their branch is slightly behind `main`,
+  provided all required CI checks are green on the current HEAD SHA. This removes the
+  "CI completed, main advanced, must rebase, CI cancelled" cycle.
+
+- **Merge queue is AVAILABLE but not FORCED.** The GitHub merge queue ruleset exists and
+  `merge_group` CI triggers are wired. The queue is not currently enforced as mandatory;
+  it is available for future enforcement without additional CI plumbing work.
+
+- **Verified-treadmill-break admin-merge criteria.** If the queue stalls due to a known
+  measurement artifact (such as the integration-test coverage gap described in #1282), an
+  admin merge may proceed when: (a) the PR has `deep-reviewed`, (b) at least 2 of 3 required
+  checks are green on the current SHA, and (c) the failing check is confirmed to be a
+  measurement artifact. This path should become RARE once #1282 is resolved.
+
+- **Batch-of-3 cadence remains in effect.** Even with strict-up-to-date off, rapid-fire
+  merges still cancel each other's CI runs. Continue merging in batches of 3 or fewer and
+  waiting for required checks before the next batch.

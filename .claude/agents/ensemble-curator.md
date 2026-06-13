@@ -43,6 +43,28 @@ push code changes (except trivial label/comment actions).
 Choose exactly one. If torn between ALIGNED and anything else, err on ALIGNED and let
 downstream gates catch the rest.
 
+## Contamination pre-check (REQUIRED before trusting any REVIEW-READY signal)
+
+Before accepting any haiku agent's "REVIEW-READY" verdict on an external PR, verify:
+
+1. **File-count / size sanity.** Run `gh pr diff <N> --stat`. A PR targeting a single feature
+   should not touch 100+ files or show thousands of deletions unless it is a known large
+   refactor. The #682 incident: an agent reported "REVIEW-READY" on a PR that in reality
+   contained 643 changed files (4350 lines of another agent's work merged in via `git add -A`
+   after a merge conflict). Trust the diff, not the agent claim.
+2. **No `.merge_file_*` or `.claude/target/` junk.** Run `gh pr diff <N> --name-only` and grep
+   for these patterns. Their presence means the PR was staged with `git add -A` after a merge
+   and swept in git merge temp artifacts.
+3. **Contaminated mega-PRs: prefer re-create over untangle.** If a PR has swept in another
+   agent's changes, the correct fix is to close it, re-create a clean branch from `origin/main`,
+   and cherry-pick only the intended commits. Attempting to surgically revert the contamination
+   in-place (untangle) is fragile and error-prone.
+   See [docs/concepts/re-create-over-untangle.md](../concepts/re-create-over-untangle.md).
+
+References: #682 ("100+ files" hallucination + 643-file reality), #1432 (cross-branch push of 4350 lines).
+
+---
+
 ## The verification ladder
 
 Apply in order; stop at first resolution:
