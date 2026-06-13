@@ -346,6 +346,20 @@ impl<'a> DeclarationProvider<'a> {
                     None
                 }
             }
+            // Cursor on a `method` name at its declaration site — self-location.
+            // NodeKind::Method has no separate name-child node; the full Method node
+            // spans the keyword + name, so find_node_at_offset returns the Method node.
+            NodeKind::Method { name, .. } => {
+                let mut declarations = Vec::new();
+                self.collect_subroutine_declarations(&self.ast, name, &mut declarations);
+                declarations.first().map(|decl| {
+                    vec![self.create_location_link(
+                        node,
+                        decl,
+                        self.get_subroutine_name_range(decl),
+                    )]
+                })
+            }
             // Handle string literals that are method names inside modifier calls:
             // `before 'save' => sub { }` — cursor on 'save' navigates to sub save { }
             NodeKind::String { value, .. } => self.find_modifier_target_declaration(node, value),
@@ -830,12 +844,16 @@ impl<'a> DeclarationProvider<'a> {
         sub_name: &str,
         subs: &mut Vec<&'b Node>,
     ) {
-        if let NodeKind::Subroutine { name, .. } = &node.kind {
-            if let Some(name_str) = name {
-                if name_str == sub_name {
-                    subs.push(node);
-                }
+        match &node.kind {
+            NodeKind::Subroutine { name: Some(name_str), .. } if name_str == sub_name => {
+                subs.push(node);
             }
+            // Method declarations (Perl 5.38+ native class / Object::Pad).
+            // NodeKind::Method.name is a bare String (not Option<String>).
+            NodeKind::Method { name: method_name, .. } if method_name == sub_name => {
+                subs.push(node);
+            }
+            _ => {}
         }
 
         for child in self.get_children(node) {
@@ -855,10 +873,11 @@ impl<'a> DeclarationProvider<'a> {
         pkg_name: &str,
         packages: &mut Vec<&'b Node>,
     ) {
-        if let NodeKind::Package { name, .. } = &node.kind {
-            if name == pkg_name {
+        match &node.kind {
+            NodeKind::Package { name, .. } | NodeKind::Class { name, .. } if name == pkg_name => {
                 packages.push(node);
             }
+            _ => {}
         }
 
         for child in self.get_children(node) {
@@ -1270,6 +1289,10 @@ impl<'a> DeclarationProvider<'a> {
                 vec![variable.as_ref(), list.as_ref(), body.as_ref()]
             }
             NodeKind::ExpressionStatement { expression } => vec![expression.as_ref()],
+            // Class body (Perl 5.38+ native class / Object::Pad) contains methods.
+            NodeKind::Class { body, .. } => vec![body.as_ref()],
+            // Package with optional inline block: `package Foo { ... }`.
+            NodeKind::Package { block: Some(block), .. } => vec![block.as_ref()],
             _ => vec![],
         }
     }
@@ -1386,6 +1409,7 @@ fn symbol_at_cursor_internal(
                     NodeKind::Variable { .. }
                         | NodeKind::FunctionCall { .. }
                         | NodeKind::Subroutine { .. }
+                        | NodeKind::Method { .. }
                         | NodeKind::MethodCall { .. }
                         | NodeKind::Use { .. }
                 )
@@ -1942,6 +1966,16 @@ fn symbol_at_cursor_internal(
             };
             Some(SymbolKey { pkg: pkg.into(), name: bare.into(), sigil: None, kind: SymKind::Sub })
         }
+        // Method declaration (Perl 5.38+ native class / Object::Pad).
+        // name is a bare String (not Option<String>) unlike NodeKind::Subroutine.
+        NodeKind::Method { name, .. } => {
+            let (pkg, bare) = if let Some(idx) = name.rfind("::") {
+                (&name[..idx], &name[idx + 2..])
+            } else {
+                (current_pkg, name.as_str())
+            };
+            Some(SymbolKey { pkg: pkg.into(), name: bare.into(), sigil: None, kind: SymKind::Sub })
+        }
         NodeKind::MethodCall { object, method, .. } => {
             let mut receiver_packages = std::collections::HashMap::new();
             record_receiver_assignment(ast, offset, current_pkg, &mut receiver_packages);
@@ -2145,4 +2179,291 @@ pub fn get_node_children(node: &Node) -> Vec<&Node> {
     // Delegate to the AST node's own comprehensive children() method,
     // which handles all node kinds including Block, Package, MethodCall, etc.
     node.children()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Parser;
+    use std::sync::Arc;
+
+    /// Helper: parse source and return DeclarationProvider with version 0.
+    fn make_provider(source: &str) -> DeclarationProvider<'static> {
+        let mut parser = Parser::new(source);
+        let ast = parser.parse().expect("parse must succeed");
+        DeclarationProvider::new(Arc::new(ast), source.to_string(), "file:///test.pl".to_string())
+    }
+
+    // =========================================================================
+    // NodeKind::Method — changed lines in declaration.rs (#854, patch-coverage)
+    //
+    // find_declaration Method arm (lines ~352-362)
+    // collect_subroutine_declarations Method arm (lines ~853-854)
+    // collect_package_declarations Class arm (line ~877)
+    // get_children_static Class arm (line ~1293)
+    // get_children_static Package block arm (line ~1295)
+    // symbol_at_cursor_internal Method arm (lines ~1971-1977)
+    // =========================================================================
+
+    /// find_declaration on a Method node (cursor on the method name) returns
+    /// Some([...]) — exercises the NodeKind::Method arm in find_declaration.
+    ///
+    /// Covered changed line: ~352  NodeKind::Method { name, .. } =>
+    #[test]
+    fn method_decl_find_declaration_self_locates() {
+        let source = "class Foo { method greet { return 1; } }";
+        let provider = make_provider(source);
+        // "greet" starts at offset 19 (after "class Foo { method ").
+        // The Method node has no separate name child, so find_node_at_offset
+        // returns the Method node when the cursor is on the name characters.
+        let offset = source.find("greet").expect("greet must be in source");
+        let result = provider.find_declaration(offset, 0);
+        assert!(
+            result.is_some(),
+            "find_declaration on a Method node must return Some; source={source:?} offset={offset}"
+        );
+    }
+
+    /// collect_subroutine_declarations finds a Method node by name.
+    ///
+    /// Covered changed line: ~853  NodeKind::Method { name: method_name, .. }
+    #[test]
+    fn method_decl_collect_subroutine_declarations_finds_method() {
+        let source = "class Foo { method greet { return 1; } }";
+        let provider = make_provider(source);
+        let mut subs = Vec::new();
+        provider.collect_subroutine_declarations(&provider.ast, "greet", &mut subs);
+        assert!(
+            !subs.is_empty(),
+            "collect_subroutine_declarations must find the method 'greet'; got empty vec"
+        );
+        assert!(
+            matches!(subs[0].kind, NodeKind::Method { ref name, .. } if name == "greet"),
+            "collected declaration must be a Method node named 'greet'"
+        );
+    }
+
+    /// collect_package_declarations finds a Class node by name.
+    ///
+    /// Covered changed line: ~877  NodeKind::Class { name, .. } if name == pkg_name
+    #[test]
+    fn class_decl_collect_package_declarations_finds_class() {
+        let source = "class Foo { method greet { return 1; } }";
+        let provider = make_provider(source);
+        let mut packages = Vec::new();
+        provider.collect_package_declarations(&provider.ast, "Foo", &mut packages);
+        assert!(
+            !packages.is_empty(),
+            "collect_package_declarations must find class 'Foo'; got empty vec"
+        );
+        assert!(
+            matches!(packages[0].kind, NodeKind::Class { ref name, .. } if name == "Foo"),
+            "collected declaration must be a Class node named 'Foo'"
+        );
+    }
+
+    /// get_children_static on a Class node returns the class body.
+    ///
+    /// Covered changed line: ~1293  NodeKind::Class { body, .. } => vec![body.as_ref()]
+    #[test]
+    fn get_children_static_class_returns_body() {
+        let source = "class Foo { method greet { return 1; } }";
+        let provider = make_provider(source);
+        // Walk the AST to find the Class node.
+        fn find_class(node: &Node) -> Option<&Node> {
+            if matches!(node.kind, NodeKind::Class { .. }) {
+                return Some(node);
+            }
+            for child in node.children() {
+                if let Some(found) = find_class(child) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        let class_node = find_class(&provider.ast).expect("Class node must exist in parsed AST");
+        let children = DeclarationProvider::get_children_static(class_node);
+        assert!(
+            !children.is_empty(),
+            "get_children_static on Class must return the body; got empty vec"
+        );
+        // The single child must be the Block body.
+        assert!(
+            matches!(children[0].kind, NodeKind::Block { .. }),
+            "Class child returned by get_children_static must be a Block"
+        );
+    }
+
+    /// get_children_static on a Package-with-block node returns the block.
+    ///
+    /// Covered changed line: ~1295  NodeKind::Package { block: Some(block), .. }
+    #[test]
+    fn get_children_static_package_block_returns_block() {
+        let source = "package Foo { sub hello { return 1; } }";
+        let provider = make_provider(source);
+        fn find_package(node: &Node) -> Option<&Node> {
+            if matches!(node.kind, NodeKind::Package { .. }) {
+                return Some(node);
+            }
+            for child in node.children() {
+                if let Some(found) = find_package(child) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        let package_node =
+            find_package(&provider.ast).expect("Package node must exist in parsed AST");
+        let children = DeclarationProvider::get_children_static(package_node);
+        // package Foo { } has a block — get_children_static must return it.
+        assert!(
+            !children.is_empty(),
+            "get_children_static on Package-with-block must return the block; got empty vec"
+        );
+    }
+
+    /// symbol_at_cursor on a Method declaration site returns a SymbolKey with
+    /// name = method name and kind = Sub.
+    ///
+    /// Covered changed lines: ~1971-1977  NodeKind::Method { name, .. } => { ... }
+    #[test]
+    fn symbol_at_cursor_method_decl_returns_symbol_key() {
+        let source = "class Foo { method greet { return 1; } }";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse().expect("parse must succeed");
+        let offset = source.find("greet").expect("greet must be in source");
+        let result = symbol_at_cursor(&ast, offset, "Foo");
+        assert!(
+            result.is_some(),
+            "symbol_at_cursor on a Method declaration must return Some; source={source:?}"
+        );
+        let key = result.unwrap();
+        assert_eq!(key.name.as_ref(), "greet", "symbol name must be the method name");
+        assert_eq!(key.kind, crate::workspace_index::SymKind::Sub, "method kind must be Sub");
+    }
+
+    // =========================================================================
+    // Boundary discriminator tests — ripr seam coverage for equality guards
+    //
+    // Each test exercises the FALSE side of a match guard (name == X conditions)
+    // so ripr can confirm the boundary is exercised in both directions.
+    // =========================================================================
+
+    /// Boundary discriminator: collect_subroutine_declarations does NOT collect a
+    /// Subroutine node when its name does not equal sub_name (name_str != sub_name).
+    ///
+    /// Exercises the FALSE side of: name_str == sub_name (line ~848).
+    #[test]
+    fn subroutine_decl_boundary_discriminator_rejects_different_sub_name() {
+        let source = "sub hello { return 1; }";
+        let provider = make_provider(source);
+        let mut subs = Vec::new();
+        // Search for "goodbye" -- a name that does NOT exist in the AST.
+        provider.collect_subroutine_declarations(&provider.ast, "goodbye", &mut subs);
+        assert!(
+            subs.is_empty(),
+            "collect_subroutine_declarations must NOT collect hello when searching for goodbye; got {count} node(s)",
+            count = subs.len()
+        );
+    }
+
+    /// Boundary discriminator: collect_subroutine_declarations does NOT collect a
+    /// Method node when its name does not equal sub_name (method_name != sub_name).
+    ///
+    /// Exercises the FALSE side of: method_name == sub_name (line ~853).
+    #[test]
+    fn method_decl_boundary_discriminator_rejects_different_method_name() {
+        let source = "class Foo { method greet { return 1; } }";
+        let provider = make_provider(source);
+        let mut subs = Vec::new();
+        // Search for "farewell" -- a name that does NOT match the greet method.
+        provider.collect_subroutine_declarations(&provider.ast, "farewell", &mut subs);
+        assert!(
+            subs.is_empty(),
+            "collect_subroutine_declarations must NOT collect greet when searching for farewell; got {count} node(s)",
+            count = subs.len()
+        );
+    }
+
+    /// Boundary discriminator: collect_package_declarations does NOT collect a
+    /// Class or Package node when its name does not equal pkg_name (name != pkg_name).
+    ///
+    /// Exercises the FALSE side of: name == pkg_name (line ~877).
+    #[test]
+    fn class_decl_boundary_discriminator_rejects_different_class_name() {
+        let source = "class Foo { method greet { return 1; } }";
+        let provider = make_provider(source);
+        let mut packages = Vec::new();
+        // Search for "Bar" -- a class name that does NOT exist in the AST.
+        provider.collect_package_declarations(&provider.ast, "Bar", &mut packages);
+        assert!(
+            packages.is_empty(),
+            "collect_package_declarations must NOT collect Foo when searching for Bar; got {count} node(s)",
+            count = packages.len()
+        );
+    }
+
+    // =========================================================================
+    // Patch coverage tests -- cover specific changed lines not reached by the
+    // existing tests above (Codecov Patch 95 gate, lines 847-849, 876, 1973).
+    // =========================================================================
+
+    /// collect_subroutine_declarations finds a Subroutine node by name.
+    ///
+    /// Covered changed lines: ~847-849  match &node.kind { NodeKind::Subroutine { name: Some(name_str), .. } if ... => { subs.push(node) }
+    /// (the Subroutine arm body, which is only hit when a sub with a matching name is visited)
+    #[test]
+    fn subroutine_decl_collect_subroutine_declarations_finds_subroutine() {
+        let source = "sub hello { return 1; }";
+        let provider = make_provider(source);
+        let mut subs = Vec::new();
+        provider.collect_subroutine_declarations(&provider.ast, "hello", &mut subs);
+        assert!(
+            !subs.is_empty(),
+            "collect_subroutine_declarations must find the sub hello; got empty vec"
+        );
+        assert!(
+            matches!(subs[0].kind, NodeKind::Subroutine { ref name, .. } if name.as_deref() == Some("hello")),
+            "collected declaration must be a Subroutine node named hello"
+        );
+    }
+
+    /// collect_package_declarations finds a Package node by name (not just Class).
+    ///
+    /// Covered changed lines: ~876  match &node.kind { NodeKind::Package { name, .. } | NodeKind::Class { name, .. } if ...
+    /// (exercises the Package arm and confirms the match head is instrumented)
+    #[test]
+    fn package_decl_collect_package_declarations_finds_package() {
+        let source = "package Bar; sub hello { return 1; }";
+        let provider = make_provider(source);
+        let mut packages = Vec::new();
+        provider.collect_package_declarations(&provider.ast, "Bar", &mut packages);
+        assert!(
+            !packages.is_empty(),
+            "collect_package_declarations must find package Bar; got empty vec"
+        );
+        assert!(
+            matches!(packages[0].kind, NodeKind::Package { ref name, .. } if name == "Bar"),
+            "collected declaration must be a Package node named Bar"
+        );
+    }
+
+    /// symbol_at_cursor_with_source on a Method declaration returns a SymbolKey
+    /// with source-text disambiguation active — exercises the Method arm of
+    /// symbol_at_cursor_internal via the symbol_at_cursor_with_source wrapper.
+    ///
+    /// Covered changed lines: ~1971-1977  NodeKind::Method arm in symbol_at_cursor_internal
+    /// Covers the bare-name path (line ~1975): no "::" in name, so pkg = current_pkg.
+    #[test]
+    fn symbol_at_cursor_with_source_method_decl_returns_symbol_key() {
+        let source = "class Foo { method greet { return 1; } }";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse().expect("parse must succeed");
+        let offset = source.find("greet").expect("greet must be in source");
+        let result = symbol_at_cursor_with_source(&ast, offset, "Foo", source);
+        assert!(result.is_some(), "symbol_at_cursor_with_source on a Method must return Some");
+        let key = result.unwrap();
+        assert_eq!(key.name.as_ref(), "greet", "symbol name must be the bare method name");
+        assert_eq!(key.pkg.as_ref(), "Foo", "pkg must be the current_pkg for bare method names");
+    }
 }
