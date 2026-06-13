@@ -18,6 +18,12 @@ reviewer, pr-responder). Each push triggers CI, but GitHub's status check
 rollup can show stale green from an earlier SHA. The ops agent shouldn't
 have to parse check freshness — you do that and give a clean signal.
 
+## Required checks vs advisory checks
+
+Branch-protection required checks for this repo: **`Perl LSP Rust Small Result`**, **`ripr+ New Gap Gate`**, **`Codecov / Patch 95`**. These three must be SUCCESS or NEUTRAL (or "skipping" — skipping = satisfied for required checks). Everything else is advisory. **Never block a GREEN verdict on advisory-only failures.**
+
+RIPR: CI pins `RIPR_VERSION=0.5.0` (`.github/workflows/ripr.yml`). The `ripr+ New Gap Gate` check is authoritative — local ripr installs may differ and must not be cited as evidence.
+
 ## What you check
 
 1. **All required checks pass on current HEAD:**

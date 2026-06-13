@@ -933,3 +933,204 @@ pub fn validate_substitution_modifiers(modifiers_str: &str) -> Result<String, ch
 
     Ok(valid_modifiers)
 }
+
+// ============================================================================
+// Canonical qw / q / qq operator content extractor (Wave D centralization)
+// ============================================================================
+
+/// Extract the inner content of a Perl quote-like operator expression.
+///
+/// This is the **canonical shared implementation** for all qw/q/qq delimiter
+/// parsing in the workspace. Every consumer crate (perl-semantic-analyzer,
+/// perl-workspace, perl-module, and this crate's own HIR model) delegates here.
+///
+/// # Behaviour
+///
+/// Strips `operator` from the start of `s`, trims any optional whitespace
+/// between the operator and its opening delimiter (Perl allows `qw (a b)`),
+/// reads the opening delimiter, maps it to its paired closing delimiter
+/// (`(` → `)`, `{` → `}`, `[` → `]`, `<` → `>`; all others self-close),
+/// rejects an alphanumeric or underscore character in delimiter position
+/// (i.e. `qwfoo` → `None`), verifies the string ends with the closing
+/// delimiter, and returns the interior slice.
+///
+/// # Examples
+///
+/// ```ignore
+/// // Basic qw
+/// assert_eq!(parse_quote_operator_content("qw(foo bar)", "qw"), Some("foo bar"));
+/// // Space before delimiter
+/// assert_eq!(parse_quote_operator_content("qw (foo bar)", "qw"), Some("foo bar"));
+/// // Self-closing delimiter
+/// assert_eq!(parse_quote_operator_content("qw/foo bar/", "qw"), Some("foo bar"));
+/// // Bareword — rejected
+/// assert_eq!(parse_quote_operator_content("qwfoo", "qw"), None);
+/// ```
+pub fn parse_quote_operator_content<'a>(s: &'a str, operator: &str) -> Option<&'a str> {
+    // Perl allows whitespace between a quote-like operator and its opening
+    // delimiter, e.g. `qw [a b]` or `q (x)`.  Trim it before reading the
+    // delimiter so the space-before-delimiter form is handled the same as the
+    // compact form.
+    let rest = s.strip_prefix(operator)?.trim_start();
+    let mut chars = rest.chars();
+    let open = chars.next()?;
+    // Reject bareword: `qwfoo` where the char after qw is alphanumeric/underscore.
+    if open.is_ascii_alphanumeric() || open == '_' {
+        return None;
+    }
+    let close = match open {
+        '(' => ')',
+        '{' => '}',
+        '[' => ']',
+        '<' => '>',
+        other => other,
+    };
+    if !rest.ends_with(close) {
+        return None;
+    }
+    let start = open.len_utf8();
+    let end = rest.len().checked_sub(close.len_utf8())?;
+    if end < start {
+        return None;
+    }
+    Some(&rest[start..end])
+}
+
+/// Parse a `qw(...)` expression and return the whitespace-split word list.
+///
+/// This is a convenience wrapper around [`parse_quote_operator_content`] that
+/// additionally splits the inner content on whitespace. Returns `None` when
+/// the input is not a valid `qw` expression.
+///
+/// # Examples
+///
+/// ```ignore
+/// assert_eq!(
+///     parse_qw_words("qw(Foo Bar Baz)"),
+///     Some(vec!["Foo".to_string(), "Bar".to_string(), "Baz".to_string()])
+/// );
+/// assert_eq!(parse_qw_words("qwfoo"), None);
+/// ```
+pub fn parse_qw_words(s: &str) -> Option<Vec<String>> {
+    let inner = parse_quote_operator_content(s, "qw")?;
+    Some(inner.split_whitespace().map(str::to_string).collect())
+}
+
+// ============================================================================
+// paired_delimiter_conformance — inline tests for get_closing_delimiter
+//
+// This test block is one of THREE that together form the conformance matrix
+// for paired-delimiter implementations across the workspace (#1320).
+//
+// The same input set is tested in:
+//   - crates/perl-lexer/src/quote_handler.rs                   (paired_close)
+//   - crates/perl-dap/src/inline_values/code_mask.rs           (matching_delimiter)
+//
+// Normalized contract: each impl maps to (close_char: char, is_paired: bool).
+//   - This impl: get_closing_delimiter(c) → cl; is_paired = (cl != c)
+// ============================================================================
+#[cfg(test)]
+mod paired_delimiter_conformance {
+    use super::get_closing_delimiter;
+
+    /// Normalize `get_closing_delimiter` to the shared `(close_char, is_paired)` shape.
+    fn normalize(open: char) -> (char, bool) {
+        let close = get_closing_delimiter(open);
+        (close, close != open)
+    }
+
+    /// The shared conformance matrix.
+    /// Each entry is `(open_char, expected_close, expected_is_paired)`.
+    const MATRIX: &[(char, char, bool)] = &[
+        // --- Paired openers -------------------------------------------
+        ('(', ')', true),
+        ('[', ']', true),
+        ('{', '}', true),
+        ('<', '>', true),
+        // --- Self-delimiting: common punctuation ----------------------
+        ('/', '/', false),
+        ('#', '#', false),
+        ('|', '|', false),
+        ('!', '!', false),
+        (',', ',', false),
+        ('%', '%', false),
+        ('~', '~', false),
+        ('.', '.', false),
+        (':', ':', false),
+        (';', ';', false),
+        // --- Self-delimiting: quote-adjacent chars --------------------
+        ('\'', '\'', false),
+        ('"', '"', false),
+        // --- Self-delimiting: less-common punctuation ----------------
+        ('@', '@', false),
+        ('$', '$', false),
+        ('^', '^', false),
+        ('&', '&', false),
+        ('*', '*', false),
+        ('+', '+', false),
+        ('-', '-', false),
+        ('=', '=', false),
+        ('?', '?', false),
+        // --- Closing chars used as openers (not paired) --------------
+        // Note: Perl does NOT auto-pair ) ] } > as openers.
+        (')', ')', false),
+        (']', ']', false),
+        ('}', '}', false),
+        ('>', '>', false),
+    ];
+
+    #[test]
+    fn get_closing_delimiter_agrees_with_conformance_matrix() {
+        for &(open, expected_close, expected_paired) in MATRIX {
+            let (got_close, got_paired) = normalize(open);
+            assert_eq!(
+                got_close, expected_close,
+                "perl-parser-core get_closing_delimiter({open:?}): close char mismatch \
+                 (got {got_close:?}, expected {expected_close:?})"
+            );
+            assert_eq!(
+                got_paired, expected_paired,
+                "perl-parser-core get_closing_delimiter({open:?}): is_paired mismatch \
+                 (got {got_paired}, expected {expected_paired})"
+            );
+        }
+    }
+
+    #[test]
+    fn get_closing_delimiter_paired_openers_return_distinct_close() {
+        // The four Perl auto-paired delimiters must map to a different close char.
+        for (open, expected_close) in [('(', ')'), ('[', ']'), ('{', '}'), ('<', '>')] {
+            let close = get_closing_delimiter(open);
+            assert_eq!(
+                close, expected_close,
+                "get_closing_delimiter({open:?}) should return {expected_close:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn get_closing_delimiter_self_delimiters_return_self() {
+        // Self-delimiting chars must return themselves unchanged.
+        let self_delims = ['/', '#', '|', '!', ',', '%', '~', '.', ':', ';', '\'', '"', '@'];
+        for open in self_delims {
+            let close = get_closing_delimiter(open);
+            assert_eq!(
+                close, open,
+                "get_closing_delimiter({open:?}) should return self for a self-delimiting char"
+            );
+        }
+    }
+
+    #[test]
+    fn get_closing_delimiter_closing_chars_used_as_openers_return_self() {
+        // Perl does NOT auto-pair ) ] } > as openers; they must return self.
+        for close in [')', ']', '}', '>'] {
+            let result = get_closing_delimiter(close);
+            assert_eq!(
+                result, close,
+                "get_closing_delimiter({close:?}) should return self — \
+                 closing chars are not themselves paired openers"
+            );
+        }
+    }
+}

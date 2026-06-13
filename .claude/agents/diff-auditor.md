@@ -75,6 +75,10 @@ Each agent sees its own step. Nobody has checked that:
 
 7. **PR metadata** — title has `(#NNN)`, body is meaningful, labels are complete.
 
+8. **PR body matches the diff.** Verify that success claims in the PR body are supported by the actual diff. If the body says "adds X" but X is absent from the diff, that is an ARTIFACTS finding — flag it.
+
+9. **Required checks vs advisory.** Branch-protection required checks: `Perl LSP Rust Small Result`, `ripr+ New Gap Gate`, `Codecov / Patch 95`. A "skipping" status on a required check = satisfied. Never block CLEAN verdict on advisory-only CI failures.
+
 ## External-agent PR rules (apply throughout audit)
 
 These aren't "next-step" operations — they're background context to carry as you audit. Keep them in mind for every PR.

@@ -18,11 +18,15 @@ use std::time::{Duration, Instant};
 static RIPR_BIN_OVERRIDE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
 const DEFAULT_ROOT: &str = ".";
-const DEFAULT_BASE: &str = "origin/master";
+const DEFAULT_BASE: &str = "origin/main";
 const DEFAULT_HEAD: &str = "HEAD";
 const PR_EVIDENCE_JSON: &str = "target/ripr/pr/repo-exposure.json";
 const PR_EVIDENCE_MD: &str = "target/ripr/pr/repo-exposure.md";
 const PR_DIFF: &str = "target/ripr/pr/pr.diff";
+/// Raw `ripr check --format json` output, uploaded as a CI artifact for diagnostics (#1346).
+/// The `repo-exposure.json` summary only contains per-bucket counts, not the `findings[]`
+/// array.  Without `findings[]` it is impossible to diagnose suppression mismatches offline.
+const PR_RAW_CHECK_JSON: &str = "target/ripr/pr/raw-check.json";
 const REVIEW_COMMENTS_JSON: &str = "target/ripr/review/comments.json";
 const REVIEW_COMMENTS_MD: &str = "target/ripr/review/comments.md";
 const ANNOTATIONS_TXT: &str = "target/ripr/review/annotations.txt";
@@ -672,6 +676,11 @@ fn write_pr_evidence(repo: &Path, options: &PrEvidenceOptions) -> Result<()> {
     let check_json = run_ripr_check(repo, options)?;
     let check_value: Value =
         serde_json::from_str(&check_json).context("ripr check output was not valid JSON")?;
+    // Write raw check output for offline diagnostics (#1346): repo-exposure.json only contains
+    // per-bucket counts; the findings[] array (which carries per-finding classification and path)
+    // is required to diagnose suppression mismatches.  This file is included in the
+    // ripr-pr-evidence artifact upload so it is available without re-running ripr.
+    write_text(&repo.join(PR_RAW_CHECK_JSON), &check_json)?;
     let suppressions = read_ripr_suppression_rules(repo, Path::new(DEFAULT_RIPR_SUPPRESSIONS))?;
     let packet = pr_evidence_packet(
         options,
@@ -684,6 +693,7 @@ fn write_pr_evidence(repo: &Path, options: &PrEvidenceOptions) -> Result<()> {
     validate_pr_evidence_packet(&packet, options, changed_files.len(), true, &base_sha, &head_sha)?;
     write_text(&repo.join(PR_EVIDENCE_JSON), &format_json(&packet)?)?;
     write_text(&repo.join(PR_EVIDENCE_MD), &render_pr_evidence_markdown(&packet))?;
+    println!("Wrote {PR_RAW_CHECK_JSON}");
     println!("Wrote {PR_EVIDENCE_JSON}");
     println!("Wrote {PR_EVIDENCE_MD}");
     Ok(())
@@ -731,6 +741,10 @@ struct RiprPrSummaryCounts {
     reachable_unrevealed: usize,
     no_static_path: usize,
     suppressed_by_policy: usize,
+    /// Suppressed findings whose classification was not recognized — cannot be attributed
+    /// to a specific bucket, but their paths matched a suppression rule.  Used to decrement
+    /// `severe_gaps` after per-bucket suppression has been applied.
+    suppressed_unclassified: usize,
 }
 
 fn ripr_pr_summary_counts(
@@ -743,6 +757,7 @@ fn ripr_pr_summary_counts(
         reachable_unrevealed: count_field(check_summary, "reachable_unrevealed"),
         no_static_path: count_field(check_summary, "no_static_path"),
         suppressed_by_policy: 0,
+        suppressed_unclassified: 0,
     };
     let Some(findings) = check_value.get("findings").and_then(Value::as_array) else {
         return summary_counts;
@@ -751,27 +766,51 @@ fn ripr_pr_summary_counts(
     let mut suppressed = RiprPrSummaryCounts::default();
     let mut unsuppressed_from_findings = RiprPrSummaryCounts::default();
     for finding in findings {
-        let classification = finding.get("classification").and_then(Value::as_str);
-        if !matches!(
-            classification,
-            Some("weakly_exposed" | "reachable_unrevealed" | "no_static_path")
-        ) {
+        // ripr 0.5.x: "classification" field, values "weakly_exposed" | "reachable_unrevealed" | "no_static_path".
+        // ripr 0.9.x: "grip_class" field, values "weakly_gripped" | "reachable_unrevealed" | "no_static_path".
+        //   "weakly_gripped" findings are counted in summary.reachable_unrevealed in 0.9.x.
+        // Accept both so suppression policy applies across ripr versions.
+        let raw_class = finding
+            .get("classification")
+            .and_then(Value::as_str)
+            .or_else(|| finding.get("grip_class").and_then(Value::as_str));
+        // Map to the canonical summary-counter name for correct bucket subtraction.
+        let canonical: Option<&str> = match raw_class {
+            Some("weakly_exposed") => Some("weakly_exposed"),
+            // ripr 0.9.x: weakly_gripped is reported under summary.reachable_unrevealed
+            Some("weakly_gripped") => Some("reachable_unrevealed"),
+            Some("reachable_unrevealed") => Some("reachable_unrevealed"),
+            Some("no_static_path") => Some("no_static_path"),
+            _ => None,
+        };
+        // Path suppression is checked BEFORE the classification guard (#1346).
+        // A finding whose classification is unrecognized must still be suppressed if its
+        // path matches a policy rule — skipping only path-unknown findings, not
+        // classification-unknown ones.
+        let Some(canonical) = canonical else {
+            if suppression_matches_finding(suppressions, finding) {
+                suppressed.suppressed_by_policy += 1;
+                suppressed.suppressed_unclassified += 1;
+            }
             continue;
-        }
+        };
         let counts = if suppression_matches_finding(suppressions, finding) {
             suppressed.suppressed_by_policy += 1;
             &mut suppressed
         } else {
             &mut unsuppressed_from_findings
         };
-        match classification {
-            Some("weakly_exposed") => counts.weakly_exposed += 1,
-            Some("reachable_unrevealed") => counts.reachable_unrevealed += 1,
-            Some("no_static_path") => counts.no_static_path += 1,
+        match canonical {
+            "weakly_exposed" => counts.weakly_exposed += 1,
+            "reachable_unrevealed" => counts.reachable_unrevealed += 1,
+            "no_static_path" => counts.no_static_path += 1,
             _ => {}
         }
     }
     if check_summary.is_some() {
+        // Per-bucket suppression: subtract classified suppressions from their respective buckets.
+        // Unclassified suppressions (suppressed_unclassified) cannot be attributed to a bucket,
+        // so they are carried through for the caller to subtract from severe_gaps directly.
         return RiprPrSummaryCounts {
             weakly_exposed: summary_counts.weakly_exposed.saturating_sub(suppressed.weakly_exposed),
             reachable_unrevealed: summary_counts
@@ -779,10 +818,17 @@ fn ripr_pr_summary_counts(
                 .saturating_sub(suppressed.reachable_unrevealed),
             no_static_path: summary_counts.no_static_path.saturating_sub(suppressed.no_static_path),
             suppressed_by_policy: suppressed.suppressed_by_policy,
+            suppressed_unclassified: suppressed.suppressed_unclassified,
         };
     }
+    // Path B: no summary object — bucket totals come from `unsuppressed_from_findings`, which
+    // only counts recognized-classification findings.  Unclassified findings were never added
+    // to those buckets, so subtracting `suppressed_unclassified` in pr_evidence_packet would
+    // over-subtract and could mask a real gap via saturating_sub.  Zero it out here; the
+    // caller's `.saturating_sub(summary.suppressed_unclassified)` then becomes a no-op.
     RiprPrSummaryCounts {
         suppressed_by_policy: suppressed.suppressed_by_policy,
+        suppressed_unclassified: 0,
         ..unsuppressed_from_findings
     }
 }
@@ -806,12 +852,25 @@ fn suppression_directory_pattern_matches(pattern: &str, path: &str) -> bool {
 }
 
 fn ripr_finding_path(finding: &Value) -> Option<String> {
+    // ripr 0.5.x: path lives under finding["probe"]["path"] or finding["probe"]["file"].
+    // ripr 0.9.x: path lives under finding["seam"]["file"] (and probe may be absent).
+    // Accept both so suppression policy applies across ripr versions.
     finding
         .get("probe")
         .and_then(|probe| {
             ["path", "file"].into_iter().find_map(|key| probe.get(key).and_then(Value::as_str))
         })
         .map(normalize_path_text)
+        .or_else(|| {
+            finding
+                .get("seam")
+                .and_then(|seam| {
+                    ["file", "path"]
+                        .into_iter()
+                        .find_map(|key| seam.get(key).and_then(Value::as_str))
+                })
+                .map(normalize_path_text)
+        })
         .or_else(|| ripr_plus_seam_path(finding))
         .filter(|path| !path.trim().is_empty())
 }
@@ -839,8 +898,13 @@ fn pr_evidence_packet(
     let weakly_exposed = summary.weakly_exposed;
     let reachable_unrevealed = summary.reachable_unrevealed;
     let no_static_path = summary.no_static_path;
-    let severe_gaps =
-        weakly_exposed.saturating_add(reachable_unrevealed).saturating_add(no_static_path);
+    // Per-bucket suppressed counts have already been subtracted from their buckets above.
+    // Findings suppressed by path but with an unrecognized classification (#1346) could not
+    // be attributed to a bucket; subtract them from the severe_gaps total now.
+    let severe_gaps = weakly_exposed
+        .saturating_add(reachable_unrevealed)
+        .saturating_add(no_static_path)
+        .saturating_sub(summary.suppressed_unclassified);
     let ripr_severe_gap = severe_gaps > 0;
     let warnings = if check_summary.is_some() {
         Vec::new()
@@ -2811,6 +2875,138 @@ paths = ["archive/["]
     }
 
     #[test]
+    fn ripr_0_9_x_grip_class_seam_file_suppressed_by_policy() -> Result<()> {
+        // ripr 0.9.x uses "grip_class" (not "classification") and "seam.file" (not "probe.file").
+        // Verify that the suppression machinery handles both field shapes so that
+        // path-scoped suppressions in policy/ripr-suppressions.toml fire under 0.9.x.
+        let options = PrEvidenceOptions {
+            root: ".".to_string(),
+            base: "origin/main".to_string(),
+            head: "HEAD".to_string(),
+        };
+        // Simulate ripr 0.9.x check output: summary.reachable_unrevealed=3, findings use grip_class+seam.
+        let check_value = json!({
+            "summary": {
+                "weakly_exposed": 0,
+                "reachable_unrevealed": 3,
+                "no_static_path": 0
+            },
+            "findings": [
+                {
+                    "grip_class": "weakly_gripped",
+                    "kind": "call_presence",
+                    "seam": {
+                        "file": "crates/perl-dap/src/debug_adapter/execution.rs",
+                        "line": 22
+                    }
+                },
+                {
+                    "grip_class": "weakly_gripped",
+                    "kind": "call_presence",
+                    "seam": {
+                        "file": "crates/perl-dap/src/debug_adapter/execution.rs",
+                        "line": 28
+                    }
+                },
+                {
+                    "grip_class": "weakly_gripped",
+                    "kind": "call_presence",
+                    "seam": {
+                        "file": "crates/perl-dap/src/debug_adapter/execution.rs",
+                        "line": 30
+                    }
+                }
+            ]
+        });
+        let suppressions = RiprSuppressionRules {
+            display_patterns: vec!["crates/perl-dap/src/debug_adapter/execution.rs".to_string()],
+            path_patterns: vec![Pattern::new("crates/perl-dap/src/debug_adapter/execution.rs")?],
+            invalid_patterns: Vec::new(),
+            suppression_reasons: Vec::new(),
+        };
+
+        let packet = pr_evidence_packet(
+            &options,
+            &["crates/perl-dap/src/debug_adapter/execution.rs".to_string()],
+            &check_value,
+            "base-sha",
+            "head-sha",
+            &suppressions,
+        );
+
+        // All 3 weakly_gripped findings are in the suppressed path and map to reachable_unrevealed.
+        // After suppression: reachable_unrevealed = 3 - 3 = 0, severe_gaps = 0.
+        assert_eq!(packet.pointer("/summary/reachable_unrevealed"), Some(&json!(0)));
+        assert_eq!(packet.pointer("/summary/weakly_exposed"), Some(&json!(0)));
+        assert_eq!(packet.pointer("/summary/severe_gaps"), Some(&json!(0)));
+        assert_eq!(packet.pointer("/summary/suppressed_by_policy"), Some(&json!(3)));
+        Ok(())
+    }
+
+    #[test]
+    fn ripr_0_9_x_unsuppressed_grip_class_produces_severe_gaps() -> Result<()> {
+        // Gate teeth: a ripr 0.9.x weakly_gripped finding on a path NOT covered by any
+        // suppression rule must produce severe_gaps > 0, causing the quality gate to FAIL.
+        // Before the grip_class fix, the gate silently skipped such findings because
+        // grip_class was not recognized, so severe_gaps stayed 0 — the gate had no teeth.
+        let options = PrEvidenceOptions {
+            root: ".".to_string(),
+            base: "origin/main".to_string(),
+            head: "HEAD".to_string(),
+        };
+        // ripr 0.9.x output: 2 weakly_gripped findings on a file not in any suppression.
+        let check_value = json!({
+            "summary": {
+                "weakly_exposed": 0,
+                "reachable_unrevealed": 2,
+                "no_static_path": 0
+            },
+            "findings": [
+                {
+                    "grip_class": "weakly_gripped",
+                    "kind": "call_presence",
+                    "seam": {
+                        "file": "crates/perl-lsp-rs/src/some_new_file.rs",
+                        "line": 10
+                    }
+                },
+                {
+                    "grip_class": "weakly_gripped",
+                    "kind": "call_presence",
+                    "seam": {
+                        "file": "crates/perl-lsp-rs/src/some_new_file.rs",
+                        "line": 20
+                    }
+                }
+            ]
+        });
+        // Suppression only covers the DAP execution.rs — the LSP file is NOT suppressed.
+        let suppressions = RiprSuppressionRules {
+            display_patterns: vec!["crates/perl-dap/src/debug_adapter/execution.rs".to_string()],
+            path_patterns: vec![Pattern::new("crates/perl-dap/src/debug_adapter/execution.rs")?],
+            invalid_patterns: Vec::new(),
+            suppression_reasons: Vec::new(),
+        };
+
+        let packet = pr_evidence_packet(
+            &options,
+            &["crates/perl-lsp-rs/src/some_new_file.rs".to_string()],
+            &check_value,
+            "base-sha",
+            "head-sha",
+            &suppressions,
+        );
+
+        // The 2 unsuppressed weakly_gripped findings map to reachable_unrevealed bucket.
+        // severe_gaps must be 2 (> 0) so the quality gate rejects this PR.
+        assert_eq!(packet.pointer("/summary/reachable_unrevealed"), Some(&json!(2)));
+        assert_eq!(packet.pointer("/summary/severe_gaps"), Some(&json!(2)));
+        assert_eq!(packet.pointer("/summary/suppressed_by_policy"), Some(&json!(0)));
+        assert_eq!(packet.pointer("/summary/ripr_severe_gap"), Some(&json!(true)));
+        Ok(())
+    }
+
+    #[test]
     fn write_review_comments_skips_ripr_when_current_pr_evidence_has_no_severe_gaps() -> Result<()>
     {
         let temp = tempfile::tempdir()?;
@@ -3355,10 +3551,10 @@ esac
 
     #[test]
     fn merge_base_guidance_suggests_fetch_for_non_shallow() {
-        let message = merge_base_failure_guidance("origin/master", "HEAD", false);
+        let message = merge_base_failure_guidance("origin/main", "HEAD", false);
         assert!(message.contains("no merge base"), "diagnosis: {message}");
         assert!(!message.contains("shallow"), "must not blame shallow: {message}");
-        assert!(message.contains("git fetch origin origin/master"), "fetch remedy: {message}");
+        assert!(message.contains("git fetch origin origin/main"), "fetch remedy: {message}");
     }
 
     #[test]
@@ -3432,5 +3628,223 @@ esac
     fn merged_labels_accepts_csv_only_without_explicit_labels() {
         let merged = merged_labels(&[], Some("needs-ci-fix,needs-ci-fix"));
         assert_eq!(merged, vec!["needs-ci-fix".to_string()]);
+    }
+
+    #[test]
+    fn ripr_unrecognized_classification_with_suppressed_path_is_suppressed() -> Result<()> {
+        // Regression test for #1346: a finding whose classification is NOT in the known
+        // canonical match arms (e.g. "static_unknown", "infection_unknown", "exposed", or
+        // any future ripr value) must still be suppressed when its path matches a policy
+        // suppression glob.  Before the fix the code did `continue` on unrecognized
+        // classification before reaching path-matching, so suppressed_by_policy stayed 0
+        // and severe_gaps remained positive — a false-positive gate failure.
+        let options = PrEvidenceOptions {
+            root: ".".to_string(),
+            base: "origin/main".to_string(),
+            head: "HEAD".to_string(),
+        };
+        // Simulate ripr output with an unrecognized classification that is counted in the
+        // summary but whose path is covered by our suppression policy.
+        let check_value = json!({
+            "summary": {
+                "weakly_exposed": 0,
+                "reachable_unrevealed": 2,
+                "no_static_path": 0
+            },
+            "findings": [
+                {
+                    // Unrecognized classification — not in any canonical match arm.
+                    "classification": "static_unknown",
+                    "kind": "call_presence",
+                    "seam": {
+                        "file": "crates/perl-dap/src/debug_adapter/variables.rs",
+                        "line": 584
+                    }
+                },
+                {
+                    // Also unrecognized, path matches suppression.
+                    "classification": "infection_unknown",
+                    "kind": "call_presence",
+                    "seam": {
+                        "file": "crates/perl-dap/src/debug_adapter/variables.rs",
+                        "line": 591
+                    }
+                }
+            ]
+        });
+        // Suppression covers the DAP variables.rs file.
+        let suppressions = RiprSuppressionRules {
+            display_patterns: vec!["crates/perl-dap/src/debug_adapter/variables.rs".to_string()],
+            path_patterns: vec![Pattern::new("crates/perl-dap/src/debug_adapter/variables.rs")?],
+            invalid_patterns: Vec::new(),
+            suppression_reasons: Vec::new(),
+        };
+
+        let packet = pr_evidence_packet(
+            &options,
+            &["crates/perl-dap/src/debug_adapter/variables.rs".to_string()],
+            &check_value,
+            "base-sha",
+            "head-sha",
+            &suppressions,
+        );
+
+        // Both findings are on a suppressed path → suppressed_by_policy=2, severe_gaps=0.
+        assert_eq!(
+            packet.pointer("/summary/suppressed_by_policy"),
+            Some(&json!(2)),
+            "unrecognized-classification findings on suppressed path must be counted as suppressed"
+        );
+        assert_eq!(
+            packet.pointer("/summary/severe_gaps"),
+            Some(&json!(0)),
+            "severe_gaps must be 0 after suppressing all findings (even unrecognized classifications)"
+        );
+        // Note: unclassified suppressions cannot be attributed to a specific bucket —
+        // reachable_unrevealed retains the raw summary value, but severe_gaps (the gate
+        // criterion) is correctly decremented by suppressed_unclassified.
+        assert_eq!(
+            packet.pointer("/summary/ripr_severe_gap"),
+            Some(&json!(false)),
+            "ripr_severe_gap must be false when all findings are suppressed"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn ripr_unrecognized_classification_without_suppressed_path_produces_severe_gaps() -> Result<()>
+    {
+        // Gate teeth: an unrecognized classification on a path NOT in suppressions
+        // must still produce severe_gaps > 0.  This guards against a fix that
+        // accidentally over-suppresses findings with unknown classifications.
+        let options = PrEvidenceOptions {
+            root: ".".to_string(),
+            base: "origin/main".to_string(),
+            head: "HEAD".to_string(),
+        };
+        let check_value = json!({
+            "summary": {
+                "weakly_exposed": 0,
+                "reachable_unrevealed": 1,
+                "no_static_path": 0
+            },
+            "findings": [
+                {
+                    "classification": "static_unknown",
+                    "kind": "call_presence",
+                    "seam": {
+                        "file": "crates/perl-lsp-rs/src/some_new_file.rs",
+                        "line": 10
+                    }
+                }
+            ]
+        });
+        // Suppression only covers DAP variables.rs — NOT the LSP file.
+        let suppressions = RiprSuppressionRules {
+            display_patterns: vec!["crates/perl-dap/src/debug_adapter/variables.rs".to_string()],
+            path_patterns: vec![Pattern::new("crates/perl-dap/src/debug_adapter/variables.rs")?],
+            invalid_patterns: Vec::new(),
+            suppression_reasons: Vec::new(),
+        };
+
+        let packet = pr_evidence_packet(
+            &options,
+            &["crates/perl-lsp-rs/src/some_new_file.rs".to_string()],
+            &check_value,
+            "base-sha",
+            "head-sha",
+            &suppressions,
+        );
+
+        // Unsuppressed finding → severe_gaps > 0, gate must reject.
+        assert_eq!(packet.pointer("/summary/suppressed_by_policy"), Some(&json!(0)));
+        assert_eq!(
+            packet.pointer("/summary/severe_gaps"),
+            Some(&json!(1)),
+            "unsuppressed unrecognized-classification finding must produce severe_gaps > 0"
+        );
+        assert_eq!(packet.pointer("/summary/ripr_severe_gap"), Some(&json!(true)));
+        Ok(())
+    }
+
+    #[test]
+    fn ripr_no_summary_mixed_recognized_gap_and_suppressed_unclassified_does_not_over_subtract(
+    ) -> Result<()> {
+        // Regression test for Path B (no summary object) over-subtract risk:
+        // if a findings-only payload has both a real recognized unsuppressed gap AND
+        // unclassified suppressed findings, suppressed_unclassified must NOT be subtracted
+        // from the bucket totals (they were never added to them) — doing so would mask a
+        // real gap via saturating_sub.
+        let options = PrEvidenceOptions {
+            root: ".".to_string(),
+            base: "origin/main".to_string(),
+            head: "HEAD".to_string(),
+        };
+        // No summary object — triggers Path B (findings-only mode).
+        let check_value = json!({
+            "findings": [
+                {
+                    // Real recognized gap — not in any suppression.
+                    "classification": "reachable_unrevealed",
+                    "kind": "call_presence",
+                    "seam": {
+                        "file": "crates/perl-lsp-rs/src/real_gap.rs",
+                        "line": 10
+                    }
+                },
+                {
+                    // Unclassified but path-suppressed — must NOT subtract from real gap.
+                    "classification": "static_unknown",
+                    "kind": "call_presence",
+                    "seam": {
+                        "file": "crates/perl-dap/src/debug_adapter/variables.rs",
+                        "line": 584
+                    }
+                },
+                {
+                    // Another unclassified suppressed — still must not cancel the real gap.
+                    "classification": "infection_unknown",
+                    "kind": "call_presence",
+                    "seam": {
+                        "file": "crates/perl-dap/src/debug_adapter/variables.rs",
+                        "line": 591
+                    }
+                }
+            ]
+        });
+        // Suppression covers DAP variables.rs only — not the LSP real_gap.rs.
+        let suppressions = RiprSuppressionRules {
+            display_patterns: vec!["crates/perl-dap/src/debug_adapter/variables.rs".to_string()],
+            path_patterns: vec![Pattern::new("crates/perl-dap/src/debug_adapter/variables.rs")?],
+            invalid_patterns: Vec::new(),
+            suppression_reasons: Vec::new(),
+        };
+
+        let packet = pr_evidence_packet(
+            &options,
+            &["crates/perl-lsp-rs/src/real_gap.rs".to_string()],
+            &check_value,
+            "base-sha",
+            "head-sha",
+            &suppressions,
+        );
+
+        // 2 unclassified are suppressed, 1 recognized is not — gate must still fire.
+        assert_eq!(
+            packet.pointer("/summary/suppressed_by_policy"),
+            Some(&json!(2)),
+            "two unclassified findings on suppressed path must be counted as suppressed"
+        );
+        assert_eq!(
+            packet.pointer("/summary/severe_gaps"),
+            Some(&json!(1)),
+            "real recognized gap must not be cancelled by unclassified suppressed findings"
+        );
+        assert_eq!(
+            packet.pointer("/summary/ripr_severe_gap"),
+            Some(&json!(true)),
+            "gate must fire: 1 real gap remains even though 2 unclassified are suppressed"
+        );
+        Ok(())
     }
 }

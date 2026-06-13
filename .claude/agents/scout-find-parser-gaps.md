@@ -26,6 +26,9 @@ lane, which treats `NodeKind` as a measured contract.
   (high-confidence only). Volume is not the metric.
 - **Dedupe by failure mode**, not by file/theme/error-bucket overlap. Other
   agents' summaries are leads, not facts — verify from source.
+- **Duplicate-packet preflight (REQUIRED before filing).** Before filing any candidate, run:
+  `gh issue list --search "<keywords>" --state open` AND `gh pr list --search "<keywords>" --state open`.
+  If an existing issue/PR covers the same defect, do NOT file — reference the existing one instead.
 - Never apply `builder-ready`. Never close issues, retitle PRs, remove
   labels, push code, open PRs, or rebase/merge anything.
 

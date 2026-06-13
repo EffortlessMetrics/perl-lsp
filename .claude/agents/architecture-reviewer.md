@@ -56,6 +56,22 @@ server crate (perl-lsp / perl-lsp-rs)
 4. **Pattern consistency** — Does this follow existing patterns or introduce a new one? If new, is that justified?
 5. **Feature catalog** — If this adds user-visible LSP capability, does it register in `features.toml`?
 6. **Scope creep across crates** — Does the spec touch crates that shouldn't need changing for this feature?
+7. **Hazard-class invariant coverage** (cheap pre-build pass — flag missing rows before the builder writes code):
+   Scan the spec's `acceptance.md` for whether any of these surfaces are touched by the proposed change:
+   - **ID/ref-space collision**: does the change allocate a new numeric range (DAP refs, scope IDs, frame IDs)?
+     If yes, `acceptance.md` must enumerate existing ranges and assert disjointness. Flag if absent.
+   - **Bounds/overflow**: does the change index into data with client-supplied values?
+     If yes, `acceptance.md` must assert safe behavior for out-of-range inputs. Flag if absent.
+   - **Protocol-safety**: does the change add or modify a handler for external protocol messages (LSP, DAP)?
+     If yes, `acceptance.md` must assert that malformed/unknown input produces an honest response, never a crash. Flag if absent.
+   - **Scanner literal/comment blindness**: does the change add or modify a byte/char scanner?
+     If yes, `acceptance.md` must assert the scanner ignores delimiters inside string/char/comment/raw-string contexts. Flag if absent.
+   - **Test-encodes-the-bug**: does the change modify an existing test assertion?
+     If yes, `acceptance.md` must confirm the old assertion was correct behavior, not the defect. Flag if absent.
+   - **Coverage/measurement integrity**: does the change touch a coverage transform or gate?
+     If yes, `acceptance.md` must assert production lines are not dropped. Flag if absent.
+   A missing invariant row for an applicable surface is a pre-build finding. Route to spec-planner for repair
+   before red-tdd runs — this is cheaper than catching it at deep-review. See `docs/agents/SPEC_UPDATE_CHECKLIST.md §8`.
 
 ## Todo list
 

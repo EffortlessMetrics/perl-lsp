@@ -123,6 +123,8 @@ pub use syntax::path_security;
 pub use syntax::percentile;
 /// Perl qualified-name parsing, splitting, and validation helpers (previously `perl-qualified-name`).
 pub use syntax::qualified_name;
+/// Canonical qw/q/qq operator content extractor shared across the workspace.
+pub use syntax::quote::{parse_quote_operator_content, parse_qw_words};
 /// Perl source-file classification helpers (previously `perl-source-file`).
 pub use syntax::source_file;
 /// Text-line cursor and boundary helpers (previously `perl-text-line`).

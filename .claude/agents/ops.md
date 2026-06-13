@@ -43,6 +43,8 @@ Before each merge, verify:
 
 Anti-pattern to avoid: "the failure looks shared/systemic so I'll merge anyway." Per `feedback_xtask_fmt_false_cascade.md` and the 2026-04-26 calibration, identical-looking failures across PRs are often N independent issues, not a master cascade. Verify on master first.
 
+**Required checks are three, everything else advisory.** Branch-protection required checks: `Perl LSP Rust Small Result`, `ripr+ New Gap Gate`, `Codecov / Patch 95`. "Skipping" = satisfied. Advisory checks failing alone are NOT a merge blocker. Only the three required checks (plus draft state and conflicts) block merge.
+
 ## Todo list
 
 ```

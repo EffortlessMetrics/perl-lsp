@@ -55,6 +55,12 @@ These aren't "next-step" operations — they're background context to carry as y
 
 **Judgment over box-checking.** The repo's quality bar is high. "Approved with no changes" is almost never right — flag something concrete (missing test, unclear naming, simpler expression). Thin mechanical output (✅ banned patterns ✅ title format ✅ scope) without a single substantive observation means you haven't looked hard enough.
 
+**PR body must match the diff.** Verify claims in the PR body against the actual diff — reject stale or unsupported success claims. If the body says "adds X" but X is not in the diff, that is a reviewable finding.
+
+**RIPR: trust CI, not local.** Verify ripr compliance from the `ripr+ New Gap Gate` / `ripr-pr-evidence` CI receipt — not from any local ripr output the builder may have included. CI pins `RIPR_VERSION=0.5.0`; local installs may differ.
+
+**Three required checks, everything else advisory.** Branch-protection required checks: `Perl LSP Rust Small Result`, `ripr+ New Gap Gate`, `Codecov / Patch 95`. "Skipping" on a required check = SATISFIED. Never block merge on advisory-only failures.
+
 ## Your pass produces ONE routing decision
 
 Sign-off is itself one of the routing options. Each pass through this reviewer ends with exactly one decision:

@@ -217,11 +217,11 @@ fn test_dap_stack_trace_edge_cases() -> TestResult {
                         .get("stackFrames")
                         .and_then(|f| f.as_array())
                         .ok_or("Expected frames array")?;
-                    let expected_len = if i == 1 { 0 } else { 1 };
+                    // No session: pagination of an empty list is always empty
                     assert_eq!(
                         frames.len(),
-                        expected_len,
-                        "Should honor stackTrace pagination for case: {}",
+                        0,
+                        "no session: stackFrames must be empty (case {})",
                         i
                     );
                 }
@@ -283,6 +283,86 @@ fn test_dap_scopes_edge_cases() -> TestResult {
 }
 
 #[test]
+fn test_dap_scopes_overflow_boundary() -> TestResult {
+    let mut adapter = DebugAdapter::new();
+
+    // Overflow threshold: frameId >= 214_748_365 makes frame_id * 10 exceed i32::MAX.
+    // With saturation: i64_to_i32_saturating(214_748_365) = 214_748_365 (fits i32),
+    // then saturating_mul(10) = i32::MAX (overflows, saturates), saturating_add(1) = i32::MAX.
+    let overflow_cases: &[(i64, &str)] = &[
+        (214_748_365, "exact overflow threshold"),
+        (i32::MAX as i64, "i32::MAX as frameId"),
+        (i32::MAX as i64 + 1, "i32::MAX + 1 as frameId"),
+        (i64::MAX, "i64::MAX as frameId"),
+        (i64::MIN, "i64::MIN as frameId — saturates to i32::MIN"),
+        (-(i32::MAX as i64) - 2, "large negative — saturates to i32::MIN"),
+    ];
+
+    for (frame_id, label) in overflow_cases {
+        let scope_args = json!({ "frameId": frame_id });
+        let response = adapter.handle_request(1, "scopes", Some(scope_args));
+        match response {
+            DapMessage::Response { command, .. } => {
+                assert_eq!(command, "scopes", "wrong command for case: {label}");
+                // Must not panic — reaching here proves no overflow panic in debug builds
+            }
+            _ => return Err(format!("Expected Response for case: {label}").into()),
+        }
+    }
+
+    // Verify exact variablesReference values for a normal frameId (roundtrip check)
+    let normal_args = json!({ "frameId": 5 });
+    let response = adapter.handle_request(2, "scopes", Some(normal_args));
+    if let DapMessage::Response { success: true, body: Some(body), .. } = response {
+        let scopes =
+            body.get("scopes").and_then(|s| s.as_array()).ok_or("Expected scopes array")?;
+        assert_eq!(scopes.len(), 3, "Expected 3 scopes for frameId=5");
+        let locals_ref = scopes[0]
+            .get("variablesReference")
+            .and_then(|v| v.as_i64())
+            .ok_or("Expected variablesReference")?;
+        let package_ref = scopes[1]
+            .get("variablesReference")
+            .and_then(|v| v.as_i64())
+            .ok_or("Expected variablesReference")?;
+        let globals_ref = scopes[2]
+            .get("variablesReference")
+            .and_then(|v| v.as_i64())
+            .ok_or("Expected variablesReference")?;
+        assert_eq!(locals_ref, 51, "locals_ref for frameId=5 should be 51");
+        assert_eq!(package_ref, 52, "package_ref for frameId=5 should be 52");
+        assert_eq!(globals_ref, 53, "globals_ref for frameId=5 should be 53");
+    } else {
+        return Err("Expected successful scopes response for frameId=5".into());
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_dap_variables_overflow_boundary() -> TestResult {
+    let mut adapter = DebugAdapter::new();
+
+    // Overflow cases: variablesReference values that would truncate under `as i32`
+    let overflow_cases: &[(i64, &str)] =
+        &[(i32::MAX as i64 + 1, "i32::MAX + 1"), (i64::MAX, "i64::MAX"), (i64::MIN, "i64::MIN")];
+
+    for (variables_reference, label) in overflow_cases {
+        let args = json!({ "variablesReference": variables_reference });
+        let response = adapter.handle_request(1, "variables", Some(args));
+        match response {
+            DapMessage::Response { command, .. } => {
+                assert_eq!(command, "variables", "wrong command for case: {label}");
+                // Must not panic — reaching here is the safety assertion
+            }
+            _ => return Err(format!("Expected Response for case: {label}").into()),
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_dap_pause_without_session() -> TestResult {
     let mut adapter = DebugAdapter::new();
 
@@ -293,7 +373,7 @@ fn test_dap_pause_without_session() -> TestResult {
             assert_eq!(command, "pause");
             assert!(!success, "Pause should fail without active session");
             if let Some(msg) = message {
-                assert!(msg.contains("Failed to pause") || msg.contains("No active"));
+                assert!(msg.contains("no Perl debug session is active"), "pause must use no-session message: {msg}");
             }
         }
         _ => return Err("Expected pause response".into()),
@@ -305,16 +385,21 @@ fn test_dap_pause_without_session() -> TestResult {
 fn test_dap_step_commands_without_session() -> TestResult {
     let mut adapter = DebugAdapter::new();
 
-    // Test all step commands without active session
+    // #898: Step commands must return failure (not success) without an active session.
     let step_commands = vec!["next", "stepIn", "stepOut", "continue"];
 
     for command in step_commands {
         let response = adapter.handle_request(1, command, None);
         match response {
-            DapMessage::Response { success, command: resp_cmd, .. } => {
+            DapMessage::Response { success, command: resp_cmd, message, .. } => {
                 assert_eq!(resp_cmd, *command);
-                // These should succeed (they're graceful no-ops without session)
-                assert!(success, "Step command {} should succeed gracefully", command);
+                // Protocol-safe error: must fail with a guidance message.
+                assert!(!success, "Step command {} must fail without session", command);
+                assert!(
+                    message.is_some(),
+                    "Step command {} must include guidance message",
+                    command
+                );
             }
             _ => return Err(format!("Expected response for command: {}", command).into()),
         }
@@ -407,7 +492,7 @@ fn test_dap_stack_trace_zero_levels_returns_remaining_frames() -> TestResult {
                 .get("stackFrames")
                 .and_then(|f| f.as_array())
                 .ok_or("Expected frames array")?;
-            assert_eq!(frames.len(), 1);
+            assert_eq!(frames.len(), 0, "no session: zero levels with no frames returns empty");
         }
         _ => return Err("Expected stackTrace response".into()),
     }

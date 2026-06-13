@@ -1,0 +1,6 @@
+---
+source: crates/perl-parser/tests/ast_snap.rs
+assertion_line: 192
+expression: "parse_sexp(\"open my $fh, '<', $path; while (my $line = <$fh>) { chomp $line; push @rows, $line; }\",)"
+---
+(source_file (call open ((my_declaration (variable $ fh)) (string "'<'") (variable $ path))) (while (my_declaration (variable $ line)(readline $fh)) (block (expression_statement (ambiguous_function_call_expression (function) (variable $ line))) (expression_statement (call push ((variable @ rows) (variable $ line)))))))

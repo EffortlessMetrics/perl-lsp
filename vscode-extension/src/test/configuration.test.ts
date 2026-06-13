@@ -292,28 +292,29 @@ describe('package.json contributes', () => {
       expect(titles.some(t => /advanced/i.test(t))).toBe(true);
     });
 
-    test('Core group contains serverPath, autoDownload, includePaths, enableDiagnostics', () => {
+    test('Core group contains serverPath, autoDownload, includePaths, enableSemanticTokens', () => {
       const coreSection = configSections.find((s: any) => /core/i.test(s.title));
       expect(coreSection).toBeDefined();
       const keys = Object.keys(coreSection.properties);
       expect(keys).toContain('perl-lsp.serverPath');
       expect(keys).toContain('perl-lsp.autoDownload');
       expect(keys).toContain('perl-lsp.includePaths');
-      expect(keys).toContain('perl-lsp.enableDiagnostics');
+      expect(keys).toContain('perl-lsp.enableSemanticTokens');
+      expect(keys).not.toContain('perl-lsp.enableDiagnostics');
     });
 
-    test('Editor group contains formatting, refactoring, and test integration settings', () => {
+    test('Editor group contains formatting and test integration settings (enableRefactoring removed)', () => {
       const editorSection = configSections.find((s: any) => /editor/i.test(s.title));
       expect(editorSection).toBeDefined();
       const keys = Object.keys(editorSection.properties);
       expect(keys).toContain('perl-lsp.enableFormatting');
       expect(keys).toContain('perl-lsp.formatOnSave');
-      expect(keys).toContain('perl-lsp.enableRefactoring');
       expect(keys).toContain('perl-lsp.enableTestIntegration');
       expect(keys).toContain('perl-lsp.perlcritic.enabled');
       expect(keys).toContain('perl-lsp.perlcritic.severity');
       expect(keys).toContain('perl-lsp.perlcritic.profile');
       expect(keys).toContain('perl-lsp.perlcritic.theme');
+      expect(keys).not.toContain('perl-lsp.enableRefactoring');
     });
 
     test('Advanced group contains featureProfile, trace.server, channel, downloadBaseUrl', () => {
@@ -417,10 +418,6 @@ describe('package.json contributes', () => {
       }
     });
 
-    test('defines enableDiagnostics with default true', () => {
-      expect(properties['perl-lsp.enableDiagnostics'].default).toBe(true);
-    });
-
     test('defines enableSemanticTokens with default true', () => {
       expect(properties['perl-lsp.enableSemanticTokens'].default).toBe(true);
     });
@@ -519,7 +516,7 @@ describe('package.json contributes', () => {
     test('resource-scoped settings use scope resource', () => {
       // Per-file/workspace settings should be resource-scoped so they can be
       // overridden in workspace and folder settings.
-      const resourceScoped = ['perl-lsp.includePaths', 'perl-lsp.enableDiagnostics', 'perl-lsp.enableSemanticTokens', 'perl-lsp.enableFormatting', 'perl-lsp.formatOnSave', 'perl-lsp.perltidyConfig', 'perl-lsp.perlcritic.enabled', 'perl-lsp.perlcritic.severity', 'perl-lsp.perlcritic.profile', 'perl-lsp.perlcritic.theme', 'perl-lsp.enableRefactoring', 'perl-lsp.enableTestIntegration', 'perl-lsp.autoPopulateNewFiles'];
+      const resourceScoped = ['perl-lsp.includePaths', 'perl-lsp.enableSemanticTokens', 'perl-lsp.enableFormatting', 'perl-lsp.formatOnSave', 'perl-lsp.perltidyConfig', 'perl-lsp.perlcritic.enabled', 'perl-lsp.perlcritic.severity', 'perl-lsp.perlcritic.profile', 'perl-lsp.perlcritic.theme', 'perl-lsp.enableTestIntegration', 'perl-lsp.autoPopulateNewFiles'];
       for (const key of resourceScoped) {
         expect(properties[key]?.scope).toBe('resource');
       }

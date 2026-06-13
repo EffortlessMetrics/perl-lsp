@@ -155,11 +155,9 @@ All settings are under the `perl-lsp.*` namespace. Open settings with `Ctrl+,` a
 | `perl-lsp.channel` | `"latest"` | Release channel. Use `latest` for the current public-alpha line or `tag` for a pinned public-alpha release |
 | `perl-lsp.versionTag` | `""` | Specific release tag (e.g. `v0.12.1`) when channel is `tag` |
 | `perl-lsp.linuxLibc` | `"auto"` | Linux libc release asset selection: `auto`, `gnu`, `glibc`, or `musl` |
-| `perl-lsp.enableDiagnostics` | `true` | Enable real-time syntax diagnostics |
-| `perl-lsp.enableSemanticTokens` | `true` | Enable semantic syntax highlighting |
-| `perl-lsp.enableFormatting` | `true` | Enable document formatting (requires `perltidy`) |
+| `perl-lsp.enableSemanticTokens` | `true` | Enable semantic syntax highlighting (requires server restart to apply) |
+| `perl-lsp.enableFormatting` | `true` | Enable document formatting (requires `perltidy`; requires server restart to apply) |
 | `perl-lsp.formatOnSave` | `false` | Format document on save |
-| `perl-lsp.enableRefactoring` | `true` | Enable refactoring code actions |
 | `perl-lsp.enableTestIntegration` | `true` | Enable Test Explorer integration |
 | `perl-lsp.includePaths` | `["lib", "local/lib/perl5"]` | Additional library paths for module resolution |
 | `perl-lsp.perltidyConfig` | `""` | Path to `.perltidyrc` (auto-detected if empty) |
@@ -258,7 +256,7 @@ The `perllsp` binary works with any editor that supports the Language Server Pro
   or setup policy may be involved.
 - For Perl binary, `@INC`, `PERL5LIB`, perldoc, or DAP module-path mismatches,
   see the [Perl setup troubleshooting guide](../docs/how-to/PERL_SETUP_TROUBLESHOOTING.md).
-- Set `perl-lsp.enableDiagnostics` to `false` to disable diagnostics.
+- To suppress false-positive diagnostics, use **Perl LSP: Copy Provider Decision Receipt** and file an issue with the copied receipt so the specific provider can be addressed.
 - File an issue with the copied provider receipt if you see false positives.
 
 ## Known Issues
@@ -267,7 +265,8 @@ The `perllsp` binary works with any editor that supports the Language Server Pro
   structures may appear with placeholder values in some scenarios.
 - The `Format Document` shortcut (`Shift+Alt+F`) is provided by VS Code's
   built-in formatter binding. perl-lsp participates through the registered
-  formatting provider when `perl-lsp.enableFormatting` is enabled.
+  formatting provider. Set `perl-lsp.enableFormatting` to `false` to disable
+  it (requires server restart).
 - On first activation, environments with strict proxies or blocked outbound
   traffic may fail auto-download. Use `perl-lsp.serverPath` or
   `perl-lsp.downloadBaseUrl` for managed/internal deployment.

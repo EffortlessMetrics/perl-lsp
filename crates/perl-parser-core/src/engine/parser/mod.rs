@@ -523,3 +523,144 @@ mod strip_qw_comments_unit_tests {
         assert_eq!(result.split_whitespace().collect::<Vec<_>>(), vec!["foo", "bar"]);
     }
 }
+
+/// Drift-guard tests for reserved `Missing*` NodeKind variants.
+///
+/// These tests document the **current parser emission contract**:
+///
+/// - `MissingExpression` IS emitted (by `recover_missing_infix_rhs`).
+/// - `MissingStatement`, `MissingIdentifier`, `MissingBlock` are RESERVED —
+///   the parser never emits them today.
+///
+/// If a future recovery change starts emitting any of the reserved variants,
+/// the guard test will fail, signalling that real parser fixture tests must
+/// be added before the change ships.
+#[cfg(test)]
+mod recovery_node_drift_guard {
+    use super::Parser;
+    use crate::ast::NodeKind;
+
+    /// Walk the AST tree and collect all s-expression tokens by flattening
+    /// the sexp string — cheap and sufficient for kind-name presence checks.
+    fn sexp(source: &str) -> String {
+        let mut parser = Parser::new(source);
+        let output = parser.parse_with_recovery();
+        output.ast.to_sexp()
+    }
+
+    // -----------------------------------------------------------------------
+    // Assertion helpers
+    // -----------------------------------------------------------------------
+
+    /// Assert that the given s-expression does NOT contain a reserved variant.
+    fn assert_no_reserved_missing(label: &str, src: &str) {
+        let s = sexp(src);
+        assert!(
+            !s.contains("(missing_statement)"),
+            "{label}: `MissingStatement` must not appear in parse output for {:?}, sexp={s}",
+            src
+        );
+        assert!(
+            !s.contains("(missing_identifier)"),
+            "{label}: `MissingIdentifier` must not appear in parse output for {:?}, sexp={s}",
+            src
+        );
+        assert!(
+            !s.contains("(missing_block)"),
+            "{label}: `MissingBlock` must not appear in parse output for {:?}, sexp={s}",
+            src
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Guard: reserved variants are NOT emitted by the current parser
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_reserved_missing_variants_not_emitted_on_truncated_input() {
+        // Inputs that are aggressively malformed or truncated — high-value
+        // probes for recovery paths.
+        let probes = [
+            // Truncated after keyword
+            "if",
+            "while",
+            "for",
+            "sub",
+            "my",
+            "our",
+            "local",
+            // Missing block bodies
+            "sub foo",
+            "if (1)",
+            "while (1)",
+            "for (my $i = 0; $i < 10; $i++)",
+            // Missing identifiers in common positions
+            "sub { }",
+            "package",
+            "use",
+            // Incomplete expressions
+            "$x->{",
+            "@arr[",
+            "%hash{",
+            // Operator with no operands
+            "++",
+            "--",
+            // Realistic partial-file snippets
+            "my $x = { key =>",
+            "print STDERR",
+            "die \"message\" if",
+        ];
+        for src in &probes {
+            assert_no_reserved_missing(src, src);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Positive: MissingExpression IS emitted for trailing infix with no RHS
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_missing_expression_is_still_emitted_for_trailing_infix() {
+        // A trailing binary operator with no RHS triggers `recover_missing_infix_rhs`,
+        // which is the one code path that emits `MissingExpression`.
+        let s = sexp("1 +");
+        assert!(
+            s.contains("(missing_expression)"),
+            "Expected `MissingExpression` in sexp for `1 +`, got: {s}"
+        );
+        // Confirm the reserved three are still absent even in this case.
+        assert!(
+            !s.contains("(missing_statement)"),
+            "MissingStatement must not appear alongside MissingExpression"
+        );
+        assert!(
+            !s.contains("(missing_identifier)"),
+            "MissingIdentifier must not appear alongside MissingExpression"
+        );
+        assert!(
+            !s.contains("(missing_block)"),
+            "MissingBlock must not appear alongside MissingExpression"
+        );
+    }
+
+    #[test]
+    fn test_missing_expression_emitted_for_assignment_no_rhs() {
+        // `my $x = ;` — another known trigger for MissingExpression via infix recovery.
+        let s = sexp("my $x = ;");
+        assert!(
+            s.contains("(missing_expression)"),
+            "Expected `MissingExpression` for `my $x = ;`, got: {s}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Sanity: the NodeKind enum variants exist (compile-time check)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_reserved_variant_names_compile() {
+        // If anyone removes or renames the reserved variants, this will fail to compile.
+        let _variants: &[NodeKind] =
+            &[NodeKind::MissingStatement, NodeKind::MissingIdentifier, NodeKind::MissingBlock];
+    }
+}

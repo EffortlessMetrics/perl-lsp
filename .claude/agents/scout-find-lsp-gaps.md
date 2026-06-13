@@ -26,6 +26,9 @@ upstream of plan review, never builder-ready. Doctrine:
 - **Dedupe by failure mode**, not by file/theme overlap. Prior smoke PRs
   touched the same file but were complementary — classify as "sequence both,"
   not "duplicate." Other agents' summaries are leads, not facts.
+- **Duplicate-packet preflight (REQUIRED before filing).** Before filing any candidate, run:
+  `gh issue list --search "<keywords>" --state open` AND `gh pr list --search "<keywords>" --state open`.
+  If an existing issue/PR covers the same defect, do NOT file — reference the existing one instead.
 - Never apply `builder-ready`. Never close issues, retitle PRs, remove
   labels, push code, open PRs, or rebase/merge anything.
 

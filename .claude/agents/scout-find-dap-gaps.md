@@ -26,6 +26,9 @@ upstream of plan review, never builder-ready. Doctrine:
 - **Dedupe by failure mode**, not by file/theme/helper/base-commit overlap.
   The #766/#768 fork touched the same area but were distinct failure modes —
   sequence, don't merge. Other agents' summaries are leads, not facts.
+- **Duplicate-packet preflight (REQUIRED before filing).** Before filing any candidate, run:
+  `gh issue list --search "<keywords>" --state open` AND `gh pr list --search "<keywords>" --state open`.
+  If an existing issue/PR covers the same defect, do NOT file — reference the existing one instead.
 - Never apply `builder-ready`. Never close issues, retitle PRs, remove
   labels, push code, open PRs, or rebase/merge anything.
 

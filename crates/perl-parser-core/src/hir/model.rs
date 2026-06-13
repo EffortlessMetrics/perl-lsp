@@ -2623,22 +2623,7 @@ fn is_version_pragma(module: &str) -> bool {
 }
 
 fn parse_qw_content(value: &str) -> Option<&str> {
-    let rest = value.strip_prefix("qw")?.trim_start();
-    let mut chars = rest.chars();
-    let open = chars.next()?;
-    let close = match open {
-        '(' => ')',
-        '[' => ']',
-        '{' => '}',
-        '<' => '>',
-        other => other,
-    };
-    let inner_start = open.len_utf8();
-    let inner_end = rest.len().checked_sub(close.len_utf8())?;
-    if inner_start > inner_end || !rest.ends_with(close) {
-        return None;
-    }
-    Some(&rest[inner_start..inner_end])
+    crate::syntax::quote::parse_quote_operator_content(value, "qw")
 }
 
 fn is_quoted(value: &str) -> bool {

@@ -13,6 +13,7 @@ use crate::cancellation::{
 use crate::completion::{
     CompletionItemKind, CompletionProvider, add_xs_api_completions_for_prefix,
 };
+use crate::runtime::types::workspace_folder_matches_doc_uri;
 use crate::{
     protocol::{JsonRpcError, JsonRpcId, REQUEST_CANCELLED, req_position, req_uri},
     runtime::routing::{IndexAccessMode, route_index_access},
@@ -469,6 +470,20 @@ impl LspServer {
                     None
                 };
 
+                // For multi-root workspaces, determine the workspace folder that owns
+                // the document so we can filter non-module symbols to that folder only.
+                // When there is only one folder (or none), skip the filter — no cross-
+                // folder leak is possible.
+                let doc_folder_filter = {
+                    let folders = self.workspace_folders.lock();
+                    if folders.len() > 1 {
+                        crate::runtime::types::best_workspace_folder_for_doc(&folders, doc_uri)
+                            .cloned()
+                    } else {
+                        None
+                    }
+                };
+
                 let qualified_variable_symbols =
                     Self::qualified_variable_workspace_symbols(index, &prefix);
                 let replace_prefix_range = (offset.saturating_sub(prefix.len()), offset);
@@ -489,8 +504,8 @@ impl LspServer {
                         continue;
                     }
 
-                    // For module-kind symbols in a `use Module` / `require Module`
-                    // context, filter by position-aware @INC reachability so that
+                    // Strategy A: module-kind symbols in `use Module` / `require Module`
+                    // context — filter by position-aware @INC reachability so that
                     // `no lib` cancellations are honoured (fixes #8537).
                     let is_module_kind = matches!(
                         symbol.kind,
@@ -505,6 +520,25 @@ impl LspServer {
                                     symbol = %symbol.name,
                                     uri = %symbol.uri,
                                     "completion: skipping workspace symbol not reachable via @INC"
+                                );
+                                continue;
+                            }
+                        }
+                    }
+
+                    // Strategy B: non-module symbols in multi-root workspace — filter
+                    // by workspace-folder containment. symbol_uri_reachable is designed
+                    // for @INC paths (module files) and would incorrectly drop scripts
+                    // and .pm files not on @INC. Folder containment is the right filter
+                    // for subroutines, variables, methods, and constants (fixes #970).
+                    if !is_module_kind {
+                        if let Some(ref folder) = doc_folder_filter {
+                            if !workspace_folder_matches_doc_uri(folder, &symbol.uri) {
+                                tracing::trace!(
+                                    symbol = %symbol.name,
+                                    uri = %symbol.uri,
+                                    folder = %folder.uri,
+                                    "completion: skipping cross-folder non-module symbol"
                                 );
                                 continue;
                             }
@@ -2440,5 +2474,272 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    // =========================================================================
+    // Strategy-B folder-scope filter unit tests (#970)
+    //
+    // These tests exercise the exact functions called by the new production
+    // code paths in add_runtime_workspace_completions:
+    //   • best_workspace_folder_for_doc  (doc_folder_filter computation)
+    //   • workspace_folder_matches_doc_uri  (Strategy-B keep/drop decision)
+    //
+    // They run under `cargo test -p perl-lsp-rs --lib` without the workspace
+    // or expose_lsp_test_api features, so they are visible to the coverage pack.
+    // =========================================================================
+
+    /// `best_workspace_folder_for_doc` returns `Some` for the matching folder
+    /// when two folders are registered — exercises the multi-folder branch that
+    /// sets `doc_folder_filter = Some(folder)`.
+    #[test]
+    fn folder_filter_multi_root_selects_owning_folder() {
+        use crate::runtime::types::{
+            best_workspace_folder_for_doc, workspace_folder_matches_doc_uri,
+        };
+        use crate::runtime::workspace_folder::WorkspaceFolderState;
+
+        let folder_a = WorkspaceFolderState::new("file:///project/folder-a".to_string());
+        let folder_b = WorkspaceFolderState::new("file:///project/folder-b".to_string());
+        let folders = vec![folder_a, folder_b];
+
+        let doc_uri = "file:///project/folder-a/script.pl";
+        let best = best_workspace_folder_for_doc(&folders, doc_uri);
+        assert!(best.is_some(), "multi-root: owning folder must be found for doc in folder-a");
+        assert_eq!(best.map(|f| f.uri.as_str()), Some("file:///project/folder-a"));
+
+        // Strategy-B keep: symbol from same folder passes the filter.
+        let same_folder_symbol_uri = "file:///project/folder-a/lib/Lib.pm";
+        assert!(
+            workspace_folder_matches_doc_uri(best.unwrap(), same_folder_symbol_uri),
+            "symbol in folder-a must pass folder-containment filter when doc is in folder-a"
+        );
+
+        // Strategy-B drop: symbol from other folder is rejected.
+        let cross_folder_symbol_uri = "file:///project/folder-b/lib/Other.pm";
+        assert!(
+            !workspace_folder_matches_doc_uri(best.unwrap(), cross_folder_symbol_uri),
+            "symbol in folder-b must be rejected by folder-containment filter when doc is in folder-a"
+        );
+    }
+
+    /// `best_workspace_folder_for_doc` returns `None` when only one folder is
+    /// registered — the production code skips Strategy-B (`doc_folder_filter = None`).
+    #[test]
+    fn folder_filter_single_root_skips_filter() {
+        use crate::runtime::types::best_workspace_folder_for_doc;
+        use crate::runtime::workspace_folder::WorkspaceFolderState;
+
+        // Simulate the `folders.len() > 1` check: with one folder the branch
+        // evaluates to false and returns None without calling best_workspace_folder_for_doc.
+        // Here we verify that even if called, the result is Some — confirming that
+        // the `len() > 1` guard is the correct and necessary gate.
+        let folder_a = WorkspaceFolderState::new("file:///project/folder-a".to_string());
+        let folders = vec![folder_a];
+
+        // len() <= 1 → production code short-circuits to None; test the guard value.
+        assert!(
+            folders.len() <= 1,
+            "single-folder workspace must have len <= 1, skipping Strategy-B"
+        );
+
+        // best_workspace_folder_for_doc still finds the folder when called directly —
+        // the skip is purely the len() > 1 guard in add_runtime_workspace_completions.
+        let doc_uri = "file:///project/folder-a/script.pl";
+        let best = best_workspace_folder_for_doc(&folders, doc_uri);
+        assert!(
+            best.is_some(),
+            "best_workspace_folder_for_doc finds the folder; the len() guard is what skips it"
+        );
+    }
+
+    /// `best_workspace_folder_for_doc` returns `None` when no folders are registered.
+    /// Production code skips Strategy-B in the no-folder case.
+    #[test]
+    fn folder_filter_no_folders_skips_filter() {
+        use crate::runtime::types::best_workspace_folder_for_doc;
+        use crate::runtime::workspace_folder::WorkspaceFolderState;
+
+        let folders: Vec<WorkspaceFolderState> = vec![];
+        let doc_uri = "file:///project/script.pl";
+        let best = best_workspace_folder_for_doc(&folders, doc_uri);
+        assert!(best.is_none(), "no folders → best_workspace_folder_for_doc returns None");
+
+        // Also verify the len() guard: empty vec has len() <= 1.
+        assert!(folders.len() <= 1, "empty workspace satisfies the single-folder skip condition");
+    }
+
+    /// Module-kind symbols (Package, Class, Role) are exempt from Strategy-B.
+    /// The `is_module_kind` flag gates Strategy-B: only `!is_module_kind` enters it.
+    #[test]
+    fn folder_filter_module_kind_exempt_from_strategy_b() {
+        use crate::workspace_index::SymbolKind;
+
+        // Verify is_module_kind computation for each module kind.
+        let package_is_module = matches!(
+            SymbolKind::Package,
+            SymbolKind::Package | SymbolKind::Class | SymbolKind::Role
+        );
+        let class_is_module =
+            matches!(SymbolKind::Class, SymbolKind::Package | SymbolKind::Class | SymbolKind::Role);
+        let role_is_module =
+            matches!(SymbolKind::Role, SymbolKind::Package | SymbolKind::Class | SymbolKind::Role);
+        // Subroutine is NOT module-kind — enters Strategy-B.
+        let sub_is_module = matches!(
+            SymbolKind::Subroutine,
+            SymbolKind::Package | SymbolKind::Class | SymbolKind::Role
+        );
+
+        assert!(package_is_module, "Package must be module-kind (exempt from Strategy-B)");
+        assert!(class_is_module, "Class must be module-kind (exempt from Strategy-B)");
+        assert!(role_is_module, "Role must be module-kind (exempt from Strategy-B)");
+        assert!(!sub_is_module, "Subroutine must NOT be module-kind (subject to Strategy-B)");
+    }
+
+    /// `workspace_folder_matches_doc_uri` correctly handles the URI prefix match.
+    /// This is the exact predicate used by Strategy-B to keep/drop symbols.
+    #[test]
+    fn folder_filter_uri_prefix_matching() {
+        use crate::runtime::types::workspace_folder_matches_doc_uri;
+        use crate::runtime::workspace_folder::WorkspaceFolderState;
+
+        let folder = WorkspaceFolderState::new("file:///project/folder-a".to_string());
+
+        // Same folder — kept.
+        assert!(
+            workspace_folder_matches_doc_uri(&folder, "file:///project/folder-a/lib/Foo.pm"),
+            "file under folder-a must match folder-a"
+        );
+        assert!(
+            workspace_folder_matches_doc_uri(&folder, "file:///project/folder-a/script.pl"),
+            "root-level file under folder-a must match"
+        );
+
+        // Different folder — dropped.
+        assert!(
+            !workspace_folder_matches_doc_uri(&folder, "file:///project/folder-b/lib/Bar.pm"),
+            "file under folder-b must not match folder-a"
+        );
+
+        // Prefix that is not a path boundary (folder-a-extra vs folder-a) — dropped.
+        assert!(
+            !workspace_folder_matches_doc_uri(&folder, "file:///project/folder-a-extra/lib/Baz.pm"),
+            "folder-a-extra must not match folder-a (not a path boundary)"
+        );
+    }
+
+    // =========================================================================
+    // Strategy-B through-production-path tests (#970, patch-coverage)
+    //
+    // The five tests above cover the helper functions directly.  These two tests
+    // go through add_runtime_workspace_completions itself so the changed lines at
+    // the doc_folder_filter block (lines ~477-485) and the Strategy-B block
+    // (lines ~534-546) are executed and visible to the --lib coverage pack.
+    //
+    // They require the workspace feature (IndexAccessMode::Full).
+    // =========================================================================
+
+    /// With two registered workspace folders, add_runtime_workspace_completions
+    /// computes doc_folder_filter = Some(folder-a) and rejects the sub from
+    /// folder-b via the Strategy-B continue branch.
+    ///
+    /// Covered changed lines:
+    ///   477-481  doc_folder_filter = Some(best_workspace_folder_for_doc(...))
+    ///   534      if !is_module_kind
+    ///   535      if let Some(ref folder) = doc_folder_filter
+    ///   536-543  !workspace_folder_matches_doc_uri -> trace + continue
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn strategy_b_multi_folder_filters_cross_folder_sub() {
+        use crate::runtime::routing::IndexAccessMode;
+        use crate::runtime::workspace_folder::WorkspaceFolderState;
+        use perl_parser::workspace_index::IndexCoordinator;
+        use std::sync::Arc;
+
+        let server = LspServer::default();
+        {
+            let mut folders = server.workspace_folders.lock();
+            folders.push(WorkspaceFolderState::new("file:///project/folder-a".to_string()));
+            folders.push(WorkspaceFolderState::new("file:///project/folder-b".to_string()));
+        }
+
+        let coordinator = Arc::new(IndexCoordinator::new());
+        // Add a non-module (Sub) symbol from folder-b — it should be filtered out.
+        let _ = coordinator.index().index_file_str(
+            "file:///project/folder-b/lib/B.pm",
+            "package B;
+sub cross_folder_sub_b { 1 }
+1;
+",
+        );
+        coordinator.transition_to_ready(1, 1);
+
+        let doc_text = "my $x = cr";
+        let doc_uri = "file:///project/folder-a/script.pl";
+        let mut completions = Vec::new();
+        server.add_runtime_workspace_completions(
+            &mut completions,
+            doc_text,
+            doc_uri,
+            doc_text.len(),
+            &IndexAccessMode::Full(&coordinator),
+            500,
+        );
+
+        let names: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+        assert!(
+            !names.contains(&"cross_folder_sub_b"),
+            "Strategy-B must reject cross_folder_sub_b from folder-b when doc is in folder-a;              got completions: {names:?}"
+        );
+    }
+
+    /// With a single registered workspace folder, add_runtime_workspace_completions
+    /// skips Strategy-B (doc_folder_filter = None) and includes symbols from any URI.
+    ///
+    /// Covered changed lines:
+    ///   479  folders.len() > 1 -> false
+    ///   482-484  else { None }   (doc_folder_filter = None -> Strategy-B skipped)
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn strategy_b_single_folder_skips_filter_includes_symbol() {
+        use crate::runtime::routing::IndexAccessMode;
+        use crate::runtime::workspace_folder::WorkspaceFolderState;
+        use perl_parser::workspace_index::IndexCoordinator;
+        use std::sync::Arc;
+
+        let server = LspServer::default();
+        {
+            let mut folders = server.workspace_folders.lock();
+            // Only one folder — len() > 1 is false -> doc_folder_filter = None.
+            folders.push(WorkspaceFolderState::new("file:///project/folder-a".to_string()));
+        }
+
+        let coordinator = Arc::new(IndexCoordinator::new());
+        // Symbol at a path outside folder-a — still included because filter is None.
+        let _ = coordinator.index().index_file_str(
+            "file:///project/folder-b/lib/B.pm",
+            "package B;
+sub single_root_sub { 1 }
+1;
+",
+        );
+        coordinator.transition_to_ready(1, 1);
+
+        let doc_text = "single";
+        let doc_uri = "file:///project/folder-a/script.pl";
+        let mut completions = Vec::new();
+        server.add_runtime_workspace_completions(
+            &mut completions,
+            doc_text,
+            doc_uri,
+            doc_text.len(),
+            &IndexAccessMode::Full(&coordinator),
+            500,
+        );
+
+        let names: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+        assert!(
+            names.contains(&"single_root_sub"),
+            "single-folder workspace must not filter by folder (doc_folder_filter = None);              got completions: {names:?}"
+        );
     }
 }

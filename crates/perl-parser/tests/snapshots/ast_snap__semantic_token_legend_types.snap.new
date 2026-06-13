@@ -1,0 +1,29 @@
+---
+source: crates/perl-parser/tests/ast_snap.rs
+assertion_line: 354
+expression: types_str
+---
+namespace
+type
+class
+interface
+enum
+enumMember
+typeParameter
+function
+method
+property
+macro
+variable
+parameter
+keyword
+modifier
+comment
+string
+number
+regexp
+operator
+sql_string
+sql_heredoc_keyword
+json_heredoc_key
+label
