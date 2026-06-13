@@ -115,6 +115,7 @@ Kick off with `/issue-discovery`.
 |-------|-------|------|
 | research-web | sonnet | Ad-hoc web research — single question, spawned by other agents |
 | wisdom | sonnet | Synthesize learnings from issue→PR→merge cycles |
+| learning-scribe | haiku | Gate-7 capture: convert deep-review fixes and incidents into docs/learnings/ entries |
 
 ## Step Skills (62)
 
