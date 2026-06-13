@@ -462,3 +462,42 @@ reason = "ripr#1429-class seams across three debug_adapter files: (A) execution.
 created = "2026-06-12"
 review_after = "2026-07-12"
 expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
+# DAP invalid-ref hardening test helpers (PR #901): ripr#1428-class false-
+# positives in #[cfg(test)] mod hazard_invariant_tests helper functions.
+#
+# PR #901 adds a #[cfg(test)] mod hazard_invariant_tests at the bottom of
+# variables.rs with two helper functions:
+#   variables_body_is_empty(adapter, variables_ref) -> bool
+#   variables_success(adapter, variables_ref) -> bool
+#
+# ripr 0.9.0 flags 4 seams inside these helpers as severe_gaps:
+#   line 584: Some(json!({...})) call in variables_body_is_empty — call_presence
+#   line 591: `let vars = body` match arm — call_presence / weakly_gripped
+#   line 597: `vars == 0` boundary discriminator — activation_unknown
+#   line 607: Some(json!({...})) call in variables_success — call_presence
+#
+# All four are ripr#1428-class false-positives: diff-scoped analysis treats the
+# internal plumbing of these test helper functions as new production seams.
+# The helper functions call handle_request (the production seam under test) and
+# decode its response — they are pure test infrastructure, not production code.
+#
+# The production seam (handle_variables invalid-ref guard, stale-ref guard) IS
+# covered by 9 integration tests in dap_variable_reference_hardening_tests.rs
+# and 8 inline lib tests in hazard_invariant_tests that exercise the helpers.
+# The helpers themselves are test-only scaffolding — same ripr#1428 class as
+# ripr-suppress-quote-operator-conformance-test-helpers and
+# ripr-suppress-seam-proof-tests. Remove when ripr#1428 is fixed upstream.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-dap-invalid-ref-hardening-test-helpers"
+kind = "test_receipt_surface"
+paths = ["crates/perl-dap/src/debug_adapter/variables.rs"]
+classification = ["call_presence", "weakly_gripped", "activation_unknown"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1428"
+reason = "Four ripr#1428-class false-positives in PR #901 hazard_invariant_tests helper functions (variables_body_is_empty and variables_success in the #[cfg(test)] mod): lines 584/591/607 are call_presence/weakly_gripped seams — handle_request call sites inside test helpers; line 597 is activation_unknown (vars == 0 boundary). These are pure test infrastructure, not production seams. The production invalid-ref guard (variables_ref_raw <= 0 || > i32::MAX, stale-ref DebugState::Stopped check) is covered by 9 integration tests in dap_variable_reference_hardening_tests.rs and 8 inline lib tests via hazard_invariant_tests. Same ripr#1428 class as ripr-suppress-quote-operator-conformance-test-helpers and ripr-suppress-seam-proof-tests. Remove when ripr#1428 is fixed upstream."
+created = "2026-06-12"
+review_after = "2026-07-12"
+expires = "2026-09-30"

@@ -406,6 +406,37 @@ impl DebugAdapter {
         Self::append_recent_output_line_locked(&mut output, line);
     }
 
+    /// Seed a minimal DebugSession in Running state for testing stale-ref guards.
+    ///
+    /// Creates a `perl -e 1` child process, installs it as the active session, and
+    /// sets the state to `DebugState::Running` so that stale-ref-guard tests can
+    /// verify the "session is not stopped" path without a live debugging scenario.
+    ///
+    /// Only for use in tests; not part of the public API contract.
+    pub fn seed_running_session_for_test(&self) {
+        use crate::debug_adapter::session::{DebugSession, DebugState, ResumeMode};
+        use crate::debug_adapter::variable_cache::VariableCache;
+        if let Ok(child) = std::process::Command::new("perl")
+            .arg("-e")
+            .arg("1")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+        {
+            if let Ok(mut guard) = self.session.lock() {
+                *guard = Some(DebugSession {
+                    process: child,
+                    state: DebugState::Running,
+                    stack_frames: vec![],
+                    variable_cache: VariableCache::default(),
+                    thread_id: 1,
+                    last_resume_mode: ResumeMode::Continue,
+                });
+            }
+        }
+    }
+
     #[cfg(test)]
     fn seed_session_for_test(&self) {
         // Spawn a cheap no-op subprocess so we have a real Child (no unsafe zeroed memory).
