@@ -691,3 +691,57 @@ reason = "One ripr#1429-class seam in PR #1264 pr_close_proof.rs: validate_sha_f
 created = "2026-06-13"
 review_after = "2026-07-13"
 expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
+# NodeKind combination edge-cases test: ripr#1428-class false-positive in newly
+# added test file. Tracks EffortlessMetrics/ripr#1428 (RIPR flags test-harness
+# plumbing in newly added test files as production seams).
+#
+# PR #651 (codex test coverage PR for issue #1442) adds a new test file:
+#   crates/perl-parser/tests/nodekind_combination_edge_cases.rs
+#
+# This is a pure test file with test functions exercising parser NodeKind
+# combination coverage. RIPR's diff-scoped analysis flags the test function
+# scaffolding (test setup, assertions) as new production seams. This is the
+# same ripr#1428 class as ripr-suppress-ux-receipt-tests and
+# ripr-suppress-seam-proof-tests.
+#
+# Remove when ripr#1428 is fixed upstream.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-nodekind-combination-test"
+kind = "test_receipt_surface"
+paths = ["crates/perl-parser/tests/nodekind_combination_edge_cases.rs"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1428"
+reason = "nodekind_combination_edge_cases.rs is a newly added test file in PR #651 whose internal test-function scaffolding is flagged as new production seams by diff-scoped RIPR analysis. This is the same ripr#1428 class as ripr-suppress-ux-receipt-tests and ripr-suppress-seam-proof-tests (test-harness plumbing falsely classified as production seams when added to a test file). The file contains pure test coverage for NodeKind combination edge cases (issue #1442). Remove when ripr#1428 is fixed upstream."
+created = "2026-06-13"
+review_after = "2026-09-13"
+expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
+# Fuzz target workspace_inputs: ripr#1428-class false-positive in newly added
+# fuzz target. Tracks EffortlessMetrics/ripr#1428 (RIPR flags fuzz harness
+# plumbing in newly added targets as production seams).
+#
+# PR #686 (codex fuzz coverage PR for issue #1175) adds a new fuzz target:
+#   fuzz/fuzz_targets/workspace_inputs.rs
+#
+# This is a pure fuzz target with harness scaffolding exercising workspace input
+# coverage. RIPR's diff-scoped analysis flags the fuzzing harness plumbing
+# (fuzz input setup, assertions) as new production seams. This is the same
+# ripr#1428 class as ripr-suppress-ux-receipt-tests and
+# ripr-suppress-seam-proof-tests.
+#
+# Remove when ripr#1428 is fixed upstream.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-fuzz-workspace-inputs-target"
+kind = "test_receipt_surface"
+paths = ["fuzz/fuzz_targets/workspace_inputs.rs"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1428"
+reason = "workspace_inputs.rs is a newly added fuzz target in PR #686 whose internal fuzz-harness scaffolding is flagged as new production seams by diff-scoped RIPR analysis. This is the same ripr#1428 class as ripr-suppress-ux-receipt-tests and ripr-suppress-seam-proof-tests (fuzz harness plumbing falsely classified as production seams when added to a fuzz target). The file contains pure fuzz coverage for workspace inputs (issue #1175). Remove when ripr#1428 is fixed upstream."
+created = "2026-06-13"
+review_after = "2026-09-13"
+expires = "2026-09-30"

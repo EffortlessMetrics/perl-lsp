@@ -889,3 +889,228 @@ my $unchanged = $subject !~ s/xyz/uvw/r;
         "Expected negated substitution payload, got {substitutions:?}"
     );
 }
+
+/// Package declarations have two shapes in Perl: block-scoped (`package Foo {}`)
+/// and statement-scoped (`package Foo;`).  Pragmas inside those package bodies
+/// should remain visible as `Use` / `No` NodeKinds with their module names and
+/// import arguments preserved.
+#[test]
+fn test_package_scopes_and_pragma_arguments() {
+    let code = r#"
+package Block::Scoped {
+    use strict;
+    use warnings FATAL => 'all';
+    use feature qw(say signatures);
+    no warnings 'once';
+
+    sub answer { return 42; }
+}
+
+package Statement::Scoped;
+use lib 'local/lib';
+no strict 'refs';
+1;
+"#;
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+
+    let mut packages: Vec<(String, bool)> = Vec::new();
+    let mut uses: Vec<(String, Vec<String>)> = Vec::new();
+    let mut nos: Vec<(String, Vec<String>)> = Vec::new();
+
+    fn walk(
+        node: &Node,
+        packages: &mut Vec<(String, bool)>,
+        uses: &mut Vec<(String, Vec<String>)>,
+        nos: &mut Vec<(String, Vec<String>)>,
+    ) {
+        match &node.kind {
+            NodeKind::Package { name, block, .. } => packages.push((name.clone(), block.is_some())),
+            NodeKind::Use { module, args, .. } => uses.push((module.clone(), args.clone())),
+            NodeKind::No { module, args, .. } => nos.push((module.clone(), args.clone())),
+            _ => {}
+        }
+        node.for_each_child(|child| walk(child, packages, uses, nos));
+    }
+    walk(&ast, &mut packages, &mut uses, &mut nos);
+
+    assert!(
+        packages.iter().any(|(name, has_block)| name == "Block::Scoped" && *has_block),
+        "block-scoped package should retain an inline block: {packages:?}"
+    );
+    assert!(
+        packages.iter().any(|(name, has_block)| name == "Statement::Scoped" && !*has_block),
+        "statement-scoped package should not synthesize an inline block: {packages:?}"
+    );
+    assert!(uses.iter().any(|(module, _)| module == "strict"), "missing `use strict`: {uses:?}");
+    assert!(
+        uses.iter().any(|(module, args)| module == "feature" && args.iter().any(|arg| arg.contains("say"))),
+        "feature imports should preserve qw args: {uses:?}"
+    );
+    assert!(
+        nos.iter()
+            .any(|(module, args)| module == "warnings"
+                && args.iter().any(|arg| arg.contains("once"))),
+        "`no warnings 'once'` should preserve args: {nos:?}"
+    );
+    assert!(
+        nos.iter().any(|(module, args)| module == "strict" && args.iter().any(|arg| arg.contains("refs"))),
+        "`no strict 'refs'` should preserve args: {nos:?}"
+    );
+}
+
+/// Modern class syntax combines `Class`, `Method`, `Signature`, and the four
+/// parameter NodeKinds.  This locks the richer combination in one focused test
+/// so coverage cannot be satisfied by only trivial signatures.
+#[test]
+fn test_class_method_signature_parameter_matrix() {
+    let code = r#"
+use feature 'class';
+use feature 'signatures';
+
+class Child::Builder :isa(Parent::Base) :isa(Role::Provider) {
+    method build ($self: $required, $optional = 1, :$named, @rest) {
+        return $required + $optional;
+    }
+}
+"#;
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+
+    let mut class_parents: Vec<Vec<String>> = Vec::new();
+    let mut method_names: Vec<String> = Vec::new();
+    let mut param_kinds: Vec<&'static str> = Vec::new();
+
+    fn walk(
+        node: &Node,
+        class_parents: &mut Vec<Vec<String>>,
+        method_names: &mut Vec<String>,
+        param_kinds: &mut Vec<&'static str>,
+    ) {
+        match &node.kind {
+            NodeKind::Class { parents, .. } => class_parents.push(parents.clone()),
+            NodeKind::Method { name, .. } => method_names.push(name.clone()),
+            NodeKind::MandatoryParameter { .. }
+            | NodeKind::OptionalParameter { .. }
+            | NodeKind::NamedParameter { .. }
+            | NodeKind::SlurpyParameter { .. } => param_kinds.push(node.kind.kind_name()),
+            _ => {}
+        }
+        node.for_each_child(|child| walk(child, class_parents, method_names, param_kinds));
+    }
+    walk(&ast, &mut class_parents, &mut method_names, &mut param_kinds);
+
+    assert!(
+        class_parents.iter().any(|parents| parents.iter().any(|p| p == "Parent::Base")
+            && parents.iter().any(|p| p == "Role::Provider")),
+        "class :isa(...) parents should be preserved: {class_parents:?}"
+    );
+    assert!(
+        method_names.iter().any(|name| name == "build"),
+        "method declaration should preserve the method name: {method_names:?}"
+    );
+    for expected in ["MandatoryParameter", "OptionalParameter", "NamedParameter", "SlurpyParameter"]
+    {
+        assert!(
+            param_kinds.contains(&expected),
+            "signature should include {expected}; saw {param_kinds:?}"
+        );
+    }
+}
+
+/// Lexical declaration coverage should distinguish declaration attributes on the
+/// whole declaration from per-variable attributes inside list declarations.
+#[test]
+fn test_variable_declaration_attribute_shapes() {
+    let code = r#"
+my $scalar :shared = 1;
+our $global :unique = 2;
+state $cached = 3;
+my ($left :shared, $right :locked, @rest) = (1, 2, 3);
+local $ENV{PATH} = '/tmp';
+"#;
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+
+    let mut declaration_attrs: Vec<(String, Vec<String>)> = Vec::new();
+    let mut list_decls = 0usize;
+    let mut variable_attrs: Vec<Vec<String>> = Vec::new();
+
+    fn walk(
+        node: &Node,
+        declaration_attrs: &mut Vec<(String, Vec<String>)>,
+        list_decls: &mut usize,
+        variable_attrs: &mut Vec<Vec<String>>,
+    ) {
+        match &node.kind {
+            NodeKind::VariableDeclaration { declarator, attributes, .. } => {
+                declaration_attrs.push((declarator.clone(), attributes.clone()));
+            }
+            NodeKind::VariableListDeclaration { .. } => *list_decls += 1,
+            NodeKind::VariableWithAttributes { attributes, .. } => {
+                variable_attrs.push(attributes.clone())
+            }
+            _ => {}
+        }
+        node.for_each_child(|child| walk(child, declaration_attrs, list_decls, variable_attrs));
+    }
+    walk(&ast, &mut declaration_attrs, &mut list_decls, &mut variable_attrs);
+
+    assert!(
+        declaration_attrs
+            .iter()
+            .any(|(decl, attrs)| decl == "my" && attrs.iter().any(|a| a == "shared")),
+        "single-variable declaration attributes should be preserved: {declaration_attrs:?}"
+    );
+    assert!(
+        declaration_attrs
+            .iter()
+            .any(|(decl, attrs)| decl == "our" && attrs.iter().any(|a| a == "unique")),
+        "our declaration attributes should be preserved: {declaration_attrs:?}"
+    );
+    assert_eq!(list_decls, 1, "expected one VariableListDeclaration");
+    assert!(
+        variable_attrs.iter().any(|attrs| attrs.iter().any(|a| a == "shared"))
+            && variable_attrs.iter().any(|attrs| attrs.iter().any(|a| a == "locked")),
+        "per-variable attributes in list declarations should be preserved: {variable_attrs:?}"
+    );
+}
+
+/// Statement modifiers are a distinct NodeKind regardless of the modifier
+/// keyword.  Cover every accepted modifier keyword so the parser cannot regress
+/// to treating only postfix `if` as the canonical shape.
+#[test]
+fn test_statement_modifier_keyword_matrix() {
+    let code = r#"
+my $x = 0;
+my @items = (1, 2, 3);
+$x++ if $x < 10;
+$x++ unless $x > 20;
+$x++ while $x < 3;
+$x++ until $x > 5;
+print $_ for @items;
+print $_ foreach @items;
+"#;
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+
+    let mut modifiers: Vec<String> = Vec::new();
+    fn walk(node: &Node, modifiers: &mut Vec<String>) {
+        if let NodeKind::StatementModifier { modifier, .. } = &node.kind {
+            modifiers.push(modifier.clone());
+        }
+        node.for_each_child(|child| walk(child, modifiers));
+    }
+    walk(&ast, &mut modifiers);
+
+    for expected in ["if", "unless", "while", "until", "for", "foreach"] {
+        assert!(
+            modifiers.iter().any(|modifier| modifier == expected),
+            "missing {expected}: {modifiers:?}"
+        );
+    }
+}
