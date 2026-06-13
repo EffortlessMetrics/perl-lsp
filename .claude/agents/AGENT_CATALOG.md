@@ -173,6 +173,35 @@ coding-standards, health-check, status-drift, rebase-pr, worktree-pr
 parser-fix, parser-scout, corpus-ratchet, dep-check, dep-clean,
 security-scout, dap-scout, changelog
 
+## Saved Workflows (2)
+
+Workflow scripts under `.claude/workflows/` — reusable multi-phase orchestration patterns
+invoked by agents, not by the user directly.
+
+| Workflow | Invoked by | Purpose |
+|---|---|---|
+| `release-readiness.js` | release captain | Six-phase adversarial release-readiness check; produces go/no-go recommendation; always requires human approval before dispatch |
+| `spec-builder.js` | spec-planner (for non-trivial issues) | Six parallel haiku analysis angles → synthesizer → acceptance.md §Hazards/§Contracts/§API-Shape/§Test-Grid/§Blast-Radius + context.md prior-art block |
+
+**Spec-builder rich-spec flow** (Gate 2 — Spec):
+
+```
+spec-planner reads issue
+  → is non-trivial? (touches >1 file OR new public API OR protocol handler)
+      YES → invoke spec-builder workflow { issue, subsystem, risk }
+               → 6 parallel haiku angles (A-hazard, B-contract, C-prior-art, D-api, E-testgrid, F-blast)
+               → synthesizer merges into acceptance.md sections
+               → spec-planner adds §Behavior, seeds subsystem hazard defaults, writes .spec/ files
+      NO  → spec-planner populates all six sections manually, marks N/A with reason
+  → red-tdd reads acceptance.md §Test-Grid + §Hazards → writes failing tests
+  → builder reads checklist.md + acceptance.md → implements until tests green
+  → deep-reviewer confirms (does not discover) — the spec already named what to check
+```
+
+**Canonical spec structure**: `docs/reference/SPEC_TEMPLATE.md` — defines the three-file layout
+(checklist.md / acceptance.md / context.md) with exact section names and worked examples for
+three shapes (parser-fix, LSP-feature, test-only).
+
 ## Campaign Guardrails (learned from 2026-06 autonomous campaign)
 
 These are cross-cutting rules encoded in individual agent defs. Listed here for visibility:
