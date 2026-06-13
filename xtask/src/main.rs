@@ -2740,6 +2740,11 @@ enum AgentCommand {
         #[command(subcommand)]
         command: AgentLeaseCommand,
     },
+    /// Orchestration ledger commands.
+    Ledgers {
+        #[command(subcommand)]
+        command: AgentLedgersCommand,
+    },
     /// Receipt commands.
     Receipt {
         #[command(subcommand)]
@@ -2749,6 +2754,19 @@ enum AgentCommand {
     Worktree {
         #[command(subcommand)]
         command: AgentWorktreeCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentLedgersCommand {
+    /// Validate docs/agents/ledgers/*.jsonl against orchestration role contracts.
+    Validate {
+        /// Override ledger directory (default: docs/agents/ledgers/).
+        #[arg(long)]
+        dir: Option<PathBuf>,
+        /// Output format: `human` (default) or `json`.
+        #[arg(long, default_value = "human")]
+        format: String,
     },
 }
 
@@ -3427,6 +3445,19 @@ fn main() -> Result<()> {
                 AgentLeaseCommand::Acquire { task, out } => agent_lease::acquire(&task, &out),
                 AgentLeaseCommand::Verify { lease, current } => {
                     agent_lease::verify(&lease, &current)
+                }
+            },
+            AgentCommand::Ledgers { command } => match command {
+                AgentLedgersCommand::Validate { dir, format } => {
+                    let fmt = if format == "json" {
+                        tasks::agent_ledgers::ValidateFormat::Json
+                    } else {
+                        tasks::agent_ledgers::ValidateFormat::Human
+                    };
+                    tasks::agent_ledgers::validate(tasks::agent_ledgers::ValidateConfig {
+                        ledger_dir: dir,
+                        format: fmt,
+                    })
                 }
             },
             AgentCommand::Receipt { command } => match command {

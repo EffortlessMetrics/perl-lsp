@@ -503,6 +503,43 @@ review_after = "2026-07-12"
 expires = "2026-09-30"
 
 # -----------------------------------------------------------------------------
+# agent_ledgers.rs validate_line string-dispatch predicates: field-name matching
+# and classification/confidence enum dispatch — activation untraceable by ripr
+# (ripr#1429 class).
+#
+# PR #1260 adds xtask/src/tasks/agent_ledgers.rs with two ripr#1429-class seams
+# flagged as weakly_exposed:
+#   (A) validate_line — string-field dispatch on JSON object keys ("pr", "title",
+#       "classification", "confidence", etc.): RIPR cannot trace that calling
+#       validate_line with a string-literal JSON row exercises the correct field-
+#       match branch, because activation flows through serde_json deserialization
+#       then HashMap field lookup — same class as parse_quote_operator_content.
+#   (B) relative_display — std::env::current_dir().unwrap_or_default() and
+#       path.strip_prefix(&cwd).unwrap_or(path): the fallback seams are
+#       ripr#1429-class unreachable-in-test (current_dir always succeeds in
+#       test environment; strip_prefix fallback only triggers when cwd != path).
+#
+# Coverage evidence: 19 inline #[cfg(test)] unit tests in agent_ledgers.rs cover
+# every field-name branch, every classification, every confidence value, the
+# close_proof conditional, cleanup_done/known_gaps boolean/array checks, and
+# error metadata (file + line number propagation).
+#
+# Suppression is narrow (single xtask file, one PR). Remove when ripr#1429 is
+# fixed upstream or when targeted mutation is scheduled per #1289.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-agent-ledgers-validate-line-predicates"
+kind = "predicate_infection_untraceable"
+paths = ["xtask/src/tasks/agent_ledgers.rs"]
+classification = ["weakly_exposed", "no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "Two ripr#1429-class seams in PR #1260 agent_ledgers.rs: (A) validate_line string-field dispatch — RIPR cannot trace coverage from string-literal JSON test rows through serde_json deserialization + HashMap field lookup to the per-field predicate branches (same class as parse_quote_operator_content and quality_baseline cfg-test-line-scanner); (B) relative_display fallback seams — unwrap_or_default on current_dir and unwrap_or on strip_prefix are ripr#1429-class unreachable-in-test predicates. All 19 inline #[cfg(test)] unit tests cover every field-name branch, classification value, confidence value, close_proof conditional, and error-metadata propagation. Suppression is narrow (single xtask file, one PR #1260). Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled per #1289."
+created = "2026-06-13"
+review_after = "2026-07-13"
+expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
 # pr_close_proof.rs validate_sha_format char-predicate and exit-code match arms:
 # string/predicate-chain activation untraceable by ripr (ripr#1429 class).
 #

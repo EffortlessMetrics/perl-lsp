@@ -394,6 +394,8 @@ Invoke `/coding-standards` for full detail.
 
 **Spec hazard defaults**: [SUBSYSTEM_HAZARD_DEFAULTS.md](docs/reference/SUBSYSTEM_HAZARD_DEFAULTS.md) — per-subsystem hazard rows (DAP, Parser, LSP, Coverage/CI) that spec-planner should seed into `acceptance.md`; extends SPEC_UPDATE_CHECKLIST §8 with subsystem-specific invariants and adversarial test obligations.
 
+**Spec system**: [SPEC_TEMPLATE.md](docs/reference/SPEC_TEMPLATE.md) — canonical `.spec/<issue#>-<slug>/` structure (checklist.md / acceptance.md with §Behavior §Hazards §Contracts §API-Shape §Test-Grid §Blast-Radius / context.md) with three worked shapes (parser-fix, LSP-feature, test-only). The [spec-builder workflow](.claude/workflows/spec-builder.js) populates the rich acceptance.md sections via six parallel haiku angles; spec-planner invokes it for non-trivial issues.
+
 **SDLC positioning**: [DISTRIBUTED_ENGINEERING_LINEAGE.md](docs/reference/DISTRIBUTED_ENGINEERING_LINEAGE.md) — situates the Octopus Cluster in classical engineering practice (Kanban, code review, trunk-health, CI/CD, SRE) with Beowulf contrast and SDLC-mapping table.
 
 ## Contributing
