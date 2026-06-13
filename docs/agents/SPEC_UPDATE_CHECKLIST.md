@@ -3,6 +3,13 @@
 Every product PR must be able to answer these questions before the builder publishes it.
 Answer them in the PR body or a PR comment — failing to answer any item is a reviewable finding.
 
+**Canonical spec structure**: [docs/reference/SPEC_TEMPLATE.md](../reference/SPEC_TEMPLATE.md) defines
+the canonical `.spec/<issue#>-<slug>/` layout — checklist.md, acceptance.md (all six required sections:
+§Behavior, §Hazards, §Contracts, §API-Shape, §Test-Grid, §Blast-Radius), and context.md.
+
+**Spec-builder workflow**: [`.claude/workflows/spec-builder.js`](../../.claude/workflows/spec-builder.js)
+runs six parallel haiku angles to populate acceptance.md §Hazards through §Blast-Radius for non-trivial issues.
+
 ---
 
 ## 1. Spec / contract alignment
