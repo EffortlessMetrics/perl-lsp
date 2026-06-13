@@ -1139,7 +1139,7 @@
   },
   "dependencies": {
     "adm-zip": "^0.5.17",
-    "tar": "^7.5.15",
+    "tar": "^7.5.16",
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
