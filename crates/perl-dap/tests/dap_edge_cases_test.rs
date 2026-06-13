@@ -373,7 +373,7 @@ fn test_dap_pause_without_session() -> TestResult {
             assert_eq!(command, "pause");
             assert!(!success, "Pause should fail without active session");
             if let Some(msg) = message {
-                assert!(msg.contains("Failed to pause") || msg.contains("No active"));
+                assert!(msg.contains("no Perl debug session is active"), "pause must use no-session message: {msg}");
             }
         }
         _ => return Err("Expected pause response".into()),
@@ -385,16 +385,21 @@ fn test_dap_pause_without_session() -> TestResult {
 fn test_dap_step_commands_without_session() -> TestResult {
     let mut adapter = DebugAdapter::new();
 
-    // Test all step commands without active session
+    // #898: Step commands must return failure (not success) without an active session.
     let step_commands = vec!["next", "stepIn", "stepOut", "continue"];
 
     for command in step_commands {
         let response = adapter.handle_request(1, command, None);
         match response {
-            DapMessage::Response { success, command: resp_cmd, .. } => {
+            DapMessage::Response { success, command: resp_cmd, message, .. } => {
                 assert_eq!(resp_cmd, *command);
-                // These should succeed (they're graceful no-ops without session)
-                assert!(success, "Step command {} should succeed gracefully", command);
+                // Protocol-safe error: must fail with a guidance message.
+                assert!(!success, "Step command {} must fail without session", command);
+                assert!(
+                    message.is_some(),
+                    "Step command {} must include guidance message",
+                    command
+                );
             }
             _ => return Err(format!("Expected response for command: {}", command).into()),
         }

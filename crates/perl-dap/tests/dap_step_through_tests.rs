@@ -72,86 +72,104 @@ fn drain_events(rx: &Receiver<DapMessage>, timeout_ms: u64) -> Vec<String> {
 // ---------------------------------------------------------------------------
 
 #[test]
-// AC:3535
+// AC:3535 / AC:898
 fn test_step_in_emits_continued_event_no_session() -> Result<(), Box<dyn std::error::Error>> {
-    // Without an active session, stepIn must still emit a "continued" event
-    // if it was going to transition state. With no session, it does nothing
-    // but the response itself must succeed (handler returns Ok).
-    let (mut adapter, _rx) = make_adapter_with_events();
+    // #898: stepIn without a session returns success: false and no continued event.
+    let (mut adapter, rx) = make_adapter_with_events();
 
     let response = adapter.handle_request(1, "stepIn", None);
 
     match response {
-        DapMessage::Response { success, command, .. } => {
-            assert!(success, "stepIn should succeed");
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "stepIn without session must fail");
             assert_eq!(command, "stepIn");
+            assert!(message.is_some(), "failure must include guidance message");
         }
         _ => return Err("Expected Response for stepIn".into()),
     }
+
+    // No continued event should be emitted on the failure path.
+    let events = drain_events(&rx, 50);
+    assert!(
+        !events.iter().any(|e| e == "continued"),
+        "stepIn without session must not emit 'continued'; got: {events:?}"
+    );
     Ok(())
 }
 
 #[test]
-// AC:3535
+// AC:3535 / AC:898
 fn test_step_out_emits_continued_event_no_session() -> Result<(), Box<dyn std::error::Error>> {
-    let (mut adapter, _rx) = make_adapter_with_events();
+    // #898: stepOut without a session returns success: false and no continued event.
+    let (mut adapter, rx) = make_adapter_with_events();
 
     let response = adapter.handle_request(1, "stepOut", None);
 
     match response {
-        DapMessage::Response { success, command, .. } => {
-            assert!(success, "stepOut should succeed");
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "stepOut without session must fail");
             assert_eq!(command, "stepOut");
+            assert!(message.is_some(), "failure must include guidance message");
         }
         _ => return Err("Expected Response for stepOut".into()),
     }
+
+    let events = drain_events(&rx, 50);
+    assert!(
+        !events.iter().any(|e| e == "continued"),
+        "stepOut without session must not emit 'continued'; got: {events:?}"
+    );
     Ok(())
 }
 
 #[test]
-// AC:3535
+// AC:3535 / AC:898
 fn test_next_emits_continued_event_no_session() -> Result<(), Box<dyn std::error::Error>> {
-    let (mut adapter, _rx) = make_adapter_with_events();
+    // #898: next without a session returns success: false and no continued event.
+    let (mut adapter, rx) = make_adapter_with_events();
 
     let response = adapter.handle_request(1, "next", None);
 
     match response {
-        DapMessage::Response { success, command, .. } => {
-            assert!(success, "next (stepOver) should succeed");
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "next without session must fail");
             assert_eq!(command, "next");
+            assert!(message.is_some(), "failure must include guidance message");
         }
         _ => return Err("Expected Response for next".into()),
     }
+
+    let events = drain_events(&rx, 50);
+    assert!(
+        !events.iter().any(|e| e == "continued"),
+        "next without session must not emit 'continued'; got: {events:?}"
+    );
     Ok(())
 }
 
 #[test]
-// AC:3535
+// AC:3535 / AC:898
 fn test_continue_emits_continued_event() -> Result<(), Box<dyn std::error::Error>> {
-    // The continue handler always emits a "continued" event even without a session.
+    // #898: continue without a session returns success: false and no continued event.
     let (mut adapter, rx) = make_adapter_with_events();
 
     let response = adapter.handle_request(1, "continue", None);
 
     match response {
-        DapMessage::Response { success, command, body, .. } => {
-            assert!(success, "continue should succeed");
+        DapMessage::Response { success, command, body, message, .. } => {
+            assert!(!success, "continue without session must fail");
             assert_eq!(command, "continue");
-            let body = body.ok_or("continue response must have a body")?;
-            assert_eq!(
-                body.get("allThreadsContinued"),
-                Some(&json!(true)),
-                "allThreadsContinued must be true"
-            );
+            assert!(body.is_none(), "failure response must have no body");
+            assert!(message.is_some(), "failure must include guidance message");
         }
         _ => return Err("Expected Response for continue".into()),
     }
 
-    // Verify continued event was emitted
-    let events = drain_events(&rx, 100);
+    // No continued event should be emitted on the failure path.
+    let events = drain_events(&rx, 50);
     assert!(
-        events.iter().any(|e| e == "continued"),
-        "continue must emit a 'continued' event; got: {events:?}"
+        !events.iter().any(|e| e == "continued"),
+        "continue without session must not emit 'continued'; got: {events:?}"
     );
     Ok(())
 }
@@ -161,9 +179,9 @@ fn test_continue_emits_continued_event() -> Result<(), Box<dyn std::error::Error
 // ---------------------------------------------------------------------------
 
 #[test]
-// AC:3535
+// AC:3535 / AC:898
 fn test_next_at_if_boundary() -> Result<(), Box<dyn std::error::Error>> {
-    // Step over should succeed at an if-block boundary.
+    // #898: next without a session must fail even when granularity args are provided.
     let mut adapter = make_adapter();
 
     let args = json!({
@@ -173,9 +191,10 @@ fn test_next_at_if_boundary() -> Result<(), Box<dyn std::error::Error>> {
     let response = adapter.handle_request(1, "next", Some(args));
 
     match response {
-        DapMessage::Response { success, command, .. } => {
-            assert!(success, "next at if boundary should succeed");
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "next without session must fail");
             assert_eq!(command, "next");
+            assert!(message.is_some(), "must include guidance message");
         }
         _ => return Err("Expected Response for next at if boundary".into()),
     }
@@ -183,9 +202,9 @@ fn test_next_at_if_boundary() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-// AC:3535
+// AC:3535 / AC:898
 fn test_step_in_at_while_boundary() -> Result<(), Box<dyn std::error::Error>> {
-    // stepIn at a while-loop boundary must succeed.
+    // #898: stepIn without a session must fail.
     let mut adapter = make_adapter();
 
     let args = json!({
@@ -195,9 +214,10 @@ fn test_step_in_at_while_boundary() -> Result<(), Box<dyn std::error::Error>> {
     let response = adapter.handle_request(1, "stepIn", Some(args));
 
     match response {
-        DapMessage::Response { success, command, .. } => {
-            assert!(success, "stepIn at while boundary should succeed");
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "stepIn without session must fail");
             assert_eq!(command, "stepIn");
+            assert!(message.is_some(), "must include guidance message");
         }
         _ => return Err("Expected Response for stepIn at while boundary".into()),
     }
@@ -205,9 +225,9 @@ fn test_step_in_at_while_boundary() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-// AC:3535
+// AC:3535 / AC:898
 fn test_step_out_at_for_boundary() -> Result<(), Box<dyn std::error::Error>> {
-    // stepOut at a for-loop boundary must succeed.
+    // #898: stepOut without a session must fail.
     let mut adapter = make_adapter();
 
     let args = json!({
@@ -217,9 +237,10 @@ fn test_step_out_at_for_boundary() -> Result<(), Box<dyn std::error::Error>> {
     let response = adapter.handle_request(1, "stepOut", Some(args));
 
     match response {
-        DapMessage::Response { success, command, .. } => {
-            assert!(success, "stepOut at for boundary should succeed");
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "stepOut without session must fail");
             assert_eq!(command, "stepOut");
+            assert!(message.is_some(), "must include guidance message");
         }
         _ => return Err("Expected Response for stepOut at for boundary".into()),
     }
@@ -227,26 +248,26 @@ fn test_step_out_at_for_boundary() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-// AC:3535
+// AC:3535 / AC:898
 fn test_step_sequence_at_block_boundaries() -> Result<(), Box<dyn std::error::Error>> {
-    // Simulate stepping through a sequence of block-boundary lines.
+    // #898: All four handlers must return failure when there is no active session.
     let mut adapter = make_adapter();
 
-    // Simulate: enter if block, step over body, exit loop, continue
     let ops: &[(&str, serde_json::Value)] = &[
-        ("next", json!({"threadId": 1})),    // step over if condition
-        ("stepIn", json!({"threadId": 1})),  // step into if body
-        ("next", json!({"threadId": 1})),    // step over while condition
-        ("stepOut", json!({"threadId": 1})), // step out of for body
+        ("next", json!({"threadId": 1})),
+        ("stepIn", json!({"threadId": 1})),
+        ("next", json!({"threadId": 1})),
+        ("stepOut", json!({"threadId": 1})),
         ("continue", json!({"threadId": 1})),
     ];
 
     for (seq, (command, args)) in ops.iter().enumerate() {
         let response = adapter.handle_request((seq + 1) as i64, command, Some(args.clone()));
         match response {
-            DapMessage::Response { success, command: cmd, .. } => {
-                assert!(success, "op {command} at seq {seq} should succeed");
+            DapMessage::Response { success, command: cmd, message, .. } => {
+                assert!(!success, "op {command} at seq {seq} must fail without session");
                 assert_eq!(&cmd, command, "command name mismatch at seq {seq}");
+                assert!(message.is_some(), "{command} must include guidance message at seq {seq}");
             }
             _ => return Err(format!("Expected Response for {command} at seq {seq}").into()),
         }
@@ -272,9 +293,11 @@ fn test_step_in_to_xs_builtin_via_target_id() -> Result<(), Box<dyn std::error::
     let response = adapter.handle_request(1, "stepIn", Some(args));
 
     match response {
-        DapMessage::Response { success, command, .. } => {
-            assert!(success, "stepIn with unknown targetId should succeed gracefully");
+        DapMessage::Response { success, command, message, .. } => {
+            // #898: No session means failure regardless of targetId.
+            assert!(!success, "stepIn without session must fail even with targetId");
             assert_eq!(command, "stepIn");
+            assert!(message.is_some(), "must include guidance message");
         }
         _ => return Err("Expected Response for stepIn with unknown targetId".into()),
     }
@@ -514,9 +537,9 @@ fn test_goto_missing_args_returns_failure() -> Result<(), Box<dyn std::error::Er
 // ---------------------------------------------------------------------------
 
 #[test]
-// AC:3535
+// AC:3535 / AC:898
 fn test_cancel_during_stepping_sequence() -> Result<(), Box<dyn std::error::Error>> {
-    // cancel should succeed and can interrupt a sequence of step requests.
+    // cancel itself must succeed; subsequent step operations without a session must fail.
     let mut adapter = make_adapter();
 
     adapter.handle_request(1, "next", Some(json!({"threadId": 1})));
@@ -525,12 +548,13 @@ fn test_cancel_during_stepping_sequence() -> Result<(), Box<dyn std::error::Erro
     let cancel_response = adapter.handle_request(3, "cancel", None);
     assert_response(cancel_response, "cancel", true);
 
-    // After cancel, further step operations must still be serviced gracefully.
+    // #898: next still fails without a session (cancel doesn't create a session).
     let response = adapter.handle_request(4, "next", Some(json!({"threadId": 1})));
     match response {
-        DapMessage::Response { success, command, .. } => {
-            assert!(success, "next after cancel should succeed");
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "next after cancel still fails without session");
             assert_eq!(command, "next");
+            assert!(message.is_some(), "must include guidance message");
         }
         _ => return Err("Expected Response for next after cancel".into()),
     }
@@ -636,23 +660,23 @@ fn test_sequence_numbers_monotonically_increasing_across_steps()
 // ---------------------------------------------------------------------------
 
 #[test]
-// AC:3535
+// AC:3535 / AC:898
 fn test_continue_pause_cycle_response_shapes() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = make_adapter();
 
-    // Continue
+    // #898: continue without a session must fail (success: false, no body).
     let continue_resp = adapter.handle_request(1, "continue", None);
     match continue_resp {
-        DapMessage::Response { success, command, body, .. } => {
-            assert!(success, "continue should succeed");
+        DapMessage::Response { success, command, body, message, .. } => {
+            assert!(!success, "continue without session must fail");
             assert_eq!(command, "continue");
-            let body = body.ok_or("continue response must have a body")?;
-            assert!(body.get("allThreadsContinued").is_some(), "must have allThreadsContinued");
+            assert!(body.is_none(), "failure response must have no body");
+            assert!(message.is_some(), "failure must include guidance message");
         }
         _ => return Err("Expected continue Response".into()),
     }
 
-    // Pause (no active session → failure)
+    // Pause (no active session → failure, same as before).
     let pause_resp = adapter.handle_request(2, "pause", None);
     match pause_resp {
         DapMessage::Response { success, command, message, .. } => {
@@ -666,24 +690,20 @@ fn test_continue_pause_cycle_response_shapes() -> Result<(), Box<dyn std::error:
 }
 
 #[test]
-// AC:3535
+// AC:3535 / AC:898
 fn test_continue_with_all_threads_arg() -> Result<(), Box<dyn std::error::Error>> {
+    // #898: continue with singleThread=false but no session must still fail.
     let mut adapter = make_adapter();
 
-    // DAP spec allows passing threadId alongside continue
     let args = json!({ "threadId": 1, "singleThread": false });
     let response = adapter.handle_request(1, "continue", Some(args));
 
     match response {
-        DapMessage::Response { success, command, body, .. } => {
-            assert!(success, "continue with singleThread=false should succeed");
+        DapMessage::Response { success, command, body, message, .. } => {
+            assert!(!success, "continue without session must fail even with singleThread=false");
             assert_eq!(command, "continue");
-            let body = body.ok_or("continue response must have a body")?;
-            assert_eq!(
-                body.get("allThreadsContinued"),
-                Some(&json!(true)),
-                "allThreadsContinued should be true"
-            );
+            assert!(body.is_none(), "failure response must have no body");
+            assert!(message.is_some(), "failure must include guidance message");
         }
         _ => return Err("Expected Response for continue".into()),
     }
@@ -804,11 +824,11 @@ fn test_step_in_targets_with_frame_id_no_session_returns_empty()
 // ---------------------------------------------------------------------------
 
 #[test]
-// AC:3535
+// AC:3535 / AC:898
 fn test_many_consecutive_step_operations() -> Result<(), Box<dyn std::error::Error>> {
+    // #898: All execution-control operations fail without a session; seq still increases.
     let mut adapter = make_adapter();
 
-    // Simulate a realistic stepping session with 20 operations
     let ops = [
         "next", "next", "stepIn", "next", "stepOut", "next", "stepIn", "stepIn", "next", "stepOut",
         "next", "next", "continue", "next", "stepIn", "next", "stepOut", "next", "next", "next",
@@ -819,7 +839,7 @@ fn test_many_consecutive_step_operations() -> Result<(), Box<dyn std::error::Err
         let response = adapter.handle_request((i + 1) as i64, op, None);
         match response {
             DapMessage::Response { seq, success, command, .. } => {
-                assert!(success, "op {op} at index {i} should succeed");
+                assert!(!success, "op {op} at index {i} must fail without session");
                 assert_eq!(&command, op, "command name should match at index {i}");
                 assert!(seq > prev_seq, "seq must increase: {seq} > {prev_seq} at index {i}");
                 prev_seq = seq;

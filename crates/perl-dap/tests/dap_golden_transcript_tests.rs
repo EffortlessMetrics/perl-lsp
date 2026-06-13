@@ -65,6 +65,35 @@ mod dap_golden_transcripts {
         Ok(())
     }
 
+    /// Like `send_and_expect_success` but for commands that must fail without
+    /// an active session (#898: execution-control handlers now return protocol-safe errors).
+    fn send_and_expect_no_session_failure(
+        adapter: &mut DebugAdapter,
+        request_seq: i64,
+        command: &str,
+        arguments: Option<Value>,
+    ) -> Result<()> {
+        let response = adapter.handle_request(request_seq, command, arguments);
+        match response {
+            DapMessage::Response { success, command: actual, message, .. } => {
+                if success {
+                    anyhow::bail!(
+                        "{command}: expected failure (no session), got success — \
+                         fix #898 may not have landed"
+                    );
+                }
+                if actual != command {
+                    anyhow::bail!("expected {command} response, got {actual}");
+                }
+                if message.is_none() {
+                    anyhow::bail!("{command}: failure must include a guidance message");
+                }
+            }
+            _ => anyhow::bail!("expected response for {command}"),
+        }
+        Ok(())
+    }
+
     fn required_body_keys_for_command(command: &str) -> &'static [&'static str] {
         match command {
             "initialize" => &["supportsConfigurationDoneRequest"],
@@ -202,7 +231,13 @@ mod dap_golden_transcripts {
                 "breakpoints": [{ "line": 9 }]
             })),
         )?;
-        send_and_expect_success(&mut adapter, 3, "continue", Some(json!({ "threadId": 1 })))?;
+        // #898: continue now returns failure without a session (protocol-safe error).
+        send_and_expect_no_session_failure(
+            &mut adapter,
+            3,
+            "continue",
+            Some(json!({ "threadId": 1 })),
+        )?;
         send_and_expect_success(&mut adapter, 4, "stackTrace", Some(json!({ "threadId": 1 })))?;
         send_and_expect_success(&mut adapter, 5, "disconnect", None)?;
         Ok(())
@@ -219,11 +254,33 @@ mod dap_golden_transcripts {
         assert!(messages.iter().any(|m| m["command"] == "stepIn"));
         assert!(messages.iter().any(|m| m["command"] == "stepOut"));
 
+        // #898: execution-control handlers return failure without an active session.
+        // This test validates the transcript structure and the no-session failure shape.
         let mut adapter = DebugAdapter::new();
-        send_and_expect_success(&mut adapter, 1, "continue", Some(json!({ "threadId": 1 })))?;
-        send_and_expect_success(&mut adapter, 2, "next", Some(json!({ "threadId": 1 })))?;
-        send_and_expect_success(&mut adapter, 3, "stepIn", Some(json!({ "threadId": 1 })))?;
-        send_and_expect_success(&mut adapter, 4, "stepOut", Some(json!({ "threadId": 1 })))?;
+        send_and_expect_no_session_failure(
+            &mut adapter,
+            1,
+            "continue",
+            Some(json!({ "threadId": 1 })),
+        )?;
+        send_and_expect_no_session_failure(
+            &mut adapter,
+            2,
+            "next",
+            Some(json!({ "threadId": 1 })),
+        )?;
+        send_and_expect_no_session_failure(
+            &mut adapter,
+            3,
+            "stepIn",
+            Some(json!({ "threadId": 1 })),
+        )?;
+        send_and_expect_no_session_failure(
+            &mut adapter,
+            4,
+            "stepOut",
+            Some(json!({ "threadId": 1 })),
+        )?;
         Ok(())
     }
 
