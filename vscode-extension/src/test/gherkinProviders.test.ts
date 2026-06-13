@@ -130,6 +130,82 @@ describe('gherkin outline providers', () => {
     expect(links).toHaveLength(0);
   });
 
+  test('skips step definitions with bounded inner quantifiers in quantified groups (#953)', () => {
+    // `([a-z]{2,5})+` — bounded inner quantifier, outer group quantifier
+    const featureA = [
+      'Feature: Validation',
+      '  Scenario: Code check',
+      '    Given aaaaaaaaaaaaaaaaaaaa!',
+    ].join('\n');
+
+    const linksA = provideGherkinStepDefinitionLinks(
+      featureA,
+      { line: 2, character: 10 } as vscode.Position,
+      [
+        {
+          uri: vscode.Uri.file('/project/features/step_definitions/validation_steps.pm'),
+          text: [
+            'use Test::BDD::Cucumber::StepFile;',
+            '',
+            'Given qr/^([a-z]{2,5})+!$/, sub {',
+            '};',
+          ].join('\n'),
+        },
+      ]
+    );
+    expect(linksA).toHaveLength(0);
+
+    // `(\d{1,3}){4}` — bounded inner quantifier, exact outer repetition
+    const featureB = [
+      'Feature: IP check',
+      '  Scenario: Address match',
+      '    Given 192168001001',
+    ].join('\n');
+
+    const linksB = provideGherkinStepDefinitionLinks(
+      featureB,
+      { line: 2, character: 10 } as vscode.Position,
+      [
+        {
+          uri: vscode.Uri.file('/project/features/step_definitions/ip_steps.pm'),
+          text: [
+            'use Test::BDD::Cucumber::StepFile;',
+            '',
+            'Given qr/^(\\d{1,3}){4}$/, sub {',
+            '};',
+          ].join('\n'),
+        },
+      ]
+    );
+    expect(linksB).toHaveLength(0);
+  });
+
+  test('#859 safe cases still resolve links after bounded-quantifier extension', () => {
+    // `[^"]+` and `[0-9]+` are linear-time — they must not be blocked.
+    const featureText = [
+      'Feature: Cart',
+      '  Scenario: Price check',
+      '    Given the total is 42',
+    ].join('\n');
+
+    const links = provideGherkinStepDefinitionLinks(
+      featureText,
+      { line: 2, character: 15 } as vscode.Position,
+      [
+        {
+          uri: vscode.Uri.file('/project/features/step_definitions/cart_steps.pm'),
+          text: [
+            'use Test::BDD::Cucumber::StepFile;',
+            '',
+            'Given qr/^the total is [0-9]+$/, sub {',
+            '};',
+          ].join('\n'),
+        },
+      ]
+    );
+    expect(links).toHaveLength(1);
+  });
+
   test('does not skip named-capture group step definitions (no false positive)', () => {
     const featureText = [
       'Feature: Cart',

@@ -124,6 +124,46 @@ describe('gherkin step definition support', () => {
     ])).toBe('defined');
   });
 
+  test('treats bounded inner quantifiers in quantified groups as expensive (#953)', () => {
+    // `([a-z]{2,5})+` and `(\d{1,3}){4}` can backtrack super-linearly even
+    // though the inner quantifier is bounded; the outer repetition of the group
+    // still creates exponential paths on failure.
+    const stepA = parseGherkinStepLine('Then aaaaaaaaaaaaaaaaaaaa!', 1);
+    expect(stepA).not.toBeNull();
+    expect(classifyStepDefinitionStatus(stepA!, [
+      'Then qr/^([a-z]{2,5})+!$/, sub { return; };',
+    ])).toBe('ambiguous');
+
+    const stepB = parseGherkinStepLine('Then 192168001001', 1);
+    expect(stepB).not.toBeNull();
+    expect(classifyStepDefinitionStatus(stepB!, [
+      'Then qr/^(\\d{1,3}){4}$/, sub { return; };',
+    ])).toBe('ambiguous');
+  });
+
+  test('#859 safe cases are still safe after bounded-quantifier extension', () => {
+    // Regression guard: ensure the bounded-quantifier extension did not
+    // accidentally widen the heuristic to flag linear-time patterns.
+    const numericStep = parseGherkinStepLine('Then total is 19', 1);
+    expect(numericStep).not.toBeNull();
+    expect(classifyStepDefinitionStatus(numericStep!, [
+      'Then qr/^total is [0-9]+$/, sub { return; };',
+    ])).toBe('defined');
+
+    const quotedStep = parseGherkinStepLine('Then name is "alice"', 1);
+    expect(quotedStep).not.toBeNull();
+    expect(classifyStepDefinitionStatus(quotedStep!, [
+      'Then qr/^name is "([^"]+)"$/, sub { return; };',
+    ])).toBe('defined');
+
+    // A capture group with no outer quantifier is also safe.
+    const capStep = parseGherkinStepLine('Then value is 42', 1);
+    expect(capStep).not.toBeNull();
+    expect(classifyStepDefinitionStatus(capStep!, [
+      'Then qr/^value is (\\d+)$/, sub { return; };',
+    ])).toBe('defined');
+  });
+
   test('suggests a deterministic feature-relative target file', () => {
     expect(
       suggestStepDefinitionPath(
