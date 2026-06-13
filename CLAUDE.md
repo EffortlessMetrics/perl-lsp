@@ -241,7 +241,7 @@ cargo test --workspace --lib          # Run all tests
 
 ## Crate Structure
 
-134 workspace members across 135 crate directories (see `cargo metadata --no-deps`). Key crates:
+39 workspace members across 38 crate directories under `crates/` plus `xtask/` at the root (see `cargo metadata --no-deps`). The pre-v0.13.0 count of ~135 reflected the original microcrate split; successive collapse waves (D, G1a/G1b, G2, G3, Final-PR-B, H) absorbed those crates into larger units. Key crates:
 
 | Crate | Path | Purpose |
 |-------|------|---------|
@@ -253,7 +253,7 @@ cargo test --workspace --lib          # Run all tests
 | **perl-workspace** | `crates/perl-workspace/` | Workspace symbol indexing |
 | **perl-semantic-analyzer** | `crates/perl-semantic-analyzer/` | Semantic analysis |
 
-Families: `perl-module-*` (module resolution), `perl-lsp-*` (LSP providers), `perl-lsp-feature-*` (feature governance), `perl-dap-*` (DAP), `perl-ts-*` (tree-sitter), `perl-workspace-*` (workspace discovery), core leaf crates (token, AST, quote, regex, heredoc, error).
+Active crate groups: `perl-parser*` (parser family), `perl-lsp-rs*` (LSP server), `perl-semantic-*` (semantic analysis), `perl-tdd-*` / `perl-test-*` (test infrastructure), `tree-sitter-perl-*` (tree-sitter bindings), core leaf crates (`perl-token`, `perl-ast`, `perl-regex`, `perl-lexer`, `perl-pod`, `perl-uri`).
 
 ## Essential Commands
 
