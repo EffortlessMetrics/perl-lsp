@@ -834,3 +834,31 @@ reason = "Two newly added test files in PR #1352 are flagged as new production s
 created = "2026-06-13"
 review_after = "2026-07-13"
 expires = "2026-09-30"
+
+# test_interpolated_method_call_1354.rs: new integration test file —
+# RIPR flags test-plumbing helpers as production seams (ripr#1428 class).
+#
+# PR #1354 adds a new test file:
+#   crates/perl-parser-core/tests/test_interpolated_method_call_1354.rs
+#
+# The file contains parse_has_no_errors(), a test helper that calls
+# Parser::new() and parser.get_errors(). RIPR's diff-scoped analysis may treat
+# this test helper as a new production seam (same class as
+# ripr-suppress-seam-proof-tests and ripr-suppress-quote-operator-conformance-
+# test-helpers). The behavior under test — find_unclosed_interpolation_delimiter
+# correctly ignoring method calls — is covered by all 15 tests in this file.
+#
+# This is the ripr#1428 class: test-harness plumbing in newly added test files
+# flagged as production seams. Remove when ripr#1428 is fixed upstream.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-interpolated-method-call-test-1354"
+kind = "test_receipt_surface"
+paths = ["crates/perl-parser-core/tests/test_interpolated_method_call_1354.rs"]
+classification = ["static_unknown", "no_static_path"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1428"
+reason = "test_interpolated_method_call_1354.rs is a new integration test file added by PR #1354. parse_has_no_errors() is test-harness plumbing (calls Parser::new() + get_errors() and returns bool for assertions). RIPR diff-scoped analysis may classify this helper as a new production seam — the same ripr#1428 class as ripr-suppress-seam-proof-tests and ripr-suppress-quote-operator-conformance-test-helpers. All 15 tests exercise the production fix (removing false ->() and ->identifier() paren-balancing from find_unclosed_interpolation_delimiter). Suppression is narrow (single test file, one PR). Remove when ripr#1428 is fixed upstream."
+created = "2026-06-13"
+review_after = "2026-07-13"
+expires = "2026-09-30"

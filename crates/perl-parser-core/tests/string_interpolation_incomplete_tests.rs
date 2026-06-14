@@ -74,10 +74,28 @@ fn double_quote_incomplete_mixed_array_index() -> R {
 
 #[test]
 fn double_quote_incomplete_arrow_paren_call() -> R {
-    // "$obj->method(arg" — paren-call tail swallowed closing quote before fix
+    // "$obj->method(arg" — method calls are NOT interpolated in Perl strings.
+    // Per fix for #1354: ->method() is literal text, so an unbalanced ( inside it
+    // must NOT produce an "Unclosed ( delimiter in interpolated string" diagnostic.
+    // This test previously asserted the old INCORRECT behavior.
     let source = r#"my $msg = "Call: $obj->method(arg";"#;
     assert_clean_sexp_without_error_nodes(source)?;
-    assert_has_unclosed_interpolation_diagnostic(source)?;
+
+    let mut parser = Parser::new(source);
+    let parsed = parser.parse_with_recovery();
+    let has_paren_unclosed = parsed
+        .diagnostics
+        .iter()
+        .map(ToString::to_string)
+        .any(|diag| diag.contains("Unclosed") && diag.contains("interpolated") && diag.contains('('));
+    if has_paren_unclosed {
+        return Err(format!(
+            "Did not expect unclosed-( diagnostic for method call (literal text, not interpolated).\nSource: {source}\nDiagnostics: {:?}",
+            parsed.diagnostics
+        )
+        .into());
+    }
+
     Ok(())
 }
 
