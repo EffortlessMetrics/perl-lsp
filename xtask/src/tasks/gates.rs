@@ -1542,6 +1542,22 @@ fn run_single_gate(
     // Execute command
     let command = gate.command.trim();
 
+    // Guard: detect unresolved {package_args} placeholder. This happens when
+    // a rust_scoped gate is invoked via --gate <name> without --base (the static
+    // gate plan path does not call render_package_args). Passing the literal string
+    // "{package_args}" to cargo test would be silently treated as a test-name filter,
+    // running zero tests and exiting 0 — a false-pass that defeats the gate entirely.
+    if command.contains("{package_args}") {
+        bail!(
+            "Gate '{}' command still contains '{{package_args}}' placeholder — \
+             this gate has planning.role=rust_scoped and must be run via \
+             `cargo xtask gates --tier pr-fast --base <ref>` (not --gate) so that \
+             ci-scope can resolve the package set. \
+             Running with an unresolved placeholder would silently pass with zero tests.",
+            gate.name
+        );
+    }
+
     // Handle quarantined gates
     if gate.quarantine && !config.verbose {
         // Skip quarantined gates unless verbose mode

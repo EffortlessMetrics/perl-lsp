@@ -424,13 +424,24 @@ gates:
     planning:
       role: always_on
 
-  # ===========================================================================
-  # Tier: merge_gate
-  # ===========================================================================
-  # Full verification required before merging. Can be slower but must be thorough.
+  - name: compile_all_targets
+    tier: pr_fast
+    description: "Compile all workspace targets (lib/bin/tests/benches) to catch integration and bench bit-rot; also validates all-features paths"
+    required: true
+    command: just check-all-targets
+    timeout_seconds: 180
+    retry_count: 0
+    budgets:
+      max_duration_ms: 150000
+    quarantine: false
+    tags:
+      - compile
+      - integration
+      - benches
+      - workspace
 
   - name: clippy_full
-    tier: merge_gate
+    tier: pr_fast
     description: "Clippy lints on full workspace with strict settings"
     required: true
     command: >-
@@ -450,6 +461,28 @@ gates:
       - lint
       - clippy
       - strict
+
+  - name: unit_routed_full
+    tier: pr_fast
+    description: "Scoped routed integration tests for ci-scope selected crates (required test gate for #1470 coupling; --tests runs tests/ directories, catching runtime assertion failures not reachable by --lib)"
+    required: true
+    command: cargo test --locked --tests {package_args}
+    timeout_seconds: 600
+    retry_count: 1
+    budgets:
+      max_duration_ms: 540000
+    quarantine: false
+    tags:
+      - test
+      - integration
+      - routed
+    planning:
+      role: rust_scoped
+
+  # ===========================================================================
+  # Tier: merge_gate
+  # ===========================================================================
+  # Full verification required before merging. Can be slower but must be thorough.
 
   - name: unit_foundation_full
     tier: merge_gate
@@ -551,22 +584,6 @@ gates:
     tags:
       - test
       - unit
-      - workspace
-
-  - name: compile_all_targets
-    tier: merge_gate
-    description: "Compile all workspace targets (lib/bin/tests/benches) to catch integration and bench bit-rot; also validates all-features paths"
-    required: true
-    command: just check-all-targets
-    timeout_seconds: 240
-    retry_count: 0
-    budgets:
-      max_duration_ms: 180000
-    quarantine: false
-    tags:
-      - compile
-      - integration
-      - benches
       - workspace
 
   - name: lsp_smoke
