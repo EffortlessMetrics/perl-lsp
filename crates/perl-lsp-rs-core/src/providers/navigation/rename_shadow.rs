@@ -1314,4 +1314,60 @@ mod tests {
         }
         Ok(())
     }
+
+    // ── Focused discriminator test for edits.is_empty() seam (#1465) ──
+
+    #[test]
+    fn classify_package_pilot_result_discriminator_empty_vs_nonempty_edits()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // Discriminator test that explicitly hits BOTH branches of edits.is_empty()
+        // in classify_package_pilot_result (line 284):
+        //   - Branch 1: edits.is_empty() == true → EmptyPlan → Ineligible
+        //   - Branch 2: edits.is_empty() == false → Eligible
+
+        // Test Case 1: Allowed with NO edits → should classify as EmptyPlan/Ineligible
+        {
+            let result = RenameCutoverResult::Allowed { edits: vec![] };
+            let outcome = classify_package_pilot_result(result);
+
+            match outcome {
+                RenamePackagePilotResult::Ineligible {
+                    reason: RenamePackagePilotIneligibleReason::EmptyPlan,
+                    edits,
+                    blockers,
+                } => {
+                    assert!(edits.is_empty(), "EmptyPlan should have empty edits");
+                    assert!(blockers.is_empty(), "EmptyPlan should have empty blockers");
+                }
+                other => {
+                    return Err(format!(
+                        "Expected Ineligible(EmptyPlan) for empty edits, got {:?}",
+                        other
+                    )
+                    .into());
+                }
+            }
+        }
+
+        // Test Case 2: Allowed with edits → should classify as Eligible
+        {
+            let edits = vec![make_edit(10, PlannedEditCategory::Definition)];
+            let result = RenameCutoverResult::Allowed { edits: edits.clone() };
+            let outcome = classify_package_pilot_result(result);
+
+            match outcome {
+                RenamePackagePilotResult::Eligible { edits: result_edits } => {
+                    assert_eq!(result_edits, edits, "Should preserve edit set for Eligible");
+                    assert_eq!(result_edits.len(), 1, "Should have exactly 1 edit");
+                }
+                other => {
+                    return Err(
+                        format!("Expected Eligible for non-empty edits, got {:?}", other).into()
+                    );
+                }
+            }
+        }
+
+        Ok(())
+    }
 }

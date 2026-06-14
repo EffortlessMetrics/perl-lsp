@@ -831,3 +831,47 @@ reason = "sub_attribute_custom_tests.rs is a newly added test file in PR #1361 w
 created = "2026-06-13"
 review_after = "2026-07-13"
 expires = "2026-09-30"
+
+# GA rename promotion (PR #1386): ripr#1429-class no_static_path seam in
+# refactor_runtime_blocker_receipts.rs — cfg(feature="workspace")-gated
+# function with wildcard match arm after UnsupportedEditCategory deletion.
+#
+# PR #1386 promotes cross-package rename to GA: all PlannedEditCategory
+# variants (Definition, Reference, ImportList, ExportList) are now accepted.
+# The explicit match arm `UnsupportedEditCategory => "unsupported_edit_category"`
+# was deleted from `rename_package_pilot_ineligible_reason` and the variant
+# now falls through to `_ => "unknown"`.
+#
+# RIPR classifies this as no_static_path because:
+#   (A) The function is gated by #[cfg(all(feature = "workspace",
+#       not(target_arch = "wasm32")))] — RIPR cannot statically trace
+#       the feature guard and therefore cannot attribute any test to the
+#       deleted arm's replacement wildcard path.
+#   (B) The wildcard `_ => "unknown"` is a catch-all; RIPR cannot
+#       determine which enum variants (including UnsupportedEditCategory)
+#       exercise it statically.
+#
+# Coverage evidence: the rename GA promotion is covered by the integration
+# test suite for package rename in PR #1386 (import/export path tests).
+# The `_ => "unknown"` arm is exercised via `EmptyPlan` and `Blocked`
+# paths in existing receipt tests. UnsupportedEditCategory is now
+# unreachable in practice (all categories accepted since GA promotion).
+#
+# This is the ripr#1429 predicate-infection-untraceable class: RIPR cannot
+# statically trace activation through cfg(feature) guards or wildcard match
+# arms. Same family as ripr-suppress-oo-method-signature-help-seams.
+# Suppression is narrow (single production file, one PR). Remove when
+# ripr#1429 is fixed upstream or UnsupportedEditCategory is re-added with
+# a discriminator test.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-rename-ga-blocker-receipts"
+kind = "activation_unknown"
+paths = ["crates/perl-lsp-rs/src/runtime/language/refactor_runtime_blocker_receipts.rs"]
+classification = ["no_static_path", "static_unknown"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "PR #1386 GA rename promotion deletes the explicit UnsupportedEditCategory match arm from rename_package_pilot_ineligible_reason (cfg(feature='workspace') gated), replacing it with _ => 'unknown'. RIPR classifies the wildcard arm as no_static_path because (A) the cfg(feature='workspace') guard breaks static call-graph traversal and (B) the wildcard catch-all cannot be attributed to UnsupportedEditCategory statically. Coverage: rename GA integration tests cover all active categories (Definition, Reference, ImportList, ExportList). UnsupportedEditCategory is unreachable post-GA (all categories accepted). Suppression is narrow: single production file, one PR. Remove when ripr#1429 is fixed upstream or a discriminator test is added for the wildcard arm."
+created = "2026-06-14"
+review_after = "2026-07-14"
+expires = "2026-09-30"

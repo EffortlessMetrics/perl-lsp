@@ -1635,7 +1635,6 @@ fn rename_package_pilot_ineligible_reason(
     match reason {
         RenamePackagePilotIneligibleReason::EmptyPlan => "empty_plan",
         RenamePackagePilotIneligibleReason::Blocked => "blocked",
-        RenamePackagePilotIneligibleReason::UnsupportedEditCategory => "unsupported_edit_category",
         _ => "unknown",
     }
 }

@@ -19,7 +19,7 @@ use perl_lsp_rs_core::providers::navigation::rename_shadow::{
 };
 use perl_lsp_rs_core::providers::rename::{RenameOptions, RenameProvider, TextEdit as RenameEdit};
 #[cfg(feature = "workspace")]
-use perl_semantic_facts::{EntityId, FileId, PlannedEdit, PlannedEditCategory};
+use perl_semantic_facts::{EntityId, FileId, PlannedEdit};
 #[cfg(feature = "workspace")]
 use perl_workspace::semantic::queries::{QueryContext, SemanticQueries};
 #[cfg(feature = "workspace")]
@@ -76,13 +76,12 @@ impl LspServer {
         let mut edit_count = 0_usize;
 
         for edit in edits {
-            if !matches!(
-                edit.category,
-                PlannedEditCategory::Definition | PlannedEditCategory::Reference
-            ) {
-                return None;
-            }
-
+            // GA promotion (#1386): all PlannedEditCategory variants (Definition,
+            // Reference, ImportList, ExportList, and any future #[non_exhaustive]
+            // additions) are accepted here.  The anchor byte-range guard below
+            // (start >= end || old_text mismatch) is the correctness safety valve
+            // for every category — if the anchor resolves to the wrong text the
+            // whole workspace edit is aborted rather than emitting a corrupt edit.
             let location = workspace_index
                 .semantic_anchor_wire_location_for_file(edit.file_id, edit.anchor_id)?;
             let doc = workspace_index.document_store().get(&location.uri)?;
