@@ -44,7 +44,20 @@ Verify CI is genuinely green on the current HEAD.
     content; failures are always RED).
     For each check with `conclusion: success` → no change (existing behavior).
 
-5b. Determine verdict — using classified checks from step 5a:
+5b. **Coverage-check-name guard** — when a coverage-named check (e.g., `Codecov / Patch 95`,
+    `Code Coverage Report`) is RED, do NOT assume patch-coverage shortfall before reading
+    the job log. Coverage jobs often run the test suite to gather LLVM-cov data. If a test
+    fails inside the coverage job, the check fails, but the failure is a TEST failure, not
+    a coverage-measurement failure. Before concluding patch % is the issue:
+    - Read the full coverage job log.
+    - Search for `FAILED`, `ERROR`, `panic`, or `test assertion` keywords.
+    - If a test failure is found inside the coverage job, classify the failure as a
+      test-correctness issue (not patch-coverage), and route back to pr-responder or builder
+      with the note: "Coverage job failed on test failure in `<test_name>`, not patch coverage."
+    - If no test failure is found, then diagnose as patch shortfall or tool error.
+    Reference: [docs/learnings/2026-06-coverage-job-ran-tests.md](../../../docs/learnings/2026-06-coverage-job-ran-tests.md)
+
+5c. Determine verdict — using classified checks from steps 5a and 5b:
    - All checks SUCCESS/NEUTRAL/INFRA-NOISE on current SHA + not draft + MERGEABLE → **GREEN**
    - Any check RED or DEVELOPER-CANCEL on current SHA → **RED** (list RED + DEVELOPER-CANCEL only; omit INFRA-NOISE from details)
    - Checks green but on old SHA → **STALE**

@@ -247,6 +247,26 @@ transform (`coverage-filter`, `lcov.info` post-processors, ripr configuration, t
 | **Motivating incident** | Issue #1282 — patch coverage was satisfied by inline `#[cfg(test)]` tests + a ripr suppression, but the new code paths were already exercised by integration tests that were not counted. The padding improved the measurement, not the coverage. |
 | **Ref** | [docs/learnings/2026-06-codecov-false-low.md](../learnings/2026-06-codecov-false-low.md) |
 
+### COV-6: Coverage jobs must not be the only place test failures are caught
+
+| Field | Value |
+|---|---|
+| **Invariant** | A coverage-measurement job (one that gathers LLVM-cov data by running tests) must fail only on measurement/transformation correctness, never on test failures. Test failures must be caught by dedicated, correctly-named gates (e.g. "test-all-libs", "test-integration") that report failures under the name of the thing being tested, not the measurement tool. Decoupling measurement from validation prevents agents from misdiagnosing test failures as coverage shortfalls. |
+| **Trigger** | Any change to CI workflows where a coverage job (running `just coverage-proof`, `cargo llvm-cov`, etc.) is the sole gate that runs the test suite or is the primary way test failures are caught |
+| **Required action** | Ensure test failures are caught by a separate, earlier CI gate with an honest name. Coverage gates should be measurement-only: they fail on measurement correctness (tool crashes, corrupted profdata, filter errors) but not on test assertion failures. The routing implication: if a "Codecov / Patch 95" check fails, agents must FIRST classify the failure (test failure vs. patch % vs. tool error) by reading the job log before assuming patch coverage is the issue. |
+| **Motivating incident** | [docs/learnings/2026-06-coverage-job-ran-tests.md](../learnings/2026-06-coverage-job-ran-tests.md): PR #1457 had a test fixture off-by-one; the failure surfaced in the "Codecov / Patch 95" gate because coverage-proof ran the test suite. Multiple agents chased patch-coverage improvements instead of fixing the test. |
+| **Ref** | Observability/misclassification anti-pattern — agents route based on check names; lying names cause misrouting. |
+
+### COV-7: Coverage-check names must not hide test failures (agent diagnostic rule)
+
+| Field | Value |
+|---|---|
+| **Invariant** | When a coverage-named check (e.g. `Codecov / Patch 95`, `Code Coverage Report`) fails, agents diagnosing the failure must FIRST classify the failure class before assuming patch-coverage shortfall. The five failure classes are: (a) coverage shortfall (patch % below threshold), (b) a TEST FAILURE hidden inside the coverage job, (c) tool failure (profdata corruption, llvm-cov crash, upload error), (d) CI routing skip (e.g. skipped for draft PR), (e) artifact-upload/infrastructure failure. Reading the job log is the first diagnostic step — do NOT assume the check name alone explains the failure. |
+| **Trigger** | Every time a PR has a failing coverage-named check as the blocker to green CI |
+| **Required diagnostic steps** (for green-ci, reviewer-deep, pr-responder agents) | (1) Read the full coverage job log. (2) Scan for `FAILED` / `ERROR` / `panic` / `test assertion` keywords indicating a test failure inside the coverage job. (3) If a test failure is found, classify it as a test-correctness issue, not a coverage-measurement issue. (4) Route back to builder or pr-responder with a comment like "Coverage job failed on test failure in `test_foo`, not patch coverage." (5) If no test failure: then diagnose patch % shortfall or tool error. |
+| **Motivating incident** | [docs/learnings/2026-06-coverage-job-ran-tests.md](../learnings/2026-06-coverage-job-ran-tests.md): PR #1457 test fixture failure in `all_kind_names_contains_every_variant` was hidden inside the "Codecov / Patch 95" check name, causing agents to misdiagnose the failure class. |
+| **Ref** | Measuring-the-instrument-is-the-bug anti-pattern; doctrinal guidance for CI diagnostic agents. |
+
 ---
 
 ## Cross-subsystem rows (apply to any change)

@@ -37,8 +37,11 @@ To add a new incident: copy [TEMPLATE.md](TEMPLATE.md) and fill in all sections.
 | [2026-06-serialize-merges-misframe.md](2026-06-serialize-merges-misframe.md) | "Hold main still" misframe: parallel velocity + rebase-robustness is the correct doctrine | multi-agent, ci, serialization, merge-velocity | #1206, #1230 |
 | [2026-06-tagged-range-codec-band-overflow.md](2026-06-tagged-range-codec-band-overflow.md) | Type-enum promotion re-introduced ID-collision through the wire codec (band-overflow, residue-disambiguation) | id-collision, bounds, dap, codec, band-overflow | #1219, #1351, #1430 |
 | [2026-06-nodekind-variant-silent-consumer-drop.md](2026-06-nodekind-variant-silent-consumer-drop.md) | New NodeKind variant silently dropped by three non-exhaustive consumers (if-let loop, wildcard arm) | parser, ast, nodekind, exhaustiveness, silent-drop, lsp-feature-gap | #1457, #1362 |
+
 | [2026-06-red-tdd-invalid-red.md](2026-06-red-tdd-invalid-red.md) | Red-TDD produced invalid red: tests that passed immediately or failed for wrong reasons | tdd, red-tdd, verification, stochastic-pipeline, test-validity | #1372, #1445, #1338 |
 | [2026-06-substrate-tax-and-red-is-a-smell.md](2026-06-substrate-tax-and-red-is-a-smell.md) | Substrate tax and red-is-a-smell: two recalibrated operating principles from the 2026-06 campaign | substrate, ci, merge, economics, anti-pattern, incident | #651, #1282, #1453, #1458 |
+
+| [2026-06-coverage-job-ran-tests.md](2026-06-coverage-job-ran-tests.md) | Coverage-named checks must not hide test failures — decoupling measurement from validation | ci, coverage, observability, misclassification | #1457, #1470, #1469 |
 
 ---
 
@@ -72,6 +75,7 @@ To add a new incident: copy [TEMPLATE.md](TEMPLATE.md) and fill in all sections.
 | exhaustiveness | Rust exhaustiveness checker blind spots (if-let, wildcard arm) |
 | silent-drop | Variant or case silently skipped by non-exhaustive consumer |
 | lsp-feature-gap | Missing LSP feature (tokens, hover, goto, rename, refs) caused by consumer gap |
+
 | tdd | TDD stage (red-tdd, green-tdd) correctness and validity |
 | red-tdd | Red-TDD stage specifically: test validity before builder starts |
 | verification | Pipeline artifact verification / ground-truth check |
@@ -80,3 +84,9 @@ To add a new incident: copy [TEMPLATE.md](TEMPLATE.md) and fill in all sections.
 | substrate | CI gate scope, required-check list, instrument configuration |
 | economics | Token cost, CI cost, amortization, leverage arithmetic |
 | anti-pattern | Operating anti-pattern (merge-past-red, routine-override)
+
+| observability | Observable failure / gate output clarity and naming honesty |
+| misclassification | Failure routed to wrong subsystem due to check name or output lying |
+
+
+
