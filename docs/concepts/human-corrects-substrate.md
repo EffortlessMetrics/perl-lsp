@@ -100,3 +100,14 @@ The questions to ask:
 - **Shift-left ladder** (`shift-left-ladder.md`) — encoding substrate corrections is
   a form of shift-left for process hazards: the correction moves from "re-discovered
   each session" to "inherited by the next orchestrator"
+
+## 2026-06 refinement
+
+This is NOT human-in-the-loop. "Human-in-the-loop" implies an approval gate on each agent action.
+The correct framing is **human-calibrated autonomous execution** or **operator-guided stochastic
+compilation**: the human calibrates the stochastic compiler's model of reality — branch policy,
+merge economics, risk appetite, when to stop, what counts as real, what ships — not a per-action
+approval gate. Agents run the pipeline; the operator adjusts the compiler. When the compiler's model
+drifts (stale branch assumptions, miscounted metrics, conflated claim and evidence), no individual
+agent pass fixes it — the operator corrects the substrate, and passes re-run against corrected
+ground truth. See [slow-stochastic-compiler](slow-stochastic-compiler.md).

@@ -80,3 +80,14 @@ confusing anyone who had the old branch checked out.
 - **Cache-aware agent lanes** (cache-aware-agent-lanes.md) -- a lane pattern with clear
   handoffs between agents prevents tangles; the lane single-owner structure is the
   preventive equivalent of re-creation curative path.
+
+## 2026-06 refinement
+
+Re-create is a **salvage threshold**, not a preference. The decision criterion: if branch state is
+more expensive to understand than to recreate, recreate. Untangle when history contains useful
+REASONING (prior approaches, root-cause analysis, edge-case discovery); recreate when the branch
+mostly contains contaminated MECHANICS (interleaved commits, conflict resolutions that mixed
+concerns, workaround-on-top-of-workaround). The artifacts that matter — the spec, the tests, the
+patch, the proof, the learning — can be extracted from a tangled branch without carrying the
+contaminated mechanics forward. A re-created branch is not a loss of history; it is a promotion of
+the useful artifacts into a clean implementation.

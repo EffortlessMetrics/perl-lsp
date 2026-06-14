@@ -67,3 +67,16 @@ repo-wide coverage without per-spec maintenance.
   rung each class belongs on.
 - **Multi-angle early spec** (`multi-angle-haiku-early-spec.md`) — how to populate the spec
   acceptance criteria rung cheaply before the builder starts.
+
+## 2026-06 refinement
+
+The ladder is NOT "always climb higher." The rule is: catch recurring, expensive classes at the
+**cheapest sufficiently reliable layer**. CI-cost and agent-cost are the same design problem; adding
+a gate adds both CI wall-clock cost and potential false-positive substrate tax. Use cheap Rust static
+checks — types, exhaustive `match`, focused clippy lints, `cargo check --all-targets` — eagerly, at
+the first recurrence of a class. Make bespoke or expensive prevention earn its keep via recurrence
+count and severity: a class that appeared once in a one-off PR does not justify a new xtask
+validator; a class that appeared in three consecutive PRs from different builders justifies promoting
+to a spec hazard row and, if it recurs again, a compile-time or clippy-level elimination.
+
+Deep review stays load-bearing. Shifting known hazards left (to spec + red tests + mechanical checks) does not make deep review optional: novel gate/tooling logic and release-impacting behavior still require it. Its job shifts from "find every obvious invariant" to "confirm known hazards are covered, hunt unknown-unknowns, catch tool/gate math errors, and detect claim/proof drift."
