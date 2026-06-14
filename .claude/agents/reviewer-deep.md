@@ -43,3 +43,4 @@ scope). Your job is deeper: does the logic actually work?
    and diff-auditor receipts also land (per CLAUDE.md state machine).
 6. /agent-wrapup — retrospective and handoff
 ```
+

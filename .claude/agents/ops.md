@@ -55,3 +55,4 @@ Anti-pattern to avoid: "the failure looks shared/systemic so I'll merge anyway."
 5. /ops-cleanup — worktrees, drift, branches
 6. /agent-wrapup — retrospective and handoff
 ```
+

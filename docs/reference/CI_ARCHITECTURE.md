@@ -353,6 +353,68 @@ limit. This prevents the "quarantine and forget" failure mode.
 
 ---
 
+## Section 4.5 — Gate Design Principles
+
+Every gate must follow these principles to maintain clarity and reliability:
+
+### 1. One gate = one failure class, named honestly
+
+A gate's name commits to the failure class it detects. `cargo clippy` detects
+lint violations; `cargo xtask fmt` detects formatting; `cargo test --lib`
+detects unit test failures. A gate's failure verdict must match what its name
+claims. For detailed treatment, see [docs/concepts/gate-names-must-match-failure-classes.md](../concepts/gate-names-must-match-failure-classes.md).
+
+### 2. Coverage may run SCOPED tests as instrumentation drivers, but must NOT gate correctness
+
+Coverage instrumentation (`llvm-cov`) runs tests to gather coverage data. This
+is legitimate — coverage needs test execution to measure which lines are
+reachable. However:
+
+- Coverage must NOT be the full-suite correctness gate — that is owned by
+  `cargo test --all`.
+- Coverage must NOT expand routed test runs to unrelated crates or subsystems
+  just to boost coverage numbers.
+- Coverage must NOT report a test failure as a coverage failure. If a test
+  fails during coverage instrumentation, the failure is a test correctness
+  issue, not a coverage measurement issue. Route it to the test/correctness
+  gate, not to coverage-fix developers.
+
+Example: `Codecov / Patch 95` runs a subset of tests to measure coverage on
+changed lines. If a test in that subset fails, the failure is `test_failure`
+(fix the code), not `coverage_shortfall` (add more tests). The gate's name
+must reflect what it is gating on.
+
+### 3. Cheap deterministic checks run on PRs (PR ≡ merge for cheap checks)
+
+The merge gate includes cheap checks that run on every PR: format, clippy, and
+test-suite. The property these checks must satisfy is: **if all cheap checks
+pass on a PR, they will pass on the merged commit to master.** This equality
+is necessary and sufficient to prevent post-merge master breaks.
+
+Heavy checks (mutation, fuzz, benchmarks, full integration matrix) do not run
+on every PR for resource reasons. That's fine — they're advisory. But if a
+cheap check passes on a PR and fails on master, the untested surface exists
+between the check and master. Widen the check, do not add PRs to the untested
+surface.
+
+### 4. Prefer enforcement over prose
+
+When a hazard is real (e.g., "coverage must not drop," "gates must not be
+skipped," "required checks must be stable"), encode the enforcement in a
+compile-time check, lint rule, or gate. Do not rely on prose instructions or
+agent diligence. The instrument is more reliable than the human (or LLM)
+following instructions.
+
+Examples:
+- Compile-time impossible: Use `#[must_use]` to enforce callers handle an error.
+- Lint: Use clippy rules to prevent banned patterns.
+- Gate: Use ripr, LCOV filters, or coverage post-processors to enforce
+  measurement integrity.
+- Hazard-default checklist: Encode acceptance criteria that prevent the hazard
+  from shipping.
+
+---
+
 ## Section 5 — CI Receipts
 
 Every gate run (local or CI) emits a structured receipt to `target/receipts/receipt.json`.
@@ -644,3 +706,6 @@ The JSON receipt classifies the first observed failure and provides reproduction
 | `server_crash` | `crash_fix` | Fix crash before merge |
 | `new_test_bug` | `test_fix` | Fix test logic and rerun |
 | `unknown` | `triage` | Inspect logs and add classifier coverage |
+
+
+

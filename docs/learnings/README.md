@@ -37,6 +37,8 @@ To add a new incident: copy [TEMPLATE.md](TEMPLATE.md) and fill in all sections.
 | [2026-06-serialize-merges-misframe.md](2026-06-serialize-merges-misframe.md) | "Hold main still" misframe: parallel velocity + rebase-robustness is the correct doctrine | multi-agent, ci, serialization, merge-velocity | #1206, #1230 |
 | [2026-06-tagged-range-codec-band-overflow.md](2026-06-tagged-range-codec-band-overflow.md) | Type-enum promotion re-introduced ID-collision through the wire codec (band-overflow, residue-disambiguation) | id-collision, bounds, dap, codec, band-overflow | #1219, #1351, #1430 |
 | [2026-06-nodekind-variant-silent-consumer-drop.md](2026-06-nodekind-variant-silent-consumer-drop.md) | New NodeKind variant silently dropped by three non-exhaustive consumers (if-let loop, wildcard arm) | parser, ast, nodekind, exhaustiveness, silent-drop, lsp-feature-gap | #1457, #1362 |
+| [2026-06-rerunning-broken-gates.md](2026-06-rerunning-broken-gates.md) | A gate that fails repeatedly on verified-correct content is the bug | ci, gate-logic, stochastic-pipeline, verification, instrument, observability | #1457, #1470, #1469 |
+| [2026-06-agent-claims-vs-ground-truth.md](2026-06-agent-claims-vs-ground-truth.md) | Agent claims must be verified against ground-truth facts before routing | ci, agent-claims, verification, ground-truth, observability, multi-agent, stochastic-pipeline | #1474 |
 
 | [2026-06-red-tdd-invalid-red.md](2026-06-red-tdd-invalid-red.md) | Red-TDD produced invalid red: tests that passed immediately or failed for wrong reasons | tdd, red-tdd, verification, stochastic-pipeline, test-validity | #1372, #1445, #1338 |
 | [2026-06-substrate-tax-and-red-is-a-smell.md](2026-06-substrate-tax-and-red-is-a-smell.md) | Substrate tax and red-is-a-smell: two recalibrated operating principles from the 2026-06 campaign | substrate, ci, merge, economics, anti-pattern, incident | #651, #1282, #1453, #1458 |
@@ -89,4 +91,8 @@ To add a new incident: copy [TEMPLATE.md](TEMPLATE.md) and fill in all sections.
 | misclassification | Failure routed to wrong subsystem due to check name or output lying |
 
 
+
+| instrument | Measurement instrument failure / scope misconfiguration |
+| agent-claims | Agent output reliability / claims verification |
+| ground-truth | Ground-truth fact verification / trust-but-verify |
 

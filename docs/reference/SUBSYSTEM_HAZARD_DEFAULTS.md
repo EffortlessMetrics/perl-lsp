@@ -266,6 +266,15 @@ transform (`coverage-filter`, `lcov.info` post-processors, ripr configuration, t
 | **Required diagnostic steps** (for green-ci, reviewer-deep, pr-responder agents) | (1) Read the full coverage job log. (2) Scan for `FAILED` / `ERROR` / `panic` / `test assertion` keywords indicating a test failure inside the coverage job. (3) If a test failure is found, classify it as a test-correctness issue, not a coverage-measurement issue. (4) Route back to builder or pr-responder with a comment like "Coverage job failed on test failure in `test_foo`, not patch coverage." (5) If no test failure: then diagnose patch % shortfall or tool error. |
 | **Motivating incident** | [docs/learnings/2026-06-coverage-job-ran-tests.md](../learnings/2026-06-coverage-job-ran-tests.md): PR #1457 test fixture failure in `all_kind_names_contains_every_variant` was hidden inside the "Codecov / Patch 95" check name, causing agents to misdiagnose the failure class. |
 | **Ref** | Measuring-the-instrument-is-the-bug anti-pattern; doctrinal guidance for CI diagnostic agents. |
+### COV-8: Coverage routing must distinguish skip from routing bug
+
+| Field | Value |
+|---|---|
+| **Invariant** | When a coverage gate's routing logic selects zero packs to run (empty coverage test set), the gate output must distinguish two scenarios: (1) routing_skip — no coverable code changed (valid, gate skips legitimately), and (2) routing_bug — production code changed but routing logic failed to select it (a bug, gate must fail loud). Silently skipping when production code changed masks a routing infrastructure failure. |
+| **Trigger** | Any change to coverage routing logic (`xtask/src/tasks/coverage.rs` or equivalent) or any gate that selectively routed coverage test packs |
+| **Required adversarial test** | (1) Scenario A: change only test files or comments (no production code touched) → routing selects zero packs → gate must skip silently (routing_skip). (2) Scenario B: change `crates/perl-parser/src/lib.rs` but the routing filter is misconfigured → routing selects zero packs → gate must FAIL and output "production code changed but no packs routed: routing BUG" (routing_bug). Distinguish the two in gate output. |
+| **Motivating incident** | Coverage gate routing silent-skipped when production code was changed but the pack selection was empty due to a filter regex error. Agents thought no coverage-relevant code was touched. Patch coverage gaps shipped to master undetected. |
+| **Ref** | [docs/concepts/gate-names-must-match-failure-classes.md](../concepts/gate-names-must-match-failure-classes.md) (routing_skip vs routing_bug) |
 
 ---
 
@@ -289,3 +298,6 @@ When a new incident motivates a new default row, add it here AND add an entry to
 
 The canonical trigger for updating this file is a deep-review finding that would have
 been caught if the hazard row had been seeded in `acceptance.md`.
+
+
+

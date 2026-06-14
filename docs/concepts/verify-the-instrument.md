@@ -204,3 +204,4 @@ acting on the reading.
   broken, correcting it is a substrate correction, not a builder task. The operator
   identifies the instrument failure; the fix is encoded as a permanent scope or gate
   change, not a one-time merge exception.
+
