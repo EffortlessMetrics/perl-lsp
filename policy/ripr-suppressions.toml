@@ -774,3 +774,33 @@ reason = "workspace_inputs.rs is a newly added fuzz target in PR #686 whose inte
 created = "2026-06-13"
 review_after = "2026-09-13"
 expires = "2026-09-30"
+
+# DAP variable-reference test files (PR #1445): ripr#1428-class false-positives
+# in newly added test files. Tracks EffortlessMetrics/ripr#1428 (RIPR flags
+# test-harness plumbing in newly added test files as production seams).
+#
+# PR #1445 adds two new test files:
+#   crates/perl-dap/tests/dap_fallback_scope_variables_collision_tests.rs
+#   crates/perl-dap/tests/dap_var_ref_arithmetic_guard_tests.rs
+#
+# These are pure test files with test functions exercising DAP variable-
+# reference collision and arithmetic hardening. RIPR's diff-scoped analysis
+# flags the test function scaffolding (test setup, assertions) as new
+# production seams. This is the same ripr#1428 class as ripr-suppress-ux-
+# receipt-tests and ripr-suppress-seam-proof-tests.
+#
+# Remove when ripr#1428 is fixed upstream.
+# ---------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-dap-variable-ref-tests"
+kind = "test_receipt_surface"
+paths = [
+  "crates/perl-dap/tests/dap_fallback_scope_variables_collision_tests.rs",
+  "crates/perl-dap/tests/dap_var_ref_arithmetic_guard_tests.rs",
+]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1428"
+reason = "Two newly added test files in PR #1445 are flagged as new production seams by diff-scoped RIPR analysis: dap_fallback_scope_variables_collision_tests.rs and dap_var_ref_arithmetic_guard_tests.rs. Test-function scaffolding (test setup, assertions) is classified as production seams. This is the same ripr#1428 class as ripr-suppress-ux-receipt-tests and ripr-suppress-seam-proof-tests (test-harness plumbing falsely classified as production seams when added to a test file). Both files contain pure test coverage for DAP variable reference collision hardening (issue #1445). Remove when ripr#1428 is fixed upstream."
+created = "2026-06-13"
+review_after = "2026-07-13"
+expires = "2026-09-30"
