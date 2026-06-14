@@ -439,6 +439,8 @@ gates:
       - integration
       - benches
       - workspace
+    planning:
+      role: always_on
 
   - name: clippy_full
     tier: pr_fast
@@ -461,6 +463,8 @@ gates:
       - lint
       - clippy
       - strict
+    planning:
+      role: always_on
 
   - name: unit_routed_full
     tier: pr_fast
