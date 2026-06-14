@@ -688,11 +688,8 @@ fn instance_dependent_flags_package() {
         "Package variant flag introduces_scope should be true (conservative prefilter)"
     );
 
-    let pkg_without_block = NodeKind::Package {
-        name: "Bar".to_string(),
-        name_span: loc(),
-        block: None,
-    };
+    let pkg_without_block =
+        NodeKind::Package { name: "Bar".to_string(), name_span: loc(), block: None };
     let f2 = pkg_without_block.flags();
 
     assert!(
@@ -768,11 +765,8 @@ fn instance_dependent_flags_phaseblock() {
 
 #[test]
 fn use_not_safe_for_breakpoint() {
-    let use_kind = NodeKind::Use {
-        module: "strict".to_string(),
-        args: vec![],
-        has_filter_risk: false,
-    };
+    let use_kind =
+        NodeKind::Use { module: "strict".to_string(), args: vec![], has_filter_risk: false };
     assert!(
         !use_kind.flags().safe_for_breakpoint,
         "Use must have safe_for_breakpoint=false (compile-time pragma)"
@@ -781,11 +775,8 @@ fn use_not_safe_for_breakpoint() {
 
 #[test]
 fn no_not_safe_for_breakpoint() {
-    let no_kind = NodeKind::No {
-        module: "warnings".to_string(),
-        args: vec![],
-        has_filter_risk: false,
-    };
+    let no_kind =
+        NodeKind::No { module: "warnings".to_string(), args: vec![], has_filter_risk: false };
     assert!(
         !no_kind.flags().safe_for_breakpoint,
         "No must have safe_for_breakpoint=false (compile-time unimport)"

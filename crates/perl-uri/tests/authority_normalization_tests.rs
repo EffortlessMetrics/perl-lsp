@@ -93,7 +93,10 @@ mod filesystem_authorities {
             "UNC path should preserve server and share components: {normalized}"
         );
         // The normalized form should not contain backslashes
-        assert!(!normalized.contains(r"\"), "normalized URI should replace backslashes with forward slashes: {normalized}");
+        assert!(
+            !normalized.contains(r"\"),
+            "normalized URI should replace backslashes with forward slashes: {normalized}"
+        );
     }
 }
 
@@ -146,7 +149,10 @@ mod classification_authorities {
         assert!(path.is_some(), "should accept URI with query and fragment");
         let path_buf = path.unwrap();
         let path_str = path_buf.to_string_lossy();
-        assert!(path_str.ends_with("module.pl"), "should extract path without query/fragment: {path_str}");
+        assert!(
+            path_str.ends_with("module.pl"),
+            "should extract path without query/fragment: {path_str}"
+        );
         assert!(!path_str.contains("?"), "path should not contain query: {path_str}");
         assert!(!path_str.contains("#"), "path should not contain fragment: {path_str}");
     }
@@ -156,8 +162,14 @@ mod classification_authorities {
         // Windows drive roots like C:\ and D:/ should normalize to canonical file:/// URIs with forward slashes
         let drive_c_backslash = uri_key("file:///C:\\");
         let drive_d_forward = uri_key("file:///D:/");
-        assert_eq!(drive_c_backslash, "file:///c:/", "C:\\ should normalize to file:///c:/ with forward slash");
-        assert_eq!(drive_d_forward, "file:///d:/", "D:/ should normalize to file:///d:/ with forward slash");
+        assert_eq!(
+            drive_c_backslash, "file:///c:/",
+            "C:\\ should normalize to file:///c:/ with forward slash"
+        );
+        assert_eq!(
+            drive_d_forward, "file:///d:/",
+            "D:/ should normalize to file:///d:/ with forward slash"
+        );
         // Verify that the same URI with different case produces the same key
         assert_eq!(
             uri_key("file:///C:/folder"),

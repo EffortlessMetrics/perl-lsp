@@ -804,3 +804,33 @@ reason = "Two newly added test files in PR #1445 are flagged as new production s
 created = "2026-06-13"
 review_after = "2026-07-13"
 expires = "2026-09-30"
+
+# Parser recovery premature-bail test files (PR #1352): ripr#1428-class false-
+# positives in newly added test files. Tracks EffortlessMetrics/ripr#1428 (RIPR
+# flags test-harness plumbing in newly added test files as production seams).
+#
+# PR #1352 adds two new test files:
+#   crates/perl-parser-core/tests/test_1352_recovery_premature_bail.rs
+#   crates/perl-parser-core/tests/test_1352_edge_cases.rs
+#
+# These are pure test files with test functions exercising parser recovery
+# premature-bail edge case coverage. RIPR's diff-scoped analysis flags the test
+# function scaffolding (test setup, assertions) as new production seams. This
+# is the same ripr#1428 class as ripr-suppress-ux-receipt-tests and ripr-
+# suppress-seam-proof-tests.
+#
+# Remove when ripr#1428 is fixed upstream.
+# -------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-1352-recovery-test-files"
+kind = "test_receipt_surface"
+paths = [
+  "crates/perl-parser-core/tests/test_1352_recovery_premature_bail.rs",
+  "crates/perl-parser-core/tests/test_1352_edge_cases.rs",
+]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1428"
+reason = "Two newly added test files in PR #1352 are flagged as new production seams by diff-scoped RIPR analysis: test_1352_recovery_premature_bail.rs and test_1352_edge_cases.rs. Test-function scaffolding (test setup, assertions) is classified as production seams. This is the same ripr#1428 class as ripr-suppress-ux-receipt-tests and ripr-suppress-seam-proof-tests (test-harness plumbing falsely classified as production seams when added to a test file). Both files contain pure test coverage for parser recovery premature-bail edge cases (issue #1352). Remove when ripr#1428 is fixed upstream."
+created = "2026-06-13"
+review_after = "2026-07-13"
+expires = "2026-09-30"

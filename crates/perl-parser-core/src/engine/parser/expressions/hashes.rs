@@ -62,6 +62,11 @@ impl<'a> Parser<'a> {
         // Save position to potentially backtrack
         let _saved_pos = self.current_position();
 
+        // Track error count before parsing the first expression so we can detect
+        // whether inner recovery occurred (e.g. an unclosed `[` inside the hash/block).
+        // This is used in the "block" fallback path to prevent premature bail (#1352).
+        let errors_before = self.errors.len();
+
         // Try to parse as expression (which might be hash contents)
         let first_expr = match self.parse_expression() {
             Ok(expr) => expr,
@@ -69,6 +74,21 @@ impl<'a> Parser<'a> {
                 // Propagate recursion/nesting limits immediately - don't try alternative parse
                 if matches!(e, ParseError::RecursionLimit | ParseError::NestingTooDeep { .. }) {
                     return Err(e);
+                }
+                // Fix #1352: If peek is at a statement boundary (;, sub, my, EOF, etc.)
+                // and not the `}` we want, the `{` is unclosed. Recover here at the
+                // expression boundary — do NOT enter the block-statement loop which would
+                // swallow trailing sub/my/... declarations into this node.
+                if self.peek_kind() != Some(TokenKind::RightBrace)
+                    && self.is_delimiter_recovery_point()
+                {
+                    self.expect_closing_delimiter(TokenKind::RightBrace)?;
+                    let end = self.previous_position();
+                    self.exit_recursion();
+                    return Ok(Node::new(
+                        NodeKind::Block { statements: Vec::new() },
+                        SourceLocation { start, end },
+                    ));
                 }
                 // If we can't parse an expression, parse as block statements
                 let mut statements = Vec::new();
@@ -243,6 +263,38 @@ impl<'a> Parser<'a> {
                 self.tokens.next()?; // consume }
                 let end = self.previous_position();
 
+                self.exit_recursion();
+                return Ok(Node::new(
+                    NodeKind::Block { statements: vec![first_expr] },
+                    SourceLocation { start, end },
+                ));
+            }
+
+            // Fix #1352: Detect unclosed-delimiter situations at the expression boundary
+            // before entering the multi-statement block loop that would swallow trailing
+            // sub/my/... declarations into this node.
+            //
+            // Two signals that the `{` is unclosed (not a legitimate multi-statement block):
+            //
+            //   (a) first_expr is already a HashLiteral — this `{` is a hash opener;
+            //       a legitimate block's first statement would never be a bare HashLiteral.
+            //
+            //   (b) inner errors occurred during parse_expression() (e.g. an unclosed `[`
+            //       triggered `expect_closing_delimiter` recovery) AND peek is `;` — the
+            //       semicolon without a preceding `}` confirms the `{` is unclosed.
+            //
+            // In both cases, use expect_closing_delimiter to record the missing `}` error
+            // and return immediately, leaving `;` and subsequent tokens for the statement
+            // parser to handle so they appear as top-level AST nodes.
+            let had_inner_errors = self.errors.len() > errors_before;
+            let unclosed_hash =
+                matches!(first_expr.kind, NodeKind::HashLiteral { .. });
+            let unclosed_after_inner_error =
+                had_inner_errors && self.peek_kind() == Some(TokenKind::Semicolon);
+
+            if unclosed_hash || unclosed_after_inner_error {
+                self.expect_closing_delimiter(TokenKind::RightBrace)?;
+                let end = self.previous_position();
                 self.exit_recursion();
                 return Ok(Node::new(
                     NodeKind::Block { statements: vec![first_expr] },

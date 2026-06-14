@@ -1,4 +1,4 @@
-﻿//! Debugger output parsing: normalize, infer types, parse stack frames, parse variables.
+//! Debugger output parsing: normalize, infer types, parse stack frames, parse variables.
 
 mod scope_variables;
 

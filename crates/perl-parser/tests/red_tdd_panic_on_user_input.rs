@@ -28,10 +28,7 @@ fn red_test_regex_hash_delimiter_no_panic() {
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on regex with hash delimiter m#pattern#"
-    );
+    assert!(result.is_ok(), "Parser panicked on regex with hash delimiter m#pattern#");
 
     // If parse succeeds, we should have a valid result
     if let Ok(parse_result) = result {
@@ -54,10 +51,7 @@ fn red_test_regex_bang_delimiter_no_panic() {
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on regex with bang delimiter m!pattern!"
-    );
+    assert!(result.is_ok(), "Parser panicked on regex with bang delimiter m!pattern!");
 }
 
 /// Test that parser doesn't panic on regex with pipe delimiter.
@@ -72,10 +66,7 @@ fn red_test_regex_pipe_delimiter_no_panic() {
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on regex with pipe delimiter m|pattern|"
-    );
+    assert!(result.is_ok(), "Parser panicked on regex with pipe delimiter m|pattern|");
 }
 
 /// Test that parser doesn't panic on quote-like with braces.
@@ -88,10 +79,7 @@ fn red_test_quote_like_braces_no_panic() {
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on quote-like with braces q{{...}}"
-    );
+    assert!(result.is_ok(), "Parser panicked on quote-like with braces q{{...}}");
 }
 
 /// Test that parser doesn't panic on quote-like with brackets.
@@ -104,10 +92,7 @@ fn red_test_quote_like_brackets_no_panic() {
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on quote-like with brackets q[...]"
-    );
+    assert!(result.is_ok(), "Parser panicked on quote-like with brackets q[...]");
 }
 
 /// Test that parser doesn't panic on quote-like with pipe.
@@ -120,10 +105,7 @@ fn red_test_quote_like_pipe_no_panic() {
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on quote-like with pipe q|...|"
-    );
+    assert!(result.is_ok(), "Parser panicked on quote-like with pipe q|...|");
 }
 
 /// Test that parser doesn't panic on single-quoted heredoc.
@@ -138,10 +120,7 @@ EOF"#;
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on single-quoted heredoc <<'EOF'"
-    );
+    assert!(result.is_ok(), "Parser panicked on single-quoted heredoc <<'EOF'");
 }
 
 /// Test that parser doesn't panic on double-quoted heredoc.
@@ -156,10 +135,7 @@ EOF"#;
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on double-quoted heredoc <<\"EOF\""
-    );
+    assert!(result.is_ok(), "Parser panicked on double-quoted heredoc <<\"EOF\"");
 }
 
 /// Test that parser doesn't panic on backtick heredoc.
@@ -174,10 +150,7 @@ EOF"#;
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on backtick heredoc <<`EOF`"
-    );
+    assert!(result.is_ok(), "Parser panicked on backtick heredoc <<`EOF`");
 }
 
 /// Test that parser doesn't panic on indented heredoc.
@@ -193,10 +166,7 @@ EOF"#;
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on indented heredoc <<~EOF"
-    );
+    assert!(result.is_ok(), "Parser panicked on indented heredoc <<~EOF");
 }
 
 /// Test that parser doesn't panic on unterminated regex.
@@ -211,10 +181,7 @@ fn red_test_unterminated_regex_no_panic() {
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on unterminated regex /unclosed_regex"
-    );
+    assert!(result.is_ok(), "Parser panicked on unterminated regex /unclosed_regex");
 }
 
 /// Test that parser doesn't panic on unclosed quote.
@@ -265,10 +232,7 @@ fn red_test_deep_nesting_100_levels_no_panic() {
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on 100-level deep nesting"
-    );
+    assert!(result.is_ok(), "Parser panicked on 100-level deep nesting");
 }
 
 /// Test that parser doesn't panic on very deep nesting (1000 levels).
@@ -289,10 +253,7 @@ fn red_test_deep_nesting_1000_levels_no_panic() {
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on 1000-level deep nesting"
-    );
+    assert!(result.is_ok(), "Parser panicked on 1000-level deep nesting");
 }
 
 /// Test that parser doesn't panic on empty input.
@@ -347,10 +308,7 @@ with embedded newline/) {
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on regex with embedded newline"
-    );
+    assert!(result.is_ok(), "Parser panicked on regex with embedded newline");
 }
 
 /// Test that parser doesn't panic on UTF-8 boundary conditions.
@@ -379,10 +337,7 @@ my $str3 = "🎉 emoji";"#;
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on mixed UTF-8 in strings"
-    );
+    assert!(result.is_ok(), "Parser panicked on mixed UTF-8 in strings");
 }
 
 /// Test that parser doesn't panic on unbalanced parentheses.
@@ -413,10 +368,7 @@ my $valid3 = 99;
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on mixed valid and invalid syntax"
-    );
+    assert!(result.is_ok(), "Parser panicked on mixed valid and invalid syntax");
 }
 
 /// Test that parser doesn't panic on ambiguous bareword regex delimiters.
@@ -432,10 +384,7 @@ if ($text =~ m#pattern#) {
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on ambiguous bareword with regex delimiters"
-    );
+    assert!(result.is_ok(), "Parser panicked on ambiguous bareword with regex delimiters");
 }
 
 /// Test that parser doesn't panic on substitution with hash delimiter.
@@ -448,10 +397,7 @@ fn red_test_substitution_hash_delimiter_no_panic() {
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on substitution with hash delimiter"
-    );
+    assert!(result.is_ok(), "Parser panicked on substitution with hash delimiter");
 }
 
 /// Test that parser doesn't panic on transliteration with hash delimiter.
@@ -464,10 +410,7 @@ fn red_test_transliteration_hash_delimiter_no_panic() {
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on transliteration with hash delimiter"
-    );
+    assert!(result.is_ok(), "Parser panicked on transliteration with hash delimiter");
 }
 
 /// Test that parser doesn't panic on qq with braces.
@@ -480,10 +423,7 @@ fn red_test_qq_braces_no_panic() {
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on qq with braces qq{{...}}"
-    );
+    assert!(result.is_ok(), "Parser panicked on qq with braces qq{{...}}");
 }
 
 /// Test that parser doesn't panic on qx with braces.
@@ -496,10 +436,7 @@ fn red_test_qx_backtick_no_panic() {
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on qx with backtick"
-    );
+    assert!(result.is_ok(), "Parser panicked on qx with backtick");
 }
 
 /// Test that parser doesn't panic on qw with various delimiters.
@@ -514,10 +451,7 @@ my @items3 = qw{item1 item2 item3};"#;
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on qw with various delimiters"
-    );
+    assert!(result.is_ok(), "Parser panicked on qw with various delimiters");
 }
 
 /// Test that parser doesn't panic on nested quote-like within heredoc.
@@ -532,10 +466,7 @@ EOF"#;
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on quote-like inside heredoc"
-    );
+    assert!(result.is_ok(), "Parser panicked on quote-like inside heredoc");
 }
 
 /// Test that parser doesn't panic on very long string literal.
@@ -564,10 +495,7 @@ fn red_test_many_sequential_quotes_no_panic() {
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on many sequential quotes"
-    );
+    assert!(result.is_ok(), "Parser panicked on many sequential quotes");
 }
 
 /// Test that parser doesn't panic on incomplete comment-like syntax.
@@ -584,10 +512,7 @@ my $z = 3;"#;
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on incomplete comment-like syntax"
-    );
+    assert!(result.is_ok(), "Parser panicked on incomplete comment-like syntax");
 }
 
 /// Test comprehensive ambiguous syntax from the original test.
@@ -641,8 +566,5 @@ EOF
         parser.parse()
     });
 
-    assert!(
-        result.is_ok(),
-        "Parser panicked on full ambiguous syntax test case"
-    );
+    assert!(result.is_ok(), "Parser panicked on full ambiguous syntax test case");
 }

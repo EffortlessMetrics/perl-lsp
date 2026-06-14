@@ -595,8 +595,8 @@ fn handle_scopes_extreme_frame_id_i32_max_returns_zero_refs() {
     adapter.set_event_sender(tx);
 
     let msg = adapter.handle_scopes(1, 0, Some(json!({ "frameId": i32::MAX })));
-    let body = extract_response_body(&msg)
-        .expect("handle_scopes should not crash on i32::MAX frame_id");
+    let body =
+        extract_response_body(&msg).expect("handle_scopes should not crash on i32::MAX frame_id");
     let scopes = body.get("scopes").and_then(|v| v.as_array()).expect("scopes array");
 
     assert_eq!(scopes.len(), 3, "should still return 3 scope entries");
