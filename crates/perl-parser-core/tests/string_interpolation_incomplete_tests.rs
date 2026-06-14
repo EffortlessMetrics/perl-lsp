@@ -83,11 +83,9 @@ fn double_quote_incomplete_arrow_paren_call() -> R {
 
     let mut parser = Parser::new(source);
     let parsed = parser.parse_with_recovery();
-    let has_paren_unclosed = parsed
-        .diagnostics
-        .iter()
-        .map(ToString::to_string)
-        .any(|diag| diag.contains("Unclosed") && diag.contains("interpolated") && diag.contains('('));
+    let has_paren_unclosed = parsed.diagnostics.iter().map(ToString::to_string).any(|diag| {
+        diag.contains("Unclosed") && diag.contains("interpolated") && diag.contains('(')
+    });
     if has_paren_unclosed {
         return Err(format!(
             "Did not expect unclosed-( diagnostic for method call (literal text, not interpolated).\nSource: {source}\nDiagnostics: {:?}",

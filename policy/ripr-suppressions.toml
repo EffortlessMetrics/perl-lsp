@@ -941,3 +941,14 @@ reason = "fix_1355_negative_bareword_fatarrow.rs is a newly added integration te
 created = "2026-06-14"
 review_after = "2026-07-14"
 expires = "2026-09-30"
+[[suppress]]
+id = "ripr-suppress-string-interpolation-incomplete-tests"
+kind = "test_receipt_surface"
+paths = ["crates/perl-parser-core/tests/string_interpolation_incomplete_tests.rs"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1428"
+reason = "Integration test file; reformatted test scaffolding falsely flagged as prod seam by diff-scoped RIPR; ripr#1428 class."
+created = "2026-06-14"
+review_after = "2026-07-14"
+expires = "2026-09-30"
+
