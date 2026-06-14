@@ -805,150 +805,29 @@ created = "2026-06-13"
 review_after = "2026-07-13"
 expires = "2026-09-30"
 
-# Parser recovery premature-bail test files (PR #1352): ripr#1428-class false-
-# positives in newly added test files. Tracks EffortlessMetrics/ripr#1428 (RIPR
-# flags test-harness plumbing in newly added test files as production seams).
+# Custom sub-attribute test file (PR #1361): ripr#1428-class false-positive in
+# newly added test file. Tracks EffortlessMetrics/ripr#1428 (RIPR flags
+# test-harness plumbing in newly added test files as production seams).
 #
-# PR #1352 adds two new test files:
-#   crates/perl-parser-core/tests/test_1352_recovery_premature_bail.rs
-#   crates/perl-parser-core/tests/test_1352_edge_cases.rs
+# PR #1361 adds one new test file:
+#   crates/perl-parser-core/tests/sub_attribute_custom_tests.rs
 #
-# These are pure test files with test functions exercising parser recovery
-# premature-bail edge case coverage. RIPR's diff-scoped analysis flags the test
-# function scaffolding (test setup, assertions) as new production seams. This
-# is the same ripr#1428 class as ripr-suppress-ux-receipt-tests and ripr-
-# suppress-seam-proof-tests.
-#
-# Remove when ripr#1428 is fixed upstream.
-# -------------------------------------------------------
-[[suppress]]
-id = "ripr-suppress-1352-recovery-test-files"
-kind = "test_receipt_surface"
-paths = [
-  "crates/perl-parser-core/tests/test_1352_recovery_premature_bail.rs",
-  "crates/perl-parser-core/tests/test_1352_edge_cases.rs",
-]
-owner = "proof-lane"
-issue = "EffortlessMetrics/ripr#1428"
-reason = "Two newly added test files in PR #1352 are flagged as new production seams by diff-scoped RIPR analysis: test_1352_recovery_premature_bail.rs and test_1352_edge_cases.rs. Test-function scaffolding (test setup, assertions) is classified as production seams. This is the same ripr#1428 class as ripr-suppress-ux-receipt-tests and ripr-suppress-seam-proof-tests (test-harness plumbing falsely classified as production seams when added to a test file). Both files contain pure test coverage for parser recovery premature-bail edge cases (issue #1352). Remove when ripr#1428 is fixed upstream."
-created = "2026-06-13"
-review_after = "2026-07-13"
-expires = "2026-09-30"
-
-# test_interpolated_method_call_1354.rs: new integration test file —
-# RIPR flags test-plumbing helpers as production seams (ripr#1428 class).
-#
-# PR #1354 adds a new test file:
-#   crates/perl-parser-core/tests/test_interpolated_method_call_1354.rs
-#
-# The file contains parse_has_no_errors(), a test helper that calls
-# Parser::new() and parser.get_errors(). RIPR's diff-scoped analysis may treat
-# this test helper as a new production seam (same class as
-# ripr-suppress-seam-proof-tests and ripr-suppress-quote-operator-conformance-
-# test-helpers). The behavior under test — find_unclosed_interpolation_delimiter
-# correctly ignoring method calls — is covered by all 15 tests in this file.
-#
-# This is the ripr#1428 class: test-harness plumbing in newly added test files
-# flagged as production seams. Remove when ripr#1428 is fixed upstream.
-# -----------------------------------------------------------------------------
-[[suppress]]
-id = "ripr-suppress-interpolated-method-call-test-1354"
-kind = "test_receipt_surface"
-paths = ["crates/perl-parser-core/tests/test_interpolated_method_call_1354.rs"]
-classification = ["static_unknown", "no_static_path"]
-owner = "proof-lane"
-issue = "EffortlessMetrics/ripr#1428"
-reason = "test_interpolated_method_call_1354.rs is a new integration test file added by PR #1354. parse_has_no_errors() is test-harness plumbing (calls Parser::new() + get_errors() and returns bool for assertions). RIPR diff-scoped analysis may classify this helper as a new production seam — the same ripr#1428 class as ripr-suppress-seam-proof-tests and ripr-suppress-quote-operator-conformance-test-helpers. All 15 tests exercise the production fix (removing false ->() and ->identifier() paren-balancing from find_unclosed_interpolation_delimiter). Suppression is narrow (single test file, one PR). Remove when ripr#1428 is fixed upstream."
-created = "2026-06-13"
-review_after = "2026-07-13"
-expires = "2026-09-30"
-
-# eval_ref_cache_miss_resume_tests.rs: ripr#1428-class false-positive in newly
-# added integration test file for issue #1338.
-#
-# PR #1338 adds a new test file:
-#   crates/perl-dap/tests/eval_ref_cache_miss_resume_tests.rs
-#
-# This is a pure integration test file exercising the stale eval_ref cache-miss
-# short-circuit fix. RIPR's diff-scoped analysis treats test-function plumbing
-# (is_honest_empty helper, assert! calls, match arms on DapMessage::Response)
-# as new production seams. This is the same ripr#1428 class as
+# This is a pure test file with 20 test functions exercising correct parser
+# behavior for custom subroutine attributes (:public, :cached(...),
+# :Path('/path'), etc.). RIPR's diff-scoped analysis flags the test function
+# scaffolding (Parser::new, parser.parse, parser.get_errors, assertions) as
+# new production seams. This is the same ripr#1428 class as
 # ripr-suppress-ux-receipt-tests and ripr-suppress-seam-proof-tests.
 #
 # Remove when ripr#1428 is fixed upstream.
 # -----------------------------------------------------------------------------
 [[suppress]]
-id = "ripr-suppress-eval-ref-cache-miss-resume-tests"
+id = "ripr-suppress-sub-attribute-custom-tests"
 kind = "test_receipt_surface"
-paths = ["crates/perl-dap/tests/eval_ref_cache_miss_resume_tests.rs"]
-classification = ["call_presence", "weakly_exposed", "static_unknown"]
+paths = ["crates/perl-parser-core/tests/sub_attribute_custom_tests.rs"]
 owner = "proof-lane"
 issue = "EffortlessMetrics/ripr#1428"
-reason = "eval_ref_cache_miss_resume_tests.rs is a newly added integration test file in PR #1338 whose internal test-function scaffolding (is_honest_empty helper, assert! plumbing, DapMessage::Response match arms) is flagged as new production seams by diff-scoped RIPR analysis. This is the same ripr#1428 class as ripr-suppress-ux-receipt-tests, ripr-suppress-seam-proof-tests, and ripr-suppress-nodekind-combination-test (test-harness plumbing falsely classified as production seams when added to a test file). The production seam under test is the handle_variables EvalResult cache-miss short-circuit in variables.rs, which is covered by the inline lib test fix_1338_stale_eval_ref_stopped_session_short_circuits_to_honest_empty in variables.rs hazard_invariant_tests. Remove when ripr#1428 is fixed upstream."
+reason = "sub_attribute_custom_tests.rs is a newly added test file in PR #1361 whose internal test-function scaffolding is flagged as new production seams by diff-scoped RIPR analysis. The file contains 20 test functions verifying that custom subroutine attributes (Catalyst :Path, Moose :public, etc.) parse cleanly without false-positive errors after the #1361 fix, plus 2 error-guard tests verifying genuine syntax errors (unterminated parens, missing name) still produce diagnostics. Test-function scaffolding (Parser::new, parser.parse, parser.get_errors, assertions) is classified as production seams. This is the same ripr#1428 class as ripr-suppress-ux-receipt-tests and ripr-suppress-seam-proof-tests (test-harness plumbing falsely classified as production seams when added to a test file). Remove when ripr#1428 is fixed upstream."
 created = "2026-06-13"
-review_after = "2026-09-13"
+review_after = "2026-07-13"
 expires = "2026-09-30"
-
-# deep_review_1355_adversarial.rs: ripr#1428-class false-positive in newly
-# added integration test file for issue #1355.
-#
-# PR #1355 (deep-review phase) adds a new test file:
-#   crates/perl-parser-core/tests/deep_review_1355_adversarial.rs
-#
-# This is a pure integration test file exercising adversarial cases for the
-# negative-bareword fix (is -not, -lt, etc. correctly parsed as bareword before
-# => and as unary operators elsewhere?). RIPR's diff-scoped analysis treats
-# test-function plumbing (assert_clean_parse calls, Parser::new, match arms)
-# as new production seams. This is the same ripr#1428 class as
-# ripr-suppress-ux-receipt-tests and ripr-suppress-seam-proof-tests.
-#
-# Remove when ripr#1428 is fixed upstream.
-# -----------------------------------------------------------------------------
-[[suppress]]
-id = "ripr-suppress-deep-review-1355-adversarial-tests"
-kind = "test_receipt_surface"
-paths = ["crates/perl-parser-core/tests/deep_review_1355_adversarial.rs"]
-owner = "proof-lane"
-issue = "EffortlessMetrics/ripr#1428"
-reason = "deep_review_1355_adversarial.rs is a newly added integration test file in PR #1355 (deep-review phase) whose internal test-function scaffolding (assert_clean_parse, Parser::new, match arms for token validation) is flagged as new production seams by diff-scoped RIPR analysis. This is the same ripr#1428 class as ripr-suppress-ux-receipt-tests and ripr-suppress-seam-proof-tests (test-harness plumbing falsely classified as production seams when added to a test file). The production fix is in unary.rs (is_low_precedence_operator_keyword helper and Minus-token handler). All 18 tests exercise adversarial cases for negative-bareword parsing. Remove when ripr#1428 is fixed upstream."
-created = "2026-06-14"
-review_after = "2026-07-14"
-expires = "2026-09-30"
-
-# fix_1355_negative_bareword_fatarrow test: ripr#1428-class false-positive in
-# newly added integration test file.
-#
-# PR #1355 adds a new integration test file:
-#   crates/perl-parser-core/tests/fix_1355_negative_bareword_fatarrow.rs
-#
-# This is a pure integration test file exercising the WordNot bareword
-# disambiguation (30 test cases covering all low-precedence comparison
-# operators). RIPR's diff-scoped analysis treats test-function plumbing
-# (assert_clean_parse, Parser::new, Ok(()) returns) as new production seams.
-# This is the same ripr#1428 class as ripr-suppress-ux-receipt-tests and
-# ripr-suppress-seam-proof-tests (test-harness plumbing falsely classified as
-# production seams when added to a new test file).
-#
-# Remove when ripr#1428 is fixed upstream.
-# -------------------------------------------------------
-[[suppress]]
-id = "ripr-suppress-fix-1355-negative-bareword-fatarrow-tests"
-kind = "test_receipt_surface"
-paths = ["crates/perl-parser-core/tests/fix_1355_negative_bareword_fatarrow.rs"]
-owner = "proof-lane"
-issue = "EffortlessMetrics/ripr#1428"
-reason = "fix_1355_negative_bareword_fatarrow.rs is a newly added integration test file in PR #1355 whose internal test-function scaffolding (assert_clean_parse, Parser::new) is flagged as new production seams by diff-scoped RIPR analysis. This is the same ripr#1428 class as ripr-suppress-ux-receipt-tests and ripr-suppress-seam-proof-tests (test-harness plumbing falsely classified as production seams when added to a test file). The production fix is in unary.rs (is_low_precedence_operator_keyword helper and Minus-token handler). All 30 tests exercise WordNot bareword disambiguation cases. Remove when ripr#1428 is fixed upstream."
-created = "2026-06-14"
-review_after = "2026-07-14"
-expires = "2026-09-30"
-[[suppress]]
-id = "ripr-suppress-string-interpolation-incomplete-tests"
-kind = "test_receipt_surface"
-paths = ["crates/perl-parser-core/tests/string_interpolation_incomplete_tests.rs"]
-owner = "proof-lane"
-issue = "EffortlessMetrics/ripr#1428"
-reason = "Integration test file; reformatted test scaffolding falsely flagged as prod seam by diff-scoped RIPR; ripr#1428 class."
-created = "2026-06-14"
-review_after = "2026-07-14"
-expires = "2026-09-30"
-

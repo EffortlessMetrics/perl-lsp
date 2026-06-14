@@ -1,9 +1,12 @@
 //! Tests for issue #3357: Subroutine attribute validation.
 //!
 //! Valid built-in Perl attributes (`:lvalue`, `:method`, `:prototype(...)`, `:const`)
-//! must parse cleanly. Unknown or misspelled attributes should produce a warning
-//! (pushed to `parser.errors()`) but still parse successfully — users may define
-//! custom attributes via the `attributes` module.
+//! must parse cleanly. Custom or unknown attribute names must also parse cleanly with
+//! NO errors — Perl allows arbitrary attributes via `MODIFY_CODE_ATTRIBUTES` (see
+//! `perldoc attributes`). Only genuine syntax errors (unterminated parens, missing
+//! name) should produce diagnostics.
+//!
+//! Updated by #1361: the false-positive "unknown attribute" error was removed.
 
 mod cpan_test_helpers;
 use cpan_test_helpers::*;
@@ -80,49 +83,38 @@ fn valid_lvalue_method_combined_no_warning() {
 }
 
 // ---------------------------------------------------------------------------
-// Invalid / misspelled attributes — must parse (no Error AST node) but
-// must emit a warning in parser.errors()
+// Custom / misspelled attributes — must parse cleanly with NO errors.
+// Per #1361: Perl allows arbitrary attributes via MODIFY_CODE_ATTRIBUTES;
+// emitting false-positive errors for unknown names was a parser bug.
 // ---------------------------------------------------------------------------
 
 #[test]
-fn invalid_lvalue_misspelled_warns() {
-    // :lvaluE is not a known attribute (case-sensitive)
+fn custom_lvalue_misspelled_no_error() {
+    // :lvaluE is technically a custom attribute name (Perl attributes are
+    // case-sensitive), not a built-in.  It should parse cleanly.
     let src = "sub invalid :lvaluE { }";
-    // Parses without an Error AST node
     assert_clean_parse(src);
-    // But should have a warning in parser.errors()
     let mut parser = Parser::new(src);
     let _ast = must(parser.parse());
     let errors = parser.errors();
     assert!(
-        !errors.is_empty(),
-        "Expected a warning for unknown attribute :lvaluE, but errors was empty"
-    );
-    let has_attr_warning = errors.iter().any(|e| format!("{e}").to_lowercase().contains("lvalue"));
-    assert!(
-        has_attr_warning,
-        "Expected warning mentioning 'lvalue' for :lvaluE, got: {:?}",
+        errors.is_empty(),
+        "Expected no errors for custom attribute :lvaluE (#1361 fix), but got: {:?}",
         errors
     );
 }
 
 #[test]
-fn unknown_foobar_attr_warns() {
+fn custom_foobar_attr_no_error() {
+    // :foobar is a valid custom attribute name — should parse cleanly.
     let src = "sub unknown :foobar { }";
-    // Parses without an Error AST node
     assert_clean_parse(src);
-    // But should have a warning
     let mut parser = Parser::new(src);
     let _ast = must(parser.parse());
     let errors = parser.errors();
     assert!(
-        !errors.is_empty(),
-        "Expected a warning for unknown attribute :foobar, but errors was empty"
-    );
-    let has_attr_warning = errors.iter().any(|e| format!("{e}").to_lowercase().contains("foobar"));
-    assert!(
-        has_attr_warning,
-        "Expected warning mentioning 'foobar' for :foobar, got: {:?}",
+        errors.is_empty(),
+        "Expected no errors for custom attribute :foobar (#1361 fix), but got: {:?}",
         errors
     );
 }
@@ -146,26 +138,28 @@ sub foo :MyAttr(foo) { }
 }
 
 #[test]
-fn unknown_attr_does_not_produce_error_ast_node() {
-    // Parsing should succeed — unknown attributes produce warnings, not hard errors
+fn custom_attr_does_not_produce_error_ast_node() {
+    // Parsing should succeed — custom attributes are valid in Perl (#1361)
     let src = "sub unknown :foobar { }";
     assert_clean_parse(src);
 }
 
 // ---------------------------------------------------------------------------
-// Anonymous subs with unknown attributes also warn
+// Anonymous subs with custom attributes parse cleanly (no false-positive error).
 // ---------------------------------------------------------------------------
 
 #[test]
-fn anon_sub_unknown_attr_warns() {
+fn anon_sub_custom_attr_no_error() {
+    // :notreal is a valid custom attribute — anonymous subs may also carry them.
     let src = "my $f = sub :notreal { 1 };";
     assert_clean_parse(src);
     let mut parser = Parser::new(src);
     let _ast = must(parser.parse());
     let errors = parser.errors();
     assert!(
-        !errors.is_empty(),
-        "Expected a warning for anonymous sub :notreal, but errors was empty"
+        errors.is_empty(),
+        "Expected no errors for anonymous sub :notreal (#1361 fix), but got: {:?}",
+        errors
     );
 }
 
