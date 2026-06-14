@@ -1082,8 +1082,10 @@ local $ENV{PATH} = '/tmp';
 /// Statement modifiers are a distinct NodeKind regardless of the modifier
 /// keyword.  Cover every accepted modifier keyword so the parser cannot regress
 /// to treating only postfix `if` as the canonical shape.
+/// Uses increment expressions to exercise a different code shape from the
+/// existing `test_statement_modifier_keyword_matrix` test above.
 #[test]
-fn test_statement_modifier_keyword_matrix() {
+fn test_statement_modifier_keyword_matrix_increment_context() {
     let code = r#"
 my $x = 0;
 my @items = (1, 2, 3);
