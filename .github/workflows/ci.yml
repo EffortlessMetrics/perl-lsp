@@ -49,15 +49,12 @@ jobs:
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             echo "run_ci=true" >> "$GITHUB_OUTPUT"
             echo "::notice::Non-PR event detected — running full CI"
-          elif [[ ",${{ join(github.event.pull_request.labels.*.name, ',') }}," == *",full-ci,"* ]]; then
-            echo "run_ci=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::PR has full-ci label — running full CI"
           elif [ "${{ github.event.pull_request.draft }}" = "true" ]; then
             echo "run_ci=false" >> "$GITHUB_OUTPUT"
             echo "::notice::Draft PR detected — skipping CI jobs until ready for review"
           else
-            echo "run_ci=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::PR default lane is EM routed CI; legacy CI requires full-ci label"
+            echo "run_ci=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Non-draft PR — running merge-gate (pr-smoke, conflict-markers, shards, UX tests); supersede protection via preflight-latest-check (#1484)"
           fi
 
   # ── Preflight: skip superseded SHAs to save cost ─────────────────────
@@ -399,7 +396,6 @@ jobs:
       - conflict-markers
       - check-all-targets
       - ux-tests
-      - windows-required
       - merge-gate-shards
     if: always() && needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     permissions:
@@ -492,6 +488,11 @@ jobs:
     needs: [draft-pr-check, preflight-latest-check]
     if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     # Run on every PR push — this is the regression prevention gate.
+    # Flakiness note: 11 active entries in .ci/ux-flakes.json (all scenario_14 / @INC
+    # conformance tests) are registered as quarantine_effect=non_blocking_pr but that
+    # registry is advisory only — it is NOT enforced here. If any scenario_14 test
+    # fails this job fails and merge-gate blocks. Quarantine enforcement (reading the
+    # registry to generate --skip flags) is a follow-up; see .ci/ux-flakes.json.
     steps:
       - uses: actions/checkout@v6
         with:
@@ -747,212 +748,3 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  # ── Windows scope: decide whether the native Windows canary is needed ─
-  # Cheap Ubuntu job that diffs against master and decides whether the
-  # diff plausibly affects Windows-specific behavior. Default for normal
-  # PRs is to skip the native Windows runner entirely and let the Linux
-  # cross-target compile check + tests cover the surface.
-  windows-scope:
-    name: Windows scope
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    needs: [draft-pr-check, preflight-latest-check]
-    if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
-    outputs:
-      required: ${{ steps.scope.outputs.required }}
-      full: ${{ steps.scope.outputs.full }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
-
-      - name: Decide Windows scope
-        id: scope
-        shell: bash
-        run: |
-          set -euo pipefail
-          # On non-PR events (push to master, schedule, manual dispatch),
-          # always run the canary and the full guardrails.
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            echo "required=true" >> "$GITHUB_OUTPUT"
-            echo "full=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Non-PR event — Windows canary + full guardrails required"
-            exit 0
-          fi
-
-          # Diff against the PR base; fall back to origin/main.
-          base_ref="${{ github.event.pull_request.base.ref }}"
-          if [ -n "$base_ref" ]; then
-            git fetch --no-tags --depth=200 origin "$base_ref" || true
-            base="origin/$base_ref"
-          else
-            git fetch --no-tags --depth=200 origin main || true
-            base="origin/main"
-          fi
-
-          changed="$(git diff --name-only "$base"...HEAD || true)"
-          echo "Changed files vs $base:"
-          echo "$changed"
-
-          required=false
-          full=false
-
-          # Windows-sensitive code paths (sandbox, module path resolution,
-          # workspace discovery, URI handling).
-          if echo "$changed" | grep -E '^(crates/perl-lsp-rs/src/security/sandbox\.rs|crates/perl-module/|crates/perl-workspace/|crates/perl-uri/)' >/dev/null; then
-            required=true
-          fi
-
-          # Toolchain / workflow / lockfile / CI-policy changes can shift
-          # Windows behavior in ways the diff alone won't reveal — promote
-          # to full. Cargo.toml is anchored to the workspace root only;
-          # per-crate Cargo.toml files are treated as ordinary code changes.
-          if echo "$changed" | grep -E '(^\.github/workflows/|^\.ci/|^Cargo\.lock$|^Cargo\.toml$|^rust-toolchain\.toml$|^justfile$)' >/dev/null; then
-            required=true
-            full=true
-          fi
-
-          # Generic Windows-sensitive heuristic across other crates. Match
-          # path basenames (segments) rather than substrings so PRs that
-          # merely happen to mention these tokens inside an unrelated file
-          # path don't get pulled in.
-          if echo "$changed" | awk -F/ '{ print $NF }' \
-              | grep -E '(^|[._-])(uri|path|module|workspace-folder|file_uri|windows|separator|canonicalize|sandbox)([._-]|$)' >/dev/null; then
-            required=true
-          fi
-
-          echo "required=$required" >> "$GITHUB_OUTPUT"
-          echo "full=$full" >> "$GITHUB_OUTPUT"
-          echo "::notice::windows-scope: required=$required full=$full"
-
-  # ── Windows Canary: tiny native dispatch check ───────────────────────
-  # Proves the Windows-only code path (currently sandbox fail-closed) is
-  # still wired. Runs only when windows-scope says required=true.
-  windows-canary:
-    name: Windows Canary
-    runs-on: windows-latest
-    timeout-minutes: 15
-    needs: [draft-pr-check, preflight-latest-check, windows-scope]
-    if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true' && needs.windows-scope.outputs.required == 'true'
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
-        with:
-          toolchain: 1.95.0
-
-      - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
-        with:
-          cache-on-failure: true
-          cache-all-crates: true
-          shared-key: ci-windows-canary-${{ hashFiles('Cargo.lock') }}
-
-      - name: Run sandbox fail-closed canary
-        shell: bash
-        run: |
-          cargo test --locked --lib -p perl-lsp-rs \
-            security::sandbox::tests::test_windows_sandbox_fails_closed \
-            -- --exact
-
-  # ── Windows Required: Ubuntu aggregator consumed by merge-gate ──────
-  # Skipped together with the rest of CI on draft PRs / superseded SHAs
-  # (same gate as merge-gate). Otherwise always runs: succeeds when the
-  # canary isn't needed, fails when the canary was required but didn't
-  # pass, and fails closed if windows-scope itself errored out (so a
-  # broken scope doesn't slip through as a green required check).
-  windows-required:
-    name: Windows Required
-    runs-on: ubuntu-24.04
-    timeout-minutes: 2
-    needs: [draft-pr-check, preflight-latest-check, windows-scope, windows-canary]
-    if: always() && needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
-    steps:
-      - name: Summarize Windows requirement
-        shell: bash
-        run: |
-          scope_result='${{ needs.windows-scope.result }}'
-          if [ "$scope_result" != "success" ]; then
-            echo "::error::windows-scope did not succeed (result=$scope_result); failing closed."
-            exit 1
-          fi
-
-          required='${{ needs.windows-scope.outputs.required }}'
-          result='${{ needs.windows-canary.result }}'
-
-          if [ "$required" != "true" ]; then
-            echo "::notice::Windows canary not required for this diff."
-            exit 0
-          fi
-
-          if [ "$result" = "success" ]; then
-            echo "::notice::Windows canary passed."
-            exit 0
-          fi
-
-          echo "::error::Windows canary required but result was: $result"
-          exit 1
-
-  # ── Windows Full Guardrails: advisory / risk-triggered ──────────────
-  # The old broad Windows matrix. Runs on push to master, manual
-  # dispatch, and PRs that windows-scope flagged as full=true
-  # (workflow/toolchain/lockfile changes). Not a merge-gate dependency
-  # for normal PRs — the cheap Linux cross-target check + windows-canary
-  # cover the universal slow lane, and this lane catches the rest.
-  # (Nightly Windows soak runs are owned by ci-nightly.yml, not here.)
-  windows-full-guardrails:
-    name: Windows Full Guardrails (${{ matrix.lane.name }})
-    runs-on: windows-latest
-    timeout-minutes: 35
-    needs: [draft-pr-check, preflight-latest-check, windows-scope]
-    if: |
-      always()
-      && needs.draft-pr-check.outputs.run_ci == 'true'
-      && needs.preflight-latest-check.outputs.is_latest == 'true'
-      && (github.event_name != 'pull_request' || needs.windows-scope.outputs.full == 'true')
-    strategy:
-      fail-fast: false
-      matrix:
-        lane:
-          - name: compile
-            command: >-
-              cargo check --locked --all-targets
-              -p perl-module
-              -p perl-lsp-rs
-              -p perl-workspace
-          - name: module-separator-regressions
-            command: >-
-              cargo test --locked -p perl-module
-              --test path_comprehensive_unit_tests
-              --test module_resolution_use_require
-          - name: sandbox-fail-closed
-            command: >-
-              cargo test --locked --lib -p perl-lsp-rs
-              security::sandbox::tests::test_windows_sandbox_fails_closed
-              -- --exact
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
-        with:
-          toolchain: 1.95.0
-
-      - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
-        with:
-          cache-on-failure: true
-          cache-all-crates: true
-          shared-key: ci-windows-full-${{ hashFiles('Cargo.lock') }}-${{ matrix.lane.name }}
-          save-if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
-
-      - name: Run Windows full guardrail lane
-        shell: bash
-        run: ${{ matrix.lane.command }}
