@@ -201,6 +201,7 @@ fn all_variants() -> Vec<NodeKind> {
         NodeKind::MissingIdentifier,
         NodeKind::MissingBlock,
         NodeKind::UnknownRest,
+        NodeKind::NestedVariableList { items: vec![] },
     ]
 }
 
@@ -313,6 +314,7 @@ const SAFE_FOR_BREAKPOINT_FALSE: &[&str] = &[
     "Identifier",
     "Use",
     "No",
+    "NestedVariableList",
     // Recovery nodes (6)
     "Error",
     "MissingExpression",
@@ -351,9 +353,9 @@ fn safe_for_breakpoint_exact_false_set() {
 }
 
 #[test]
-fn safe_for_breakpoint_covers_all_69_variants() {
+fn safe_for_breakpoint_covers_all_70_variants() {
     // Every variant must appear in exactly one of the two lists.
-    // After ratification: 41 in TRUE, 28 in FALSE = 69 total variants (per acceptance.md)
+    // After ratification: 41 in TRUE, 29 in FALSE = 70 total variants (per acceptance.md)
     for kind in all_variants() {
         let name = kind.kind_name();
         let in_true = SAFE_FOR_BREAKPOINT_TRUE.contains(&name);

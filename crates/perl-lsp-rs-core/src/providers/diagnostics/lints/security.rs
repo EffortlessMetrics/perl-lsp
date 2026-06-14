@@ -110,6 +110,13 @@ fn walk_security_node(
                 signal_shadowed
             }
         }
+        NodeKind::NestedVariableList { items } => {
+            // Recurse into nested variable list items for security analysis.
+            for item in items {
+                walk_security_node(item, diagnostics, signal_shadowed);
+            }
+            signal_shadowed
+        }
         NodeKind::If { condition, then_branch, elsif_branches, else_branch, .. } => {
             walk_security_node(condition, diagnostics, signal_shadowed);
             walk_security_node(then_branch, diagnostics, signal_shadowed);
@@ -882,6 +889,29 @@ mod tests {
         assert!(
             diags.iter().any(|d| d.code.as_deref() == Some("PL606")),
             "readpipe() should be flagged as PL606: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn nested_variable_list_traversal_in_security_walker() {
+        // Covers lines 113-118: NestedVariableList arm in walk_security_node.
+        // A my-declaration with a nested paren group produces a NestedVariableList node
+        // in the AST; the security walker must recurse into it without flagging it.
+        let diags = security_diags("my ($a, ($b, $c)) = (1, (2, 3));");
+        // No security diagnostics expected for a plain lexical nested-list declaration.
+        assert!(
+            diags.is_empty(),
+            "nested variable list declaration should not produce security diagnostics: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn nested_variable_list_deep_traversal_in_security_walker() {
+        // Exercises recursive descent through deeply nested NestedVariableList nodes.
+        let diags = security_diags("my ($x, ($y, ($z, $w))) = (1, (2, (3, 4)));");
+        assert!(
+            diags.is_empty(),
+            "deeply nested variable list should not produce security diagnostics: {diags:?}"
         );
     }
 }

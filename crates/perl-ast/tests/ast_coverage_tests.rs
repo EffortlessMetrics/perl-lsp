@@ -1611,6 +1611,7 @@ fn all_kind_names_contains_every_variant() -> Result<(), Box<dyn std::error::Err
         NodeKind::MissingIdentifier,
         NodeKind::MissingBlock,
         NodeKind::UnknownRest,
+        NodeKind::NestedVariableList { items: vec![] },
     ];
 
     let all_names: std::collections::HashSet<&str> =

@@ -828,6 +828,32 @@ paths = ["crates/perl-parser-core/tests/sub_attribute_custom_tests.rs"]
 owner = "proof-lane"
 issue = "EffortlessMetrics/ripr#1428"
 reason = "sub_attribute_custom_tests.rs is a newly added test file in PR #1361 whose internal test-function scaffolding is flagged as new production seams by diff-scoped RIPR analysis. The file contains 20 test functions verifying that custom subroutine attributes (Catalyst :Path, Moose :public, etc.) parse cleanly without false-positive errors after the #1361 fix, plus 2 error-guard tests verifying genuine syntax errors (unterminated parens, missing name) still produce diagnostics. Test-function scaffolding (Parser::new, parser.parse, parser.get_errors, assertions) is classified as production seams. This is the same ripr#1428 class as ripr-suppress-ux-receipt-tests and ripr-suppress-seam-proof-tests (test-harness plumbing falsely classified as production seams when added to a test file). Remove when ripr#1428 is fixed upstream."
+
+# Nested variable list test file (PR #1362): ripr#1428-class false-positive
+# in newly added test file. Tracks EffortlessMetrics/ripr#1428 (RIPR flags
+# test-harness plumbing in newly added test files as production seams).
+#
+# PR #1362 adds one new test file:
+#   crates/perl-parser-core/tests/nested_varlist_tests.rs
+#
+# This is a pure test file with test functions exercising nested variable
+# list declaration coverage. RIPR's diff-scoped analysis flags the test
+# function scaffolding (test setup, assertions) as new production seams. This
+# is the same ripr#1428 class as ripr-suppress-ux-receipt-tests and ripr-
+# suppress-seam-proof-tests. (Reviewer's other tests added to existing files
+# comprehensive_unit_tests.rs and surface_decl.rs do not need suppression.)
+#
+# Remove when ripr#1428 is fixed upstream.
+# -------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-1362-nested-varlist-test-file"
+kind = "test_receipt_surface"
+paths = [
+  "crates/perl-parser-core/tests/nested_varlist_tests.rs",
+]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1428"
+reason = "One newly added test file in PR #1362 is flagged as new production seams by diff-scoped RIPR analysis: nested_varlist_tests.rs. Test-function scaffolding (test setup, assertions) is classified as production seams. This is the same ripr#1428 class as ripr-suppress-ux-receipt-tests and ripr-suppress-seam-proof-tests (test-harness plumbing falsely classified as production seams when added to a test file). Reviewer's other tests were added to existing comprehensive_unit_tests.rs and surface_decl.rs and do not require suppression. The file contains pure test coverage for nested variable list declaration (issue #1362). Remove when ripr#1428 is fixed upstream."
 created = "2026-06-13"
 review_after = "2026-07-13"
 expires = "2026-09-30"

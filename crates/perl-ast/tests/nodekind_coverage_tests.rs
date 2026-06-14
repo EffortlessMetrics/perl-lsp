@@ -547,6 +547,7 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
         (Node::new(NodeKind::MissingIdentifier, loc()), "MissingIdentifier", 0),
         (Node::new(NodeKind::MissingBlock, loc()), "MissingBlock", 0),
         (Node::new(NodeKind::UnknownRest, loc()), "UnknownRest", 0),
+        (Node::new(NodeKind::NestedVariableList { items: vec![] }, loc()), "NestedVariableList", 0),
     ]
 }
 

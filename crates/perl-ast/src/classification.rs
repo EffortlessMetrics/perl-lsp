@@ -238,6 +238,7 @@ impl NodeKind {
 
             NodeKind::VariableDeclaration { .. }
             | NodeKind::VariableListDeclaration { .. }
+            | NodeKind::NestedVariableList { .. }
             | NodeKind::Subroutine { .. }
             | NodeKind::Prototype { .. }
             | NodeKind::Signature { .. }
@@ -321,6 +322,15 @@ impl NodeKind {
                 children = true,
                 recovery = false,
                 bp = true
+            ),
+            NodeKind::NestedVariableList { .. } => flags!(
+                exec = false,
+                scope = false,
+                decl = true,
+                refs = false,
+                children = true,
+                recovery = false,
+                bp = false
             ),
             NodeKind::Variable { .. } => flags!(
                 exec = false,
@@ -1022,6 +1032,7 @@ mod tests {
                 attributes: vec![],
                 initializer: None,
             },
+            NodeKind::NestedVariableList { items: vec![] },
             NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
             NodeKind::VariableWithAttributes { variable: Box::new(leaf()), attributes: vec![] },
             NodeKind::Assignment {

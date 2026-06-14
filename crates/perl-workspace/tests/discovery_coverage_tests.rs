@@ -55,6 +55,9 @@ fn git_discovery_finds_committed_and_untracked_perl_files() -> TestResult {
 
     run_git(root, &["init", "--quiet"])?;
 
+    // Configure git identity for commit (required in CI where global identity may not be set)
+    run_git(root, &["config", "user.email", "test@example.com"])?;
+    run_git(root, &["config", "user.name", "Test"])?;
     // Committed file
     create_file(root, "lib/Committed.pm")?;
     run_git(root, &["add", "lib/Committed.pm"])?;
