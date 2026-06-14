@@ -429,10 +429,12 @@ gates:
     description: "Compile all workspace targets (lib/bin/tests/benches) to catch integration and bench bit-rot; also validates all-features paths"
     required: true
     command: just check-all-targets
-    timeout_seconds: 180
+    # Two full-workspace cargo check passes (default + all-features) require more time
+    # than the original 180s budget on a fresh CI runner. Aligned with unit_scoped budget.
+    timeout_seconds: 600
     retry_count: 0
     budgets:
-      max_duration_ms: 150000
+      max_duration_ms: 540000
     quarantine: false
     tags:
       - compile
