@@ -92,6 +92,15 @@ occurrence is counted.
 **When to add this criterion**: Any change that introduces or modifies a scanner that
 parses source text character-by-character to count, locate, or extract structural tokens.
 
+**Generalization — enum consumer blindness**: The same silent-drop failure class appears in
+typed enum dispatch. An `if let Variant::X { .. }` with no else branch, or a `_ => {}` wildcard
+arm in a traversal function, silently skips new enum variants. Adding a new Rust enum variant
+passes the exhaustiveness checker for explicit `match` arms but is invisible to `if let`
+guards and wildcard arms. See PARSER-5 in
+[docs/reference/SUBSYSTEM_HAZARD_DEFAULTS.md](../reference/SUBSYSTEM_HAZARD_DEFAULTS.md) and
+[docs/learnings/2026-06-nodekind-variant-silent-consumer-drop.md](../learnings/2026-06-nodekind-variant-silent-consumer-drop.md)
+for the concrete incident (`NodeKind::NestedVariableList`, PR #1457).
+
 ---
 
 ## Class 5: Test Encodes the Bug

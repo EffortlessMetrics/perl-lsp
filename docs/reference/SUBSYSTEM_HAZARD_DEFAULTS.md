@@ -145,6 +145,16 @@ or any other crate whose primary job is tokenizing or parsing Perl source text.
 | **Required adversarial test** | Run the recovery test input through the current parser (not a cached snapshot) and confirm the variant is reachable before treating the snapshot as a positive assertion. Add a comment in the test naming the recovery path that produces each error node. |
 | **Ref** | Class 5 (test-encodes-the-bug) in [docs/concepts/hazard-class-invariants.md](../concepts/hazard-class-invariants.md); incident: [docs/learnings/2026-06-test-encodes-the-bug.md](../learnings/2026-06-test-encodes-the-bug.md) |
 
+### PARSER-5: New NodeKind variant — audit non-exhaustive consumers
+
+| Field | Value |
+|---|---|
+| **Invariant** | Adding a new `NodeKind` variant requires auditing the **non-exhaustive consumer surface**, not just the exhaustive `match` arms the compiler enforces. Two patterns are invisible to the exhaustiveness checker and silently drop new variants: (a) `if let NodeKind::X { .. } = node` inside a loop with no `else` branch — the new variant is skipped; (b) `_ => { /* no children */ }` wildcard arms in traversal/extraction functions (e.g. `visit_children`, semantic-token emitters, symbol extractors, declaration mappers) — the new variant falls into the no-op. Each silent drop equals one missing LSP feature (tokens, hover, go-to-definition, rename, reference tracking) for the new construct. |
+| **Trigger** | Any change that adds a new `NodeKind` variant to `crates/perl-ast/src/ast.rs` |
+| **Required adversarial test** | For each new variant: (1) grep `if let NodeKind::` across all consumer crates and verify every loop that matches sibling variants also matches the new variant or has an explicit else branch; (2) grep `_ =>` wildcard arms in `visit_children`, semantic-token dispatch, symbol extraction, and declaration-mapping functions — add an explicit arm for the new variant in each; (3) write an integration test asserting that LSP semantic tokens, hover, go-to-definition, and workspace symbols all return non-empty results for a Perl snippet that uses the new construct. |
+| **Motivating incident** | [docs/learnings/2026-06-nodekind-variant-silent-consumer-drop.md](../learnings/2026-06-nodekind-variant-silent-consumer-drop.md): PR #1457 (`NodeKind::NestedVariableList`) silently dropped in 3 consumers — `node_analysis` `if let` loop (no semantic tokens/hover), `variable_decl_from_node` (no workspace symbols → no goto/rename), `visit_children` wildcard arm (no reference tracking). Deep-review caught all three in commit `c5c8f6bf8`. |
+| **Ref** | [docs/reference/PARSER_CONTRACTS.md §4](PARSER_CONTRACTS.md) (NodeKind Classification drift guard) |
+
 ---
 
 ## LSP subsystem

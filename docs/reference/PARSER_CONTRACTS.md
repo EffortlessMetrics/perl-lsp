@@ -369,6 +369,40 @@ for future use. No variants currently map to either category.
   error guard). A PR adding a new `NodeKind` variant must add the corresponding
   arm to both `category()` and `flags()`.
 
+### Non-exhaustive consumer audit (REQUIRED for every new variant)
+
+The exhaustive `match self { ... }` arms in `classification.rs` are the compiler-enforced
+drift guard — they catch the obvious case. However, two consumer patterns are **invisible
+to the exhaustiveness checker** and must be audited manually whenever a new variant is added:
+
+1. **`if let NodeKind::X { .. } = node` in loops without an else branch** — the loop body
+   runs for matched variants and silently skips new variants. The compiler sees no problem.
+
+2. **`_ => { /* no children */ }` wildcard arms** in traversal and extraction functions
+   (especially `visit_children`, semantic-token dispatch, symbol extractors, declaration
+   mappers) — new variants fall into the no-op arm. The match remains exhaustive; the new
+   variant is silently dropped.
+
+In PR #1457 (`NodeKind::NestedVariableList`, issue #1362), both patterns caused three
+silent consumer drops: the `node_analysis` `if let` loop (no semantic tokens or hover for
+inner variables), the `variable_decl_from_node` declaration mapper (no workspace symbols,
+breaking go-to-definition and rename), and the `visit_children` wildcard arm (no reference
+tracking). Deep-review caught and fixed all three in commit `c5c8f6bf8`.
+
+**The required audit for any new `NodeKind` variant:**
+
+```
+grep -r "if let NodeKind::" crates/ -- look for loops with no else
+grep -r "_ =>" crates/perl-semantic-analyzer crates/perl-symbol crates/perl-workspace -- look for wildcard arms in traversal/extraction
+```
+
+For each hit: add an explicit arm or else branch for the new variant. Write an integration
+test asserting that semantic tokens, hover, go-to-definition, and workspace symbols all
+return results for a Perl snippet using the new construct.
+
+**See**: [docs/reference/SUBSYSTEM_HAZARD_DEFAULTS.md PARSER-5](SUBSYSTEM_HAZARD_DEFAULTS.md)
+and [docs/learnings/2026-06-nodekind-variant-silent-consumer-drop.md](../learnings/2026-06-nodekind-variant-silent-consumer-drop.md).
+
 ---
 
 ## 5. Recovery Nodes — Decision Record
@@ -542,6 +576,7 @@ that span line boundaries.
 | Indirect-object ambiguity | `perl-parser-core` | `crates/perl-parser/tests/parser_regressions.rs` | #1296, #1214 |
 | Embedded code (`s///e`) | `perl-ast`, `perl-parser-core` | `crates/perl-parser-core/tests/fix_subst_e_has_embedded_code_975.rs` | #1238 |
 | NodeKind classification | `perl-ast` | `crates/perl-ast/tests/classification_tests.rs` | #1295 |
+| NodeKind non-exhaustive consumer audit | `perl-semantic-analyzer`, `perl-symbol`, `perl-workspace` | grep `if let NodeKind::` + `_ =>` wildcard arms | #1457 deep-review |
 | Recovery node decision | `perl-ast` | (not fixture-coverable — never emitted) | open #915 |
 | Formatting preserve gates | `perl-lsp-perltidy` | `crates/perl-lsp-perltidy/tests/native_formatter_parse_gate_tests.rs` | #1314 |
 

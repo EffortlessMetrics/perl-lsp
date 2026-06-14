@@ -36,6 +36,7 @@ To add a new incident: copy [TEMPLATE.md](TEMPLATE.md) and fill in all sections.
 | [2026-06-merged-before-review-fix-forward.md](2026-06-merged-before-review-fix-forward.md) | PR merged on 3-green before in-flight deep-review completed; fix landed as fix-forward | multi-agent, dap, deep-review, fix-forward | #1240, #1363, #1364 |
 | [2026-06-serialize-merges-misframe.md](2026-06-serialize-merges-misframe.md) | "Hold main still" misframe: parallel velocity + rebase-robustness is the correct doctrine | multi-agent, ci, serialization, merge-velocity | #1206, #1230 |
 | [2026-06-tagged-range-codec-band-overflow.md](2026-06-tagged-range-codec-band-overflow.md) | Type-enum promotion re-introduced ID-collision through the wire codec (band-overflow, residue-disambiguation) | id-collision, bounds, dap, codec, band-overflow | #1219, #1351, #1430 |
+| [2026-06-nodekind-variant-silent-consumer-drop.md](2026-06-nodekind-variant-silent-consumer-drop.md) | New NodeKind variant silently dropped by three non-exhaustive consumers (if-let loop, wildcard arm) | parser, ast, nodekind, exhaustiveness, silent-drop, lsp-feature-gap | #1457, #1362 |
 
 ---
 
@@ -64,3 +65,8 @@ To add a new incident: copy [TEMPLATE.md](TEMPLATE.md) and fill in all sections.
 | codec | Wire/serialization codec correctness |
 | band-overflow | Encoded value crosses its declared wire band |
 | tagged-range | Tagged-range codec with disjoint-band design |
+| ast | AST node structure / NodeKind variants |
+| nodekind | NodeKind enum variant addition or consumer audit |
+| exhaustiveness | Rust exhaustiveness checker blind spots (if-let, wildcard arm) |
+| silent-drop | Variant or case silently skipped by non-exhaustive consumer |
+| lsp-feature-gap | Missing LSP feature (tokens, hover, goto, rename, refs) caused by consumer gap |
