@@ -26,6 +26,26 @@
 //!   it means "this kind of node is a valid candidate for breakpoint
 //!   placement, pending positional validation."
 //!
+//!   **Compile-time constructs** (`Use`, `No`) are `false` because they run
+//!   inside `BEGIN` blocks and are not stoppable in a runtime debugger session.
+//!   Verified via Perl 5.40.1 debugger probe.
+//!
+//!   **Instance-dependent flags** (variant flag is a conservative prefilter;
+//!   the DAP consumer must verify the AST structure or metadata field):
+//!   - `Eval.introduces_scope`: variant flag is `true`; consumer must check
+//!     whether the `block` child is a `NodeKind::Block` — `eval STRING`/
+//!     `eval EXPR` introduce no static lexical scope.
+//!   - `Package.introduces_scope` / `Package.safe_for_breakpoint`: variant
+//!     flags are both `true`; consumer must check `block.is_some()` —
+//!     `package Foo;` (block absent) creates no lexical scope.
+//!   - `PhaseBlock.safe_for_breakpoint`: variant flag is `true`; DAP consumer
+//!     must check the `phase` field — `BEGIN`/`CHECK`/`UNITCHECK` are
+//!     compile-time phases (not stoppable in a runtime session); `END` and
+//!     `INIT` may be stoppable depending on attach timing.
+//!
+//!   See `docs/reference/PARSER_CONTRACTS.md` §Breakpoint for the full contract
+//!   table with static and instance-dependent rows and consumer guidance.
+//!
 //! - **Invariant.** `recovery_artifact == true` implies
 //!   `safe_for_breakpoint == false`. This is enforced by the table and
 //!   verified by [`NodeKindFlags::validate`].
@@ -770,6 +790,9 @@ impl NodeKind {
                 recovery = false,
                 bp = true
             ),
+            // `use Module LIST` is BEGIN { require Module; Module->import(@LIST) } —
+            // compile-time pragma. Perl 5.40.1 debugger probe reports "not breakable".
+            // safe_for_breakpoint=false: compile-time pragma; not stoppable in runtime debugger.
             NodeKind::Use { .. } => flags!(
                 exec = true,
                 scope = false,
@@ -777,8 +800,11 @@ impl NodeKind {
                 refs = false,
                 children = true,
                 recovery = false,
-                bp = true
+                bp = false
             ),
+            // `no Module LIST` is BEGIN { Module->unimport(@LIST) } —
+            // compile-time unimport. Perl 5.40.1 debugger probe reports "not breakable".
+            // safe_for_breakpoint=false: compile-time unimport; not stoppable in runtime debugger.
             NodeKind::No { .. } => flags!(
                 exec = true,
                 scope = false,
@@ -786,7 +812,7 @@ impl NodeKind {
                 refs = false,
                 children = true,
                 recovery = false,
-                bp = true
+                bp = false
             ),
             NodeKind::PhaseBlock { .. } => flags!(
                 exec = true,

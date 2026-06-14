@@ -288,7 +288,7 @@ Enum definitions: `NodeKindCategory` (line ~53), `NodeKindFlags` (line ~82).
 | Gate | Consumer | Status |
 |---|---|---|
 | Phase 7 (NOW) | Document-symbols provider, semantic-tokens provider | MAY consume `NodeKindCategory` |
-| Phase 8 (BLOCKED on #1297) | DAP breakpoint validator | MUST NOT consume `safe_for_breakpoint` yet |
+| Phase 8 (ready after #1297) | DAP breakpoint validator | MAY consume `safe_for_breakpoint` as prefilter; MUST apply instance-dependent checks (see §Breakpoint contract below) |
 
 ### Proof
 
@@ -316,20 +316,35 @@ placement. It does **not** mean "always stop here." DAP consumers must
 additionally inspect instance-level facts (is this cursor inside a heredoc body?
 a POD block? after `__DATA__`?) and verify with the runtime/debugger.
 
-**`safe_for_breakpoint` and `introduces_scope` for several variants are
-research-gated by open issue #1297.** Specifically:
+### §Breakpoint and Scope Classification Contract (ratified issue #1297, PR #1452)
 
-| Variant | Flag | Baseline | Open question |
+**Issue #1297 ratification (ChatGPT-Pro + Perl 5.40.1 debugger probe) is now merged.**
+The following table documents all ratified flag values and the instance-dependent rows
+that DAP consumers must handle with AST-structure or metadata checks.
+
+**Static (variant-level, no instance check needed):**
+
+| Variant | Flag | Ratified value | Evidence |
 |---|---|---|---|
-| `PhaseBlock` | `safe_for_breakpoint` | `true` | `BEGIN`/`CHECK`/`UNITCHECK` run at compile time — not stoppable in a DAP session; `END`/`INIT` may differ |
-| `PhaseBlock` | `introduces_scope` | `true` | Debugger-observable lexical scope? |
-| `Use` / `No` | `safe_for_breakpoint` | `true` | `use Module LIST` is equivalent to `BEGIN { require ...; ->import }` — compile-time; can the debugger stop on it? |
-| `Eval` | `introduces_scope` | `true` | `eval BLOCK` introduces scope; `eval STRING` does not — this is instance-dependent, not variant-level |
-| `Package` | `introduces_scope` | `true` | Block-form (`package Foo { }`) introduces scope; statement-form (`package Foo;`) does not — instance-dependent |
+| `Use` | `safe_for_breakpoint` | **`false`** | `use Module LIST` is `BEGIN { require; import }` — compile-time; Perl 5.40.1 probe reports "not breakable". |
+| `No` | `safe_for_breakpoint` | **`false`** | `no Module LIST` is `BEGIN { unimport }` — compile-time; Perl 5.40.1 probe reports "not breakable". |
+| `Class` | `safe_for_breakpoint` | `true` | `class Foo { }` header line is stoppable in runtime debugger; probe confirms. |
+| `Goto` | `safe_for_breakpoint` | `true` | Executable statement before control transfer; stoppable. |
+| `Typeglob` | `safe_for_breakpoint` | `false` | Typeglob reference/assignment introduces no lexical scope; not a runtime statement. |
 
-Phase 8 DAP breakpoint migration **waits on issue #1297** resolution. Until
-#1297 is closed, no production DAP breakpoint validator should consume
-`safe_for_breakpoint` for these variants.
+**Instance-dependent (variant flag is a conservative prefilter; DAP consumer must verify):**
+
+| Variant | Flag | Variant-level value | Consumer must check |
+|---|---|---|---|
+| `Eval` | `introduces_scope` | `true` (prefilter) | Whether `block` child is `NodeKind::Block` — `eval STRING`/`eval EXPR` introduce no static scope. |
+| `Package` | `introduces_scope` | `true` (prefilter) | Whether `block.is_some()` — `package Foo;` (no block) creates no lexical scope. |
+| `Package` | `safe_for_breakpoint` | `true` (prefilter) | Whether `block.is_some()` — statement form differs from block form at runtime. |
+| `PhaseBlock` | `safe_for_breakpoint` | `true` (prefilter) | `phase` field: `BEGIN`/`CHECK`/`UNITCHECK` are compile-time (not stoppable); `END` is stoppable; `INIT` may depend on attach timing. |
+
+Phase 8 DAP breakpoint validator **may now consume `safe_for_breakpoint`** as a prefilter,
+but MUST apply the instance-dependent checks in the table above before accepting a
+breakpoint request. The prefilter eliminates obvious non-candidates (recovery nodes,
+literals, compile-time pragmas); the instance checks handle variant-level ambiguity.
 
 **Naming note.** The flag is currently named `safe_for_breakpoint`. A future
 rename or split to something like `can_host_executable_code` vs

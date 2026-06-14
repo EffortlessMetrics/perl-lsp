@@ -241,7 +241,8 @@ fn recovery_implies_not_safe_for_breakpoint() {
 // ────────────────────────────────────────────────────────
 
 /// The exact set of variant names that must be safe_for_breakpoint=TRUE
-/// per the plan-reviewer corrected table (43 variants).
+/// per the plan-reviewer corrected table (41 variants after ratification).
+/// Use and No removed (compile-time pragma/unimport; not runtime-breakable).
 const SAFE_FOR_BREAKPOINT_TRUE: &[&str] = &[
     "ExpressionStatement",
     "VariableDeclaration",
@@ -282,14 +283,13 @@ const SAFE_FOR_BREAKPOINT_TRUE: &[&str] = &[
     "Substitution",
     "Transliteration",
     "Package",
-    "Use",
-    "No",
     "PhaseBlock",
     "Class",
 ];
 
 /// The exact set of variant names that must be safe_for_breakpoint=FALSE
-/// per the plan-reviewer corrected table (26 variants).
+/// per the plan-reviewer corrected table (28 variants after ratification).
+/// Use and No added (compile-time pragma/unimport; not runtime-breakable).
 const SAFE_FOR_BREAKPOINT_FALSE: &[&str] = &[
     "Program",
     "Variable",
@@ -311,6 +311,8 @@ const SAFE_FOR_BREAKPOINT_FALSE: &[&str] = &[
     "DataSection",
     "Format",
     "Identifier",
+    "Use",
+    "No",
     // Recovery nodes (6)
     "Error",
     "MissingExpression",
@@ -351,6 +353,7 @@ fn safe_for_breakpoint_exact_false_set() {
 #[test]
 fn safe_for_breakpoint_covers_all_69_variants() {
     // Every variant must appear in exactly one of the two lists.
+    // After ratification: 41 in TRUE, 28 in FALSE = 69 total variants (per acceptance.md)
     for kind in all_variants() {
         let name = kind.kind_name();
         let in_true = SAFE_FOR_BREAKPOINT_TRUE.contains(&name);
@@ -625,5 +628,166 @@ fn all_kind_names_count_matches_variants() {
     assert_eq!(
         constructed, named,
         "all_variants() produced {constructed} variants but ALL_KIND_NAMES has {named} entries"
+    );
+}
+
+// ────────────────────────────────────────────────────────
+// Test: Instance-dependent flags documented
+//
+// Per acceptance.md §Instance-dependent semantics (Hazards):
+// Eval, Package, and PhaseBlock have conservative variant-level flags.
+// The DAP/LSP consumer must verify AST structure or phase name to determine
+// actual behavior. These tests document the variant-level flags and the
+// consumer responsibility boundaries.
+// ────────────────────────────────────────────────────────
+
+#[test]
+fn instance_dependent_flags_eval() {
+    // Eval::safe_for_breakpoint = true (prefilter, variant-level).
+    // BUT: consumer must check if child is NodeKind::Block to know scope behavior.
+    // - eval BLOCK { ... } has scope (block present)
+    // - eval STRING or eval EXPR does not have scope (block is not Block kind)
+
+    let eval_with_block = NodeKind::Eval { block: Box::new(block_node()) };
+    let f = eval_with_block.flags();
+
+    assert!(
+        f.safe_for_breakpoint,
+        "Eval variant flag safe_for_breakpoint should be true (prefilter)"
+    );
+    assert!(
+        f.introduces_scope,
+        "Eval variant flag introduces_scope should be true (conservative prefilter)"
+    );
+
+    // Comment: Consumer (Phase 8 DAP layer) must check if block field contains
+    // a Block node to know if scope is actually introduced at runtime.
+}
+
+#[test]
+fn instance_dependent_flags_package() {
+    // Package::safe_for_breakpoint = true (prefilter, variant-level).
+    // Package::introduces_scope = true (prefilter, variant-level).
+    // BUT: consumer must check block field to distinguish behavior:
+    // - package Foo { ... } form: block is Some(Block node) → scope is real
+    // - package Foo; form: block is None → no scope created
+
+    let pkg_with_block = NodeKind::Package {
+        name: "Foo".to_string(),
+        name_span: loc(),
+        block: Some(Box::new(block_node())),
+    };
+    let f = pkg_with_block.flags();
+
+    assert!(
+        f.safe_for_breakpoint,
+        "Package variant flag safe_for_breakpoint should be true (prefilter)"
+    );
+    assert!(
+        f.introduces_scope,
+        "Package variant flag introduces_scope should be true (conservative prefilter)"
+    );
+
+    let pkg_without_block = NodeKind::Package {
+        name: "Bar".to_string(),
+        name_span: loc(),
+        block: None,
+    };
+    let f2 = pkg_without_block.flags();
+
+    assert!(
+        f2.safe_for_breakpoint,
+        "Package variant flag safe_for_breakpoint should be true even without block (prefilter)"
+    );
+    assert!(
+        f2.introduces_scope,
+        "Package variant flag introduces_scope should be true even without block (prefilter)"
+    );
+
+    // Comment: Consumer must check block.is_some() to distinguish statement form
+    // (package Foo;) from block form (package Foo { ... }).
+}
+
+#[test]
+fn instance_dependent_flags_phaseblock() {
+    // PhaseBlock::safe_for_breakpoint = true (prefilter, variant-level).
+    // PhaseBlock::introduces_scope = true (prefilter, variant-level).
+    // BUT: consumer must check phase field to determine runtime stoppability:
+    // - BEGIN, CHECK, UNITCHECK: compile-time phase (not stoppable in runtime session)
+    // - END: run-time cleanup (stoppable at exit)
+    // - INIT: initialization (may be stoppable depending on timing)
+
+    let begin_block = NodeKind::PhaseBlock {
+        phase: "BEGIN".to_string(),
+        phase_span: None,
+        block: Box::new(block_node()),
+    };
+    let f = begin_block.flags();
+
+    assert!(
+        f.safe_for_breakpoint,
+        "PhaseBlock variant flag safe_for_breakpoint should be true (has block, prefilter)"
+    );
+    assert!(
+        f.introduces_scope,
+        "PhaseBlock variant flag introduces_scope should be true (has block, prefilter)"
+    );
+
+    let end_block = NodeKind::PhaseBlock {
+        phase: "END".to_string(),
+        phase_span: None,
+        block: Box::new(block_node()),
+    };
+    let f2 = end_block.flags();
+
+    assert!(
+        f2.safe_for_breakpoint,
+        "PhaseBlock variant flag safe_for_breakpoint should be true (all phases have same variant flags)"
+    );
+    assert!(
+        f2.introduces_scope,
+        "PhaseBlock variant flag introduces_scope should be true (all phases have same variant flags)"
+    );
+
+    // Comment: Consumer (Phase 8 DAP layer) must check phase field to determine
+    // if breakpoint is actually stoppable at runtime:
+    // - BEGIN/CHECK/UNITCHECK: not stoppable in runtime session
+    // - END: stoppable at shutdown
+    // - INIT: maybe stoppable depending on attach timing
+    // The variant flags are conservative (all true) and serve as a prefilter.
+}
+
+// ────────────────────────────────────────────────────────
+// Test: Use and No safe_for_breakpoint=false coverage
+//
+// Direct test for Use/No variants to ensure llvm-cov measures coverage of
+// the modified match arms in classification.rs (where Use/No changed from
+// safe_for_breakpoint=true to false). The main test suite exercises these
+// variants indirectly; this test directly asserts the flag value.
+// ────────────────────────────────────────────────────────
+
+#[test]
+fn use_not_safe_for_breakpoint() {
+    let use_kind = NodeKind::Use {
+        module: "strict".to_string(),
+        args: vec![],
+        has_filter_risk: false,
+    };
+    assert!(
+        !use_kind.flags().safe_for_breakpoint,
+        "Use must have safe_for_breakpoint=false (compile-time pragma)"
+    );
+}
+
+#[test]
+fn no_not_safe_for_breakpoint() {
+    let no_kind = NodeKind::No {
+        module: "warnings".to_string(),
+        args: vec![],
+        has_filter_risk: false,
+    };
+    assert!(
+        !no_kind.flags().safe_for_breakpoint,
+        "No must have safe_for_breakpoint=false (compile-time unimport)"
     );
 }
