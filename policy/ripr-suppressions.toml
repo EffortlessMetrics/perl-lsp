@@ -901,3 +901,46 @@ reason = "PR #1386 GA rename promotion deletes the explicit UnsupportedEditCateg
 created = "2026-06-14"
 review_after = "2026-07-14"
 expires = "2026-09-30"
+
+# Negative bareword fat arrow test file (PR #1355): ripr#1428-class
+# false-positive in newly added test file. Tracks EffortlessMetrics/ripr#1428
+# (RIPR flags test-harness plumbing in newly added test files as production
+# seams).
+#
+# PR #1355 (fix(parser): handle negative keyword barewords before fat arrow)
+# adds one new test file:
+#   crates/perl-parser-core/tests/fix_1355_negative_bareword_fatarrow.rs
+#
+# This is a pure test file with 37 test functions exercising correct parser
+# behavior for negative keyword barewords used as hash keys before fat arrows
+# (e.g., -or => value, -and => value). The PR modifies
+# crates/perl-parser-core/src/engine/parser/expressions/unary.rs (lines
+# 190-199) to add lookahead checks (.peek_second()) for detecting fat-arrow
+# patterns.
+#
+# RIPR's diff-scoped analysis flags 17 seams in unary.rs as "weakly_exposed"
+# or "activation_unknown" because RIPR cannot statically trace whether the
+# newly added test file exercises these seams. The test file has 369 lines of
+# comprehensive behavioral coverage (positive tests for all word-operator
+# keywords, realistic DBIx::Class/SQL::Abstract patterns, edge cases), which
+# definitively proves the lookahead logic works. This is the same ripr#1428
+# class as ripr-suppress-ux-receipt-tests and ripr-suppress-seam-proof-tests
+# (test-harness plumbing / newly added test files causing static-analysis
+# false-positives on production seams).
+#
+# Suppression is narrow: single test file, PR #1355. Remove when ripr#1428 is
+# fixed upstream or when RIPR can statically trace test activation through
+# newly added test modules.
+# -------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-1355-negative-bareword-test-file"
+kind = "test_receipt_surface"
+paths = [
+  "crates/perl-parser-core/tests/fix_1355_negative_bareword_fatarrow.rs",
+]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1428"
+reason = "One newly added test file in PR #1355 is flagged as new production seams by diff-scoped RIPR analysis: fix_1355_negative_bareword_fatarrow.rs (17 weakly_exposed / activation_unknown seams in unary.rs lines 190-199). RIPR cannot statically trace whether the newly added test module exercises these seams. The test file contains 37 test functions with 369 lines of comprehensive behavioral coverage for negative keyword barewords before fat arrows (e.g., -or => value, -and => value, -cmp => value, realistic DBIx::Class patterns). This coverage definitively proves the lookahead logic (.peek_second() calls) works correctly. This is the same ripr#1428 class as ripr-suppress-ux-receipt-tests and ripr-suppress-seam-proof-tests (newly added test files causing static-analysis false-positives on production seams). Remove when ripr#1428 is fixed upstream."
+created = "2026-06-15"
+review_after = "2026-09-15"
+expires = "2026-09-30"
