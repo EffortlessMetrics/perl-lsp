@@ -60,10 +60,9 @@ CI hasn't broken since their last look).
 | `merge-gate` | 2 min | Aggregates shard results into the required merge-blocking status |
 | `ux-tests` | 15 min | UX regression suite against live binary |
 | `check-all-targets` | 10 min | `cargo check --workspace --all-targets` (bit-rot guard) |
-| `windows-scope` | 5 min | Diff classifier: decides whether the native Windows canary (and full guardrails) need to run for this PR |
-| `windows-canary` | 15 min | Native Windows runner that proves the Windows-only sandbox dispatch path is wired. Conditional on `windows-scope.required=true` |
-| `windows-required` | 2 min | Ubuntu aggregator consumed by `merge-gate` — succeeds when canary isn't required, fails when canary is required and didn't pass, fails closed if `windows-scope` errored |
-| `windows-full-guardrails` | 35 min | Old broad Windows matrix (compile / module-separator / sandbox). Runs on push to master, manual dispatch, or PRs that change toolchain/lockfile/workflows. **Not** a merge-gate dependency for normal PRs |
+| `lsp-memory-smoke` | 15 min | Memory plateau check against the LSP release binary (advisory, not merge-blocking) |
+
+The `windows-scope`, `windows-canary`, `windows-required`, and `windows-full-guardrails` jobs were removed in #1485 (maintainer directive, 2026-06). See §4.5 — Runner Policy.
 
 **Scoping within Frontdoor Proof**: The pr-smoke job uses `cargo xtask ci-scope` to
 classify the diff and select scoped lanes. This is "scoped-deep" CI — narrow to the blast
@@ -624,45 +623,18 @@ queue.
 
 ## Section 9 — Windows Guardrails
 
-Windows is treated as a scarce platform canary plus a periodic full-platform soak,
-not a full proof lane on every PR. The merge-blocking path used to wait on the
-entire `windows-guardrails` matrix on `windows-latest`; the 2026-04-25 failure
-catalog showed the sandbox lane had only ~6% headroom over master runtime, so
-that arrangement was reorganized into four jobs.
+Windows CI jobs (`windows-scope`, `windows-canary`, `windows-required`, `windows-full-guardrails`)
+were **removed from `ci.yml` in #1485** (2026-06-14 maintainer directive). CI runs on self-hosted
+Ubuntu/Linux runners only. Windows/macOS runners are billed GitHub-hosted and are reserved for
+genuinely OS-specific necessity — see §4.5 (Runner Policy) for the current policy.
 
-A Linux cross-target compile-shape check (`cargo check --target
-x86_64-pc-windows-msvc`) was considered but dropped: the workspace contains
-build scripts that invoke `cc` for the MSVC target, which require `lib.exe`
-and `cl.exe` and don't cross-compile cleanly from Linux. Generic compile
-bit-rot is covered by `check-all-targets`; Windows-specific compile coverage
-lives in `windows-canary` (small) and `windows-full-guardrails` (full).
+Generic compile bit-rot and cross-platform logic is fully covered by `check-all-targets` on Linux.
+cfg(windows) code paths (DAP platform dispatch, sandbox fail-closed, subprocess invocation) lose
+per-PR runner coverage; this is an accepted trade-off per the runner policy.
 
-**Current shape:**
-
-| Job | Runner | Role | Merge-gate dependency? |
-|-----|--------|------|------------------------|
-| `windows-scope` | ubuntu-24.04 | Diff classifier. Sets `required=true` when the diff touches sandbox/module/workspace/URI code or basenames containing `path`, `uri`, `module`, `workspace-folder`, `file_uri`, `windows`, `separator`, `canonicalize`, `sandbox`. Sets `full=true` on `.github/workflows/`, `.ci/`, root `Cargo.toml`/`Cargo.lock`, `rust-toolchain.toml`, `justfile`, or non-PR events. | (input to others) |
-| `windows-canary` | windows-latest | Tiny native dispatch canary — currently `test_windows_sandbox_fails_closed` via `cargo test --lib`. Runs only when `windows-scope.required=true`. | (covered via aggregator) |
-| `windows-required` | ubuntu-24.04 | Aggregator consumed by `merge-gate`. Skipped together with the rest of CI on draft PRs / superseded SHAs; otherwise succeeds when the canary isn't needed; fails when the canary was required and didn't pass; fails closed if `windows-scope` itself errored. Branch protection points at `ci/merge-gate` (not at this job directly). | Yes |
-| `windows-full-guardrails` | windows-latest | Old broad Windows matrix (`compile`, `module-separator-regressions`, `sandbox-fail-closed`). Runs on push to master, manual dispatch, and PRs flagged `full=true`. (Nightly Windows soak runs are owned by `ci-nightly.yml`.) | No (advisory / risk-triggered) |
-
-**Why this shape:**
-
-- The merge-blocking path now pays for a cheap Ubuntu diff classifier on every
-  PR plus a tiny native canary on Windows-relevant PRs, instead of the full
-  broad Windows matrix on every PR.
-- Linux owns generic compile coverage via `check-all-targets`; Windows owns
-  wiring proof — that the `#[cfg(target_os = "windows")]` branch is actually
-  reached, currently the sandbox fail-closed test.
-- Full Windows coverage still runs, but on master, manual dispatch, and
-  high-risk PRs (toolchain/lockfile/workflow) — not on every normal PR.
-  Nightly Windows soak coverage lives in `ci-nightly.yml`.
-
-**Known failure pattern** (see `feedback_xtask_fmt_false_cascade.md` in MEMORY.md): The
-`Compile + PR Smoke + Windows Full Guardrails (module-separator-regressions)` triple-failure
-pattern is the fingerprint of `xtask fmt` aborting at first failure. This looks like a
-master cascade but is often N independent PR-side format issues. Verify on master before
-declaring cascade.
+**Known failure pattern**: The `Compile + PR Smoke` double-failure pattern is the fingerprint of
+`xtask fmt` aborting at first failure. This looks like a master cascade but is often N independent
+PR-side format issues. Verify on master before declaring cascade.
 
 ---
 
