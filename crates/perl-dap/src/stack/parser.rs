@@ -237,6 +237,11 @@ impl PerlStackParser {
             .or_else(|| caps.name("file2"))?
             .as_str();
 
+        // Reject blank/whitespace-only file captures (e.g. "main:: :42:")
+        if file.trim().is_empty() {
+            return None;
+        }
+
         // Get line from either capture group
         let line_str = caps.name("line").or_else(|| caps.name("line2"))?.as_str();
         let line: i64 = line_str.parse().ok()?;
@@ -334,6 +339,10 @@ impl PerlStackParser {
                 .or_else(|| caps.name("file2"))?
                 .as_str()
                 .to_string();
+            // Reject blank/whitespace-only file captures (e.g. "main:: :42:")
+            if file.trim().is_empty() {
+                return None;
+            }
             let line_str = caps.name("line").or_else(|| caps.name("line2"))?.as_str();
             let line: i64 = line_str.parse().ok()?;
 
