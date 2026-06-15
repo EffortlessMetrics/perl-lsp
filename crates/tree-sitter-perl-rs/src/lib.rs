@@ -172,7 +172,11 @@ impl PerlLanguage {
         self.kind_names.len()
     }
 
-    /// Returns all node kind names, in alphabetical order.
+    /// Returns all node kind names, in declaration order.
+    ///
+    /// The order matches the variant declaration order of [`perl_ast::NodeKind`].
+    /// `ALL_KIND_NAMES` is auto-derived via `strum::VariantNames`; callers that
+    /// need a sorted list should sort the returned slice themselves.
     pub fn node_kind_names(&self) -> &[&'static str] {
         self.kind_names
     }
@@ -1022,17 +1026,24 @@ mod tests {
     }
 
     #[test]
-    fn test_language_kind_names_are_sorted_alphabetically() {
-        // node_kind_names() documents "in alphabetical order"; enforce that contract.
+    fn test_language_kind_names_declaration_order_and_no_duplicates() {
+        // ALL_KIND_NAMES is now in declaration order (not alphabetical) via strum::VariantNames
+        // (changed in PR #1491). Verify there are no duplicates and 'Program' is first.
         let lang = language();
         let names = lang.node_kind_names();
-        let mut sorted = names.to_vec();
-        sorted.sort_unstable();
+        assert!(!names.is_empty(), "node_kind_names must not be empty");
         assert_eq!(
-            names,
-            sorted.as_slice(),
-            "node_kind_names() must be in alphabetical order; \
-             re-sort ALL_KIND_NAMES in perl-ast if a new variant was added out of order"
+            names.first(),
+            Some(&"Program"),
+            "First kind name should be 'Program' (declaration order)"
+        );
+        let unique: std::collections::BTreeSet<&str> = names.iter().copied().collect();
+        assert_eq!(
+            names.len(),
+            unique.len(),
+            "node_kind_names must not contain duplicates: {} entries, {} unique",
+            names.len(),
+            unique.len()
         );
     }
 

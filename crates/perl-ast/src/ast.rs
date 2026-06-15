@@ -106,6 +106,7 @@ pub use perl_position_tracking::SourceLocation;
 // Re-export Token and TokenKind from perl-token for AST error nodes
 pub use perl_token::{Token, TokenKind};
 use std::fmt;
+use strum::VariantNames as _;
 
 /// Core AST node representing any Perl language construct within parsing workflows.
 ///
@@ -1567,7 +1568,7 @@ impl Node {
 /// - Vector storage enables efficient bulk operations on child nodes
 /// - Clone operations optimized for concurrent analysis workflows
 /// - Pattern matching performance tuned for common Perl constructs
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, strum::VariantNames)]
 pub enum NodeKind {
     /// Top-level program containing all statements in an Perl script
     ///
@@ -2325,82 +2326,14 @@ impl NodeKind {
         }
     }
 
-    /// Canonical list of **all** `kind_name()` strings, in alphabetical order.
+    /// Canonical list of **all** `kind_name()` strings, in declaration order.
+    ///
+    /// Auto-derived from the `NodeKind` enum via `strum::VariantNames` — adding a new
+    /// variant automatically updates this list. No manual maintenance required.
     ///
     /// Every consumer that needs the full set of NodeKind names should reference
     /// this constant instead of maintaining a hand-written copy.
-    pub const ALL_KIND_NAMES: &[&'static str] = &[
-        "ArrayLiteral",
-        "Assignment",
-        "Binary",
-        "Block",
-        "Class",
-        "DataSection",
-        "Default",
-        "Defer",
-        "Diamond",
-        "Do",
-        "Ellipsis",
-        "Error",
-        "Eval",
-        "ExpressionStatement",
-        "For",
-        "Foreach",
-        "Format",
-        "FunctionCall",
-        "Given",
-        "Glob",
-        "Goto",
-        "HashLiteral",
-        "Heredoc",
-        "Identifier",
-        "If",
-        "IndirectCall",
-        "LabeledStatement",
-        "LoopControl",
-        "MandatoryParameter",
-        "Match",
-        "Method",
-        "MethodCall",
-        "MissingBlock",
-        "MissingExpression",
-        "MissingIdentifier",
-        "MissingStatement",
-        "NamedParameter",
-        "NestedVariableList",
-        "No",
-        "Number",
-        "OptionalParameter",
-        "Package",
-        "PhaseBlock",
-        "Program",
-        "Prototype",
-        "Readline",
-        "Regex",
-        "Return",
-        "Signature",
-        "SlurpyParameter",
-        "StatementModifier",
-        "String",
-        "Subroutine",
-        "Substitution",
-        "Ternary",
-        "Tie",
-        "Transliteration",
-        "Try",
-        "Typeglob",
-        "Unary",
-        "Undef",
-        "UnknownRest",
-        "Untie",
-        "Use",
-        "Variable",
-        "VariableDeclaration",
-        "VariableListDeclaration",
-        "VariableWithAttributes",
-        "When",
-        "While",
-    ];
+    pub const ALL_KIND_NAMES: &[&'static str] = NodeKind::VARIANTS;
 
     /// Subset of `ALL_KIND_NAMES` that represent synthetic/recovery nodes.
     ///
@@ -2867,6 +2800,43 @@ mod tests {
         );
     }
 
+    /// Construct recovery variants and return their `kind_name()` strings.
+    ///
+    /// Adding a recovery variant to `NodeKind` without updating `RECOVERY_KIND_NAMES`
+    /// will cause `recovery_kind_names_is_consistent_with_kind_name` to fail.
+    fn recovery_kind_names_from_variants() -> BTreeSet<&'static str> {
+        vec![
+            NodeKind::Error {
+                message: String::new(),
+                expected: vec![],
+                found: None,
+                partial: None,
+            },
+            NodeKind::MissingExpression,
+            NodeKind::MissingStatement,
+            NodeKind::MissingIdentifier,
+            NodeKind::MissingBlock,
+            NodeKind::UnknownRest,
+        ]
+        .iter()
+        .map(|v| v.kind_name())
+        .collect()
+    }
+
+    #[test]
+    fn recovery_kind_names_is_consistent_with_kind_name() {
+        let from_enum = recovery_kind_names_from_variants();
+        let from_const: BTreeSet<&str> = NodeKind::RECOVERY_KIND_NAMES.iter().copied().collect();
+        let only_in_enum: Vec<_> = from_enum.difference(&from_const).collect();
+        let only_in_const: Vec<_> = from_const.difference(&from_enum).collect();
+        assert!(
+            only_in_enum.is_empty() && only_in_const.is_empty(),
+            "RECOVERY_KIND_NAMES is out of sync with recovery variants:\n  \
+             in enum but not in RECOVERY_KIND_NAMES: {only_in_enum:?}\n  \
+             in RECOVERY_KIND_NAMES but not in enum: {only_in_const:?}"
+        );
+    }
+
     #[test]
     fn recovery_kind_names_is_subset_of_all() {
         let all: BTreeSet<&str> = NodeKind::ALL_KIND_NAMES.iter().copied().collect();
@@ -2883,6 +2853,99 @@ mod tests {
         assert!(
             not_in_all.is_empty(),
             "RECOVERY_KIND_NAMES contains entries not in ALL_KIND_NAMES: {not_in_all:?}"
+        );
+    }
+
+    #[test]
+    fn all_kind_names_not_empty() {
+        // Regression guard: ALL_KIND_NAMES should always be populated
+        assert!(
+            !NodeKind::ALL_KIND_NAMES.is_empty(),
+            "ALL_KIND_NAMES should not be empty; strum derivation failed"
+        );
+    }
+
+    #[test]
+    fn all_kind_names_no_empty_strings() {
+        // Boundary condition: no entry should be an empty string
+        for (i, name) in NodeKind::ALL_KIND_NAMES.iter().enumerate() {
+            assert!(!name.is_empty(), "ALL_KIND_NAMES[{}] is empty string", i);
+        }
+    }
+
+    #[test]
+    fn all_kind_names_starts_with_program() {
+        // Regression guard: first variant is Program (declaration order invariant)
+        assert_eq!(
+            NodeKind::ALL_KIND_NAMES.first(),
+            Some(&"Program"),
+            "First variant in ALL_KIND_NAMES should be 'Program' (declaration order)"
+        );
+    }
+
+    #[test]
+    fn all_kind_names_ends_with_unknown_rest() {
+        // Regression guard: last variant is UnknownRest (declaration order invariant)
+        assert_eq!(
+            NodeKind::ALL_KIND_NAMES.last(),
+            Some(&"UnknownRest"),
+            "Last variant in ALL_KIND_NAMES should be 'UnknownRest' (declaration order)"
+        );
+    }
+
+    #[test]
+    fn all_kind_names_valid_kind_names() {
+        // Regression guard: every string in ALL_KIND_NAMES is a valid kind_name() output
+        for (i, name) in NodeKind::ALL_KIND_NAMES.iter().enumerate() {
+            let found = all_kind_names_from_variants().contains(name);
+            assert!(
+                found,
+                "ALL_KIND_NAMES[{}] = '{}' is not a valid kind_name() return value",
+                i, name
+            );
+        }
+    }
+
+    #[test]
+    fn all_kind_names_exact_match_with_variants_set() {
+        // Regression guard: ALL_KIND_NAMES contains exactly the same names as all variants
+        let from_enum = all_kind_names_from_variants();
+        let from_const: BTreeSet<&str> = NodeKind::ALL_KIND_NAMES.iter().copied().collect();
+
+        assert_eq!(from_enum, from_const, "ALL_KIND_NAMES set does not match variant kind_names");
+    }
+
+    #[test]
+    fn all_kind_names_no_whitespace_padding() {
+        // Boundary condition: no leading/trailing whitespace in variant names
+        for (i, name) in NodeKind::ALL_KIND_NAMES.iter().enumerate() {
+            assert_eq!(
+                *name,
+                name.trim(),
+                "ALL_KIND_NAMES[{}] = '{}' has leading/trailing whitespace",
+                i,
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn all_kind_names_count_regression_guard() {
+        // Regression guard: ALL_KIND_NAMES must have at least 70 entries.
+        // The previous hand-maintained list had 70 variants (including NestedVariableList
+        // added in #1457). Failing below that count means a variant was deleted or the
+        // strum derivation silently stopped working.
+        //
+        // Note: the previous test `all_kind_names_strum_derived_stability` asserted
+        // `NodeKind::VARIANTS == NodeKind::ALL_KIND_NAMES`, which is trivially true by
+        // definition (ALL_KIND_NAMES = NodeKind::VARIANTS). That assertion was vacuous
+        // and has been replaced with this count guard.
+        assert!(
+            NodeKind::ALL_KIND_NAMES.len() >= 70,
+            "ALL_KIND_NAMES has only {} entries; expected >= 70. \
+             A variant may have been accidentally removed, or strum::VariantNames \
+             is not being applied correctly.",
+            NodeKind::ALL_KIND_NAMES.len()
         );
     }
 }

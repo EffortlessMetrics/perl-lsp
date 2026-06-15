@@ -243,9 +243,12 @@ impl DebugAdapter {
                         }
                     }
                     None => {
-                        // Invalid or non-Scope variablesReference — no framed output to fetch.
-                        // EvalResult/Child cache hits were already served above;
-                        // unknown refs produce an honest empty list.
+                        // Non-Scope variablesReference — no framed output to fetch.
+                        // Cache hits were already returned via variable_cache above.
+                        // Stale EvalResult refs short-circuit to an empty response
+                        // before reaching this branch (see the early return above).
+                        // A stale Child ref on cache miss silently produces an empty
+                        // list here; that gap is tracked in issue #1445.
                     }
                 }
 

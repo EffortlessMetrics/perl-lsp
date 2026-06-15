@@ -1148,16 +1148,18 @@ fn first_child_of_error_without_partial() {
 // ===========================================================================
 
 #[test]
-fn all_kind_names_is_sorted() {
+fn all_kind_names_has_no_duplicates() {
+    // ALL_KIND_NAMES is now auto-derived from the enum via strum::VariantNames
+    // (declaration order, not alphabetical). Verify there are no duplicates.
     let names = NodeKind::ALL_KIND_NAMES;
-    for window in names.windows(2) {
-        assert!(
-            window[0] < window[1],
-            "ALL_KIND_NAMES not sorted: {:?} >= {:?}",
-            window[0],
-            window[1]
-        );
-    }
+    let unique: std::collections::BTreeSet<&str> = names.iter().copied().collect();
+    assert_eq!(
+        names.len(),
+        unique.len(),
+        "ALL_KIND_NAMES contains duplicates: {} entries, {} unique",
+        names.len(),
+        unique.len()
+    );
 }
 
 #[test]

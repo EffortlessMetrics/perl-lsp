@@ -1512,14 +1512,83 @@ fn count_nodes_nested_tree() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn kind_name_covers_all_variants() -> Result<(), Box<dyn std::error::Error>> {
-    // Verify ALL_KIND_NAMES is populated and sorted
+    // Verify ALL_KIND_NAMES is populated (auto-derived via strum::VariantNames —
+    // declaration order, not alphabetical).
     assert!(!NodeKind::ALL_KIND_NAMES.is_empty());
-    let sorted: Vec<&str> = {
-        let mut v: Vec<&str> = NodeKind::ALL_KIND_NAMES.to_vec();
-        v.sort();
-        v
-    };
-    assert_eq!(NodeKind::ALL_KIND_NAMES, sorted.as_slice(), "ALL_KIND_NAMES should be sorted");
+
+    // Verify no duplicates.
+    let unique: std::collections::BTreeSet<&str> =
+        NodeKind::ALL_KIND_NAMES.iter().copied().collect();
+    assert_eq!(
+        NodeKind::ALL_KIND_NAMES.len(),
+        unique.len(),
+        "ALL_KIND_NAMES should have no duplicates"
+    );
+
+    // Spot-check representatives from every NodeKind category to verify ALL_KIND_NAMES
+    // contains each variant's kind_name(). The exhaustive set-equality check lives in
+    // ast.rs::tests::all_kind_names_exact_match_with_variants_set (internal test module
+    // has access to all_kind_names_from_variants() helper).
+    let loc = SourceLocation { start: 0, end: 0 };
+    let dummy = Node::new(NodeKind::Undef, loc);
+    let spot_checks: &[(&str, NodeKind)] = &[
+        ("Program", NodeKind::Program { statements: vec![] }),
+        ("Variable", NodeKind::Variable { sigil: "$".into(), name: "x".into() }),
+        (
+            "Binary",
+            NodeKind::Binary {
+                op: "+".into(),
+                left: Box::new(dummy.clone()),
+                right: Box::new(dummy.clone()),
+            },
+        ),
+        (
+            "If",
+            NodeKind::If {
+                condition: Box::new(dummy.clone()),
+                then_branch: Box::new(dummy.clone()),
+                elsif_branches: vec![],
+                else_branch: None,
+                keyword: None,
+            },
+        ),
+        (
+            "Subroutine",
+            NodeKind::Subroutine {
+                name: None,
+                name_span: None,
+                prototype: None,
+                signature: None,
+                attributes: vec![],
+                body: Box::new(dummy.clone()),
+            },
+        ),
+        ("FunctionCall", NodeKind::FunctionCall { name: String::new(), args: vec![] }),
+        ("Use", NodeKind::Use { module: String::new(), args: vec![], has_filter_risk: false }),
+        (
+            "Error",
+            NodeKind::Error {
+                message: String::new(),
+                expected: vec![],
+                found: None,
+                partial: None,
+            },
+        ),
+        ("MissingExpression", NodeKind::MissingExpression),
+        ("UnknownRest", NodeKind::UnknownRest),
+    ];
+    for (expected_name, kind) in spot_checks {
+        let actual_kind_name = kind.kind_name();
+        assert_eq!(actual_kind_name, *expected_name, "kind_name() mismatch");
+        assert!(
+            NodeKind::ALL_KIND_NAMES.contains(expected_name),
+            "ALL_KIND_NAMES missing entry for variant '{expected_name}'"
+        );
+    }
+
+    // Count guard: at least 70 variants (pre-PR baseline including NestedVariableList).
+    assert!(NodeKind::ALL_KIND_NAMES.len() >= 70, "ALL_KIND_NAMES has too few entries");
+
     Ok(())
 }
 

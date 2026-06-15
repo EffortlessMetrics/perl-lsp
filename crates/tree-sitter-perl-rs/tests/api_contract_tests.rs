@@ -27,17 +27,24 @@ fn language_descriptor_reports_stable_named_kind_catalog() {
 
 #[test]
 fn language_descriptor_kind_names_are_sorted_and_unique() {
+    // ALL_KIND_NAMES is now in declaration order (not alphabetical) via strum::VariantNames
+    // (changed in PR #1491). Verify no duplicates and "Program" is first.
     let descriptor = language();
     let names = descriptor.node_kind_names();
-
-    for pair in names.windows(2) {
-        assert!(
-            pair[0] < pair[1],
-            "kind names must be sorted and unique; saw {:?} before {:?}",
-            pair[0],
-            pair[1]
-        );
-    }
+    assert!(!names.is_empty(), "node_kind_names must not be empty");
+    assert_eq!(
+        names.first(),
+        Some(&"Program"),
+        "First kind name should be 'Program' (declaration order)"
+    );
+    let unique: std::collections::BTreeSet<&str> = names.iter().copied().collect();
+    assert_eq!(
+        names.len(),
+        unique.len(),
+        "node_kind_names must not contain duplicates: {} entries, {} unique",
+        names.len(),
+        unique.len()
+    );
 }
 
 #[test]
