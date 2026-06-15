@@ -381,11 +381,7 @@ fn test_ripr_seam_minus_and_sexp_exact_identifier() {
     // The -and keyword must produce an Identifier node with name "-and".
     let ast = parse("my %h = (-and => 5);");
     let sexp = ast.to_sexp();
-    assert!(
-        sexp.contains("-and"),
-        "Expected '-and' identifier in sexp, got:\n{}",
-        sexp
-    );
+    assert!(sexp.contains("-and"), "Expected '-and' identifier in sexp, got:\n{}", sexp);
     assert!(
         !sexp.to_lowercase().contains("error"),
         "Expected no error nodes for -and => value, got:\n{}",
@@ -398,11 +394,7 @@ fn test_ripr_seam_minus_xor_sexp_exact_identifier() {
     // The -xor keyword must produce an Identifier node with name "-xor".
     let ast = parse("my %h = (-xor => 1);");
     let sexp = ast.to_sexp();
-    assert!(
-        sexp.contains("-xor"),
-        "Expected '-xor' identifier in sexp, got:\n{}",
-        sexp
-    );
+    assert!(sexp.contains("-xor"), "Expected '-xor' identifier in sexp, got:\n{}", sexp);
 }
 
 #[test]
@@ -410,11 +402,7 @@ fn test_ripr_seam_minus_not_sexp_exact_identifier() {
     // The -not (WordNot) keyword must produce an Identifier with name "-not".
     let ast = parse("my %h = (-not => 1);");
     let sexp = ast.to_sexp();
-    assert!(
-        sexp.contains("-not"),
-        "Expected '-not' identifier in sexp, got:\n{}",
-        sexp
-    );
+    assert!(sexp.contains("-not"), "Expected '-not' identifier in sexp, got:\n{}", sexp);
 }
 
 #[test]
@@ -422,11 +410,7 @@ fn test_ripr_seam_minus_cmp_sexp_exact_identifier() {
     // The -cmp (StringCompare) keyword must produce an Identifier with name "-cmp".
     let ast = parse("my %h = (-cmp => 1);");
     let sexp = ast.to_sexp();
-    assert!(
-        sexp.contains("-cmp"),
-        "Expected '-cmp' identifier in sexp, got:\n{}",
-        sexp
-    );
+    assert!(sexp.contains("-cmp"), "Expected '-cmp' identifier in sexp, got:\n{}", sexp);
 }
 
 /// Test that the lookahead condition is critical.
@@ -485,9 +469,11 @@ fn test_ripr_seam_name_format_exact() {
     let ast = parse("my %h = (-or => 1);");
     let sexp = ast.to_sexp();
     // Must contain the exact string "-or" (not "or", not "-OR", not "- or").
-    assert!(sexp.contains("\"" ) && sexp.contains("-or"),
+    assert!(
+        sexp.contains("\"") && sexp.contains("-or"),
         "Expected exact '-or' string in identifier, got:\n{}",
-        sexp);
+        sexp
+    );
 }
 
 /// Test that consuming the keyword token (self.tokens.next()) happens correctly.
@@ -500,9 +486,11 @@ fn test_ripr_seam_token_consumption_moves_parser() {
     let ast = parse(source);
     let sexp = ast.to_sexp();
     // Both -or and -and must parse correctly, proving token consumption worked.
-    assert!(sexp.contains("-or") && sexp.contains("-and"),
+    assert!(
+        sexp.contains("-or") && sexp.contains("-and"),
         "Expected both -or and -and parsed correctly, got:\n{}",
-        sexp);
+        sexp
+    );
 }
 
 /// Test that node location (start, end) is correctly set.
@@ -516,9 +504,11 @@ fn test_ripr_seam_node_location_set() {
     // The AST should be parseable and contain the identifier; if locations were wrong,
     // serialization or later processing might fail.
     let sexp = ast.to_sexp();
-    assert!(!sexp.to_lowercase().contains("error"),
+    assert!(
+        !sexp.to_lowercase().contains("error"),
         "Location tracking failure would show as error, got:\n{}",
-        sexp);
+        sexp
+    );
 }
 
 /// Test that the lookahead (peek_second) doesn't consume tokens.
@@ -531,9 +521,11 @@ fn test_ripr_seam_lookahead_non_destructive() {
     let ast = parse(source);
     let sexp = ast.to_sexp();
     // All three must be present, proving lookahead didn't consume.
-    assert!(sexp.contains("-or") && sexp.contains("-and") && sexp.contains("-xor"),
+    assert!(
+        sexp.contains("-or") && sexp.contains("-and") && sexp.contains("-xor"),
         "Lookahead might have consumed tokens, got:\n{}",
-        sexp);
+        sexp
+    );
 }
 
 /// Test nested contexts: the fix must apply at all nesting levels.
