@@ -12,6 +12,9 @@
 use perl_ast::classification::NodeKindCategory;
 use perl_ast::{Node, NodeKind, SourceLocation};
 
+#[path = "helpers.rs"]
+mod helpers;
+
 fn loc() -> SourceLocation {
     SourceLocation::new(0, 1)
 }
@@ -25,184 +28,12 @@ fn block_node() -> Node {
 }
 
 // ────────────────────────────────────────────────────────
-// Helper: produce one representative of each NodeKind variant
+// all_variants: delegates to helpers::all_nodekind_instances()
 // ────────────────────────────────────────────────────────
-
+// The canonical fixture lives in tests/helpers.rs. When a new NodeKind
+// variant is added, update helpers.rs (one place for all integration tests).
 fn all_variants() -> Vec<NodeKind> {
-    vec![
-        NodeKind::Program { statements: vec![] },
-        NodeKind::ExpressionStatement { expression: Box::new(leaf()) },
-        NodeKind::VariableDeclaration {
-            declarator: "my".to_string(),
-            variable: Box::new(leaf()),
-            attributes: vec![],
-            initializer: None,
-        },
-        NodeKind::VariableListDeclaration {
-            declarator: "my".to_string(),
-            variables: vec![],
-            attributes: vec![],
-            initializer: None,
-        },
-        NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
-        NodeKind::VariableWithAttributes { variable: Box::new(leaf()), attributes: vec![] },
-        NodeKind::Assignment { lhs: Box::new(leaf()), rhs: Box::new(leaf()), op: "=".to_string() },
-        NodeKind::Binary { op: "+".to_string(), left: Box::new(leaf()), right: Box::new(leaf()) },
-        NodeKind::Ternary {
-            condition: Box::new(leaf()),
-            then_expr: Box::new(leaf()),
-            else_expr: Box::new(leaf()),
-        },
-        NodeKind::Unary { op: "-".to_string(), operand: Box::new(leaf()) },
-        NodeKind::Diamond,
-        NodeKind::Ellipsis,
-        NodeKind::Undef,
-        NodeKind::Readline { filehandle: None },
-        NodeKind::Glob { pattern: "*.pl".to_string() },
-        NodeKind::Typeglob { name: "foo".to_string() },
-        NodeKind::Number { value: "42".to_string() },
-        NodeKind::String { value: "hello".to_string(), interpolated: false },
-        NodeKind::Heredoc {
-            delimiter: "EOF".to_string(),
-            content: "body".to_string(),
-            interpolated: false,
-            indented: false,
-            command: false,
-            body_span: None,
-        },
-        NodeKind::ArrayLiteral { elements: vec![] },
-        NodeKind::HashLiteral { pairs: vec![] },
-        NodeKind::Block { statements: vec![] },
-        NodeKind::Eval { block: Box::new(block_node()) },
-        NodeKind::Do { block: Box::new(block_node()) },
-        NodeKind::Defer { block: Box::new(block_node()) },
-        NodeKind::Try { body: Box::new(block_node()), catch_blocks: vec![], finally_block: None },
-        NodeKind::If {
-            condition: Box::new(leaf()),
-            then_branch: Box::new(block_node()),
-            elsif_branches: vec![],
-            else_branch: None,
-            keyword: None,
-        },
-        NodeKind::LabeledStatement {
-            label: "OUTER".to_string(),
-            statement: Box::new(Node::new(
-                NodeKind::LoopControl { op: "next".to_string(), label: None },
-                loc(),
-            )),
-        },
-        NodeKind::While {
-            condition: Box::new(leaf()),
-            body: Box::new(block_node()),
-            continue_block: None,
-            keyword: None,
-        },
-        NodeKind::Tie { variable: Box::new(leaf()), package: Box::new(leaf()), args: vec![] },
-        NodeKind::Untie { variable: Box::new(leaf()) },
-        NodeKind::For {
-            init: None,
-            condition: None,
-            update: None,
-            body: Box::new(block_node()),
-            continue_block: None,
-        },
-        NodeKind::Foreach {
-            variable: Box::new(leaf()),
-            list: Box::new(leaf()),
-            body: Box::new(block_node()),
-            continue_block: None,
-        },
-        NodeKind::Given { expr: Box::new(leaf()), body: Box::new(block_node()) },
-        NodeKind::When { condition: Box::new(leaf()), body: Box::new(block_node()) },
-        NodeKind::Default { body: Box::new(block_node()) },
-        NodeKind::StatementModifier {
-            statement: Box::new(leaf()),
-            modifier: "if".to_string(),
-            condition: Box::new(leaf()),
-        },
-        NodeKind::Subroutine {
-            name: Some("foo".to_string()),
-            name_span: None,
-            prototype: None,
-            signature: None,
-            attributes: vec![],
-            body: Box::new(block_node()),
-        },
-        NodeKind::Prototype { content: "$@".to_string() },
-        NodeKind::Signature { parameters: vec![] },
-        NodeKind::MandatoryParameter { variable: Box::new(leaf()) },
-        NodeKind::OptionalParameter { variable: Box::new(leaf()), default_value: Box::new(leaf()) },
-        NodeKind::SlurpyParameter { variable: Box::new(leaf()) },
-        NodeKind::NamedParameter { variable: Box::new(leaf()) },
-        NodeKind::Method {
-            name: "bar".to_string(),
-            signature: None,
-            attributes: vec![],
-            body: Box::new(block_node()),
-        },
-        NodeKind::Return { value: None },
-        NodeKind::LoopControl { op: "next".to_string(), label: None },
-        NodeKind::Goto { target: Box::new(leaf()) },
-        NodeKind::MethodCall { object: Box::new(leaf()), method: "foo".to_string(), args: vec![] },
-        NodeKind::FunctionCall { name: "print".to_string(), args: vec![] },
-        NodeKind::IndirectCall {
-            method: "new".to_string(),
-            object: Box::new(leaf()),
-            args: vec![],
-        },
-        NodeKind::Regex {
-            pattern: "foo".to_string(),
-            replacement: None,
-            modifiers: "".to_string(),
-            has_embedded_code: false,
-        },
-        NodeKind::Match {
-            expr: Box::new(leaf()),
-            pattern: "foo".to_string(),
-            modifiers: "".to_string(),
-            has_embedded_code: false,
-            negated: false,
-        },
-        NodeKind::Substitution {
-            expr: Box::new(leaf()),
-            pattern: "foo".to_string(),
-            replacement: "bar".to_string(),
-            modifiers: "".to_string(),
-            has_embedded_code: false,
-            negated: false,
-        },
-        NodeKind::Transliteration {
-            expr: Box::new(leaf()),
-            search: "a".to_string(),
-            replace: "b".to_string(),
-            modifiers: "".to_string(),
-            negated: false,
-        },
-        NodeKind::Package { name: "Foo".to_string(), name_span: loc(), block: None },
-        NodeKind::Use { module: "strict".to_string(), args: vec![], has_filter_risk: false },
-        NodeKind::No { module: "strict".to_string(), args: vec![], has_filter_risk: false },
-        NodeKind::PhaseBlock {
-            phase: "BEGIN".to_string(),
-            phase_span: None,
-            block: Box::new(block_node()),
-        },
-        NodeKind::DataSection { marker: "__DATA__".to_string(), body: None },
-        NodeKind::Class { name: "Foo".to_string(), parents: vec![], body: Box::new(block_node()) },
-        NodeKind::Format { name: "STDOUT".to_string(), body: "".to_string() },
-        NodeKind::Identifier { name: "foo".to_string() },
-        NodeKind::Error {
-            message: "oops".to_string(),
-            expected: vec![],
-            found: None,
-            partial: None,
-        },
-        NodeKind::MissingExpression,
-        NodeKind::MissingStatement,
-        NodeKind::MissingIdentifier,
-        NodeKind::MissingBlock,
-        NodeKind::UnknownRest,
-        NodeKind::NestedVariableList { items: vec![] },
-    ]
+    helpers::all_nodekind_instances()
 }
 
 // ────────────────────────────────────────────────────────

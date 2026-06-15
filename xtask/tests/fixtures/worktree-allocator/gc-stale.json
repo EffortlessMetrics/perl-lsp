@@ -21,6 +21,17 @@
       "owner": "agent-gc",
       "lease_expiry": "2026-05-01T00:00:00Z",
       "last_heartbeat": "2026-04-30T12:00:00Z"
+    },
+    {
+      "worktree_id": "wt-expired-heartbeat-fresh",
+      "path": "/tmp/.claude/worktrees/agent-wt-expired-heartbeat-fresh",
+      "task_id": "task-expired",
+      "pr": 203,
+      "branch": "agent/pr-203",
+      "base_sha": "cccccccccccccccccccccccccccccccccccccccc",
+      "owner": "agent-gc",
+      "lease_expiry": "2026-04-29T06:00:00Z",
+      "last_heartbeat": "2026-04-30T11:00:00Z"
     }
   ]
 }
