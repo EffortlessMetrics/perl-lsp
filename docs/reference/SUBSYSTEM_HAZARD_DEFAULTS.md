@@ -276,6 +276,16 @@ transform (`coverage-filter`, `lcov.info` post-processors, ripr configuration, t
 | **Motivating incident** | Coverage gate routing silent-skipped when production code was changed but the pack selection was empty due to a filter regex error. Agents thought no coverage-relevant code was touched. Patch coverage gaps shipped to master undetected. |
 | **Ref** | [docs/concepts/gate-names-must-match-failure-classes.md](../concepts/gate-names-must-match-failure-classes.md) (routing_skip vs routing_bug) |
 
+### CI-1: Runner policy — Linux-only default, Windows/Mac for OS-specific necessity
+
+| Field | Value |
+|---|---|
+| **Invariant** | CI runs on **self-hosted Ubuntu/Linux runners only** (free pool). Any Windows/macOS job falls back to **GitHub-hosted runners (billed)**. Linux coverage is sufficient for OS-agnostic code (parser, AST, lexer, LSP, DAP). Windows/macOS runner jobs are reserved for genuinely OS-specific code paths (`cfg(windows)` / `cfg(target_os = "macos")`) with real, user-impacting risk that cannot be exercised on Linux. General or redundant cross-platform re-testing does **not** qualify as an "extenuating circumstance." Adding a Windows/Mac runner job requires explicit justification naming the OS-specific divergence it guards. |
+| **Trigger** | Any proposal to add a Windows or macOS runner job to a PR-triggered CI workflow (`.github/workflows/ci.yml`, `.github/workflows/pr-*.yml`, etc.) |
+| **Required justification** | Before adding a billed runner job: (1) name the `cfg(windows)` / `cfg(target_os = "macos")` code path or feature being guarded; (2) explain why the divergence cannot be tested on Linux (e.g., UNC paths, registry access, Mach API); (3) confirm the risk is real and user-impacting, not redundant coverage. Exception: release-artifact builds on tag and scheduled (non-PR) post-publish smoke tests are accepted without justification. |
+| **Motivating incident** | [#1484](https://github.com/EffortlessMetrics/perl-lsp/issues/1484) / [#1485](https://github.com/EffortlessMetrics/perl-lsp/pull/1485): Per-PR Windows-runner jobs (`windows-canary`, `windows-full-guardrails`) were removed from merge-gate because they redundantly re-tested cross-platform logic already covered by Linux gates, incurring billed GitHub-hosted cost for no additional safety signal. |
+| **Ref** | [docs/reference/CI_ARCHITECTURE.md §4.5](CI_ARCHITECTURE.md#section-45--runner-policy) |
+
 ---
 
 ## Cross-subsystem rows (apply to any change)

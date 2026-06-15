@@ -353,7 +353,25 @@ limit. This prevents the "quarantine and forget" failure mode.
 
 ---
 
-## Section 4.5 — Gate Design Principles
+## Section 4.5 — Runner Policy
+
+### Linux-only CI by default
+
+CI runs on **self-hosted Ubuntu/Linux runners only** (free pool). There is **no self-hosted Windows or macOS pool** — any Windows/Mac job falls back to **GitHub-hosted runners, which are billed** and are to be avoided.
+
+**Default: all CI runs on Linux.** The codebase is overwhelmingly cross-platform and OS-agnostic. Parser, AST, lexer, LSP, semantic analysis, and DAP are pure logic with no OS-specific divergence. Linux coverage is fully representative for the vast majority of work.
+
+**Windows/macOS runner jobs are reserved for extenuating circumstances:** a genuinely OS-specific code path (`cfg(windows)` / `cfg(target_os = "macos")`) with real, user-impacting risk that *cannot* be exercised on Linux. General or redundant cross-platform re-testing does **not** qualify. Adding a Windows/Mac runner job requires explicit justification naming the OS-specific divergence it guards. Prefer covering OS specifics in the maintainer's local (Windows) dev loop over billed cloud CI.
+
+**Accepted exceptions** (not subject to this policy — they genuinely require the target OS):
+- Release-artifact builds that produce the distributed Windows/macOS binaries on tag (`release.yml`)
+- Scheduled post-publish smoke tests (weekly, not PR-triggered)
+
+**2026-06 incident**: Per #1484/#1485, the per-PR Windows-runner jobs (`windows-canary`, `windows-full-guardrails` + their Ubuntu feeders) were removed from the merge-gate tier because they redundantly re-tested cross-platform logic already covered by Linux gates.
+
+---
+
+## Section 4.6 — Gate Design Principles
 
 Every gate must follow these principles to maintain clarity and reliability:
 
