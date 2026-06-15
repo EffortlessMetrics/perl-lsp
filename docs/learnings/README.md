@@ -44,6 +44,7 @@ To add a new incident: copy [TEMPLATE.md](TEMPLATE.md) and fill in all sections.
 | [2026-06-substrate-tax-and-red-is-a-smell.md](2026-06-substrate-tax-and-red-is-a-smell.md) | Substrate tax and red-is-a-smell: two recalibrated operating principles from the 2026-06 campaign | substrate, ci, merge, economics, anti-pattern, incident | #651, #1282, #1453, #1458 |
 
 | [2026-06-coverage-job-ran-tests.md](2026-06-coverage-job-ran-tests.md) | Coverage-named checks must not hide test failures — decoupling measurement from validation | ci, coverage, observability, misclassification | #1457, #1470, #1469 |
+| [2026-06-substrate-self-validation-bootstrap.md](2026-06-substrate-self-validation-bootstrap.md) | You cannot validate a gate-fix through the broken gate | ci, substrate, bootstrap, recursion, incident, gate-logic, self-validation | #1469, #1477, #1478, #1479, #1484, #1485 |
 
 ---
 
@@ -95,4 +96,6 @@ To add a new incident: copy [TEMPLATE.md](TEMPLATE.md) and fill in all sections.
 | instrument | Measurement instrument failure / scope misconfiguration |
 | agent-claims | Agent output reliability / claims verification |
 | ground-truth | Ground-truth fact verification / trust-but-verify |
+| bootstrap | Bootstrap recursion / self-validating layer circularity |
+| self-validation | Layer validating its own correctness or fixes |
 
