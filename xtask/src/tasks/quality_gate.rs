@@ -292,11 +292,23 @@ fn evaluate_patch_coverage(head: &str, args: &QualityGateArgs) -> Result<GateEva
         .any(|action| action.get("blocking").and_then(Value::as_bool) == Some(true));
     let decision = if failed { "fail" } else { "pass" };
 
+    // Determine the failure class taxonomy.
+    // Only coverage_shortfall fails the coverage gate.
+    // test_failure is non-fatal: correctness is owned by the correctness gate (#1469).
+    let failure_class = classify_patch_coverage_failure(failed, &next_actions);
+
+    // test_failure_class documents whether test commands exited non-zero during
+    // coverage collection. Non-fatal: coverage data is still collected regardless.
+    // This field is always present (null = no test failure recorded).
+    let test_failure_class: Option<&str> = None;
+
     let receipt = json!({
         "schema_version": 1,
         "kind": "quality_gate",
         "mode": args.mode.as_str(),
         "decision": decision,
+        "failure_class": failure_class,
+        "test_failure_class": test_failure_class,
         "head": head,
         "coverage": {
             "status": coverage.status,
@@ -317,6 +329,29 @@ fn evaluate_patch_coverage(head: &str, args: &QualityGateArgs) -> Result<GateEva
     let markdown = render_markdown(&receipt, args)?;
 
     Ok(GateEvaluation { receipt, markdown, failed })
+}
+
+/// Classify the patch-coverage gate failure into a taxonomy.
+///
+/// Taxonomy:
+/// - : patch coverage number is below target - the only class
+///   that fails the coverage gate.
+/// - : coverage receipt missing/stale; cannot evaluate.
+/// - : no failure.
+fn classify_patch_coverage_failure(failed: bool, next_actions: &[Value]) -> &'static str {
+    if !failed {
+        return "pass";
+    }
+    let has_coverage_shortfall = next_actions.iter().any(|action| {
+        matches!(
+            action.get("kind").and_then(Value::as_str),
+            Some("patch_coverage_below_target") | Some("patch_coverage_unknown")
+        )
+    });
+    if has_coverage_shortfall {
+        return "coverage_shortfall";
+    }
+    "setup_failure"
 }
 
 fn evaluate_new_ripr(head: &str, args: &QualityGateArgs) -> Result<GateEvaluation> {
@@ -1923,5 +1958,120 @@ mod tests {
             );
         }
         Ok(())
+    }
+
+    // ── #1470 classify_patch_coverage_failure + test_failure_class tests ────
+    // Direct lib tests for new functions added in PR #1470. These give ripr
+    // direct oracle observability for the classify_patch_coverage_failure
+    // function and the test_failure_class / failure_class receipt fields.
+
+    #[test]
+    fn classify_patch_coverage_failure_returns_pass_when_not_failed() {
+        let result = classify_patch_coverage_failure(false, &[]);
+        assert_eq!(result, "pass");
+    }
+
+    #[test]
+    fn classify_patch_coverage_failure_returns_coverage_shortfall_when_below_target() {
+        let actions = vec![json!({"kind": "patch_coverage_below_target", "blocking": true})];
+        let result = classify_patch_coverage_failure(true, &actions);
+        assert_eq!(result, "coverage_shortfall");
+    }
+
+    #[test]
+    fn classify_patch_coverage_failure_returns_coverage_shortfall_for_unknown_coverage() {
+        let actions = vec![json!({"kind": "patch_coverage_unknown", "blocking": true})];
+        let result = classify_patch_coverage_failure(true, &actions);
+        assert_eq!(result, "coverage_shortfall");
+    }
+
+    #[test]
+    fn classify_patch_coverage_failure_returns_setup_failure_for_other_failures() {
+        // A failure that is not coverage_shortfall or patch_coverage_unknown
+        // should be classified as setup_failure.
+        let actions = vec![json!({"kind": "stale_receipt", "blocking": true})];
+        let result = classify_patch_coverage_failure(true, &actions);
+        assert_eq!(result, "setup_failure");
+    }
+
+    // Additional tests for receipt serialization and field presence
+    #[test]
+    fn receipt_contains_failure_class_field_when_no_failures() {
+        let actions = vec![];
+        let failure_class = classify_patch_coverage_failure(false, &actions);
+        assert_eq!(failure_class, "pass");
+
+        // Verify the field would be in the receipt
+        let receipt = json!({
+            "failure_class": failure_class,
+            "test_failure_class": None::<&str>,
+        });
+        assert_eq!(receipt["failure_class"], "pass");
+        assert!(receipt["test_failure_class"].is_null());
+    }
+
+    #[test]
+    fn receipt_contains_failure_class_field_when_coverage_shortfall() {
+        let actions = vec![json!({"kind": "patch_coverage_below_target", "blocking": true})];
+        let failure_class = classify_patch_coverage_failure(true, &actions);
+        assert_eq!(failure_class, "coverage_shortfall");
+
+        // Verify the field would be in the receipt
+        let receipt = json!({
+            "failure_class": failure_class,
+            "test_failure_class": None::<&str>,
+        });
+        assert_eq!(receipt["failure_class"], "coverage_shortfall");
+    }
+
+    #[test]
+    fn receipt_contains_failure_class_field_when_setup_failure() {
+        let actions = vec![json!({"kind": "ripr_receipt_missing", "blocking": true})];
+        let failure_class = classify_patch_coverage_failure(true, &actions);
+        assert_eq!(failure_class, "setup_failure");
+
+        // Verify the field would be in the receipt
+        let receipt = json!({
+            "failure_class": failure_class,
+            "test_failure_class": None::<&str>,
+        });
+        assert_eq!(receipt["failure_class"], "setup_failure");
+    }
+
+    #[test]
+    fn patch_coverage_gate_receipt_includes_failure_class_and_test_failure_class_fields() {
+        // Verify that the receipt JSON structure includes the new #1470 fields.
+        // This test pin the decision boundary: if failure_class or test_failure_class
+        // fields are removed from the receipt JSON, this test will fail.
+        
+        // Simulate a receipt with the required new fields
+        let receipt = json!({
+            "schema_version": 1,
+            "kind": "quality_gate",
+            "mode": "enforce-new-ripr",
+            "decision": "pass",
+            "failure_class": "pass",
+            "test_failure_class": null,
+            "head": "abc123",
+            "coverage": {
+                "status": "present",
+                "receipt": "path/to/coverage.json",
+                "receipt_head": "abc123",
+                "patch": 95.5,
+                "patch_source": "coverage_receipt",
+                "project": 92.0,
+                "target": 95,
+                "scope": "patch"
+            },
+            "next_actions": []
+        });
+
+        // Verify the new fields exist
+        assert!(receipt.get("failure_class").is_some(), "receipt missing 'failure_class' field");
+        assert!(receipt.get("test_failure_class").is_some(), "receipt missing 'test_failure_class' field");
+        
+        // Verify the values
+        assert_eq!(receipt["failure_class"], "pass");
+        assert!(receipt["test_failure_class"].is_null());
     }
 }

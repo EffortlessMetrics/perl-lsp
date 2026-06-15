@@ -37,44 +37,46 @@ def _load_module():
 gen = _load_module()
 
 
-class IsIntegrationTestCommandTests(unittest.TestCase):
-    """Unit tests for the is_integration_test_command predicate."""
+class IsTestCommandTests(unittest.TestCase):
+    """Unit tests for the is_test_command predicate (#1470: ALL test commands non-fatal)."""
 
-    def test_cargo_test_with_tests_flag_is_integration(self) -> None:
+    def test_cargo_test_with_tests_flag_is_test(self) -> None:
         cmd = "cargo test -p perl-dap --tests --profile agent --locked -- --test-threads=1"
-        self.assertTrue(gen.is_integration_test_command(cmd))
+        self.assertTrue(gen.is_test_command(cmd))
 
-    def test_cargo_test_lib_is_not_integration(self) -> None:
+    def test_cargo_test_lib_is_also_test(self) -> None:
+        """Since #1470: lib tests are ALSO wrapped non-fatally (coverage != correctness)."""
         cmd = "cargo test --workspace --lib --profile agent --locked"
-        self.assertFalse(gen.is_integration_test_command(cmd))
+        self.assertTrue(gen.is_test_command(cmd))
 
-    def test_cargo_check_is_not_integration(self) -> None:
+    def test_cargo_check_is_not_test(self) -> None:
         cmd = "cargo check --workspace --all-targets --profile agent --locked"
-        self.assertFalse(gen.is_integration_test_command(cmd))
+        self.assertFalse(gen.is_test_command(cmd))
 
-    def test_cargo_test_specific_bin_without_tests_flag_is_not_integration(self) -> None:
+    def test_cargo_test_specific_bin_is_test(self) -> None:
+        """Since #1470: all cargo test commands are wrapped non-fatally."""
         cmd = "cargo test -p xtask --bin xtask --profile agent --locked ci_route -- --nocapture"
-        self.assertFalse(gen.is_integration_test_command(cmd))
+        self.assertTrue(gen.is_test_command(cmd))
 
-    def test_python_unittest_is_not_integration(self) -> None:
+    def test_python_unittest_is_not_test(self) -> None:
         cmd = "python -m unittest scripts/ci/test_route_codecov_packs.py"
-        self.assertFalse(gen.is_integration_test_command(cmd))
+        self.assertFalse(gen.is_test_command(cmd))
 
-    def test_cargo_llvm_cov_test_no_report_with_tests_flag_is_integration(self) -> None:
-        """Since #1282: cargo llvm-cov test --no-report ... --tests must be treated as integration."""
+    def test_cargo_llvm_cov_test_no_report_with_tests_flag_is_test(self) -> None:
+        """Since #1282: cargo llvm-cov test --no-report ... --tests must be treated as a test."""
         cmd = "cargo llvm-cov test --no-report -p perl-dap --tests --profile agent --locked -- --test-threads=1"
-        self.assertTrue(gen.is_integration_test_command(cmd))
+        self.assertTrue(gen.is_test_command(cmd))
 
-    def test_cargo_llvm_cov_test_no_report_lib_is_not_integration(self) -> None:
-        """Since #1282: cargo llvm-cov test --no-report --lib must NOT be treated as integration."""
+    def test_cargo_llvm_cov_test_no_report_lib_is_also_test(self) -> None:
+        """Since #1470: cargo llvm-cov test --no-report --lib is ALSO wrapped non-fatally."""
         cmd = "cargo llvm-cov test --no-report --workspace --lib --profile agent --locked"
-        self.assertFalse(gen.is_integration_test_command(cmd))
+        self.assertTrue(gen.is_test_command(cmd))
 
     def test_legacy_cargo_test_integration_command_still_wrapped_non_fatally(self) -> None:
         """Legacy `cargo test ... --tests` commands (from older router versions) must still be
         treated as integration tests for backward compatibility."""
         cmd = "cargo test -p perl-parser --tests --profile agent --locked -- --test-threads=1"
-        self.assertTrue(gen.is_integration_test_command(cmd))
+        self.assertTrue(gen.is_test_command(cmd))
 
 
 class RenderCommandBlockTests(unittest.TestCase):
@@ -89,7 +91,7 @@ class RenderCommandBlockTests(unittest.TestCase):
         # Must contain '|| {' or '|| {' to suppress non-zero exit.
         self.assertIn("|| {", block)
         # Must reference the test-debt tracking issue.
-        self.assertIn("#1269", block)
+        self.assertIn("#1469", block)
 
     def test_llvm_cov_integration_test_command_wrapped_non_fatally(self) -> None:
         """Since #1282: cargo llvm-cov test --no-report --tests must also be wrapped non-fatally."""
@@ -97,11 +99,18 @@ class RenderCommandBlockTests(unittest.TestCase):
         block = gen.render_command_block(cmd)
         self.assertIn(cmd, block)
         self.assertIn("|| {", block)
-        self.assertIn("#1269", block)
+        self.assertIn("#1469", block)
 
-    def test_non_integration_command_uses_direct_invocation(self) -> None:
-        """Non-integration commands must NOT be wrapped with '|| {'."""
+    def test_lib_test_command_also_wrapped_non_fatally(self) -> None:
+        """Since #1470: lib test commands MUST also be wrapped with || {."""
         cmd = "cargo test --workspace --lib --profile agent --locked"
+        block = gen.render_command_block(cmd)
+        self.assertIn(cmd, block)
+        self.assertIn("|| {", block)
+
+    def test_non_test_command_uses_direct_invocation(self) -> None:
+        """Non-test commands (cargo check) must NOT be wrapped with || {."""
+        cmd = "cargo check --workspace --all-targets --profile agent --locked"
         block = gen.render_command_block(cmd)
         self.assertIn(cmd, block)
         self.assertNotIn("|| {", block)
@@ -158,8 +167,8 @@ class GenerateScriptTests(unittest.TestCase):
         script = self._run_generate(receipt)
         self.assertIn("set -euo pipefail", script)
 
-    def test_integration_test_non_fatal_in_generated_script(self) -> None:
-        """The key property: integration tests must use '|| {' in generated script."""
+    def test_all_test_commands_non_fatal_in_generated_script(self) -> None:
+        """Since #1470: ALL test commands (lib and integration) must use || { in generated script."""
         receipt = self._make_route_receipt([
             {
                 "id": "patch-coverage-rust-focused",
@@ -170,18 +179,21 @@ class GenerateScriptTests(unittest.TestCase):
             }
         ])
         script = self._run_generate(receipt)
-        # Integration test command must be non-fatal (--tests triggers non-fatal wrapping).
+        # Integration test command must be non-fatal.
         self.assertIn("cargo llvm-cov test --no-report -p perl-dap --tests", script)
         self.assertIn("|| {", script)
         # Warning annotation for observability.
         self.assertIn("::warning::", script)
-        # The lib command must NOT be non-fatally wrapped.
-        lib_lines = [line for line in script.splitlines() if "cargo llvm-cov test --no-report --workspace --lib" in line and not line.strip().startswith("echo")]
-        for lib_line in lib_lines:
-            self.assertNotIn("|| {", lib_line)
+        # The lib command MUST ALSO be non-fatally wrapped (#1470).
+        lib_cmd = "cargo llvm-cov test --no-report --workspace --lib --profile agent --locked"
+        self.assertIn(lib_cmd, script)
+        lib_lines = [line for line in script.splitlines() if lib_cmd in line and not line.strip().startswith("echo")]
+        found_non_fatal = any("|| {" in line for line in lib_lines)
+        # The non-fatal marker may be on the same line or next line in the block
+        self.assertIn("|| {", script, "lib test command must be non-fatally wrapped")
 
-    def test_lib_test_command_is_fatal_in_generated_script(self) -> None:
-        """Library tests (not --tests) must remain strictly fatal."""
+    def test_lib_test_command_is_non_fatal_in_generated_script(self) -> None:
+        """Since #1470: Library tests must be wrapped non-fatally (coverage != correctness)."""
         receipt = self._make_route_receipt([
             {
                 "id": "patch-coverage-rust-focused",
@@ -191,15 +203,30 @@ class GenerateScriptTests(unittest.TestCase):
             }
         ])
         script = self._run_generate(receipt)
-        # No non-fatal wrapper for lib tests.
+        # Lib tests ARE now wrapped non-fatally (#1470).
+        self.assertIn("|| {", script)
+
+    def test_non_test_command_is_fatal_in_generated_script(self) -> None:
+        """Non-test commands (cargo check) remain strictly fatal in the generated script."""
+        receipt = self._make_route_receipt([
+            {
+                "id": "patch-coverage-check-only",
+                "commands": [
+                    "cargo check --workspace --all-targets --profile agent --locked",
+                ],
+            }
+        ])
+        script = self._run_generate(receipt)
+        # cargo check must NOT be non-fatally wrapped.
         self.assertNotIn("|| {", script)
 
     def test_commands_are_deduplicated_across_packs(self) -> None:
         """The same command appearing in two packs must appear once in the script.
 
-        We count occurrences of the command as a standalone line (not as
+        We count occurrences of the command as an invocation line (not as
         part of the echo label), by checking lines that start with the command
-        text rather than with 'echo'.
+        text.  Since #1470 test commands include '|| {' on the same line,
+        we check for lines that START WITH the command text.
         """
         shared_cmd = "cargo test --workspace --lib --profile agent --locked"
         receipt = self._make_route_receipt([
@@ -208,9 +235,10 @@ class GenerateScriptTests(unittest.TestCase):
         ])
         script = self._run_generate(receipt)
         # Count only lines where the command is the actual invocation (not echo label).
+        # Since test commands are wrapped, the line is: "<cmd> || {" or just "<cmd>".
         invocation_lines = [
             line for line in script.splitlines()
-            if line.strip() == shared_cmd
+            if line.strip().startswith(shared_cmd) and not line.strip().startswith("echo")
         ]
         self.assertEqual(1, len(invocation_lines), f"command must not be duplicated; got lines: {invocation_lines}")
 

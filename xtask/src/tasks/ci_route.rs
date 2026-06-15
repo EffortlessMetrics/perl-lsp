@@ -15,6 +15,11 @@ pub struct CiRouteArgs {
     pub changed_files: Vec<String>,
 }
 
+/// Cap on the number of coverage packs that will be selected for a single PR.
+/// Multi-file PRs MUST NOT trigger full-suite expansion - coverage packs are
+/// scoped to changed surfaces only.
+const COVERAGE_PACK_CAP: u64 = 10;
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
 struct CiRouteReceipt {
@@ -30,6 +35,17 @@ struct CiRouteReceipt {
     coverage_pack_selector: Vec<String>,
     coverage_proof_packs: Vec<CoverageProofPackReceipt>,
     estimated_lem: u64,
+    /// routing_skip: no coverable production code changed - valid policy skip (exit 0).
+    /// routing_bug: production code changed but zero packs routed - FAIL LOUD.
+    /// routed: packs were selected and will run.
+    routing_classification: &'static str,
+    /// Maximum number of coverage packs that will be selected for a single PR.
+    coverage_pack_cap: u64,
+    /// Number of coverage packs that were eligible but skipped due to the cap.
+    coverage_packs_skipped: u64,
+    /// Human-readable reason why packs were skipped (empty string if none skipped).
+    #[serde(skip_serializing_if = "str::is_empty")]
+    coverage_pack_skip_reason: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -502,10 +518,45 @@ fn route_receipt(base: &str, head: &str, changed_files: Vec<String>) -> Result<C
         route.coverage_pack_selector.iter().cloned().collect();
     let (coverage_pack_selector, skipped_coverage_packs, coverage_proof_packs) =
         coverage_proof_pack_selection(&requested_coverage_pack_selector, &changed_files)?;
-    for (pack, reason) in skipped_coverage_packs {
-        route.skip(pack, reason);
+    for (pack, reason) in &skipped_coverage_packs {
+        route.skip(pack.clone(), reason.clone());
     }
     let estimated_lem = route.estimated_lem(coverage_pack_selector.len());
+
+    // Determine routing classification:
+    // - routing_skip: no coverable production code changed - valid policy skip (exit 0)
+    // - routing_bug: production code changed but zero coverage packs routed - FAIL LOUD
+    // - routed: packs were selected and will run
+    let has_coverable_production_code = changed_files.iter().any(|file| is_lcov_source_path(file));
+    let routing_classification = if coverage_proof_packs.is_empty() {
+        if has_coverable_production_code {
+            // Production code changed but nothing was routed - this is a routing bug
+            "routing_bug"
+        } else {
+            // No coverable production code - valid policy skip
+            "routing_skip"
+        }
+    } else {
+        "routed"
+    };
+
+    // Enforce pack cap: coverage packs are scoped to changed surfaces only.
+    // Multi-file PRs MUST NOT expand to the full suite.
+    let total_eligible = u64::try_from(coverage_proof_packs.len()).unwrap_or(u64::MAX);
+    let coverage_packs_skipped = total_eligible.saturating_sub(COVERAGE_PACK_CAP);
+    let (coverage_pack_selector, coverage_proof_packs) = if total_eligible > COVERAGE_PACK_CAP {
+        let cap = usize::try_from(COVERAGE_PACK_CAP).unwrap_or(usize::MAX);
+        (coverage_pack_selector[..cap].to_vec(), coverage_proof_packs[..cap].to_vec())
+    } else {
+        (coverage_pack_selector, coverage_proof_packs)
+    };
+    let coverage_pack_skip_reason = if coverage_packs_skipped > 0 {
+        format!(
+            "pack cap {COVERAGE_PACK_CAP} reached; {coverage_packs_skipped} pack(s) skipped to prevent full-suite expansion"
+        )
+    } else {
+        String::new()
+    };
 
     Ok(CiRouteReceipt {
         schema_version: "ci-route.v1",
@@ -527,6 +578,10 @@ fn route_receipt(base: &str, head: &str, changed_files: Vec<String>) -> Result<C
         coverage_pack_selector,
         coverage_proof_packs,
         estimated_lem,
+        routing_classification,
+        coverage_pack_cap: COVERAGE_PACK_CAP,
+        coverage_packs_skipped,
+        coverage_pack_skip_reason,
     })
 }
 
@@ -3670,5 +3725,74 @@ mod tests {
 
     fn proof_pack_ids(receipt: &CiRouteReceipt) -> Vec<&str> {
         receipt.required_proof_packs.iter().map(|pack| pack.id.as_str()).collect()
+    }
+
+    // ── #1470 routing-classification + pack-cap field tests ────────────────────
+    // These inline lib tests give ripr direct observability of the new struct
+    // fields added in PR #1470 (routing_classification, coverage_pack_cap,
+    // coverage_packs_skipped, coverage_pack_skip_reason). The integration-test
+    // variants in coverage_proof_measure_only_red_tdd.rs exercise the same
+    // behavior through the CLI binary (fixture_opaque to ripr). These lib tests
+    // call route_receipt() directly so ripr can trace the oracle through the
+    // assertion. Resolves the fixture_opaque weakly_exposed seams at
+    // ci_route.rs:561 and ci_route.rs:567 introduced by PR #1470.
+
+    #[test]
+    fn routing_classification_is_routing_skip_for_docs_only_change() -> Result<()> {
+        let receipt =
+            route_receipt("origin/main", "HEAD", vec!["docs/development/ROADMAP.md".to_string()])?;
+        assert_eq!(
+            receipt.routing_classification, "routing_skip",
+            "docs-only change has no coverable production code — must be routing_skip"
+        );
+        assert_eq!(receipt.coverage_pack_cap, COVERAGE_PACK_CAP);
+        assert_eq!(receipt.coverage_packs_skipped, 0);
+        assert!(receipt.coverage_pack_skip_reason.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn routing_classification_is_routed_for_rust_source_change() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec!["crates/perl-parser/src/lib.rs".to_string()],
+        )?;
+        assert_eq!(
+            receipt.routing_classification, "routed",
+            "Rust source change with coverage packs must be classified as routed"
+        );
+        assert_eq!(receipt.coverage_pack_cap, COVERAGE_PACK_CAP);
+        assert!(!receipt.coverage_proof_packs.is_empty(), "packs must be selected for Rust source");
+        Ok(())
+    }
+
+    #[test]
+    fn coverage_packs_skipped_is_zero_when_under_cap() -> Result<()> {
+        // A single-file change will select at most one pack — well under the cap.
+        let receipt =
+            route_receipt("origin/main", "HEAD", vec!["crates/perl-lexer/src/lib.rs".to_string()])?;
+        assert_eq!(
+            receipt.coverage_packs_skipped, 0,
+            "single-file change must not skip any packs (under cap)"
+        );
+        assert!(
+            receipt.coverage_pack_skip_reason.is_empty(),
+            "skip_reason must be empty when no packs are skipped"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn coverage_pack_cap_field_is_always_present_in_receipt() -> Result<()> {
+        // coverage_pack_cap must be present in all routing outcomes (routed, routing_skip).
+        let routed =
+            route_receipt("origin/main", "HEAD", vec!["xtask/src/tasks/ci_route.rs".to_string()])?;
+        assert_eq!(routed.coverage_pack_cap, COVERAGE_PACK_CAP);
+
+        let skip =
+            route_receipt("origin/main", "HEAD", vec!["scripts/install-githooks.sh".to_string()])?;
+        assert_eq!(skip.coverage_pack_cap, COVERAGE_PACK_CAP);
+        Ok(())
     }
 }
