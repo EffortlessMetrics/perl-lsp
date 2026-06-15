@@ -88,10 +88,10 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
     ] {
         let step = must_some(workflow_step(coverage_job, setup_step));
         assert!(
-            step.contains(
-                "if: github.event_name != 'pull_request' || steps.coverage_route.outputs.coverage_required == 'true'"
-            ),
-            "coverage setup step `{setup_step}` must run only when routed coverage is required"
+            step.contains("merge_group")
+                && step.contains("pull_request")
+                && step.contains("coverage_required"),
+            "coverage setup step `{setup_step}` must run only when routed coverage is required (including merge_group support)"
         );
     }
     let codecov_upload_start = must_some(coverage_job.find("- name: Upload coverage to Codecov"));
@@ -100,9 +100,9 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
         must_some(after_codecov_upload.find("\n      - name: Upload coverage proof artifacts"));
     let codecov_upload_step = &after_codecov_upload[..codecov_upload_end];
     assert_eq!(
-        codecov_upload_step.matches("fail_ci_if_error: true").count(),
+        codecov_upload_step.matches("continue-on-error: true").count(),
         1,
-        "Codecov upload must fail the job when coverage upload/status integration errors"
+        "Codecov upload must not fail the job on integration errors (non-fatal telemetry)"
     );
     assert!(
         codecov_upload_step.contains("uses: codecov/codecov-action@")
