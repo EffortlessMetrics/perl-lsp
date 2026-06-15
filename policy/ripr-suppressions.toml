@@ -944,3 +944,47 @@ reason = "One newly added test file in PR #1355 is flagged as new production sea
 created = "2026-06-15"
 review_after = "2026-09-15"
 expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
+# print_in_lib allow_scopes: ripr#1429-class iterator/closure/predicate seams.
+#
+# PR #624 extracts check_print_in_lib into commands/print_in_lib/ submodules.
+# allow_scopes.rs introduces 5 weakly_gripped seams that RIPR cannot statically
+# trace:
+#   (A) file_has_print_allow: lines.iter().take(30).any(|line| ...) — iterator
+#       chain with closure; RIPR cannot trace activation from unit test inputs
+#       through the iterator combinator chain to the closure body.
+#   (B) line_is_whole_line_comment: line.trim_start().starts_with("//") — string
+#       predicate; RIPR cannot statically determine whether the starts_with
+#       boundary is covered by discriminator tests.
+#   (C) observe_line / apply_brace_delta: brace_delta() boundary predicates
+#       and early-return conditions — RIPR cannot statically attribute the
+#       signed/unsigned arithmetic boundary (saturating_sub) to specific test
+#       inputs.
+#
+# Unit tests added by this PR directly call each function with boundary inputs:
+#   file_has_print_allow_only_checks_first_30_lines (A, boundary at 30)
+#   file_has_print_allow_detects_inner_print_stderr (A, true path)
+#   line_is_whole_line_comment_true_for_double_slash (B, true path)
+#   line_is_whole_line_comment_false_for_code (B, false path)
+#   apply_brace_delta_saturates_at_zero_on_excess_closes (C, saturation)
+#   observe_line_while_in_brace_scope_applies_delta (C, depth tracking)
+#
+# RIPR cannot statically trace closure/iterator/predicate activation from the
+# test literal inputs to the seam boundary — the same ripr#1429 class as
+# ripr-suppress-canonical-quote-operator-helper. All seams are covered by the
+# inline unit tests and the pre-existing check_print_in_lib_test.rs integration
+# tests. Suppression is narrow: single new production file, PR #624. Remove
+# when ripr#1429 is fixed upstream.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-print-in-lib-allow-scopes-iterator-seams"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-ci-hygiene/src/commands/print_in_lib/allow_scopes.rs"]
+classification = ["weakly_exposed", "static_unknown"]
+owner = "proof-lane"
+issue = "EffortlessMetrics/ripr#1429"
+reason = "PR #624 allow_scopes.rs has 5 weakly_gripped seams that are ripr#1429-class predicate/iterator/closure patterns: (A) file_has_print_allow uses iter().take(30).any(closure) — RIPR cannot statically trace closure activation from test inputs through iterator combinators; (B) line_is_whole_line_comment uses starts_with predicate — RIPR cannot attribute boundary coverage statically; (C) observe_line/apply_brace_delta use brace counting arithmetic with saturating_sub — signed/unsigned boundary not statically traceable. All seams have inline unit tests (file_has_print_allow_detects_inner_print_stderr, _only_checks_first_30_lines, line_is_whole_line_comment_true/false, apply_brace_delta_saturates_at_zero_on_excess_closes, observe_line_while_in_brace_scope_applies_delta) and are exercised end-to-end by check_print_in_lib_test.rs integration tests. Suppression is narrow: single new production file, PR #624. Remove when ripr#1429 is fixed upstream."
+created = "2026-06-15"
+review_after = "2026-07-15"
+expires = "2026-09-30"
