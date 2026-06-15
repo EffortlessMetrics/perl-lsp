@@ -1201,6 +1201,76 @@ fn test_error_handling_evaluate_empty_expression() {
 
 #[test]
 // AC:5.4
+// Regression test for #1495: Validate expression BEFORE frame lookup.
+// When both empty expression and invalid frame are present,
+// the error should be about the expression (validation precedes frame lookup).
+fn test_error_handling_evaluate_empty_expression_with_invalid_frame_precedence() {
+    // Test that empty-expression validation precedes frame validation
+    let (mut adapter, _rx) = create_test_adapter();
+
+    // Both invalid: expression is empty AND frameId is non-existent
+    let args = json!({
+        "expression": "",
+        "frameId": 1
+    });
+
+    let response = adapter.handle_request(1, "evaluate", Some(args));
+
+    match response {
+        DapMessage::Response { success, message, .. } => {
+            assert!(!success, "Request with empty expression should be rejected");
+            assert!(message.is_some());
+            let msg = must_some(message);
+            // The key assertion: error must be about the empty expression,
+            // not about the frame. This pins that expression validation
+            // happens first.
+            assert!(
+                msg.contains("Empty"),
+                "Error message should mention 'Empty' expression, but got: {}",
+                msg
+            );
+        }
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
+    }
+}
+
+#[test]
+// AC:5.4
+// Regression test for #1495: Validate expression BEFORE frame lookup.
+// When both newline-containing expression and invalid frame are present,
+// the error should be about the newline (validation precedes frame lookup).
+fn test_error_handling_evaluate_newline_expression_with_invalid_frame_precedence() {
+    // Test that newline-expression validation precedes frame validation
+    let (mut adapter, _rx) = create_test_adapter();
+
+    // Both invalid: expression has newline AND frameId is non-existent
+    let args = json!({
+        "expression": "foo\nbar",
+        "frameId": 1
+    });
+
+    let response = adapter.handle_request(1, "evaluate", Some(args));
+
+    match response {
+        DapMessage::Response { success, message, .. } => {
+            assert!(!success, "Request with newline expression should be rejected");
+            assert!(message.is_some());
+            let msg = must_some(message);
+            // The key assertion: error must be about the newline,
+            // not about the frame. This pins that expression validation
+            // (specifically newline rejection) happens before frame lookup.
+            assert!(
+                msg.contains("newline"),
+                "Error message should mention 'newline', but got: {}",
+                msg
+            );
+        }
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
+    }
+}
+
+#[test]
+// AC:5.4
 fn test_error_handling_scopes_missing_frame_id() {
     // Test that scopes request validates frameId
     let (mut adapter, _rx) = create_test_adapter();
