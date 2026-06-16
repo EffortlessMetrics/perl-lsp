@@ -14,10 +14,8 @@ struct TempRepo {
 impl TempRepo {
     fn new(label: &str) -> TestResult<Self> {
         let nanos = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-        let path = env::temp_dir().join(format!(
-            "perl-ci-hygiene-fatal-{label}-{}-{nanos}",
-            std::process::id()
-        ));
+        let path = env::temp_dir()
+            .join(format!("perl-ci-hygiene-fatal-{label}-{}-{nanos}", std::process::id()));
         fs::create_dir_all(&path)?;
         fs::write(path.join("Cargo.toml"), "[workspace]\n")?;
         Ok(Self { path })
@@ -111,10 +109,7 @@ pub fn dangerous() {
         String::from_utf8_lossy(&out.stdout)
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        stdout.contains("abort"),
-        "output should mention abort\nstdout: {stdout}"
-    );
+    assert!(stdout.contains("abort"), "output should mention abort\nstdout: {stdout}");
     Ok(())
 }
 
@@ -140,10 +135,7 @@ pub fn shutdown() {
         String::from_utf8_lossy(&out.stdout)
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        stdout.contains("exit"),
-        "output should mention exit\nstdout: {stdout}"
-    );
+    assert!(stdout.contains("exit"), "output should mention exit\nstdout: {stdout}");
     Ok(())
 }
 
@@ -181,10 +173,7 @@ fn forbid_fatal_constructs_ignores_test_directories() -> TestResult {
     // Place abort() call in a tests/ directory — the scanner must skip this path.
     let test_dir = repo.path().join("crates").join("my-crate").join("tests");
     fs::create_dir_all(&test_dir)?;
-    fs::write(
-        test_dir.join("integration_test.rs"),
-        "fn helper() { std::process::abort(); }\n",
-    )?;
+    fs::write(test_dir.join("integration_test.rs"), "fn helper() { std::process::abort(); }\n")?;
 
     let out = run_forbid_fatal_constructs(repo.path())?;
     assert_eq!(
@@ -233,10 +222,7 @@ fn forbid_fatal_constructs_skips_non_rust_files() -> TestResult {
     repo.write_crate_src("my-crate", "lib.rs", "pub fn safe() {}\n")?;
     // A non-.rs file that contains the forbidden pattern — must be ignored.
     let src = repo.path().join("crates").join("my-crate").join("src");
-    fs::write(
-        src.join("README.md"),
-        "Do not call std::process::abort() here.\n",
-    )?;
+    fs::write(src.join("README.md"), "Do not call std::process::abort() here.\n")?;
 
     let out = run_forbid_fatal_constructs(repo.path())?;
     assert_eq!(

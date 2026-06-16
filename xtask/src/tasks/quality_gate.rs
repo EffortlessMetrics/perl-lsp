@@ -2043,7 +2043,7 @@ mod tests {
         // Verify that the receipt JSON structure includes the new #1470 fields.
         // This test pin the decision boundary: if failure_class or test_failure_class
         // fields are removed from the receipt JSON, this test will fail.
-        
+
         // Simulate a receipt with the required new fields
         let receipt = json!({
             "schema_version": 1,
@@ -2068,8 +2068,11 @@ mod tests {
 
         // Verify the new fields exist
         assert!(receipt.get("failure_class").is_some(), "receipt missing 'failure_class' field");
-        assert!(receipt.get("test_failure_class").is_some(), "receipt missing 'test_failure_class' field");
-        
+        assert!(
+            receipt.get("test_failure_class").is_some(),
+            "receipt missing 'test_failure_class' field"
+        );
+
         // Verify the values
         assert_eq!(receipt["failure_class"], "pass");
         assert!(receipt["test_failure_class"].is_null());

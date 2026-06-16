@@ -45,38 +45,29 @@ mod tests {
 
     #[test]
     fn test_prefix_rs_file_is_excluded() {
-        assert!(is_excluded_for_print_check(Path::new(
-            "crates/my-crate/src/test_helpers.rs"
-        )));
+        assert!(is_excluded_for_print_check(Path::new("crates/my-crate/src/test_helpers.rs")));
     }
 
     #[test]
     fn test_prefix_without_rs_extension_not_excluded() {
         // Only .rs files with test_ prefix are excluded.
-        assert!(!is_excluded_for_print_check(Path::new(
-            "crates/my-crate/src/test_helpers.txt"
-        )));
+        assert!(!is_excluded_for_print_check(Path::new("crates/my-crate/src/test_helpers.txt")));
     }
 
     #[test]
     fn ux_tests_crate_path_is_excluded() {
-        let path: PathBuf =
-            ["crates", "perl-lsp-ux-tests", "src", "lib.rs"].iter().collect();
+        let path: PathBuf = ["crates", "perl-lsp-ux-tests", "src", "lib.rs"].iter().collect();
         assert!(is_excluded_for_print_check(&path));
     }
 
     #[test]
     fn normal_lib_rs_is_not_excluded() {
-        assert!(!is_excluded_for_print_check(Path::new(
-            "crates/perl-parser/src/lib.rs"
-        )));
+        assert!(!is_excluded_for_print_check(Path::new("crates/perl-parser/src/lib.rs")));
     }
 
     #[test]
     fn file_starting_with_test_but_not_rs_extension_is_not_excluded() {
         // test_helpers.toml should NOT be excluded.
-        assert!(!is_excluded_for_print_check(Path::new(
-            "crates/my-crate/src/test_helpers.toml"
-        )));
+        assert!(!is_excluded_for_print_check(Path::new("crates/my-crate/src/test_helpers.toml")));
     }
 }

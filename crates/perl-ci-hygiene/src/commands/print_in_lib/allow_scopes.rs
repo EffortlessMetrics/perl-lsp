@@ -119,13 +119,13 @@ mod tests {
         let mut scope = PrintAllowScope::default();
         // Enter brace scope via pending_attr path.
         scope.note_attribute();
-        scope.observe_line("fn foo() {");     // depth becomes 1
+        scope.observe_line("fn foo() {"); // depth becomes 1
         assert_eq!(scope.active_brace_depth, 1);
         // Observe a line that adds one more open brace.
-        scope.observe_line("if true {");      // depth becomes 2
+        scope.observe_line("if true {"); // depth becomes 2
         assert_eq!(scope.active_brace_depth, 2);
         // Observe a closing brace — depth decrements.
-        scope.observe_line("}");              // depth becomes 1
+        scope.observe_line("}"); // depth becomes 1
         assert_eq!(scope.active_brace_depth, 1);
     }
 
@@ -145,9 +145,9 @@ mod tests {
         let mut scope = PrintAllowScope::default();
         scope.note_attribute();
         // These lines must not consume pending_attr
-        scope.observe_line("   ");            // whitespace-only
-        scope.observe_line("// comment");    // whole-line comment
-        scope.observe_line("#[inline]");     // attribute line
+        scope.observe_line("   "); // whitespace-only
+        scope.observe_line("// comment"); // whole-line comment
+        scope.observe_line("#[inline]"); // attribute line
         assert!(scope.pending_attr, "pending_attr should survive non-consuming lines");
     }
 
@@ -157,9 +157,9 @@ mod tests {
     fn apply_brace_delta_decrements_depth_on_close() {
         let mut scope = PrintAllowScope::default();
         scope.note_attribute();
-        scope.observe_line("fn foo() {");    // pending_attr consumed; depth = 1
+        scope.observe_line("fn foo() {"); // pending_attr consumed; depth = 1
         assert_eq!(scope.active_brace_depth, 1);
-        scope.observe_line("}");             // apply_brace_delta: depth → 0
+        scope.observe_line("}"); // apply_brace_delta: depth → 0
         assert_eq!(scope.active_brace_depth, 0);
     }
 
@@ -168,10 +168,10 @@ mod tests {
         let mut scope = PrintAllowScope::default();
         scope.note_attribute();
         // Open two braces in a single line.
-        scope.observe_line("fn foo() { if true {");   // depth = 2
+        scope.observe_line("fn foo() { if true {"); // depth = 2
         assert_eq!(scope.active_brace_depth, 2);
         // Close three braces — more than the depth; should saturate at 0.
-        scope.observe_line("} } }");                   // depth → 0, not underflow
+        scope.observe_line("} } }"); // depth → 0, not underflow
         assert_eq!(scope.active_brace_depth, 0);
     }
 
@@ -196,15 +196,13 @@ mod tests {
 
     #[test]
     fn file_has_print_allow_detects_inner_print_stderr() {
-        let lines: Vec<String> =
-            vec!["#![allow(clippy::print_stderr)]".to_owned()];
+        let lines: Vec<String> = vec!["#![allow(clippy::print_stderr)]".to_owned()];
         assert!(file_has_print_allow(&lines));
     }
 
     #[test]
     fn file_has_print_allow_detects_inner_print_stdout() {
-        let lines: Vec<String> =
-            vec!["#![allow(clippy::print_stdout)]".to_owned()];
+        let lines: Vec<String> = vec!["#![allow(clippy::print_stdout)]".to_owned()];
         assert!(file_has_print_allow(&lines));
     }
 
@@ -224,9 +222,7 @@ mod tests {
 
     #[test]
     fn line_has_outer_print_allow_attr_rejects_inner_bracket() {
-        assert!(!line_has_outer_print_allow_attr(
-            "#![allow(clippy::print_stderr)]"
-        ));
+        assert!(!line_has_outer_print_allow_attr("#![allow(clippy::print_stderr)]"));
     }
 
     #[test]
