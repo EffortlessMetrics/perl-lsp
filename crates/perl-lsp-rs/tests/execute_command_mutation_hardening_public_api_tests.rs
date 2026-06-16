@@ -19,6 +19,7 @@
 //! - Cross-command behavior verification
 
 use perl_lsp::execute_command::{ExecuteCommandProvider, get_supported_commands};
+use perl_lsp_rs_core::config::WorkspaceConfig;
 use perl_tdd_support::must;
 use serde_json::{Value, json};
 use std::fs;
@@ -34,6 +35,23 @@ fn setup_provider_workspace()
     let workspace = tempdir()?;
     let provider =
         ExecuteCommandProvider::with_workspace_roots(vec![workspace.path().to_path_buf()]);
+    Ok((workspace, provider))
+}
+
+/// Create a provider with workspace roots **and** a WorkspaceConfig that names
+/// `perl` as the interpreter path.  This mirrors the internal
+/// `provider_with_execute_perl` helper in `src/execute_command/tests.rs` and is
+/// required for any test that calls `perl.runFile` or `perl.runTestSub`: since
+/// PR #8966 those handlers reject ambient-fallback Perl discovery and return
+/// `Err(…)` when no `WorkspaceConfig` is attached.
+fn setup_provider_workspace_with_perl()
+-> Result<(TempDir, ExecuteCommandProvider), Box<dyn std::error::Error>> {
+    let workspace = tempdir()?;
+    let mut config = WorkspaceConfig::default();
+    config.perl_path = Some("perl".to_string());
+    let provider =
+        ExecuteCommandProvider::with_workspace_roots(vec![workspace.path().to_path_buf()])
+            .with_workspace_config(config);
     Ok((workspace, provider))
 }
 
@@ -100,7 +118,9 @@ fn setup_initialized_server() -> perl_lsp::LspServer {
 
 #[test]
 fn test_execute_command_not_default_comprehensive() -> TestResult {
-    let (workspace, provider) = setup_provider_workspace()?;
+    // Use a provider with WorkspaceConfig so perl.runFile / perl.runTestSub
+    // do not reject with "refusing ambient fallback" (PR #8966).
+    let (workspace, provider) = setup_provider_workspace_with_perl()?;
 
     // Create test files for comprehensive testing
     let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'test execution';\n";
@@ -238,7 +258,9 @@ fn test_execute_command_not_default_comprehensive() -> TestResult {
 
 #[test]
 fn test_command_routing_specificity_comprehensive() -> TestResult {
-    let (workspace, provider) = setup_provider_workspace()?;
+    // Use a provider with WorkspaceConfig so perl.runFile does not reject with
+    // "refusing ambient fallback" (PR #8966).
+    let (workspace, provider) = setup_provider_workspace_with_perl()?;
 
     // Create test file
     let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'routing test';\n";
@@ -627,7 +649,9 @@ fn test_file_not_found_error_structure() -> TestResult {
 
 #[test]
 fn test_command_execution_success_failure_logic() -> TestResult {
-    let (workspace, provider) = setup_provider_workspace()?;
+    // Use a provider with WorkspaceConfig so perl.runFile / perl.runTestSub
+    // do not reject with "refusing ambient fallback" (PR #8966).
+    let (workspace, provider) = setup_provider_workspace_with_perl()?;
 
     // Create files for testing different execution scenarios
     let valid_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint \"success\";\n";
@@ -768,7 +792,9 @@ fn test_supported_commands_structure() -> TestResult {
 
 #[test]
 fn test_comprehensive_workflow_validation() -> TestResult {
-    let (workspace, provider) = setup_provider_workspace()?;
+    // Use a provider with WorkspaceConfig so perl.runFile / perl.runTestSub
+    // do not reject with "refusing ambient fallback" (PR #8966).
+    let (workspace, provider) = setup_provider_workspace_with_perl()?;
 
     // Create comprehensive test file
     let comprehensive_content = r#"#!/usr/bin/perl
