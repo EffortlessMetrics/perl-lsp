@@ -2847,6 +2847,17 @@ cpan-corpus-check:
 cpan-corpus-ratchet:
     cargo run -p xtask -- cpan-corpus ratchet
 
+# Install the top-50 bounded CPAN subset (~5-8 min, for quick local validation)
+cpan-corpus-install-bounded:
+    cargo run -p xtask -- cpan-corpus install \
+        --dist-list .ci/cpan-top-50-distributions.txt \
+        --install-dir target/cpan-corpus-bounded
+
+# Sweep the bounded CPAN subset (requires cpan-corpus-install-bounded first)
+cpan-corpus-sweep-bounded:
+    cargo run -p xtask -- cpan-corpus sweep \
+        --install-dir target/cpan-corpus-bounded
+
 # ============================================================================
 # Scorecard Metrics Ratchet
 # ============================================================================

@@ -1,0 +1,62 @@
+# CPAN top 50 distributions by reverse dependency count
+# Hand-selected from cpan-top-1000-distributions.txt for the bounded CI mode.
+#
+# Purpose: fast feedback on PR triggers and workflow_dispatch. Installs in
+# ~5-8 minutes (vs ~45+ minutes for the full 1000-distribution corpus), covers
+# the highest-impact modules, and exercises real parser paths without tying up
+# a runner slot for the entire nightly budget.
+#
+# Update policy: keep this as a stable ~50 representative subset. When adding
+# distributions, prefer those that exercise distinct parser features (OO,
+# functional, DSL) over redundant coverage.
+#
+Test-Simple
+ExtUtils-MakeMaker
+PathTools
+IO
+Carp
+Module-Build
+Scalar-List-Utils
+Moose
+Exporter
+File-Temp
+Test-Exception
+Moo
+libwww-perl
+URI
+parent
+Module-Build-Tiny
+JSON
+Data-Dumper
+HTTP-Message
+namespace-autoclean
+Getopt-Long
+DateTime
+version
+Try-Tiny
+lib
+Encode
+Type-Tiny
+base
+Mojolicious
+Time-HiRes
+DBI
+Path-Tiny
+FindBin
+Test-Deep
+File-Path
+Test2-Suite
+Test-Pod
+Test-Most
+List-MoreUtils
+namespace-clean
+Test-Fatal
+MIME-Base64
+constant
+Plack
+Test-NoWarnings
+Pod-Usage
+File-Slurp
+Class-Accessor
+Storable
+Dist-Zilla
