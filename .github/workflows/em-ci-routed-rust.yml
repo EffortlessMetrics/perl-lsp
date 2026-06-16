@@ -159,6 +159,8 @@ jobs:
           echo "idle_cx53=${idle_cx53:-0}"
           echo "idle_cx43=${idle_cx43:-0}"
 
+          # Prefer CX53 (301 GB volume, ~140 GB free) over CX43 (150 GB volume,
+          # fills faster from orphaned run artifacts).
           if [ "${idle_cx53:-0}" -gt 0 ]; then
             emit "cx53" "cx53_idle" "false" "false"
           elif [ "${idle_cx43:-0}" -gt 0 ]; then
@@ -177,6 +179,8 @@ jobs:
       group: em-ci-small
       labels: [self-hosted, linux, x64, em-ci, cx53, rust-small, trusted-pr]
     timeout-minutes: 60
+    outputs:
+      preflight_ok: ${{ steps.preflight.outputs.preflight_ok }}
     env:
       CARGO_HOME: /mnt/ci-cache/cargo-home
       SCCACHE_DIR: /mnt/ci-cache/sccache
@@ -206,24 +210,53 @@ jobs:
           fetch-depth: 1
 
       - name: Preflight disk and toolchain
+        id: preflight
         shell: bash
         run: |
           set -euo pipefail
-          # Self-heal: remove orphaned Rust Small scratch dirs older than 24 h whose
-          # cleanup step never ran (killed runs, OOM evictions, timeouts).
-          # Pattern [0-9]*-[0-9]* matches bare run_id-attempt dirs only; ripr-* dirs
-          # are handled by ripr.yml and intentionally excluded here.
-          find /mnt/ci-scratch/perl-lsp-swarm -maxdepth 1 -name '[0-9]*-[0-9]*' -mmin +1440 -exec rm -rf {} + 2>/dev/null || true
-          find /mnt/ci-scratch/tmp -maxdepth 1 -name '[0-9]*-[0-9]*' -mmin +1440 -exec rm -rf {} + 2>/dev/null || true
+          # ── Orphan reaper (primary disk hygiene) ─────────────────────────────
+          # Invariant: an idle runner is a disk-clean runner.  Killed, OOM-evicted,
+          # and timed-out runs skip their cleanup step, leaving orphaned
+          # run_id-attempt scratch dirs that accumulate and fill the volume.
+          # Reap them at >2 h (120 min) — well past the 60 min CX53 job timeout —
+          # rather than the previous 24 h threshold that let CX43 reach 0 GB.
+          # Pattern [0-9]*-[0-9]* matches bare run_id-attempt dirs only; ripr-*
+          # dirs are handled by ripr.yml and intentionally excluded here.
+          find /mnt/ci-scratch/perl-lsp-swarm -maxdepth 1 -name '[0-9]*-[0-9]*' -mmin +120 -exec rm -rf {} + 2>/dev/null || true
+          find /mnt/ci-scratch/tmp -maxdepth 1 -name '[0-9]*-[0-9]*' -mmin +120 -exec rm -rf {} + 2>/dev/null || true
+          # ── sccache size cap ──────────────────────────────────────────────────
+          # sccache self-prunes when it runs, but if bypassed the dir grows
+          # unbounded.  Hard-cap at 70 GB (CX53 SCCACHE_CACHE_SIZE=60G + buffer).
+          if [ -d "$SCCACHE_DIR" ]; then
+            sccache_gb=$(du -sm "$SCCACHE_DIR" 2>/dev/null | awk '{print int($1/1024)}' || echo 0)
+            if [ "${sccache_gb:-0}" -gt 70 ]; then
+              echo "::warning::sccache is ${sccache_gb} GB (>70 GB cap); purging to free disk"
+              rm -rf "${SCCACHE_DIR:?}"/* 2>/dev/null || true
+            fi
+          fi
+          # ── Docker dangling resource prune ────────────────────────────────────
+          # Dangling images/stopped containers from prior runs consume /mnt/docker.
+          # --filter until=2h targets resources idle for >2 h (safe to remove).
+          docker image prune -f --filter "until=2h" 2>/dev/null || true
+          docker container prune -f --filter "until=2h" 2>/dev/null || true
+          docker volume prune -f 2>/dev/null || true
+          # ── Disk guard ────────────────────────────────────────────────────────
           # The Rust Small lane runs cargo check --workspace + two targeted tests.
           # Cold build (no sccache): ~10-15 GB of incremental artifacts.
           # Warm build (sccache hit): ~1 GB. 40 GB gives 3-4x cold-build headroom
-          # and fits on both CX53 (301 GB volume, ~140 GB free) and CX43 (150 GB
-          # volume) after self-clean of orphaned dirs.
-          ci-disk-guard /mnt/ci-scratch 40
-          ci-disk-guard /mnt/docker 20
-          ci-disk-guard /mnt/ci-cache 20
+          # and fits on CX53 (301 GB volume, ~140 GB free) after self-clean.
+          # If the guard still fails, set preflight_ok=false and exit 1 so the
+          # rust-small-fallback job can take over on GitHub-hosted.
+          disk_ok=true
+          ci-disk-guard /mnt/ci-scratch 40 || disk_ok=false
+          ci-disk-guard /mnt/docker 20 || disk_ok=false
+          ci-disk-guard /mnt/ci-cache 20 || disk_ok=false
           df -h /mnt/ci-scratch /mnt/docker /mnt/ci-cache || true
+          echo "preflight_ok=${disk_ok}" >> "$GITHUB_OUTPUT"
+          if [ "$disk_ok" = "false" ]; then
+            echo "::error::Disk preflight failed on CX53 after cleanup. Failover job will run on GitHub-hosted."
+            exit 1
+          fi
           mkdir -p "$TMPDIR" "$CARGO_TARGET_DIR" "$CARGO_HOME" "$SCCACHE_DIR"
 
       - name: Run Rust small lane
@@ -285,6 +318,8 @@ jobs:
       group: em-ci-small
       labels: [self-hosted, linux, x64, em-ci, cx43, rust-small, trusted-pr]
     timeout-minutes: 75
+    outputs:
+      preflight_ok: ${{ steps.preflight.outputs.preflight_ok }}
     env:
       CARGO_HOME: /mnt/ci-cache/cargo-home
       SCCACHE_DIR: /mnt/ci-cache/sccache
@@ -314,24 +349,50 @@ jobs:
           fetch-depth: 1
 
       - name: Preflight disk and toolchain
+        id: preflight
         shell: bash
         run: |
           set -euo pipefail
-          # Self-heal: remove orphaned Rust Small scratch dirs older than 24 h whose
-          # cleanup step never ran (killed runs, OOM evictions, timeouts).
-          # Pattern [0-9]*-[0-9]* matches bare run_id-attempt dirs only; ripr-* dirs
-          # are handled by ripr.yml and intentionally excluded here.
-          find /mnt/ci-scratch/perl-lsp-swarm -maxdepth 1 -name '[0-9]*-[0-9]*' -mmin +1440 -exec rm -rf {} + 2>/dev/null || true
-          find /mnt/ci-scratch/tmp -maxdepth 1 -name '[0-9]*-[0-9]*' -mmin +1440 -exec rm -rf {} + 2>/dev/null || true
+          # ── Orphan reaper (primary disk hygiene) ─────────────────────────────
+          # Invariant: an idle runner is a disk-clean runner.  Killed, OOM-evicted,
+          # and timed-out runs skip their cleanup step, leaving orphaned
+          # run_id-attempt scratch dirs that accumulate and fill the volume.
+          # Reap them at >2 h (120 min) — well past the 75 min CX43 job timeout —
+          # rather than the previous 24 h threshold.  The 24 h window let CX43 reach
+          # 0 GB free; a 2 h window ensures orphans are cleared before the next run.
+          find /mnt/ci-scratch/perl-lsp-swarm -maxdepth 1 -name '[0-9]*-[0-9]*' -mmin +120 -exec rm -rf {} + 2>/dev/null || true
+          find /mnt/ci-scratch/tmp -maxdepth 1 -name '[0-9]*-[0-9]*' -mmin +120 -exec rm -rf {} + 2>/dev/null || true
+          # ── sccache size cap ──────────────────────────────────────────────────
+          # CX43 has a smaller volume (150 GB). Hard-cap sccache at 35 GB.
+          if [ -d "$SCCACHE_DIR" ]; then
+            sccache_gb=$(du -sm "$SCCACHE_DIR" 2>/dev/null | awk '{print int($1/1024)}' || echo 0)
+            if [ "${sccache_gb:-0}" -gt 35 ]; then
+              echo "::warning::sccache is ${sccache_gb} GB (>35 GB cap); purging to free disk"
+              rm -rf "${SCCACHE_DIR:?}"/* 2>/dev/null || true
+            fi
+          fi
+          # ── Docker dangling resource prune ────────────────────────────────────
+          docker image prune -f --filter "until=2h" 2>/dev/null || true
+          docker container prune -f --filter "until=2h" 2>/dev/null || true
+          docker volume prune -f 2>/dev/null || true
+          # ── Disk guard ────────────────────────────────────────────────────────
           # The Rust Small lane runs cargo check --workspace + two targeted tests.
           # Cold build (no sccache): ~10-15 GB of incremental artifacts.
           # Warm build (sccache hit): ~1 GB. 40 GB gives 3-4x cold-build headroom.
           # CX43 had 64 GB free when the 80 GB guard fired (PR #1228 evidence) --
           # 64 GB > 40 GB, so this guard will pass on a reasonably maintained host.
-          ci-disk-guard /mnt/ci-scratch 40
-          ci-disk-guard /mnt/docker 15
-          ci-disk-guard /mnt/ci-cache 15
+          # If the guard still fails after cleanup, set preflight_ok=false and exit 1
+          # so the rust-small-fallback job can take over on GitHub-hosted.
+          disk_ok=true
+          ci-disk-guard /mnt/ci-scratch 40 || disk_ok=false
+          ci-disk-guard /mnt/docker 15 || disk_ok=false
+          ci-disk-guard /mnt/ci-cache 15 || disk_ok=false
           df -h /mnt/ci-scratch /mnt/docker /mnt/ci-cache || true
+          echo "preflight_ok=${disk_ok}" >> "$GITHUB_OUTPUT"
+          if [ "$disk_ok" = "false" ]; then
+            echo "::error::Disk preflight failed on CX43 after cleanup. Failover job will run on GitHub-hosted."
+            exit 1
+          fi
           mkdir -p "$TMPDIR" "$CARGO_TARGET_DIR" "$CARGO_HOME" "$SCCACHE_DIR"
 
       - name: Run Rust small lane
@@ -419,6 +480,74 @@ jobs:
           cargo check --workspace --locked
           git diff --check
 
+  # ── Disk-full failover ──────────────────────────────────────────────────────
+  # Defense-in-depth: if the primary self-hosted runner's preflight disk-guard
+  # still fails AFTER aggressive cleanup (orphan reap + sccache cap + docker
+  # prune), fall back to GitHub-hosted so the PR is not blocked by a disk-full
+  # runner.  This job is intentionally narrow — it only runs cargo check, not
+  # the full Docker-based test suite — because the failing runner needs ops
+  # attention (the ::warning annotation in this job's summary is the signal).
+  # The aggregate Result job below accepts this success the same as the primary.
+  rust-small-fallback:
+    name: Perl LSP Rust Small (Disk-Full Fallback)
+    needs:
+      - route-rust-small
+      - rust-small-cx53
+      - rust-small-cx43
+    # Trigger ONLY when the primary self-hosted job failed AND the preflight step
+    # explicitly recorded preflight_ok=false (written to GITHUB_OUTPUT before exit 1).
+    # This prevents a real test failure from masking under a GH-hosted cargo-check-only run.
+    # If preflight_ok is empty (job OOM-killed before the step could write output), we
+    # do NOT trigger the fallback — that case needs ops investigation, not a workaround.
+    if: >-
+      always() &&
+      needs.route-rust-small.result == 'success' &&
+      (
+        (needs.route-rust-small.outputs.target == 'cx53' && needs.rust-small-cx53.result == 'failure' && needs.rust-small-cx53.outputs.preflight_ok == 'false') ||
+        (needs.route-rust-small.outputs.target == 'cx43' && needs.rust-small-cx43.result == 'failure' && needs.rust-small-cx43.outputs.preflight_ok == 'false')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CARGO_INCREMENTAL: "0"
+      RUST_TEST_THREADS: "2"
+    steps:
+      - name: Annotate failover reason
+        shell: bash
+        run: |
+          echo "::warning::Primary runner (${{ needs.route-rust-small.outputs.target }}) failed — falling back to GitHub-hosted. Reclaim runner disk before next run."
+          {
+            echo "### Disk-Full Failover"
+            echo ""
+            echo "Primary runner \`${{ needs.route-rust-small.outputs.target }}\` failed its"
+            echo "disk preflight even after aggressive cleanup (orphan reap + sccache cap +"
+            echo "docker prune). This job ran the Rust Small lane on GitHub-hosted as"
+            echo "defense-in-depth. Ops: reclaim disk on the failing runner."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+        with:
+          shared-key: perl-lsp-rust-small-fallback-${{ env.RUST_VERSION }}-${{ hashFiles('Cargo.lock') }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Run Rust small lane (fallback)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fetch --locked
+          cargo check --workspace --locked
+          git diff --check
+
   rust-small-result:
     name: Perl LSP Rust Small Result
     needs:
@@ -426,6 +555,7 @@ jobs:
       - rust-small-cx53
       - rust-small-cx43
       - rust-small-github
+      - rust-small-fallback
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -441,6 +571,7 @@ jobs:
           CX53_RESULT: ${{ needs.rust-small-cx53.result }}
           CX43_RESULT: ${{ needs.rust-small-cx43.result }}
           GITHUB_RESULT: ${{ needs.rust-small-github.result }}
+          FALLBACK_RESULT: ${{ needs.rust-small-fallback.result }}
         run: |
           set -euo pipefail
 
@@ -452,6 +583,7 @@ jobs:
           echo "cx53_result=${CX53_RESULT:-}"
           echo "cx43_result=${CX43_RESULT:-}"
           echo "github_result=${GITHUB_RESULT:-}"
+          echo "fallback_result=${FALLBACK_RESULT:-}"
 
           {
             echo "### Perl LSP Rust Small Result"
@@ -464,6 +596,7 @@ jobs:
             echo "- cx53_result: \`${CX53_RESULT:-}\`"
             echo "- cx43_result: \`${CX43_RESULT:-}\`"
             echo "- github_result: \`${GITHUB_RESULT:-}\`"
+            echo "- fallback_result: \`${FALLBACK_RESULT:-}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
           if [ "$ROUTE_RESULT" != "success" ]; then
@@ -473,24 +606,50 @@ jobs:
 
           case "${ROUTER_TARGET:-}" in
             cx53)
-              test "$CX53_RESULT" = "success"
-              test "$CX43_RESULT" = "skipped"
-              test "$GITHUB_RESULT" = "skipped"
+              if [ "$CX53_RESULT" = "success" ]; then
+                # Primary succeeded normally.
+                test "$CX43_RESULT" = "skipped"
+                test "$GITHUB_RESULT" = "skipped"
+                test "$FALLBACK_RESULT" = "skipped"
+              elif [ "$FALLBACK_RESULT" = "success" ]; then
+                # Disk-full preflight failover: fallback ran on GitHub-hosted.
+                # The fallback only triggers when preflight_ok=false, so this is
+                # safe — we know the primary failed at preflight, not at test time.
+                echo "::warning::CX53 disk preflight failed; lane passed via GitHub-hosted fallback. Reclaim CX53 disk."
+                test "$CX43_RESULT" = "skipped"
+                test "$GITHUB_RESULT" = "skipped"
+              else
+                # Primary failed and no fallback ran (real test failure, or fallback
+                # itself failed). Fail the check.
+                echo "::error::Rust Small on CX53 failed ($CX53_RESULT); fallback result: $FALLBACK_RESULT"
+                exit 1
+              fi
               ;;
             cx43)
-              test "$CX43_RESULT" = "success"
-              test "$CX53_RESULT" = "skipped"
-              test "$GITHUB_RESULT" = "skipped"
+              if [ "$CX43_RESULT" = "success" ]; then
+                test "$CX53_RESULT" = "skipped"
+                test "$GITHUB_RESULT" = "skipped"
+                test "$FALLBACK_RESULT" = "skipped"
+              elif [ "$FALLBACK_RESULT" = "success" ]; then
+                echo "::warning::CX43 disk preflight failed; lane passed via GitHub-hosted fallback. Reclaim CX43 disk."
+                test "$CX53_RESULT" = "skipped"
+                test "$GITHUB_RESULT" = "skipped"
+              else
+                echo "::error::Rust Small on CX43 failed ($CX43_RESULT); fallback result: $FALLBACK_RESULT"
+                exit 1
+              fi
               ;;
             github)
               test "$GITHUB_RESULT" = "success"
               test "$CX53_RESULT" = "skipped"
               test "$CX43_RESULT" = "skipped"
+              test "$FALLBACK_RESULT" = "skipped"
               ;;
             none)
               test "$CX53_RESULT" = "skipped"
               test "$CX43_RESULT" = "skipped"
               test "$GITHUB_RESULT" = "skipped"
+              test "$FALLBACK_RESULT" = "skipped"
               echo "::error::No runner route available (reason: ${ROUTER_REASON:-unknown}). Re-run later or use workflow_dispatch force_target=github."
               exit 1
               ;;

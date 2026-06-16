@@ -175,6 +175,8 @@ jobs:
       group: em-ci-small
       labels: [self-hosted, linux, x64, em-ci, cx53, rust-small, trusted-pr]
     timeout-minutes: 60
+    outputs:
+      preflight_ok: ${{ steps.preflight.outputs.preflight_ok }}
     env:
       RIPR_VERSION: "0.9.0"
       BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref || github.event.repository.default_branch }}
@@ -206,20 +208,42 @@ jobs:
           fetch-depth: 0
 
       - name: Preflight disk
+        id: preflight
         shell: bash
         run: |
           set -euo pipefail
-          # Self-heal: remove orphaned ripr-* scratch dirs older than 24 h that were
-          # left by killed or timed-out runs whose cleanup step never executed.
-          # Scope is intentionally narrow (ripr-* only); other lanes' dirs are out
-          # of scope and belong to issue #978 for workspace-wide scratch governance.
-          find /mnt/ci-scratch -maxdepth 1 -name 'ripr-*' -mmin +1440 -exec rm -rf {} + 2>/dev/null || true
+          # ── Orphan reaper (primary disk hygiene) ─────────────────────────────
+          # Invariant: an idle runner is a disk-clean runner.  Killed, OOM-evicted,
+          # and timed-out ripr runs leave orphaned ripr-* scratch dirs behind.
+          # Reap at >2 h (120 min) — past the 60 min CX53 ripr timeout — rather
+          # than the previous 24 h that let disk fill between maintenance cycles.
+          find /mnt/ci-scratch -maxdepth 1 -name 'ripr-*' -mmin +120 -exec rm -rf {} + 2>/dev/null || true
+          # ── sccache size cap ──────────────────────────────────────────────────
+          if [ -d "$SCCACHE_DIR" ]; then
+            sccache_gb=$(du -sm "$SCCACHE_DIR" 2>/dev/null | awk '{print int($1/1024)}' || echo 0)
+            if [ "${sccache_gb:-0}" -gt 70 ]; then
+              echo "::warning::sccache is ${sccache_gb} GB (>70 GB cap); purging"
+              rm -rf "${SCCACHE_DIR:?}"/* 2>/dev/null || true
+            fi
+          fi
+          # ── Docker dangling resource prune ────────────────────────────────────
+          docker image prune -f --filter "until=2h" 2>/dev/null || true
+          docker container prune -f --filter "until=2h" 2>/dev/null || true
+          docker volume prune -f 2>/dev/null || true
+          # ── Disk guard ────────────────────────────────────────────────────────
           # ripr needs at most an xtask debug build (~5-8 GB) plus small JSON
-          # analysis artifacts (<1 GB).  20 GB gives 2-3x headroom without
-          # requiring the full 100 GB reserved for the complete Rust CI build.
-          ci-disk-guard /mnt/ci-scratch 20
-          ci-disk-guard /mnt/ci-cache 20
+          # analysis artifacts (<1 GB).  20 GB gives 2-3x headroom on CX53.
+          # If the guard still fails, set preflight_ok=false and let the
+          # ripr-fallback job run on GitHub-hosted.
+          disk_ok=true
+          ci-disk-guard /mnt/ci-scratch 20 || disk_ok=false
+          ci-disk-guard /mnt/ci-cache 20 || disk_ok=false
           df -h /mnt/ci-scratch /mnt/ci-cache || true
+          echo "preflight_ok=${disk_ok}" >> "$GITHUB_OUTPUT"
+          if [ "$disk_ok" = "false" ]; then
+            echo "::error::Disk preflight failed on CX53 after cleanup. Failover job will run on GitHub-hosted."
+            exit 1
+          fi
           mkdir -p "$TMPDIR" "$CARGO_TARGET_DIR" "$CARGO_HOME" "$SCCACHE_DIR"
 
       - name: Run ripr evidence and gate (Docker)
@@ -380,6 +404,8 @@ jobs:
       group: em-ci-small
       labels: [self-hosted, linux, x64, em-ci, cx43, rust-small, trusted-pr]
     timeout-minutes: 75
+    outputs:
+      preflight_ok: ${{ steps.preflight.outputs.preflight_ok }}
     env:
       RIPR_VERSION: "0.9.0"
       BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref || github.event.repository.default_branch }}
@@ -411,22 +437,46 @@ jobs:
           fetch-depth: 0
 
       - name: Preflight disk
+        id: preflight
         shell: bash
         run: |
           set -euo pipefail
-          # Self-heal: remove orphaned ripr-* scratch dirs older than 24 h that were
-          # left by killed or timed-out runs whose cleanup step never executed.
-          # Scope is intentionally narrow (ripr-* only); other lanes' dirs are out
-          # of scope and belong to issue #978 for workspace-wide scratch governance.
-          find /mnt/ci-scratch -maxdepth 1 -name 'ripr-*' -mmin +1440 -exec rm -rf {} + 2>/dev/null || true
+          # ── Orphan reaper (primary disk hygiene) ─────────────────────────────
+          # Invariant: an idle runner is a disk-clean runner.  Killed, OOM-evicted,
+          # and timed-out ripr runs leave orphaned ripr-* scratch dirs behind.
+          # Reap at >2 h (120 min) — past the 75 min CX43 ripr timeout — rather
+          # than the previous 24 h that let disk fill between maintenance cycles.
+          find /mnt/ci-scratch -maxdepth 1 -name 'ripr-*' -mmin +120 -exec rm -rf {} + 2>/dev/null || true
+          # ── sccache size cap ──────────────────────────────────────────────────
+          # CX43 has a smaller volume. Hard-cap sccache at 35 GB.
+          if [ -d "$SCCACHE_DIR" ]; then
+            sccache_gb=$(du -sm "$SCCACHE_DIR" 2>/dev/null | awk '{print int($1/1024)}' || echo 0)
+            if [ "${sccache_gb:-0}" -gt 35 ]; then
+              echo "::warning::sccache is ${sccache_gb} GB (>35 GB cap); purging"
+              rm -rf "${SCCACHE_DIR:?}"/* 2>/dev/null || true
+            fi
+          fi
+          # ── Docker dangling resource prune ────────────────────────────────────
+          docker image prune -f --filter "until=2h" 2>/dev/null || true
+          docker container prune -f --filter "until=2h" 2>/dev/null || true
+          docker volume prune -f 2>/dev/null || true
+          # ── Disk guard ────────────────────────────────────────────────────────
           # ripr needs at most an xtask debug build (~5-8 GB) plus small JSON
           # analysis artifacts (<1 GB).  20 GB gives 2-3x headroom without
           # requiring the full 80 GB reserved for the complete Rust CI build.
           # CX43 had 32 GB free when the 80 GB guard fired (run 27074596917) --
           # 32 GB > 20 GB, so this guard will pass on a reasonably maintained host.
-          ci-disk-guard /mnt/ci-scratch 20
-          ci-disk-guard /mnt/ci-cache 15
+          # If the guard still fails, set preflight_ok=false and let the
+          # ripr-fallback job run on GitHub-hosted.
+          disk_ok=true
+          ci-disk-guard /mnt/ci-scratch 20 || disk_ok=false
+          ci-disk-guard /mnt/ci-cache 15 || disk_ok=false
           df -h /mnt/ci-scratch /mnt/ci-cache || true
+          echo "preflight_ok=${disk_ok}" >> "$GITHUB_OUTPUT"
+          if [ "$disk_ok" = "false" ]; then
+            echo "::error::Disk preflight failed on CX43 after cleanup. Failover job will run on GitHub-hosted."
+            exit 1
+          fi
           mkdir -p "$TMPDIR" "$CARGO_TARGET_DIR" "$CARGO_HOME" "$SCCACHE_DIR"
 
       - name: Run ripr evidence and gate (Docker)
@@ -709,6 +759,165 @@ jobs:
           if-no-files-found: error
 
   # -------------------------------------------------------------------------
+  # 2d. ripr disk-full failover -- runs ripr on GitHub-hosted when the primary
+  # self-hosted runner (CX53 or CX43) was routed but its disk preflight still
+  # failed after aggressive cleanup (orphan reap + sccache cap + docker prune).
+  # Uses the same ripr-github pattern so the quality gate is fully enforced.
+  # -------------------------------------------------------------------------
+  ripr-fallback:
+    name: ripr+ (Disk-Full Fallback)
+    needs:
+      - route-ripr
+      - ripr-cx53
+      - ripr-cx43
+    # Trigger ONLY when the primary self-hosted job failed AND the preflight step
+    # explicitly recorded preflight_ok=false (written to GITHUB_OUTPUT before exit 1).
+    # This prevents a real ripr quality-gate failure from masking under a GitHub-hosted run.
+    if: >-
+      always() &&
+      needs.route-ripr.result == 'success' &&
+      (
+        (needs.route-ripr.outputs.target == 'cx53' && needs.ripr-cx53.result == 'failure' && needs.ripr-cx53.outputs.preflight_ok == 'false') ||
+        (needs.route-ripr.outputs.target == 'cx43' && needs.ripr-cx43.result == 'failure' && needs.ripr-cx43.outputs.preflight_ok == 'false')
+      )
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      RIPR_VERSION: "0.9.0"
+      BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref || github.event.repository.default_branch }}
+      PR_LABELS: ${{ github.event_name == 'pull_request' && join(github.event.pull_request.labels.*.name, ',') || '' }}
+    steps:
+      - name: Annotate failover reason
+        shell: bash
+        run: |
+          echo "::warning::Primary runner (${{ needs.route-ripr.outputs.target }}) failed — falling back to GitHub-hosted for ripr. Reclaim runner disk before next run."
+          {
+            echo "### ripr Disk-Full Failover"
+            echo ""
+            echo "Primary runner \`${{ needs.route-ripr.outputs.target }}\` failed its disk"
+            echo "preflight even after aggressive cleanup. Running ripr on GitHub-hosted"
+            echo "as defense-in-depth. Ops: reclaim disk on the failing runner."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Toolchain (rust-toolchain.toml pins 1.95.0)
+        run: rustc --version
+
+      - name: Normalize base ref
+        shell: bash
+        run: |
+          stripped="${BASE_REF#refs/heads/}"
+          echo "BASE_REF=$stripped" >> "$GITHUB_ENV"
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          cache-on-failure: true
+          cache-all-crates: true
+          shared-key: ripr-fallback-${{ env.RIPR_VERSION }}-${{ hashFiles('Cargo.lock') }}
+          save-if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
+
+      - name: Install ripr
+        run: cargo install ripr --version "$RIPR_VERSION" --locked
+
+      - name: Run ripr doctor
+        run: ripr doctor
+
+      - name: Generate PR evidence
+        run: cargo xtask ripr-pr --base "origin/$BASE_REF" --head HEAD
+
+      - name: Generate repo-wide RIPR+ baseline receipt
+        if: always()
+        run: cargo xtask ripr-plus --receipt target/receipts/quality/ripr-plus.json
+
+      - name: Generate review guidance
+        if: always()
+        run: cargo xtask ripr-review-comments --base "origin/$BASE_REF" --head HEAD --timeout-seconds 210
+
+      - name: Generate impacted evidence
+        if: always()
+        run: cargo xtask impacted-evidence --labels-csv "$PR_LABELS"
+
+      - name: Generate PR evidence summary
+        if: always()
+        run: cargo xtask ripr-pr-summary
+
+      - name: Generate warning annotations
+        if: always()
+        run: cargo xtask ripr-annotations
+
+      - name: Validate PR evidence contracts
+        if: always()
+        run: |
+          cargo xtask ripr-pr --base "origin/$BASE_REF" --head HEAD --check
+          cargo xtask ripr-plus --receipt target/receipts/quality/ripr-plus.json --check
+          cargo xtask ripr-review-comments --base "origin/$BASE_REF" --head HEAD --check
+          cargo xtask impacted-evidence --labels-csv "$PR_LABELS" --check
+          cargo xtask ripr-pr-summary --check
+          cargo xtask ripr-annotations --check
+
+      - name: Enforce new RIPR gap quality gate
+        if: always()
+        run: |
+          cargo xtask quality-gate \
+            --mode enforce-new-ripr \
+            --ripr-receipt target/receipts/quality/ripr-plus.json \
+            --ripr-pr-receipt target/ripr/pr/repo-exposure.json \
+            --review-receipt target/ripr/review/comments.json \
+            --ripr-base "origin/$BASE_REF" \
+            --ripr-head HEAD \
+            --receipt target/receipts/quality/quality-gate-ripr.json \
+            --summary target/receipts/quality/quality-gate-ripr.md
+          cargo xtask quality-gate \
+            --mode enforce-new-ripr \
+            --ripr-receipt target/receipts/quality/ripr-plus.json \
+            --ripr-pr-receipt target/ripr/pr/repo-exposure.json \
+            --review-receipt target/ripr/review/comments.json \
+            --ripr-base "origin/$BASE_REF" \
+            --ripr-head HEAD \
+            --receipt target/receipts/quality/quality-gate-ripr.json \
+            --summary target/receipts/quality/quality-gate-ripr.md \
+            --check
+
+      - name: Append PR evidence summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f target/ripr/pr/summary.md ]; then
+            cat target/ripr/pr/summary.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No RIPR PR evidence summary was produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f target/receipts/quality/quality-gate-ripr.md ]; then
+            printf '\n' >> "$GITHUB_STEP_SUMMARY"
+            cat target/receipts/quality/quality-gate-ripr.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No RIPR quality-gate summary was produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f target/ripr/review/annotations.txt ]; then
+            cat target/ripr/review/annotations.txt
+          fi
+
+      - name: Upload ripr PR evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ripr-pr-evidence-fallback
+          path: |
+            target/ripr/pr/**
+            target/ripr/review/**
+            target/xtask/impacted-evidence/**
+            target/receipts/quality/ripr-plus.json
+            target/receipts/quality/quality-gate-ripr.json
+            target/receipts/quality/quality-gate-ripr.md
+          retention-days: 14
+          if-no-files-found: error
+
+  # -------------------------------------------------------------------------
   # 3. Result aggregator -- owns the "ripr+ New Gap Gate" required-check name.
   # -------------------------------------------------------------------------
   ripr:
@@ -718,6 +927,7 @@ jobs:
       - ripr-cx53
       - ripr-cx43
       - ripr-github
+      - ripr-fallback
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -731,6 +941,7 @@ jobs:
           CX53_RESULT: ${{ needs.ripr-cx53.result }}
           CX43_RESULT: ${{ needs.ripr-cx43.result }}
           GITHUB_RESULT: ${{ needs.ripr-github.result }}
+          FALLBACK_RESULT: ${{ needs.ripr-fallback.result }}
         run: |
           set -euo pipefail
 
@@ -740,6 +951,7 @@ jobs:
           echo "cx53_result=${CX53_RESULT:-}"
           echo "cx43_result=${CX43_RESULT:-}"
           echo "github_result=${GITHUB_RESULT:-}"
+          echo "fallback_result=${FALLBACK_RESULT:-}"
 
           {
             echo "### ripr+ New Gap Gate Result"
@@ -750,6 +962,7 @@ jobs:
             echo "- cx53_result: \`${CX53_RESULT:-}\`"
             echo "- cx43_result: \`${CX43_RESULT:-}\`"
             echo "- github_result: \`${GITHUB_RESULT:-}\`"
+            echo "- fallback_result: \`${FALLBACK_RESULT:-}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
           if [ "$ROUTE_RESULT" != "success" ]; then
@@ -759,14 +972,26 @@ jobs:
 
           case "${ROUTER_TARGET:-}" in
             cx53)
-              if [ "$CX53_RESULT" != "success" ]; then
-                echo "::error::ripr on CX53 did not succeed: $CX53_RESULT"
+              if [ "$CX53_RESULT" = "success" ]; then
+                : # Primary succeeded normally.
+              elif [ "$FALLBACK_RESULT" = "success" ]; then
+                # Disk-full preflight failover: fallback ran on GitHub-hosted.
+                # Safe because fallback only triggers when preflight_ok=false.
+                echo "::warning::CX53 disk preflight failed; ripr passed via GitHub-hosted fallback. Reclaim CX53 disk."
+              else
+                # Primary failed and fallback did not succeed (real ripr failure, or
+                # fallback skipped because preflight wasn't the failure cause).
+                echo "::error::ripr on CX53 failed ($CX53_RESULT); fallback result: $FALLBACK_RESULT"
                 exit 1
               fi
               ;;
             cx43)
-              if [ "$CX43_RESULT" != "success" ]; then
-                echo "::error::ripr on CX43 did not succeed: $CX43_RESULT"
+              if [ "$CX43_RESULT" = "success" ]; then
+                : # Primary succeeded normally.
+              elif [ "$FALLBACK_RESULT" = "success" ]; then
+                echo "::warning::CX43 disk preflight failed; ripr passed via GitHub-hosted fallback. Reclaim CX43 disk."
+              else
+                echo "::error::ripr on CX43 failed ($CX43_RESULT); fallback result: $FALLBACK_RESULT"
                 exit 1
               fi
               ;;
