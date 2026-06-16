@@ -363,10 +363,10 @@ mod position_utf16_conversion_tests {
     #[case("\n", 0, (0, 0))] // Start of newline
     #[case("\n", 1, (1, 0))] // After newline
     #[case("\r\n", 0, (0, 0))] // Start of CRLF
-    #[case("\r\n", 1, (0, 1))] // Middle of CRLF
+    #[case("\r\n", 1, (0, 0))] // \n byte in CRLF — clamped to content end (col 0); \r\n excluded from columns
     #[case("\r\n", 2, (1, 0))] // After CRLF
     #[case("😀", 0, (0, 0))] // Start of emoji (4-byte UTF-8, 2 UTF-16 units)
-    #[case("😀", 1, (0, 1))] // Middle of emoji (invalid position)
+    #[case("😀", 1, (0, 0))] // Mid-codepoint byte — clamped to previous char boundary (col 0)
     #[case("😀", 4, (0, 2))] // End of emoji
     #[case("😀", 5, (0, 2))] // Beyond emoji
     fn test_utf16_conversion_boundaries(
@@ -384,16 +384,20 @@ mod position_utf16_conversion_tests {
 
     /// Test CRLF handling edge cases that could cause incorrect line/column calculation
     /// Targets position.rs lines 160-167: CRLF logical line handling
+    // Byte layout for "hello\r\nworld": h=0 e=1 l=2 l=3 o=4 \r=5 \n=6 w=7 ...
+    // \r (offset 5) and \n (offset 6) are both part of the CRLF line ending.
+    // Both are clamped to content end (col 5 = end of "hello").
+    // Byte layout for "a\r\nb\r\nc": a=0 \r=1 \n=2 b=3 \r=4 \n=5 c=6
     #[rstest]
-    #[case("hello\r\nworld", 5, (0, 5))] // End of line before CRLF
-    #[case("hello\r\nworld", 6, (0, 6))] // At \r
-    #[case("hello\r\nworld", 7, (1, 0))] // After \r\n
+    #[case("hello\r\nworld", 5, (0, 5))] // At \r — clamped to content end (col 5)
+    #[case("hello\r\nworld", 6, (0, 5))] // At \n in CRLF — clamped to content end (col 5)
+    #[case("hello\r\nworld", 7, (1, 0))] // After \r\n, start of "world"
     #[case("line1\r\nline2\r\n", 7, (1, 0))] // Start of second line
-    #[case("line1\r\nline2\r\n", 12, (1, 5))] // End of second line
+    #[case("line1\r\nline2\r\n", 12, (1, 5))] // At \r in second CRLF — clamped to content end (col 5)
     #[case("line1\r\nline2\r\n", 14, (2, 0))] // After final CRLF
-    #[case("a\r\nb\r\nc", 2, (0, 2))] // At \r in first CRLF
-    #[case("a\r\nb\r\nc", 3, (1, 0))] // After first CRLF
-    #[case("a\r\nb\r\nc", 5, (1, 2))] // At \r in second CRLF
+    #[case("a\r\nb\r\nc", 2, (0, 1))] // At \n in first CRLF — clamped to content end (col 1)
+    #[case("a\r\nb\r\nc", 3, (1, 0))] // After first CRLF, start of "b"
+    #[case("a\r\nb\r\nc", 5, (1, 1))] // At \n in second CRLF — clamped to content end (col 1)
     fn test_crlf_boundary_handling(
         #[case] text: &str,
         #[case] offset: usize,
@@ -429,8 +433,19 @@ mod position_utf16_conversion_tests {
                 let (line, col) = offset_to_utf16_line_col(text, offset);
                 let roundtrip = utf16_line_col_to_offset(text, line, col);
 
-                // For invalid UTF-8 positions (middle of multi-byte), allow some tolerance
-                let tolerance = if text.chars().any(|c| c.len_utf8() > 1) { 4 } else { 0 };
+                // For invalid UTF-8 positions (middle of multi-byte) allow tolerance of 4 bytes
+                // (maximum UTF-8 codepoint size). Also allow tolerance of 1 for CRLF sequences:
+                // \n at offset N in \r\n maps to the same position as \r at N-1 (both clamp to
+                // content end), so the roundtrip returns N-1 rather than N — a difference of 1.
+                let has_multibyte = text.chars().any(|c| c.len_utf8() > 1);
+                let has_crlf = text.contains("\r\n");
+                let tolerance = if has_multibyte {
+                    4
+                } else if has_crlf {
+                    1
+                } else {
+                    0
+                };
 
                 assert!(
                     roundtrip <= offset + tolerance
@@ -463,13 +478,17 @@ mod position_utf16_conversion_tests {
     fn test_line_counting_edge_cases() {
         // Test files with various line ending patterns
         // Note: Offsets point to character positions, not "after" positions
+        // Byte layout for "mixed\n\r\n": m=0 i=1 x=2 e=3 d=4 \n=5 \r=6 \n=7 (len=8)
+        // Line 0: "mixed\n" (offsets 0–5), Line 1: "\r\n" (offsets 6–7), Line 2: ""
+        // Offset 7 is the \n in the CRLF on line 1. content_end for "\r\n" is 0 (empty content).
+        // rel = 7-6 = 1 >= content_end=0 → clamped to (1, 0).
         let cases = vec![
             ("no_newline", 10, (0, 10)),         // No final newline
             ("with_newline\n", 13, (1, 0)),      // Offset 13 = past end, after final newline
             ("empty_last_line\n\n", 17, (2, 0)), // Offset 17 = past end, after second newline
             ("crlf_ending\r\n", 13, (1, 0)),     // Offset 13 = past end, after CRLF
             ("mixed\n\r\n", 8, (2, 0)),          // Offset 8 = past end (len=8), after final \n
-            ("mixed\n\r\n", 7, (1, 1)),          // Offset 7 = at the \n char, line 1 col 1
+            ("mixed\n\r\n", 7, (1, 0)), // Offset 7 = \n in CRLF on line 1 — clamped to content end (col 0)
         ];
 
         for (text, offset, expected) in cases {
