@@ -19,6 +19,16 @@ fn codecov_patch_status_requires_95_with_no_threshold() -> Result<(), Box<dyn st
     let config: Value = serde_yaml_ng::from_str(&raw_config)?;
 
     assert_eq!(
+        yaml_path(&config, &["codecov", "require_ci_to_pass"]),
+        Some("false"),
+        "Codecov statuses must not wait for unrelated CI/test gates to pass"
+    );
+    assert_eq!(
+        yaml_path(&config, &["codecov", "notify", "wait_for_ci"]),
+        Some("false"),
+        "Codecov notifications must not be delayed on unrelated CI/test gates"
+    );
+    assert_eq!(
         yaml_path(&config, &["coverage", "status", "patch", "default", "target"]),
         Some("95%"),
         "Codecov patch status must require 95% coverage"
@@ -27,6 +37,11 @@ fn codecov_patch_status_requires_95_with_no_threshold() -> Result<(), Box<dyn st
         yaml_path(&config, &["coverage", "status", "patch", "default", "threshold"]),
         Some("0%"),
         "Codecov patch status must have no threshold allowance"
+    );
+    assert_eq!(
+        yaml_path(&config, &["coverage", "status", "patch", "default", "if_ci_failed"]),
+        Some("ignore"),
+        "Codecov patch status must evaluate coverage independently from unrelated CI/test failures"
     );
     assert_ne!(
         yaml_path(&config, &["coverage", "status", "patch", "default", "informational"],),
@@ -37,6 +52,11 @@ fn codecov_patch_status_requires_95_with_no_threshold() -> Result<(), Box<dyn st
         yaml_path(&config, &["coverage", "status", "project", "default", "target"],),
         Some("95%"),
         "Codecov project status should advertise the final 95% target"
+    );
+    assert_eq!(
+        yaml_path(&config, &["coverage", "status", "project", "default", "if_ci_failed"]),
+        Some("ignore"),
+        "Codecov project status must not inherit unrelated CI/test failures"
     );
     assert_eq!(
         yaml_path(&config, &["coverage", "status", "project", "default", "informational"],),
@@ -143,18 +163,18 @@ fn coverage_docs_describe_patch_front_door_without_ci_wiring()
     );
     assert!(
         coverage_doc.contains("Codecov / Patch 95")
-            && coverage_doc.contains("fail_ci_if_error: true"),
-        "coverage how-to must describe the active blocking Codecov patch upload"
+            && coverage_doc.contains("fail_ci_if_error: false")
+            && coverage_doc.contains("local quality-gate receipt"),
+        "coverage how-to must describe the local receipt as the active blocking patch proof"
     );
     for stale_phrase in [
-        "fail_ci_if_error: false",
-        "Codecov upload failures are configured as non-blocking",
-        "Codecov upload step is non-blocking",
-        "so service outages or missing token setup do not block merge-gate CI",
+        "fail_ci_if_error: true",
+        "upload failures block PRs",
+        "missing token, upload error, or Codecov processing failure prevents the PR from merging",
     ] {
         assert!(
             !coverage_doc.contains(stale_phrase),
-            "coverage how-to must not preserve stale non-blocking Codecov upload guidance: {stale_phrase}"
+            "coverage how-to must not preserve stale blocking Codecov upload guidance: {stale_phrase}"
         );
     }
 

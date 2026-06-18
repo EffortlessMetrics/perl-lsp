@@ -18,6 +18,8 @@ Current policy:
 
 - patch `95%` / `0%` is the front-door PR coverage policy;
 - project `95%` remains informational during burn-down;
+- Codecov statuses use `require_ci_to_pass: false` plus status-level
+  `if_ci_failed: ignore` so routed test failures stay in test-named gates;
 - proof-lane `xtask/src/` paths are included through focused quality-gate and RIPR integration coverage;
 - per-flag `target` fields are not used because project and patch status blocks own thresholds.
 
@@ -52,7 +54,7 @@ Codecov does **not** answer:
 | Coverage flags          | crate-level flags, including `xtask/src/` for proof-rail code         | keep flags inspectable without per-flag status targets    |
 | Branch-coverage ratchet | `.ci/coverage-baseline.txt` parser branch ratchet                     | unchanged in this slice                                   |
 | Coverage receipt        | `target/receipts/quality/coverage-baseline.json` plus quality-gate JSON/Markdown in CI | keep current on every PR |
-| Test Analytics          | receipt to JUnit upload in PR-fast / gate shards / UX regression lanes | unchanged; documented as **test telemetry**               |
+| Test Analytics          | receipt to JUnit upload in PR-fast / gate shards / UX regression lanes | unchanged; **test telemetry**, not a coverage verdict     |
 
 ## Historical current vs target
 

@@ -264,8 +264,9 @@ fn docs_describe_transitional_blocking_contract() {
         status_doc.contains("quality-gate")
             && status_doc.contains("Markdown summaries")
             && status_doc.contains("Current Blocking Proof Floor")
-            && status_doc.contains("Codecov upload or")
-            && status_doc.contains("processing failures through `fail_ci_if_error: true`")
+            && status_doc.contains("coverage routing or setup")
+            && status_doc.contains("failures. Codecov upload")
+            && status_doc.contains("Codecov upload and Test Analytics telemetry are non-fatal")
             && status_doc.contains(
                 "generated quality-gate receipts are freshness-checked for patch, new-RIPR,"
             )
