@@ -128,7 +128,7 @@ const XTASK_SUPPORTED_EDITOR_INLINE_PACK: ProofPack = ProofPack {
 const INLINE_CORE_PACK: ProofPack = ProofPack {
     id: "inline-core",
     commands: &[
-        "cargo test -p perl-lsp-rs-core --lib --profile agent --locked inline_completion -- --nocapture",
+        "cargo llvm-cov test --no-report -p perl-lsp-rs-core --lib --profile agent --locked inline_completion -- --nocapture",
     ],
 };
 
@@ -149,7 +149,7 @@ const XTASK_INLINE_COMPLETION_QUALITY_PACK: ProofPack = ProofPack {
 const COMPLETION_CORE_PACK: ProofPack = ProofPack {
     id: "completion-core",
     commands: &[
-        "cargo test -p perl-lsp-rs-core --lib --profile agent --locked completion::completion -- --nocapture",
+        "cargo llvm-cov test --no-report -p perl-lsp-rs-core --lib --profile agent --locked completion::completion -- --nocapture",
     ],
 };
 
@@ -3503,7 +3503,7 @@ mod tests {
         assert!(receipt.coverage_proof_packs.iter().flat_map(|pack| pack.commands.iter()).any(
             |command| {
                 command
-                    == "cargo test -p perl-lsp-rs-core --lib --profile agent --locked inline_completion -- --nocapture"
+                    == "cargo llvm-cov test --no-report -p perl-lsp-rs-core --lib --profile agent --locked inline_completion -- --nocapture"
             }
         ));
         assert!(

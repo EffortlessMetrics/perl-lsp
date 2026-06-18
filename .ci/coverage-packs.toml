@@ -45,7 +45,7 @@ files = [
   "crates/perl-lsp-rs-core/src/providers/inline_completion/",
 ]
 commands = [
-  "cargo test -p perl-lsp-rs-core --lib --profile agent --locked inline_completion -- --nocapture",
+  "cargo llvm-cov test --no-report -p perl-lsp-rs-core --lib --profile agent --locked inline_completion -- --nocapture",
 ]
 coverage_filters = [
   "inline_completion",
@@ -83,7 +83,7 @@ files = [
   "crates/perl-lsp-rs-core/src/providers/completion/",
 ]
 commands = [
-  "cargo test -p perl-lsp-rs-core --lib --profile agent --locked completion::completion -- --nocapture",
+  "cargo llvm-cov test --no-report -p perl-lsp-rs-core --lib --profile agent --locked completion::completion -- --nocapture",
 ]
 coverage_filters = [
   "completion::completion",

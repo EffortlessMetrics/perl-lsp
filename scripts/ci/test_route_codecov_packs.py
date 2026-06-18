@@ -95,7 +95,7 @@ class RouteCodecovPacksTests(unittest.TestCase):
                     "crates/perl-lsp-rs-core/src/providers/completion/",
                 ],
                 "commands": [
-                    "cargo test -p perl-lsp-rs-core --lib completion::completion",
+                    "cargo llvm-cov test --no-report -p perl-lsp-rs-core --lib completion::completion",
                 ],
                 "coverage_filters": ["completion::completion"],
             },
@@ -125,7 +125,7 @@ class RouteCodecovPacksTests(unittest.TestCase):
                     "crates/perl-lsp-rs-core/src/providers/completion/",
                 ],
                 "commands": [
-                    "cargo test -p perl-lsp-rs-core --lib completion::completion",
+                    "cargo llvm-cov test --no-report -p perl-lsp-rs-core --lib completion::completion",
                 ],
                 "coverage_filters": ["completion::completion"],
             },
@@ -166,7 +166,7 @@ class RouteCodecovPacksTests(unittest.TestCase):
                     "crates/perl-lsp-rs-core/src/providers/inline_completion/",
                 ],
                 "commands": [
-                    "cargo test -p perl-lsp-rs-core --lib inline_completion",
+                    "cargo llvm-cov test --no-report -p perl-lsp-rs-core --lib inline_completion",
                 ],
                 "coverage_filters": ["inline_completion"],
             },
@@ -205,7 +205,7 @@ class RouteCodecovPacksTests(unittest.TestCase):
                     "crates/perl-lsp-rs-core/src/providers/inline_completion/",
                 ],
                 "commands": [
-                    "cargo test -p perl-lsp-rs-core --lib inline_completion",
+                    "cargo llvm-cov test --no-report -p perl-lsp-rs-core --lib inline_completion",
                 ],
                 "coverage_filters": ["inline_completion"],
             },

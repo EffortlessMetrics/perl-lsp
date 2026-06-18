@@ -167,7 +167,48 @@ fn coverage_pack_manifest_declares_completion_core_pack() -> Result<()> {
     );
     assert!(commands.iter().filter_map(toml::Value::as_str).any(|value| {
         value
-            == "cargo test -p perl-lsp-rs-core --lib --profile agent --locked completion::completion -- --nocapture"
+            == "cargo llvm-cov test --no-report -p perl-lsp-rs-core --lib --profile agent --locked completion::completion -- --nocapture"
+    }));
+    Ok(())
+}
+
+#[test]
+fn coverage_pack_manifest_declares_inline_core_pack() -> Result<()> {
+    let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(PathBuf::from)
+        .ok_or_else(|| anyhow!("xtask manifest path has no parent"))?
+        .join(".ci/coverage-packs.toml");
+    let manifest: toml::Value = toml::from_str(&fs::read_to_string(manifest_path)?)?;
+    let packs = manifest
+        .get("pack")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| anyhow!("coverage pack manifest must contain pack array"))?;
+    let pack = packs
+        .iter()
+        .find(|pack| {
+            pack.get("id").and_then(toml::Value::as_str)
+                == Some("patch-coverage-inline-provider-core")
+        })
+        .ok_or_else(|| anyhow!("missing inline core coverage pack"))?;
+    let files = pack
+        .get("files")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| anyhow!("coverage pack files must be an array"))?;
+    let commands = pack
+        .get("commands")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| anyhow!("coverage pack commands must be an array"))?;
+
+    assert!(
+        files
+            .iter()
+            .filter_map(toml::Value::as_str)
+            .any(|value| { value == "crates/perl-lsp-rs-core/src/providers/inline_completion/" })
+    );
+    assert!(commands.iter().filter_map(toml::Value::as_str).any(|value| {
+        value
+            == "cargo llvm-cov test --no-report -p perl-lsp-rs-core --lib --profile agent --locked inline_completion -- --nocapture"
     }));
     Ok(())
 }
