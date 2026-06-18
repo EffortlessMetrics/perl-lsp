@@ -94,7 +94,9 @@ pub fn find_node_at_range(node: &Node, range: (usize, usize)) -> Option<&Node> {
 #[must_use]
 pub fn get_indent_at(source: &str, pos: usize) -> String {
     let clamped_pos = pos.min(source.len());
-    let line_start = source[..clamped_pos].rfind('\n').map_or(0, |p| p + 1);
+    // Walk back to the last valid char boundary in case pos lands mid-multibyte char.
+    let safe_pos = (0..=clamped_pos).rev().find(|&i| source.is_char_boundary(i)).unwrap_or(0);
+    let line_start = source[..safe_pos].rfind('\n').map_or(0, |p| p + 1);
     let line = &source[line_start..];
 
     let mut indent = String::new();
@@ -158,5 +160,24 @@ mod tests {
     fn get_indent_clamps_out_of_bounds_pos() {
         let src = "line1\n  line2";
         assert_eq!(get_indent_at(src, src.len() + 50), "  ");
+    }
+
+    #[test]
+    fn get_indent_at_mid_emoji_does_not_panic() {
+        // U+1F600 (😀) encodes to 4 bytes: F0 9F 98 80.
+        let src = "    \u{1F600}";
+        let emoji_start = 4;
+        // Offset one byte into the emoji lands mid-char and must not panic.
+        assert_eq!(get_indent_at(src, emoji_start + 1), "    ");
+    }
+
+    #[test]
+    fn get_indent_at_mid_cjk_does_not_panic() {
+        // U+4E2D (中) encodes to 3 bytes: E4 B8 AD.
+        let src = "\n  \u{4E2D}text";
+        let cjk_start = src.find('\u{4E2D}').unwrap_or(0);
+        assert_eq!(get_indent_at(src, cjk_start), "  ");
+        // Mid-char offset must not panic.
+        assert_eq!(get_indent_at(src, cjk_start + 1), "  ");
     }
 }
