@@ -498,6 +498,24 @@ fn load_metadata(root: &Path) -> Result<serde_json::Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn run_rejects_posting_mode_before_git_or_cargo_work() -> Result<()> {
+        let result = run(CiPrSummaryConfig {
+            base: "refs/heads/missing-base-is-not-touched".to_string(),
+            dry_run: false,
+        });
+
+        let Err(err) = result else {
+            color_eyre::eyre::bail!("posting mode unexpectedly succeeded");
+        };
+        let message = format!("{err:#}");
+        assert!(message.contains("--dry-run is required"), "unexpected error: {message}");
+        assert!(message.contains("not yet implemented"), "unexpected error: {message}");
+        Ok(())
+    }
 
     #[test]
     fn render_markdown_has_all_required_sections() {
@@ -556,6 +574,42 @@ mod tests {
     }
 
     #[test]
+    fn render_markdown_includes_widening_policy_and_timing_notes() {
+        let summary = PrSummary {
+            base_ref: "origin/main".to_string(),
+            head_sha: "def5678".to_string(),
+            changed_file_count: 1,
+            diff_class: "ci_config".to_string(),
+            changed_crates: vec![],
+            widened_crates: vec![WidenedCrate {
+                name: "xtask".to_string(),
+                reason: "proof-infrastructure policy widener".to_string(),
+            }],
+            gates_run: vec![],
+            gates_skipped: vec![],
+            policy_note: Some("Policy loaded from `policy/ci-budget.toml`".to_string()),
+            timing_estimate_secs: Some(0),
+        };
+
+        let md = render_markdown(&summary);
+
+        assert!(md.contains("xtask"), "expected widened crate in markdown: {md}");
+        assert!(
+            md.contains("proof-infrastructure policy widener"),
+            "missing widening reason: {md}"
+        );
+        assert!(
+            md.contains("_(all known gates selected)_"),
+            "missing empty skipped-gates note: {md}"
+        );
+        assert!(md.contains("## Policy"), "missing policy section: {md}");
+        assert!(
+            md.contains("Learned-estimates file present"),
+            "missing timing sentinel note: {md}"
+        );
+    }
+
+    #[test]
     fn classify_diff_simple_code() {
         let files = vec!["crates/perl-parser/src/lib.rs".to_string()];
         assert_eq!(classify_diff_simple(&files), "code");
@@ -573,6 +627,46 @@ mod tests {
             "docs/reference/STABILITY.md".to_string(),
         ];
         assert_eq!(classify_diff_simple(&files), "mixed");
+    }
+
+    #[test]
+    fn classify_diff_simple_covers_non_rust_surfaces() {
+        let cases = [
+            (vec![".github/workflows/ci.yml".to_string()], "ci_config"),
+            (vec!["Cargo.lock".to_string()], "docs_as_code"),
+            (vec!["README.md".to_string()], "prose_only"),
+            (vec!["scripts/build-support.py".to_string()], "code"),
+        ];
+
+        for (files, expected) in cases {
+            assert_eq!(classify_diff_simple(&files), expected, "files: {files:?}");
+        }
+    }
+
+    #[test]
+    fn derive_gates_falls_back_to_fmt_only_for_empty_diff_without_metadata() -> Result<()> {
+        let temp = TempDir::new()?;
+        let (gates_run, gates_skipped, policy_note) = derive_gates(&[], temp.path());
+        let run_names: Vec<&str> = gates_run.iter().map(|gate| gate.name.as_str()).collect();
+
+        assert_eq!(run_names, vec!["fmt"]);
+        assert!(gates_skipped.iter().any(|gate| gate == "test_scoped"));
+        assert!(gates_skipped.iter().any(|gate| gate == "clippy_scoped"));
+        assert!(policy_note.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn derive_gates_falls_back_to_scoped_checks_for_code_without_metadata() -> Result<()> {
+        let temp = TempDir::new()?;
+        let changed_files = vec!["xtask/src/tasks/ci_pr_summary.rs".to_string()];
+        let (gates_run, gates_skipped, policy_note) = derive_gates(&changed_files, temp.path());
+        let run_names: Vec<&str> = gates_run.iter().map(|gate| gate.name.as_str()).collect();
+
+        assert_eq!(run_names, vec!["fmt", "clippy_scoped", "test_scoped"]);
+        assert!(!gates_skipped.iter().any(|gate| gate == "fmt"));
+        assert!(policy_note.is_none());
+        Ok(())
     }
 
     #[test]
@@ -616,5 +710,31 @@ mod tests {
     fn count_files_in_crate_xtask() {
         let files = vec!["xtask/src/main.rs".to_string(), "xtask/src/tasks/ci.rs".to_string()];
         assert_eq!(count_files_in_crate(&files, "xtask"), 2);
+    }
+
+    #[test]
+    fn read_policy_note_prefers_ci_budget_policy() -> Result<()> {
+        let temp = TempDir::new()?;
+        fs::create_dir_all(temp.path().join("policy"))?;
+        fs::create_dir_all(temp.path().join(".ci"))?;
+        fs::write(temp.path().join("policy/ci-lanes.toml"), "[lanes]\n")?;
+        fs::write(temp.path().join("policy/ci-budget.toml"), "[budget]\n")?;
+        fs::write(temp.path().join(".ci/GATE_REGISTRY.toml"), "[gates]\n")?;
+
+        assert_eq!(
+            read_policy_note(temp.path()).as_deref(),
+            Some("Policy loaded from `policy/ci-budget.toml`")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn read_timing_estimate_detects_docs_ci_file() -> Result<()> {
+        let temp = TempDir::new()?;
+        fs::create_dir_all(temp.path().join("docs/ci"))?;
+        fs::write(temp.path().join("docs/ci/lem-budgeting.md"), "# estimates\n")?;
+
+        assert_eq!(read_timing_estimate(temp.path()), Some(0));
+        Ok(())
     }
 }
