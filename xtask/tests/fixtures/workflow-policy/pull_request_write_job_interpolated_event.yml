@@ -1,0 +1,14 @@
+name: fixture-pr-write-job-interpolated-event
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  publish:
+    if: ${{ github.event_name == format('{0}', 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - run: git push

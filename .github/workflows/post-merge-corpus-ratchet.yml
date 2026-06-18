@@ -329,8 +329,9 @@ jobs:
         # For now, the push is best-effort (git push || echo warning) so CI stays green
         # even when branch protection blocks the direct-to-master push. The warning
         # annotation remains visible in the Actions UI so the failure is not silent.
-        # The workflow remains contents: read because it also has a pull_request
-        # trigger for bounded corpus review.
+        # The bounded pull_request job remains contents: read; this full ratchet
+        # job holds contents: write but is excluded from pull_request by its
+        # trusted-event job condition.
         run: |
           CHANGED_FILES=$(git diff --name-only -- \
             .ci/cpan-corpus-baseline.json \

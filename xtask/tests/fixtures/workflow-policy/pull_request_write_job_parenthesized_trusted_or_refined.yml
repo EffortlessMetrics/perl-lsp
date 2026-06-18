@@ -1,0 +1,19 @@
+name: fixture-pr-write-job-parenthesized-trusted-or-refined
+
+on:
+  pull_request:
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.repository == 'EffortlessMetrics/perl-lsp-swarm'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - run: git push

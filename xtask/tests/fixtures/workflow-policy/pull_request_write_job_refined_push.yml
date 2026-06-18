@@ -1,0 +1,15 @@
+name: fixture-pr-write-job-refined-push
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  publish:
+    if: github.event_name == 'push' && github.repository == 'EffortlessMetrics/perl-lsp-swarm'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - run: git push
