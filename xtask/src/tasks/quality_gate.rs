@@ -173,7 +173,7 @@ fn evaluate_final(head: &str, args: &QualityGateArgs) -> Result<GateEvaluation> 
     }
     if ripr_pr.status == "present" {
         match ripr_pr.new_unresolved {
-            Some(count) if count > 0 => {
+            Some(count) if count > 0 && !review.is_nonproduction_only_scope() => {
                 next_actions.push(new_ripr_gap_action(count, &ripr_pr, &review, args));
                 if review.status == "present" && review.top_gaps.is_empty() {
                     next_actions.push(ripr_review_guidance_gap_action(&review, head, args));
@@ -238,6 +238,7 @@ fn evaluate_final(head: &str, args: &QualityGateArgs) -> Result<GateEvaluation> 
             "expected_head_sha": head,
             "base": review.base,
             "base_sha": review.base_sha,
+            "production_files_considered": review.production_files_considered,
             "top_gaps": review.top_gaps,
         },
         "temporary_exceptions": exceptions.receipt,
@@ -376,7 +377,7 @@ fn evaluate_new_ripr(head: &str, args: &QualityGateArgs) -> Result<GateEvaluatio
 
     if ripr_pr.status == "present" {
         match ripr_pr.new_unresolved {
-            Some(count) if count > 0 => {
+            Some(count) if count > 0 && !review.is_nonproduction_only_scope() => {
                 next_actions.push(new_ripr_gap_action(count, &ripr_pr, &review, args));
                 if review.status != "present" {
                     if !review_receipt_blocks_without_new_gaps {
@@ -425,6 +426,7 @@ fn evaluate_new_ripr(head: &str, args: &QualityGateArgs) -> Result<GateEvaluatio
             "expected_head_sha": head,
             "base": review.base,
             "base_sha": review.base_sha,
+            "production_files_considered": review.production_files_considered,
             "top_gaps": review.top_gaps,
         },
         "temporary_exceptions": exceptions.receipt,
@@ -471,7 +473,16 @@ struct ReviewGuidanceReceipt {
     receipt_head_sha: Option<String>,
     base: Option<String>,
     base_sha: Option<String>,
+    production_files_considered: Option<u64>,
     top_gaps: Vec<Value>,
+}
+
+impl ReviewGuidanceReceipt {
+    fn is_nonproduction_only_scope(&self) -> bool {
+        self.status == "present"
+            && self.top_gaps.is_empty()
+            && self.production_files_considered == Some(0)
+    }
 }
 
 #[derive(Debug)]
@@ -871,6 +882,7 @@ fn read_review_guidance_receipt(path: &Path, expected_head: &str) -> ReviewGuida
             receipt_head_sha: None,
             base: None,
             base_sha: None,
+            production_files_considered: None,
             top_gaps: Vec::new(),
         },
         JsonReceipt::Invalid => ReviewGuidanceReceipt {
@@ -878,11 +890,15 @@ fn read_review_guidance_receipt(path: &Path, expected_head: &str) -> ReviewGuida
             receipt_head_sha: None,
             base: None,
             base_sha: None,
+            production_files_considered: None,
             top_gaps: Vec::new(),
         },
         JsonReceipt::Present(payload) => {
             let receipt_head_sha =
                 payload.get("head_sha").and_then(Value::as_str).map(ToOwned::to_owned);
+            let production_files_considered = payload
+                .pointer("/analysis_scope/production_files_considered")
+                .and_then(Value::as_u64);
             let producer_status = payload.get("status").and_then(Value::as_str);
             let mut status = if receipt_head_sha.as_deref() != Some(expected_head) {
                 "stale"
@@ -906,6 +922,7 @@ fn read_review_guidance_receipt(path: &Path, expected_head: &str) -> ReviewGuida
                 receipt_head_sha,
                 base: payload.get("base").and_then(Value::as_str).map(ToOwned::to_owned),
                 base_sha: payload.get("base_sha").and_then(Value::as_str).map(ToOwned::to_owned),
+                production_files_considered,
                 top_gaps,
             }
         }

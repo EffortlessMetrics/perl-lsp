@@ -4,7 +4,7 @@
 //! - 13 perl-module-* crates are absorbed into a single perl-module facade
 //! - New perl-module crate is registered in workspace
 //! - Old crates are removed from workspace members and publish allowlist
-//! - Workspace member count decreases from 135 to 123
+//! - Workspace member count stays below the pre-collapse inventory
 //! - Publish allowlist decreases from 132 to 120 (per spec)
 //! - The perl-module facade provides complete public API via api.rs
 //!
@@ -21,10 +21,12 @@ fn project_root() -> PathBuf {
     dir
 }
 
-/// The workspace member count must be exactly 123 after collapse (135 - 13 + 1).
-/// Before implementation: 135 members. After: 123 members.
+/// The workspace member count must stay below the pre-collapse inventory.
+/// Later collapse waves may reduce the count further, so this guard rejects
+/// regressions without pinning a stale exact total.
 #[test]
-fn test_workspace_member_count_is_123_after_collapse() -> Result<(), Box<dyn std::error::Error>> {
+fn test_workspace_member_count_stays_below_pre_collapse_inventory()
+-> Result<(), Box<dyn std::error::Error>> {
     let root = project_root();
     let workspace_cargo_path = root.join("Cargo.toml");
     let content = fs::read_to_string(&workspace_cargo_path)?;
@@ -42,13 +44,13 @@ fn test_workspace_member_count_is_123_after_collapse() -> Result<(), Box<dyn std
 
     let member_count = members_content.matches('"').count() / 2; // Each path has opening and closing quote
 
-    assert_eq!(
-        member_count, 123,
-        "Workspace member count should be exactly 123 after collapse.\n\
+    assert!(
+        member_count <= 123,
+        "Workspace member count should stay at or below the Wave 1 post-collapse inventory.\n\
          Before: 135 members (13 perl-module-* + others)\n\
-         After: 123 members (those 13 collapsed into 1 perl-module facade)\n\
+         Wave 1 after: 123 members (those 13 collapsed into 1 perl-module facade)\n\
          Current count: {}\n\
-         Collapse equation: 135 - 13 + 1 = 123\n\
+         Later collapse waves may reduce this further, but must not reintroduce the old inventory.\n\
          See .spec/4420-wave1-perl-module/acceptance.md line 22",
         member_count
     );
@@ -269,16 +271,30 @@ fn test_old_perl_module_crates_removed_from_publish_allowlist()
     Ok(())
 }
 
-/// The perl-module Cargo.toml must declare version 0.14.0 (major bump for public API change).
+/// The perl-module Cargo.toml must stay aligned with the workspace release line.
 #[test]
-fn test_perl_module_version_is_0_14_0() -> Result<(), Box<dyn std::error::Error>> {
+fn test_perl_module_version_matches_workspace_version() -> Result<(), Box<dyn std::error::Error>> {
     let root = project_root();
-    let perl_module_cargo = root.join("crates/perl-module/Cargo.toml");
-    let content = fs::read_to_string(&perl_module_cargo)?;
+    let workspace_cargo = fs::read_to_string(root.join("Cargo.toml"))?;
+    let workspace_value: toml::Value = toml::from_str(&workspace_cargo)?;
+    let workspace_version = workspace_value
+        .get("workspace")
+        .and_then(|value| value.get("package"))
+        .and_then(|value| value.get("version"))
+        .and_then(toml::Value::as_str)
+        .ok_or("workspace.package.version missing from Cargo.toml")?;
 
-    assert!(
-        content.contains("version = \"0.14.0\""),
-        "perl-module Cargo.toml must declare version = \"0.14.0\".\n\
+    let perl_module_cargo = fs::read_to_string(root.join("crates/perl-module/Cargo.toml"))?;
+    let perl_module_value: toml::Value = toml::from_str(&perl_module_cargo)?;
+    let perl_module_version = perl_module_value
+        .get("package")
+        .and_then(|value| value.get("version"))
+        .and_then(toml::Value::as_str)
+        .ok_or("package.version missing from crates/perl-module/Cargo.toml")?;
+
+    assert_eq!(
+        perl_module_version, workspace_version,
+        "perl-module Cargo.toml must match workspace.package.version.\n\
          This reflects the breaking change: perl_module_name::* → perl_module::name::*\n\
          See .spec/4420-wave1-perl-module/acceptance.md line 63\n\
          See .spec/4420-wave1-perl-module/context.md section 'Major version bump'"
@@ -365,44 +381,52 @@ fn test_perl_lsp_cargo_uses_perl_module_not_individual_crates()
     Ok(())
 }
 
-/// Test that perl-lsp-completion's Cargo.toml was updated.
+/// Test that the current completion provider owner uses the unified perl-module facade.
 #[test]
-fn test_perl_lsp_completion_cargo_uses_perl_module() -> Result<(), Box<dyn std::error::Error>> {
+fn test_perl_lsp_core_completion_provider_uses_perl_module()
+-> Result<(), Box<dyn std::error::Error>> {
     let root = project_root();
-    let cargo_path = root.join("crates/perl-lsp-completion/Cargo.toml");
+    let cargo_path = root.join("crates/perl-lsp-rs-core/Cargo.toml");
     let content = fs::read_to_string(&cargo_path)?;
 
     // Must not have perl-module-import (absorbed)
     assert!(
         !content.contains("perl-module-import"),
-        "perl-lsp-completion must not depend on perl-module-import.\n\
+        "perl-lsp-rs-core completion provider must not depend on perl-module-import.\n\
          It should use the unified perl-module facade instead.\n\
          See .spec/4420-wave1-perl-module/acceptance.md line 34"
     );
-
-    // Must have perl-module (or at least not fail to build)
-    // We can't test it depends on perl-module directly yet since the facade
-    // may not be fully wired, but we test it doesn't reference old crates
+    assert!(
+        content.contains("perl-module"),
+        "perl-lsp-rs-core completion provider owner must depend on perl-module facade.\n\
+         See .spec/4420-wave1-perl-module/acceptance.md line 34"
+    );
     Ok(())
 }
 
-/// Test that perl-lsp-document-links Cargo.toml was updated.
+/// Test that the current document-links provider owner uses the unified perl-module facade.
 #[test]
-fn test_perl_lsp_document_links_cargo_uses_perl_module() -> Result<(), Box<dyn std::error::Error>> {
+fn test_perl_lsp_core_document_links_provider_uses_perl_module()
+-> Result<(), Box<dyn std::error::Error>> {
     let root = project_root();
-    let cargo_path = root.join("crates/perl-lsp-document-links/Cargo.toml");
+    let cargo_path = root.join("crates/perl-lsp-rs-core/Cargo.toml");
     let content = fs::read_to_string(&cargo_path)?;
 
     // Must not have old deps (absorbed)
     assert!(
         !content.contains("perl-module-path"),
-        "perl-lsp-document-links must not depend on perl-module-path.\n\
+        "perl-lsp-rs-core document-links provider must not depend on perl-module-path.\n\
          See .spec/4420-wave1-perl-module/acceptance.md line 36"
     );
 
     assert!(
         !content.contains("perl-module-import"),
-        "perl-lsp-document-links must not depend on perl-module-import.\n\
+        "perl-lsp-rs-core document-links provider must not depend on perl-module-import.\n\
+         See .spec/4420-wave1-perl-module/acceptance.md line 36"
+    );
+    assert!(
+        content.contains("perl-module"),
+        "perl-lsp-rs-core document-links provider owner must depend on perl-module facade.\n\
          See .spec/4420-wave1-perl-module/acceptance.md line 36"
     );
 

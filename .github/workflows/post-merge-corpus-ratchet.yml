@@ -207,6 +207,8 @@ jobs:
     if: |
       github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'full')
+    permissions:
+      contents: write
     runs-on: ubuntu-24.04
     # Raised from 45 to 120 minutes to survive a cold seed install.
     # A cold install of 1000 distributions takes ~60-90 min on a fresh runner.

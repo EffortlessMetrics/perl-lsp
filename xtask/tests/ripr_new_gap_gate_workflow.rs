@@ -99,6 +99,31 @@ fn ripr_workflow_runs_on_ready_for_review_without_path_filter()
 }
 
 #[test]
+fn ripr_self_hosted_preflight_falls_back_when_required_image_is_missing()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = project_root()?;
+    let workflow = fs::read_to_string(root.join(".github/workflows/ripr.yml"))?;
+
+    assert_eq!(
+        workflow.matches("docker image inspect em-ci-rust:1.95").count(),
+        2,
+        "CX53 and CX43 preflight must both check the required Docker image before running ripr"
+    );
+    assert!(
+        workflow.contains("Required Docker image em-ci-rust:1.95 is missing on CX53")
+            && workflow.contains("Required Docker image em-ci-rust:1.95 is missing on CX43"),
+        "missing self-hosted Rust image must be reported as preflight failure"
+    );
+    assert!(
+        workflow.contains("needs.ripr-cx53.outputs.preflight_ok == 'false'")
+            && workflow.contains("needs.ripr-cx43.outputs.preflight_ok == 'false'"),
+        "preflight_ok=false must route the run to the GitHub-hosted fallback"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn ripr_docs_describe_unfiltered_ready_for_review_receipt_routing()
 -> Result<(), Box<dyn std::error::Error>> {
     let root = project_root()?;

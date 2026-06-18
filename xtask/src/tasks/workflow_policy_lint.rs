@@ -184,7 +184,7 @@ fn lint_workflow_file(path: &Path, is_fixture: bool, issues: &mut Vec<LintIssue>
     }
 
     if is_pull_request(&triggers)
-        && has_contents_write_permission(&workflow)
+        && has_contents_write_permission_on_pull_request_job(&workflow)
         && !is_contents_write_allowlisted(&workflow_name)
     {
         issues.push(LintIssue {
@@ -316,7 +316,7 @@ fn has_write_all_permissions(workflow: &Value) -> bool {
     workflow.get("permissions").and_then(Value::as_str).is_some_and(|value| value == "write-all")
 }
 
-fn has_contents_write_permission(workflow: &Value) -> bool {
+fn has_contents_write_permission_on_pull_request_job(workflow: &Value) -> bool {
     if workflow
         .get("permissions")
         .and_then(Value::as_mapping)
@@ -329,14 +329,42 @@ fn has_contents_write_permission(workflow: &Value) -> bool {
 
     workflow.get("jobs").and_then(Value::as_mapping).is_some_and(|jobs| {
         jobs.values().any(|job| {
-            job.as_mapping()
-                .and_then(|mapping| mapping.get(Value::String("permissions".to_string())))
-                .and_then(Value::as_mapping)
-                .and_then(|mapping| mapping.get(Value::String("contents".to_string())))
-                .and_then(Value::as_str)
-                .is_some_and(|value| value == "write")
+            let Some(job) = job.as_mapping() else {
+                return false;
+            };
+            job_has_contents_write_permission(job) && !job_is_statically_excluded_from_pr(job)
         })
     })
+}
+
+fn job_has_contents_write_permission(job: &Mapping) -> bool {
+    job.get(Value::String("permissions".to_string()))
+        .and_then(Value::as_mapping)
+        .and_then(|mapping| mapping.get(Value::String("contents".to_string())))
+        .and_then(Value::as_str)
+        .is_some_and(|value| value == "write")
+}
+
+fn job_is_statically_excluded_from_pr(job: &Mapping) -> bool {
+    let Some(condition) = job.get(Value::String("if".to_string())).and_then(Value::as_str) else {
+        return false;
+    };
+    let normalized: String = condition.chars().filter(|ch| !ch.is_whitespace()).collect();
+    let references_event = normalized.contains("github.event_name");
+    let references_trusted_event = [
+        "'schedule'",
+        "\"schedule\"",
+        "'workflow_dispatch'",
+        "\"workflow_dispatch\"",
+        "'push'",
+        "\"push\"",
+    ]
+    .iter()
+    .any(|event| normalized.contains(event));
+    let references_untrusted_pr =
+        normalized.contains("'pull_request'") || normalized.contains("\"pull_request\"");
+
+    references_event && references_trusted_event && !references_untrusted_pr
 }
 
 fn checks_out_pr_head(workflow: &Value) -> bool {
@@ -870,6 +898,24 @@ mod tests {
         let mut issues = Vec::new();
         lint_workflow_file(&path, true, &mut issues)?;
         assert!(issues.iter().all(|issue| issue.level != "error"));
+        Ok(())
+    }
+
+    #[test]
+    fn fixture_pull_request_job_write_fails() -> Result<()> {
+        let path = fixture_path("pull_request_job_write.yml")?;
+        let mut issues = Vec::new();
+        lint_workflow_file(&path, true, &mut issues)?;
+        assert!(issues.iter().any(|issue| issue.code == "PR_CONTENTS_WRITE"));
+        Ok(())
+    }
+
+    #[test]
+    fn fixture_pull_request_with_scheduled_write_job_passes() -> Result<()> {
+        let path = fixture_path("pull_request_with_scheduled_write_job.yml")?;
+        let mut issues = Vec::new();
+        lint_workflow_file(&path, true, &mut issues)?;
+        assert!(issues.iter().all(|issue| issue.code != "PR_CONTENTS_WRITE"));
         Ok(())
     }
 

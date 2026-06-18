@@ -322,6 +322,44 @@ fn quality_gate_cli_new_ripr_invalid_exception_action_uses_new_ripr_mode_command
 }
 
 #[test]
+fn quality_gate_cli_passes_nonproduction_only_new_ripr_scope() -> TestResult {
+    let root = repo_root()?;
+    let dir = tempdir()?;
+    let ripr = dir.path().join("ripr-plus.json");
+    let ripr_pr = dir.path().join("repo-exposure.json");
+    let review = dir.path().join("comments.json");
+    let receipt = dir.path().join("quality-gate.json");
+    let summary = dir.path().join("quality-gate.md");
+    let head = current_head(&root)?;
+
+    write_ripr_plus_receipt(&ripr, &head)?;
+    write_ripr_pr_receipt(&ripr_pr, &head, 126)?;
+    write_nonproduction_only_review_guidance_receipt(&review, &head)?;
+
+    new_ripr_quality_gate_command(&root, &ripr, &ripr_pr, &review, &receipt, &summary)?
+        .assert()
+        .success();
+
+    let payload: Value = serde_json::from_str(&fs::read_to_string(&receipt)?)?;
+    assert_eq!(payload.pointer("/decision").and_then(Value::as_str), Some("pass"));
+    assert_eq!(payload.pointer("/ripr_pr/new_unresolved").and_then(Value::as_u64), Some(126));
+    assert_eq!(
+        payload.pointer("/review_guidance/production_files_considered").and_then(Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(payload.get("next_actions").and_then(Value::as_array).map(Vec::len), Some(0));
+
+    let markdown = fs::read_to_string(&summary)?;
+    assert!(markdown.contains("- decision: `pass`"), "{markdown}");
+    assert!(
+        !markdown.contains("new_ripr_gap"),
+        "nonproduction-only RIPR scope must not create repair packets: {markdown}"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn quality_gate_cli_check_blocks_stale_new_ripr_gate_json_receipt() -> TestResult {
     let root = repo_root()?;
     let dir = tempdir()?;
@@ -943,6 +981,37 @@ fn write_non_actionable_review_guidance_receipt(path: &Path, head: &str) -> Test
                     }
                 }
             ],
+            "summary_only": [],
+            "suppressed": [],
+            "warnings": []
+        }),
+    )
+}
+
+fn write_nonproduction_only_review_guidance_receipt(path: &Path, head: &str) -> TestResult {
+    write_json(
+        path,
+        json!({
+            "schema_version": "0.1",
+            "tool": "ripr",
+            "status": "advisory",
+            "base": "quality-gate-cli-test-base",
+            "base_sha": "quality-gate-cli-test-base-sha",
+            "head": "HEAD",
+            "head_sha": head,
+            "analysis_scope": {
+                "scope": "diff_scoped_changed_files",
+                "run_status": "limited_diff_scope",
+                "production_files_considered": 0,
+                "scoped_production_files": [],
+                "limitation": "review_comments_diff_scope_only"
+            },
+            "summary": {
+                "comments": 0,
+                "summary_only": 0,
+                "suppressed": 0
+            },
+            "comments": [],
             "summary_only": [],
             "suppressed": [],
             "warnings": []

@@ -23,11 +23,19 @@ struct PolicyGate {
     required: bool,
     timeout_seconds: Option<u64>,
     budgets: Option<GateBudgets>,
+    planning: Option<GatePlanning>,
 }
 
 #[derive(Debug, Deserialize)]
 struct GateBudgets {
     max_duration_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GatePlanning {
+    role: String,
+    #[serde(default)]
+    packages: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -134,6 +142,41 @@ fn conflict_marker_gate_has_local_runtime_headroom() -> Result<(), Box<dyn std::
             >= 120_000,
         "conflict marker budget must reflect observed local runtime"
     );
+
+    Ok(())
+}
+
+#[test]
+fn inline_completion_contract_scope_stays_on_lsp_crates() -> Result<(), Box<dyn std::error::Error>>
+{
+    let root = project_root();
+    let policy_path = root.join(".ci/gate-policy.yaml");
+    let content = fs::read_to_string(policy_path)?;
+    let parsed: GatePolicyDoc = serde_yaml_ng::from_str(&content)?;
+
+    let gates: HashMap<_, _> =
+        parsed.gates.into_iter().map(|gate| (gate.name.clone(), gate)).collect();
+
+    let contract =
+        gates.get("inline_completion_contract").ok_or("missing inline_completion_contract gate")?;
+    let contract_planning =
+        contract.planning.as_ref().ok_or("inline_completion_contract missing planning")?;
+
+    assert_eq!(contract.tier, "pr_fast");
+    assert!(contract.required, "inline_completion_contract must stay PR-blocking");
+    assert_eq!(contract_planning.role, "rust_package_scoped");
+    assert_eq!(contract_planning.packages, vec!["perl-lsp-rs", "perl-lsp-rs-core"]);
+
+    let quality = gates
+        .get("inline_completion_quality_receipt")
+        .ok_or("missing inline_completion_quality_receipt gate")?;
+    let quality_planning =
+        quality.planning.as_ref().ok_or("inline_completion_quality_receipt missing planning")?;
+
+    assert_eq!(quality.tier, "pr_fast");
+    assert!(quality.required, "inline_completion_quality_receipt must stay PR-blocking");
+    assert_eq!(quality_planning.role, "rust_package_scoped");
+    assert_eq!(quality_planning.packages, vec!["perl-lsp-rs-core", "xtask"]);
 
     Ok(())
 }

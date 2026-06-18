@@ -95,6 +95,7 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
         );
     }
     let codecov_upload_start = must_some(coverage_job.find("- name: Upload coverage to Codecov"));
+    let enforced_coverage_steps = &coverage_job[..codecov_upload_start];
     let after_codecov_upload = &coverage_job[codecov_upload_start..];
     let codecov_upload_end =
         must_some(after_codecov_upload.find("\n      - name: Upload coverage proof artifacts"));
@@ -110,7 +111,7 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
         "Codecov upload step must upload the workspace library plus xtask proof-lane LCOV receipt"
     );
     for required in [
-        "BASE_REF: ${{ github.base_ref || github.event.repository.default_branch }}",
+        "BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref || github.event.repository.default_branch }}",
         "base_ref=\"$BASE_REF\"",
         "id: coverage_route",
         "coverage_required=$coverage_required",
@@ -119,7 +120,7 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
         "just coverage-proof-routed \"origin/$base_ref\" \"HEAD\"",
         "changed-file routing selected no LCOV coverage proof packs",
         "if: github.event_name != 'pull_request'",
-        "if: github.event_name != 'pull_request' || steps.coverage_route.outputs.coverage_required == 'true'",
+        "github.event_name != 'pull_request' && github.event_name != 'merge_group'",
         "just coverage-proof \"origin/$base_ref\"",
         "cache-targets: false",
         "RUSTFLAGS: \"-Cdebuginfo=0\"",
@@ -149,8 +150,8 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
         "coverage proof artifact upload must pin the action SHA"
     );
     assert!(
-        !coverage_job.contains("continue-on-error: true"),
-        "coverage patch proof must not make Codecov upload advisory"
+        !enforced_coverage_steps.contains("continue-on-error: true"),
+        "coverage patch proof must stay enforced before non-fatal Codecov telemetry upload"
     );
     assert!(
         codecov_router.contains("CI-enforced lightweight Codecov coverage-pack route")
@@ -164,7 +165,7 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
         "--receipt target/receipts/quality/ci-route.json",
         "--summary target/receipts/quality/ci-route.md",
         "coverage-pack-commands.sh",
-        "coverage-route-selected-packs.txt",
+        "scripts/ci/generate-coverage-pack-commands.py",
         "changed-file routing selected no coverage proof packs",
         "cargo llvm-cov report --profile agent --lcov --output-path target/lcov.info",
         "--scope routed-coverage-packs",

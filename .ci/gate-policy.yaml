@@ -341,7 +341,6 @@ gates:
       packages:
         - perl-lsp-rs
         - perl-lsp-rs-core
-        - xtask
 
   - name: inline_completion_quality_receipt
     tier: pr_fast

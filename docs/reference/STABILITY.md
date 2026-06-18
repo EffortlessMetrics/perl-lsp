@@ -1,6 +1,6 @@
 # API Stability and SemVer Policy
 
-**MSRV:** 1.92 • **Edition:** 2024 • **Status:** Public alpha (`0.12.x` line)
+**MSRV:** 1.92 • **Edition:** 2024 • **Status:** Public alpha (`0.16.x` line)
 
 This document is the project's published compatibility contract for crates released to crates.io.
 It replaces informal wording like "we try" with explicit guarantees, review gates, and expected
@@ -11,7 +11,7 @@ version-bump behavior.
 This policy applies to every crate in the workspace publish allowlist at
 `[workspace.metadata.publish.allow]` in the root `Cargo.toml`.
 
-As of workspace version `0.12.4` (2026-04-23), the allowlist contains **31 published crates**.
+As of workspace version `0.16.0`, the allowlist contains **31 published crates**.
 
 Contract tiers:
 
