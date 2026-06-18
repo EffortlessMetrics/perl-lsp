@@ -211,6 +211,7 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
         "cargo test -p xtask --bin xtask semantic_inline_receipts --locked",
         "cargo test -p xtask --bin xtask semantic_inline_next_edit --locked",
         "cargo test -p xtask --locked",
+        "--test active_goal_manifest_cli",
         "--test ci_route_cli",
         "--test quality_ci_wiring_policy",
         "--test quality_gate_patch_coverage_cli_policy",

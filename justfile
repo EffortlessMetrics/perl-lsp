@@ -1953,6 +1953,7 @@ coverage-proof base='origin/main':
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask semantic_inline_receipts --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --bin xtask semantic_inline_next_edit --locked
     "$HOME/.cargo/bin/rustup" run nightly cargo test -p xtask --locked \
+        --test active_goal_manifest_cli \
         --test ci_route_cli \
         --test codecov_patch_gate_policy \
         --test quality_ci_wiring_policy \
