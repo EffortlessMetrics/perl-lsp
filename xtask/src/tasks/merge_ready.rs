@@ -580,4 +580,84 @@ mod tests {
         let checks = required_check_names_from_policy(&policy);
         assert_eq!(checks, vec!["Codecov / Patch 95", "ripr+ New Gap Gate"]);
     }
+
+    #[test]
+    fn test_required_workflow_candidate_matches_ci_gate_and_merge_names() {
+        for candidate in ["ci.yml", "ci-nightly.yml", "quality-gate.yml", "merge-ready.yml"] {
+            assert!(
+                is_required_workflow_candidate(Path::new(candidate)),
+                "{candidate} should be included in the merge-readiness gate graph"
+            );
+        }
+
+        for candidate in ["docs.yml", "release.yml", "scorecard.yml"] {
+            assert!(
+                !is_required_workflow_candidate(Path::new(candidate)),
+                "{candidate} should not be included in the merge-readiness gate graph"
+            );
+        }
+    }
+
+    #[test]
+    fn test_collect_gate_files_returns_empty_when_gate_inputs_are_absent()
+    -> color_eyre::eyre::Result<()> {
+        let tmp_dir = tempfile::tempdir()?;
+        let files = collect_gate_files(tmp_dir.path())?;
+        assert!(files.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_collect_gate_files_includes_policy_gate_and_required_workflows()
+    -> color_eyre::eyre::Result<()> {
+        let tmp_dir = tempfile::tempdir()?;
+        let root = tmp_dir.path();
+
+        fs::create_dir_all(root.join(".ci").join("policies"))?;
+        fs::create_dir_all(root.join(".ci").join("gates.d"))?;
+        fs::create_dir_all(root.join(".github").join("workflows"))?;
+        fs::write(root.join(".ci").join("policies").join("required-checks.toml"), "checks = []")?;
+        fs::write(root.join(".ci").join("gates.d").join("quality.toml"), "gate = true")?;
+        fs::write(root.join(".github").join("workflows").join("ci.yml"), "name: ci")?;
+        fs::write(root.join(".github").join("workflows").join("merge-ready.yml"), "name: merge")?;
+        fs::write(root.join(".github").join("workflows").join("docs.yml"), "name: docs")?;
+
+        let files = collect_gate_files(root)?;
+        let normalized: Vec<String> =
+            files.into_iter().map(|path| path.replace('\\', "/")).collect();
+
+        assert!(normalized.contains(&".ci/policies/required-checks.toml".to_string()));
+        assert!(normalized.contains(&".ci/gates.d/quality.toml".to_string()));
+        assert!(normalized.contains(&".github/workflows/ci.yml".to_string()));
+        assert!(normalized.contains(&".github/workflows/merge-ready.yml".to_string()));
+        assert!(!normalized.contains(&".github/workflows/docs.yml".to_string()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_compute_gate_graph_version_tracks_required_checks_and_file_content()
+    -> color_eyre::eyre::Result<()> {
+        let tmp_dir = tempfile::tempdir()?;
+        let root = tmp_dir.path();
+
+        fs::create_dir_all(root.join(".ci").join("policies"))?;
+        fs::create_dir_all(root.join(".ci").join("gates.d"))?;
+        fs::write(
+            root.join(".ci").join("policies").join("required-checks.toml"),
+            "[[checks]]\nname = \"Codecov / Patch 95\"\nrequired = true\n",
+        )?;
+        let gate_path = root.join(".ci").join("gates.d").join("quality.toml");
+        fs::write(&gate_path, "mode = \"advisory\"\n")?;
+
+        let baseline = compute_gate_graph_version(root, &["Codecov / Patch 95".to_string()])?;
+        let changed_checks = compute_gate_graph_version(root, &["ripr+ New Gap Gate".to_string()])?;
+        fs::write(&gate_path, "mode = \"enforce\"\n")?;
+        let changed_file = compute_gate_graph_version(root, &["Codecov / Patch 95".to_string()])?;
+
+        assert_ne!(baseline, changed_checks);
+        assert_ne!(baseline, changed_file);
+
+        Ok(())
+    }
 }
