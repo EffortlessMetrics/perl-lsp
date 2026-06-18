@@ -201,6 +201,7 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
         "cargo test --workspace --lib --locked",
         "cargo test -p xtask --bin xtask quality_baseline --locked",
         "cargo test -p xtask --bin xtask merge_ready --locked",
+        "cargo test -p xtask --bin xtask gates --locked",
         "cargo test -p xtask --bin xtask queue_reconciler --locked",
         "cargo test -p xtask --bin xtask ci_route --locked",
         "cargo test -p xtask --bin xtask ripr --locked",
