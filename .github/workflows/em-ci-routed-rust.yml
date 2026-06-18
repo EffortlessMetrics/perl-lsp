@@ -251,10 +251,21 @@ jobs:
           ci-disk-guard /mnt/ci-scratch 40 || disk_ok=false
           ci-disk-guard /mnt/docker 20 || disk_ok=false
           ci-disk-guard /mnt/ci-cache 20 || disk_ok=false
+          image_ok=true
+          docker image inspect em-ci-rust:1.95 >/dev/null 2>&1 || image_ok=false
           df -h /mnt/ci-scratch /mnt/docker /mnt/ci-cache || true
-          echo "preflight_ok=${disk_ok}" >> "$GITHUB_OUTPUT"
+          if [ "$disk_ok" = "true" ] && [ "$image_ok" = "true" ]; then
+            preflight_ok=true
+          else
+            preflight_ok=false
+          fi
+          echo "preflight_ok=${preflight_ok}" >> "$GITHUB_OUTPUT"
           if [ "$disk_ok" = "false" ]; then
             echo "::error::Disk preflight failed on CX53 after cleanup. Failover job will run on GitHub-hosted."
+            exit 1
+          fi
+          if [ "$image_ok" = "false" ]; then
+            echo "::error::Required Docker image em-ci-rust:1.95 is missing on CX53. Failover job will run on GitHub-hosted."
             exit 1
           fi
           mkdir -p "$TMPDIR" "$CARGO_TARGET_DIR" "$CARGO_HOME" "$SCCACHE_DIR"
@@ -387,10 +398,21 @@ jobs:
           ci-disk-guard /mnt/ci-scratch 40 || disk_ok=false
           ci-disk-guard /mnt/docker 15 || disk_ok=false
           ci-disk-guard /mnt/ci-cache 15 || disk_ok=false
+          image_ok=true
+          docker image inspect em-ci-rust:1.95 >/dev/null 2>&1 || image_ok=false
           df -h /mnt/ci-scratch /mnt/docker /mnt/ci-cache || true
-          echo "preflight_ok=${disk_ok}" >> "$GITHUB_OUTPUT"
+          if [ "$disk_ok" = "true" ] && [ "$image_ok" = "true" ]; then
+            preflight_ok=true
+          else
+            preflight_ok=false
+          fi
+          echo "preflight_ok=${preflight_ok}" >> "$GITHUB_OUTPUT"
           if [ "$disk_ok" = "false" ]; then
             echo "::error::Disk preflight failed on CX43 after cleanup. Failover job will run on GitHub-hosted."
+            exit 1
+          fi
+          if [ "$image_ok" = "false" ]; then
+            echo "::error::Required Docker image em-ci-rust:1.95 is missing on CX43. Failover job will run on GitHub-hosted."
             exit 1
           fi
           mkdir -p "$TMPDIR" "$CARGO_TARGET_DIR" "$CARGO_HOME" "$SCCACHE_DIR"
@@ -515,14 +537,14 @@ jobs:
       - name: Annotate failover reason
         shell: bash
         run: |
-          echo "::warning::Primary runner (${{ needs.route-rust-small.outputs.target }}) failed — falling back to GitHub-hosted. Reclaim runner disk before next run."
+          echo "::warning::Primary runner (${{ needs.route-rust-small.outputs.target }}) failed preflight — falling back to GitHub-hosted. Check runner disk and em-ci-rust image before next run."
           {
-            echo "### Disk-Full Failover"
+            echo "### Self-Hosted Preflight Failover"
             echo ""
-            echo "Primary runner \`${{ needs.route-rust-small.outputs.target }}\` failed its"
-            echo "disk preflight even after aggressive cleanup (orphan reap + sccache cap +"
-            echo "docker prune). This job ran the Rust Small lane on GitHub-hosted as"
-            echo "defense-in-depth. Ops: reclaim disk on the failing runner."
+            echo "Primary runner \`${{ needs.route-rust-small.outputs.target }}\` failed"
+            echo "preflight before the Rust lane started. This job ran the Rust Small lane"
+            echo "on GitHub-hosted as defense-in-depth. Ops: check disk and the"
+            echo "\`em-ci-rust:1.95\` image on the failing runner."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/checkout@v6
@@ -612,10 +634,10 @@ jobs:
                 test "$GITHUB_RESULT" = "skipped"
                 test "$FALLBACK_RESULT" = "skipped"
               elif [ "$FALLBACK_RESULT" = "success" ]; then
-                # Disk-full preflight failover: fallback ran on GitHub-hosted.
+                # Self-hosted preflight failover: fallback ran on GitHub-hosted.
                 # The fallback only triggers when preflight_ok=false, so this is
                 # safe — we know the primary failed at preflight, not at test time.
-                echo "::warning::CX53 disk preflight failed; lane passed via GitHub-hosted fallback. Reclaim CX53 disk."
+                echo "::warning::CX53 preflight failed; lane passed via GitHub-hosted fallback. Check CX53 disk and em-ci-rust image."
                 test "$CX43_RESULT" = "skipped"
                 test "$GITHUB_RESULT" = "skipped"
               else
@@ -631,7 +653,7 @@ jobs:
                 test "$GITHUB_RESULT" = "skipped"
                 test "$FALLBACK_RESULT" = "skipped"
               elif [ "$FALLBACK_RESULT" = "success" ]; then
-                echo "::warning::CX43 disk preflight failed; lane passed via GitHub-hosted fallback. Reclaim CX43 disk."
+                echo "::warning::CX43 preflight failed; lane passed via GitHub-hosted fallback. Check CX43 disk and em-ci-rust image."
                 test "$CX53_RESULT" = "skipped"
                 test "$GITHUB_RESULT" = "skipped"
               else

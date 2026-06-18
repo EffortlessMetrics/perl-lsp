@@ -71,7 +71,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 # ============================================================================
 # Shared setup steps factored as a reusable composite action would require a
@@ -327,6 +327,8 @@ jobs:
         # For now, the push is best-effort (git push || echo warning) so CI stays green
         # even when branch protection blocks the direct-to-master push. The warning
         # annotation remains visible in the Actions UI so the failure is not silent.
+        # The workflow remains contents: read because it also has a pull_request
+        # trigger for bounded corpus review.
         run: |
           CHANGED_FILES=$(git diff --name-only -- \
             .ci/cpan-corpus-baseline.json \

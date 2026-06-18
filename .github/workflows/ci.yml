@@ -149,6 +149,16 @@ jobs:
       - name: Run PR-fast via shared xtask gate runner
         run: |
           set +e
+          # Keep the heavy Cargo test artifacts out of the checkout filesystem.
+          # Gate receipts intentionally stay at target/receipts for upload steps.
+          if [ -d /mnt ] && sudo mkdir -p /mnt/perl-lsp-swarm && sudo chown "$USER" /mnt/perl-lsp-swarm; then
+            export CARGO_TARGET_DIR="/mnt/perl-lsp-swarm/pr-smoke-${{ github.run_id }}-${{ github.run_attempt }}"
+          else
+            export CARGO_TARGET_DIR="${RUNNER_TEMP:-$PWD/target}/cargo-target/pr-smoke-${{ github.run_id }}-${{ github.run_attempt }}"
+          fi
+          mkdir -p "$CARGO_TARGET_DIR"
+          echo "PR-fast CARGO_TARGET_DIR=$CARGO_TARGET_DIR"
+          df -h . "$CARGO_TARGET_DIR" || true
           echo "PR-fast timeout policy: GitHub job 35m, outer runner watchdog 30m, per-gate timeouts recorded in target/receipts/receipt.json"
           timeout --signal=TERM --kill-after=60s 1800s ./target/debug/xtask gates --tier pr-fast --base origin/main --receipt
           status=$?
@@ -747,4 +757,3 @@ jobs:
             target/memory/receipts/pr-smoke-doc-churn.receipt.json
           if-no-files-found: warn
           retention-days: 14
-
