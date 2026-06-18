@@ -3350,6 +3350,62 @@ paths = ["archive/["]
     }
 
     #[test]
+    fn render_annotations_skips_missing_comments_file() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path();
+
+        let rendered = render_annotations(repo, REVIEW_COMMENTS_JSON)?;
+
+        assert!(rendered.comments_missing);
+        assert!(rendered.text.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn render_annotations_rejects_missing_comments_array() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path();
+        fs::create_dir_all(repo.join("target/ripr/review"))?;
+        fs::write(repo.join(REVIEW_COMMENTS_JSON), format_json(&json!({ "summary": {} }))?)?;
+
+        let err = match render_annotations(repo, REVIEW_COMMENTS_JSON) {
+            Ok(_) => bail!("comments[] must be required for annotation rendering"),
+            Err(err) => err,
+        };
+
+        assert!(err.to_string().contains("missing comments[]"));
+        Ok(())
+    }
+
+    #[test]
+    fn annotation_from_comment_rejects_missing_placement_fields() -> Result<()> {
+        let missing_path = annotation_from_comment(&json!({
+            "placement": {
+                "line": 42,
+                "mode": "exact_seam_line"
+            }
+        }));
+        assert!(missing_path.is_err());
+
+        let missing_line = annotation_from_comment(&json!({
+            "placement": {
+                "path": "xtask/src/tasks/ripr_evidence.rs",
+                "mode": "exact_seam_line"
+            }
+        }));
+        assert!(missing_line.is_err());
+
+        let missing_mode = annotation_from_comment(&json!({
+            "placement": {
+                "path": "xtask/src/tasks/ripr_evidence.rs",
+                "line": 42
+            }
+        }));
+        assert!(missing_mode.is_err());
+        Ok(())
+    }
+
+    #[test]
     fn impacted_evidence_routes_severe_ripr_gap_without_label() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let repo = temp.path();
@@ -3401,6 +3457,29 @@ paths = ["archive/["]
     }
 
     #[test]
+    fn impacted_evidence_invalid_pr_receipt_warns_and_renders_warning() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path();
+        fs::create_dir_all(repo.join("target/ripr/pr"))?;
+        fs::write(repo.join(PR_EVIDENCE_JSON), "{not json\n")?;
+        let options = ImpactedEvidenceOptions {
+            pr_evidence: PR_EVIDENCE_JSON.to_string(),
+            labels: vec!["mutation".to_string()],
+        };
+
+        let packet = impacted_evidence_packet(repo, &options);
+        let markdown = render_impacted_evidence_markdown(&packet);
+
+        assert_eq!(packet.pointer("/status"), Some(&json!("incomplete")));
+        assert_eq!(packet.pointer("/summary/mutation_mode"), Some(&json!("targeted")));
+        assert_eq!(packet.pointer("/warnings/0/kind"), Some(&json!("invalid_json")));
+        assert_eq!(packet.pointer("/artifacts/2/available"), Some(&json!(false)));
+        assert!(markdown.contains("invalid_json"), "{markdown}");
+        assert!(markdown.contains("PR evidence JSON is invalid"), "{markdown}");
+        Ok(())
+    }
+
+    #[test]
     fn render_pr_evidence_summary_names_missing_and_invalid_inputs() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let repo = temp.path();
@@ -3430,6 +3509,105 @@ paths = ["archive/["]
                 .contains("| PR evidence Markdown | `target/ripr/pr/repo-exposure.md` | missing |")
         );
         assert!(summary.contains("- mutation_mode: `fast_only`"), "{summary}");
+        Ok(())
+    }
+
+    #[test]
+    fn validate_pr_evidence_packet_reports_contract_violations() -> Result<()> {
+        let options = PrEvidenceOptions {
+            root: ".".to_string(),
+            base: "origin/main".to_string(),
+            head: "HEAD".to_string(),
+        };
+        let packet = json!({
+            "schema_version": "0.1",
+            "tool": "ripr",
+            "kind": "pr_evidence",
+            "scope": "diff",
+            "status": "surprising",
+            "root": ".",
+            "base": "origin/main",
+            "base_sha": "base-sha",
+            "head": "HEAD",
+            "head_sha": "head-sha",
+            "summary": {
+                "changed_files": 2,
+                "comments": "zero",
+                "summary_only": 0,
+                "suppressed": 0,
+                "weakly_exposed": 0,
+                "reachable_unrevealed": 0,
+                "no_static_path": 0,
+                "severe_gaps": 0,
+                "requires_targeted_mutation": "false",
+                "ripr_severe_gap": false,
+                "routing_reason": 7
+            },
+            "warnings": {},
+            "advisory_limits": [],
+            "artifacts": []
+        });
+
+        let err = match validate_pr_evidence_packet(
+            &packet, &options, 1, false, "base-sha", "head-sha",
+        ) {
+            Ok(_) => bail!("invalid PR evidence packet must fail contract validation"),
+            Err(err) => err,
+        };
+        let message = err.to_string();
+
+        assert!(message.contains("status"));
+        assert!(message.contains("summary.comments"));
+        assert!(message.contains("summary.changed_files"));
+        assert!(message.contains("summary.requires_targeted_mutation"));
+        assert!(message.contains("summary.routing_reason"));
+        assert!(message.contains("warnings"));
+        assert!(message.contains("advisory_limits"));
+        assert!(message.contains(PR_EVIDENCE_JSON));
+        assert!(message.contains(PR_EVIDENCE_MD));
+        Ok(())
+    }
+
+    #[test]
+    fn validate_review_comments_reports_contract_violations() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path();
+        init_git_repo(repo)?;
+        fs::create_dir_all(repo.join("target/ripr/review"))?;
+        fs::write(
+            repo.join(REVIEW_COMMENTS_JSON),
+            format_json(&json!({
+                "schema_version": "0.1",
+                "tool": "ripr",
+                "status": "surprising",
+                "base": "HEAD",
+                "base_sha": revision_sha(repo, "HEAD")?,
+                "head": "HEAD",
+                "head_sha": revision_sha(repo, "HEAD")?,
+                "summary": [],
+                "comments": [],
+                "summary_only": "none",
+                "suppressed": [],
+                "warnings": []
+            }))?,
+        )?;
+        let options = ReviewCommentsOptions {
+            root: ".".to_string(),
+            base: "HEAD".to_string(),
+            head: "HEAD".to_string(),
+            timeout_seconds: None,
+        };
+
+        let err = match validate_review_comments(repo, &options, true) {
+            Ok(_) => bail!("invalid review comments packet must fail contract validation"),
+            Err(err) => err,
+        };
+        let message = err.to_string();
+
+        assert!(message.contains("status"));
+        assert!(message.contains("summary_only"));
+        assert!(message.contains("summary is missing or not an object"));
+        assert!(message.contains(REVIEW_COMMENTS_MD));
         Ok(())
     }
 
