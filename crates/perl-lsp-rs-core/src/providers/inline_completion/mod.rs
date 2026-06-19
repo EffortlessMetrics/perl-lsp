@@ -1843,6 +1843,14 @@ impl InlineCompletionProvider {
             .then(|| "'test description' => sub {\n    \n};".to_string())
     }
 
+    fn preferred_try_tiny_block(&self, context: &SemanticInlineContext) -> Option<String> {
+        context
+            .imported_modules
+            .iter()
+            .any(|module| module.name == "Try::Tiny")
+            .then(|| "{\n    \n} catch {\n    \n};".to_string())
+    }
+
     fn push_unique(&self, values: &mut Vec<String>, value: String) {
         if values.iter().any(|existing| existing == &value) {
             return;
@@ -2140,6 +2148,21 @@ impl InlineCandidateSource for SyntaxCandidateSource {
                 InlineCompletionItem {
                     insert_text: binding,
                     filter_text: Some(collection),
+                    range: None,
+                    command: None,
+                },
+            );
+        }
+
+        if ends_with_keyword(prefix, "try ")
+            && let Some(block) = provider.preferred_try_tiny_block(semantic_context)
+        {
+            sink.push(
+                Self::SOURCE,
+                0,
+                InlineCompletionItem {
+                    insert_text: block,
+                    filter_text: Some("try".into()),
                     range: None,
                     command: None,
                 },
@@ -3493,6 +3516,7 @@ fn is_module_fragment_char(ch: char) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_tdd_support::must_some;
 
     #[test]
     fn test_after_arrow() {
@@ -5199,6 +5223,154 @@ mod tests {
     }
 
     #[test]
+    fn try_tiny_import_suggests_try_catch_block() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Try::Tiny;\ntry ";
+        let character = "try ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 1, character);
+
+        let item = completions
+            .items
+            .iter()
+            .find(|item| item.insert_text == "{\n    \n} catch {\n    \n};")
+            .ok_or("expected Try::Tiny try/catch block completion")?;
+
+        assert_eq!(item.filter_text.as_deref(), Some("try"));
+        Ok(())
+    }
+
+    #[test]
+    fn preferred_try_tiny_block_boundary_discriminator() {
+        let provider = InlineCompletionProvider::new();
+        let prepared = must_some(provider.prepare_context("", 0, 0));
+        let mut semantic_context = provider.semantic_context_for_prepared_context(&prepared);
+        semantic_context.imported_modules = vec![ModuleFact { name: "Try::Tiny".into() }];
+
+        assert_eq!(
+            provider.preferred_try_tiny_block(&semantic_context).as_deref(),
+            Some("{\n    \n} catch {\n    \n};"),
+            "input that hits the boundary: module.name == \"Try::Tiny\""
+        );
+    }
+
+    #[test]
+    fn add_candidates_boundary_discriminator() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Try::Tiny;\ntry ";
+        let character = "try ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 1, character);
+
+        assert!(
+            completions.items.iter().any(|item| item.insert_text == "{\n    \n} catch {\n    \n};"
+                && item.filter_text.as_deref() == Some("try")),
+            "`try ` prefix with Try::Tiny import must activate the Try::Tiny scaffold: {:?}",
+            completions.items
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn add_candidates_call_presence_observer() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Try::Tiny;\ntry ";
+        let character = "try ".encode_utf16().count() as u32;
+        let prepared = provider.prepare_context(source, 1, character).ok_or("expected context")?;
+        let semantic_context = provider.semantic_context_for_source(source, &prepared);
+        let mut sink = InlineCandidateSink::new(&semantic_context);
+
+        SyntaxCandidateSource.add_candidates(&provider, &prepared, &semantic_context, &mut sink);
+
+        let items = sink.into_items();
+        assert!(
+            items.iter().any(|ranked| ranked.item.insert_text == "{\n    \n} catch {\n    \n};"
+                && ranked.item.filter_text.as_deref() == Some("try")),
+            "syntax candidate source must push the Try::Tiny scaffold for an imported try prefix: {:?}",
+            items.iter().map(|ranked| &ranked.item).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn try_tiny_block_requires_visible_import() {
+        let provider = InlineCompletionProvider::new();
+        let source = "try ";
+        let character = source.encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 0, character);
+
+        assert!(
+            completions.items.iter().all(|item| item.insert_text != "{\n    \n} catch {\n    \n};"),
+            "Try::Tiny scaffold must not appear without an import: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn try_tiny_block_stays_quiet_in_comment() {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Try::Tiny;\n# try ";
+        let character = "# try ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 1, character);
+
+        assert!(
+            completions.items.is_empty(),
+            "hard-reject comment context must not return Try::Tiny completions: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn try_tiny_block_stays_quiet_in_string() {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Try::Tiny;\nmy $text = \"try ";
+        let character = "my $text = \"try ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 1, character);
+
+        assert!(
+            completions.items.is_empty(),
+            "hard-reject string context must not return Try::Tiny completions: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn try_tiny_block_stays_quiet_in_pod() {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Try::Tiny;\n=pod\ntry ";
+        let character = "try ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 2, character);
+
+        assert!(
+            completions.items.is_empty(),
+            "hard-reject POD context must not return Try::Tiny completions: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn try_tiny_block_requires_keyword_boundary() {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Try::Tiny;\nmy $try = 1;\n$try ";
+        let character = "$try ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 2, character);
+
+        assert!(
+            completions.items.iter().all(|item| item.insert_text != "{\n    \n} catch {\n    \n};"),
+            "Try::Tiny scaffold must not appear for a visible scalar named try: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+
+        let source = "use Try::Tiny;\ngettry ";
+        let character = "gettry ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 1, character);
+
+        assert!(
+            completions.items.iter().all(|item| item.insert_text != "{\n    \n} catch {\n    \n};"),
+            "Try::Tiny scaffold must not appear inside an identifier suffix: {:?}",
+            completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
     fn test_assertion_requires_declared_actual_and_expected_variables() {
         let provider = InlineCompletionProvider::new();
         let source = "use Test::More;\n\n$got = compute();\nmy $expected = 42;\n\n";
@@ -6003,6 +6175,54 @@ mod tests {
         let score = InlineCandidateScore::for_candidate(source, priority, &item, semantic_context);
         let metadata = InlineCandidateMetadata::for_candidate(source, &item, semantic_context);
         RankedCompletionItem { score, order, metadata, item }
+    }
+
+    #[test]
+    fn module_candidate_bonus_boundary_discriminator() {
+        let provider = InlineCompletionProvider::new();
+        let prepared = must_some(provider.prepare_context("", 0, 0));
+        let mut semantic = provider.semantic_context_for_prepared_context(&prepared);
+        semantic.available_modules = vec![ModuleFact { name: "My::App".into() }];
+        let item = InlineCompletionItem {
+            insert_text: "My::App;".into(),
+            filter_text: Some("My::App".into()),
+            range: None,
+            command: None,
+        };
+
+        semantic.expected_syntax = ExpectedSyntax::ReturnExpression;
+        assert_eq!(
+            module_candidate_bonus(&item, &semantic),
+            0,
+            "input that hits the boundary: context.expected_syntax != ExpectedSyntax::UseModule"
+        );
+
+        semantic.expected_syntax = ExpectedSyntax::UseModule;
+        assert_eq!(module_candidate_bonus(&item, &semantic), 35);
+    }
+
+    #[test]
+    fn receiver_candidate_bonus_boundary_discriminator() {
+        let provider = InlineCompletionProvider::new();
+        let prepared = must_some(provider.prepare_context("", 0, 0));
+        let mut semantic = provider.semantic_context_for_prepared_context(&prepared);
+        semantic.current_package_methods = vec![MethodFact { name: "save".into() }];
+        let item = InlineCompletionItem {
+            insert_text: "save()".into(),
+            filter_text: Some("save".into()),
+            range: None,
+            command: None,
+        };
+
+        semantic.expected_syntax = ExpectedSyntax::ReturnExpression;
+        assert_eq!(
+            receiver_candidate_bonus(&item, &semantic),
+            0,
+            "input that hits the boundary: context.expected_syntax != ExpectedSyntax::MethodName"
+        );
+
+        semantic.expected_syntax = ExpectedSyntax::MethodName;
+        assert_eq!(receiver_candidate_bonus(&item, &semantic), 30);
     }
 
     #[test]
