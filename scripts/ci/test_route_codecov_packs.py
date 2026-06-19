@@ -158,6 +158,52 @@ class RouteCodecovPacksTests(unittest.TestCase):
             [pack["id"] for pack in router.selected_packs(packs, paths)],
         )
 
+    def test_mixed_focused_lcov_and_non_lcov_rust_control_plane_avoids_fallback(self) -> None:
+        packs = [
+            {
+                "id": "patch-coverage-xtask-gates",
+                "files": [
+                    "xtask/src/tasks/gates.rs",
+                ],
+                "commands": [
+                    "cargo llvm-cov test --no-report -p xtask --bin xtask --profile agent --locked gates -- --nocapture",
+                ],
+                "coverage_filters": ["gates"],
+            },
+            {
+                "id": "patch-coverage-ci-route",
+                "lcov": False,
+                "files": [
+                    "scripts/ci/route-codecov-packs.py",
+                    "scripts/ci/test_route_codecov_packs.py",
+                    "xtask/src/tasks/ci_route.rs",
+                ],
+                "commands": ["python -m unittest scripts/ci/test_route_codecov_packs.py"],
+                "coverage_filters": ["ci_route"],
+            },
+            {
+                "id": router.FALLBACK_PACK_ID,
+                "files": ["*.rs"],
+                "commands": ["cargo llvm-cov test --no-report --workspace --lib"],
+                "coverage_filters": ["workspace-lib"],
+            },
+        ]
+
+        paths = [
+            "xtask/src/tasks/gates.rs",
+            "xtask/src/tasks/ci_route.rs",
+            ".ci/coverage-packs.toml",
+        ]
+
+        self.assertEqual(
+            ["patch-coverage-xtask-gates"],
+            [pack["id"] for pack in router.selected_packs(packs, paths)],
+        )
+        self.assertEqual(
+            ["patch-coverage-ci-route"],
+            [pack["id"] for pack in router.non_lcov_matches(packs, paths)],
+        )
+
     def test_inline_provider_change_selects_provider_pack_without_quality_pack(self) -> None:
         packs = [
             {

@@ -181,8 +181,11 @@ def selected_packs(packs: list[dict[str, object]], paths: list[str]) -> list[dic
         and pack_matches(pack, paths)
         and pack_matches_lcov_source(pack, paths)
     ]
+    non_lcov_selected = non_lcov_matches(packs, paths)
     selected_needs_fallback = fallback is not None and any(
-        is_lcov_source_path(path) and not any(pack_matches(pack, [path]) for pack in selected)
+        is_lcov_source_path(path)
+        and not any(pack_matches(pack, [path]) for pack in selected)
+        and not any(pack_matches(pack, [path]) for pack in non_lcov_selected)
         for path in paths
     )
     if selected_needs_fallback:

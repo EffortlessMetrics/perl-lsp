@@ -90,6 +90,18 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-xtask-gates"
+files = [
+  "xtask/src/tasks/gates.rs",
+]
+commands = [
+  "cargo llvm-cov test --no-report -p xtask --bin xtask --profile agent --locked gates -- --nocapture",
+]
+coverage_filters = [
+  "gates",
+]
+
+[[pack]]
 id = "patch-coverage-xtask-file-policy"
 files = [
   "xtask/src/tasks/file_policy.rs",

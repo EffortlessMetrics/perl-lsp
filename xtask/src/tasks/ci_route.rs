@@ -153,6 +153,11 @@ const XTASK_NATIVE_TOOLING_PACK: ProofPack = ProofPack {
     ],
 };
 
+const XTASK_GATES_PACK: ProofPack = ProofPack {
+    id: "xtask-gates",
+    commands: &["cargo test -p xtask --bin xtask --profile agent --locked gates -- --nocapture"],
+};
+
 const XTASK_FILE_POLICY_PACK: ProofPack = ProofPack {
     id: "xtask-file-policy",
     commands: &[
@@ -648,6 +653,12 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         route.add_pack(XTASK_NATIVE_TOOLING_PACK);
         route.add_coverage_pack("patch-coverage-xtask-native-tooling");
         return;
+    }
+
+    if file == "xtask/src/tasks/gates.rs" {
+        route.add_surface("xtask-gates");
+        route.add_pack(XTASK_GATES_PACK);
+        return route.add_coverage_pack("patch-coverage-xtask-gates");
     }
 
     if file == "xtask/src/tasks/file_policy.rs" {
@@ -3082,6 +3093,7 @@ mod tests {
                 "patch-coverage-inline-ux-fixtures",
                 "patch-coverage-xtask-inline-quality",
                 "patch-coverage-xtask-native-tooling",
+                "patch-coverage-xtask-gates",
                 "patch-coverage-xtask-file-policy",
                 "patch-coverage-completion-core",
                 "patch-coverage-ux-scenario",
@@ -3149,6 +3161,7 @@ mod tests {
             "patch-coverage-inline-ux-fixtures",
             "patch-coverage-xtask-inline-quality",
             "patch-coverage-xtask-native-tooling",
+            "patch-coverage-xtask-gates",
             "patch-coverage-xtask-file-policy",
             "patch-coverage-completion-core",
             "patch-coverage-ux-scenario",
@@ -3601,6 +3614,49 @@ mod tests {
                         == "cargo test -p xtask --bin xtask --profile agent --locked native_tooling -- --nocapture"
                 })
         }));
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_receipt_maps_gates_to_lcov_pack() -> Result<()> {
+        let receipt =
+            route_receipt("origin/main", "HEAD", vec!["xtask/src/tasks/gates.rs".to_string()])?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["xtask-gates"]);
+        assert!(proof_pack_ids(&receipt).contains(&"xtask-gates"));
+        assert_eq!(receipt.coverage_pack_selector, vec!["patch-coverage-xtask-gates"]);
+        let coverage_pack = receipt
+            .coverage_proof_packs
+            .iter()
+            .find(|pack| pack.id == "patch-coverage-xtask-gates")
+            .ok_or_else(|| eyre!("missing gates coverage pack"))?;
+        assert_eq!(coverage_pack.coverage_filters, vec!["gates"]);
+        assert!(coverage_pack.files.iter().any(|file| file == "xtask/src/tasks/gates.rs"));
+        assert!(coverage_pack.commands.iter().any(|command| {
+            command
+                == "cargo llvm-cov test --no-report -p xtask --bin xtask --profile agent --locked gates -- --nocapture"
+        }));
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "xtask-gates"
+                && pack.commands.iter().any(|command| {
+                    command
+                        == "cargo test -p xtask --bin xtask --profile agent --locked gates -- --nocapture"
+                })
+        }));
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_gates_route_does_not_shadow_file_policy() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec!["xtask/src/tasks/file_policy.rs".to_string()],
+        )?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["xtask-file-policy"]);
+        assert_eq!(receipt.coverage_pack_selector, vec!["patch-coverage-xtask-file-policy"]);
+        assert!(proof_pack_ids(&receipt).contains(&"xtask-file-policy"));
         Ok(())
     }
 

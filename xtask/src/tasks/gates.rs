@@ -2522,7 +2522,7 @@ mod tests {
         blocking_failure_gate_names, build_pr_fast_plan_from_scope,
         build_pr_fast_plan_from_scope_with_targets, compare_receipts, determine_overall_status,
         extend_plan_with_non_pr_fast_static_gates, extend_plan_with_static_tiers, failure_guidance,
-        is_blocking_gate_status, is_cargo_test_command, load_policy_for_inspection,
+        filter_gates, is_blocking_gate_status, is_cargo_test_command, load_policy_for_inspection,
         parse_first_failure, read_gate_output, run_shell_command_with_timeout, run_single_gate,
     };
     use crate::tasks::ci_scope::{
@@ -2641,6 +2641,87 @@ mod tests {
 
     fn skipped_gate_names(plan: &super::GatePlan) -> Vec<String> {
         plan.skipped.iter().map(|skipped| skipped.name.clone()).collect()
+    }
+
+    #[test]
+    fn gates_display_names_match_policy_schema_values() -> color_eyre::eyre::Result<()> {
+        assert_eq!(GateTier::PrFast.to_string(), "pr_fast");
+        assert_eq!(GateTier::MergeGate.to_string(), "merge_gate");
+        assert_eq!(GateTier::Nightly.to_string(), "nightly");
+        assert_eq!(GateTier::All.to_string(), "all");
+
+        assert_eq!(GatePlanningRole::AlwaysOn.to_string(), "always_on");
+        assert_eq!(GatePlanningRole::RustScoped.to_string(), "rust_scoped");
+        assert_eq!(GatePlanningRole::RustFallback.to_string(), "rust_fallback");
+        assert_eq!(GatePlanningRole::RustPackageScoped.to_string(), "rust_package_scoped");
+        assert_eq!(GatePlanningRole::Static.to_string(), "static");
+        Ok(())
+    }
+
+    #[test]
+    fn gates_filter_prefers_explicit_gate_over_tier() -> color_eyre::eyre::Result<()> {
+        let policy = policy_with_gates(vec![
+            tier_gate("fmt", "pr_fast", "true"),
+            tier_gate("nightly-heavy", "nightly", "true"),
+        ]);
+        let config = GateRunnerConfig {
+            tier: GateTier::PrFast,
+            gate_filter: Some("nightly-heavy".to_string()),
+            ..GateRunnerConfig::default()
+        };
+
+        let gates = filter_gates(&policy, &config)?;
+
+        assert_eq!(
+            gates.iter().map(|gate| gate.name.as_str()).collect::<Vec<_>>(),
+            vec!["nightly-heavy"]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn gates_filter_reports_unknown_explicit_gate() -> color_eyre::eyre::Result<()> {
+        let policy = policy_with_gates(vec![tier_gate("fmt", "pr_fast", "true")]);
+        let config = GateRunnerConfig {
+            gate_filter: Some("missing".to_string()),
+            ..GateRunnerConfig::default()
+        };
+
+        let Err(error) = filter_gates(&policy, &config) else {
+            color_eyre::eyre::bail!("missing gate should fail");
+        };
+
+        assert!(error.to_string().contains("No gate found with name 'missing'"));
+        Ok(())
+    }
+
+    #[test]
+    fn gates_filter_orders_merge_gate_policy_by_execution_priority() -> color_eyre::eyre::Result<()>
+    {
+        let policy = policy_with_gates(vec![
+            tier_gate("release", "release", "true"),
+            tier_gate("nightly", "nightly", "true"),
+            tier_gate("merge", "merge_gate", "true"),
+            tier_gate("fmt", "pr_fast", "true"),
+            tier_gate("unknown", "experimental", "true"),
+        ]);
+        let merge_config =
+            GateRunnerConfig { tier: GateTier::MergeGate, ..GateRunnerConfig::default() };
+        let nightly_config =
+            GateRunnerConfig { tier: GateTier::Nightly, ..GateRunnerConfig::default() };
+
+        let merge_gates = filter_gates(&policy, &merge_config)?;
+        let nightly_gates = filter_gates(&policy, &nightly_config)?;
+
+        assert_eq!(
+            merge_gates.iter().map(|gate| gate.name.as_str()).collect::<Vec<_>>(),
+            vec!["fmt", "merge"]
+        );
+        assert_eq!(
+            nightly_gates.iter().map(|gate| gate.name.as_str()).collect::<Vec<_>>(),
+            vec!["fmt", "merge", "nightly", "release", "unknown"]
+        );
+        Ok(())
     }
 
     #[test]
