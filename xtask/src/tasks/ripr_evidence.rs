@@ -3231,6 +3231,40 @@ paths = ["archive/["]
     }
 
     #[test]
+    fn render_review_comment_markdown_falls_back_and_escapes_warnings() {
+        let clean = render_clean_review_comments_markdown(&json!({}));
+
+        assert!(clean.contains(&format!("- base: `{DEFAULT_BASE}`")), "{clean}");
+        assert!(clean.contains(&format!("- head: `{DEFAULT_HEAD}`")), "{clean}");
+        assert!(clean.contains("No review guidance was generated"), "{clean}");
+
+        let error = render_error_review_comments_markdown(&json!({
+            "base": "feature/base",
+            "head": "topic/head",
+            "warnings": [
+                {
+                    "kind": "tool_error",
+                    "message": "ripr failed | timed out\nsecondary detail"
+                }
+            ]
+        }));
+
+        assert!(error.contains("- status: error"), "{error}");
+        assert!(error.contains("- base: `feature/base`"), "{error}");
+        assert!(error.contains("- head: `topic/head`"), "{error}");
+        assert!(
+            error.contains("tool_error: ripr failed \\| timed out secondary detail"),
+            "{error}"
+        );
+
+        let missing_warning = render_error_review_comments_markdown(&json!({}));
+        assert!(
+            missing_warning.contains("review guidance generation did not complete"),
+            "{missing_warning}"
+        );
+    }
+
+    #[test]
     fn render_pr_evidence_summary_surfaces_error_review_guidance() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let repo = temp.path();
@@ -3406,6 +3440,36 @@ paths = ["archive/["]
     }
 
     #[test]
+    fn annotation_from_comment_uses_defaults_and_rejects_empty_path() -> Result<()> {
+        let annotation = annotation_from_comment(&json!({
+            "placement": {
+                "path": "xtask/src/tasks/ripr_evidence.rs",
+                "line": 7,
+                "mode": "owner_function_changed_line"
+            }
+        }))?;
+
+        assert_eq!(
+            annotation,
+            "::warning file=xtask/src/tasks/ripr_evidence.rs,line=7,title=ripr advisory focused_test::RIPR review guidance"
+        );
+
+        let err = match annotation_from_comment(&json!({
+            "placement": {
+                "path": "   ",
+                "line": 7,
+                "mode": "owner_function_changed_line"
+            }
+        })) {
+            Ok(annotation) => bail!("empty path must fail, got {annotation}"),
+            Err(err) => err,
+        };
+
+        assert!(err.to_string().contains("placement.path"));
+        Ok(())
+    }
+
+    #[test]
     fn impacted_evidence_routes_severe_ripr_gap_without_label() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let repo = temp.path();
@@ -3477,6 +3541,83 @@ paths = ["archive/["]
         assert!(markdown.contains("invalid_json"), "{markdown}");
         assert!(markdown.contains("PR evidence JSON is invalid"), "{markdown}");
         Ok(())
+    }
+
+    #[test]
+    fn load_json_distinguishes_present_missing_and_invalid_inputs() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path();
+        let receipt = "target/ripr/pr/custom.json";
+
+        let missing = load_json(repo, receipt);
+        assert_eq!(missing.state, InputState::Missing);
+        assert_eq!(missing.state.to_string(), "missing");
+        assert!(missing.value.is_none());
+
+        fs::create_dir_all(repo.join("target/ripr/pr"))?;
+        fs::write(repo.join(receipt), "{not json\n")?;
+        let invalid = load_json(repo, receipt);
+        let InputState::Invalid(message) = invalid.state else {
+            bail!("invalid receipt must report invalid state");
+        };
+        assert!(message.contains("key must be a string"), "{message}");
+        assert!(invalid.value.is_none());
+        assert_eq!(
+            InputState::Invalid("bad | value\nnext".to_string()).to_string(),
+            "invalid: bad \\| value next"
+        );
+
+        fs::write(repo.join(receipt), format_json(&json!({ "status": "advisory" }))?)?;
+        let present = load_json(repo, receipt);
+        assert_eq!(present.state, InputState::Present);
+        assert_eq!(present.value, Some(json!({ "status": "advisory" })));
+        Ok(())
+    }
+
+    #[test]
+    fn render_impacted_evidence_markdown_escapes_labels_artifacts_and_warnings() {
+        let markdown = render_impacted_evidence_markdown(&json!({
+            "summary": {
+                "mutation_mode": "fast_only",
+                "requires_targeted_mutation": false,
+                "requires_full_owner_mutation": false,
+                "ripr_severe_gap": false,
+                "routing_reason": null
+            },
+            "inputs": {
+                "pr_evidence": "target/ripr/pr/repo|exposure.json",
+                "labels": ["needs|ci", "line\nbreak"]
+            },
+            "artifacts": [
+                {
+                    "label": "PR|JSON",
+                    "path": "target/ripr/pr/repo|exposure.json",
+                    "available": true
+                },
+                {}
+            ],
+            "warnings": [
+                {
+                    "kind": "tool|warning",
+                    "message": "first | line\nsecond line"
+                },
+                {}
+            ]
+        }));
+
+        assert!(markdown.contains("- routing_reason: `none`"), "{markdown}");
+        assert!(
+            markdown.contains("- PR evidence: `target/ripr/pr/repo\\|exposure.json`"),
+            "{markdown}"
+        );
+        assert!(markdown.contains("- labels: `needs\\|ci, line break`"), "{markdown}");
+        assert!(
+            markdown.contains("| PR\\|JSON | `target/ripr/pr/repo\\|exposure.json` | true |"),
+            "{markdown}"
+        );
+        assert!(markdown.contains("| artifact | `unknown` | false |"), "{markdown}");
+        assert!(markdown.contains("- tool\\|warning: first \\| line second line"), "{markdown}");
+        assert!(markdown.contains("- warning: unknown warning"), "{markdown}");
     }
 
     #[test]
