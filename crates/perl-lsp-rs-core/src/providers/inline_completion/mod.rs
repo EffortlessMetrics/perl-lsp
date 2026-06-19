@@ -3072,6 +3072,10 @@ fn dbi_receiver_kind_for_source(
     }
 
     let imported_dbi = context.imported_modules.iter().any(|module| module.name == "DBI");
+    if !imported_dbi {
+        return None;
+    }
+
     let assigned_from_dbi_connect = non_comment_code_lines(text)
         .map(code_before_line_comment)
         .any(|line| line_assigns_variable_from_dbi_connect(line, variable.name.as_str()));

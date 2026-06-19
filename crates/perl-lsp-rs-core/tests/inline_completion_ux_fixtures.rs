@@ -19,6 +19,8 @@ const CURSOR: &str = "<<CURSOR>>";
 const TRY_TINY_BLOCK: &str = "{\n    \n} catch {\n    \n};";
 const MOJOLICIOUS_LITE_ROUTE: &str =
     "'/path' => sub {\n    my $c = shift;\n    $c->render(text => 'ok');\n};";
+const DBI_PREPARE_METHOD: &str = "prepare()";
+const DBI_FETCHROW_HASHREF_METHOD: &str = "fetchrow_hashref()";
 
 struct InlineCompletionScenario {
     text: String,
@@ -370,8 +372,94 @@ fn inline_completion_fixture_corpus_defines_completion_pack_contract() -> TestRe
         ],
     };
 
+    let dbi_database_handle = CompletionPackContract {
+        provider_id: "dbi_database_handle_methods",
+        insert_text: DBI_PREPARE_METHOD,
+        filter_text: "prepare",
+        positive: &[CompletionPackPositiveCase {
+            name: "import_present_database_handle_partial_method",
+            source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\n$dbh->pr<<CURSOR>>",
+            expected_replaces: Some("pr"),
+            expected_after: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\n$dbh->prepare()",
+        }],
+        quiet: &[
+            CompletionPackQuietCase {
+                name: "import_absent_database_handle_hint",
+                source: "my $dbh = DBI->connect($dsn, $user, $pass);\n$dbh->pr<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "comment_context",
+                source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\n# $dbh->pr<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "string_context",
+                source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy $text = \"$dbh->pr<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "pod_context",
+                source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\n=pod\n$dbh->pr<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "near_match_receiver_syntax",
+                source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\n$dbh=>pr<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "non_dbi_receiver_conflict",
+                source: "use DBI;\nmy $socket = Client->connect($dsn);\n$socket->pr<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "parse_damage_non_scalar_receiver",
+                source: "use DBI;\nmy @dbh = DBI->connect($dsn, $user, $pass);\n@dbh->pr<<CURSOR>>",
+            },
+        ],
+    };
+
+    let dbi_statement_handle = CompletionPackContract {
+        provider_id: "dbi_statement_handle_methods",
+        insert_text: DBI_FETCHROW_HASHREF_METHOD,
+        filter_text: "fetchrow_hashref",
+        positive: &[CompletionPackPositiveCase {
+            name: "import_present_statement_handle_partial_method",
+            source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy $sth = $dbh->prepare($sql);\n$sth->fetch<<CURSOR>>",
+            expected_replaces: Some("fetch"),
+            expected_after: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy $sth = $dbh->prepare($sql);\n$sth->fetchrow_hashref()",
+        }],
+        quiet: &[
+            CompletionPackQuietCase {
+                name: "import_absent_statement_handle_hint",
+                source: "my $dbh = DBI->connect($dsn, $user, $pass);\nmy $sth = $dbh->prepare($sql);\n$sth->fetch<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "comment_context",
+                source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy $sth = $dbh->prepare($sql);\n# $sth->fetch<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "string_context",
+                source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy $sth = $dbh->prepare($sql);\nmy $text = \"$sth->fetch<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "pod_context",
+                source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy $sth = $dbh->prepare($sql);\n=pod\n$sth->fetch<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "near_match_receiver_syntax",
+                source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy $sth = $dbh->prepare($sql);\n$sth=>fetch<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "non_dbi_receiver_conflict",
+                source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy $query = $builder->prepare($sql);\n$query->fetch<<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "parse_damage_non_scalar_receiver",
+                source: "use DBI;\nmy $dbh = DBI->connect($dsn, $user, $pass);\nmy @sth = $dbh->prepare($sql);\n@sth->fetch<<CURSOR>>",
+            },
+        ],
+    };
+
     assert_completion_pack_contract(try_tiny)?;
-    assert_completion_pack_contract(mojolicious_lite)
+    assert_completion_pack_contract(mojolicious_lite)?;
+    assert_completion_pack_contract(dbi_database_handle)?;
+    assert_completion_pack_contract(dbi_statement_handle)
 }
 
 #[test]
