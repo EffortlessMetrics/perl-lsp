@@ -4283,3 +4283,105 @@ print nested_func();
     );
     Ok(())
 }
+
+#[test]
+fn strict_subs_no_false_positive_on_arrow_deref_hash_key() -> Result<(), Box<dyn std::error::Error>>
+{
+    let code = r#"
+use strict 'subs';
+package My::App;
+sub greeting {
+    my $self = shift;
+    return $self->{name};
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|issue| matches!(issue.kind, IssueKind::UnquotedBareword)
+            && issue.variable_name == "name"),
+        "arrow-deref key $self->{{name}} must not be flagged as bareword; got: {:?}",
+        issues
+            .iter()
+            .filter(|issue| matches!(issue.kind, IssueKind::UnquotedBareword))
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_no_false_positive_on_arrow_deref_variants() -> Result<(), Box<dyn std::error::Error>>
+{
+    let code = r#"
+use strict 'subs';
+my $ref = {};
+my $a = {};
+my $self = {};
+my $variable = 'runtime';
+my $obj = bless {}, 'Foo';
+my $x = $ref->{key};
+my $y = $a->{b}{c};
+my $z = $obj->method()->{field};
+my $quoted = $self->{'quoted'};
+my $dynamic = $self->{$variable};
+"#;
+    let issues = scope_issues_strict(code);
+    let false_positives: Vec<_> = issues
+        .iter()
+        .filter(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword)
+                && ["key", "b", "c", "field", "quoted", "variable"]
+                    .contains(&issue.variable_name.as_str())
+        })
+        .collect();
+    assert!(
+        false_positives.is_empty(),
+        "arrow-deref hash keys must not be flagged as barewords; got: {:?}",
+        false_positives
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_still_flags_genuine_barewords_near_arrow_deref()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+my $ref = {};
+my $x = $ref->{key};
+my $composite = $ref->{FOO + 1};
+my $y = GENUINE_BAREWORD;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword)
+                && issue.variable_name == "GENUINE_BAREWORD"
+        }),
+        "genuine bareword outside hash-key context must still be flagged"
+    );
+    assert!(
+        issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "FOO"
+        }),
+        "bareword inside composite arrow-deref key expression must still be flagged"
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_still_flags_qualified_arrow_deref_keys() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+my $ref = {};
+my $qualified = $ref->{FOO::BAR};
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "FOO::BAR"
+        }),
+        "qualified arrow-deref key must still be flagged under strict subs; got: {:?}",
+        issues
+    );
+    Ok(())
+}

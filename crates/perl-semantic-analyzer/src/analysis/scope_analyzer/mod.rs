@@ -1351,6 +1351,17 @@ impl ScopeAnalyzer {
                         return true;
                     }
                 }
+                // Arrow-deref hash subscript: $ref->{key}, $obj->method()->{key}, $a->{b}{c}
+                // Anchor on `node`, not `current`: only direct simple keys are auto-quoted,
+                // so composite or qualified keys like `$ref->{FOO + 1}` and `$ref->{FOO::BAR}`
+                // must still flag their barewords.
+                NodeKind::Binary { op, left: _, right } if op == "->{}" => {
+                    if std::ptr::eq(right.as_ref(), node)
+                        && Self::is_simple_autoquoted_hash_key(node)
+                    {
+                        return true;
+                    }
+                }
                 NodeKind::HashLiteral { pairs } => {
                     // Check if current node is a key in any of the pairs
                     for (key, _value) in pairs {
@@ -1391,6 +1402,10 @@ impl ScopeAnalyzer {
         }
 
         false
+    }
+
+    fn is_simple_autoquoted_hash_key(node: &Node) -> bool {
+        matches!(&node.kind, NodeKind::Identifier { name } if !name.contains("::"))
     }
 
     /// Return one human-readable fix suggestion per issue.
