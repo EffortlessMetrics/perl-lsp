@@ -2003,6 +2003,66 @@ mod tests {
         violations.iter().map(|violation| violation.kind.as_str()).collect()
     }
 
+    fn write_fixture(root: &Path, relative: &str, contents: &str) -> Result<()> {
+        let path = root.join(relative);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("creating fixture dir {}", parent.display()))?;
+        }
+        fs::write(&path, contents).with_context(|| format!("writing fixture {}", path.display()))
+    }
+
+    fn run_git(root: &Path, args: &[&str]) -> Result<()> {
+        let output = std::process::Command::new("git")
+            .current_dir(root)
+            .args(args)
+            .output()
+            .with_context(|| format!("running git {}", args.join(" ")))?;
+        if output.status.success() {
+            return Ok(());
+        }
+
+        Err(eyre!("git {} failed: {}", args.join(" "), String::from_utf8_lossy(&output.stderr)))
+    }
+
+    fn init_tracked_fixture(root: &Path, files: &[(&str, &str)]) -> Result<Vec<String>> {
+        run_git(root, &["init", "-q"])?;
+        for (path, contents) in files {
+            write_fixture(root, path, contents)?;
+            run_git(root, &["add", path])?;
+        }
+        list_tracked_files(root)
+    }
+
+    fn readme_allowlist_toml() -> Result<String> {
+        let mut entry = make_entry("readme", None, Some("README.md"), "documentation");
+        entry.covered_by = vec!["README.md".to_string()];
+        entry.reason = "Fixture documentation.".to_string();
+        entry.review_after = "2999-01-01".to_string();
+        let entry_toml = toml::to_string(&entry).context("serializing readme allowlist fixture")?;
+        Ok(format!("[[allow]]\n{entry_toml}"))
+    }
+
+    fn write_readme_allowlist(root: &Path, relative: &str) -> Result<std::path::PathBuf> {
+        let path = root.join(relative);
+        write_fixture(root, relative, &readme_allowlist_toml()?)?;
+        Ok(path)
+    }
+
+    #[test]
+    fn readme_allowlist_fixture_round_trips_through_policy_schema() -> Result<()> {
+        let allowlist_toml = readme_allowlist_toml()?;
+        let allowlist: Allowlist = toml::from_str(&allowlist_toml)?;
+        let entry =
+            allowlist.allow.first().ok_or_else(|| eyre!("expected readme allowlist entry"))?;
+
+        assert_eq!(allowlist.allow.len(), 1);
+        assert_eq!(entry.id, "readme");
+        assert_eq!(entry.path.as_deref(), Some("README.md"));
+        assert_eq!(entry.covered_by, vec!["README.md".to_string()]);
+        Ok(())
+    }
+
     // --- migration candidate finder ---
 
     #[test]
@@ -2170,6 +2230,133 @@ mod tests {
         let json = serde_json::to_string(&record)?;
         let back: FileRecord = serde_json::from_str(&json)?;
         assert_eq!(record, back);
+        Ok(())
+    }
+
+    #[test]
+    fn build_inventory_reads_git_tracked_files_and_workspace_allowlist() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let tracked = init_tracked_fixture(
+            temp.path(),
+            &[
+                ("README.md", "# Fixture\n"),
+                ("src/lib.rs", "pub fn marker() {}\n"),
+                ("scripts/tool.py", "print('fixture')\n"),
+            ],
+        )?;
+        assert!(tracked.iter().any(|path| path == "README.md"));
+        assert!(tracked.iter().any(|path| path == "scripts/tool.py"));
+        assert!(tracked.iter().any(|path| path == "src/lib.rs"));
+        write_readme_allowlist(temp.path(), "policy/non-rust-allowlist.toml")?;
+
+        let records = build_inventory(temp.path())?;
+        let readme = records
+            .iter()
+            .find(|record| record.path == "README.md")
+            .ok_or_else(|| eyre!("missing README.md record"))?;
+        let rust = records
+            .iter()
+            .find(|record| record.path == "src/lib.rs")
+            .ok_or_else(|| eyre!("missing src/lib.rs record"))?;
+        let script = records
+            .iter()
+            .find(|record| record.path == "scripts/tool.py")
+            .ok_or_else(|| eyre!("missing scripts/tool.py record"))?;
+
+        assert_eq!(readme.category, "documentation");
+        assert!(readme.allowlisted);
+        assert_eq!(rust.category, "rust");
+        assert_eq!(script.category, "unclassified");
+        assert!(!script.allowlisted);
+        Ok(())
+    }
+
+    #[test]
+    fn non_rust_inventory_writes_json_markdown_and_docs_outputs() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let tracked = init_tracked_fixture(temp.path(), &[("README.md", "# Fixture\n")])?;
+        assert_eq!(tracked, vec!["README.md".to_string()]);
+        let allowlist_path = write_readme_allowlist(temp.path(), "policy/non-rust-allowlist.toml")?;
+        assert!(allowlist_path.exists());
+
+        non_rust_inventory(temp.path())?;
+
+        let target_markdown = temp.path().join("target/policy/non-rust-inventory.md");
+        let target_json = temp.path().join("target/policy/non-rust-inventory.json");
+        let docs_markdown = temp.path().join("docs/policy/NON_RUST_INVENTORY.md");
+        let markdown = fs::read_to_string(&target_markdown)
+            .with_context(|| format!("reading {}", target_markdown.display()))?;
+        let json = fs::read_to_string(&target_json)
+            .with_context(|| format!("reading {}", target_json.display()))?;
+        let docs = fs::read_to_string(&docs_markdown)
+            .with_context(|| format!("reading {}", docs_markdown.display()))?;
+
+        assert!(markdown.contains("# Non-Rust File Inventory"));
+        assert!(json.contains("\"path\": \"README.md\""));
+        assert_eq!(markdown, docs);
+        Ok(())
+    }
+
+    #[test]
+    fn check_file_policy_advisory_writes_receipt_and_markdown_report() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let tracked = init_tracked_fixture(
+            temp.path(),
+            &[("README.md", "# Fixture\n"), ("scripts/tool.py", "print('fixture')\n")],
+        )?;
+        assert!(tracked.iter().any(|path| path == "scripts/tool.py"));
+        let allowlist = write_readme_allowlist(temp.path(), "allow.toml")?;
+
+        check_file_policy(
+            temp.path(),
+            CheckFilePolicyConfig {
+                mode: CheckFilePolicyMode::Advisory,
+                json_output: None,
+                allowlist_path: Some(allowlist),
+                root_override: Some(temp.path().to_path_buf()),
+            },
+        )?;
+
+        let receipt_path = temp.path().join("target/policy/file-policy-report.json");
+        let report_path = temp.path().join("target/policy/file-policy-report.md");
+        let receipt_text = fs::read_to_string(&receipt_path)
+            .with_context(|| format!("reading {}", receipt_path.display()))?;
+        let report = fs::read_to_string(&report_path)
+            .with_context(|| format!("reading {}", report_path.display()))?;
+        let receipt: FilePolicyReceipt = serde_json::from_str(&receipt_text)?;
+
+        assert_eq!(receipt.mode, "advisory");
+        assert_eq!(receipt.total_tracked, 2);
+        assert_eq!(receipt.non_rust, 2);
+        assert_eq!(receipt.unclassified, 1);
+        assert!(receipt.violations.is_empty());
+        assert!(report.contains("| Unclassified | 1 |"));
+        Ok(())
+    }
+
+    #[test]
+    fn validate_non_rust_policy_wrapper_reports_success_and_failure() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let allowlist = temp.path().join("allow.toml");
+        let debt = temp.path().join("debt.toml");
+        let allowlist_text = readme_allowlist_toml()?;
+        fs::write(&allowlist, &allowlist_text)
+            .with_context(|| format!("writing {}", allowlist.display()))?;
+        fs::write(&debt, "debt = []\n").with_context(|| format!("writing {}", debt.display()))?;
+
+        validate_non_rust_policy(ValidateNonRustPolicyConfig {
+            allowlist_path: allowlist.clone(),
+            debt_path: debt.clone(),
+        })?;
+
+        fs::write(&allowlist, "[[allow]]\nid = \"broken\"\n")
+            .with_context(|| format!("rewriting {}", allowlist.display()))?;
+        let result = validate_non_rust_policy(ValidateNonRustPolicyConfig {
+            allowlist_path: allowlist,
+            debt_path: debt,
+        });
+
+        assert!(result.is_err());
         Ok(())
     }
 
