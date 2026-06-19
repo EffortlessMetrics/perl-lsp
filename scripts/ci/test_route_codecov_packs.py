@@ -1440,11 +1440,8 @@ class IntegrationTestAugmentationTests(unittest.TestCase):
         return {
             "id": router.FALLBACK_PACK_ID,
             "files": ["*.rs"],
-            "commands": [
-                "cargo llvm-cov test --no-report --workspace --lib --profile agent --locked",
-                "cargo check --workspace --all-targets --profile agent --locked",
-            ],
-            "coverage_filters": ["workspace-lib-and-integration"],
+            "commands": [],
+            "coverage_filters": ["changed-crate-lib-and-integration"],
         }
 
     def test_dap_src_change_injects_per_crate_tests_command(self) -> None:
@@ -1480,14 +1477,23 @@ class IntegrationTestAugmentationTests(unittest.TestCase):
                 f"coverage-lane integration test must be single-threaded; got: {cmd}",
             )
 
-        # Static lib command must use cargo-llvm-cov so the binary is registered (#1282).
+        # Per-crate lib command must use cargo-llvm-cov so the binary is registered (#1282).
         lib_cmds = [
             cmd for cmd in rust_pack["commands"]
-            if "cargo llvm-cov test --no-report" in cmd and "--lib" in cmd
+            if "cargo llvm-cov test --no-report -p perl-dap" in cmd and "--lib" in cmd
         ]
         self.assertTrue(
             lib_cmds,
-            f"lib command must use cargo llvm-cov test --no-report; got: {rust_pack['commands']}",
+            f"lib command must use cargo llvm-cov test --no-report -p perl-dap; got: {rust_pack['commands']}",
+        )
+        self.assertNotIn(
+            "cargo llvm-cov test --no-report --workspace --lib --profile agent --locked",
+            rust_pack["commands"],
+            "Patch 95 fallback coverage must stay changed-crate scoped",
+        )
+        self.assertFalse(
+            any(cmd.startswith("cargo check --workspace") for cmd in rust_pack["commands"]),
+            f"Patch 95 must not carry non-coverage workspace checks; got: {rust_pack['commands']}",
         )
 
     def test_multiple_changed_crates_each_get_integration_test_command(self) -> None:
@@ -1509,8 +1515,18 @@ class IntegrationTestAugmentationTests(unittest.TestCase):
             cmd for cmd in rust_pack["commands"]
             if "cargo llvm-cov test --no-report -p perl-parser" in cmd and "--tests" in cmd
         ]
+        dap_lib_cmds = [
+            cmd for cmd in rust_pack["commands"]
+            if "cargo llvm-cov test --no-report -p perl-dap" in cmd and "--lib" in cmd
+        ]
+        parser_lib_cmds = [
+            cmd for cmd in rust_pack["commands"]
+            if "cargo llvm-cov test --no-report -p perl-parser" in cmd and "--lib" in cmd
+        ]
         self.assertTrue(dap_cmds, f"expected perl-dap --tests command; got: {rust_pack['commands']}")
         self.assertTrue(parser_cmds, f"expected perl-parser --tests command; got: {rust_pack['commands']}")
+        self.assertTrue(dap_lib_cmds, f"expected perl-dap --lib command; got: {rust_pack['commands']}")
+        self.assertTrue(parser_lib_cmds, f"expected perl-parser --lib command; got: {rust_pack['commands']}")
         # All injected integration-test commands must be single-threaded.
         for cmd in dap_cmds + parser_cmds:
             self.assertIn(
@@ -1552,6 +1568,10 @@ class IntegrationTestAugmentationTests(unittest.TestCase):
         normalized = [router.normalize_pack(p, paths) for p in selected]
         if normalized:
             rust_pack = normalized[0]
+            self.assertIn(
+                "cargo llvm-cov test --no-report -p xtask --bin xtask --profile agent --locked",
+                rust_pack["commands"],
+            )
             spurious = [
                 cmd for cmd in rust_pack["commands"]
                 if "-p xtask --tests" in cmd

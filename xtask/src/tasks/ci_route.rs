@@ -1309,14 +1309,14 @@ fn coverage_proof_pack_receipts(selector: &[String]) -> Result<Vec<CoverageProof
     Ok(proof_packs)
 }
 
-/// Build the command list for the rust-focused pack, appending per-crate
-/// integration-test runs for every crate that owns a changed source file.
+/// Build the command list for the rust-focused pack, appending crate-local
+/// coverage runs for every crate that owns a changed source file.
 ///
-/// The static pack command only covers unit tests inside `src/lib.rs`.
-/// DAP-style crates (e.g. `perl-dap`) prove production-code coverage
-/// exclusively through integration tests in `tests/`.  Without the extra
-/// `--tests` invocations those lines show 0 % patch coverage even though
-/// the tests exist and pass.
+/// The fallback pack is intentionally crate-scoped. Workspace-wide coverage is
+/// too expensive for Patch 95 and can turn a focused Rust change into a timeout
+/// before a coverage receipt is produced. DAP-style crates (e.g. `perl-dap`)
+/// prove production-code coverage through integration tests in `tests/`, while
+/// ordinary library paths need a registered `--lib` binary.
 ///
 /// IMPORTANT (#1282): these commands use `cargo llvm-cov test --no-report`
 /// instead of plain `cargo test`.  Without `--no-report`, cargo-llvm-cov does
@@ -1342,16 +1342,46 @@ fn augment_rust_focused_commands(
     base_commands: &[String],
     changed_files: &[String],
 ) -> Vec<String> {
-    let mut commands = base_commands.to_vec();
+    let mut commands = Vec::new();
+    for command in base_commands {
+        if is_deprecated_rust_focused_command(command) {
+            continue;
+        }
+        push_unique_command(&mut commands, command.clone());
+    }
     for crate_name in changed_crates(changed_files) {
-        let cmd = format!(
+        let lib_cmd = format!(
+            "cargo llvm-cov test --no-report -p {crate_name} --lib --profile agent --locked"
+        );
+        let tests_cmd = format!(
             "cargo llvm-cov test --no-report -p {crate_name} --tests --profile agent --locked -- --test-threads=1"
         );
-        if !commands.contains(&cmd) {
-            commands.push(cmd);
-        }
+        push_unique_command(&mut commands, lib_cmd);
+        push_unique_command(&mut commands, tests_cmd);
+    }
+    if has_xtask_source_change(changed_files) {
+        push_unique_command(
+            &mut commands,
+            "cargo llvm-cov test --no-report -p xtask --bin xtask --profile agent --locked"
+                .to_string(),
+        );
     }
     commands
+}
+
+fn push_unique_command(commands: &mut Vec<String>, command: String) {
+    if !commands.contains(&command) {
+        commands.push(command);
+    }
+}
+
+fn is_deprecated_rust_focused_command(command: &str) -> bool {
+    command.starts_with("cargo llvm-cov test --no-report --workspace --lib ")
+        || command.starts_with("cargo check --workspace ")
+}
+
+fn has_xtask_source_change(paths: &[String]) -> bool {
+    paths.iter().any(|path| is_lcov_source_path(path) && path.starts_with("xtask/src/"))
 }
 
 fn coverage_proof_pack_selection(
@@ -1459,7 +1489,7 @@ fn parse_coverage_pack_manifest(contents: &str) -> Result<CoveragePackManifest> 
         if pack.files.is_empty() {
             bail!("coverage pack `{}` must list at least one file", pack.id);
         }
-        if pack.commands.is_empty() {
+        if pack.commands.is_empty() && pack.id != RUST_FOCUSED_PACK_ID {
             bail!("coverage pack `{}` must list at least one command", pack.id);
         }
         if pack.coverage_filters.is_empty() {
@@ -3037,6 +3067,21 @@ mod tests {
     }
 
     #[test]
+    fn ci_route_coverage_pack_manifest_allows_dynamic_rust_focused_commands() -> Result<()> {
+        let manifest = parse_coverage_pack_manifest(
+            r#"
+                [[pack]]
+                id = "patch-coverage-rust-focused"
+                files = ["*.rs"]
+                commands = []
+                coverage_filters = ["changed-crate-lib-and-integration"]
+            "#,
+        )?;
+        assert_eq!(1, manifest.pack.len());
+        Ok(())
+    }
+
+    #[test]
     fn ci_route_coverage_pack_manifest_rejects_empty_coverage_filter_list() -> Result<()> {
         let Err(error) = parse_coverage_pack_manifest(
             r#"
@@ -3798,9 +3843,9 @@ mod tests {
     }
 
     /// Regression guard for PR #1212 / #1217: DAP-style crates prove their
-    /// patch coverage through integration tests, not lib tests.  The
-    /// rust-focused pack must include a per-crate `--tests` command for every
-    /// crate that owns a changed source file.
+    /// patch coverage through integration tests as well as lib tests.  The
+    /// rust-focused pack must include per-crate `--lib` and `--tests` commands
+    /// for every crate that owns a changed source file.
     ///
     /// The command must also carry `-- --test-threads=1` (fix for #1232 /
     /// coverage-lane-single-threaded): integration tests in this workspace
@@ -3847,13 +3892,27 @@ mod tests {
             );
         }
 
-        // Static lib command must use cargo-llvm-cov so its binary is registered.
+        // Per-crate lib command must use cargo-llvm-cov so its binary is registered.
         assert!(
             rust_pack
                 .commands
                 .iter()
-                .any(|cmd| cmd.contains("cargo llvm-cov test --no-report") && cmd.contains("--lib")),
-            "lib command must use cargo llvm-cov test --no-report; got: {:?}",
+                .any(|cmd| cmd.contains("cargo llvm-cov test --no-report -p perl-dap")
+                    && cmd.contains("--lib")),
+            "lib command must use cargo llvm-cov test --no-report -p perl-dap; got: {:?}",
+            rust_pack.commands
+        );
+        assert!(
+            !rust_pack
+                .commands
+                .iter()
+                .any(|cmd| cmd.contains("cargo llvm-cov test --no-report --workspace --lib")),
+            "Patch 95 fallback coverage must stay changed-crate scoped; got: {:?}",
+            rust_pack.commands
+        );
+        assert!(
+            !rust_pack.commands.iter().any(|cmd| cmd.starts_with("cargo check --workspace")),
+            "Patch 95 must not carry non-coverage workspace checks; got: {:?}",
             rust_pack.commands
         );
 
@@ -3874,9 +3933,17 @@ mod tests {
             .iter()
             .find(|pack| pack.id == "patch-coverage-rust-focused");
 
-        // If selected, must not have a spurious `-p <crate> --tests` line
-        // (xtask changes don't belong to a crates/ crate).
+        // If selected, xtask gets its bin coverage target but must not have a
+        // spurious `-p <crate> --tests` line (xtask changes don't belong to a
+        // crates/ crate).
         if let Some(pack) = rust_pack {
+            assert!(
+                pack.commands.iter().any(|cmd| {
+                    cmd == "cargo llvm-cov test --no-report -p xtask --bin xtask --profile agent --locked"
+                }),
+                "xtask fallback should cover the xtask bin target; got: {:?}",
+                pack.commands
+            );
             for cmd in &pack.commands {
                 assert!(
                     !cmd.contains("-p xtask --tests"),

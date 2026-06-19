@@ -921,10 +921,7 @@ id = "patch-coverage-rust-focused"
 files = [
   "*.rs",
 ]
-commands = [
-  "cargo llvm-cov test --no-report --workspace --lib --profile agent --locked",
-  "cargo check --workspace --all-targets --profile agent --locked",
-]
+commands = []
 coverage_filters = [
-  "workspace-lib-and-integration",
+  "changed-crate-lib-and-integration",
 ]

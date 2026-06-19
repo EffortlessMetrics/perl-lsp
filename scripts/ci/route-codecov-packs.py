@@ -48,10 +48,11 @@ def changed_crates(paths: list[str]) -> list[str]:
 def augment_rust_focused_commands(base_commands: list[str], paths: list[str]) -> list[str]:
     """Append per-crate integration-test commands to the rust-focused pack.
 
-    The static pack command only runs ``--lib`` tests.  DAP-style crates
-    (e.g. ``perl-dap``) prove patch coverage exclusively through integration
-    tests in ``tests/``.  Without the extra ``--tests`` invocations those
-    lines show 0 % patch coverage even though the tests exist and pass.
+    The fallback pack is intentionally crate-scoped.  Workspace-wide coverage
+    is too expensive for Patch 95 and can turn a focused Rust change into a
+    timeout before a coverage receipt is produced.  DAP-style crates (e.g.
+    ``perl-dap``) prove patch coverage through integration tests in ``tests/``,
+    while ordinary library paths need a registered ``--lib`` binary.
 
     Root cause (#1282): plain ``cargo test`` does NOT register the binary with
     cargo-llvm-cov's tracking file.  When ``cargo llvm-cov report`` runs it
@@ -75,12 +76,35 @@ def augment_rust_focused_commands(base_commands: list[str], paths: list[str]) ->
     coverage NUMBER, not test pass/fail.  Pre-existing test-debt (tracked in
     #1269) can no longer block PRs by surfacing in this lane.
     """
-    commands = list(base_commands)
+    commands: list[str] = []
+    for cmd in base_commands:
+        if _is_deprecated_rust_focused_command(cmd):
+            continue
+        if cmd not in commands:
+            commands.append(cmd)
     for crate_name in changed_crates(paths):
-        cmd = f"cargo llvm-cov test --no-report -p {crate_name} --tests --profile agent --locked -- --test-threads=1"
+        lib_cmd = f"cargo llvm-cov test --no-report -p {crate_name} --lib --profile agent --locked"
+        tests_cmd = f"cargo llvm-cov test --no-report -p {crate_name} --tests --profile agent --locked -- --test-threads=1"
+        for cmd in (lib_cmd, tests_cmd):
+            if cmd not in commands:
+                commands.append(cmd)
+    if has_xtask_source_change(paths):
+        cmd = "cargo llvm-cov test --no-report -p xtask --bin xtask --profile agent --locked"
         if cmd not in commands:
             commands.append(cmd)
     return commands
+
+
+def _is_deprecated_rust_focused_command(cmd: str) -> bool:
+    """Drop pre-#1529 broad commands if an older manifest is used."""
+    return cmd.startswith("cargo llvm-cov test --no-report --workspace --lib ") or cmd.startswith(
+        "cargo check --workspace "
+    )
+
+
+def has_xtask_source_change(paths: list[str]) -> bool:
+    """Return whether the fallback pack owns an xtask source change."""
+    return any(is_lcov_source_path(path) and path.startswith("xtask/src/") for path in paths)
 
 
 def parse_args() -> argparse.Namespace:
