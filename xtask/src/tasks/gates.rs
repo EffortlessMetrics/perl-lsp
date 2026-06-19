@@ -2518,12 +2518,14 @@ mod tests {
     use super::{
         DiffResult, FirstFailure, GateDefinition, GateMetrics, GatePlanningConfig,
         GatePlanningRole, GatePolicy, GateResult, GateRunnerConfig, GateTier, GlobalSettings,
-        MAX_GATE_OUTPUT_BYTES, MetricChange, PackageTargetIndex, Receipt,
+        MAX_GATE_OUTPUT_BYTES, MetricChange, OutputFormat, PackageTargetIndex, Receipt,
         blocking_failure_gate_names, build_pr_fast_plan_from_scope,
         build_pr_fast_plan_from_scope_with_targets, compare_receipts, determine_overall_status,
-        extend_plan_with_non_pr_fast_static_gates, extend_plan_with_static_tiers, failure_guidance,
-        filter_gates, is_blocking_gate_status, is_cargo_test_command, load_policy_for_inspection,
-        parse_first_failure, read_gate_output, run_shell_command_with_timeout, run_single_gate,
+        extend_plan_with_non_pr_fast_static_gates, extend_plan_with_static_tiers,
+        extract_output_summary, failure_guidance, filter_gates, is_blocking_gate_status,
+        is_cargo_test_command, load_policy_for_inspection, load_receipt, output_diff,
+        parse_first_failure, parse_test_metrics, read_gate_output, run_shell_command_with_timeout,
+        run_single_gate, write_receipt,
     };
     use crate::tasks::ci_scope::{
         ArchWidener, DirectCrate, LaneDecisions, PlatformOverrides, RevDepCrate, ScopeOutput,
@@ -3449,6 +3451,156 @@ gates:
 
         assert!(output.starts_with("[gate log truncated"), "large log should be marked truncated");
         assert!(output.contains("last important line"), "tail should preserve useful diagnostics");
+        Ok(())
+    }
+
+    #[test]
+    fn gate_output_summary_keeps_tail_lines() {
+        let output = (1..=12).map(|idx| format!("line-{idx}")).collect::<Vec<_>>().join("\n");
+
+        let summary = extract_output_summary(&output, 4);
+
+        assert_eq!(summary, "line-9\nline-10\nline-11\nline-12");
+    }
+
+    #[test]
+    fn parse_test_metrics_reads_standard_cargo_summary() {
+        let output =
+            "test result: FAILED. 7 passed; 2 failed; 3 ignored; 0 measured; 0 filtered out";
+
+        let metrics = parse_test_metrics(output).expect("cargo test summary should parse");
+
+        assert_eq!(metrics.tests_passed, Some(7));
+        assert_eq!(metrics.tests_failed, Some(2));
+        assert_eq!(metrics.tests_ignored, Some(3));
+        assert_eq!(metrics.tests_total, Some(12));
+        assert!(parse_test_metrics("no cargo summary here").is_none());
+    }
+
+    #[test]
+    fn unresolved_package_args_gate_refuses_to_spawn() -> color_eyre::eyre::Result<()> {
+        let gate =
+            pr_gate("scoped-tests", GatePlanningRole::RustScoped, "cargo test {package_args}");
+        let policy = policy_with_gates(vec![gate.clone()]);
+        let tmp = tempdir()?;
+        let err = run_single_gate(&gate, &policy, tmp.path(), &GateRunnerConfig::default())
+            .expect_err("unresolved package args must fail before command execution");
+        let message = format!("{err:#}");
+
+        assert!(message.contains("scoped-tests"), "gate name should be in error: {message}");
+        assert!(
+            message.contains("must be run via"),
+            "repair guidance should be present: {message}"
+        );
+        assert!(
+            !tmp.path().join("scoped-tests.log").exists(),
+            "guard should fail before creating a command log"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn quarantined_gate_skips_without_verbose_mode() -> color_eyre::eyre::Result<()> {
+        let mut gate = pr_gate("known-flake", GatePlanningRole::AlwaysOn, "exit 1");
+        gate.required = false;
+        gate.quarantine = true;
+        let policy = policy_with_gates(vec![gate.clone()]);
+        let tmp = tempdir()?;
+
+        let result = run_single_gate(&gate, &policy, tmp.path(), &GateRunnerConfig::default())?;
+
+        assert_eq!(result.status, "skip");
+        assert_eq!(result.required, Some(false));
+        assert_eq!(result.exit_code, None);
+        assert_eq!(result.output_summary.as_deref(), Some("Quarantined - skipped"));
+        assert!(result.log_path.is_none(), "skipped quarantine gates should not claim a log");
+        Ok(())
+    }
+
+    #[test]
+    fn run_single_gate_captures_test_metrics_artifacts_and_log() -> color_eyre::eyre::Result<()> {
+        let command = if cfg!(windows) {
+            "echo prelude && echo test result: ok. 3 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+        } else {
+            "printf 'prelude\ntest result: ok. 3 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.01s\n'"
+        };
+        let mut gate = pr_gate("unit-smoke", GatePlanningRole::AlwaysOn, command);
+        gate.tags.push("test".to_string());
+        gate.artifacts.push("target/receipts/unit-smoke.json".to_string());
+        let policy = policy_with_gates(vec![gate.clone()]);
+        let tmp = tempdir()?;
+
+        let result = run_single_gate(&gate, &policy, tmp.path(), &GateRunnerConfig::default())?;
+
+        assert_eq!(result.status, "pass");
+        assert_eq!(result.exit_code, Some(0));
+        assert_eq!(result.log_path.as_deref(), Some("logs/unit-smoke.log"));
+        assert_eq!(result.artifacts, Some(vec!["target/receipts/unit-smoke.json".to_string()]));
+        let metrics = result.metrics.expect("test-tagged gate should expose test metrics");
+        assert_eq!(metrics.tests_passed, Some(3));
+        assert_eq!(metrics.tests_failed, Some(0));
+        assert_eq!(metrics.tests_ignored, Some(2));
+        assert_eq!(metrics.tests_total, Some(5));
+        assert!(
+            result
+                .output_summary
+                .as_deref()
+                .is_some_and(|summary| summary.contains("test result: ok.")),
+            "result summary should include the cargo-style test line"
+        );
+        assert!(
+            tmp.path().join("unit-smoke.log").exists(),
+            "shell gate should write the command log"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn receipt_write_and_load_roundtrip_reports_missing_file() -> color_eyre::eyre::Result<()> {
+        let tmp = tempdir()?;
+        let receipt_path = tmp.path().join("nested").join("receipt.json");
+        let receipt = test_receipt_with_metrics(GateMetrics {
+            tests_total: Some(1),
+            tests_passed: Some(1),
+            ..GateMetrics::default()
+        });
+
+        write_receipt(&receipt, &receipt_path)?;
+        let loaded = load_receipt(&receipt_path)?;
+
+        assert_eq!(loaded.schema_version, receipt.schema_version);
+        assert_eq!(loaded.gates.len(), 1);
+        assert_eq!(loaded.gates[0].gate_name, "tests");
+        let missing = tmp.path().join("missing.json");
+        let err = load_receipt(&missing).expect_err("missing baseline should be reported");
+        assert!(
+            format!("{err:#}").contains("Failed to read baseline receipt"),
+            "missing-file context should be actionable"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn diff_output_accepts_json_and_human_formats() -> color_eyre::eyre::Result<()> {
+        let baseline = test_receipt_with_metrics(GateMetrics {
+            tests_total: Some(10),
+            ..GateMetrics::default()
+        });
+        let current = test_receipt_with_metrics(GateMetrics {
+            tests_total: Some(15),
+            ..GateMetrics::default()
+        });
+        let diff = compare_receipts(&baseline, &current)?;
+
+        let json_config =
+            GateRunnerConfig { output_format: OutputFormat::Json, ..GateRunnerConfig::default() };
+        output_diff(&diff, &json_config)?;
+        output_diff(&diff, &GateRunnerConfig::default())?;
+
+        assert!(
+            diff.metric_changes.iter().any(|change| change.metric_name == "tests_total"),
+            "diff should include the changed metric rendered above"
+        );
         Ok(())
     }
 
