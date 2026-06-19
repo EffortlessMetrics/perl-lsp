@@ -19,6 +19,12 @@ pub struct CiRouteArgs {
 /// Multi-file PRs MUST NOT trigger full-suite expansion - coverage packs are
 /// scoped to changed surfaces only.
 const COVERAGE_PACK_CAP: u64 = 10;
+const TEST_SUPPORT_CRATE_PREFIXES: &[&str] = &[
+    "crates/perl-lsp-ux-tests/",
+    "crates/perl-tdd-support/",
+    "crates/perl-test-generators/",
+    "crates/perl-test-must/",
+];
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -1357,12 +1363,7 @@ fn augment_rust_focused_commands(
         push_unique_command(&mut commands, lib_cmd);
         if let Some(test_targets) = test_targets_by_crate.get(&crate_name) {
             for target in test_targets {
-                push_unique_command(
-                    &mut commands,
-                    format!(
-                        "cargo llvm-cov test --no-report -p {crate_name} --test {target} --profile agent --locked -- --test-threads=1"
-                    ),
-                );
+                push_unique_command(&mut commands, targeted_test_command(&crate_name, target));
             }
         } else {
             push_unique_command(
@@ -1398,8 +1399,16 @@ fn has_xtask_source_change(paths: &[String]) -> bool {
     paths.iter().any(|path| is_lcov_source_path(path) && path.starts_with("xtask/src/"))
 }
 
-fn changed_integration_test_targets(paths: &[String]) -> BTreeMap<String, Vec<String>> {
-    let mut targets: BTreeMap<String, Vec<String>> = BTreeMap::new();
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct IntegrationTestTarget {
+    name: String,
+    features: Vec<String>,
+}
+
+fn changed_integration_test_targets(
+    paths: &[String],
+) -> BTreeMap<String, Vec<IntegrationTestTarget>> {
+    let mut targets: BTreeMap<String, Vec<IntegrationTestTarget>> = BTreeMap::new();
     let mut seen = BTreeSet::new();
     for path in paths {
         let parts: Vec<&str> = path.split('/').collect();
@@ -1412,10 +1421,72 @@ fn changed_integration_test_targets(paths: &[String]) -> BTreeMap<String, Vec<St
         let crate_name = parts[1].to_string();
         let target = target.to_string();
         if seen.insert((crate_name.clone(), target.clone())) {
-            targets.entry(crate_name).or_default().push(target);
+            targets.entry(crate_name).or_default().push(IntegrationTestTarget {
+                name: target,
+                features: required_features_for_test(path),
+            });
         }
     }
     targets
+}
+
+fn required_features_for_test(path: &str) -> Vec<String> {
+    let Some(path) = resolve_changed_file(path) else {
+        return Vec::new();
+    };
+    let Ok(source) = fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    feature_cfgs_in_source(&source)
+}
+
+fn resolve_changed_file(path: &str) -> Option<PathBuf> {
+    let path = PathBuf::from(path);
+    if path.exists() {
+        return Some(path);
+    }
+    std::env::current_dir()
+        .ok()
+        .and_then(|cwd| cwd.parent().map(|parent| parent.join(&path)))
+        .filter(|candidate| candidate.exists())
+}
+
+fn feature_cfgs_in_source(source: &str) -> Vec<String> {
+    let mut features = BTreeSet::new();
+    for line in source.lines() {
+        let trimmed = line.trim();
+        if !trimmed.starts_with("#![cfg(") {
+            continue;
+        }
+        let mut cursor = trimmed;
+        while let Some(index) = cursor.find("feature") {
+            cursor = &cursor[index + "feature".len()..];
+            let Some(after_equals) = cursor.trim_start().strip_prefix('=') else {
+                continue;
+            };
+            let Some(after_quote) = after_equals.trim_start().strip_prefix('"') else {
+                continue;
+            };
+            let Some(end_quote) = after_quote.find('"') else {
+                continue;
+            };
+            features.insert(after_quote[..end_quote].to_string());
+            cursor = &after_quote[end_quote + 1..];
+        }
+    }
+    features.into_iter().collect()
+}
+
+fn targeted_test_command(crate_name: &str, target: &IntegrationTestTarget) -> String {
+    let feature_arg = if target.features.is_empty() {
+        String::new()
+    } else {
+        format!(" --features {}", target.features.join(","))
+    };
+    format!(
+        "cargo llvm-cov test --no-report -p {crate_name}{feature_arg} --test {} --profile agent --locked -- --test-threads=1",
+        target.name
+    )
 }
 
 fn coverage_proof_pack_selection(
@@ -1467,7 +1538,13 @@ fn is_lcov_source_path(path: &str) -> bool {
     path.ends_with(".rs")
         && !path.starts_with("xtask/tests/")
         && !path.contains("/tests/")
+        && !is_test_support_crate_path(path)
         && (path.starts_with("xtask/src/") || path.starts_with("crates/"))
+}
+
+fn is_test_support_crate_path(path: &str) -> bool {
+    let normalized = path.replace('\\', "/");
+    TEST_SUPPORT_CRATE_PREFIXES.iter().any(|prefix| normalized.starts_with(prefix))
 }
 
 /// Extract the crate directory name from a path like `crates/<name>/src/...`.
@@ -3994,6 +4071,93 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    #[test]
+    fn ci_route_rust_focused_pack_preserves_changed_test_target_features() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec![
+                "crates/perl-lsp-rs/src/runtime/workspace.rs".to_string(),
+                "crates/perl-lsp-rs/tests/multi_root_workspace_tests.rs".to_string(),
+                "crates/perl-lsp-ux-tests/src/lib.rs".to_string(),
+            ],
+        )?;
+
+        let rust_pack = receipt
+            .coverage_proof_packs
+            .iter()
+            .find(|pack| pack.id == "patch-coverage-rust-focused")
+            .ok_or_else(|| color_eyre::eyre::eyre!("patch-coverage-rust-focused not selected"))?;
+
+        assert!(
+            rust_pack.commands.iter().any(|cmd| {
+                cmd == "cargo llvm-cov test --no-report -p perl-lsp-rs --features expose_lsp_test_api,workspace --test multi_root_workspace_tests --profile agent --locked -- --test-threads=1"
+            }),
+            "feature-gated changed test target must keep required features; got: {:?}",
+            rust_pack.commands
+        );
+        assert!(
+            !rust_pack.commands.iter().any(|cmd| cmd.contains("-p perl-lsp-ux-tests")),
+            "test-harness crates are not production Patch95 inputs; got: {:?}",
+            rust_pack.commands
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn required_features_for_test_handles_missing_unreadable_and_direct_paths() -> Result<()> {
+        let temp = TempDir::new()?;
+        let feature_file = temp.path().join("feature_target.rs");
+        fs::write(
+            &feature_file,
+            r#"#![cfg(all(feature = "workspace", feature = "expose_lsp_test_api"))]"#,
+        )?;
+
+        let feature_file = feature_file.to_string_lossy().into_owned();
+        assert_eq!(
+            required_features_for_test(&feature_file),
+            vec!["expose_lsp_test_api".to_string(), "workspace".to_string()]
+        );
+
+        let missing_file = temp.path().join("missing_target.rs").to_string_lossy().into_owned();
+        assert!(required_features_for_test(&missing_file).is_empty());
+
+        let unreadable_path = temp.path().join("directory_target.rs");
+        fs::create_dir(&unreadable_path)?;
+        let unreadable_path = unreadable_path.to_string_lossy().into_owned();
+        assert!(required_features_for_test(&unreadable_path).is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn feature_cfgs_in_source_ignores_malformed_inner_cfg_feature_fragments() {
+        let features = feature_cfgs_in_source(
+            r#"
+#![cfg(feature)]
+#![cfg(feature = workspace)]
+#![cfg(feature = "unterminated)]
+#![cfg(feature = "lsp")]
+#[cfg(feature = "test-only")]
+#![cfg(all(feature = "workspace", feature = "expose_lsp_test_api"))]
+"#,
+        );
+
+        assert_eq!(
+            features,
+            vec!["expose_lsp_test_api".to_string(), "lsp".to_string(), "workspace".to_string()]
+        );
+    }
+
+    #[test]
+    fn ci_route_test_support_crate_sources_are_not_lcov_sources() {
+        assert!(!is_lcov_source_path("crates/perl-lsp-ux-tests/src/lib.rs"));
+        assert!(!is_lcov_source_path("crates/perl-tdd-support/src/lib.rs"));
+        assert!(!is_lcov_source_path("crates/perl-test-generators/src/lib.rs"));
+        assert!(!is_lcov_source_path("crates/perl-test-must/src/lib.rs"));
     }
 
     /// Only lib-test crates (no integration tests directory, no crates/ source changes)

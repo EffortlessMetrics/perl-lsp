@@ -12,6 +12,12 @@ use serde_json::{Value as JsonValue, json};
 use serde_yaml_ng::Value as YamlValue;
 
 const COVERAGE_TARGET: f64 = 95.0;
+const TEST_SUPPORT_CRATE_PREFIXES: &[&str] = &[
+    "crates/perl-lsp-ux-tests/",
+    "crates/perl-tdd-support/",
+    "crates/perl-test-generators/",
+    "crates/perl-test-must/",
+];
 
 // ---------------------------------------------------------------------------
 // cfg(test) line detection
@@ -682,10 +688,41 @@ fn changed_lines_for_lcov_file<'a>(
     path: &str,
     changed_lines: &'a BTreeMap<String, BTreeSet<u64>>,
 ) -> Option<&'a BTreeSet<u64>> {
-    changed_lines.get(path).or_else(|| {
+    changed_lines_for_candidate(path, changed_lines).or_else(|| {
         root.and_then(|root| relative_lcov_path(root, path))
-            .and_then(|relative| changed_lines.get(&relative))
+            .and_then(|relative| changed_lines_for_candidate(&relative, changed_lines))
     })
+}
+
+fn changed_lines_for_candidate<'a>(
+    path: &str,
+    changed_lines: &'a BTreeMap<String, BTreeSet<u64>>,
+) -> Option<&'a BTreeSet<u64>> {
+    if is_repo_relative_rust_path(path) && !is_patch_coverage_source_path(path) {
+        return None;
+    }
+    changed_lines.get(path)
+}
+
+fn is_repo_relative_rust_path(path: &str) -> bool {
+    let normalized = path.replace('\\', "/");
+    normalized.ends_with(".rs")
+        && (normalized.starts_with("crates/")
+            || normalized.starts_with("xtask/src/")
+            || normalized.starts_with("xtask/tests/"))
+}
+
+fn is_patch_coverage_source_path(path: &str) -> bool {
+    let normalized = path.replace('\\', "/");
+    normalized.ends_with(".rs")
+        && !normalized.starts_with("xtask/tests/")
+        && !normalized.contains("/tests/")
+        && !is_test_support_crate_path(&normalized)
+        && (normalized.starts_with("xtask/src/") || normalized.starts_with("crates/"))
+}
+
+fn is_test_support_crate_path(path: &str) -> bool {
+    TEST_SUPPORT_CRATE_PREFIXES.iter().any(|prefix| path.starts_with(prefix))
 }
 
 fn relative_lcov_path(root: &Path, path: &str) -> Option<String> {
@@ -1951,6 +1988,37 @@ mod tests {\n\
         let patch =
             patch_coverage_from_changed_lines_for_root(Some(temp.path()), &summary, &changed);
         assert_eq!(patch, 100.0, "test-only PR patch coverage must be 100.0 after stripping");
+        Ok(())
+    }
+
+    #[test]
+    fn patch_coverage_ignores_test_support_crate_sources() -> TestResult {
+        let lcov = LcovSummary {
+            line_hit: 0,
+            line_found: 2,
+            files: vec![FileCoverage {
+                path: "crates/perl-lsp-ux-tests/src/lib.rs".to_string(),
+                line_hit: 0,
+                line_found: 2,
+                uncovered_lines: vec![1, 2],
+                lines: vec![
+                    LcovLine { number: 1, hit_count: 0 },
+                    LcovLine { number: 2, hit_count: 0 },
+                ],
+            }],
+        };
+        let changed: BTreeMap<String, BTreeSet<u64>> = BTreeMap::from([(
+            "crates/perl-lsp-ux-tests/src/lib.rs".to_string(),
+            BTreeSet::from([1u64, 2]),
+        )]);
+
+        let patch =
+            patch_coverage_from_changed_lines_for_root(Some(Path::new(".")), &lcov, &changed);
+        assert_eq!(patch, 100.0, "test-support crates must not affect Patch95");
+        assert!(
+            patch_file_gaps_for_root(Some(Path::new(".")), &lcov, &changed).is_empty(),
+            "test-support crates must not appear in patch gap next actions"
+        );
         Ok(())
     }
 }

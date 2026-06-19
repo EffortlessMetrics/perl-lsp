@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -19,6 +20,13 @@ except ModuleNotFoundError:  # pragma: no cover - CI uses Python 3.11+.
 FALLBACK_PACK_ID = "patch-coverage-rust-focused"
 NON_LCOV_SKIP_REASON = "non-LCOV CI policy/routing surface; covered by focused CI gates"
 NON_SOURCE_LCOV_SKIP_REASON = "LCOV coverage pack matched only non-source files; covered by focused CI gates"
+TEST_SUPPORT_CRATE_PREFIXES = (
+    "crates/perl-lsp-ux-tests/",
+    "crates/perl-tdd-support/",
+    "crates/perl-test-generators/",
+    "crates/perl-test-must/",
+)
+FEATURE_CFG_RE = re.compile(r'feature\s*=\s*"([^"]+)"')
 
 
 def crate_name_from_source_path(path: str) -> str | None:
@@ -45,9 +53,9 @@ def changed_crates(paths: list[str]) -> list[str]:
     return result
 
 
-def changed_integration_test_targets(paths: list[str]) -> dict[str, list[str]]:
+def changed_integration_test_targets(paths: list[str]) -> dict[str, list[tuple[str, tuple[str, ...]]]]:
     """Return changed top-level integration test targets by crate name."""
-    result: dict[str, list[str]] = {}
+    result: dict[str, list[tuple[str, tuple[str, ...]]]] = {}
     seen: set[tuple[str, str]] = set()
     for path in paths:
         parts = path.split("/")
@@ -62,8 +70,26 @@ def changed_integration_test_targets(paths: list[str]) -> dict[str, list[str]]:
         if key in seen:
             continue
         seen.add(key)
-        result.setdefault(crate_name, []).append(target)
+        result.setdefault(crate_name, []).append((target, tuple(required_features_for_test(path))))
     return result
+
+
+def required_features_for_test(path: str) -> list[str]:
+    """Return crate features gated by a changed integration test target."""
+    test_path = Path(path)
+    if not test_path.exists():
+        return []
+    try:
+        source = test_path.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    features: set[str] = set()
+    for line in source.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("#![cfg("):
+            continue
+        features.update(FEATURE_CFG_RE.findall(stripped))
+    return sorted(features)
 
 
 def augment_rust_focused_commands(base_commands: list[str], paths: list[str]) -> list[str]:
@@ -111,8 +137,8 @@ def augment_rust_focused_commands(base_commands: list[str], paths: list[str]) ->
         test_targets = test_targets_by_crate.get(crate_name, [])
         if test_targets:
             integration_cmds = [
-                f"cargo llvm-cov test --no-report -p {crate_name} --test {target} --profile agent --locked -- --test-threads=1"
-                for target in test_targets
+                targeted_test_command(crate_name, target, features)
+                for target, features in test_targets
             ]
         else:
             integration_cmds = [
@@ -185,7 +211,22 @@ def is_lcov_source_path(path: str) -> bool:
         return False
     if path.startswith("xtask/tests/") or "/tests/" in path:
         return False
+    if is_test_support_crate_path(path):
+        return False
     return path.startswith("xtask/src/") or path.startswith("crates/")
+
+
+def is_test_support_crate_path(path: str) -> bool:
+    normalized = path.replace("\\", "/")
+    return any(normalized.startswith(prefix) for prefix in TEST_SUPPORT_CRATE_PREFIXES)
+
+
+def targeted_test_command(crate_name: str, target: str, features: tuple[str, ...]) -> str:
+    feature_arg = f" --features {','.join(features)}" if features else ""
+    return (
+        f"cargo llvm-cov test --no-report -p {crate_name}{feature_arg} "
+        f"--test {target} --profile agent --locked -- --test-threads=1"
+    )
 
 
 def pack_matches_lcov_source(pack: dict[str, object], paths: list[str]) -> bool:

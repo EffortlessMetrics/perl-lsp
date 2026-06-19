@@ -1501,6 +1501,33 @@ class IntegrationTestAugmentationTests(unittest.TestCase):
             f"Patch 95 must not carry non-coverage workspace checks; got: {rust_pack['commands']}",
         )
 
+    def test_feature_gated_changed_test_target_preserves_required_features(self) -> None:
+        packs = [self._fallback_pack()]
+        paths = [
+            "crates/perl-lsp-rs/src/runtime/workspace.rs",
+            "crates/perl-lsp-rs/tests/multi_root_workspace_tests.rs",
+            "crates/perl-lsp-ux-tests/src/lib.rs",
+        ]
+
+        selected = router.selected_packs(packs, paths)
+        normalized = [router.normalize_pack(p, paths) for p in selected]
+        rust_pack = normalized[0]
+
+        self.assertIn(
+            "cargo llvm-cov test --no-report -p perl-lsp-rs --features expose_lsp_test_api,workspace --test multi_root_workspace_tests --profile agent --locked -- --test-threads=1",
+            rust_pack["commands"],
+        )
+        self.assertFalse(
+            any("-p perl-lsp-ux-tests" in cmd for cmd in rust_pack["commands"]),
+            f"test-harness crates are not production Patch95 inputs; got: {rust_pack['commands']}",
+        )
+
+    def test_test_support_crate_source_is_not_lcov_source(self) -> None:
+        self.assertFalse(router.is_lcov_source_path("crates/perl-lsp-ux-tests/src/lib.rs"))
+        self.assertFalse(router.is_lcov_source_path("crates/perl-tdd-support/src/lib.rs"))
+        self.assertFalse(router.is_lcov_source_path("crates/perl-test-generators/src/lib.rs"))
+        self.assertFalse(router.is_lcov_source_path("crates/perl-test-must/src/lib.rs"))
+
     def test_multiple_changed_crates_each_get_integration_test_command(self) -> None:
         packs = [self._fallback_pack()]
         paths = [
