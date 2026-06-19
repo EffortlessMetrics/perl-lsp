@@ -90,6 +90,18 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-xtask-file-policy"
+files = [
+  "xtask/src/tasks/file_policy.rs",
+]
+commands = [
+  "cargo llvm-cov test --no-report -p xtask --bin xtask --profile agent --locked file_policy -- --nocapture",
+]
+coverage_filters = [
+  "file_policy",
+]
+
+[[pack]]
 id = "patch-coverage-completion-core"
 files = [
   "crates/perl-lsp-rs-core/src/providers/completion/",

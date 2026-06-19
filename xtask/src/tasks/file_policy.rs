@@ -1999,6 +1999,10 @@ mod tests {
         }
     }
 
+    fn violation_kinds(violations: &[PolicyViolation]) -> Vec<&str> {
+        violations.iter().map(|violation| violation.kind.as_str()).collect()
+    }
+
     // --- migration candidate finder ---
 
     #[test]
@@ -2251,6 +2255,274 @@ unknown = "field"
             validation.errors
         );
         Ok(())
+    }
+
+    #[test]
+    fn validate_non_rust_policy_reports_matcher_and_field_shape_errors() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let allowlist = temp.path().join("allow.toml");
+        let debt = temp.path().join("debt.toml");
+        fs::write(
+            &allowlist,
+            r#"
+[[allow]]
+id = "missing-matcher"
+kind = "documentation"
+language = "markdown"
+surface = "docs"
+classification = "documentation"
+owner = "docs"
+reason = "No matcher."
+covered_by = []
+created = "2026-05-13"
+review_after = "2026-08-13"
+
+[[allow]]
+id = "bad-shapes"
+glob = './docs\**'
+kind = "documentation"
+language = "markdown"
+surface = "docs"
+classification = "surprise"
+owner = "docs"
+reason = "Bad schema shapes."
+covered_by = "not-a-list"
+created = "not-a-date"
+review_after = 20260813
+retired = "no"
+
+[[allow]]
+id = "first-readme"
+path = "README.md"
+kind = "documentation"
+language = "markdown"
+surface = "docs"
+classification = "documentation"
+owner = "docs"
+reason = "First readme entry."
+covered_by = []
+created = "2026-05-13"
+review_after = "2026-08-13"
+
+[[allow]]
+id = "second-readme"
+path = "README.md"
+kind = "documentation"
+language = "markdown"
+surface = "docs"
+classification = "documentation"
+owner = "docs"
+reason = "Duplicate matcher."
+covered_by = []
+created = "2026-05-13"
+review_after = "2026-08-13"
+"#,
+        )?;
+        fs::write(&debt, "debt = []\n")?;
+
+        let validation = validate_non_rust_policy_files(&allowlist, &debt);
+
+        for expected in [
+            "must set either `glob` or `path`",
+            "without leading `./`",
+            "contains Windows backslashes",
+            "classification `surprise`",
+            "`covered_by` must be a list of strings",
+            "`created` is not a real date",
+            "`review_after` must be a YYYY-MM-DD string",
+            "`retired` must be a boolean",
+            "duplicate matcher `README.md`",
+        ] {
+            assert!(
+                validation.errors.iter().any(|error| error.contains(expected)),
+                "missing {expected:?} in {:?}",
+                validation.errors
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn check_allowlist_entries_reports_blocking_and_strict_violations() {
+        let mut expired = make_entry("expired", None, Some("README.md"), "documentation");
+        expired.expires = Some("2026-01-01".to_string());
+
+        let mut empty_fields = make_entry("empty-fields", None, None, "");
+        empty_fields.kind.clear();
+        empty_fields.language.clear();
+        empty_fields.owner.clear();
+        empty_fields.reason.clear();
+        empty_fields.surface.clear();
+        empty_fields.classification.clear();
+
+        let invalid_glob = make_entry("invalid-glob", Some("["), None, "documentation");
+
+        let blocking = check_allowlist_entries(
+            &[expired, empty_fields, invalid_glob],
+            CheckFilePolicyMode::BlockingAllowlist,
+            &[],
+        );
+        let blocking_kinds = violation_kinds(&blocking);
+        for expected in [
+            "expired-entry",
+            "missing-matcher",
+            "missing-kind",
+            "missing-language",
+            "missing-owner",
+            "missing-reason",
+            "missing-surface",
+            "missing-classification",
+            "missing-covered-by",
+            "invalid-glob",
+        ] {
+            assert!(
+                blocking_kinds.contains(&expected),
+                "missing {expected:?} in {:?}",
+                blocking_kinds
+            );
+        }
+
+        let mut stale = make_entry("dup", None, Some("/absolute/path.md"), "documentation");
+        stale.review_after = "2026-01-01".to_string();
+        stale.covered_by = vec!["fixture".to_string()];
+        let mut duplicate = make_entry("dup", None, Some("docs\\guide.md"), "documentation");
+        duplicate.covered_by = vec!["fixture".to_string()];
+        let mut broad = make_entry("broad", Some("**/*"), None, "documentation");
+        broad.covered_by = vec!["fixture".to_string()];
+        let mut unused = make_entry("unused", None, Some("missing.md"), "documentation");
+        unused.covered_by = vec!["fixture".to_string()];
+
+        let strict = check_allowlist_entries(
+            &[stale, duplicate, broad, unused],
+            CheckFilePolicyMode::BlockingStrict,
+            &["README.md".to_string()],
+        );
+        let strict_kinds = violation_kinds(&strict);
+        for expected in [
+            "duplicate-id",
+            "stale-review-after",
+            "unused-entry",
+            "absolute-path",
+            "backslash-path",
+            "broad-glob-no-reason",
+        ] {
+            assert!(strict_kinds.contains(&expected), "missing {expected:?} in {:?}", strict_kinds);
+        }
+    }
+
+    #[test]
+    fn render_policy_report_markdown_lists_violation_details() {
+        let receipt = FilePolicyReceipt {
+            schema_version: 1,
+            mode: "blocking-strict".to_string(),
+            total_tracked: 3,
+            non_rust: 2,
+            unclassified: 1,
+            expired: 1,
+            stale_review_after: 1,
+            duplicate_ids: 0,
+            unused_entries: 1,
+            violations: vec![PolicyViolation {
+                kind: "unused-entry".to_string(),
+                message: "Entry matches no tracked file".to_string(),
+                path: Some("missing.md".to_string()),
+                entry_id: Some("unused".to_string()),
+            }],
+        };
+
+        let report = render_policy_report_markdown(&receipt);
+
+        assert!(report.contains("# Non-Rust File Policy Report"));
+        assert!(report.contains("| Mode | `blocking-strict` |"));
+        assert!(report.contains("| Violations | 1 |"));
+        assert!(report.contains("| `unused-entry` | `missing.md` | `unused` |"));
+    }
+
+    #[test]
+    fn render_policy_report_markdown_reports_empty_violation_set() {
+        let receipt = FilePolicyReceipt {
+            schema_version: 1,
+            mode: "advisory".to_string(),
+            total_tracked: 1,
+            non_rust: 0,
+            unclassified: 0,
+            expired: 0,
+            stale_review_after: 0,
+            duplicate_ids: 0,
+            unused_entries: 0,
+            violations: Vec::new(),
+        };
+
+        let report = render_policy_report_markdown(&receipt);
+
+        assert!(report.contains("No violations for the selected mode."));
+    }
+
+    #[test]
+    fn proposal_renderers_show_grouping_and_migration_guidance() -> Result<()> {
+        let unclassified = vec![
+            "scripts/ci/check-status.py".to_string(),
+            "README.md".to_string(),
+            "docs/guide.md".to_string(),
+        ];
+        let directory_groups = group_by_directory(&unclassified);
+        let extension_groups = group_by_extension(&unclassified);
+
+        assert_eq!(
+            directory_groups.get("(root)").ok_or_else(|| eyre!("missing root directory group"))?,
+            &vec!["README.md".to_string()]
+        );
+        assert_eq!(
+            extension_groups.get("md").ok_or_else(|| eyre!("missing markdown group"))?.len(),
+            2
+        );
+
+        let mut entry = make_entry("proposed-dir-scripts", Some("scripts/**/*"), None, "build");
+        entry.owner = "TBD".to_string();
+        entry.surface = "unclassified".to_string();
+        entry.broad_glob_reason = Some("bulk proposal".to_string());
+        entry.covered_by = vec!["scripts/**/*".to_string()];
+
+        let proposed_toml = render_proposed_toml(
+            std::slice::from_ref(&entry),
+            ProposeGroupBy::Directory,
+            "2026-06-19",
+        )?;
+        assert!(proposed_toml.contains("status = \"proposed\""));
+        assert!(proposed_toml.contains("id = \"proposed-dir-scripts\""));
+        assert!(proposed_toml.contains("broad_glob_reason = \"bulk proposal\""));
+
+        let proposal = render_proposal_markdown(
+            &directory_groups,
+            &[entry],
+            ProposeGroupBy::Directory,
+            &unclassified,
+        );
+        assert!(proposal.contains("# Non-Rust Allowlist Proposal"));
+        assert!(proposal.contains("Rust migration candidates"));
+        assert!(proposal.contains("xtask policy/check tasks"));
+        assert!(proposal.contains("`scripts/ci/check-status.py`"));
+        Ok(())
+    }
+
+    #[test]
+    fn date_and_classifier_helpers_cover_policy_edge_cases() {
+        assert_eq!(days_to_ymd(0), (1970, 1, 1));
+        assert_eq!(add_days((1970, 1, 1), 31), (1970, 2, 1));
+        assert_eq!(fmt_ymd((2026, 6, 9)), "2026-06-09");
+        assert!(is_past_date("not-a-date"));
+        assert!(is_policy_broad_glob("*.md"));
+        assert!(is_policy_broad_glob("docs/**"));
+        assert!(is_broad_glob("**/*"));
+        assert!(!is_broad_glob("docs/*.md"));
+        assert_eq!(classify_dir("docs"), "docs");
+        assert_eq!(classify_dir("scripts"), "build");
+        assert_eq!(classify_dir("unknown"), "tbd");
+        assert_eq!(classify_ext("py"), "build");
+        assert_eq!(classify_ext("png"), "data");
+        assert_eq!(classify_ext("mystery"), "tbd");
+        assert_eq!(script_language("tools/check.ps1"), Some("shell"));
+        assert_eq!(script_language("docs/readme.md"), None);
     }
 
     // --- render_markdown smoke ---

@@ -153,6 +153,13 @@ const XTASK_NATIVE_TOOLING_PACK: ProofPack = ProofPack {
     ],
 };
 
+const XTASK_FILE_POLICY_PACK: ProofPack = ProofPack {
+    id: "xtask-file-policy",
+    commands: &[
+        "cargo test -p xtask --bin xtask --profile agent --locked file_policy -- --nocapture",
+    ],
+};
+
 const COMPLETION_CORE_PACK: ProofPack = ProofPack {
     id: "completion-core",
     commands: &[
@@ -641,6 +648,12 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         route.add_pack(XTASK_NATIVE_TOOLING_PACK);
         route.add_coverage_pack("patch-coverage-xtask-native-tooling");
         return;
+    }
+
+    if file == "xtask/src/tasks/file_policy.rs" {
+        route.add_surface("xtask-file-policy");
+        route.add_pack(XTASK_FILE_POLICY_PACK);
+        return route.add_coverage_pack("patch-coverage-xtask-file-policy");
     }
 
     if file.starts_with("crates/perl-lsp-rs-core/src/providers/completion/") {
@@ -3069,6 +3082,7 @@ mod tests {
                 "patch-coverage-inline-ux-fixtures",
                 "patch-coverage-xtask-inline-quality",
                 "patch-coverage-xtask-native-tooling",
+                "patch-coverage-xtask-file-policy",
                 "patch-coverage-completion-core",
                 "patch-coverage-ux-scenario",
                 "patch-coverage-ci-policy",
@@ -3135,6 +3149,7 @@ mod tests {
             "patch-coverage-inline-ux-fixtures",
             "patch-coverage-xtask-inline-quality",
             "patch-coverage-xtask-native-tooling",
+            "patch-coverage-xtask-file-policy",
             "patch-coverage-completion-core",
             "patch-coverage-ux-scenario",
             "patch-coverage-ci-policy",
@@ -3586,6 +3601,52 @@ mod tests {
                         == "cargo test -p xtask --bin xtask --profile agent --locked native_tooling -- --nocapture"
                 })
         }));
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_receipt_maps_file_policy_to_lcov_pack() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec!["xtask/src/tasks/file_policy.rs".to_string()],
+        )?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["xtask-file-policy"]);
+        assert!(proof_pack_ids(&receipt).contains(&"xtask-file-policy"));
+        assert_eq!(receipt.coverage_pack_selector, vec!["patch-coverage-xtask-file-policy"]);
+        let coverage_pack = receipt
+            .coverage_proof_packs
+            .iter()
+            .find(|pack| pack.id == "patch-coverage-xtask-file-policy")
+            .ok_or_else(|| eyre!("missing file policy coverage pack"))?;
+        assert_eq!(coverage_pack.coverage_filters, vec!["file_policy"]);
+        assert!(coverage_pack.files.iter().any(|file| file == "xtask/src/tasks/file_policy.rs"));
+        assert!(coverage_pack.commands.iter().any(|command| {
+            command
+                == "cargo llvm-cov test --no-report -p xtask --bin xtask --profile agent --locked file_policy -- --nocapture"
+        }));
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "xtask-file-policy"
+                && pack.commands.iter().any(|command| {
+                    command
+                        == "cargo test -p xtask --bin xtask --profile agent --locked file_policy -- --nocapture"
+                })
+        }));
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_file_policy_route_does_not_shadow_completion_provider() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec!["crates/perl-lsp-rs-core/src/providers/completion/mod.rs".to_string()],
+        )?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["completion-core"]);
+        assert_eq!(receipt.coverage_pack_selector, vec!["patch-coverage-completion-core"]);
+        assert!(proof_pack_ids(&receipt).contains(&"completion-core"));
         Ok(())
     }
 
