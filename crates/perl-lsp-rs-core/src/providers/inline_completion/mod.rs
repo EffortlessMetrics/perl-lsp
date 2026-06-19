@@ -1851,6 +1851,15 @@ impl InlineCompletionProvider {
             .then(|| "{\n    \n} catch {\n    \n};".to_string())
     }
 
+    fn preferred_mojolicious_lite_route(&self, context: &SemanticInlineContext) -> Option<String> {
+        context.imported_modules.iter().any(|module| module.name == "Mojolicious::Lite").then(
+            || {
+                "'/path' => sub {\n    my $c = shift;\n    $c->render(text => 'ok');\n};"
+                    .to_string()
+            },
+        )
+    }
+
     fn push_unique(&self, values: &mut Vec<String>, value: String) {
         if values.iter().any(|existing| existing == &value) {
             return;
@@ -2164,6 +2173,22 @@ impl InlineCandidateSource for SyntaxCandidateSource {
                 InlineCompletionItem {
                     insert_text: block,
                     filter_text: Some("try".into()),
+                    range: None,
+                    command: None,
+                },
+            );
+        }
+
+        if ends_with_keyword(prefix, "get ")
+            && line_suffix_after_prefix(full_line, prefix).trim().is_empty()
+            && let Some(route) = provider.preferred_mojolicious_lite_route(semantic_context)
+        {
+            sink.push(
+                Self::SOURCE,
+                0,
+                InlineCompletionItem {
+                    insert_text: route,
+                    filter_text: Some("get".into()),
                     range: None,
                     command: None,
                 },
@@ -5399,6 +5424,20 @@ mod tests {
             "Try::Tiny scaffold must not appear inside an identifier suffix: {:?}",
             completions.items.iter().map(|item| &item.insert_text).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn mojolicious_lite_import_suggests_route_scaffold() {
+        let provider = InlineCompletionProvider::new();
+        let source = "use Mojolicious::Lite;\nget ";
+        let character = "get ".encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 1, character);
+
+        let item = completions.items.iter().find(|item| {
+            item.insert_text
+                == "'/path' => sub {\n    my $c = shift;\n    $c->render(text => 'ok');\n};"
+        });
+        assert_eq!(item.and_then(|item| item.filter_text.as_deref()), Some("get"));
     }
 
     #[test]

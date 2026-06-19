@@ -17,6 +17,8 @@ type TestResult = Result<(), Box<dyn Error>>;
 
 const CURSOR: &str = "<<CURSOR>>";
 const TRY_TINY_BLOCK: &str = "{\n    \n} catch {\n    \n};";
+const MOJOLICIOUS_LITE_ROUTE: &str =
+    "'/path' => sub {\n    my $c = shift;\n    $c->render(text => 'ok');\n};";
 
 struct InlineCompletionScenario {
     text: String,
@@ -333,7 +335,43 @@ fn inline_completion_fixture_corpus_defines_completion_pack_contract() -> TestRe
         ],
     };
 
-    assert_completion_pack_contract(try_tiny)
+    let mojolicious_lite = CompletionPackContract {
+        provider_id: "mojolicious_lite_route",
+        insert_text: MOJOLICIOUS_LITE_ROUTE,
+        filter_text: "get",
+        positive: &[CompletionPackPositiveCase {
+            name: "import_present_valid_route_keyword",
+            source: "use Mojolicious::Lite;\nget <<CURSOR>>",
+            expected_replaces: None,
+            expected_after: "use Mojolicious::Lite;\nget '/path' => sub {\n    my $c = shift;\n    $c->render(text => 'ok');\n};",
+        }],
+        quiet: &[
+            CompletionPackQuietCase { name: "import_absent", source: "get <<CURSOR>>" },
+            CompletionPackQuietCase {
+                name: "comment_context",
+                source: "use Mojolicious::Lite;\n# get <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "string_context",
+                source: "use Mojolicious::Lite;\nmy $text = \"get <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "pod_context",
+                source: "use Mojolicious::Lite;\n=pod\nget <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "near_match_token",
+                source: "use Mojolicious::Lite;\nforget <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "parse_damage_extra_closing_paren",
+                source: "use Mojolicious::Lite;\nget <<CURSOR>>)",
+            },
+        ],
+    };
+
+    assert_completion_pack_contract(try_tiny)?;
+    assert_completion_pack_contract(mojolicious_lite)
 }
 
 #[test]
