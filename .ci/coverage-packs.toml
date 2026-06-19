@@ -78,6 +78,18 @@ coverage_filters = [
 ]
 
 [[pack]]
+id = "patch-coverage-xtask-native-tooling"
+files = [
+  "xtask/src/tasks/native_tooling.rs",
+]
+commands = [
+  "cargo llvm-cov test --no-report -p xtask --bin xtask --profile agent --locked native_tooling -- --nocapture",
+]
+coverage_filters = [
+  "native_tooling",
+]
+
+[[pack]]
 id = "patch-coverage-completion-core"
 files = [
   "crates/perl-lsp-rs-core/src/providers/completion/",

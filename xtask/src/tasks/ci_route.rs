@@ -146,6 +146,13 @@ const XTASK_INLINE_COMPLETION_QUALITY_PACK: ProofPack = ProofPack {
     ],
 };
 
+const XTASK_NATIVE_TOOLING_PACK: ProofPack = ProofPack {
+    id: "xtask-native-tooling",
+    commands: &[
+        "cargo test -p xtask --bin xtask --profile agent --locked native_tooling -- --nocapture",
+    ],
+};
+
 const COMPLETION_CORE_PACK: ProofPack = ProofPack {
     id: "completion-core",
     commands: &[
@@ -626,6 +633,13 @@ fn route_file(file: &str, route: &mut RouteBuilder) {
         route.add_surface("xtask-inline-completion-quality");
         route.add_pack(XTASK_INLINE_COMPLETION_QUALITY_PACK);
         route.add_coverage_pack("patch-coverage-xtask-inline-quality");
+        return;
+    }
+
+    if file == "xtask/src/tasks/native_tooling.rs" {
+        route.add_surface("xtask-native-tooling");
+        route.add_pack(XTASK_NATIVE_TOOLING_PACK);
+        route.add_coverage_pack("patch-coverage-xtask-native-tooling");
         return;
     }
 
@@ -3054,6 +3068,7 @@ mod tests {
                 "patch-coverage-inline-provider-core",
                 "patch-coverage-inline-ux-fixtures",
                 "patch-coverage-xtask-inline-quality",
+                "patch-coverage-xtask-native-tooling",
                 "patch-coverage-completion-core",
                 "patch-coverage-ux-scenario",
                 "patch-coverage-ci-policy",
@@ -3119,6 +3134,7 @@ mod tests {
             "patch-coverage-inline-provider-core",
             "patch-coverage-inline-ux-fixtures",
             "patch-coverage-xtask-inline-quality",
+            "patch-coverage-xtask-native-tooling",
             "patch-coverage-completion-core",
             "patch-coverage-ux-scenario",
             "patch-coverage-ci-policy",
@@ -3537,6 +3553,38 @@ mod tests {
         assert!(receipt.required_proof_packs.iter().any(|pack| {
             pack.id == "xtask-inline-completion-quality"
                 && pack.commands.iter().any(|command| command.contains("inline-completion-quality"))
+        }));
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_receipt_maps_native_tooling_to_lcov_pack() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec!["xtask/src/tasks/native_tooling.rs".to_string()],
+        )?;
+
+        assert_eq!(receipt.changed_surfaces, vec!["xtask-native-tooling"]);
+        assert!(proof_pack_ids(&receipt).contains(&"xtask-native-tooling"));
+        assert_eq!(receipt.coverage_pack_selector, vec!["patch-coverage-xtask-native-tooling"]);
+        let coverage_pack = receipt
+            .coverage_proof_packs
+            .iter()
+            .find(|pack| pack.id == "patch-coverage-xtask-native-tooling")
+            .ok_or_else(|| eyre!("missing native tooling coverage pack"))?;
+        assert_eq!(coverage_pack.coverage_filters, vec!["native_tooling"]);
+        assert!(coverage_pack.files.iter().any(|file| file == "xtask/src/tasks/native_tooling.rs"));
+        assert!(coverage_pack.commands.iter().any(|command| {
+            command
+                == "cargo llvm-cov test --no-report -p xtask --bin xtask --profile agent --locked native_tooling -- --nocapture"
+        }));
+        assert!(receipt.required_proof_packs.iter().any(|pack| {
+            pack.id == "xtask-native-tooling"
+                && pack.commands.iter().any(|command| {
+                    command
+                        == "cargo test -p xtask --bin xtask --profile agent --locked native_tooling -- --nocapture"
+                })
         }));
         Ok(())
     }
