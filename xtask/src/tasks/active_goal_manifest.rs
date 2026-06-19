@@ -16,7 +16,7 @@ const EXPECTED_LANES: &[&str] = &["trust", "substrate", "reliability"];
 const ALLOWED_WORK_ITEM_STATUSES: &[&str] =
     &["active", "ready", "planned", "completed", "blocked", "deferred"];
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Eq, PartialEq)]
 struct ManifestStats {
     path_references: usize,
     proof_commands: usize,
@@ -56,6 +56,19 @@ fn validate(root: &Path) -> Result<ManifestStats> {
         bail!("{ACTIVE_GOAL_PATH}: expected TOML table");
     };
 
+    let (stats, violations) = validate_manifest_table(root, table);
+    if !violations.is_empty() {
+        eprintln!("active goal manifest violations:");
+        for violation in &violations {
+            eprintln!("  - {violation}");
+        }
+        bail!("active goal manifest check failed with {} violation(s)", violations.len());
+    }
+
+    Ok(stats)
+}
+
+fn validate_manifest_table(root: &Path, table: &Table) -> (ManifestStats, Vec<String>) {
     let mut stats = ManifestStats::default();
     let mut violations = Vec::new();
 
@@ -66,15 +79,7 @@ fn validate(root: &Path) -> Result<ManifestStats> {
     validate_next_queues(table, &lanes, &mut violations);
     validate_work_items(root, table, &lanes, &mut stats, &mut violations);
 
-    if !violations.is_empty() {
-        eprintln!("active goal manifest violations:");
-        for violation in &violations {
-            eprintln!("  - {violation}");
-        }
-        bail!("active goal manifest check failed with {} violation(s)", violations.len());
-    }
-
-    Ok(stats)
+    (stats, violations)
 }
 
 fn validate_top_level(
@@ -457,4 +462,105 @@ fn require_non_empty_string(doc: &str, table: &Table, field: &str, violations: &
 
 fn string_field<'a>(table: &'a Table, field: &str) -> Option<&'a str> {
     table.get(field).and_then(Value::as_str)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn active_goal_manifest_accepts_current_contract() -> Result<()> {
+        let stats = validate(&project_root()?)?;
+
+        assert_eq!(stats.repo, "perl-lsp-swarm");
+        assert_eq!(stats.lane, "real_perl_editor_trust_v1");
+        assert_eq!(stats.lanes, 3);
+        assert_eq!(stats.active_work_items, 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn active_goal_manifest_reports_non_rtk_proof_commands() -> Result<()> {
+        let mut table = Table::new();
+        table.insert(
+            "commands".to_owned(),
+            Value::Array(vec![Value::String("cargo test -p xtask".to_owned())]),
+        );
+        let mut stats = ManifestStats::default();
+        let mut violations = Vec::new();
+
+        validate_optional_command_array(
+            ".perl-lsp/goals/active.toml: work_item[0]",
+            &table,
+            "commands",
+            &mut stats,
+            &mut violations,
+        );
+
+        assert_eq!(stats.proof_commands, 1);
+        assert_eq!(
+            violations,
+            vec![
+                ".perl-lsp/goals/active.toml: work_item[0]: commands[0] must start with \"rtk \""
+                    .to_owned()
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn active_goal_manifest_rejects_non_repo_relative_paths() -> Result<()> {
+        let root = project_root()?;
+        let mut stats = ManifestStats::default();
+        let mut violations = Vec::new();
+
+        validate_relative_existing_path(
+            &root,
+            ACTIVE_GOAL_PATH,
+            "proposal",
+            "C:/tmp/proposal.md",
+            &mut stats,
+            &mut violations,
+        );
+
+        assert_eq!(
+            violations,
+            vec![
+                ".perl-lsp/goals/active.toml: proposal must be a repo-relative slash path: C:/tmp/proposal.md"
+                    .to_owned()
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn active_goal_manifest_requires_declared_lane_and_active_work() -> Result<()> {
+        let root = project_root()?;
+        let mut table = Table::new();
+        let mut work_item = Table::new();
+        work_item.insert("id".to_owned(), Value::String("wi-1".to_owned()));
+        work_item.insert("status".to_owned(), Value::String("completed".to_owned()));
+        work_item.insert("lane".to_owned(), Value::String("unknown".to_owned()));
+        work_item.insert("claim_boundary".to_owned(), Value::String("fixture".to_owned()));
+        table.insert("work_item".to_owned(), Value::Array(vec![Value::Table(work_item)]));
+        let lanes = BTreeSet::from(["trust".to_owned()]);
+        let mut stats = ManifestStats::default();
+        let mut violations = Vec::new();
+
+        validate_work_items(&root, &table, &lanes, &mut stats, &mut violations);
+
+        assert_eq!(
+            violations,
+            vec![
+                ".perl-lsp/goals/active.toml: work_item[0]: lane \"unknown\" is not declared in [[lanes]]"
+                    .to_owned(),
+                ".perl-lsp/goals/active.toml: at least one work_item must be active".to_owned(),
+            ]
+        );
+
+        Ok(())
+    }
 }

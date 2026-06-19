@@ -206,6 +206,7 @@ fn coverage_workflow_blocks_patch_coverage_and_requires_receipts() {
         "cargo test -p xtask --bin xtask ci_route --locked",
         "cargo test -p xtask --bin xtask workflow_policy_lint --locked",
         "cargo test -p xtask --bin xtask allocation_tracker --locked",
+        "cargo test -p xtask --bin xtask active_goal_manifest --locked",
         "cargo test -p xtask --bin xtask file_policy --locked",
         "cargo test -p xtask --bin xtask ripr --locked",
         "cargo test -p xtask --bin xtask inline_completion_quality --locked",
