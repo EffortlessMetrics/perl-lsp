@@ -1727,6 +1727,10 @@ impl LspServer {
         if let Some(params) = params {
             if let Some(event) = params.get("event") {
                 let change = extract_workspace_folder_change(event);
+                if change.added.is_empty() && change.removed.is_empty() {
+                    tracing::debug!("Ignoring empty workspace folder change notification");
+                    return Ok(());
+                }
 
                 if !change.added.is_empty() {
                     let mut workspace_folders = self.workspace_folders.lock();
@@ -2586,6 +2590,35 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(server.pending_workspace_configuration_requests.lock().is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn did_change_workspace_folders_empty_event_is_noop() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let server = LspServer::new();
+        let request_id =
+            crate::runtime::types::ServerRequestId::new(8).ok_or("valid request id")?;
+        server.pending_workspace_configuration_requests.lock().insert(
+            request_id,
+            crate::runtime::PendingWorkspaceConfigurationRequest {
+                folder_uris: vec!["file:///tmp/folder-a".to_string()],
+                includes_global_item: true,
+                created_at: std::time::Instant::now(),
+            },
+        );
+        let before_invocations = server.workspace_indexing_invocation_count();
+
+        let result = server.handle_did_change_workspace_folders(Some(json!({
+            "event": {
+                "added": [],
+                "removed": []
+            }
+        })));
+
+        assert!(result.is_ok());
+        assert_eq!(server.pending_workspace_configuration_requests.lock().len(), 1);
+        assert_eq!(server.workspace_indexing_invocation_count(), before_invocations);
         Ok(())
     }
 

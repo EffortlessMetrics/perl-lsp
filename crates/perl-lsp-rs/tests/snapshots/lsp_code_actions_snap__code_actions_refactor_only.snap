@@ -4,6 +4,14 @@ expression: normalized
 ---
 - has_command: false
   has_edit: true
+  kind: refactor.extract
+  title: "Extract 'open(my $fh, '<', 'data.txt')' to variable"
+- has_command: false
+  has_edit: true
+  kind: refactor.extract
+  title: "Extract 'open(my $fh, '<', 'data.txt')' to variable"
+- has_command: false
+  has_edit: true
   kind: refactor.rewrite
   title: "Add error checking to 'open'"
 - has_command: false

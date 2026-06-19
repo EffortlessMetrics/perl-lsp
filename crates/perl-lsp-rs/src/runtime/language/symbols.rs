@@ -143,10 +143,12 @@ impl LspServer {
                     let total_lines = doc.text.lines().count();
 
                     // Add fold for data section body if it exists
-                    if marker_line + 1 < total_lines {
+                    let start_line = marker_line + 1;
+                    let end_line = total_lines.saturating_sub(1);
+                    if end_line > start_line {
                         lsp_ranges.push(json!({
-                            "startLine": marker_line + 1,
-                            "endLine": total_lines - 1,
+                            "startLine": start_line,
+                            "endLine": end_line,
                             "kind": "comment"
                         }));
                     }
@@ -161,7 +163,7 @@ impl LspServer {
                     let (end_line, _) =
                         self.offset_to_pos16(doc, range.end_offset.saturating_sub(1));
 
-                    if start_line <= end_line {
+                    if end_line > start_line {
                         lsp_ranges.push(json!({
                             "startLine": start_line,
                             "endLine": end_line,
@@ -180,11 +182,12 @@ impl LspServer {
                         // Calculate actual line numbers from document content
                         let start_line = offset_to_line(&doc.text, range.start_offset);
                         let end_line = offset_to_line(&doc.text, range.end_offset);
+                        let lsp_end_line = end_line.saturating_sub(1);
 
-                        if end_line > start_line {
+                        if lsp_end_line > start_line {
                             let mut lsp_range = json!({
                                 "startLine": start_line,
-                                "endLine": end_line - 1,  // LSP folding ranges are inclusive
+                                "endLine": lsp_end_line,  // LSP folding ranges are inclusive
                             });
 
                             if let Some(ref kind) = range.kind {

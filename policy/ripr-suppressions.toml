@@ -11,7 +11,7 @@ schema_version = 1
 policy = "ripr-suppressions"
 owner = "EffortlessMetrics"
 status = "advisory"
-updated = "2026-06-01"
+updated = "2026-06-19"
 
 # -----------------------------------------------------------------------------
 # Generated status docs: validated through status-generation checks, not
@@ -55,6 +55,24 @@ issue = "#8197"
 reason = "Editor UX receipt tests are proof inputs validated by cargo/UX gates and fixture inventory; diff-scoped RIPR should not block on oracle gaps inside newly added receipt tests."
 created = "2026-06-01"
 review_after = "2026-07-01"
+expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
+# LSP cancellation performance receipt: test harness timing policy, not
+# production behavior. The AC12 test intentionally enforces aggregate percentile
+# thresholds rather than failing individual samples that can include scheduler
+# preemption.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-lsp-cancellation-performance-receipt"
+kind = "test_receipt_surface"
+paths = ["crates/perl-lsp-rs/tests/lsp_cancellation_performance_tests.rs"]
+classification = ["weakly_exposed"]
+owner = "lsp-lane"
+issue = "#1550"
+reason = "Issue #1550 keeps the AC12 cancellation latency contract in aggregate average/p95/p99/p99.9 assertions while removing a per-sample 500us wall-clock assertion that can fail under scheduler preemption. RIPR 0.9.0 treats that test-receipt assertion change as weakly_exposed production risk even though the surface is an integration performance receipt and the contract remains covered by test_cancellation_check_latency_performance_ac12."
+created = "2026-06-18"
+review_after = "2026-07-18"
 expires = "2026-09-30"
 
 # -----------------------------------------------------------------------------
@@ -219,6 +237,38 @@ issue = "EffortlessMetrics/ripr#1429"
 reason = "phase_block_description match arms (BEGIN/END/INIT/CHECK/UNITCHECK/wildcard) are ripr#1429-class no_static_path seams: RIPR cannot trace activation from string-literal call sites through the str match dispatch. All arms are covered by dedicated unit tests in hover_tests.rs with exact (strong-oracle) string assertions. Suppression is minimal (single production file, only hover_cards.rs). Remove when ripr#1429 is fixed upstream."
 created = "2026-06-11"
 review_after = "2026-07-11"
+expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
+# Live compiler hover preservation guard: ripr#1429-class feature-gated
+# propagation path.
+#
+# PR #1551 preserves the richer legacy Moo/Moose accessor hover card when the
+# live compiler path can only produce a generic generated-symbol card. The guard
+# is covered by direct unit tests in live_compiler_hover.rs:
+#   - preserves_richer_moo_accessor_hover_over_generated_compiler_card
+#   - uses_compiler_hover_when_it_keeps_accessor_attribution
+# and by the targeted e2e regression:
+#   - moose_hover_completion_and_definition_include_attribute_metadata
+#
+# RIPR cannot statically trace the feature-gated path through
+# workspace_index.with_semantic_queries_for_uri -> hover_cutover ->
+# should_preserve_legacy_hover, and reports reachable_unrevealed /
+# weakly_exposed findings on the guard despite the direct and e2e oracles.
+# This is the same ripr#1429 propagation-path class as the neighboring hover
+# suppressions. Suppression is narrow: single production file, issue #1550.
+# Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-live-compiler-hover-preservation-guard"
+kind = "predicate_infection_untraceable"
+paths = ["crates/perl-lsp-rs/src/runtime/language/hover/live_compiler_hover.rs"]
+classification = ["weakly_exposed", "reachable_unrevealed"]
+owner = "lsp-lane"
+issue = "#1550"
+reason = "PR #1551 adds a live compiler hover guard that preserves the richer legacy Moo/Moose accessor hover card when compiler facts would return only a generic generated-symbol card. Direct unit tests cover both preserve and use-compiler branches, and moose_hover_completion_and_definition_include_attribute_metadata covers the e2e regression. RIPR cannot statically trace the feature-gated workspace_index.with_semantic_queries_for_uri -> hover_cutover -> should_preserve_legacy_hover propagation path, so this is a ripr#1429-class static tracing limitation. Suppression is narrow: single production file, issue #1550. Remove when ripr#1429 is fixed upstream or targeted mutation is scheduled."
+created = "2026-06-19"
+review_after = "2026-07-19"
 expires = "2026-09-30"
 
 # -----------------------------------------------------------------------------

@@ -420,7 +420,7 @@ impl LspServer {
         use crate::protocol::req_range;
         if let Some(params) = params {
             let uri = req_uri(&params)?;
-            let ((start_line, _start_char), (end_line, _end_char)) = req_range(&params)?;
+            let ((start_line, start_char), (end_line, end_char)) = req_range(&params)?;
 
             tracing::debug!(uri, start_line, end_line, "Getting semantic tokens for range");
 
@@ -431,8 +431,9 @@ impl LspServer {
                         crate::semantic_tokens::collect_semantic_tokens(ast, &doc.text, &|off| {
                             self.offset_to_pos16(doc, off)
                         });
-                    let encoded =
-                        filter_encoded_semantic_tokens_by_line(all_tokens, start_line, end_line);
+                    let encoded = filter_encoded_semantic_tokens_by_range(
+                        all_tokens, start_line, start_char, end_line, end_char,
+                    );
 
                     tracing::debug!(count = encoded.len() / 5, "Found semantic tokens in range");
 
@@ -449,10 +450,12 @@ impl LspServer {
     }
 }
 
-fn filter_encoded_semantic_tokens_by_line(
+fn filter_encoded_semantic_tokens_by_range(
     tokens: Vec<crate::semantic_tokens::EncodedToken>,
     start_line: u32,
+    start_char: u32,
     end_line: u32,
+    end_char: u32,
 ) -> Vec<u32> {
     let mut absolute_tokens = Vec::new();
     let mut line = 0u32;
@@ -467,7 +470,11 @@ fn filter_encoded_semantic_tokens_by_line(
             start = delta_start;
         }
 
-        if line >= start_line && line <= end_line {
+        let starts_after_range_start =
+            line > start_line || (line == start_line && start >= start_char);
+        let starts_before_range_end = line < end_line || (line == end_line && start < end_char);
+
+        if starts_after_range_start && starts_before_range_end {
             absolute_tokens.push((line, start, length, token_type, modifiers));
         }
     }
@@ -498,20 +505,24 @@ mod tests {
     }
 
     #[test]
-    fn filter_encoded_semantic_tokens_by_line_reencodes_retained_range()
+    fn filter_encoded_semantic_tokens_by_range_reencodes_retained_range()
     -> Result<(), Box<dyn std::error::Error>> {
         let tokens: Vec<crate::semantic_tokens::EncodedToken> =
             vec![[0, 0, 5, 1, 0], [1, 2, 3, 2, 0], [0, 5, 4, 3, 1], [1, 1, 2, 4, 0]];
 
         assert_eq!(
-            filter_encoded_semantic_tokens_by_line(tokens.clone(), 1, 1),
+            filter_encoded_semantic_tokens_by_range(tokens.clone(), 1, 0, 2, 0),
             vec![1, 2, 3, 2, 0, 0, 5, 4, 3, 1]
         );
         assert_eq!(
-            filter_encoded_semantic_tokens_by_line(tokens.clone(), 1, 2),
+            filter_encoded_semantic_tokens_by_range(tokens.clone(), 1, 0, 3, 0),
             vec![1, 2, 3, 2, 0, 0, 5, 4, 3, 1, 1, 1, 2, 4, 0]
         );
-        assert!(filter_encoded_semantic_tokens_by_line(tokens, 3, 4).is_empty());
+        assert_eq!(
+            filter_encoded_semantic_tokens_by_range(tokens.clone(), 1, 5, 2, 0),
+            vec![1, 7, 4, 3, 1]
+        );
+        assert!(filter_encoded_semantic_tokens_by_range(tokens, 3, 0, 4, 0).is_empty());
 
         Ok(())
     }

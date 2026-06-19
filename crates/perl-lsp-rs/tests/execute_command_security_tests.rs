@@ -65,8 +65,13 @@ fn test_run_test_sub_file_path_injection() -> Result<(), Box<dyn Error>> {
 #[test]
 fn test_run_test_sub_subname_injection() -> Result<(), Box<dyn Error>> {
     let temp_dir = TempDir::new()?;
+    let config = match config_with_perl5lib(false) {
+        Some(config) => config,
+        None => return Ok(()),
+    };
     let provider =
-        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()])
+            .with_workspace_config(config);
 
     // Create a minimal test file with a marker subroutine
     let test_file = temp_dir.path().join("security_test_sub.pl");
@@ -208,8 +213,13 @@ fn test_valid_file_execution() -> Result<(), Box<dyn Error>> {
     let file_path = temp_dir.path().join("test_valid.pl");
     fs::write(&file_path, "print 'VALID_OUTPUT';")?;
 
+    let config = match config_with_perl5lib(false) {
+        Some(config) => config,
+        None => return Ok(()),
+    };
     let provider =
-        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()])
+            .with_workspace_config(config);
 
     let result = provider.execute_command(
         "perl.runFile",

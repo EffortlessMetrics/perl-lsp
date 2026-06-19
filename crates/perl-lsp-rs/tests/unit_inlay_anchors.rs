@@ -28,7 +28,7 @@ mod tests {
         // initialize (min caps; advertise pull diags so server won't publish)
         let _ = server.handle_request(serde_json::from_value(json!({
             "jsonrpc":"2.0","id":1,"method":"initialize","params":{
-                "capabilities":{"textDocument":{"diagnostic":{}}}
+                "capabilities":{"textDocument":{"diagnostic":{},"inlayHint":{}}}
             }
         }))?);
         let _ = server.handle_request(serde_json::from_value(
@@ -128,8 +128,8 @@ open(FH, "<", "file.txt");
         // token position depending on how the parser reports the arg location.
         // push(@arr  → array: at "(" (column 4)
         assert_unique_label_at(text, &hints, "array:", 1, "(")?;
-        // substr($s  → expr: at "(" (column 6)
-        assert_unique_label_at(text, &hints, "expr:", 2, "(")?;
+        // substr($s  → expr: at "$s" (column 7)
+        assert_unique_label_at(text, &hints, "expr:", 2, "$s")?;
         // open(FH    → filehandle: at "(" (column 4)
         assert_unique_label_at(text, &hints, "filehandle:", 3, "(")?;
         Ok(())

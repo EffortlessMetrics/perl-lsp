@@ -1,56 +1,73 @@
 use std::io::{BufRead, BufReader, Read, Write};
-use std::net::TcpStream;
-use std::process::{Command, Stdio};
+use std::net::{TcpListener, TcpStream};
+use std::process::{Child, Command, Stdio};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+struct ChildGuard {
+    child: Child,
+}
+
+impl ChildGuard {
+    fn new(child: Child) -> Self {
+        Self { child }
+    }
+}
+
+impl Drop for ChildGuard {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+fn reserve_local_port() -> Result<u16, Box<dyn std::error::Error>> {
+    let listener = TcpListener::bind(("127.0.0.1", 0))?;
+    let port = listener.local_addr()?.port();
+    drop(listener);
+    Ok(port)
+}
+
+fn connect_with_deadline(port: u16) -> Result<TcpStream, Box<dyn std::error::Error>> {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut last_error = None;
+
+    while Instant::now() < deadline {
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(stream) => return Ok(stream),
+            Err(error) => {
+                last_error = Some(error);
+                thread::sleep(Duration::from_millis(50));
+            }
+        }
+    }
+
+    Err(std::io::Error::new(
+        std::io::ErrorKind::TimedOut,
+        format!("timed out waiting for perl-lsp socket on 127.0.0.1:{port}: {last_error:?}"),
+    )
+    .into())
+}
 
 /// Integration test for TCP socket mode.
 /// Spawns the LSP server in socket mode, connects, and verifies the initialize handshake.
 #[test]
 fn test_socket_connection() -> Result<(), Box<dyn std::error::Error>> {
     let bin_path = env!("CARGO_BIN_EXE_perl-lsp");
+    let port = reserve_local_port()?;
 
-    // Start the server in socket mode on a random port (port 0)
-    let mut child = Command::new(bin_path)
+    let child = Command::new(bin_path)
         .arg("--socket")
         .arg("--port")
-        .arg("0")
-        .stderr(Stdio::piped())
-        .stdout(Stdio::piped())
+        .arg(port.to_string())
+        .env("PERL_LSP_QUIET", "1")
+        .stderr(Stdio::null())
+        .stdout(Stdio::null())
         .spawn()?;
-
-    let stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
-    let reader = BufReader::new(stderr);
-
-    // Read stderr to find the port
-    let mut lines = reader.lines();
-    let mut port = 0;
-    for line_res in lines.by_ref() {
-        let line = line_res?;
-        println!("Server startup: {}", line); // Debug output
-        if line.contains("Perl LSP listening on") {
-            // Parse port from "Perl LSP listening on 127.0.0.1:12345"
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if let Some(addr) = parts.last() {
-                if let Some(port_str) = addr.split(':').next_back() {
-                    port = port_str.parse()?;
-                    break;
-                }
-            }
-        }
-    }
-
-    assert_ne!(port, 0, "Failed to determine server port");
-
-    // Spawn thread to continue reading stderr
-    thread::spawn(move || {
-        for l in lines.map_while(Result::ok) {
-            println!("SERVER LOG: {}", l);
-        }
-    });
+    let child = ChildGuard::new(child);
 
     // Connect to the server with timeout
-    let stream = TcpStream::connect(("127.0.0.1", port))?;
+    let stream = connect_with_deadline(port)?;
     stream.set_read_timeout(Some(Duration::from_secs(5)))?;
     stream.set_write_timeout(Some(Duration::from_secs(5)))?;
 
@@ -105,7 +122,7 @@ fn test_socket_connection() -> Result<(), Box<dyn std::error::Error>> {
 
     // Give server time to exit gracefully before force-killing
     std::thread::sleep(std::time::Duration::from_millis(100));
-    let _ = child.kill();
+    drop(child);
 
     Ok(())
 }

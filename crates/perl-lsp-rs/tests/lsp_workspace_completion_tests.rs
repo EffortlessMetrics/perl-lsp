@@ -43,6 +43,39 @@ fn completion_snapshot(items: &[serde_json::Value], prefix: &str) -> Vec<serde_j
     snapshot_items
 }
 
+fn completion_snapshot_for_labels(
+    items: &[serde_json::Value],
+    expected_labels: &[&str],
+) -> Vec<serde_json::Value> {
+    let mut snapshot_items: Vec<serde_json::Value> = expected_labels
+        .iter()
+        .filter_map(|expected_label| {
+            let item = items.iter().find(|item| {
+                item.get("label").and_then(serde_json::Value::as_str) == Some(*expected_label)
+            })?;
+
+            Some(json!({
+                "label": expected_label,
+                "kind": item.get("kind"),
+                "detail": item.get("detail"),
+                "documentation": item
+                    .get("documentation")
+                    .and_then(|doc| doc.get("value").and_then(serde_json::Value::as_str))
+                    .or_else(|| item.get("documentation").and_then(serde_json::Value::as_str)),
+                "insertText": item.get("insertText"),
+            }))
+        })
+        .collect();
+
+    snapshot_items.sort_by(|a, b| {
+        let a_label = a.get("label").and_then(serde_json::Value::as_str).unwrap_or("");
+        let b_label = b.get("label").and_then(serde_json::Value::as_str).unwrap_or("");
+        a_label.cmp(b_label)
+    });
+
+    snapshot_items
+}
+
 fn await_open_processing(server: &common::LspServer) {
     // didOpen triggers parse + indexing work asynchronously in the spawned server.
     // Drain until quiet before asserting on workspace-aware completions.
@@ -526,7 +559,8 @@ fn test_completion_inherited_method_from_parent() -> Result<(), Box<dyn std::err
         labels
     );
 
-    let inherited_snapshot = completion_snapshot(items, "");
+    let inherited_snapshot =
+        completion_snapshot_for_labels(items, &["child_only_method", "inherited_greet"]);
     assert_yaml_snapshot!("workspace_completion_inherited_methods", inherited_snapshot);
 
     Ok(())

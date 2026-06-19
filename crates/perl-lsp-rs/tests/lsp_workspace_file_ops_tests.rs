@@ -951,6 +951,8 @@ fn test_will_delete_files_warns_for_cross_file_symbol_usage_without_module_impor
         }
     });
     let _ = make_request(&server, "textDocument/didOpen", Some(utility_module));
+    let _ = wait_for_method(&output, "perl-lsp/index-ready");
+    output.clear();
 
     let consumer_script = json!({
         "textDocument": {
@@ -961,6 +963,7 @@ fn test_will_delete_files_warns_for_cross_file_symbol_usage_without_module_impor
         }
     });
     let _ = make_request(&server, "textDocument/didOpen", Some(consumer_script));
+    let _ = wait_for_method(&output, "perl-lsp/index-ready");
     output.clear();
 
     let params = json!({

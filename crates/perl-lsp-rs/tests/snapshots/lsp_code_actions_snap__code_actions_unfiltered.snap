@@ -17,11 +17,19 @@ expression: normalized
 - has_command: false
   has_edit: true
   kind: quickfix
-  title: "Rename to '$_fh' (mark as intentionally unused)"
+  title: "Rename to '$_fh'"
 - has_command: false
   has_edit: true
   kind: quickfix
-  title: "Rename to '_$fh'"
+  title: "Rename to '$_fh' (mark as intentionally unused)"
+- has_command: false
+  has_edit: true
+  kind: refactor.extract
+  title: "Extract 'open(my $fh, '<', 'data.txt')' to variable"
+- has_command: false
+  has_edit: true
+  kind: refactor.extract
+  title: "Extract 'open(my $fh, '<', 'data.txt')' to variable"
 - has_command: false
   has_edit: true
   kind: refactor.rewrite

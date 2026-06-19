@@ -65,11 +65,26 @@ impl LspServer {
                 HoverCutoverResult::Exact(explanation)
                 | HoverCutoverResult::Ambiguous(explanation)
                 | HoverCutoverResult::DynamicBoundary(explanation) => {
+                    if Self::should_preserve_legacy_hover(
+                        legacy_text.as_deref(),
+                        &explanation.markdown,
+                    ) {
+                        return None;
+                    }
                     Some(Self::hover_markdown_value(explanation.markdown))
                 }
                 HoverCutoverResult::LegacyFallback(_) => None,
             }
         }
+    }
+
+    fn should_preserve_legacy_hover(legacy_text: Option<&str>, compiler_markdown: &str) -> bool {
+        let Some(legacy_text) = legacy_text else {
+            return false;
+        };
+
+        legacy_text.contains("**Moo/Moose Attribute Accessor**")
+            && !compiler_markdown.contains("Moo/Moose Attribute Accessor")
     }
 
     fn hover_outcome_uses_live_compiler_facts(outcome: &HoverCutoverOutcome) -> bool {
@@ -98,5 +113,37 @@ impl LspServer {
                 "value": markdown,
             },
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn preserves_richer_moo_accessor_hover_over_generated_compiler_card()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let legacy = "**Moo/Moose Attribute Accessor**\n\n**Attribute**: `email`\n**Type**: `Str`";
+        let compiler =
+            "**Symbol** `email` (generated)\n\nSource: framework adapter / framework synthesis";
+
+        if !LspServer::should_preserve_legacy_hover(Some(legacy), compiler) {
+            return Err("expected rich Moo/Moose accessor hover to be preserved".into());
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn uses_compiler_hover_when_it_keeps_accessor_attribution()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let legacy = "**Moo/Moose Attribute Accessor**\n\n**Attribute**: `email`";
+        let compiler = "**Moo/Moose Attribute Accessor**\n\n**Attribute**: `email`";
+
+        if LspServer::should_preserve_legacy_hover(Some(legacy), compiler) {
+            return Err("expected compiler hover with accessor attribution to be usable".into());
+        }
+
+        Ok(())
     }
 }

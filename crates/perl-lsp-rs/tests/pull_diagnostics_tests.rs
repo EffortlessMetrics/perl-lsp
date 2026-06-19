@@ -23,6 +23,13 @@ fn has_code(diag: &lsp_types::Diagnostic, code: &str) -> bool {
     matches!(&diag.code, Some(NumberOrString::String(s)) if s == code)
 }
 
+fn has_deterministic_source(diag: &lsp_types::Diagnostic) -> bool {
+    matches!(
+        diag.source.as_deref(),
+        Some("perl-lsp") | Some("perl-lsp-critic") | Some("perlcritic")
+    )
+}
+
 #[test]
 fn pull_diagnostics_unused_variable_emits_pl102() -> Result<(), Box<dyn std::error::Error>> {
     let provider = PullDiagnosticsProvider::new();
@@ -182,10 +189,30 @@ fn pull_diagnostics_full_then_unchanged() -> Result<(), Box<dyn std::error::Erro
         DocumentDiagnosticReport::Full(full) => {
             let report = &full.full_document_diagnostic_report;
             assert!(!report.items.is_empty(), "expected diagnostics for parse error");
-            assert!(
-                report.items.iter().all(|item| item.source.as_deref() == Some("perl-lsp")),
-                "expected deterministic diagnostic source"
-            );
+            let unexpected_sources: Vec<String> = report
+                .items
+                .iter()
+                .filter(|item| !has_deterministic_source(item))
+                .map(|item| format!("{:?}", item.source))
+                .collect();
+            if !unexpected_sources.is_empty() {
+                return Err(format!(
+                    "expected deterministic diagnostic source, got {unexpected_sources:?}"
+                )
+                .into());
+            }
+            let parser_diagnostic = report
+                .items
+                .iter()
+                .find(|item| has_code(item, "PL001"))
+                .ok_or("expected PL001 parse diagnostic")?;
+            if parser_diagnostic.source.as_deref() != Some("perl-lsp") {
+                return Err(format!(
+                    "expected PL001 source perl-lsp, got {:?}",
+                    parser_diagnostic.source
+                )
+                .into());
+            }
             report.result_id.clone().ok_or("result id missing")?
         }
         DocumentDiagnosticReport::Unchanged(_) => {

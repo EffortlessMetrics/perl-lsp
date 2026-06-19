@@ -32,6 +32,7 @@ caps:
   - lsp.semantic_tokens
   - lsp.signature_help
   - lsp.type_definition
+  - lsp.type_hierarchy
   - lsp.workspace_symbol
 catalog:
   - dap.breakpoint_locations
@@ -60,18 +61,23 @@ catalog:
   - dap.watchpoints
   - experimental.perlInlineCompletionStream
   - lsp.apply_edit
+  - lsp.apply_edit_metadata
   - lsp.call_hierarchy
   - lsp.cancel_request
   - lsp.client_register_capability
   - lsp.client_unregister_capability
   - lsp.code_action
+  - lsp.code_action_documentation
   - lsp.code_action_resolve
   - lsp.code_lens
   - lsp.code_lens_refresh
   - lsp.code_lens_resolve
+  - lsp.code_lens_resolve_support_properties
   - lsp.color_presentation
   - lsp.completion
   - lsp.completion_item_resolve
+  - lsp.completion_list_apply_kind
+  - lsp.completion_list_item_defaults_data
   - lsp.configuration
   - lsp.declaration
   - lsp.definition
@@ -149,6 +155,7 @@ catalog:
   - lsp.work_done_progress_create
   - lsp.workspace_diagnostics
   - lsp.workspace_edit
+  - lsp.workspace_edit_snippet_text_edit
   - lsp.workspace_folders
   - lsp.workspace_symbol
   - lsp.workspace_symbol_resolve
