@@ -2725,6 +2725,235 @@ mod tests {
     }
 
     #[test]
+    fn gate_policy_deserializes_gate_defaults() -> color_eyre::eyre::Result<()> {
+        let yaml = r#"
+schema_version: 1
+global:
+  default_timeout_seconds: 30
+tiers: {}
+gates:
+  - name: fmt
+    tier: pr_fast
+    description: format
+    command: cargo fmt --check
+"#;
+
+        let policy: GatePolicy = serde_yaml_ng::from_str(yaml)?;
+        let gate = policy.gates.first().ok_or_else(|| color_eyre::eyre::eyre!("missing gate"))?;
+
+        assert_eq!(policy.schema_version, 1);
+        assert_eq!(policy.global.default_timeout_seconds, 30);
+        assert_eq!(policy.global.artifact_retention_days, 0);
+        assert_eq!(policy.global.default_retry_count, 0);
+        assert!(policy.global.environment.is_empty());
+        assert!(policy.global.toolchain.is_none());
+        assert!(policy.flake_policy.is_none());
+        assert!(policy.audit.is_none());
+
+        assert_eq!(gate.name, "fmt");
+        assert!(gate.required);
+        assert_eq!(gate.timeout_seconds, 300);
+        assert_eq!(gate.retry_count, 0);
+        assert!(gate.budgets.is_none());
+        assert!(!gate.quarantine);
+        assert!(gate.tags.is_empty());
+        assert!(gate.artifacts.is_empty());
+        assert!(gate.matrix.is_none());
+        assert!(gate.planning.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn gate_policy_deserializes_structured_policy_fields() -> color_eyre::eyre::Result<()> {
+        let yaml = r##"
+schema_version: 1
+global:
+  default_timeout_seconds: 45
+  artifact_retention_days: 5
+  default_retry_count: 2
+  environment:
+    RUST_LOG: debug
+  toolchain:
+    msrv: "1.95.0"
+    components:
+      - rustfmt
+      - clippy
+tiers:
+  pr_fast:
+    description: fast PR gates
+    target_duration_seconds: 60
+    enforcement: required
+    trigger:
+      - pull_request
+gates:
+  - name: clippy_scoped
+    tier: pr_fast
+    description: scoped clippy
+    required: false
+    command: cargo clippy --locked
+    timeout_seconds: 90
+    retry_count: 1
+    budgets:
+      max_duration_ms: 1234
+      max_warnings: 7
+    quarantine: true
+    tags:
+      - rust
+      - lint
+    artifacts:
+      - target/receipts/clippy.json
+    matrix:
+      os:
+        - ubuntu-latest
+    planning:
+      role: rust_package_scoped
+      packages:
+        - xtask
+flake_policy:
+  max_retries: 2
+  auto_quarantine_threshold: 3
+  quarantine_duration_days: 14
+  quarantined_gates:
+    - gate: clippy_scoped
+      reason: intermittent runner failure
+      quarantined_at: "2026-06-19"
+      issue: "#123"
+  known_flaky_patterns:
+    - pattern: timeout
+      reason: slow host
+audit:
+  receipt_path: target/receipts/gates.json
+  log_directory: target/logs
+  retention_days: 10
+"##;
+
+        let policy: GatePolicy = serde_yaml_ng::from_str(yaml)?;
+        let toolchain = policy
+            .global
+            .toolchain
+            .as_ref()
+            .ok_or_else(|| color_eyre::eyre::eyre!("missing toolchain"))?;
+        let tier = policy
+            .tiers
+            .get("pr_fast")
+            .ok_or_else(|| color_eyre::eyre::eyre!("missing pr_fast tier"))?;
+        let gate = policy.gates.first().ok_or_else(|| color_eyre::eyre::eyre!("missing gate"))?;
+        let budgets =
+            gate.budgets.as_ref().ok_or_else(|| color_eyre::eyre::eyre!("missing budgets"))?;
+        let planning =
+            gate.planning.as_ref().ok_or_else(|| color_eyre::eyre::eyre!("missing planning"))?;
+        let flake_policy = policy
+            .flake_policy
+            .as_ref()
+            .ok_or_else(|| color_eyre::eyre::eyre!("missing flake policy"))?;
+        let quarantine = flake_policy
+            .quarantined_gates
+            .first()
+            .ok_or_else(|| color_eyre::eyre::eyre!("missing quarantined gate"))?;
+        let flaky = flake_policy
+            .known_flaky_patterns
+            .first()
+            .ok_or_else(|| color_eyre::eyre::eyre!("missing flaky pattern"))?;
+        let audit =
+            policy.audit.as_ref().ok_or_else(|| color_eyre::eyre::eyre!("missing audit"))?;
+
+        assert_eq!(policy.global.artifact_retention_days, 5);
+        assert_eq!(policy.global.default_retry_count, 2);
+        assert_eq!(policy.global.environment.get("RUST_LOG").map(String::as_str), Some("debug"));
+        assert_eq!(toolchain.msrv.as_deref(), Some("1.95.0"));
+        assert_eq!(toolchain.components, vec!["rustfmt", "clippy"]);
+
+        assert_eq!(tier.description, "fast PR gates");
+        assert_eq!(tier.target_duration_seconds, 60);
+        assert_eq!(tier.enforcement, "required");
+        assert_eq!(tier.trigger.len(), 1);
+
+        assert_eq!(gate.name, "clippy_scoped");
+        assert!(!gate.required);
+        assert_eq!(gate.timeout_seconds, 90);
+        assert_eq!(gate.retry_count, 1);
+        assert_eq!(budgets.max_duration_ms, Some(1234));
+        assert_eq!(budgets.max_warnings, Some(7));
+        assert!(gate.quarantine);
+        assert_eq!(gate.tags, vec!["rust", "lint"]);
+        assert_eq!(gate.artifacts, vec!["target/receipts/clippy.json"]);
+        assert!(gate.matrix.is_some());
+        assert_eq!(planning.role, GatePlanningRole::RustPackageScoped);
+        assert_eq!(planning.packages, vec!["xtask"]);
+
+        assert_eq!(flake_policy.max_retries, 2);
+        assert_eq!(flake_policy.auto_quarantine_threshold, 3);
+        assert_eq!(flake_policy.quarantine_duration_days, 14);
+        assert_eq!(quarantine.gate, "clippy_scoped");
+        assert_eq!(quarantine.issue.as_deref(), Some("#123"));
+        assert_eq!(flaky.pattern, "timeout");
+        assert_eq!(flaky.reason, "slow host");
+        assert_eq!(audit.receipt_path, "target/receipts/gates.json");
+        assert_eq!(audit.log_directory, "target/logs");
+        assert_eq!(audit.retention_days, 10);
+        Ok(())
+    }
+
+    #[test]
+    fn load_policy_for_inspection_reads_yaml_file() -> color_eyre::eyre::Result<()> {
+        let tmp = tempdir()?;
+        let policy_path = tmp.path().join("gate-policy.yaml");
+        fs::write(
+            &policy_path,
+            r#"
+schema_version: 1
+global:
+  default_timeout_seconds: 30
+tiers: {}
+gates:
+  - name: fmt
+    tier: pr_fast
+    description: format
+    command: cargo fmt --check
+"#,
+        )?;
+
+        let policy = load_policy_for_inspection(&policy_path)?;
+        let gate = policy.gates.first().ok_or_else(|| color_eyre::eyre::eyre!("missing gate"))?;
+
+        assert_eq!(policy.schema_version, 1);
+        assert_eq!(policy.gates.len(), 1);
+        assert_eq!(gate.name, "fmt");
+        Ok(())
+    }
+
+    #[test]
+    fn load_policy_for_inspection_reports_missing_file() -> color_eyre::eyre::Result<()> {
+        let tmp = tempdir()?;
+        let policy_path = tmp.path().join("missing-gate-policy.yaml");
+
+        let Err(error) = load_policy_for_inspection(&policy_path) else {
+            color_eyre::eyre::bail!("missing policy file should fail");
+        };
+
+        let message = error.to_string();
+        assert!(message.contains("Failed to read gate policy"));
+        assert!(message.contains("missing-gate-policy.yaml"));
+        Ok(())
+    }
+
+    #[test]
+    fn load_policy_for_inspection_reports_yaml_parse_error() -> color_eyre::eyre::Result<()> {
+        let tmp = tempdir()?;
+        let policy_path = tmp.path().join("gate-policy.yaml");
+        fs::write(&policy_path, "schema_version: [")?;
+
+        let Err(error) = load_policy_for_inspection(&policy_path) else {
+            color_eyre::eyre::bail!("malformed policy should fail");
+        };
+
+        let message = error.to_string();
+        assert!(message.contains("Failed to parse gate policy"));
+        assert!(message.contains("gate-policy.yaml"));
+        Ok(())
+    }
+
+    #[test]
     fn pr_fast_prose_only_keeps_always_on_and_skips_rust_lanes() -> color_eyre::eyre::Result<()> {
         let gates = vec![
             pr_gate("fmt", GatePlanningRole::AlwaysOn, "cargo xtask fmt --check"),
