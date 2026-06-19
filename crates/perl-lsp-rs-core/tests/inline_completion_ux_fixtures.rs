@@ -16,6 +16,7 @@ use perl_parser_core::position::{offset_to_utf16_line_col, utf16_line_col_to_off
 type TestResult = Result<(), Box<dyn Error>>;
 
 const CURSOR: &str = "<<CURSOR>>";
+const TRY_TINY_BLOCK: &str = "{\n    \n} catch {\n    \n};";
 
 struct InlineCompletionScenario {
     text: String,
@@ -80,6 +81,26 @@ struct AcceptedEditFixture {
     source: &'static str,
     expected_first: &'static str,
     expected_after: &'static str,
+}
+
+struct CompletionPackContract {
+    provider_id: &'static str,
+    insert_text: &'static str,
+    filter_text: &'static str,
+    positive: &'static [CompletionPackPositiveCase],
+    quiet: &'static [CompletionPackQuietCase],
+}
+
+struct CompletionPackPositiveCase {
+    name: &'static str,
+    source: &'static str,
+    expected_replaces: Option<&'static str>,
+    expected_after: &'static str,
+}
+
+struct CompletionPackQuietCase {
+    name: &'static str,
+    source: &'static str,
 }
 
 #[test]
@@ -269,6 +290,50 @@ fn inline_completion_fixture_corpus_returns_expected_ghost_text() -> TestResult 
     }
 
     Ok(())
+}
+
+#[test]
+fn inline_completion_fixture_corpus_defines_completion_pack_contract() -> TestResult {
+    let try_tiny = CompletionPackContract {
+        provider_id: "try_tiny_block",
+        insert_text: TRY_TINY_BLOCK,
+        filter_text: "try",
+        positive: &[CompletionPackPositiveCase {
+            name: "import_present_valid_try_keyword",
+            source: "use Try::Tiny;\ntry <<CURSOR>>",
+            expected_replaces: None,
+            expected_after: "use Try::Tiny;\ntry {\n    \n} catch {\n    \n};",
+        }],
+        quiet: &[
+            CompletionPackQuietCase { name: "import_absent", source: "try <<CURSOR>>" },
+            CompletionPackQuietCase {
+                name: "comment_context",
+                source: "use Try::Tiny;\n# try <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "string_context",
+                source: "use Try::Tiny;\nmy $text = \"try <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "pod_context",
+                source: "use Try::Tiny;\n=pod\ntry <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "near_match_token",
+                source: "use Try::Tiny;\ngettry <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "visible_symbol_conflict",
+                source: "use Try::Tiny;\nmy $try = 1;\n$try <<CURSOR>>",
+            },
+            CompletionPackQuietCase {
+                name: "parse_damage_extra_closing_paren",
+                source: "use Try::Tiny;\ntry <<CURSOR>>)",
+            },
+        ],
+    };
+
+    assert_completion_pack_contract(try_tiny)
 }
 
 #[test]
@@ -660,6 +725,95 @@ fn assert_accepted_edit(fixture: AcceptedEditFixture) -> TestResult {
             fixture.name
         )
         .into());
+    }
+
+    Ok(())
+}
+
+fn assert_completion_pack_contract(contract: CompletionPackContract) -> TestResult {
+    for case in contract.positive {
+        let scenario = InlineCompletionScenario::from_fixture(case.source)?;
+        let completions = scenario.completions();
+        let item = completions.items.iter().find(|item| item.insert_text == contract.insert_text);
+        let Some(item) = item else {
+            return Err(format!(
+                "{}:{} expected completion {}, got {:?}",
+                contract.provider_id,
+                case.name,
+                contract.insert_text,
+                completion_texts(&completions)
+            )
+            .into());
+        };
+
+        if item.filter_text.as_deref() != Some(contract.filter_text) {
+            return Err(format!(
+                "{}:{} expected filter_text {:?}, got {:?}",
+                contract.provider_id, case.name, contract.filter_text, item.filter_text
+            )
+            .into());
+        }
+
+        match (case.expected_replaces, item.range.as_ref()) {
+            (Some(expected), Some(range)) => {
+                let replaced = slice_for_range(scenario.text.as_str(), range)?;
+                if replaced != expected {
+                    return Err(format!(
+                        "{}:{} expected replacement range to cover {:?}, got {:?}",
+                        contract.provider_id, case.name, expected, replaced
+                    )
+                    .into());
+                }
+            }
+            (Some(expected), None) => {
+                return Err(format!(
+                    "{}:{} expected replacement range for {:?}",
+                    contract.provider_id, case.name, expected
+                )
+                .into());
+            }
+            (None, Some(range)) => {
+                return Err(format!(
+                    "{}:{} expected insertion-only candidate, got range {:?}",
+                    contract.provider_id, case.name, range
+                )
+                .into());
+            }
+            (None, None) => {}
+        }
+
+        let accepted = apply_inline_completion_item(&scenario, item)?;
+        if accepted != case.expected_after {
+            return Err(format!(
+                "{}:{} accepted edit produced unexpected text\nexpected:\n{}\nactual:\n{}",
+                contract.provider_id, case.name, case.expected_after, accepted
+            )
+            .into());
+        }
+
+        let before = parser_diagnostic_count(scenario.text.as_str());
+        let after = parser_diagnostic_count(accepted.as_str());
+        if after > before {
+            return Err(format!(
+                "{}:{} accepted edit increased parser diagnostics from {before} to {after}",
+                contract.provider_id, case.name
+            )
+            .into());
+        }
+    }
+
+    for case in contract.quiet {
+        let scenario = InlineCompletionScenario::from_fixture(case.source)?;
+        let completions = scenario.completions();
+        if completions.items.iter().any(|item| item.insert_text == contract.insert_text) {
+            return Err(format!(
+                "{}:{} expected pack to stay quiet, got {:?}",
+                contract.provider_id,
+                case.name,
+                completion_texts(&completions)
+            )
+            .into());
+        }
     }
 
     Ok(())

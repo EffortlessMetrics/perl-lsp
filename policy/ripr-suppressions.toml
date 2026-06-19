@@ -58,6 +58,24 @@ review_after = "2026-07-01"
 expires = "2026-09-30"
 
 # -----------------------------------------------------------------------------
+# Inline completion pack contract fixtures: executable receipt matrix, not
+# production behavior. The fixture file added for #1567 records positive and
+# quiet-path evidence for deterministic inline completion packs; RIPR 0.9.x
+# treats fixture plumbing and matrix iteration as new production seams.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-inline-completion-pack-contract-fixture"
+kind = "test_receipt_surface"
+paths = ["crates/perl-lsp-rs-core/tests/inline_completion_ux_fixtures.rs"]
+classification = ["weakly_exposed", "no_static_path", "static_unknown"]
+owner = "editor-trust"
+issue = "#1567"
+reason = "Issue #1567 adds inline_completion_ux_fixtures.rs as an executable completion-pack contract receipt for Try::Tiny positive, no-import, comment, string, POD, near-match, parse-damage, visible-symbol conflict, and stable-range cases. RIPR 0.9.x classifies the new fixture matrix and helper plumbing as production exposure even though the product seam is exercised through InlineCompletionProvider and the focused fixture test cargo test -p perl-lsp-rs-core --test inline_completion_ux_fixtures. Keep this suppression narrow to the single receipt file and remove when RIPR stops counting test fixture plumbing as production seams."
+created = "2026-06-19"
+review_after = "2026-07-19"
+expires = "2026-09-30"
+
+# -----------------------------------------------------------------------------
 # LSP cancellation performance receipt: test harness timing policy, not
 # production behavior. The AC12 test intentionally enforces aggregate percentile
 # thresholds rather than failing individual samples that can include scheduler
