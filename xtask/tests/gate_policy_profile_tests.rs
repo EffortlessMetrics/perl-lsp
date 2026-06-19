@@ -147,6 +147,39 @@ fn conflict_marker_gate_has_local_runtime_headroom() -> Result<(), Box<dyn std::
 }
 
 #[test]
+fn routed_integration_test_gate_has_cold_ci_headroom() -> Result<(), Box<dyn std::error::Error>> {
+    let root = project_root();
+    let policy_path = root.join(".ci/gate-policy.yaml");
+    let content = fs::read_to_string(policy_path)?;
+    let parsed: GatePolicyDoc = serde_yaml_ng::from_str(&content)?;
+
+    let gate = parsed
+        .gates
+        .into_iter()
+        .find(|gate| gate.name == "unit_routed_full")
+        .ok_or("missing unit_routed_full gate")?;
+
+    assert_eq!(gate.tier, "pr_fast", "unit_routed_full must stay in pr-fast");
+    assert!(gate.required, "unit_routed_full must stay PR-blocking");
+    assert_eq!(
+        gate.planning.as_ref().map(|planning| planning.role.as_str()),
+        Some("rust_scoped"),
+        "unit_routed_full must stay routed to changed Rust packages"
+    );
+    assert!(
+        gate.timeout_seconds.unwrap_or_default() >= 900,
+        "unit_routed_full timeout must include cold integration-test build headroom"
+    );
+    assert!(
+        gate.budgets.as_ref().and_then(|budget| budget.max_duration_ms).unwrap_or_default()
+            >= 780_000,
+        "unit_routed_full duration budget must reflect observed cold PR-fast runtime"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn inline_completion_contract_scope_stays_on_lsp_crates() -> Result<(), Box<dyn std::error::Error>>
 {
     let root = project_root();

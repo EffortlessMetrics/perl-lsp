@@ -472,10 +472,13 @@ gates:
     description: "Scoped routed integration tests for ci-scope selected crates (required test gate for #1470 coupling; --tests runs tests/ directories, catching runtime assertion failures not reachable by --lib)"
     required: true
     command: cargo test --locked --tests {package_args}
-    timeout_seconds: 600
+    # PR #1585 produced two timeout-only receipts where the 600s gate budget was
+    # exhausted by cold integration-test build/test work. Keep the gate under the
+    # 30m PR-fast outer watchdog while giving cold hosted runners room to finish.
+    timeout_seconds: 900
     retry_count: 1
     budgets:
-      max_duration_ms: 540000
+      max_duration_ms: 840000
     quarantine: false
     tags:
       - test
