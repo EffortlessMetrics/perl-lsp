@@ -45,6 +45,27 @@ def changed_crates(paths: list[str]) -> list[str]:
     return result
 
 
+def changed_integration_test_targets(paths: list[str]) -> dict[str, list[str]]:
+    """Return changed top-level integration test targets by crate name."""
+    result: dict[str, list[str]] = {}
+    seen: set[tuple[str, str]] = set()
+    for path in paths:
+        parts = path.split("/")
+        if len(parts) != 4 or parts[0] != "crates" or parts[2] != "tests":
+            continue
+        filename = parts[3]
+        if not filename.endswith(".rs"):
+            continue
+        crate_name = parts[1]
+        target = Path(filename).stem
+        key = (crate_name, target)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.setdefault(crate_name, []).append(target)
+    return result
+
+
 def augment_rust_focused_commands(base_commands: list[str], paths: list[str]) -> list[str]:
     """Append per-crate integration-test commands to the rust-focused pack.
 
@@ -82,10 +103,22 @@ def augment_rust_focused_commands(base_commands: list[str], paths: list[str]) ->
             continue
         if cmd not in commands:
             commands.append(cmd)
+    test_targets_by_crate = changed_integration_test_targets(paths)
     for crate_name in changed_crates(paths):
         lib_cmd = f"cargo llvm-cov test --no-report -p {crate_name} --lib --profile agent --locked"
-        tests_cmd = f"cargo llvm-cov test --no-report -p {crate_name} --tests --profile agent --locked -- --test-threads=1"
-        for cmd in (lib_cmd, tests_cmd):
+        if lib_cmd not in commands:
+            commands.append(lib_cmd)
+        test_targets = test_targets_by_crate.get(crate_name, [])
+        if test_targets:
+            integration_cmds = [
+                f"cargo llvm-cov test --no-report -p {crate_name} --test {target} --profile agent --locked -- --test-threads=1"
+                for target in test_targets
+            ]
+        else:
+            integration_cmds = [
+                f"cargo llvm-cov test --no-report -p {crate_name} --tests --profile agent --locked -- --test-threads=1"
+            ]
+        for cmd in integration_cmds:
             if cmd not in commands:
                 commands.append(cmd)
     if has_xtask_source_change(paths):

@@ -1433,7 +1433,8 @@ class IntegrationTestAugmentationTests(unittest.TestCase):
 
     DAP-style crates prove patch coverage through integration tests, not
     lib tests.  The rust-focused fallback pack must include a per-crate
-    ``--tests`` command for every crate that owns a changed source file.
+    integration-test coverage command for every crate that owns a changed
+    source file.
     """
 
     def _fallback_pack(self) -> dict:
@@ -1458,16 +1459,20 @@ class IntegrationTestAugmentationTests(unittest.TestCase):
         normalized = [router.normalize_pack(p, paths) for p in selected]
         rust_pack = normalized[0]
 
-        # Must include per-crate integration-test invocation using cargo-llvm-cov
+        # Must include changed integration-test invocation using cargo-llvm-cov
         # (fixes #1282: plain `cargo test` doesn't register binaries with cargo-llvm-cov).
         # --test-threads=1 prevents parallel-unsafe tests from flaking in the coverage lane.
         integration_cmds = [
             cmd for cmd in rust_pack["commands"]
-            if "cargo llvm-cov test --no-report -p perl-dap" in cmd and "--tests" in cmd
+            if "cargo llvm-cov test --no-report -p perl-dap" in cmd and "--test dap_adapter_tests" in cmd
         ]
         self.assertTrue(
             integration_cmds,
-            f"Expected a 'cargo llvm-cov test --no-report -p perl-dap --tests' command; got: {rust_pack['commands']}",
+            f"Expected a 'cargo llvm-cov test --no-report -p perl-dap --test dap_adapter_tests' command; got: {rust_pack['commands']}",
+        )
+        self.assertFalse(
+            any("cargo llvm-cov test --no-report -p perl-dap --tests" in cmd for cmd in rust_pack["commands"]),
+            f"source+changed-test route must not run the whole perl-dap integration suite; got: {rust_pack['commands']}",
         )
         # Every integration-test command must carry --test-threads=1.
         for cmd in integration_cmds:
@@ -1534,6 +1539,27 @@ class IntegrationTestAugmentationTests(unittest.TestCase):
                 cmd,
                 f"coverage-lane integration test must be single-threaded; got: {cmd}",
             )
+
+    def test_source_with_changed_integration_test_uses_targeted_test_command(self) -> None:
+        packs = [self._fallback_pack()]
+        paths = [
+            "crates/perl-lsp-rs/src/runtime/language/symbols.rs",
+            "crates/perl-lsp-rs/tests/lsp_folding_ranges_test.rs",
+        ]
+
+        selected = router.selected_packs(packs, paths)
+        normalized = [router.normalize_pack(p, paths) for p in selected]
+        rust_pack = normalized[0]
+
+        self.assertIn(
+            "cargo llvm-cov test --no-report -p perl-lsp-rs --test lsp_folding_ranges_test --profile agent --locked -- --test-threads=1",
+            rust_pack["commands"],
+        )
+        self.assertNotIn(
+            "cargo llvm-cov test --no-report -p perl-lsp-rs --tests --profile agent --locked -- --test-threads=1",
+            rust_pack["commands"],
+            "changed integration test target should replace the full integration suite for that crate",
+        )
 
     def test_integration_test_command_not_duplicated(self) -> None:
         packs = [self._fallback_pack()]

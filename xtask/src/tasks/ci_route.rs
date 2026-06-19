@@ -1349,15 +1349,29 @@ fn augment_rust_focused_commands(
         }
         push_unique_command(&mut commands, command.clone());
     }
+    let test_targets_by_crate = changed_integration_test_targets(changed_files);
     for crate_name in changed_crates(changed_files) {
         let lib_cmd = format!(
             "cargo llvm-cov test --no-report -p {crate_name} --lib --profile agent --locked"
         );
-        let tests_cmd = format!(
-            "cargo llvm-cov test --no-report -p {crate_name} --tests --profile agent --locked -- --test-threads=1"
-        );
         push_unique_command(&mut commands, lib_cmd);
-        push_unique_command(&mut commands, tests_cmd);
+        if let Some(test_targets) = test_targets_by_crate.get(&crate_name) {
+            for target in test_targets {
+                push_unique_command(
+                    &mut commands,
+                    format!(
+                        "cargo llvm-cov test --no-report -p {crate_name} --test {target} --profile agent --locked -- --test-threads=1"
+                    ),
+                );
+            }
+        } else {
+            push_unique_command(
+                &mut commands,
+                format!(
+                    "cargo llvm-cov test --no-report -p {crate_name} --tests --profile agent --locked -- --test-threads=1"
+                ),
+            );
+        }
     }
     if has_xtask_source_change(changed_files) {
         push_unique_command(
@@ -1382,6 +1396,26 @@ fn is_deprecated_rust_focused_command(command: &str) -> bool {
 
 fn has_xtask_source_change(paths: &[String]) -> bool {
     paths.iter().any(|path| is_lcov_source_path(path) && path.starts_with("xtask/src/"))
+}
+
+fn changed_integration_test_targets(paths: &[String]) -> BTreeMap<String, Vec<String>> {
+    let mut targets: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut seen = BTreeSet::new();
+    for path in paths {
+        let parts: Vec<&str> = path.split('/').collect();
+        if parts.len() != 4 || parts[0] != "crates" || parts[2] != "tests" {
+            continue;
+        }
+        let Some(target) = parts[3].strip_suffix(".rs") else {
+            continue;
+        };
+        let crate_name = parts[1].to_string();
+        let target = target.to_string();
+        if seen.insert((crate_name.clone(), target.clone())) {
+            targets.entry(crate_name).or_default().push(target);
+        }
+    }
+    targets
 }
 
 fn coverage_proof_pack_selection(
@@ -3844,8 +3878,8 @@ mod tests {
 
     /// Regression guard for PR #1212 / #1217: DAP-style crates prove their
     /// patch coverage through integration tests as well as lib tests.  The
-    /// rust-focused pack must include per-crate `--lib` and `--tests` commands
-    /// for every crate that owns a changed source file.
+    /// rust-focused pack must include per-crate `--lib` and integration-test
+    /// coverage commands for every crate that owns a changed source file.
     ///
     /// The command must also carry `-- --test-threads=1` (fix for #1232 /
     /// coverage-lane-single-threaded): integration tests in this workspace
@@ -3868,7 +3902,7 @@ mod tests {
             .find(|pack| pack.id == "patch-coverage-rust-focused")
             .ok_or_else(|| color_eyre::eyre::eyre!("patch-coverage-rust-focused not selected"))?;
 
-        // Must include per-crate integration-test invocation using cargo-llvm-cov
+        // Must include changed integration-test invocation using cargo-llvm-cov
         // (fixes #1282: plain `cargo test` doesn't register binaries with
         // cargo-llvm-cov's tracking file, so `cargo llvm-cov report` silently
         // drops integration-test profdata → false-low patch %).
@@ -3877,12 +3911,20 @@ mod tests {
             .iter()
             .filter(|cmd| {
                 cmd.contains("cargo llvm-cov test --no-report -p perl-dap")
-                    && cmd.contains("--tests")
+                    && cmd.contains("--test dap_adapter_tests")
             })
             .collect();
         assert!(
             !integration_cmds.is_empty(),
-            "expected a `cargo llvm-cov test --no-report -p perl-dap --tests` command; got: {:?}",
+            "expected a `cargo llvm-cov test --no-report -p perl-dap --test dap_adapter_tests` command; got: {:?}",
+            rust_pack.commands
+        );
+        assert!(
+            !rust_pack
+                .commands
+                .iter()
+                .any(|cmd| cmd.contains("cargo llvm-cov test --no-report -p perl-dap --tests")),
+            "source+changed-test route must not run the whole perl-dap integration suite; got: {:?}",
             rust_pack.commands
         );
         for cmd in &integration_cmds {
@@ -3913,6 +3955,41 @@ mod tests {
         assert!(
             !rust_pack.commands.iter().any(|cmd| cmd.starts_with("cargo check --workspace")),
             "Patch 95 must not carry non-coverage workspace checks; got: {:?}",
+            rust_pack.commands
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn ci_route_rust_focused_pack_targets_changed_integration_test() -> Result<()> {
+        let receipt = route_receipt(
+            "origin/main",
+            "HEAD",
+            vec![
+                "crates/perl-lsp-rs/src/runtime/language/symbols.rs".to_string(),
+                "crates/perl-lsp-rs/tests/lsp_folding_ranges_test.rs".to_string(),
+            ],
+        )?;
+
+        let rust_pack = receipt
+            .coverage_proof_packs
+            .iter()
+            .find(|pack| pack.id == "patch-coverage-rust-focused")
+            .ok_or_else(|| color_eyre::eyre::eyre!("patch-coverage-rust-focused not selected"))?;
+
+        assert!(
+            rust_pack.commands.iter().any(|cmd| {
+                cmd == "cargo llvm-cov test --no-report -p perl-lsp-rs --test lsp_folding_ranges_test --profile agent --locked -- --test-threads=1"
+            }),
+            "expected targeted lsp_folding_ranges_test coverage command; got: {:?}",
+            rust_pack.commands
+        );
+        assert!(
+            !rust_pack.commands.iter().any(|cmd| {
+                cmd == "cargo llvm-cov test --no-report -p perl-lsp-rs --tests --profile agent --locked -- --test-threads=1"
+            }),
+            "changed integration test target should replace the full integration suite for that crate; got: {:?}",
             rust_pack.commands
         );
 
