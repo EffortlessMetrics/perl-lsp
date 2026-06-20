@@ -472,13 +472,13 @@ gates:
     description: "Scoped routed integration tests for ci-scope selected crates (required test gate for #1470 coupling; --tests runs tests/ directories, catching runtime assertion failures not reachable by --lib)"
     required: true
     command: cargo test --locked --tests {package_args}
-    # PR #1585 produced two timeout-only receipts where the 600s gate budget was
-    # exhausted by cold integration-test build/test work. Keep the gate under the
-    # 30m PR-fast outer watchdog while giving cold hosted runners room to finish.
-    timeout_seconds: 900
+    # PR #1585 produced timeout-only receipts at 600s and 900s for the
+    # perl-lsp-rs/perl-lsp-rs-core/xtask route. Keep the required --tests proof
+    # bounded while matching the PR Smoke watchdog for the heavier routed path.
+    timeout_seconds: 1500
     retry_count: 1
     budgets:
-      max_duration_ms: 840000
+      max_duration_ms: 1320000
     quarantine: false
     tags:
       - test

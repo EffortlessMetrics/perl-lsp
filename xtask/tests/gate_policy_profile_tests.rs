@@ -167,12 +167,12 @@ fn routed_integration_test_gate_has_cold_ci_headroom() -> Result<(), Box<dyn std
         "unit_routed_full must stay routed to changed Rust packages"
     );
     assert!(
-        gate.timeout_seconds.unwrap_or_default() >= 900,
+        gate.timeout_seconds.unwrap_or_default() >= 1_500,
         "unit_routed_full timeout must include cold integration-test build headroom"
     );
     assert!(
         gate.budgets.as_ref().and_then(|budget| budget.max_duration_ms).unwrap_or_default()
-            >= 780_000,
+            >= 1_320_000,
         "unit_routed_full duration budget must reflect observed cold PR-fast runtime"
     );
 

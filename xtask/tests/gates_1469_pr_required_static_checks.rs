@@ -301,6 +301,20 @@ fn ci_workflow_runs_unit_routed_full_in_pr_smoke() -> Result<(), Box<dyn std::er
         "pr-smoke job must run gates --tier pr-fast --base origin/main \
          to properly resolve package_args for rust_scoped gates like unit_routed_full"
     );
+    assert!(
+        workflow.contains("timeout-minutes: 50"),
+        "pr-smoke job timeout must include the observed heavy routed integration-test path"
+    );
+    assert!(
+        workflow.contains("PR-fast timeout policy: GitHub job 50m, outer runner watchdog 45m"),
+        "pr-smoke log message must document the active watchdog policy"
+    );
+    assert!(
+        workflow.contains(
+            "timeout --signal=TERM --kill-after=60s 2700s ./target/debug/xtask gates --tier pr-fast --base origin/main --receipt"
+        ),
+        "pr-smoke inner watchdog must leave enough room for unit_routed_full receipt output"
+    );
 
     // Ensure the routed shard (which was a failed attempt to run unit_routed_full)
     // has been removed
