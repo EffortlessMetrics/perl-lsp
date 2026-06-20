@@ -1437,6 +1437,7 @@ fn is_dynamic_boundary_occurrence(kind: OccurrenceKind) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::semantic::facts::PRODUCER_SCHEMA_VERSION;
     use perl_semantic_facts::{
         AnchorFact, AnchorId, Confidence, EdgeFact, EdgeId, EdgeKind, EntityFact, EntityId,
         EntityKind, ExportSet, ExportTag, FileId, ImportKind, ImportSpec, ImportSymbols,
@@ -1459,6 +1460,7 @@ mod tests {
             source_uri: uri.to_string(),
             file_id,
             content_hash: 0,
+            producer_schema_version: PRODUCER_SCHEMA_VERSION,
             anchors_hash: None,
             entities_hash: None,
             occurrences_hash: None,
@@ -3936,6 +3938,7 @@ mod tests {
                         source_uri: spec.file_uri.clone(),
                         file_id,
                         content_hash: 0,
+                        producer_schema_version: PRODUCER_SCHEMA_VERSION,
                         anchors_hash: None,
                         entities_hash: None,
                         occurrences_hash: None,
@@ -4188,6 +4191,7 @@ mod tests {
                 source_uri: "file:///lib/Pkg.pm".to_string(),
                 file_id: file_def,
                 content_hash: 0,
+                producer_schema_version: PRODUCER_SCHEMA_VERSION,
                 anchors_hash: None,
                 entities_hash: None,
                 occurrences_hash: None,
@@ -4213,6 +4217,7 @@ mod tests {
                     source_uri: "file:///lib/Consumer.pm".to_string(),
                     file_id: file_importer,
                     content_hash: 0,
+                    producer_schema_version: PRODUCER_SCHEMA_VERSION,
                     anchors_hash: None,
                     entities_hash: None,
                     occurrences_hash: None,
@@ -4491,6 +4496,7 @@ mod tests {
                 source_uri: "file:///lib/Pkg.pm".to_string(),
                 file_id,
                 content_hash: 0,
+                producer_schema_version: PRODUCER_SCHEMA_VERSION,
                 anchors_hash: None,
                 entities_hash: None,
                 occurrences_hash: None,
@@ -5065,6 +5071,7 @@ mod tests {
 #[allow(clippy::print_stderr)]
 mod latency_benchmarks {
     use super::*;
+    use crate::semantic::facts::PRODUCER_SCHEMA_VERSION;
     use crate::semantic::imports::ImportExportIndex;
     use crate::semantic::references::ReferenceIndex;
     use crate::semantic::scorecard::{
@@ -5180,6 +5187,7 @@ mod latency_benchmarks {
                 source_uri: uri.clone(),
                 file_id,
                 content_hash: i as u64,
+                producer_schema_version: PRODUCER_SCHEMA_VERSION,
                 anchors_hash: None,
                 entities_hash: None,
                 occurrences_hash: None,

@@ -81,6 +81,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use url::Url;
 
+use crate::semantic::facts::PRODUCER_SCHEMA_VERSION;
 use crate::semantic::imports::ImportExportIndex;
 pub use crate::semantic::invalidation::ShardReplaceResult;
 use crate::semantic::invalidation::{ShardCategoryHashes, plan_shard_replacement};
@@ -1143,6 +1144,12 @@ pub struct FileFactShard {
     pub file_id: FileId,
     /// Whole-file content hash used for stale-shard replacement.
     pub content_hash: u64,
+    /// Schema version of the semantic fact producer that built this shard.
+    ///
+    /// Set to [`crate::semantic::facts::PRODUCER_SCHEMA_VERSION`] at
+    /// construction time.  Consumers (e.g. the snapshot layer in #1601)
+    /// compare this field against the constant to detect schema drift.
+    pub producer_schema_version: u32,
     /// Optional per-category hashes for change diagnostics.
     pub anchors_hash: Option<u64>,
     /// Optional per-category hashes for change diagnostics.
@@ -2471,6 +2478,7 @@ impl WorkspaceIndex {
             source_uri: uri.to_string(),
             file_id,
             content_hash,
+            producer_schema_version: PRODUCER_SCHEMA_VERSION,
             anchors_hash: Some(anchors_hash),
             entities_hash: Some(entities_hash),
             occurrences_hash: Some(0),
@@ -2520,39 +2528,43 @@ impl WorkspaceIndex {
                 ast, file_id,
             );
 
+        // Build synthetic entity/anchor slices from eval-sub triples.
+        // IMPORTANT: The triple is (entity, anchor, occurrence).  Only idx 0
+        // (entity) and idx 1 (anchor) belong in the synthetic slices.  Idx 2
+        // (occurrence) already flows through `dynamic_boundaries` above — do
+        // NOT move it here or `occurrences_hash` will double-count.
+        let synthetic_entities_from_eval: Vec<perl_semantic_facts::EntityFact> =
+            eval_sub_triples.iter().map(|(entity, _, _)| entity.clone()).collect();
+        let synthetic_anchors_from_eval: Vec<perl_semantic_facts::AnchorFact> =
+            eval_sub_triples.iter().map(|(_, anchor, _)| anchor.clone()).collect();
+
+        // Build synthetic entity/anchor slices from generated member facts.
+        let synthetic_entities_from_generated: Vec<perl_semantic_facts::EntityFact> =
+            generated_member_facts.iter().map(|f| f.entity.clone()).collect();
+        let synthetic_anchors_from_generated: Vec<perl_semantic_facts::AnchorFact> =
+            generated_member_facts.iter().map(|f| f.anchor.clone()).collect();
+
+        // Merge into single synthetic slices for the canonical builder.
+        let mut all_synthetic_entities = synthetic_entities_from_eval;
+        all_synthetic_entities.extend(synthetic_entities_from_generated);
+        let mut all_synthetic_anchors = synthetic_anchors_from_eval;
+        all_synthetic_anchors.extend(synthetic_anchors_from_generated);
+
         // Build the canonical fact shard.
+        // Synthetic entities/anchors are now passed to the builder so that
+        // `entities_hash` and `anchors_hash` cover the COMPLETE set.
         // Import specs (for `use`, `require`, `ClassName->import()`) and
         // use-lib facts are populated separately via ImportExportIndex — not passed here.
-        let mut shard = crate::semantic::facts::build_canonical_fact_shard(
+        crate::semantic::facts::build_canonical_fact_shard(
             uri,
             content_hash,
             &decl_facts,
             &ref_facts,
             &[],
             &dynamic_boundaries,
-        );
-
-        // Merge entity and anchor facts from semantic producers into the shard.
-        // The `build_canonical_fact_shard` function only accepts OccurrenceFact
-        // slices for dynamic_boundaries; extra entities and anchors must be
-        // merged manually so queries can resolve those semantic facts.
-        //
-        // NOTE: This post-build merge means `entities_hash` and `anchors_hash` do
-        // not reflect these additions. Incremental replacement
-        // (`replace_fact_shard_incremental`) may miss a change if only synthetic
-        // facts change — the `content_hash` (whole-file) will still catch it.
-        // A future refactor should extend `build_canonical_fact_shard`'s API to
-        // accept extra entity/anchor slices alongside `dynamic_boundaries`.
-        for (entity, anchor, _) in eval_sub_triples {
-            shard.entities.push(entity);
-            shard.anchors.push(anchor);
-        }
-        for fact in generated_member_facts {
-            shard.entities.push(fact.entity);
-            shard.anchors.push(fact.anchor);
-        }
-
-        shard
+            &all_synthetic_entities,
+            &all_synthetic_anchors,
+        )
     }
 
     /// Replace a [`FileFactShard`] with per-category incremental invalidation.
@@ -7057,6 +7069,7 @@ MixedMod->import(qw(qw_one qw_two));
             source_uri: uri.to_string(),
             file_id,
             content_hash,
+            producer_schema_version: PRODUCER_SCHEMA_VERSION,
             anchors_hash,
             entities_hash,
             occurrences_hash,
