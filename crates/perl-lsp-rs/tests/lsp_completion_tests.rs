@@ -1852,6 +1852,186 @@ fn test_completion_list_apply_kind_absent_without_item_defaults()
     Ok(())
 }
 
+/// Test sigil-aware completion: $var should only offer scalar completions
+#[test]
+fn test_scalar_completion_only_offers_scalars() -> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    let uri = "file:///test_scalar_sigil.pl";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": r#"
+my @names = (1, 2, 3);
+my $name = 42;
+my %name_map = ();
+
+my $result = $name
+"#
+                }
+            }
+        }),
+    );
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
+
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": { "line": 5, "character": 16 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+    let labels: Vec<String> = items
+        .iter()
+        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .collect::<Result<_, _>>()?;
+
+    // Should suggest $name but NOT @names or %name_map
+    assert!(labels.contains(&"$name".to_string()), "Should suggest $name");
+    assert!(
+        !labels.contains(&"@names".to_string()),
+        "Should NOT suggest @names when using $ sigil"
+    );
+    assert!(
+        !labels.contains(&"%name_map".to_string()),
+        "Should NOT suggest %name_map when using $ sigil"
+    );
+
+    Ok(())
+}
+
+/// Test sigil-aware completion: @var should only offer array completions
+#[test]
+fn test_array_completion_only_offers_arrays() -> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    let uri = "file:///test_array_sigil.pl";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": r#"
+my @names = (1, 2, 3);
+my $name = 42;
+my %name_map = ();
+
+my @result = @name
+"#
+                }
+            }
+        }),
+    );
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
+
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": { "line": 5, "character": 16 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+    let labels: Vec<String> = items
+        .iter()
+        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .collect::<Result<_, _>>()?;
+
+    // Should suggest @names but NOT $name or %name_map
+    assert!(labels.contains(&"@names".to_string()), "Should suggest @names");
+    assert!(!labels.contains(&"$name".to_string()), "Should NOT suggest $name when using @ sigil");
+    assert!(
+        !labels.contains(&"%name_map".to_string()),
+        "Should NOT suggest %name_map when using @ sigil"
+    );
+
+    Ok(())
+}
+
+/// Test sigil-aware completion: %var should only offer hash completions
+#[test]
+fn test_hash_completion_only_offers_hashes() -> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    let uri = "file:///test_hash_sigil.pl";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": r#"
+my @names = (1, 2, 3);
+my $name = 42;
+my %name_map = ();
+
+my %result = %name
+"#
+                }
+            }
+        }),
+    );
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_secs(2));
+
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": { "line": 5, "character": 16 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+    let labels: Vec<String> = items
+        .iter()
+        .map(|item| item["label"].as_str().ok_or("Missing label field").map(|s| s.to_string()))
+        .collect::<Result<_, _>>()?;
+
+    // Should suggest %name_map but NOT $name or @names
+    assert!(labels.contains(&"%name_map".to_string()), "Should suggest %name_map");
+    assert!(!labels.contains(&"$name".to_string()), "Should NOT suggest $name when using % sigil");
+    assert!(
+        !labels.contains(&"@names".to_string()),
+        "Should NOT suggest @names when using % sigil"
+    );
+
+    Ok(())
+}
+
 #[test]
 fn test_completion_list_apply_kind_emitted_when_supported() -> Result<(), Box<dyn std::error::Error>>
 {
