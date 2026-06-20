@@ -2,13 +2,13 @@
 
 **Status**: release-staged, maintainer-held. Do not tag, publish, or dispatch a release without Steven's explicit approval.
 **Updated**: 2026-06-20
-**Release payload SHA**: `540fd5e79ddbfa07b5feb857b6bfe5f80bbc2d21`
-**Current `origin/main` SHA at refresh**: `540fd5e79ddbfa07b5feb857b6bfe5f80bbc2d21`
-**Previous readiness bundle merge SHA**: `0ec44c3e3b641c2ff0e4abd0d1f86f057441ebfe`
+**Release payload SHA**: `798675813a2333fa79a68b7eac980ada57e4205f`
+**Current `origin/main` SHA at refresh**: `798675813a2333fa79a68b7eac980ada57e4205f`
+**Previous readiness bundle merge SHA**: `91fdc2f3dfe0e48d40726dd76efea69f45892d8f`
 **Workspace version (`Cargo.toml`)**: `0.16.0`
 **Last release tag**: `v0.16.0` at `b6d9f12b995ad8ad78ca641940bd73e4b1a3c26d` (2026-06-06)
 
-Note: the release payload SHA is the latest audited merged closeout commit that changed release-facing product, CI, or changelog scope. It includes #1867, which restored storage-safe VSIX packaging verification and the package-level published-VSIX smoke receipt, #1878, which repaired native-tooling git context in Windows-linked worktrees for release evidence regeneration, #1875, which keeps context-specific completions grouped by semantic family, and #1881, which repaired RIPR evidence git context in Windows-linked worktrees. The previous readiness bundle merge SHA records the doc-only staging bundle that captured the earlier closeout claims before #1881 landed. Verify the current `origin/main` SHA again at dispatch time; later doc-only clarification commits do not expand the product claim.
+Note: the release payload SHA is the latest audited merged closeout commit that changed release-facing product, CI, or changelog scope. It includes #1867, which restored storage-safe VSIX packaging verification and the package-level published-VSIX smoke receipt, #1878, which repaired native-tooling git context in Windows-linked worktrees for release evidence regeneration, #1875, which keeps context-specific completions grouped by semantic family, #1881, which repaired RIPR evidence git context in Windows-linked worktrees, #1886, which cleans stale gitignored workspace `target/` directories before self-hosted runner checkout, and #1882, which refreshes cached POD hover content after external module-file edits. The previous readiness bundle merge SHA records the doc-only staging bundle that captured the closeout claims through #1881. Verify the current `origin/main` SHA again at dispatch time; later doc-only clarification commits do not expand the product claim.
 
 Note: `v0.16.0` is a real tag, but it is not on current `origin/main` ancestry (`git describe origin/main` resolves from `v0.15.0`). Do not use a naive "commits since v0.16.0" count as release evidence without resolving that tag-lineage question.
 
@@ -26,22 +26,22 @@ Note: `v0.16.0` is a real tag, but it is not on current `origin/main` ancestry (
 
 ## Gate State
 
-Latest merged release-scope PR checked: [#1881](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1881), merge commit `540fd5e79ddbfa07b5feb857b6bfe5f80bbc2d21`, merged 2026-06-20T12:11:22Z. It follows the doc-only readiness refresh [#1880](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1880), merge commit `0ec44c3e3b641c2ff0e4abd0d1f86f057441ebfe`, the context-specific completion repair [#1875](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1875), merge commit `5d8db844cafc1019e026d2d4abb082691a65b7de`, the native-tooling git-context repair [#1878](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1878), merge commit `588bb59cbb981c6af978b8cefb136bca357ba480`, the storage-safe VSIX smoke repair [#1867](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1867), merge commit `b0c9edb5918bd3ec4443c99f6f75fa51077d1485`, the POD document-link expansion [#1795](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1795), merge commit `adcfd107ce9dd3a9cb8fbab5a5597f384d5c499d`, the doc-only readiness refresh [#1837](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1837), merge commit `6dd58b2ba7f084a2de7545c159c57397350e7370`, and the quality-baseline repair [#1833](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1833), merge commit `6e588ff2ad37789170733aec255e27c4b43a22ae`. The docs/assets-only CI skip was repaired and proven by [#1817](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1817), merge commit `f5f63fbf8df4e7aacddde13abf7e815a2e8f4160`, merged 2026-06-20T07:06:11Z.
+Latest merged release-scope PR checked: [#1882](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1882), merge commit `798675813a2333fa79a68b7eac980ada57e4205f`, merged 2026-06-20T13:04:45Z. It follows the runner workspace-target cleanup [#1886](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1886), merge commit `4975a654c5162fe70a194b21fbf02f84bda0eaeb`, the doc-only readiness refresh [#1883](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1883), merge commit `91fdc2f3dfe0e48d40726dd76efea69f45892d8f`, the RIPR evidence git-context repair [#1881](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1881), merge commit `540fd5e79ddbfa07b5feb857b6bfe5f80bbc2d21`, the context-specific completion repair [#1875](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1875), merge commit `5d8db844cafc1019e026d2d4abb082691a65b7de`, the native-tooling git-context repair [#1878](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1878), merge commit `588bb59cbb981c6af978b8cefb136bca357ba480`, the storage-safe VSIX smoke repair [#1867](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1867), merge commit `b0c9edb5918bd3ec4443c99f6f75fa51077d1485`, the POD document-link expansion [#1795](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1795), merge commit `adcfd107ce9dd3a9cb8fbab5a5597f384d5c499d`, the doc-only readiness refresh [#1837](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1837), merge commit `6dd58b2ba7f084a2de7545c159c57397350e7370`, and the quality-baseline repair [#1833](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1833), merge commit `6e588ff2ad37789170733aec255e27c4b43a22ae`. The docs/assets-only CI skip was repaired and proven by [#1817](https://github.com/EffortlessMetrics/perl-lsp-swarm/pull/1817), merge commit `f5f63fbf8df4e7aacddde13abf7e815a2e8f4160`, merged 2026-06-20T07:06:11Z.
 
 | Required / decision gate | Status | Notes |
 |--------------------------|-----------------|-------|
-| `Perl LSP Rust Small Result` | PASS | #1881 GitHub check completed 2026-06-20T11:49:47Z. |
-| `ripr+ New Gap Gate` | PASS | #1881 GitHub check completed 2026-06-20T12:05:36Z. |
-| `Codecov / Patch 95` | PASS | #1881 GitHub check completed 2026-06-20T12:07:25Z; `codecov/patch` completed 2026-06-20T12:07:33Z. |
-| `Workflow Trigger Lint` | PASS | #1881 GitHub check completed 2026-06-20T11:53:31Z after #1816/#1817 removed required-workflow path filters. |
-| `PR Smoke (Fast Feedback)` | PASS | #1881 GitHub check completed 2026-06-20T12:06:56Z. |
-| `CI Gate (Merge-Blocking)` | PASS | #1881 GitHub check completed 2026-06-20T12:07:01Z. |
-| `UX Regression Tests` | PASS | #1881 GitHub check completed 2026-06-20T11:57:04Z. |
-| `droid-review` | PASS | #1881 GitHub check completed 2026-06-20T11:55:15Z. Advisory proof, not product-smoke proof. |
-| `LSP Memory Smoke` | PASS | #1881 GitHub check completed 2026-06-20T11:54:21Z. |
-| `UB Review Advisory on GitHub Hosted` | PASS | #1881 advisory check completed 2026-06-20T12:12:34Z. Advisory proof, not product-smoke proof. |
+| `Perl LSP Rust Small Result` | PASS | #1882 GitHub check completed 2026-06-20T12:33:15Z. |
+| `ripr+ New Gap Gate` | PASS | #1882 GitHub check completed 2026-06-20T12:48:41Z. |
+| `Codecov / Patch 95` | PASS | #1882 GitHub check completed 2026-06-20T13:04:25Z. |
+| `Workflow Trigger Lint` | PASS | #1882 GitHub check completed 2026-06-20T12:37:22Z after #1816/#1817 removed required-workflow path filters. |
+| `PR Smoke (Fast Feedback)` | PASS | #1882 GitHub check completed 2026-06-20T12:56:54Z. |
+| `CI Gate (Merge-Blocking)` | PASS | #1882 GitHub check completed 2026-06-20T12:57:03Z. |
+| `UX Regression Tests` | PASS | #1882 GitHub check completed 2026-06-20T12:40:22Z; `UX Regression Gate` completed 2026-06-20T12:46:36Z. |
+| `droid-review` | PASS | #1882 GitHub check completed 2026-06-20T12:43:28Z. Advisory proof, not product-smoke proof. |
+| `LSP Memory Smoke` | PASS | #1882 GitHub check completed 2026-06-20T12:37:44Z. |
+| `UB Review Advisory on GitHub Hosted` | PASS | #1882 advisory check completed 2026-06-20T12:57:19Z. Advisory proof, not product-smoke proof. |
 
-Advisory/non-required state observed during this refresh: #1881 routed `ripr+` to CX43 and the aggregate `ripr+ New Gap Gate` passed. Earlier #1878 primary `ripr+ on CX43` failed quickly, then the disk-full fallback completed successfully and the aggregate gate passed. Required merge gates listed above were green.
+Advisory/non-required state observed during this refresh: #1882 routed `Perl LSP Rust Small` and `ripr+` to CX43 and both primary jobs passed. The immediately prior #1886 workflow cleanup routed `ripr+` to CX43; the primary `ripr+ on CX43` job failed quickly, then `ripr+ (Disk-Full Fallback)` completed successfully and the aggregate `ripr+ New Gap Gate` passed. #1886 `workflow-policy-lint` completed successfully at 2026-06-20T12:49:04Z. Required merge gates listed above were green.
 
 Coverage semantics after #1482/#1549/#1576/#1581/#1586: coverage verdicts are scoped to coverage shortfall/setup/routing failures. Routed test failures belong to test-named gates, not the Codecov/Patch-95 verdict.
 
@@ -61,10 +61,10 @@ This table records the late closeout scope that updates the older 2026-06 draft.
 | Single-root LSP readiness | #1551 | Baseline PR smoke blockers were repaired: hover preservation, workspace file-op/index waits, empty workspace-folder no-op handling, progress harness determinism. |
 | Multi-root project model | #1522 | `workspace/symbol` waits for active indexing, includes `workspaceFolderUri`, and returns deterministic multi-root results. |
 | Diagnostics accuracy | #1562 | `$self->{name}` / `$ref->{key}` no longer produce false `UnquotedBareword` diagnostics under `use strict`. |
-| References, docs links, and folding | #1597, #1638, #1560, #1795 | Partial-index reference fallback avoids documents-lock re-entry; perldoc/MetaCPAN targets share one validated resolver; POD `L<>` document links are exposed and resolved; heredoc/multiline folding boundaries are corrected. |
+| References, docs links, hover, and folding | #1597, #1638, #1560, #1795, #1882 | Partial-index reference fallback avoids documents-lock re-entry; perldoc/MetaCPAN targets share one validated resolver; POD `L<>` document links are exposed and resolved; cached POD hover content refreshes after external module-file edits; heredoc/multiline folding boundaries are corrected. |
 | DAP honesty | #1430, #1444, #1496, #1498 | Variable-reference spaces are typed; evaluate and stack parsing report the real invalid input instead of stale or misleading state. |
 | Deterministic completion value | #1532, #1573, #1579, #1585, #1875 | Try::Tiny, Mojolicious, DBI, and indexed package receiver completions are offered only with supporting evidence; context-specific completion families keep stable semantic sort tiers. |
-| Measurement substrate | #1482, #1520, #1528, #1530, #1539, #1549, #1576, #1581, #1586, #1688, #1689, #1816, #1817, #1833, #1878, #1881 | Coverage/test semantics, CPAN bounded ratchet mode, runner disk failover, workflow privilege analysis, routed-suite expectations, draft-ripr neutrality, trigger-safe docs/assets-only CI skipping, Windows-worktree coverage-baseline recovery, native-tooling git-context recovery, and RIPR evidence git-context recovery are current. |
+| Measurement substrate | #1482, #1520, #1528, #1530, #1539, #1549, #1576, #1581, #1586, #1688, #1689, #1816, #1817, #1833, #1878, #1881, #1886 | Coverage/test semantics, CPAN bounded ratchet mode, runner disk failover, workflow privilege analysis, routed-suite expectations, draft-ripr neutrality, trigger-safe docs/assets-only CI skipping, Windows-worktree coverage-baseline recovery, native-tooling git-context recovery, RIPR evidence git-context recovery, and self-hosted workspace-target cleanup are current. |
 
 Correction from earlier draft: #1524 is closed, not merged. The arrow-deref diagnostic fix landed as #1562.
 
@@ -72,7 +72,7 @@ Correction from earlier draft: #1524 is closed, not merged. The arrow-deref diag
 
 ## Product Smoke Receipts
 
-All product-smoke commands below were run locally on Windows against `origin/main`/`c94d50e8` lineage during the 2026-06-20 closeout pass unless noted. Later main commits through release payload `540fd5e79ddbfa07b5feb857b6bfe5f80bbc2d21` were docs/CI release-staging changes, the targeted POD document-link expansion in #1795, the storage-safe VSIX packaging/reinstall-smoke closeout in #1867, the native-tooling git-context repair in #1878, the context-specific completion sort-tier repair in #1875, and the RIPR evidence git-context repair in #1881. Cargo target output was redirected outside the worktree under `D:\cargo-target\perl-lsp-release-smoke*` or the specific external target dir named in the command.
+All product-smoke commands below were run locally on Windows against `origin/main`/`c94d50e8` lineage during the 2026-06-20 closeout pass unless noted. Later main commits through release payload `798675813a2333fa79a68b7eac980ada57e4205f` were docs/CI release-staging changes, the targeted POD document-link expansion in #1795, the storage-safe VSIX packaging/reinstall-smoke closeout in #1867, the native-tooling git-context repair in #1878, the context-specific completion sort-tier repair in #1875, the RIPR evidence git-context repair in #1881, the self-hosted workspace-target cleanup in #1886, and the POD hover cache refresh in #1882. Cargo target output was redirected outside the worktree under `D:\cargo-target\perl-lsp-release-smoke*` or the specific external target dir named in the command.
 
 ### Parser / Robustness
 
@@ -98,6 +98,7 @@ All product-smoke commands below were run locally on Windows against `origin/mai
 | Rename workflow | `cargo test -p perl-lsp-rs --test navigation_regression_tests rename --profile agent --locked -- --test-threads=1 --nocapture` | PASS, 5 passed |
 | Formatting smoke | `cargo test -p perl-lsp-rs --lib formatting --profile agent --locked -- --nocapture` | PASS, 5 passed |
 | Workspace configuration/settings | `cargo test -p perl-lsp-rs --test workspace_resolution_tests configuration --profile agent --locked -- --test-threads=1 --nocapture` | PASS, 6 passed |
+| POD hover cache refresh after external edits | `cargo test -p perl-lsp-rs --lib --profile agent --locked pod_hover_cache_refreshes_after_external_file_edit -- --nocapture` | PASS in #1882 verification; merged CI reported 36 passing checks |
 
 ### DAP
 
@@ -163,4 +164,4 @@ This document does not authorize or initiate a release. No tag, no `crates.io` p
 
 ---
 
-Generated from current repo/GitHub state through release payload `540fd5e79ddbfa07b5feb857b6bfe5f80bbc2d21` and local smoke receipts on 2026-06-20. Claims above are limited to the commands and receipts named in this file. Verify the current `origin/main` SHA again before dispatch.
+Generated from current repo/GitHub state through release payload `798675813a2333fa79a68b7eac980ada57e4205f` and local smoke receipts on 2026-06-20. Claims above are limited to the commands and receipts named in this file. Verify the current `origin/main` SHA again before dispatch.

@@ -104,6 +104,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now exposes module/core-pragma and same-document POD section references from
   real POD blocks, and `documentLink/resolve` validates same-document section
   fragments before returning `#section` targets. (#1795)
+- **POD hover refreshes after external module edits.** Hover documentation
+  cached from a resolved module file is refreshed when that file's mtime
+  changes outside the LSP document lifecycle, so hover no longer serves stale
+  POD after on-disk edits. (#1882)
 - **Context-specific completions keep semantic groups together.** Hash-key,
   Moo/Moose type and option, and Object::Pad constructor-parameter completions
   now use separate sort tiers so clients do not interleave unrelated suggestions
@@ -186,6 +190,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   routing now treats disk hygiene as a preflight invariant and falls back only
   for disk-preflight failures, without masking real test or gate failures.
   (#1528)
+- **Self-hosted CI removes stale workspace `target/` before checkout.** CX43
+  and CX53 Rust Small, RIPR, and UB-review jobs now delete the gitignored
+  workspace `target/` during pre-checkout ownership cleanup. Real Cargo output
+  remains on `/mnt/ci-scratch`, while stale root-owned workspace receipts no
+  longer block checkout or `target` creation. (#1886)
 - **Workflow privilege analysis fails closed for untrusted event expressions.**
   Jobs with write permissions must prove every event-expression branch is
   anchored to a trusted event. (#1539)
