@@ -4260,6 +4260,33 @@ $data{db"#;
 }
 
 #[test]
+fn test_hash_key_completion_double_quoted_keys_with_special_characters() {
+    // Mirror of the single-quoted case for double-quoted keys: keys written with
+    // `"..."` and containing special characters must also be completed. This
+    // exercises the double-quote branch of the quote-stripping logic.
+    let code = r#"my %data = ("db-host" => 'localhost', "api.key" => 'secret');
+$data{db"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new(&ast);
+    let completions = provider.get_completions(code, code.len());
+
+    // 'db-host' (double-quoted key with hyphen) should be suggested for prefix 'db'.
+    assert!(
+        completions.iter().any(|c| c.label == "db-host"),
+        "expected 'db-host' (double-quoted key with hyphen) in completions for prefix 'db'; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+
+    // 'api.key' should NOT be suggested (doesn't start with 'db').
+    assert!(
+        !completions.iter().any(|c| c.label == "api.key"),
+        "expected 'api.key' filtered out by prefix 'db'; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
 fn test_hash_key_completion_quoted_keys_with_dots_and_spaces() {
     // Test completion with dot and space separators in keys
     let code = r#"my %config = ('db.host' => 1, 'api key' => 2);
